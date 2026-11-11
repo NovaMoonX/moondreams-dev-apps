@@ -748,6 +748,14 @@ test('taking back a settle reopens its question and the turn; no other answer do
     planReopen({ questionRef: ref }, capture('whichIsTrue', NOW, 'needsYou')),
     { 'questionState.q1.answeredAt': null },
   );
+  assert.deepEqual(
+    planReopen({ questionRef: ref }, capture('groupTopics', NOW, 'needsYou')),
+    { 'questionState.q1.answeredAt': null },
+  );
+  assert.equal(
+    planReopen({ questionRef: ref }, capture('groupTopics', null, 'needsYou')),
+    null,
+  );
   assert.equal(
     planReopen({ questionRef: ref }, capture('asked', NOW, 'sorted')),
     null,
@@ -1337,7 +1345,7 @@ test('a version is kept after a later version, and while the topic is being writ
     ]),
   );
   assert.equal(later.reason, 'nothingToTakeBack');
-  assert.deepEqual(later.kept, [ADDED]);
+  assert.deepEqual(later.kept, ['Car care']);
   const claimed = asRefused(
     plan(execution([versionEffect('added')]), [
       topicTarget('car', {
@@ -1346,7 +1354,7 @@ test('a version is kept after a later version, and while the topic is being writ
       }),
     ]),
   );
-  assert.deepEqual(claimed.kept, [ADDED]);
+  assert.deepEqual(claimed.kept, ['Car care']);
   const stale = asWrite(
     plan(execution([versionEffect('added')]), [
       topicTarget('car', {
@@ -1403,7 +1411,7 @@ test('a move is kept whole when any topic in it changed, or the old parent is go
       topicTarget('rinse', { parentId: 'washing', depth: 2 }, 'Rinse'),
     ]),
   );
-  assert.deepEqual(moved, [MOVED]);
+  assert.deepEqual(moved, ['Washing']);
   const parentGone = refusedKept(
     plan(execution(placement()), [
       [
@@ -1418,7 +1426,44 @@ test('a move is kept whole when any topic in it changed, or the old parent is go
       topicTarget('rinse', { parentId: 'washing', depth: 3 }, 'Rinse'),
     ]),
   );
-  assert.deepEqual(parentGone, [MOVED]);
+  assert.deepEqual(parentGone, ['Washing']);
+});
+
+test('two moves of one topic in a turn go back to where it started', () => {
+  const twice = [
+    topicEntry(
+      'update',
+      'washing',
+      { parentId: 'car', depth: 2, 'sealed.title': MOVED },
+      { parentId: null, depth: 1, 'sealed.title': MOVED },
+    ),
+    topicEntry(
+      'update',
+      'washing',
+      { parentId: 'kitchen', depth: 2, 'sealed.title': MOVED },
+      { parentId: 'car', depth: 2, 'sealed.title': MOVED },
+    ),
+  ];
+  const result = asWrite(
+    plan(execution(twice), [
+      topicTarget('washing', { parentId: 'kitchen', depth: 2 }, 'Washing'),
+      topicTarget('kitchen', { parentId: null, depth: 1 }),
+    ]),
+  );
+  assert.deepEqual(
+    result.updates.map((entry) => [
+      entry.docId,
+      entry.fields.parentId,
+      entry.fields.depth,
+    ]),
+    [['washing', null, 1]],
+  );
+  const stopped = refusedKept(
+    plan(execution(twice), [
+      topicTarget('washing', { parentId: 'car', depth: 2 }, 'Washing'),
+    ]),
+  );
+  assert.deepEqual(stopped, ['Washing']);
 });
 
 const refusedKept = (result: UndoPlan) => asRefused(result).kept;
@@ -1471,7 +1516,7 @@ test('a grouping goes back as one change: the child moves out, its version is re
     { docId: 'washing', from: 3, to: 2 },
   ]);
   assert.equal(result.updates.length, 1);
-  assert.equal(result.undoSealed.summary, 'Took back 1 change to Car care');
+  assert.equal(result.undoSealed.summary, 'Took back grouping under Car care');
 });
 
 test('a made parent stays when it was written, used, or a child stayed under it', () => {

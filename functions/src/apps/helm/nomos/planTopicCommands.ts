@@ -19,7 +19,7 @@ import {
   buildTopicNotMovedLine,
   buildTopicRacedLine,
   buildTopicUnchangedLine,
-  NOTES_NOT_KEPT_LINE,
+  buildTopicLaterLine,
 } from './summaries.js';
 import { decideTopic } from './policy.js';
 import {
@@ -130,7 +130,8 @@ const EMPTY_PLAN: TopicPlan = {
 };
 
 const pathText = (tree: PlacedTopic[], id: string) =>
-  pathOf(id, tree).join(' › ') || (tree.find((t) => t.id === id)?.name ?? '');
+  pathOf(id, tree).filter(Boolean).join(' › ') ||
+  (tree.find((t) => t.id === id)?.name ?? '');
 
 const afterWrite = (docState: DocState): DocState =>
   docState === 'writing' ? 'behind' : docState;
@@ -172,7 +173,12 @@ const addToTopic = (
       notKept: [...state.plan.notKept, buildTopicBusyLine(path)],
     });
   }
-  if (topic.version < 1 || state.room < 1) return state;
+  if (topic.version < 1) return state;
+  if (state.room < 1) {
+    return withPlan(state, {
+      notKept: [...state.plan.notKept, buildTopicLaterLine(path)],
+    });
+  }
   const inserted = insertNomosSection(
     topic.sections,
     {
@@ -423,7 +429,7 @@ const moveTopic = (
   const used = placements.length + (version ? 1 : 0);
   if (!root || used > state.room) {
     return withPlan(state, {
-      notKept: [...state.plan.notKept, NOTES_NOT_KEPT_LINE],
+      notKept: [...state.plan.notKept, buildTopicNotMovedLine('room', path)],
     });
   }
   const line = buildTopicMovedLine(path, parentPath);

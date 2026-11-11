@@ -602,7 +602,7 @@ export type TopicSource =
       kind: 'message';
       captureId: string;
       at: number;
-      noteId?: string | null;
+      noteId: string | null;
     }
   | { kind: 'file'; mediaId: string; noteId: string | null }
   | { kind: 'general'; noteId: string }

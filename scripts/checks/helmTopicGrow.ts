@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import { topicDocumentFor } from '../../functions/src/apps/helm/nomos/buildContext.ts';
+import { hasReviseCue } from '../../functions/src/apps/helm/nomos/route.ts';
 import type {
   CaptureReading,
   TopicCommand,
@@ -195,6 +196,82 @@ assert.deepEqual(
   reply('make the intro shorter in Kitchen', { topicAlias: 'tp2' })
     .topicDropped,
   ['topic-revise-unseen'],
+);
+
+// 1b. A question about a topic never revises it: the quote itself must ask for a change, in two words or more.
+assert.deepEqual(
+  reply('what size are my tyres in Car care?', { requestQuote: 'tyres' })
+    .topicDropped,
+  ['topic-revise-unasked'],
+);
+assert.deepEqual(
+  reply('what should I change the oil with in Car care?', {
+    requestQuote: 'change the oil with',
+  }).topicDropped,
+  ['topic-revise-unasked'],
+);
+assert.deepEqual(
+  reply('shorten Car care', { requestQuote: 'shorten' }).topicDropped,
+  ['topic-revise-unasked'],
+);
+assert.equal(hasReviseCue('what should I change the oil with?'), false);
+assert.equal(hasReviseCue('what size are my tyres?'), false);
+assert.equal(hasReviseCue('make the intro shorter'), true);
+
+// 1c. A move is kept only when the words move the topic they name; grouping is asked only by its own words.
+const moveReply = (text: string) => {
+  const { topics } = books();
+  return normalizeNomosReply(
+    {
+      commands: [
+        {
+          kind: 'moveTopic',
+          topicAlias: 'tp1',
+          parentAlias: 'tp2',
+          childAliases: [],
+          title: null,
+        },
+      ],
+      mentions: [],
+      places: [],
+    },
+    {
+      reading,
+      aliases: createAliasBook('t'),
+      topics,
+      topicNames: new Map([
+        ['car', 'Car care'],
+        ['kitchen', 'Kitchen'],
+      ]),
+      captureText: text,
+    },
+  );
+};
+assert.equal(moveReply('put Car care under Kitchen').topicCommands.length, 1);
+assert.deepEqual(moveReply('what is in Car care?').topicDropped, [
+  'topic-move-unasked',
+]);
+assert.deepEqual(moveReply('move the dentist to Tuesday').topicDropped, [
+  'topic-move-unasked',
+]);
+assert.equal(
+  isGroupingAsked(
+    'move Running to Tuesday and Stretching to Wednesday',
+    'Fitness',
+    ['Running', 'Stretching'],
+  ),
+  false,
+);
+assert.equal(
+  isGroupingAsked('group Running and Stretching', 'Fitness', [
+    'Running',
+    'Stretching',
+  ]),
+  true,
+);
+assert.equal(
+  isGroupingAsked('put them under Fitness', 'Fitness', ['Running']),
+  true,
 );
 
 // 2. A person's sections are byte-for-byte unchanged unless the words name them.
@@ -498,6 +575,30 @@ const third = plan([second], [store.topic]);
 assert.equal(third.versions.length, 0);
 assert.match(third.notKept[0], /changed while this was made/);
 assert.deepEqual(store.versions, [3, 4, 5]);
+
+// 5b. A refusal for lack of room says so, never silently: an add waits as a pending note, a move names itself.
+const roomAdd = plan(
+  [
+    {
+      kind: 'addToTopic',
+      topicId: 'car',
+      noteIndex: 0,
+      afterSectionId: null,
+      heading: 'H',
+      markdown: 'M',
+    },
+  ],
+  [store.topic],
+  { notes: [note], room: 0 },
+);
+assert.deepEqual([roomAdd.versions.length, roomAdd.skipFiling.size], [0, 0]);
+assert.match(roomAdd.notKept[0], /Not written into Car care yet/);
+const roomMove = plan(
+  [{ kind: 'moveTopic', topicId: 'car', parentId: 'kitchen' }],
+  [store.topic, topicOf('kitchen', { name: 'Kitchen' })],
+  { room: 0 },
+);
+assert.match(roomMove.notKept[0], /Not moved · Too much changed at once/);
 
 // 6. A live write claim refuses an add and a revision, and a move under it writes no version.
 const claimed = topicOf('car', {

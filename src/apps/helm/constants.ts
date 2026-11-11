@@ -220,10 +220,16 @@ const forgetMomentsLine = (moments: number) =>
     ? ''
     : ` ${moments === 1 ? 'Its moment is' : `Its ${moments} moments are`} deleted too.`;
 
-const toTopicPhrase = (count: number, name: string | null) =>
-  count === 1
-    ? `1 change to ${name ?? 'a topic'}`
-    : `${count} changes to topics`;
+const toTopicPhrase = (
+  count: number,
+  name: string | null,
+  isGrouping = false,
+) =>
+  isGrouping && name
+    ? `grouping under ${name}`
+    : count === 1
+      ? `1 change to ${name ?? 'a topic'}`
+      : `${count} changes to topics`;
 
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
@@ -1438,23 +1444,27 @@ export const HELM_COPY = {
       .filter(Boolean)
       .join(' '),
   undoTopicPhrase: toTopicPhrase,
-  undoTopicChanges: (count: number, name: string | null) =>
-    `Took back ${toTopicPhrase(count, name)}`,
+  undoTopicChanges: (count: number, name: string | null, isGrouping = false) =>
+    `Took back ${toTopicPhrase(count, name, isGrouping)}`,
   undoReportTopics: (
     count: number,
     name: string | null,
     kept: number,
     gone: number,
+    isGrouping = false,
   ) =>
     [
-      `Took back ${toTopicPhrase(count, name)}.`,
+      `Took back ${toTopicPhrase(count, name, isGrouping)}.`,
       kept > 0 ? `Kept ${kept} you changed since.` : '',
       gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
     ]
       .filter(Boolean)
       .join(' '),
-  undoReportTopicsToo: (count: number, name: string | null) =>
-    `${toTopicPhrase(count, name)} too.`,
+  undoReportTopicsToo: (
+    count: number,
+    name: string | null,
+    isGrouping = false,
+  ) => `${toTopicPhrase(count, name, isGrouping)} too.`,
   undoReportNoteUnfiled: 'Took the note back out of those topics.',
   tookBackNoteUnfiled: 'Took the note back out of those topics',
   undoReportNotesToo: (count: number) =>
@@ -1818,7 +1828,7 @@ export const HELM_COPY = {
     when: string,
     byYou: boolean,
     assistant: string,
-  ) => `Version ${version} · ${when} · ${byYou ? 'you' : assistant}`,
+  ) => `Version ${version}\u00a0· ${when}\u00a0· ${byYou ? 'you' : assistant}`,
   historyRestoredFrom: (version: number) => `Back to version ${version}`,
   historyNewest: 'Newest',
   topicHistoryLine: (when: string, summary: string) => `${when} · ${summary}`,

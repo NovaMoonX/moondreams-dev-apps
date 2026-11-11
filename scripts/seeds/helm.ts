@@ -1745,7 +1745,7 @@ async function buildNoteTurn(input: {
   return { capture, execution, note };
 }
 
-/** Alex's Knowledge: eleven topics up to three levels deep (🏃 Running and 🧘 Stretching at the top, waiting on a "Group them under Fitness?" question; 🚗 Car care › Washing › Ceramic coat and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty-six notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. Car care has a written document: six parts (a list under Service, a part from each kind of source and a winter-tires part the person wrote) at version 5, with its five versions under `versions/{n}`. */
+/** Alex's Knowledge: eleven topics up to three levels deep (🏃 Running and 🧘 Stretching at the top, waiting on a "Group them under Fitness?" question; 🚗 Car care › Washing › Ceramic coat and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty-six notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. Car care has a written document: seven parts (an intro, a list under Service, a part from each kind of source and a winter-tyres part the person wrote) at version 5, with its five versions under `versions/{n}`. */
 async function buildKnowledge(input: {
   uid: string;
   now: number;
@@ -1793,6 +1793,18 @@ async function buildKnowledge(input: {
       ),
     },
   });
+  const intro: TopicSection = {
+    id: 'seed-section-car-intro',
+    heading: 'Intro',
+    level: 1,
+    markdown:
+      'Everything about keeping the car running: the oil schedule, the shop on Fifth, tyre pressure and the winter set. It is gathered here so the next service is no guesswork.',
+    writtenBy: 'nomos',
+    sources: [
+      { kind: 'note', noteId: 'seed-note-01' },
+      { kind: 'note', noteId: 'seed-note-02' },
+    ],
+  };
   const service: TopicSection = {
     id: 'seed-section-car-service',
     heading: 'Service',
@@ -1804,10 +1816,10 @@ async function buildKnowledge(input: {
   };
   const tyres: TopicSection = {
     id: 'seed-section-car-tyres',
-    heading: 'Tire pressure',
+    heading: 'Tyre pressure',
     level: 1,
     markdown:
-      'Front **35**, back **33** when the tires are cold. The sticker inside the driver door has it.',
+      'Front **35**, back **33** when the tyres are cold. The sticker inside the driver door has it.',
     writtenBy: 'nomos',
     sources: [{ kind: 'note', noteId: 'seed-note-02' }],
   };
@@ -1835,21 +1847,22 @@ async function buildKnowledge(input: {
     heading: 'From the owner booklet',
     level: 2,
     markdown:
-      'Rotate the tires every 7,500 miles. Check the brake fluid once a year.',
+      'Rotate the tyres every 7,500 miles. Check the brake fluid once a year.',
     writtenBy: 'nomos',
     sources: [{ kind: 'file', mediaId: 'seed-media-home', noteId: null }],
   };
   const winter: TopicSection = {
     id: 'seed-section-car-winter',
-    heading: 'Winter tires',
+    heading: 'Winter tyres',
     level: 1,
     markdown: 'Put them on in early November and take them off in April.',
     writtenBy: 'person',
     sources: [{ kind: 'person', at: now - 2 * DAY_MS }],
   };
-  const serviceShort: TopicSection = {
-    ...service,
-    markdown: '- **Oil:** synthetic 5W-30, every 5,000 miles.',
+  const introShort: TopicSection = {
+    ...intro,
+    markdown:
+      'Everything about keeping the car running, gathered in one place.',
   };
   const tyreMark = {
     kind: 'message' as const,
@@ -1882,7 +1895,7 @@ async function buildKnowledge(input: {
       by: 'nomos',
       noteIds: ['seed-note-01', 'seed-note-02'],
       summary: 'Wrote the first version from 2 notes',
-      sections: [service, tyres],
+      sections: [intro, service, tyres],
     },
     {
       reason: 'addedFromSource',
@@ -1890,24 +1903,24 @@ async function buildKnowledge(input: {
       by: 'nomos',
       noteIds: [],
       summary: 'Added the owner booklet and a line from a saved answer',
-      sections: [service, tyresHeard, freshener, booklet],
+      sections: [intro, service, tyresHeard, freshener, booklet],
     },
     {
       reason: 'personEdit',
       at: now - 2 * DAY_MS,
       by: 'person',
       noteIds: [],
-      summary: 'You added Winter tires',
-      sections: [service, tyresHeard, freshener, booklet, winter],
+      summary: 'You added Winter tyres',
+      sections: [intro, service, tyresHeard, freshener, booklet, winter],
     },
     {
       reason: 'revisedOnRequest',
       at: now - 25 * MINUTE_MS,
       by: 'nomos',
       noteIds: [],
-      summary: 'Shortened the Service part',
+      summary: 'Shortened the intro',
       requestQuote: 'make the intro shorter',
-      sections: [serviceShort, tyresHeard, freshener, booklet, winter],
+      sections: [introShort, service, tyresHeard, freshener, booklet, winter],
     },
     {
       reason: 'addedFromSource',
@@ -1918,7 +1931,8 @@ async function buildKnowledge(input: {
       sourceCaptureId: TYRE_TURN_ID,
       executionId: TYRE_EXECUTION_ID,
       sections: [
-        serviceShort,
+        introShort,
+        service,
         tyresHeard,
         freshener,
         booklet,
@@ -2002,7 +2016,15 @@ async function buildKnowledge(input: {
       null,
       'seed-topic-car',
       2,
-      { docState: 'behind', pendingNoteIds: ['seed-note-05'] },
+      {
+        docState: 'behind',
+        pendingNoteIds: [
+          'seed-note-03',
+          'seed-note-04',
+          'seed-note-05',
+          'seed-note-06',
+        ],
+      },
       { version: 1, sections: [washingSection], writtenAt: washingWrittenAt },
     ),
     topicOf('seed-topic-car-fragrance', 'Fragrance', null, 'seed-topic-car'),
@@ -2090,8 +2112,8 @@ async function buildKnowledge(input: {
     ),
     noteOf(
       2,
-      'Tire pressure',
-      'Front 35, back 33 when the tires are cold. The sticker inside the driver door has it.',
+      'Tyre pressure',
+      'Front 35, back 33 when the tyres are cold. The sticker inside the driver door has it.',
       [car],
     ),
     noteOf(

@@ -135,13 +135,14 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
   const isNewest = opened !== null && opened.version === topic.version;
   const isFirst = opened !== null && opened.version === 1;
   const canChange = opened !== null && opened.version <= topic.version;
+  const isTurnRow =
+    isNewest && (opened.reason === 'moved' || opened.reason === 'grouped');
   const turn =
-    isNewest &&
-    (opened.reason === 'moved' || opened.reason === 'grouped') &&
-    opened.executionId
+    isTurnRow && opened.executionId
       ? executionsById.get(opened.executionId)
       : undefined;
   const turnId = turn && canUndo(turn) ? turn.id : null;
+  const canAct = canChange && !isFirst && !(isTurnRow && turnId === null);
 
   return (
     <DetailSheet
@@ -155,8 +156,7 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
       viewKey={opened ? `version-${opened.version}` : 'list'}
       footer={
         opened &&
-        canChange &&
-        !isFirst && (
+        canAct && (
           <div className='px-6 pt-2 pb-3'>
             <ModalFooterActions
               note={
@@ -200,7 +200,7 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
             <p className='text-foreground text-[15px] font-semibold'>
               {HELM_COPY.historyReason(opened.reason)}
               {opened.restoredFromVersion !== null &&
-                ` · ${HELM_COPY.historyRestoredFrom(opened.restoredFromVersion)}`}
+                `\u00a0· ${HELM_COPY.historyRestoredFrom(opened.restoredFromVersion)}`}
             </p>
             {opened.changeSummary && (
               <p className='text-foreground text-[15px] text-pretty'>
@@ -267,7 +267,7 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
                     <span className='text-muted-foreground block text-[13px]'>
                       {lineOf(entry)}
                       {entry.version === topic.version &&
-                        ` · ${HELM_COPY.historyNewest}`}
+                        `\u00a0· ${HELM_COPY.historyNewest}`}
                     </span>
                   </span>
                   <ChevronRight

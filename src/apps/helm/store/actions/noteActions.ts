@@ -2,6 +2,7 @@ import {
   arrayRemove,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocFromCache,
@@ -281,7 +282,7 @@ export async function editNote(
 
 export type NoteRestore = 'restored' | 'exists';
 
-/** Deletes a note and marks every topic that cites it or is filed under it behind, in one batch handed back unawaited so it works offline. Undo puts the note back under its id while the id is free, keeping only the topics that still exist. */
+/** Deletes a note and marks every topic that cites it or is filed under it behind. The delete is handed back unawaited so it works offline, and each topic mark is its own write so a topic deleted elsewhere never undoes it. Undo puts the note back under its id while the id is free, keeping only the topics that still exist. */
 export async function deleteNote(
   uid: string,
   noteId: string,
@@ -294,17 +295,17 @@ export async function deleteNote(
     ...((raw as Note).topicIds ?? []),
     ...topicsCitingNote(topics, noteId),
   ]);
-  const batch = writeBatch(db);
-  batch.delete(ref);
+  const write = deleteDoc(ref);
   topics
     .filter((topic) => marked.has(topic.id))
     .forEach((topic) =>
-      batch.update(
+      updateDoc(
         doc(topicsOf(uid), topic.id),
         withNoteAdded(topic.docState, noteId),
+      ).catch((error) =>
+        console.error('A topic was not marked behind a deleted note', error),
       ),
     );
-  const write = batch.commit();
   const restore = async (): Promise<NoteRestore> => {
     if ((await getDoc(ref)).exists()) return 'exists';
     const topicIds = (raw as Note).topicIds ?? [];

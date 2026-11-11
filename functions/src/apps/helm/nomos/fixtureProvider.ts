@@ -1266,28 +1266,32 @@ const readTopicWork = (text: string, message: string) => {
       places: [],
     };
   }
-  const first = document?.sections.find((entry) => entry.writtenBy === 'nomos');
-  if (/\bmake the intro shorter\b/i.test(text) && document && first) {
+  const first = document?.sections.find(
+    (entry, index) => index === 0 && entry.writtenBy === 'nomos',
+  );
+  if (/\bmake the intro shorter\b/i.test(text) && document) {
     return {
-      commands: [
-        toTopicCommand({
-          kind: 'reviseTopic',
-          topicAlias: document.topic,
-          requestQuote: 'make the intro shorter',
-          changeSummary: 'Shortened the intro',
-          topicChanges: [
-            {
-              kind: 'replace',
-              sectionAlias: first.section,
-              sectionAliases: [],
-              afterSectionAlias: null,
-              heading: 'Intro',
-              level: 2,
-              markdown: 'A shorter intro.',
-            },
+      commands: !first
+        ? []
+        : [
+            toTopicCommand({
+              kind: 'reviseTopic',
+              topicAlias: document.topic,
+              requestQuote: 'make the intro shorter',
+              changeSummary: 'Shortened the intro',
+              topicChanges: [
+                {
+                  kind: 'replace',
+                  sectionAlias: first.section,
+                  sectionAliases: [],
+                  afterSectionAlias: null,
+                  heading: null,
+                  level: 2,
+                  markdown: 'A shorter intro.',
+                },
+              ],
+            }),
           ],
-        }),
-      ],
       mentions: [],
       places: [],
     };

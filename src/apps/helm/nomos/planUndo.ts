@@ -462,6 +462,11 @@ const isClaimLive = (data: Values, now: number) => {
 
 type Entry = { ref: EffectRef; effect: ExecutionEffect };
 
+const toTopicName = (target: UndoTarget, fallback: string) =>
+  target.opened && 'sections' in target.opened && target.opened.name
+    ? target.opened.name
+    : fallback;
+
 /** A version a turn wrote goes back only while it is still the newest and nothing is writing the topic. */
 const planVersionBack = (
   target: UndoTarget,
@@ -474,10 +479,11 @@ const planVersionBack = (
     toText(last?.written['sealed.title']) ?? HELM_COPY.resultTaskFallback;
   const from = toNumber(last?.written.version);
   const to = toNumber(first?.previous?.version);
-  if (from === null || to === null) return { kind: 'kept', title };
+  const keptTitle = toTopicName(target, title);
+  if (from === null || to === null) return { kind: 'kept', title: keptTitle };
   if (target.data === null) return { kind: 'gone' };
   if (target.data.version !== from || isClaimLive(target.data, now)) {
-    return { kind: 'kept', title };
+    return { kind: 'kept', title: keptTitle };
   }
   return {
     kind: 'versionBack',
@@ -496,10 +502,10 @@ const planPlacements = (
   placed: { docId: string; target: UndoTarget; entries: Entry[] }[],
   now: number,
 ): { docId: string; outcome: RecordOutcome }[] => {
-  const readEffect = ({ entries }: { entries: Entry[] }) =>
+  const lastEffect = ({ entries }: { entries: Entry[] }) =>
     entries[entries.length - 1].effect;
   const isAsLeft = placed.every(({ target, entries }) => {
-    const { written } = readEffect({ entries });
+    const { written } = lastEffect({ entries });
     return (
       target.data !== null &&
       target.data.depth === written.depth &&
@@ -507,20 +513,23 @@ const planPlacements = (
       target.isOwnerHere !== false
     );
   });
-  return placed.map(({ docId, entries }) => {
-    const { written, previous } = readEffect({ entries });
+  return placed.map(({ docId, target, entries }) => {
+    const { written } = lastEffect({ entries });
+    const { previous } = entries[0].effect;
     const title =
       toText(written['sealed.title']) ?? HELM_COPY.resultTaskFallback;
     const isMoved = 'parentId' in written;
     if (!isAsLeft || !previous) {
       return {
         docId,
-        outcome: isMoved ? { kind: 'kept', title } : { kind: 'skipped' },
+        outcome: isMoved
+          ? { kind: 'kept', title: toTopicName(target, title) }
+          : { kind: 'skipped' },
       };
     }
     const restored: Values = {
       depth: previous.depth,
-      ...(isMoved ? { parentId: previous.parentId } : {}),
+      ...(isMoved ? { parentId: previous.parentId ?? null } : {}),
     };
     const fields: Values = { ...restored, lastEditedAt: now };
     const back = (values: Values, other: Values): ExecutionEffect => ({
@@ -854,6 +863,12 @@ export function planUndo(input: {
     ),
   ];
   const topicName = topicNames.length === 1 ? topicNames[0] : null;
+  const isGrouping =
+    topicChanges.some(({ outcome }) => outcome.kind === 'deleted') &&
+    topicChanges.some(
+      ({ outcome }) =>
+        outcome.kind === 'restored' && 'parentId' in outcome.fields,
+    );
   if (
     notesDone.length === 0 &&
     records.length === 0 &&
@@ -955,9 +970,15 @@ export function planUndo(input: {
     dateCount === 0 &&
     projectCount === 0;
   const report = isTopicsOnly
-    ? HELM_COPY.undoReportTopics(topicCount, topicName, kept.length, gone)
+    ? HELM_COPY.undoReportTopics(
+        topicCount,
+        topicName,
+        kept.length,
+        gone,
+        isGrouping,
+      )
     : topicCount > 0
-      ? `${baseReport} ${HELM_COPY.undoReportTopicsToo(topicCount, topicName)}`
+      ? `${baseReport} ${HELM_COPY.undoReportTopicsToo(topicCount, topicName, isGrouping)}`
       : baseReport;
   const baseSummary =
     records.length === 0
@@ -1041,9 +1062,9 @@ export function planUndo(input: {
     },
     undoSealed: {
       summary: isTopicsOnly
-        ? HELM_COPY.undoTopicChanges(topicCount, topicName)
+        ? HELM_COPY.undoTopicChanges(topicCount, topicName, isGrouping)
         : topicCount > 0
-          ? `${baseSummary} and ${HELM_COPY.undoTopicPhrase(topicCount, topicName)}`
+          ? `${baseSummary} and ${HELM_COPY.undoTopicPhrase(topicCount, topicName, isGrouping)}`
           : baseSummary,
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
@@ -1076,7 +1097,7 @@ export const getTakenBackIds = (undo: OpenExecution | null) =>
       : [],
   );
 
-/** What taking back an answer to a "which is true now?" question writes to its turn so the question asks again; null for any other execution. */
+/** What taking back an answer to a "which is true now?" or "group these?" question writes to its turn so the question asks again; null for any other execution. */
 export const planReopen = (
   original: Pick<OpenExecution, 'questionRef'>,
   capture: {
@@ -1087,7 +1108,12 @@ export const planReopen = (
   const ref = original.questionRef;
   const state = ref && capture ? capture.questionState[ref.questionId] : null;
   if (!ref || !capture || !state) return null;
-  if (state.kind !== 'whichIsTrue' || state.answeredAt === null) return null;
+  if (
+    (state.kind !== 'whichIsTrue' && state.kind !== 'groupTopics') ||
+    state.answeredAt === null
+  ) {
+    return null;
+  }
   return {
     [`questionState.${ref.questionId}.answeredAt`]: null,
     ...(capture.status === 'sorted' && { status: 'needsYou' }),

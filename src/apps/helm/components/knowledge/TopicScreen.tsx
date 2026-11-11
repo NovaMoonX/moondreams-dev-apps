@@ -401,7 +401,7 @@ function TopicScreen({
                   type='button'
                   variant='tertiary'
                   size='sm'
-                  className="text-muted-foreground relative block h-auto max-w-full min-w-0 px-0 py-0 text-left text-[13px] font-normal before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                  className="text-muted-foreground relative block h-auto max-w-full min-w-0 px-0! py-0! text-left text-[13px] font-normal before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
                   onClick={() => setIsHistoryOpen(true)}
                 >
                   <span className='block truncate'>{historyLine}</span>

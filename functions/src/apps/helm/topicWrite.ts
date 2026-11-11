@@ -8,7 +8,7 @@ import { toComparable } from '../../vendor/optionMatchUtils.js';
 
 export type TopicSource =
   | { kind: 'note'; noteId: string }
-  | { kind: 'message'; captureId: string; at: number; noteId?: string | null }
+  | { kind: 'message'; captureId: string; at: number; noteId: string | null }
   | { kind: 'file'; mediaId: string; noteId: string | null }
   | { kind: 'general'; noteId: string }
   | { kind: 'person'; at: number };
@@ -108,6 +108,7 @@ export type Refusal =
   | 'unknownSection'
   | 'personSection'
   | 'droppedSource'
+  | 'staleCopy'
   | 'noSource'
   | 'overCap';
 
@@ -174,6 +175,8 @@ const countChars = (sections: TopicSection[]) =>
 export interface ApplyOptions {
   mode: 'write' | 'revise';
   editablePersonIds?: ReadonlySet<string>;
+  /** Notes already cited whose words changed: their section is replaced, never given a second part. */
+  changedIds?: ReadonlySet<string>;
 }
 
 interface Context {
@@ -182,6 +185,7 @@ interface Context {
   newId: () => string;
   isRevise: boolean;
   editable: ReadonlySet<string>;
+  changed: ReadonlySet<string>;
 }
 
 interface State {
@@ -278,6 +282,9 @@ const applyOne = (
     }
     const sources = toSources(change.noteIds, context.known, []);
     if (sources.length === 0) return { refusal: 'noSource' };
+    if (change.noteIds.some((id) => context.changed.has(id))) {
+      return { refusal: 'staleCopy' };
+    }
     const section: TopicSection = {
       id: context.newId(),
       heading: words.heading,
@@ -336,10 +343,11 @@ const applyOne = (
       return { refusal: 'droppedSource' };
     }
     const position = Math.min(...ids.map(indexOf));
+    const keeps = context.isRevise && change.kind === 'replace';
     const section: TopicSection = {
       id: replaced[0].id,
-      heading: words.heading,
-      level: words.level,
+      heading: keeps ? replaced[0].heading : words.heading,
+      level: keeps ? replaced[0].level : words.level,
       markdown: words.markdown,
       writtenBy: 'nomos',
       sources,
@@ -428,6 +436,7 @@ export const applyTopicChanges = (input: {
     newId: input.newId,
     isRevise: input.options?.mode === 'revise',
     editable: input.options?.editablePersonIds ?? new Set(),
+    changed: input.options?.changedIds ?? new Set(),
   };
   const start: State = {
     sections: input.sections,
@@ -823,7 +832,9 @@ export const createTopicFixtureProvider = (): ModelProvider => ({
             markdown: string;
           }[]
         >(message, 'document') ?? [];
-      const target = sections.find((section) => section.writtenBy === 'nomos');
+      const target = sections.find(
+        (section, index) => index === 0 && section.writtenBy === 'nomos',
+      );
       const sentences = (target?.markdown ?? '').split(/(?<=[.!?])\s+/);
       return answer(
         {
@@ -846,7 +857,16 @@ export const createTopicFixtureProvider = (): ModelProvider => ({
         SUBMIT_REVISE_TOOL.name,
       );
     }
-    const document = readBlock<{ id: string }[]>(message, 'document') ?? [];
+    const document =
+      readBlock<
+        {
+          id: string;
+          heading: string | null;
+          level: number;
+          noteIds: string[];
+        }[]
+      >(message, 'document') ?? [];
+    const changed = readBlock<string[]>(message, 'changed_notes') ?? [];
     const notes =
       readBlock<{ id: string; title: string; body: string }[]>(
         message,
@@ -879,12 +899,27 @@ export const createTopicFixtureProvider = (): ModelProvider => ({
         changeSummary: `Brought in ${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`,
         changes: [
           ...intro,
-          ...notes.map((note) => ({
-            ...blank,
-            heading: note.title,
-            markdown: toBullets(note.body) || note.body,
-            noteIds: [note.id],
-          })),
+          ...notes.map((note) => {
+            const citing = changed.includes(note.id)
+              ? document.find((section) => section.noteIds.includes(note.id))
+              : undefined;
+            return citing
+              ? {
+                  ...blank,
+                  kind: 'replace',
+                  sectionId: citing.id,
+                  heading: citing.heading,
+                  level: citing.level,
+                  markdown: toBullets(note.body) || note.body,
+                  noteIds: citing.noteIds,
+                }
+              : {
+                  ...blank,
+                  heading: note.title,
+                  markdown: toBullets(note.body) || note.body,
+                  noteIds: [note.id],
+                };
+          }),
         ].slice(0, MAX_CHANGES),
       },
       SUBMIT_TOPIC_TOOL.name,

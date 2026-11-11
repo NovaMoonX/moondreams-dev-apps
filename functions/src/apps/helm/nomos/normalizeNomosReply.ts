@@ -4,6 +4,7 @@ import {
 } from '../../../vendor/optionMatchUtils.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { ASK_WORDS } from './summaries.js';
+import { hasReviseCue } from './route.js';
 import {
   ANSWER_SCOPES,
   ASK_DATE_MODES,
@@ -1000,6 +1001,7 @@ export type TopicDrop =
   | 'topic-revise-unseen'
   | 'topic-revise-empty'
   | 'topic-move-unresolved'
+  | 'topic-move-unasked'
   | 'topic-group-unresolved';
 
 const GROUP_VERBS = new Set(['put', 'group', 'move']);
@@ -1016,21 +1018,31 @@ export const isNamedIn = (text: string, name: string) => {
   );
 };
 
-/** Whether the person asked to group topics: a grouping verb, and either the new parent's name or every child's name in the same words. */
+const MOVE_VERBS = new Set(['put', 'move', 'moved', 'nest', 'file']);
+
+const hasMoveVerb = (text: string) =>
+  toComparable(text)
+    .split(' ')
+    .some((word) => MOVE_VERBS.has(word));
+
+/** Whether the person asked to group topics: "put" or "move" with the new parent's name, or "group" / "make a topic" with the parent's name or every child's name in the same words. */
 export const isGroupingAsked = (
   text: string,
   name: string,
   childNames: string[],
 ) => {
-  const comparable = toComparable(text);
-  const hasVerb =
-    comparable.split(' ').some((word) => GROUP_VERBS.has(word)) ||
+  const words = toComparable(text).split(' ');
+  const comparable = words.join(' ');
+  const hasGroupVerb =
+    words.includes('group') ||
     /\bmake a topic (of|for|from)\b/.test(comparable);
+  const hasPutVerb = words.some((word) => GROUP_VERBS.has(word));
+  const isParentNamed = isNamedIn(text, name);
   return (
-    hasVerb &&
-    (isNamedIn(text, name) ||
-      (childNames.length > 0 &&
-        childNames.every((childName) => isNamedIn(text, childName))))
+    ((hasPutVerb || hasGroupVerb) && isParentNamed) ||
+    (hasGroupVerb &&
+      childNames.length > 0 &&
+      childNames.every((childName) => isNamedIn(text, childName)))
   );
 };
 
@@ -1143,9 +1155,9 @@ const readTopicCommands = (
         const quote =
           typeof item.requestQuote === 'string' ? item.requestQuote.trim() : '';
         const isQuoted =
-          quote !== '' &&
-          captureWords.includes(` ${toComparable(quote)} `) &&
-          toComparable(quote) !== '';
+          toComparable(quote).split(' ').filter(Boolean).length >= 2 &&
+          hasReviseCue(quote) &&
+          captureWords.includes(` ${toComparable(quote)} `);
         const name = topicId ? names.get(topicId) : undefined;
         const isAsked =
           topicId !== null &&
@@ -1179,6 +1191,14 @@ const readTopicCommands = (
           item.parentAlias == null ? null : topicOf(item.parentAlias);
         if (!topicId || (item.parentAlias != null && !parentId)) {
           return drop('topic-move-unresolved');
+        }
+        const movedName = names.get(topicId);
+        if (
+          !hasMoveVerb(text) ||
+          movedName === undefined ||
+          !isNamedIn(text, movedName)
+        ) {
+          return drop('topic-move-unasked');
         }
         return parentId === topicId
           ? drop('topic-move-unresolved')

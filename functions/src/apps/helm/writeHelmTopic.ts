@@ -509,6 +509,12 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
     known,
     gone,
     newId: randomUUID,
+    options: {
+      mode: 'write',
+      changedIds: new Set(
+        notes.flatMap((note) => (cited.has(note.id) ? [note.id] : [])),
+      ),
+    },
   });
   logger.info('helm.topic.applied', {
     applied: applied.applied.length,

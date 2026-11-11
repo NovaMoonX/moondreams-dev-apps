@@ -58,6 +58,7 @@ import {
   buildSpokenWhichTopic,
   buildTopicQuestion,
   describeNotes,
+  describeTopicChanges,
   NOTE_KEPT_SPOKEN,
   NOTES_FULL_LINE,
   NOTES_NOT_KEPT_LINE,
@@ -1220,6 +1221,38 @@ export function planWrites(input: PlanInput): WritePlan {
   topicPlan.effects.forEach(({ ref, effect }) =>
     record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
   );
+  const refiled = [...skipFiling]
+    .filter((key) => !topicPlan.skipFiling.has(key))
+    .reduce(
+      (state, key) => {
+        const [topicId, noteId] = key.split(':');
+        if (!state.made.has(noteId)) return state;
+        const before = state.working.get(topicId) ?? {
+          docState: input.topics?.get(topicId)?.docState ?? 'empty',
+          pendingNoteIds: input.topics?.get(topicId)?.pendingNoteIds ?? [],
+        };
+        const after = {
+          docState: toBehindState(before.docState),
+          pendingNoteIds: [...before.pendingNoteIds, noteId],
+        };
+        record(topicId, 'update', after, before, 'topics');
+        const earlier = state.filings.get(topicId);
+        return {
+          ...state,
+          working: new Map(state.working).set(topicId, after),
+          filings: new Map(state.filings).set(topicId, {
+            id: topicId,
+            docState: after.docState,
+            addPendingIds: [...(earlier?.addPendingIds ?? []), noteId],
+          }),
+        };
+      },
+      {
+        made: new Set(noteSteps.creates.map((created) => created.id)),
+        working: noteSteps.working,
+        filings: noteSteps.filings,
+      },
+    );
   const notKept = [
     ...new Set([
       ...factSteps.notKept,
@@ -1572,7 +1605,7 @@ export function planWrites(input: PlanInput): WritePlan {
     projectCreates: projectPlan.creates,
     projectUpdates: projectPlan.updates,
     noteCreates: noteSteps.creates,
-    topicUpdates: [...noteSteps.filings.values()],
+    topicUpdates: [...refiled.filings.values()],
     topicVersions: topicPlan.versions,
     topicPlacements: topicPlan.placements,
     topicCreates: topicPlan.parentCreates,
@@ -1874,7 +1907,7 @@ export function buildExecution(
           plan.milestonesAdded,
         ),
         describeNotes(plan.notesMade),
-        ...plan.topicLines,
+        describeTopicChanges(plan.topicLines.length),
         ...plan.notKept,
         homeLine,
       ]

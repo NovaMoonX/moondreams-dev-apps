@@ -529,6 +529,41 @@ console.log(
   `fixture document: ${written.sections.length} sections, ${written.sections.reduce((sum, s) => sum + s.markdown.length + (s.heading?.length ?? 0), 0)} characters, ${size} bytes as JSON`,
 );
 
+// An edited cited note: the fixture replaces the citing section, and the guard accepts it.
+const edited = notes[0];
+const editedMessage = buildWriteMessage({
+  name: 'Car care',
+  sections: written.sections,
+  notes: [edited],
+  changedIds: [edited.id],
+});
+const editedLoop = await createTopicFixtureProvider().runToolLoop({
+  role: 'topicWrite',
+  system: '',
+  messages: [{ role: 'user', content: editedMessage }],
+  mcpClient: {
+    listTools: async () => ({ tools: [] }),
+    callTool: async () => ({ content: [] }),
+  } as never,
+  terminalTool: SUBMIT_TOPIC_TOOL,
+  limits: { maxTurns: 2, maxToolCalls: 0, maxMillis: 1000 },
+});
+const editedChanges = readChanges(editedLoop.terminalInput)?.changes ?? [];
+assert.deepEqual(
+  editedChanges.map((entry) => entry.kind),
+  ['replace'],
+);
+assert.deepEqual(
+  applyTopicChanges({
+    sections: written.sections,
+    changes: editedChanges,
+    known: fixtureKnown,
+    newId,
+    options: { mode: 'write', changedIds: new Set([edited.id]) },
+  }).refusals,
+  [],
+);
+
 // A question asked from a topic's page: the document goes in whole, sections citing their notes.
 const reading: CaptureReading = {
   people: [],
@@ -646,6 +681,36 @@ assert.equal(
   editable.sections.find((entry) => entry.id === 'a')?.writtenBy,
   'nomos',
 );
+
+// A note whose words changed is replaced in its citing section, never given a second part.
+const staleInsert = run([change({ noteIds: ['note-s1'] })], {
+  options: { mode: 'write', changedIds: new Set(['note-s1']) },
+});
+assert.deepEqual(
+  staleInsert.refusals.map((refusal) => refusal.code),
+  ['staleCopy'],
+);
+const staleReplace = run(
+  [change({ kind: 'replace', sectionId: 's1', noteIds: ['note-s1'] })],
+  { options: { mode: 'write', changedIds: new Set(['note-s1']) } },
+);
+assert.deepEqual(staleReplace.refusals, []);
+
+// A revision's replace keeps the section's own heading and level; renaming is a retitle.
+const keptHeading = run(
+  [
+    change({
+      kind: 'replace',
+      sectionId: 's1',
+      heading: 'Intro',
+      level: 3,
+      markdown: 'Short.',
+    }),
+  ],
+  { options: { mode: 'revise' } },
+);
+assert.equal(keptHeading.sections[0].heading, SECTIONS[0].heading);
+assert.equal(keptHeading.sections[0].level, SECTIONS[0].level);
 
 // A section whose only note is gone is taken out in code, one with more stays.
 const withGone = [

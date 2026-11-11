@@ -239,6 +239,12 @@ export const NOTES_FULL_LINE = 'Your notes are full (1,000).';
 export const NOTES_NOT_KEPT_LINE =
   'Not kept · too much to save in one go. Try the note on its own.';
 
+/** "Changed a topic" or "Changed 2 topics": the rows show each change's own words. */
+export const describeTopicChanges = (count: number) =>
+  count === 0
+    ? null
+    : plural(count, 'Changed a topic', `Changed ${count} topics`);
+
 /** "Saved a note" or "Saved 2 notes", for the summary of a turn that kept some. */
 export const describeNotes = (count: number) =>
   count === 0 ? null : plural(count, 'Saved a note', `Saved ${count} notes`);
@@ -343,24 +349,29 @@ export const buildTopicRacedLine = (topicPath: string) =>
 export const buildTopicUnchangedLine = (topicPath: string) =>
   `Nothing changed in ${topicPath}`;
 
+export const buildTopicLaterLine = (topicPath: string) =>
+  `Not written into ${topicPath} yet · Too much changed at once. The note waits there`;
+
 export const buildTopicFullLine = (topicPath: string) =>
   `Not added to ${topicPath} · The document has no more room`;
 
 export const buildTopicNotMovedLine = (
-  refusal: 'unchanged' | 'self' | 'descendant' | 'tooDeep' | 'tooMany',
+  refusal: 'unchanged' | 'self' | 'descendant' | 'tooDeep' | 'tooMany' | 'room',
   topicPath: string,
 ) =>
   refusal === 'unchanged'
     ? `${topicPath} is already there`
-    : refusal === 'tooDeep' || refusal === 'tooMany'
-      ? 'Not moved · Topics go three levels deep, with up to 20 subtopics each'
-      : `Not moved · ${topicPath} cannot go inside itself`;
+    : refusal === 'room'
+      ? `Not moved · Too much changed at once to move ${topicPath}`
+      : refusal === 'tooDeep' || refusal === 'tooMany'
+        ? 'Not moved · Topics go three levels deep, with up to 20 subtopics each'
+        : `Not moved · ${topicPath} cannot go inside itself`;
 
 /** "Group Washing and Fragrance under Car care?", written and spoken the same. */
 export const buildGroupPrompt = (childNames: string[], parentName: string) =>
   `Group ${joinNames(childNames)} under ${parentName}?`;
 
-/** The sealed half of the question asked before a new parent topic is made: yes or not now, with the grouping held until the person answers. */
+/** The sealed half of the question asked before a new parent topic is made: yes or don't group, with the grouping held until the person answers. */
 export const buildGroupQuestion = (input: {
   name: string;
   childIds: string[];
@@ -372,7 +383,7 @@ export const buildGroupQuestion = (input: {
   prompt: buildGroupPrompt(input.childNames, input.name),
   options: [
     { id: 'yes', label: 'Group them', detail: null, ref: null },
-    { id: 'no', label: 'Not now', detail: null, ref: null },
+    { id: 'no', label: "Don't group", detail: null, ref: null },
   ],
   allowsSomethingElse: false,
   noneOption: false,

@@ -1566,7 +1566,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       topicDocument,
     });
     const topicVersions = new Map<string, number>(
-      focusedTopic && topicDocument === 'whole'
+      focusedTopic && topicDocument === 'whole' && hasReviseCue(combined.text)
         ? [[focusedTopic.id, focusedTopic.version]]
         : [],
     );

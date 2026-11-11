@@ -31,7 +31,6 @@ const REVISE_CUES = new Set([
   'remove',
   'cut',
   'trim',
-  'change',
   'intro',
   'introduction',
 ]);

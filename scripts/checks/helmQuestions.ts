@@ -881,7 +881,7 @@ const GROUP_QUESTION: HelmQuestion = {
   prompt: 'Group Washing and Fragrance under Car care?',
   options: [
     { id: 'yes', label: 'Group them', detail: null, ref: null },
-    { id: 'no', label: 'Not now', detail: null, ref: null },
+    { id: 'no', label: "Don't group", detail: null, ref: null },
   ],
   allowsSomethingElse: false,
   noneOption: false,

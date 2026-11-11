@@ -22,7 +22,9 @@ export function useTopicVersions(
 ): TopicVersions {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
-  const [state, setState] = useState<TopicVersions>({
+  const key = `${topicId ?? ''}:${max ?? ''}`;
+  const [state, setState] = useState<TopicVersions & { key: string }>({
+    key,
     versions: null,
     hasFailed: false,
   });
@@ -32,7 +34,7 @@ export function useTopicVersions(
     const run = { isStopped: false, stop: null as Unsubscribe | null };
     const fail = (error: unknown) => {
       console.error('Helm topic history failed', error);
-      if (!run.isStopped) setState({ versions: null, hasFailed: true });
+      if (!run.isStopped) setState({ key, versions: null, hasFailed: true });
     };
     getHelmEncryption(uid)
       .then((encryption) => {
@@ -41,7 +43,7 @@ export function useTopicVersions(
           uid,
           topicId,
           createSealedReader(encryption, openJson),
-          (versions) => setState({ versions, hasFailed: false }),
+          (versions) => setState({ key, versions, hasFailed: false }),
           fail,
           max,
         );
@@ -51,7 +53,7 @@ export function useTopicVersions(
       run.isStopped = true;
       run.stop?.();
     };
-  }, [uid, topicId, max]);
+  }, [uid, topicId, max, key]);
 
-  return state;
+  return state.key === key ? state : { versions: null, hasFailed: false };
 }

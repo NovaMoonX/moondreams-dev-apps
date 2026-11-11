@@ -2,7 +2,7 @@ import type { OpenTopic, TopicSource } from '@apps/helm/types';
 
 /** The note a source was made from; null for words that came from no note. */
 export const sourceNoteId = (source: TopicSource): string | null =>
-  source.kind === 'person' ? null : (source.noteId ?? null);
+  source.kind === 'person' ? null : source.noteId;
 
 /** The topics whose document cites a note, by id. */
 export const topicsCitingNote = (
