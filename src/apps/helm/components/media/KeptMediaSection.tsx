@@ -27,21 +27,21 @@ function KeptMediaSection({ record }: KeptMediaSectionProps) {
   if (shown.length === 0) return null;
 
   return (
-    <>
+    <div>
       <ul className='-mx-4 flex gap-2 overflow-x-auto px-4'>
         {shown.map((media, index) => (
           <li key={media.id} className='shrink-0'>
             <Button
               type='button'
               variant='tertiary'
-              className="relative block size-16 overflow-hidden rounded-xl p-0! before:absolute before:-inset-1 before:content-['']"
+              className="relative block size-16 rounded-xl p-0! before:absolute before:-inset-1 before:content-['']"
               aria-label={HELM_COPY.mediaViewOnRecord(index + 1, shown.length)}
               onClick={() => setViewedId(media.id)}
             >
               <MediaThumb
                 media={media}
                 alt=''
-                className='size-full'
+                className='size-full rounded-xl'
                 fallback={
                   <span className='text-muted-foreground grid size-full place-items-center p-1 text-center text-[11px]'>
                     {HELM_COPY.mediaUnreadable}
@@ -59,7 +59,7 @@ function KeptMediaSection({ record }: KeptMediaSectionProps) {
           onClose={() => setViewedId(null)}
         />
       )}
-    </>
+    </div>
   );
 }
 
