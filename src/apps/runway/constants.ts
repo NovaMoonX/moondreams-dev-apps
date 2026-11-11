@@ -2921,7 +2921,7 @@ export const SET_HELD_WORDS = {
 /** A bill's "Put money aside": money added to what is set aside for its payments, never taken out. */
 export const BILL_SET_ASIDE_WORDS = {
   open: 'Put money aside',
-  openSub: 'From Free to Spend, or money you already have',
+  openSub: 'From Free to Spend or money saved elsewhere',
   openSubNone: 'Nothing set aside yet',
   title: (name: string) => `Put money aside for ${name}`,
   amount: 'Put aside',
@@ -2929,7 +2929,7 @@ export const BILL_SET_ASIDE_WORDS = {
   action: 'Put it aside',
   moved: (amount: string, name: string) => `Put ${amount} aside for ${name}`,
   outsideIn: {
-    title: 'I put it aside already',
+    title: 'Already saved elsewhere',
     body: 'In another account or in cash. Free to Spend stays the same.',
   },
   setAside: (name: string) => `${name}, set aside`,
