@@ -170,10 +170,13 @@ export type FundingAmount =
   | { kind: 'percent'; bps: number; of: 'dayMoney' | 'remaining' }
   | { kind: 'rest' };
 
+/** A pay-first amount: a funding amount, or basis points of the target bill's payment at its high end. */
+export type PairingAmount = FundingAmount | { kind: 'billShare'; bps: number };
+
 /** Sends part of one income day's money to a named bill, envelope or goal. */
 export interface Pairing {
   targetItemId: string;
-  amount: FundingAmount;
+  amount: PairingAmount;
   topUpFromAnySource: boolean;
 }
 

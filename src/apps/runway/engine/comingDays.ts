@@ -1,5 +1,6 @@
 import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 import type {
+  BillVersion,
   DayOverrideSealed,
   MoneyRange,
   OpenVersion,
@@ -32,6 +33,8 @@ const isPayLine = (version: OpenVersion): version is PayLineVersion =>
   version.kind === 'payLine';
 const isSource = (version: OpenVersion): version is SourceVersion =>
   version.kind === 'source';
+const isBill = (version: OpenVersion): version is BillVersion =>
+  version.kind === 'bill';
 
 /**
  * Splits `from`..`to` where an item's version in force can change, so a schedule that changes from a
@@ -145,8 +148,8 @@ const pairedCache = new WeakMap<
 /**
  * What each coming pay's "pay these first" set asks of each bill, by bill id and then day key: the
  * day's own set, else its pay line's, else its source's. Only a fixed figure or a share of the
- * day's money is known ahead, counted only as far as the day's money reaches once its other
- * pairings have theirs; a share of what remains or the rest of the day is left out.
+ * day's money or of the bill (at its high end) is known ahead, counted only as far as the day's money
+ * reaches once its other pairings have theirs; a share of what remains or the rest of the day is left out.
  */
 export function getPairedByBill(
   versions: readonly OpenVersion[],
@@ -167,6 +170,7 @@ export function getPairedByBill(
     return known.result;
   const payLines = versions.filter(isPayLine);
   const sources = versions.filter(isSource);
+  const bills = versions.filter(isBill);
   const overrides = new Map(
     openDays.map((day) => [day.id, day.override.pairings]),
   );
@@ -195,7 +199,13 @@ export function getPairedByBill(
           ? amount.cents
           : amount.kind === 'percent' && amount.of === 'dayMoney'
             ? percentOf(money, amount.bps)
-            : null,
+            : amount.kind === 'billShare'
+              ? percentOf(
+                  resolveCurrentOrNext(bills, targetItemId, day.on)?.payload
+                    .amount.highCents ?? 0,
+                  amount.bps,
+                )
+              : null,
     }));
     const asked = asks.reduce((sum, ask) => sum + (ask.cents ?? 0), 0);
     asks.forEach(({ targetItemId, cents }) => {

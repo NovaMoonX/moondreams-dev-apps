@@ -49,8 +49,8 @@ import {
   selectItemNames,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
-  FundingAmount,
   Pairing,
+  PairingAmount,
   PayLineSealed,
   SourceSealed,
 } from '@apps/runway/types';
@@ -101,11 +101,21 @@ const blankRow = (key: number): PairingRow => ({
   mode: 'exact',
   of: 'dayMoney',
   amount: '',
+  share: 'full',
   topUp: false,
 });
 
-const toAmount = (row: PairingRow): FundingAmount | null => {
+const SHARE_BPS = { full: 10_000, half: 5_000 } as const;
+
+const toAmount = (row: PairingRow): PairingAmount | null => {
   if (row.mode === 'rest') return { kind: 'rest' };
+  if (row.mode === 'bill') {
+    const bps =
+      row.share === 'other'
+        ? parsePercentToBps(row.amount, { stepBps: 1 })
+        : SHARE_BPS[row.share];
+    return bps === null ? null : { kind: 'billShare', bps };
+  }
   if (row.mode === 'percent') {
     const bps = parsePercentToBps(row.amount);
     return bps === null ? null : { kind: 'percent', bps, of: row.of };
@@ -119,17 +129,29 @@ const toRow = (pairing: Pairing, key: number): PairingRow => {
   return {
     key,
     targetItemId: pairing.targetItemId,
-    mode: amount.kind,
+    mode: amount.kind === 'billShare' ? 'bill' : amount.kind,
     of: amount.kind === 'percent' ? amount.of : 'dayMoney',
     amount:
       amount.kind === 'exact'
         ? (amount.cents / 100).toFixed(2)
-        : amount.kind === 'percent'
+        : amount.kind === 'percent' ||
+            (amount.kind === 'billShare' &&
+              amount.bps !== SHARE_BPS.full &&
+              amount.bps !== SHARE_BPS.half)
           ? String(amount.bps / 100)
           : '',
+    share:
+      amount.kind !== 'billShare' || amount.bps === SHARE_BPS.full
+        ? 'full'
+        : amount.bps === SHARE_BPS.half
+          ? 'half'
+          : 'other',
     topUp: pairing.topUpFromAnySource,
   };
 };
+
+const capitalize = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
 
 const getBlocker = (rows: PairingRow[], canBeEmpty: boolean) => {
   if (rows.length === 0)
@@ -258,6 +280,14 @@ function PairingsEditor({
         }
       : null;
   };
+  /** The high end of a bill's amount, which a share of the bill is taken from. */
+  const getBillBase = (id: string | null) => {
+    const amount = bills.find((entry) => entry.item.id === id)?.version
+      .payload.amount;
+    return amount
+      ? { cents: amount.highCents, isRanged: amount.lowCents !== amount.highCents }
+      : null;
+  };
   const buildPairings = (rows: PairingRow[]) =>
     rows.flatMap((row): Pairing[] => {
       const amount = toAmount(row);
@@ -333,10 +363,12 @@ function PairingsEditor({
   const getRowAmountText = (row: PairingRow) => {
     const amount = toAmount(row);
     return amount === null
-      ? row.mode === 'percent'
+      ? row.mode === 'percent' || row.mode === 'bill'
         ? 'Percent not set'
         : 'Amount not set'
-      : amount.kind === 'exact'
+      : amount.kind === 'billShare'
+        ? `${capitalize(describeAmount(amount))} ${day ? 'from this pay' : 'each pay'}`
+        : amount.kind === 'exact'
         ? day
           ? `Asks ${describeAmount(amount)} of this pay`
           : `${describeAmount(amount)} each pay`
@@ -496,6 +528,12 @@ function PairingsEditor({
               : null
           }
           capNote={getCapNote(editingRow)}
+          bill={
+            editingRow.mode === 'bill'
+              ? getBillBase(editingRow.targetItemId)
+              : null
+          }
+          isOneDay={day !== undefined}
           amountText={getRowAmountText(editingRow)}
           problem={getBlocker([editingRow], true)}
           onChange={(patch) =>

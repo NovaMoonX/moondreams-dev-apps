@@ -3935,6 +3935,31 @@ export const MOVED_DAY_WORDS = {
 } as const;
 
 /** What happens to "Pay these first" when the item it pays has stopped. */
+export const PAIRING_BILL_WORDS = {
+  mode: 'Of the bill',
+  full: 'Full',
+  half: 'Half',
+  other: 'Other share',
+  shareLabel: 'Share of the bill',
+  shareWords: { full: 'All', half: 'Half' },
+  describe: (bps: number) =>
+    bps === 10_000
+      ? 'the full bill'
+      : bps === 5_000
+        ? 'half the bill'
+        : `${bps / 100}% of the bill`,
+  worked: (
+    share: string,
+    name: string,
+    bill: string,
+    cents: string,
+    isOneDay: boolean,
+  ) =>
+    `${share} of ${name} (${bill}) · ${cents} from ${isOneDay ? 'this pay' : 'each pay'}`,
+  ranged: 'Uses the high end of its range, and follows the bill when it changes.',
+  follows: 'Follows the bill when its amount changes.',
+} as const;
+
 export const PAIRING_STOP_WORDS = {
   archived: 'Archived, so it gets nothing from this pay',
   ended: (date: string) => `Ended ${date}, so it gets nothing from this pay`,

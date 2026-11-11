@@ -3,11 +3,13 @@ import {
   CALENDAR_PERIOD_LABELS,
   CALENDAR_PERIOD_UNITS,
   HOW_OFTEN_WORDS,
+  PAIRING_BILL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import type {
   FundingAmount,
   FundingRule,
+  PairingAmount,
   PriorityExtra,
 } from '@apps/runway/types';
 
@@ -36,10 +38,11 @@ export function normalizeFunding(funding: FundingRule): FundingRule {
   return result;
 }
 
-/** What a line asks for: "$50.00", "10% of Main job" (or "of the day's money" when no day is named), "the rest". */
-export function describeAmount(amount: FundingAmount, of?: string) {
+/** What a line asks for: "$50.00", "10% of Main job" (or "of the day's money" when no day is named), "the rest", "half the bill". */
+export function describeAmount(amount: PairingAmount, of?: string) {
   if (amount.kind === 'exact') return formatCents(amount.cents);
   if (amount.kind === 'rest') return 'the rest';
+  if (amount.kind === 'billShare') return PAIRING_BILL_WORDS.describe(amount.bps);
   const target =
     amount.of === 'remaining' ? 'what is left' : (of ?? 'each pay');
   const result = `${formatBps(amount.bps)}% of ${target}`;
@@ -72,7 +75,7 @@ export function describeFunding(
 
 /** Why an item's own rule is not what an income day sets aside: a pairing names an amount for it (shown as "First from"). Null when none does. */
 export function describePairedBy(
-  pairedBy: readonly { sourceName: string; amount: FundingAmount }[],
+  pairedBy: readonly { sourceName: string; amount: PairingAmount }[],
   own?: FundingRule,
 ) {
   if (pairedBy.length === 0) return null;
