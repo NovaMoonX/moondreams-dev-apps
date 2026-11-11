@@ -295,6 +295,7 @@ const MOVE_SCREEN: ScreenContext = {
   ],
   topicId: null,
   procedureId: null,
+  runId: null,
   v: 1,
 };
 

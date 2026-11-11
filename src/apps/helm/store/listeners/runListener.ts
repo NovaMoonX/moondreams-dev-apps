@@ -175,6 +175,26 @@ export const startOpenRunsListener = (
     onError,
   );
 
+const runsByField = (
+  uid: string,
+  field: 'procedureId' | 'attachedTo.id',
+  id: string,
+  max: number,
+) =>
+  field === 'procedureId'
+    ? query(
+        collection(db, 'apps', 'helm', 'users', uid, 'procedureRuns'),
+        where('procedureId', '==', id),
+        orderBy('startedAt', 'desc'),
+        limit(max),
+      )
+    : query(
+        collection(db, 'apps', 'helm', 'users', uid, 'procedureRuns'),
+        where('attachedTo.id', '==', id),
+        orderBy('startedAt', 'desc'),
+        limit(max),
+      );
+
 /** One procedure's or one thing's runs, newest first, up to `max`. Started only while a page that lists them is open. */
 export const startRunsListener = (
   uid: string,
@@ -184,18 +204,7 @@ export const startRunsListener = (
   onChange: (runs: OpenRun[]) => void,
   onError: (error: Error) => void,
   max: number,
-) =>
-  listenToRuns(
-    query(
-      runsOf(uid),
-      where(field, '==', id),
-      orderBy('startedAt', 'desc'),
-      limit(max),
-    ),
-    read,
-    onChange,
-    onError,
-  );
+) => listenToRuns(runsByField(uid, field, id, max), read, onChange, onError);
 
 /** One run, or null once it is gone or won't open. */
 export function startRunListener(
