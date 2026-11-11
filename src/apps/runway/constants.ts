@@ -1693,7 +1693,7 @@ export const DUE_WORDS = {
     `${name} is still marked paid. Open the bill to take it back`,
 } as const;
 
-/** A repeating bill's "Paid from": which of the plan's pays carries it. */
+/** A repeating bill's "Set aside from": which of the plan's pays carries it. */
 export const BILL_PAID_FROMS = ['spread', 'lastBefore', 'pay'] as const;
 
 export const PAID_FROM_WORDS = {
