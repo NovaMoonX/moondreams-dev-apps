@@ -1,6 +1,7 @@
-import type {
-  ModelProvider,
-  ToolLoopRequest,
+import {
+  messageText,
+  type ModelProvider,
+  type ToolLoopRequest,
 } from '../../../ai/modelProvider.js';
 import { EMPTY_USAGE } from '../../../ai/models.js';
 import { toSenderName } from './answerGuards.js';
@@ -1379,7 +1380,7 @@ const readPlanDay = (text: string, reading: CaptureReading) =>
     : null;
 
 /** Emulator stand-in with no key: one createTask per comma (not one inside a number), "and" or line, each carrying the date span that lies inside it; a piece of only filler words or no letters makes none. */
-export function createFixtureProvider(
+function createTextFixtureProvider(
   text: string,
   reading: CaptureReading,
 ): ModelProvider {
@@ -1397,7 +1398,7 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const packed = readPackingAnswer(messages[0]?.content ?? '');
+      const packed = readPackingAnswer(messageText(messages[0]?.content ?? ''));
       const packingAsks = packed ? null : readPackingAsks(text);
       if (packed !== null || packingAsks) {
         return {
@@ -1409,7 +1410,11 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const followUp = readFollowUp(text, reading, messages[0]?.content ?? '');
+      const followUp = readFollowUp(
+        text,
+        reading,
+        messageText(messages[0]?.content ?? ''),
+      );
       if (followUp) {
         return {
           terminalInput: { commands: followUp },
@@ -1420,7 +1425,10 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const grown = readTopicWork(text, messages[0]?.content ?? '');
+      const grown = readTopicWork(
+        text,
+        messageText(messages[0]?.content ?? ''),
+      );
       if (grown) {
         return {
           terminalInput: grown,
@@ -1453,7 +1461,11 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const keyDate = readKeyDate(text, reading, messages[0]?.content ?? '');
+      const keyDate = readKeyDate(
+        text,
+        reading,
+        messageText(messages[0]?.content ?? ''),
+      );
       if (keyDate) {
         return {
           terminalInput: keyDate,
@@ -1465,7 +1477,7 @@ export function createFixtureProvider(
         };
       }
       const fact =
-        readContradiction(text, messages[0]?.content ?? '') ??
+        readContradiction(text, messageText(messages[0]?.content ?? '')) ??
         readSelfFact(text) ??
         readFact(text);
       if (fact) {
@@ -1478,7 +1490,7 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const noted = readNote(text, messages[0]?.content ?? '');
+      const noted = readNote(text, messageText(messages[0]?.content ?? ''));
       if (noted) {
         return {
           terminalInput: noted,
@@ -1525,7 +1537,10 @@ export function createFixtureProvider(
           toolCalls,
         };
       }
-      const answer = readQuestion(text, messages[0]?.content ?? '');
+      const answer = readQuestion(
+        text,
+        messageText(messages[0]?.content ?? ''),
+      );
       if (answer) {
         return {
           terminalInput: { commands: [answer] },
@@ -1551,7 +1566,10 @@ export function createFixtureProvider(
       ];
       const entities = readEntities(text, reading);
       const openProjects =
-        readBlock<string[]>(messages[0]?.content ?? '', 'open_projects') ?? [];
+        readBlock<string[]>(
+          messageText(messages[0]?.content ?? ''),
+          'open_projects',
+        ) ?? [];
       const commands = bounds.flatMap(([start, end], index) => {
         const spans = reading.dates.filter(
           (span) => span.start >= start && span.end <= end,
@@ -1606,6 +1624,90 @@ export function createFixtureProvider(
         errorCode: null,
         usage: EMPTY_USAGE,
         toolCalls: [],
+      };
+    },
+  };
+}
+
+const KEEP_PHOTO_RE = /\b(quote|receipt|letter|form|invoice|keep)\b/i;
+const NOT_KEEP_PHOTO_RE = /\b(?:don'?t|do not) keep\b/i;
+
+const wordsOf = (value: string) =>
+  new Set(
+    (
+      value
+        .toLowerCase()
+        .replace(/'s\b/g, '')
+        .match(/[a-z]{3,}/g) ?? []
+    ).filter((word) => !FILLER.has(word) && !KEEP_PHOTO_RE.test(word)),
+  );
+
+/** Emulator stand-in for photos: words that call the photo a quote, receipt, letter, form or invoice (or say keep) keep each one on the first open task sharing a word with them, else on a task made from the words; any other photo is read and let go, and the usual splitter files the words. */
+export function createFixtureProvider(
+  text: string,
+  reading: CaptureReading,
+): ModelProvider {
+  const base = createTextFixtureProvider(text, reading);
+  return {
+    runToolLoop: async (request) => {
+      const result = await base.runToolLoop(request);
+      const message = messageText(request.messages[0]?.content ?? '');
+      const photos = readBlock<{ alias: string }[]>(message, 'attachments');
+      if (
+        !photos?.length ||
+        result.endedBy !== 'terminal' ||
+        result.terminalName !== 'file_results'
+      ) {
+        return result;
+      }
+      const isKeep = KEEP_PHOTO_RE.test(text) && !NOT_KEEP_PHOTO_RE.test(text);
+      const mine = wordsOf(text);
+      const task = isKeep
+        ? (
+            readBlock<{ alias: string; title: string }[]>(
+              message,
+              'open_tasks',
+            ) ?? []
+          ).find((entry) =>
+            [...wordsOf(entry.title)].some((word) => mine.has(word)),
+          )
+        : undefined;
+      const title = text.trim().replace(/[.!]+$/, '');
+      const made = isKeep && !task && hasMeaning(title);
+      const target = task?.alias ?? '$new1';
+      const media = photos.map(({ alias }) => ({
+        alias,
+        decision: isKeep && (task || made) ? 'keep' : 'discard',
+        caption: isKeep ? 'A photo you sent' : 'A screenshot',
+        attachTo: isKeep && (task || made) ? [target] : [],
+      }));
+      if (!isKeep) {
+        return {
+          ...result,
+          terminalInput: { ...(result.terminalInput as object), media },
+        };
+      }
+      return {
+        ...result,
+        terminalInput: {
+          commands: made
+            ? [
+                {
+                  kind: 'createTask',
+                  ref: '$new1',
+                  taskAlias: null,
+                  title: title.charAt(0).toUpperCase() + title.slice(1),
+                  dueSpanId: null,
+                  isUrgent: null,
+                  whoRefs: [],
+                  placeRefs: [],
+                  projectRef: null,
+                },
+              ]
+            : [],
+          ...readEntities(text, reading),
+          media,
+        },
       };
     },
   };

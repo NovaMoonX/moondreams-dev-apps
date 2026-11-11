@@ -116,6 +116,8 @@ export interface ContextInput {
   topics?: ContextTopic[];
   /** The notes the device thinks the turn may be about, at most `MAX_HINT_NOTES`. */
   notes?: ContextNote[];
+  /** The photos sent with the turn, by alias. */
+  attachments?: { alias: string; kind: 'photo' }[];
   focusedTopic?: ContextFocusedTopic | null;
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
   topicDocument?: 'whole' | 'outline' | null;
@@ -389,6 +391,9 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(topicDocument
       ? [`<topic_document>${toDataJson(topicDocument)}</topic_document>`]
+      : []),
+    ...(input.attachments?.length
+      ? [`<attachments>${toDataJson(input.attachments)}</attachments>`]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]

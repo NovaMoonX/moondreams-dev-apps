@@ -71,7 +71,21 @@ export function createAnthropicProvider(
     const toolCalls: string[] = [];
     const messages: Message[] = input.map((message) => ({
       role: message.role,
-      content: message.content,
+      content:
+        typeof message.content === 'string'
+          ? message.content
+          : message.content.map((part): Block =>
+              part.type === 'text'
+                ? { type: 'text', text: part.text }
+                : {
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: part.mediaType,
+                      data: part.data,
+                    },
+                  },
+            ),
     }));
     const terminals = [terminalTool, ...extraTerminalTools];
     const terminalNames = new Set(terminals.map((tool) => tool.name));

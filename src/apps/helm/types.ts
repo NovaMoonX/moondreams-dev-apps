@@ -234,6 +234,8 @@ export interface Capture {
   turnLeadId: string | null;
   /** On a lead, the messages that joined it in order, at most 9. */
   joinedCaptureIds: string[];
+  /** The photos sent with the turn, in pick order, at most 5; empty on a turn with none and on one made before photos. */
+  attachmentIds: string[];
   seenAt: number | null;
   /** `"{connectorId}|{accountId}"` of each connection an answer quoted; empty on a turn that quoted none and on one made before quotes. */
   quotedSourceKeys: string[];
@@ -688,6 +690,12 @@ export type MediaStatus = 'uploading' | 'received' | 'kept' | 'discarded';
 
 /** A record a medium shows on, by id. */
 export interface MediaAttachment {
+  kind: 'who' | 'place' | 'task' | 'fact';
+  id: string;
+}
+
+/** The who or place a photo shows on. */
+export interface PhotoOwner {
   kind: 'who' | 'place';
   id: string;
 }
@@ -707,12 +715,18 @@ export interface Media {
   decidedAt: number | null;
   /** A discarded medium is deleted after this; an upload that never finished too. */
   deleteAfter: number | null;
+  /** The turn that sent it; null on a who's or place's photo and on one made before photos in turns. */
+  sourceCaptureId: string | null;
+  /** The execution that kept it, so Undo can find it; null until one did. */
+  executionId: string | null;
   sealed: Sealed;
 }
 
 export interface MediaSealed {
   bytesNonce: string;
   thumbNonce: string | null;
+  /** The assistant's one line about a photo it kept, up to 200 characters; null on any other. */
+  caption: string | null;
   /** The data key that sealed the bytes. */
   keyId: string;
 }

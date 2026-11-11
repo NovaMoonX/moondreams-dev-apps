@@ -498,6 +498,8 @@ export function buildImportWrites(input: {
             createdAt: now,
             decidedAt: now,
             deleteAfter: null,
+            sourceCaptureId: null,
+            executionId: null,
             sealed: seal({
               bytesNonce: kept.sealed.bytesNonce,
               thumbNonce: kept.sealed.thumbNonce,

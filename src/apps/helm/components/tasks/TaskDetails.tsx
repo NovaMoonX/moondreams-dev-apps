@@ -14,6 +14,7 @@ import SummaryRow from '@/components/SummaryRow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import {
   CONTEXT_OPTIONS,
   ENERGY_OPTIONS,
@@ -523,6 +524,7 @@ function TaskDetails({
           )}
         </SummaryRow>
       )}
+      <KeptMediaSection record={{ kind: 'task', id: task.id }} />
     </div>
   );
 }

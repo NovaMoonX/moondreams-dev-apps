@@ -26,13 +26,22 @@ export function buildResultLines(
 ): ResultLine[] {
   const effectLines = execution.effectRefs.flatMap(
     (ref, index): ResultLine[] => {
-      if (
-        ref.collection === 'who' ||
-        ref.collection === 'places' ||
-        ref.collection === 'media'
-      )
-        return [];
+      if (ref.collection === 'who' || ref.collection === 'places') return [];
       const effect = execution.effects[index];
+      if (ref.collection === 'media') {
+        // A photo an import made or an undo took back is counted with its person, not listed.
+        if (ref.op !== 'update' || execution.category === 'undo') return [];
+        return [
+          {
+            key: `${ref.docId}:${index}`,
+            docId: ref.docId,
+            title:
+              toText(effect?.written['sealed.title']) ??
+              HELM_COPY.resultPhotoFallback,
+            detail: HELM_COPY.resultPhotoKept,
+          },
+        ];
+      }
       if (ref.collection === 'topics') {
         const title = toText(effect?.written['sealed.title']);
         const kind = effect ? topicEffectKind(effect) : 'filing';

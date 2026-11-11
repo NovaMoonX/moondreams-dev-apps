@@ -14,6 +14,8 @@ import {
   type AskCommand,
   type CreateNoteCommand,
   type KeyDateCommand,
+  type MediaDecision,
+  type MediaTarget,
   type MentionRead,
   type NomosCommand,
   type NoteFactCommand,
@@ -40,6 +42,7 @@ import {
   type PlacedTopic,
   type PlannedVersion,
 } from './planTopicCommands.js';
+import { LET_GO_WINDOW_MS } from '../media/mediaCaps.js';
 import { toNoteSource } from '../topicWrite.js';
 import type { LiveTopic } from '../topicVersionStore.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
@@ -71,6 +74,7 @@ import {
   buildSpokenWhichIsTrue,
   buildWhichIsTrueQuestion,
   describeFacts,
+  describeKeptPhotos,
   describeKeyDates,
   describeProjects,
   summarize,
@@ -186,6 +190,134 @@ export interface Effect {
   previous: Record<string, unknown> | null;
 }
 
+/** The photos a turn sent, as the transaction read them, and what the model decided about each. */
+export interface MediaInput {
+  decisions: MediaDecision[];
+  /** Each photo still `received` when the transaction read it, by alias. */
+  photos: Map<string, { id: string; words: Record<string, unknown> }>;
+  /** Photos code let go without a decision: refused over the cap or not opened. */
+  letGoIds: string[];
+  /** The existing records a keep may name, by `task:id` or `fact:id`, with the title each shows under. */
+  titles: Map<string, string>;
+  executionId: string;
+}
+
+export interface MediaPlan {
+  /** Photos kept, written in the turn's one execution. */
+  kept: { id: string; data: Record<string, unknown> }[];
+  /** Photos let go, written in the same transaction but never an effect, so Undo cannot bring one back as received. */
+  letGo: { id: string; data: Record<string, unknown> }[];
+  effectRefs: EffectRef[];
+  effects: Effect[];
+  keptTitles: string[];
+}
+
+const toMediaKey = (target: MediaTarget) => `${target.kind}:${target.ref}`;
+
+/** Decides each photo: a keep goes on the records it names that still resolve (at most what the effects have room for), every other photo is let go for a day. */
+export function planMediaDecisions(input: {
+  media: MediaInput;
+  /** A target's record as it will exist after the turn, or null when it does not. */
+  resolve: (target: MediaTarget) => { id: string; title: string } | null;
+  room: number;
+  now: number;
+  seal: (fields: Record<string, unknown>) => SealedPayload;
+}): MediaPlan {
+  const { media, now } = input;
+  const letGoData = {
+    status: 'discarded',
+    attachedTo: [],
+    decidedBy: 'nomos',
+    decidedAt: now,
+    deleteAfter: now + LET_GO_WINDOW_MS,
+  };
+  const decided = media.decisions.flatMap((decision) => {
+    const photo = media.photos.get(decision.alias);
+    return photo ? [{ decision, photo }] : [];
+  });
+  const planned = decided.reduce<{
+    kept: MediaPlan['kept'];
+    letGo: MediaPlan['letGo'];
+    effectRefs: EffectRef[];
+    effects: Effect[];
+    keptTitles: string[];
+  }>(
+    (acc, { decision, photo }) => {
+      const targets = decision.targets.flatMap((target) => {
+        const found = input.resolve(target);
+        return found
+          ? [{ kind: target.kind, id: found.id, title: found.title }]
+          : [];
+      });
+      if (
+        decision.decision !== 'keep' ||
+        targets.length === 0 ||
+        acc.effects.length >= input.room
+      ) {
+        return {
+          ...acc,
+          letGo: [...acc.letGo, { id: photo.id, data: letGoData }],
+        };
+      }
+      const attachedTo = targets.map(({ kind, id }) => ({ kind, id }));
+      const title = targets[0].title;
+      const written = {
+        'sealed.title': title,
+        status: 'kept',
+        role: 'attachment',
+        attachedTo,
+        decidedBy: 'nomos',
+        decidedAt: now,
+        deleteAfter: null,
+        executionId: media.executionId,
+      };
+      const previous = {
+        'sealed.title': title,
+        status: 'received',
+        role: 'attachment',
+        attachedTo: [],
+        decidedBy: null,
+        decidedAt: null,
+        deleteAfter: null,
+        executionId: null,
+      };
+      return {
+        kept: [
+          ...acc.kept,
+          {
+            id: photo.id,
+            data: {
+              status: 'kept',
+              role: 'attachment',
+              attachedTo,
+              decidedBy: 'nomos',
+              decidedAt: now,
+              deleteAfter: null,
+              executionId: media.executionId,
+              sealed: input.seal({ ...photo.words, caption: decision.caption }),
+            },
+          },
+        ],
+        letGo: acc.letGo,
+        effectRefs: [
+          ...acc.effectRefs,
+          { op: 'update', collection: 'media', docId: photo.id },
+        ],
+        effects: [...acc.effects, { written, previous }],
+        keptTitles: [...acc.keptTitles, title],
+      };
+    },
+    { kept: [], letGo: [], effectRefs: [], effects: [], keptTitles: [] },
+  );
+  return {
+    ...planned,
+    letGo: [
+      ...planned.letGo,
+      ...media.letGoIds.map((id) => ({ id, data: letGoData })),
+    ],
+  };
+}
+
 export interface WritePlan {
   creates: { id: string; data: Record<string, unknown> }[];
   updates: { id: string; data: Record<string, unknown> }[];
@@ -202,6 +334,11 @@ export interface WritePlan {
   projectCreates: { id: string; data: Record<string, unknown> }[];
   projectUpdates: { id: string; data: Record<string, unknown> }[];
   noteCreates: { id: string; data: Record<string, unknown> }[];
+  /** Photos kept by this turn, and photos let go for a day. */
+  mediaKept: { id: string; data: Record<string, unknown> }[];
+  mediaLetGo: { id: string; data: Record<string, unknown> }[];
+  /** The title of each record a photo was kept on, for the summary. */
+  mediaKeptTitles: string[];
   topicUpdates: TopicFiling[];
   /** The versions the turn writes for topics, each with the placement it carries. */
   topicVersions: PlannedVersion[];
@@ -294,6 +431,7 @@ interface PlanInput {
   topicTree?: PlacedTopic[];
   /** When the capture was said, which a note's mark in a document carries. */
   capturedAt?: number;
+  media?: MediaInput;
 }
 
 interface Draft {
@@ -1309,6 +1447,24 @@ export function planWrites(input: PlanInput): WritePlan {
     };
   });
 
+  const mediaPlan: MediaPlan = input.media
+    ? planMediaDecisions({
+        media: input.media,
+        resolve: (target) => {
+          const draft =
+            target.kind === 'task' ? drafts.get(target.ref) : undefined;
+          if (draft) return { id: draft.id, title: draft.title };
+          const title = input.media?.titles.get(toMediaKey(target));
+          return title ? { id: target.ref, title } : null;
+        },
+        room: MAX_EFFECTS - effects.length,
+        now,
+        seal,
+      })
+    : { kept: [], letGo: [], effectRefs: [], effects: [], keptTitles: [] };
+  effectRefs.push(...mediaPlan.effectRefs);
+  effects.push(...mediaPlan.effects);
+
   const isFiling = effects.length > 0;
   const people = input.people;
   const links = (field: 'whoIds' | 'placeIds') =>
@@ -1605,6 +1761,9 @@ export function planWrites(input: PlanInput): WritePlan {
     projectCreates: projectPlan.creates,
     projectUpdates: projectPlan.updates,
     noteCreates: noteSteps.creates,
+    mediaKept: mediaPlan.kept,
+    mediaLetGo: mediaPlan.letGo,
+    mediaKeptTitles: mediaPlan.keptTitles,
     topicUpdates: [...refiled.filings.values()],
     topicVersions: topicPlan.versions,
     topicPlacements: topicPlan.placements,
@@ -1907,6 +2066,7 @@ export function buildExecution(
           plan.milestonesAdded,
         ),
         describeNotes(plan.notesMade),
+        describeKeptPhotos(plan.mediaKeptTitles),
         describeTopicChanges(plan.topicLines.length),
         ...plan.notKept,
         homeLine,

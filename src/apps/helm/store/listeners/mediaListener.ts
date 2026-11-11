@@ -30,8 +30,9 @@ const toAttachments = (value: unknown): MediaAttachment[] =>
         (entry): entry is MediaAttachment =>
           typeof entry === 'object' &&
           entry !== null &&
-          ((entry as MediaAttachment).kind === 'who' ||
-            (entry as MediaAttachment).kind === 'place') &&
+          ['who', 'place', 'task', 'fact'].includes(
+            (entry as MediaAttachment).kind,
+          ) &&
           typeof (entry as MediaAttachment).id === 'string',
       )
     : [];
@@ -54,6 +55,8 @@ async function openMedia(
     createdAt: data.createdAt ?? 0,
     decidedAt: data.decidedAt ?? null,
     deleteAfter: data.deleteAfter ?? null,
+    sourceCaptureId: data.sourceCaptureId ?? null,
+    executionId: data.executionId ?? null,
   } as const;
   try {
     if (!data.sealed) throw new Error('This photo has no sealed details.');
@@ -65,6 +68,7 @@ async function openMedia(
       ...base,
       bytesNonce,
       thumbNonce: toText(payload.thumbNonce),
+      caption: toText(payload.caption),
       keyId,
       isUnreadable: false,
     };
@@ -73,13 +77,14 @@ async function openMedia(
       ...base,
       bytesNonce: '',
       thumbNonce: null,
+      caption: null,
       keyId: '',
       isUnreadable: true,
     };
   }
 }
 
-/** The person's photos still in play (kept, received or uploading). A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+/** The person's photos still in play (kept, received, uploading, or let go and waiting to be swept). A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startMediaListener(
   uid: string,
   read: SealedReader,
@@ -92,7 +97,7 @@ export function startMediaListener(
   const stop = onSnapshot(
     query(
       collection(db, 'apps', 'helm', 'users', uid, 'media'),
-      where('status', 'in', ['kept', 'received', 'uploading']),
+      where('status', 'in', ['kept', 'received', 'uploading', 'discarded']),
       limit(MEDIA_LIMIT),
     ),
     async (snapshot) => {

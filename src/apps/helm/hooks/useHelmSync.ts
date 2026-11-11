@@ -62,6 +62,7 @@ import {
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
 import { startFactsListener } from '@apps/helm/store/listeners/factListener';
 import { startKeyDateIndexListener } from '@apps/helm/store/listeners/keyDateIndexListener';
+import { sweepExpiredMedia } from '@apps/helm/store/actions/mediaActions';
 import { startMediaListener } from '@apps/helm/store/listeners/mediaListener';
 import { startPlacesListener } from '@apps/helm/store/listeners/placeListener';
 import { startNotesListener } from '@apps/helm/store/listeners/noteListener';
@@ -349,7 +350,10 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
           startMediaListener(
             uid,
             read,
-            (media) => dispatch(setMedia(media)),
+            (media) => {
+              dispatch(setMedia(media));
+              void sweepExpiredMedia(uid, media, Date.now());
+            },
             (error) => {
               console.error('Helm photos listener failed', error);
               dispatch(setMediaFailed());

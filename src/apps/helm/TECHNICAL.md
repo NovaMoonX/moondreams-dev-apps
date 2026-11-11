@@ -137,7 +137,7 @@ interface Capture {
   sessionId: string;                   // round 6: the conversation session (section 21)
   turnIndex: number;                   // round 6: order inside the session
   screen: { view: HelmView; focus: RecordRef | null; visible: RecordRef[]; v: 1 } | null; // round 6: section 21; ≤20 visible
-  attachmentIds: string[];             // round 6: media ids, ≤5 (PRODUCT.md)
+  attachmentIds: string[];             // round 6: media ids, ≤5 (PRODUCT.md); built in issue 52, [] on a turn with none or made before it
   interruptedCaptureId: string | null; // round 6: the turn whose spoken reply the person talked over (barge-in)
   turnLeadId: string | null;           // round 6d: set on a message that joined an earlier one's turn (section 21 "Back-to-back messages"); null on the lead
   joinedCaptureIds: string[];          // round 6d: on the lead, the messages that joined it, in order; ≤9
@@ -585,6 +585,19 @@ Bytes are sealed on the device with `encryptBytes` (`@lib/security`, Runway's re
 
 **As built (issue 37).** Photos only, so `Media` carries just the fields photos use: `kind` (`'photo'`), `role`, `status`, `mimeType`, `hasThumb`, `attachedTo` (`{ kind: 'who' | 'place'; id }[]`, not the screen context's `RecordRef`), `decidedBy`, `createdAt`, `decidedAt`, `deleteAfter`, and `sealed` holding `bytesNonce`, `thumbNonce` and `keyId` (a photo sealed under another key is refused, not shown). `byteSize`, `width`, `height`, `durationMs`, `pageCount`, `takenAt`, `sourceCaptureId`, `executionId` and the sealed `fileName`, `caption` and `text` arrive with the issue that reads them. A who's `mediaIds` holds every photo it keeps (at most 12) and `photoMediaId` names the main one among them; a place's `photoMediaIds` is the ordered list and its first is the cover. The rule for `…/media/{mediaId}` is its own match (owner-only, with the readable shape checked), not the wildcard's list.
 
+**As built (issue 52).** Photos sent in a turn. New fields: `Capture.attachmentIds` (the turn's photos in pick order, at most 5, `[]` on a turn made before), `Media.sourceCaptureId` (the turn that sent it; null on a who's or place's photo), `Media.executionId` (the execution that kept it, so Undo finds it; null until one did) and `MediaSealed.caption` (the assistant's one line about a kept photo, at most 200; null on any other). `MediaAttachment.kind` widens to `'who' | 'place' | 'task' | 'fact'`; `PhotoOwner` (`who | place`) stays the type of a who's or place's picture. Keep targets are tasks and facts only: projects, a who's own photo ("this is Dana") and facts noted in the same turn come later, as do MCP and file uploads into notes or topics (`asNote`/`asTopic` are not built).
+
+| Moment | `status` | `deleteAfter` |
+|---|---|---|
+| Upload started on the device | `uploading` (then `received`) | now + 24 h, so an upload that never finished is swept |
+| Sent with a turn | `received` | `null`; `sourceCaptureId` set |
+| Kept (by the assistant, or "Keep it") | `kept` | `null` |
+| Read and let go | `discarded` | now + 24 h, never sooner |
+| Removed from its record, or its keep taken back by Undo | `discarded` | now + 24 h |
+| A held or failed turn's photos, when it is made a task as written | `discarded` | now + 24 h |
+
+The server reads a photo only for the capture it was sent with (`sourceCaptureId`) and only while `received`. Let-go photos are not Undo effects; a keep is (its effect names the medium, and Undo makes it `discarded`). The index `media status ASC, deleteAfter ASC` (collection scope, in `firestore.indexes.json`) serves the sweep.
+
 ### `StyleProfile` [MVP]
 
 ```ts
@@ -872,6 +885,8 @@ Only a spoken turn gets a spoken line (owner, round 6 second set); a typed turn 
 
 ### Media into the model
 
+**As built (issue 52): photos only.** The photos of the turn (`Capture.attachmentIds`, at most 5) are opened on the server (`media/openMedia.ts`: only a `photo` that is `received` and was sent with this capture, bytes from Storage through the Admin SDK, opened under the person's key in memory; one sealed under another key or that won't open is let go and the reply says how many weren't read) and go in as `image` blocks of the one 1600 px copy, with a short `<attachments>` list of aliases. `file_results` gains a `media` key, `{ alias, decision: 'keep' | 'discard', caption, attachTo }[]`; `attachTo` is a task or fact alias in the context. Code accepts a decision only for a photo of this capture, and a keep only when its target exists and opens, else the photo is let go; captions are cut at 200 characters. A turn with a photo takes the full route and never joins a running turn. PDFs, Markdown, voice notes, `asNote` and `asTopic` are not built; the rest of this section is the design for them.
+
 Each attachment (section 23) is opened on the server and goes in as: a photo, an image block at 1600 px; a PDF, its text layer up to 12,000 characters, or a document block when it has none; Markdown, plain text up to 12,000 characters inside the data delimiters (it is untrusted content like mail); a voice note, its transcript as the turn's text. `file_results` gains `media: { alias, decision: 'keep' | 'discard', caption, attachTo, asNote, asTopic }[]`; code keeps only what is attached or made a note or a topic, and a voice note's audio is never the model's decision. A turn with media always takes the full route.
 
 ### Sessions and the screen
@@ -1088,7 +1103,7 @@ Calendar is one connector on the platform (section 19, connector `google:calenda
 | Cloud voice slow (no audio in 2.5 s) or failing | The device voice says the same line; the turn records which voice spoke | section 20 |
 | Person talks over a reply | Playback stops, the stream is cut, the new turn starts with the last 300 ms of audio and knows the earlier one was interrupted; works with cloud listening and the on-device model, online or off; only on the browser's recognition fallback, or over a system-voice ack, is a tap needed | section 20 |
 | Voice or site voice budget reached | Device listening and voice until midnight UTC; nothing blocked | section 20 |
-| Attachment over its cap, or a sixth one | Refused on the device before upload, naming the cap ("PDFs up to 20 pages") | composer |
+| Attachment over its cap, or a sixth one | Refused on the device before upload, naming the cap ("PDFs up to 20 pages"); built for photos (issue 52): a sixth photo or a file that is not a photo is refused with a line, and a photo of any size is shrunk, never refused | composer |
 | Upload fails or the phone goes offline mid-upload | The medium stays `uploading` on the device with Retry; the turn waits for it; after 24 h the server deletes the stub | section 23 |
 | A scanned PDF with no text, or a password-protected one | Scanned: read as a document; protected: "Couldn't open this PDF" on its line, the rest of the turn goes on | section 23 |
 | A Markdown file over 20,000 characters | Refused before upload with the cap | composer |
@@ -1193,7 +1208,7 @@ Every row is proven in `check:helm-rules` (the site rows in `check:connections-r
 | Index | `synced`: `deleteAfter` ASC (collection group) | The expiry sweep | `expireKeptCopies` | Issue 19 |
 | Index | `grants`: `status` ASC, `lastSyncAt` ASC (collection group) | The hourly sweep's oldest live grants | `syncConnectionsHourly` | Issue 19 |
 | Index | none other | `facts.subjectIds array-contains-any`, notes by id, `keyDates` by `whoId` and `shape` (equality only, round 6e), `captures.quotedSourceKeys array-contains`, and every client listener are single-field or document-id ranges | n/a | n/a |
-| Storage | `apps/helm/media/{uid}/{mediaId}` and `{mediaId}.thumb` | Sealed media bytes; owner-only rule (section 14) | media flow | Issue 37 |
+| Storage | `apps/helm/media/{uid}/{mediaId}` and `{mediaId}.thumb` | Sealed media bytes; owner-only rule (section 14); a photo sent in a turn is one 1600 px copy plus its thumbnail | media flow | Issues 37, 52 |
 | Callable | `embedHelmNote` | Seals an embedding of a note for retrieval by meaning | note save | Next |
 
 No Realtime Database paths, pushes or worker changes beyond the registry's own `cloudflare-worker.js` entry. Round 6 adds Helm's first Storage path.
@@ -1721,7 +1736,7 @@ Sized for 2,000 who and 20,000 key dates per person; each date is its own `keyDa
 
 | Kind | Accepted | Cap | How the assistant reads it |
 |---|---|---|---|
-| Photo or screenshot | JPEG, PNG, WebP, HEIC (converted on the device) | shrunk on the device to `cover` (1600 px) for the model and `photo` (1280 px) to keep; 10 MB before shrinking | an image block |
+| Photo or screenshot | JPEG, PNG, WebP, HEIC (converted on the device) | any size; shrunk on the device to 1600 px (built, issue 52: one sealed 1600 px copy plus a 512 px thumbnail serve the model and the keep; no refusal for size) | an image block |
 | PDF | `application/pdf` | 10 MB and 20 pages (PRODUCT.md) | its text layer, extracted on the server, up to 12,000 characters to the model; a scanned PDF with no text layer goes as a document block (Claude reads PDFs natively up to its own page limit; unverified current limits) |
 | Voice note | recorded in the composer (`audio/webm` or `audio/mp4`) | 5 minutes, 10 MB | transcribed by `transcribeVoiceNote`, charged to voice listening minutes; the transcript is the capture's text |
 | Markdown | `.md`, `text/markdown`, `text/plain` with a `.md` name | 20,000 characters (PRODUCT.md), 100 KB | read as text, no vision path; up to 12,000 characters to the model (the whole file when it starts a topic, below) |
@@ -1729,6 +1744,8 @@ Sized for 2,000 who and 20,000 key dates per person; each date is its own `keyDa
 Up to 5 attachments per turn (PRODUCT.md); 2,000 kept media per person (a quiet cap row in Settings). Video is Next.
 
 ### Flow
+
+**As built (issue 52).** Photos only. Step 1 shrinks to 1600 px with no size refusal and checks only the count (5) and that the file is an image. A turn of photos alone is an `'attachment'` turn. Step 3's decisions are `keep` or `discard` with a caption and an `attachTo` that is a task or fact (an existing one in the context or the turn's own new task); a photo with no target is let go. "Keep it" on a let-go photo attaches it to the first task or fact the turn changed, else keeps it with no record; it writes from the device, so it needs a connection, and it is not an Undo effect. Step 4 writes a keep in the turn's execution (`executionId` on the medium); a let-go photo is `discarded` with `deleteAfter = now + 24 h` outside any execution.
 
 1. The device checks the cap, shrinks a photo, makes a 512 px thumbnail, seals bytes and thumbnail with `encryptBytes` under the data key, uploads to `apps/helm/media/{uid}/{mediaId}` and `{mediaId}.thumb` (`application/octet-stream`), and writes `media/{mediaId}` as `uploading`, then `received`.
 2. The capture carries `attachmentIds`; `sortHelmCapture` opens each medium (bytes from Storage through the Admin SDK, opened with the person's key in memory) and hands it to the model as above. A PDF's text layer is extracted with a small server dependency chosen in the PDF issue (`pdfjs-dist` legacy build or `unpdf`; licence checked there).
@@ -1743,7 +1760,7 @@ When the assistant keeps a Markdown file as knowledge, code (never the model) wr
 
 ### Discarded media and deletion
 
-A discarded medium stays 24 hours with "Didn't keep it · Keep it" on its line in the conversation (design draws it), then is deleted. That line, PRODUCT.md's Keeping and Deleting and "What the AI sees" all name the same promise: a file the assistant didn't keep is deleted within 24 hours, never "as soon as it's read" (the bytes must outlive the turn so Keep it can work). Deletion: Storage objects first, then the document. Three sweeps do this, so no scheduled job is needed: `sortHelmCapture` deletes up to 20 of the caller's expired media at the end of each call, the device deletes expired ones it holds on open, and `deleteHelmData` removes the whole Storage prefix. An `uploading` medium older than 24 hours is deleted the same way.
+A discarded medium stays 24 hours with "Didn't keep it · Keep it" on its line in the conversation (design draws it), then is deleted. That line, PRODUCT.md's Keeping and Deleting and "What the AI sees" all name the same promise: a file the assistant didn't keep is deleted within 24 hours, never "as soon as it's read" (the bytes must outlive the turn so Keep it can work). Deletion: Storage objects first, then the document. Three sweeps do this, so no scheduled job is needed: `sortHelmCapture` deletes up to 20 of the caller's expired media (`status in [uploading, received, discarded]`, `deleteAfter <= now`) at the end of every call, sorted, held or failed; the device deletes expired ones over the photos it has loaded on open (`sweepExpiredMedia` in `mediaActions.ts`, at most 20); and `deleteHelmData` removes the whole Storage prefix (issue 63's Delete all will call the exported sweep). A sweep is best effort: Storage objects first, the document only once they are gone, a failure left for the next one. An `uploading` medium older than 24 hours is deleted the same way.
 
 ### Showing sealed media
 

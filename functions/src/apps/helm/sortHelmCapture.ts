@@ -9,10 +9,15 @@ import {
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import {
+  HttpsError,
+  onCall,
+  type CallableRequest,
+} from 'firebase-functions/v2/https';
+import { getStorage } from 'firebase-admin/storage';
 
 import { createAnthropicProvider } from '../../ai/providers/anthropic.js';
-import type { ModelProvider } from '../../ai/modelProvider.js';
+import type { ModelProvider, ToolLoopContent } from '../../ai/modelProvider.js';
 import { getUsageCost } from '../../ai/models.js';
 import type { Keyring } from '../../appKeys/keyring.js';
 import type { SealedPayload } from '../../appKeys/seal.js';
@@ -53,6 +58,8 @@ import {
   type OpenTopicRecord,
 } from './noteStore.js';
 import { createHelmMcpServer } from './mcp/server.js';
+import { openMedia, type OpenedPhoto } from './media/openMedia.js';
+import { sweepExpiredMedia } from './media/sweepMedia.js';
 import {
   createQuoteBook,
   createSearchedLog,
@@ -76,6 +83,7 @@ import {
   type AskCommand,
   type CaptureReading,
   type CreateNoteCommand,
+  type MediaDecision,
   type MentionRead,
   type NoteFactCommand,
   type KeyDateCommand,
@@ -108,6 +116,7 @@ import {
   ASK_DEFERRED_LINE,
   NOTHING_CHANGED_LINE,
   buildAnswerKeptLine,
+  buildPhotosNotOpenedLine,
 } from './nomos/summaries.js';
 import {
   buildAnswerExecution,
@@ -121,6 +130,7 @@ import {
   type ExistingTask,
   type KeptNote,
   type KnownWhoState,
+  type MediaInput,
   type NoteTopicState,
   type PeopleInput,
   type QuestionStateEntry,
@@ -162,6 +172,7 @@ import {
   INTERRUPTED_PROMPT,
   MAIL_PROMPT,
   MAX_CONTEXT_TASKS,
+  MEDIA_PROMPT,
   REST_PROMPT,
   SYSTEM_PROMPT,
   TOPIC_PROMPT,
@@ -256,6 +267,7 @@ interface CaptureDoc {
   turnIndex?: number;
   turnLeadId?: string | null;
   inputMode?: string;
+  attachmentIds?: string[];
   route?: Route | null;
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
   joinedCaptureIds?: string[];
@@ -1301,7 +1313,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   });
   const opened = openForHelm(key, capture.sealed);
   const leadText = typeof opened.text === 'string' ? opened.text : null;
-  if (!leadText) throw new SortFailure('unreadable');
+  const hasAttachments =
+    mode === 'full' && (capture.attachmentIds ?? []).length > 0;
+  if (leadText === null || (!leadText && !hasAttachments)) {
+    throw new SortFailure('unreadable');
+  }
   const answersQuestion = readAnswersQuestion(capture);
   const answerTurn: AnswerTurn | null = answersQuestion
     ? {
@@ -1361,6 +1377,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       route: 'quick',
       timeZone: 'UTC',
       isSpoken: capture.inputMode === 'voice',
+      media: null,
     });
   }
   const answeredQuestion =
@@ -1379,6 +1396,20 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     text: leadText,
     reading: toReading(opened.reading),
   };
+
+  const answersAQuestion = answerTurn !== null;
+  const attached =
+    hasAttachments && !answersAQuestion
+      ? await openMedia({
+          firestore,
+          bucket: getStorage().bucket(),
+          base,
+          uid,
+          key,
+          captureId: claimed.captureRef.id,
+          listed: capture.attachmentIds,
+        })
+      : { photos: [], unopened: [], refused: [] };
 
   const profileRead = firestore.doc(base).get();
   const [profile, openTasks, alreadyMade, screen, earlierTurns, synced] =
@@ -1564,6 +1595,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       notes: toContextNotes(hinted, combined.text),
       focusedTopic: topicDocument ? focusedTopic : null,
       topicDocument,
+      attachments: attached.photos.map((photo) => ({
+        alias: photo.alias,
+        kind: 'photo' as const,
+      })),
     });
     const topicVersions = new Map<string, number>(
       focusedTopic && topicDocument === 'whole' && hasReviseCue(combined.text)
@@ -1588,6 +1623,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       liveGrants.length > 0 ? MAIL_PROMPT : null,
       topics.length > 0 ? TOPIC_PROMPT : null,
       mode === 'rest' ? REST_PROMPT : null,
+      attached.photos.length > 0 ? MEDIA_PROMPT : null,
       typeof capture.interruptedCaptureId === 'string' &&
       capture.interruptedCaptureId !== ''
         ? INTERRUPTED_PROMPT
@@ -1619,7 +1655,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         .runToolLoop({
           role,
           system,
-          messages: [{ role: 'user', content: context.message }],
+          messages: [
+            {
+              role: 'user',
+              content: toMessageContent(context.message, attached.photos),
+            },
+          ],
           mcpClient: mcp.client,
           terminalTool: FILE_RESULTS_TOOL,
           extraTerminalTools: canHandOver ? [HAND_OVER_TOOL] : [],
@@ -1667,6 +1708,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               mode,
               isAnswer: answerTurn !== null,
               hasTopicFocus: focusedTopic !== null,
+              hasMedia: attached.photos.length > 0,
             }),
       runOn,
       reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
@@ -1762,7 +1804,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     quotes,
     alreadyMade,
     timeZone,
+    photoAliases: attached.photos.map((photo) => photo.alias),
   });
+  reply.mediaDropped.forEach((code) =>
+    logger.info('helm.media.dropped', { code }),
+  );
   reply.askDropped.forEach((code) => logger.info('helm.ask.dropped', { code }));
   reply.noteDropped.forEach((code) =>
     logger.info('helm.sort.noteDropped', { code }),
@@ -1788,6 +1834,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     topicCommands: mode === 'full' ? reply.topicCommands : [],
     topics,
     hinted,
+    media: {
+      photos: attached.photos,
+      decisions: reply.media,
+      letGoIds: [...attached.unopened, ...attached.refused],
+      unopenedCount: attached.unopened.length,
+    },
     captureText: combined.text,
     planDay: mode === 'full' ? reply.planDay : null,
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
@@ -1806,6 +1858,75 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     isSpoken: read.isSpoken,
   });
 }
+
+/** The photos a turn sent, as the call read them, and what the model decided about each. */
+interface SentMedia {
+  photos: OpenedPhoto[];
+  decisions: MediaDecision[];
+  /** Photos code lets go without a decision: refused over the cap or not opened. */
+  letGoIds: string[];
+  unopenedCount: number;
+}
+
+const toMessageContent = (
+  message: string,
+  photos: OpenedPhoto[],
+): string | ToolLoopContent[] =>
+  photos.length === 0
+    ? message
+    : [
+        { type: 'text', text: message },
+        ...photos.flatMap((photo): ToolLoopContent[] => [
+          { type: 'text', text: `Photo ${photo.alias}:` },
+          photo.block,
+        ]),
+      ];
+
+const TITLE_SHOWN_CHARS = 80;
+
+/** The title each existing task or fact a keep names shows under, read in the transaction; one that is gone or won't open has none, so a keep on it is let go. */
+const readMediaTitles = async (
+  transaction: Transaction,
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  decisions: MediaDecision[],
+): Promise<Map<string, string>> => {
+  const wanted = [
+    ...new Map(
+      decisions
+        .filter((decision) => decision.decision === 'keep')
+        .flatMap((decision) => decision.targets)
+        .filter((target) => !target.ref.startsWith('$new'))
+        .map((target) => [`${target.kind}:${target.ref}`, target]),
+    ).entries(),
+  ];
+  const snapshots = await Promise.all(
+    wanted.map(([, target]) =>
+      transaction.get(
+        firestore.doc(
+          `${base}/${target.kind === 'task' ? 'tasks' : 'facts'}/${target.ref}`,
+        ),
+      ),
+    ),
+  );
+  return new Map(
+    wanted.flatMap(([mapKey, target], index): [string, string][] => {
+      const sealed = snapshots[index].get('sealed') as
+        SealedPayload | undefined;
+      if (!sealed) return [];
+      try {
+        const words = openForHelm(key, sealed);
+        const text = target.kind === 'task' ? words.title : words.statement;
+        return typeof text === 'string' && text
+          ? [[mapKey, text.slice(0, TITLE_SHOWN_CHARS)]]
+          : [];
+      } catch {
+        return [];
+      }
+    }),
+  );
+};
 
 async function writeResult(
   input: Claimed & {
@@ -1836,6 +1957,7 @@ async function writeResult(
     route: Route;
     timeZone: string;
     isSpoken: boolean;
+    media: SentMedia | null;
   },
 ): Promise<SortResult> {
   const {
@@ -1870,6 +1992,7 @@ async function writeResult(
     route,
     timeZone,
     isSpoken,
+    media: sentMedia,
   } = input;
   const tasksPath = `${base}/tasks`;
   const built = answer
@@ -2167,6 +2290,39 @@ async function writeResult(
         ];
       }),
     );
+    const mediaIds = sentMedia
+      ? [
+          ...new Set([
+            ...sentMedia.photos.map((photo) => photo.id),
+            ...sentMedia.letGoIds,
+          ]),
+        ]
+      : [];
+    const [mediaSnaps, mediaTitles] = await Promise.all([
+      Promise.all(
+        mediaIds.map((id) =>
+          transaction.get(firestore.doc(`${base}/media/${id}`)),
+        ),
+      ),
+      sentMedia && !isStale
+        ? readMediaTitles(
+            transaction,
+            firestore,
+            base,
+            key,
+            sentMedia.decisions,
+          )
+        : Promise.resolve(new Map<string, string>()),
+    ]);
+    const stillReceived = new Set(
+      mediaSnaps
+        .filter(
+          (snapshot) =>
+            snapshot.get('status') === 'received' &&
+            snapshot.get('sourceCaptureId') === captureRef.id,
+        )
+        .map((snapshot) => snapshot.id),
+    );
     const executionRef = firestore.collection(`${base}/executions`).doc();
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
     const homeDoc = profileSnap?.exists ? homeSnap?.docs[0] : undefined;
@@ -2277,6 +2433,25 @@ async function writeResult(
       existingFacts,
       timeZone,
       selfWhoId,
+      media:
+        sentMedia && !isStale
+          ? ({
+              decisions: sentMedia.decisions,
+              photos: new Map(
+                sentMedia.photos
+                  .filter((photo) => stillReceived.has(photo.id))
+                  .map((photo) => [
+                    photo.alias,
+                    { id: photo.id, words: photo.words },
+                  ]),
+              ),
+              letGoIds: sentMedia.letGoIds.filter((id) =>
+                stillReceived.has(id),
+              ),
+              titles: mediaTitles,
+              executionId: executionRef.id,
+            } satisfies MediaInput)
+          : undefined,
       keyDates: isStale ? [] : keyDates,
       keyDateIndex: keyDateRead?.index ?? undefined,
       isKeyDateIndexUnreadable:
@@ -2292,13 +2467,23 @@ async function writeResult(
         ),
       ),
     });
-    const plan = home
+    const withHome = home
       ? {
           ...written,
           effectRefs: [...written.effectRefs, home.ref],
           effects: [...written.effects, home.effect],
         }
       : written;
+    const plan =
+      sentMedia && sentMedia.unopenedCount > 0
+        ? {
+            ...withHome,
+            notKept: [
+              ...withHome.notKept,
+              buildPhotosNotOpenedLine(sentMedia.unopenedCount),
+            ],
+          }
+        : withHome;
     const isFiling = plan.effects.length > 0 || plan.lines.length > 0;
     if (
       !isFiling &&
@@ -2373,6 +2558,9 @@ async function writeResult(
       plan.noteCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/notes/${id}`), data),
       );
+      plan.mediaKept.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/media/${id}`), data),
+      );
       const versionsWritten = new Map<string, number[]>(versionNumbers);
       plan.topicVersions.forEach((version) => {
         const live = liveTopics.get(version.topicId);
@@ -2444,6 +2632,9 @@ async function writeResult(
         ),
       );
     }
+    plan.mediaLetGo.forEach(({ id, data }) =>
+      transaction.update(firestore.doc(`${base}/media/${id}`), data),
+    );
     const spokenAnswer = reply && isSpoken ? reply.spoken : null;
     const spokenLine =
       spokenAnswer && !isFiling && firstQuestion
@@ -2662,62 +2853,82 @@ export const sortHelmCapture = onCall(
     ],
   },
   async (request): Promise<SortResult> => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
+    try {
+      return await sortRequest(request);
+    } finally {
+      const uid = request.auth?.uid;
+      if (uid) {
+        await sweepExpiredMedia({
+          firestore: getFirestore(),
+          bucket: getStorage().bucket(),
+          uid,
+          now: Date.now(),
+        }).catch((error: unknown) =>
+          logger.warn('helm.media.sweepUnavailable', {
+            cause: error instanceof Error ? error.name : 'error',
+          }),
+        );
+      }
     }
-    const startedAt = Date.now();
-    const { captureId, requestKey, mode, noteIds } = readInput(request.data);
-    const firestore = getFirestore();
-    const captureRef = firestore.doc(
-      `apps/helm/users/${uid}/captures/${captureId}`,
-    );
-    const requestRef = firestore.doc(
-      `apps/helm/server/${uid}/sortRequests/${requestKey}`,
-    );
-
-    const [stored, snapshot] = await Promise.all([
-      requestRef.get(),
-      captureRef.get(),
-    ]);
-    const answered = readAnswered(stored.data(), captureId);
-    if (answered) return answered;
-    const early = snapshot.data() as CaptureDoc | undefined;
-    if (!early) throw new HttpsError('not-found', 'This capture is gone.');
-    if (mode === 'rest' && !hasOpenMoreToSort(early.questionState)) {
-      throw new HttpsError(
-        'failed-precondition',
-        'There is nothing left to sort here.',
-      );
-    }
-    const answer = readEarlyAnswer(early, Date.now(), mode);
-    if (answer) return answer;
-
-    const keyring = loadKeyringOrFail();
-    const claim = await claimCapture(firestore, captureRef, Date.now(), mode);
-    if (!claim) return toResult('received');
-    if (claim === 'failed' || claim === 'needsYou') return toResult(claim);
-
-    return sortClaimed({
-      firestore,
-      uid,
-      keyring,
-      captureRef,
-      requestRef,
-      mode,
-      startedAt,
-      noteIds,
-      ...claim,
-    }).catch((error: unknown) => {
-      if (error instanceof HttpsError) throw error;
-      const failure =
-        error instanceof SortFailure
-          ? error
-          : new SortFailure(
-              error instanceof NomosReplyError ? error.code : 'unexpected',
-            );
-      logger.warn('helm.sort.failed', { code: failure.code });
-      return failClaim(firestore, captureRef, claim.claimId, failure, {}, mode);
-    });
   },
 );
+
+async function sortRequest(request: CallableRequest): Promise<SortResult> {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
+  }
+  const startedAt = Date.now();
+  const { captureId, requestKey, mode, noteIds } = readInput(request.data);
+  const firestore = getFirestore();
+  const captureRef = firestore.doc(
+    `apps/helm/users/${uid}/captures/${captureId}`,
+  );
+  const requestRef = firestore.doc(
+    `apps/helm/server/${uid}/sortRequests/${requestKey}`,
+  );
+
+  const [stored, snapshot] = await Promise.all([
+    requestRef.get(),
+    captureRef.get(),
+  ]);
+  const answered = readAnswered(stored.data(), captureId);
+  if (answered) return answered;
+  const early = snapshot.data() as CaptureDoc | undefined;
+  if (!early) throw new HttpsError('not-found', 'This capture is gone.');
+  if (mode === 'rest' && !hasOpenMoreToSort(early.questionState)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'There is nothing left to sort here.',
+    );
+  }
+  const answer = readEarlyAnswer(early, Date.now(), mode);
+  if (answer) return answer;
+
+  const keyring = loadKeyringOrFail();
+  const claim = await claimCapture(firestore, captureRef, Date.now(), mode);
+  if (!claim) return toResult('received');
+  if (claim === 'failed' || claim === 'needsYou') return toResult(claim);
+
+  return sortClaimed({
+    firestore,
+    uid,
+    keyring,
+    captureRef,
+    requestRef,
+    mode,
+    startedAt,
+    noteIds,
+    ...claim,
+  }).catch((error: unknown) => {
+    if (error instanceof HttpsError) throw error;
+    const failure =
+      error instanceof SortFailure
+        ? error
+        : new SortFailure(
+            error instanceof NomosReplyError ? error.code : 'unexpected',
+          );
+    logger.warn('helm.sort.failed', { code: failure.code });
+    return failClaim(firestore, captureRef, claim.claimId, failure, {}, mode);
+  });
+}

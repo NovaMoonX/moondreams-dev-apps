@@ -1,5 +1,6 @@
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type { TopicVersionReason } from '@apps/helm/types';
+import { MAX_ATTACHMENTS_PER_TURN } from '@apps/helm/utils/mediaCaps';
 
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
 
@@ -450,6 +451,49 @@ export const HELM_COPY = {
       .filter(Boolean)
       .join(' '),
   resultPhotoFallback: 'A photo',
+  resultPhotoKept: 'Kept a photo',
+  attachMenuLabel: 'Add a photo',
+  attachTake: 'Take a photo',
+  attachChoose: 'Choose photos',
+  attachNote: (name: string) =>
+    `${name} reads what you send to sort it, and keeps only what's useful. You'll see what it kept.`,
+  attachRemove: 'Remove photo',
+  attachFailed: "Didn't upload",
+  attachTryAgain: 'Try again',
+  attachUploading: 'Uploading',
+  attachTooMany: `Up to ${MAX_ATTACHMENTS_PER_TURN} photos a turn. Remove one to add another.`,
+  attachSomeFit: (added: number) =>
+    `Added ${added}. Up to ${MAX_ATTACHMENTS_PER_TURN} photos a turn.`,
+  attachNotPhoto: 'Only photos and screenshots for now.',
+  attachNeedsConnection:
+    'Sending a photo needs a connection. Your words stay here.',
+  attachWaiting: 'Waiting for your photos to upload.',
+  attachWaitingTitle: 'Photos are still uploading',
+  attachFailedBlock:
+    "A photo didn't upload. Try again or remove it, then send.",
+  attachThumbLabel: (position: number) => `Photo ${position}`,
+  mediaKeptOn: (record: string) => `Kept the photo on ${record}`,
+  mediaKeptNoRecord: 'Kept the photo',
+  mediaLetGo: "Read the photo. Didn't keep it",
+  mediaKeepIt: 'Keep it',
+  mediaDeletedSoon: 'Deleted in 24 hours unless you keep it.',
+  mediaKeepFailed: "That photo couldn't be kept. Try again.",
+  mediaKeepGone: 'That photo is already gone.',
+  mediaKeepNeedsConnection: 'Keeping a photo needs a connection.',
+  mediaKeptToast: 'Kept the photo',
+  mediaOnRecordTitle: 'Photos',
+  mediaFromTurn: (day: string) => `From what you sent on ${day}`,
+  mediaRemovedToast: 'Photo removed',
+  mediaRemoveFailed: "That photo didn't come off. Try again.",
+  mediaRestoreFailed: "That photo couldn't be put back. Try again.",
+  mediaUnreadable: "This photo can't be opened.",
+  tookBackPhotos: (count: number) =>
+    count === 1 ? 'Took back a kept photo' : `Took back ${count} kept photos`,
+  undoReportPhotos: (count: number) =>
+    count === 1
+      ? 'Took back the kept photo. It is deleted in 24 hours.'
+      : `Took back ${count} kept photos. They are deleted in 24 hours.`,
+  undoReportPhotosToo: 'Photos it kept are deleted in 24 hours.',
   undoFailed: "That couldn't be taken back. Try again.",
   undoNeedsConnectionTitle: 'Undo needs a connection',
   undoNeedsConnectionBody:

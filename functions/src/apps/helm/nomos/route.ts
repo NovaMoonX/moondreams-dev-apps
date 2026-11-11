@@ -41,19 +41,22 @@ export const hasReviseCue = (text: string) =>
     .split(' ')
     .some((word) => REVISE_CUES.has(word));
 
-/** Short plain turns go to the quick model; a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
+/** Short plain turns go to the quick model; a turn with photos, a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
 export const pickRoute = ({
   text,
   mode,
   isAnswer = false,
   hasTopicFocus = false,
+  hasMedia = false,
 }: {
   text: string;
   mode: 'full' | 'rest';
   isAnswer?: boolean;
   hasTopicFocus?: boolean;
+  hasMedia?: boolean;
 }): Route => {
   const trimmed = text.trim();
+  if (hasMedia) return 'full';
   if (isAnswer && mode === 'full') return 'quick';
   if (hasTopicFocus && mode === 'full' && hasReviseCue(trimmed)) return 'full';
   return mode === 'full' &&

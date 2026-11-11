@@ -176,6 +176,7 @@ async function openCapture(
     executionIds: data.executionIds ?? [],
     turnLeadId: toLeadId(data.turnLeadId),
     joinedCaptureIds: toIds(data.joinedCaptureIds),
+    attachmentIds: toIds(data.attachmentIds),
     seenAt: data.seenAt ?? null,
     quotedSourceKeys: toIds(data.quotedSourceKeys),
     answerSavedNoteId:

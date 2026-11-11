@@ -707,7 +707,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] Hear me offline, on every phone: an opt-in download of about 40–75 MB that listens on the phone, interrupting included (N, C)
 - [ ] "Hey [name]" while Helm is open on screen, off until you turn it on (O)
 - [ ] The assistant on every screen, knowing what is in view: "move this to Friday", "who's this?", "add a step" (O, C)
-- [ ] Send photos, screenshots, PDFs, voice notes and Markdown files; the assistant keeps each on the record it changed or lets it go, and says which (O, C)
+- [x] Send photos, screenshots, PDFs, voice notes and Markdown files; the assistant keeps each on the record it changed or lets it go, and says which (O, C) (issue 52 built photos: up to 5 a turn, kept on a task or fact or let go and deleted 24 hours later, with Keep it; PDFs, voice notes, Markdown files and keeping on a project, a person or a note come later)
 - [ ] One turn split into several things, each filed as a task, fact, who, place, preference or note and linked to a project, with one Undo; typed shorthand read exactly (O, N, C)
 - [x] Questions in the shape that fits (pick one, pick several, yes or no, a few words, a date or time, a person, place or project, a number), asked only for what the assistant can't settle, one at a time when spoken, answered by tap or voice, skippable to Needs you, with Undo (O, N, C)
 - [ ] Inbox: Needs you (the questions waiting) and what's new since you looked (O, C)

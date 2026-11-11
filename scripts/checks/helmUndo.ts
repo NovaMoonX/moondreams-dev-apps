@@ -1594,6 +1594,69 @@ test('topic effects give one line each, a grouping gives one line, and filing gi
   );
 });
 
+const keptPhoto = (
+  data: Record<string, unknown> | null,
+): [string, UndoTarget] => ['m1', { docId: 'm1', data, opened: null }];
+
+const KEEP_PHOTO = {
+  ref: { op: 'update', collection: 'media', docId: 'm1' } as EffectRef,
+  effect: {
+    written: {
+      status: 'kept',
+      attachedTo: [{ kind: 'task', id: 't1' }],
+      'sealed.title': 'Confirm the venue quote',
+    },
+    previous: {
+      status: 'received',
+      attachedTo: [],
+      'sealed.title': 'Confirm the venue quote',
+    },
+  } as ExecutionEffect,
+};
+
+test('undo of a keep lets the photo go for a fresh 24 hours', () => {
+  const result = asWrite(
+    plan(execution([KEEP_PHOTO]), [
+      keptPhoto({
+        status: 'kept',
+        role: 'attachment',
+        executionId: 'exec-1',
+        attachedTo: [{ kind: 'task', id: 't1' }],
+        deleteAfter: null,
+      }),
+    ]),
+  );
+  assert.equal(result.deletes.length, 0);
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].collection, 'media');
+  assert.deepEqual(result.updates[0].fields, {
+    status: 'discarded',
+    attachedTo: [],
+    decidedAt: NOW,
+    deleteAfter: NOW + 24 * 60 * 60 * 1000,
+    executionId: null,
+  });
+  assert.equal(result.undoSealed.summary, 'Took back a kept photo');
+  assert.deepEqual(
+    result.undoExecution.effectRefs.map((ref) => ref.op),
+    ['update'],
+  );
+});
+
+test('undo of a keep skips a photo the person already removed', () => {
+  const result = asRefused(
+    plan(execution([KEEP_PHOTO]), [
+      keptPhoto({
+        status: 'discarded',
+        role: 'attachment',
+        executionId: null,
+        attachedTo: [],
+      }),
+    ]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+});
+
 const failures = tests.flatMap(([name, run]) => {
   try {
     run();

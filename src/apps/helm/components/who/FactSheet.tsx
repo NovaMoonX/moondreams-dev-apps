@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useAppSelector } from '@/store';
+import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import QuestionCard from '@apps/helm/components/home/QuestionCard';
 import SourceRing from '@apps/helm/components/who/SourceRing';
 import { FACT_STATEMENT_MAX, HELM_COPY } from '@apps/helm/constants';
@@ -341,6 +342,7 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
               )}
             </p>
           ))}
+          <KeptMediaSection record={{ kind: 'fact', id: shown.id }} />
         </div>
       )}
     </DetailSheet>

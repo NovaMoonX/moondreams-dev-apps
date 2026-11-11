@@ -249,6 +249,18 @@ export const describeTopicChanges = (count: number) =>
 export const describeNotes = (count: number) =>
   count === 0 ? null : plural(count, 'Saved a note', `Saved ${count} notes`);
 
+/** The line for photos that would not open: "Couldn't open one photo". */
+export const buildPhotosNotOpenedLine = (count: number) =>
+  count === 1 ? "Couldn't open one photo" : `Couldn't open ${count} photos`;
+
+/** "Kept the photo on Venue quote", or "Kept 2 photos" when the titles differ in number from one. */
+export const describeKeptPhotos = (titles: string[]) =>
+  titles.length === 0
+    ? null
+    : titles.length === 1
+      ? `Kept the photo on ${titles[0]}`
+      : `Kept ${titles.length} photos`;
+
 /** "Saved a note." or "Saved a note in Kitchen." */
 export const buildSpokenNote = (topicName: string | null) =>
   topicName ? `Saved a note in ${topicName}.` : 'Saved a note.';

@@ -562,6 +562,7 @@ async function buildBackToBack(input: {
         executionIds: order === 0 ? [executionId] : [],
         turnLeadId: order === 0 ? null : leadId,
         joinedCaptureIds: order === 0 ? joinedIds : [],
+        attachmentIds: [],
         seenAt: createdAt,
         quotedSourceKeys: [],
         answerSavedNoteId: null,
@@ -899,6 +900,7 @@ async function buildGmailTurn(input: {
     executionIds: [executionId],
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     seenAt: createdAt + MINUTE_MS,
     quotedSourceKeys: [`google:gmail|${GOOGLE_ACCOUNT_ID}`],
     answerSavedNoteId: null,
@@ -1034,6 +1036,7 @@ async function buildAnswerTurns(input: {
         executionIds: [executionId],
         turnLeadId: null,
         joinedCaptureIds: [],
+        attachmentIds: [],
         seenAt: createdAt + MINUTE_MS,
         quotedSourceKeys: [],
         answerSavedNoteId:
@@ -1408,10 +1411,13 @@ async function buildSeedPhoto(input: {
     createdAt: now - 5 * DAY_MS,
     decidedAt: now - 5 * DAY_MS,
     deleteAfter: null,
+    sourceCaptureId: null,
+    executionId: null,
     sealed: await sealJson<MediaSealed>(
       {
         bytesNonce: bytes.nonce,
         thumbNonce: thumb.nonce,
+        caption: null,
         keyId: encryption.keyId,
       },
       encryption,
@@ -1659,6 +1665,7 @@ async function buildNoteTurn(input: {
     executionIds: [CAPTURE_NOTE_EXECUTION_ID],
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     seenAt: createdAt + MINUTE_MS,
     quotedSourceKeys: [],
     answerSavedNoteId: null,
@@ -2293,6 +2300,7 @@ async function buildKnowledge(input: {
     lastErrorCode: null,
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     quotedSourceKeys: [],
     answerSavedNoteId: null,
     whoIds: [],
@@ -2419,6 +2427,227 @@ async function buildKnowledge(input: {
       { id: 'seed-turn-group-fitness', capture: groupCapture },
     ],
     executions: [{ id: TYRE_EXECUTION_ID, execution: tyreExecution }],
+  };
+}
+
+/** Alex's three turns that sent a photo: the venue's quote, kept on a task the turn made (with its Execution), a screenshot the assistant let go that is deleted in 20 hours unless kept, and a receipt whose photo is already deleted. Seven documents plus the two sealed objects of the first two photos. */
+async function buildPhotoTurns(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const sessionId = `seed-${uid}-photos`;
+  const taskId = 'seed-task-photo-venue';
+  const executionId = 'seed-execution-photo-venue';
+  const title = 'Confirm the venue quote';
+  const keptTurn = 'seed-turn-photo-kept';
+  const letGoTurn = 'seed-turn-photo-let-go';
+  const goneTurn = 'seed-turn-photo-gone';
+  const turnOf = async (
+    id: string,
+    index: number,
+    text: string,
+    minutesAgo: number,
+    fields: Pick<Capture, 'attachmentIds' | 'executionIds'>,
+  ) => {
+    const createdAt = now - minutesAgo * MINUTE_MS;
+    const capture: Capture = {
+      inputMode: 'typed',
+      sttProvider: null,
+      interruptedCaptureId: null,
+      answersQuestion: null,
+      ttsProvider: null,
+      medium: 'web',
+      sessionId,
+      turnIndex: index,
+      route: 'full',
+      status: 'sorted',
+      heldReason: null,
+      claimId: null,
+      claimedAt: null,
+      attempts: 0,
+      lastErrorCode: null,
+      questionState: {},
+      turnLeadId: null,
+      joinedCaptureIds: [],
+      seenAt: createdAt + MINUTE_MS,
+      quotedSourceKeys: [],
+      answerSavedNoteId: null,
+      whoIds: [],
+      placeIds: [],
+      planDayKey: null,
+      createdAt,
+      sortedAt: createdAt + SORT_DELAY_MS,
+      screen: null,
+      ...fields,
+      sealed: await sealJson<CaptureSealed>(
+        {
+          text,
+          reading: readCapture(text, {
+            now: createdAt,
+            timeZone,
+            assistantName: DEFAULT_ASSISTANT_NAME,
+          }),
+          answer: null,
+          questionAnswer: null,
+        },
+        encryption,
+      ),
+    };
+    return { id, createdAt, capture };
+  };
+  const [kept, letGo, gone] = await Promise.all([
+    turnOf(keptTurn, 0, "This is the venue's quote", 150, {
+      attachmentIds: ['seed-media-photo-quote'],
+      executionIds: [executionId],
+    }),
+    turnOf(letGoTurn, 1, 'Screenshot of the parking rules', 120, {
+      attachmentIds: ['seed-media-photo-parking'],
+      executionIds: [],
+    }),
+    turnOf(goneTurn, 2, "Here's the receipt from the framer", 90, {
+      attachmentIds: ['seed-media-photo-deleted'],
+      executionIds: [],
+    }),
+  ]);
+  const captures = [kept, letGo, gone];
+  const attachment = async (
+    id: string,
+    color: [number, number, number],
+    fields: Partial<Media>,
+  ) => {
+    const photo = await buildSeedPhoto({
+      uid,
+      id,
+      attachedTo: { kind: 'task', id: taskId },
+      color,
+      now,
+      encryption,
+    });
+    return {
+      ...photo,
+      media: {
+        ...photo.media,
+        role: 'attachment' as const,
+        mimeType: 'image/png',
+        ...fields,
+      },
+    };
+  };
+  const keptAt = kept.createdAt + SORT_DELAY_MS;
+  const letGoAt = letGo.createdAt + SORT_DELAY_MS;
+  const media = await Promise.all([
+    attachment('seed-media-photo-quote', [196, 168, 98], {
+      status: 'kept',
+      attachedTo: [{ kind: 'task', id: taskId }],
+      decidedBy: 'nomos',
+      createdAt: kept.createdAt,
+      decidedAt: keptAt,
+      deleteAfter: null,
+      sourceCaptureId: keptTurn,
+      executionId,
+    }),
+    attachment('seed-media-photo-parking', [120, 140, 120], {
+      status: 'discarded',
+      attachedTo: [],
+      decidedBy: 'nomos',
+      createdAt: letGo.createdAt,
+      decidedAt: letGoAt,
+      deleteAfter: now + 20 * 60 * MINUTE_MS,
+      sourceCaptureId: letGoTurn,
+      executionId: null,
+    }),
+  ]);
+  const task: Task = {
+    status: 'open',
+    importance: null,
+    isUrgent: false,
+    due: null,
+    durationMinutes: null,
+    energy: null,
+    context: null,
+    projectId: null,
+    milestoneId: null,
+    whoIds: [],
+    placeIds: [],
+    notUntil: null,
+    waitsOnTaskIds: [],
+    waitsOnWhoId: null,
+    stepState: {},
+    mediaIds: [],
+    createdBy: 'nomos',
+    sourceCaptureId: keptTurn,
+    executionId,
+    createdAt: keptAt,
+    lastEditedAt: null,
+    completedAt: null,
+    clearedAt: null,
+    sealed: await sealJson<TaskSealed>(
+      { title, notes: null, steps: {} },
+      encryption,
+    ),
+  };
+  const execution: Execution = {
+    captureId: keptTurn,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'create', collection: 'tasks', docId: taskId },
+      { op: 'update', collection: 'media', docId: 'seed-media-photo-quote' },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: keptAt,
+    decidedAt: keptAt,
+    finishedAt: keptAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: `Made a task and kept the photo on ${title}`,
+        commands: [{ kind: 'createTask', title, due: null }],
+        effects: [
+          {
+            written: {
+              'sealed.title': title,
+              due: null,
+              status: 'open',
+              isUrgent: false,
+            },
+            previous: null,
+          },
+          {
+            written: {
+              status: 'kept',
+              attachedTo: [{ kind: 'task', id: taskId }],
+              'sealed.title': title,
+            },
+            previous: {
+              status: 'received',
+              attachedTo: [],
+              'sealed.title': title,
+            },
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+        lines: [],
+      },
+      encryption,
+    ),
+  };
+  return {
+    captures,
+    media,
+    task: { id: taskId, task },
+    execution: { id: executionId, execution },
   };
 }
 
@@ -2728,6 +2957,7 @@ async function buildPeople(input: {
     executionIds: [],
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     seenAt: null,
     quotedSourceKeys: [],
     answerSavedNoteId: null,
@@ -2815,6 +3045,7 @@ async function buildPeople(input: {
     executionIds: [],
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     seenAt: null,
     quotedSourceKeys: [],
     answerSavedNoteId: null,
@@ -2861,6 +3092,7 @@ async function buildPeople(input: {
     executionIds: [],
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     seenAt: turnAt + MINUTE_MS,
     quotedSourceKeys: [],
     answerSavedNoteId: null,
@@ -3608,6 +3840,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             executionIds: isSorted ? [executionId] : [],
             turnLeadId: null,
             joinedCaptureIds: [],
+            attachmentIds: [],
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
             quotedSourceKeys: [],
             answerSavedNoteId: null,
@@ -4023,6 +4256,37 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.clashCapture.capture,
         );
       }
+      const photoTurns = people
+        ? await buildPhotoTurns({
+            uid: user.uid,
+            now: context.now,
+            timeZone,
+            encryption,
+          })
+        : null;
+      if (photoTurns) {
+        photoTurns.captures.forEach((entry) =>
+          batch.set(person.collection('captures').doc(entry.id), entry.capture),
+        );
+        photoTurns.media.forEach((entry) =>
+          batch.set(person.collection('media').doc(entry.id), entry.media),
+        );
+        await Promise.all(
+          photoTurns.media.flatMap((entry) =>
+            entry.uploads.map((upload) =>
+              uploadSealedSeed(upload.path, upload.bytes),
+            ),
+          ),
+        );
+        batch.set(
+          person.collection('tasks').doc(photoTurns.task.id),
+          photoTurns.task.task,
+        );
+        batch.set(
+          person.collection('executions').doc(photoTurns.execution.id),
+          photoTurns.execution.execution,
+        );
+      }
       const projects = people
         ? await buildProjects({ now: context.now, encryption })
         : null;
@@ -4070,7 +4334,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         );
       }
       const peopleCount = people
-        ? people.who.length +
+        ? (photoTurns
+            ? photoTurns.captures.length + photoTurns.media.length + 2
+            : 0) +
+          people.who.length +
           people.places.length +
           people.media.length +
           people.tasks.length +

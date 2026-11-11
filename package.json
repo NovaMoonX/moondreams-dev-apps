@@ -108,6 +108,7 @@
     "voice:deepgram-secret": "bash scripts/voice/deepgramSecret.sh",
     "voice:gemini-secret": "bash scripts/voice/geminiSecret.sh",
     "voice:google-setup": "bash scripts/voice/googleSetup.sh",
+    "check:helm-media": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmMedia.ts",
     "check:helm-voice": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmVoice.ts",
     "check:helm-copy": "tsx scripts/checks/helmCopy.ts",
     "check:yearly-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/yearlyDates.ts",

@@ -3,17 +3,26 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type KeyboardEvent,
   type Ref,
 } from 'react';
 
-import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  DropdownMenuFactories,
+  Textarea,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, Camera, ImagePlus, Paperclip } from 'lucide-react';
 
+import EllipsisDropdown from '@/components/EllipsisDropdown';
+import LockedButton from '@/components/LockedButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { readFormDraft, writeFormDraft } from '@lib/app/formDrafts';
+import { openFileChooser } from '@/utils/fileUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 
 import {
@@ -22,11 +31,13 @@ import {
   HELM_COPY,
   NOTE_BODY_MAX,
 } from '@apps/helm/constants';
+import AttachmentChips from '@apps/helm/components/home/AttachmentChips';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
+import { useTurnAttachments } from '@apps/helm/hooks/useMediaUpload';
 import { useSaveAsNote } from '@apps/helm/hooks/useSaveAsNote';
 import {
   clearSentTurn,
@@ -47,6 +58,10 @@ import {
   readCapture,
   URGENT_KEY,
 } from '@apps/helm/utils/captureReading';
+
+const { option } = DropdownMenuFactories;
+const TAKE_PHOTO = 'take';
+const CHOOSE_PHOTOS = 'choose';
 
 const HOME_DRAFT_KEY = `${HELM_DRAFT_PREFIX}composer`;
 
@@ -109,6 +124,10 @@ function Composer({
     label: string;
   } | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const libraryInput = useRef<HTMLInputElement>(null);
+  const canTakePhoto = useCanTakePhoto();
+  const attachments = useTurnAttachments();
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   // The reading is of the words as they will be sealed, so its offsets match the trimmed text.
@@ -178,9 +197,11 @@ function Composer({
   );
   const length = text.trim().length;
   const isTooLong = length > CAPTURE_MAX_CHARS;
+  const hasPhotos = attachments.mediaIds.length > 0;
+  const isHeldBackByPhotos = attachments.isUploading || attachments.hasFailed;
   const canSend =
     isReady &&
-    length > 0 &&
+    (length > 0 || hasPhotos) &&
     !isSending &&
     isCapturesLoaded &&
     user !== null &&
@@ -192,13 +213,20 @@ function Composer({
     if (!canSend || !user) return;
     const { uid } = user;
     const sent = text;
-    const turn = { ...getNextTurn(), createdAt: Date.now() };
+    const attachmentIds = attachments.mediaIds;
+    const next = getNextTurn();
+    // A turn with photos starts its own turn and never joins a running one.
+    const turn = {
+      ...next,
+      leadId: attachmentIds.length > 0 ? null : next.leadId,
+      createdAt: Date.now(),
+    };
     const sentDismissed = dismissed;
     const sentDays = fixedDays;
     const restore = (error: unknown) => {
       console.error('Helm turn did not send', error);
       const withSent = (current: string) =>
-        current ? `${current}\n${sent}` : sent;
+        !sent ? current : current ? `${current}\n${sent}` : sent;
       // The field may have unmounted since Send, so the words go back into the kept draft directly.
       // After a switch to another account the sealer is theirs, so nothing is kept for this one.
       if (store.getState().helm.uid === uid) {
@@ -232,9 +260,11 @@ function Composer({
         answersQuestion: null,
         questionAnswer: null,
         noteIds: rankStoredNotes(sent),
+        attachmentIds,
         ...turn,
       });
       recordSentTurn(uid, turn, id);
+      attachments.clear();
       setText('');
       setDismissed([]);
       setFixedDays({});
@@ -273,6 +303,11 @@ function Composer({
     setTypedAt(Date.now());
     const caret = before.length + added.length;
     requestAnimationFrame(() => field.setSelectionRange(caret, caret));
+  };
+
+  const pickPhotos = (event: ChangeEvent<HTMLInputElement>) => {
+    attachments.add(Array.from(event.target.files ?? []));
+    event.target.value = '';
   };
 
   return (
@@ -333,6 +368,16 @@ function Composer({
           else finish();
         }}
       />
+      <AttachmentChips
+        items={attachments.items}
+        onRemove={attachments.remove}
+        onRetry={attachments.retry}
+      />
+      {attachments.items.length > 0 && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.attachNote(name)}
+        </p>
+      )}
       <ReadChips
         reading={reading}
         timeZone={timeZone}
@@ -399,25 +444,91 @@ function Composer({
       )}
       {waitingPlaceholder === null && (
         <div className='flex items-center justify-between gap-3'>
-          <span
-            className='text-muted-foreground text-[13px] tabular-nums'
-            aria-live='polite'
-          >
-            {isNearLimit &&
-              `${length.toLocaleString()} / ${CAPTURE_MAX_CHARS.toLocaleString()}`}
-          </span>
-          <Button
-            type='button'
-            size='sm'
-            rounded='full'
-            disabled={!canSend}
-            onClick={() => void send()}
-          >
-            <ArrowUp className='size-4' aria-hidden='true' />
-            {HELM_COPY.send}
-          </Button>
+          <div className='flex min-w-0 items-center gap-2'>
+            <EllipsisDropdown
+              variant='tertiary'
+              placement='top'
+              alignment='start'
+              ariaLabel={HELM_COPY.attachMenuLabel}
+              disabled={!isReady}
+              icon={<Paperclip className='size-4' aria-hidden='true' />}
+              items={[
+                ...(canTakePhoto
+                  ? [
+                      option({
+                        label: HELM_COPY.attachTake,
+                        value: TAKE_PHOTO,
+                        icon: <Camera className='size-4' aria-hidden='true' />,
+                      }),
+                    ]
+                  : []),
+                option({
+                  label: HELM_COPY.attachChoose,
+                  value: CHOOSE_PHOTOS,
+                  icon: <ImagePlus className='size-4' aria-hidden='true' />,
+                }),
+              ]}
+              onItemSelect={(value: string) =>
+                openFileChooser(
+                  value === TAKE_PHOTO
+                    ? cameraInput.current
+                    : libraryInput.current,
+                  { isCamera: value === TAKE_PHOTO },
+                )
+              }
+            />
+            <span
+              className='text-muted-foreground text-[13px] tabular-nums'
+              aria-live='polite'
+            >
+              {isNearLimit &&
+                `${length.toLocaleString()} / ${CAPTURE_MAX_CHARS.toLocaleString()}`}
+            </span>
+          </div>
+          {isHeldBackByPhotos ? (
+            <LockedButton
+              label={HELM_COPY.send}
+              title={HELM_COPY.attachWaitingTitle}
+              size='sm'
+              className='rounded-full'
+            >
+              <p>
+                {attachments.isUploading
+                  ? HELM_COPY.attachWaiting
+                  : HELM_COPY.attachFailedBlock}
+              </p>
+            </LockedButton>
+          ) : (
+            <Button
+              type='button'
+              size='sm'
+              rounded='full'
+              disabled={!canSend}
+              onClick={() => void send()}
+            >
+              <ArrowUp className='size-4' aria-hidden='true' />
+              {HELM_COPY.send}
+            </Button>
+          )}
         </div>
       )}
+      <input
+        ref={cameraInput}
+        type='file'
+        accept='image/*'
+        className='hidden'
+        tabIndex={-1}
+        onChange={pickPhotos}
+      />
+      <input
+        ref={libraryInput}
+        type='file'
+        accept='image/*'
+        multiple
+        className='hidden'
+        tabIndex={-1}
+        onChange={pickPhotos}
+      />
       <NoteSheet noteId={openNoteId} onClose={() => setOpenNoteId(null)} />
     </div>
   );

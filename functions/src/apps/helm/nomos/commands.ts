@@ -4,6 +4,7 @@ import type { SyncedCopy } from '../syncedCopies.js';
 import { SENSITIVE_CATEGORIES } from './sensitive.js';
 import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
 import type { ModelChange } from '../topicWrite.js';
+import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
@@ -76,6 +77,7 @@ export const MAX_PLACES = 5;
 export const NAME_CAP = 80;
 export const PLAN_DAY_AHEAD = 6;
 export const MAX_EFFECTS = 40;
+export const MAX_MEDIA_TARGETS = 3;
 export const TITLE_CAP = 200;
 export const QUESTION_CAP = 200;
 export const ANSWER_TEXT_CAP = 1_200;
@@ -428,6 +430,20 @@ const nullable = (type: string, description: string) => ({
   description,
 });
 
+/** A record a photo may be kept on: an existing one by id, or a task this reply makes by its `$new` ref. */
+export interface MediaTarget {
+  kind: 'task' | 'fact';
+  ref: string;
+}
+
+/** What code accepts of the model's word on one photo: a keep always has a target. */
+export interface MediaDecision {
+  alias: string;
+  decision: 'keep' | 'discard';
+  caption: string | null;
+  targets: MediaTarget[];
+}
+
 /** One flat object per command, every field required and nullable, so the model's reply is checked against it before code reads it. */
 export const FILE_RESULTS_TOOL: TerminalTool = {
   name: 'file_results',
@@ -438,6 +454,29 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
     additionalProperties: false,
     required: ['commands'],
     properties: {
+      media: {
+        type: 'array',
+        description:
+          'One entry for each photo in <attachments>, none for a turn with no photos. Keep a photo only when it is worth seeing again on a task or a fact; otherwise discard it.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['alias', 'decision', 'caption', 'attachTo'],
+          properties: {
+            alias: { type: 'string', description: 'A photo alias such as m1.' },
+            decision: { type: 'string', enum: ['keep', 'discard'] },
+            caption: nullable(
+              'string',
+              `keep: one plain line saying what the photo shows, at most ${MEDIA_CAPTION_CAP} characters; null for discard.`,
+            ),
+            attachTo: {
+              type: 'array',
+              description: `keep: at most ${MAX_MEDIA_TARGETS} of a task alias from <open_tasks>, a $new ref of a createTask in this reply, or a fact alias from <known_facts>; empty for discard.`,
+              items: { type: 'string' },
+            },
+          },
+        },
+      },
       commands: {
         type: 'array',
         items: {

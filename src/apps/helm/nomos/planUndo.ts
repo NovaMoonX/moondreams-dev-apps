@@ -1,5 +1,6 @@
 import { CLAIM_MS, HELM_COPY } from '@apps/helm/constants';
 import { CURRENT_PLACE_MS } from '@apps/helm/engine/currentPlace';
+import { LET_GO_WINDOW_MS } from '@apps/helm/utils/mediaCaps';
 import { ALL_KEY_KINDS, MOMENT_PRECISIONS } from '@apps/helm/utils/moments';
 import type {
   EffectRef,
@@ -762,7 +763,40 @@ export function planUndo(input: {
   // A photo an import added goes with its person: when the person is taken back or restored, or already gone.
   const photoOutcomes = groups
     .filter(([docId]) => isMediaDoc(docId))
-    .map(([docId]) => {
+    .map(([docId, entries]) => {
+      const keep = entries.find(({ ref }) => ref.op === 'update');
+      if (keep) {
+        const data = targetOf(docId).data;
+        const title =
+          toText(keep.effect.written['sealed.title']) ??
+          HELM_COPY.resultPhotoFallback;
+        const isStillKept =
+          data?.status === 'kept' &&
+          data.role === 'attachment' &&
+          data.executionId === original.id;
+        const outcome: RecordOutcome =
+          data === null
+            ? { kind: 'gone' }
+            : isStillKept
+              ? {
+                  kind: 'restored',
+                  title,
+                  fields: {
+                    status: 'discarded',
+                    attachedTo: [],
+                    decidedAt: now,
+                    deleteAfter: now + LET_GO_WINDOW_MS,
+                    executionId: null,
+                  },
+                  reseal: null,
+                  effect: {
+                    written: { 'sealed.title': title },
+                    previous: { attachedTo: data.attachedTo },
+                  },
+                }
+              : { kind: 'skipped' };
+        return { docId, outcome };
+      }
       const attached = targetOf(docId).data?.attachedTo;
       const ownerIds = Array.isArray(attached)
         ? attached.flatMap((entry: { id?: unknown }) =>
@@ -837,6 +871,9 @@ export function planUndo(input: {
         !isNoteDoc(docId) &&
         !isTopicDoc(docId),
   );
+  const photosLetGo = done.filter(
+    ({ docId, outcome }) => isMediaDoc(docId) && outcome.kind === 'restored',
+  );
   const topicChanges = done.filter(
     ({ docId, outcome }) =>
       isTopicDoc(docId) &&
@@ -870,6 +907,7 @@ export function planUndo(input: {
         outcome.kind === 'restored' && 'parentId' in outcome.fields,
     );
   if (
+    photosLetGo.length === 0 &&
     notesDone.length === 0 &&
     records.length === 0 &&
     factsDone.length === 0 &&
@@ -969,7 +1007,17 @@ export function planUndo(input: {
     factCount === 0 &&
     dateCount === 0 &&
     projectCount === 0;
-  const report = isTopicsOnly
+  const photoCount = photosLetGo.length;
+  const isPhotosOnly =
+    photoCount > 0 &&
+    notesDone.length === 0 &&
+    records.length === 0 &&
+    factCount === 0 &&
+    dateCount === 0 &&
+    projectCount === 0 &&
+    topicCount === 0;
+  const photosToo = photoCount > 0 ? HELM_COPY.undoReportPhotosToo : '';
+  const withTopics = isTopicsOnly
     ? HELM_COPY.undoReportTopics(
         topicCount,
         topicName,
@@ -980,6 +1028,9 @@ export function planUndo(input: {
     : topicCount > 0
       ? `${baseReport} ${HELM_COPY.undoReportTopicsToo(topicCount, topicName, isGrouping)}`
       : baseReport;
+  const report = isPhotosOnly
+    ? HELM_COPY.undoReportPhotos(photoCount)
+    : [withTopics, photosToo].filter(Boolean).join(' ');
   const baseSummary =
     records.length === 0
       ? isNotesOnly
@@ -1061,11 +1112,13 @@ export function planUndo(input: {
       finishedAt: now,
     },
     undoSealed: {
-      summary: isTopicsOnly
-        ? HELM_COPY.undoTopicChanges(topicCount, topicName, isGrouping)
-        : topicCount > 0
-          ? `${baseSummary} and ${HELM_COPY.undoTopicPhrase(topicCount, topicName, isGrouping)}`
-          : baseSummary,
+      summary: isPhotosOnly
+        ? HELM_COPY.tookBackPhotos(photoCount)
+        : isTopicsOnly
+          ? HELM_COPY.undoTopicChanges(topicCount, topicName, isGrouping)
+          : topicCount > 0
+            ? `${baseSummary} and ${HELM_COPY.undoTopicPhrase(topicCount, topicName, isGrouping)}`
+            : baseSummary,
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,
