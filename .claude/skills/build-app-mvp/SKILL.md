@@ -162,6 +162,8 @@ Start this once every MVP PR is merged up and reviewed.
 
 ## Final report to the user
 
+It opens with one line naming the polish PR as the place to review everything, with links to the PR and to its overview comment: that PR holds the whole stack's changes and the comment holds what to do (owner: "this should always be outputted at the end of building the mvp"). Every later card that reports the stack repeats that line.
+
 - the stack in merge order, with PR links;
 - what each review caught;
 - what's unverified (live API, brand copy);
