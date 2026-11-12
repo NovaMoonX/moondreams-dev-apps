@@ -49,10 +49,6 @@ export const getCoverThrough = (
   nextPayOn: DateOnly | null,
 ): DateOnly => Math.max(addUtcDays(today, BILL_COVER_DAYS), nextPayOn ?? 0);
 
-/** The key a payment's cover is read by: the bill and the due date it is marked paid by. */
-export const coverKey = (billId: string, dueOn: DateOnly) =>
-  `${billId}:${dueOn}`;
-
 /** What Free to Spend sets aside for each unpaid bill payment soon enough that its pays won't carry it in time: Must before Should before Want, then the earlier payment, until Free to Spend runs out. Nothing is stored; it moves as the bills, pays and money move. */
 export function computeBillCover(input: BillCoverInput): BillCover {
   const through = getCoverThrough(input.today, input.nextPayOn);

@@ -87,7 +87,11 @@ assert.equal(getCoverThrough(today, null), at(BILL_COVER_DAYS));
   const undated = cover({ gym: [payment(at(5), 1_000)] }, 50_000, at(14), [
     { id: 'gym', name: 'gym', isDated: false },
   ]);
-  assert.equal(undated.coveredCents, 0, 'a bill with no due date is not covered');
+  assert.equal(
+    undated.coveredCents,
+    0,
+    'a bill with no due date is not covered',
+  );
 }
 
 // A pay further off than 30 days stretches the window to it.
@@ -116,7 +120,10 @@ assert.equal(
       ['want', 1_000, 2_000],
     ],
   );
-  const twice = cover({ weekly: [payment(at(9), 600), payment(at(2), 600)] }, 900);
+  const twice = cover(
+    { weekly: [payment(at(9), 600), payment(at(2), 600)] },
+    900,
+  );
   assert.deepEqual(
     twice.payments.map((entry) => [entry.dueOn, entry.coveredCents]),
     [
@@ -141,7 +148,9 @@ assert.equal(
     horizon: at(365),
     days: [],
     draftOf: () => null,
-    bills: [{ id: 'netflix', name: 'Netflix', since: at(-60), isUndated: false }],
+    bills: [
+      { id: 'netflix', name: 'Netflix', since: at(-60), isUndated: false },
+    ],
     payments: { netflix: [payment(at(5), 1_599)] },
   };
   assert.equal(lookahead(base).problems.length, 1, 'uncovered, it warns');

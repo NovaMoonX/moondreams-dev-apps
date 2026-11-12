@@ -1506,17 +1506,17 @@ function ItemSheet({
           header?.archivedAt == null &&
           payment !== null &&
           payment.paid === null && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<PiggyBank />}
-            label={BILL_SET_ASIDE_WORDS.open}
-            subtitle={getSetAsideSub(payment.totalCents)}
-            onClick={() =>
-              hasStarted ? goTo('setAside') : setIsStartOpen(true)
-            }
-          />
-        )}
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<PiggyBank />}
+              label={BILL_SET_ASIDE_WORDS.open}
+              subtitle={getSetAsideSub(payment.totalCents)}
+              onClick={() =>
+                hasStarted ? goTo('setAside') : setIsStartOpen(true)
+              }
+            />
+          )}
         {canChange && maxAction && (
           <ActionRow
             isGrouped
@@ -2407,28 +2407,28 @@ function ItemSheet({
                       ? setHeldView
                       : view === 'setAside'
                         ? billSetAsideView
-                      : view === 'heldIn'
-                        ? heldInView
-                        : view === 'horizonPlan'
-                          ? horizonPlanView
-                          : view === 'planChoice'
-                            ? planChoiceView
-                            : view === 'comingList'
-                              ? comingListView
-                              : view === 'changeSheet' && changeSheetView
-                                ? changeSheetView
-                                : view === 'horizonLink' && horizonLinkView
-                                  ? horizonLinkView
-                                  : view === 'pins'
-                                    ? pinsView
-                                    : view === 'dayAction' &&
-                                        dayAction?.renderView
-                                      ? dayAction.renderView({
-                                          onBack: () => goTo('menu'),
-                                          onClose,
-                                          openChange,
-                                        })
-                                      : action
+                        : view === 'heldIn'
+                          ? heldInView
+                          : view === 'horizonPlan'
+                            ? horizonPlanView
+                            : view === 'planChoice'
+                              ? planChoiceView
+                              : view === 'comingList'
+                                ? comingListView
+                                : view === 'changeSheet' && changeSheetView
+                                  ? changeSheetView
+                                  : view === 'horizonLink' && horizonLinkView
+                                    ? horizonLinkView
+                                    : view === 'pins'
+                                      ? pinsView
+                                      : view === 'dayAction' &&
+                                          dayAction?.renderView
+                                        ? dayAction.renderView({
+                                            onBack: () => goTo('menu'),
+                                            onClose,
+                                            openChange,
+                                          })
+                                        : action
         }
       >
         {menu}

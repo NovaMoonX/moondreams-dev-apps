@@ -1,7 +1,10 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { computeBillCover, type BillCover } from '@apps/runway/engine/billCover';
+import {
+  computeBillCover,
+  type BillCover,
+} from '@apps/runway/engine/billCover';
 import type { Balances } from '@apps/runway/engine/balances';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { selectLedgerOnlyBalances } from '@apps/runway/store/selectors/balanceSelectors';
@@ -40,9 +43,7 @@ export const selectBillCover = createSelector(
       payments,
       nextPayOn: comingDays.find((day) => day.on >= today)?.on ?? null,
       freeToSpendCents:
-        balances.isStarted && balances.hasMoney
-          ? balances.freeToSpendCents
-          : 0,
+        balances.isStarted && balances.hasMoney ? balances.freeToSpendCents : 0,
     }),
 );
 
@@ -52,7 +53,8 @@ export const selectBalances = createSelector(
   (balances, billCover): CoveredBalances => ({
     ...balances,
     ledgerBillsCents: balances.assignedToBillsCents,
-    assignedToBillsCents: balances.assignedToBillsCents + billCover.coveredCents,
+    assignedToBillsCents:
+      balances.assignedToBillsCents + billCover.coveredCents,
     freeToSpendCents: balances.freeToSpendCents - billCover.coveredCents,
     billCover,
   }),

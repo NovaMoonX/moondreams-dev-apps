@@ -86,7 +86,8 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
     await openItemAt(itemId, step);
   };
 
-  const heldOf = (id: string) => Math.max(0, balances.assignedByItem[id] ?? 0);
+  const ledgerOf = (id: string) => balances.assignedByItem[id] ?? 0;
+  const heldOf = (id: string) => Math.max(0, ledgerOf(id));
   const getPlanRows = (
     section: PlanSection,
     itemKind: 'bill' | 'goal' | 'envelope' | 'horizon',
@@ -104,7 +105,7 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
           (item.heldReleasedOn === null || item.heldReleasedOn > today),
       )
       .map((item) => ({ id: item.id, cents: getCents(item.id) }))
-      .filter((row) => row.cents > 0)
+      .filter((row) => row.cents !== 0)
       .sort((a, b) => rank(a.id) - rank(b.id))
       .map(({ id, cents }) => {
         const payload = newestPayload.get(id);
@@ -148,11 +149,11 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
         'bills',
         'bill',
         bills,
-        (id) => heldOf(id) + coveredOf(id),
-        (id) => getBillDetail(id, heldOf(id), coveredOf(id)),
+        (id) => ledgerOf(id) + coveredOf(id),
+        (id) => getBillDetail(id, ledgerOf(id), coveredOf(id)),
       );
     }
-    if (kind === 'goals') return getPlanRows('goals', 'goal', goals, heldOf);
+    if (kind === 'goals') return getPlanRows('goals', 'goal', goals, ledgerOf);
     if (kind === 'envelopes') {
       return getPlanRows('envelopes', 'envelope', envelopes, heldOf);
     }
@@ -168,7 +169,7 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
       onOpen: () => void leaveViewForTab('plan', 'cards'),
     }));
   };
-  const rows = getRows().filter((row) => row.cents > 0);
+  const rows = getRows().filter((row) => row.cents !== 0);
   const shortPayments =
     kind === 'bills'
       ? billCover.payments.filter((payment) => payment.shortCents > 0)

@@ -31,7 +31,10 @@ import {
   undoHorizonState,
   type HorizonStateWritten,
 } from '@apps/runway/store/actions/horizonActions';
-import { selectBalances, selectHeldBy } from '@apps/runway/store/selectors/billCoverSelectors';
+import {
+  selectBalances,
+  selectHeldBy,
+} from '@apps/runway/store/selectors/billCoverSelectors';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectAllHorizonItems,
