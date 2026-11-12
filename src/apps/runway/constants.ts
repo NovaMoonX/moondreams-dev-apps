@@ -1280,8 +1280,7 @@ export const CHANGE_WORDS = {
     'This changed somewhere else. What it does now is shown below. Check it, then save again.',
   fromHeading: 'When it starts',
   fromNow: 'From now on',
-  fromNowNote:
-    'Takes effect from now on. To set a later date, use Plan a change.',
+  fromNowNote: 'Starts now. For a later date, use Plan a change.',
   whenHeading: 'When should it start?',
   whenOpenedFrom: (day: string) =>
     `You opened this from your ${day} income day.`,
