@@ -94,7 +94,7 @@ function BrowseTile({
       variant='tertiary'
       className={join(
         'helm-card flex h-auto w-full flex-col items-start justify-between gap-3 p-4 text-left',
-        isCompact && 'gap-2 p-2.5',
+        isCompact && 'justify-start! gap-2 p-2.5',
         isWide && 'col-span-2',
         isCompact ? 'min-h-16' : isSmall ? 'min-h-20' : 'min-h-28',
       )}

@@ -7,7 +7,7 @@ import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { formatClock, getDayNoon, toDayKey } from '@apps/helm/utils/planDays';
-import { getDayEvents, getLiveRecords } from '@apps/helm/utils/synced';
+import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
 /** The Today tile's state: the next timed event, else how many events the day holds; null when there are none. */
 export function useTodayTileLine() {
@@ -22,7 +22,7 @@ export function useTodayTileLine() {
 
   return useMemo(() => {
     const { events } = getDayEvents(
-      getLiveRecords(stored, grants, true),
+      getTodayRecords(stored, grants),
       getDayNoon(toDayKey(now, timeZone), timeZone),
       timeZone,
     );

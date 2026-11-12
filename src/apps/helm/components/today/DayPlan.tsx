@@ -49,7 +49,7 @@ import {
   isLiveCalendar,
   type PlanSources,
 } from '@apps/helm/utils/planInput';
-import { getDayEvents, getLiveRecords } from '@apps/helm/utils/synced';
+import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
 const FREE_GAP_MINUTES = 45;
 const FULL_GAP_MINUTES = 30;
@@ -120,14 +120,8 @@ function DayPlan({
   const day = sources.planDays[dayKey];
   const isToday = dayKey === todayKey;
 
-  // A calendar Google stopped sharing is left out until it is reconnected.
   const records = useMemo(
-    () =>
-      getLiveRecords(stored, grants, true).filter(
-        (record) =>
-          grants.find((grant) => grant.id === record.grantId)?.status !==
-          'needsReconnect',
-      ),
+    () => getTodayRecords(stored, grants),
     [stored, grants],
   );
   const merged = useMemo(

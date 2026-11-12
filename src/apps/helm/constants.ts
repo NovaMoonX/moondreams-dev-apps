@@ -1704,8 +1704,6 @@ export const HELM_COPY = {
   linkedOrganization: 'Organization',
   linkedPlace: 'Place',
   photosTitle: 'Photos',
-  photosEmpty: (name: string) =>
-    `Add a photo of ${name}. It shows here and in your lists, and it's sealed on your phone before it's saved.`,
   photoAdd: 'Add a photo',
   photoFull: `This page holds up to ${PHOTOS_PER_RECORD} photos. Remove one to add another.`,
   photoAdded: 'Photo added',

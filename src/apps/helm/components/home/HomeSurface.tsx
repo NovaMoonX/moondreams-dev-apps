@@ -1,4 +1,4 @@
-import { useMemo, useState, type Ref } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -8,7 +8,7 @@ import HeaderIconButton from '@/components/HeaderIconButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useConnections } from '@/lib/connections/useConnections';
-import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import { getDeviceTimeZone, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { useAppDispatch, useAppSelector } from '@/store';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import Composer from '@apps/helm/components/home/Composer';
@@ -28,8 +28,8 @@ import { useSession } from '@apps/helm/hooks/useSession';
 import { hasLapsedTrust } from '@apps/helm/queries/helmKeyQueries';
 import { retryKey, type KeyStatus } from '@apps/helm/store/helmSlice';
 import { selectHeldItems } from '@apps/helm/store/selectors/captureSelectors';
-import { formatClock } from '@apps/helm/utils/planDays';
-import { getDayEvents, getLiveRecords } from '@apps/helm/utils/synced';
+import { formatClock, getDayNoon, toDayKey } from '@apps/helm/utils/planDays';
+import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
 interface HomeSurfaceProps {
   composerRef: Ref<HTMLTextAreaElement>;
@@ -58,16 +58,17 @@ const ROW =
 /** The next fixed thing today (tomorrow's first once today's are over) and how many questions wait, each a door. */
 function QuietLines({ now }: { now: number }) {
   const { showView } = useHelmUrlState();
-  const { grants } = useConnections({ readerAppId: 'helm' });
+  const { grants } = useConnections({
+    readerAppId: 'helm',
+    includeEnded: true,
+  });
   const stored = useAppSelector((state) => state.helm.synced.items);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const needsYou = useAppSelector(selectHeldItems).needsYou.length;
   const nextEvent = useMemo(() => {
-    const records = getLiveRecords(stored, grants, false).filter(
-      (record) =>
-        grants.find((grant) => grant.id === record.grantId)?.status === 'live',
-    );
+    const records = getTodayRecords(stored, grants);
+    const todayNoon = getDayNoon(toDayKey(now, timeZone), timeZone);
     const firstAfter = (at: number, from: number) =>
       getDayEvents(records, at, timeZone).events.find(
         (event) =>
@@ -82,7 +83,7 @@ function QuietLines({ now }: { now: number }) {
         ),
       };
     }
-    const tomorrow = firstAfter(now + DAY_MS, 0);
+    const tomorrow = firstAfter(todayNoon + DAY_MS, 0);
     return tomorrow?.startAt != null
       ? {
           label: HELM_COPY.homeNextEventTomorrow(
@@ -172,7 +173,31 @@ function HomeSurface({
   const hasTurns = sessions.length > 0;
   const voice = useHelmVoiceContext();
   const now = useNow(60_000);
-  const todayStart = new Date(now).setHours(0, 0, 0, 0);
+  const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
+  const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
+  const todayStart = zonedDateTimeToEpoch(
+    toDayKey(now, timeZone),
+    '00:00',
+    timeZone,
+  );
+  const composerBox = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = composerBox.current;
+    if (!element) return;
+    const root = document.documentElement;
+    const publish = () =>
+      root.style.setProperty(
+        '--helm-composer-h',
+        `${element.getBoundingClientRect().height}px`,
+      );
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--helm-composer-h');
+    };
+  }, []);
 
   return (
     <main className='flex flex-1 flex-col pb-10'>
@@ -247,6 +272,10 @@ function HomeSurface({
           )}
         </div>
       </div>
+      <div
+        aria-hidden='true'
+        className='h-[var(--helm-composer-h,0px)] shrink-0'
+      />
       {/* While the voice is in use the dock's words take this place; the field keeps its draft and its room. */}
       <div
         className={join(
@@ -254,7 +283,10 @@ function HomeSurface({
           voice.state !== 'idle' && 'invisible',
         )}
       >
-        <div className="before:from-background pointer-events-auto relative mx-auto max-w-xl before:pointer-events-none before:absolute before:inset-x-[-1rem] before:-top-6 before:bottom-1/2 before:-z-10 before:bg-gradient-to-t before:to-transparent before:content-['']">
+        <div
+          ref={composerBox}
+          className="before:from-background pointer-events-auto relative mx-auto max-w-xl before:pointer-events-none before:absolute before:inset-x-[-1rem] before:-top-6 before:bottom-1/2 before:-z-10 before:bg-gradient-to-t before:to-transparent before:content-['']"
+        >
           <Composer
             key={keyStatus === 'ready' ? 'ready' : 'waiting'}
             fieldRef={composerRef}

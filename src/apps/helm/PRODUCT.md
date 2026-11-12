@@ -286,7 +286,7 @@ The owner's words: "in order to have a timeline for the user and for their peopl
     - "Graduated · 2016"
   - Then "See all 14 moments" when there are more than 3.
   - Add: "Add a date"
-  - Empty: "No key dates yet. Tell [name] a birthday or a moment, or add one."
+  - Empty: one "Add a key date" row (tell [name] a birthday or a moment, or add one there)
   - A row opens a small sheet with its source, Edit, Remove (with Undo) and, for a date that comes back, "Show on Today" (on by default for Birthday, Anniversary and Custom yearly). Adding or changing a date that comes back by hand needs a connection, and the sheet says "Needs a connection to save"; a date said in a turn while offline waits with the turn.
 - **All moments, word for word.** "See all 14 moments" opens a page titled "Grandpa's moments", grouped by decade, then year, newest first:
   - Decade heading: "2020s", "2010s", "1980s"
