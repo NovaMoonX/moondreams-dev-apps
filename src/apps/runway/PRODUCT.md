@@ -484,7 +484,7 @@ Free to Spend is the money nobody has claimed. Home shows it, and tapping it sho
 | | Line | What it counts |
 |---|---|---|
 | | **Money on hand** | what you started with, plus the money from every income day you confirmed since, less every bill payment you marked paid, less (Track only) what you spent |
-| − | **Held for bills** | for each bill, what it started with plus what confirmed days set aside for it, less what its paid payments used |
+| − | **Held for bills** | for each bill, what it started with plus what confirmed days set aside for it, less what its paid payments used, plus what Free to Spend covers of a payment due within 30 days or before the next pay (whichever is further) that its pays won't fill in time (Must, Should, Want, then the earlier payment, until Free to Spend runs out; nothing stored, so it moves as the plan moves) |
 | − | **Held for Horizon** | each open or kept-held Horizon item's left |
 | − | **Held for goals** | for each goal, what it started with plus what confirmed days gave it |
 | − | **Set aside in envelopes** (Plan) or **Left in envelopes** (Track) | each envelope's figure, with an overspent envelope counted as $0 |
