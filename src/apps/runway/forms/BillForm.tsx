@@ -172,8 +172,13 @@ import type {
   Priority,
   Schedule,
 } from '@apps/runway/types';
-import { getIntervalMonths, toPayOn } from '@apps/runway/engine/schedule';
 import {
+  getIntervalMonths,
+  occurrences,
+  toPayOn,
+} from '@apps/runway/engine/schedule';
+import {
+  describeDueAnswer,
   describeEveryMonths,
   describePayOnDay,
 } from '@apps/runway/utils/billText';
@@ -427,6 +432,18 @@ const toSchedule = (
         ? [new Date(anchor).getUTCDate()]
         : [],
   };
+};
+
+const NEXT_DUE_REACH = 800 * 86_400_000;
+
+/** A repeating bill's next due day from today, which its edit shows in place of the first one it was given. */
+const getNextDue = (payload: BillSealed, today: number) => {
+  const { schedule } = payload.timing;
+  if (schedule.kind === 'once' || schedule.anchor === null) return null;
+  return (
+    occurrences(schedule, payload.ending, today, today + NEXT_DUE_REACH)[0] ??
+    null
+  );
 };
 
 /** A saved schedule as the form's repeat answers. */
@@ -727,6 +744,9 @@ function BillFormBody({
   const openAccounts = useAppSelector(selectAccounts);
   const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const isTracking = isTrackingLevel(useAppSelector(selectLevel));
+  const [nextDue] = useState(() =>
+    editing ? getNextDue(editing.payload, today) : null,
+  );
   const [startData] = useState<BillFormData>(() =>
     editing || draft?.initial || fromCost
       ? {
@@ -758,6 +778,7 @@ function BillFormBody({
           ...(draft?.forName
             ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
             : {}),
+          ...(nextDue === null ? {} : { startDate: toDateInputValue(nextDue) }),
         }
       : {
           name: '',
@@ -967,6 +988,30 @@ function BillFormBody({
   const isDueValid =
     formData.isLater ||
     (dueDate !== undefined && (editing !== undefined || dueDate >= today));
+  /** The saved first date while the shown next date and the repeat are untouched, so an edit never moves the schedule's start. */
+  const toAnchor = (data: BillFormData) => {
+    if (data.isLater) return null;
+    const isKept =
+      editing !== undefined &&
+      nextDue !== null &&
+      data.startDate === startData.startDate &&
+      data.frequency === startData.frequency &&
+      getEveryMonths(data) === getEveryMonths(startData);
+    return isKept
+      ? editing.payload.timing.schedule.anchor
+      : fromDateInputValue(data.startDate);
+  };
+  const getDueSummary = (on: number) => {
+    const anchor = toAnchor(formData);
+    const day =
+      formData.frequency === null || anchor === null || anchor === undefined
+        ? null
+        : describeDueAnswer(
+            toSchedule(formData, formData.frequency, anchor),
+            on,
+          );
+    return day ?? formatDateOrdinalUTC(on);
+  };
   const canLater =
     editing === undefined
       ? fromCost === undefined
@@ -1135,13 +1180,13 @@ function BillFormBody({
     },
     {
       id: 'due',
-      title: FORM_FLOW_WORDS.dueTitle,
+      title: isOnce ? FORM_FLOW_WORDS.dueTitle : FORM_FLOW_WORDS.nextDueTitle,
       summaryLabel: FORM_FLOW_WORDS.due,
       summaryValue: formData.isLater
         ? FORM_FLOW_WORDS.dueLaterSummary
         : dueDate === undefined
           ? ''
-          : formatDateOrdinalUTC(dueDate),
+          : getDueSummary(dueDate),
       isAnswered: isDueValid,
       blocker:
         dueDate !== undefined && !isDueValid ? FORM_FLOW_WORDS.pastDay : null,
@@ -1679,7 +1724,7 @@ function BillFormBody({
 
   const buildBill = (data: BillFormData): BillSealed | null => {
     const amount = parseAmountDraft(data.amount);
-    const anchor = data.isLater ? null : fromDateInputValue(data.startDate);
+    const anchor = toAnchor(data);
     const ending = buildEnding(data);
     if (
       amount === null ||

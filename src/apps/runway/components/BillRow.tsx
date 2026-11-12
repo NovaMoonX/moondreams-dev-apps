@@ -8,10 +8,7 @@ import { isTrackingLevel } from '@apps/runway/engine/level';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardName } from '@apps/runway/utils/cardText';
-import {
-  formatDateOrdinalUTC,
-  formatRelativeDayUTC,
-} from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
@@ -31,10 +28,11 @@ import {
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
-import type { BillSealed, Stance } from '@apps/runway/types';
+import type { BillSealed, Schedule, Stance } from '@apps/runway/types';
 import {
   describeBillMonthly,
   describeBillRepeat,
+  describeDueDay,
   isSavingUpBill,
   isUndatedBill,
   joinPaymentAndState,
@@ -84,20 +82,17 @@ interface BillSheetProps {
 
 const getDueLine = (
   payment: BillPayment | null,
+  schedule: Schedule,
   isUndated: boolean,
   today: number,
   isSavingUp: boolean,
 ) => {
   if (isUndated) return BILL_WORDS.needsDueDate;
   if (!payment) return 'No payment left';
-  const date = formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC);
+  const date = describeDueDay(schedule, payment.dueOn, today);
   if (payment.paid) return `Paid · due\u00a0${date}`;
   if (payment.payOn !== payment.dueOn) {
-    const payDate = formatRelativeDayUTC(
-      payment.payOn,
-      today,
-      formatDateOrdinalUTC,
-    );
+    const payDate = describeDueDay(schedule, payment.payOn, today);
     return BILL_WORDS.payOnLine(payDate, date);
   }
   return isSavingUp
@@ -155,6 +150,7 @@ function BillRow({
   const emoji = useItemEmoji(bill.emoji, bill.groupId);
   const stateLine = getDueLine(
     payment,
+    bill.timing.schedule,
     isUndated,
     today,
     isSavingUp && monthly === null,
@@ -256,7 +252,7 @@ export function BillSheet({
   const getDueFact = () => {
     if (isUndated) return null;
     if (payment)
-      return `due\u00a0${formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC)}`;
+      return `due\u00a0${describeDueDay(schedule, payment.dueOn, today)}`;
     return 'No payment left';
   };
   const fact = [

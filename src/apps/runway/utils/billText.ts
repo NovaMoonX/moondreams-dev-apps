@@ -27,7 +27,11 @@ import type {
   Schedule,
 } from '@apps/runway/types';
 import { describeCadenceLine } from '@apps/runway/utils/fundingText';
-import { formatDateOrdinalUTC, toDayOrdinal } from '@/utils/formatUtils';
+import {
+  formatDateOrdinalUTC,
+  formatRelativeDayUTC,
+  toDayOrdinal,
+} from '@/utils/formatUtils';
 import { LAST_DAY } from '@apps/runway/utils/monthDays';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 
@@ -162,6 +166,51 @@ export function describeEnvelopeMonthly(
 /** A bill that comes round less often than monthly is saved up for over the pays before it, unless it is paid all from the pay right before it is due. */
 export const isSavingUpBill = (schedule: Schedule, fundedBy: BillFundedBy) =>
   getIntervalMonths(schedule) !== null && fundedBy.kind !== 'lastBefore';
+
+const WEEKDAYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+const CLOSE_DAYS = 7;
+
+const isLastOfMonth = (on: number) =>
+  new Date(on + 86_400_000).getUTCDate() === 1;
+
+/** The day a repeating schedule lands on, in its own terms ("the 10th", "the last day", "Fridays"); null when only the full date says it. */
+function describeRepeatDay(schedule: Schedule, on: number) {
+  const date = new Date(on);
+  if (schedule.kind === 'monthly') {
+    return schedule.monthDays[0] === LAST_DAY && isLastOfMonth(on)
+      ? 'the last day'
+      : `the ${toDayOrdinal(date.getUTCDate())}`;
+  }
+  if (schedule.kind === 'weekly') return `${WEEKDAYS[date.getUTCDay()]}s`;
+  return null;
+}
+
+/** When a payment falls due, as a row says it: "today", "tomorrow" or "Fri" inside a week, the full date once it has passed, otherwise its repeat's day ("the 10th"), falling back to the full date. */
+export function describeDueDay(schedule: Schedule, on: number, today: number) {
+  const days = Math.round((on - today) / 86_400_000);
+  if (days <= 1) {
+    return formatRelativeDayUTC(on, today, formatDateOrdinalUTC);
+  }
+  if (days < CLOSE_DAYS) return WEEKDAYS[new Date(on).getUTCDay()].slice(0, 3);
+  return describeRepeatDay(schedule, on) ?? formatDateOrdinalUTC(on);
+}
+
+/** A repeating bill's due day for its form's folded row: "The 10th of each month", "Every Friday"; null when the date itself is the answer. */
+export function describeDueAnswer(schedule: Schedule, on: number) {
+  const day = describeRepeatDay(schedule, on);
+  if (day === null) return null;
+  return schedule.kind === 'weekly'
+    ? `Every ${day.slice(0, -1)}`
+    : `${day.charAt(0).toUpperCase()}${day.slice(1)} of each month`;
+}
 
 /** When a bill falls due, in the words a row and a change entry share: "Due Dec 1", "Monthly from Dec 1" or, with no date yet, "Monthly · due date later". */
 export function describeBillTiming(schedule: Schedule) {
