@@ -17,7 +17,7 @@ import {
   getAccountHoldings,
   getHolderById,
 } from '@apps/runway/engine/accounts';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectLedgerOnlyBalances as selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   deriveBillProgress,
   deriveHeldByItem,

@@ -62,7 +62,7 @@ import {
   setAccountBalance,
   setAccountHolds,
 } from '@apps/runway/store/actions/accountActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectAccountHoldings,
   selectAccounts,

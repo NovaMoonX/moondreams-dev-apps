@@ -43,7 +43,7 @@ import { selectHomeMoves } from '@apps/runway/store/selectors/moveSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { getListedCards } from '@apps/runway/utils/cardText';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
   selectAllCards,

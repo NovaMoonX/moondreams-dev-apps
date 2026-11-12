@@ -78,7 +78,7 @@ import ChoiceCards from '@apps/runway/components/ChoiceCards';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import { makeCostABill } from '@apps/runway/store/actions/horizonActions';
 import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectCostPaid,
   selectCostPayments,

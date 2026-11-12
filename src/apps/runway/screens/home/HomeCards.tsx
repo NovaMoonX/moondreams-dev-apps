@@ -9,7 +9,7 @@ import CardSheets, {
 } from '@apps/runway/components/CardSheets';
 import { CARD_WORDS, HOME_TILE_COUNT } from '@apps/runway/constants';
 import { getNextDueOn } from '@apps/runway/engine/cards';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly } from '@apps/runway/types';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';

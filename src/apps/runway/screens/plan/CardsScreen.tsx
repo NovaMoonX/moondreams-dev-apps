@@ -14,7 +14,7 @@ import AddMethodSheet from '@apps/runway/components/AddMethodSheet';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import CardForm from '@apps/runway/forms/CardForm';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectAllCards,
   selectIsMovesLoaded,

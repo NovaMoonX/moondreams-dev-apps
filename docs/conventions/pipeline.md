@@ -75,7 +75,7 @@ Every part of the pipeline is open to change, not only the review agents: the sk
 5. **Not worth it** (a one-off, or a fix that costs more than it prevents): leave it, and say nothing.
 6. **Log it** in `pipeline-log.md`: one row per change or proposal, with its scope (an app id, or 'shared'), newest first. Before changing a step, read its rows: three corrections of one agent or hook mean its design is wrong, not its wording, and that is a proposal to redesign it.
 
-**A retro ends every orchestrated run** (a multi-issue run, a new app, a size L PR): in your final message, three lines at most on what cost the most, what a review missed or flagged as noise, and which briefs came back; each line becomes a change or a proposal by the rules above, or is dropped.
+**A retro ends every orchestrated run** (a multi-issue run, a new app, a size L PR): in your final message, three lines at most on what cost the most, what a review missed or flagged as noise, and which briefs came back; each line becomes a change or a proposal by the rules above, or is dropped. A plan that took more than one round of the owner's answers has its own retro at approval (`orchestrate` "A plan that took more than one round ends in a plan retro").
 
 ## Changing the pipeline
 

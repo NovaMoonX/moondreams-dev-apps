@@ -32,7 +32,7 @@ import {
   type WrittenCostPaid,
 } from '@apps/runway/store/actions/horizonActions';
 import { removePurchaseOfCost } from '@apps/runway/store/actions/purchaseActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectAllHorizonItems,
   isGoalCovering,

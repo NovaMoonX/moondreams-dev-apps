@@ -39,7 +39,7 @@ import {
   payCard,
   undoCardPayment,
 } from '@apps/runway/store/actions/cardActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { CardPaymentCovers, OpenCard } from '@apps/runway/types';
 import {

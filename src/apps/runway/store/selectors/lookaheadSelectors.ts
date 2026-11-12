@@ -14,7 +14,10 @@ import {
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
 import { selectSelfPayingBills } from '@apps/runway/store/selectors/autoPaySelectors';
-import { selectFreeToSpend } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectBillCover,
+  selectFreeToSpend,
+} from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   computeDraftView,
@@ -88,6 +91,8 @@ export function computeLookahead(
     horizonItems?: ReturnType<typeof selectAllHorizonItems>;
     /** Free to Spend now; a payment fronted by it is checked against it. */
     freeToSpendCents?: number | null;
+    /** What Free to Spend covers of the bills its pays won't carry in time. */
+    billCover?: ReturnType<typeof selectBillCover> | null;
     /** The bills that pay themselves; none when the caller has none. */
     selfPaying?: ReturnType<typeof selectSelfPayingBills>;
   },
@@ -113,6 +118,7 @@ export function computeLookahead(
     payments: inputs.payments,
     stance,
     freeToSpendCents: inputs.freeToSpendCents ?? null,
+    billCover: inputs.billCover ?? null,
     horizonItems: (inputs.horizonItems ?? []).map(({ item, version }) => ({
       id: item.id,
       name: version.payload.name,
@@ -172,6 +178,7 @@ export const selectLookahead = createSelector(
     selectBillPayments,
     selectAllHorizonItems,
     selectFreeToSpend,
+    selectBillCover,
     selectSelfPayingBills,
     (_state: RootState, _today?: number, extraHeld?: Record<string, number>) =>
       extraHeld,
@@ -192,6 +199,7 @@ export const selectLookahead = createSelector(
     payments,
     horizonItems,
     freeToSpendCents,
+    billCover,
     selfPaying,
     extraHeld,
   ) =>
@@ -210,6 +218,7 @@ export const selectLookahead = createSelector(
         payments,
         horizonItems,
         freeToSpendCents,
+        billCover,
         selfPaying,
       },
     ),
