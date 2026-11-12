@@ -236,7 +236,7 @@ interface FundingStepsArgs {
   set: (patch: Partial<FundingFormData>) => void;
   comingDays: readonly ComingDay[];
   /** Whose words the way to leave "How often" for later uses; null when it must be answered. */
-  skippable: 'envelope' | 'envelopeStop' | 'goal' | null;
+  skippable: 'envelope' | 'goal' | null;
   /** The question over a calendar amount, in the form's own words, given "a month", "every 2 weeks" and the like. */
   getAmountTitle: (unit: string) => string;
   /** One quiet line under the amount, when the form has something to suggest. */
@@ -314,8 +314,6 @@ export function buildFundingSteps({
           <SkipQuestionButton
             note={HOW_OFTEN_WORDS.skipNote[skippable]}
             skippedNote={HOW_OFTEN_WORDS.skippedNote}
-            label={HOW_OFTEN_WORDS.skipLabel[skippable]}
-            skippedLabel={HOW_OFTEN_WORDS.skippedLabel[skippable]}
             isSkipped={data.often === 'none'}
             onSkip={() => {
               set({ often: 'none', amount: '' });

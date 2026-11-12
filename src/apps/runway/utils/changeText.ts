@@ -9,6 +9,7 @@ import {
   FORM_FLOW_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
+  HOW_OFTEN_WORDS,
   MAKE_BILL_WORDS,
   BILL_PAY_WORDS,
   PAID_FROM_WORDS,
@@ -386,11 +387,9 @@ const getParts = (
         { funding: goalBefore.funding, extras: getExtras(goalBefore) },
         { funding: goalAfter.funding, extras: getExtras(goalAfter) },
         (value) =>
-          describeFunding(
-            value.funding,
-            value.extras,
-            'targetCents' in goalAfter ? 'goal' : 'envelope',
-          ),
+          value.funding.cadence.kind === 'none'
+            ? HOW_OFTEN_WORDS.idleInChange
+            : describeFunding(value.funding, value.extras),
       ),
       diff(
         GROUP_WORDS.changeLabel,

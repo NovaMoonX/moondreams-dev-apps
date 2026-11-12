@@ -260,8 +260,12 @@ function EnvelopeTile({
           help={pairedNote}
           quickChange={{
             label: ITEM_SHEET_R2_WORDS.change,
-            subtitle: ITEM_SHEET_R2_WORDS.changeAmountSub,
-            step: 'amount',
+            ...(envelope.funding.cadence.kind === 'none'
+              ? { subtitle: ITEM_SHEET_R2_WORDS.changeOftenSub, step: 'often' }
+              : {
+                  subtitle: ITEM_SHEET_R2_WORDS.changeAmountSub,
+                  step: 'amount',
+                }),
           }}
           onClose={() => {
             setIsOpen(false);

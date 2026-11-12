@@ -3167,6 +3167,7 @@ export const ITEM_SHEET_R2_WORDS = {
   change: 'Change',
   changeBillSub: 'Amount, name, due date and more',
   changeAmountSub: 'Amount, name and more',
+  changeOftenSub: 'How often, amount, name and more',
   changeTargetSub: 'Target, name and more',
   firstDateNote: 'Nothing is set aside for it until it has a date.',
   pauseSub: 'Nothing new goes in',
@@ -3260,28 +3261,18 @@ export const HOW_OFTEN_WORDS = {
   /** The folded "How often" row once it was skipped. */
   skippedSummary: {
     envelope: 'Not set yet',
-    envelopeStop: 'Nothing goes in for now',
     goal: 'Not saving for it yet',
   },
   skippedNote: 'Pick one above when you are ready',
-  skipLabel: {
-    envelope: 'Skip for now',
-    envelopeStop: 'Stop adding for now',
-    goal: 'Skip for now',
-  },
-  skippedLabel: {
-    envelope: 'Skipped for now',
-    envelopeStop: 'Stopped for now',
-    goal: 'Skipped for now',
-  },
   /** The line under "Skip for now". */
   skipNote: {
     envelope: 'Nothing goes in until you set it',
-    envelopeStop: 'Nothing goes in until you set it again',
     goal: 'Nothing goes in until you start saving for it',
   },
   /** An envelope nothing goes into, as its row and history say it. */
   envelopeIdle: 'Nothing goes in for now',
+  /** The same state inside a change line ("Funding nothing for now to $150.00 a month"). */
+  idleInChange: 'nothing for now',
   perPeriodLabel: 'Amount',
   paycheckAmountTitle: 'How much from each pay?',
   fromWhich: 'Which pay',
