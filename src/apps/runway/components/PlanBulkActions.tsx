@@ -81,7 +81,7 @@ import { formatRange } from '@apps/runway/utils/rangeText';
 import { toMonthlyRange } from '@apps/runway/engine/groups';
 import { isSavingFor } from '@apps/runway/engine/pace';
 import { fundingAtLevel } from '@apps/runway/engine/parts';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   useGoalsMonthly,
   usePlanTotals,
