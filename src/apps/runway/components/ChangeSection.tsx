@@ -39,6 +39,7 @@ function ChangeSection({
     flow.candidate !== null && 'funding' in flow.candidate
       ? (flow.candidate.funding as FundingRule)
       : undefined,
+    kind === 'goal' ? 'goal' : 'envelope',
   );
   const replacedText = describeReplaced(flow.replaced, getCardNamer(allCards));
 

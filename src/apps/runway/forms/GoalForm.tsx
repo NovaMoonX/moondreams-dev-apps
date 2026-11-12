@@ -387,7 +387,7 @@ function GoalFormBody({
     data: formData,
     set,
     comingDays,
-    allowNone: !editing || startData.often === 'none',
+    skippable: !editing || startData.often === 'none' ? 'goal' : null,
     isDraft: !!draft,
     draftSources: draft?.sources,
     getAmountTitle: (unit) => `How much goes in ${unit}?`,

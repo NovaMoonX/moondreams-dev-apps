@@ -29,10 +29,17 @@ export const getShareBps = (row: {
     ? parsePercentToBps(row.amount, { stepBps: 1 })
     : SHARE_BPS[row.share];
 
+type FundedKind = 'envelope' | 'goal';
+
+const IDLE_WORDS: Record<FundedKind, string> = {
+  envelope: HOW_OFTEN_WORDS.envelopeIdle,
+  goal: HOW_OFTEN_WORDS.notBeingAdded,
+};
+
 const describeCadence = (cadence: FundingRule['cadence']) => {
   if (cadence.kind === 'calendar') return CALENDAR_PERIOD_UNITS[cadence.period];
   if (cadence.kind === 'none')
-    return HOW_OFTEN_WORDS.noAddingSummary.toLowerCase();
+    return HOW_OFTEN_WORDS.envelopeIdle.toLowerCase();
   if (cadence.kind === 'everyIncomeDay') return 'every income day';
   if (cadence.kind === 'everyNth') {
     return cadence.n === 2
@@ -84,8 +91,9 @@ export function describeExtras(
 export function describeFunding(
   funding: FundingRule,
   extras: readonly PriorityExtra[] = [],
+  kind: FundedKind = 'envelope',
 ) {
-  if (funding.cadence.kind === 'none') return 'no contribution';
+  if (funding.cadence.kind === 'none') return IDLE_WORDS[kind].toLowerCase();
   const result = `${describeAmount(funding.amount)} ${describeCadence(funding.cadence)}${describeExtras(extras)}`;
   return result;
 }
@@ -94,11 +102,14 @@ export function describeFunding(
 export function describePairedBy(
   pairedBy: readonly { sourceName: string; amount: PairingAmount }[],
   own?: FundingRule,
+  kind: FundedKind = 'envelope',
 ) {
   if (pairedBy.length === 0) return null;
   if (pairedBy.length === 1) {
     const { sourceName, amount } = pairedBy[0];
-    const instead = own ? `, instead of ${describeFundingShort(own)}` : '';
+    const instead = own
+      ? `, instead of ${describeFundingShort(own, [], kind)}`
+      : '';
     return `First from ${sourceName}: ${describeAmount(amount, sourceName)} on its income days${instead}.`;
   }
   const names = [...new Set(pairedBy.map((entry) => entry.sourceName))];
@@ -119,8 +130,9 @@ export function describeCadenceLine(cadence: FundingRule['cadence']) {
 export function describeFundingShort(
   funding: FundingRule,
   extras: readonly PriorityExtra[] = [],
+  kind: FundedKind = 'envelope',
 ) {
-  if (funding.cadence.kind === 'none') return HOW_OFTEN_WORDS.notBeingAdded;
+  if (funding.cadence.kind === 'none') return IDLE_WORDS[kind];
   const amount =
     funding.amount.kind === 'exact'
       ? formatCentsShort(funding.amount.cents)

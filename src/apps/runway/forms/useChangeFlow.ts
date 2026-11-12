@@ -48,7 +48,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeChange,
-  isIdleGoal,
+  isIdleItem,
   isMoneylessChange,
   isSamePayload,
   type ItemPayload,
@@ -231,14 +231,14 @@ export function useChangeFlow({
     presetDayKey,
   });
   const isUnchanged = candidate !== null && isSamePayload(current, candidate);
-  // A goal idle today and in every later stretch moves no money whatever changes; a funded stretch ahead keeps the full flow.
+  // A goal or envelope idle today and in every later stretch moves no money whatever changes; a funded stretch ahead keeps the full flow.
   const isIdleThroughout =
-    isIdleGoal(candidate ?? current) &&
+    isIdleItem(candidate ?? current) &&
     getVersionStretches<OpenVersion, ItemPayload>(
       allVersions,
       itemId,
       today,
-    ).every(({ payload }) => isIdleGoal(payload));
+    ).every(({ payload }) => isIdleItem(payload));
   const isMoneyless =
     candidate !== null &&
     !isUnchanged &&

@@ -172,8 +172,13 @@ import type {
   Priority,
   Schedule,
 } from '@apps/runway/types';
-import { getIntervalMonths, toPayOn } from '@apps/runway/engine/schedule';
 import {
+  getIntervalMonths,
+  occurrences,
+  toPayOn,
+} from '@apps/runway/engine/schedule';
+import {
+  describeDueAnswer,
   describeEveryMonths,
   describePayOnDay,
 } from '@apps/runway/utils/billText';
@@ -427,6 +432,19 @@ const toSchedule = (
         ? [new Date(anchor).getUTCDate()]
         : [],
   };
+};
+
+const NEXT_DUE_REACH = 800 * 86_400_000;
+const NO_ENDING = { onDate: null, afterCount: null };
+
+/** A repeating bill's next due day from today, which its edit shows in place of the first one it was given. */
+const getNextDue = (payload: BillSealed, today: number) => {
+  const { schedule } = payload.timing;
+  if (schedule.kind === 'once' || schedule.anchor === null) return null;
+  return (
+    occurrences(schedule, payload.ending, today, today + NEXT_DUE_REACH)[0] ??
+    null
+  );
 };
 
 /** A saved schedule as the form's repeat answers. */
@@ -691,6 +709,12 @@ function BillFormBody({
   const openAccounts = useAppSelector(selectAccounts);
   const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const isTracking = isTrackingLevel(useAppSelector(selectLevel));
+  const [nextDue] = useState(() =>
+    editing ? getNextDue(editing.payload, today) : null,
+  );
+  const [savedData] = useState(() =>
+    editing ? getEditingData(editing.payload, false) : null,
+  );
   const [startData] = useState<BillFormData>(() =>
     editing || draft?.initial || fromCost
       ? {
@@ -722,6 +746,7 @@ function BillFormBody({
           ...(draft?.forName
             ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
             : {}),
+          ...(nextDue === null ? {} : { startDate: toDateInputValue(nextDue) }),
         }
       : {
           name: '',
@@ -755,7 +780,7 @@ function BillFormBody({
       ? null
       : `${FORM_DRAFT_PREFIX}${noun}:${editing?.itemId ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
-  const draftBase = editing ? startData : null;
+  const draftBase = editing ? savedData : null;
   const kept = useFormDraft({
     key: draftKey,
     base: draftBase,
@@ -827,6 +852,28 @@ function BillFormBody({
           (pin) => formatDateOrdinalUTC(pin.expectedOn),
         )
       : [];
+  /** A date that still lands on the saved schedule keeps that schedule (or its first date when the new repeat still lands on the date), so an edit never moves where the bill started counting. */
+  const toBillSchedule = (data: BillFormData, frequency: Frequency) => {
+    if (data.isLater) return toSchedule(data, frequency, null);
+    const picked = fromDateInputValue(data.startDate);
+    if (picked === undefined) return undefined;
+    const saved = editing?.payload.timing.schedule;
+    const isOnSaved =
+      saved !== undefined &&
+      saved.anchor !== null &&
+      saved.kind !== 'once' &&
+      occurrences(saved, NO_ENDING, picked, picked).length > 0;
+    if (!saved || !isOnSaved) return toSchedule(data, frequency, picked);
+    const isSameRepeat =
+      frequency === savedData?.frequency &&
+      savedData !== null &&
+      getEveryMonths(data) === getEveryMonths(savedData);
+    if (isSameRepeat) return saved;
+    const rebuilt = toSchedule(data, frequency, saved.anchor);
+    return occurrences(rebuilt, NO_ENDING, picked, picked).length > 0
+      ? rebuilt
+      : toSchedule(data, frequency, picked);
+  };
   const canPickPay = !isOnce && formData.frequency !== null;
   const savedFundedBy = editing?.payload.fundedBy.kind ?? null;
   const canAskPaidFrom =
@@ -837,7 +884,8 @@ function BillFormBody({
         formData.frequency !== null &&
         hasPaysToChoose(
           comingDays,
-          toSchedule(formData, formData.frequency, dueDate),
+          toBillSchedule(formData, formData.frequency) ??
+            toSchedule(formData, formData.frequency, dueDate),
           today,
           getOneTimePayIds(plan),
         )));
@@ -931,6 +979,14 @@ function BillFormBody({
   const isDueValid =
     formData.isLater ||
     (dueDate !== undefined && (editing !== undefined || dueDate >= today));
+  const getDueSummary = (on: number) => {
+    const schedule =
+      formData.frequency === null
+        ? undefined
+        : toBillSchedule(formData, formData.frequency);
+    const day = schedule ? describeDueAnswer(schedule, on) : null;
+    return day ?? formatDateOrdinalUTC(on);
+  };
   const canLater =
     editing === undefined
       ? fromCost === undefined
@@ -1099,13 +1155,13 @@ function BillFormBody({
     },
     {
       id: 'due',
-      title: FORM_FLOW_WORDS.dueTitle,
+      title: isOnce ? FORM_FLOW_WORDS.dueTitle : FORM_FLOW_WORDS.nextDueTitle,
       summaryLabel: FORM_FLOW_WORDS.due,
       summaryValue: formData.isLater
         ? FORM_FLOW_WORDS.dueLaterSummary
         : dueDate === undefined
           ? ''
-          : formatDateOrdinalUTC(dueDate),
+          : getDueSummary(dueDate),
       isAnswered: isDueValid,
       blocker:
         dueDate !== undefined && !isDueValid ? FORM_FLOW_WORDS.pastDay : null,
@@ -1643,13 +1699,15 @@ function BillFormBody({
 
   const buildBill = (data: BillFormData): BillSealed | null => {
     const amount = parseAmountDraft(data.amount);
-    const anchor = data.isLater ? null : fromDateInputValue(data.startDate);
     const ending = buildEnding(data);
+    const schedule =
+      data.frequency === null
+        ? undefined
+        : toBillSchedule(data, data.frequency);
     if (
       amount === null ||
-      anchor === undefined ||
+      schedule === undefined ||
       !ending ||
-      data.frequency === null ||
       !isRepeatAnswered(data)
     )
       return null;
@@ -1669,7 +1727,7 @@ function BillFormBody({
       amount,
       timing: {
         kind: 'date',
-        schedule: toSchedule(data, data.frequency, anchor),
+        schedule,
       },
       ending,
       fundedBy,
