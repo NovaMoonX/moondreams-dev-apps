@@ -37,7 +37,7 @@ import {
 import { usePlanTotals } from '@apps/runway/hooks/useGroupFigures';
 import { describePlanTotal } from '@apps/runway/utils/billText';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 const TIP_MIN_ROWS = 3;

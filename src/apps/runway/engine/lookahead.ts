@@ -16,6 +16,7 @@ import type {
 
 import { isSelfPaying } from './autoPay';
 import type { ComingDay } from './comingDays';
+import { getCoveredCents, type BillCover } from './billCover';
 import type { BillPayment } from './demands';
 import type { Draft } from './draft';
 import { addUtcDays, DAY_MS } from './dates';
@@ -127,6 +128,8 @@ export interface LookaheadInput {
   stance?: Stance;
   /** Free to Spend now; null or missing leaves a fronted payment unchecked. */
   freeToSpendCents?: Cents | null;
+  /** What Free to Spend covers of each bill payment its pays won't carry in time; none when missing. */
+  billCover?: Pick<BillCover, 'payments'> | null;
   /** The draft for one day given what the days before it left behind; null when the day has none. */
   draftOf: (day: ComingDay, carry: LookaheadCarry) => LookaheadDraft | null;
 }
@@ -349,7 +352,7 @@ const findDueCosts = (input: LookaheadInput): Lookahead['dueCosts'] =>
     )
     .sort((a, b) => a.dueOn - b.dueOn || a.costName.localeCompare(b.costName));
 
-/** The first payment of each bill that the pays before it are not set to carry in full: none comes before it, the pay it names does not, or what is pinned leaves some of it. */
+/** The first payment of each bill that the pays before it, and what Free to Spend covers of it, are not set to carry in full: none comes before it, the pay it names does not, or what is pinned leaves some of it. */
 const findNoIncome = (
   input: LookaheadInput,
   walkedFunded: LookaheadCarry['funded'],
@@ -361,7 +364,8 @@ const findNoIncome = (
         payment.payOn > input.today &&
         payment.payOn <= input.horizon &&
         payment.fundedCents +
-          payment.parts.reduce((sum, part) => sum + part.cents, 0) <
+          payment.parts.reduce((sum, part) => sum + part.cents, 0) +
+          getCoveredCents(input.billCover ?? null, bill.id, payment.dueOn) <
           payment.totalCents,
     );
     if (!unfunded) return [];
@@ -371,7 +375,10 @@ const findNoIncome = (
       .reduce((sum, entry) => sum + entry.cents, 0);
     const shortBy = Math.max(
       0,
-      unfunded.totalCents - unfunded.fundedCents - walked,
+      unfunded.totalCents -
+        unfunded.fundedCents -
+        walked -
+        getCoveredCents(input.billCover ?? null, bill.id, unfunded.dueOn),
     );
     const reason =
       unfunded.parts.length > 0

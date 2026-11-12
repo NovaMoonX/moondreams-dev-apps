@@ -1,7 +1,7 @@
 import { useAppSelector } from '@/store';
 import { getGoalStretches } from '@apps/runway/engine/goalTimeline';
 import { getMonthlyPaceCents, isSavingFor } from '@apps/runway/engine/pace';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectUsualMonthPlan,
   toBillMember,

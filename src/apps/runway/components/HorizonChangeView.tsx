@@ -17,7 +17,7 @@ import { CHANGE_WORDS, HORIZON_WORDS } from '@apps/runway/constants';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { selectGoalCovers } from '@apps/runway/store/selectors/overviewSelectors';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectCostPaid,
   selectStance,

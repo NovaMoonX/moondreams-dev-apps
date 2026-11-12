@@ -96,10 +96,7 @@ import {
   setHorizonStateWith,
   undoHorizonState,
 } from '@apps/runway/store/actions/horizonActions';
-import {
-  selectBalances,
-  selectHeldBy,
-} from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances, selectHeldBy } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectGoalCovers } from '@apps/runway/store/selectors/overviewSelectors';
 import {
   selectAllCards,

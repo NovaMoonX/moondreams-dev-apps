@@ -73,7 +73,7 @@ import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextFeeOn } from '@apps/runway/engine/cardFees';
 import type { HeldChoice } from '@apps/runway/engine/endings';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   getFeeHeldCents,
   getFeePlan,

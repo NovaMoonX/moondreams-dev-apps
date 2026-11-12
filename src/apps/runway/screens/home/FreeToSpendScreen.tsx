@@ -53,10 +53,8 @@ import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { canChangeStart } from '@apps/runway/utils/startingCorrection';
 import type { PlanSection } from '@apps/runway/types';
-import {
-  selectBalances,
-  selectBankBacking,
-} from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBankBacking } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectIsMovesLoaded,
   selectIsRecordsReady,

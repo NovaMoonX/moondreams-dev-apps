@@ -36,7 +36,7 @@ import { useGoalPaces } from '@apps/runway/hooks/useGoalPaces';
 import { Dot } from '@apps/runway/screens/days/CalendarDot';
 import { getDotKind } from '@apps/runway/utils/calendarDots';
 import DaysCalendarCell from '@apps/runway/screens/days/DaysCalendarCell';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectBillPayments,

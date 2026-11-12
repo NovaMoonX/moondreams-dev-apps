@@ -2592,6 +2592,7 @@ export const ITEM_SHEET_WORDS = {
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',
   paidFromSetAside: 'It comes out of what is set aside',
+  paidFromCovered: 'Already covered from Free to Spend',
   paidFromFree: 'not set aside yet comes out of Free to Spend',
   stopHeading: 'Stop or pause',
   startHeading: 'Start or stop',
@@ -2929,6 +2930,9 @@ export const BILL_SET_ASIDE_WORDS = {
   openSub: (held: string, total: string) => `${held} of ${total}`,
   openSubNone: 'Nothing yet',
   openSubFull: (total: string) => `All ${total} of the next payment`,
+  openSubCovered: (covered: string) => `${covered} covered from Free to Spend`,
+  openSubPartCovered: (held: string, covered: string) =>
+    `${held} put aside · ${covered} covered from Free to Spend`,
   title: (name: string) => `Put money aside for ${name}`,
   amount: 'Put aside',
   needsAmount: 'Enter how much to put aside.',

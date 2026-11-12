@@ -56,7 +56,7 @@ import type {
   ItemShortsReading,
   PreviewChange,
 } from '@apps/runway/store/selectors/previewSelectors';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectBills,
   selectComingDays,

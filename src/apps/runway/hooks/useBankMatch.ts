@@ -36,7 +36,7 @@ import {
   type MergedPurchase,
   type PairedPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectMoveTick } from '@apps/runway/store/selectors/moveSelectors';
 import {
