@@ -80,7 +80,18 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
   const [openBill, setOpenBill] = useState<{
     id: string;
     step: string | null;
+    dueOn: number | null;
+    bill: (typeof bills)[number]['version']['payload'];
   } | null>(null);
+  const openBillSheet = (
+    id: string,
+    step: string | null,
+    dueOn: number | null,
+  ) => {
+    const entry = bills.find(({ item }) => item.id === id);
+    if (entry) setOpenBill({ id, step, dueOn, bill: entry.version.payload });
+    else void openOnPlan('bills', id);
+  };
   const { leaveViewForTab, openItemAt } = useRunwayUrlState();
   const mask = useMaskedText();
   const { billCover } = balances;
@@ -160,10 +171,7 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
         bills,
         (id) => ledgerOf(id) + coveredOf(id),
         (id) => getBillDetail(id, ledgerOf(id), coveredOf(id)),
-        (id) =>
-          bills.some(({ item }) => item.id === id)
-            ? setOpenBill({ id, step: null })
-            : void openOnPlan('bills', id),
+        (id) => openBillSheet(id, null, null),
       );
     }
     if (kind === 'goals') return getPlanRows('goals', 'goal', goals, ledgerOf);
@@ -253,7 +261,7 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
                         `${payment.name}, ${formatCents(payment.shortCents)}. ${detail}`,
                       )}
                       onOpen={() =>
-                        setOpenBill({ id: payment.billId, step: 'funding' })
+                        openBillSheet(payment.billId, 'funding', payment.dueOn)
                       }
                     />
                   );
@@ -263,14 +271,16 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
           )}
         </>
       )}
-      {openBill && openBillEntry && (
+      {openBill && (
         <BillSheet
           key={openBill.id}
           billId={openBill.id}
-          bill={openBillEntry.version.payload}
+          bill={openBillEntry?.version.payload ?? openBill.bill}
           payment={
-            (payments[openBill.id] ?? []).find(
-              (entry) => entry.dueOn >= today,
+            (payments[openBill.id] ?? []).find((entry) =>
+              openBill.dueOn === null
+                ? entry.dueOn >= today
+                : entry.dueOn === openBill.dueOn,
             ) ?? null
           }
           planStance={stance}
