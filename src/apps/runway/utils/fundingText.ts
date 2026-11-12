@@ -102,11 +102,14 @@ export function describeFunding(
 export function describePairedBy(
   pairedBy: readonly { sourceName: string; amount: PairingAmount }[],
   own?: FundingRule,
+  kind: FundedKind = 'envelope',
 ) {
   if (pairedBy.length === 0) return null;
   if (pairedBy.length === 1) {
     const { sourceName, amount } = pairedBy[0];
-    const instead = own ? `, instead of ${describeFundingShort(own)}` : '';
+    const instead = own
+      ? `, instead of ${describeFundingShort(own, [], kind)}`
+      : '';
     return `First from ${sourceName}: ${describeAmount(amount, sourceName)} on its income days${instead}.`;
   }
   const names = [...new Set(pairedBy.map((entry) => entry.sourceName))];

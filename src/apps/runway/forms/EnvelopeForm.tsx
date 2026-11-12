@@ -305,7 +305,8 @@ function EnvelopeFormBody({
     data: formData,
     set,
     comingDays,
-    skippable: 'envelope',
+    skippable:
+      editing && startData.often !== 'none' ? 'envelopeStop' : 'envelope',
     isDraft: !!draft,
     draftSources: draft?.sources,
     getAmountTitle: (unit) => `How much does it get ${unit}?`,

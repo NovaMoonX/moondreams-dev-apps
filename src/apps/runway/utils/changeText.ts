@@ -440,9 +440,12 @@ const MONEYLESS_KEYS = [
   'spillTo',
 ];
 
-/** A goal nothing goes into: paused or not being saved for yet. */
-export const isIdleGoal = (payload: ItemPayload | null | undefined) =>
-  !!payload && 'targetCents' in payload && !isSavingFor(payload);
+/** A goal or envelope nothing goes into: paused, not being saved for yet, or with nothing set to go in. */
+export const isIdleItem = (payload: ItemPayload | null | undefined) => {
+  if (!payload || !('funding' in payload)) return false;
+  if ('targetCents' in payload) return !isSavingFor(payload);
+  return payload.funding.cadence.kind === 'none';
+};
 
 /** A change to only a name, emoji, group, card or account: it moves no money on any income day. */
 export const isMoneylessChange = (before: ItemPayload, after: ItemPayload) => {
