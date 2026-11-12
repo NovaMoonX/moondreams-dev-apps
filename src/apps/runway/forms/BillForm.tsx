@@ -888,7 +888,7 @@ function BillFormBody({
           (pin) => formatDateOrdinalUTC(pin.expectedOn),
         )
       : [];
-  /** A date that still lands on the saved schedule keeps that schedule (or its first date when only the repeat changed), so an edit never moves where the bill started counting. */
+  /** A date that still lands on the saved schedule keeps that schedule (or its first date when the new repeat still lands on the date), so an edit never moves where the bill started counting. */
   const toBillSchedule = (data: BillFormData, frequency: Frequency) => {
     if (data.isLater) return toSchedule(data, frequency, null);
     const picked = fromDateInputValue(data.startDate);
@@ -904,7 +904,11 @@ function BillFormBody({
       frequency === savedData?.frequency &&
       savedData !== null &&
       getEveryMonths(data) === getEveryMonths(savedData);
-    return isSameRepeat ? saved : toSchedule(data, frequency, saved.anchor);
+    if (isSameRepeat) return saved;
+    const rebuilt = toSchedule(data, frequency, saved.anchor);
+    return occurrences(rebuilt, NO_ENDING, picked, picked).length > 0
+      ? rebuilt
+      : toSchedule(data, frequency, picked);
   };
   const canPickPay = !isOnce && formData.frequency !== null;
   const savedFundedBy = editing?.payload.fundedBy.kind ?? null;
