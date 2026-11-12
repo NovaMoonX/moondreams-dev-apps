@@ -14,12 +14,15 @@ import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
+import { MASK } from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import Pill from '@/components/Pill';
 import SectionHeader from '@/components/SectionHeader';
 import SelectionBar from '@/components/SelectionBar';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
+import ChoiceCard from '@apps/runway/components/ChoiceCard';
 import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -61,8 +64,10 @@ import {
   selectGroups,
   selectHeldByItem,
   selectPurposeEmojis,
+  selectResolvedPlan,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
+  BillFundedBy,
   BillSealed,
   EnvelopeSealed,
   GoalSealed,
@@ -71,6 +76,21 @@ import type {
 import { describePayOnDay } from '@apps/runway/utils/billText';
 import { getCardName } from '@apps/runway/utils/cardText';
 import { planGroupPriority } from '@apps/runway/utils/groupPriority';
+import { getPayOptions } from '@apps/runway/utils/payFrom';
+import { formatRange } from '@apps/runway/utils/rangeText';
+import { toMonthlyRange } from '@apps/runway/engine/groups';
+import { isSavingFor } from '@apps/runway/engine/pace';
+import { fundingAtLevel } from '@apps/runway/engine/parts';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import {
+  useGoalsMonthly,
+  usePlanTotals,
+} from '@apps/runway/hooks/useGroupFigures';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import {
+  isCountedAt,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
 
 type MemberPayload = BillSealed | EnvelopeSealed | GoalSealed;
 type Sheet =
@@ -89,6 +109,26 @@ const canPayOnDay = (payload: MemberPayload) =>
 /** A card's annual fee bill follows its card: only its priority and Paid from change here. */
 const isFeeBill = (payload: MemberPayload) =>
   'timing' in payload && isCardFeeBill(payload);
+
+/** Whether an item adds to a usual month at the dial, as the selection's total counts it: a bill paid once or with no fixed beat, an envelope with no fixed amount at the dial, and a goal not being saved for or already reached add nothing. */
+const isInMonthly = (
+  payload: MemberPayload,
+  dial: Priority,
+  heldCents: number,
+) => {
+  if ('timing' in payload)
+    return (
+      isCountedAt(payload.priority, dial) &&
+      toMonthlyRange(payload.amount, payload.timing.schedule) !== null
+    );
+  if ('targetCents' in payload)
+    return (
+      isCountedAt(payload.priority, dial) &&
+      isSavingFor(payload) &&
+      heldCents < payload.targetCents
+    );
+  return fundingAtLevel(payload, dial)?.amount.kind === 'exact';
+};
 
 export interface TickedItem {
   itemId: string;
@@ -125,6 +165,35 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
   const pullAccounts = getPullAccounts(accounts);
   const shownAccounts = pullAccounts.length >= 2 ? pullAccounts : [];
   const hasPaidWith = isTracking || shownAccounts.length > 0;
+
+  const { dial } = usePriorityDial();
+  const today = todayAsUtcDate();
+  const tickedIds = new Set(ticked.map(({ itemId }) => itemId));
+  const totals = usePlanTotals(today, dial, tickedIds);
+  const goalsMonthly = useGoalsMonthly(today, dial, tickedIds);
+  const mask = useMaskedText();
+  const monthly =
+    view === 'bills'
+      ? totals.bills.total
+      : view === 'envelopes'
+        ? totals.envelopes.total
+        : goalsMonthly;
+  const assignedByItem = useAppSelector(selectBalances).assignedByItem;
+  const notCounted = ticked.filter(
+    ({ itemId, payload }) =>
+      !isInMonthly(payload, dial, Math.max(0, assignedByItem[itemId] ?? 0)),
+  ).length;
+  const { isHidden } = useValuesHidden();
+  const selectedNote = isHidden
+    ? PLAN_SELECT_WORDS.selectedMonthly(count, noun, MASK, 0)
+    : mask(
+        PLAN_SELECT_WORDS.selectedMonthly(
+          count,
+          noun,
+          formatRange(monthly),
+          notCounted,
+        ),
+      );
 
   const close = () => setSheet(null);
   const backToMenu = () => setSheet('menu');
@@ -266,7 +335,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
             ? PLAN_SELECT_WORDS.nothing(noun)
             : changeable.length === 0
               ? PLAN_SELECT_WORDS.feeOnly
-              : null
+              : selectedNote
         }
         actions={[
           {
@@ -326,11 +395,11 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
           ticked={ticked}
           isSaving={bulk.isWriting}
           onClose={backToMenu}
-          onSave={(kind) =>
+          onSave={(fundedBy) =>
             void save(
               applyToAll((payload) =>
-                'fundedBy' in payload
-                  ? { ...payload, fundedBy: { kind } }
+                canPickPaidFrom(payload) && 'fundedBy' in payload
+                  ? { ...payload, fundedBy }
                   : payload,
               ),
               { clearsPins: true },
@@ -535,6 +604,18 @@ function PayOnSheet({
   );
 }
 
+type PaidFromPick = 'spread' | 'lastBefore' | 'pay';
+
+const PAID_FROM_PICKS: readonly PaidFromPick[] = [
+  'spread',
+  'lastBefore',
+  'pay',
+];
+
+/** A bill paid once keeps the income days it was given; only a repeating one says which pay carries it. */
+const canPickPaidFrom = (payload: MemberPayload) =>
+  'timing' in payload && payload.timing.schedule.kind !== 'once';
+
 function PaidFromSheet({
   ticked,
   isSaving,
@@ -544,23 +625,47 @@ function PaidFromSheet({
   ticked: readonly TickedItem[];
   isSaving: boolean;
   onClose: () => void;
-  onSave: (kind: 'suggested' | 'lastBefore') => void;
+  onSave: (fundedBy: BillFundedBy) => void;
 }) {
-  const [kind, setKind] = useState<'suggested' | 'lastBefore' | null>(null);
+  const [pick, setPick] = useState<PaidFromPick | null>(null);
+  const [payValue, setPayValue] = useState<string | null>(null);
   const days = useAppSelector((state) => state.runway.days);
   const today = todayAsUtcDate();
+  const plan = useAppSelector((state) => selectResolvedPlan(state, today));
+  const payOptions = getPayOptions(plan);
+  const picks = PAID_FROM_PICKS.filter(
+    (value) => value !== 'pay' || payOptions.length > 0,
+  );
+  const skipped = ticked
+    .filter(({ payload }) => !canPickPaidFrom(payload))
+    .map(({ name }) => name);
+  const fundedBy: BillFundedBy | null =
+    pick === 'spread'
+      ? { kind: 'suggested' }
+      : pick === 'lastBefore'
+        ? { kind: 'lastBefore' }
+        : (payOptions.find(({ value }) => value === payValue)?.fundedBy ??
+          null);
   const pinCount =
-    kind === null
+    fundedBy === null
       ? 0
       : ticked
           .filter(
             ({ payload }) =>
-              'fundedBy' in payload && payload.fundedBy.kind !== kind,
+              canPickPaidFrom(payload) &&
+              'fundedBy' in payload &&
+              JSON.stringify(payload.fundedBy) !== JSON.stringify(fundedBy),
           )
           .reduce(
             (sum, { itemId }) => sum + getBillPins(days, itemId, today).length,
             0,
           );
+  const getNote = () => {
+    if (pick === null) return PLAN_SELECT_WORDS.pickToContinue;
+    if (fundedBy === null) return PAID_FROM_WORDS.pickPay;
+    if (pinCount > 0) return PLAN_SELECT_WORDS.paidFromPinsNote(pinCount);
+    return null;
+  };
 
   return (
     <SmallSheet
@@ -568,35 +673,45 @@ function PaidFromSheet({
       sheetTitle={PLAN_SELECT_WORDS.paidFrom}
       onClose={onClose}
     >
-      <PillGroup
-        label={PLAN_SELECT_WORDS.paidFromTitle}
-        options={[
-          {
-            value: 'suggested',
-            label: PAID_FROM_WORDS.spread,
-            detail: PAID_FROM_WORDS.spreadMeaning,
-          },
-          {
-            value: 'lastBefore',
-            label: PAID_FROM_WORDS.lastBefore,
-            detail: PAID_FROM_WORDS.lastBeforeMeaning,
-          },
-        ]}
-        value={kind}
-        onChange={setKind}
-      />
+      <div
+        role='radiogroup'
+        aria-label={PAID_FROM_WORDS.label}
+        className='space-y-2'
+      >
+        {picks.map((value) => (
+          <ChoiceCard
+            key={value}
+            label={PAID_FROM_WORDS[value]}
+            meaning={PAID_FROM_WORDS[`${value}Meaning`]}
+            isChosen={pick === value}
+            onPick={() => setPick(value)}
+          />
+        ))}
+      </div>
+      {pick === 'pay' && (
+        <div className='space-y-2'>
+          <PillGroup
+            label={PAID_FROM_WORDS.whichPay}
+            options={payOptions.map(({ value, label }) => ({ value, label }))}
+            value={payValue}
+            onChange={setPayValue}
+          />
+          <p className='text-muted-foreground text-xs'>
+            {PAID_FROM_WORDS.onlyRepeating}
+          </p>
+        </div>
+      )}
+      {skipped.length > 0 && (
+        <p className='text-muted-foreground text-xs text-pretty'>
+          {PLAN_SELECT_WORDS.paidFromSkipped(skipped)}
+        </p>
+      )}
       <Footer
-        note={
-          kind === null
-            ? PLAN_SELECT_WORDS.pickToContinue
-            : pinCount > 0
-              ? PLAN_SELECT_WORDS.paidFromPinsNote(pinCount)
-              : null
-        }
-        isDisabled={kind === null}
+        note={getNote()}
+        isDisabled={fundedBy === null}
         isSaving={isSaving}
         onClose={onClose}
-        onSave={() => kind && onSave(kind)}
+        onSave={() => fundedBy && onSave(fundedBy)}
       />
     </SmallSheet>
   );

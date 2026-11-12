@@ -567,7 +567,7 @@ function PairingsEditor({
       )}
       <div hidden={editingRow !== null}>
         <ChangeSteps
-          isReason={flow.step === 'reason'}
+          isReason={flow.step !== 'form'}
           reason={<ChangeReason flow={flow} onClose={onCancel ?? onClose} />}
         >
           <ChangeFlowContext value={flowValue}>

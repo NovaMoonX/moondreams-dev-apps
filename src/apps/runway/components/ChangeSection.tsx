@@ -43,18 +43,23 @@ function ChangeSection({
   );
   const replacedText = describeReplaced(flow.replaced, getCardNamer(allCards));
 
+  const isAskedFirst = flow.isPlanning || value.isPause;
+  const fromWhen = (
+    <FromWhenPicker
+      value={flow.from}
+      onChange={flow.setFrom}
+      today={flow.today}
+      days={flow.days}
+      kind={kind}
+      presetDayKey={flow.presetDayKey}
+      isPlanning={flow.isPlanning}
+      isPause={value.isPause}
+    />
+  );
+
   return (
     <div ref={setWarningBox} className='space-y-3'>
-      <FromWhenPicker
-        value={flow.from}
-        onChange={flow.setFrom}
-        today={flow.today}
-        days={flow.days}
-        kind={kind}
-        presetDayKey={flow.presetDayKey}
-        isPlanning={flow.isPlanning}
-        isPause={value.isPause}
-      />
+      {isAskedFirst && fromWhen}
       {flow.isLinkable && (
         <PartOfPicker value={flow.eventId} onChange={flow.setEventId} />
       )}
@@ -72,6 +77,7 @@ function ChangeSection({
           warningActions={value.warningActions}
         />
       )}
+      {!isAskedFirst && fromWhen}
     </div>
   );
 }

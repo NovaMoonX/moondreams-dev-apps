@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { getFirstMoneyDay } from '@apps/runway/engine/horizonLinks';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import AmountField from '@/components/AmountField';
 import AppToggle from '@/components/AppToggle';
@@ -120,6 +119,7 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import BackLink from '@/components/BackLink';
+import ChoiceCard from '@apps/runway/components/ChoiceCard';
 import QuickChange from '@apps/runway/components/QuickChange';
 import { isCardFeeBill } from '@apps/runway/engine/cardFees';
 import ChangeSection from '@apps/runway/components/ChangeSection';
@@ -498,42 +498,6 @@ const paidFromOptions = BILL_PAID_FROMS.map((value) => ({
   value,
   label: PAID_FROM_WORDS[value],
 }));
-
-interface PaidFromChoiceProps {
-  label: string;
-  meaning: string;
-  isChosen: boolean;
-  onPick: () => void;
-}
-
-function PaidFromChoice({
-  label,
-  meaning,
-  isChosen,
-  onPick,
-}: PaidFromChoiceProps) {
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      role='radio'
-      aria-checked={isChosen}
-      className={join(
-        'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-2! text-left font-normal whitespace-normal',
-        isChosen &&
-          'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
-      )}
-      onClick={onPick}
-    >
-      <span className='text-[15px] leading-[1.125rem] font-medium'>
-        {label}
-      </span>
-      <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
-        {meaning}
-      </span>
-    </Button>
-  );
-}
 
 const toPickLabel = (pick: { name: string; emoji: string }) =>
   `${pick.emoji} ${pick.name}`;
@@ -1472,7 +1436,7 @@ function BillFormBody({
                     className='space-y-2'
                   >
                     {paidFromChoices.map(({ value, label }) => (
-                      <PaidFromChoice
+                      <ChoiceCard
                         key={value}
                         label={label}
                         meaning={PAID_FROM_WORDS[`${value}Meaning`]}
@@ -2128,7 +2092,7 @@ function BillFormBody({
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps
-        isReason={flow.step === 'reason'}
+        isReason={flow.step !== 'form'}
         reason={<ChangeReason flow={flow} onClose={requestClose} />}
       >
         <ChangeFlowContext value={flowValue}>

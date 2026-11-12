@@ -798,7 +798,7 @@ function GoalFormBody({
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps
-        isReason={flow.step === 'reason'}
+        isReason={flow.step !== 'form'}
         reason={<ChangeReason flow={flow} onClose={requestClose} />}
       >
         <ChangeFlowContext value={flowValue}>

@@ -14,9 +14,9 @@ import { CHANGE_WORDS, MAX_CHANGE_DAYS_AHEAD } from '@apps/runway/constants';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
 import { addUtcDays } from '@apps/runway/engine/dates';
 import type { ItemKind } from '@apps/runway/types';
-import type {
-  FromWhenChoice,
-  FromWhenValue,
+import {
+  getFromWhenOptions,
+  type FromWhenValue,
 } from '@apps/runway/utils/fromWhen';
 import DateInput from '@/components/DateInput';
 
@@ -41,9 +41,7 @@ const STRETCH_OPTIONS = [
   { value: 'until', label: CHANGE_WORDS.stretchDate },
 ] as const;
 
-const hasDayOnly = (kind: ItemKind) => kind === 'envelope' || kind === 'goal';
-
-/** When a change starts and how long it lasts: always one summary row, whose choices open in their own sheet (on an income day's own screen with that day's choices first), so the form's rows never move. Earlier days keep what they had; only choices that mean something here are drawn. */
+/** When a change starts and how long it lasts. An everyday edit starts now and only says so; a change planned ahead asks its later start in place, and a pause keeps its one row whose choices open in their own sheet. A change opened from an income day's screen asks when it starts in its own step after the form. Earlier days keep what they had. */
 function FromWhenPicker({
   value,
   onChange,
@@ -56,26 +54,13 @@ function FromWhenPicker({
   isPause = false,
 }: FromWhenPickerProps) {
   const preset = days.find((day) => day.dayKey === presetDayKey) ?? null;
-  const dayFirst: { value: FromWhenChoice; label: string }[] = [
-    ...(hasDayOnly(kind) && (preset || days.length > 0)
-      ? [{ value: 'dayOnly' as const, label: CHANGE_WORDS.dayOnly }]
-      : []),
-    ...(preset && preset.on > today
-      ? [{ value: 'fromDay' as const, label: CHANGE_WORDS.fromDay }]
-      : []),
-  ];
-  const later: { value: FromWhenChoice; label: string }[] = [
-    { value: 'date', label: CHANGE_WORDS.fromDate },
-    ...(kind !== 'source'
-      ? [{ value: 'stretch' as const, label: CHANGE_WORDS.stretch }]
-      : []),
-  ];
-  const now = { value: 'now' as const, label: CHANGE_WORDS.fromNow };
-  const options = isPlanning
-    ? later
-    : preset !== null
-      ? [...dayFirst, now]
-      : [now, ...dayFirst];
+  const options = getFromWhenOptions({
+    kind,
+    days,
+    presetDayKey,
+    today,
+    isPlanning,
+  });
   const [isOpen, setIsOpen] = useState(false);
   const dayOptions = days.map((day) => ({
     value: day.dayKey,
@@ -86,6 +71,7 @@ function FromWhenPicker({
     options.find((option) => option.value === value.choice)?.label ??
     CHANGE_WORDS.fromNow;
   const isFixed = !isPlanning && options.length < 2;
+  const isEveryday = !isPlanning && !isPause;
 
   const controls = (
     <div className='space-y-4'>
@@ -198,6 +184,15 @@ function FromWhenPicker({
       <ActionSection caption={CHANGE_WORDS.fromHeading}>
         {controls}
       </ActionSection>
+    );
+  }
+
+  if (isEveryday && preset !== null && options.length > 1) return null;
+  if (isEveryday && value.choice === 'now') {
+    return (
+      <p className='text-muted-foreground text-xs text-pretty'>
+        {CHANGE_WORDS.fromNowNote}
+      </p>
     );
   }
 

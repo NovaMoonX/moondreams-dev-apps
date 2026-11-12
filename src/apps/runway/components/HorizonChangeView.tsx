@@ -153,7 +153,7 @@ function HorizonChangeView({
 
   return (
     <ChangeSteps
-      isReason={flow.step === 'reason'}
+      isReason={flow.step !== 'form'}
       reason={
         <ChangeReason
           flow={flow}

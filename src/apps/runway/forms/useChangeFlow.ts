@@ -57,6 +57,7 @@ import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describePayChoice } from '@apps/runway/utils/payFrom';
 import {
   getChangeSpan,
+  getFromWhenOptions,
   getPlanAheadFrom,
   type ChangeSpan,
   type FromWhenValue,
@@ -69,6 +70,8 @@ import type {
   ItemKind,
   OpenVersion,
 } from '@apps/runway/types';
+
+export type ChangeStep = 'form' | 'when' | 'reason';
 
 /** What an afterSave step cleared, so the toast can offer an Undo. */
 export interface PinsCleared {
@@ -211,7 +214,11 @@ export function useChangeFlow({
   const startFrom = initialFrom ?? getPlanAheadFrom(planAhead);
   const [from, setFrom] = useState(startFrom);
   const [eventId, setEventId] = useState<string | null>(presetEventId);
-  const [step, setStepState] = useState<'form' | 'reason'>('form');
+  const [step, setStepState] = useState<ChangeStep>('form');
+  // A kept draft that already chose a start keeps it chosen.
+  const [hasPickedWhen, setHasPickedWhen] = useState(
+    initialFrom !== undefined && initialFrom.choice !== 'now',
+  );
   const reviewedRef = useRef<StretchPlan<ItemPayload>['written'] | null>(null);
   const [note, setNote] = useState(initialNote);
   const [error, setError] = useState<string | null>(null);
@@ -266,9 +273,29 @@ export function useChangeFlow({
             ACCOUNT_WORDS.payFromNone,
         );
 
-  const setStep = (next: 'form' | 'reason') => {
-    reviewedRef.current = next === 'reason' ? (plan?.written ?? null) : null;
-    setStepState(next);
+  // An edit opened from an income day's screen asks when it starts in its own step, between the form and the reason.
+  const presetDay = days.find(({ dayKey }) => dayKey === presetDayKey) ?? null;
+  const asksWhen =
+    planAhead === null &&
+    startFrom.choice !== 'date' &&
+    startFrom.choice !== 'stretch' &&
+    !isMoneyless &&
+    getFromWhenOptions({
+      kind,
+      days,
+      presetDayKey,
+      today,
+      isPlanning: false,
+    }).length > 1;
+  const setStep = (next: ChangeStep) => {
+    const target =
+      next === 'reason' && step === 'form' && asksWhen ? 'when' : next;
+    reviewedRef.current = target === 'reason' ? (plan?.written ?? null) : null;
+    setStepState(target);
+  };
+  const pickWhen = (choice: FromWhenValue['choice']) => {
+    setFrom((value) => ({ ...value, choice }));
+    setHasPickedWhen(true);
   };
   const getPlan = (versions: readonly OpenVersion[]) =>
     candidate === null || span?.kind !== 'version'
@@ -494,6 +521,13 @@ export function useChangeFlow({
     }
   };
 
+  const whenBlocker = !hasPickedWhen
+    ? CHANGE_WORDS.whenBlocker
+    : (spanBlocker ??
+      (span?.kind === 'day' && candidate !== null
+        ? getDayOnlyBlocker(kind, current, candidate)
+        : null));
+
   const getBlocker = (formBlocker: string | null) => {
     if (formBlocker !== null) return formBlocker;
     if (spanBlocker !== null) return spanBlocker;
@@ -517,6 +551,11 @@ export function useChangeFlow({
     isPlanning: planAhead !== null,
     step,
     setStep,
+    asksWhen,
+    presetDay,
+    hasPickedWhen,
+    pickWhen,
+    whenBlocker,
     note,
     setNote,
     error,
