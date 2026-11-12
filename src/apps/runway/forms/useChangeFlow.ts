@@ -215,7 +215,10 @@ export function useChangeFlow({
   const [from, setFrom] = useState(startFrom);
   const [eventId, setEventId] = useState<string | null>(presetEventId);
   const [step, setStepState] = useState<ChangeStep>('form');
-  const [hasPickedWhen, setHasPickedWhen] = useState(false);
+  // A kept draft that already chose a start keeps it chosen.
+  const [hasPickedWhen, setHasPickedWhen] = useState(
+    initialFrom !== undefined && initialFrom.choice !== 'now',
+  );
   const reviewedRef = useRef<StretchPlan<ItemPayload>['written'] | null>(null);
   const [note, setNote] = useState(initialNote);
   const [error, setError] = useState<string | null>(null);

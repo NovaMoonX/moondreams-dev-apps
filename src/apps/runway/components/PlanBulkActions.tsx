@@ -78,6 +78,8 @@ import { getPayOptions } from '@apps/runway/utils/payFrom';
 import { formatRange } from '@apps/runway/utils/rangeText';
 import { toMonthlyRange } from '@apps/runway/engine/groups';
 import { isSavingFor } from '@apps/runway/engine/pace';
+import { fundingAtLevel } from '@apps/runway/engine/parts';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   useGoalsMonthly,
   usePlanTotals,
@@ -106,13 +108,24 @@ const canPayOnDay = (payload: MemberPayload) =>
 const isFeeBill = (payload: MemberPayload) =>
   'timing' in payload && isCardFeeBill(payload);
 
-/** Whether an item adds to a usual month at the dial: a bill paid once or with no fixed beat, an envelope with no fixed amount and a goal not being saved for add nothing. */
-const isInMonthly = (payload: MemberPayload, dial: Priority) => {
-  if (!isCountedAt(payload.priority, dial)) return false;
+/** Whether an item adds to a usual month at the dial, as the selection's total counts it: a bill paid once or with no fixed beat, an envelope with no fixed amount at the dial, and a goal not being saved for or already reached add nothing. */
+const isInMonthly = (
+  payload: MemberPayload,
+  dial: Priority,
+  heldCents: number,
+) => {
   if ('timing' in payload)
-    return toMonthlyRange(payload.amount, payload.timing.schedule) !== null;
-  if ('targetCents' in payload) return isSavingFor(payload);
-  return payload.funding.amount.kind === 'exact';
+    return (
+      isCountedAt(payload.priority, dial) &&
+      toMonthlyRange(payload.amount, payload.timing.schedule) !== null
+    );
+  if ('targetCents' in payload)
+    return (
+      isCountedAt(payload.priority, dial) &&
+      isSavingFor(payload) &&
+      heldCents < payload.targetCents
+    );
+  return fundingAtLevel(payload, dial)?.amount.kind === 'exact';
 };
 
 export interface TickedItem {
@@ -163,8 +176,10 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
       : view === 'envelopes'
         ? totals.envelopes.total
         : goalsMonthly;
+  const assignedByItem = useAppSelector(selectBalances).assignedByItem;
   const notCounted = ticked.filter(
-    ({ payload }) => !isInMonthly(payload, dial),
+    ({ itemId, payload }) =>
+      !isInMonthly(payload, dial, Math.max(0, assignedByItem[itemId] ?? 0)),
   ).length;
   const selectedNote = mask(
     PLAN_SELECT_WORDS.selectedMonthly(
