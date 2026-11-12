@@ -1462,7 +1462,7 @@ export const DRAFT_CADENCE_WORDS: Record<
 };
 
 export const DRAFT_WORDS = {
-  fundedFrom: 'set aside from',
+  fundedFrom: 'comes out of',
   outOfMoney: "This day's money ran out before it got to this item",
   restEmpty: "Nothing was left of this day's money for the rest",
   restAsk: 'The rest',
@@ -1693,12 +1693,12 @@ export const DUE_WORDS = {
     `${name} is still marked paid. Open the bill to take it back`,
 } as const;
 
-/** A repeating bill's "Set aside from": which of the plan's pays carries it. */
+/** A repeating bill's "Comes out of": which of the plan's pays carries it. */
 export const BILL_PAID_FROMS = ['spread', 'lastBefore', 'pay'] as const;
 
 export const PAID_FROM_WORDS = {
-  title: 'Which pay covers it?',
-  title2: 'Set aside from',
+  title: 'Which pay does it come out of?',
+  title2: 'Comes out of',
   spreadRow: 'Spread across your pays',
   chosenRow: 'Days you chose',
   spreadMeaning: 'Every pay before it is due puts in a share.',
@@ -1710,8 +1710,8 @@ export const PAID_FROM_WORDS = {
       : dates.length <= 3
         ? `This replaces your changes for the ${dates.slice(0, -1).join(', ')} and ${dates[dates.length - 1]} pays.`
         : `This replaces your changes for the ${dates.slice(0, 3).join(', ')} and ${dates.length - 3} more pays.`,
-  summaryLabel: 'Set aside from',
-  label: 'Set aside from',
+  summaryLabel: 'Comes out of',
+  label: 'Comes out of',
   spread: 'Spread across my pays',
   lastBefore: "The pay right before it's due",
   lastBeforeLower: "the pay right before it's due",
@@ -1741,7 +1741,7 @@ export const PAID_FROM_WORDS = {
   pinsLeft: (name: string) =>
     `${name} is now spread, but some per-pay changes are still on.`,
   undoPartial: (name: string) =>
-    `${name} is set aside from its old pays again, but the per-pay changes could not be put back.`,
+    `${name} comes out of its old pays again, but the per-pay changes could not be put back.`,
   undo: 'Undo',
   saveFailed: 'This did not save. Nothing was changed.',
 } as const;
@@ -1791,7 +1791,7 @@ export const PAY_SHARE_WORDS = {
   eachTime: 'each time',
   actionSub: (name: string, total: string) =>
     `${name} stays ${total}; only this pay changes`,
-  leftOutDetail: (pay: string) => `Set aside from ${pay}`,
+  leftOutDetail: (pay: string) => `Comes out of ${pay}`,
   restSetAside: (cents: string, due: string) =>
     `${cents} · already set aside · due\u00a0${due}`,
   completesIt: (cents: string, due: string) =>
@@ -1799,7 +1799,7 @@ export const PAY_SHARE_WORDS = {
   undoPins: 'Put them back',
   theDatePay: (date: string) => `the ${date} pay`,
   leftOutCarrier: (date: string) => `Comes out of the ${date} pay`,
-  leftOutHeading: 'Set aside from another pay',
+  leftOutHeading: 'Comes out of another pay',
   summary: (name: string, cents: string, date: string) =>
     `${name}: this pay puts in ${cents}, for ${date} only.`,
   savedToast: (name: string) => `Changed what this pay puts toward ${name}`,
@@ -1810,7 +1810,7 @@ export const PAY_SHARE_WORDS = {
     `This pay has ${money} left for it, so ${over} would stay short.`,
   savedTitle: 'Saved for this pay',
   withheld: (name: string) =>
-    `Only this pay changed. To choose which pay covers ${name} every time, change Set aside from on its sheet.`,
+    `Only this pay changed. To choose which pay covers ${name} every time, change Comes out of on its sheet.`,
   done: 'Done',
   setPaidFrom: 'Choose the pay',
   pinsClearedToast: (name: string, count: number) =>
@@ -1822,14 +1822,14 @@ export const PAY_SHARE_WORDS = {
   pinsNotBack: (name: string, count: number) =>
     `${name}: ${count} per-pay ${count === 1 ? 'change was' : 'changes were'} changed again since, so ${count === 1 ? 'it was' : 'they were'} left as is`,
   oneTimePay: (pay: string, name: string) =>
-    `${pay} is one-time and ${name} isn't set aside from it. Pick a repeating pay, or choose different pays for it.`,
+    `${pay} is one-time and ${name} doesn't come out of it. Pick a repeating pay, or choose different pays for it.`,
   whyNothing: 'Why this pay puts nothing in',
   leftOutTitle: (name: string, from: string) => `${name} comes from ${from}`,
   leftOutBody: 'This pay puts nothing toward it.',
   firstOnlyTitle: (name: string) => `${name} comes out of this pay first`,
   pairedSub: (name: string) => `What this pay puts toward ${name} first`,
   firstOnlyBody: (from: string) =>
-    `It is set aside from ${from}, so what this pay puts in is set by Pay these first, not here.`,
+    `It comes out of ${from}, so what this pay puts in is set by Pay these first, not here.`,
   hiddenEffects: 'Other pays and items may move',
   whyOthers:
     'Other items move because this pay has less or more left for them.',
@@ -1850,7 +1850,7 @@ export const PAY_SHARE_WORDS = {
   keepPartial: (name: string, pay: string) =>
     `${name} now comes from ${pay}, but some per-pay changes are still on. Tap Try again to clear them.`,
   undoPartial: (name: string) =>
-    `${name} is set aside from its old pays again, but this pay's figure could not be restored.`,
+    `${name} comes out of its old pays again, but this pay's figure could not be restored.`,
 } as const;
 
 /** The levels; tracking is one switch for the whole plan, and Link is Track with a bank linked. */
@@ -1891,7 +1891,7 @@ export const TRACKING_WORDS = {
   envelopes: 'What each envelope holds',
   goals: 'What each goal holds',
   horizon: 'What each Horizon item holds',
-  bills: 'Already set aside for bills',
+  bills: 'Already put aside for bills',
   cards: 'What each card owes',
   start: 'Start tracking',
   stopTitle: 'Stop tracking',
@@ -2022,7 +2022,7 @@ export const START_AMOUNTS_WORDS = {
   goals: 'What each goal holds',
   horizon: 'What each Horizon item holds',
   envelopes: 'What each envelope holds',
-  bills: 'Already set aside for bills',
+  bills: 'Already put aside for bills',
   total: 'Total in your account',
   offline:
     'Saving where things stand needs a connection. Nothing was saved. Try again when you are back online.',
@@ -2584,7 +2584,7 @@ export const ITEM_SHEET_WORDS = {
   fundsNotice:
     'Everything in your plan is paid from your income. Items here come out of this pay first.',
   fundsBillNote:
-    'For a bill, this is what this pay puts in, whichever pays it is set aside from.',
+    'For a bill, this is what this pay puts in, whichever pays it comes out of.',
   history: 'History',
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',
@@ -2920,11 +2920,12 @@ export const SET_HELD_WORDS = {
     `Put ${amount} back in ${name}`,
 } as const;
 
-/** A bill's "Put money aside": money added to what is set aside for its payments, never taken out. */
+/** A bill's "Already put aside": money added to what is set aside for its payments, never taken out. */
 export const BILL_SET_ASIDE_WORDS = {
-  open: 'Put money aside',
-  openSub: 'Add to what it holds',
-  openSubNone: 'Nothing set aside yet',
+  open: 'Already put aside',
+  openSub: (held: string, total: string) => `${held} of ${total}`,
+  openSubNone: 'Nothing yet',
+  openSubFull: (total: string) => `All ${total} of the next payment`,
   title: (name: string) => `Put money aside for ${name}`,
   amount: 'Put aside',
   needsAmount: 'Enter how much to put aside.',
@@ -2934,15 +2935,15 @@ export const BILL_SET_ASIDE_WORDS = {
     title: 'Already saved elsewhere',
     body: 'In another account or in cash. Free to Spend stays the same.',
   },
-  setAside: (name: string) => `${name}, set aside`,
+  setAside: (name: string) => `${name}, put aside`,
   sourceQuestion: 'Where does it come from?',
-  addTitle: 'Already set aside for it?',
-  addLabel: 'Already set aside',
+  addTitle: 'Already put aside for it?',
+  addLabel: 'Already put aside',
   addAmount: 'Amount',
   addNone: 'None yet',
   addHint: 'Saved for its next payment. Leave it empty if none.',
   notRecorded: (name: string) =>
-    `${name} was added, but what is set aside for it did not record. Open the bill and choose Put money aside.`,
+    `${name} was added, but what is set aside for it did not record. Open the bill and choose Already put aside.`,
 } as const;
 
 export const PROBLEM_WORDS = {
@@ -3033,7 +3034,7 @@ export const FORM_FLOW_WORDS = {
   endsTitle: 'Does it end?',
   ends: 'Ends',
   fundingTitle: 'Which income days pay for it?',
-  funding: 'Set aside from',
+  funding: 'Comes out of',
   envelopeAmountTitle: 'How much does it get each time?',
   eachTime: 'Each time',
   balance: 'Balance',
@@ -3172,7 +3173,7 @@ export const ITEM_SHEET_R2_WORDS = {
   changeName: 'Change name',
   heldDetail: (amount: string) => `${amount} held · choose`,
   toppedUp: 'Topped up',
-  setAsideHeading: 'Set aside from this pay',
+  setAsideHeading: 'Comes out of this pay',
   holdsThroughUndated: 'not counting bills with no due date',
   everythingPaid: 'Mark all paid',
   markedPaid: (name: string) => `Marked ${name} paid`,

@@ -142,7 +142,7 @@ function SavedStart({ uid }: { uid: string }) {
               emoji: version.payload.emoji,
               groupId:
                 'groupId' in version.payload ? version.payload.groupId : null,
-              line: item.kind === 'bill' ? 'Already set aside' : 'In it now',
+              line: item.kind === 'bill' ? 'Already put aside' : 'In it now',
               amount: formatCentsShort(started.byItem[item.id]),
             },
           ],

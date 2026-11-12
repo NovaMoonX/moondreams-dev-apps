@@ -1739,8 +1739,8 @@ const version = (
         undefined,
         () => 'the pay on the 30th',
       ),
-      'Set aside from spread across your pays to the pay on the 30th',
-      'a Set aside from change reads as plain words',
+      'Comes out of spread across your pays to the pay on the 30th',
+      'a Comes out of change reads as plain words',
     );
     // A window with no pin of its own spreads as before, whatever is pinned in other months.
     assert.deepEqual(
@@ -4972,7 +4972,7 @@ const version = (
     };
     assert.ok(
       describeLineReason(fromMain, { main: 'Main job' }).includes(
-        'set aside from Main job',
+        'comes out of Main job',
       ),
       'a line names the source that pays it',
     );
@@ -4992,7 +4992,7 @@ const version = (
         { main: 'Main job' },
         'Vacation fund',
         'side',
-      ).includes('set aside from Main job'),
+      ).includes('comes out of Main job'),
       'a line paid by another source still names it',
     );
   }

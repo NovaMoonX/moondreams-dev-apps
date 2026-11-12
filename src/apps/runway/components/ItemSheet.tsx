@@ -118,7 +118,6 @@ import {
   MOVE_WORDS,
   SET_HELD_WORDS,
   BILL_SET_ASIDE_WORDS,
-  BILL_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
   HOME_PIN_WORDS,
@@ -1295,9 +1294,14 @@ function ItemSheet({
   const openHistory = () => goTo('history');
   const getSetAsideSub = (totalCents: number) => {
     if (totalCents > 0 && billSetAsideCents >= totalCents)
-      return BILL_WORDS.readyToPay;
+      return mask(BILL_SET_ASIDE_WORDS.openSubFull(formatCents(totalCents)));
     return billSetAsideCents > 0
-      ? BILL_SET_ASIDE_WORDS.openSub
+      ? mask(
+          BILL_SET_ASIDE_WORDS.openSub(
+            formatCents(billSetAsideCents),
+            formatCents(totalCents),
+          ),
+        )
       : BILL_SET_ASIDE_WORDS.openSubNone;
   };
   const getMarkPaidSub = (due: NonNullable<typeof payment>) => {
