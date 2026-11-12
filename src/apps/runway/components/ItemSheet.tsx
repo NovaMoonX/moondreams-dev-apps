@@ -2124,6 +2124,14 @@ function ItemSheet({
       kind='bill'
       name={payload.name}
       heldCents={billSetAsideCents}
+      coverNote={
+        payment && billCoveredCents > 0
+          ? BILL_SET_ASIDE_WORDS.coverNote(
+              formatCents(billCoveredCents),
+              formatDateOrdinalUTC(payment.dueOn),
+            )
+          : null
+      }
       account={null}
       today={today}
       onBack={() => goTo('menu')}

@@ -44,6 +44,8 @@ interface SetHeldViewProps {
   name: string;
   /** What the envelope or goal holds now; for a bill, what is set aside for its next payment. */
   heldCents: Cents;
+  /** A bill's next payment that Free to Spend covers, said above the field. */
+  coverNote?: string | null;
   /** The account that holds it, with what in it is not set aside (null when its balance is not known). */
   account: {
     name: string;
@@ -89,6 +91,7 @@ function SetHeldView({
   kind,
   name,
   heldCents,
+  coverNote = null,
   account,
   today,
   onBack,
@@ -197,8 +200,7 @@ function SetHeldView({
   const isSourceLocked =
     options.find((option) => option.choice === source)?.isLocked ?? false;
   const getAmountBlocker = () => {
-    if (isBill)
-      return difference > 0 ? null : BILL_SET_ASIDE_WORDS.needsAmount;
+    if (isBill) return difference > 0 ? null : BILL_SET_ASIDE_WORDS.needsAmount;
     if (target === null) return SET_HELD_WORDS.needsAmount;
     return difference === 0 ? SET_HELD_WORDS.unchanged : null;
   };
@@ -345,6 +347,11 @@ function SetHeldView({
       <ActionTitle>
         {isBill ? BILL_SET_ASIDE_WORDS.title(name) : SET_HELD_WORDS.title(name)}
       </ActionTitle>
+      {coverNote !== null && (
+        <p className='text-muted-foreground text-sm'>
+          <MaskedText>{coverNote}</MaskedText>
+        </p>
+      )}
       <AmountHero
         label={isBill ? BILL_SET_ASIDE_WORDS.amount : SET_HELD_WORDS.amount}
         value={amount}

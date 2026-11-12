@@ -1,12 +1,13 @@
-import { ChevronRight, TriangleAlert } from 'lucide-react';
+import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
+import HelpTip from '@/components/HelpTip';
+import SectionDivider from '@/components/SectionDivider';
 import SensitiveValue from '@/components/SensitiveValue';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { BillSheet } from '@apps/runway/components/BillRow';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { HELD_BREAKDOWN_WORDS } from '@apps/runway/constants';
 import { BILL_COVER_DAYS } from '@apps/runway/engine/billCover';
@@ -15,10 +16,12 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectAllHorizonItems,
+  selectBillPayments,
   selectBills,
   selectCards,
   selectEnvelopes,
   selectGoals,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { PlanSection } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
@@ -72,6 +75,12 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
           at: version.createdAt,
         });
   }, new Map());
+  const payments = useAppSelector((state) => selectBillPayments(state, today));
+  const stance = useAppSelector(selectStance);
+  const [openBill, setOpenBill] = useState<{
+    id: string;
+    step: string | null;
+  } | null>(null);
   const { leaveViewForTab, openItemAt } = useRunwayUrlState();
   const mask = useMaskedText();
   const { billCover } = balances;
@@ -94,6 +103,7 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
     resolved: readonly Named[],
     getCents: (id: string) => number,
     getDetail: (id: string, cents: number) => string | null = () => null,
+    open: (id: string) => void = (id) => void openOnPlan(section, id),
   ): HeldRow[] => {
     const order = resolved.map(({ item }) => item.id);
     const rank = (id: string) =>
@@ -115,7 +125,7 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
           emoji: payload?.emoji ?? null,
           detail: getDetail(id, cents),
           cents,
-          onOpen: () => void openOnPlan(section, id),
+          onOpen: () => open(id),
         };
       });
   };
@@ -131,13 +141,12 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
         null,
       );
     const words = HELD_BREAKDOWN_WORDS;
+    if (covered === 0) return null;
     const source =
-      putAside > 0 && covered > 0
+      putAside > 0
         ? words.putAsideAndCovered(formatCents(putAside), formatCents(covered))
-        : covered > 0
-          ? words.covered
-          : words.putAside;
-    return nextDue === null || covered === 0
+        : words.covered;
+    return nextDue === null
       ? source
       : `${source} · ${words.due(formatDateOrdinalUTC(nextDue))}`;
   };
@@ -151,6 +160,10 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
         bills,
         (id) => ledgerOf(id) + coveredOf(id),
         (id) => getBillDetail(id, ledgerOf(id), coveredOf(id)),
+        (id) =>
+          bills.some(({ item }) => item.id === id)
+            ? setOpenBill({ id, step: null })
+            : void openOnPlan('bills', id),
       );
     }
     if (kind === 'goals') return getPlanRows('goals', 'goal', goals, ledgerOf);
@@ -175,78 +188,96 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
       ? billCover.payments.filter((payment) => payment.shortCents > 0)
       : [];
 
+  const isPlanned = balances.isStarted && balances.hasMoney;
+  const openBillEntry = bills.find(({ item }) => item.id === openBill?.id);
+
   return (
     <div className='space-y-4'>
       <div className='border-border bg-accent rounded-2xl border p-4'>
-        <p className='text-muted-foreground text-sm font-medium'>{name}</p>
+        <p className='text-muted-foreground flex items-center gap-1 text-sm font-medium'>
+          {name}
+          {kind === 'bills' && (
+            <HelpTip title={name}>
+              {HELD_BREAKDOWN_WORDS.coverRule(BILL_COVER_DAYS)}
+            </HelpTip>
+          )}
+        </p>
         <p className='text-3xl font-semibold tracking-tight tabular-nums'>
           <SensitiveValue>{formatCents(totalCents)}</SensitiveValue>
         </p>
       </div>
-      {kind === 'bills' && (
-        <p className='text-muted-foreground text-sm'>
-          {HELD_BREAKDOWN_WORDS.coverRule(BILL_COVER_DAYS)}
-        </p>
-      )}
       {rows.length === 0 && shortPayments.length === 0 ? (
         <p className='text-muted-foreground text-sm'>
           {HELD_BREAKDOWN_WORDS.empty[kind]}
         </p>
       ) : (
-        <ul className='border-border bg-card divide-border divide-y rounded-2xl border'>
-          {rows.map((row) => (
-            <ItemRow
-              key={row.id}
-              itemId={row.id}
-              name={row.name}
-              emoji={row.emoji}
-              detail={row.detail}
-              figure={formatCents(row.cents)}
-              ariaLabel={mask(
-                `${row.name}, ${formatCents(row.cents)}${row.detail ? `. ${row.detail}` : ''}`,
-              )}
-              onOpen={row.onOpen}
-            />
-          ))}
-          {shortPayments.map((payment) => {
-            const label = mask(
-              HELD_BREAKDOWN_WORDS.short(
-                payment.name,
-                formatCents(payment.shortCents),
-              ),
-            );
-            return (
-              <li
-                key={`${payment.billId}:${payment.dueOn}`}
-                className='first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl'
-              >
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
-                  aria-label={`${label}. ${HELD_BREAKDOWN_WORDS.shortOpen(payment.name)}`}
-                  onClick={() =>
-                    void openOnPlan('bills', payment.billId, 'funding')
-                  }
-                >
-                  <span
-                    className='grid size-9 shrink-0 place-items-center rounded-full bg-(--runway-warning-soft) text-(--runway-warning-ink) shadow-[inset_0_0_0_1px_var(--runway-warning-edge)]'
-                    aria-hidden='true'
-                  >
-                    <TriangleAlert className='h-4 w-4' />
-                  </span>
-                  <span className='min-w-0 flex-1 pt-1.5 font-medium break-words'>
-                    {label}
-                  </span>
-                  <ChevronRight
-                    className='text-muted-foreground mt-2.5 h-4 w-4 shrink-0'
-                    aria-hidden='true'
-                  />
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          {rows.length > 0 && (
+            <ul className='border-border bg-card divide-border divide-y rounded-2xl border'>
+              {rows.map((row) => (
+                <ItemRow
+                  key={row.id}
+                  itemId={row.id}
+                  name={row.name}
+                  emoji={row.emoji}
+                  detail={row.detail}
+                  figure={formatCents(row.cents)}
+                  ariaLabel={mask(
+                    `${row.name}, ${formatCents(row.cents)}${row.detail ? `. ${row.detail}` : ''}`,
+                  )}
+                  onOpen={row.onOpen}
+                />
+              ))}
+            </ul>
+          )}
+          {shortPayments.length > 0 && (
+            <div className='space-y-2'>
+              <SectionDivider label={HELD_BREAKDOWN_WORDS.notCovered} />
+              <ul className='border-border bg-card divide-border divide-y rounded-2xl border'>
+                {shortPayments.map((payment) => {
+                  const detail = isPlanned
+                    ? HELD_BREAKDOWN_WORDS.short(
+                        formatDateOrdinalUTC(payment.dueOn),
+                      )
+                    : HELD_BREAKDOWN_WORDS.shortSetStart;
+                  return (
+                    <ItemRow
+                      key={`${payment.billId}:${payment.dueOn}`}
+                      name={payment.name}
+                      emoji={newestPayload.get(payment.billId)?.emoji ?? null}
+                      detail={detail}
+                      isDetailWarning
+                      isDetailInked
+                      figure={formatCents(payment.shortCents)}
+                      ariaLabel={mask(
+                        `${payment.name}, ${formatCents(payment.shortCents)}. ${detail}`,
+                      )}
+                      onOpen={() =>
+                        setOpenBill({ id: payment.billId, step: 'funding' })
+                      }
+                    />
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+      {openBill && openBillEntry && (
+        <BillSheet
+          key={openBill.id}
+          billId={openBill.id}
+          bill={openBillEntry.version.payload}
+          payment={
+            (payments[openBill.id] ?? []).find(
+              (entry) => entry.dueOn >= today,
+            ) ?? null
+          }
+          planStance={stance}
+          today={today}
+          startsAtStep={openBill.step ?? undefined}
+          onClose={() => setOpenBill(null)}
+        />
       )}
     </div>
   );

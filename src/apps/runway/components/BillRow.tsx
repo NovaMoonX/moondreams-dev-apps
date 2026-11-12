@@ -5,6 +5,8 @@ import { useAppSelector } from '@/store';
 import CardForm from '@apps/runway/forms/CardForm';
 import { isCardFeeBill } from '@apps/runway/engine/cardFees';
 import { isTrackingLevel } from '@apps/runway/engine/level';
+import { getCoveredCents } from '@apps/runway/engine/billCover';
+import { selectBillCover } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardName } from '@apps/runway/utils/cardText';
@@ -18,6 +20,7 @@ import ItemSheet, {
 import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
   AUTO_PAY_WORDS,
+  BILL_SET_ASIDE_WORDS,
   BILL_WORDS,
   CARD_FEE_WORDS,
   GROUP_WORDS,
@@ -102,11 +105,23 @@ const getDueLine = (
 };
 
 /** Where the next payment stands, short: "$1,075 of $1,250 set aside", or "saved" for a bill saved up for. */
-const getProgress = (payment: BillPayment | null, isSavingUp: boolean) => {
+const getProgress = (
+  payment: BillPayment | null,
+  isSavingUp: boolean,
+  coveredCents: number,
+) => {
   if (!payment) return null;
   const { paid, fundedCents, totalCents } = payment;
   if (paid) {
     return `${paid.paidOn < payment.payOn ? 'Paid ahead' : 'Paid'} ${formatDateOrdinalUTC(paid.paidOn)}`;
+  }
+  if (coveredCents > 0) {
+    return fundedCents > 0
+      ? BILL_SET_ASIDE_WORDS.progressPartCovered(
+          formatCentsShort(fundedCents),
+          formatCentsShort(coveredCents),
+        )
+      : BILL_SET_ASIDE_WORDS.progressCovered;
   }
   if (fundedCents <= 0)
     return isSavingUp ? BILL_WORDS.nothingSaved : 'Nothing set aside yet';
@@ -228,6 +243,10 @@ export function BillSheet({
         (card) => card.id === bill.cardFeeOf && card.archivedAt === null,
       ) ?? null)
     : null;
+  const billCover = useAppSelector(selectBillCover);
+  const coveredCents = payment
+    ? getCoveredCents(billCover, billId, payment.dueOn)
+    : 0;
   const paidFromAction = usePaidFromAction(billId, today);
   const paidWithAction = usePaidWithAction(billId, today);
   const horizonItems = useAppSelector((state) =>
@@ -260,7 +279,7 @@ export function BillSheet({
     PRIORITY_LABELS[bill.priority],
     repeat,
     getDueFact(),
-    getProgress(payment, isSavingUp),
+    getProgress(payment, isSavingUp, coveredCents),
   ]
     .filter(Boolean)
     .join(' · ');
