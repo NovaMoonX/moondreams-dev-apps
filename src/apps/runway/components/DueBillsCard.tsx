@@ -57,6 +57,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getBillCardName } from '@apps/runway/utils/cardText';
+import { describeDueDay } from '@apps/runway/utils/billText';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 
 type DueBill = Lookahead['due'][number];
@@ -85,9 +86,7 @@ const getDueLine = (
   today: number,
 ) => {
   if (!due.isOverdue && due.dueOn > today) {
-    return DUE_WORDS.dueLater(
-      formatRelativeDayUTC(due.dueOn, today, formatDateOrdinalUTC),
-    );
+    return DUE_WORDS.dueLater(describeDueDay(null, due.dueOn, today));
   }
   if (!due.isOverdue) return DUE_WORDS.today;
   const when = formatRelativeDayUTC(due.dueOn, today, formatDateOrdinalUTC);

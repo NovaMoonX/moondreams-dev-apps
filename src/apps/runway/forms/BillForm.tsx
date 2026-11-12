@@ -435,6 +435,7 @@ const toSchedule = (
 };
 
 const NEXT_DUE_REACH = 800 * 86_400_000;
+const NO_ENDING = { onDate: null, afterCount: null };
 
 /** A repeating bill's next due day from today, which its edit shows in place of the first one it was given. */
 const getNextDue = (payload: BillSealed, today: number) => {
@@ -747,6 +748,9 @@ function BillFormBody({
   const [nextDue] = useState(() =>
     editing ? getNextDue(editing.payload, today) : null,
   );
+  const [savedData] = useState(() =>
+    editing ? getEditingData(editing.payload, false) : null,
+  );
   const [startData] = useState<BillFormData>(() =>
     editing || draft?.initial || fromCost
       ? {
@@ -812,7 +816,7 @@ function BillFormBody({
       ? null
       : `${FORM_DRAFT_PREFIX}${noun}:${editing?.itemId ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
-  const draftBase = editing ? startData : null;
+  const draftBase = editing ? savedData : null;
   const kept = useFormDraft({
     key: draftKey,
     base: draftBase,
@@ -884,6 +888,24 @@ function BillFormBody({
           (pin) => formatDateOrdinalUTC(pin.expectedOn),
         )
       : [];
+  /** A date that still lands on the saved schedule keeps that schedule (or its first date when only the repeat changed), so an edit never moves where the bill started counting. */
+  const toBillSchedule = (data: BillFormData, frequency: Frequency) => {
+    if (data.isLater) return toSchedule(data, frequency, null);
+    const picked = fromDateInputValue(data.startDate);
+    if (picked === undefined) return undefined;
+    const saved = editing?.payload.timing.schedule;
+    const isOnSaved =
+      saved !== undefined &&
+      saved.anchor !== null &&
+      saved.kind !== 'once' &&
+      occurrences(saved, NO_ENDING, picked, picked).length > 0;
+    if (!saved || !isOnSaved) return toSchedule(data, frequency, picked);
+    const isSameRepeat =
+      frequency === savedData?.frequency &&
+      savedData !== null &&
+      getEveryMonths(data) === getEveryMonths(savedData);
+    return isSameRepeat ? saved : toSchedule(data, frequency, saved.anchor);
+  };
   const canPickPay = !isOnce && formData.frequency !== null;
   const savedFundedBy = editing?.payload.fundedBy.kind ?? null;
   const canAskPaidFrom =
@@ -894,7 +916,8 @@ function BillFormBody({
         formData.frequency !== null &&
         hasPaysToChoose(
           comingDays,
-          toSchedule(formData, formData.frequency, dueDate),
+          toBillSchedule(formData, formData.frequency) ??
+            toSchedule(formData, formData.frequency, dueDate),
           today,
           getOneTimePayIds(plan),
         )));
@@ -988,28 +1011,12 @@ function BillFormBody({
   const isDueValid =
     formData.isLater ||
     (dueDate !== undefined && (editing !== undefined || dueDate >= today));
-  /** The saved first date while the shown next date and the repeat are untouched, so an edit never moves the schedule's start. */
-  const toAnchor = (data: BillFormData) => {
-    if (data.isLater) return null;
-    const isKept =
-      editing !== undefined &&
-      nextDue !== null &&
-      data.startDate === startData.startDate &&
-      data.frequency === startData.frequency &&
-      getEveryMonths(data) === getEveryMonths(startData);
-    return isKept
-      ? editing.payload.timing.schedule.anchor
-      : fromDateInputValue(data.startDate);
-  };
   const getDueSummary = (on: number) => {
-    const anchor = toAnchor(formData);
-    const day =
-      formData.frequency === null || anchor === null || anchor === undefined
-        ? null
-        : describeDueAnswer(
-            toSchedule(formData, formData.frequency, anchor),
-            on,
-          );
+    const schedule =
+      formData.frequency === null
+        ? undefined
+        : toBillSchedule(formData, formData.frequency);
+    const day = schedule ? describeDueAnswer(schedule, on) : null;
     return day ?? formatDateOrdinalUTC(on);
   };
   const canLater =
@@ -1724,13 +1731,15 @@ function BillFormBody({
 
   const buildBill = (data: BillFormData): BillSealed | null => {
     const amount = parseAmountDraft(data.amount);
-    const anchor = toAnchor(data);
     const ending = buildEnding(data);
+    const schedule =
+      data.frequency === null
+        ? undefined
+        : toBillSchedule(data, data.frequency);
     if (
       amount === null ||
-      anchor === undefined ||
+      schedule === undefined ||
       !ending ||
-      data.frequency === null ||
       !isRepeatAnswered(data)
     )
       return null;
@@ -1750,7 +1759,7 @@ function BillFormBody({
       amount,
       timing: {
         kind: 'date',
-        schedule: toSchedule(data, data.frequency, anchor),
+        schedule,
       },
       ending,
       fundedBy,

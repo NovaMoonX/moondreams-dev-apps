@@ -90,9 +90,10 @@ const getDueLine = (
   if (isUndated) return BILL_WORDS.needsDueDate;
   if (!payment) return 'No payment left';
   const date = describeDueDay(schedule, payment.dueOn, today);
-  if (payment.paid) return `Paid · due\u00a0${date}`;
+  if (payment.paid)
+    return `Paid · due\u00a0${describeDueDay(null, payment.dueOn, today)}`;
   if (payment.payOn !== payment.dueOn) {
-    const payDate = describeDueDay(schedule, payment.payOn, today);
+    const payDate = describeDueDay(null, payment.payOn, today);
     return BILL_WORDS.payOnLine(payDate, date);
   }
   return isSavingUp

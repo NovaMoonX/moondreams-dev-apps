@@ -178,29 +178,32 @@ const WEEKDAYS = [
 ];
 const CLOSE_DAYS = 7;
 
-const isLastOfMonth = (on: number) =>
-  new Date(on + 86_400_000).getUTCDate() === 1;
-
 /** The day a repeating schedule lands on, in its own terms ("the 10th", "the last day", "Fridays"); null when only the full date says it. */
 function describeRepeatDay(schedule: Schedule, on: number) {
   const date = new Date(on);
   if (schedule.kind === 'monthly') {
-    return schedule.monthDays[0] === LAST_DAY && isLastOfMonth(on)
-      ? 'the last day'
-      : `the ${toDayOrdinal(date.getUTCDate())}`;
+    const day = schedule.monthDays[0] ?? date.getUTCDate();
+    return day === LAST_DAY
+      ? 'the\u00a0last\u00a0day'
+      : `the\u00a0${toDayOrdinal(day)}`;
   }
   if (schedule.kind === 'weekly') return `${WEEKDAYS[date.getUTCDay()]}s`;
   return null;
 }
 
-/** When a payment falls due, as a row says it: "today", "tomorrow" or "Fri" inside a week, the full date once it has passed, otherwise its repeat's day ("the 10th"), falling back to the full date. */
-export function describeDueDay(schedule: Schedule, on: number, today: number) {
+/** When a payment falls due, as a row says it: "today", "tomorrow" or "Fri" inside a week, the full date once it has passed, otherwise its repeat's day ("the 10th"); with no schedule (a one-off pay date) or no repeat day, the full date. */
+export function describeDueDay(
+  schedule: Schedule | null,
+  on: number,
+  today: number,
+) {
   const days = Math.round((on - today) / 86_400_000);
   if (days <= 1) {
     return formatRelativeDayUTC(on, today, formatDateOrdinalUTC);
   }
   if (days < CLOSE_DAYS) return WEEKDAYS[new Date(on).getUTCDay()].slice(0, 3);
-  return describeRepeatDay(schedule, on) ?? formatDateOrdinalUTC(on);
+  const day = schedule === null ? null : describeRepeatDay(schedule, on);
+  return day ?? formatDateOrdinalUTC(on);
 }
 
 /** A repeating bill's due day for its form's folded row: "The 10th of each month", "Every Friday"; null when the date itself is the answer. */
