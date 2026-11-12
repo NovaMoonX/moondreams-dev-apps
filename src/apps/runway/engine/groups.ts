@@ -91,13 +91,14 @@ export function getIncomeDaysPerMonth(
     }, 0);
 }
 
-/** An envelope's fixed amount for a usual month as a ratio; null when its amount or beat is not fixed. */
+/** An envelope's fixed amount for a usual month as a ratio (nothing for one nothing goes into); null when its amount or beat is not fixed. */
 const getEnvelopeWeight = ({
   funding,
   incomeDaysPerMonth,
 }: GroupEnvelopeMember): [number, number] | null => {
-  if (funding.amount.kind !== 'exact') return null;
   const { cadence } = funding;
+  if (cadence.kind === 'none') return [0, 1];
+  if (funding.amount.kind !== 'exact') return null;
   if (cadence.kind === 'calendar')
     return CALENDAR_FACTORS[cadence.period] ?? null;
   if (incomeDaysPerMonth === 0) return null;

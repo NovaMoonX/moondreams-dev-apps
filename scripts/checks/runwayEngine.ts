@@ -121,7 +121,11 @@ import {
   getPeriodStart,
   spreadCalendarAmount,
 } from '../../src/apps/runway/engine/calendar.ts';
-import { describeFunding } from '../../src/apps/runway/utils/fundingText.ts';
+import {
+  describeCadenceLine,
+  describeFunding,
+  describeFundingShort,
+} from '../../src/apps/runway/utils/fundingText.ts';
 import {
   countReceiptItems,
   describeReceiptRead,
@@ -9532,7 +9536,11 @@ const version = (
     'a span of 1,500 periods is walked to its last day, not cut at 1,200, and the empty periods pass their amounts on',
   );
   assert.equal(describeFunding(calendarRule(60_000)), '$600.00 a month');
-  assert.equal(describeFunding(idle.funding), 'no contribution');
+  assert.equal(
+    describeFunding(idle.funding, [], 'goal'),
+    'not saving for it yet',
+  );
+  assert.equal(describeFunding(idle.funding), 'nothing goes in for now');
   assert.equal(
     describeFunding({
       amount: { kind: 'exact', cents: 5_000 },
@@ -17980,6 +17988,35 @@ console.log('runway engine: ok');
     null,
     'G11: an envelope on chosen days has no monthly figure',
   );
+  const idleEnvelope: FundingRule = {
+    amount: { kind: 'exact', cents: 0 },
+    cadence: { kind: 'none' },
+  };
+  assert.equal(
+    toMonthlyEnvelopeCents(idleEnvelope, 2),
+    0,
+    'An envelope nothing goes into counts $0 a month, not as left out',
+  );
+  assert.equal(
+    describeEnvelopeMonthly(idleEnvelope, 2),
+    null,
+    'An envelope nothing goes into has no monthly figure of its own',
+  );
+  assert.equal(
+    describeFundingShort(idleEnvelope),
+    'Nothing goes in for now',
+    'An envelope nothing goes into says so in its row',
+  );
+  assert.equal(
+    describeFundingShort(idleEnvelope, [], 'goal'),
+    'Not saving for it yet',
+    'A goal nothing goes into keeps its own words',
+  );
+  assert.equal(
+    describeCadenceLine(idleEnvelope.cadence),
+    'Nothing goes in for now',
+    'An envelope nothing goes into says so where its beat would be',
+  );
   assert.deepEqual(
     monthlyTotal(
       [
@@ -18098,10 +18135,10 @@ console.log('runway engine: ok');
     ),
     {
       total: exact(128_000),
-      uncounted: 4,
+      uncounted: 3,
       oneTime: { count: 0, range: exact(0), dueOn: null },
     },
-    "G11: income-day envelopes count x the usual month's income days (an Nth one divided by n); chosen, none, percent and rest are named as left out; bills and envelopes add into one total",
+    "G11: income-day envelopes count x the usual month's income days (an Nth one divided by n); one nothing goes into counts $0; chosen, percent and rest are named as left out; bills and envelopes add into one total",
   );
   assert.deepEqual(
     monthlyTotal([], nov, [

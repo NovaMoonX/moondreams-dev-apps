@@ -587,7 +587,7 @@ export async function createGoal(
       : ` by ${formatDateOrdinalUTC(goal.targetDate)}`;
   const laterOn = startsOn !== null && startsOn > startDate ? startsOn : null;
   const changePayload: ChangeSealed = {
-    summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding, getExtras(goal))}${laterOn === null ? '' : `, from ${formatDateOrdinalUTC(laterOn)}`}.`,
+    summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding, getExtras(goal), 'goal')}${laterOn === null ? '' : `, from ${formatDateOrdinalUTC(laterOn)}`}.`,
   };
 
   const [goalSealed, changeSealed, later] = await Promise.all([

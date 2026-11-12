@@ -94,7 +94,7 @@ function GoalRow({
       ? ''
       : ` ${PRIORITY_DIAL_WORDS.paceSuffix[paceDial]}`
   }`;
-  const funding = describeFundingShort(goal.funding, getExtras(goal));
+  const funding = describeFundingShort(goal.funding, getExtras(goal), 'goal');
 
   return (
     <>
