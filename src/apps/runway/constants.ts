@@ -1738,8 +1738,7 @@ export const PAID_FROM_WORDS = {
   keepSpread: 'Spread across my pays',
   pickAnother: 'Pick another pay',
   changed: (name: string) => `${name} is now spread across your pays`,
-  paidFromBack: (name: string, was: string) =>
-    `${name}: back to ${was}.`,
+  paidFromBack: (name: string, was: string) => `${name}: back to ${was}.`,
   undoFailed: 'That could not be undone.',
   pinsLeft: (name: string) =>
     `${name} is now spread, but some per-pay changes are still on.`,
@@ -1848,8 +1847,7 @@ export const PAY_SHARE_WORDS = {
     `${name}: this pay puts in ${cents} again, for ${date} only.`,
   resetToast: (name: string) =>
     `${name} is back to the plan's amount for this pay`,
-  paidFromBack: (name: string, was: string) =>
-    `${name}: back to ${was}.`,
+  paidFromBack: (name: string, was: string) => `${name}: back to ${was}.`,
   keepPartial: (name: string, pay: string) =>
     `${name} now comes from ${pay}, but some per-pay changes are still on. Tap Try again to clear them.`,
   undoPartial: (name: string) =>
@@ -3262,7 +3260,18 @@ export const HOW_OFTEN_WORDS = {
   goalTitle: 'How often does money go in?',
   caption: 'How often',
   paycheck: 'From a paycheck',
-  none: 'Not saving for it yet',
+  /** The folded "How often" row once it was skipped. */
+  skippedSummary: {
+    envelope: 'Not set yet',
+    goal: 'Not saving for it yet',
+  },
+  /** The line under "Skip for now". */
+  skipNote: {
+    envelope: 'Nothing goes in until you set it',
+    goal: 'Nothing goes in until you start saving for it',
+  },
+  /** An envelope nothing goes into, as its row and history say it. */
+  envelopeIdle: 'Nothing goes in for now',
   perPeriodLabel: 'Amount',
   paycheckAmountTitle: 'How much from each pay?',
   fromWhich: 'Which pay',
@@ -3274,9 +3283,6 @@ export const HOW_OFTEN_WORDS = {
   restTitle: 'Whatever is left of each pay',
   restHelp:
     'What is left of that pay after your bills and the envelopes above this one in priority.',
-  noAddingSummary: 'Not saving for it yet',
-  noAddingHint:
-    'Nothing goes into it. Start saving for it from its sheet whenever you like.',
   needsIncome: 'Add an income source first, so there are pays to count.',
   badAmount: 'Enter an amount above $0, like 600.00.',
   currentTitle: 'How much is in it now?',

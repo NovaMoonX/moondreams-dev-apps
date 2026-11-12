@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import AmountField, { type AmountMode } from '@/components/AmountField';
 import HelpTip from '@/components/HelpTip';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
+import SkipQuestionButton from '@/components/SkipQuestionButton';
 import type { QuestionStep } from '@/hooks/useQuestionFlow';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
@@ -221,7 +222,7 @@ export function describeFormAmount(
   amount: FundingAmount | null,
 ) {
   if (amount === null) return '';
-  if (data.often === 'none') return HOW_OFTEN_WORDS.noAddingSummary;
+  if (data.often === 'none') return '';
   if (isCalendar(data.often)) {
     return `${describeAmount(amount)} ${CALENDAR_PERIOD_UNITS[data.often]}`;
   }
@@ -234,8 +235,8 @@ interface FundingStepsArgs {
   data: FundingFormData;
   set: (patch: Partial<FundingFormData>) => void;
   comingDays: readonly ComingDay[];
-  /** A goal may be saved with nothing going into it. */
-  allowNone: boolean;
+  /** Whose words the way to leave "How often" for later uses; null when it must be answered. */
+  skippable: 'envelope' | 'goal' | null;
   /** The question over a calendar amount, in the form's own words, given "a month", "every 2 weeks" and the like. */
   getAmountTitle: (unit: string) => string;
   /** One quiet line under the amount, when the form has something to suggest. */
@@ -251,7 +252,7 @@ export function buildFundingSteps({
   data,
   set,
   comingDays,
-  allowNone,
+  skippable,
   getAmountTitle,
   getAmountHint,
   isDraft = false,
@@ -267,9 +268,6 @@ export function buildFundingSteps({
       label: CALENDAR_PERIOD_LABELS[value],
     })),
     { value: 'paycheck' as HowOften, label: HOW_OFTEN_WORDS.paycheck },
-    ...(allowNone
-      ? [{ value: 'none' as HowOften, label: HOW_OFTEN_WORDS.none }]
-      : []),
   ];
   const sourceOptions = [
     { value: ALL_SOURCES, label: HOW_OFTEN_WORDS.allSources },
@@ -284,14 +282,15 @@ export function buildFundingSteps({
       : data.often === 'paycheck'
         ? HOW_OFTEN_WORDS.paycheck
         : data.often === 'none'
-          ? HOW_OFTEN_WORDS.none
+          ? HOW_OFTEN_WORDS.skippedSummary[skippable ?? 'goal']
           : CALENDAR_PERIOD_LABELS[data.often];
   const isPaycheck = data.often === 'paycheck';
   const periodAnswered = !isPaycheck || hasDays;
 
   const often: QuestionStep = {
     id: 'often',
-    title: allowNone ? 'How often does money go in?' : HOW_OFTEN_WORDS.title,
+    title:
+      skippable === 'goal' ? HOW_OFTEN_WORDS.goalTitle : HOW_OFTEN_WORDS.title,
     summaryLabel: HOW_OFTEN_WORDS.caption,
     summaryValue: oftenText,
     isAnswered: periodAnswered,
@@ -307,10 +306,20 @@ export function buildFundingSteps({
               often: value,
               amount: value === data.often ? data.amount : '',
             });
-            if (value === 'paycheck' || value === 'none') return;
+            if (value === 'paycheck') return;
             moveOn();
           }}
         />
+        {skippable !== null && !isPaycheck && (
+          <SkipQuestionButton
+            note={HOW_OFTEN_WORDS.skipNote[skippable]}
+            isSkipped={data.often === 'none'}
+            onSkip={() => {
+              set({ often: 'none', amount: '' });
+              moveOn();
+            }}
+          />
+        )}
         {isPaycheck && sources.length > 0 && (
           <div className='space-y-2'>
             <p className='text-muted-foreground text-xs'>

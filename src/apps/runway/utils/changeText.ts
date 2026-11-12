@@ -332,8 +332,11 @@ const getParts = (
         billAfter.stanceOverride ?? null,
         (value) => value ?? 'follows the plan',
       ),
-      diff(PAID_FROM_WORDS.label, billBefore.fundedBy, billAfter.fundedBy, (value) =>
-        describeFundedByChange(value, payNameOf),
+      diff(
+        PAID_FROM_WORDS.label,
+        billBefore.fundedBy,
+        billAfter.fundedBy,
+        (value) => describeFundedByChange(value, payNameOf),
       ),
       diff(
         BILL_PAY_WORDS.label,
@@ -382,7 +385,12 @@ const getParts = (
         'Funding',
         { funding: goalBefore.funding, extras: getExtras(goalBefore) },
         { funding: goalAfter.funding, extras: getExtras(goalAfter) },
-        (value) => describeFunding(value.funding, value.extras),
+        (value) =>
+          describeFunding(
+            value.funding,
+            value.extras,
+            'targetCents' in goalAfter ? 'goal' : 'envelope',
+          ),
       ),
       diff(
         GROUP_WORDS.changeLabel,
