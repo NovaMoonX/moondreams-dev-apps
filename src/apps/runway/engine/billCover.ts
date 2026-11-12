@@ -83,13 +83,21 @@ export function computeBillCover(input: BillCoverInput): BillCover {
     )
     .sort((a, b) => a.rank - b.rank || a.payOn - b.payOn);
   const walked = gaps.reduce<{ left: Cents; payments: BillCoverPayment[] }>(
-    (acc, { rank: _rank, ...gap }) => {
+    (acc, gap) => {
       const coveredCents = Math.min(gap.gapCents, Math.max(0, acc.left));
       return {
         left: acc.left - coveredCents,
         payments: [
           ...acc.payments,
-          { ...gap, coveredCents, shortCents: gap.gapCents - coveredCents },
+          {
+            billId: gap.billId,
+            name: gap.name,
+            dueOn: gap.dueOn,
+            payOn: gap.payOn,
+            gapCents: gap.gapCents,
+            coveredCents,
+            shortCents: gap.gapCents - coveredCents,
+          },
         ],
       };
     },

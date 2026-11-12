@@ -77,6 +77,11 @@ export const RUNWAY_VIEWS = [
   'checkAmount',
   'checkBalance',
   'cashPosition',
+  'heldBills',
+  'heldGoals',
+  'heldEnvelopes',
+  'heldHorizon',
+  'heldCards',
   'needsHome',
   'accountMoves',
   'rules',
@@ -1738,8 +1743,7 @@ export const PAID_FROM_WORDS = {
   keepSpread: 'Spread across my pays',
   pickAnother: 'Pick another pay',
   changed: (name: string) => `${name} is now spread across your pays`,
-  paidFromBack: (name: string, was: string) =>
-    `${name}: back to ${was}.`,
+  paidFromBack: (name: string, was: string) => `${name}: back to ${was}.`,
   undoFailed: 'That could not be undone.',
   pinsLeft: (name: string) =>
     `${name} is now spread, but some per-pay changes are still on.`,
@@ -1848,8 +1852,7 @@ export const PAY_SHARE_WORDS = {
     `${name}: this pay puts in ${cents} again, for ${date} only.`,
   resetToast: (name: string) =>
     `${name} is back to the plan's amount for this pay`,
-  paidFromBack: (name: string, was: string) =>
-    `${name}: back to ${was}.`,
+  paidFromBack: (name: string, was: string) => `${name}: back to ${was}.`,
   keepPartial: (name: string, pay: string) =>
     `${name} now comes from ${pay}, but some per-pay changes are still on. Tap Try again to clear them.`,
   undoPartial: (name: string) =>
@@ -3918,6 +3921,25 @@ export const FREE_SUM_WORDS = {
   result: 'Free to Spend',
   laterFix:
     'To fix a balance later, correct the income day or the bill payment it came from.',
+} as const;
+
+export const HELD_BREAKDOWN_WORDS = {
+  empty: {
+    bills: 'Nothing is held for bills right now.',
+    goals: 'Nothing is held for goals right now.',
+    envelopes: 'Nothing is held in envelopes right now.',
+    horizon: 'Nothing is held for Horizon right now.',
+    cards: 'Nothing is set aside for cards right now.',
+  },
+  coverRule: (days: number) =>
+    `Bills due in the next ${days} days, or before your next pay, are covered from Free to Spend when your pays won't reach them in time.`,
+  putAside: 'Put aside',
+  covered: 'Covered from Free to Spend',
+  putAsideAndCovered: (putAside: string, covered: string) =>
+    `${putAside} put aside · ${covered} covered from Free to Spend`,
+  due: (date: string) => `Due ${date}`,
+  short: (name: string, amount: string) => `${name} · ${amount} short`,
+  shortOpen: (name: string) => `Open ${name} to see what it needs`,
 } as const;
 
 export const CASH_POSITION_WORDS = {
