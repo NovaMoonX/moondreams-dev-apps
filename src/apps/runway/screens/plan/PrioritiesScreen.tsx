@@ -74,7 +74,7 @@ import {
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { reorderItems } from '@apps/runway/store/actions/itemActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   type PreviewChange,
   type PreviewDay,

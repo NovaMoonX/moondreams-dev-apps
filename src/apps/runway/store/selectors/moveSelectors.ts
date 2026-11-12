@@ -14,7 +14,7 @@ import {
   resolveCurrentOrNext,
   resolveVersion,
 } from '@apps/runway/engine/resolve';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectLedgerOnlyBalances as selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,

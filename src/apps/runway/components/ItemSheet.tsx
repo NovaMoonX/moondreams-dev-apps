@@ -179,7 +179,11 @@ import {
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getBillCardName, getCardNamer } from '@apps/runway/utils/cardText';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectBalances,
+  selectBillCover,
+} from '@apps/runway/store/selectors/billCoverSelectors';
+import { getCoveredCents } from '@apps/runway/engine/billCover';
 import { resolveSpill } from '@apps/runway/engine/spill';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatList } from '@/utils/formatUtils';
@@ -483,6 +487,11 @@ function ItemSheet({
   );
   const isSelfPaying = useIsSelfPaying(itemId, payment?.dueOn ?? null, today);
   const billSetAsideCents = payment?.fundedCents ?? Math.max(0, heldCents);
+  const billCover = useAppSelector(selectBillCover);
+  const billCoveredCents =
+    payment === null || payment === undefined
+      ? 0
+      : getCoveredCents(billCover, itemId, payment.dueOn);
   const matchedPurchase = useAppSelector((state) =>
     state.runway.purchases.reduce<OpenPurchase | null>(
       (newest, purchase) =>
@@ -1293,6 +1302,15 @@ function ItemSheet({
   };
   const openHistory = () => goTo('history');
   const getSetAsideSub = (totalCents: number) => {
+    if (billCoveredCents > 0)
+      return mask(
+        billSetAsideCents > 0
+          ? BILL_SET_ASIDE_WORDS.openSubPartCovered(
+              formatCents(billSetAsideCents),
+              formatCents(billCoveredCents),
+            )
+          : BILL_SET_ASIDE_WORDS.openSubCovered(formatCents(billCoveredCents)),
+      );
     if (totalCents > 0 && billSetAsideCents >= totalCents)
       return mask(BILL_SET_ASIDE_WORDS.openSubFull(formatCents(totalCents)));
     return billSetAsideCents > 0
@@ -1309,9 +1327,12 @@ function ItemSheet({
     if (paidWithCard !== null) return CARD_WORDS.chargedTo(paidWithCard);
     if (due.fundedCents >= due.totalCents)
       return ITEM_SHEET_WORDS.paidFromSetAside;
+    const dueCoveredCents = getCoveredCents(billCover, itemId, due.dueOn);
+    if (due.fundedCents + dueCoveredCents >= due.totalCents)
+      return ITEM_SHEET_WORDS.paidFromCovered;
     return mask(
       ITEM_SHEET_R2_WORDS.paidFromFreeText(
-        formatCentsShort(due.totalCents - due.fundedCents),
+        formatCentsShort(due.totalCents - due.fundedCents - dueCoveredCents),
       ),
     );
   };
@@ -1485,17 +1506,17 @@ function ItemSheet({
           header?.archivedAt == null &&
           payment !== null &&
           payment.paid === null && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<PiggyBank />}
-            label={BILL_SET_ASIDE_WORDS.open}
-            subtitle={getSetAsideSub(payment.totalCents)}
-            onClick={() =>
-              hasStarted ? goTo('setAside') : setIsStartOpen(true)
-            }
-          />
-        )}
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<PiggyBank />}
+              label={BILL_SET_ASIDE_WORDS.open}
+              subtitle={getSetAsideSub(payment.totalCents)}
+              onClick={() =>
+                hasStarted ? goTo('setAside') : setIsStartOpen(true)
+              }
+            />
+          )}
         {canChange && maxAction && (
           <ActionRow
             isGrouped
@@ -2103,6 +2124,14 @@ function ItemSheet({
       kind='bill'
       name={payload.name}
       heldCents={billSetAsideCents}
+      coverNote={
+        payment && billCoveredCents > 0
+          ? BILL_SET_ASIDE_WORDS.coverNote(
+              formatCents(billCoveredCents),
+              formatDateOrdinalUTC(payment.dueOn),
+            )
+          : null
+      }
       account={null}
       today={today}
       onBack={() => goTo('menu')}
@@ -2386,28 +2415,28 @@ function ItemSheet({
                       ? setHeldView
                       : view === 'setAside'
                         ? billSetAsideView
-                      : view === 'heldIn'
-                        ? heldInView
-                        : view === 'horizonPlan'
-                          ? horizonPlanView
-                          : view === 'planChoice'
-                            ? planChoiceView
-                            : view === 'comingList'
-                              ? comingListView
-                              : view === 'changeSheet' && changeSheetView
-                                ? changeSheetView
-                                : view === 'horizonLink' && horizonLinkView
-                                  ? horizonLinkView
-                                  : view === 'pins'
-                                    ? pinsView
-                                    : view === 'dayAction' &&
-                                        dayAction?.renderView
-                                      ? dayAction.renderView({
-                                          onBack: () => goTo('menu'),
-                                          onClose,
-                                          openChange,
-                                        })
-                                      : action
+                        : view === 'heldIn'
+                          ? heldInView
+                          : view === 'horizonPlan'
+                            ? horizonPlanView
+                            : view === 'planChoice'
+                              ? planChoiceView
+                              : view === 'comingList'
+                                ? comingListView
+                                : view === 'changeSheet' && changeSheetView
+                                  ? changeSheetView
+                                  : view === 'horizonLink' && horizonLinkView
+                                    ? horizonLinkView
+                                    : view === 'pins'
+                                      ? pinsView
+                                      : view === 'dayAction' &&
+                                          dayAction?.renderView
+                                        ? dayAction.renderView({
+                                            onBack: () => goTo('menu'),
+                                            onClose,
+                                            openChange,
+                                          })
+                                        : action
         }
       >
         {menu}

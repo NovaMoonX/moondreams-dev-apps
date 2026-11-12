@@ -52,11 +52,9 @@ import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { canChangeStart } from '@apps/runway/utils/startingCorrection';
-import type { PlanSection } from '@apps/runway/types';
-import {
-  selectBalances,
-  selectBankBacking,
-} from '@apps/runway/store/selectors/balanceSelectors';
+import HeldBreakdownView from '@apps/runway/screens/home/HeldBreakdownView';
+import { selectBankBacking } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectIsMovesLoaded,
   selectIsRecordsReady,
@@ -68,11 +66,14 @@ interface FreeToSpendScreenProps {
   onClose: () => void;
 }
 
+type HeldViewName =
+  'heldBills' | 'heldGoals' | 'heldEnvelopes' | 'heldHorizon' | 'heldCards';
+
 interface SumRow {
   sign: string;
   name: string;
   value: string;
-  section?: PlanSection;
+  view?: HeldViewName;
   /** What the row counts, behind an info icon beside its name. */
   help?: string;
   isEmphasised?: boolean;
@@ -92,6 +93,8 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     closeCheckBalance,
     openCashPosition,
     closeCashPosition,
+    openHeldView,
+    closeHeldView,
     leaveViewForTab,
     showSpendKind,
     showSpendPeriod,
@@ -146,6 +149,42 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   );
   const figure = getFreeToSpendFigure(balances);
   const free = describeFreeToSpend(figure);
+  const envelopesName =
+    level === 'link'
+      ? FREE_SUM_WORDS.envelopesLink
+      : isTrackingLevel(level)
+        ? FREE_SUM_WORDS.envelopesTrack
+        : FREE_SUM_WORDS.envelopesPlan;
+  const heldViews = {
+    heldBills: {
+      kind: 'bills',
+      name: FREE_SUM_WORDS.bills,
+      totalCents: balances.assignedToBillsCents,
+    },
+    heldGoals: {
+      kind: 'goals',
+      name: FREE_SUM_WORDS.goals,
+      totalCents: balances.assignedToGoalsCents,
+    },
+    heldEnvelopes: {
+      kind: 'envelopes',
+      name: envelopesName,
+      totalCents: balances.assignedToEnvelopesCents,
+    },
+    heldHorizon: {
+      kind: 'horizon',
+      name: FREE_SUM_WORDS.horizon,
+      totalCents: balances.assignedToHorizonCents,
+    },
+    heldCards: {
+      kind: 'cards',
+      name: FREE_SUM_WORDS.cards,
+      totalCents: balances.assignedToCardsCents,
+    },
+  } as const;
+  const heldView = view !== null && view in heldViews ? view : null;
+  const held =
+    heldView === null ? null : heldViews[heldView as keyof typeof heldViews];
   const rows: SumRow[] = [
     {
       sign: '',
@@ -158,20 +197,15 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     },
     {
       sign: '+',
-      name:
-        level === 'link'
-          ? FREE_SUM_WORDS.envelopesLink
-          : isTrackingLevel(level)
-            ? FREE_SUM_WORDS.envelopesTrack
-            : FREE_SUM_WORDS.envelopesPlan,
+      name: envelopesName,
       value: formatCents(balances.assignedToEnvelopesCents),
-      section: 'envelopes',
+      view: 'heldEnvelopes',
     },
     {
       sign: '+',
       name: FREE_SUM_WORDS.goals,
       value: formatCents(balances.assignedToGoalsCents),
-      section: 'goals',
+      view: 'heldGoals',
     },
     ...(balances.assignedToHorizonCents !== 0
       ? [
@@ -179,7 +213,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             sign: '+',
             name: FREE_SUM_WORDS.horizon,
             value: formatCents(balances.assignedToHorizonCents),
-            section: 'horizon' as const,
+            view: 'heldHorizon' as const,
           },
         ]
       : []),
@@ -187,7 +221,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       sign: '+',
       name: FREE_SUM_WORDS.bills,
       value: formatCents(balances.assignedToBillsCents),
-      section: 'bills',
+      view: 'heldBills',
     },
     ...(balances.assignedToCardsCents !== 0
       ? [
@@ -195,7 +229,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             sign: '+',
             name: FREE_SUM_WORDS.cards,
             value: formatCents(balances.assignedToCardsCents),
-            section: 'cards' as const,
+            view: 'heldCards' as const,
             help: CARD_WORDS.freeWaitingHelp,
           },
         ]
@@ -212,9 +246,6 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             : undefined,
     },
   ];
-  const openSection = (section: PlanSection) => {
-    leaveViewForTab('plan', section);
-  };
   const startCreatedAt = useAppSelector((state) =>
     state.runway.moves
       .filter((move) => move.kind === 'start' && move.reversesMoveId === null)
@@ -238,12 +269,14 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     if (isChecking) return CHECK_WORDS.title;
     if (isCheckingBalance) return BALANCE_CHECK_WORDS.title;
     if (isViewingCash) return CASH_POSITION_WORDS.title;
+    if (held) return held.name;
     return sheetKey === null ? HOME_WORDS.freeToSpend : 'Where things stand';
   };
   const getBack = () => {
     if (isChecking) return closeCheckAmount;
     if (isCheckingBalance) return closeCheckBalance;
     if (isViewingCash) return closeCashPosition;
+    if (held) return closeHeldView;
     return sheetKey === null ? undefined : () => setSheetKey(null);
   };
 
@@ -260,6 +293,12 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
         <CheckBalanceBody onOpenDays={() => leaveViewForTab('days')} />
       ) : isViewingCash ? (
         <WhereYourCashIsBody />
+      ) : held ? (
+        <HeldBreakdownView
+          kind={held.kind}
+          name={held.name}
+          totalCents={held.totalCents}
+        />
       ) : sheetKey !== null ? (
         <StartingAmountsSheet
           key={sheetKey}
@@ -325,7 +364,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                     <SensitiveValue>{row.value}</SensitiveValue>
                   </span>,
                   <span key='chevron' className='flex justify-center'>
-                    {row.section && (
+                    {row.view && (
                       <ChevronRight
                         className='text-muted-foreground h-4 w-4'
                         aria-hidden='true'
@@ -335,10 +374,10 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 ];
                 const rowClass =
                   'grid min-h-12 grid-cols-[1.25rem_minmax(0,1fr)_auto_1rem] items-center gap-x-2 px-3 py-2';
-                const { section } = row;
+                const { view: rowView } = row;
                 return (
                   <div key={row.name}>
-                    {section && row.help ? (
+                    {rowView && row.help ? (
                       <div className={join(rowClass, 'relative')}>
                         {cells}
                         <Button
@@ -347,10 +386,10 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                           size='stripped'
                           className='absolute inset-0 size-full rounded-none'
                           aria-label={`${row.name}. See what makes it up`}
-                          onClick={() => openSection(section)}
+                          onClick={() => openHeldView(rowView)}
                         />
                       </div>
-                    ) : section ? (
+                    ) : rowView ? (
                       <Button
                         type='button'
                         variant='tertiary'
@@ -360,7 +399,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                           'text-foreground! grid! w-full text-left font-normal',
                         )}
                         aria-label={`${row.name}. See what makes it up`}
-                        onClick={() => openSection(section)}
+                        onClick={() => openHeldView(rowView)}
                       >
                         {cells}
                       </Button>

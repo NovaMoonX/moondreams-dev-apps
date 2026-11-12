@@ -99,7 +99,7 @@ import {
 import {
   selectBalances,
   selectHeldBy,
-} from '@apps/runway/store/selectors/balanceSelectors';
+} from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectGoalCovers } from '@apps/runway/store/selectors/overviewSelectors';
 import {
   selectAllCards,

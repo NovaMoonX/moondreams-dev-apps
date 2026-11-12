@@ -109,7 +109,7 @@ import {
   deletePurchase,
   editPurchase,
 } from '@apps/runway/store/actions/purchaseActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
 import { unspill } from '@apps/runway/engine/spill';
 import {

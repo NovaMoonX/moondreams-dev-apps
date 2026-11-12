@@ -42,7 +42,7 @@ import {
 import { isCardFeeBill } from '@apps/runway/engine/cardFees';
 import { archiveItem } from '@apps/runway/store/actions/itemActions';
 import type { HeldChoice } from '@apps/runway/engine/endings';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectBills,
   selectGroups,

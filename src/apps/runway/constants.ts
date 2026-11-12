@@ -77,6 +77,11 @@ export const RUNWAY_VIEWS = [
   'checkAmount',
   'checkBalance',
   'cashPosition',
+  'heldBills',
+  'heldGoals',
+  'heldEnvelopes',
+  'heldHorizon',
+  'heldCards',
   'needsHome',
   'accountMoves',
   'rules',
@@ -2590,6 +2595,7 @@ export const ITEM_SHEET_WORDS = {
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',
   paidFromSetAside: 'It comes out of what is set aside',
+  paidFromCovered: 'Paid from what Free to Spend covers',
   paidFromFree: 'not set aside yet comes out of Free to Spend',
   stopHeading: 'Stop or pause',
   startHeading: 'Start or stop',
@@ -2927,6 +2933,15 @@ export const BILL_SET_ASIDE_WORDS = {
   openSub: (held: string, total: string) => `${held} of ${total}`,
   openSubNone: 'Nothing yet',
   openSubFull: (total: string) => `All ${total} of the next payment`,
+  openSubCovered: (covered: string) =>
+    `Nothing put aside · ${covered} covered from Free to Spend`,
+  progressCovered: 'Covered from Free to Spend',
+  progressPartCovered: (held: string, covered: string) =>
+    `${held} put aside · ${covered} covered`,
+  coverNote: (covered: string, dueOn: string) =>
+    `${covered} is covered from Free to Spend until ${dueOn}, since your pays won't reach it in time. Put money aside yourself to hold it here instead.`,
+  openSubPartCovered: (held: string, covered: string) =>
+    `${held} put aside · ${covered} covered from Free to Spend`,
   title: (name: string) => `Put money aside for ${name}`,
   amount: 'Put aside',
   needsAmount: 'Enter how much to put aside.',
@@ -3922,6 +3937,25 @@ export const FREE_SUM_WORDS = {
   result: 'Free to Spend',
   laterFix:
     'To fix a balance later, correct the income day or the bill payment it came from.',
+} as const;
+
+export const HELD_BREAKDOWN_WORDS = {
+  empty: {
+    bills: 'Nothing is held for bills right now.',
+    goals: 'Nothing is held for goals right now.',
+    envelopes: 'Nothing is held in envelopes right now.',
+    horizon: 'Nothing is held for Horizon right now.',
+    cards: 'Nothing is set aside for cards right now.',
+  },
+  coverRule: (days: number) =>
+    `Bills due in the next ${days} days, or before your next pay, are covered from Free to Spend when your pays won't reach them in time.`,
+  covered: 'Covered from Free to Spend',
+  putAsideAndCovered: (putAside: string, covered: string) =>
+    `${putAside} put aside · ${covered} covered from Free to Spend`,
+  due: (date: string) => `Due ${date}`,
+  short: (date: string) => `Short · due ${date}`,
+  shortSetStart: 'Set what you have to cover it',
+  notCovered: 'Not covered',
 } as const;
 
 export const CASH_POSITION_WORDS = {
