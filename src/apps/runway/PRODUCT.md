@@ -184,6 +184,10 @@ Several costs that belong to one event, some once and some repeating, paid from 
 - **Paid ahead of time.** A card, a car note or any bill can be marked paid before its due date. It stops asking for money, and the payment is recorded with the day you made it. If the bill was not yet funded, the payment comes out of Free to Spend and the next draft makes it up.
 - **What it's for.** A bill, an envelope or a goal can say what it is for: Pets, Home, Car. Pets can hold the pet insurance bill, the Food, Litter and Pet misc envelopes and a Vet fund goal. The Bills, Envelopes and Goals lists show each name with what is for it under it, and what they come to in a usual month, bills, envelopes and active goals together (a range when an amount varies; an item with no fixed amount or beat is named as left out; a paused goal is not counted). What is for something can set the priority a new bill, envelope or goal starts with. "Stop using Pets" leaves its bills, envelopes and goals in the plan with nothing set. It is a label for organizing and totaling; it does not change when anything is funded. Income gets nothing. (Code and data keep the name group.)
 
+### Paying On a Day You Pick, In Detail
+
+Many people pay a bill on a day that suits their pay, not on its due date (the owner pays the car and living bills on the 1st, after being paid on the 30th). A bill that comes round at most once a month can carry a "Pay on" day: Runway then plans and counts the bill on the last such day on or before each due date (a short month uses its last day), so the money is set aside for the day it really leaves. The due date still names the payment, so marking it paid and its history read the same as before. Bills due several times a month keep paying on their due dates. Several bills can be moved to a day together from Plan (Changing several at once).
+
 ### Envelopes, In Detail
 
 - **An envelope sets its own timing.** Each envelope has an amount and a funding rule:
@@ -645,3 +649,7 @@ Every change says from when and shows, before it saves, which coming income days
 - **Receipts:** Images are kept until the person removes them; nothing expires and no scheduled function touches them.
 - **State and tooling:** Slices, listeners, actions and selectors follow the repo's existing pattern, with the app's own reducer composed into the central store.
 - **A bill can wait for its due date.** Adding a bill never needs a date: until it has one, the plan sets nothing aside for it and says so as a thing to fix. A monthly bill without a date still counts in its group's monthly total.
+
+### Changing several at once
+
+A person tidying their plan (moving every auto bill to be paid on the 1st, putting three subscriptions into a group) can press and hold a row, or a group heading, in Bills, Envelopes or Goals to tick several and change them together: Pay on, Comes out of and Charged to for bills, Priority and Move to a group for all three, or Archive. Selecting stays in one view, so the header's count always covers everything ticked (a card's annual fee bill keeps its group, card and place in the plan, and the sheet says so), and each change ends in one toast with one Undo (Archive asks first instead).

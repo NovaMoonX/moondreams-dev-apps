@@ -103,6 +103,7 @@ import {
   isPickOrCreate,
   isText,
   isTextList,
+  isWholeNumber,
   keptChangeChecks,
   readDraftFields,
   withDraftDefaults,
@@ -171,8 +172,13 @@ import type {
   Priority,
   Schedule,
 } from '@apps/runway/types';
-import { getIntervalMonths } from '@apps/runway/engine/schedule';
-import { describeEveryMonths } from '@apps/runway/utils/billText';
+import { getIntervalMonths, toPayOn } from '@apps/runway/engine/schedule';
+import {
+  describeEveryMonths,
+  describePayOnDay,
+} from '@apps/runway/utils/billText';
+import MonthDayGrid from '@apps/runway/components/MonthDayGrid';
+import { LAST_DAY } from '@apps/runway/utils/monthDays';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import {
   NEW_GROUP_ID,
@@ -225,12 +231,18 @@ interface BillFormData {
   paysItself: boolean;
   /** What is already set aside for it, asked only when a bill is added. */
   setAside: string;
+  /** The day of the month the person pays it; null pays on the due date. */
+  payOnDay: number | null;
 }
 
 interface BillDraft extends KeptChange {
   formData: BillFormData;
   isPriorityChosen: boolean;
 }
+
+const isNullableDay = (value: unknown) =>
+  value === null ||
+  (isWholeNumber(value) && Number(value) >= 1 && Number(value) <= LAST_DAY);
 
 const parseBillDraft = (stored: unknown): BillDraft | null => {
   const draft = readDraftFields<BillDraft>(stored, {
@@ -244,6 +256,7 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
           accountId: null,
           paysItself: false,
           setAside: '',
+          payOnDay: null,
         }),
         {
           name: isText,
@@ -266,6 +279,7 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
           accountId: isNullableText,
           paysItself: isFlag,
           setAside: isText,
+          payOnDay: isNullableDay,
           isLater: isFlag,
         },
       )
@@ -323,6 +337,7 @@ export type BillStepId =
   | 'amount'
   | 'due'
   | 'repeats'
+  | 'payOn'
   | 'ends'
   | 'funding'
   | 'priority'
@@ -347,6 +362,7 @@ const EMPTY_BILL: BillSealed = {
   paidByCardId: null,
   accountId: null,
   paysItself: false,
+  payOnDay: null,
 };
 
 const priorityOptions = PRIORITIES.map((value) => ({
@@ -372,6 +388,18 @@ const getEveryMonths = (data: BillFormData): number | null => {
     ? months
     : null;
 };
+
+/** A day of the month to pay on means something for a bill paid at most once a month. */
+const canPayOnDay = (frequency: Frequency | null) =>
+  frequency !== null &&
+  frequency !== 'weekly' &&
+  frequency !== 'everyOtherWeek';
+
+const payOnOptions = (['due', 'day'] as const).map((value) => ({
+  value,
+  label:
+    value === 'due' ? FORM_FLOW_WORDS.payOnDue : FORM_FLOW_WORDS.payOnSetDay,
+}));
 
 const isRepeatAnswered = (data: BillFormData) =>
   data.frequency !== null &&
@@ -602,6 +630,7 @@ const getEditingData = (
     accountId: payload.accountId ?? null,
     paysItself: payload.paysItself === true,
     setAside: '',
+    payOnDay: payload.payOnDay ?? null,
   };
 };
 
@@ -752,6 +781,7 @@ function BillFormBody({
           accountId: null,
           paysItself: false,
           setAside: '',
+          payOnDay: null,
         },
   );
   const startsChosen =
@@ -787,6 +817,9 @@ function BillFormBody({
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<BillFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
+  const [isPayOnDayShown, setIsPayOnDayShown] = useState(
+    formData.payOnDay !== null,
+  );
 
   const planStance = useAppSelector(selectStance);
   const isOnce = formData.frequency === 'once';
@@ -1226,6 +1259,54 @@ function BillFormBody({
         </div>
       ),
     },
+    ...(canPayOnDay(formData.frequency) && !formData.isLater
+      ? [
+          {
+            id: 'payOn',
+            title: FORM_FLOW_WORDS.payOnTitle,
+            summaryLabel: FORM_FLOW_WORDS.payOn,
+            summaryValue: describePayOnDay(formData.payOnDay),
+            isAnswered: true,
+            isPreAnswered: true,
+            render: ({ moveOn }: QuestionControls) => (
+              <div className='space-y-3'>
+                <PillGroup
+                  label={FORM_FLOW_WORDS.payOnTitle}
+                  options={payOnOptions}
+                  value={isPayOnDayShown ? 'day' : 'due'}
+                  onChange={(choice) => {
+                    if (choice === 'due') {
+                      set({ payOnDay: null });
+                      setIsPayOnDayShown(false);
+                      moveOn();
+                      return;
+                    }
+                    setIsPayOnDayShown(true);
+                  }}
+                />
+                {isPayOnDayShown && (
+                  <MonthDayGrid
+                    label={FORM_FLOW_WORDS.payOnDayLabel}
+                    value={formData.payOnDay}
+                    onPick={(payOnDay) => {
+                      set({ payOnDay });
+                      moveOn();
+                    }}
+                  />
+                )}
+                {formData.payOnDay !== null && dueDate !== undefined && (
+                  <p className='text-muted-foreground text-sm text-pretty'>
+                    {FORM_FLOW_WORDS.payOnNote(
+                      formatDateOrdinalUTC(toPayOn(dueDate, formData.payOnDay)),
+                      formatDateOrdinalUTC(dueDate),
+                    )}
+                  </p>
+                )}
+              </div>
+            ),
+          },
+        ]
+      : []),
     ...(isOnce || formData.frequency === null
       ? []
       : [
@@ -1644,6 +1725,8 @@ function BillFormBody({
         : planStart !== null || startingCents === 0
           ? {}
           : { startingCents }),
+      payOnDay:
+        canPayOnDay(data.frequency) && !data.isLater ? data.payOnDay : null,
     };
     if (isFeeBill && editing) {
       const locked = editing.payload;
@@ -1750,6 +1833,7 @@ function BillFormBody({
             isAccountsLoaded,
           ),
           paysItself: editing.payload.paysItself === true,
+          payOnDay: editing.payload.payOnDay ?? null,
         }
       : EMPTY_BILL,
     candidate,

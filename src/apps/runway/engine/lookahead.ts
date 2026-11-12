@@ -152,6 +152,8 @@ export interface Lookahead {
     billId: string;
     name: string;
     dueOn: DateOnly;
+    /** The day the person pays it, on or before `dueOn`; it is late only once `dueOn` has passed. */
+    payOn: DateOnly;
     isOverdue: boolean;
     laterDueOn: DateOnly[];
   }[];
@@ -268,7 +270,8 @@ const findShorts = (
       (entry) =>
         entry.shortBy > 0 &&
         (entry.tier === 'must' ||
-          (entry.bill !== null && entry.bill.dueOn < nextOn) ||
+          (entry.bill !== null &&
+            (entry.bill.payOn ?? entry.bill.dueOn) < nextOn) ||
           (entry.cost != null && entry.cost.dueOn < nextOn)),
     )
     .map((line) => ({
@@ -290,7 +293,7 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
       const unpaid = (input.payments[bill.id] ?? []).filter(
         (payment) =>
           payment.paid === null &&
-          payment.dueOn <= input.today &&
+          payment.payOn <= input.today &&
           payment.dueOn >= bill.since &&
           !isSelfPaying(bill, payment.dueOn, input.today),
       );
@@ -301,13 +304,14 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
               billId: bill.id,
               name: bill.name,
               dueOn: first.dueOn,
+              payOn: first.payOn,
               isOverdue: first.dueOn < input.today,
               laterDueOn: unpaid.slice(1).map((payment) => payment.dueOn),
             },
           ]
         : [];
     })
-    .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name));
+    .sort((a, b) => a.payOn - b.payOn || a.name.localeCompare(b.name));
 
 /** The first payment of each cost inside the plan that is due today or past due and not marked paid. */
 const findDueCosts = (input: LookaheadInput): Lookahead['dueCosts'] =>
@@ -354,8 +358,8 @@ const findNoIncome = (
     const unfunded = (input.payments[bill.id] ?? []).find(
       (payment) =>
         payment.paid === null &&
-        payment.dueOn > input.today &&
-        payment.dueOn <= input.horizon &&
+        payment.payOn > input.today &&
+        payment.payOn <= input.horizon &&
         payment.fundedCents +
           payment.parts.reduce((sum, part) => sum + part.cents, 0) <
           payment.totalCents,
@@ -378,7 +382,7 @@ const findNoIncome = (
     return [
       {
         kind: 'noIncome',
-        on: unfunded.dueOn,
+        on: unfunded.payOn,
         billId: bill.id,
         name: bill.name,
         reason,
@@ -626,8 +630,8 @@ export function getStanceCushion(
           (payment) =>
             payment.paid === null &&
             payment.ranged !== null &&
-            payment.dueOn >= today &&
-            payment.dueOn <= end,
+            payment.payOn >= today &&
+            payment.payOn <= end,
         )
         .map((payment) => ({
           key: billId,

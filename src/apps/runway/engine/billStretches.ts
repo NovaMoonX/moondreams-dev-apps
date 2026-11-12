@@ -55,6 +55,7 @@ export function getBillStretches(
       schedule: version.payload.timing.schedule,
       ending: capEnding(version.payload.ending, endedAt),
       fundedBy: version.payload.fundedBy,
+      payOnDay: version.payload.payOnDay ?? null,
     }),
   );
   return result;

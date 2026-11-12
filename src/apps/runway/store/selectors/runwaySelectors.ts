@@ -1158,6 +1158,7 @@ export function computeDraftView(
     schedule: version.payload.timing.schedule,
     ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
+    payOnDay: version.payload.payOnDay ?? null,
     stretches: getStretchesOf(versions, item),
     fixed: fixedByBill.get(item.id),
     paired: pairedByBill.get(item.id),
@@ -1259,8 +1260,8 @@ export function computeDraftView(
     const inside = payments.find(
       (payment, index) =>
         payment.paid === null &&
-        day.on <= payment.dueOn &&
-        (index === 0 || day.on > payments[index - 1].dueOn),
+        day.on <= payment.payOn &&
+        (index === 0 || day.on > payments[index - 1].payOn),
     );
     const name = resolvedBills.find(({ item }) => item.id === bill.itemId)
       ?.version.payload.name;
@@ -1403,6 +1404,7 @@ export const selectBillPayments = createSelector(
               schedule: payload.timing.schedule,
               ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
+              payOnDay: payload.payOnDay ?? null,
               stretches: getStretchesOf(versions, item),
               fixed: fixedByBill.get(item.id),
               paired: pairedByBill.get(item.id),

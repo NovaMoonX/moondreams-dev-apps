@@ -97,7 +97,7 @@ export const selectAccountMoves = createSelector(
                 {
                   id: billId,
                   name: version.payload.name,
-                  dueOn: payment.dueOn,
+                  dueOn: payment.payOn,
                   cents: payment.totalCents,
                   paidByCardId: isTrack
                     ? (version.payload.paidByCardId ?? null)

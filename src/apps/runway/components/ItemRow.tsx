@@ -11,6 +11,7 @@ import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import SensitiveValue from '@/components/SensitiveValue';
+import { useLongPress } from '@/hooks/useLongPress';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import ItemBadge from '@apps/runway/components/ItemBadge';
@@ -82,6 +83,8 @@ interface ItemRowProps {
   itemId?: string;
   /** Stands where a ticked row's checkbox does, on a row with nothing to tick; the row's tap opens it. */
   slot?: ReactNode;
+  /** Press and hold (right-click on a computer) on a row that opens: starts picking several. */
+  onLongPress?: () => void;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -109,8 +112,10 @@ function ItemRow({
   isFigureMuted = false,
   itemId,
   slot,
+  onLongPress,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
+  const longPress = useLongPress(() => onLongPress?.());
   const baseAriaLabel =
     isPrivate && isHidden && givenAriaLabel
       ? (hiddenAriaLabel ?? `${name}. Amount hidden. Open`)
@@ -341,9 +346,19 @@ function ItemRow({
         <Button
           type='button'
           variant='tertiary'
-          className={join(rowClass, 'min-w-0 flex-1')}
+          className={join(
+            rowClass,
+            'min-w-0 flex-1',
+            onLongPress && 'select-none [-webkit-touch-callout:none]',
+          )}
           aria-label={tick && ariaLabel ? `${ariaLabel}. Tick it` : ariaLabel}
-          onClick={tick ? () => tick.onChange(!tick.checked) : onOpen}
+          {...(onLongPress ? longPress : {})}
+          onClick={(event) => {
+            if (onLongPress) longPress.onClick(event);
+            if (event.defaultPrevented) return;
+            if (tick) tick.onChange(!tick.checked);
+            else onOpen?.();
+          }}
         >
           {text}
         </Button>
@@ -387,9 +402,16 @@ function ItemRow({
       <Button
         type='button'
         variant='tertiary'
-        className={rowClass}
+        className={join(
+          rowClass,
+          onLongPress && 'select-none [-webkit-touch-callout:none]',
+        )}
         aria-label={ariaLabel}
-        onClick={onOpen}
+        {...(onLongPress ? longPress : {})}
+        onClick={(event) => {
+          if (onLongPress) longPress.onClick(event);
+          if (!event.defaultPrevented) onOpen();
+        }}
       >
         {badge}
         {text}

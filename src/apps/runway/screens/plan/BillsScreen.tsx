@@ -23,7 +23,11 @@ import { useAutoChecks } from '@apps/runway/hooks/useAutoPay';
 import DueBillsCard from '@apps/runway/components/DueBillsCard';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
+import PlanBulkActions, {
+  PlanSelectHeader,
+} from '@apps/runway/components/PlanBulkActions';
 import PlanTotal from '@apps/runway/components/PlanTotal';
+import { usePlanSelection } from '@apps/runway/hooks/usePlanSelection';
 import {
   isCountedAt,
   usePriorityDial,
@@ -104,6 +108,11 @@ function BillsScreen() {
       groupId: groupId !== null && groupIds.has(groupId) ? groupId : null,
     };
   });
+  const selection = usePlanSelection(
+    'bills',
+    listed.map(({ item }) => item.id),
+  );
+  const isSelecting = selection.isActive;
   const undated = listed.filter(({ payload }) => isUndatedBill(payload));
   const isNarrowed = isUndatedBillsOnly && undated.length > 0;
   const isAllDated = isUndatedBillsOnly && undated.length === 0;
@@ -131,7 +140,8 @@ function BillsScreen() {
     .filter(
       ({ figures, rows }) =>
         rows.length > 0 ||
-        (needle === '' &&
+        (!isSelecting &&
+          needle === '' &&
           !isNarrowed &&
           !isCardFeeGroup(figures.id) &&
           figures.bills.length +
@@ -185,6 +195,15 @@ function BillsScreen() {
                   planStance={stance}
                   today={today}
                   onOpen={() => setOpenBillId(item.id)}
+                  select={
+                    isSelecting
+                      ? {
+                          checked: selection.ids.has(item.id),
+                          onChange: () => selection.toggle([item.id]),
+                        }
+                      : undefined
+                  }
+                  onHold={() => selection.begin([item.id])}
                   isFaded={!isCountedAt(payload.priority, dial)}
                   isOutsideTotal={
                     groupId !== null && payload.timing.schedule.kind === 'once'
@@ -214,7 +233,7 @@ function BillsScreen() {
     }
     return (
       <div className='space-y-3'>
-        {!isNarrowed && (
+        {!isNarrowed && !isSelecting && (
           <DueBillsCard
             lookahead={lookahead}
             today={today}
@@ -222,10 +241,10 @@ function BillsScreen() {
             overflow='unfold'
           />
         )}
-        {hasDue && !isNarrowed && (
+        {hasDue && !isNarrowed && !isSelecting && (
           <SectionDivider label={BILL_WORDS.allBills} />
         )}
-        {isAllDated && (
+        {isAllDated && !isSelecting && (
           <InlineNotice
             tone='success'
             onDismiss={closeUndatedBills}
@@ -235,6 +254,7 @@ function BillsScreen() {
           </InlineNotice>
         )}
         {undated.length > 0 &&
+          !isSelecting &&
           (isNarrowed ? (
             <div className='flex flex-wrap items-center justify-between gap-2'>
               <div className='min-w-0'>
@@ -281,6 +301,23 @@ function BillsScreen() {
                   figures={figures}
                   kind='bills'
                   onOpen={() => setOpenGroupId(figures.id)}
+                  select={
+                    isSelecting
+                      ? {
+                          ticked: rows.filter(({ item }) =>
+                            selection.ids.has(item.id),
+                          ).length,
+                          total: rows.length,
+                          onToggle: () =>
+                            selection.toggle(rows.map(({ item }) => item.id)),
+                        }
+                      : undefined
+                  }
+                  onHold={
+                    rows.length > 0
+                      ? () => selection.begin(rows.map(({ item }) => item.id))
+                      : undefined
+                  }
                 />
                 {rows.length > 0 && getCard(rows)}
               </div>
@@ -295,7 +332,7 @@ function BillsScreen() {
             )}
           </>
         )}
-        {isShowingTip && (
+        {isShowingTip && !isSelecting && (
           <p className='text-muted-foreground text-sm'>{GROUP_WORDS.setTip}</p>
         )}
       </div>
@@ -304,31 +341,59 @@ function BillsScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title='Bills'
-        action={
-          isLoaded && totalFigure ? (
-            <PlanTotal
-              figure={totalFigure}
-              dial={dial}
-              help={
-                <GroupTotalHelp
-                  total={total}
-                  hasRange={total.total.lowCents !== total.total.highCents}
-                  stance={stance}
-                />
-              }
-            />
-          ) : undefined
-        }
-      />
+      {isSelecting ? (
+        <PlanSelectHeader
+          view='bills'
+          tickedIds={selection.ticked}
+          allIds={visible.map(({ item }) => item.id)}
+          onToggle={selection.toggle}
+          onDone={selection.exit}
+        />
+      ) : (
+        <SectionHeader
+          title='Bills'
+          action={
+            isLoaded && totalFigure ? (
+              <PlanTotal
+                figure={totalFigure}
+                dial={dial}
+                help={
+                  <GroupTotalHelp
+                    total={total}
+                    hasRange={total.total.lowCents !== total.total.highCents}
+                    stance={stance}
+                  />
+                }
+              />
+            ) : undefined
+          }
+        />
+      )}
       {getBody()}
-      {isLoaded && <StoppedHoldingList kind='bill' today={today} />}
-      <FloatingAction
-        label='Add a bill'
-        icon={<Receipt className='h-5 w-5' aria-hidden='true' />}
-        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-      />
+      {isLoaded && !isSelecting && (
+        <StoppedHoldingList kind='bill' today={today} />
+      )}
+      {isSelecting ? (
+        <PlanBulkActions
+          view='bills'
+          ticked={listed
+            .filter(({ item }) => selection.ids.has(item.id))
+            .map(({ item, payload }) => ({
+              itemId: item.id,
+              name: payload.name,
+              payload,
+            }))}
+          onSaved={(saved, failed) =>
+            failed.length === 0 ? selection.exit() : selection.toggle(saved)
+          }
+        />
+      ) : (
+        <FloatingAction
+          label='Add a bill'
+          icon={<Receipt className='h-5 w-5' aria-hidden='true' />}
+          onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+        />
+      )}
       {openGroupId !== null && (
         <GroupSheet
           groupId={openGroupId}

@@ -10,6 +10,7 @@ import {
   ITEM_SHEET_R2_WORDS,
   PACE_STATE_LABELS,
   PACE_WORDS,
+  PLAN_SELECT_WORDS,
   PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
@@ -38,6 +39,10 @@ interface GoalRowProps {
   /** A warning elsewhere asked for this goal: its sheet is open at this step (null for the sheet itself) until `onRequestDone`. */
   request?: { step: string | null; eventId: string | null } | null;
   onRequestDone?: () => void;
+  /** While picking several: the row's tap ticks it and the chevron still opens it. */
+  select?: { checked: boolean; onChange: (checked: boolean) => void };
+  /** Press and hold (right-click on a computer): starts picking several with this one ticked. */
+  onHold?: () => void;
 }
 
 /** The pace in a few words: "Ahead, reaches it Oct 29", "Behind, $40.00 short by Nov 25". */
@@ -77,6 +82,8 @@ function GoalRow({
   detailLead = null,
   request = null,
   onRequestDone,
+  select,
+  onHold,
 }: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const emoji = useItemEmoji(goal.emoji, goal.groupId);
@@ -107,6 +114,12 @@ function GoalRow({
         isHighlighted={isHighlighted}
         isFaded={isFaded}
         itemId={goalId}
+        tick={
+          select && !reorder
+            ? { ...select, label: PLAN_SELECT_WORDS.tick(goal.name) }
+            : undefined
+        }
+        onLongPress={reorder ? undefined : onHold}
       />
       {(isOpen || request !== null) && (
         <ItemSheet

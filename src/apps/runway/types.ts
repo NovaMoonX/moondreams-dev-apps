@@ -398,6 +398,8 @@ export interface BillSealed {
   paysItself?: boolean | null;
   /** What was set aside for it when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
   startingCents?: Cents | null;
+  /** The day of the month the person pays it, the last one on or before each due date; null (or missing) pays on the due date. */
+  payOnDay?: number | null;
   /** The card whose annual fee this bill is: its name, amount, date, group and card follow the card and are changed only there. Missing or null on any other bill. */
   cardFeeOf?: string | null;
 }

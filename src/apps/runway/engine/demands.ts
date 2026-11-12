@@ -51,7 +51,13 @@ import {
 import { planGoalContributions } from './pace';
 import { effectiveStance, pick } from './stance';
 import { getCalendarCents } from './calendar';
-import { getIntervalMonths, occurrences, selectRuleDays } from './schedule';
+import {
+  getIntervalMonths,
+  occurrences,
+  selectRuleDays,
+  canPayOnSchedule,
+  toPayOn,
+} from './schedule';
 import { matchMovedDates } from './moved';
 import {
   getLineId,
@@ -125,6 +131,8 @@ export interface DraftBillStretch {
   schedule: Schedule;
   ending: Ending;
   fundedBy: BillFundedBy;
+  /** The day of the month it is paid, before its due date; null or missing pays on the due date. */
+  payOnDay?: number | null;
 }
 
 export interface DraftBillInput {
@@ -138,6 +146,7 @@ export interface DraftBillInput {
   schedule: Schedule;
   ending: Ending;
   fundedBy: BillFundedBy;
+  payOnDay?: number | null;
   /** The bill's versions in order, when it changes over time: each payment takes the one in force on its due day, and the fields above stand for a bill with none. */
   stretches?: readonly DraftBillStretch[];
   /** Cents a day must give this bill by day key, whatever the funding says; the rest of a payment is spread over its other eligible days. */
@@ -159,6 +168,8 @@ export type DraftAsk =
 /** A bill's demand names the payment it is saving toward. */
 export interface BillShare {
   dueOn: DateOnly;
+  /** The day the money leaves: the due date unless the bill is paid on a day of its own. Missing reads as `dueOn`. */
+  payOn?: DateOnly;
   totalCents: Cents;
   /** What confirmed days already set aside for the payment. */
   setAsideCents?: Cents;
@@ -620,7 +631,10 @@ const isInDayOrder = (days: readonly IncomeDayRef[]) =>
   days.every((day, index) => index === 0 || days[index - 1].on <= day.on);
 
 export interface BillPayment {
+  /** The payment's key: a paid mark and its lateness are read from it. */
   dueOn: DateOnly;
+  /** The day the money leaves, which its saving, its to-do and the forecast follow: the due date unless the bill is paid on a day of its own. */
+  payOn: DateOnly;
   totalCents: Cents;
   /** What each income day sets aside, in day order. */
   parts: { day: IncomeDayRef; cents: Cents }[];
@@ -653,23 +667,40 @@ const getDueBeyond = (stretch: DraftBillStretch, horizon: number) => {
   ).slice(0, 1);
 };
 
-/** Each payment of a bill up to `horizon` with the stretch in force on its due day; a stretch's dates stop the day before the next begins. */
+/** Each payment of a bill paid by `horizon` with the stretch in force on its due day; a stretch's dates stop the day before the next begins. A pay-on day pays up to a month ahead, so a payment due just past the horizon can still be paid inside it. */
 const getDues = (stretches: readonly DraftBillStretch[], horizon: number) => {
-  const inRange = stretches.flatMap((stretch, index) => {
-    const next = stretches[index + 1];
-    return occurrences(
-      stretch.schedule,
-      stretch.ending,
-      index === 0 ? (stretch.schedule.anchor ?? 0) : stretch.from,
-      next ? Math.min(horizon, next.from - DAY_MS) : horizon,
-    ).map((dueOn) => ({ dueOn, stretch }));
-  });
+  const inRange = stretches
+    .flatMap((stretch, index) => {
+      const next = stretches[index + 1];
+      const payOnDay = canPayOnSchedule(stretch.schedule)
+        ? stretch.payOnDay
+        : null;
+      const reach = payOnDay ? addUtcMonths(horizon, 1) : horizon;
+      return occurrences(
+        stretch.schedule,
+        stretch.ending,
+        index === 0 ? (stretch.schedule.anchor ?? 0) : stretch.from,
+        next ? Math.min(reach, next.from - DAY_MS) : reach,
+      ).map((dueOn) => ({
+        dueOn,
+        stretch,
+        payOn: toPayOn(dueOn, payOnDay),
+      }));
+    })
+    .filter((entry) => entry.payOn <= horizon);
   const last = stretches[stretches.length - 1];
-  const result = [
-    ...inRange,
-    ...getDueBeyond(last, horizon).map((dueOn) => ({ dueOn, stretch: last })),
-  ];
-  return result;
+  const listed = new Set(inRange.map((entry) => entry.dueOn));
+  const beyond = getDueBeyond(last, horizon)
+    .filter((dueOn) => !listed.has(dueOn))
+    .map((dueOn) => ({
+      dueOn,
+      stretch: last,
+      payOn: toPayOn(
+        dueOn,
+        canPayOnSchedule(last.schedule) ? last.payOnDay : null,
+      ),
+    }));
+  return [...inRange, ...beyond];
 };
 
 /** Of what a payment due after the horizon still needs, the part the income days up to the horizon carry: its share of the time from the window's first day to the due date. */
@@ -715,6 +746,7 @@ export function planBillPayments(
           schedule: bill.schedule,
           ending: bill.ending,
           fundedBy: bill.fundedBy,
+          payOnDay: bill.payOnDay ?? null,
         },
       ];
   const figuresOf = (stretch: DraftBillStretch) => {
@@ -757,10 +789,10 @@ export function planBillPayments(
     return { heldNowCents, heldMostCents };
   };
   const dueList = getDues(stretches, horizon);
-  const dues = dueList.map((entry) => entry.dueOn);
+  const pays = dueList.map((entry) => entry.payOn);
   const moved = matchMovedDates(
     progress.paid.map((entry) => entry.dueOn),
-    dues,
+    dueList.map((entry) => entry.dueOn),
   );
   const paidByDue = new Map(
     [...progress.paid]
@@ -770,7 +802,7 @@ export function planBillPayments(
   if (bill.fundedBy.kind === 'chosen') {
     const chosen = new Set(bill.fundedBy.dayKeys);
     const days = chronological.filter((day) => chosen.has(day.dayKey));
-    return dueList.slice(0, 1).map(({ dueOn, stretch }) => {
+    return dueList.slice(0, 1).map(({ dueOn, payOn, stretch }) => {
       const figures = figuresOf(stretch);
       const { amountCents, ranged } = figures;
       const paid = paidByDue.get(dueOn) ?? null;
@@ -779,7 +811,7 @@ export function planBillPayments(
       const window = chronological.filter(
         (day) =>
           chosen.has(day.dayKey) ||
-          (day.on <= dueOn &&
+          (day.on <= payOn &&
             bill.paired !== undefined &&
             Object.hasOwn(bill.paired, day.dayKey)),
       );
@@ -804,6 +836,7 @@ export function planBillPayments(
       );
       return {
         dueOn,
+        payOn,
         totalCents: amountCents,
         ranged,
         isSavingUp: figures.isSavingUp,
@@ -824,18 +857,18 @@ export function planBillPayments(
     });
   }
   const ordered = isInDayOrder(chronological);
-  const first = getFirstNeeded(dues, options.firstDayOn);
+  const first = getFirstNeeded(pays, options.firstDayOn);
   const isCarried = (entry: FundedDay) =>
     entry.isMoved === true || entry.dayKey === START_DAY_KEY;
   const hasMoved = progress.funded.some(isCarried);
   // Money moved into the bill, or held on the start day, is not tied to one window: what a payment leaves of it is there for the next.
   const carriedIn = dueList.reduce<{ into: Cents[]; spare: Cents }>(
-    (acc, { dueOn, stretch }, index) => {
+    (acc, { payOn, stretch }, index) => {
       if (!hasMoved) return { into: [...acc.into, 0], spare: 0 };
       const inWindow = fundedInWindow(
         progress.funded,
-        index === 0 ? -Infinity : dues[index - 1],
-        dueOn,
+        index === 0 ? -Infinity : pays[index - 1],
+        payOn,
       );
       const movedCents = sumFunded(inWindow.filter(isCarried));
       const over =
@@ -847,70 +880,73 @@ export function planBillPayments(
     },
     { into: [], spare: 0 },
   ).into;
-  const result = dueList.slice(first).map(({ dueOn, stretch }, offset) => {
-    const index = first + offset;
-    const figures = figuresOf(stretch);
-    const { amountCents, ranged } = figures;
-    const previous = index === 0 ? -Infinity : dues[index - 1];
-    const window = ordered
-      ? chronological.slice(
-          indexAfter(chronological, previous),
-          indexAfter(chronological, dueOn),
-        )
-      : chronological.filter((day) => day.on > previous && day.on <= dueOn);
-    const confirmed = fundedInWindow(progress.funded, previous, dueOn);
-    const fundedCents = sumFunded(confirmed) + carriedIn[index];
-    const paid = paidByDue.get(dueOn) ?? null;
-    const eligible = getEligibleDays(
-      window,
-      stretch.fundedBy,
-      bill.oneTimePayLineIds,
-    );
-    const left = paid ? 0 : Math.max(0, amountCents - fundedCents);
-    const pairedShares = getPairedShares(
-      window,
-      dueOn > horizon ? toShareByHorizon(left, window, dueOn, horizon) : left,
-      bill.paired,
-      bill.fixed,
-      eligible,
-    );
-    const others = eligible.filter(
-      (day) => !pairedShares.cents.has(day.dayKey),
-    );
-    const shares = getDayShares(
-      others,
-      pairedShares.left,
-      bill.fixed,
-      bill.oneTimePayLineIds,
-    );
-    const otherShares = new Map(
-      others.map((day, position) => [day.dayKey, shares[position]]),
-    );
-    return {
-      dueOn,
-      totalCents: amountCents,
-      ranged,
-      isSavingUp: figures.isSavingUp,
-      parts: paid
-        ? []
-        : window
-            .filter(
-              (day) =>
-                pairedShares.cents.has(day.dayKey) ||
-                otherShares.has(day.dayKey),
-            )
-            .map((day) => ({
-              day,
-              cents:
-                pairedShares.cents.get(day.dayKey) ??
-                (otherShares.get(day.dayKey) as Cents),
-            })),
-      fundedCents,
-      fundedDays: countFundedDays(confirmed),
-      ...getHeld(dueOn, fundedCents, paid, figures),
-      paid,
-    };
-  });
+  const result = dueList
+    .slice(first)
+    .map(({ dueOn, payOn, stretch }, offset) => {
+      const index = first + offset;
+      const figures = figuresOf(stretch);
+      const { amountCents, ranged } = figures;
+      const previous = index === 0 ? -Infinity : pays[index - 1];
+      const window = ordered
+        ? chronological.slice(
+            indexAfter(chronological, previous),
+            indexAfter(chronological, payOn),
+          )
+        : chronological.filter((day) => day.on > previous && day.on <= payOn);
+      const confirmed = fundedInWindow(progress.funded, previous, payOn);
+      const fundedCents = sumFunded(confirmed) + carriedIn[index];
+      const paid = paidByDue.get(dueOn) ?? null;
+      const eligible = getEligibleDays(
+        window,
+        stretch.fundedBy,
+        bill.oneTimePayLineIds,
+      );
+      const left = paid ? 0 : Math.max(0, amountCents - fundedCents);
+      const pairedShares = getPairedShares(
+        window,
+        payOn > horizon ? toShareByHorizon(left, window, payOn, horizon) : left,
+        bill.paired,
+        bill.fixed,
+        eligible,
+      );
+      const others = eligible.filter(
+        (day) => !pairedShares.cents.has(day.dayKey),
+      );
+      const shares = getDayShares(
+        others,
+        pairedShares.left,
+        bill.fixed,
+        bill.oneTimePayLineIds,
+      );
+      const otherShares = new Map(
+        others.map((day, position) => [day.dayKey, shares[position]]),
+      );
+      return {
+        dueOn,
+        payOn,
+        totalCents: amountCents,
+        ranged,
+        isSavingUp: figures.isSavingUp,
+        parts: paid
+          ? []
+          : window
+              .filter(
+                (day) =>
+                  pairedShares.cents.has(day.dayKey) ||
+                  otherShares.has(day.dayKey),
+              )
+              .map((day) => ({
+                day,
+                cents:
+                  pairedShares.cents.get(day.dayKey) ??
+                  (otherShares.get(day.dayKey) as Cents),
+              })),
+        fundedCents,
+        fundedDays: countFundedDays(confirmed),
+        ...getHeld(dueOn, fundedCents, paid, figures),
+        paid,
+      };
+    });
   return result;
 }
 
@@ -943,13 +979,14 @@ function buildBillDemands(
           itemId: bill.itemId,
           part: null,
           tier: bill.priority,
-          dueBeforeNext: payment.dueOn < nextAfter(part.day.on),
+          dueBeforeNext: payment.payOn < nextAfter(part.day.on),
           orderIndex: bill.orderIndex,
           createdAt: bill.createdAt,
           cents: part.cents,
           cadence: BILL_CADENCES[bill.fundedBy.kind],
           bill: {
             dueOn: payment.dueOn,
+            payOn: payment.payOn,
             totalCents: payment.totalCents,
             setAsideCents: payment.fundedCents,
             isSavingUp: payment.isSavingUp,
