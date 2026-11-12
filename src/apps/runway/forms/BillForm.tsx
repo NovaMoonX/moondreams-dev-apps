@@ -5,6 +5,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AmountField from '@/components/AmountField';
 import AppToggle from '@/components/AppToggle';
 import RevealChip from '@/components/RevealChip';
 import SummaryRow from '@/components/SummaryRow';
@@ -33,7 +34,7 @@ import { generateUuid } from '@/utils/idUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   BILL_EVERY_UNIT_LABELS,
   BILL_EVERY_UNITS,
@@ -47,6 +48,8 @@ import {
   ACCOUNT_WORDS,
   AUTO_PAY_WORDS,
   BILL_PAY_WORDS,
+  BILL_SET_ASIDE_WORDS,
+  MAX_PURCHASE_CENTS,
   CARD_WORDS,
   FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
@@ -90,6 +93,7 @@ import { getBillPins } from '@apps/runway/engine/billShare';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
+import { recordHolding } from '@apps/runway/store/actions/moveActions';
 import {
   isAmountDraft,
   isFlag,
@@ -225,6 +229,8 @@ interface BillFormData {
   accountId: string | null;
   /** The app counts each payment as paid on its due day. */
   paysItself: boolean;
+  /** What is already set aside for it, asked only when a bill is added. */
+  setAside: string;
   /** The day of the month the person pays it; null pays on the due date. */
   payOnDay: number | null;
 }
@@ -249,6 +255,7 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
         withDraftDefaults(draft.formData, {
           accountId: null,
           paysItself: false,
+          setAside: '',
           payOnDay: null,
         }),
         {
@@ -271,6 +278,7 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
           paidByCardId: isNullableText,
           accountId: isNullableText,
           paysItself: isFlag,
+          setAside: isText,
           payOnDay: isNullableDay,
           isLater: isFlag,
         },
@@ -621,6 +629,7 @@ const getEditingData = (
     paidByCardId: payload.paidByCardId ?? null,
     accountId: payload.accountId ?? null,
     paysItself: payload.paysItself === true,
+    setAside: '',
     payOnDay: payload.payOnDay ?? null,
   };
 };
@@ -771,6 +780,7 @@ function BillFormBody({
           paidByCardId: null,
           accountId: null,
           paysItself: false,
+          setAside: '',
           payOnDay: null,
         },
   );
@@ -824,6 +834,12 @@ function BillFormBody({
   const canChoose = isOnce && dueDays.length > 0;
   const isChosen = canChoose && formData.funding === 'chosen';
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
+  const planStart = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? null,
+  );
+  const setAsideCents = parseMoneyToCents(formData.setAside);
+  const startingCents =
+    setAsideCents !== null && setAsideCents > 0 ? setAsideCents : 0;
   const openDays = useAppSelector((state) => state.runway.days);
   const store = useStore<RootState>();
   const savedPay =
@@ -1446,6 +1462,33 @@ function BillFormBody({
             },
           ]
         : []),
+    ...(editing || draft || fromCost
+      ? []
+      : [
+          {
+            id: 'setAside',
+            title: BILL_SET_ASIDE_WORDS.addTitle,
+            summaryLabel: BILL_SET_ASIDE_WORDS.addLabel,
+            summaryValue:
+              setAsideCents !== null && setAsideCents > 0
+                ? formatCents(setAsideCents)
+                : BILL_SET_ASIDE_WORDS.addNone,
+            isAnswered:
+              formData.setAside.trim() === '' ||
+              (setAsideCents !== null && setAsideCents <= MAX_PURCHASE_CENTS),
+            isPreAnswered: true,
+            blocker: FORM_FLOW_WORDS.badAmount,
+            render: () => (
+              <AmountField
+                isHero
+                label={BILL_SET_ASIDE_WORDS.addAmount}
+                value={formData.setAside}
+                onChange={(setAside) => set({ setAside })}
+                hint={BILL_SET_ASIDE_WORDS.addHint}
+              />
+            ),
+          } satisfies QuestionStep,
+        ]),
     ...(draft && !draft.forName
       ? []
       : [
@@ -1675,6 +1718,13 @@ function BillFormBody({
         isAccountsLoaded,
       ),
       paysItself: isTracking ? data.paysItself : startData.paysItself,
+      ...(editing
+        ? editing.payload.startingCents === undefined
+          ? {}
+          : { startingCents: editing.payload.startingCents }
+        : planStart !== null || startingCents === 0
+          ? {}
+          : { startingCents }),
       payOnDay:
         canPayOnDay(data.frequency) && !data.isLater ? data.payOnDay : null,
     };
@@ -1928,7 +1978,7 @@ function BillFormBody({
         onClose();
         return;
       }
-      await createBill(user.uid, encryption, {
+      const { billId } = await createBill(user.uid, encryption, {
         startDate: today,
         bill,
         newGroup: resolveGroup(formData).newGroup,
@@ -1952,6 +2002,22 @@ function BillFormBody({
           },
         ),
       });
+      if (planStart !== null && startingCents > 0) {
+        const isRecorded = await recordHolding(
+          user.uid,
+          encryption,
+          planStart,
+          { holding: 'bill', refId: billId, amountCents: startingCents },
+        ).catch((holdingError) => {
+          console.error(holdingError);
+          return false;
+        });
+        if (!isRecorded)
+          addToast({
+            title: BILL_SET_ASIDE_WORDS.notRecorded(bill.name),
+            type: 'warning',
+          });
+      }
       onClose();
     } catch (saveError) {
       setError(

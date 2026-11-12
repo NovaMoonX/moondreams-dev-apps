@@ -1,5 +1,6 @@
 // Pure checks for Runway's engine; run under several time zones: `TZ=America/Los_Angeles npm run check:runway-engine`.
 import assert from 'node:assert/strict';
+import { START_DAY_KEY } from '../../src/apps/runway/constants.ts';
 
 import {
   listChangesBetweenIncomeDays,
@@ -1820,8 +1821,8 @@ const version = (
         undefined,
         () => 'the pay on the 30th',
       ),
-      'Paid from spread across your pays to the pay on the 30th',
-      'a Paid from change reads as plain words',
+      'Comes out of spread across your pays to the pay on the 30th',
+      'a Comes out of change reads as plain words',
     );
     // A window with no pin of its own spreads as before, whatever is pinned in other months.
     assert.deepEqual(
@@ -5053,7 +5054,7 @@ const version = (
     };
     assert.ok(
       describeLineReason(fromMain, { main: 'Main job' }).includes(
-        'paid from Main job',
+        'comes out of Main job',
       ),
       'a line names the source that pays it',
     );
@@ -5073,7 +5074,7 @@ const version = (
         { main: 'Main job' },
         'Vacation fund',
         'side',
-      ).includes('paid from Main job'),
+      ).includes('comes out of Main job'),
       'a line paid by another source still names it',
     );
   }
@@ -19589,7 +19590,7 @@ console.log('runway engine: ok');
 }
 
 // Horizon: money moved into a bill, the share a cost brings, and the refusals.
-{
+const checkHorizonMoves = () => {
   const nov1 = utc(2026, 11, 1);
   const transfer = (
     moveId: string,
@@ -19798,6 +19799,22 @@ console.log('runway engine: ok');
     [0, 0, 0],
     'and the pays ask nothing while the surplus covers them',
   );
+  const fromStart = planBillPayments(
+    {
+      ...monthly,
+      progress: {
+        funded: [{ dayKey: START_DAY_KEY, on: nov1, cents: 35_000 }],
+        paid: [],
+      },
+    },
+    weekly,
+    dueFeb + 10 * DAY_MS,
+  ).slice(0, 3);
+  assert.deepEqual(
+    fromStart.map(({ fundedCents }) => fundedCents),
+    [35_000, 25_000, 15_000],
+    'what a bill held on the start day carries to each next payment like money moved in',
+  );
 
   const cost = (
     id: string,
@@ -19975,7 +19992,8 @@ console.log('runway engine: ok');
     null,
     'a cost saved before it had its own priority follows its item',
   );
-}
+};
+checkHorizonMoves();
 
 // Where your cash is (Issue 61).
 {

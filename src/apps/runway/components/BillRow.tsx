@@ -170,7 +170,7 @@ function BillRow({
       ? null
       : payerCard === null
         ? AUTO_PAY_WORDS.payerBank
-        : payerCard;
+        : AUTO_PAY_WORDS.payerCard(payerCard);
   const figureWord = monthly
     ? BILL_WORDS.aMonth
     : figureKind === 'monthly' && bill.timing.schedule.kind === 'once'

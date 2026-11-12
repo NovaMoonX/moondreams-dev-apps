@@ -14,7 +14,7 @@ import {
   hasPaysToChoose,
 } from '@apps/runway/utils/payFrom';
 
-/** A repeating bill's "Paid from · The pay on the 30th" row, opening that question of its form; undefined when there is nothing to choose between or `billId` is '' (not a bill). */
+/** A repeating bill's "Comes out of · The pay on the 30th" row, opening that question of its form; undefined when there is nothing to choose between or `billId` is '' (not a bill). */
 export function usePaidFromAction(billId: string, today: number) {
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
