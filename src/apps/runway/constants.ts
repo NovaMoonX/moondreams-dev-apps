@@ -3027,6 +3027,7 @@ export const FORM_FLOW_WORDS = {
   expenseAmountTitle: 'How much will it be?',
   amount: 'Amount',
   dueTitle: 'When is it due?',
+  nextDueTitle: 'When is it next due?',
   due: 'Due',
   dueLater: "I'll add it later",
   dueLaterSummary: 'Later',
