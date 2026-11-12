@@ -695,6 +695,8 @@ All of this lives in `src/apps/runway/engine/` as pure TypeScript: no React, no 
 - Comparing an instant with a date-only end date uses `endDate + 86_400_000` as the exclusive bound.
 - `todayAsUtcDate()` is the only function that reads the viewer's local day, and the only place a local getter appears.
 
+**Pay-on day.** A bill's sealed payload may carry `payOnDay` (1–31, `null` or missing means the due date). `toPayOn(dueOn, payOnDay)` gives the last `payOnDay` on or before the due date, clamped to a short month; each `BillPayment` carries `payOn` beside `dueOn`, paid marks stay keyed by `dueOn`, and everything that asks "is it paid before the next pay" (lookahead, confirm, priorities, auto-pay's `paidOn`) reads `payOn ?? dueOn`. `canPayOnSchedule` turns the day off for weekly, every-other-week, twice-monthly and several-month-day schedules. `getDues` reaches one month past the horizon for a stretch with a pay-on day and keeps payments whose `payOn` falls inside it, so a payment due after the horizon but paid before it is funded in full.
+
 ### Plan versions
 
 `resolveItem(versions, itemId, on, knownAt?)`:
@@ -1683,3 +1685,10 @@ interface MoneyLink {                       // contract v1
 - **Device pass:** `useAutoPay`, mounted in `RunwayPage` after the bank matcher, writes marks and matches once each per session (a tried set); a failure is logged and never blocks the others.
 - **Actions (`autoPayActions.ts`):** `correctPaidAmount`, `matchChargeToBill`, `undoChargeMatch`, `unmatchBillCharge` (restores the estimate mark only at Track), `forgetBillMatch`, each one transaction that replaces the mark through a takeback plus a new mark and one History entry.
 - **Checks:** `scripts/checks/runwayAutoPay.ts` in `check:runway-engine`.
+
+## Changing several at once
+
+- `usePlanSelection(view, liveIds)` wraps the shared `useSelection` per Plan view (state lives and dies with the view) and publishes `{ view, count, exit }` on a ref from `PlanSelectLockContext` while it is on; `PlanScreen` reads that ref when a pill or swipe fires, so it blocks the swipe and asks before leaving without mirroring state in an effect.
+- `usePlanBulk(view)` plans a change over each ticked item's stretches from today (`getVersionStretches`, skipping items it would not change) and writes one `changeItem` per item through `Promise.allSettled`, with `describeChange` wording and `isMoneylessChange` deciding `changeEffectiveFrom`. A bulk Paid from also clears each bill's per-pay figures (`clearBillPins`) and the Undo restores them. The Undo rewrites an item only while its stretches still equal what was written (`isSameValue`).
+- A bulk Priority reuses `planGroupPriority` with `getNextTierRank` over every bill, envelope and goal, so extras fold the same way a group's priority does. Archive calls `archiveItem` per item with the held-money choice only for items that hold money.
+- `useLongPress` cancels a hold once the finger travels more than 10px, so a scroll or the Plan swipe never starts selecting.

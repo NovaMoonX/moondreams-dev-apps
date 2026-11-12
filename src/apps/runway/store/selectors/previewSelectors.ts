@@ -729,6 +729,7 @@ export function previewBillShareView(
     schedule: payload.timing.schedule,
     ending: capEnding(payload.ending, item.endedAt),
     fundedBy: payload.fundedBy,
+    payOnDay: payload.payOnDay ?? null,
     stretches: getStretchesOf(versions, item),
     fixed,
     paired: getPairedByBill(versions, openDays, coming, stance).get(billId),

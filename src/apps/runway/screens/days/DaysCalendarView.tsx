@@ -136,9 +136,9 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
     () => ({
       incomeDays: days,
       billPayments: Object.entries(payments).flatMap(([billId, list]) =>
-        list.flatMap(({ dueOn, totalCents, paid }) =>
+        list.flatMap(({ dueOn, payOn, totalCents, paid }) =>
           paid !== null || dueOn >= (startDate ?? today)
-            ? [{ billId, dueOn, totalCents }]
+            ? [{ billId, dueOn, payOn, totalCents }]
             : [],
         ),
       ),
@@ -276,17 +276,19 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
       const bill = bills.find(({ item }) => item.id === entry.billId);
       return bill ? (
         <BillRow
-          key={`${entry.billId}${entry.on}`}
+          key={`${entry.billId}${entry.dueOn}`}
           bill={bill.version.payload}
           payment={
             (payments[entry.billId] ?? []).find(
-              (payment) => payment.dueOn === entry.on,
+              (payment) => payment.dueOn === entry.dueOn,
             ) ?? null
           }
           planStance={stance}
           today={today}
           figureKind='payment'
-          onOpen={() => setOpenBillRef({ billId: entry.billId, on: entry.on })}
+          onOpen={() =>
+            setOpenBillRef({ billId: entry.billId, on: entry.dueOn })
+          }
         />
       ) : null;
     }

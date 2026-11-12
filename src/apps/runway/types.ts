@@ -396,6 +396,8 @@ export interface BillSealed {
   accountId?: string | null;
   /** The bill is charged or pulled on its own: it never asks to be marked paid. Missing or null reads as false; offered from Track up. */
   paysItself?: boolean | null;
+  /** The day of the month the person pays it, the last one on or before each due date; null (or missing) pays on the due date. */
+  payOnDay?: number | null;
   /** The card whose annual fee this bill is: its name, amount, date, group and card follow the card and are changed only there. Missing or null on any other bill. */
   cardFeeOf?: string | null;
 }

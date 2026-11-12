@@ -16,6 +16,7 @@ import {
   BILL_WORDS,
   HOME_PIN_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PLAN_SELECT_WORDS,
   PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
@@ -58,6 +59,10 @@ interface EnvelopeTileProps {
   figureKind?: 'monthly' | 'payment';
   /** Pinned to Home's first tiles: the tile wears a small pin. */
   isPinned?: boolean;
+  /** While picking several: the row's tap ticks it and the chevron still opens it. */
+  select?: { checked: boolean; onChange: (checked: boolean) => void };
+  /** Press and hold (right-click on a computer): starts picking several with this one ticked. */
+  onHold?: () => void;
 }
 
 const capitalize = (text: string) =>
@@ -78,6 +83,8 @@ function EnvelopeTile({
   dial = 'want',
   figureKind = 'monthly',
   isPinned = false,
+  select,
+  onHold,
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { openItem, closeOpenItem, showPlanSection } = useRunwayUrlState();
@@ -213,6 +220,13 @@ function EnvelopeTile({
           reorder={reorder}
           isHighlighted={isHighlighted}
           isFaded={isFaded}
+          itemId={itemId}
+          tick={
+            select && !reorder
+              ? { ...select, label: PLAN_SELECT_WORDS.tick(envelope.name) }
+              : undefined
+          }
+          onLongPress={reorder ? undefined : onHold}
         />
       )}
       {(isOpen || request !== null) && (

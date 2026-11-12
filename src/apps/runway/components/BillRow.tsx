@@ -26,6 +26,7 @@ import {
   GROUP_WORDS,
   MAKE_BILL_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PLAN_SELECT_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
@@ -62,6 +63,10 @@ interface BillRowProps {
   isFaded?: boolean;
   itemId?: string;
   onOpen?: () => void;
+  /** While picking several: the row's tap ticks it and the chevron still opens the bill. */
+  select?: { checked: boolean; onChange: (checked: boolean) => void };
+  /** Press and hold (right-click on a computer): starts picking several with this bill ticked. */
+  onHold?: () => void;
 }
 
 interface BillSheetProps {
@@ -87,6 +92,14 @@ const getDueLine = (
   if (!payment) return 'No payment left';
   const date = formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC);
   if (payment.paid) return `Paid · due\u00a0${date}`;
+  if (payment.payOn !== payment.dueOn) {
+    const payDate = formatRelativeDayUTC(
+      payment.payOn,
+      today,
+      formatDateOrdinalUTC,
+    );
+    return BILL_WORDS.payOnLine(payDate, date);
+  }
   return isSavingUp
     ? `${BILL_WORDS.savingUp} · due\u00a0${date}`
     : `Due\u00a0${date}`;
@@ -97,7 +110,7 @@ const getProgress = (payment: BillPayment | null, isSavingUp: boolean) => {
   if (!payment) return null;
   const { paid, fundedCents, totalCents } = payment;
   if (paid) {
-    return `${paid.paidOn < payment.dueOn ? 'Paid ahead' : 'Paid'} ${formatDateOrdinalUTC(paid.paidOn)}`;
+    return `${paid.paidOn < payment.payOn ? 'Paid ahead' : 'Paid'} ${formatDateOrdinalUTC(paid.paidOn)}`;
   }
   if (fundedCents <= 0)
     return isSavingUp ? BILL_WORDS.nothingSaved : 'Nothing set aside yet';
@@ -123,6 +136,8 @@ function BillRow({
   isFaded = false,
   onOpen,
   itemId,
+  select,
+  onHold,
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const cents = pick(stance, bill.amount, 'expense');
@@ -184,6 +199,12 @@ function BillRow({
       isHighlighted={isHighlighted}
       isFaded={isFaded}
       itemId={itemId}
+      tick={
+        select && !reorder
+          ? { ...select, label: PLAN_SELECT_WORDS.tick(bill.name) }
+          : undefined
+      }
+      onLongPress={reorder ? undefined : onHold}
     />
   );
 }

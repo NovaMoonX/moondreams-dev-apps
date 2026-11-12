@@ -1613,6 +1613,8 @@ export const PAID_AMOUNT_WORDS = {
 } as const;
 
 export const BILL_WORDS = {
+  payOnLine: (payOn: string, dueOn: string) =>
+    `Pay\u00a0${payOn} · due\u00a0${dueOn}`,
   paid: 'Paid',
   paidAhead: 'Paid ahead',
   waiting: 'Waiting for the rest',
@@ -1644,6 +1646,7 @@ export const DUE_WORDS = {
   title: 'To pay today',
   titleLate: 'To pay now',
   today: 'Due today',
+  dueLater: (when: string) => `Your day to pay it · due\u00a0${when}`,
   upTo: (amount: string) => `up\u00A0to\u00A0${amount}`,
   wasDue: (when: string) => `Was due\u00a0${when}`,
   missed: (
@@ -3002,6 +3005,15 @@ export const FORM_FLOW_WORDS = {
   dueLaterSummary: 'Later',
   repeatsTitle: 'Does it repeat?',
   repeats: 'Repeats',
+  payOnTitle: 'When do you pay it?',
+  payOn: 'You pay it',
+  payOnDue: 'On the due date',
+  payOnSetDay: 'On a set day',
+  payOnDayLabel: 'Day of the month you pay it',
+  payOnLastDay: 'On the last day of the month',
+  payOnDaySummary: (ordinal: string) => `On the ${ordinal}`,
+  payOnNote: (payOn: string, dueOn: string) =>
+    `Runway has it ready by ${payOn}, ahead of its ${dueOn} due date.`,
   endsTitle: 'Does it end?',
   ends: 'Ends',
   fundingTitle: 'Which income days pay for it?',
@@ -5264,4 +5276,102 @@ export const RULE_WORDS = {
   changeMade: (sentence: string) => `Rule made: ${sentence}.`,
   changeChanged: (sentence: string) => `Rule changed: ${sentence}.`,
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
+} as const;
+
+const listNames = (names: readonly string[]) =>
+  names.length <= 3
+    ? names.join(', ').replace(/, ([^,]*)$/, ' and $1')
+    : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
+
+/** Picking several bills, envelopes or goals in one Plan view and changing them together. */
+export const PLAN_SELECT_WORDS = {
+  noun: {
+    bills: ['bill', 'bills'],
+    envelopes: ['envelope', 'envelopes'],
+    goals: ['goal', 'goals'],
+  } as const,
+  tick: (name: string) => `Select ${name}`,
+  count: (count: number, noun: readonly [string, string]) =>
+    `${count} ${count === 1 ? noun[0] : noun[1]} selected`,
+  nothing: (noun: readonly [string, string]) => `Tap the ${noun[1]} to change`,
+  selectAll: 'Select all',
+  clearAll: 'Clear',
+  done: 'Done',
+  groupTicked: (ticked: number, total: number) =>
+    `${ticked} of ${total} selected`,
+  groupTick: (name: string) => `Select everything in ${name}`,
+  groupUntick: (name: string) => `Clear everything in ${name}`,
+  leaveTitle: 'Leave selecting?',
+  leaveBody: (count: number, noun: readonly [string, string]) =>
+    `The ${count} ${count === 1 ? noun[0] : noun[1]} you selected will be cleared.`,
+  leave: 'Leave',
+  change: 'Change',
+  changeTitle: (count: number, noun: readonly [string, string]) =>
+    `Change ${count} ${count === 1 ? noun[0] : noun[1]}`,
+  archive: 'Archive',
+  payOn: 'Pay on',
+  payOnSub: 'The day of the month you pay them',
+  paidFrom: 'Paid from',
+  paidFromSub: 'Which pay covers them',
+  paidWith: 'Paid with',
+  paidWithSub: 'Card or account, and whether they pay themselves',
+  priority: 'Priority',
+  prioritySub: 'Must, Should or Want',
+  group: 'Move to a group',
+  groupSub: 'Or take them out of their group',
+  payOnTitle: 'When do you pay them?',
+  payOnSkipped: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'keeps its' : 'keep their'} own pay day.`,
+  feeSkipped: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'stays with its card' : 'stay with their cards'}, so ${names.length === 1 ? "it isn't" : "they aren't"} changed.`,
+  feeOnly: 'Annual fee bills are archived with their card.',
+  paidFromTitle: 'Which pay covers them?',
+  paidFromPinsNote: (count: number) =>
+    count === 1
+      ? 'This replaces 1 change you made for one pay.'
+      : `This replaces ${count} changes you made for single pays.`,
+  paidWithTitle: 'How do you pay them?',
+  leaveEach: 'Leave each as it is',
+  paysItselfOn: 'They pay themselves',
+  paysItselfOff: 'I mark them paid',
+  priorityTitle: 'How much do they matter?',
+  priorityFolds: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'has' : 'have'} an extra at another level. ${names.length === 1 ? 'It becomes' : 'Each becomes'} one amount at this level.`,
+  groupTitle: 'Which group?',
+  noGroup: 'No group',
+  save: 'Save',
+  nothingChanges: 'They already read that way.',
+  summary: (name: string, change: string, from: string) =>
+    `${name}: ${change}, from ${from}.`,
+  summaryMoneyless: (name: string, change: string) => `${name}: ${change}.`,
+  updated: (count: number, noun: readonly [string, string]) =>
+    `Updated ${count} ${count === 1 ? noun[0] : noun[1]}`,
+  updatedPartly: (done: number, total: number, failed: readonly string[]) =>
+    `Updated ${done} of ${total}. ${listNames(failed)} did not save and ${failed.length === 1 ? 'is' : 'are'} still selected.`,
+  pinsKept: (names: readonly string[]) =>
+    `${listNames(names)} still ${names.length === 1 ? 'has' : 'have'} amounts set per pay. Open ${names.length === 1 ? 'it' : 'each'} to clear them.`,
+  pickToContinue: 'Pick one to continue.',
+  failed: 'That did not save. Nothing was changed.',
+  undo: 'Undo',
+  undone: 'Put back as they were',
+  undoPartly: (done: number, total: number, skipped: readonly string[]) =>
+    `Put back ${done} of ${total}. ${listNames(skipped)} changed again since or did not save, so ${skipped.length === 1 ? 'it was' : 'they were'} left as ${skipped.length === 1 ? 'it is' : 'they are'}.`,
+  undoFailed: 'That could not be put back.',
+  archiveTitle: (count: number, noun: readonly [string, string]) =>
+    `Archive ${count} ${count === 1 ? noun[0] : noun[1]}?`,
+  archiveBody: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'leaves' : 'leave'} your plan from today. ${names.length === 1 ? 'Its' : 'Their'} history stays.`,
+  archiveHeld: (amount: string, holding: readonly string[], total: number) =>
+    total === 1
+      ? `It holds ${amount}`
+      : holding.length === 1
+        ? `${holding[0]} holds ${amount}`
+        : `${listNames(holding)} hold ${amount} together`,
+  archiveConfirm: (count: number, noun: readonly [string, string]) =>
+    `Archive ${count} ${count === 1 ? noun[0] : noun[1]}`,
+  archived: (count: number, noun: readonly [string, string]) =>
+    `Archived ${count} ${count === 1 ? noun[0] : noun[1]}`,
+  archivedPartly: (done: number, total: number, failed: readonly string[]) =>
+    `Archived ${done} of ${total}. ${listNames(failed)} did not archive and ${failed.length === 1 ? 'is' : 'are'} still selected.`,
+  hint: 'Press and hold to select several',
 } as const;

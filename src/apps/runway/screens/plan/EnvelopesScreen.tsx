@@ -25,7 +25,11 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
+import PlanBulkActions, {
+  PlanSelectHeader,
+} from '@apps/runway/components/PlanBulkActions';
 import PlanTotal from '@apps/runway/components/PlanTotal';
+import { usePlanSelection } from '@apps/runway/hooks/usePlanSelection';
 import {
   isCountedAt,
   usePriorityDial,
@@ -64,6 +68,11 @@ function EnvelopesScreen() {
     envelopes.length > 0,
   );
 
+  const selection = usePlanSelection(
+    'envelopes',
+    envelopes.map(({ item }) => item.id),
+  );
+  const isSelecting = selection.isActive;
   const hasSearch = envelopes.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const groupIds = new Set(figuresByGroup.map(({ id }) => id));
@@ -97,6 +106,15 @@ function EnvelopesScreen() {
           today={today}
           isFaded={!isCountedAt(version.payload.priority, dial)}
           dial={dial}
+          select={
+            isSelecting
+              ? {
+                  checked: selection.ids.has(item.id),
+                  onChange: () => selection.toggle([item.id]),
+                }
+              : undefined
+          }
+          onHold={() => selection.begin([item.id])}
         />
       ))}
     </ul>
@@ -137,6 +155,21 @@ function EnvelopesScreen() {
                   figures={figures}
                   kind='envelopes'
                   onOpen={() => setOpenGroupId(figures.id)}
+                  select={
+                    isSelecting
+                      ? {
+                          ticked: rows.filter(({ item }) =>
+                            selection.ids.has(item.id),
+                          ).length,
+                          total: rows.length,
+                          onToggle: () =>
+                            selection.toggle(rows.map(({ item }) => item.id)),
+                        }
+                      : undefined
+                  }
+                  onHold={() =>
+                    selection.begin(rows.map(({ item }) => item.id))
+                  }
                 />
                 {rows.length > 0 && getList(rows)}
               </div>
@@ -151,7 +184,7 @@ function EnvelopesScreen() {
             )}
           </>
         )}
-        {isShowingTip && (
+        {isShowingTip && !isSelecting && (
           <p className='text-muted-foreground text-sm'>{GROUP_WORDS.setTip}</p>
         )}
       </div>
@@ -160,31 +193,59 @@ function EnvelopesScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title='Envelopes'
-        action={
-          isLoaded && totalFigure ? (
-            <PlanTotal
-              figure={totalFigure}
-              dial={dial}
-              help={
-                <GroupTotalHelp
-                  total={total}
-                  hasRange={total.total.lowCents !== total.total.highCents}
-                  stance={stance}
-                />
-              }
-            />
-          ) : undefined
-        }
-      />
+      {isSelecting ? (
+        <PlanSelectHeader
+          view='envelopes'
+          tickedIds={selection.ticked}
+          allIds={visible.map(({ item }) => item.id)}
+          onToggle={selection.toggle}
+          onDone={selection.exit}
+        />
+      ) : (
+        <SectionHeader
+          title='Envelopes'
+          action={
+            isLoaded && totalFigure ? (
+              <PlanTotal
+                figure={totalFigure}
+                dial={dial}
+                help={
+                  <GroupTotalHelp
+                    total={total}
+                    hasRange={total.total.lowCents !== total.total.highCents}
+                    stance={stance}
+                  />
+                }
+              />
+            ) : undefined
+          }
+        />
+      )}
       {getBody()}
-      {isLoaded && <StoppedHoldingList kind='envelope' today={today} />}
-      <FloatingAction
-        label='Add an envelope'
-        icon={<Wallet className='h-5 w-5' aria-hidden='true' />}
-        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-      />
+      {isLoaded && !isSelecting && (
+        <StoppedHoldingList kind='envelope' today={today} />
+      )}
+      {isSelecting ? (
+        <PlanBulkActions
+          view='envelopes'
+          ticked={envelopes
+            .filter(({ item }) => selection.ids.has(item.id))
+            .map(({ item, version }) => ({
+              itemId: item.id,
+              name: version.payload.name,
+              payload: version.payload,
+            }))}
+          onSaved={(saved, failed) =>
+            failed.length === 0 ? selection.exit() : selection.toggle(saved)
+          }
+        />
+      ) : (
+        <FloatingAction
+          label='Add an envelope'
+          icon={<Wallet className='h-5 w-5' aria-hidden='true' />}
+          onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+        />
+      )}
       {openGroupId !== null && (
         <GroupSheet
           groupId={openGroupId}

@@ -156,7 +156,7 @@ export const selectBillsDueBeforePay = createSelector(
     const cents = bills
       .filter(({ version }) => isCountedAt(version.payload.priority, dial))
       .flatMap(({ item }) => payments[item.id] ?? [])
-      .filter(({ paid, dueOn }) => paid === null && dueOn < nextPay.on)
+      .filter(({ paid, payOn }) => paid === null && payOn < nextPay.on)
       .reduce((sum, { totalCents }) => sum + totalCents, 0);
     return { cents, payOn: nextPay.on };
   },

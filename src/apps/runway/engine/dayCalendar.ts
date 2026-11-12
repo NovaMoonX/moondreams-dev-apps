@@ -15,7 +15,13 @@ export type CalendarKind = (typeof CALENDAR_KINDS)[number];
 
 export type CalendarEntry =
   | { kind: 'income'; on: DateOnly; dayKey: string }
-  | { kind: 'bill'; on: DateOnly; billId: string; totalCents: Cents }
+  | {
+      kind: 'bill';
+      on: DateOnly;
+      dueOn: DateOnly;
+      billId: string;
+      totalCents: Cents;
+    }
   | { kind: 'card'; on: DateOnly; cardId: string }
   | { kind: 'goal'; on: DateOnly; goalId: string; track: GoalTrack | null }
   | { kind: 'change'; on: DateOnly; change: PlanChange };
@@ -25,6 +31,8 @@ export interface CalendarSources {
   billPayments: readonly {
     billId: string;
     dueOn: DateOnly;
+    /** The day it is paid; the entry sits there. */
+    payOn: DateOnly;
     totalCents: Cents;
   }[];
   /** `since` is the first day a due day counts, so a card is not shown due before it existed. */
@@ -81,10 +89,11 @@ export function buildCalendarEntries(
       .filter(({ on }) => inRange(on))
       .map(({ dayKey, on }): CalendarEntry => ({ kind: 'income', on, dayKey })),
     ...sources.billPayments
-      .filter(({ dueOn }) => inRange(dueOn))
-      .map(({ billId, dueOn, totalCents }): CalendarEntry => ({
+      .filter(({ payOn }) => inRange(payOn))
+      .map(({ billId, dueOn, payOn, totalCents }): CalendarEntry => ({
         kind: 'bill',
-        on: dueOn,
+        on: payOn,
+        dueOn,
         billId,
         totalCents,
       })),

@@ -519,7 +519,7 @@ export function buildDraft(input: DraftInput): Draft {
       return { key: itemId, cents: goalNeeds.get(itemId) as Cents };
     const payments = billPayments.get(itemId);
     if (!payments) return null;
-    const payment = payments.find((entry) => entry.dueOn >= on);
+    const payment = payments.find((entry) => entry.payOn >= on);
     if (!payment || payment.paid) return { key: itemId, cents: 0 };
     return {
       key: `${itemId}:${payment.dueOn}`,
