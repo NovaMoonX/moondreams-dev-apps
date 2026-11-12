@@ -10,6 +10,7 @@ import {
   CHANGE_WORDS,
   MAX_NOTE_LENGTH,
 } from '@apps/runway/constants';
+import ChangeWhen from '@apps/runway/components/ChangeWhen';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
 import { useAppSelector } from '@/store';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -27,7 +28,7 @@ interface ChangeReasonProps {
   saveLabel?: string;
 }
 
-/** Asked where the edit is saved, in place of the form: starter chips, one box, and a save that works with no answer. */
+/** Asked where the edit is saved, in place of the form (after when it starts, for an edit opened from an income day): starter chips, one box, and a save that works with no answer. */
 function ChangeReason({
   flow,
   onClose,
@@ -40,10 +41,11 @@ function ChangeReason({
   const mask = useMaskedText();
   const replacedText = describeReplaced(replaced, getCardNamer(allCards));
   const trimmed = note.trim();
+  if (flow.step === 'when') return <ChangeWhen flow={flow} onClose={onClose} />;
 
   return (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto [@media(max-height:419px)]:gap-2.5'>
-      <BackLink onBack={() => flow.setStep('form')} />
+      <BackLink onBack={() => flow.setStep(flow.asksWhen ? 'when' : 'form')} />
       <div className='space-y-1'>
         <ActionTitle>{CHANGE_WORDS.whyHeading}</ActionTitle>
         <p className='text-muted-foreground text-sm break-words'>

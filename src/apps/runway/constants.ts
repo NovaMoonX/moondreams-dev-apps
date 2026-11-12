@@ -1280,6 +1280,16 @@ export const CHANGE_WORDS = {
     'This changed somewhere else. What it does now is shown below. Check it, then save again.',
   fromHeading: 'When it starts',
   fromNow: 'From now on',
+  fromNowNote:
+    'Takes effect from now on. To set a later date, use Plan a change.',
+  whenHeading: 'When should it start?',
+  whenOpenedFrom: (day: string) =>
+    `You opened this from your ${day} income day.`,
+  fromDayMeaning: (day: string) => `${day} and every income day after it`,
+  dayOnlyMeaning: (day: string) => `Only ${day}, then it goes back`,
+  fromNowMeaning: (day: string) =>
+    `Starting today, including any income days before ${day}`,
+  whenBlocker: 'Pick when it starts.',
   fromDate: 'From a later date',
   dateLabel: 'Starts on',
   dateBlocker: 'Pick a day after today, within ten years.',
@@ -1738,8 +1748,7 @@ export const PAID_FROM_WORDS = {
   keepSpread: 'Spread across my pays',
   pickAnother: 'Pick another pay',
   changed: (name: string) => `${name} is now spread across your pays`,
-  paidFromBack: (name: string, was: string) =>
-    `${name}: back to ${was}.`,
+  paidFromBack: (name: string, was: string) => `${name}: back to ${was}.`,
   undoFailed: 'That could not be undone.',
   pinsLeft: (name: string) =>
     `${name} is now spread, but some per-pay changes are still on.`,
@@ -1848,8 +1857,7 @@ export const PAY_SHARE_WORDS = {
     `${name}: this pay puts in ${cents} again, for ${date} only.`,
   resetToast: (name: string) =>
     `${name} is back to the plan's amount for this pay`,
-  paidFromBack: (name: string, was: string) =>
-    `${name}: back to ${was}.`,
+  paidFromBack: (name: string, was: string) => `${name}: back to ${was}.`,
   keepPartial: (name: string, pay: string) =>
     `${name} now comes from ${pay}, but some per-pay changes are still on. Tap Try again to clear them.`,
   undoPartial: (name: string) =>
@@ -5323,6 +5331,13 @@ export const PLAN_SELECT_WORDS = {
   count: (count: number, noun: readonly [string, string]) =>
     `${count} ${count === 1 ? noun[0] : noun[1]} selected`,
   nothing: (noun: readonly [string, string]) => `Tap the ${noun[1]} to change`,
+  selectedMonthly: (
+    count: number,
+    noun: readonly [string, string],
+    figure: string,
+    notCounted: number,
+  ) =>
+    `${count} ${count === 1 ? noun[0] : noun[1]} · ${figure} a month${notCounted > 0 ? ` · ${notCounted} not counted` : ''}`,
   selectAll: 'Select all',
   clearAll: 'Clear',
   done: 'Done',
@@ -5355,6 +5370,8 @@ export const PLAN_SELECT_WORDS = {
     `${listNames(names)} ${names.length === 1 ? 'stays with its card' : 'stay with their cards'}, so ${names.length === 1 ? "it isn't" : "they aren't"} changed.`,
   feeOnly: 'Annual fee bills are archived with their card.',
   paidFromTitle: 'Which pay do they come out of?',
+  paidFromSkipped: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'is paid once and keeps its' : 'are paid once and keep their'} own days.`,
   paidFromPinsNote: (count: number) =>
     count === 1
       ? 'This replaces 1 change you made for one pay.'

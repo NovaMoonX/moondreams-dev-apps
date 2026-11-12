@@ -3,6 +3,7 @@ import { CHANGE_WORDS, MAX_CHANGE_DAYS_AHEAD } from '@apps/runway/constants';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
 import { addUtcDays, DAY_MS } from '@apps/runway/engine/dates';
 import { getStretchEnd } from '@apps/runway/engine/stretch';
+import type { ItemKind } from '@apps/runway/types';
 
 export type FromWhenChoice = 'now' | 'date' | 'fromDay' | 'dayOnly' | 'stretch';
 
@@ -139,4 +140,44 @@ export function getChangeSpan(
     };
   }
   return { span: { kind: 'day', day }, blocker: null };
+}
+
+export interface FromWhenOption {
+  value: FromWhenChoice;
+  label: string;
+}
+
+/** The starts a change can be given: later ones when it is planned ahead, else from now on, with an income day's own choices when that day's screen opened the form. */
+export function getFromWhenOptions({
+  kind,
+  days,
+  presetDayKey,
+  today,
+  isPlanning,
+}: {
+  kind: ItemKind;
+  days: readonly ComingDay[];
+  presetDayKey: string | null;
+  today: number;
+  isPlanning: boolean;
+}): FromWhenOption[] {
+  if (isPlanning)
+    return [
+      { value: 'date', label: CHANGE_WORDS.fromDate },
+      ...(kind !== 'source'
+        ? [{ value: 'stretch' as const, label: CHANGE_WORDS.stretch }]
+        : []),
+    ];
+  const now = { value: 'now' as const, label: CHANGE_WORDS.fromNow };
+  const preset = days.find((day) => day.dayKey === presetDayKey) ?? null;
+  if (preset === null) return [now];
+  return [
+    ...(preset.on > today
+      ? [{ value: 'fromDay' as const, label: CHANGE_WORDS.fromDay }]
+      : []),
+    ...(kind === 'envelope' || kind === 'goal'
+      ? [{ value: 'dayOnly' as const, label: CHANGE_WORDS.dayOnly }]
+      : []),
+    now,
+  ];
 }

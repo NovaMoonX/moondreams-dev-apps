@@ -74,16 +74,23 @@ export function useIncomeDaysPerMonth(today: number) {
     getEnvelopeIncomeDays(payLines, today, funding);
 }
 
-/** What the whole plan's income, bills and envelopes each come to in a usual month, counting only the bills and envelopes at or above `dial`. */
+const isPicked = (onlyIds: ReadonlySet<string> | null, id: string) =>
+  onlyIds === null || onlyIds.has(id);
+
+/** What the whole plan's income, bills and envelopes each come to in a usual month, counting only the bills and envelopes at or above `dial` (and only those in `onlyIds` when given). */
 export function usePlanTotals(
   today: number,
   dial: Priority = 'want',
+  onlyIds: ReadonlySet<string> | null = null,
 ): Record<'income' | 'bills' | 'envelopes', GroupTotal> {
   const usual = useAppSelector((state) => selectUsualMonthPlan(state, today));
-  const bills = usual.bills.filter(({ version }) =>
-    isCountedAt(version.payload.priority, dial),
+  const bills = usual.bills.filter(
+    ({ item, version }) =>
+      isPicked(onlyIds, item.id) && isCountedAt(version.payload.priority, dial),
   );
-  const envelopes = usual.envelopes;
+  const envelopes = usual.envelopes.filter(({ item }) =>
+    isPicked(onlyIds, item.id),
+  );
   const payLines = toPayLines(usual.plan);
   const usualMonth = usual.month;
   return {
@@ -101,15 +108,21 @@ export function usePlanTotals(
 const isFundedGoal = ({ version }: ResolvedGoal) =>
   isSavingFor(version.payload);
 
-/** What the goals counted at `dial` take in a usual month: a goal with a date at the pace that finishes it on time, one without at what its rule puts in. */
-export function useGoalsMonthly(today: number, dial: Priority): MoneyRange {
+/** What the goals counted at `dial` (only those in `onlyIds` when given) take in a usual month: a goal with a date at the pace that finishes it on time, one without at what its rule puts in. */
+export function useGoalsMonthly(
+  today: number,
+  dial: Priority,
+  onlyIds: ReadonlySet<string> | null = null,
+): MoneyRange {
   const usual = useAppSelector((state) => selectUsualMonthPlan(state, today));
   const versions = useAppSelector((state) => state.runway.versions);
   const assignedByItem = useAppSelector(selectBalances).assignedByItem;
   const payLines = toPayLines(usual.plan);
   const live = usual.goals.filter(
     (goal) =>
-      isFundedGoal(goal) && isCountedAt(goal.version.payload.priority, dial),
+      isPicked(onlyIds, goal.item.id) &&
+      isFundedGoal(goal) &&
+      isCountedAt(goal.version.payload.priority, dial),
   );
   const heldOf = ({ item }: ResolvedGoal) =>
     Math.max(0, assignedByItem[item.id] ?? 0);
