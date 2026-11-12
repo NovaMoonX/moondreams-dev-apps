@@ -3036,6 +3036,7 @@ export const FORM_FLOW_WORDS = {
   expenseAmountTitle: 'How much will it be?',
   amount: 'Amount',
   dueTitle: 'When is it due?',
+  nextDueTitle: 'When is it next due?',
   due: 'Due',
   dueLater: "I'll add it later",
   dueLaterSummary: 'Later',
@@ -3176,6 +3177,7 @@ export const ITEM_SHEET_R2_WORDS = {
   change: 'Change',
   changeBillSub: 'Amount, name, due date and more',
   changeAmountSub: 'Amount, name and more',
+  changeOftenSub: 'How often, amount, name and more',
   changeTargetSub: 'Target, name and more',
   firstDateNote: 'Nothing is set aside for it until it has a date.',
   pauseSub: 'Nothing new goes in',
@@ -3261,15 +3263,26 @@ export const CALENDAR_PERIOD_UNITS: Record<
 
 /** The answers to "How often?": a calendar period, or a share of each pay. */
 export const HOW_OFTEN_PAYCHECK = 'paycheck';
-/** A goal that is not being added to. */
-export const HOW_OFTEN_NONE = 'none';
-
 export const HOW_OFTEN_WORDS = {
   title: 'How often does it get money?',
   goalTitle: 'How often does money go in?',
   caption: 'How often',
   paycheck: 'From a paycheck',
-  none: 'Not saving for it yet',
+  /** The folded "How often" row once it was skipped. */
+  skippedSummary: {
+    envelope: 'Not set yet',
+    goal: 'Not saving for it yet',
+  },
+  skippedNote: 'Pick one above when you are ready',
+  /** The line under "Skip for now". */
+  skipNote: {
+    envelope: 'Nothing goes in until you set it',
+    goal: 'Nothing goes in until you start saving for it',
+  },
+  /** An envelope nothing goes into, as its row and history say it. */
+  envelopeIdle: 'Nothing goes in for now',
+  /** The same state inside a change line ("Funding nothing for now to $150.00 a month"). */
+  idleInChange: 'nothing for now',
   perPeriodLabel: 'Amount',
   paycheckAmountTitle: 'How much from each pay?',
   fromWhich: 'Which pay',
@@ -3281,9 +3294,6 @@ export const HOW_OFTEN_WORDS = {
   restTitle: 'Whatever is left of each pay',
   restHelp:
     'What is left of that pay after your bills and the envelopes above this one in priority.',
-  noAddingSummary: 'Not saving for it yet',
-  noAddingHint:
-    'Nothing goes into it. Start saving for it from its sheet whenever you like.',
   needsIncome: 'Add an income source first, so there are pays to count.',
   badAmount: 'Enter an amount above $0, like 600.00.',
   currentTitle: 'How much is in it now?',
