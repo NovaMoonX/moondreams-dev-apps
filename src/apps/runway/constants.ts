@@ -5337,7 +5337,7 @@ export const PLAN_SELECT_WORDS = {
     figure: string,
     notCounted: number,
   ) =>
-    `${count} ${count === 1 ? noun[0] : noun[1]} · ${figure} a month${notCounted > 0 ? ` · ${notCounted} not counted` : ''}`,
+    `${count} ${count === 1 ? noun[0] : noun[1]} · ${figure} a month${notCounted > 0 ? ` · ${notCounted} not in the total` : ''}`,
   selectAll: 'Select all',
   clearAll: 'Clear',
   done: 'Done',
@@ -5369,7 +5369,7 @@ export const PLAN_SELECT_WORDS = {
   feeSkipped: (names: readonly string[]) =>
     `${listNames(names)} ${names.length === 1 ? 'stays with its card' : 'stay with their cards'}, so ${names.length === 1 ? "it isn't" : "they aren't"} changed.`,
   feeOnly: 'Annual fee bills are archived with their card.',
-  paidFromTitle: 'Which pay do they come out of?',
+  paidFromTitle: 'Which pay covers them?',
   paidFromSkipped: (names: readonly string[]) =>
     `${listNames(names)} ${names.length === 1 ? 'is paid once and keeps its' : 'are paid once and keep their'} own days.`,
   paidFromPinsNote: (count: number) =>

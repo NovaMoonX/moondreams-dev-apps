@@ -34,7 +34,7 @@ function ChoiceCard({
       <span className='text-[15px] leading-[1.125rem] font-medium'>
         {label}
       </span>
-      <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
+      <span className='text-muted-foreground block text-[13px] leading-[1.125rem] text-pretty'>
         {meaning}
       </span>
     </Button>

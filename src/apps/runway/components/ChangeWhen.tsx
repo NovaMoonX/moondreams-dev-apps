@@ -4,7 +4,7 @@ import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
-import ChoiceCards from '@apps/runway/components/ChoiceCards';
+import ChoiceCard from '@apps/runway/components/ChoiceCard';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import { CHANGE_WORDS, FORM_FLOW_WORDS } from '@apps/runway/constants';
 import type { ChangeFlow } from '@apps/runway/forms/useChangeFlow';
@@ -51,7 +51,21 @@ function ChangeWhen({ flow, onClose }: ChangeWhenProps) {
           {CHANGE_WORDS.whenOpenedFrom(dayText)}
         </p>
       </div>
-      <ChoiceCards options={options} value={chosen} onChange={flow.pickWhen} />
+      <div
+        role='radiogroup'
+        aria-label={CHANGE_WORDS.whenHeading}
+        className='space-y-2'
+      >
+        {options.map(({ value, title, body }) => (
+          <ChoiceCard
+            key={value}
+            label={title}
+            meaning={body}
+            isChosen={chosen === value}
+            onPick={() => flow.pickWhen(value)}
+          />
+        ))}
+      </div>
       {chosen !== null && flow.whenBlocker === null && (
         <EffectPreview
           isCompact

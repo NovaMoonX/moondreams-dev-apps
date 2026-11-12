@@ -14,6 +14,8 @@ import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
+import { MASK } from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import Pill from '@/components/Pill';
 import SectionHeader from '@/components/SectionHeader';
 import SelectionBar from '@/components/SelectionBar';
@@ -181,14 +183,17 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
     ({ itemId, payload }) =>
       !isInMonthly(payload, dial, Math.max(0, assignedByItem[itemId] ?? 0)),
   ).length;
-  const selectedNote = mask(
-    PLAN_SELECT_WORDS.selectedMonthly(
-      count,
-      noun,
-      formatRange(monthly),
-      notCounted,
-    ),
-  );
+  const { isHidden } = useValuesHidden();
+  const selectedNote = isHidden
+    ? PLAN_SELECT_WORDS.selectedMonthly(count, noun, MASK, 0)
+    : mask(
+        PLAN_SELECT_WORDS.selectedMonthly(
+          count,
+          noun,
+          formatRange(monthly),
+          notCounted,
+        ),
+      );
 
   const close = () => setSheet(null);
   const backToMenu = () => setSheet('menu');
@@ -685,9 +690,6 @@ function PaidFromSheet({
       </div>
       {pick === 'pay' && (
         <div className='space-y-2'>
-          <p className='text-muted-foreground text-xs'>
-            {PAID_FROM_WORDS.whichPay}
-          </p>
           <PillGroup
             label={PAID_FROM_WORDS.whichPay}
             options={payOptions.map(({ value, label }) => ({ value, label }))}
@@ -700,7 +702,7 @@ function PaidFromSheet({
         </div>
       )}
       {skipped.length > 0 && (
-        <p className='text-muted-foreground text-sm'>
+        <p className='text-muted-foreground text-xs text-pretty'>
           {PLAN_SELECT_WORDS.paidFromSkipped(skipped)}
         </p>
       )}
