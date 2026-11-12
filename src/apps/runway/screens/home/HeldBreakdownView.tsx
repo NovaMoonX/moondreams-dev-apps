@@ -58,6 +58,20 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
     selectAllHorizonItems(state, today),
   );
   const cards = useAppSelector(selectCards);
+  const items = useAppSelector((state) => state.runway.items);
+  const versions = useAppSelector((state) => state.runway.versions);
+  const newestPayload = versions.reduce<
+    Map<string, { name: string; emoji: string | null; at: number }>
+  >((acc, version) => {
+    const seen = acc.get(version.itemId);
+    return seen && seen.at >= version.createdAt
+      ? acc
+      : acc.set(version.itemId, {
+          name: version.payload.name,
+          emoji: 'emoji' in version.payload ? version.payload.emoji : null,
+          at: version.createdAt,
+        });
+  }, new Map());
   const { leaveViewForTab, openItemAt } = useRunwayUrlState();
   const mask = useMaskedText();
   const { billCover } = balances;
@@ -75,16 +89,35 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
   const heldOf = (id: string) => Math.max(0, balances.assignedByItem[id] ?? 0);
   const getPlanRows = (
     section: PlanSection,
+    itemKind: 'bill' | 'goal' | 'envelope' | 'horizon',
     resolved: readonly Named[],
-  ): HeldRow[] =>
-    resolved.map(({ item, version }) => ({
-      id: item.id,
-      name: version.payload.name,
-      emoji: version.payload.emoji,
-      detail: null,
-      cents: heldOf(item.id),
-      onOpen: () => void openOnPlan(section, item.id),
-    }));
+    getCents: (id: string) => number,
+    getDetail: (id: string, cents: number) => string | null = () => null,
+  ): HeldRow[] => {
+    const order = resolved.map(({ item }) => item.id);
+    const rank = (id: string) =>
+      order.includes(id) ? order.indexOf(id) : order.length;
+    return items
+      .filter(
+        (item) =>
+          item.kind === itemKind &&
+          (item.heldReleasedOn === null || item.heldReleasedOn > today),
+      )
+      .map((item) => ({ id: item.id, cents: getCents(item.id) }))
+      .filter((row) => row.cents > 0)
+      .sort((a, b) => rank(a.id) - rank(b.id))
+      .map(({ id, cents }) => {
+        const payload = newestPayload.get(id);
+        return {
+          id,
+          name: payload?.name ?? '',
+          emoji: payload?.emoji ?? null,
+          detail: getDetail(id, cents),
+          cents,
+          onOpen: () => void openOnPlan(section, id),
+        };
+      });
+  };
 
   const getBillDetail = (billId: string, putAside: number, covered: number) => {
     const nextDue = billCover.payments
@@ -110,22 +143,22 @@ function HeldBreakdownView({ kind, name, totalCents }: HeldBreakdownViewProps) {
 
   const getRows = (): HeldRow[] => {
     if (kind === 'bills') {
-      return bills.map(({ item, version }) => {
-        const putAside = heldOf(item.id);
-        const covered = billCover.coveredByBill[item.id] ?? 0;
-        return {
-          id: item.id,
-          name: version.payload.name,
-          emoji: version.payload.emoji,
-          detail: getBillDetail(item.id, putAside, covered),
-          cents: putAside + covered,
-          onOpen: () => void openOnPlan('bills', item.id),
-        };
-      });
+      const coveredOf = (id: string) => billCover.coveredByBill[id] ?? 0;
+      return getPlanRows(
+        'bills',
+        'bill',
+        bills,
+        (id) => heldOf(id) + coveredOf(id),
+        (id) => getBillDetail(id, heldOf(id), coveredOf(id)),
+      );
     }
-    if (kind === 'goals') return getPlanRows('goals', goals);
-    if (kind === 'envelopes') return getPlanRows('envelopes', envelopes);
-    if (kind === 'horizon') return getPlanRows('horizon', horizon);
+    if (kind === 'goals') return getPlanRows('goals', 'goal', goals, heldOf);
+    if (kind === 'envelopes') {
+      return getPlanRows('envelopes', 'envelope', envelopes, heldOf);
+    }
+    if (kind === 'horizon') {
+      return getPlanRows('horizon', 'horizon', horizon, heldOf);
+    }
     return cards.map((card) => ({
       id: card.id,
       name: getCardName(card, cards),
