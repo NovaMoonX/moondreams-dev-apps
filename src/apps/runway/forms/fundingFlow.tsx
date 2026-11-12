@@ -313,6 +313,7 @@ export function buildFundingSteps({
         {skippable !== null && (
           <SkipQuestionButton
             note={HOW_OFTEN_WORDS.skipNote[skippable]}
+            skippedNote={HOW_OFTEN_WORDS.skippedNote}
             label={HOW_OFTEN_WORDS.skipLabel[skippable]}
             skippedLabel={HOW_OFTEN_WORDS.skippedLabel[skippable]}
             isSkipped={data.often === 'none'}

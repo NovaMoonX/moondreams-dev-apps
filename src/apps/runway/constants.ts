@@ -3263,6 +3263,7 @@ export const HOW_OFTEN_WORDS = {
     envelopeStop: 'Nothing goes in for now',
     goal: 'Not saving for it yet',
   },
+  skippedNote: 'Pick one above when you are ready',
   skipLabel: {
     envelope: 'Skip for now',
     envelopeStop: 'Stop adding for now',

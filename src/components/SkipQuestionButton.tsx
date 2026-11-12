@@ -1,6 +1,8 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Check } from 'lucide-react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import SectionDivider from '@/components/SectionDivider';
 
 interface SkipQuestionButtonProps {
@@ -9,6 +11,8 @@ interface SkipQuestionButtonProps {
   onSkip: () => void;
   /** The question is already left for later; the button then shows that state instead of offering it. */
   isSkipped?: boolean;
+  /** What to do from the skipped state; falls back to `note`. */
+  skippedNote?: string;
   label?: string;
   skippedLabel?: string;
 }
@@ -18,6 +22,7 @@ function SkipQuestionButton({
   note,
   onSkip,
   isSkipped = false,
+  skippedNote,
   label = 'Skip for now',
   skippedLabel = 'Skipped for now',
 }: SkipQuestionButtonProps) {
@@ -27,15 +32,20 @@ function SkipQuestionButton({
       <div className='space-y-1.5'>
         <Button
           type='button'
-          variant='secondary'
-          className='h-auto min-h-10 w-full gap-2 whitespace-normal'
+          variant='outline'
+          className={join(
+            'h-auto min-h-10 w-full gap-2 whitespace-normal',
+            isSkipped && 'border-primary bg-accent text-accent-foreground',
+          )}
           aria-pressed={isSkipped}
           onClick={onSkip}
         >
           {isSkipped && <Check className='size-4' aria-hidden='true' />}
           {isSkipped ? skippedLabel : label}
         </Button>
-        <p className='text-muted-foreground text-center text-xs'>{note}</p>
+        <p className='text-muted-foreground text-center text-xs'>
+          {isSkipped ? (skippedNote ?? note) : note}
+        </p>
       </div>
     </div>
   );
