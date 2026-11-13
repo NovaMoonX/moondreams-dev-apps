@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { getToken } from 'firebase/app-check';
 import { httpsCallable } from 'firebase/functions';
@@ -6,6 +13,7 @@ import { httpsCallable } from 'firebase/functions';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
 import { createSpeechSource } from '@/lib/speech/voice/speechSource';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
@@ -16,11 +24,7 @@ import {
 } from '@/lib/speech/voice/voiceToken';
 import { store, useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
-import {
-  DEFAULT_ASSISTANT_NAME,
-  END_PHRASES,
-  HELM_COPY,
-} from '@apps/helm/constants';
+import { END_PHRASES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
@@ -38,6 +42,7 @@ import {
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
+import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
 import {
   loadExecutionsById,
   markCaptureSpoken,
@@ -106,25 +111,27 @@ const getSpeechHeaders = async () => {
   };
 };
 
-const HELM_VOICE_IDENTITY: VoiceIdentity = {
+const toVoiceIdentity = (label: string): VoiceIdentity => ({
   id: 'helm-assistant',
-  label: DEFAULT_ASSISTANT_NAME,
+  label,
   device: {
     naturalVoice: true,
     systemVoiceHints: [],
     rate: 1,
     pitch: 1,
   },
-};
+});
 
 /** Helm's voice: talking writes a spoken turn like a typed one, the line the server sealed for it is said once the turn is sorted, and "undo that" takes the open session's latest turn back. One instance serves home and the conversation over a page. */
 export function useHelmVoice() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const name = useAssistantName();
+  const voiceIdentity = useMemo(() => toVoiceIdentity(name), [name]);
   const uid = user?.uid ?? null;
   const [note, setNote] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [hasNoticeDoor, setHasNoticeDoor] = useState(false);
   const captures = useAppSelector(selectAllCaptures);
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
@@ -167,13 +174,24 @@ export function useHelmVoice() {
   );
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const topScreen = useAppSelector(selectTopScreen);
-  const { view, isAskRequested, openAsk } = useHelmUrlState();
+  const { view, isAskRequested, openAsk, openVoiceSettings } =
+    useHelmUrlState();
   const [showsPhoneLine, setShowsPhoneLine] = useState(false);
   const isHomeView = VIEW_KINDS[view] === 'home';
 
+  const lang = navigator.language || 'en-US';
+  // Started ahead of the first listen only where it will be the one listening: the phrase, or no cloud.
+  const onDevice = useOnDeviceRecognition({
+    lang,
+    isWarm:
+      keyStatus === 'ready' &&
+      (isWakeWordOn || voiceMode !== 'cloudWhenOnline'),
+  });
+
   const voice = useVoiceConversation({
-    lang: navigator.language || 'en-US',
-    identity: HELM_VOICE_IDENTITY,
+    lang,
+    isOnDeviceReady: onDevice.isOn,
+    identity: voiceIdentity,
     endPhrases: END_PHRASES,
     onUtterance: (text, heardBy) => {
       void handleUtterance(text, heardBy.sttProvider);
@@ -181,6 +199,10 @@ export function useHelmVoice() {
     onNothingHeard: (isAsked) => {
       interruptedCaptureId.current = null;
       if (isAsked) showNote(HELM_COPY.talkHeardNothing);
+    },
+    onDeviceListenFailed: (isAsked) => {
+      interruptedCaptureId.current = null;
+      if (isAsked) showNote(HELM_COPY.talkListenFailed);
     },
     onCloudHeld: () => setShowsPhoneLine(true),
     onBargeIn: () => {
@@ -211,6 +233,11 @@ export function useHelmVoice() {
     noteId.current = window.setTimeout(() => setNote(null), NOTE_MS);
   }
 
+  function showNotice(text: string, hasDoor: boolean) {
+    setNotice(text);
+    setHasNoticeDoor(hasDoor);
+  }
+
   function say(line: string) {
     voice.settle();
     showNote(line);
@@ -222,23 +249,30 @@ export function useHelmVoice() {
   }
 
   /** The phrase was heard: it starts what a Talk tap starts, from the page in front, or sends the words that came with it. */
-  function wakeUp(rest: string | null) {
+  function wakeUp(rest: string | null, heardBy: { sttProvider: string }) {
     if (!voice.isAvailable) return false;
     const page = isHomeView
       ? null
       : (selectTopScreen(store.getState())?.context ?? null);
     const isStarted =
-      rest === null ? talk(page) === 'started' : sendHeard(rest, page);
+      rest === null
+        ? talk(page) === 'started'
+        : sendHeard(rest, page, heardBy.sttProvider);
     if (isStarted && page !== null && !isAskRequested) void openAsk();
     return isStarted;
   }
 
-  function sendHeard(text: string, page: ScreenContext | null) {
+  function sendHeard(
+    text: string,
+    page: ScreenContext | null,
+    sttProvider: string,
+  ) {
     screen.current = page;
     setNotice(null);
+    setHasNoticeDoor(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
-    return voice.submit(text, 'browser');
+    return voice.submit(text, sttProvider);
   }
 
   async function handleUtterance(text: string, sttProvider: string) {
@@ -314,14 +348,8 @@ export function useHelmVoice() {
       return true;
     }
     const isModel = question.builtBy === 'model';
-    const optionId =
-      answer?.value.shape === 'pickOne' ? answer.value.optionId : null;
-    const choice =
-      answer?.value.shape === 'pickSeveral' && question.kind === 'whichTopic'
-        ? { optionIds: answer.value.optionIds }
-        : optionId !== null
-          ? { optionId }
-          : null;
+    const choice = toQuestionChoice(question, answer?.value ?? null);
+    const optionId = choice && 'optionId' in choice ? choice.optionId : null;
     if (isModel ? answer === null : choice === null) {
       const isShort = text.trim().split(/\s+/).length <= ASK_AGAIN_MAX_WORDS;
       if (!isShort || askedAgain.current.has(askedKey)) return false;
@@ -637,11 +665,21 @@ export function useHelmVoice() {
       voice.stop();
       return 'stopped' as const;
     }
+    if (!navigator.onLine && !onDevice.isOn) {
+      showNotice(
+        onDevice.block === null
+          ? HELM_COPY.talkNeedsConnection
+          : HELM_COPY.talkNeedsConnectionBlocked,
+        onDevice.block === null,
+      );
+      return 'blocked' as const;
+    }
     if (!voice.isAvailable) {
-      setNotice(
+      showNotice(
         voice.unavailableReason === 'no-permission'
           ? HELM_COPY.talkNeedsMicrophone
           : HELM_COPY.talkNeedsRecognition,
+        false,
       );
       return 'blocked' as const;
     }
@@ -651,6 +689,7 @@ export function useHelmVoice() {
   function startListening(page: ScreenContext | null) {
     screen.current = page;
     setNotice(null);
+    setHasNoticeDoor(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
     voice.listen();
@@ -662,7 +701,12 @@ export function useHelmVoice() {
     note,
     notice,
     showsPhoneLine,
-    clearNotice: () => setNotice(null),
+    hasNoticeDoor,
+    openVoiceSettings,
+    clearNotice: () => {
+      setNotice(null);
+      setHasNoticeDoor(false);
+    },
     talk,
     setSurfaceShown,
   };

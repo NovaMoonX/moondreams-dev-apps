@@ -88,7 +88,7 @@ const settle = (
   matcher: Matcher,
   name: string,
   known: Named[],
-  assistantName: string | null,
+  assistantNames: string[],
   isSameKind: (option: Named) => boolean,
 ): EntityMatch => {
   const wordsOf = (text: string) =>
@@ -98,7 +98,11 @@ const settle = (
       .filter((word) => word.length > 1);
   const comparable = matcher.comparable(name);
   if (comparable === '') return { kind: 'dropped' };
-  if (assistantName && comparable === matcher.comparable(assistantName)) {
+  if (
+    assistantNames.some(
+      (assistantName) => comparable === matcher.comparable(assistantName),
+    )
+  ) {
     return { kind: 'dropped' };
   }
   const sure = matcher.match(name, known);
@@ -127,7 +131,7 @@ const settle = (
 export function matchWho(input: {
   mentions: { name: string; kind: MentionKind }[];
   known: KnownWho[];
-  assistantName: string | null;
+  assistantNames: string[];
 }): EntityMatch[] {
   const kinds = new Map(input.known.map((who) => [who.id, who.kind]));
   return input.mentions.map((mention) =>
@@ -135,7 +139,7 @@ export function matchWho(input: {
       whoMatcher,
       mention.name,
       input.known,
-      input.assistantName,
+      input.assistantNames,
       (option) => kinds.get(option.id) === mention.kind,
     ),
   );
@@ -145,9 +149,9 @@ export function matchWho(input: {
 export function matchPlaces(input: {
   names: string[];
   known: KnownPlace[];
-  assistantName: string | null;
+  assistantNames: string[];
 }): EntityMatch[] {
   return input.names.map((name) =>
-    settle(placeMatcher, name, input.known, input.assistantName, () => true),
+    settle(placeMatcher, name, input.known, input.assistantNames, () => true),
   );
 }

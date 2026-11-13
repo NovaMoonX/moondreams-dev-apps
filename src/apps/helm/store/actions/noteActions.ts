@@ -22,6 +22,11 @@ import {
   NOTES_LIMIT,
 } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
+import {
+  planPhotoRelease,
+  type ReleasablePhoto,
+} from '@apps/helm/utils/mediaRelease';
+import { topicsCitingNote } from '@apps/helm/utils/topicSources';
 import type {
   HelmEncryption,
   Note,
@@ -150,13 +155,14 @@ export type NoteEdit =
 const sameIds = (left: string[], right: string[]) =>
   left.length === right.length && left.every((id) => right.includes(id));
 
-/** Changes a note in one transaction that writes only the fields the person changed, so another device's edits are kept. Undo puts back only fields still as this edit left them. Needs a connection. */
+/** Changes a note in one transaction that writes only the fields the person changed, so another device's edits are kept. New words mark every topic the note is filed under or its document cites (`citingTopicIds`) behind, and a topic the note leaves while its document still cites it is marked too, so its next write re-reads the note. Undo puts back only fields still as this edit left them. Needs a connection. */
 export async function editNote(
   uid: string,
   encryption: HelmEncryption,
   noteId: string,
   from: NoteWords,
   to: NoteWords,
+  citingTopicIds: string[],
 ): Promise<NoteEdit> {
   if (!navigator.onLine) return { kind: 'offline' };
   const before = toWords(from);
@@ -182,8 +188,20 @@ export async function editNote(
         (id) => !after.topicIds.includes(id),
       );
       const isTopicsChanged = addedTopics.length + removedTopics.length > 0;
+      const isTextChanged = isTitleChanged || isBodyChanged;
+      const marked = new Set([
+        ...addedTopics,
+        ...removedTopics.filter((id) => citingTopicIds.includes(id)),
+        ...(isTextChanged
+          ? [
+              ...data.topicIds.filter((id) => !removedTopics.includes(id)),
+              ...citingTopicIds,
+            ]
+          : []),
+      ]);
+      const unmarked = removedTopics.filter((id) => !marked.has(id));
       const topicSnapshots = await Promise.all(
-        [...addedTopics, ...removedTopics].map((id) =>
+        [...marked, ...unmarked].map((id) =>
           transaction.get(doc(topicsOf(uid), id)),
         ),
       );
@@ -216,7 +234,7 @@ export async function editNote(
         if (!snapshot.exists()) return;
         transaction.update(
           snapshot.ref,
-          addedTopics.includes(snapshot.id)
+          marked.has(snapshot.id)
             ? withNoteAdded((snapshot.data() as Topic).docState, noteId)
             : withNoteRemoved(snapshot.data() as Topic, noteId),
         );
@@ -268,12 +286,41 @@ export async function editNote(
 
 export type NoteRestore = 'restored' | 'exists';
 
-/** Deletes a note. Undo puts it back under its id while the id is free, keeping only the topics that still exist. */
-export async function deleteNote(uid: string, noteId: string) {
+/** Deletes a note and marks every topic that cites it or is filed under it behind. The delete is handed back unawaited so it works offline, and each topic mark is its own write so a topic deleted elsewhere never undoes it. Undo puts the note back under its id while the id is free, keeping only the topics that still exist. */
+export async function deleteNote(
+  uid: string,
+  noteId: string,
+  topics: readonly OpenTopic[],
+  media: ReleasablePhoto[],
+) {
   const ref = doc(notesOf(uid), noteId);
   const raw = (await getDocFromCache(ref).catch(() => getDoc(ref))).data();
   if (!raw) throw new Error('This note is already gone.');
+  const marked = new Set([
+    ...((raw as Note).topicIds ?? []),
+    ...topicsCitingNote(topics, noteId),
+  ]);
   const write = deleteDoc(ref);
+  const released = planPhotoRelease(
+    media,
+    [{ kind: 'note', id: noteId }],
+    Date.now(),
+  );
+  const mediaRef = (id: string) =>
+    doc(db, 'apps', 'helm', 'users', uid, 'media', id);
+  released.forEach((entry) =>
+    updateDoc(mediaRef(entry.id), entry.forward).catch(() => undefined),
+  );
+  topics
+    .filter((topic) => marked.has(topic.id))
+    .forEach((topic) =>
+      updateDoc(
+        doc(topicsOf(uid), topic.id),
+        withNoteAdded(topic.docState, noteId),
+      ).catch((error) =>
+        console.error('A topic was not marked behind a deleted note', error),
+      ),
+    );
   const restore = async (): Promise<NoteRestore> => {
     if ((await getDoc(ref)).exists()) return 'exists';
     const topicIds = (raw as Note).topicIds ?? [];
@@ -285,6 +332,9 @@ export async function deleteNote(uid: string, noteId: string) {
       )
     ).flat();
     await setDoc(ref, { ...raw, topicIds: kept, lastEditedAt: Date.now() });
+    released.forEach((entry) =>
+      updateDoc(mediaRef(entry.id), entry.back).catch(() => undefined),
+    );
     return 'restored';
   };
   return { write, restore };

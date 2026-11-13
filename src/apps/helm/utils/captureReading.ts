@@ -1,5 +1,5 @@
 import { parseNaturalDate } from '@/utils/naturalDateUtils';
-import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import { getDateTimeFormat, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import type {
   CaptureReading,
   DateSpan,
@@ -279,7 +279,7 @@ export const getClockOf = (at: number, timeZone: string) => {
 /** The calendar day of a due (UTC midnight): a moment's day is the one it falls on in `timeZone`. */
 export const getDueDay = (due: TaskDue, timeZone: string) => {
   if (due.kind === 'day') return due.date;
-  const parts = new Intl.DateTimeFormat('en-US', {
+  const parts = getDateTimeFormat({
     timeZone,
     year: 'numeric',
     month: 'numeric',

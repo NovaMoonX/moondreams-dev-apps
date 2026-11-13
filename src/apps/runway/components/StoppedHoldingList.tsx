@@ -10,7 +10,7 @@ import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import { HELD_WORDS } from '@apps/runway/constants';
 import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectAllPurposeEmojis } from '@apps/runway/store/selectors/runwaySelectors';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 

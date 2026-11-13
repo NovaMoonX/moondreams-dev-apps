@@ -12,6 +12,7 @@ import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
+import { formatDateShort } from '@/utils/formatUtils';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import NoteRow from '@apps/helm/components/knowledge/NoteRow';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
@@ -20,17 +21,17 @@ import SectionSourcesSheet from '@apps/helm/components/knowledge/SectionSourcesS
 import TopicFormSheet from '@apps/helm/components/knowledge/TopicFormSheet';
 import TopicMoveSheet from '@apps/helm/components/knowledge/TopicMoveSheet';
 import TopicRow from '@apps/helm/components/knowledge/TopicRow';
-import VersionsSheet from '@apps/helm/components/knowledge/VersionsSheet';
+import TopicVersionsSheet from '@apps/helm/components/knowledge/TopicVersionsSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
-import { HELM_COPY } from '@apps/helm/constants';
+import { CLAIM_MS, HELM_COPY } from '@apps/helm/constants';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
+import { useTopicVersions } from '@apps/helm/hooks/useTopicVersions';
 import {
   getTopicWriteState,
   subscribeTopicWrites,
   writeTopic,
 } from '@apps/helm/queries/nomosMutations';
 import {
-  CLAIM_MS,
   deleteTopic,
   isUnavailable,
   moveTopic,
@@ -60,6 +61,8 @@ const HEADING_CLASS = {
 
 interface TopicScreenProps {
   topicId: string | null;
+  /** Where Back lands when it is not Knowledge. */
+  backLabel?: string;
   onBack: () => void;
   onHome: () => void;
   onOpenTopic: (topicId: string) => void;
@@ -81,6 +84,7 @@ const moveFailure = (kind: Exclude<TopicMove['kind'], 'moved'>) =>
 /** One topic: its path, how much it holds, its subtopics and its notes, with a menu to rename, add under, move or delete it. */
 function TopicScreen({
   topicId,
+  backLabel = HELM_COPY.knowledgeTitle,
   onBack,
   onHome,
   onOpenTopic,
@@ -133,6 +137,16 @@ function TopicScreen({
     'page',
     topic?.id ?? null,
   );
+
+  const { versions: newestVersions } = useTopicVersions(topic?.id ?? null, 1);
+  const newest = newestVersions?.[0] ?? null;
+  const historyLine =
+    topic && newest && newest.version === topic.version
+      ? HELM_COPY.topicHistoryLine(
+          formatDateShort(newest.createdAt),
+          newest.changeSummary || HELM_COPY.historyReason(newest.reason),
+        )
+      : null;
 
   const now = useNow(15_000);
   const isStaleClaim =
@@ -345,7 +359,7 @@ function TopicScreen({
   return (
     <>
       <HelmHeader
-        backLabel={parent ? parent.name : HELM_COPY.knowledgeTitle}
+        backLabel={parent ? parent.name : backLabel}
         onBack={leave}
         onHome={onHome}
         menu={menu}
@@ -385,6 +399,17 @@ function TopicScreen({
               <p className='text-muted-foreground text-[13px]'>
                 {HELM_COPY.topicCountLine(subtopicList.length, notes.length)}
               </p>
+              {historyLine && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  className="text-muted-foreground relative block h-auto max-w-full min-w-0 px-0! py-0! text-left text-[13px] font-normal before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                  onClick={() => setIsHistoryOpen(true)}
+                >
+                  <span className='block truncate'>{historyLine}</span>
+                </Button>
+              )}
             </div>
             {status && (
               <div className='helm-card flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5'>
@@ -538,7 +563,7 @@ function TopicScreen({
             version={topic.version}
             section={editingSection}
           />
-          <VersionsSheet
+          <TopicVersionsSheet
             isOpen={isHistoryOpen}
             onClose={() => setIsHistoryOpen(false)}
             topic={topic}

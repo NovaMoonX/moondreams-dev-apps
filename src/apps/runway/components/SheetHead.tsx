@@ -14,6 +14,8 @@ interface SheetHeadProps {
   suffix?: string;
   /** The one short fact under the figure. */
   fact?: string | null;
+  /** A small dot before the fact: the bank updated this figure a moment ago. */
+  isFactFresh?: boolean;
   /** A second muted line under the fact, for a detail that only some records carry. */
   secondFact?: string | null;
   /** A caveat about the figure (which end of a range it is planned at), behind a help icon. */
@@ -31,6 +33,7 @@ function SheetHead({
   figure,
   suffix,
   fact,
+  isFactFresh = false,
   secondFact,
   help,
   helpTitle,
@@ -91,6 +94,12 @@ function SheetHead({
       {fact && (
         <p className='text-muted-foreground text-sm break-words'>
           <span className='line-clamp-3'>
+            {isFactFresh && (
+              <span
+                className='bg-success mr-1.5 inline-block size-1.5 rounded-full align-middle'
+                aria-hidden='true'
+              />
+            )}
             <MaskedText>{fact}</MaskedText>
           </span>
         </p>

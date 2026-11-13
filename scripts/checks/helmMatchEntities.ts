@@ -52,7 +52,7 @@ test('one sure match links, by name or by alias', () => {
         { name: 'Miso', kind: 'pet' },
       ],
       known,
-      assistantName: null,
+      assistantNames: [],
     }),
     [
       { kind: 'match', id: 'w1' },
@@ -72,7 +72,7 @@ test('a first name that fits two people is unsure, and so is one that fits only 
       matchWho({
         mentions: [person('Sam')],
         known: twoSams,
-        assistantName: null,
+        assistantNames: [],
       }),
     ),
     ['unsure'],
@@ -82,7 +82,7 @@ test('a first name that fits two people is unsure, and so is one that fits only 
       matchWho({
         mentions: [person('Sam Rivera'), person('Sam Chen')],
         known: twoSams,
-        assistantName: null,
+        assistantNames: [],
       }),
     ),
     ['match', 'unsure'],
@@ -92,7 +92,7 @@ test('a first name that fits two people is unsure, and so is one that fits only 
       matchWho({
         mentions: [person('Sam')],
         known: [who('w3', 'person', 'Sam Rivera')],
-        assistantName: null,
+        assistantNames: [],
       }),
     ),
     ['unsure'],
@@ -106,7 +106,7 @@ test('a cat and a person both named Miso are unsure, never merged', () => {
       matchWho({
         mentions: [{ name: 'Miso', kind: 'pet' }],
         known: both,
-        assistantName: null,
+        assistantNames: [],
       }),
     ),
     ['unsure'],
@@ -116,7 +116,7 @@ test('a cat and a person both named Miso are unsure, never merged', () => {
       matchWho({
         mentions: [{ name: 'Miso', kind: 'organization' }],
         known: [who('w1', 'pet', 'Miso')],
-        assistantName: null,
+        assistantNames: [],
       }),
     ),
     ['unsure'],
@@ -129,13 +129,22 @@ test('a name nobody has is new, and the assistant is dropped', () => {
     matchWho({
       mentions: [person('Priya'), person('nova'), person('Nova')],
       known,
-      assistantName: 'Nova',
+      assistantNames: ['Nova'],
     }),
     [{ kind: 'new' }, { kind: 'dropped' }, { kind: 'dropped' }],
   );
   assert.deepEqual(
-    matchWho({ mentions: [person('Nova')], known, assistantName: null }),
+    matchWho({ mentions: [person('Nova')], known, assistantNames: [] }),
     [{ kind: 'match', id: 'w2' }],
+  );
+  assert.deepEqual(
+    matchWho({
+      mentions: [person('Nomos'), person('Juniper'), person('Priya')],
+      known,
+      assistantNames: ['Juniper', 'Nomos'],
+    }),
+    [{ kind: 'dropped' }, { kind: 'dropped' }, { kind: 'new' }],
+    'the old or default name said after a rename is still never a person',
   );
 });
 
@@ -156,7 +165,7 @@ test('places match by name or alias, are new when unknown and unsure when half k
         'Nova',
       ],
       known,
-      assistantName: 'Nova',
+      assistantNames: ['Nova'],
     }),
     [
       { kind: 'match', id: 'p1' },
@@ -413,6 +422,7 @@ const plan = (people: Partial<PeopleInput>, commands: unknown[]) =>
       known: [],
       knownPlaces: [],
       assistantName: null,
+      assistantNames: [],
       dayKey: '2026-11-10',
       capturedAt: 4000,
       ...people,
@@ -516,6 +526,7 @@ test('an unsure or assistant-named mention links nothing and makes nothing', () 
         state('w3', 'person', 'Nova'),
       ],
       assistantName: 'Nova',
+      assistantNames: ['Nova'],
     },
     [task('Call Sam', { whoRefs: ['$w1', '$w2'] })],
   );

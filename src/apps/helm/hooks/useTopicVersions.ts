@@ -15,21 +15,26 @@ interface TopicVersions {
   hasFailed: boolean;
 }
 
-/** Listens to one topic's versions for as long as the caller is mounted: mount it only while History is open. */
-export function useTopicVersions(topicId: string): TopicVersions {
+/** Listens to one topic's newest versions (every one by default) for as long as the caller is mounted; a null topic listens to nothing. */
+export function useTopicVersions(
+  topicId: string | null,
+  max?: number,
+): TopicVersions {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
-  const [state, setState] = useState<TopicVersions>({
+  const key = `${topicId ?? ''}:${max ?? ''}`;
+  const [state, setState] = useState<TopicVersions & { key: string }>({
+    key,
     versions: null,
     hasFailed: false,
   });
 
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || !topicId) return;
     const run = { isStopped: false, stop: null as Unsubscribe | null };
     const fail = (error: unknown) => {
       console.error('Helm topic history failed', error);
-      if (!run.isStopped) setState({ versions: null, hasFailed: true });
+      if (!run.isStopped) setState({ key, versions: null, hasFailed: true });
     };
     getHelmEncryption(uid)
       .then((encryption) => {
@@ -38,8 +43,9 @@ export function useTopicVersions(topicId: string): TopicVersions {
           uid,
           topicId,
           createSealedReader(encryption, openJson),
-          (versions) => setState({ versions, hasFailed: false }),
+          (versions) => setState({ key, versions, hasFailed: false }),
           fail,
+          max,
         );
       })
       .catch(fail);
@@ -47,7 +53,7 @@ export function useTopicVersions(topicId: string): TopicVersions {
       run.isStopped = true;
       run.stop?.();
     };
-  }, [uid, topicId]);
+  }, [uid, topicId, max, key]);
 
-  return state;
+  return state.key === key ? state : { versions: null, hasFailed: false };
 }

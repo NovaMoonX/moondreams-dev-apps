@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -6,24 +6,57 @@ import { ChevronRight } from 'lucide-react';
 
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
-import MarkdownText from '@/components/MarkdownText';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { useTopicVersions } from '@apps/helm/hooks/useTopicVersions';
-import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
-import {
-  restoreTopicVersion,
-  type DocumentChange,
-} from '@apps/helm/store/actions/topicActions';
-import type { OpenTopic, OpenTopicVersion } from '@apps/helm/types';
+import { canUndo } from '@apps/helm/nomos/planUndo';
+import type { DocumentChange } from '@apps/helm/store/actions/topicActions';
+import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import { takeBack } from '@apps/helm/store/actions/undoActions';
+
+/** One change as the sheet draws it, whatever it is a change to. */
+export interface VersionRow {
+  id: string;
+  version: number;
+  createdBy: 'person' | 'nomos';
+  restoredFromVersion: number | null;
+  createdAt: number;
+  changeSummary: string;
+  requestQuote: string | null;
+  executionId: string | null;
+  /** The reason as stored, for the rows whose Undo takes back a whole turn. */
+  reason: string;
+  /** The row's headline: its summary when it has one, else the reason in words. */
+  title: string;
+  reasonText: string;
+  /** What the version holds, in a line ("12 steps in this version"). */
+  contentLine: string;
+}
 
 interface VersionsSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  topic: OpenTopic;
+  /** The sheet's list title. */
+  title: string;
+  /** The version the thing is on now. */
+  newest: number;
+  /** Newest first; null until the first snapshot. */
+  rows: VersionRow[] | null;
+  hasFailed: boolean;
+  /** Writes an earlier version again as the newest. */
+  onRestore: (target: number) => Promise<DocumentChange>;
+  /** What a version holds, drawn under its header. */
+  renderVersion: (version: number) => ReactNode;
+  /** The reasons whose newest row is taken back as the whole turn that made it. */
+  turnReasons?: string[];
+  undoHint: (createdBy: 'person' | 'nomos') => string;
+  /** Say it in the thing's own words where the generic line would name the wrong thing. */
+  lines?: { changed: string; offline: string };
+  /** Lets the first version be put back once it is no longer the newest. */
+  canRestoreFirst?: boolean;
 }
 
 const ROW =
@@ -31,32 +64,41 @@ const ROW =
 
 const whenOf = (at: number) => `${formatDateShort(at)}, ${formatTime(at)}`;
 
-const rowTitle = (entry: OpenTopicVersion) =>
-  entry.reason === 'personEdit' && entry.changeSummary
-    ? entry.changeSummary
-    : HELM_COPY.historyReason(entry.reason);
-
-const failureLine = (kind: Exclude<DocumentChange, 'saved'>) =>
+const failureLine = (
+  kind: Exclude<DocumentChange, 'saved'>,
+  lines: VersionsSheetProps['lines'],
+) =>
   kind === 'offline'
-    ? HELM_COPY.historyNeedsConnection
+    ? (lines?.offline ?? HELM_COPY.historyNeedsConnection)
     : kind === 'changed'
-      ? HELM_COPY.historyChanged
+      ? (lines?.changed ?? HELM_COPY.historyChanged)
       : kind === 'busy'
         ? HELM_COPY.sectionBusy
         : kind === 'first'
           ? HELM_COPY.historyFirstVersion
           : HELM_COPY.historyRestoreFailed;
 
-function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
+function VersionsBody({
+  onClose,
+  title,
+  newest,
+  rows,
+  hasFailed,
+  onRestore,
+  renderVersion,
+  turnReasons = [],
+  undoHint,
+  canRestoreFirst = false,
+  lines,
+}: Omit<VersionsSheetProps, 'isOpen'>) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const assistant = useAssistantName();
-  const { versions, hasFailed } = useTopicVersions(topic.id);
+  const executionsById = useAppSelector(selectExecutionsById);
   const [openVersion, setOpenVersion] = useState<number | null>(null);
   const [isBusy, setIsBusy] = useState(false);
-  const opened =
-    versions?.find((entry) => entry.version === openVersion) ?? null;
-  const lineOf = (entry: OpenTopicVersion) =>
+  const opened = rows?.find((entry) => entry.version === openVersion) ?? null;
+  const lineOf = (entry: VersionRow) =>
     HELM_COPY.historyRowLine(
       entry.version,
       whenOf(entry.createdAt),
@@ -68,13 +110,7 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
     if (!user || isBusy) return;
     setIsBusy(true);
     try {
-      const result = await restoreTopicVersion(
-        user.uid,
-        await getHelmEncryption(user.uid),
-        topic.id,
-        topic.version,
-        target,
-      );
+      const result = await onRestore(target);
       if (result === 'saved') {
         setOpenVersion(null);
         addToast({
@@ -85,41 +121,70 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
           type: 'success',
         });
       } else {
-        addToast({ title: failureLine(result), type: 'info' });
+        addToast({ title: failureLine(result, lines), type: 'info' });
       }
     } catch (error) {
-      console.error('Helm topic version was not restored', error);
+      console.error('Helm version was not restored', error);
       addToast({ title: HELM_COPY.historyRestoreFailed, type: 'error' });
     }
     setIsBusy(false);
   };
 
-  const isNewest = opened !== null && opened.version === topic.version;
+  const takeBackTurn = async (executionId: string, summary: string) => {
+    if (!user || isBusy) return;
+    setIsBusy(true);
+    try {
+      const result = await takeBack(user.uid, executionId);
+      if (result.kind === 'done') {
+        setOpenVersion(null);
+        addToast({ title: HELM_COPY.historyUndone(summary), type: 'success' });
+      } else {
+        addToast({
+          title:
+            result.kind === 'offline'
+              ? (lines?.offline ?? HELM_COPY.historyNeedsConnection)
+              : result.reason === 'unreadable'
+                ? HELM_COPY.historyRestoreFailed
+                : (lines?.changed ?? HELM_COPY.historyChanged),
+          type: 'info',
+        });
+      }
+    } catch (error) {
+      console.error('Helm move was not taken back', error);
+      addToast({ title: HELM_COPY.historyRestoreFailed, type: 'error' });
+    }
+    setIsBusy(false);
+  };
+
+  const isNewest = opened !== null && opened.version === newest;
   const isFirst = opened !== null && opened.version === 1;
-  const canChange = opened !== null && opened.version <= topic.version;
+  const canChange = opened !== null && opened.version <= newest;
+  const isTurnRow = isNewest && turnReasons.includes(opened.reason);
+  const turn =
+    isTurnRow && opened.executionId
+      ? executionsById.get(opened.executionId)
+      : undefined;
+  const turnId = turn && canUndo(turn) ? turn.id : null;
+  const canAct =
+    canChange &&
+    !(isFirst && !(canRestoreFirst && !isNewest)) &&
+    !(isTurnRow && turnId === null);
 
   return (
     <DetailSheet
       isOpen
       onClose={onClose}
-      title={
-        opened
-          ? HELM_COPY.historyVersionTitle(opened.version)
-          : HELM_COPY.historyTitle(topic.name)
-      }
+      title={opened ? HELM_COPY.historyVersionTitle(opened.version) : title}
       viewKey={opened ? `version-${opened.version}` : 'list'}
       footer={
         opened &&
-        canChange &&
-        !isFirst && (
+        canAct && (
           <div className='px-6 pt-2 pb-3'>
             <ModalFooterActions
               note={
                 !isNewest
                   ? HELM_COPY.historyRestoreHint
-                  : opened.createdBy === 'nomos'
-                    ? `${HELM_COPY.historyUndoHint} ${HELM_COPY.historyUndoNotesHint}`
-                    : HELM_COPY.historyUndoHint
+                  : undoHint(opened.createdBy)
               }
               rightActions={
                 <Button
@@ -127,10 +192,12 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
                   variant='secondary'
                   loading={isBusy}
                   onClick={() =>
-                    void change(
-                      isNewest ? opened.version - 1 : opened.version,
-                      isNewest ? rowTitle(opened) : null,
-                    )
+                    void (turnId
+                      ? takeBackTurn(turnId, opened.title)
+                      : change(
+                          isNewest ? opened.version - 1 : opened.version,
+                          isNewest ? opened.title : null,
+                        ))
                   }
                 >
                   {isNewest
@@ -145,15 +212,12 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
     >
       {opened ? (
         <div className='space-y-4'>
-          <BackLink
-            onBack={() => setOpenVersion(null)}
-            label={HELM_COPY.historyTitle(topic.name)}
-          />
+          <BackLink onBack={() => setOpenVersion(null)} label={title} />
           <div className='space-y-1'>
             <p className='text-foreground text-[15px] font-semibold'>
-              {HELM_COPY.historyReason(opened.reason)}
+              {opened.reasonText}
               {opened.restoredFromVersion !== null &&
-                ` · ${HELM_COPY.historyRestoredFrom(opened.restoredFromVersion)}`}
+                `\u00a0· ${HELM_COPY.historyRestoredFrom(opened.restoredFromVersion)}`}
             </p>
             {opened.changeSummary && (
               <p className='text-foreground text-[15px] text-pretty'>
@@ -169,7 +233,7 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
               {lineOf(opened)}
             </p>
             <p className='text-muted-foreground text-[13px]'>
-              {HELM_COPY.historyPartsLine(opened.sections.length)}
+              {opened.contentLine}
             </p>
           </div>
           {isFirst && (
@@ -177,29 +241,20 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
               {HELM_COPY.historyFirstVersion}
             </p>
           )}
-          {opened.sections.map((section) => (
-            <section key={section.id} className='space-y-2'>
-              {section.heading && (
-                <h3 className='text-foreground text-[15px] leading-[21px] font-semibold'>
-                  {section.heading}
-                </h3>
-              )}
-              <MarkdownText text={section.markdown} />
-            </section>
-          ))}
+          {renderVersion(opened.version)}
         </div>
       ) : hasFailed ? (
         <p className='text-muted-foreground text-[15px]'>
           {HELM_COPY.historyFailed}
         </p>
-      ) : versions && versions.length === 0 ? (
+      ) : rows && rows.length === 0 ? (
         <p className='text-muted-foreground text-[15px]'>
           {HELM_COPY.historyEmpty}
         </p>
       ) : (
-        versions && (
+        rows && (
           <ul className='helm-card divide-border divide-y overflow-hidden'>
-            {versions.map((entry) => (
+            {rows.map((entry) => (
               <li key={entry.id}>
                 <Button
                   type='button'
@@ -209,18 +264,18 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
                 >
                   <span className='min-w-0 flex-1'>
                     <span className='text-foreground block text-[15px] leading-[21px] break-words'>
-                      {rowTitle(entry)}
+                      {entry.title}
                     </span>
                     {entry.changeSummary &&
-                      rowTitle(entry) !== entry.changeSummary && (
+                      entry.title !== entry.changeSummary && (
                         <span className='text-muted-foreground line-clamp-2 text-[13px] break-words'>
                           {entry.changeSummary}
                         </span>
                       )}
                     <span className='text-muted-foreground block text-[13px]'>
                       {lineOf(entry)}
-                      {entry.version === topic.version &&
-                        ` · ${HELM_COPY.historyNewest}`}
+                      {entry.version === newest &&
+                        `\u00a0· ${HELM_COPY.historyNewest}`}
                     </span>
                   </span>
                   <ChevronRight
@@ -237,9 +292,9 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
   );
 }
 
-/** A topic's History: what changed, when and by whom, newest first. A row opens in place with Undo on the newest and Restore on an older one. */
-function VersionsSheet({ isOpen, onClose, topic }: VersionsSheetProps) {
-  return isOpen ? <VersionsBody topic={topic} onClose={onClose} /> : null;
+/** A thing's History: what changed, when and by whom, newest first. A row opens in place with Undo on the newest and Restore on an older one. */
+function VersionsSheet({ isOpen, ...rest }: VersionsSheetProps) {
+  return isOpen ? <VersionsBody {...rest} /> : null;
 }
 
 export default VersionsSheet;

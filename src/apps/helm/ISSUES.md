@@ -213,7 +213,7 @@ One Undo takes back what the assistant did for a capture, keeping records the pe
 ### Success Criteria
 - [ ] The person can undo a capture's changes and read in Activity what was taken back and what was kept.
 - [ ] `check:helm-undo` passes; offline, Undo says it needs a connection.
-- [ ] To do before ship: "Anthropic doesn't use what Helm sends to train its models." appears in "What the AI sees" only if the check of Anthropic's current API terms and the account's retention setting passes; the PR records what was checked, and the line is left out otherwise.
+- [x] Checked before ship: "Anthropic doesn't use what Helm sends to train its models." appears in "What the AI sees" only if the check of Anthropic's current API terms and the account's retention setting passes; the PR records what was checked, and the line is left out otherwise.
 - [ ] No new rules; stated. Seed has an undone execution.
 - [ ] Conventions: none new; `state-data.md` Undo rule checked.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
@@ -452,27 +452,27 @@ The person can talk over a spoken reply and it stops at once, hearing their firs
 **Files:** `src/lib/speech/onDevice/{capability,modelStore,recognizerWorker,onDeviceStt}.ts`, `src/hooks/useOnDeviceRecognition.ts`, `public/speech/asr/*` + `NOTICE`, `src/lib/speech/voice/{voiceRouter,bargeIn}.ts`, `src/hooks/useVoiceConversation.ts` (wake listening on the model), `scripts/checks/speechShared.ts` (file list widened), `scripts/checks/voiceRouter.ts`, `src/apps/helm/components/voice/VoiceSettings.tsx` ("Hear me offline" row), `vite.config.ts` or the service worker's cache list (the model files), `CLAUDE.md` (Pattern index), `docs/conventions/code.md`
 **Context:** `TECHNICAL.md` section 20 ("On-device recognition", "Routing", "Wake word, barge-in and hands-free"); `useNaturalVoice` and its licence row as the pattern; CLAUDE.md "A vendored third-party asset keeps its licence beside it".
 ### Description
-In voice settings, "Hear me offline" downloads a speech-recognition model to the phone (the row says the size, about 40–75 MB, before it starts), after checking the phone can run it. From then on Helm hears the person with no connection on any phone, talking over a reply works offline too, and "Hey {name}" listens on the phone itself so nothing leaves it.
+In voice settings, "Hear me offline" downloads a speech-recognition model to the phone (the row says the size, 57 MB, before it starts), after checking the phone can run it. From then on Helm hears the person with no connection on any phone, talking over a reply works offline too, and "Hey {name}" listens on the phone itself so nothing leaves it.
 ### Possible Approach
 1. Build sherpa-onnx's WebAssembly speech-recognition-only target with a streaming English Zipformer (int8); measure size and real-time factor on a mid-range Android phone and an iPhone; fall back to `vosk-browser` if it fails. Correct `TECHNICAL.md`'s unverified sizes.
 2. Licences: confirm Apache-2.0 (sherpa-onnx) and MIT (ONNX Runtime) for the release used, prove from the build's file list that eSpeak NG (GPL-3.0) is not inside, and record the model weights' licence; `NOTICE` beside the files and the licences named on the row, as the natural voice does.
 3. `capability.ts` (WebAssembly SIMD, `AudioWorklet`, storage estimate, memory hint) gates the row; `modelStore.ts` downloads from the site's origin with a hash check, a progress line and Cancel, caches it, and removes it on "Remove".
 4. `recognizerWorker.ts` runs the model in a Web Worker on the PCM worklet's frames; `onDeviceStt.ts` is an `SttAdapter`; the router prefers it whenever cloud listening isn't used, and for wake listening.
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** download the model ("Hear me offline").
-- [ ] **Read:** the row's state (size, downloading with progress, ready, can't run here).
-- [ ] **Update:** n/a.
-- [ ] **Delete:** Remove frees the space.
+- [x] **Create:** download the model ("Hear me offline").
+- [x] **Read:** the row's state (size, downloading with progress, ready, can't run here).
+- [x] **Update:** n/a.
+- [x] **Delete:** Remove frees the space.
 ### Success Criteria
 - [ ] The person can turn on "Hear me offline", go into airplane mode, and still talk to Helm, interrupt a reply by voice and say "Hey {name}".
-- [ ] A phone that can't run it, or lacks the space, is told why before any download; a cancelled or failed download leaves nothing cached.
-- [ ] No audio leaves the device while the model listens (network log); the model files are served from the site's origin and checked by hash.
-- [ ] The licences are named in the PR with the eSpeak NG check's evidence; anything not confirmed is listed in the PR as unverified and the owner decides whether to ship it.
-- [ ] `check:pinch-voice` covers `src/lib/speech/onDevice/**` and `useOnDeviceRecognition.ts`; shared code has no Helm words.
-- [ ] No rules or schema change (download state is browser state); stated.
-- [ ] Conventions: `code.md`'s "Voice for any app" bullet gains the on-device model; Pattern index line for `useOnDeviceRecognition`.
+- [x] A phone that can't run it, or lacks the space, is told why before any download; a cancelled or failed download leaves nothing cached.
+- [x] No audio leaves the device while the model listens (network log); the model files are served from the site's origin and checked by hash.
+- [x] The licences are named in the PR with the eSpeak NG check's evidence; anything not confirmed is listed in the PR as unverified and the owner decides whether to ship it.
+- [x] `check:pinch-voice` covers `src/lib/speech/onDevice/**` and `useOnDeviceRecognition.ts`; shared code has no Helm words.
+- [x] No rules or schema change (download state is browser state); stated.
+- [x] Conventions: `code.md`'s "Voice for any app" bullet gains the on-device model; Pattern index line for `useOnDeviceRecognition`.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
-- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+- [x] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 
 ### Issue 18: Connected apps: the site's read contract, grants and the Pinch adapter
 
@@ -747,16 +747,16 @@ Drive connects on its own tap, behind the same switch. A question that needs a d
 
 **Prerequisites:** 25, 28
 **Target PR Size:** ~250 lines (S)
-**Files:** `src/apps/runway/share/manifest.ts` (`transactions`, off), `functions/src/apps/runway/share/adapter.ts` (`query`), `functions/src/connections/liveRouter.ts` (site adapters' live categories), `functions/src/apps/helm/mcp/tools/searchAppRecords.ts`, `functions/src/apps/helm/mcp/buildTools.ts`, `src/lib/connections/contract.ts` (`transaction` kind), `functions/src/vendor/connectionsContract.ts`, `scripts/connections/adapterMatrix.ts`, `scripts/seeds/helm.ts`
+**Files:** `src/apps/runway/share/manifest.ts` (`transactions`, off), `functions/src/apps/runway/share/adapter.ts` (`query`), `functions/src/connections/liveRouter.ts` (site adapters' live categories), `functions/src/apps/runway/share/transactions.ts`, `functions/src/apps/helm/mcp/buildTools.ts` (`search_app_records`), `scripts/connections/adapterMatrix.ts`, `scripts/seeds/helm.ts`
 **Context:** `TECHNICAL.md` section 19 ("Runway and Worth the Wait", "Read when asked"); decisions.md "Round 5 owner answers" (Transactions offered, off).
 ### Description
-Runway's connection page offers "Transactions: the date, who you paid, the amount and its category", off until switched on. Once on, "what did I spend at Costco last month?" is answered from Runway with the rows quoted ("Looked in Runway just now. Nothing is kept."), and nothing is copied into Helm.
+Runway's connection page offers "Transactions: the date, who you paid, the amount and its category", off until switched on. Once on, "what did I spend at Costco last month?" is answered from Runway with the rows quoted ("Looked in your Runway transactions just now."), and nothing is copied into Helm; only the rows the answer quotes (up to 5) are kept with it, blanked when the connection ends.
 ### Possible Approach
 1. The adapter's live `query` opens purchases within the asked range on the server under Runway's key, keeps spending and refunds, matches the payee with `createOptionMatcher`, and returns at most 20 rows plus the count and total.
 2. The live router serves a site adapter's live category with no token; `search_app_records` is offered only while the category is on.
 ### CRUD & Entry-Point Requirements
 - [ ] **Update:** switch Transactions on or off on Runway's page.
-- [ ] **Read:** answers quoting transaction rows, with Open in Runway.
+- [ ] **Read:** answers listing transaction rows, with one Open in Runway.
 ### Success Criteria
 - [ ] The person can ask what they spent at a place and get the rows and a total, with Helm keeping none of them.
 - [ ] `check:adapters`: a row has only date, payee, amount, currency and category; no note, receipt, link, card, account, bank description or deposit leaves the adapter; another uid gets nothing.
@@ -1268,7 +1268,7 @@ Opening a topic shows one properly formatted document (headings, lists) that the
 
 **Prerequisites:** 50
 **Target PR Size:** ~350 lines (M)
-**Files:** `functions/src/apps/helm/nomos/{commands,normalizeNomosReply,executeCommands,policy,summaries}.ts` (`addToTopic`, `reviseTopic`, `moveTopic`, `createParentTopic` held as `groupTopics`), `functions/src/apps/helm/resolveHelmQuestion.ts` (`groupTopics`), `functions/src/apps/helm/mcp/tools/getTopic.ts`, `src/apps/helm/store/actions/noteActions.ts` (an edited or deleted note marks its topics behind), `src/apps/helm/components/knowledge/{TopicScreen,VersionsSheet}.tsx` (change lines with Undo), `scripts/seeds/helm.ts`
+**Files:** `functions/src/apps/helm/nomos/{commands,normalizeNomosReply,executeCommands,policy,summaries}.ts` (`addToTopic`, `reviseTopic`, `moveTopic`, `createParentTopic` held as `groupTopics`), `functions/src/apps/helm/resolveHelmQuestion.ts` (`groupTopics`), `functions/src/apps/helm/mcp/buildTools.ts` (`get_topic`), `src/apps/helm/store/actions/noteActions.ts` (an edited or deleted note marks its topics behind), `src/apps/helm/components/knowledge/{TopicScreen,VersionsSheet}.tsx` (change lines with Undo), `scripts/seeds/helm.ts`
 **Context:** `TECHNICAL.md` sections 5 ("Notes and topics"), 7 ("Editing or deleting a note"), 9, 24 ("How it grows", "Revising by asking", "Nesting", "History and Undo"); round 5's Next issue "Change a note by asking" moved here.
 ### Description
 When something the person says plainly fits a part of a topic ("the winter tyres are 205/55 R16"), the assistant adds it to the document on its own with a line and Undo. It may reword its own text (headings, order, joining sentences), logged in History, and move a topic under an existing parent with Undo; it always asks before making a new parent ("Group Washing and Fragrance under Car care?"). It never removes or rewrites the person's words unless asked: reading a topic, the person says "make it shorter" or "rewrite the intro", the document changes, a line says what changed, and Undo puts the earlier version back. Editing a note updates every topic that cites it, each as a new version.
@@ -1343,7 +1343,7 @@ The person can also attach a PDF (up to 20 pages, 10 MB), a Markdown file (up to
 
 **Prerequisites:** 45, 51
 **Target PR Size:** ~400 lines (M)
-**Files:** `functions/src/apps/helm/nomos/{commands,executeCommands,policy,summaries}.ts` (`createProcedure`, `reviseProcedure`), `functions/src/apps/helm/mcp/tools/searchProcedures.ts`, `src/apps/helm/store/listeners/procedureListener.ts`, `src/apps/helm/store/actions/procedureActions.ts`, `src/apps/helm/components/procedures/{ProceduresView,ProcedureScreen}.tsx`, `src/apps/helm/components/knowledge/VersionsSheet.tsx` (reused), `src/apps/helm/utils/{procedureMarkdown,stepGroups}.ts`, `src/apps/helm/screen/views.ts`, `src/apps/helm/types.ts` (`Procedure`, `ProcedureVersion`), `firestore.rules`, `scripts/helm/rulesMatrix.py`, `scripts/seeds/helm.ts`
+**Files:** `functions/src/apps/helm/nomos/{commands,executeCommands,policy,summaries}.ts` (`createProcedure`, `reviseProcedure`), `functions/src/apps/helm/mcp/buildTools.ts` (`search_procedures`), `src/apps/helm/store/listeners/procedureListener.ts`, `src/apps/helm/store/actions/procedureActions.ts`, `src/apps/helm/components/procedures/{ProceduresView,ProcedureScreen}.tsx`, `src/apps/helm/components/knowledge/VersionsSheet.tsx` (reused), `src/apps/helm/utils/{procedureMarkdown,stepGroups}.ts`, `src/apps/helm/screen/views.ts`, `src/apps/helm/types.ts` (`Procedure`, `ProcedureVersion`), `firestore.rules`, `scripts/helm/rulesMatrix.py`, `scripts/seeds/helm.ts`
 **Context:** `TECHNICAL.md` sections 2 ("Procedure"), 25; `PRODUCT.md` "Procedures".
 ### Description
 "Make me a packing routine for work trips" makes a procedure: steps in optional groups, with Undo. The person edits it by hand or by asking; every change is a version; Copy gives Markdown. "Make this a routine" on a task with steps copies them into a new procedure.
@@ -1395,7 +1395,7 @@ The person can also attach a PDF (up to 20 pages, 10 MB), a Markdown file (up to
 **Files:** `functions/src/apps/helm/learnHelmStyle.ts`, `functions/src/ai/models.ts` (`style` prompt), `functions/src/index.ts`, `src/apps/helm/queries/styleMutations.ts`, `src/apps/helm/store/listeners/styleListener.ts`, `src/apps/helm/components/howNomosSeesYou/StyleNotes.tsx`, `functions/src/apps/helm/nomos/prompt.ts` (style in free writing), `src/apps/helm/types.ts` (`StyleProfile`, `styleLearnedThroughAt`), `firestore.rules`, `scripts/helm/rulesMatrix.py`, `scripts/seeds/helm.ts`
 **Context:** `TECHNICAL.md` sections 2 ("StyleProfile"), 26.
 ### Description
-After every 25 typed turns, Helm learns a few notes about how the person writes ("Short sentences", "Signs off 'Cheers,'"), each saying how many examples it rests on. They show under "How {name} sees you", editable and removable, and shape the assistant's own free writing.
+After every 25 typed turns, Helm learns a few notes about how the person writes ("Short sentences", "Signs off 'Cheers,'"), each saying how many of their messages it was seen in. They show under "How {name} sees you", editable and removable, and shape the assistant's own free writing.
 ### Possible Approach
 1. `learnHelmStyle` over the last 50 typed turns (never voice), quick model, ≤12 traits and ≤6 avoid lines with counts; merge keeps person-set traits.
 2. Nothing written is stored besides the traits.

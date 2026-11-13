@@ -29,6 +29,8 @@ import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
 const PROJECT = 'moondreams-dev-apps';
 const RUNS = 5;
 const ABORT_AFTER_MS = 300;
+/** A request that has not finished by now is a hang, not a slow voice. */
+const REQUEST_TIMEOUT_MS = 30_000;
 const OUT_DIR = new URL('../../voice-benchmark/', import.meta.url);
 const NEXT_DIR = new URL('.next/', OUT_DIR);
 const DOC_PATH = new URL('../../docs/voice-benchmark.md', import.meta.url);
@@ -195,7 +197,12 @@ const speakOnce = async (
   voiceId: string,
 ) => {
   const startedAt = performance.now();
-  const { stream } = await provider.speak({ text, voiceId, format: 'mp3' });
+  const { stream } = await provider.speak({
+    text,
+    voiceId,
+    format: 'mp3',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
   const reader = stream.getReader();
   const first = await reader.read();
   const firstByteMs = performance.now() - startedAt;
@@ -344,14 +351,22 @@ const runVoice = async (
       () => null,
       noteFailure,
     ));
+  const progress = { done: 0 };
   const samples = await inSequence(REPLIES, async (item) => {
     const blocked = auth.error ?? voiceError;
-    return blocked !== null
-      ? failedSample(item, blocked)
-      : runReply(provider, voice, item).catch((error) =>
-          failedSample(item, noteFailure(error)),
-        );
+    const sample =
+      blocked !== null
+        ? failedSample(item, blocked)
+        : await runReply(provider, voice, item).catch((error) =>
+            failedSample(item, noteFailure(error)),
+          );
+    progress.done += 1;
+    process.stdout.write(
+      `\r  ${provider.id} ${voice.label}: reply ${progress.done} of ${REPLIES.length}`,
+    );
+    return sample;
   });
+  process.stdout.write('\r\x1b[K');
   const abortMs =
     auth.error !== null || voiceError !== null
       ? null

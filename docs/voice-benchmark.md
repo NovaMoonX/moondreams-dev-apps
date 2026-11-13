@@ -23,7 +23,7 @@ Each is spoken after `toSpokenText`, as the site will.
 
 ## How to run it
 
-Run these once on your own machine (each reads what you paste hidden and checks it before saving):
+Run these once on your own machine (each reads what you paste hidden and checks it before saving): Each key script first checks whether its key is already saved in Firebase and, if so, stops with a line saying so (and offers to add a new version only if you ask).
 
 ```
 npm run voice:deepgram-secret

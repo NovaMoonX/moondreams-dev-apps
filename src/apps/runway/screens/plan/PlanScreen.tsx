@@ -6,12 +6,21 @@ import {
   useState,
 } from 'react';
 import { Settings2 } from 'lucide-react';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import EntryTile from '@/components/EntryTile';
 import { useAppSelector } from '@/store';
 import SwipeArea from '@/components/SwipeArea';
 import PlanOverview from '@apps/runway/components/PlanOverview';
-import { PLAN_MORE_LABEL, PLAN_SECTIONS } from '@apps/runway/constants';
+import {
+  PLAN_MORE_LABEL,
+  PLAN_SECTIONS,
+  PLAN_SELECT_WORDS,
+} from '@apps/runway/constants';
+import {
+  PlanSelectLockContext,
+  type PlanSelectLock,
+} from '@apps/runway/hooks/usePlanSelection';
 import CardsScreen from '@apps/runway/screens/plan/CardsScreen';
 import BillsScreen from '@apps/runway/screens/plan/BillsScreen';
 import EnvelopesScreen from '@apps/runway/screens/plan/EnvelopesScreen';
@@ -100,6 +109,8 @@ function PlanScreen() {
   const isMore = planSection === 'more';
 
   const bodyRef = useRef<HTMLDivElement>(null);
+  const selectLockRef = useRef<PlanSelectLock | null>(null);
+  const { confirm } = useActionModal();
   const slideRef = useRef<{
     direction: 1 | -1;
     ghost: HTMLElement;
@@ -201,19 +212,38 @@ function PlanScreen() {
   );
 
   const showNeighbour = (direction: 1 | -1) => {
+    if (selectLockRef.current) return;
     const next = getNeighbour(direction);
     if (next && !isCovered()) slideTo(next, direction);
   };
-  const select = (section: PlanSection) => {
+  const select = async (section: PlanSection) => {
     const from = getIndex(planSection);
     const to = getIndex(section);
     if (section === planSection) return;
+    const lock = selectLockRef.current;
+    if (lock) {
+      const noun = PLAN_SELECT_WORDS.noun[lock.view];
+      const isLeaving =
+        lock.count === 0 ||
+        (await confirm({
+          title: PLAN_SELECT_WORDS.leaveTitle,
+          message: PLAN_SELECT_WORDS.leaveBody(lock.count, noun),
+          confirmText: PLAN_SELECT_WORDS.leave,
+        }));
+      if (!isLeaving) return;
+      lock.exit();
+    }
     if (from < 0 || to < 0) showPlanSection(section);
     else slideTo(section, to > from ? 1 : -1);
   };
   const followFinger = (dx: number, isEnd: boolean) => {
     const body = bodyRef.current;
-    if (!body || slideRef.current || (!isEnd && isCovered())) return;
+    if (
+      !body ||
+      slideRef.current ||
+      (!isEnd && (isCovered() || selectLockRef.current))
+    )
+      return;
     const transition = isEnd ? `left ${SLIDE_MS}ms ease-out` : 'none';
     const direction = dx < 0 ? 1 : -1;
     const next = getNeighbour(direction);
@@ -252,52 +282,54 @@ function PlanScreen() {
   };
 
   return (
-    <SwipeArea
-      className='relative space-y-4 overflow-x-clip'
-      onSwipe={showNeighbour}
-      onDrag={followFinger}
-    >
-      {hasIncome && (
-        <PlanOverview
-          sections={sections}
-          current={isMore ? 'more' : planSection}
-          onSelect={select}
-        />
-      )}
-      {peek && (
-        <div
-          ref={attachPeek}
-          className='pointer-events-none absolute space-y-4 [&_.fixed]:hidden!'
-          aria-hidden='true'
-          inert
-        >
-          <RunwayPreviewContext.Provider value>
-            <SectionView section={peek.section} />
-          </RunwayPreviewContext.Provider>
-        </div>
-      )}
-      <div
-        ref={bodyRef}
-        className='relative space-y-4 [&_.fixed]:transition-opacity data-moving:[&_.fixed]:opacity-0'
+    <PlanSelectLockContext.Provider value={selectLockRef}>
+      <SwipeArea
+        className='relative space-y-4 overflow-x-clip'
+        onSwipe={showNeighbour}
+        onDrag={followFinger}
       >
-        {planSection === 'envelopes' && <EnvelopesScreen />}
-        {isMore && <MoreScreen />}
-        {planSection === 'goals' && <GoalsScreen />}
-        {planSection === 'horizon' && <HorizonScreen />}
-        {planSection === 'bills' && <BillsScreen />}
-        {planSection === 'cards' && <CardsScreen />}
-        {planSection === 'income' && <IncomeScreen />}
-        {hasIncome && !isMore && (
-          <div className='grid'>
-            <EntryTile
-              icon={<Settings2 className='h-4 w-4' />}
-              label={PLAN_MORE_LABEL}
-              onClick={() => showPlanSection('more')}
-            />
+        {hasIncome && (
+          <PlanOverview
+            sections={sections}
+            current={isMore ? 'more' : planSection}
+            onSelect={(section) => void select(section)}
+          />
+        )}
+        {peek && (
+          <div
+            ref={attachPeek}
+            className='pointer-events-none absolute space-y-4 [&_.fixed]:hidden!'
+            aria-hidden='true'
+            inert
+          >
+            <RunwayPreviewContext.Provider value>
+              <SectionView section={peek.section} />
+            </RunwayPreviewContext.Provider>
           </div>
         )}
-      </div>
-    </SwipeArea>
+        <div
+          ref={bodyRef}
+          className='relative space-y-4 [&_.fixed]:transition-opacity data-moving:[&_.fixed]:opacity-0'
+        >
+          {planSection === 'envelopes' && <EnvelopesScreen />}
+          {isMore && <MoreScreen />}
+          {planSection === 'goals' && <GoalsScreen />}
+          {planSection === 'horizon' && <HorizonScreen />}
+          {planSection === 'bills' && <BillsScreen />}
+          {planSection === 'cards' && <CardsScreen />}
+          {planSection === 'income' && <IncomeScreen />}
+          {hasIncome && !isMore && (
+            <div className='grid'>
+              <EntryTile
+                icon={<Settings2 className='h-4 w-4' />}
+                label={PLAN_MORE_LABEL}
+                onClick={() => void select('more')}
+              />
+            </div>
+          )}
+        </div>
+      </SwipeArea>
+    </PlanSelectLockContext.Provider>
   );
 }
 

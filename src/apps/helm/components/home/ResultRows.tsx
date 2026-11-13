@@ -4,12 +4,19 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { getTakenBackIds } from '@apps/helm/nomos/planUndo';
-import { selectNoteById } from '@apps/helm/store/selectors/knowledgeSelectors';
+import {
+  selectNoteById,
+  selectTopicById,
+} from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { OpenExecution } from '@apps/helm/types';
+import { selectProcedureById } from '@apps/helm/store/selectors/procedureSelectors';
+import { selectOpenRunById } from '@apps/helm/store/selectors/runSelectors';
 import type { ResultLine } from '@apps/helm/utils/resultLines';
 
 interface ResultRowsProps {
@@ -21,12 +28,16 @@ interface ResultRowsProps {
   isFlat?: boolean;
 }
 
-/** One row per change; after an Undo the taken-back rows are struck, and the ones kept or deleted since say so. A row for a note opens it over this screen. */
+/** One row per change; after an Undo the taken-back rows are struck, and the ones kept or deleted since say so. A row for a note opens it over this screen, and a row for a topic, a procedure or a run opens it from home. */
 function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
   const takenBack = getTakenBackIds(undo);
   const gone = new Set(undo?.goneIds ?? []);
   const isUndone = execution.undoneByExecutionId !== null && undo !== null;
   const noteById = useAppSelector(selectNoteById);
+  const topicById = useAppSelector(selectTopicById);
+  const procedureById = useAppSelector(selectProcedureById);
+  const runById = useAppSelector(selectOpenRunById);
+  const { showView } = useHelmUrlState();
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
   return (
@@ -38,7 +49,28 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
           const isStruck = isTracked && takenBack.has(docId);
           const isGone = isTracked && !isStruck && gone.has(docId);
           const isKept = isTracked && !isStruck && !isGone;
-          const refNote = line.ref ? noteById.get(line.ref.id) : undefined;
+          const refNote =
+            line.ref?.collection === 'notes'
+              ? noteById.get(line.ref.id)
+              : undefined;
+          const topicId =
+            !isFlat &&
+            line.ref?.collection === 'topics' &&
+            topicById.has(line.ref.id)
+              ? line.ref.id
+              : null;
+          const procedureId =
+            !isFlat &&
+            line.ref?.collection === 'procedures' &&
+            procedureById.has(line.ref.id)
+              ? line.ref.id
+              : null;
+          const runId =
+            !isFlat &&
+            line.ref?.collection === 'procedureRuns' &&
+            runById.has(line.ref.id)
+              ? line.ref.id
+              : null;
           const looseDetail =
             refNote && refNote.topicIds.length === 0
               ? HELM_COPY.noteLoose
@@ -49,7 +81,20 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
               ? HELM_COPY.keptRow
               : (line.detail ?? looseDetail);
           const noteId = refNote && line.ref ? line.ref.id : null;
-          const open = noteId ? () => setOpenNoteId(noteId) : null;
+          const open = noteId
+            ? () => setOpenNoteId(noteId)
+            : topicId
+              ? () =>
+                  afterBackLayersClose(() => void showView('topic', topicId))
+              : procedureId
+                ? () =>
+                    afterBackLayersClose(
+                      () => void showView('procedure', procedureId),
+                    )
+                : runId
+                  ? () =>
+                      afterBackLayersClose(() => void showView('run', runId))
+                  : null;
           const titleLine = (
             <p
               className={join(
