@@ -97,12 +97,14 @@ import { A_LIST_SHARES } from '../../functions/src/apps/a-list/share/manifest.ts
 import { GOING_ONCE_SHARES } from '../../functions/src/apps/going-once/share/manifest.ts';
 import { NINE_LIVES_SHARES } from '../../functions/src/apps/nine-lives/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
+import { RUNWAY_SHARES } from '../../functions/src/apps/runway/share/manifest.ts';
 import { WAYPOINT_SHARES } from '../../functions/src/apps/waypoint/share/manifest.ts';
 import { WORTH_THE_WAIT_SHARES } from '../../functions/src/apps/worth-the-wait/share/manifest.ts';
 import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
+import { formatMoney } from '../../functions/src/utils/formatMoney.ts';
 import { getShowtime } from './aList.ts';
 import { getSeedPickupOn } from './goingOnce.ts';
-import { readEmulatorKeyring } from './runway.ts';
+import { buildSampleShareSummary, readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -113,7 +115,14 @@ import {
 interface CopyDefinition {
   category: string;
   sourceRef: string;
-  kind: 'event' | 'task' | 'place' | 'project' | 'pet' | 'trip';
+  kind:
+    | 'event'
+    | 'task'
+    | 'place'
+    | 'project'
+    | 'pet'
+    | 'trip'
+    | 'moneySummary';
   title: string;
   subtitle: string | null;
   startAt: number | null;
@@ -123,6 +132,10 @@ interface CopyDefinition {
   isAllDay?: boolean;
   placeLabel?: string;
   extra?: Record<string, string | number>;
+  detail?: string;
+  amountCents?: number;
+  currency?: string;
+  sourceUpdatedAt?: number;
 }
 
 const DAY_MS = 86_400_000;
@@ -135,12 +148,14 @@ const SEED_PROFILES = [
     timeZone: 'America/Los_Angeles',
     assistantName: null,
     assistantTone: null,
+    theme: null,
   },
   {
     user: FIXTURE_USERS.partnerTwo,
     timeZone: 'America/New_York',
     assistantName: 'Juniper',
     assistantTone: 'warm',
+    theme: 'plum',
   },
 ];
 
@@ -577,6 +592,7 @@ async function buildBackToBack(input: {
         interruptedCaptureId: null,
         answersQuestion: null,
         ttsProvider: null,
+        arrivedVia: 'direct',
         medium: 'web',
         sessionId: `seed-${uid}-today`,
         turnIndex: turnIndexFrom + order,
@@ -895,6 +911,7 @@ async function buildGmailTurn(input: {
         text: 'Your cake tasting is at 2:00 PM. See you then!',
         deepLink:
           'https://mail.google.com/mail/?authuser=personal@example.com#all/18f0c0de00000001',
+        record: null,
         deletedAt: null,
       },
     ],
@@ -915,6 +932,7 @@ async function buildGmailTurn(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: `seed-${uid}-answers`,
     turnIndex: 6,
@@ -1051,6 +1069,7 @@ async function buildAnswerTurns(input: {
         interruptedCaptureId: null,
         answersQuestion: null,
         ttsProvider: null,
+        arrivedVia: 'direct',
         medium: 'web',
         sessionId: `seed-${uid}-answers`,
         turnIndex: order,
@@ -1339,7 +1358,7 @@ async function buildPlanDays(input: {
   return { days, task: { id: 'seed-task-plan-done', task: doneTask } };
 }
 
-const toWho = (
+export const toWho = (
   fields: Pick<Who, 'kind' | 'tier' | 'tierSetBy' | 'isSelf' | 'createdBy'> &
     Partial<Pick<Who, 'lastMentionedAt'>>,
   createdAt: number,
@@ -1360,7 +1379,10 @@ const toWho = (
   sealed,
 });
 
-const wordsOf = (name: string, extra: Partial<WhoSealed> = {}): WhoSealed => ({
+export const wordsOf = (
+  name: string,
+  extra: Partial<WhoSealed> = {},
+): WhoSealed => ({
   name,
   aliases: [],
   relation: null,
@@ -1415,7 +1437,7 @@ function makeSquarePng(
 }
 
 /** One kept photo of a who or place: a flat-colour PNG sealed with the person's key, its document and the two sealed objects to upload. */
-async function buildSeedPhoto(input: {
+export async function buildSeedPhoto(input: {
   uid: string;
   id: string;
   attachedTo: Media['attachedTo'][number];
@@ -1467,7 +1489,7 @@ async function buildSeedPhoto(input: {
 }
 
 /** Uploads a seeded sealed object to the Storage emulator; a bucket the app isn't configured for leaves the photo unreadable. */
-async function uploadSealedSeed(path: string, bytes: Uint8Array) {
+export async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   const bucket =
     process.env.STORAGE_BUCKET ??
     process.env.VITE_FIREBASE_STORAGE_BUCKET ??
@@ -1684,6 +1706,7 @@ async function buildNoteTurn(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: `seed-${uid}-answers`,
     turnIndex: 7,
@@ -2322,6 +2345,7 @@ async function buildKnowledge(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct' as const,
     medium: 'web' as const,
     sessionId: `seed-${uid}-growth`,
     turnIndex,
@@ -2980,6 +3004,7 @@ async function buildPhotoTurns(input: {
       interruptedCaptureId: null,
       answersQuestion: null,
       ttsProvider: null,
+      arrivedVia: 'direct',
       medium: 'web',
       sessionId,
       turnIndex: index,
@@ -3274,6 +3299,7 @@ async function buildFileTurns(input: {
       interruptedCaptureId: null,
       answersQuestion: null,
       ttsProvider: null,
+      arrivedVia: 'direct',
       medium: 'web',
       sessionId,
       turnIndex: index,
@@ -3948,6 +3974,7 @@ async function buildPeople(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: 'seed-alex-question',
     turnIndex: 0,
@@ -4029,6 +4056,7 @@ async function buildPeople(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: 'seed-alex-asked',
     turnIndex: 0,
@@ -4091,6 +4119,7 @@ async function buildPeople(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: 'seed-alex-who',
     turnIndex: 0,
@@ -4130,6 +4159,7 @@ async function buildPeople(input: {
   const factAt = now - 4 * DAY_MS;
   const factCapture: Capture = {
     ...capture,
+    arrivedVia: 'dropBox',
     sessionId: 'seed-alex-facts',
     turnIndex: 0,
     seenAt: factAt + MINUTE_MS,
@@ -4763,11 +4793,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const batch = context.firestore.batch();
 
   const turnCounts = await Promise.all(
-    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone }) => {
+    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone, theme }) => {
       batch.set(users.doc(user.uid), {
         timeZone,
         assistantName,
         assistantTone,
+        theme,
         dayStartTime: DEFAULT_DAY_START_TIME,
         dayEndTime: DEFAULT_DAY_END_TIME,
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
@@ -4841,6 +4872,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             interruptedCaptureId: null,
             answersQuestion: null,
             ttsProvider: spoken === undefined ? null : 'natural',
+            arrivedVia: 'direct',
             medium: 'web',
             sessionId: `seed-${user.uid}-${turn.session}`,
             turnIndex: ALL_TURNS.filter(
@@ -5598,7 +5630,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         dueAt: copy.dueAt,
         calendarKey: null,
         isBusy: null,
-        sourceUpdatedAt: syncedAt - DAY_MS,
+        sourceUpdatedAt: copy.sourceUpdatedAt ?? syncedAt - DAY_MS,
         contentHash: `seed-${id}`,
         syncedAt: endedAt ?? syncedAt,
         transformVersion: 1,
@@ -5609,10 +5641,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           {
             title: copy.title,
             subtitle: copy.subtitle,
-            detail: null,
+            detail: copy.detail ?? null,
             placeLabel: copy.placeLabel ?? null,
-            amountCents: null,
-            currency: null,
+            amountCents: copy.amountCents ?? null,
+            currency: copy.currency ?? null,
             deepLink: copy.deepLink,
             extra: copy.extra ?? {},
           },
@@ -6048,6 +6080,109 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     grantId: waypointGrantId,
   });
 
+  const runwayConnectorId = toAppConnectorId('runway');
+  const runwayGrantId = toGrantId('helm', runwayConnectorId, SITE_ACCOUNT_ID);
+  const runwaySummary = buildSampleShareSummary(context.now);
+  const runwayNextIncomeAt = runwaySummary.nextIncomeOn
+    ? Date.parse(`${runwaySummary.nextIncomeOn}T00:00:00Z`)
+    : null;
+  const runwayCopies: CopyDefinition[] = [
+    {
+      category: 'moneySummary',
+      sourceRef: 'plan/summary',
+      kind: 'moneySummary',
+      title: 'Free to Spend',
+      subtitle: null,
+      startAt: null,
+      dueAt: null,
+      isAllDay: false,
+      detail:
+        runwaySummary.dueBeforeIncomeCents > 0
+          ? `${formatMoney(
+              runwaySummary.dueBeforeIncomeCents,
+              runwaySummary.currency,
+            )} is due before the next income on ${runwaySummary.nextIncomeOn}`
+          : `Nothing is due before the next income on ${runwaySummary.nextIncomeOn}`,
+      amountCents: runwaySummary.freeToSpendCents,
+      currency: runwaySummary.currency,
+      sourceUpdatedAt: runwaySummary.computedAt,
+      extra: {
+        dueBeforeIncomeCents: runwaySummary.dueBeforeIncomeCents,
+        ...(runwayNextIncomeAt === null
+          ? {}
+          : { nextIncomeAt: runwayNextIncomeAt }),
+      },
+      deepLink: '/runway',
+    },
+  ];
+  const runwayGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: runwayConnectorId,
+    accountId: SITE_ACCOUNT_ID,
+    categories: {
+      moneySummary: { isOn: true, changedAt: connectedAt },
+      upcomingBills: { isOn: false, changedAt: connectedAt },
+      horizon: { isOn: false, changedAt: connectedAt },
+      transactions: { isOn: true, changedAt: connectedAt },
+    },
+    options: null,
+    status: 'live',
+    categoryState: Object.fromEntries(
+      RUNWAY_SHARES.shares.flatMap((share) =>
+        share.categories.map((category) => [
+          category.id,
+          {
+            lastOkAt: category.mode === 'live' ? null : syncedAt,
+            lastError: null,
+            count: runwayCopies.filter((copy) => copy.category === category.id)
+              .length,
+          },
+        ]),
+      ),
+    ),
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: syncedAt,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('grants')
+      .doc(runwayGrantId),
+    runwayGrant,
+  );
+  writeCopies(FIXTURE_USERS.partnerOne.uid, runwayCopies, null, {
+    connectorId: runwayConnectorId,
+    grantId: runwayGrantId,
+  });
+  // Jamie's plan is the one that tracks spending, so a question about a store has rows to find there.
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerTwo.uid)
+      .collection('grants')
+      .doc(runwayGrantId),
+    {
+      ...runwayGrant,
+      categories: {
+        ...runwayGrant.categories,
+        moneySummary: { isOn: false, changedAt: connectedAt },
+      },
+      categoryState: Object.fromEntries(
+        Object.entries(runwayGrant.categoryState).map(([id, state]) => [
+          id,
+          { ...state, count: 0 },
+        ]),
+      ),
+    } satisfies ConnectionGrant,
+  );
+
   const worthTheWaitConnectorId = toAppConnectorId('worth-the-wait');
   const worthTheWaitGrantId = toGrantId(
     'helm',
@@ -6366,6 +6501,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       nineLivesCopies.length +
       1 +
       waypointCopies.length +
+      1 +
       1 +
       6,
   };

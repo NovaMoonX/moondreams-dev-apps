@@ -24,7 +24,7 @@ function SearchedLine({ searched, canReconnect }: SearchedLineProps) {
 
   if (searched.failed === null) {
     return (
-      <p className='text-muted-foreground py-2.5 text-[13px] text-pretty'>
+      <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.searchedLine(
           searched.label,
           now - searched.at < JUST_NOW_MS
@@ -36,7 +36,7 @@ function SearchedLine({ searched, canReconnect }: SearchedLineProps) {
   }
   const canAsk = canReconnect && searched.failed === HELM_COPY.searchedStopped;
   return (
-    <div className='flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5'>
+    <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
       <p className='text-muted-foreground min-w-0 flex-1 text-[13px] text-pretty'>
         {HELM_COPY.searchedFailed(searched.label, searched.failed)}
       </p>

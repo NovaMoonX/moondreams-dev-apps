@@ -1,6 +1,9 @@
+import { formatList } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
+import type { ThemeOption } from '@/components/ThemePicker';
 import type {
   AssistantTone,
+  HelmTheme,
   MediaKind,
   ProcedureVersionReason,
   TopicVersionReason,
@@ -16,6 +19,100 @@ import {
 
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
 export const DEFAULT_ASSISTANT_TONE: AssistantTone = 'composed';
+
+export const DEFAULT_HELM_THEME: HelmTheme = 'chestnut';
+
+/** The four palettes with the colours their preview cards draw; they match the blocks in `helm.css`. */
+export const HELM_THEMES: ThemeOption<HelmTheme>[] = [
+  {
+    id: 'chestnut',
+    name: 'Chestnut & Sand',
+    light: {
+      background: '#f7f3ee',
+      card: '#fffdfa',
+      foreground: '#2e241d',
+      muted: '#6b5d51',
+      primary: '#7a5434',
+      primaryForeground: '#ffffff',
+      border: '#e5dccf',
+    },
+    dark: {
+      background: '#15110e',
+      card: '#1e1915',
+      foreground: '#f1e9e1',
+      muted: '#ad9d8e',
+      primary: '#e0bf9c',
+      primaryForeground: '#17110c',
+      border: '#382e26',
+    },
+  },
+  {
+    id: 'plum',
+    name: 'Plum & Pewter',
+    light: {
+      background: '#f7f5f7',
+      card: '#ffffff',
+      foreground: '#2a2130',
+      muted: '#655b6b',
+      primary: '#53375f',
+      primaryForeground: '#ffffff',
+      border: '#e4dfe6',
+    },
+    dark: {
+      background: '#151018',
+      card: '#1e1822',
+      foreground: '#efe9f2',
+      muted: '#a99eae',
+      primary: '#d3b8e0',
+      primaryForeground: '#150f18',
+      border: '#352c3b',
+    },
+  },
+  {
+    id: 'teal',
+    name: 'Mist & Deep Teal',
+    light: {
+      background: '#f3f6f6',
+      card: '#ffffff',
+      foreground: '#172a2e',
+      muted: '#52666a',
+      primary: '#14555e',
+      primaryForeground: '#ffffff',
+      border: '#dae3e4',
+    },
+    dark: {
+      background: '#0d1517',
+      card: '#152023',
+      foreground: '#e6eef0',
+      muted: '#97aaae',
+      primary: '#86ccd6',
+      primaryForeground: '#081316',
+      border: '#273639',
+    },
+  },
+  {
+    id: 'indigo',
+    name: 'Porcelain & Indigo',
+    light: {
+      background: '#f8f8fb',
+      card: '#ffffff',
+      foreground: '#1b1e33',
+      muted: '#5a5e78',
+      primary: '#3a3f8c',
+      primaryForeground: '#ffffff',
+      border: '#e1e2ec',
+    },
+    dark: {
+      background: '#0e0f1a',
+      card: '#161828',
+      foreground: '#e8e9f5',
+      muted: '#9fa3c0',
+      primary: '#b1b6f6',
+      primaryForeground: '#0e0f1a',
+      border: '#2a2d45',
+    },
+  },
+];
 
 /** Each tone with a fixed sample of the same answer, shown before saving; no model writes these. */
 export const ASSISTANT_TONES: {
@@ -394,6 +491,13 @@ export const HELM_COPY = {
   talkListening: 'Listening',
   talkSendLabel: 'Send what you said',
   talkListeningHint: 'Listening…',
+  talkGettingReady: 'Getting ready…',
+  talkListenFailed: "Couldn't start listening on this phone. Try again.",
+  talkNeedsConnection:
+    'Talk needs a connection on this phone. Turn on Hear me offline to talk without one.',
+  talkNeedsConnectionBlocked:
+    'Talk needs a connection on this phone. Type for now.',
+  talkOpenVoiceSettings: 'Voice settings',
   talkHeardNothing: "I didn't catch anything. Tap to try again.",
   talkStoppedWhileWorking: "It's still being added. I just won't read it out.",
   talkSavedOffline: "Saved. I'll file it when you're back online.",
@@ -464,6 +568,10 @@ export const HELM_COPY = {
   overdueDue: (due: string) => `Overdue · ${due}`,
   unreadable: "Couldn't open this",
   loadingEarlier: 'Opening earlier turns',
+  earlierFold: (count: number) => `Earlier · ${count}`,
+  homeNextEvent: (clock: string, title: string) => `${clock} · ${title}`,
+  homeNextEventTomorrow: (clock: string, title: string) =>
+    `Tomorrow ${clock} · ${title}`,
   earlierFailed: "Couldn't open earlier turns. Try again",
   inboxTitle: 'Needs you',
   inboxNewSince: 'New since you looked',
@@ -496,6 +604,12 @@ export const HELM_COPY = {
   turnSheetTitle: 'What you said',
   nothingWaiting: 'Nothing waiting',
   newSinceLooked: (count: number) => `${count} new since you looked`,
+  settingsTrustedBrowsers: 'Trusted browsers',
+  keptCopyNotice: (when: string | null) =>
+    when ? `Offline copy · ${when}` : 'Offline copy',
+  keptCopyRetry: 'Try again',
+  trustLapsedBody: (app: string) =>
+    `Trust this browser is off now. Turn it on again in Settings to keep opening ${app} offline.`,
   needsConnectionTitle: "Your things open once you're back online.",
   needsConnectionBody: (name: string) =>
     `This browser doesn't keep the key to them, so typing to ${name} waits for a connection too.`,
@@ -504,8 +618,46 @@ export const HELM_COPY = {
     "They're safe and nothing was changed. The problem is on our side, not yours.",
   tryAgain: 'Try again',
   stillCannotOpen: "Still can't open them. Your things are safe.",
-  composerOffline: "Typing works again once you're back online",
   composerBlocked: 'Typing works again once your things open',
+  outboxIntro: (name: string) =>
+    `You can still tell ${name} things; they wait here.`,
+  outboxNeedsConnection: (name: string) =>
+    `${name} needs a connection to keep this`,
+  outboxNoAttach:
+    "Photos and voice notes need a connection. Add them once you're back online.",
+  outboxNotKept: (name: string) =>
+    `Couldn't keep this on this device. ${name} needs a connection to keep it. Your words are still in the field.`,
+  outboxRowTitle: "Sealed until it's sent, so the words don't show here",
+  outboxRowLine: (time: string) => `${time} · sorted once you're back online`,
+  outboxCount: (count: number) =>
+    count === 1
+      ? '1 thing saved on this device'
+      : `${count} things saved on this device`,
+  outboxSheetTitle: 'Saved on this device',
+  outboxRemove: 'Remove',
+  outboxRemoveTitle: 'Remove this?',
+  outboxRemoveBody: (words: string | null, time: string) =>
+    words === null
+      ? `This takes what you typed at ${time} off this device. It hasn't been sent, so it's gone for good.`
+      : `This takes “${words}” off this device. It hasn't been sent, so it's gone for good.`,
+  outboxRemoveFailed: "Couldn't remove it. Try again.",
+  outboxSentLocked: "Sent. You'll see them once your things open.",
+  outboxRejected: (count: number) =>
+    count === 1
+      ? "1 thing saved on this device couldn't be kept."
+      : `${count} things saved on this device couldn't be kept.`,
+  outboxSignOutTitle: (count: number) =>
+    count === 1
+      ? 'Sign out and lose 1 thing?'
+      : `Sign out and lose ${count} things?`,
+  outboxSignOutBody: (count: number, name: string) =>
+    count === 1
+      ? `1 thing you told ${name} is still waiting on this device to be sent. Signing out deletes it.`
+      : `${count} things you told ${name} are still waiting on this device to be sent. Signing out deletes them.`,
+  outboxSignOutConfirm: 'Sign out anyway',
+  outboxStay: 'Stay',
+  arrivedViaDropBox:
+    'Saved on this device, then sent once you were back online',
   needsYouCount: (count: number) =>
     count === 1 ? '1 needs you' : `${count} need you`,
   couldNotRead: "Couldn't read this",
@@ -786,13 +938,21 @@ export const HELM_COPY = {
     `Updated ${when} · read only in ${name}`,
   syncedKept: (date: string) => `No longer updated · deletes ${date}`,
   syncedOpenIn: (app: string) => `Open in ${app}`,
+  recordGroupOpen: 'Open',
   syncedGroup: (category: string, app: string) => `${category} · ${app}`,
   syncedTodayFromApps: 'From your apps',
   syncedMore: (count: number) => `${count} more`,
   syncedFewer: 'Show fewer',
   syncedWaiting: 'Waiting for the first update',
+  connectionLiveLine:
+    'Read only when you ask. Only what an answer quotes is kept.',
   syncedStale: (when: string) => `Last updated ${when} · may be out of date`,
   syncedAllDay: 'All day',
+  todayTileNext: (time: string, title: string) => `Next: ${time} · ${title}`,
+  todayTileCount: (count: number) =>
+    `${count} ${count === 1 ? 'event' : 'events'} today`,
+  feedGroupTitle: (label: string, count: number) => `${label} · ${count}`,
+  feedGroupDetail: (app: string) => `${app} · all day`,
   syncedUpdatedLine: (when: string) => `Updated ${when}`,
   syncedNow: 'Sync now',
   syncedTryNow: 'Try now',
@@ -908,6 +1068,7 @@ export const HELM_COPY = {
   planRestAnyway: 'Plan my day anyway',
   planOverlaps: (title: string) => `Overlaps ${title}`,
   busyAllDayLabel: 'Keeps me busy all day',
+  busyAllDayHint: "While it is on, tasks aren't planned into this day.",
   busyAllDayFailed: "That didn't save. Try again.",
   syncedTentative: 'Tentative',
   sameThingTime: (appName: string, time: string) => `${appName} says ${time}`,
@@ -934,7 +1095,7 @@ export const HELM_COPY = {
   settingsVoiceDevice: 'On this device',
   voiceDeviceOnlyTitle: 'Keep voice on this device',
   voiceDeviceOnlyOn:
-    "Your speech isn't sent to our voice services, and answers are read by this device's voice. In Chrome, the browser's own listening uses Google.",
+    "Your speech isn't sent to our voice services, and answers are read by this device's voice. The browser still does its own listening: in Chrome that goes to Google, in Safari to Apple.",
   voiceDeviceOnlyOff:
     "Online, Deepgram turns your speech into words for clearer listening. This browser listens when it can't.",
   voiceHandsFreeTitle: 'Answer without tapping',
@@ -943,14 +1104,111 @@ export const HELM_COPY = {
   voiceHandsFreeOff: 'Tap Talk to answer.',
   voiceWakeTitle: (name: string) => `Hey ${name}`,
   voiceWake: (name: string) =>
-    `While this is open on screen, this browser's own listening waits for "Hey ${name}". In Chrome that listening uses Google.`,
+    `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple.`,
   voiceWakeLocked: "This browser can't listen for a phrase.",
+  voiceDeviceOnlyOnOffline:
+    "Your speech isn't sent anywhere: this phone turns it into words itself, and answers are read by this device's voice.",
+  voiceDeviceOnlyOffOffline:
+    "Online, Deepgram turns your speech into words for clearer listening. This phone listens itself when there's no connection.",
+  voiceWakeOffline: (name: string) =>
+    `While this is open on screen, this phone listens for "Hey ${name}" itself. Nothing you say leaves it.`,
+  voiceOfflineTitle: 'Hear me offline',
+  voiceOfflineOffer: (name: string, sizeMb: number) =>
+    `Talk to ${name} with no connection. What you say stays on this phone. A one-time download of ${sizeMb} MB from this site, best on Wi-Fi.`,
+  voiceOfflineDownload: 'Download',
+  voiceOfflineDownloading: (loadedMb: number, sizeMb: number) =>
+    `Downloading… ${loadedMb} of ${sizeMb} MB`,
+  voiceOfflineCancel: 'Cancel',
+  voiceOfflineReady: (sizeMb: number) =>
+    `Ready. Talk works offline on this phone, and replies use its own voice. It keeps ${sizeMb} MB here.`,
+  voiceOfflineRemove: 'Remove from this phone',
+  voiceOfflineRemoved: 'Removed. Talk needs a connection again on this phone.',
+  voiceOfflineUndo: 'Undo',
+  voiceOfflineTryAgain: 'Try again',
+  voiceOfflineStopped: 'The download stopped, so nothing was kept.',
+  voiceOfflineNoRoom:
+    "There isn't room on this phone to keep it, so nothing was kept. Free up some space and try again.",
+  voiceOfflineCheckFailed:
+    "The download didn't match what was expected, so nothing was kept.",
+  voiceOfflineStartFailed:
+    "It's downloaded but couldn't start on this phone. Remove it, then download it again.",
+  voiceOfflineLicences: 'Open source licences',
+  voiceOfflineLicencesTitle: 'Open source licences',
+  voiceOfflineCredits: (credits: string) =>
+    `Hear me offline uses ${credits}, all open source.`,
+  voiceOfflineBlocked: {
+    browser:
+      "This browser can't run offline listening. Talk needs a connection here.",
+    simd: "This phone's browser is too old to run offline listening. Talk needs a connection here.",
+    audio:
+      "This browser can't share its microphone with offline listening. Talk needs a connection here.",
+    memory:
+      "This phone doesn't have the memory for offline listening. Talk needs a connection here.",
+    space:
+      "This phone doesn't have room for offline listening. Talk needs a connection here.",
+    language:
+      'Offline listening understands English only for now. Talk needs a connection here.',
+  },
   voiceDone: 'Done',
   voiceModeFailed: "Couldn't change that. Try again.",
   voiceOnPhone: 'Listening with this browser for the rest of today.',
   voiceNotice:
-    "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound. You can change this in Settings.",
+    "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound or use it to train its models. You can change this in Settings.",
   settingsYourData: 'Your data',
+  deleteAllTitle: (appName: string) => `Delete all my ${appName} data`,
+  deleteAllRowHint: 'Everything it keeps, for good',
+  deleteAllWorking: 'Deleting. This can take a minute.',
+  deleteAllConfirmTitle: (appName: string) =>
+    `Delete all your ${appName} data?`,
+  deleteAllConfirmBody: (
+    held: string[],
+    connections: number,
+    assistant: string,
+  ) =>
+    [
+      held.length > 0
+        ? `This deletes everything it keeps for you, including your ${formatList(held)}.`
+        : 'This deletes everything it keeps for you.',
+      connections > 0
+        ? `It ends its ${connections === 1 ? 'connection' : `${connections} connections`} and removes the copies it made from them.`
+        : null,
+      `${assistant} starts over as if you had never opened it. Your account and your other apps stay as they are. This can't be undone.`,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  deleteAllConfirmAction: 'Delete everything',
+  deleteAllDone:
+    'All your data here is deleted. You can start fresh whenever you like.',
+  deleteAllCancelled: 'The sign-in was closed, so nothing was deleted.',
+  deleteAllKinds: (counts: {
+    tasks: number;
+    people: number;
+    places: number;
+    projects: number;
+    procedures: number;
+    topics: number;
+    notes: number;
+    photos: number;
+  }) =>
+    [
+      [counts.tasks, 'open task', 'open tasks'],
+      [counts.people, 'person or pet', 'people and pets'],
+      [counts.places, 'place', 'places'],
+      [counts.projects, 'project', 'projects'],
+      [counts.procedures, 'procedure', 'procedures'],
+      [counts.topics, 'topic', 'topics'],
+      [counts.notes, 'note', 'notes'],
+      [counts.photos, 'photo', 'photos'],
+    ].flatMap(([count, one, many]) =>
+      count === 0 ? [] : [`${count} ${count === 1 ? one : many}`],
+    ),
+  deleteAllNeedsConnectionBody:
+    'Deleting changes your account on our servers, so it can only start while you are online.',
+  deleteAllFailed:
+    'Not everything was deleted. Run it again and it picks up where it stopped.',
+  deleteAllUnreachable:
+    "The delete couldn't reach the server. Check your connection and run it again; it picks up where it stopped.",
+  deleteAllSignIn: 'Sign in again to delete. Nothing has been removed.',
   activityTitle: 'Activity',
   activityRowHint: 'What was done, and when',
   activityEmpty: (name: string) =>
@@ -1023,8 +1281,8 @@ export const HELM_COPY = {
   quoteOpenDrive: 'Open in Drive',
   quoteDisconnected: 'This email was disconnected',
   quoteDocumentDisconnected: 'This document was disconnected',
-  searchedLine: (where: string, when: string) =>
-    `Looked in ${where} ${when}. Only what this answer quotes is kept.`,
+  quoteRecordDisconnected: 'This record was disconnected',
+  searchedLine: (where: string, when: string) => `Looked in ${where} ${when}.`,
   searchedJustNow: 'just now',
   searchedFailed: (account: string, why: string) =>
     `Couldn't look in ${account}: ${why}`,
@@ -1045,7 +1303,7 @@ export const HELM_COPY = {
     `What you tell ${name}, and the records it needs to file or answer it.`,
   aiSeesWhereLead: 'Where it runs',
   aiSeesWhere: (name: string) =>
-    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. It reaches your things only through its own tools.`,
+    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. Anthropic doesn't use what it's sent to train its models. It reaches your things only through its own tools.`,
   aiSeesStoredLead: 'Stored encrypted',
   aiSeesStored:
     "What you say, your records and every line in Activity are encrypted before they're saved.",
@@ -1183,7 +1441,9 @@ export const HELM_COPY = {
   planPlanIt: 'Plan it',
   planSkipped: (title: string) => `${title} is back in Any time`,
   planPlannedOn: (day: string) =>
-    `Planned ${day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day}`,
+    day === 'Today' || day === 'Tomorrow'
+      ? `On ${day.toLowerCase()}'s plan`
+      : `Planned for ${day}`,
   planOpening: (day: string, time: string) => `${day} ${time}`,
   planNoOpenings: 'Nothing fits in the next two days. Pick a day.',
   planDayPicked: (day: string) => `Moved to ${day}`,
@@ -1194,6 +1454,11 @@ export const HELM_COPY = {
   planUnreadable: 'This plan could not be opened.',
   planTaskGone: 'A task that is done or removed',
   settingsAssistant: 'Your assistant',
+  settingsColours: 'Colours',
+  coloursHint: 'Pick the colours you like. They follow you to every device.',
+  coloursLabel: 'Colour theme',
+  coloursLight: 'Light',
+  coloursDark: 'Dark',
   assistantRow: 'Name and tone',
   assistantSheetTitle: 'Your assistant',
   assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
@@ -1281,8 +1546,6 @@ export const HELM_COPY = {
   whoGone: 'This page is gone.',
   whoUnreadable: "This page couldn't be opened.",
   whoFactsTitle: 'Facts',
-  whoFactsEmpty: (assistant: string) =>
-    `Nothing noted yet. What you tell ${assistant} about them lands here.`,
   factsAdd: 'Add a fact',
   factsAddTitle: 'Add a fact',
   factStatementField: 'What is true',
@@ -1433,7 +1696,6 @@ export const HELM_COPY = {
   whoTasksTitle: 'Tasks',
   whoTasksEmpty: 'No open tasks.',
   whoMentionsTitle: 'Mentions',
-  whoMentionsEmpty: 'Not mentioned yet.',
   showAllMentions: (count: number) => `Show all ${count}`,
   showFewerMentions: 'Show fewer',
   placeHomeLine: 'Your home',
@@ -1594,8 +1856,6 @@ export const HELM_COPY = {
   linkedOrganization: 'Organization',
   linkedPlace: 'Place',
   photosTitle: 'Photos',
-  photosEmpty: (name: string) =>
-    `Add a photo of ${name}. It shows here and in your lists, and it's sealed on your phone before it's saved.`,
   photoAdd: 'Add a photo',
   photoFull: `This page holds up to ${PHOTOS_PER_RECORD} photos. Remove one to add another.`,
   photoAdded: 'Photo added',
@@ -1629,8 +1889,7 @@ export const HELM_COPY = {
   photoViewerLabel: 'Photos',
   keyDatesHeading: 'Key dates',
   keyDateAdd: 'Add a date',
-  keyDatesEmpty: (name: string) =>
-    `No key dates yet. Tell ${name} a birthday, or add one.`,
+  keyDateAddRow: 'Add a key date',
   keyDateKindBirthday: 'Birthday',
   keyDateKindAnniversary: 'Anniversary',
   keyDateKindCustom: 'Something else',
@@ -2218,8 +2477,8 @@ export const HELM_COPY = {
   runNeedsConnectionBody:
     'Adding a step is saved with a connection. Ticks work without one and are kept until you are back.',
   runStartedOn: (date: string) => `Started ${date}`,
-  runRowDetail: (state: string, done: number, total: number) =>
-    `${state} · ${done} of ${total}`,
+  runRowDetail: (state: string, done: number, total: number, extras: number) =>
+    `${state} · ${done} of ${total}${extras > 0 ? ` · ${extras} added for this run` : ''}`,
   runExtraPlaceholder: 'What else this time?',
   runExtraSheetTitle: 'Just this time',
   runExtraSheetHint: 'This step is only on this run.',
@@ -2453,6 +2712,38 @@ export const HELM_COPY = {
   taskProjectRow: 'Project',
   resultProjectLine: (emoji: string | null, name: string) =>
     `Project · ${emoji ? `${emoji} ` : ''}${name}`,
+  searchTitle: 'Search',
+  searchEverything: 'Search everything',
+  searchPlaceholder: 'Search people, tasks, notes…',
+  searchHint: (assistant: string) =>
+    `Find anything you have told ${assistant}: people, tasks, dates, facts, notes and more.`,
+  searchNothing: (query: string, assistant: string) =>
+    `Nothing matches "${query}". Searched your people, tasks, dates, facts, notes, topics, projects, procedures, places, photos and connected apps. Mail and Drive are searched only when you ask ${assistant}.`,
+  searchLookingDone: 'Still looking through done tasks…',
+  searchLookingDates: 'Still looking through older dates…',
+  searchFailedDone:
+    "Couldn't look through done tasks. Open Search again to retry.",
+  searchFailedPart:
+    "Some of what's kept couldn't be loaded, so a match may be missing. Reopen the app to retry.",
+  searchFailedDates:
+    "Couldn't look through older dates. Open Search again to retry.",
+  searchGroupPeople: 'People',
+  searchGroupTasks: 'Tasks',
+  searchGroupDates: 'Dates',
+  searchGroupFacts: 'Facts',
+  searchGroupNotes: 'Notes',
+  searchGroupTopics: 'Topics',
+  searchGroupProjects: 'Projects',
+  searchGroupProcedures: 'Procedures',
+  searchGroupPlaces: 'Places',
+  searchGroupMedia: 'Photos and files',
+  searchGroupSynced: 'From your apps',
+  searchShowAll: (count: number) => `Show all ${count.toLocaleString('en-US')}`,
+  searchShowFewer: 'Show fewer',
+  searchFirstShown: (count: number) =>
+    `Showing the first ${count.toLocaleString('en-US')}. Add a word to narrow it.`,
+  searchLooseNote: 'Loose note',
+  searchOpenResult: (title: string) => `Open ${title}`,
 } as const;
 
 export const PLANNER_COPY = {

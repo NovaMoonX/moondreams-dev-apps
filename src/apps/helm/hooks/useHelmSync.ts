@@ -2,12 +2,16 @@ import { useEffect, useRef } from 'react';
 
 import { syncConnections } from '@/lib/connections/connectionCalls';
 import { useConnections } from '@/lib/connections/useConnections';
+import { setSiteNotice } from '@/hooks/useSiteNotice';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
 import { createSealedReader } from '@lib/security';
 import {
   clearHelmKey,
   getHelmEncryption,
+  isKeptKey,
+  readServerReachedAt,
 } from '@apps/helm/queries/helmKeyQueries';
 import {
   createDraftSealer,
@@ -15,7 +19,11 @@ import {
   openJson,
 } from '@apps/helm/security';
 import { useStyleLearning } from '@apps/helm/queries/styleLearning';
-import { ensureHelmProfile } from '@apps/helm/store/actions/settingsActions';
+import {
+  ensureHelmProfile,
+  forgetHelmOnDevice,
+  reopenHelmToFirstRun,
+} from '@apps/helm/store/actions/settingsActions';
 import { ensureSelfWho } from '@apps/helm/store/actions/whoActions';
 import {
   clearHelm,
@@ -86,6 +94,7 @@ import {
   startOpenTasksListener,
   startProjectTasksListener,
 } from '@apps/helm/store/listeners/taskListener';
+import { useCaptureOutbox } from '@apps/helm/hooks/useCaptureOutbox';
 import { useCaptureSweep } from '@apps/helm/hooks/useCaptureSweep';
 import { useKeyDateRepair } from '@apps/helm/hooks/useKeyDateRepair';
 import { usePlanOnCapture } from '@apps/helm/hooks/usePlanDays';
@@ -162,7 +171,11 @@ function useSelfWho(uid: string | null, displayName: string | null) {
       if (isMaking.current) return;
       isMaking.current = true;
       getHelmEncryption(uid)
-        .then((encryption) => ensureSelfWho(uid, encryption, name))
+        .then((encryption) =>
+          isKeptKey(encryption)
+            ? undefined
+            : ensureSelfWho(uid, encryption, name),
+        )
         .catch((error: unknown) =>
           console.error('Helm could not make the person', error),
         )
@@ -176,6 +189,12 @@ function useSelfWho(uid: string | null, displayName: string | null) {
   }, [uid, keyStatus, hasNoSelf, name]);
 }
 
+const formatKeptAt = (at: number | null) => {
+  if (at === null) return null;
+  const isToday = new Date(at).toDateString() === new Date().toDateString();
+  return isToday ? formatTime(at) : formatDateShort(at);
+};
+
 /** Keeps the signed-in person's Helm profile in the store and makes it the first time they open Helm; once the data key is here, keeps their turns there too. */
 export function useHelmSync(uid: string | null, displayName: string | null) {
   const dispatch = useAppDispatch();
@@ -184,33 +203,34 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
     if (!uid) return;
 
     let isCurrent = true;
+    let hadProfile = false;
     const stops: (() => void)[] = [];
     stops.push(
       startProfileListener(
         uid,
-        (profile) => {
-          if (isCurrent) dispatch(setProfile({ uid, profile }));
+        (profile, isFromServer) => {
+          if (!isCurrent) return;
+          // A profile that existed and is now gone from the server was deleted on another device; a first open never had one.
+          if (profile === null && hadProfile && isFromServer) {
+            isCurrent = false;
+            void forgetHelmOnDevice(uid).finally(reopenHelmToFirstRun);
+            return;
+          }
+          hadProfile = profile !== null;
+          dispatch(setProfile({ uid, profile }));
         },
         (error) => console.error('Helm profile listener failed', error),
       ),
     );
-    const ensure = () =>
-      ensureHelmProfile(uid).catch((error: unknown) =>
-        console.error('Helm profile was not created', error),
-      );
-    ensure();
-    // A first open made offline has its transaction refused; it is tried again once the device is back online.
-    window.addEventListener('online', ensure);
-
     return () => {
       isCurrent = false;
-      window.removeEventListener('online', ensure);
       stops.forEach((stop) => stop());
       dispatch(clearHelm());
     };
   }, [uid, dispatch]);
 
   useCaptureSweep(uid);
+  useCaptureOutbox(uid);
   usePlanOnCapture(uid);
   useConnectionsRefresh(uid);
   useSelfWho(uid, displayName);
@@ -236,6 +256,22 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
           createDraftSealer(encryption),
         );
         if (!isCurrent) return;
+        const isKept = isKeptKey(encryption);
+        // A kept copy only opens what is here and asks the server again once online; only the server's key starts a profile.
+        if (isKept) {
+          window.addEventListener('online', retryOnline);
+          setSiteNotice({
+            label: HELM_COPY.keptCopyNotice(
+              formatKeptAt(readServerReachedAt(uid)),
+            ),
+            actionLabel: HELM_COPY.keptCopyRetry,
+            onAction: retryOnline,
+          });
+        } else {
+          void ensureHelmProfile(uid).catch((error: unknown) =>
+            console.error('Helm profile was not created', error),
+          );
+        }
         dispatch(setKeyStatus('ready'));
         const read = createSealedReader(encryption, openJson);
         stops.push(
@@ -430,6 +466,7 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
     return () => {
       isCurrent = false;
       window.removeEventListener('online', retryOnline);
+      setSiteNotice(null);
       stops.forEach((stop) => stop());
       clearHelmKey();
     };

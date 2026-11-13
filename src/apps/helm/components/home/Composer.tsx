@@ -5,6 +5,7 @@ import {
   useState,
   type ChangeEvent,
   type KeyboardEvent,
+  type ReactNode,
   type Ref,
 } from 'react';
 
@@ -16,6 +17,7 @@ import {
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   ArrowUp,
+  AtSign,
   Camera,
   FileText,
   ImagePlus,
@@ -56,6 +58,7 @@ import {
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { store, useAppSelector } from '@/store';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
+import { saveToOutbox } from '@apps/helm/store/actions/outboxActions';
 import { MAX_VOICE_NOTE_MS } from '@apps/helm/utils/mediaCaps';
 import type { ScreenContext } from '@apps/helm/types';
 import {
@@ -77,6 +80,14 @@ const RECORD = 'record';
 
 const HOME_DRAFT_KEY = `${HELM_DRAFT_PREFIX}composer`;
 
+/** The kept draft and the words typed while waiting, the draft first unless the words already hold it. */
+const startingText = (restored: string | null, held: string) =>
+  restored === null || held.includes(restored)
+    ? held || (restored ?? '')
+    : held
+      ? `${restored}\n${held}`
+      : restored;
+
 const parseDraft = (stored: unknown) =>
   typeof stored === 'string' && stored.length > 0 ? stored : null;
 
@@ -84,14 +95,22 @@ interface ComposerProps {
   /** Lets the dock's Type and Talk put the cursor here. */
   fieldRef: Ref<HTMLTextAreaElement>;
   onFocusChange: (isFocused: boolean) => void;
-  /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft. */
+  /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft and the words typed while waiting. */
   isReady: boolean;
+  /** Offline or refused, with the drop-box key kept on this device: the field takes words and keeps them sealed there until the connection is back; photos and voice notes wait. */
+  isOutbox?: boolean;
+  /** The words typed before this field was mounted again for the key; only home holds them. */
+  heldText?: string;
+  /** Hands the owner the words as they change, so a remount keeps them. */
+  onTextChange?: (text: string) => void;
   /** Says why the field waits when the key can't come yet (offline, or refused). */
   waitingPlaceholder: string | null;
   /** The page the words are asked from, stamped on the turn; null from home. */
   screen: ScreenContext | null;
   /** Where unsent words are kept; the conversation over a page keeps its own, apart from home's. */
   draftKey?: string;
+  /** Sits at the card's top-left, above the field. */
+  topSlot?: ReactNode;
 }
 
 /** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter sends and Shift+Enter starts a new line. */
@@ -99,9 +118,13 @@ function Composer({
   fieldRef,
   onFocusChange,
   isReady,
+  isOutbox = false,
+  heldText = '',
+  onTextChange,
   waitingPlaceholder,
   screen,
   draftKey = HOME_DRAFT_KEY,
+  topSlot,
 }: ComposerProps) {
   const name = useAssistantName();
   const voice = useHelmVoiceContext();
@@ -112,7 +135,11 @@ function Composer({
     base: null,
     parse: parseDraft,
   });
-  const [text, setText] = useState(restored ?? '');
+  const [text, setText] = useState(() => startingText(restored, heldText));
+  const changeText = (next: string) => {
+    setText(next);
+    onTextChange?.(next);
+  };
   // Kept on unmount too: leaving home for another view, or the phone closing the page, finds the words still here.
   useKeepFormDraft({
     key: isReady ? draftKey : null,
@@ -129,6 +156,7 @@ function Composer({
   // The clock the words are read against, taken when they last changed.
   const [typedAt, setTypedAt] = useState(() => Date.now());
   const [isFocused, setIsFocused] = useState(false);
+  const [isShorthandOpen, setIsShorthandOpen] = useState(false);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [fixedDays, setFixedDays] = useState<Record<string, number>>({});
   const [lastDrop, setLastDrop] = useState<{
@@ -247,10 +275,45 @@ function Composer({
     !isTooLong &&
     !isRecording &&
     !isHeldBackByPhotos;
+  const canSendToOutbox =
+    isOutbox &&
+    !isReady &&
+    length > 0 &&
+    !isSending &&
+    user !== null &&
+    !isTooLong;
   const canSaveAsNote = isTooLong && length <= NOTE_BODY_MAX;
   const isNearLimit = length >= CAPTURE_COUNTER_FROM;
 
+  const sendToOutbox = async () => {
+    if (!canSendToOutbox || !user) return;
+    const sent = text.trim();
+    const createdAt = Date.now();
+    setIsSending(true);
+    try {
+      await saveToOutbox(user.uid, {
+        text: sent,
+        reading: applyReadingEdits(
+          readCapture(sent, { now: createdAt, timeZone, assistantName: name }),
+          { dismissed, days: fixedDays, timeZone },
+        ),
+        inputMode: 'typed',
+        createdAt,
+      });
+      changeText('');
+      setDismissed([]);
+      setFixedDays({});
+      setLastDrop(null);
+    } catch (error) {
+      console.error('Helm could not keep this on the device', error);
+      addToast({ title: HELM_COPY.outboxNotKept(name), type: 'error' });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const send = async () => {
+    if (canSendToOutbox) return sendToOutbox();
     if (!canSend || !user) return;
     const { uid } = user;
     const sent = text;
@@ -312,7 +375,7 @@ function Composer({
       });
       recordSentTurn(uid, turn, id);
       attachments.clear();
-      setText('');
+      changeText('');
       setDismissed([]);
       setFixedDays({});
       setLastDrop(null);
@@ -346,10 +409,15 @@ function Composer({
     const before = text.slice(0, from);
     const spacer = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
     const added = `${spacer}${insert}`;
-    setText(`${before}${added}${text.slice(to)}`);
+    changeText(`${before}${added}${text.slice(to)}`);
     setTypedAt(Date.now());
     const caret = before.length + added.length;
     requestAnimationFrame(() => field.setSelectionRange(caret, caret));
+  };
+
+  const toggleShorthand = () => {
+    if (isFocused) setIsShorthandOpen((isOpen) => !isOpen);
+    else root.current?.querySelector('textarea')?.focus();
   };
 
   const pickPhotos = (event: ChangeEvent<HTMLInputElement>) => {
@@ -380,11 +448,14 @@ function Composer({
       );
   };
 
+  const canType = isReady || isOutbox;
+  const showsActions = waitingPlaceholder === null;
+
   return (
     <div
       ref={root}
       data-composer
-      className='space-y-2'
+      className='helm-composer border-border flex flex-col gap-1 rounded-[20px] border px-2 py-2'
       // A press on any control here keeps the field focused: a blur would drop the shorthand row and move what was pressed before the tap lands.
       onPointerDown={(event) => {
         const target = event.target;
@@ -393,231 +464,180 @@ function Composer({
         }
       }}
     >
+      {topSlot && <div className='flex px-1'>{topSlot}</div>}
       {voice.notice !== null && (
-        <p className='text-muted-foreground text-[13px]' role='status'>
-          {voice.notice}
-        </p>
-      )}
-      {isFocused && isReady && <ShorthandRow onInsert={insertShorthand} />}
-      {isRecording ? (
         <div
-          className='helm-field flex items-center gap-3 px-3 py-3'
+          className='text-muted-foreground flex flex-col items-start gap-0.5 px-1 text-[13px]'
           role='status'
         >
-          <span
-            className='bg-destructive size-2.5 shrink-0 rounded-full'
-            aria-hidden='true'
-          />
-          <span className='flex min-w-0 flex-1 items-baseline gap-1.5 text-[15px]'>
-            <span className='whitespace-nowrap'>{HELM_COPY.recording}</span>
-            <span className='shrink-0 tabular-nums'>
-              {formatClock(recorder.elapsedMs)}
-            </span>
-          </span>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
-            onClick={recorder.cancel}
-          >
-            {HELM_COPY.recordCancel}
-          </Button>
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            rounded='full'
-            className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
-            onClick={recorder.stop}
-          >
-            {HELM_COPY.recordStop}
-          </Button>
+          <p>{voice.notice}</p>
+          {voice.hasNoticeDoor && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="text-primary relative -ml-2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+              onClick={() => void voice.openVoiceSettings()}
+            >
+              {HELM_COPY.talkOpenVoiceSettings}
+            </Button>
+          )}
         </div>
-      ) : (
-        <Textarea
-          ref={fieldRef}
-          variant='outline'
-          rows={2}
-          aria-label={HELM_COPY.composerLabel(name)}
-          placeholder={
-            waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)
-          }
-          className='helm-field'
-          disabled={!isReady}
-          value={text}
-          onChange={(event) => {
-            if (voice.notice !== null) voice.clearNotice();
-            if (attachments.notice !== null) attachments.say(null);
-            setText(event.target.value);
-            setTypedAt(Date.now());
-          }}
-          onKeyDown={handleKeyDown}
-          onFocus={(event) => {
-            onFocusChange(true);
-            setIsFocused(true);
-            // The keyboard shrinks the viewport after focus lands, so the field and its Send row are brought back into view each time it does.
-            const block = event.currentTarget.closest('[data-composer]');
-            const keepInView = () =>
-              block?.scrollIntoView({ block: 'nearest' });
-            stopKeepingInView.current?.();
-            window.visualViewport?.addEventListener('resize', keepInView);
-            stopKeepingInView.current = () =>
-              window.visualViewport?.removeEventListener('resize', keepInView);
-          }}
-          onBlur={(event) => {
-            const field = event.currentTarget;
-            const finish = () => {
-              if (document.activeElement === field) return;
-              setIsFocused(false);
-              stopKeepingInView.current?.();
-              stopKeepingInView.current = null;
-              onFocusChange(false);
-            };
-            if (press.current.isDown) press.current.pendingBlur = finish;
-            else finish();
-          }}
-        />
       )}
-      {(recorder.state === 'refused' || recorder.state === 'unsupported') && (
-        <p className='text-muted-foreground text-[13px]' role='status'>
-          {recorder.state === 'unsupported'
-            ? HELM_COPY.recordUnsupported
-            : HELM_COPY.recordNoMicrophone}
-        </p>
+      {isShorthandOpen && canType && showsActions && (
+        <ShorthandRow onInsert={insertShorthand} />
       )}
-      <AttachmentChips
-        items={attachments.items}
-        onRemove={attachments.remove}
-        onRetry={attachments.retry}
-      />
-      {attachments.notice !== null && (
-        <p className='text-muted-foreground text-[13px]' role='status'>
-          {attachments.notice}
-        </p>
-      )}
-      {attachments.items.length > 0 && (
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.attachNote(name)}
-        </p>
-      )}
-      <ReadChips
-        reading={reading}
-        timeZone={timeZone}
-        onDismiss={(key, label) => {
-          setDismissed((current) => [...current, key]);
-          setLastDrop({ key, label });
-        }}
-        onPickDay={(key, day) => {
-          setFixedDays((current) => ({ ...current, [key]: day }));
-          setLastDrop(null);
-        }}
-      />
-      {shownDrop && (
-        <p className='text-muted-foreground text-[13px]'>
-          {HELM_COPY.readAsTextDone(shownDrop.label)}
+      <div className='flex items-end gap-1'>
+        {showsActions && !(isOutbox && !isReady) && (
+          <EllipsisDropdown
+            variant='tertiary'
+            placement='top'
+            alignment='start'
+            ariaLabel={HELM_COPY.attachMenuLabel}
+            disabled={!isReady || isRecording}
+            className='size-10! shrink-0 rounded-full'
+            icon={<Paperclip className='size-5' aria-hidden='true' />}
+            items={[
+              ...(canTakePhoto
+                ? [
+                    option({
+                      label: HELM_COPY.attachTake,
+                      value: TAKE_PHOTO,
+                      icon: <Camera className='size-4' aria-hidden='true' />,
+                    }),
+                  ]
+                : []),
+              option({
+                label: HELM_COPY.attachChoose,
+                value: CHOOSE_PHOTOS,
+                icon: <ImagePlus className='size-4' aria-hidden='true' />,
+              }),
+              option({
+                label: HELM_COPY.attachChooseFile,
+                description: HELM_COPY.attachChooseFileHint,
+                value: CHOOSE_FILE,
+                icon: <FileText className='size-4' aria-hidden='true' />,
+              }),
+              option({
+                label: HELM_COPY.attachRecord,
+                value: RECORD,
+                icon: <Mic className='size-4' aria-hidden='true' />,
+              }),
+            ]}
+            onItemSelect={chooseAttachment}
+          />
+        )}
+        {showsActions && canType && (
           <Button
             type='button'
             variant='tertiary'
-            size='sm'
-            className="relative ml-1 inline-flex h-7 min-w-0 rounded-full px-2 align-middle text-[13px] before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
-            onClick={() => {
-              setDismissed((current) =>
-                current.filter((key) => key !== shownDrop.key),
-              );
-              setLastDrop(null);
-            }}
+            size='icon'
+            rounded='full'
+            aria-label={HELM_COPY.shorthandLabel}
+            aria-pressed={isShorthandOpen}
+            disabled={isRecording}
+            className='size-10 min-h-0 min-w-10 shrink-0 p-0'
+            onClick={toggleShorthand}
           >
-            {HELM_COPY.undo}
+            <AtSign className='size-5' aria-hidden='true' />
           </Button>
-        </p>
-      )}
-      {isTooLong && (
-        <p className='text-destructive text-[13px]' aria-live='polite'>
-          {HELM_COPY.tooLong(length - CAPTURE_MAX_CHARS)}
-        </p>
-      )}
-      {isTooLong && (
-        <div className='flex items-center'>
-          {canSaveAsNote ? (
+        )}
+        {isRecording ? (
+          <div
+            className='flex min-h-10 min-w-0 flex-1 items-center gap-2 px-1'
+            role='status'
+          >
+            <span
+              className='bg-destructive size-2.5 shrink-0 rounded-full'
+              aria-hidden='true'
+            />
+            <span className='flex min-w-0 flex-1 items-baseline gap-1.5 text-[15px]'>
+              <span className='whitespace-nowrap'>{HELM_COPY.recording}</span>
+              <span className='shrink-0 tabular-nums'>
+                {formatClock(recorder.elapsedMs)}
+              </span>
+            </span>
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
+              onClick={recorder.cancel}
+            >
+              {HELM_COPY.recordCancel}
+            </Button>
             <Button
               type='button'
               variant='secondary'
               size='sm'
               rounded='full'
-              disabled={!isReady || !user || isSavingNote}
-              className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
-              onClick={() => {
-                setIsSavingNote(true);
-                void saveAsNote(text)
-                  .then((isTaken) => {
-                    if (isTaken) setText('');
-                  })
-                  .finally(() => setIsSavingNote(false));
-              }}
+              className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
+              onClick={recorder.stop}
             >
-              {HELM_COPY.saveAsNote}
+              {HELM_COPY.recordStop}
             </Button>
-          ) : (
-            <p className='text-muted-foreground text-[13px]'>
-              {HELM_COPY.saveAsNoteTooLong}
-            </p>
-          )}
-        </div>
-      )}
-      {waitingPlaceholder === null && (
-        <div className='flex items-center justify-between gap-3'>
-          <div className='flex min-w-0 items-center gap-2'>
-            <EllipsisDropdown
-              variant='tertiary'
-              placement='top'
-              alignment='start'
-              ariaLabel={HELM_COPY.attachMenuLabel}
-              disabled={!isReady || isRecording}
-              icon={<Paperclip className='size-4' aria-hidden='true' />}
-              items={[
-                ...(canTakePhoto
-                  ? [
-                      option({
-                        label: HELM_COPY.attachTake,
-                        value: TAKE_PHOTO,
-                        icon: <Camera className='size-4' aria-hidden='true' />,
-                      }),
-                    ]
-                  : []),
-                option({
-                  label: HELM_COPY.attachChoose,
-                  value: CHOOSE_PHOTOS,
-                  icon: <ImagePlus className='size-4' aria-hidden='true' />,
-                }),
-                option({
-                  label: HELM_COPY.attachChooseFile,
-                  description: HELM_COPY.attachChooseFileHint,
-                  value: CHOOSE_FILE,
-                  icon: <FileText className='size-4' aria-hidden='true' />,
-                }),
-                option({
-                  label: HELM_COPY.attachRecord,
-                  value: RECORD,
-                  icon: <Mic className='size-4' aria-hidden='true' />,
-                }),
-              ]}
-              onItemSelect={chooseAttachment}
-            />
-            <span
-              className='text-muted-foreground text-[13px] tabular-nums'
-              aria-live='polite'
-            >
-              {isNearLimit &&
-                `${length.toLocaleString()} / ${CAPTURE_MAX_CHARS.toLocaleString()}`}
-            </span>
           </div>
-          {isHeldBackByPhotos ? (
+        ) : (
+          <div className='min-w-0 flex-1 [&_textarea]:block'>
+            <Textarea
+              ref={fieldRef}
+              variant='base'
+              rounded='none'
+              autoExpand
+              rows={1}
+              aria-label={HELM_COPY.composerLabel(name)}
+              placeholder={
+                waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)
+              }
+              className='max-h-32 min-h-10 resize-none border-0 bg-transparent px-1 py-2.5 text-[15px] leading-5 shadow-none outline-none focus:outline-none focus-visible:ring-0 focus-visible:outline-none'
+              disabled={!canType}
+              value={text}
+              onChange={(event) => {
+                if (voice.notice !== null) voice.clearNotice();
+                if (attachments.notice !== null) attachments.say(null);
+                changeText(event.target.value);
+                setTypedAt(Date.now());
+              }}
+              onKeyDown={handleKeyDown}
+              onFocus={(event) => {
+                onFocusChange(true);
+                setIsFocused(true);
+                setIsShorthandOpen(true);
+                // The keyboard shrinks the viewport after focus lands, so the card is brought back into view each time it does.
+                const block = event.currentTarget.closest('[data-composer]');
+                const keepInView = () =>
+                  block?.scrollIntoView({ block: 'nearest' });
+                stopKeepingInView.current?.();
+                window.visualViewport?.addEventListener('resize', keepInView);
+                stopKeepingInView.current = () =>
+                  window.visualViewport?.removeEventListener(
+                    'resize',
+                    keepInView,
+                  );
+              }}
+              onBlur={(event) => {
+                const field = event.currentTarget;
+                const finish = () => {
+                  if (document.activeElement === field) return;
+                  setIsFocused(false);
+                  setIsShorthandOpen(false);
+                  stopKeepingInView.current?.();
+                  stopKeepingInView.current = null;
+                  onFocusChange(false);
+                };
+                if (press.current.isDown) press.current.pendingBlur = finish;
+                else finish();
+              }}
+            />
+          </div>
+        )}
+        {showsActions &&
+          (isHeldBackByPhotos ? (
             <LockedButton
               label={HELM_COPY.send}
               title={HELM_COPY.attachWaitingTitle}
               size='sm'
-              className='rounded-full'
+              className='h-10 shrink-0 rounded-full'
             >
               <p>
                 {attachments.isWriting
@@ -630,17 +650,119 @@ function Composer({
           ) : (
             <Button
               type='button'
-              size='sm'
+              size='icon'
               rounded='full'
-              disabled={!canSend}
+              aria-label={HELM_COPY.send}
+              disabled={!canSend && !canSendToOutbox}
+              className='size-10 min-h-0 min-w-10 shrink-0 p-0'
               onClick={() => void send()}
             >
-              <ArrowUp className='size-4' aria-hidden='true' />
-              {HELM_COPY.send}
+              <ArrowUp className='size-5' aria-hidden='true' />
             </Button>
-          )}
-        </div>
-      )}
+          ))}
+      </div>
+      <div className='flex flex-col gap-2 px-1 pb-1 empty:hidden'>
+        {(recorder.state === 'refused' || recorder.state === 'unsupported') && (
+          <p className='text-muted-foreground text-[13px]' role='status'>
+            {recorder.state === 'unsupported'
+              ? HELM_COPY.recordUnsupported
+              : HELM_COPY.recordNoMicrophone}
+          </p>
+        )}
+        <AttachmentChips
+          items={attachments.items}
+          onRemove={attachments.remove}
+          onRetry={attachments.retry}
+        />
+        {attachments.notice !== null && (
+          <p className='text-muted-foreground text-[13px]' role='status'>
+            {attachments.notice}
+          </p>
+        )}
+        {attachments.items.length > 0 && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.attachNote(name)}
+          </p>
+        )}
+        <ReadChips
+          isInCard
+          reading={reading}
+          timeZone={timeZone}
+          onDismiss={(key, label) => {
+            setDismissed((current) => [...current, key]);
+            setLastDrop({ key, label });
+          }}
+          onPickDay={(key, day) => {
+            setFixedDays((current) => ({ ...current, [key]: day }));
+            setLastDrop(null);
+          }}
+        />
+        {shownDrop && (
+          <p className='text-muted-foreground text-[13px]'>
+            {HELM_COPY.readAsTextDone(shownDrop.label)}
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="relative ml-1 inline-flex h-7 min-w-0 rounded-full px-2 align-middle text-[13px] before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+              onClick={() => {
+                setDismissed((current) =>
+                  current.filter((key) => key !== shownDrop.key),
+                );
+                setLastDrop(null);
+              }}
+            >
+              {HELM_COPY.undo}
+            </Button>
+          </p>
+        )}
+        {isTooLong && (
+          <p className='text-destructive text-[13px]' aria-live='polite'>
+            {HELM_COPY.tooLong(length - CAPTURE_MAX_CHARS)}
+          </p>
+        )}
+        {isTooLong && (
+          <div className='flex items-center'>
+            {canSaveAsNote ? (
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                rounded='full'
+                disabled={!isReady || !user || isSavingNote}
+                className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+                onClick={() => {
+                  setIsSavingNote(true);
+                  void saveAsNote(text)
+                    .then((isTaken) => {
+                      if (isTaken) changeText('');
+                    })
+                    .finally(() => setIsSavingNote(false));
+                }}
+              >
+                {HELM_COPY.saveAsNote}
+              </Button>
+            ) : (
+              <p className='text-muted-foreground text-[13px]'>
+                {HELM_COPY.saveAsNoteTooLong}
+              </p>
+            )}
+          </div>
+        )}
+        {isOutbox && !isReady && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.outboxNoAttach}
+          </p>
+        )}
+        {showsActions && isNearLimit && (
+          <span
+            className='text-muted-foreground text-[13px] tabular-nums'
+            aria-live='polite'
+          >
+            {`${length.toLocaleString()} / ${CAPTURE_MAX_CHARS.toLocaleString()}`}
+          </span>
+        )}
+      </div>
       <input
         ref={cameraInput}
         type='file'

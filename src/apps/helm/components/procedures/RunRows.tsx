@@ -1,12 +1,13 @@
 import { useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, ListPlus, Plus } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import { TICK_HIT_CLASS } from '@/components/ChecklistGroup';
 import Drawer from '@/components/Drawer';
 import RevealChip from '@/components/RevealChip';
 import SectionHeader from '@/components/SectionHeader';
@@ -14,12 +15,17 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import TickMark from '@/components/TickMark';
 import { formatDateShort } from '@/utils/formatUtils';
 import { HELM_COPY, RUNS_ALL_MAX, RUNS_LISTED } from '@apps/helm/constants';
+import AddRow from '@apps/helm/components/who/AddRow';
 import StartRunSheet, {
   type RunTarget,
 } from '@apps/helm/components/procedures/StartRunSheet';
 import { useRuns } from '@apps/helm/hooks/useRuns';
 import type { OpenRun } from '@apps/helm/types';
-import { getRunProgress, type RunStep } from '@apps/helm/utils/runSteps';
+import {
+  getRunBlocks,
+  getRunProgress,
+  type RunStep,
+} from '@apps/helm/utils/runSteps';
 
 interface RunsListProps {
   runs: OpenRun[];
@@ -55,7 +61,12 @@ export function RunsList({ runs, variant, onOpen }: RunsListProps) {
                     : run.title || HELM_COPY.runUntitled}
                 </span>
                 <span className='text-muted-foreground block text-[13px] break-words'>
-                  {HELM_COPY.runRowDetail(state, done, total)}
+                  {HELM_COPY.runRowDetail(
+                    state,
+                    done,
+                    total,
+                    getRunBlocks(run).extras.length,
+                  )}
                 </span>
               </span>
               <ChevronRight
@@ -117,8 +128,7 @@ export function RunStepRow({
             />
           )
         ) : (
-          <Checkbox
-            className={TICK_HIT_CLASS}
+          <AppCheckbox
             checked={isDone}
             onCheckedChange={(next) => onTick(Boolean(next))}
             aria-label={
@@ -221,6 +231,21 @@ export function RunsSection({
   const shown = runs ?? [];
   if (!start && shown.length === 0 && !hasFailed) return null;
   const hasMore = shown.length > RUNS_LISTED;
+  if (start && shown.length === 0 && !hasFailed)
+    return (
+      <>
+        <AddRow
+          label={HELM_COPY.runStart}
+          onClick={() => setIsStarting(true)}
+        />
+        <StartRunSheet
+          isOpen={isStarting}
+          target={start}
+          onClose={() => setIsStarting(false)}
+          onStarted={onOpen}
+        />
+      </>
+    );
   return (
     <section className='space-y-2'>
       <SectionHeader title={HELM_COPY.runsHeading} />

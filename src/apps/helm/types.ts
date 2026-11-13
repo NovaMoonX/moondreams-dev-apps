@@ -26,7 +26,8 @@ export type HelmView =
   | 'procedure'
   | 'run'
   | 'howNomosSeesYou'
-  | 'comingUp';
+  | 'comingUp'
+  | 'search';
 
 export type Sealed = EncryptedFieldPayload;
 
@@ -36,11 +37,15 @@ export type VoiceMode = 'cloudWhenOnline' | 'deviceOnly';
 
 export type AssistantTone = 'composed' | 'warm' | 'brief' | 'formal';
 
+export type HelmTheme = 'chestnut' | 'plum' | 'teal' | 'indigo';
+
 export interface HelmProfile {
   /** The person's own name for the assistant; null reads as the default. Always read through readAssistantName. */
   assistantName: string | null;
   /** How the assistant's answers sound; null reads as composed. */
   assistantTone: AssistantTone | null;
+  /** The colour theme; null reads as chestnut. */
+  theme: HelmTheme | null;
   /** IANA zone, set from the device on first open. */
   timeZone: string;
   /** Floating "HH:mm": the earliest a slot may start. */
@@ -266,6 +271,8 @@ export interface Capture {
   answersQuestion: { captureId: string; questionId: string } | null;
   /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
   ttsProvider: string | null;
+  /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
+  arrivedVia: 'direct' | 'dropBox';
   medium: 'web';
   sessionId: string;
   turnIndex: number;
@@ -337,6 +344,13 @@ export type SourceRef =
       label: string | null;
     };
 
+/** A record read from another app, as the answer kept it. */
+export interface AnswerRecord {
+  name: string;
+  detail: string | null;
+  amount: string;
+}
+
 export interface AnswerQuote {
   id: string;
   connectorId: string;
@@ -345,6 +359,8 @@ export interface AnswerQuote {
   /** When the quoted message was sent; null on quotes kept before it was recorded. */
   at: number | null;
   text: string | null;
+  /** Null on a mail or document quote and on app records kept before it was stored; those are read from `sourceLabel` and `text`. */
+  record: AnswerRecord | null;
   deepLink: string | null;
   deletedAt: number | null;
 }
