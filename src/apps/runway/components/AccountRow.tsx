@@ -19,7 +19,7 @@ function AccountRow({ account, unassignedCents, onOpen }: AccountRowProps) {
   const { isHidden } = useValuesHidden();
   const hasBalance = account.balanceCents !== null;
   const isShort = !isHidden && unassignedCents !== null && unassignedCents < 0;
-  const now = useNow(30_000);
+  const now = useNow(60_000);
   const bank = useAppSelector((state) =>
     account.linkId === null
       ? null

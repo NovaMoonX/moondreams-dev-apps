@@ -1637,7 +1637,15 @@ async function writeSeedCards(
     {
       id: SEED_VENTURE_CARD,
       asOf: context.now - 2 * 60_000,
-      sealed: await sealJson({ cents: 0 }, encryption),
+      sealed: await sealJson(
+        {
+          cents: 0,
+          availableCents: null,
+          limitCents: 1_000_000,
+          hasInstantBalance: false,
+        },
+        encryption,
+      ),
     } satisfies AccountBalanceDoc,
   );
   const discoverStartId = `start_${SEED_DISCOVER_CARD}_${createdAt + 120_000}`;
@@ -1800,7 +1808,15 @@ async function writeSeedAccounts(
     {
       id: 'seed-account-checking-a',
       asOf: context.now - 2 * 60_000,
-      sealed: await sealJson({ cents: 221_450 }, encryption),
+      sealed: await sealJson(
+        {
+          cents: 221_450,
+          availableCents: 21_450,
+          limitCents: null,
+          hasInstantBalance: true,
+        },
+        encryption,
+      ),
     } satisfies AccountBalanceDoc,
   );
   batch.set(context.firestore.doc(`${plan}/links/${SEED_WEALTHFRONT_LINK}`), {
@@ -1832,8 +1848,16 @@ async function writeSeedAccounts(
     context.firestore.doc(`${plan}/accountBalances/seed-account-wealthfront`),
     {
       id: 'seed-account-wealthfront',
-      asOf: context.now - 2 * 60_000,
-      sealed: await sealJson({ cents: 82_400 }, encryption),
+      asOf: context.now - 3 * 60 * 60_000,
+      sealed: await sealJson(
+        {
+          cents: 82_400,
+          availableCents: 82_400,
+          limitCents: null,
+          hasInstantBalance: true,
+        },
+        encryption,
+      ),
     } satisfies AccountBalanceDoc,
   );
   return accounts.length + 3;

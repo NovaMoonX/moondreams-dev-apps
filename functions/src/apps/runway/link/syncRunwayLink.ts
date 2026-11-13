@@ -437,8 +437,11 @@ async function readAccounts(
     if (!(error instanceof ProviderError) || error.code === 'NO_ACCOUNTS') {
       throw error;
     }
+    // The purchases synced just before, so a sign-in request here came from the live read itself: it stays off for this link, a reconnect included.
     if (error.kind === 'needsAttention') {
-      await grantRef.update({ isLiveBalanceOff: true });
+      await grantRef.update({ isLiveBalanceOff: true }).catch(() => {
+        logger.warn('runway.sync.liveOffWriteFailed', { linkId });
+      });
     }
     logger.warn('runway.sync.liveBalanceFailed', {
       linkId,
@@ -478,27 +481,27 @@ async function writeBalances(
     ];
   });
   if (entries.length === 0) return;
-  const stored = await firestore.getAll(...entries.map((entry) => entry.ref));
-  const storedAsOf = new Map(
-    stored.map((snapshot) => [snapshot.id, snapshot.data()?.asOf as unknown]),
-  );
   // A saved read can be older than a live one made moments ago, and must never put an earlier balance back.
-  const writes = entries.flatMap((entry): Write[] => {
-    const previous = storedAsOf.get(entry.targetId);
-    if (typeof previous === 'number' && previous > entry.asOf) return [];
-    return [
-      {
-        kind: 'set',
-        ref: entry.ref,
-        data: {
+  await firestore.runTransaction(async (transaction) => {
+    const stored = await transaction.getAll(
+      ...entries.map((entry) => entry.ref),
+    );
+    const storedAsOf = new Map(
+      stored.map((snapshot) => [snapshot.id, snapshot.data()?.asOf as unknown]),
+    );
+    entries
+      .filter((entry) => {
+        const previous = storedAsOf.get(entry.targetId);
+        return typeof previous !== 'number' || previous <= entry.asOf;
+      })
+      .forEach((entry) => {
+        transaction.set(entry.ref, {
           id: entry.targetId,
           asOf: entry.asOf,
           sealed: sealWithKey(planKey, entry.sealed, SEALED_SCHEMA_VERSION),
-        },
-      },
-    ];
+        });
+      });
   });
-  await commitWrites(firestore, writes);
 }
 
 /* An unlink can land while a sync runs, so every write that marks the link live re-reads it in the
@@ -670,7 +673,9 @@ export async function syncRunwayLink(
     if (targets.size === 0) return { ...empty, state: 'skipped' };
 
     const isAskingNow =
-      options.isFresh && (await claimFreshAsk(firestore, grantRef));
+      options.isFresh &&
+      linkSnapshot.data()?.status === 'active' &&
+      (await claimFreshAsk(firestore, grantRef));
     // Plaid checks the bank on its own a few times a day; this asks it to check now, and what it finds arrives through the webhook.
     if (isAskingNow) {
       await provider.refreshTransactions(grant).catch((error: unknown) => {

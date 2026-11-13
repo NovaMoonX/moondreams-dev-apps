@@ -164,7 +164,7 @@ function AccountSheet({
               formatCents(interest.cents),
               formatDateOrdinalUTC(interest.on),
             );
-  const now = useNow(30_000);
+  const now = useNow(60_000);
   const bank = useAppSelector((state) =>
     account.linkId === null
       ? null

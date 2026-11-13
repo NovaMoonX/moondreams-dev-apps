@@ -5,7 +5,7 @@ import { isTrackingLevel } from '@apps/runway/engine/level';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { Cents } from '@apps/runway/types';
 
-/** What each card's bank charges still waiting to settle come to, by card id: the same counted lines the card's reserve is built from. */
+/** What each card's bank charges still waiting to settle come to, by card id, counted as the card's reserve counts a charge (its amount, from the start day, once it has lines). */
 export const selectPendingByCard = createSelector(
   [
     (state: RootState) => state.runway.purchases,
@@ -20,13 +20,12 @@ export const selectPendingByCard = createSelector(
             (purchase) =>
               purchase.status === 'pending' &&
               (purchase.paidByCardId ?? null) !== null &&
-              purchase.date >= startDate,
+              purchase.date >= startDate &&
+              purchase.lines.length > 0,
           )
           .reduce<Record<string, Cents>>((sums, purchase) => {
             const cardId = purchase.paidByCardId ?? '';
-            sums[cardId] =
-              (sums[cardId] ?? 0) +
-              purchase.lines.reduce((sum, line) => sum + line.cents, 0);
+            sums[cardId] = (sums[cardId] ?? 0) + purchase.amountCents;
             return sums;
           }, {}),
 );
@@ -38,3 +37,15 @@ export const getCardPendingCents = (
   reserveCents: Cents,
 ) =>
   Math.min(Math.max(0, pendingByCard[cardId] ?? 0), Math.max(0, reserveCents));
+
+/** Each card's posted part of what waits to be paid, for totals beside the card rows: the reserve less what is still pending. */
+export const toPostedByCard = (
+  reserveByCard: Readonly<Record<string, Cents>>,
+  pendingByCard: Readonly<Record<string, Cents>>,
+) =>
+  Object.fromEntries(
+    Object.entries(reserveByCard).map(([cardId, reserveCents]) => [
+      cardId,
+      reserveCents - getCardPendingCents(pendingByCard, cardId, reserveCents),
+    ]),
+  );
