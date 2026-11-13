@@ -224,7 +224,7 @@ function WorthTheWaitLayout() {
           aria-label='Open Worth the Wait guide'
           title='Open Worth the Wait guide'
           onClick={openManual}
-          className='group border-border bg-background hover:bg-muted/40 fixed right-6 bottom-6 z-50 h-12 w-12 rounded-full! border shadow-lg transition-colors'
+          className='group border-border bg-background hover:bg-muted/40 fixed right-6 bottom-6 z-30 h-12 w-12 rounded-full! border shadow-lg transition-colors'
         >
           <HelpIcon
             message='Worth the Wait guide'

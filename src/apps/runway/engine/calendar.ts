@@ -2,10 +2,11 @@ import type {
   CalendarPeriod,
   Cents,
   DateOnly,
+  FundingPay,
   FundingRule,
 } from '@apps/runway/types';
 
-import { DAY_MS } from './dates';
+import { DAY_MS, daysInUtcMonth, payLineIdOfDayKey } from './dates';
 import { allocate } from './money';
 
 /** A Monday, so a week and a two-week block count from the same day everywhere. */
@@ -52,16 +53,34 @@ export function getPeriodStart(period: CalendarPeriod, on: DateOnly): DateOnly {
   return result;
 }
 
-/** A rule's income days: only its source's when it names one. */
-export function scopeToSource<D extends { sourceId?: string | null }>(
-  funding: Pick<FundingRule, 'sourceId'>,
-  days: readonly D[],
-): D[] {
-  const sourceId = funding.sourceId ?? null;
+/** Whether an income day is the pay a rule names: its pay line, and its day of the month when one is named (a 31st lands on a short month's last day). */
+export function isOnFundingPay(
+  day: { dayKey: string; on: number },
+  pay: FundingPay,
+): boolean {
+  if (payLineIdOfDayKey(day.dayKey) !== pay.payLineId) return false;
+  if (pay.monthDay === null) return true;
+  const date = new Date(day.on);
   const result =
-    sourceId === null
-      ? [...days]
-      : days.filter((day) => day.sourceId === sourceId);
+    date.getUTCDate() ===
+    Math.min(
+      pay.monthDay,
+      daysInUtcMonth(date.getUTCFullYear(), date.getUTCMonth()),
+    );
+  return result;
+}
+
+/** A rule's income days: only its source's when it names one, and only its pay's when it names one. */
+export function scopeToSource<
+  D extends { dayKey: string; on: number; sourceId?: string | null },
+>(funding: Pick<FundingRule, 'sourceId' | 'pay'>, days: readonly D[]): D[] {
+  const sourceId = funding.sourceId ?? null;
+  const pay = funding.pay ?? null;
+  const result = days.filter(
+    (day) =>
+      (sourceId === null || day.sourceId === sourceId) &&
+      (pay === null || isOnFundingPay(day, pay)),
+  );
   return result;
 }
 

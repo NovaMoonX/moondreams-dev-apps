@@ -51,6 +51,7 @@ export async function openTask(
     createdAt: data.createdAt ?? 0,
     lastEditedAt: data.lastEditedAt ?? null,
     completedAt: data.completedAt ?? null,
+    clearedAt: data.clearedAt ?? null,
   } as const;
   try {
     if (!data.sealed) throw new Error('This task has no sealed words.');

@@ -1,15 +1,24 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
-import { KEY_DATE_PRECISIONS, type MentionRead } from './commands.js';
+import {
+  KEY_DATE_PRECISIONS,
+  MAX_EFFECTS,
+  NOTE_TOPICS_CAP,
+  type MentionRead,
+} from './commands.js';
 import {
   buildPlaceDoc,
   buildWhoDoc,
+  toBehindState,
   toNameCase,
   type Effect,
   type EffectRef,
+  type NoteTopicState,
   type QuestionStateEntry,
+  type TopicFiling,
 } from './executeCommands.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import {
+  buildNoteFiledLine,
   buildSettledDateLine,
   buildSettledLine,
   buildSettledNoneLine,
@@ -28,6 +37,13 @@ import {
 import type { IndexChange } from '../keyDateIndex.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
+import {
+  planGroupTopics,
+  type PlacedTopic,
+  type PlannedVersion,
+} from './planTopicCommands.js';
+import type { TopicPlacement } from '../topicTree.js';
+import type { LiveTopic } from '../topicVersionStore.js';
 
 export interface ResolveTask {
   title: string;
@@ -54,12 +70,20 @@ export interface ResolveFact {
   subjectIds: string[];
 }
 
+/** A note a "which topics?" question holds, as it is now. */
+export interface ResolveNote {
+  title: string;
+  topicIds: string[];
+}
+
 export const FACT_TEXT_MAX = 500;
 
 export interface ResolveInput {
   captureId: string;
   questionId: string;
   optionId: string;
+  /** The topics ticked on a "which topics?" question; empty for every other. */
+  optionIds?: string[];
   by: 'tap' | 'voice';
   now: number;
   timeZone: string;
@@ -91,11 +115,24 @@ export interface ResolveInput {
     tierSetBy: 'person' | 'nomos';
     lastMentionedAt: number | null;
   } | null;
+  /** The note a held fileNote names, or null when it is gone. */
+  note?: ResolveNote | null;
+  /** The topics that still exist, by id. */
+  topics?: Map<string, NoteTopicState>;
+  /** The topics a held grouping names, whole, and the tree they sit in. */
+  group?: { topics: Map<string, LiveTopic>; tree: PlacedTopic[] };
   newId: () => string;
   seal: (fields: Record<string, unknown>) => SealedPayload;
 }
 
-export type ResolveRefusal = 'answered' | 'unknown' | 'gone' | 'changed';
+export type ResolveRefusal =
+  | 'answered'
+  | 'unknown'
+  | 'gone'
+  | 'changed'
+  | 'noteGone'
+  | 'topicGone'
+  | 'groupChanged';
 
 export interface ResolvePlan {
   taskUpdates: { id: string; data: Record<string, unknown> }[];
@@ -110,6 +147,15 @@ export interface ResolvePlan {
     indexChange: IndexChange | null;
   } | null;
   whoUpdate: { id: string; data: Record<string, unknown> } | null;
+  /** A note filed by the answer: its new topic list; its words and edit time stay as they were. */
+  noteUpdate: { id: string; data: Record<string, unknown> } | null;
+  topicUpdates: TopicFiling[];
+  /** A grouping the answer made: the parent, the moves and the versions that say where each topic went. */
+  groupWrite?: {
+    parentCreate: { id: string; data: Record<string, unknown> };
+    placements: TopicPlacement[];
+    versions: PlannedVersion[];
+  } | null;
   execution: Record<string, unknown> | null;
   capture: Record<string, unknown>;
   /** True when the question was closed without writing, because its facts changed since. */
@@ -126,7 +172,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isHeld = (value: unknown): value is Record<string, unknown> =>
   isRecord(value) &&
-  (Array.isArray(value.taskIds) ||
+  (typeof value.noteId === 'string' ||
+    Array.isArray(value.taskIds) ||
+    Array.isArray(value.childIds) ||
     Array.isArray(value.factIds) ||
     typeof value.keyDateId === 'string');
 
@@ -184,6 +232,8 @@ function closeStale(
     factUpdates: freed,
     keyDateUpdate: null,
     whoUpdate: null,
+    noteUpdate: null,
+    topicUpdates: [],
     execution: null,
     isStale: true,
     capture: {
@@ -408,6 +458,7 @@ function planSettle(
       effects: entries.map(({ effect }) => effect),
       undoReport: null,
       goneIds: null,
+      lines: null,
       spoken: null,
     }),
   };
@@ -430,6 +481,8 @@ function planSettle(
       ),
       keyDateUpdate: null,
       whoUpdate: null,
+      noteUpdate: null,
+      topicUpdates: [],
       execution,
       isStale: false,
       capture: {
@@ -567,6 +620,7 @@ function planSettleKeyDate(
           effects: [effect],
           undoReport: null,
           goneIds: null,
+          lines: null,
           spoken: null,
         }),
       };
@@ -587,6 +641,8 @@ function planSettleKeyDate(
       factUpdates: [],
       keyDateUpdate,
       whoUpdate: null,
+      noteUpdate: null,
+      topicUpdates: [],
       execution,
       isStale: false,
       capture: {
@@ -602,6 +658,277 @@ function planSettleKeyDate(
                 at: now,
                 turnCaptureId: null,
                 shape: 'pickOne',
+                optionId,
+                otherText: null,
+              },
+            },
+          },
+        },
+        status:
+          !isOpen && capture.status === 'needsYou' ? 'sorted' : capture.status,
+        executionIds: execution
+          ? [...capture.executionIds, input.executionId]
+          : capture.executionIds,
+      },
+    },
+  };
+}
+
+/** What answering "which topics?" writes: the note's topics become what it had plus the ticked ones that still exist (at most 10), and each of those topics falls behind with the note waiting. The note's words and edit time are left alone. */
+function planFileNote(
+  input: ResolveInput,
+  question: Record<string, unknown>,
+  held: Record<string, unknown>,
+  oldQuestions: Record<string, unknown>,
+  options: PickOption[],
+): { refused: ResolveRefusal } | { refused: null; plan: ResolvePlan } {
+  const { questionId, now, capture } = input;
+  const state = capture.questionState[questionId];
+  const noteId = typeof held.noteId === 'string' ? held.noteId : '';
+  const known = input.topics ?? new Map<string, NoteTopicState>();
+  const ticked = [...new Set(input.optionIds ?? [])];
+  if (
+    ticked.length === 0 ||
+    ticked.some((id) => !options.some((option) => option.id === id))
+  ) {
+    return { refused: 'unknown' };
+  }
+  const note = input.note ?? null;
+  if (!note) return { refused: 'noteGone' };
+  const picked = ticked.filter((id) => known.has(id));
+  if (picked.length === 0) return { refused: 'topicGone' };
+  const topicIds = union(note.topicIds, picked).slice(0, NOTE_TOPICS_CAP);
+  const added = topicIds.filter((id) => !note.topicIds.includes(id));
+  const topicNames = topicIds.map((id) => known.get(id)?.name ?? '');
+  const line = buildNoteFiledLine(note.title, topicNames);
+  const filings = added.map((id): TopicFiling => {
+    const topic = known.get(id) as NoteTopicState;
+    return {
+      id,
+      docState: toBehindState(topic.docState),
+      addPendingIds: topic.pendingNoteIds.includes(noteId) ? [] : [noteId],
+    };
+  });
+  const entries =
+    added.length === 0
+      ? []
+      : [
+          {
+            ref: {
+              op: 'update',
+              collection: 'notes',
+              docId: noteId,
+            } as EffectRef,
+            effect: {
+              written: { topicIds, 'sealed.title': line },
+              previous: { topicIds: note.topicIds, 'sealed.title': line },
+            } as Effect,
+          },
+          ...filings.map(({ id, docState, addPendingIds }) => {
+            const topic = known.get(id) as NoteTopicState;
+            return {
+              ref: {
+                op: 'update',
+                collection: 'topics',
+                docId: id,
+              } as EffectRef,
+              effect: {
+                written: {
+                  docState,
+                  pendingNoteIds: [...topic.pendingNoteIds, ...addPendingIds],
+                },
+                previous: {
+                  docState: topic.docState,
+                  pendingNoteIds: topic.pendingNoteIds,
+                },
+              } as Effect,
+            };
+          }),
+        ];
+  const execution =
+    entries.length === 0
+      ? null
+      : {
+          captureId: input.captureId,
+          actor: 'nomos',
+          category: 'organize',
+          autonomyLevel: AUTOMATIC_LEVEL,
+          state: 'succeeded',
+          effectRefs: entries.map(({ ref }) => ref),
+          linkedWhoIds: [],
+          linkedPlaceIds: [],
+          undoesExecutionId: null,
+          undoneByExecutionId: null,
+          questionRef: { captureId: input.captureId, questionId },
+          errorCode: null,
+          createdAt: now,
+          decidedAt: now,
+          finishedAt: now,
+          sealed: input.seal({
+            summary: line,
+            commands: [],
+            effects: entries.map(({ effect }) => effect),
+            undoReport: null,
+            goneIds: null,
+            lines: null,
+            spoken: null,
+          }),
+        };
+  const questionState = {
+    ...capture.questionState,
+    [questionId]: { ...state, answeredAt: now },
+  };
+  const isOpen = Object.values(questionState).some(
+    (entry) => entry.answeredAt === null,
+  );
+  return {
+    refused: null,
+    plan: {
+      taskUpdates: [],
+      whoCreate: null,
+      placeCreate: null,
+      factCreate: null,
+      factUpdates: [],
+      keyDateUpdate: null,
+      whoUpdate: null,
+      noteUpdate:
+        added.length === 0 ? null : { id: noteId, data: { topicIds } },
+      topicUpdates: filings,
+      execution,
+      isStale: false,
+      capture: {
+        questionState,
+        sealed: {
+          ...input.opened,
+          questions: {
+            ...oldQuestions,
+            [questionId]: {
+              ...question,
+              answer: {
+                by: input.by,
+                at: now,
+                turnCaptureId: null,
+                shape: 'pickSeveral',
+                optionIds: picked,
+              },
+            },
+          },
+        },
+        status:
+          !isOpen && capture.status === 'needsYou' ? 'sorted' : capture.status,
+        executionIds: execution
+          ? [...capture.executionIds, input.executionId]
+          : capture.executionIds,
+      },
+    },
+  };
+}
+
+/** Answering a grouping question: "no" closes it and writes nothing, "yes" makes the parent and moves the topics, unless they changed since it was asked. */
+function planGroup(
+  input: ResolveInput,
+  question: Record<string, unknown>,
+  held: Record<string, unknown>,
+  oldQuestions: Record<string, unknown>,
+): { refused: ResolveRefusal } | { refused: null; plan: ResolvePlan } {
+  const { questionId, optionId, now, capture } = input;
+  const state = capture.questionState[questionId];
+  if (optionId !== 'yes' && optionId !== 'no') return { refused: 'unknown' };
+  const name = typeof held.name === 'string' ? held.name : '';
+  const childIds = (held.childIds as unknown[]).filter(
+    (id): id is string => typeof id === 'string',
+  );
+  const grouped =
+    optionId === 'no' || !input.group
+      ? null
+      : planGroupTopics({
+          name,
+          childIds,
+          topics: input.group.topics,
+          tree: input.group.tree,
+          captureId: input.captureId,
+          executionId: input.executionId,
+          now,
+          newId: input.newId,
+          seal: input.seal,
+          room: MAX_EFFECTS,
+        });
+  if (optionId === 'yes' && !grouped) return { refused: 'topicGone' };
+  if (grouped?.kind === 'refused') {
+    return {
+      refused: grouped.reason === 'topicGone' ? 'topicGone' : 'groupChanged',
+    };
+  }
+  const made = grouped?.kind === 'grouped' ? grouped : null;
+  const execution = !made
+    ? null
+    : {
+        captureId: input.captureId,
+        actor: 'nomos',
+        category: 'organize',
+        autonomyLevel: AUTOMATIC_LEVEL,
+        state: 'succeeded',
+        effectRefs: made.effects.map(({ ref }) => ref),
+        linkedWhoIds: [],
+        linkedPlaceIds: [],
+        undoesExecutionId: null,
+        undoneByExecutionId: null,
+        questionRef: { captureId: input.captureId, questionId },
+        errorCode: null,
+        createdAt: now,
+        decidedAt: now,
+        finishedAt: now,
+        sealed: input.seal({
+          summary: made.line,
+          commands: [],
+          effects: made.effects.map(({ effect }) => effect),
+          undoReport: null,
+          goneIds: null,
+          lines: null,
+          spoken: null,
+        }),
+      };
+  const questionState = {
+    ...capture.questionState,
+    [questionId]: { ...state, answeredAt: now },
+  };
+  const isOpen = Object.values(questionState).some(
+    (entry) => entry.answeredAt === null,
+  );
+  return {
+    refused: null,
+    plan: {
+      taskUpdates: [],
+      whoCreate: null,
+      placeCreate: null,
+      factCreate: null,
+      factUpdates: [],
+      keyDateUpdate: null,
+      whoUpdate: null,
+      noteUpdate: null,
+      topicUpdates: [],
+      groupWrite: made
+        ? {
+            parentCreate: made.parentCreate,
+            placements: made.placements,
+            versions: made.versions,
+          }
+        : null,
+      execution,
+      isStale: false,
+      capture: {
+        questionState,
+        sealed: {
+          ...input.opened,
+          questions: {
+            ...oldQuestions,
+            [questionId]: {
+              ...question,
+              answer: {
+                by: input.by,
+                at: now,
+                turnCaptureId: null,
+                shape: 'yesNo',
                 optionId,
                 otherText: null,
               },
@@ -636,8 +963,15 @@ export function planResolve(
   const held = Array.isArray(question.heldCommands)
     ? question.heldCommands.find(isHeld)
     : null;
-  if (!options.some((option) => option.id === optionId) || !held) {
+  if (!held) return { refused: 'unknown' };
+  if (held.kind === 'fileNote') {
+    return planFileNote(input, question, held, oldQuestions, options);
+  }
+  if (!options.some((option) => option.id === optionId)) {
     return { refused: 'unknown' };
+  }
+  if (held.kind === 'groupTopics') {
+    return planGroup(input, question, held, oldQuestions);
   }
   if (held.kind === 'settleFact') {
     return planSettle(input, question, held, oldQuestions);
@@ -821,6 +1155,7 @@ export function planResolve(
             effects: allEffects.map(({ effect }) => effect),
             undoReport: null,
             goneIds: null,
+            lines: null,
             spoken: null,
           }),
         };
@@ -842,6 +1177,8 @@ export function planResolve(
       factUpdates: [],
       keyDateUpdate: null,
       whoUpdate,
+      noteUpdate: null,
+      topicUpdates: [],
       execution,
       isStale: false,
       capture: {

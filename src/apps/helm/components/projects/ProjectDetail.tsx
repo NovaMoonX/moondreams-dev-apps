@@ -15,9 +15,12 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import DoneTasksFold from '@apps/helm/components/projects/DoneTasksFold';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
+import MilestonesTab from '@apps/helm/components/projects/MilestonesTab';
 import ProjectEditSheet from '@apps/helm/components/projects/ProjectEditSheet';
 import ProjectPeople from '@apps/helm/components/projects/ProjectPeople';
+import { RunsSection } from '@apps/helm/components/procedures/RunRows';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import { DAY_MS, HELM_COPY, PROJECT_TASKS_SHOWN } from '@apps/helm/constants';
@@ -34,7 +37,7 @@ import { sortProjectTasks } from '@apps/helm/utils/projectTasks';
 
 const { option } = DropdownMenuFactories;
 
-type ProjectTab = 'tasks' | 'people';
+type ProjectTab = 'tasks' | 'milestones' | 'people';
 
 interface ProjectDetailProps {
   projectId: string | null;
@@ -42,6 +45,7 @@ interface ProjectDetailProps {
   onBack: () => void;
   onHome: () => void;
   onOpenWho: (whoId: string) => void;
+  onOpenRun: (runId: string) => void;
 }
 
 /** One project: what it is, what its tasks show, and tabs for its tasks and its people. A finished project reads only, with a way to reopen it. */
@@ -51,6 +55,7 @@ function ProjectDetail({
   onBack,
   onHome,
   onOpenWho,
+  onOpenRun,
 }: ProjectDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -77,9 +82,20 @@ function ProjectDetail({
       ),
     [projectTasks, projectId, timeZone, now],
   );
-  const doneCount = projectTasks.filter(
-    (task) => task.projectId === projectId && task.status === 'done',
-  ).length;
+  const doneTasks = useMemo(
+    () =>
+      projectTasks
+        .filter(
+          (task) =>
+            task.projectId === projectId &&
+            task.status === 'done' &&
+            task.clearedAt === null,
+        )
+        .sort(
+          (left, right) => (right.completedAt ?? 0) - (left.completedAt ?? 0),
+        ),
+    [projectTasks, projectId],
+  );
   const shownTasks = isAllTasks
     ? openTasks
     : openTasks.slice(0, PROJECT_TASKS_SHOWN);
@@ -291,6 +307,18 @@ function ProjectDetail({
                 onFinish={() => changeStatus('finished')}
               />
             )}
+            <RunsSection
+              field='attachedTo.id'
+              id={project.id}
+              variant='thing'
+              onOpen={onOpenRun}
+              start={{
+                attachment: { kind: 'project', id: project.id },
+                label: project.name,
+                dueOn: null,
+                alsoIds: [],
+              }}
+            />
             <Tabs
               value={tab}
               onValueChange={(value) => setTab(value as ProjectTab)}
@@ -300,6 +328,9 @@ function ProjectDetail({
               <TabsList>
                 <TabsTrigger value='tasks'>
                   {HELM_COPY.projectTabTasks}
+                </TabsTrigger>
+                <TabsTrigger value='milestones'>
+                  {HELM_COPY.projectTabMilestones}
                 </TabsTrigger>
                 <TabsTrigger value='people'>
                   {HELM_COPY.projectTabPeople}
@@ -312,7 +343,7 @@ function ProjectDetail({
                   tasks={shownTasks}
                   emptyLine={HELM_COPY.projectTasksEmpty(
                     project.name,
-                    doneCount,
+                    doneTasks.length,
                   )}
                   view='project'
                   ownerId={project.id}
@@ -327,7 +358,10 @@ function ProjectDetail({
                       : HELM_COPY.projectTasksShowAll(openTasks.length)}
                   </ShowMoreButton>
                 )}
+                <DoneTasksFold projectId={project.id} tasks={doneTasks} />
               </section>
+            ) : tab === 'milestones' ? (
+              <MilestonesTab project={project} isReadOnly={isFinished} />
             ) : (
               <ProjectPeople
                 project={project}

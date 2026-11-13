@@ -66,6 +66,11 @@ import {
 import { effectiveStance } from '@apps/runway/engine/stance';
 import type { HoldChoice, ItemKind } from '@apps/runway/types';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { listChangesBetweenIncomeDays } from '@apps/runway/engine/planChanges';
+import {
+  PlanChangeNotice,
+  PlanChangesView,
+} from '@apps/runway/screens/days/PlanChangeNotice';
 import {
   selectChangeableKey,
   selectDraft,
@@ -115,8 +120,12 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const [openLineId, setOpenLineId] = useState<string | null>(null);
   const [fundsFromLineId, setFundsFromLineId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isShowingChanges, setIsShowingChanges] = useState(false);
   const { isHidden } = useValuesHidden();
   const today = todayAsUtcDate(useNow(60_000));
+  const planItems = useAppSelector((state) => state.runway.items);
+  const planVersions = useAppSelector((state) => state.runway.versions);
+  const listedDays = useAppSelector((state) => selectListedDays(state, today));
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
   const isRecordsReady = useAppSelector(
@@ -141,6 +150,23 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   }
 
   const { day, draft, items, sourceNames, override, inheritedPairings } = view;
+  const previousOn = [...listedDays.open, ...listedDays.confirmed]
+    .filter((other) => other.payLineId === day.payLineId && other.on < day.on)
+    .reduce<number | null>(
+      (latest, other) =>
+        latest === null ? other.on : Math.max(latest, other.on),
+      null,
+    );
+  const planChanges =
+    previousOn === null
+      ? []
+      : listChangesBetweenIncomeDays(
+          planVersions,
+          planItems,
+          previousOn,
+          day.on,
+          day.payLineId,
+        );
   const heldLines = draft.lines.filter(
     (line) => line.pairing?.state === 'held',
   );
@@ -380,6 +406,22 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       : [],
   );
 
+  if (isShowingChanges && planChanges.length > 0) {
+    return (
+      <Subview
+        title={formatDayTitle(day.on)}
+        onClose={onClose}
+        headerAction={<ValuesEyeButton />}
+      >
+        <PlanChangesView
+          changes={planChanges}
+          today={today}
+          onBack={() => setIsShowingChanges(false)}
+        />
+      </Subview>
+    );
+  }
+
   return (
     <Subview
       title={formatDayTitle(day.on)}
@@ -398,6 +440,12 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
             <MaskedText>{statusLine}</MaskedText>
           </p>
         </div>
+        {planChanges.length > 0 && (
+          <PlanChangeNotice
+            changes={planChanges}
+            onOpen={() => setIsShowingChanges(true)}
+          />
+        )}
         <DepositFound
           dayKey={dayKey}
           confirmedCents={null}

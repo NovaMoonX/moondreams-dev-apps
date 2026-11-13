@@ -52,6 +52,27 @@ const toMilestones = (value: unknown): Record<string, { title: string }> =>
       )
     : {};
 
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+/** An entry missing a field or holding a non-finite number is skipped, so a half-written one never shows. */
+const toMilestoneState = (value: unknown): Project['milestoneState'] =>
+  typeof value === 'object' && value !== null
+    ? Object.fromEntries(
+        Object.entries(value).flatMap(([id, entry]) => {
+          const { date, order, doneAt } = (entry ?? {}) as Record<
+            string,
+            unknown
+          >;
+          return (date === null || isNumber(date)) &&
+            isNumber(order) &&
+            (doneAt === null || isNumber(doneAt))
+            ? [[id, { date, order, doneAt }]]
+            : [];
+        }),
+      )
+    : {};
+
 /** A project that won't open is kept, with no name, so the surface can say so instead of dropping it. */
 async function openProject(
   entry: QueryDocumentSnapshot,
@@ -62,7 +83,7 @@ async function openProject(
     id: entry.id,
     targetDate: data.targetDate ?? null,
     status: data.status === 'finished' ? 'finished' : 'active',
-    milestoneState: data.milestoneState ?? {},
+    milestoneState: toMilestoneState(data.milestoneState),
     whoRoles: toRoles(data.whoRoles),
     mediaIds: data.mediaIds ?? [],
     createdBy: data.createdBy ?? 'nomos',

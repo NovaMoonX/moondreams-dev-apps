@@ -15,9 +15,17 @@ export interface ProjectEvidence {
   canFinish: boolean;
 }
 
-/** A short line built only from what the project's tasks show: what is overdue, the next dated task, how long it has been quiet, what a key person still has open. Never a percentage, a bar or a grade. */
+/** A short line built only from what the project's tasks and milestones show: what is overdue, the next deadline (a milestone or a dated task),  how long it has been quiet, what a key person still has open. Never a percentage, a bar or a grade. */
 export function selectProjectEvidence(input: {
-  project: Pick<OpenProject, 'id' | 'whoRoles' | 'roleNotes' | 'createdAt'>;
+  project: Pick<
+    OpenProject,
+    | 'id'
+    | 'whoRoles'
+    | 'roleNotes'
+    | 'createdAt'
+    | 'milestoneState'
+    | 'milestones'
+  >;
   tasks: Pick<
     OpenTask,
     'projectId' | 'status' | 'due' | 'whoIds' | 'completedAt' | 'title'
@@ -40,13 +48,23 @@ export function selectProjectEvidence(input: {
   const overdue = open.filter(
     (task) => task.due !== null && isOverdue(task.due, timeZone, now),
   ).length;
-  const nextDue = open
-    .flatMap((task) =>
+  const milestoneDeadlines = Object.entries(project.milestoneState).flatMap(
+    ([id, state]) => {
+      const words = project.milestones[id];
+      return words && state.doneAt === null && state.date !== null
+        ? [{ title: words.title, day: state.date }]
+        : [];
+    },
+  );
+  // A milestone whose day has passed is shown in its tab only; it is neither overdue nor next.
+  const nextDue = [
+    ...milestoneDeadlines.filter((entry) => entry.day >= today),
+    ...open.flatMap((task) =>
       task.due !== null && !isOverdue(task.due, timeZone, now)
         ? [{ title: task.title, day: getDueDay(task.due, timeZone) }]
         : [],
-    )
-    .sort((left, right) => left.day - right.day)[0];
+    ),
+  ].sort((left, right) => left.day - right.day)[0];
   const keyOpen = Object.entries(project.whoRoles)
     .flatMap(([whoId, role]) => {
       const name = whoNames.get(whoId);

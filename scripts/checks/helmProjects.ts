@@ -28,8 +28,22 @@ const READING: CaptureReading = {
   dates: [],
   addressedAs: null,
 };
-const read = (raw: Record<string, unknown>) =>
-  normalizeNomosReply(raw, { reading: READING, aliases: createAliasBook('t') });
+const MARCH_THIRD = Date.UTC(2026, 2, 3);
+const DATED: CaptureReading = {
+  ...READING,
+  dates: [
+    {
+      id: 'd1',
+      text: 'March 3',
+      start: 0,
+      end: 7,
+      due: { kind: 'day', date: MARCH_THIRD },
+      precision: null,
+    },
+  ],
+};
+const read = (raw: Record<string, unknown>, reading = READING) =>
+  normalizeNomosReply(raw, { reading, aliases: createAliasBook('t') });
 
 const task = (title: string, extra: Record<string, unknown> = {}) => ({
   kind: 'createTask',
@@ -60,6 +74,11 @@ const role = (
   role: roleName,
   roleNote,
 });
+const milestone = (
+  projectRef: string,
+  title: string,
+  dueSpanId: string | null = 'd1',
+) => ({ kind: 'addMilestone', projectRef, title, dueSpanId });
 const mention = (ref: string, name: string) => ({
   ref,
   name,
@@ -92,13 +111,29 @@ const existingProject = (
   name: string,
   whoRoles: ExistingProject['whoRoles'] = {},
   roleNotes: Record<string, string> = {},
+  milestoneTitles: Record<string, string> = {},
 ): ExistingProject => ({
   id,
   name,
   emoji: '💍',
   whoRoles,
   roleNotes,
-  sealed: { name, emoji: '💍', objective: null, milestones: {}, roleNotes },
+  milestoneState: Object.fromEntries(
+    Object.keys(milestoneTitles).map((key, order) => [
+      key,
+      { date: null, order, doneAt: null },
+    ]),
+  ),
+  milestoneTitles,
+  sealed: {
+    name,
+    emoji: '💍',
+    objective: null,
+    milestones: Object.fromEntries(
+      Object.entries(milestoneTitles).map(([key, title]) => [key, { title }]),
+    ),
+    roleNotes,
+  },
 });
 
 const counter = () => {
@@ -112,17 +147,22 @@ const counter = () => {
 const plan = (
   raw: { commands: unknown[]; mentions?: unknown[] },
   options: {
+    reading?: CaptureReading;
     projects?: ExistingProject[];
     who?: KnownWhoState[];
   } = {},
 ): WritePlan => {
-  const reply = read({ mentions: [], places: [], ...raw });
+  const reply = read(
+    { mentions: [], places: [], ...raw },
+    options.reading ?? READING,
+  );
   const people: PeopleInput = {
     mentions: reply.mentions,
     places: reply.places,
     known: options.who ?? [],
     knownPlaces: [],
     assistantName: null,
+    assistantNames: [],
     dayKey: '2026-11-10',
     capturedAt: 4000,
   };
@@ -377,6 +417,167 @@ test('the reply keeps one project and the roles are capped', () => {
   const kinds = reply.projects.map((entry) => entry.kind);
   assert.equal(kinds.filter((kind) => kind === 'createProject').length, 1);
   assert.equal(kinds.filter((kind) => kind === 'setProjectRole').length, 5);
+});
+
+test('a milestone is added to a project by both maps in one update, with its own effect', () => {
+  const result = plan(
+    { commands: [milestone('the wedding', 'Venue deposit')] },
+    { reading: DATED, projects: [existingProject('pr1', 'Wedding')] },
+  );
+  assert.equal(result.milestonesAdded, 1);
+  const [update] = result.projectUpdates;
+  assert.equal(update.id, 'pr1');
+  assert.deepEqual(update.data['milestoneState.new-1'], {
+    date: MARCH_THIRD,
+    order: 0,
+    doneAt: null,
+  });
+  assert.equal(update.data.whoRoles, undefined);
+  assert.deepEqual(refsOf(result), ['update:projects']);
+  const [effect] = result.effects;
+  assert.deepEqual(effect.written['sealed.milestones.new-1'], {
+    title: 'Venue deposit',
+  });
+  assert.equal(effect.previous?.['milestoneState.new-1'], null);
+  assert.equal(
+    effect.written['sealed.title'],
+    'Milestone · Venue deposit · 💍 Wedding · Mar 3',
+  );
+});
+
+test('a milestone and a role in one turn share one write that keeps both', () => {
+  const result = plan(
+    {
+      commands: [
+        role('Wedding', ['$w1'], 'key', 'florist'),
+        milestone('Wedding', 'Venue deposit', null),
+      ],
+      mentions: [dana],
+    },
+    {
+      who: [known('w1', 'Dana')],
+      projects: [
+        existingProject('pr1', 'Wedding', {}, {}, { m0: 'Venue booked' }),
+      ],
+    },
+  );
+  assert.equal(result.projectUpdates.length, 1);
+  const [update] = result.projectUpdates;
+  assert.deepEqual(update.data.whoRoles, { w1: 'key' });
+  assert.equal(update.data['milestoneState.new-1'] !== undefined, true);
+  assert.equal(
+    (update.data['milestoneState.new-1'] as { order: number }).order,
+    1,
+  );
+  assert.equal(result.effects.length, 2);
+  assert.equal(
+    result.effects[1].written['milestoneState.new-1'] !== undefined,
+    true,
+  );
+});
+
+test('a milestone with a title the project already has is not added again', () => {
+  const result = plan(
+    {
+      commands: [
+        milestone('Wedding', 'venue booked!'),
+        milestone('Wedding', 'Final guest list'),
+        milestone('Wedding', 'Final Guest List'),
+      ],
+    },
+    {
+      reading: DATED,
+      projects: [
+        existingProject('pr1', 'Wedding', {}, {}, { m0: 'Venue booked' }),
+      ],
+    },
+  );
+  assert.equal(result.milestonesAdded, 1);
+  assert.equal(result.projectUpdates.length, 1);
+  const added = Object.keys(result.projectUpdates[0].data).filter((key) =>
+    key.startsWith('milestoneState.'),
+  );
+  assert.equal(added.length, 1);
+  assert.deepEqual(
+    result.effects[0].written[
+      `sealed.milestones.${added[0].slice('milestoneState.'.length)}`
+    ],
+    {
+      title: 'Final guest list',
+    },
+  );
+});
+
+test('a milestone for a project the person has none of is kept out and reported', () => {
+  const result = plan(
+    { commands: [milestone('Move', 'Book movers')] },
+    { projects: [existingProject('pr1', 'Wedding')] },
+  );
+  assert.equal(result.projectUpdates.length, 0);
+  assert.equal(result.milestonesAdded, 0);
+  assert.deepEqual(result.notKept, ["Couldn't find a project called Move"]);
+});
+
+test('a milestone for the project this turn starts is written with it', () => {
+  const result = plan(
+    {
+      commands: [project('Wedding'), milestone('Wedding', 'Venue booked')],
+    },
+    { reading: DATED },
+  );
+  assert.equal(result.milestonesAdded, 1);
+  const [created] = result.projectCreates;
+  assert.equal(Object.keys(created.data.milestoneState as object).length, 1);
+  assert.deepEqual(refsOf(result), ['create:projects', 'update:projects']);
+});
+
+test('a project holds thirty milestones and says so when a thirty-first is asked', () => {
+  const titles = Object.fromEntries(
+    Array.from({ length: 30 }, (_, index) => [`m${index}`, `Step ${index}`]),
+  );
+  const result = plan(
+    { commands: [milestone('Wedding', 'One more')] },
+    { projects: [existingProject('pr1', 'Wedding', {}, {}, titles)] },
+  );
+  assert.equal(result.milestonesAdded, 0);
+  assert.equal(result.projectUpdates.length, 0);
+  assert.deepEqual(result.notKept, ['💍 Wedding already holds 30 milestones']);
+});
+
+test('a reply keeps three milestones, cuts the title and reads the date from its span', () => {
+  const reply = read(
+    {
+      commands: [
+        ...Array.from({ length: 5 }, (_, index) =>
+          milestone('Wedding', `Step ${index}`),
+        ),
+        milestone('Wedding', 'x'.repeat(120)),
+        milestone('', 'No project'),
+        milestone('Wedding', ''),
+      ],
+      mentions: [],
+      places: [],
+    },
+    DATED,
+  );
+  const milestones = reply.projects.flatMap((entry) =>
+    entry.kind === 'addMilestone' ? [entry] : [],
+  );
+  assert.equal(milestones.length, 3);
+  assert.equal(milestones[0].date, MARCH_THIRD);
+  const long = read(
+    {
+      commands: [milestone('Wedding', 'x'.repeat(120), null)],
+      mentions: [],
+      places: [],
+    },
+    DATED,
+  );
+  const [only] = long.projects.flatMap((entry) =>
+    entry.kind === 'addMilestone' ? [entry] : [],
+  );
+  assert.equal(only.title.length, 80);
+  assert.equal(only.date, null);
 });
 
 const failures: string[] = [];

@@ -3,9 +3,16 @@ import { deflateSync } from 'node:zlib';
 
 import { wrapDataKey } from '../../functions/src/appKeys/wrap.ts';
 import { createDigest } from '../../functions/src/apps/helm/nomos/contactImport.ts';
+import {
+  markdownTitle,
+  readableSections,
+} from '../../functions/src/apps/helm/media/markdownSections.ts';
 import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   buildFactSource,
+  buildFileTopicLine,
+  describeKeptPhotos,
+  buildGroupQuestion,
   buildKeyDateClashQuestion,
   buildWhichIsTrueQuestion,
   toKeyDateName,
@@ -26,7 +33,11 @@ import {
 } from '../../src/apps/helm/constants.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import { openJson, sealBytes, sealJson } from '../../src/apps/helm/security.ts';
-import { getMediaObjectPath } from '../../src/apps/helm/utils/mediaPath.ts';
+import { toStepState } from '../../src/apps/helm/utils/stepGroups.ts';
+import {
+  getMediaObjectPath,
+  getMediaObjectPaths,
+} from '../../src/apps/helm/utils/mediaPath.ts';
 import {
   getDueDay,
   readCapture,
@@ -44,9 +55,12 @@ import type {
   Fact,
   FactSealed,
   Media,
+  MediaKind,
   MediaSealed,
   Place,
   PlaceSealed,
+  Note,
+  NoteSealed,
   Project,
   ProjectSealed,
   Who,
@@ -58,6 +72,18 @@ import type {
   Task,
   TaskDue,
   TaskSealed,
+  Procedure,
+  ProcedureSealed,
+  StyleProfile,
+  StyleSealed,
+  ProcedureVersion,
+  ProcedureVersionSealed,
+  Topic,
+  TopicDepth,
+  TopicSealed,
+  TopicSection,
+  TopicVersion,
+  TopicVersionSealed,
 } from '../../src/apps/helm/types.ts';
 import {
   GOOGLE_ACCOUNT_PREFIX,
@@ -71,12 +97,14 @@ import { A_LIST_SHARES } from '../../functions/src/apps/a-list/share/manifest.ts
 import { GOING_ONCE_SHARES } from '../../functions/src/apps/going-once/share/manifest.ts';
 import { NINE_LIVES_SHARES } from '../../functions/src/apps/nine-lives/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
+import { RUNWAY_SHARES } from '../../functions/src/apps/runway/share/manifest.ts';
 import { WAYPOINT_SHARES } from '../../functions/src/apps/waypoint/share/manifest.ts';
 import { WORTH_THE_WAIT_SHARES } from '../../functions/src/apps/worth-the-wait/share/manifest.ts';
 import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
+import { formatMoney } from '../../functions/src/utils/formatMoney.ts';
 import { getShowtime } from './aList.ts';
 import { getSeedPickupOn } from './goingOnce.ts';
-import { readEmulatorKeyring } from './runway.ts';
+import { buildSampleShareSummary, readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -87,7 +115,14 @@ import {
 interface CopyDefinition {
   category: string;
   sourceRef: string;
-  kind: 'event' | 'task' | 'place' | 'project' | 'pet' | 'trip';
+  kind:
+    | 'event'
+    | 'task'
+    | 'place'
+    | 'project'
+    | 'pet'
+    | 'trip'
+    | 'moneySummary';
   title: string;
   subtitle: string | null;
   startAt: number | null;
@@ -97,6 +132,10 @@ interface CopyDefinition {
   isAllDay?: boolean;
   placeLabel?: string;
   extra?: Record<string, string | number>;
+  detail?: string;
+  amountCents?: number;
+  currency?: string;
+  sourceUpdatedAt?: number;
 }
 
 const DAY_MS = 86_400_000;
@@ -104,8 +143,20 @@ const MINUTE_MS = 60_000;
 
 // Alex keeps Pacific Time, so the first open shows a profile that was made earlier; Jamie's zone differs from the emulator's.
 const SEED_PROFILES = [
-  { user: FIXTURE_USERS.partnerOne, timeZone: 'America/Los_Angeles' },
-  { user: FIXTURE_USERS.partnerTwo, timeZone: 'America/New_York' },
+  {
+    user: FIXTURE_USERS.partnerOne,
+    timeZone: 'America/Los_Angeles',
+    assistantName: null,
+    assistantTone: null,
+    theme: null,
+  },
+  {
+    user: FIXTURE_USERS.partnerTwo,
+    timeZone: 'America/New_York',
+    assistantName: 'Juniper',
+    assistantTone: 'warm',
+    theme: 'plum',
+  },
 ];
 
 const SORT_DELAY_MS = 4_000;
@@ -269,6 +320,9 @@ const MOVE_SCREEN: ScreenContext = {
     { collection: 'tasks', id: 'seed-task-hand-2' },
     { collection: 'tasks', id: 'seed-task-3-1' },
   ],
+  topicId: null,
+  procedureId: null,
+  runId: null,
   v: 1,
 };
 
@@ -409,6 +463,7 @@ async function buildUndone(input: {
       undoReport: null,
       spoken: null,
       goneIds: null,
+      lines: [],
       isUnreadable: false,
     },
     targets: new Map(
@@ -494,6 +549,7 @@ async function buildMove(input: {
         undoReport: null,
         spoken: null,
         goneIds: null,
+        lines: [],
       },
       input.encryption,
     ),
@@ -536,6 +592,7 @@ async function buildBackToBack(input: {
         interruptedCaptureId: null,
         answersQuestion: null,
         ttsProvider: null,
+        arrivedVia: 'direct',
         medium: 'web',
         sessionId: `seed-${uid}-today`,
         turnIndex: turnIndexFrom + order,
@@ -550,8 +607,10 @@ async function buildBackToBack(input: {
         executionIds: order === 0 ? [executionId] : [],
         turnLeadId: order === 0 ? null : leadId,
         joinedCaptureIds: order === 0 ? joinedIds : [],
+        attachmentIds: [],
         seenAt: createdAt,
         quotedSourceKeys: [],
+        answerSavedNoteId: null,
         whoIds: [],
         placeIds: [],
         planDayKey: null,
@@ -600,6 +659,7 @@ async function buildBackToBack(input: {
         createdAt: sortedAt,
         lastEditedAt: null,
         completedAt: null,
+        clearedAt: null,
         sealed: await sealJson<TaskSealed>(
           { title, notes: null, steps: {} },
           encryption,
@@ -648,6 +708,7 @@ async function buildBackToBack(input: {
         undoReport: null,
         spoken: null,
         goneIds: null,
+        lines: [],
       },
       encryption,
     ),
@@ -687,6 +748,9 @@ const ANSWER_TASKS = [
     dueDays: 1,
   },
 ];
+
+const SAVED_ANSWER_QUESTION = 'How long does cake keep?';
+const SAVED_ANSWER_NOTE_ID = 'seed-note-from-answer';
 
 const EMPTY_ANSWER = {
   sources: [],
@@ -757,7 +821,7 @@ const buildAnswers = (now: number): CaptureAnswer[] => {
     },
     {
       ...EMPTY_ANSWER,
-      question: 'How long does cake keep?',
+      question: SAVED_ANSWER_QUESTION,
       scope: 'theWorld',
       fromRecords: null,
       general:
@@ -773,6 +837,15 @@ const buildAnswers = (now: number): CaptureAnswer[] => {
       general:
         'Ibuprofen and similar pain relievers can raise blood pressure and may make metoprolol work less well.',
       isHealth: true,
+    },
+    {
+      ...EMPTY_ANSWER,
+      question: 'Why does cream cheese frosting go runny?',
+      scope: 'theWorld',
+      fromRecords: null,
+      general:
+        'Usually the butter or cream cheese was too warm, or the cream cheese was a spreadable tub with extra water. Chill it for 20 minutes and beat again.',
+      suggestedTopicId: 'seed-topic-kitchen-baking',
     },
   ];
 };
@@ -838,6 +911,7 @@ async function buildGmailTurn(input: {
         text: 'Your cake tasting is at 2:00 PM. See you then!',
         deepLink:
           'https://mail.google.com/mail/?authuser=personal@example.com#all/18f0c0de00000001',
+        record: null,
         deletedAt: null,
       },
     ],
@@ -858,6 +932,7 @@ async function buildGmailTurn(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: `seed-${uid}-answers`,
     turnIndex: 6,
@@ -872,8 +947,10 @@ async function buildGmailTurn(input: {
     executionIds: [executionId],
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     seenAt: createdAt + MINUTE_MS,
     quotedSourceKeys: [`google:gmail|${GOOGLE_ACCOUNT_ID}`],
+    answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
     planDayKey: null,
@@ -927,6 +1004,7 @@ async function buildGmailTurn(input: {
         undoReport: null,
         spoken: null,
         goneIds: null,
+        lines: [],
       },
       encryption,
     ),
@@ -991,6 +1069,7 @@ async function buildAnswerTurns(input: {
         interruptedCaptureId: null,
         answersQuestion: null,
         ttsProvider: null,
+        arrivedVia: 'direct',
         medium: 'web',
         sessionId: `seed-${uid}-answers`,
         turnIndex: order,
@@ -1005,8 +1084,13 @@ async function buildAnswerTurns(input: {
         executionIds: [executionId],
         turnLeadId: null,
         joinedCaptureIds: [],
+        attachmentIds: [],
         seenAt: createdAt + MINUTE_MS,
         quotedSourceKeys: [],
+        answerSavedNoteId:
+          answer.question === SAVED_ANSWER_QUESTION
+            ? SAVED_ANSWER_NOTE_ID
+            : null,
         whoIds: [],
         placeIds: [],
         planDayKey: null,
@@ -1051,6 +1135,7 @@ async function buildAnswerTurns(input: {
             undoReport: null,
             spoken: null,
             goneIds: null,
+            lines: [],
           },
           encryption,
         ),
@@ -1058,6 +1143,41 @@ async function buildAnswerTurns(input: {
       return { captureId, capture, executionId, execution };
     }),
   );
+  const saved = answers.find(
+    (entry) => entry.question === SAVED_ANSWER_QUESTION,
+  );
+  const savedTurn = turns.find(
+    (turn) => turn.capture.answerSavedNoteId === SAVED_ANSWER_NOTE_ID,
+  );
+  const notes: { id: string; note: Note }[] =
+    saved?.general && savedTurn
+      ? [
+          {
+            id: SAVED_ANSWER_NOTE_ID,
+            note: {
+              topicIds: ['seed-topic-kitchen-baking'],
+              source: 'savedAnswer',
+              isFromGeneralAnswer: true,
+              checkedAt: null,
+              hasHealthCaution: false,
+              sourceCaptureId: savedTurn.captureId,
+              sourceMediaId: null,
+              projectIds: [],
+              createdBy: 'person',
+              executionId: null,
+              createdAt: savedTurn.capture.sortedAt ?? now,
+              lastEditedAt: null,
+              sealed: await sealJson<NoteSealed>(
+                {
+                  title: 'How long does cake keep',
+                  body: saved.general,
+                },
+                encryption,
+              ),
+            },
+          },
+        ]
+      : [];
   const tasks = await Promise.all(
     ANSWER_TASKS.map(async (entry, order) => {
       const made = now - (order + 4) * 60 * MINUTE_MS;
@@ -1084,6 +1204,7 @@ async function buildAnswerTurns(input: {
         createdAt: made,
         lastEditedAt: null,
         completedAt: null,
+        clearedAt: null,
         sealed: await sealJson<TaskSealed>(
           { title: entry.title, notes: null, steps: {} },
           encryption,
@@ -1092,7 +1213,7 @@ async function buildAnswerTurns(input: {
       return { id: entry.id, task };
     }),
   );
-  return { turns, tasks };
+  return { turns, tasks, notes };
 }
 
 /** Alex's plan days: yesterday as it was (one event, one kept task done that day and one not) and today (one kept slot and one suggestion), with the done task they need. */
@@ -1148,6 +1269,7 @@ async function buildPlanDays(input: {
     createdAt: now - 3 * DAY_MS,
     lastEditedAt: at(yesterdayKey, '14:25'),
     completedAt: at(yesterdayKey, '14:25'),
+    clearedAt: null,
     sealed: await sealJson<TaskSealed>(
       { title: doneTitle, notes: null, steps: {} },
       encryption,
@@ -1236,7 +1358,7 @@ async function buildPlanDays(input: {
   return { days, task: { id: 'seed-task-plan-done', task: doneTask } };
 }
 
-const toWho = (
+export const toWho = (
   fields: Pick<Who, 'kind' | 'tier' | 'tierSetBy' | 'isSelf' | 'createdBy'> &
     Partial<Pick<Who, 'lastMentionedAt'>>,
   createdAt: number,
@@ -1257,7 +1379,10 @@ const toWho = (
   sealed,
 });
 
-const wordsOf = (name: string, extra: Partial<WhoSealed> = {}): WhoSealed => ({
+export const wordsOf = (
+  name: string,
+  extra: Partial<WhoSealed> = {},
+): WhoSealed => ({
   name,
   aliases: [],
   relation: null,
@@ -1312,7 +1437,7 @@ function makeSquarePng(
 }
 
 /** One kept photo of a who or place: a flat-colour PNG sealed with the person's key, its document and the two sealed objects to upload. */
-async function buildSeedPhoto(input: {
+export async function buildSeedPhoto(input: {
   uid: string;
   id: string;
   attachedTo: Media['attachedTo'][number];
@@ -1332,15 +1457,22 @@ async function buildSeedPhoto(input: {
     status: 'kept',
     mimeType: 'image/png',
     hasThumb: true,
+    durationMs: null,
+    pageCount: null,
     attachedTo: [attachedTo],
     decidedBy: 'person',
     createdAt: now - 5 * DAY_MS,
     decidedAt: now - 5 * DAY_MS,
     deleteAfter: null,
+    sourceCaptureId: null,
+    executionId: null,
     sealed: await sealJson<MediaSealed>(
       {
         bytesNonce: bytes.nonce,
         thumbNonce: thumb.nonce,
+        caption: null,
+        fileName: null,
+        text: null,
         keyId: encryption.keyId,
       },
       encryption,
@@ -1357,7 +1489,7 @@ async function buildSeedPhoto(input: {
 }
 
 /** Uploads a seeded sealed object to the Storage emulator; a bucket the app isn't configured for leaves the photo unreadable. */
-async function uploadSealedSeed(path: string, bytes: Uint8Array) {
+export async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   const bucket =
     process.env.STORAGE_BUCKET ??
     process.env.VITE_FIREBASE_STORAGE_BUCKET ??
@@ -1381,7 +1513,7 @@ async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   }
 }
 
-/** Alex's two projects: the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago, so its line reads "1 overdue · Dana (florist) has 1 open") and the 🏠 Move finished a month ago with its one done task. */
+/** Alex's two projects: the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone. */
 async function buildProjects(input: {
   now: number;
   encryption: HelmEncryption;
@@ -1401,11 +1533,12 @@ async function buildProjects(input: {
       | 'lastEditedAt'
     >,
     words: ProjectSealed,
+    milestoneState: Project['milestoneState'] = {},
   ): Promise<{ id: string; project: Project }> => ({
     id,
     project: {
       ...fields,
-      milestoneState: {},
+      milestoneState,
       mediaIds: [],
       createdBy: 'person',
       executionId: null,
@@ -1440,6 +1573,7 @@ async function buildProjects(input: {
       executionId: null,
       lastEditedAt: null,
       completedAt: null,
+      clearedAt: null,
       ...fields,
       sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
     },
@@ -1466,8 +1600,25 @@ async function buildProjects(input: {
         name: 'Wedding',
         emoji: '💍',
         objective: 'Married on June 20 with everyone there',
-        milestones: {},
+        milestones: {
+          'seed-milestone-wedding-1': { title: 'Venue booked' },
+          'seed-milestone-wedding-2': { title: 'Final guest list' },
+          'seed-milestone-wedding-3': { title: 'Pick the menu' },
+        },
         roleNotes: { 'seed-who-dana': 'florist' },
+      },
+      {
+        'seed-milestone-wedding-1': {
+          date: today - 40 * DAY_MS,
+          order: 0,
+          doneAt: now - 32 * DAY_MS,
+        },
+        'seed-milestone-wedding-2': {
+          date: today + 9 * DAY_MS,
+          order: 1,
+          doneAt: null,
+        },
+        'seed-milestone-wedding-3': { date: null, order: 2, doneAt: null },
       },
     ),
     projectOf(
@@ -1483,8 +1634,15 @@ async function buildProjects(input: {
         name: 'Move',
         emoji: '🏠',
         objective: null,
-        milestones: {},
+        milestones: { 'seed-milestone-move-1': { title: 'Keys handed over' } },
         roleNotes: {},
+      },
+      {
+        'seed-milestone-move-1': {
+          date: today - 35 * DAY_MS,
+          order: 0,
+          doneAt: now - 36 * DAY_MS,
+        },
       },
     ),
   ]);
@@ -1519,6 +1677,2017 @@ async function buildProjects(input: {
     }),
   ]);
   return { projects, tasks };
+}
+
+const TYRE_TURN_ID = 'seed-turn-tyre-size';
+const TYRE_EXECUTION_ID = 'seed-execution-tyre-size';
+const TYRE_NOTE_ID = 'seed-note-22';
+const CAPTURE_NOTE_ID = 'seed-note-from-capture';
+const CAPTURE_NOTE_TURN_ID = 'seed-turn-note';
+const CAPTURE_NOTE_EXECUTION_ID = 'seed-execution-note';
+
+/** The turn "Remember that cakes keep 3 days in the fridge": the note it kept in Baking, the topic it marked behind, and the execution with the result line as the assistant writes it. */
+async function buildNoteTurn(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const text = 'Remember that cakes keep 3 days in the fridge';
+  const title = 'Cakes keep 3 days in the fridge';
+  const body = 'cakes keep 3 days in the fridge';
+  const createdAt = now - 12 * MINUTE_MS;
+  const sortedAt = createdAt + SORT_DELAY_MS;
+  const line = `Saved a note: ${title} · Baking`;
+  const capture: Capture = {
+    inputMode: 'typed',
+    sttProvider: null,
+    interruptedCaptureId: null,
+    answersQuestion: null,
+    ttsProvider: null,
+    arrivedVia: 'direct',
+    medium: 'web',
+    sessionId: `seed-${uid}-answers`,
+    turnIndex: 7,
+    route: 'full',
+    status: 'sorted',
+    heldReason: null,
+    claimId: null,
+    claimedAt: null,
+    attempts: 0,
+    lastErrorCode: null,
+    questionState: {},
+    executionIds: [CAPTURE_NOTE_EXECUTION_ID],
+    turnLeadId: null,
+    joinedCaptureIds: [],
+    attachmentIds: [],
+    seenAt: createdAt + MINUTE_MS,
+    quotedSourceKeys: [],
+    answerSavedNoteId: null,
+    whoIds: [],
+    placeIds: [],
+    planDayKey: null,
+    createdAt,
+    sortedAt,
+    screen: null,
+    sealed: await sealJson<CaptureSealed>(
+      {
+        text,
+        reading: readCapture(text, {
+          now: createdAt,
+          timeZone,
+          assistantName: DEFAULT_ASSISTANT_NAME,
+        }),
+        answer: null,
+        questionAnswer: null,
+      },
+      encryption,
+    ),
+  };
+  const execution: Execution = {
+    captureId: CAPTURE_NOTE_TURN_ID,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'create', collection: 'notes', docId: CAPTURE_NOTE_ID },
+      {
+        op: 'update',
+        collection: 'topics',
+        docId: 'seed-topic-kitchen-baking',
+      },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: sortedAt,
+    decidedAt: sortedAt,
+    finishedAt: sortedAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: 'Saved a note',
+        commands: [],
+        effects: [
+          { written: { 'sealed.title': line }, previous: null },
+          {
+            written: {
+              docState: 'behind',
+              pendingNoteIds: [CAPTURE_NOTE_ID],
+            },
+            previous: { docState: 'empty', pendingNoteIds: [] },
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+        lines: [],
+      },
+      encryption,
+    ),
+  };
+  const note: Note = {
+    topicIds: ['seed-topic-kitchen-baking'],
+    source: 'capture',
+    isFromGeneralAnswer: false,
+    checkedAt: null,
+    hasHealthCaution: false,
+    sourceCaptureId: CAPTURE_NOTE_TURN_ID,
+    sourceMediaId: null,
+    projectIds: [],
+    createdBy: 'nomos',
+    executionId: CAPTURE_NOTE_EXECUTION_ID,
+    createdAt: sortedAt,
+    lastEditedAt: null,
+    sealed: await sealJson<NoteSealed>({ title, body }, encryption),
+  };
+  return { capture, execution, note };
+}
+
+/** Alex's Knowledge: eleven topics up to three levels deep (🏃 Running and 🧘 Stretching at the top, waiting on a "Group them under Fitness?" question; 🚗 Car care › Washing › Ceramic coat and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty-six notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. Car care has a written document: seven parts (an intro, a list under Service, a part from each kind of source and a winter-tyres part the person wrote) at version 5, with its five versions under `versions/{n}`. */
+async function buildKnowledge(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const topicOf = async (
+    id: string,
+    name: string,
+    emoji: string | null,
+    parentId: string | null,
+    depth: TopicDepth = parentId === null ? 1 : 2,
+    filing: Pick<Topic, 'docState' | 'pendingNoteIds'> = {
+      docState: 'empty',
+      pendingNoteIds: [],
+    },
+    document: {
+      version: number;
+      sections: TopicSection[];
+      writtenAt?: number;
+    } = {
+      version: 0,
+      sections: [],
+    },
+  ): Promise<{ id: string; topic: Topic }> => ({
+    id,
+    topic: {
+      parentId,
+      depth,
+      projectIds: [],
+      version: document.version,
+      ...filing,
+      writeClaim: null,
+      overviewOf: {},
+      createdBy: 'person',
+      executionId: null,
+      createdAt: now - 40 * DAY_MS,
+      lastEditedAt: document.version > 0 ? now - 2 * DAY_MS : null,
+      lastWrittenAt:
+        document.version > 0 ? (document.writtenAt ?? now - 2 * DAY_MS) : null,
+      sealed: await sealJson<TopicSealed>(
+        { name, emoji, overview: null, sections: document.sections },
+        encryption,
+      ),
+    },
+  });
+  const intro: TopicSection = {
+    id: 'seed-section-car-intro',
+    heading: 'Intro',
+    level: 1,
+    markdown:
+      'Everything about keeping the car running: the oil schedule, the shop on Fifth, tyre pressure and the winter set. It is gathered here so the next service is no guesswork.',
+    writtenBy: 'nomos',
+    sources: [
+      { kind: 'note', noteId: 'seed-note-01' },
+      { kind: 'note', noteId: 'seed-note-02' },
+    ],
+  };
+  const service: TopicSection = {
+    id: 'seed-section-car-service',
+    heading: 'Service',
+    level: 1,
+    markdown:
+      '- **Oil:** synthetic 5W-30, every 5,000 miles.\n- The shop on Fifth does it in about twenty minutes.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'note', noteId: 'seed-note-01' }],
+  };
+  const tyres: TopicSection = {
+    id: 'seed-section-car-tyres',
+    heading: 'Tyre pressure',
+    level: 1,
+    markdown:
+      'Front **35**, back **33** when the tyres are cold. The sticker inside the driver door has it.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'note', noteId: 'seed-note-02' }],
+  };
+  const heardMark = {
+    kind: 'message' as const,
+    captureId: 'seed-turn-car-tires',
+    at: now - 9 * DAY_MS,
+    noteId: 'seed-note-02',
+  };
+  const tyresHeard: TopicSection = {
+    ...tyres,
+    sources: [...tyres.sources, heardMark],
+  };
+  const freshener: TopicSection = {
+    id: 'seed-section-car-freshener',
+    heading: 'Keeping it fresh inside',
+    level: 2,
+    markdown:
+      'Wipe the vents and the dash before clipping on a new air freshener, so it does not smell muddy over old dust.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'general', noteId: SAVED_ANSWER_NOTE_ID }],
+  };
+  const booklet: TopicSection = {
+    id: 'seed-section-car-booklet',
+    heading: 'From the owner booklet',
+    level: 2,
+    markdown:
+      'Rotate the tyres every 7,500 miles. Check the brake fluid once a year.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'file', mediaId: 'seed-media-home', noteId: null }],
+  };
+  const winter: TopicSection = {
+    id: 'seed-section-car-winter',
+    heading: 'Winter tyres',
+    level: 1,
+    markdown: 'Put them on in early November and take them off in April.',
+    writtenBy: 'person',
+    sources: [{ kind: 'person', at: now - 2 * DAY_MS }],
+  };
+  const introShort: TopicSection = {
+    ...intro,
+    markdown:
+      'Everything about keeping the car running, gathered in one place.',
+  };
+  const tyreMark = {
+    kind: 'message' as const,
+    captureId: TYRE_TURN_ID,
+    at: now - 20 * MINUTE_MS,
+    noteId: TYRE_NOTE_ID,
+  };
+  const tyreSize: TopicSection = {
+    id: 'seed-section-car-tyre-size',
+    heading: 'Winter tyre size',
+    level: 2,
+    markdown: 'The winter tyres are 205/55 R16.',
+    writtenBy: 'nomos',
+    sources: [tyreMark],
+  };
+  const carVersions: {
+    reason: TopicVersion['reason'];
+    at: number;
+    by: TopicVersion['createdBy'];
+    noteIds: string[];
+    summary: string;
+    sections: TopicSection[];
+    requestQuote?: string;
+    sourceCaptureId?: string;
+    executionId?: string;
+  }[] = [
+    {
+      reason: 'firstWritten',
+      at: now - 20 * DAY_MS,
+      by: 'nomos',
+      noteIds: ['seed-note-01', 'seed-note-02'],
+      summary: 'Wrote the first version from 2 notes',
+      sections: [intro, service, tyres],
+    },
+    {
+      reason: 'addedFromSource',
+      at: now - 9 * DAY_MS,
+      by: 'nomos',
+      noteIds: [],
+      summary: 'Added the owner booklet and a line from a saved answer',
+      sections: [intro, service, tyresHeard, freshener, booklet],
+    },
+    {
+      reason: 'personEdit',
+      at: now - 2 * DAY_MS,
+      by: 'person',
+      noteIds: [],
+      summary: 'You added Winter tyres',
+      sections: [intro, service, tyresHeard, freshener, booklet, winter],
+    },
+    {
+      reason: 'revisedOnRequest',
+      at: now - 25 * MINUTE_MS,
+      by: 'nomos',
+      noteIds: [],
+      summary: 'Shortened the intro',
+      requestQuote: 'make the intro shorter',
+      sections: [introShort, service, tyresHeard, freshener, booklet, winter],
+    },
+    {
+      reason: 'addedFromSource',
+      at: now - 20 * MINUTE_MS,
+      by: 'nomos',
+      noteIds: [TYRE_NOTE_ID],
+      summary: 'Added Winter tyre size',
+      sourceCaptureId: TYRE_TURN_ID,
+      executionId: TYRE_EXECUTION_ID,
+      sections: [
+        introShort,
+        service,
+        tyresHeard,
+        freshener,
+        booklet,
+        tyreSize,
+        winter,
+      ],
+    },
+  ];
+  const carSections = carVersions[carVersions.length - 1].sections;
+  const washingSection: TopicSection = {
+    id: 'seed-section-washing-drying',
+    heading: 'Drying',
+    level: 1,
+    markdown: 'Pat the panels dry, never wipe in circles.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'note', noteId: 'seed-note-05' }],
+  };
+  const washingWrittenAt = now - 10 * DAY_MS;
+  const washingVersion = {
+    topicId: 'seed-topic-car-washing',
+    id: '1',
+    version: {
+      version: 1,
+      restoredFromVersion: null,
+      createdBy: 'nomos',
+      reason: 'firstWritten',
+      noteIds: ['seed-note-05'],
+      sourceCaptureId: null,
+      executionId: null,
+      createdAt: washingWrittenAt,
+      sealed: await sealJson<TopicVersionSealed>(
+        {
+          sections: [washingSection],
+          changeSummary: 'Wrote the first version from 1 note',
+          requestQuote: null,
+          parentName: null,
+        },
+        encryption,
+      ),
+    } satisfies TopicVersion,
+  };
+  const carHistory = await Promise.all(
+    carVersions.map(async (entry, index) => ({
+      topicId: 'seed-topic-car',
+      id: String(index + 1),
+      version: {
+        version: index + 1,
+        restoredFromVersion: null,
+        createdBy: entry.by,
+        reason: entry.reason,
+        noteIds: entry.noteIds,
+        sourceCaptureId: entry.sourceCaptureId ?? null,
+        executionId: entry.executionId ?? null,
+        createdAt: entry.at,
+        sealed: await sealJson<TopicVersionSealed>(
+          {
+            sections: entry.sections,
+            changeSummary: entry.summary,
+            requestQuote: entry.requestQuote ?? null,
+            parentName: null,
+          },
+          encryption,
+        ),
+      } satisfies TopicVersion,
+    })),
+  );
+  const versions = [...carHistory, washingVersion];
+  const topics = await Promise.all([
+    topicOf(
+      'seed-topic-car',
+      'Car care',
+      '🚗',
+      null,
+      1,
+      { docState: 'current', pendingNoteIds: [] },
+      { version: carVersions.length, sections: carSections },
+    ),
+    topicOf(
+      'seed-topic-car-washing',
+      'Washing',
+      null,
+      'seed-topic-car',
+      2,
+      {
+        docState: 'behind',
+        pendingNoteIds: [
+          'seed-note-03',
+          'seed-note-04',
+          'seed-note-05',
+          'seed-note-06',
+        ],
+      },
+      { version: 1, sections: [washingSection], writtenAt: washingWrittenAt },
+    ),
+    topicOf('seed-topic-car-fragrance', 'Fragrance', null, 'seed-topic-car'),
+    topicOf('seed-topic-kitchen', 'Kitchen', '🍰', null),
+    topicOf(
+      'seed-topic-kitchen-baking',
+      'Baking',
+      null,
+      'seed-topic-kitchen',
+      2,
+      {
+        docState: 'behind',
+        pendingNoteIds: [CAPTURE_NOTE_ID, SAVED_ANSWER_NOTE_ID],
+      },
+    ),
+    topicOf('seed-topic-wedding', 'Wedding etiquette', '💐', null),
+    topicOf('seed-topic-garden', 'Garden', '🌱', null),
+    topicOf(
+      'seed-topic-garden-tomatoes',
+      'Tomatoes',
+      null,
+      'seed-topic-garden',
+    ),
+    topicOf(
+      'seed-topic-car-ceramic',
+      'Ceramic coat',
+      null,
+      'seed-topic-car-washing',
+      3,
+    ),
+    topicOf('seed-topic-running', 'Running', '🏃', null),
+    topicOf('seed-topic-stretching', 'Stretching', '🧘', null),
+  ]);
+  const noteOf = async (
+    index: number,
+    title: string,
+    body: string,
+    topicIds: string[],
+    extra: Partial<
+      Pick<
+        Note,
+        | 'lastEditedAt'
+        | 'checkedAt'
+        | 'createdAt'
+        | 'source'
+        | 'sourceCaptureId'
+        | 'createdBy'
+        | 'executionId'
+      >
+    > = {},
+  ): Promise<{ id: string; note: Note }> => ({
+    id: `seed-note-${String(index).padStart(2, '0')}`,
+    note: {
+      topicIds,
+      source: 'typed',
+      isFromGeneralAnswer: false,
+      checkedAt: null,
+      hasHealthCaution: false,
+      sourceCaptureId: null,
+      sourceMediaId: null,
+      projectIds: [],
+      createdBy: 'person',
+      executionId: null,
+      createdAt: now - (21 - index) * DAY_MS,
+      lastEditedAt: null,
+      ...extra,
+      sealed: await sealJson<NoteSealed>({ title, body }, encryption),
+    },
+  });
+  const car = 'seed-topic-car';
+  const washing = 'seed-topic-car-washing';
+  const fragrance = 'seed-topic-car-fragrance';
+  const kitchen = 'seed-topic-kitchen';
+  const baking = 'seed-topic-kitchen-baking';
+  const wedding = 'seed-topic-wedding';
+  const garden = 'seed-topic-garden';
+  const tomatoes = 'seed-topic-garden-tomatoes';
+  const ceramic = 'seed-topic-car-ceramic';
+  const notes = await Promise.all([
+    noteOf(
+      1,
+      'Oil change every 5,000 miles',
+      'Synthetic oil, the 5W-30 the manual names. The shop on Fifth does it in twenty minutes.',
+      [car],
+    ),
+    noteOf(
+      2,
+      'Tyre pressure',
+      'Front 35, back 33 when the tyres are cold. The sticker inside the driver door has it.',
+      [car],
+    ),
+    noteOf(
+      3,
+      'Wash in the shade',
+      'Hot paint dries soap into spots. Early morning or after five.',
+      [washing],
+    ),
+    noteOf(
+      4,
+      'Two buckets',
+      'One for soap, one for rinsing the mitt, so grit stays out of the paint.',
+      [washing],
+    ),
+    noteOf(
+      5,
+      'Microfiber for drying',
+      'Pat the panels dry, never wipe in circles.',
+      [washing],
+      { lastEditedAt: now - 3 * DAY_MS, checkedAt: now - 3 * DAY_MS },
+    ),
+    noteOf(
+      6,
+      'Clean the vents first',
+      'A new air freshener smells muddy over old dust. Wipe the vents and the dash, then clip it on.',
+      [washing, fragrance],
+    ),
+    noteOf(
+      7,
+      'Vanilla and sandalwood',
+      'The scent that lasted a whole month in the heat.',
+      [fragrance],
+    ),
+    noteOf(
+      8,
+      'Pie crust stays flaky',
+      'Butter straight from the fridge and ice water, a tablespoon at a time.',
+      [kitchen],
+    ),
+    noteOf(
+      9,
+      'Sharpen knives twice a year',
+      'The honing steel is for every week; the stone only in spring and fall.',
+      [kitchen],
+    ),
+    noteOf(
+      10,
+      'Bread flour for chewy loaves',
+      'Higher protein makes the crumb chewier. All-purpose is fine for quick bread.',
+      [baking],
+    ),
+    noteOf(
+      11,
+      'Oven runs hot',
+      'About 15 degrees over. Bake at 335 when a recipe says 350.',
+      [baking],
+    ),
+    noteOf(
+      12,
+      'Brown butter cookies',
+      'Let the butter cool before the sugar goes in, or the cookies spread.',
+      [baking],
+    ),
+    noteOf(
+      13,
+      'RSVP wording',
+      'Please reply by May 15. Wording that worked for Priya: https://example.com/rsvp-wording, then a text to anyone silent after a week.',
+      [wedding],
+    ),
+    noteOf(
+      14,
+      'Seating the families',
+      'Parents near the front, and keep anyone who is not speaking apart.',
+      [wedding],
+    ),
+    noteOf(
+      15,
+      'Thank-you notes',
+      'Within three months, and name the gift in the note.',
+      [wedding],
+    ),
+    noteOf(
+      16,
+      'Water in the morning',
+      'Wet leaves overnight invite blight. Water the soil at dawn.',
+      [garden],
+    ),
+    noteOf(
+      17,
+      'Pinch the suckers',
+      'The small shoots between the stem and a branch. Pinch them off the determinate plants, leave them on the cherry ones.',
+      [tomatoes],
+    ),
+    noteOf(
+      18,
+      'Wifi password for the cabin',
+      'Written on the router: it is the cabin name and 2019.',
+      [],
+    ),
+    noteOf(
+      19,
+      'Gift ideas for Mom',
+      'A framed photo of the lake, the good tea, a book about birds.',
+      [],
+    ),
+    noteOf(
+      20,
+      'Parking by the dentist',
+      'The garage on Elm is cheaper than the meter, and the validation is at the front desk.',
+      [],
+    ),
+    noteOf(
+      21,
+      'Ceramic coat aftercare',
+      'Wait a week before the first wash, then use a pH-neutral soap and skip the automatic wash.',
+      [ceramic],
+    ),
+    {
+      ...(await noteOf(
+        22,
+        'Winter tyres are 205/55 R16',
+        'The winter tyres are 205/55 R16',
+        [car],
+        {
+          source: 'capture',
+          sourceCaptureId: TYRE_TURN_ID,
+          createdBy: 'nomos',
+          executionId: TYRE_EXECUTION_ID,
+          createdAt: now - 20 * MINUTE_MS,
+        },
+      )),
+      id: TYRE_NOTE_ID,
+    },
+    noteOf(
+      23,
+      'Easy pace for long runs',
+      'If you can not talk, slow down.',
+      ['seed-topic-running'],
+      { createdAt: now - 6 * DAY_MS },
+    ),
+    noteOf(
+      24,
+      'Shoes wear out near 400 miles',
+      'Mark the day the new pair goes on.',
+      ['seed-topic-running'],
+      { createdAt: now - 5 * DAY_MS },
+    ),
+    noteOf(
+      25,
+      'Hamstring stretch after runs',
+      'Lie on your back, one leg up with a towel.',
+      ['seed-topic-stretching'],
+      { createdAt: now - 4 * DAY_MS },
+    ),
+    noteOf(
+      26,
+      'Hold each stretch 30 seconds',
+      'No bouncing, breathe out as you ease in.',
+      ['seed-topic-stretching'],
+      { createdAt: now - 3 * DAY_MS },
+    ),
+  ]);
+  const baseCapture = (createdAt: number, turnIndex: number, text: string) => ({
+    inputMode: 'typed' as const,
+    sttProvider: null,
+    interruptedCaptureId: null,
+    answersQuestion: null,
+    ttsProvider: null,
+    arrivedVia: 'direct' as const,
+    medium: 'web' as const,
+    sessionId: `seed-${uid}-growth`,
+    turnIndex,
+    route: 'full' as const,
+    heldReason: null,
+    claimId: null,
+    claimedAt: null,
+    attempts: 0,
+    lastErrorCode: null,
+    turnLeadId: null,
+    joinedCaptureIds: [],
+    attachmentIds: [],
+    quotedSourceKeys: [],
+    answerSavedNoteId: null,
+    whoIds: [],
+    placeIds: [],
+    planDayKey: null,
+    createdAt,
+    sortedAt: createdAt + SORT_DELAY_MS,
+    screen: null,
+    reading: readCapture(text, {
+      now: createdAt,
+      timeZone,
+      assistantName: DEFAULT_ASSISTANT_NAME,
+    }),
+  });
+  const tyreText = 'The winter tyres are 205/55 R16';
+  const tyreAt = now - 20 * MINUTE_MS;
+  const tyreBase = baseCapture(tyreAt, 8, tyreText);
+  const tyreLine = 'Added to Car care: Winter tyre size';
+  const tyreCapture: Capture = {
+    ...tyreBase,
+    status: 'sorted',
+    questionState: {},
+    executionIds: [TYRE_EXECUTION_ID],
+    seenAt: tyreAt + MINUTE_MS,
+    sealed: await sealJson<CaptureSealed>(
+      {
+        text: tyreText,
+        reading: tyreBase.reading,
+        answer: null,
+        questionAnswer: null,
+      },
+      encryption,
+    ),
+  };
+  const tyreExecution: Execution = {
+    captureId: TYRE_TURN_ID,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'create', collection: 'notes', docId: TYRE_NOTE_ID },
+      { op: 'update', collection: 'topics', docId: 'seed-topic-car' },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: tyreBase.sortedAt,
+    decidedAt: tyreBase.sortedAt,
+    finishedAt: tyreBase.sortedAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: tyreLine,
+        commands: [],
+        effects: [
+          {
+            written: {
+              'sealed.title':
+                'Saved a note: Winter tyres are 205/55 R16 · Car care',
+            },
+            previous: null,
+          },
+          {
+            written: {
+              version: 5,
+              change: 'added',
+              'sealed.title': tyreLine,
+            },
+            previous: { version: 4, 'sealed.title': tyreLine },
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+        lines: [],
+      },
+      encryption,
+    ),
+  };
+  const groupText = 'Did my long run and then stretched';
+  const groupAt = now - 15 * MINUTE_MS;
+  const groupQuestionId = 'seed-question-group-fitness';
+  const groupBase = baseCapture(groupAt, 9, groupText);
+  const groupCapture: Capture = {
+    ...groupBase,
+    status: 'needsYou',
+    questionState: {
+      [groupQuestionId]: {
+        kind: 'groupTopics',
+        shape: 'yesNo',
+        askedAt: groupBase.sortedAt,
+        answeredAt: null,
+        skippedAt: null,
+      },
+    },
+    executionIds: [],
+    seenAt: null,
+    sealed: await sealJson<CaptureSealed>(
+      {
+        text: groupText,
+        reading: groupBase.reading,
+        answer: null,
+        questionAnswer: null,
+        questions: {
+          [groupQuestionId]: buildGroupQuestion({
+            name: 'Fitness',
+            childIds: ['seed-topic-running', 'seed-topic-stretching'],
+            childNames: ['Running', 'Stretching'],
+          }),
+        },
+      },
+      encryption,
+    ),
+  };
+  return {
+    topics,
+    notes,
+    versions,
+    captures: [
+      { id: TYRE_TURN_ID, capture: tyreCapture },
+      { id: 'seed-turn-group-fitness', capture: groupCapture },
+    ],
+    executions: [{ id: TYRE_EXECUTION_ID, execution: tyreExecution }],
+  };
+}
+
+interface SeedProcedureStep {
+  id: string;
+  text: string;
+  detail?: string | null;
+  groupId: string | null;
+}
+
+interface SeedProcedureVersion {
+  by: 'nomos' | 'person';
+  reason: ProcedureVersion['reason'];
+  at: number;
+  summary: string;
+  requestQuote?: string;
+  title: string;
+  steps: SeedProcedureStep[];
+}
+
+/** Alex's two procedures: Packing for a work trip (made by the assistant on request in three groups, a charger added when asked and a pair of shoes renamed by hand, 13 steps at version 3) and Closing the cabin (made by hand, 7 steps in no group at version 2). Two documents plus five versions under `versions/{n}`. */
+async function buildProcedures(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
+  const { now, encryption } = input;
+  const GROUPS = {
+    clothes: { id: 'seed-group-clothes', name: 'Clothes' },
+    electronics: { id: 'seed-group-electronics', name: 'Electronics' },
+    documents: { id: 'seed-group-documents', name: 'Documents' },
+  };
+  const step = (
+    id: string,
+    text: string,
+    groupId: string | null = null,
+  ): SeedProcedureStep => ({ id, text, groupId });
+  const packingStart = [
+    step('seed-step-pack-weather', 'Check the weather at the destination'),
+    step('seed-step-pack-hotel', 'Confirm the hotel booking'),
+    step('seed-step-pack-shirts', 'Two work shirts', GROUPS.clothes.id),
+    step('seed-step-pack-trousers', 'Trousers', GROUPS.clothes.id),
+    step('seed-step-pack-shoes', 'Shoes for the meeting', GROUPS.clothes.id),
+    step('seed-step-pack-sleepwear', 'Sleepwear', GROUPS.clothes.id),
+    step('seed-step-pack-toiletry', 'Toiletry bag', GROUPS.clothes.id),
+    step('seed-step-pack-laptop', 'Laptop', GROUPS.electronics.id),
+    step(
+      'seed-step-pack-phone-charger',
+      'Phone charger',
+      GROUPS.electronics.id,
+    ),
+    step('seed-step-pack-headphones', 'Headphones', GROUPS.electronics.id),
+    step('seed-step-pack-id', 'ID or passport', GROUPS.documents.id),
+    step('seed-step-pack-agenda', 'Printed agenda', GROUPS.documents.id),
+  ];
+  const charger = step(
+    'seed-step-pack-laptop-charger',
+    'Laptop charger',
+    GROUPS.electronics.id,
+  );
+  const withCharger = [
+    ...packingStart.slice(0, 8),
+    charger,
+    ...packingStart.slice(8),
+  ];
+  const withSmartShoes = withCharger.map((entry) =>
+    entry.id === 'seed-step-pack-shoes'
+      ? { ...entry, text: 'Smart shoes' }
+      : entry,
+  );
+  const packingGroups = Object.values(GROUPS);
+  const packingVersions: SeedProcedureVersion[] = [
+    {
+      by: 'nomos',
+      reason: 'created',
+      at: now - 6 * DAY_MS,
+      summary: '',
+      title: 'Packing for a work trip',
+      steps: packingStart,
+    },
+    {
+      by: 'nomos',
+      reason: 'revisedOnRequest',
+      at: now - 5 * DAY_MS,
+      summary: 'Added the laptop charger',
+      requestQuote: 'add a step for the laptop charger',
+      title: 'Packing for a work trip',
+      steps: withCharger,
+    },
+    {
+      by: 'person',
+      reason: 'personEdit',
+      at: now - 2 * DAY_MS,
+      summary: 'You changed Smart shoes',
+      title: 'Packing for a work trip',
+      steps: withSmartShoes,
+    },
+  ];
+  const cabinStart = [
+    step('seed-step-cabin-water', 'Turn off the water main'),
+    step('seed-step-cabin-pipes', 'Drain the pipes'),
+    step('seed-step-cabin-fridge', 'Empty the fridge'),
+    step('seed-step-cabin-unplug', 'Unplug appliances'),
+    step('seed-step-cabin-shutters', 'Close the shutters'),
+    step('seed-step-cabin-lock', 'Lock up and check every door'),
+  ];
+  const cabinFinal = [
+    ...cabinStart.slice(0, 5),
+    step('seed-step-cabin-thermostat', 'Set the thermostat to 50°F'),
+    cabinStart[5],
+  ];
+  const cabinVersions: SeedProcedureVersion[] = [
+    {
+      by: 'person',
+      reason: 'created',
+      at: now - 20 * DAY_MS,
+      summary: '',
+      title: 'Closing the cabin',
+      steps: cabinStart,
+    },
+    {
+      by: 'person',
+      reason: 'personEdit',
+      at: now - 12 * DAY_MS,
+      summary: 'You added 1 step',
+      title: 'Closing the cabin',
+      steps: cabinFinal,
+    },
+  ];
+  const partsOf = (
+    title: string,
+    steps: SeedProcedureStep[],
+    groups: { id: string; name: string }[],
+  ) => ({
+    stepState: toStepState(
+      [
+        ...steps.filter((entry) => entry.groupId === null),
+        ...groups.flatMap((group) =>
+          steps.filter((entry) => entry.groupId === group.id),
+        ),
+      ].map(({ id, groupId }) => ({ id, groupId })),
+    ),
+    groupOrder: groups.map((group) => group.id),
+    body: {
+      title,
+      steps: Object.fromEntries(
+        steps.map((entry) => [
+          entry.id,
+          { text: entry.text, detail: entry.detail ?? null },
+        ]),
+      ),
+      groups: Object.fromEntries(
+        groups.map((group) => [group.id, { name: group.name }]),
+      ),
+    } satisfies ProcedureSealed,
+  });
+  const build = async (
+    id: string,
+    createdBy: 'nomos' | 'person',
+    groups: { id: string; name: string }[],
+    history: SeedProcedureVersion[],
+  ) => {
+    const latest = history[history.length - 1];
+    const parts = partsOf(latest.title, latest.steps, groups);
+    return {
+      id,
+      procedure: {
+        stepState: parts.stepState,
+        groupOrder: parts.groupOrder,
+        version: history.length,
+        createdBy,
+        sourceCaptureId: null,
+        sourceTaskId: null,
+        executionId: null,
+        createdAt: history[0].at,
+        lastEditedAt: latest.at,
+        sealed: await sealJson<ProcedureSealed>(parts.body, encryption),
+      } satisfies Procedure,
+      versions: await Promise.all(
+        history.map(async (entry, index) => {
+          const own = partsOf(entry.title, entry.steps, groups);
+          return {
+            procedureId: id,
+            id: String(index + 1),
+            version: {
+              version: index + 1,
+              restoredFromVersion: null,
+              createdBy: entry.by,
+              reason: entry.reason,
+              stepState: own.stepState,
+              groupOrder: own.groupOrder,
+              sourceCaptureId: null,
+              executionId: null,
+              createdAt: entry.at,
+              sealed: await sealJson<ProcedureVersionSealed>(
+                {
+                  ...own.body,
+                  changeSummary: entry.summary,
+                  requestQuote: entry.requestQuote ?? null,
+                },
+                encryption,
+              ),
+            } satisfies ProcedureVersion,
+          };
+        }),
+      ),
+    };
+  };
+  const built = [
+    await build(
+      'seed-procedure-packing',
+      'nomos',
+      packingGroups,
+      packingVersions,
+    ),
+    await build('seed-procedure-cabin', 'person', [], cabinVersions),
+  ];
+  return {
+    procedures: built.map(({ id, procedure }) => ({ id, procedure })),
+    versions: built.flatMap(({ versions }) => versions),
+    basis: {
+      packing: { steps: withSmartShoes, groups: packingGroups },
+      cabin: { steps: cabinStart },
+    },
+  };
+}
+
+interface SeedRunSource {
+  steps: SeedProcedureStep[];
+  groups?: { id: string; name: string }[];
+}
+
+/** Alex's two runs of those procedures: Packing for a work trip at version 3, open for the Waypoint trip (5 of 13 steps ticked, the chargers still to do, and one step added just this time, "Umbrella"), and Closing the cabin at version 1, finished three weeks ago for the finished Move project with every step ticked; the procedure has since gained a step, so the run keeps its own steps. Two documents under `procedureRuns/{id}`. */
+async function buildRuns(input: {
+  now: number;
+  encryption: HelmEncryption;
+  packing: SeedRunSource;
+  cabin: SeedRunSource;
+}) {
+  const { now, encryption } = input;
+  const anchor = new Date(now + 10 * DAY_MS);
+  const tripStart = Date.UTC(
+    anchor.getUTCFullYear(),
+    anchor.getUTCMonth(),
+    anchor.getUTCDate(),
+  );
+  const waypointGrantId = toGrantId(
+    'helm',
+    toAppConnectorId('waypoint'),
+    SITE_ACCOUNT_ID,
+  );
+  const tripCopyId = createHash('sha256')
+    .update(`${waypointGrantId}|trips|trips/seed-waypoint-trip`)
+    .digest('hex')
+    .slice(0, 40);
+  const doneFirst = new Set([
+    'seed-step-pack-weather',
+    'seed-step-pack-hotel',
+    'seed-step-pack-shirts',
+    'seed-step-pack-trousers',
+    'seed-step-pack-sleepwear',
+  ]);
+  const umbrella = { id: 'seed-step-run-umbrella', text: 'Umbrella' };
+  const build = async (
+    id: string,
+    run: {
+      procedureId: string;
+      title: string;
+      source: SeedRunSource;
+      version: number;
+      attachedTo: { kind: 'project' | 'synced'; id: string };
+      attachedLabel: string;
+      dueOn: number | null;
+      startedAt: number;
+      finishedAt: number | null;
+      doneAt: (stepId: string) => number | null;
+      extra: { id: string; text: string } | null;
+      createdBy: 'person' | 'nomos';
+    },
+  ) => {
+    const groups = run.source.groups ?? [];
+    const ordered = [
+      ...run.source.steps.filter((entry) => entry.groupId === null),
+      ...groups.flatMap((group) =>
+        run.source.steps.filter((entry) => entry.groupId === group.id),
+      ),
+    ];
+    const rows = [
+      ...ordered.map((entry) => ({
+        id: entry.id,
+        text: entry.text,
+        groupId: entry.groupId,
+        isExtra: false,
+      })),
+      ...(run.extra
+        ? [
+            {
+              id: run.extra.id,
+              text: run.extra.text,
+              groupId: null,
+              isExtra: true,
+            },
+          ]
+        : []),
+    ];
+    return {
+      id,
+      run: {
+        procedureId: run.procedureId,
+        procedureVersion: run.version,
+        attachedTo: run.attachedTo,
+        dueOn: run.dueOn,
+        stepState: Object.fromEntries(
+          rows.map((row, index) => [
+            row.id,
+            {
+              order: index,
+              groupId: row.groupId,
+              doneAt: run.doneAt(row.id),
+              isExtra: row.isExtra,
+            },
+          ]),
+        ),
+        groupOrder: groups.map((group) => group.id),
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        createdBy: run.createdBy,
+        executionId: null,
+        lastEditedAt: run.finishedAt ?? run.startedAt + 2 * MINUTE_MS,
+        sealed: await sealJson(
+          {
+            title: run.title,
+            steps: Object.fromEntries(
+              rows.map((row) => [row.id, { text: row.text, detail: null }]),
+            ),
+            groups: Object.fromEntries(
+              groups.map((group) => [group.id, { name: group.name }]),
+            ),
+            attachedLabel: run.attachedLabel,
+          },
+          encryption,
+        ),
+      },
+    };
+  };
+  const finishedAt = now - 21 * DAY_MS;
+  return [
+    await build('seed-run-packing-trip', {
+      procedureId: 'seed-procedure-packing',
+      title: 'Packing for a work trip',
+      source: input.packing,
+      version: 3,
+      attachedTo: { kind: 'synced', id: tripCopyId },
+      attachedLabel: 'Pacific Northwest Weekend',
+      dueOn: tripStart,
+      startedAt: now - 3 * 60 * MINUTE_MS,
+      finishedAt: null,
+      doneAt: (stepId) =>
+        doneFirst.has(stepId) ? now - 2 * 60 * MINUTE_MS : null,
+      extra: umbrella,
+      createdBy: 'nomos',
+    }),
+    await build('seed-run-cabin-move', {
+      procedureId: 'seed-procedure-cabin',
+      title: 'Closing the cabin',
+      source: input.cabin,
+      version: 1,
+      attachedTo: { kind: 'project', id: 'seed-project-move' },
+      attachedLabel: 'Move',
+      dueOn: null,
+      startedAt: finishedAt - 3 * 60 * MINUTE_MS,
+      finishedAt,
+      doneAt: () => finishedAt - 60 * MINUTE_MS,
+      extra: null,
+      createdBy: 'person',
+    }),
+  ];
+}
+
+/** Alex's writing style: `style/general`, learned from 34 typed messages (four learned traits, one the person set, and two lines to avoid), plus two learned from sent mail: `style/mail-work` (Work email, 3 traits) and `style/mail-who-seed-who-sam-rivera` (Sam Rivera, 2 traits). Three documents. */
+async function buildStyle(input: {
+  now: number;
+  encryption: HelmEncryption;
+}): Promise<{ id: string; style: StyleProfile }[]> {
+  const { now, encryption } = input;
+  const editedAt = now - 2 * DAY_MS;
+  const words: StyleSealed = {
+    label: 'General',
+    traits: {
+      'short-sentences': {
+        text: 'Short sentences',
+        isPersonSet: false,
+        exampleCount: 27,
+      },
+      'lowercase-starts-in-quick-notes': {
+        text: 'Lowercase starts in quick notes',
+        isPersonSet: false,
+        exampleCount: 19,
+      },
+      'signs-off-cheers': {
+        text: "Signs off 'Cheers,'",
+        isPersonSet: false,
+        exampleCount: 11,
+      },
+      'plain-words-over-formal-ones': {
+        text: 'Plain words over formal ones',
+        isPersonSet: false,
+        exampleCount: 22,
+      },
+      'warm-but-brief': {
+        text: 'Warm but brief',
+        isPersonSet: true,
+        exampleCount: 0,
+      },
+    },
+    avoid: ['No exclamation marks', 'No emoji'],
+    removed: [],
+  };
+  const fromMail = async (
+    id: string,
+    audienceWhoId: string | null,
+    label: string,
+    traits: [string, string, number][],
+    sampleCount: number,
+  ) => ({
+    id,
+    style: {
+      scope: audienceWhoId ? ('audience' as const) : ('occasion' as const),
+      audienceWhoId,
+      learnedFrom: ['sentMail' as const],
+      sampleCount,
+      personEditedAt: null,
+      createdAt: now - DAY_MS,
+      lastEditedAt: now - DAY_MS,
+      sealed: await sealJson<StyleSealed>(
+        {
+          label,
+          traits: Object.fromEntries(
+            traits.map(([traitId, text, exampleCount]) => [
+              traitId,
+              { text, isPersonSet: false, exampleCount },
+            ]),
+          ),
+          avoid: [],
+          removed: [],
+        },
+        encryption,
+      ),
+    },
+  });
+  return [
+    {
+      id: 'general',
+      style: {
+        scope: 'general',
+        audienceWhoId: null,
+        learnedFrom: ['helmText'],
+        sampleCount: 34,
+        personEditedAt: editedAt,
+        createdAt: now - 6 * DAY_MS,
+        lastEditedAt: editedAt,
+        sealed: await sealJson<StyleSealed>(words, encryption),
+      },
+    },
+    await fromMail(
+      'mail-work',
+      null,
+      'Work email',
+      [
+        [
+          'bullet-points-for-steps',
+          'Bullet points for anything with steps',
+          31,
+        ],
+        ['opens-with-the-persons-name', "Opens with the person's name", 44],
+        ['signs-thanks-alex', "Signs 'Thanks, Alex'", 38],
+      ],
+      120,
+    ),
+    await fromMail(
+      'mail-who-seed-who-sam-rivera',
+      'seed-who-sam-rivera',
+      'Sam Rivera',
+      [
+        ['first-name-and-a-quick-hello', 'First name and a quick hello', 9],
+        ['short-and-to-the-point', 'Short and to the point', 11],
+      ],
+      14,
+    ),
+  ];
+}
+
+/** Alex's three turns that sent a photo: the venue's quote, kept on a task the turn made (with its Execution), a screenshot the assistant let go that is deleted in 20 hours unless kept, and a receipt whose photo is already deleted. Seven documents plus the two sealed objects of the first two photos. */
+async function buildPhotoTurns(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const sessionId = `seed-${uid}-photos`;
+  const taskId = 'seed-task-photo-venue';
+  const executionId = 'seed-execution-photo-venue';
+  const title = 'Confirm the venue quote';
+  const keptTurn = 'seed-turn-photo-kept';
+  const letGoTurn = 'seed-turn-photo-let-go';
+  const goneTurn = 'seed-turn-photo-gone';
+  const turnOf = async (
+    id: string,
+    index: number,
+    text: string,
+    minutesAgo: number,
+    fields: Pick<Capture, 'attachmentIds' | 'executionIds'>,
+  ) => {
+    const createdAt = now - minutesAgo * MINUTE_MS;
+    const capture: Capture = {
+      inputMode: 'typed',
+      sttProvider: null,
+      interruptedCaptureId: null,
+      answersQuestion: null,
+      ttsProvider: null,
+      arrivedVia: 'direct',
+      medium: 'web',
+      sessionId,
+      turnIndex: index,
+      route: 'full',
+      status: 'sorted',
+      heldReason: null,
+      claimId: null,
+      claimedAt: null,
+      attempts: 0,
+      lastErrorCode: null,
+      questionState: {},
+      turnLeadId: null,
+      joinedCaptureIds: [],
+      seenAt: createdAt + MINUTE_MS,
+      quotedSourceKeys: [],
+      answerSavedNoteId: null,
+      whoIds: [],
+      placeIds: [],
+      planDayKey: null,
+      createdAt,
+      sortedAt: createdAt + SORT_DELAY_MS,
+      screen: null,
+      ...fields,
+      sealed: await sealJson<CaptureSealed>(
+        {
+          text,
+          reading: readCapture(text, {
+            now: createdAt,
+            timeZone,
+            assistantName: DEFAULT_ASSISTANT_NAME,
+          }),
+          answer: null,
+          questionAnswer: null,
+        },
+        encryption,
+      ),
+    };
+    return { id, createdAt, capture };
+  };
+  const [kept, letGo, gone] = await Promise.all([
+    turnOf(keptTurn, 0, "This is the venue's quote", 150, {
+      attachmentIds: ['seed-media-photo-quote'],
+      executionIds: [executionId],
+    }),
+    turnOf(letGoTurn, 1, 'Screenshot of the parking rules', 120, {
+      attachmentIds: ['seed-media-photo-parking'],
+      executionIds: [],
+    }),
+    turnOf(goneTurn, 2, "Here's the receipt from the framer", 90, {
+      attachmentIds: ['seed-media-photo-deleted'],
+      executionIds: [],
+    }),
+  ]);
+  const captures = [kept, letGo, gone];
+  const attachment = async (
+    id: string,
+    color: [number, number, number],
+    fields: Partial<Media>,
+  ) => {
+    const photo = await buildSeedPhoto({
+      uid,
+      id,
+      attachedTo: { kind: 'task', id: taskId },
+      color,
+      now,
+      encryption,
+    });
+    return {
+      ...photo,
+      media: {
+        ...photo.media,
+        role: 'attachment' as const,
+        mimeType: 'image/png',
+        ...fields,
+      },
+    };
+  };
+  const keptAt = kept.createdAt + SORT_DELAY_MS;
+  const letGoAt = letGo.createdAt + SORT_DELAY_MS;
+  const media = await Promise.all([
+    attachment('seed-media-photo-quote', [196, 168, 98], {
+      status: 'kept',
+      attachedTo: [{ kind: 'task', id: taskId }],
+      decidedBy: 'nomos',
+      createdAt: kept.createdAt,
+      decidedAt: keptAt,
+      deleteAfter: null,
+      sourceCaptureId: keptTurn,
+      executionId,
+    }),
+    attachment('seed-media-photo-parking', [120, 140, 120], {
+      status: 'discarded',
+      attachedTo: [],
+      decidedBy: 'nomos',
+      createdAt: letGo.createdAt,
+      decidedAt: letGoAt,
+      deleteAfter: now + 20 * 60 * MINUTE_MS,
+      sourceCaptureId: letGoTurn,
+      executionId: null,
+    }),
+  ]);
+  const task: Task = {
+    status: 'open',
+    importance: null,
+    isUrgent: false,
+    due: null,
+    durationMinutes: null,
+    energy: null,
+    context: null,
+    projectId: null,
+    milestoneId: null,
+    whoIds: [],
+    placeIds: [],
+    notUntil: null,
+    waitsOnTaskIds: [],
+    waitsOnWhoId: null,
+    stepState: {},
+    mediaIds: [],
+    createdBy: 'nomos',
+    sourceCaptureId: keptTurn,
+    executionId,
+    createdAt: keptAt,
+    lastEditedAt: null,
+    completedAt: null,
+    clearedAt: null,
+    sealed: await sealJson<TaskSealed>(
+      { title, notes: null, steps: {} },
+      encryption,
+    ),
+  };
+  const execution: Execution = {
+    captureId: keptTurn,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'create', collection: 'tasks', docId: taskId },
+      { op: 'update', collection: 'media', docId: 'seed-media-photo-quote' },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: keptAt,
+    decidedAt: keptAt,
+    finishedAt: keptAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: `Made a task and kept the photo on ${title}`,
+        commands: [{ kind: 'createTask', title, due: null }],
+        effects: [
+          {
+            written: {
+              'sealed.title': title,
+              due: null,
+              status: 'open',
+              isUrgent: false,
+            },
+            previous: null,
+          },
+          {
+            written: {
+              status: 'kept',
+              attachedTo: [{ kind: 'task', id: taskId }],
+              'sealed.title': title,
+            },
+            previous: {
+              status: 'received',
+              attachedTo: [],
+              'sealed.title': title,
+            },
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+        lines: [],
+      },
+      encryption,
+    ),
+  };
+  return {
+    captures,
+    media,
+    task: { id: taskId, task },
+    execution: { id: executionId, execution },
+  };
+}
+
+/** A valid PDF with a text layer: one page per list of lines, in Helvetica. */
+function makeTextPdf(pages: string[][]) {
+  const pageObject = (index: number) => 4 + index * 2;
+  const stream = (lines: string[]) =>
+    `BT /F1 14 Tf 72 720 Td 20 TL ${lines
+      .map((line) => `(${line.replace(/[\\()]/g, '\\$&')}) Tj T*`)
+      .join(' ')} ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${pages.map((_, index) => `${pageObject(index)} 0 R`).join(' ')}] /Count ${pages.length} >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    ...pages.flatMap((lines, index) => [
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageObject(index) + 1} 0 R >>`,
+      `<< /Length ${stream(lines).length} >>\nstream\n${stream(lines)}\nendstream`,
+    ]),
+  ];
+  const body = objects.reduce(
+    (acc, object, index) => ({
+      text: `${acc.text}${index + 1} 0 obj\n${object}\nendobj\n`,
+      offsets: [...acc.offsets, acc.text.length],
+    }),
+    { text: '%PDF-1.4\n', offsets: [] as number[] },
+  );
+  const xref = body.offsets
+    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
+    .join('');
+  return new Uint8Array(
+    Buffer.from(
+      `${body.text}xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${xref}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${body.text.length}\n%%EOF\n`,
+      'latin1',
+    ),
+  );
+}
+
+/** A silent mono 8-bit WAV of the given length at 8 kHz. */
+function makeSilentWav(seconds: number) {
+  const samples = 8000 * seconds;
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + samples, 4);
+  header.write('WAVEfmt ', 8);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(8000, 24);
+  header.writeUInt32LE(8000, 28);
+  header.writeUInt16LE(1, 32);
+  header.writeUInt16LE(8, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(samples, 40);
+  return new Uint8Array(Buffer.concat([header, Buffer.alloc(samples, 0x80)]));
+}
+
+/** Alex's three turns that sent a file, after the photo turns: a two-page vet PDF kept on a task the turn made, a Markdown packing list kept as a note and a topic, and a voice note whose transcript made a task and whose recording was let go (deleted in 20 hours unless kept). Fourteen documents plus the PDF's and the voice note's sealed objects. */
+async function buildFileTurns(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const sessionId = `seed-${uid}-photos`;
+  const seal = <T extends object>(fields: T) => sealJson<T>(fields, encryption);
+  const pdfTurn = 'seed-turn-file-pdf';
+  const pdfMedia = 'seed-media-file-pdf';
+  const pdfTask = 'seed-task-file-vet';
+  const pdfExecution = 'seed-execution-file-pdf';
+  const pdfTitle = 'Vet visit: booster Nov 3';
+  const mdTurn = 'seed-turn-file-markdown';
+  const mdMedia = 'seed-media-file-markdown';
+  const mdNote = 'seed-note-file-packing';
+  const mdTopic = 'seed-topic-file-packing';
+  const mdExecution = 'seed-execution-file-markdown';
+  const mdName = 'packing-list.md';
+  const mdText =
+    "# Packing list\n\n## Clothes\n- Rain jacket\n- Two jumpers\n\n## Tech\n- Charger\n- Adapter\n\n<b>Don't forget the passport</b>\n";
+  const voiceTurn = 'seed-turn-file-voice';
+  const voiceMedia = 'seed-media-file-voice';
+  const voiceTask = 'seed-task-file-vet-call';
+  const voiceExecution = 'seed-execution-file-voice';
+  const voiceText = "Call the vet about Miso's booster on Friday";
+  const voiceTitle = "Call the vet about Miso's booster";
+  const turnOf = async (
+    id: string,
+    index: number,
+    text: string,
+    minutesAgo: number,
+    fields: Pick<Capture, 'attachmentIds' | 'executionIds'> &
+      Partial<Pick<Capture, 'inputMode' | 'sttProvider' | 'ttsProvider'>>,
+  ) => {
+    const createdAt = now - minutesAgo * MINUTE_MS;
+    const reading = readCapture(text, {
+      now: createdAt,
+      timeZone,
+      assistantName: DEFAULT_ASSISTANT_NAME,
+    });
+    const capture: Capture = {
+      inputMode: 'typed',
+      sttProvider: null,
+      interruptedCaptureId: null,
+      answersQuestion: null,
+      ttsProvider: null,
+      arrivedVia: 'direct',
+      medium: 'web',
+      sessionId,
+      turnIndex: index,
+      route: 'full',
+      status: 'sorted',
+      heldReason: null,
+      claimId: null,
+      claimedAt: null,
+      attempts: 0,
+      lastErrorCode: null,
+      questionState: {},
+      turnLeadId: null,
+      joinedCaptureIds: [],
+      seenAt: createdAt + MINUTE_MS,
+      quotedSourceKeys: [],
+      answerSavedNoteId: null,
+      whoIds: [],
+      placeIds: [],
+      planDayKey: null,
+      createdAt,
+      sortedAt: createdAt + SORT_DELAY_MS,
+      screen: null,
+      ...fields,
+      sealed: await seal<CaptureSealed>({
+        text,
+        reading,
+        answer: null,
+        questionAnswer: null,
+      }),
+    };
+    return { id, createdAt, reading, capture };
+  };
+  const [pdf, markdown, voice] = await Promise.all([
+    turnOf(pdfTurn, 3, "The vet's summary from Miso's visit", 75, {
+      attachmentIds: [pdfMedia],
+      executionIds: [pdfExecution],
+    }),
+    turnOf(mdTurn, 4, 'My packing list', 60, {
+      attachmentIds: [mdMedia],
+      executionIds: [mdExecution],
+    }),
+    turnOf(voiceTurn, 5, voiceText, 45, {
+      inputMode: 'voice',
+      sttProvider: 'voiceNote',
+      ttsProvider: 'natural',
+      attachmentIds: [voiceMedia],
+      executionIds: [voiceExecution],
+    }),
+  ]);
+  const sortedAt = (turn: { createdAt: number }) =>
+    turn.createdAt + SORT_DELAY_MS;
+  const buildMedia = async (
+    kind: MediaKind,
+    turn: { id: string; createdAt: number },
+    sealed: Omit<MediaSealed, 'keyId'>,
+    fields: Partial<Media>,
+  ): Promise<Media> => ({
+    kind,
+    role: 'attachment',
+    status: 'kept',
+    mimeType: '',
+    hasThumb: false,
+    durationMs: null,
+    pageCount: null,
+    attachedTo: [],
+    decidedBy: 'nomos',
+    createdAt: turn.createdAt,
+    decidedAt: sortedAt(turn),
+    deleteAfter: null,
+    sourceCaptureId: turn.id,
+    executionId: null,
+    ...fields,
+    sealed: await seal<MediaSealed>({ ...sealed, keyId: encryption.keyId }),
+  });
+  const [pdfBytes, voiceBytes] = await Promise.all([
+    sealBytes(
+      makeTextPdf([
+        [
+          'Miso - vet summary',
+          'Booster given Nov 3',
+          'Weight 4.2 kg, a healthy cat',
+        ],
+        ['Next booster due in 12 months', 'Bring the booster card next time'],
+      ]),
+      encryption,
+    ),
+    sealBytes(makeSilentWav(1), encryption),
+  ]);
+  const media = [
+    {
+      id: pdfMedia,
+      media: await buildMedia(
+        'pdf',
+        pdf,
+        {
+          bytesNonce: pdfBytes.nonce,
+          thumbNonce: null,
+          caption: null,
+          fileName: 'miso-vet-summary.pdf',
+          text: null,
+        },
+        {
+          mimeType: 'application/pdf',
+          pageCount: 2,
+          attachedTo: [{ kind: 'task', id: pdfTask }],
+          executionId: pdfExecution,
+        },
+      ),
+      uploads: getMediaObjectPaths(uid, pdfMedia, 'pdf', false).map((path) => ({
+        path,
+        bytes: pdfBytes.bytes,
+      })),
+    },
+    {
+      id: mdMedia,
+      media: await buildMedia(
+        'markdown',
+        markdown,
+        {
+          bytesNonce: null,
+          thumbNonce: null,
+          caption: null,
+          fileName: mdName,
+          text: mdText,
+        },
+        {
+          mimeType: 'text/markdown',
+          attachedTo: [{ kind: 'note', id: mdNote }],
+          executionId: mdExecution,
+        },
+      ),
+      uploads: [],
+    },
+    {
+      id: voiceMedia,
+      media: await buildMedia(
+        'voiceNote',
+        voice,
+        {
+          bytesNonce: voiceBytes.nonce,
+          thumbNonce: null,
+          caption: null,
+          fileName: null,
+          text: voiceText,
+        },
+        {
+          mimeType: 'audio/wav',
+          durationMs: 1000,
+          status: 'discarded',
+          deleteAfter: now + 20 * 60 * MINUTE_MS,
+        },
+      ),
+      uploads: getMediaObjectPaths(uid, voiceMedia, 'voiceNote', false).map(
+        (path) => ({ path, bytes: voiceBytes.bytes }),
+      ),
+    },
+  ];
+  const buildTask = async (
+    id: string,
+    title: string,
+    due: TaskDue | null,
+    turn: { id: string; createdAt: number },
+    executionId: string,
+  ) => {
+    const task: Task = {
+      status: 'open',
+      importance: null,
+      isUrgent: false,
+      due,
+      durationMinutes: null,
+      energy: null,
+      context: null,
+      projectId: null,
+      milestoneId: null,
+      whoIds: [],
+      placeIds: [],
+      notUntil: null,
+      waitsOnTaskIds: [],
+      waitsOnWhoId: null,
+      stepState: {},
+      mediaIds: [],
+      createdBy: 'nomos',
+      sourceCaptureId: turn.id,
+      executionId,
+      createdAt: sortedAt(turn),
+      lastEditedAt: null,
+      completedAt: null,
+      clearedAt: null,
+      sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
+    };
+    return { id, task };
+  };
+  const voiceDue = dueFrom(voice.reading.dates, 'Friday');
+  const tasks = await Promise.all([
+    buildTask(pdfTask, pdfTitle, null, pdf, pdfExecution),
+    buildTask(voiceTask, voiceTitle, voiceDue, voice, voiceExecution),
+  ]);
+  const buildExecution = async (
+    captureId: string,
+    at: number,
+    fields: Pick<Execution, 'effectRefs'> &
+      Pick<ExecutionSealed, 'summary' | 'commands' | 'effects' | 'spoken'> &
+      Partial<Pick<ExecutionSealed, 'lines'>>,
+  ): Promise<Execution> => ({
+    captureId,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: fields.effectRefs,
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: at,
+    decidedAt: at,
+    finishedAt: at,
+    sealed: await seal<ExecutionSealed>({
+      summary: fields.summary,
+      commands: fields.commands,
+      effects: fields.effects,
+      undoReport: null,
+      spoken: fields.spoken,
+      goneIds: null,
+      lines: fields.lines ?? [],
+    }),
+  });
+  const taskEffect = (title: string, due: TaskDue | null) => ({
+    written: { 'sealed.title': title, due, status: 'open', isUrgent: false },
+    previous: null,
+  });
+  const keptEffect = (title: string, attachedTo: Media['attachedTo']) => ({
+    written: {
+      'sealed.title': title,
+      status: 'kept',
+      role: 'attachment',
+      attachedTo,
+      decidedBy: 'nomos',
+      decidedAt: 0,
+      deleteAfter: null,
+    },
+    previous: {
+      'sealed.title': title,
+      status: 'received',
+      role: 'attachment',
+      attachedTo: [],
+      decidedBy: null,
+      decidedAt: null,
+      deleteAfter: null,
+    },
+  });
+  const sections = readableSections(mdText).map((section, index) => ({
+    id: `seed-section-file-packing-${index + 1}`,
+    heading: section.heading,
+    level: section.level,
+    markdown: section.markdown,
+    writtenBy: 'person' as const,
+    sources: [{ kind: 'file' as const, mediaId: mdMedia, noteId: mdNote }],
+  }));
+  const noteTitle = markdownTitle(mdText, mdName);
+  const topicLine = buildFileTopicLine(noteTitle, mdName);
+  const mdAt = sortedAt(markdown);
+  const note: Note = {
+    topicIds: [mdTopic],
+    source: 'importedFile',
+    isFromGeneralAnswer: false,
+    checkedAt: null,
+    hasHealthCaution: false,
+    sourceCaptureId: mdTurn,
+    sourceMediaId: mdMedia,
+    projectIds: [],
+    createdBy: 'nomos',
+    executionId: mdExecution,
+    createdAt: mdAt,
+    lastEditedAt: null,
+    sealed: await seal<NoteSealed>({ title: noteTitle, body: mdText }),
+  };
+  const topic: Topic = {
+    parentId: null,
+    depth: 1,
+    projectIds: [],
+    version: 1,
+    docState: 'current',
+    pendingNoteIds: [],
+    writeClaim: null,
+    overviewOf: {},
+    createdBy: 'nomos',
+    executionId: mdExecution,
+    createdAt: mdAt,
+    lastEditedAt: null,
+    lastWrittenAt: mdAt,
+    sealed: await seal<TopicSealed>({
+      name: noteTitle,
+      emoji: null,
+      overview: null,
+      sections,
+    }),
+  };
+  const version: TopicVersion = {
+    version: 1,
+    restoredFromVersion: null,
+    createdBy: 'nomos',
+    reason: 'imported',
+    noteIds: [mdNote],
+    sourceCaptureId: mdTurn,
+    executionId: mdExecution,
+    createdAt: mdAt,
+    sealed: await seal<TopicVersionSealed>({
+      sections,
+      changeSummary: `Imported from ${mdName}`,
+      requestQuote: null,
+      parentName: null,
+    }),
+  };
+  const voiceSpoken = buildSpokenAck({
+    inputMode: 'voice',
+    counts: { made: 1, updated: 0, completed: 0 },
+    messageCount: 1,
+    created: [{ title: voiceTitle, due: voiceDue }],
+    timeZone,
+    now: sortedAt(voice),
+  });
+  const executions = await Promise.all([
+    buildExecution(pdfTurn, sortedAt(pdf), {
+      effectRefs: [
+        { op: 'create', collection: 'tasks', docId: pdfTask },
+        { op: 'update', collection: 'media', docId: pdfMedia },
+      ],
+      summary: [summarize(1), describeKeptPhotos([pdfTitle], ['pdf'])].join(
+        '. ',
+      ),
+      commands: [{ kind: 'createTask', title: pdfTitle, due: null }],
+      effects: [
+        taskEffect(pdfTitle, null),
+        keptEffect(pdfTitle, [{ kind: 'task', id: pdfTask }]),
+      ],
+      spoken: null,
+    }),
+    buildExecution(mdTurn, mdAt, {
+      effectRefs: [
+        { op: 'create', collection: 'notes', docId: mdNote },
+        { op: 'create', collection: 'topics', docId: mdTopic },
+        { op: 'update', collection: 'media', docId: mdMedia },
+      ],
+      summary: topicLine,
+      commands: [],
+      effects: [
+        {
+          written: { 'sealed.title': topicLine },
+          previous: null,
+        },
+        {
+          written: {
+            'sealed.title': topicLine,
+            'sealed.name': noteTitle,
+            importedVersion: 1,
+          },
+          previous: null,
+        },
+        keptEffect(noteTitle, [{ kind: 'note', id: mdNote }]),
+      ],
+      spoken: null,
+      lines: [{ text: topicLine, ref: { collection: 'topics', id: mdTopic } }],
+    }),
+    buildExecution(voiceTurn, sortedAt(voice), {
+      effectRefs: [{ op: 'create', collection: 'tasks', docId: voiceTask }],
+      summary: summarize(1),
+      commands: [{ kind: 'createTask', title: voiceTitle, due: voiceDue }],
+      effects: [taskEffect(voiceTitle, voiceDue)],
+      spoken: voiceSpoken,
+    }),
+  ]);
+  return {
+    captures: [pdf, markdown, voice].map(({ id, capture }) => ({
+      id,
+      capture,
+    })),
+    media,
+    tasks,
+    executions: [pdfExecution, mdExecution, voiceExecution].map(
+      (id, index) => ({ id, execution: executions[index] }),
+    ),
+    notes: [{ id: mdNote, note }],
+    topics: [{ id: mdTopic, topic }],
+    versions: [{ topicId: mdTopic, id: '1', version }],
+  };
 }
 
 /** Alex's people: themself, two Sams, Dana, a cat and a bakery, five facts on Dana, Sam and Home, four on Alex themself (two preferences, a favorite and who they are), the turn that said Dana's, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
@@ -1731,6 +3900,7 @@ async function buildPeople(input: {
       createdAt: now - (order + 3) * DAY_MS,
       lastEditedAt: null,
       completedAt: null,
+      clearedAt: null,
       sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
     },
   });
@@ -1804,6 +3974,7 @@ async function buildPeople(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: 'seed-alex-question',
     turnIndex: 0,
@@ -1826,8 +3997,10 @@ async function buildPeople(input: {
     executionIds: [],
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     seenAt: null,
     quotedSourceKeys: [],
+    answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
     createdAt: questionAt,
@@ -1883,6 +4056,7 @@ async function buildPeople(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: 'seed-alex-asked',
     turnIndex: 0,
@@ -1912,8 +4086,10 @@ async function buildPeople(input: {
     executionIds: [],
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     seenAt: null,
     quotedSourceKeys: [],
+    answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
     createdAt: askedAt,
@@ -1943,6 +4119,7 @@ async function buildPeople(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: 'seed-alex-who',
     turnIndex: 0,
@@ -1957,8 +4134,10 @@ async function buildPeople(input: {
     executionIds: [],
     turnLeadId: null,
     joinedCaptureIds: [],
+    attachmentIds: [],
     seenAt: turnAt + MINUTE_MS,
     quotedSourceKeys: [],
+    answerSavedNoteId: null,
     whoIds: ['seed-who-sam-patel'],
     placeIds: [],
     createdAt: turnAt,
@@ -1980,6 +4159,7 @@ async function buildPeople(input: {
   const factAt = now - 4 * DAY_MS;
   const factCapture: Capture = {
     ...capture,
+    arrivedVia: 'dropBox',
     sessionId: 'seed-alex-facts',
     turnIndex: 0,
     seenAt: factAt + MINUTE_MS,
@@ -2613,9 +4793,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const batch = context.firestore.batch();
 
   const turnCounts = await Promise.all(
-    SEED_PROFILES.map(async ({ user, timeZone }) => {
+    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone, theme }) => {
       batch.set(users.doc(user.uid), {
         timeZone,
+        assistantName,
+        assistantTone,
+        theme,
         dayStartTime: DEFAULT_DAY_START_TIME,
         dayEndTime: DEFAULT_DAY_END_TIME,
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
@@ -2632,6 +4815,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         hasSeenVoiceNotice: false,
         selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
         currentPlace: null,
+        styleLearnedThroughAt:
+          user.uid === FIXTURE_USERS.partnerOne.uid ? context.now : null,
         createdAt,
         lastEditedAt: null,
       });
@@ -2687,6 +4872,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             interruptedCaptureId: null,
             answersQuestion: null,
             ttsProvider: spoken === undefined ? null : 'natural',
+            arrivedVia: 'direct',
             medium: 'web',
             sessionId: `seed-${user.uid}-${turn.session}`,
             turnIndex: ALL_TURNS.filter(
@@ -2703,8 +4889,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             executionIds: isSorted ? [executionId] : [],
             turnLeadId: null,
             joinedCaptureIds: [],
+            attachmentIds: [],
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
             quotedSourceKeys: [],
+            answerSavedNoteId: null,
             whoIds: [],
             placeIds: [],
             planDayKey: null,
@@ -2741,6 +4929,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                 createdAt: sortedAt,
                 lastEditedAt: null,
                 completedAt: null,
+                clearedAt: null,
                 sealed: await sealJson<TaskSealed>(
                   { title, notes: null, steps: {} },
                   encryption,
@@ -2791,6 +4980,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                     undoReport: null,
                     spoken: spoken ?? null,
                     goneIds: null,
+                    lines: [],
                   },
                   encryption,
                 ),
@@ -2901,6 +5091,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             createdAt: made,
             lastEditedAt: made + 3 * MINUTE_MS,
             completedAt: null,
+            clearedAt: null,
             sealed: await sealJson<TaskSealed>(
               {
                 title: entry.title,
@@ -2965,7 +5156,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               timeZone,
               encryption,
             })
-          : { turns: [], tasks: [] };
+          : { turns: [], tasks: [], notes: [] };
       answerTurns.turns.forEach((entry) => {
         batch.set(
           person.collection('captures').doc(entry.captureId),
@@ -2978,6 +5169,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       });
       answerTurns.tasks.forEach((entry) =>
         batch.set(person.collection('tasks').doc(entry.id), entry.task),
+      );
+      answerTurns.notes.forEach((entry) =>
+        batch.set(person.collection('notes').doc(entry.id), entry.note),
       );
       const gmailTurn =
         user.uid === FIXTURE_USERS.partnerOne.uid
@@ -3000,6 +5194,29 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         batch.set(
           person.collection('facts').doc(gmailTurn.factId),
           gmailTurn.fact,
+        );
+      }
+      const noteTurn =
+        user.uid === FIXTURE_USERS.partnerOne.uid
+          ? await buildNoteTurn({
+              uid: user.uid,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+      if (noteTurn) {
+        batch.set(
+          person.collection('captures').doc(CAPTURE_NOTE_TURN_ID),
+          noteTurn.capture,
+        );
+        batch.set(
+          person.collection('executions').doc(CAPTURE_NOTE_EXECUTION_ID),
+          noteTurn.execution,
+        );
+        batch.set(
+          person.collection('notes').doc(CAPTURE_NOTE_ID),
+          noteTurn.note,
         );
       }
       const planDays =
@@ -3088,6 +5305,85 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.clashCapture.capture,
         );
       }
+      const photoTurns = people
+        ? await buildPhotoTurns({
+            uid: user.uid,
+            now: context.now,
+            timeZone,
+            encryption,
+          })
+        : null;
+      if (photoTurns) {
+        photoTurns.captures.forEach((entry) =>
+          batch.set(person.collection('captures').doc(entry.id), entry.capture),
+        );
+        photoTurns.media.forEach((entry) =>
+          batch.set(person.collection('media').doc(entry.id), entry.media),
+        );
+        await Promise.all(
+          photoTurns.media.flatMap((entry) =>
+            entry.uploads.map((upload) =>
+              uploadSealedSeed(upload.path, upload.bytes),
+            ),
+          ),
+        );
+        batch.set(
+          person.collection('tasks').doc(photoTurns.task.id),
+          photoTurns.task.task,
+        );
+        batch.set(
+          person.collection('executions').doc(photoTurns.execution.id),
+          photoTurns.execution.execution,
+        );
+      }
+      const fileTurns = photoTurns
+        ? await buildFileTurns({
+            uid: user.uid,
+            now: context.now,
+            timeZone,
+            encryption,
+          })
+        : null;
+      if (fileTurns) {
+        fileTurns.captures.forEach((entry) =>
+          batch.set(person.collection('captures').doc(entry.id), entry.capture),
+        );
+        fileTurns.media.forEach((entry) =>
+          batch.set(person.collection('media').doc(entry.id), entry.media),
+        );
+        await Promise.all(
+          fileTurns.media.flatMap((entry) =>
+            entry.uploads.map((upload) =>
+              uploadSealedSeed(upload.path, upload.bytes),
+            ),
+          ),
+        );
+        fileTurns.tasks.forEach((entry) =>
+          batch.set(person.collection('tasks').doc(entry.id), entry.task),
+        );
+        fileTurns.executions.forEach((entry) =>
+          batch.set(
+            person.collection('executions').doc(entry.id),
+            entry.execution,
+          ),
+        );
+        fileTurns.notes.forEach((entry) =>
+          batch.set(person.collection('notes').doc(entry.id), entry.note),
+        );
+        fileTurns.topics.forEach((entry) =>
+          batch.set(person.collection('topics').doc(entry.id), entry.topic),
+        );
+        fileTurns.versions.forEach((entry) =>
+          batch.set(
+            person
+              .collection('topics')
+              .doc(entry.topicId)
+              .collection('versions')
+              .doc(entry.id),
+            entry.version,
+          ),
+        );
+      }
       const projects = people
         ? await buildProjects({ now: context.now, encryption })
         : null;
@@ -3099,8 +5395,100 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           batch.set(person.collection('tasks').doc(entry.id), entry.task),
         );
       }
+      const knowledge = people
+        ? await buildKnowledge({
+            uid: user.uid,
+            now: context.now,
+            timeZone,
+            encryption,
+          })
+        : null;
+      if (knowledge) {
+        knowledge.topics.forEach((entry) =>
+          batch.set(person.collection('topics').doc(entry.id), entry.topic),
+        );
+        knowledge.notes.forEach((entry) =>
+          batch.set(person.collection('notes').doc(entry.id), entry.note),
+        );
+        knowledge.versions.forEach((entry) =>
+          batch.set(
+            person
+              .collection('topics')
+              .doc(entry.topicId)
+              .collection('versions')
+              .doc(entry.id),
+            entry.version,
+          ),
+        );
+        knowledge.captures.forEach((entry) =>
+          batch.set(person.collection('captures').doc(entry.id), entry.capture),
+        );
+        knowledge.executions.forEach((entry) =>
+          batch.set(
+            person.collection('executions').doc(entry.id),
+            entry.execution,
+          ),
+        );
+      }
+      const procedures = people
+        ? await buildProcedures({ now: context.now, encryption })
+        : null;
+      if (procedures) {
+        procedures.procedures.forEach((entry) =>
+          batch.set(
+            person.collection('procedures').doc(entry.id),
+            entry.procedure,
+          ),
+        );
+        procedures.versions.forEach((entry) =>
+          batch.set(
+            person
+              .collection('procedures')
+              .doc(entry.procedureId)
+              .collection('versions')
+              .doc(entry.id),
+            entry.version,
+          ),
+        );
+      }
+      const runs = procedures
+        ? await buildRuns({
+            now: context.now,
+            encryption,
+            packing: procedures.basis.packing,
+            cabin: procedures.basis.cabin,
+          })
+        : null;
+      if (runs) {
+        runs.forEach((entry) =>
+          batch.set(
+            person.collection('procedureRuns').doc(entry.id),
+            entry.run,
+          ),
+        );
+      }
+      const style = people
+        ? await buildStyle({ now: context.now, encryption })
+        : null;
+      if (style) {
+        style.forEach((entry) =>
+          batch.set(person.collection('style').doc(entry.id), entry.style),
+        );
+      }
       const peopleCount = people
-        ? people.who.length +
+        ? (photoTurns
+            ? photoTurns.captures.length + photoTurns.media.length + 2
+            : 0) +
+          (fileTurns
+            ? fileTurns.captures.length +
+              fileTurns.media.length +
+              fileTurns.tasks.length +
+              fileTurns.executions.length +
+              fileTurns.notes.length +
+              fileTurns.topics.length +
+              fileTurns.versions.length
+            : 0) +
+          people.who.length +
           people.places.length +
           people.media.length +
           people.tasks.length +
@@ -3108,7 +5496,19 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.keyDates.length +
           1 +
           7 +
-          (projects ? projects.projects.length + projects.tasks.length : 0)
+          (projects ? projects.projects.length + projects.tasks.length : 0) +
+          (knowledge
+            ? knowledge.topics.length +
+              knowledge.notes.length +
+              knowledge.versions.length +
+              knowledge.captures.length +
+              knowledge.executions.length
+            : 0) +
+          (procedures
+            ? procedures.procedures.length + procedures.versions.length
+            : 0) +
+          (runs ? runs.length : 0) +
+          (style ? style.length : 0)
         : 0;
       const backToBackCount =
         peopleCount +
@@ -3117,7 +5517,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         1 +
         answerTurns.turns.length * 2 +
         answerTurns.tasks.length +
+        answerTurns.notes.length +
         (gmailTurn ? 3 : 0) +
+        (noteTurn ? 3 : 0) +
         (planDays ? planDays.days.length + 1 : 0);
       return (
         backToBackCount +
@@ -3228,7 +5630,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         dueAt: copy.dueAt,
         calendarKey: null,
         isBusy: null,
-        sourceUpdatedAt: syncedAt - DAY_MS,
+        sourceUpdatedAt: copy.sourceUpdatedAt ?? syncedAt - DAY_MS,
         contentHash: `seed-${id}`,
         syncedAt: endedAt ?? syncedAt,
         transformVersion: 1,
@@ -3239,10 +5641,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           {
             title: copy.title,
             subtitle: copy.subtitle,
-            detail: null,
+            detail: copy.detail ?? null,
             placeLabel: copy.placeLabel ?? null,
-            amountCents: null,
-            currency: null,
+            amountCents: copy.amountCents ?? null,
+            currency: copy.currency ?? null,
             deepLink: copy.deepLink,
             extra: copy.extra ?? {},
           },
@@ -3678,6 +6080,109 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     grantId: waypointGrantId,
   });
 
+  const runwayConnectorId = toAppConnectorId('runway');
+  const runwayGrantId = toGrantId('helm', runwayConnectorId, SITE_ACCOUNT_ID);
+  const runwaySummary = buildSampleShareSummary(context.now);
+  const runwayNextIncomeAt = runwaySummary.nextIncomeOn
+    ? Date.parse(`${runwaySummary.nextIncomeOn}T00:00:00Z`)
+    : null;
+  const runwayCopies: CopyDefinition[] = [
+    {
+      category: 'moneySummary',
+      sourceRef: 'plan/summary',
+      kind: 'moneySummary',
+      title: 'Free to Spend',
+      subtitle: null,
+      startAt: null,
+      dueAt: null,
+      isAllDay: false,
+      detail:
+        runwaySummary.dueBeforeIncomeCents > 0
+          ? `${formatMoney(
+              runwaySummary.dueBeforeIncomeCents,
+              runwaySummary.currency,
+            )} is due before the next income on ${runwaySummary.nextIncomeOn}`
+          : `Nothing is due before the next income on ${runwaySummary.nextIncomeOn}`,
+      amountCents: runwaySummary.freeToSpendCents,
+      currency: runwaySummary.currency,
+      sourceUpdatedAt: runwaySummary.computedAt,
+      extra: {
+        dueBeforeIncomeCents: runwaySummary.dueBeforeIncomeCents,
+        ...(runwayNextIncomeAt === null
+          ? {}
+          : { nextIncomeAt: runwayNextIncomeAt }),
+      },
+      deepLink: '/runway',
+    },
+  ];
+  const runwayGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: runwayConnectorId,
+    accountId: SITE_ACCOUNT_ID,
+    categories: {
+      moneySummary: { isOn: true, changedAt: connectedAt },
+      upcomingBills: { isOn: false, changedAt: connectedAt },
+      horizon: { isOn: false, changedAt: connectedAt },
+      transactions: { isOn: true, changedAt: connectedAt },
+    },
+    options: null,
+    status: 'live',
+    categoryState: Object.fromEntries(
+      RUNWAY_SHARES.shares.flatMap((share) =>
+        share.categories.map((category) => [
+          category.id,
+          {
+            lastOkAt: category.mode === 'live' ? null : syncedAt,
+            lastError: null,
+            count: runwayCopies.filter((copy) => copy.category === category.id)
+              .length,
+          },
+        ]),
+      ),
+    ),
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: syncedAt,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('grants')
+      .doc(runwayGrantId),
+    runwayGrant,
+  );
+  writeCopies(FIXTURE_USERS.partnerOne.uid, runwayCopies, null, {
+    connectorId: runwayConnectorId,
+    grantId: runwayGrantId,
+  });
+  // Jamie's plan is the one that tracks spending, so a question about a store has rows to find there.
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerTwo.uid)
+      .collection('grants')
+      .doc(runwayGrantId),
+    {
+      ...runwayGrant,
+      categories: {
+        ...runwayGrant.categories,
+        moneySummary: { isOn: false, changedAt: connectedAt },
+      },
+      categoryState: Object.fromEntries(
+        Object.entries(runwayGrant.categoryState).map(([id, state]) => [
+          id,
+          { ...state, count: 0 },
+        ]),
+      ),
+    } satisfies ConnectionGrant,
+  );
+
   const worthTheWaitConnectorId = toAppConnectorId('worth-the-wait');
   const worthTheWaitGrantId = toGrantId(
     'helm',
@@ -3996,6 +6501,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       nineLivesCopies.length +
       1 +
       waypointCopies.length +
+      1 +
       1 +
       6,
   };

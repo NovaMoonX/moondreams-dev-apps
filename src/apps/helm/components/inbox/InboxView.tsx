@@ -153,6 +153,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
                   className='flex h-auto w-full items-center justify-between gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
                   onClick={() => open(capture)}
                 >
+                  <span className='size-4 shrink-0' aria-hidden='true' />
                   <span className='min-w-0 flex-1'>
                     <span className='text-foreground line-clamp-2 text-[15px] leading-[21px] break-words'>
                       {capture.isUnreadable

@@ -1,6 +1,148 @@
+import { formatList } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
+import type { ThemeOption } from '@/components/ThemePicker';
+import type {
+  AssistantTone,
+  HelmTheme,
+  MediaKind,
+  ProcedureVersionReason,
+  TopicVersionReason,
+} from '@apps/helm/types';
+import {
+  MAX_ATTACHMENTS_PER_TURN,
+  MAX_MARKDOWN_BYTES,
+  MAX_MARKDOWN_CHARS,
+  MAX_PDF_BYTES,
+  MAX_PDF_PAGES,
+  MAX_VOICE_NOTE_MS,
+} from '@apps/helm/utils/mediaCaps';
 
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
+export const DEFAULT_ASSISTANT_TONE: AssistantTone = 'composed';
+
+export const DEFAULT_HELM_THEME: HelmTheme = 'chestnut';
+
+/** The four palettes with the colours their preview cards draw; they match the blocks in `helm.css`. */
+export const HELM_THEMES: ThemeOption<HelmTheme>[] = [
+  {
+    id: 'chestnut',
+    name: 'Chestnut & Sand',
+    light: {
+      background: '#f7f3ee',
+      card: '#fffdfa',
+      foreground: '#2e241d',
+      muted: '#6b5d51',
+      primary: '#7a5434',
+      primaryForeground: '#ffffff',
+      border: '#e5dccf',
+    },
+    dark: {
+      background: '#15110e',
+      card: '#1e1915',
+      foreground: '#f1e9e1',
+      muted: '#ad9d8e',
+      primary: '#e0bf9c',
+      primaryForeground: '#17110c',
+      border: '#382e26',
+    },
+  },
+  {
+    id: 'plum',
+    name: 'Plum & Pewter',
+    light: {
+      background: '#f7f5f7',
+      card: '#ffffff',
+      foreground: '#2a2130',
+      muted: '#655b6b',
+      primary: '#53375f',
+      primaryForeground: '#ffffff',
+      border: '#e4dfe6',
+    },
+    dark: {
+      background: '#151018',
+      card: '#1e1822',
+      foreground: '#efe9f2',
+      muted: '#a99eae',
+      primary: '#d3b8e0',
+      primaryForeground: '#150f18',
+      border: '#352c3b',
+    },
+  },
+  {
+    id: 'teal',
+    name: 'Mist & Deep Teal',
+    light: {
+      background: '#f3f6f6',
+      card: '#ffffff',
+      foreground: '#172a2e',
+      muted: '#52666a',
+      primary: '#14555e',
+      primaryForeground: '#ffffff',
+      border: '#dae3e4',
+    },
+    dark: {
+      background: '#0d1517',
+      card: '#152023',
+      foreground: '#e6eef0',
+      muted: '#97aaae',
+      primary: '#86ccd6',
+      primaryForeground: '#081316',
+      border: '#273639',
+    },
+  },
+  {
+    id: 'indigo',
+    name: 'Porcelain & Indigo',
+    light: {
+      background: '#f8f8fb',
+      card: '#ffffff',
+      foreground: '#1b1e33',
+      muted: '#5a5e78',
+      primary: '#3a3f8c',
+      primaryForeground: '#ffffff',
+      border: '#e1e2ec',
+    },
+    dark: {
+      background: '#0e0f1a',
+      card: '#161828',
+      foreground: '#e8e9f5',
+      muted: '#9fa3c0',
+      primary: '#b1b6f6',
+      primaryForeground: '#0e0f1a',
+      border: '#2a2d45',
+    },
+  },
+];
+
+/** Each tone with a fixed sample of the same answer, shown before saving; no model writes these. */
+export const ASSISTANT_TONES: {
+  value: AssistantTone;
+  label: string;
+  sample: string;
+}[] = [
+  {
+    value: 'composed',
+    label: 'Composed',
+    sample: 'Your cake tasting is today at 3:00 PM at Sweet Layer Bakery.',
+  },
+  {
+    value: 'warm',
+    label: 'Warm',
+    sample:
+      "Your cake tasting is today at 3:00 PM at Sweet Layer Bakery. Hope it's a good one.",
+  },
+  {
+    value: 'brief',
+    label: 'Brief',
+    sample: 'Cake tasting: today, 3:00 PM, Sweet Layer Bakery.',
+  },
+  {
+    value: 'formal',
+    label: 'Formal',
+    sample:
+      'The cake tasting is this afternoon at 3:00 PM, at Sweet Layer Bakery.',
+  },
+];
 
 export const DEFAULT_DAY_START_TIME = '08:00';
 export const DEFAULT_DAY_END_TIME = '22:00';
@@ -28,6 +170,9 @@ export const TASK_TITLE_CAP = 200;
 
 /** A turn being read whose claim is older than this is taken over by the next sweep. */
 export const SWEEP_LEASE_MS = 90 * 1000;
+
+/** How long a topic write the server is making holds the topic. */
+export const CLAIM_MS = 90_000;
 /** The window of the ten-minute limit. */
 export const RECENT_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 /** A turn whose reading failed is not tried again by the sweep before this has passed. */
@@ -68,16 +213,68 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 export const OPEN_TASKS_LIMIT = 150;
 export const FACTS_LIMIT = 300;
 export const FACT_STATEMENT_MAX = 500;
+export const STYLE_TRAIT_MAX = 120;
+export const STYLE_AVOID_MAX = 80;
+export const STYLE_TRAIT_LIMIT = 12;
+export const STYLE_AVOID_LIMIT = 6;
+export const STYLE_REMOVED_LIMIT = 30;
+/** New typed messages between one learning run and the next. */
+export const STYLE_LEARN_EVERY = 25;
 export const TOPIC_MAX = 40;
 /** The most who and places the app keeps listening to. */
 export const WHO_LIMIT = 2_500;
 export const PLACES_LIMIT = 500;
 export const PROJECTS_LIMIT = 500;
+export const NOTES_LIMIT = 1_000;
+export const TOPICS_LIMIT = 100;
+export const NOTE_TITLE_MAX = 80;
+export const NOTE_BODY_MAX = 20_000;
+/** The count under a note's text shows from here. */
+export const NOTE_COUNT_FROM = 18_000;
+export const TOPIC_NAME_MAX = 40;
+export const TOPIC_DEPTH_MAX = 3;
+export const SECTION_HEADING_MAX = 80;
+export const SECTION_MARKDOWN_MAX = 4_000;
+export const TOPIC_SECTIONS_MAX = 60;
+export const TOPIC_DOCUMENT_MAX = 30_000;
+export const SECTION_SOURCES_MAX = 20;
+/** The newest versions the History sheet listens to. */
+export const TOPIC_VERSIONS_LIMIT = 200;
+export const PROCEDURES_LIMIT = 200;
+export const PROCEDURE_STEPS_MAX = 60;
+export const PROCEDURE_STEP_TEXT_CAP = 200;
+export const PROCEDURE_STEP_DETAIL_CAP = 500;
+export const PROCEDURE_TITLE_CAP = 80;
+export const PROCEDURE_GROUPS_MAX = 12;
+export const PROCEDURE_GROUP_NAME_CAP = 40;
+export const PROCEDURE_VERSIONS_KEPT = 200;
+/** Steps past which a procedure's groups start folded. */
+export const PROCEDURE_FOLD_FROM = 50;
+/** A run holds the procedure's steps and the ones added for it alone, and the server writes the same caps. */
+export const RUN_STEPS_MAX = 80;
+export const RUN_EXTRA_MAX = 20;
+export const RUN_GROUPS_MAX = 12;
+export const RUN_EXTRA_TEXT_CAP = 200;
+/** Open runs listened to for the whole app. */
+export const RUNS_OPEN_LIMIT = 50;
+/** Runs a procedure's page or a project's lists before it says there are more. */
+export const RUNS_LISTED = 5;
+export const RUNS_ALL_MAX = 100;
+/** Days ahead a trip or event is offered on Start a run. */
+export const RUN_START_DAYS = 30;
+export const RUN_START_LISTED = 4;
+export const SUBTOPICS_MAX = 20;
+export const NOTE_TOPICS_MAX = 10;
+/** Notes the search field appears from. */
+export const KNOWLEDGE_SEARCH_FROM = 8;
 /** The most tasks in projects (open and done) the app keeps listening to. */
 export const PROJECT_TASKS_LIMIT = 1_000;
 export const PROJECT_NAME_MAX = 80;
 export const PROJECT_OBJECTIVE_MAX = 200;
 export const PROJECT_ROLE_NOTE_MAX = 40;
+export const MILESTONE_TITLE_MAX = 80;
+/** The most milestones one project holds. */
+export const MILESTONES_MAX = 30;
 /** Tasks a project's page lists before "Show all". */
 export const PROJECT_TASKS_SHOWN = 6;
 /** Days without a finished task before a project says it has gone quiet. */
@@ -194,12 +391,113 @@ const forgetMomentsLine = (moments: number) =>
     ? ''
     : ` ${moments === 1 ? 'Its moment is' : `Its ${moments} moments are`} deleted too.`;
 
+const toTopicPhrase = (
+  count: number,
+  name: string | null,
+  isGrouping = false,
+) =>
+  isGrouping && name
+    ? `grouping under ${name}`
+    : count === 1
+      ? `1 change to ${name ?? 'a topic'}`
+      : `${count} changes to topics`;
+
+const NAMED_STEPS_SHOWN = 2;
+const NAMED_STEP_CLIP = 24;
+
+const toStepNames = (names: string[]) => {
+  const clipped = names.map((name) =>
+    name.length > NAMED_STEP_CLIP
+      ? `${name.slice(0, NAMED_STEP_CLIP - 1).trimEnd()}…`
+      : name,
+  );
+  const shown = clipped.slice(0, NAMED_STEPS_SHOWN);
+  const more = clipped.length - shown.length;
+  return more > 0
+    ? `${shown.join(', ')} and ${more} more`
+    : shown.join(' and ');
+};
+
+const toStepsEdit = (verb: string, count: number, names: string[]) =>
+  names.length === 0
+    ? `You ${verb} ${count === 1 ? '1 step' : `${count} steps`}`
+    : `You ${verb} ${toStepNames(names)}`;
+
+const toProcedurePhrase = (count: number, name: string | null) =>
+  count === 1
+    ? `1 change to ${name ?? 'a procedure'}`
+    : `${count} changes to procedures`;
+
+/** What an Undo did to runs, as lowercase parts: a run the turn started is taken back, ticks it wrote are unticked. */
+const toRunParts = (deleted: string[], unticked: number) =>
+  [
+    deleted.length === 0
+      ? ''
+      : `took back ${deleted.length === 1 ? `the run of ${deleted[0]}` : `${deleted.length} runs`}`,
+    unticked === 0
+      ? ''
+      : `unticked ${unticked === 1 ? '1 step' : `${unticked} steps`}`,
+  ].filter(Boolean);
+
+const toCapital = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Each kind of medium in a sentence: its word, its titled and "the" forms, its sheet title, and whether its file name stands in for them. */
+const MEDIA_WORDS: Record<
+  MediaKind,
+  {
+    word: string;
+    title: string;
+    noun: string;
+    sheet: string;
+    isNamedByFile: boolean;
+  }
+> = {
+  photo: {
+    word: 'photo',
+    title: 'A photo',
+    noun: 'the photo',
+    sheet: 'Photo',
+    isNamedByFile: false,
+  },
+  pdf: {
+    word: 'PDF',
+    title: 'A PDF',
+    noun: 'the PDF',
+    sheet: 'PDF',
+    isNamedByFile: false,
+  },
+  voiceNote: {
+    word: 'recording',
+    title: 'A recording',
+    noun: 'the recording',
+    sheet: 'Recording',
+    isNamedByFile: false,
+  },
+  markdown: {
+    word: 'file',
+    title: 'A file',
+    noun: 'the file',
+    sheet: 'Markdown file',
+    isNamedByFile: true,
+  },
+};
+
+const mediaWordOf = (kind: MediaKind) => MEDIA_WORDS[kind].word;
+
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
   talk: 'Talk',
   talkListening: 'Listening',
   talkSendLabel: 'Send what you said',
   talkListeningHint: 'Listening…',
+  talkGettingReady: 'Getting ready…',
+  talkListenFailed: "Couldn't start listening on this phone. Try again.",
+  talkNeedsConnection:
+    'Talk needs a connection on this phone. Turn on Hear me offline to talk without one.',
+  talkNeedsConnectionBlocked:
+    'Talk needs a connection on this phone. Type for now.',
+  talkOpenVoiceSettings: 'Voice settings',
   talkHeardNothing: "I didn't catch anything. Tap to try again.",
   talkStoppedWhileWorking: "It's still being added. I just won't read it out.",
   talkSavedOffline: "Saved. I'll file it when you're back online.",
@@ -257,6 +555,7 @@ export const HELM_COPY = {
   resultLinked: (names: string[]) => `Linked ${names.join(', ')}`,
   resultTaskDue: (due: string) => `Task · ${due}`,
   resultDone: 'Marked done',
+  resultNoteFallback: 'A note',
   resultTaskFallback: 'A task',
   resultFactFallback: 'Something noted',
   aiNotice: (name: string) =>
@@ -269,6 +568,10 @@ export const HELM_COPY = {
   overdueDue: (due: string) => `Overdue · ${due}`,
   unreadable: "Couldn't open this",
   loadingEarlier: 'Opening earlier turns',
+  earlierFold: (count: number) => `Earlier · ${count}`,
+  homeNextEvent: (clock: string, title: string) => `${clock} · ${title}`,
+  homeNextEventTomorrow: (clock: string, title: string) =>
+    `Tomorrow ${clock} · ${title}`,
   earlierFailed: "Couldn't open earlier turns. Try again",
   inboxTitle: 'Needs you',
   inboxNewSince: 'New since you looked',
@@ -291,9 +594,22 @@ export const HELM_COPY = {
   changeDay: (text: string) => `Change the day for ${text}`,
   tooLong: (over: number) =>
     `Too long by ${over.toLocaleString()} ${over === 1 ? 'character' : 'characters'}. Split it into two.`,
+  noteLoose: 'Not in a topic yet',
+  saveAsNote: 'Save as a note',
+  saveAsNoteTooLong: 'Too long to save as a note (20,000 at most).',
+  noteSavedFromText: (title: string) => `Saved a note: ${title}`,
+  noteAlreadyKept: (title: string) => `Already in your notes: ${title}`,
+  noteOpen: 'Open',
+  noteFromWhatYouSaid: (date: string) => `From what you said on ${date}`,
   turnSheetTitle: 'What you said',
   nothingWaiting: 'Nothing waiting',
   newSinceLooked: (count: number) => `${count} new since you looked`,
+  settingsTrustedBrowsers: 'Trusted browsers',
+  keptCopyNotice: (when: string | null) =>
+    when ? `Offline copy · ${when}` : 'Offline copy',
+  keptCopyRetry: 'Try again',
+  trustLapsedBody: (app: string) =>
+    `Trust this browser is off now. Turn it on again in Settings to keep opening ${app} offline.`,
   needsConnectionTitle: "Your things open once you're back online.",
   needsConnectionBody: (name: string) =>
     `This browser doesn't keep the key to them, so typing to ${name} waits for a connection too.`,
@@ -302,8 +618,46 @@ export const HELM_COPY = {
     "They're safe and nothing was changed. The problem is on our side, not yours.",
   tryAgain: 'Try again',
   stillCannotOpen: "Still can't open them. Your things are safe.",
-  composerOffline: "Typing works again once you're back online",
   composerBlocked: 'Typing works again once your things open',
+  outboxIntro: (name: string) =>
+    `You can still tell ${name} things; they wait here.`,
+  outboxNeedsConnection: (name: string) =>
+    `${name} needs a connection to keep this`,
+  outboxNoAttach:
+    "Photos and voice notes need a connection. Add them once you're back online.",
+  outboxNotKept: (name: string) =>
+    `Couldn't keep this on this device. ${name} needs a connection to keep it. Your words are still in the field.`,
+  outboxRowTitle: "Sealed until it's sent, so the words don't show here",
+  outboxRowLine: (time: string) => `${time} · sorted once you're back online`,
+  outboxCount: (count: number) =>
+    count === 1
+      ? '1 thing saved on this device'
+      : `${count} things saved on this device`,
+  outboxSheetTitle: 'Saved on this device',
+  outboxRemove: 'Remove',
+  outboxRemoveTitle: 'Remove this?',
+  outboxRemoveBody: (words: string | null, time: string) =>
+    words === null
+      ? `This takes what you typed at ${time} off this device. It hasn't been sent, so it's gone for good.`
+      : `This takes “${words}” off this device. It hasn't been sent, so it's gone for good.`,
+  outboxRemoveFailed: "Couldn't remove it. Try again.",
+  outboxSentLocked: "Sent. You'll see them once your things open.",
+  outboxRejected: (count: number) =>
+    count === 1
+      ? "1 thing saved on this device couldn't be kept."
+      : `${count} things saved on this device couldn't be kept.`,
+  outboxSignOutTitle: (count: number) =>
+    count === 1
+      ? 'Sign out and lose 1 thing?'
+      : `Sign out and lose ${count} things?`,
+  outboxSignOutBody: (count: number, name: string) =>
+    count === 1
+      ? `1 thing you told ${name} is still waiting on this device to be sent. Signing out deletes it.`
+      : `${count} things you told ${name} are still waiting on this device to be sent. Signing out deletes them.`,
+  outboxSignOutConfirm: 'Sign out anyway',
+  outboxStay: 'Stay',
+  arrivedViaDropBox:
+    'Saved on this device, then sent once you were back online',
   needsYouCount: (count: number) =>
     count === 1 ? '1 needs you' : `${count} need you`,
   couldNotRead: "Couldn't read this",
@@ -405,6 +759,125 @@ export const HELM_COPY = {
       .filter(Boolean)
       .join(' '),
   resultPhotoFallback: 'A photo',
+  mediaFallbackTitle: (kind: MediaKind, fileName: string | null) =>
+    MEDIA_WORDS[kind].isNamedByFile
+      ? (fileName ?? MEDIA_WORDS[kind].title)
+      : MEDIA_WORDS[kind].title,
+  mediaNoun: (kind: MediaKind, fileName: string | null) =>
+    MEDIA_WORDS[kind].isNamedByFile
+      ? (fileName ?? MEDIA_WORDS[kind].noun)
+      : MEDIA_WORDS[kind].noun,
+  mediaWord: mediaWordOf,
+  attachMenuLabel: 'Add a photo or file',
+  attachTake: 'Take a photo',
+  attachChoose: 'Choose photos',
+  attachChooseFile: 'Choose a file',
+  attachChooseFileHint: 'PDF or Markdown',
+  attachRecord: 'Record a voice note',
+  attachNote: (name: string) =>
+    `${name} reads what you send to sort it, and keeps only what's useful. You'll see what it kept.`,
+  attachRemove: (name: string) => `Remove ${name}`,
+  attachRemoveVoice: 'Remove voice note',
+  attachFailed: "Didn't upload",
+  attachTryAgain: 'Try again',
+  attachUploading: 'Uploading',
+  attachTooMany: `Up to ${MAX_ATTACHMENTS_PER_TURN} photos or files a turn. Remove one to add another.`,
+  attachSomeFit: (added: number) =>
+    `Added ${added}. Up to ${MAX_ATTACHMENTS_PER_TURN} photos or files a turn.`,
+  attachNotSupported: 'Photos, PDFs, Markdown files and voice notes only.',
+  attachTooManyPages: (pages: number) =>
+    `This PDF has ${pages} pages. Send one of up to ${MAX_PDF_PAGES} pages.`,
+  attachPdfTooLarge: `PDFs can be up to ${MAX_PDF_BYTES / 1024 / 1024} MB.`,
+  attachMarkdownTooLong: (chars: number) =>
+    `This file has ${chars.toLocaleString()} characters. Up to ${MAX_MARKDOWN_CHARS.toLocaleString()} can be read.`,
+  attachMarkdownTooLarge: `Markdown files can be up to ${MAX_MARKDOWN_BYTES / 1024} KB.`,
+  attachVoiceTooLong: `Voice notes can be up to ${MAX_VOICE_NOTE_MS / 60_000} minutes.`,
+  attachNeedsConnection:
+    'Sending a photo or file needs a connection. Your words stay here.',
+  attachWaiting: 'Waiting for your photos and files to upload.',
+  attachWaitingTitle: 'Still uploading',
+  attachWaitingVoice: 'Waiting for your voice note to be written out.',
+  attachFailedBlock:
+    "A photo or file didn't upload. Try again or remove it, then send.",
+  attachThumbLabel: (position: number) => `Photo ${position}`,
+  attachFileLabel: (name: string) => name,
+  attachMarkdownMeta: 'Markdown file',
+  attachVoiceMeta: (time: string) => `Voice note · ${time}`,
+  attachVoiceWritten: (time: string) => `Voice note · ${time} · Written out`,
+  attachWritingOut: 'Writing it out…',
+  attachWriteFailed: "Couldn't write this out",
+  attachVoiceUsedUp:
+    'Voice notes are used up for today. Type what it says, or try tomorrow.',
+  attachVoiceTooLongToWrite:
+    'This recording is over 5 minutes. Type what it says instead.',
+  attachPdfLocked: 'This PDF is locked. Unlock it and send it again.',
+  attachPdfUnreadable: "Couldn't open this PDF. Try another copy.",
+  recording: 'Recording',
+  recordCancel: 'Cancel',
+  recordStop: 'Stop',
+  recordStoppedAtLimit: 'Voice notes stop at 5 minutes. This one is saved.',
+  recordNoMicrophone:
+    "The microphone isn't available. Allow it in your browser's settings, or type instead.",
+  recordUnsupported: "This browser can't record. Type instead.",
+  recordNeedsConnection:
+    "Voice notes need a connection. Type it, or try again when you're back online.",
+  mediaKeptOn: (noun: string, record: string) => `Kept ${noun} on ${record}`,
+  mediaSeeOn: (record: string) => `See it on ${record}`,
+  mediaKeptNoRecord: (noun: string) => `Kept ${noun}`,
+  mediaLetGo: (kind: MediaKind) => `Didn't keep the ${mediaWordOf(kind)}`,
+  mediaKeepIt: 'Keep it',
+  mediaKeepRecording: 'Keep the recording',
+  mediaReadNotKept: (file: string) => `Read ${file}`,
+  mediaVoiceNotKept: 'Wrote out your voice note',
+  mediaKeepFailed: "That couldn't be kept. Try again.",
+  mediaKeepGone: 'That is already gone.',
+  mediaKeepNeedsConnection: 'Keeping this needs a connection.',
+  mediaKeptToast: 'Kept',
+  mediaOnRecordTitle: 'Photos',
+  mediaFromTurn: (day: string) => `From what you sent on ${day}`,
+  mediaRemovedToast: (kind: MediaKind) =>
+    `${mediaWordOf(kind)[0].toUpperCase()}${mediaWordOf(kind).slice(1)} removed`,
+  mediaRemoveFailed: "That didn't come off. Try again.",
+  mediaRestoreFailed: "That couldn't be put back. Try again.",
+  mediaUnreadable: "This can't be opened.",
+  mediaNotKeptIn: (hoursLeft: number | null) =>
+    hoursLeft === null
+      ? 'Not kept'
+      : hoursLeft < 1
+        ? 'Not kept · deleted in under an hour'
+        : `Not kept · deleted in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
+  mediaTookOff: (record: string) => `You took it off ${record}`,
+  mediaRemovedNoRecord: 'You removed it',
+  mediaGoneTile: 'Removed',
+  mediaVoiceTile: 'Voice note',
+  mediaSeeNote: (title: string) => `See it in Knowledge: ${title}`,
+  mediaNotKeptHours: (hoursLeft: number | null) =>
+    hoursLeft === null
+      ? "Didn't keep it"
+      : hoursLeft < 1
+        ? "Didn't keep it · Deleted in under an hour"
+        : `Didn't keep it · Deleted in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
+  mediaRemove: (kind: MediaKind) => `Remove ${mediaWordOf(kind)}`,
+  mediaRemoveSubtitle: (kind: MediaKind) =>
+    `A ${mediaWordOf(kind)} nothing else holds is deleted in 24 hours. You can undo it until then.`,
+  mediaViewOnRecord: (position: number, total: number) =>
+    `Item ${position} of ${total}`,
+  mediaOpenPdf: 'Open the PDF',
+  mediaOpenPdfHint: 'Opens in a new tab',
+  mediaOpenPdfFailed: "The PDF didn't open. Try again.",
+  mediaPdfPages: (pages: number | null) =>
+    pages === null ? 'PDF' : `PDF · ${pages} ${pages === 1 ? 'page' : 'pages'}`,
+  mediaSheetTitle: (kind: MediaKind) => MEDIA_WORDS[kind].sheet,
+  mediaTranscriptTitle: 'What you said',
+  mediaMarkdownEmpty: 'This file is empty.',
+  mediaViewFile: (name: string) => `Open ${name}`,
+  tookBackPhotos: (count: number) =>
+    count === 1 ? 'Took back a kept photo' : `Took back ${count} kept photos`,
+  undoReportPhotos: (count: number) =>
+    count === 1
+      ? 'Took back the kept photo. It is deleted in 24 hours.'
+      : `Took back ${count} kept photos. They are deleted in 24 hours.`,
+  undoReportPhotosToo: 'Photos it kept are deleted in 24 hours.',
   undoFailed: "That couldn't be taken back. Try again.",
   undoNeedsConnectionTitle: 'Undo needs a connection',
   undoNeedsConnectionBody:
@@ -465,13 +938,21 @@ export const HELM_COPY = {
     `Updated ${when} · read only in ${name}`,
   syncedKept: (date: string) => `No longer updated · deletes ${date}`,
   syncedOpenIn: (app: string) => `Open in ${app}`,
+  recordGroupOpen: 'Open',
   syncedGroup: (category: string, app: string) => `${category} · ${app}`,
   syncedTodayFromApps: 'From your apps',
   syncedMore: (count: number) => `${count} more`,
   syncedFewer: 'Show fewer',
   syncedWaiting: 'Waiting for the first update',
+  connectionLiveLine:
+    'Read only when you ask. Only what an answer quotes is kept.',
   syncedStale: (when: string) => `Last updated ${when} · may be out of date`,
   syncedAllDay: 'All day',
+  todayTileNext: (time: string, title: string) => `Next: ${time} · ${title}`,
+  todayTileCount: (count: number) =>
+    `${count} ${count === 1 ? 'event' : 'events'} today`,
+  feedGroupTitle: (label: string, count: number) => `${label} · ${count}`,
+  feedGroupDetail: (app: string) => `${app} · all day`,
   syncedUpdatedLine: (when: string) => `Updated ${when}`,
   syncedNow: 'Sync now',
   syncedTryNow: 'Try now',
@@ -587,6 +1068,7 @@ export const HELM_COPY = {
   planRestAnyway: 'Plan my day anyway',
   planOverlaps: (title: string) => `Overlaps ${title}`,
   busyAllDayLabel: 'Keeps me busy all day',
+  busyAllDayHint: "While it is on, tasks aren't planned into this day.",
   busyAllDayFailed: "That didn't save. Try again.",
   syncedTentative: 'Tentative',
   sameThingTime: (appName: string, time: string) => `${appName} says ${time}`,
@@ -613,7 +1095,7 @@ export const HELM_COPY = {
   settingsVoiceDevice: 'On this device',
   voiceDeviceOnlyTitle: 'Keep voice on this device',
   voiceDeviceOnlyOn:
-    "Your speech isn't sent to our voice services, and answers are read by this device's voice. In Chrome, the browser's own listening uses Google.",
+    "Your speech isn't sent to our voice services, and answers are read by this device's voice. The browser still does its own listening: in Chrome that goes to Google, in Safari to Apple.",
   voiceDeviceOnlyOff:
     "Online, Deepgram turns your speech into words for clearer listening. This browser listens when it can't.",
   voiceHandsFreeTitle: 'Answer without tapping',
@@ -622,14 +1104,111 @@ export const HELM_COPY = {
   voiceHandsFreeOff: 'Tap Talk to answer.',
   voiceWakeTitle: (name: string) => `Hey ${name}`,
   voiceWake: (name: string) =>
-    `While this is open on screen, this browser's own listening waits for "Hey ${name}". In Chrome that listening uses Google.`,
+    `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple.`,
   voiceWakeLocked: "This browser can't listen for a phrase.",
+  voiceDeviceOnlyOnOffline:
+    "Your speech isn't sent anywhere: this phone turns it into words itself, and answers are read by this device's voice.",
+  voiceDeviceOnlyOffOffline:
+    "Online, Deepgram turns your speech into words for clearer listening. This phone listens itself when there's no connection.",
+  voiceWakeOffline: (name: string) =>
+    `While this is open on screen, this phone listens for "Hey ${name}" itself. Nothing you say leaves it.`,
+  voiceOfflineTitle: 'Hear me offline',
+  voiceOfflineOffer: (name: string, sizeMb: number) =>
+    `Talk to ${name} with no connection. What you say stays on this phone. A one-time download of ${sizeMb} MB from this site, best on Wi-Fi.`,
+  voiceOfflineDownload: 'Download',
+  voiceOfflineDownloading: (loadedMb: number, sizeMb: number) =>
+    `Downloading… ${loadedMb} of ${sizeMb} MB`,
+  voiceOfflineCancel: 'Cancel',
+  voiceOfflineReady: (sizeMb: number) =>
+    `Ready. Talk works offline on this phone, and replies use its own voice. It keeps ${sizeMb} MB here.`,
+  voiceOfflineRemove: 'Remove from this phone',
+  voiceOfflineRemoved: 'Removed. Talk needs a connection again on this phone.',
+  voiceOfflineUndo: 'Undo',
+  voiceOfflineTryAgain: 'Try again',
+  voiceOfflineStopped: 'The download stopped, so nothing was kept.',
+  voiceOfflineNoRoom:
+    "There isn't room on this phone to keep it, so nothing was kept. Free up some space and try again.",
+  voiceOfflineCheckFailed:
+    "The download didn't match what was expected, so nothing was kept.",
+  voiceOfflineStartFailed:
+    "It's downloaded but couldn't start on this phone. Remove it, then download it again.",
+  voiceOfflineLicences: 'Open source licences',
+  voiceOfflineLicencesTitle: 'Open source licences',
+  voiceOfflineCredits: (credits: string) =>
+    `Hear me offline uses ${credits}, all open source.`,
+  voiceOfflineBlocked: {
+    browser:
+      "This browser can't run offline listening. Talk needs a connection here.",
+    simd: "This phone's browser is too old to run offline listening. Talk needs a connection here.",
+    audio:
+      "This browser can't share its microphone with offline listening. Talk needs a connection here.",
+    memory:
+      "This phone doesn't have the memory for offline listening. Talk needs a connection here.",
+    space:
+      "This phone doesn't have room for offline listening. Talk needs a connection here.",
+    language:
+      'Offline listening understands English only for now. Talk needs a connection here.',
+  },
   voiceDone: 'Done',
   voiceModeFailed: "Couldn't change that. Try again.",
   voiceOnPhone: 'Listening with this browser for the rest of today.',
   voiceNotice:
-    "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound. You can change this in Settings.",
+    "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound or use it to train its models. You can change this in Settings.",
   settingsYourData: 'Your data',
+  deleteAllTitle: (appName: string) => `Delete all my ${appName} data`,
+  deleteAllRowHint: 'Everything it keeps, for good',
+  deleteAllWorking: 'Deleting. This can take a minute.',
+  deleteAllConfirmTitle: (appName: string) =>
+    `Delete all your ${appName} data?`,
+  deleteAllConfirmBody: (
+    held: string[],
+    connections: number,
+    assistant: string,
+  ) =>
+    [
+      held.length > 0
+        ? `This deletes everything it keeps for you, including your ${formatList(held)}.`
+        : 'This deletes everything it keeps for you.',
+      connections > 0
+        ? `It ends its ${connections === 1 ? 'connection' : `${connections} connections`} and removes the copies it made from them.`
+        : null,
+      `${assistant} starts over as if you had never opened it. Your account and your other apps stay as they are. This can't be undone.`,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  deleteAllConfirmAction: 'Delete everything',
+  deleteAllDone:
+    'All your data here is deleted. You can start fresh whenever you like.',
+  deleteAllCancelled: 'The sign-in was closed, so nothing was deleted.',
+  deleteAllKinds: (counts: {
+    tasks: number;
+    people: number;
+    places: number;
+    projects: number;
+    procedures: number;
+    topics: number;
+    notes: number;
+    photos: number;
+  }) =>
+    [
+      [counts.tasks, 'open task', 'open tasks'],
+      [counts.people, 'person or pet', 'people and pets'],
+      [counts.places, 'place', 'places'],
+      [counts.projects, 'project', 'projects'],
+      [counts.procedures, 'procedure', 'procedures'],
+      [counts.topics, 'topic', 'topics'],
+      [counts.notes, 'note', 'notes'],
+      [counts.photos, 'photo', 'photos'],
+    ].flatMap(([count, one, many]) =>
+      count === 0 ? [] : [`${count} ${count === 1 ? one : many}`],
+    ),
+  deleteAllNeedsConnectionBody:
+    'Deleting changes your account on our servers, so it can only start while you are online.',
+  deleteAllFailed:
+    'Not everything was deleted. Run it again and it picks up where it stopped.',
+  deleteAllUnreachable:
+    "The delete couldn't reach the server. Check your connection and run it again; it picks up where it stopped.",
+  deleteAllSignIn: 'Sign in again to delete. Nothing has been removed.',
   activityTitle: 'Activity',
   activityRowHint: 'What was done, and when',
   activityEmpty: (name: string) =>
@@ -659,14 +1238,51 @@ export const HELM_COPY = {
   answerTaskGone: 'A task that is done or removed',
   answerSyncedGone: 'Something from a connected app that is no longer there',
   answerOpenSource: (title: string) => `Open ${title}`,
+  answerTopicGone: 'A topic that has since been deleted',
+  answerNoteGone: 'A note that has since been deleted',
+  answerNoteMark: (place: string | null) =>
+    place ? `Your note · ${place}` : 'Your note',
+  answerNoteNotChecked: 'Saved from a general answer · Not checked',
+  answerNoteChecked: 'Saved from a general answer · Checked by you',
+  answerDiffersFromNote: (title: string, says: string) => {
+    const said = says.replace(/[\s.!?,;:]+$/, '');
+    return title
+      ? `Your note '${title}' says: ${said}`
+      : `Your note says: ${said}`;
+  },
+  saveToKnowledge: 'Save to my knowledge',
+  saveAlreadyKept: (title: string) => `Already in your notes: ${title}`,
+  saveAlreadyKeptOpen: 'Open',
+  saveFailed: "That wasn't saved. Try again.",
+  savedNoteIn: (topic: string) => `Saved to ${topic}`,
+  savedNoteLoose: 'Saved, not in a topic yet',
+  savedNoteOpen: (title: string) => `Open the saved note: ${title}`,
+  savedChangeTopic: 'Change topic',
+  savedWhichTopic: 'Which topic should this go in?',
+  savedNewTopic: 'New topic',
+  savedMoreTopics: 'More topics',
+  savedSkip: 'Skip',
+  savedTopicParent: 'Under (optional)',
+  savedTopicTopLevel: 'Top level',
+  savedUndoEdited:
+    'That note was changed since, so it stays. Delete it from Knowledge.',
+  savedFilingFailed: "That topic wasn't kept. Try again.",
+  noteSavedFromAnswer: 'Saved from a general answer',
+  noteNotChecked: 'Not checked',
+  noteCheckedByYou: 'Checked by you',
+  noteIChecked: 'I checked this',
+  noteCheckFailed: "That wasn't marked. Try again.",
+  noteChangeTopicTitle: 'Change topic',
+  noteInNoTopic: 'In no topic ·',
+  notePutInOne: 'Put it in one',
   quoteFrom: (label: string, day: string | null) =>
     day === null ? label : `${label}\u00a0· ${day}`,
   quoteOpen: 'Open in Gmail',
   quoteOpenDrive: 'Open in Drive',
   quoteDisconnected: 'This email was disconnected',
   quoteDocumentDisconnected: 'This document was disconnected',
-  searchedLine: (where: string, when: string) =>
-    `Looked in ${where} ${when}. Only what this answer quotes is kept.`,
+  quoteRecordDisconnected: 'This record was disconnected',
+  searchedLine: (where: string, when: string) => `Looked in ${where} ${when}.`,
   searchedJustNow: 'just now',
   searchedFailed: (account: string, why: string) =>
     `Couldn't look in ${account}: ${why}`,
@@ -687,7 +1303,7 @@ export const HELM_COPY = {
     `What you tell ${name}, and the records it needs to file or answer it.`,
   aiSeesWhereLead: 'Where it runs',
   aiSeesWhere: (name: string) =>
-    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. It reaches your things only through its own tools.`,
+    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. Anthropic doesn't use what it's sent to train its models. It reaches your things only through its own tools.`,
   aiSeesStoredLead: 'Stored encrypted',
   aiSeesStored:
     "What you say, your records and every line in Activity are encrypted before they're saved.",
@@ -750,6 +1366,9 @@ export const HELM_COPY = {
   markNotDone: (title: string) => `Mark ${title} not done`,
   doneAt: (day: string, time: string) => `Done ${day} ${time}`,
   rowDone: 'Done',
+  rowDoneOn: (day: string) => `Done ${day}`,
+  taskReopenedToast: (title: string) => `${title} is open again`,
+  undoChangedSince: 'That changed since, so it stays as it is.',
   deleteTaskTitle: 'Delete this task?',
   deleteTaskBody: (waiting: number) =>
     `Its notes and steps go with it.${waitingOnCount(waiting)}`,
@@ -822,7 +1441,9 @@ export const HELM_COPY = {
   planPlanIt: 'Plan it',
   planSkipped: (title: string) => `${title} is back in Any time`,
   planPlannedOn: (day: string) =>
-    `Planned ${day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day}`,
+    day === 'Today' || day === 'Tomorrow'
+      ? `On ${day.toLowerCase()}'s plan`
+      : `Planned for ${day}`,
   planOpening: (day: string, time: string) => `${day} ${time}`,
   planNoOpenings: 'Nothing fits in the next two days. Pick a day.',
   planDayPicked: (day: string) => `Moved to ${day}`,
@@ -832,6 +1453,24 @@ export const HELM_COPY = {
   planNoRoomPick: 'Pick a day',
   planUnreadable: 'This plan could not be opened.',
   planTaskGone: 'A task that is done or removed',
+  settingsAssistant: 'Your assistant',
+  settingsColours: 'Colours',
+  coloursHint: 'Pick the colours you like. They follow you to every device.',
+  coloursLabel: 'Colour theme',
+  coloursLight: 'Light',
+  coloursDark: 'Dark',
+  assistantRow: 'Name and tone',
+  assistantSheetTitle: 'Your assistant',
+  assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
+  assistantNameLabel: 'Name',
+  assistantNameHint:
+    'Up to 16 letters, numbers, spaces, hyphens or apostrophes. With Hey on in Voice service, it is also the name you say.',
+  assistantNameError: 'Letters, numbers, spaces, hyphens or apostrophes only.',
+  assistantUseDefault: (name: string) => `Use the default name (${name})`,
+  assistantToneLabel: 'How it answers',
+  assistantToneHint:
+    'Shapes its written answers. Names, dates and what it files never change.',
+  assistantSave: 'Save',
   settingsPlanning: 'Planning',
   yourDayRow: 'Your day',
   yourDayLine: (start: string, end: string) => `${start} to ${end}`,
@@ -907,8 +1546,6 @@ export const HELM_COPY = {
   whoGone: 'This page is gone.',
   whoUnreadable: "This page couldn't be opened.",
   whoFactsTitle: 'Facts',
-  whoFactsEmpty: (assistant: string) =>
-    `Nothing noted yet. What you tell ${assistant} about them lands here.`,
   factsAdd: 'Add a fact',
   factsAddTitle: 'Add a fact',
   factStatementField: 'What is true',
@@ -992,13 +1629,73 @@ export const HELM_COPY = {
   seesYouTopicPlaceholder: 'gas station',
   seesYouTopicSuggestions: 'Topics you already use',
   seesYouAddedToast: 'Added to what is kept about you',
+  styleTitle: 'How you write',
+  styleHelpTip:
+    'Notes about how you write, from messages you type here and, if you switch it on, your sent mail. Only the notes are kept, never the messages or emails.',
+  styleEmpty: `Notes about your writing appear here after about ${STYLE_LEARN_EVERY} messages you type. You can also add one yourself.`,
+  styleUnreadable: "Your writing notes can't be opened right now.",
+  styleSeenIn: (count: number) => `Seen in ${count} of your messages`,
+  styleAddedByYou: 'Added by you',
+  styleEditedByYou: 'Edited by you',
+  styleAvoidSource: 'Not in what you write',
+  styleAdd: 'Add',
+  styleAddLabel: 'Add a writing note',
+  styleAddTitle: 'Add a writing note',
+  styleSheetTitle: 'Writing note',
+  styleField: 'The note',
+  stylePlaceholder: 'Short sentences',
+  styleHelp: 'Describe how you write, in a few words.',
+  styleMissing: 'Write the note first.',
+  styleFull: (limit: number) =>
+    `Up to ${limit} notes. Remove one to add another.`,
+  styleAvoidFull: (limit: number) =>
+    `Up to ${limit} of these. Remove one to put this back.`,
+  styleEdit: 'Edit',
+  styleRemove: 'Remove',
+  styleSaved: 'Saved your note',
+  styleAdded: 'Added your note',
+  styleRemoved: 'Removed the note',
+  styleGone: 'That note is already gone.',
+  styleUndoneFailed: 'The note could not be put back.',
+  styleMailTitle: 'Learn from my sent mail',
+  styleMailBody:
+    'Reads your last 6 months of sent mail once. Only short notes are kept, never the emails.',
+  styleMailHelpTip:
+    'Up to 300 emails you sent in the last 6 months are read once, on the server, to note how you write at work, in personal mail and with people you write to often. The emails are never kept. To read them again later, switch this off and on.',
+  styleMailReading: 'Reading your sent mail…',
+  styleMailNotEnough:
+    "There isn't enough sent mail yet to learn from. Try again after you've sent a few more emails.",
+  styleMailBusy:
+    "You've asked a lot in the last few minutes. Try this again a little later.",
+  styleMailNothingLearned:
+    'Your sent mail was read, but there was nothing clear enough to note yet.',
+  styleMailFailed: "Your sent mail couldn't be read. Try again in a moment.",
+  styleMailConnect: 'Connect Gmail',
+  styleMailNeedsGmailBody:
+    "Gmail isn't connected any more. Connect it, then switch this on again.",
+  styleMailReconnect:
+    'Gmail needs reconnecting before your sent mail can be read.',
+  styleMailReconnectAction: 'Open Connected apps',
+  styleMailUnreadable:
+    "Your style notes can't be opened right now, so nothing was changed. Try again later.",
+  styleMailOffline:
+    "You're offline. Connect to the internet and switch this on again.",
+  styleMailOffConfirmTitle: 'Remove the notes from your sent mail?',
+  styleMailOffConfirm:
+    'Work email, Personal email and the notes for each person are removed, including any you changed, added or removed there. Your other style notes stay, and you can undo this right after.',
+  styleMailOffAction: 'Remove them',
+  styleMailRemoved: 'Removed the notes from your sent mail',
+  styleMailRemoveFailed: "The notes couldn't be removed. Try again.",
+  styleMailUndoneFailed: "The notes couldn't be put back.",
+  styleMailSeenIn: (count: number) => `Seen in ${count} of your sent emails`,
+  styleMailWithWho: (name: string) => `With ${name}`,
+  styleMailGroupsTitle: 'From your sent mail',
   askSeesYou: 'Ask about what is kept about you',
   chipSeesYou: 'About you',
   backToSeesYou: (assistant: string) => `Back to How ${assistant} sees you`,
   whoTasksTitle: 'Tasks',
   whoTasksEmpty: 'No open tasks.',
   whoMentionsTitle: 'Mentions',
-  whoMentionsEmpty: 'Not mentioned yet.',
   showAllMentions: (count: number) => `Show all ${count}`,
   showFewerMentions: 'Show fewer',
   placeHomeLine: 'Your home',
@@ -1097,9 +1794,13 @@ export const HELM_COPY = {
   questionGone: (kind: string) =>
     kind === 'whichIsTrue'
       ? 'That changed since.'
-      : kind === 'whichPlace'
-        ? 'That place was removed.'
-        : 'That person was removed.',
+      : kind === 'whichTopic'
+        ? 'That note or one of those topics was removed.'
+        : kind === 'groupTopics'
+          ? 'Those topics changed since.'
+          : kind === 'whichPlace'
+            ? 'That place was removed.'
+            : 'That person was removed.',
   editUnreadable: "This page couldn't be opened.",
   whoTierTitle: 'How close',
   whoTierHelp: (assistant: string) =>
@@ -1155,8 +1856,6 @@ export const HELM_COPY = {
   linkedOrganization: 'Organization',
   linkedPlace: 'Place',
   photosTitle: 'Photos',
-  photosEmpty: (name: string) =>
-    `Add a photo of ${name}. It shows here and in your lists, and it's sealed on your phone before it's saved.`,
   photoAdd: 'Add a photo',
   photoFull: `This page holds up to ${PHOTOS_PER_RECORD} photos. Remove one to add another.`,
   photoAdded: 'Photo added',
@@ -1190,8 +1889,7 @@ export const HELM_COPY = {
   photoViewerLabel: 'Photos',
   keyDatesHeading: 'Key dates',
   keyDateAdd: 'Add a date',
-  keyDatesEmpty: (name: string) =>
-    `No key dates yet. Tell ${name} a birthday, or add one.`,
+  keyDateAddRow: 'Add a key date',
   keyDateKindBirthday: 'Birthday',
   keyDateKindAnniversary: 'Anniversary',
   keyDateKindCustom: 'Something else',
@@ -1344,6 +2042,79 @@ export const HELM_COPY = {
     ]
       .filter(Boolean)
       .join(' '),
+  tookBackNotes: (count: number) =>
+    `Took back ${count} ${count === 1 ? 'note' : 'notes'}`,
+  undoReportNotes: (takenBack: number, kept: number, gone: number) =>
+    [
+      `Took back ${takenBack} ${takenBack === 1 ? 'note' : 'notes'}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoTopicPhrase: toTopicPhrase,
+  undoTopicChanges: (count: number, name: string | null, isGrouping = false) =>
+    `Took back ${toTopicPhrase(count, name, isGrouping)}`,
+  undoReportTopics: (
+    count: number,
+    name: string | null,
+    kept: number,
+    gone: number,
+    isGrouping = false,
+  ) =>
+    [
+      `Took back ${toTopicPhrase(count, name, isGrouping)}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportTopicsToo: (
+    count: number,
+    name: string | null,
+    isGrouping = false,
+  ) => `${toTopicPhrase(count, name, isGrouping)} too.`,
+  undoProcedurePhrase: toProcedurePhrase,
+  undoProcedureChanges: (count: number, name: string | null) =>
+    `Took back ${toProcedurePhrase(count, name)}`,
+  undoReportProcedures: (
+    count: number,
+    name: string | null,
+    kept: number,
+    gone: number,
+  ) =>
+    [
+      `Took back ${toProcedurePhrase(count, name)}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportProceduresToo: (count: number, name: string | null) =>
+    `${toProcedurePhrase(count, name)} too.`,
+  undoRunChanges: (deleted: string[], unticked: number) =>
+    toCapital(toRunParts(deleted, unticked).join(' and ')),
+  undoRunPhrase: (deleted: string[], unticked: number) =>
+    toRunParts(deleted, unticked).join(' and '),
+  undoReportRuns: (
+    deleted: string[],
+    unticked: number,
+    kept: number,
+    gone: number,
+  ) =>
+    [
+      `${toRunParts(deleted, unticked).map(toCapital).join('. ')}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportRunsToo: (deleted: string[], unticked: number) =>
+    `${toRunParts(deleted, unticked).map(toCapital).join('. ')}.`,
+  undoReportNoteUnfiled: 'Took the note back out of those topics.',
+  tookBackNoteUnfiled: 'Took the note back out of those topics',
+  undoReportNotesToo: (count: number) =>
+    `${count === 1 ? '1 note' : `${count} notes`} too.`,
   undoReportProjectsToo: (count: number) =>
     `${count === 1 ? '1 project' : `${count} projects`} too.`,
   askProject: (name: string) => `Ask about ${name}`,
@@ -1393,6 +2164,7 @@ export const HELM_COPY = {
           ? `Target was ${dateLabel}`
           : `Target was ${dateLabel} · ${-daysAway} ${daysAway === -1 ? 'day' : 'days'} ago`,
   projectTabTasks: 'Tasks',
+  projectTabMilestones: 'Milestones',
   projectTabPeople: 'People',
   projectTabsLabel: 'Project sections',
   projectTasksEmpty: (name: string, doneCount: number) =>
@@ -1401,6 +2173,41 @@ export const HELM_COPY = {
       : `No tasks yet. Say "add a task for ${name}" to put one here.`,
   projectTasksShowAll: (count: number) => `Show all ${count}`,
   projectTasksShowFewer: 'Show fewer',
+  doneTasksFold: (count: number) => `Done · ${count}`,
+  doneTasksHide: 'Hide done',
+  clearDoneTasks: (count: number) =>
+    count === 1 ? 'Clear 1 done task' : `Clear ${count} done tasks`,
+  clearDoneNone: 'There was nothing left to clear.',
+  doneTasksCleared: (count: number) =>
+    `Cleared ${count} done ${count === 1 ? 'task' : 'tasks'}`,
+  clearDoneNeedsConnection: 'Clearing done tasks needs a connection.',
+  milestoneAdd: 'Add milestone',
+  milestonesEmpty: "No milestones. Add one if there's a date that matters.",
+  milestoneNoDate: 'No date',
+  milestoneWhen: (dateLabel: string, days: number) =>
+    days > 0
+      ? `${dateLabel} · in\u00a0${days}\u00a0${days === 1 ? 'day' : 'days'}`
+      : days === 0
+        ? `${dateLabel} · today`
+        : `${dateLabel} · ${-days}\u00a0${days === -1 ? 'day' : 'days'} ago`,
+  milestoneReachedFold: (count: number) => `Reached · ${count}`,
+  milestoneReachedHide: 'Hide reached',
+  milestoneMarkReached: (title: string) => `Mark ${title} reached`,
+  milestoneMarkNotReached: (title: string) => `Mark ${title} not reached`,
+  milestoneAddTitle: 'Add milestone',
+  milestoneEditTitle: 'Change milestone',
+  milestoneTitleField: 'Title',
+  milestoneTitlePlaceholder: 'Venue booked',
+  milestoneDateField: 'Date (optional)',
+  milestoneTitleMissing: 'A title is needed.',
+  milestoneDeleteConfirm: (title: string) => `Delete ${title}?`,
+  milestoneAddedToast: (title: string) => `Added ${title}`,
+  milestoneChangedToast: (title: string) => `Saved ${title}`,
+  milestoneDeletedToast: (title: string) => `Deleted ${title}`,
+  milestoneReachedToast: (title: string) => `Reached ${title}`,
+  milestoneReopenedToast: (title: string) => `${title} is open again`,
+  milestonesFull: 'A project holds up to 30 milestones.',
+  milestoneGone: 'This milestone is gone.',
   projectPeopleEmpty: 'No one is on this project yet.',
   projectKeyPerson: 'key person',
   projectInvolvedPerson: 'involved',
@@ -1489,9 +2296,454 @@ export const HELM_COPY = {
     role: 'key' | 'involved',
   ) =>
     `${emoji ? `${emoji} ` : ''}${name} · ${role === 'key' ? 'key person' : 'involved'}`,
+  knowledgeTitle: 'Knowledge',
+  knowledgeFailed: "Your knowledge couldn't be opened.",
+  knowledgeEmpty: (assistant: string) =>
+    `What you keep shows here. Write a note, or tell ${assistant} something worth keeping.`,
+  knowledgeSearch: 'Search your knowledge',
+  knowledgeNoMatch: 'No note matches that.',
+  askKnowledge: 'Ask about your knowledge',
+  chipKnowledge: 'About your knowledge',
+  backToKnowledge: 'Back to Knowledge',
+  noteNew: 'New note',
+  topicNew: 'New topic',
+  looseNotesRow: (count: number) => `Loose notes · ${count}`,
+  looseNotesTitle: 'Loose notes',
+  looseNotesEmpty: 'Every note is in a topic.',
+  topicCountLine: (subtopics: number, notes: number) =>
+    subtopics === 0 && notes === 0
+      ? 'Nothing here yet'
+      : [
+          ...(subtopics > 0
+            ? [`${subtopics} ${subtopics === 1 ? 'subtopic' : 'subtopics'}`]
+            : []),
+          ...(notes > 0
+            ? [
+                `${notes} ${notes === 1 ? 'note' : 'notes'}${subtopics > 0 ? ' of its own' : ''}`,
+              ]
+            : []),
+        ].join(' · '),
+  proceduresTitle: 'Procedures',
+  proceduresFailed: "Your procedures couldn't be opened.",
+  proceduresEmpty: (assistant: string) =>
+    `No procedures yet. Write down a routine you repeat, ask ${assistant} for one, or turn a task's steps into one.`,
+  procedureMadeOn: (when: string) => `Made ${when}`,
+  procedureNew: 'New procedure',
+  procedureEditTitle: 'Change procedure',
+  procedureStepCount: (count: number) =>
+    count === 1 ? '1 step' : `${count} steps`,
+  procedureFacts: (count: number, madeBy: string) =>
+    `A procedure · ${count === 1 ? '1 step' : `${count} steps`} · ${madeBy}`,
+  procedureChanged: (date: string) => `Changed ${date}`,
+  procedureMadeBy: (assistant: string) => `Made by ${assistant}`,
+  procedureMadeByYou: 'Made by you',
+  procedureMadeFrom: (task: string) => `Made from ${task}`,
+  procedureEdit: 'Edit',
+  procedureHistory: 'History',
+  procedureCopy: 'Copy as Markdown',
+  procedureDelete: 'Delete',
+  procedureDeleteTitle: (title: string) => `Delete ${title}?`,
+  procedureDeleteConfirm: (count: number) =>
+    `Its ${count === 1 ? 'one step goes' : `${count} steps go`} with it, and its history. Runs on a project or trip stay, and runs on their own go with it. You can undo it right after.`,
+  procedureDeleted: (title: string) => `Deleted ${title}`,
+  procedureDeletedBack: (title: string) => `${title} is back`,
+  procedureDeleteFailed: "That wasn't deleted. Try again.",
+  procedureUndoFailed: "That wasn't put back. Try again.",
+  procedureCopied: (count: number) =>
+    count === 1 ? 'Copied 1 step' : `Copied ${count} steps`,
+  procedureCopyFailed: "Couldn't copy",
+  procedureStepsFull: 'A procedure holds 60 steps',
+  procedureGroupsFull: 'A procedure holds 12 groups',
+  procedureAddStep: 'Add a step',
+  procedureAddGroup: 'Add a group',
+  procedurePutInGroup: 'Put it in a group',
+  procedureNoGroup: 'No group',
+  procedureStepDetail: 'Add detail',
+  procedureStepField: 'Step',
+  procedureDetailField: 'Detail',
+  procedureGroupField: 'Group name',
+  procedureGroupFallback: 'Group',
+  procedureTitleLabel: 'Title',
+  procedureTitlePlaceholder: 'Packing for a work trip',
+  procedureStepPlaceholder: 'What to do',
+  procedureMoveUp: 'Move up',
+  procedureMoveDown: 'Move down',
+  procedureRemoveStep: 'Remove step',
+  procedureRemoveGroup: 'Remove group',
+  procedureGroupActions: (name: string) => `Actions for ${name}`,
+  procedureGroupRemoved: (name: string) => `Removed ${name}`,
+  procedureStepActions: (position: number) => `Actions for step ${position}`,
+  procedureStepSheetTitle: 'Step',
+  procedureStepDetailRow: 'Detail',
+  procedureMoveToGroup: 'Move to group',
+  procedureStepDetailHeading: 'More about this step',
+  procedureNeedsWords: 'Add a title and at least one step.',
+  procedureFromTask: 'Make these steps a procedure',
+  procedureFromTaskOpen: (title: string) => `Open ${title}`,
+  procedureFromTaskCut: 'Kept the first 60 steps',
+  procedureFromTaskMade: (title: string) => `Made the procedure ${title}`,
+  procedureNeedsConnection: 'Needs a connection to save',
+  procedureRaced: 'Changed elsewhere · Reload',
+  procedureRacedClose: 'Changed elsewhere · Close and reopen',
+  procedureGone: 'This procedure is gone.',
+  procedureUntitled: 'A procedure',
+  procedureSaved: 'Saved',
+  procedureUndoHint: 'Puts the procedure back as it was before this.',
+  procedureSummaryAdded: (count: number, names: string[] = []) =>
+    toStepsEdit('added', count, names),
+  procedureSummaryRemoved: (count: number, names: string[] = []) =>
+    toStepsEdit('removed', count, names),
+  procedureSummaryChanged: (count: number, names: string[] = []) =>
+    toStepsEdit('changed', count, names),
+  procedureSummaryReordered: 'You reordered the steps',
+  procedureSummaryRenamed: 'You changed the title',
+  procedureSummaryGroups: 'You changed the groups',
+  procedureSummaryNothing: 'You saved it again',
+  procedureSummaryRestored: (version: number) => `Put back version ${version}`,
+  procedureMade: (title: string) => `Kept ${title}`,
+  procedureGroupShow: (name: string, count: number) =>
+    `${name} · ${count === 1 ? '1 step' : `${count} steps`}`,
+  procedureHistoryTitle: (title: string) => `History · ${title}`,
+  historyStepsLine: (count: number) =>
+    `${count} ${count === 1 ? 'step' : 'steps'} in this version`,
+  askAboutProcedure: 'Ask about this procedure',
+  chipProcedure: (title: string) => `About this procedure: ${title}`,
+  askAboutProcedures: (count: number) =>
+    count === 0
+      ? 'Ask about your procedures'
+      : `Ask about these ${count} procedures`,
+  chipProcedures: 'About your procedures',
+  backToProcedures: 'Back to Procedures',
+  backToProcedure: (title: string) => `Back to ${title}`,
+  runStart: 'Start a run',
+  runStartTitle: 'What is it for?',
+  runStartHint: 'It copies the steps as they are now.',
+  runJustARun: 'Just a run',
+  runJustARunHint: 'Not for a trip, event or project',
+  runStartTrips: 'Coming up',
+  runStartProjects: 'Projects',
+  runStartFailed: "That run wasn't started. Try again.",
+  runFor: (label: string, day: string | null) =>
+    day ? `For ${label} · ${day}` : `For ${label}`,
+  runProgress: (done: number, total: number) => `${done} of ${total}`,
+  runAllSteps: 'All steps',
+  runTickAll: 'Tick all steps',
+  runJustThisTime: 'Just this time',
+  runAddExtra: 'Add a step just this time',
+  runExtraField: 'Step',
+  runExtraAdd: 'Add',
+  runAddToProcedure: 'Add to the procedure',
+  runAddedToProcedure: (title: string) => `Added to ${title}`,
+  runAddToProcedureFailed: "That wasn't added. Try again.",
+  runFinish: 'Finish this run',
+  runFinished: (date: string) => `Finished ${date}`,
+  runReopen: 'Reopen',
+  runDelete: 'Delete run',
+  runDeleteTitle: 'Delete this run?',
+  runDeleteConfirm: 'Its ticks go with it. You can undo it right after.',
+  runDeleted: (title: string) => `Deleted the run of ${title}`,
+  runDeletedBack: 'The run is back',
+  runDeleteFailed: "That wasn't deleted. Try again.",
+  runUndoFailed: "That wasn't put back. Try again.",
+  runTickFailed: "That tick wasn't saved. Try again.",
+  runsHeading: 'Runs',
+  runsShowAll: 'Show all runs',
+  runsShowFewer: 'Show fewer runs',
+  runNoLongerThere: (label: string, date: string | null) =>
+    `From ${label}${date === null ? '' : `, ${date}`}, no longer in the app it came from`,
+  runsFailedLine: "Couldn't load runs right now",
+  runStartFor: (name: string) => `For ${name}`,
+  runStartPickTitle: 'Which procedure?',
+  runStartPickHint: "It copies that procedure's steps as they are now.",
+  runStartNow: 'Now',
+  runStartShowMore: 'Show more',
+  runStartShowFewer: 'Show fewer',
+  runStartRunning: (done: number, total: number) =>
+    `Running · ${done} of ${total}`,
+  runNoStepsTitle: 'This procedure has no steps yet',
+  runNoStepsBody: 'Add a step to it, then start a run.',
+  runNoStepsRow: 'No steps yet',
+  runFinishEmptyTitle: 'Finish without ticking anything?',
+  runFinishEmptyMessage: 'It stays in its runs with every step not done.',
+  runProcedureGone: 'Its procedure is gone',
+  runGone: 'This run is gone.',
+  runUnreadable: "This run couldn't be opened.",
+  runFailed: "Your runs couldn't be opened.",
+  runUntitled: 'A run',
+  askAboutRun: 'Ask about this run',
+  chipRun: (title: string) => `About this run: ${title}`,
+  backToRun: (title: string) => `Back to ${title}`,
+  runNeedsConnection: 'Needs a connection to save',
+  runNeedsConnectionBody:
+    'Adding a step is saved with a connection. Ticks work without one and are kept until you are back.',
+  runStartedOn: (date: string) => `Started ${date}`,
+  runRowDetail: (state: string, done: number, total: number, extras: number) =>
+    `${state} · ${done} of ${total}${extras > 0 ? ` · ${extras} added for this run` : ''}`,
+  runExtraPlaceholder: 'What else this time?',
+  runExtraSheetTitle: 'Just this time',
+  runExtraSheetHint: 'This step is only on this run.',
+  runAddToProcedureHint: 'Keeps it for every run after this one.',
+  runExtraFull: 'A run holds 20 extra steps',
+  runFinishHint: 'Steps not ticked stay on it as not done.',
+  askTopic: 'Ask about this topic',
+  chipTopic: (name: string) => `About this topic: ${name}`,
+  backToTopic: (name: string) => `Back to ${name}`,
+  topicsHeading: 'Topics',
+  topicSubtopicsHeading: 'Subtopics',
+  topicNotesHeading: 'Notes',
+  topicNotesEmpty: 'No notes here yet.',
+  topicGone: 'This topic is gone.',
+  topicUnreadable: "This topic couldn't be opened.",
+  topicMenuRename: 'Change name or emoji',
+  topicMenuAddSub: 'Add a subtopic',
+  topicMenuMove: 'Move under…',
+  topicMenuDelete: 'Delete topic',
+  topicAddTitle: 'New topic',
+  topicSubAddTitle: 'New subtopic',
+  topicNameField: 'Name',
+  topicEmojiField: 'Emoji',
+  topicNamePlaceholder: 'Car care',
+  topicNameMissing: 'A name is needed.',
+  topicAddAction: 'Add',
+  topicMadeToast: (name: string) => `Made ${name}`,
+  topicSavedToast: (name: string) => `Saved ${name}`,
+  topicsFull: 'Knowledge holds up to 100 topics.',
+  topicSubsFull: 'A topic holds up to 20 subtopics.',
+  topicTooDeep: 'Topics go three levels deep.',
+  topicChanged: 'That topic changed since. Open it again to try.',
+  topicMoveTitle: 'Move under…',
+  topicMoveTop: 'Top level',
+  topicMoveTopHint: 'Not under any topic',
+  topicMoveNone: 'There is nowhere else to move this.',
+  topicMoveToast: (name: string, parent: string | null) =>
+    parent === null
+      ? `Moved ${name} to the top level`
+      : `Moved ${name} under ${parent}`,
+  topicMoveRefused: "That move isn't allowed.",
+  topicMoveLimits: `Topics go three levels deep, with up to ${SUBTOPICS_MAX} subtopics each.`,
+  topicDeleteTitle: (name: string) => `Delete ${name}?`,
+  topicDeleteConfirm: (
+    name: string,
+    subtopics: number,
+    notes: number,
+    parentName: string | null,
+  ) =>
+    [
+      subtopics === 0 && notes === 0
+        ? `${name} has nothing in it.`
+        : `${name} has ${[
+            ...(subtopics > 0
+              ? [`${subtopics} ${subtopics === 1 ? 'subtopic' : 'subtopics'}`]
+              : []),
+            ...(notes > 0
+              ? [`${notes} ${notes === 1 ? 'note' : 'notes'}`]
+              : []),
+          ].join(' and ')}.`,
+      subtopics > 0
+        ? `The ${subtopics === 1 ? 'subtopic moves' : 'subtopics move'} ${parentName === null ? 'to the top level' : `up to ${parentName}`}${notes > 0 ? '; the notes stay, loose or in their other topics.' : '.'}`
+        : notes > 0
+          ? `The ${notes === 1 ? 'note stays' : 'notes stay'}, loose or in ${notes === 1 ? 'its' : 'their'} other topics.`
+          : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  topicDeleteAction: 'Delete topic',
+  topicDeletedToast: (name: string) => `Deleted ${name}`,
+  topicDeletedBack: (name: string) => `${name} is back`,
+  topicDeletedBackSkipped: (name: string) =>
+    `${name} is back. Notes already in 10 topics stay as they are.`,
+  topicRestorePartial: (name: string) =>
+    `${name} is back, but some notes or subtopics couldn't be put back.`,
+  topicUndoFailed: "That couldn't be put back. Try again.",
+  topicDeleteNeedsConnection: 'Deleting a topic needs a connection.',
+  topicDeletePartial: (name: string) =>
+    `${name} wasn't deleted, and some notes may have lost it. Open it and check.`,
+  topicDeleteFailed: "That wasn't deleted. Try again.",
+  topicBringingIn: (count: number) =>
+    `Bringing in ${count} new ${count === 1 ? 'note' : 'notes'}…`,
+  topicFailedLine: (count: number) =>
+    `${count} new ${count === 1 ? "note isn't" : "notes aren't"} in the document yet`,
+  topicTryAgain: 'Try again',
+  topicBringThemIn: 'Bring them in',
+  topicSoonLine: (count: number) =>
+    `Couldn't bring ${count === 1 ? 'it' : 'them'} in just now. Try again in a few minutes`,
+  topicLimitedLine: (count: number) =>
+    `${count} new ${count === 1 ? 'note' : 'notes'} will be added tomorrow`,
+  topicReadThemNow: 'Read them now',
+  topicNewNotesHeading: 'New notes',
+  topicNotesDivider: 'Notes',
+  topicDocumentEmptyNotes: 'Nothing is written here yet.',
+  topicAddPart: 'Add a part',
+  topicMenuHistory: 'History',
+  topicSectionOpen: (heading: string | null) =>
+    heading ? `Where ${heading} came from` : 'Where this part came from',
+  topicSubtopicsLinkHeading: 'Subtopics',
+  sourcesTitle: 'Where this came from',
+  sourceNote: (title: string) => `Your note · ${title}`,
+  sourceNoteGone: 'A note that is removed',
+  sourceMessage: (date: string) => `You said, ${date}`,
+  sourceGeneral: 'Saved from a general answer',
+  sourceGeneralNotChecked: 'Saved from a general answer · Not checked',
+  sourceFile: 'From a file',
+  sourceFileNamed: (name: string) => `From ${name}`,
+  sourcePerson: (date: string) => `You wrote this, ${date}`,
+  sourcesEmpty: 'Nothing is recorded for this part.',
+  sourcesEditPart: 'Edit this part',
+  sectionAddTitle: 'Add a part',
+  sectionEditTitle: 'Edit this part',
+  sectionHeadingField: 'Heading',
+  sectionHeadingPlaceholder: 'Tyre pressure',
+  sectionWordsField: 'Words',
+  sectionWordsHint:
+    'Markdown works: **bold**, - lists, [links](https://example.com).',
+  sectionWordsPlaceholder: 'Front 36 psi, rear 38 psi.',
+  sectionWordsMissing: 'Some words are needed.',
+  sectionFull: 'A document holds up to 60 parts.',
+  sectionTooLong: 'The document would pass 30,000 characters.',
+  sectionSaved: 'Saved. This part is yours now.',
+  sectionAdded: 'Added your part.',
+  sectionGone: 'That part is gone. Open the topic again.',
+  sectionChangedSince: 'This part changed since you opened it',
+  sectionRemoveAria: 'Remove this part',
+  sectionRemoveTitle: 'Remove this part?',
+  sectionRemoveConfirm: 'Remove this part? You can bring it back from History.',
+  sectionRemoveAction: 'Remove',
+  sectionRemoved: 'Removed. You can bring it back from History.',
+  historyTitle: (name: string) => `History · ${name}`,
+  historyEmpty: 'Nothing has changed yet.',
+  historyFailed: "History couldn't be opened.",
+  historyReason: (
+    reason: TopicVersionReason | ProcedureVersionReason,
+    byYou = true,
+    assistant = '',
+  ) =>
+    reason === 'created'
+      ? byYou
+        ? 'Made by you'
+        : `${assistant} made it`
+      : reason === 'firstWritten'
+        ? 'First written from your notes'
+        : reason === 'addedFromSource'
+          ? 'Added from your notes'
+          : reason === 'personEdit'
+            ? 'You edited a part'
+            : reason === 'revisedOnRequest'
+              ? 'Changed when you asked'
+              : reason === 'moved'
+                ? 'Moved'
+                : reason === 'grouped'
+                  ? 'Grouped under a topic'
+                  : reason === 'rearranged'
+                    ? 'Rearranged'
+                    : reason === 'imported'
+                      ? 'Brought in from a file'
+                      : reason === 'sourceRemoved'
+                        ? 'Took out what a removed note said'
+                        : reason === 'fromRun'
+                          ? 'Added from a run'
+                          : 'Restored an earlier version',
+  historyRowLine: (
+    version: number,
+    when: string,
+    byYou: boolean,
+    assistant: string,
+  ) => `Version ${version}\u00a0· ${when}\u00a0· ${byYou ? 'you' : assistant}`,
+  historyRestoredFrom: (version: number) => `Back to version ${version}`,
+  historyNewest: 'Newest',
+  topicHistoryLine: (when: string, summary: string) => `${when} · ${summary}`,
+  historyVersionTitle: (version: number) => `Version ${version}`,
+  historyUndo: 'Undo this change',
+  historyUndoHint: 'Puts the document back as it was before this.',
+  historyUndoNotesHint: 'The notes stay below the document.',
+  historyUndone: (summary: string) => `Undid: ${summary}`,
+  historyRestore: (version: number) => `Restore version ${version}`,
+  historyRestoreHint: 'Writes it again as the newest version. Nothing is lost.',
+  historyFirstVersion: 'This is the first version.',
+  historySummaryEdited: (heading: string | null) =>
+    heading ? `You edited ${heading}` : 'You edited a part',
+  historySummaryAdded: (heading: string | null) =>
+    heading ? `You added ${heading}` : 'You added a part',
+  historySummaryRemoved: (label: string) => `You removed ${label}`,
+  historySummaryRestored: (version: number) => `Put back version ${version}`,
+  sectionBusy: 'The document is being updated. Try again in a moment.',
+  historyRestored: (version: number) => `Restored version ${version}`,
+  historyChanged: 'The document changed since. Open History again.',
+  historyNeedsConnection: 'Changing the document needs a connection.',
+  historyRestoreFailed: "That wasn't restored. Try again.",
+  historyPartsLine: (count: number) =>
+    `${count} ${count === 1 ? 'part' : 'parts'} in this version`,
+  noteAddTitle: 'New note',
+  noteEditTitle: 'Change note',
+  noteTitleField: 'Title',
+  noteTitlePlaceholder: 'Wash the car in the shade',
+  noteBodyField: 'Note',
+  noteBodyPlaceholder: 'What is worth keeping?',
+  noteTopicsField: 'Topics',
+  noteTopicsHint: 'None is fine. It then shows under Loose notes.',
+  noteNeedsWords: 'Add a title or some words.',
+  noteCount: (count: number) =>
+    `${count.toLocaleString('en-US')} / ${NOTE_BODY_MAX.toLocaleString('en-US')}`,
+  noteSavedToast: (title: string) => `Saved ${title}`,
+  noteMadeToast: (title: string) => `Kept ${title}`,
+  noteDeletedToast: (title: string) => `Deleted ${title}`,
+  noteDeletedBack: (title: string) => `${title} is back`,
+  noteDeleteConfirm: (title: string) => `Delete ${title}?`,
+  noteDeleteAction: 'Delete',
+  noteUntitled: 'Untitled note',
+  noteGone: 'This note is gone.',
+  noteUnreadable: "This note couldn't be opened.",
+  noteSheetTitle: 'Note',
+  noteAdded: (date: string) => `Added ${date}`,
+  noteWrote: (date: string) => `You wrote this on ${date}`,
+  noteChangedOn: (date: string) => `Last changed ${date}`,
+  noteCopy: 'Copy',
+  noteEdit: 'Edit',
+  noteDelete: 'Delete',
+  notesFull: 'Knowledge holds up to 1,000 notes.',
+  noteTopicsFull: 'A note goes in up to 10 topics.',
+  noteChangedSince: 'That note changed since. Open it again to try.',
+  noteUndoFailed: "That couldn't be put back. Try again.",
+  noteDeleteFailed: "That wasn't deleted. Try again.",
+  topicPickerNew: '+ New topic',
+  topicPickerPending: 'Add or clear the new topic.',
+  topicPickerNamePlaceholder: 'Topic name',
+  topicPickerFull:
+    'A note goes in up to 10 topics. Take one off to pick another.',
   taskProjectRow: 'Project',
   resultProjectLine: (emoji: string | null, name: string) =>
     `Project · ${emoji ? `${emoji} ` : ''}${name}`,
+  searchTitle: 'Search',
+  searchEverything: 'Search everything',
+  searchPlaceholder: 'Search people, tasks, notes…',
+  searchHint: (assistant: string) =>
+    `Find anything you have told ${assistant}: people, tasks, dates, facts, notes and more.`,
+  searchNothing: (query: string, assistant: string) =>
+    `Nothing matches "${query}". Searched your people, tasks, dates, facts, notes, topics, projects, procedures, places, photos and connected apps. Mail and Drive are searched only when you ask ${assistant}.`,
+  searchLookingDone: 'Still looking through done tasks…',
+  searchLookingDates: 'Still looking through older dates…',
+  searchFailedDone:
+    "Couldn't look through done tasks. Open Search again to retry.",
+  searchFailedPart:
+    "Some of what's kept couldn't be loaded, so a match may be missing. Reopen the app to retry.",
+  searchFailedDates:
+    "Couldn't look through older dates. Open Search again to retry.",
+  searchGroupPeople: 'People',
+  searchGroupTasks: 'Tasks',
+  searchGroupDates: 'Dates',
+  searchGroupFacts: 'Facts',
+  searchGroupNotes: 'Notes',
+  searchGroupTopics: 'Topics',
+  searchGroupProjects: 'Projects',
+  searchGroupProcedures: 'Procedures',
+  searchGroupPlaces: 'Places',
+  searchGroupMedia: 'Photos and files',
+  searchGroupSynced: 'From your apps',
+  searchShowAll: (count: number) => `Show all ${count.toLocaleString('en-US')}`,
+  searchShowFewer: 'Show fewer',
+  searchFirstShown: (count: number) =>
+    `Showing the first ${count.toLocaleString('en-US')}. Add a word to narrow it.`,
+  searchLooseNote: 'Loose note',
+  searchOpenResult: (title: string) => `Open ${title}`,
 } as const;
 
 export const PLANNER_COPY = {
