@@ -23,7 +23,8 @@ export type SeedScope =
   | 'going-once'
   | 'going-once-scale'
   | 'helm'
-  | 'runway-scale';
+  | 'runway-scale'
+  | 'helm-scale';
 
 export interface SeedContext {
   auth: Auth;

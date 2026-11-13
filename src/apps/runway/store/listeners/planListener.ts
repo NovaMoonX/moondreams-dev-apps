@@ -24,6 +24,8 @@ async function openPlan(
         notifyTimeZone: null,
         holdsPrompt: null,
         bankBackedSeenAt: null,
+        horizonNudgeDismissed: null,
+        homePins: null,
       };
   const result: OpenPlan = {
     uid: plan.uid,
@@ -37,12 +39,15 @@ async function openPlan(
     })),
     dirtyFrom: plan.dirtyFrom ?? null,
     notify: plan.notify ?? null,
+    sorting: plan.sorting ?? null,
     keyId: plan.keyId ?? null,
     currencyCode: fields.currencyCode,
     notifyHour: fields.notifyHour ?? null,
     notifyTimeZone: fields.notifyTimeZone ?? null,
     holdsPrompt: fields.holdsPrompt ?? null,
     bankBackedSeenAt: fields.bankBackedSeenAt ?? null,
+    horizonNudgeDismissed: fields.horizonNudgeDismissed ?? null,
+    homePins: fields.homePins ?? null,
   };
   return result;
 }

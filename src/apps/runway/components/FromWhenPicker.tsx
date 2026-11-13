@@ -6,6 +6,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 
 import { PillGroup } from '@/components/PillGroup';
+import { ActionSection } from '@apps/runway/components/ActionSection';
 import SummaryRow from '@/components/SummaryRow';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -13,9 +14,9 @@ import { CHANGE_WORDS, MAX_CHANGE_DAYS_AHEAD } from '@apps/runway/constants';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
 import { addUtcDays } from '@apps/runway/engine/dates';
 import type { ItemKind } from '@apps/runway/types';
-import type {
-  FromWhenChoice,
-  FromWhenValue,
+import {
+  getFromWhenOptions,
+  type FromWhenValue,
 } from '@apps/runway/utils/fromWhen';
 import DateInput from '@/components/DateInput';
 
@@ -29,6 +30,10 @@ interface FromWhenPickerProps {
   /** The income day whose screen opened the form, if any. */
   presetDayKey: string | null;
   isDisabled?: boolean;
+  /** The change is planned for a later day (Plan a change): only later starts are offered and they are asked in place. */
+  isPlanning?: boolean;
+  /** A pause is always for a while, so only its dates and length are asked. */
+  isPause?: boolean;
 }
 
 const STRETCH_OPTIONS = [
@@ -36,9 +41,7 @@ const STRETCH_OPTIONS = [
   { value: 'until', label: CHANGE_WORDS.stretchDate },
 ] as const;
 
-const hasDayOnly = (kind: ItemKind) => kind === 'envelope' || kind === 'goal';
-
-/** When a change starts and how long it lasts: always one summary row, whose choices open in their own sheet (on an income day's own screen with that day's choices first), so the form's rows never move. Earlier days keep what they had; only choices that mean something here are drawn. */
+/** When a change starts and how long it lasts. An everyday edit starts now and only says so; a change planned ahead asks its later start in place, and a pause keeps its one row whose choices open in their own sheet. A change opened from an income day's screen asks when it starts in its own step after the form. Earlier days keep what they had. */
 function FromWhenPicker({
   value,
   onChange,
@@ -47,27 +50,17 @@ function FromWhenPicker({
   kind,
   presetDayKey,
   isDisabled = false,
+  isPlanning = false,
+  isPause = false,
 }: FromWhenPickerProps) {
   const preset = days.find((day) => day.dayKey === presetDayKey) ?? null;
-  const dayFirst: { value: FromWhenChoice; label: string }[] = [
-    ...(hasDayOnly(kind) && (preset || days.length > 0)
-      ? [{ value: 'dayOnly' as const, label: CHANGE_WORDS.dayOnly }]
-      : []),
-    ...(preset && preset.on > today
-      ? [{ value: 'fromDay' as const, label: CHANGE_WORDS.fromDay }]
-      : []),
-  ];
-  const rest: { value: FromWhenChoice; label: string }[] = [
-    { value: 'now', label: CHANGE_WORDS.fromNow },
-    { value: 'date', label: CHANGE_WORDS.fromDate },
-    ...(kind !== 'source'
-      ? [{ value: 'stretch' as const, label: CHANGE_WORDS.stretch }]
-      : []),
-  ];
-  const options =
-    preset !== null
-      ? [...dayFirst, ...rest]
-      : [rest[0], ...dayFirst, ...rest.slice(1)];
+  const options = getFromWhenOptions({
+    kind,
+    days,
+    presetDayKey,
+    today,
+    isPlanning,
+  });
   const [isOpen, setIsOpen] = useState(false);
   const dayOptions = days.map((day) => ({
     value: day.dayKey,
@@ -77,15 +70,19 @@ function FromWhenPicker({
   const chosen =
     options.find((option) => option.value === value.choice)?.label ??
     CHANGE_WORDS.fromNow;
+  const isFixed = !isPlanning && options.length < 2;
+  const isEveryday = !isPlanning && !isPause;
 
   const controls = (
     <div className='space-y-4'>
-      <PillGroup
-        label={CHANGE_WORDS.fromHeading}
-        options={options}
-        value={value.choice}
-        onChange={(choice) => !isDisabled && onChange({ ...value, choice })}
-      />
+      {!isPause && (
+        <PillGroup
+          label={CHANGE_WORDS.fromHeading}
+          options={options}
+          value={value.choice}
+          onChange={(choice) => !isDisabled && onChange({ ...value, choice })}
+        />
+      )}
       {value.choice === 'fromDay' && preset && (
         <p className='text-muted-foreground text-sm'>
           {formatDateOrdinalUTC(preset.on)}
@@ -123,6 +120,20 @@ function FromWhenPicker({
       {value.choice === 'stretch' && (
         <div className='space-y-2'>
           <p className='text-muted-foreground text-xs'>
+            {CHANGE_WORDS.stretchStartHeading}
+          </p>
+          <DateInput
+            variant='outline'
+            aria-label={CHANGE_WORDS.stretchStartLabel}
+            min={toDateInputValue(today)}
+            max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
+            value={value.date}
+            disabled={isDisabled}
+            onChange={(event) =>
+              onChange({ ...value, date: event.target.value })
+            }
+          />
+          <p className='text-muted-foreground text-xs'>
             {CHANGE_WORDS.stretchHeading}
           </p>
           <PillGroup
@@ -151,7 +162,7 @@ function FromWhenPicker({
             <DateInput
               variant='outline'
               aria-label={CHANGE_WORDS.stretchDateLabel}
-              min={toDateInputValue(today)}
+              min={value.date || toDateInputValue(today)}
               max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
               value={value.until}
               disabled={isDisabled}
@@ -168,12 +179,33 @@ function FromWhenPicker({
     </div>
   );
 
+  if (isPlanning) {
+    return (
+      <ActionSection caption={CHANGE_WORDS.fromHeading}>
+        {controls}
+      </ActionSection>
+    );
+  }
+
+  if (isEveryday && preset !== null && options.length > 1) return null;
+  if (isEveryday && value.choice === 'now') {
+    return (
+      <p className='text-muted-foreground text-xs text-pretty'>
+        {CHANGE_WORDS.fromNowNote}
+      </p>
+    );
+  }
+
   return (
     <>
       <SummaryRow
         label={CHANGE_WORDS.fromHeading}
-        ariaLabel={`${CHANGE_WORDS.fromHeading}: ${chosen}. Change`}
-        onClick={isDisabled ? undefined : () => setIsOpen(true)}
+        ariaLabel={
+          isFixed
+            ? `${CHANGE_WORDS.fromHeading}: ${chosen}`
+            : `${CHANGE_WORDS.fromHeading}: ${chosen}. Change`
+        }
+        onClick={isDisabled || isFixed ? undefined : () => setIsOpen(true)}
       >
         {chosen}
       </SummaryRow>

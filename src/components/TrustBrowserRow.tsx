@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
+  Lock,
+  LogOut,
   Monitor,
   MonitorSmartphone,
   ShieldCheck,
@@ -13,6 +15,8 @@ import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
 import SettingsRow from '@/components/SettingsRow';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { getSignOutQuestions } from '@/lib/auth/signOutChecks';
 import { canKeepDeviceSecrets } from '@/lib/security';
 import type { TrustedBrowser } from '@/lib/security/trustedBrowsers';
 import type { TrustedKeyStore } from '@/lib/security/trustedKey';
@@ -35,6 +39,18 @@ const TRUST_BROWSER_WORDS = {
   removeOne: (label: string) => `Remove ${label}?`,
   removeAll: 'Remove all',
   removeAllTitle: (count: number) => `Remove all ${count} browsers?`,
+  signOutAll: 'Sign out everywhere',
+  signOutAllHelp: 'Lost a phone? Ends every sign-in on this site.',
+  signingOutAll: 'Signing you out everywhere…',
+  signOutAllTitle: 'Sign out everywhere?',
+  signOutAllMessage: (appName: string) =>
+    `Signs you out of every app on this site, on every device, this one too. Other devices are signed out within the hour. One that stays offline keeps its ${appName} copy for up to 30 days.`,
+  signOutAllConfirm: 'Sign out everywhere',
+  signOutAllFailed:
+    'Couldn’t sign you out everywhere, so your other browsers are still signed in. Try again in a moment.',
+  needsConnection: 'Needs a connection',
+  needsConnectionBody:
+    'Signing out everywhere changes your account on our servers, so it can only start while you’re online.',
 } as const;
 
 const isPhone = (label: string) => /iPhone|iPad|Android/.test(label);
@@ -78,10 +94,17 @@ interface TrustBrowserRowProps {
   store: TrustedKeyStore;
   uid: string;
   appName: string;
+  /** Adds a way to end every sign-in on the site; the handler ends this browser's own session once the server has. */
+  onSignOutEverywhere?: () => Promise<void>;
 }
 
 /** An app's offline switch for this browser, and the other browsers that keep its key with a way to remove them; draws nothing where the browser can't keep the key. */
-function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
+function TrustBrowserRow({
+  store,
+  uid,
+  appName,
+  onSignOutEverywhere,
+}: TrustBrowserRowProps) {
   const canKeep = canKeepDeviceSecrets();
   const isTrusted =
     useQuery({ ...store.trustedQueryOptions(uid), enabled: canKeep }).data ??
@@ -91,7 +114,9 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
       .data ?? [];
   const [error, setError] = useState<string | null>(null);
   const [isListOpen, setListOpen] = useState(false);
-  const { confirm } = useActionModal();
+  const [isSigningOutAll, setSigningOutAll] = useState(false);
+  const { alert, confirm } = useActionModal();
+  const isOffline = useNetworkStatus() === 'offline';
 
   if (!canKeep) return null;
 
@@ -134,6 +159,30 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
     setListOpen(false);
   };
 
+  const signOutEverywhere = async () => {
+    if (!onSignOutEverywhere) return;
+    const isConfirmed = await confirm({
+      title: TRUST_BROWSER_WORDS.signOutAllTitle,
+      message: TRUST_BROWSER_WORDS.signOutAllMessage(appName),
+      confirmText: TRUST_BROWSER_WORDS.signOutAllConfirm,
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+    const isWorkLetGo = await getSignOutQuestions(uid).reduce(
+      async (previous, question) =>
+        (await previous) && confirm({ ...question, destructive: true }),
+      Promise.resolve(true),
+    );
+    if (!isWorkLetGo) return;
+    setError(null);
+    setSigningOutAll(true);
+    onSignOutEverywhere().catch((signOutError: unknown) => {
+      console.error(signOutError);
+      setSigningOutAll(false);
+      setError(TRUST_BROWSER_WORDS.signOutAllFailed);
+    });
+  };
+
   return (
     <>
       <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
@@ -162,6 +211,35 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
             hasChevron
           />
         )}
+        {onSignOutEverywhere &&
+          (isOffline ? (
+            <SettingsRow
+              icon={<Lock className='size-5' />}
+              title={TRUST_BROWSER_WORDS.signOutAll}
+              description={TRUST_BROWSER_WORDS.needsConnection}
+              onClick={() =>
+                alert({
+                  title: TRUST_BROWSER_WORDS.needsConnection,
+                  message: TRUST_BROWSER_WORDS.needsConnectionBody,
+                })
+              }
+              hasChevron
+            />
+          ) : (
+            <SettingsRow
+              icon={<LogOut className='size-5' />}
+              title={TRUST_BROWSER_WORDS.signOutAll}
+              description={
+                isSigningOutAll
+                  ? TRUST_BROWSER_WORDS.signingOutAll
+                  : TRUST_BROWSER_WORDS.signOutAllHelp
+              }
+              onClick={
+                isSigningOutAll ? undefined : () => void signOutEverywhere()
+              }
+              hasChevron={!isSigningOutAll}
+            />
+          ))}
       </ul>
       {error && (
         <p className='text-destructive mt-2 text-sm' role='alert'>

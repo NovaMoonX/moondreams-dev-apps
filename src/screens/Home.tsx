@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import AppToggle from '@/components/AppToggle';
+import InlineNotice from '@/components/InlineNotice';
 import SectionHeader from '@/components/SectionHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { clearSignOutNote, readSignOutNote } from '@/lib/auth/signOutNote';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { APP_DESCRIPTION, APP_TITLE, getAppResumePath } from '@lib/app';
 import type { AppMetadata } from '@lib/types/appCatalog';
@@ -29,6 +31,10 @@ function Home() {
     false,
   );
   const [infoAppId, setInfoAppId] = useState<string | null>(null);
+  const [signOutNote, setSignOutNote] = useState(readSignOutNote);
+  useEffect(() => {
+    if (user) clearSignOutNote();
+  }, [user]);
   const isGrid = !isWide && !isShowingDetails;
   const infoApp = apps.find((app) => app.id === infoAppId) ?? null;
   const starredApps = apps.filter((app) => starredAppIds.includes(app.id));
@@ -80,6 +86,18 @@ function Home() {
           <p className='text-foreground/70 mx-auto max-w-xl text-base md:text-lg'>
             {APP_DESCRIPTION}
           </p>
+          {signOutNote && !user ? (
+            <InlineNotice
+              tone='success'
+              className='mx-auto max-w-xl text-left'
+              onDismiss={() => {
+                clearSignOutNote();
+                setSignOutNote(null);
+              }}
+            >
+              {signOutNote}
+            </InlineNotice>
+          ) : null}
         </main>
 
         {loading ? (

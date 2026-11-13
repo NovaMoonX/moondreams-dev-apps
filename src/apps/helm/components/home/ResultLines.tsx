@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
-import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import { formatTime } from '@/utils/formatUtils';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
+import UndoButton from '@apps/helm/components/activity/UndoButton';
+import ResultRows from '@apps/helm/components/home/ResultRows';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useOnceVisible } from '@apps/helm/hooks/useOnceVisible';
@@ -12,9 +13,12 @@ import {
   markAiNoticeSeen,
   markCaptureSeen,
 } from '@apps/helm/store/actions/captureActions';
+import { useResultLines } from '@apps/helm/hooks/useResultLines';
+import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
+import { canUndo } from '@apps/helm/nomos/planUndo';
+import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenExecution } from '@apps/helm/types';
-import { buildResultLines } from '@apps/helm/utils/resultLines';
-import { selectOpenTasksById } from '@apps/helm/store/selectors/captureSelectors';
+import { readMadeEntities } from '@apps/helm/utils/resultLines';
 
 interface ResultLinesProps {
   captureId: string;
@@ -25,7 +29,8 @@ interface ResultLinesProps {
   showsNotice: boolean;
 }
 
-const toSentence = (summary: string) => summary.replace(/[.!]*$/, '.');
+const toSentence = (summary: string) =>
+  /[?]$/.test(summary) ? summary : summary.replace(/[.!]*$/, '.');
 
 function AiNotice() {
   const name = useAssistantName();
@@ -54,6 +59,29 @@ function AiNotice() {
   );
 }
 
+function PeopleRow({ execution }: Pick<ResultLinesProps, 'execution'>) {
+  const made = readMadeEntities(execution);
+  const madeIds = new Set(made.map((entry) => entry.id));
+  const others = useLinkedNames({
+    whoIds: execution.linkedWhoIds.filter((id) => !madeIds.has(id)),
+    placeIds: execution.linkedPlaceIds.filter((id) => !madeIds.has(id)),
+  });
+  const parts = [
+    made.length > 0
+      ? HELM_COPY.resultAdded(made.map((entry) => entry.name))
+      : null,
+    others.length > 0
+      ? HELM_COPY.resultLinked(others.map((entry) => entry.name))
+      : null,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <p className='border-border text-muted-foreground border-t px-3.5 py-2 text-[13px] break-words'>
+      {parts.join(' · ')}
+    </p>
+  );
+}
+
 /** What the assistant said about a turn and the compact card of what it did, one row per change. */
 function ResultLines({
   captureId,
@@ -63,12 +91,11 @@ function ResultLines({
   showsNotice,
 }: ResultLinesProps) {
   const { user } = useAuth();
-  const now = useNow(60_000);
-  const tasksById = useAppSelector(selectOpenTasksById);
-  const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
-  const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const card = useRef<HTMLDivElement>(null);
-  const lines = buildResultLines(execution, tasksById, timeZone, now);
+  const lines = useResultLines(execution);
+  const { undo } = useUndoOf(execution);
+  const isUndone = execution.undoneByExecutionId !== null;
+  const hasFoot = canUndo(execution) || isUndone;
 
   useOnceVisible(card, isOnHome && !isSeen && user !== null, async () => {
     if (!user) return;
@@ -79,34 +106,46 @@ function ResultLines({
   });
 
   return (
-    <div ref={card} className='flex w-full flex-col items-start gap-2'>
+    <div
+      ref={card}
+      className='flex w-full flex-col items-start gap-2 empty:hidden'
+    >
       {execution.isUnreadable ? (
         <p className='text-muted-foreground pl-[30px] text-[13px]'>
           {HELM_COPY.unreadable}
         </p>
       ) : (
         <>
-          {execution.summary && (
+          {execution.summary && execution.category !== 'answer' && (
             <AssistantLine>{toSentence(execution.summary)}</AssistantLine>
           )}
           {lines.length > 0 && (
-            <ul
-              aria-label={HELM_COPY.resultLabel}
-              className='helm-card divide-border ml-[30px] w-[calc(100%-30px)] divide-y overflow-hidden'
-            >
-              {lines.map((line) => (
-                <li key={line.key} className='px-3.5 py-2.5'>
-                  <p className='text-[15px] leading-[21px] break-words'>
-                    {line.title}
-                  </p>
-                  {line.detail && (
-                    <p className='text-muted-foreground text-[13px] break-words'>
-                      {line.detail}
+            <div className='helm-card ml-[30px] w-[calc(100%-30px)] overflow-hidden'>
+              <ResultRows execution={execution} lines={lines} undo={undo} />
+              {!isUndone && <PeopleRow execution={execution} />}
+              {hasFoot && (
+                <div className='border-border flex items-baseline justify-between gap-3 border-t px-3.5 py-2'>
+                  {isUndone ? (
+                    <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
+                      {undo?.undoReport ?? HELM_COPY.takenBackLabel}
                     </p>
+                  ) : (
+                    <UndoButton
+                      execution={execution}
+                      lineCount={lines.length}
+                    />
                   )}
-                </li>
-              ))}
-            </ul>
+                  {!isUndone && (
+                    <time
+                      dateTime={new Date(execution.createdAt).toISOString()}
+                      className='text-muted-foreground shrink-0 text-[13px] tabular-nums'
+                    >
+                      {formatTime(execution.createdAt)}
+                    </time>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {isOnHome && showsNotice && <AiNotice />}
         </>

@@ -1,4 +1,5 @@
-export type ModelRole = 'interpret';
+export type ModelRole =
+  'interpret' | 'quick' | 'style' | 'topicWrite' | 'topicOverview';
 
 export interface ModelUsage {
   inputTokens: number;
@@ -10,6 +11,8 @@ export interface ModelUsage {
 interface ModelSpec {
   id: string;
   effort: 'low' | 'medium' | 'high';
+  /** Whether the model accepts the API's server-side fallback list; a Haiku-class model refuses it with a 400. */
+  hasServerFallback: boolean;
   /** US dollars per million tokens. */
   price: {
     input: number;
@@ -19,12 +22,37 @@ interface ModelSpec {
   };
 }
 
-/** Ids and prices were checked against Anthropic's model table dated 2026-10-06. */
+/** Ids and prices follow Anthropic's model table as given in the claude-api reference on 2026-11-09; the Haiku-class cache prices follow the usual 0.1x read and 1.25x write ratio of the input price. */
 const MODELS: Record<ModelRole, ModelSpec> = {
   interpret: {
     id: 'claude-sonnet-5-5',
     effort: 'low',
+    hasServerFallback: true,
     price: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  },
+  quick: {
+    id: 'claude-haiku-5-5',
+    effort: 'low',
+    hasServerFallback: false,
+    price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  },
+  style: {
+    id: 'claude-haiku-5-5',
+    effort: 'low',
+    hasServerFallback: false,
+    price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  },
+  topicWrite: {
+    id: 'claude-sonnet-5-5',
+    effort: 'low',
+    hasServerFallback: true,
+    price: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  },
+  topicOverview: {
+    id: 'claude-haiku-5-5',
+    effort: 'low',
+    hasServerFallback: false,
+    price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
   },
 };
 

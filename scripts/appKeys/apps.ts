@@ -1,4 +1,8 @@
 import {
+  keyCheckPath as connectionsKeyCheckPath,
+  makeKeyCheck as makeConnectionsKeyCheck,
+} from '../../functions/src/connections/connectionKey.ts';
+import {
   makeKeyCheck as makeHelmKeyCheck,
   keyCheckPath as helmKeyCheckPath,
   wrappedKeyPath as helmWrappedKeyPath,
@@ -45,11 +49,21 @@ export const APP_KEYS = {
     makeKeyCheck: makeHelmKeyCheck,
     drillUid: 'drill-test-person',
   },
+  connections: {
+    secretName: 'CONNECTIONS_MASTER_KEYS',
+    newKeyEnv: 'CONNECTIONS_NEW_KEY',
+    wrappedKeyPath: (uid: string) =>
+      `connectionsServer/${uid}/tokens/drill-test-account`,
+    keyCheckPath: connectionsKeyCheckPath,
+    makeKeyCheck: makeConnectionsKeyCheck,
+    drillUid: 'drill-test-person',
+  },
 } as const satisfies Record<string, AppKeys>;
 
 export type AppKeysName = keyof typeof APP_KEYS;
 
 export const readAppFlag = (value: string | null): AppKeys => {
-  if (value === 'runway' || value === 'helm') return APP_KEYS[value];
-  throw new Error('Refused: --app is runway or helm.');
+  if (value === 'runway' || value === 'helm' || value === 'connections')
+    return APP_KEYS[value];
+  throw new Error('Refused: --app is runway, helm or connections.');
 };

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Pin } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -6,22 +7,28 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   BILL_WORDS,
+  HOME_PIN_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PLAN_SELECT_WORDS,
   PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { useIncomeDaysPerMonth } from '@apps/runway/hooks/useGroupFigures';
 import { describeEnvelopeMonthly } from '@apps/runway/utils/billText';
+import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { EnvelopeSealed, Priority } from '@apps/runway/types';
 import {
   describeCadenceLine,
+  describeFundingPayFact,
   describeFundingShort,
   describeExtras,
 } from '@apps/runway/utils/fundingText';
@@ -53,6 +60,12 @@ interface EnvelopeTileProps {
   dial?: Priority;
   /** Which figure leads: what it comes to a month, or what each time puts in. */
   figureKind?: 'monthly' | 'payment';
+  /** Pinned to Home's first tiles: the tile wears a small pin. */
+  isPinned?: boolean;
+  /** While picking several: the row's tap ticks it and the chevron still opens it. */
+  select?: { checked: boolean; onChange: (checked: boolean) => void };
+  /** Press and hold (right-click on a computer): starts picking several with this one ticked. */
+  onHold?: () => void;
 }
 
 const capitalize = (text: string) =>
@@ -72,8 +85,20 @@ function EnvelopeTile({
   isPart = false,
   dial = 'want',
   figureKind = 'monthly',
+  isPinned = false,
+  select,
+  onHold,
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { openItem, closeOpenItem, showPlanSection } = useRunwayUrlState();
+  const request =
+    look === 'row' &&
+    figureKind === 'monthly' &&
+    !isPart &&
+    openItem?.itemId === itemId &&
+    openItem.eventId !== null
+      ? openItem
+      : null;
   const { isHidden } = useValuesHidden();
   const level = useAppSelector(selectLevel);
   const { value, word } = describeEnvelopeFigure(level, cents);
@@ -86,6 +111,10 @@ function EnvelopeTile({
       : extras.filter((extra) => !isCountedAt(extra.tier, dial));
   const whole = withExtras(envelope);
   const funding = describeFundingShort(whole);
+  const plan = useAppSelector((state) =>
+    selectResolvedPlan(state, todayAsUtcDate()),
+  );
+  const payFact = describeFundingPayFact(envelope.funding, plan);
   const emoji = useItemEmoji(envelope.emoji, envelope.groupId);
   const { amount } = counted;
   const eachTime = amount.kind === 'exact' ? formatCents(amount.cents) : null;
@@ -149,11 +178,7 @@ function EnvelopeTile({
             type='button'
             variant='tertiary'
             className='border-border bg-card text-foreground! h-full min-h-28 w-full flex-col items-start justify-start gap-2 rounded-2xl border p-3! text-left font-normal whitespace-normal'
-            aria-label={
-              isHidden
-                ? `${envelope.name}. Amount hidden. Open`
-                : `${envelope.name}, ${value} ${word}. Open`
-            }
+            aria-label={`${envelope.name}${isPinned ? `, ${HOME_PIN_WORDS.pinned.toLowerCase()}` : ''}${isHidden ? '. Amount hidden' : `, ${value} ${word}`}. Open`}
             onClick={open}
           >
             <span className='flex w-full min-w-0 items-center gap-2'>
@@ -163,6 +188,12 @@ function EnvelopeTile({
               <span className='min-w-0 flex-1 font-medium break-words'>
                 <span className='line-clamp-2'>{envelope.name}</span>
               </span>
+              {isPinned && (
+                <Pin
+                  className='text-muted-foreground h-3.5 w-3.5 shrink-0 self-start'
+                  aria-hidden='true'
+                />
+              )}
             </span>
             <span className='mt-auto block'>
               <span
@@ -196,12 +227,20 @@ function EnvelopeTile({
           reorder={reorder}
           isHighlighted={isHighlighted}
           isFaded={isFaded}
+          itemId={itemId}
+          tick={
+            select && !reorder
+              ? { ...select, label: PLAN_SELECT_WORDS.tick(envelope.name) }
+              : undefined
+          }
+          onLongPress={reorder ? undefined : onHold}
         />
       )}
-      {isOpen && (
+      {(isOpen || request !== null) && (
         <ItemSheet
           itemId={itemId}
           kind='envelope'
+          presetEventId={request?.eventId ?? undefined}
           today={today}
           figureLabel={
             isPlan
@@ -216,6 +255,7 @@ function EnvelopeTile({
           fact={[
             isPlan && eachTime ? partsText : PRIORITY_LABELS[envelope.priority],
             isPlan && eachTime ? null : funding,
+            payFact,
             envelope.maxCents === null
               ? null
               : ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents)),
@@ -228,10 +268,20 @@ function EnvelopeTile({
           help={pairedNote}
           quickChange={{
             label: ITEM_SHEET_R2_WORDS.change,
-            subtitle: ITEM_SHEET_R2_WORDS.changeAmountSub,
-            step: 'amount',
+            ...(envelope.funding.cadence.kind === 'none'
+              ? { subtitle: ITEM_SHEET_R2_WORDS.changeOftenSub, step: 'often' }
+              : {
+                  subtitle: ITEM_SHEET_R2_WORDS.changeAmountSub,
+                  step: 'amount',
+                }),
           }}
-          onClose={() => setIsOpen(false)}
+          onClose={() => {
+            setIsOpen(false);
+            if (request === null) return;
+            closeOpenItem();
+            if (request.returnTo !== null)
+              void showPlanSection(request.returnTo);
+          }}
         />
       )}
     </>

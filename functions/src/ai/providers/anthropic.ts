@@ -61,16 +61,43 @@ export function createAnthropicProvider(
     messages: input,
     mcpClient,
     terminalTool,
+    extraTerminalTools = [],
     limits,
     onUsage,
+    signal,
   }: ToolLoopRequest): Promise<ToolLoopResult> {
     const spec = getModelSpec(role);
     const startedAt = Date.now();
     const toolCalls: string[] = [];
     const messages: Message[] = input.map((message) => ({
       role: message.role,
-      content: message.content,
+      content:
+        typeof message.content === 'string'
+          ? message.content
+          : message.content.map((part): Block => {
+              if (part.type === 'text')
+                return { type: 'text', text: part.text };
+              return part.type === 'image'
+                ? {
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: part.mediaType,
+                      data: part.data,
+                    },
+                  }
+                : {
+                    type: 'document',
+                    source: {
+                      type: 'base64',
+                      media_type: part.mediaType,
+                      data: part.data,
+                    },
+                  };
+            }),
     }));
+    const terminals = [terminalTool, ...extraTerminalTools];
+    const terminalNames = new Set(terminals.map((tool) => tool.name));
     const ask = `Call ${terminalTool.name} now with what you have.`;
     const state = { usage: EMPTY_USAGE, turns: 0, asked: false };
     const timeLeft = () => limits.maxMillis - (Date.now() - startedAt);
@@ -82,8 +109,10 @@ export function createAnthropicProvider(
       endedBy: ToolLoopResult['endedBy'],
       terminalInput: unknown = null,
       errorCode: string | null = null,
+      terminalName: string | null = null,
     ): ToolLoopResult => ({
       terminalInput,
+      terminalName,
       endedBy,
       errorCode,
       usage: state.usage,
@@ -92,7 +121,7 @@ export function createAnthropicProvider(
 
     try {
       const listed = (await mcpClient.listTools()).tools
-        .filter((tool) => tool.name !== terminalTool.name)
+        .filter((tool) => !terminalNames.has(tool.name))
         .sort((a, b) => a.name.localeCompare(b.name));
       const tools: Anthropic.Beta.Messages.BetaTool[] = [
         ...listed.map((tool) => ({
@@ -101,14 +130,16 @@ export function createAnthropicProvider(
           input_schema:
             tool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
         })),
-        {
-          name: terminalTool.name,
-          description: terminalTool.description,
+        ...terminals.map((tool, index) => ({
+          name: tool.name,
+          description: tool.description,
           input_schema:
-            terminalTool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
+            tool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
           strict: true,
-          cache_control: { type: 'ephemeral' },
-        },
+          ...(index === terminals.length - 1
+            ? { cache_control: { type: 'ephemeral' as const } }
+            : {}),
+        })),
       ];
       const systemBlocks = [
         {
@@ -119,6 +150,7 @@ export function createAnthropicProvider(
       ];
 
       for (;;) {
+        if (signal?.aborted) return end('aborted');
         if (state.turns >= limits.maxTurns || timeLeft() < MIN_TURN_MS) {
           return end('limit');
         }
@@ -131,10 +163,11 @@ export function createAnthropicProvider(
             tool_choice: { type: 'auto' },
             messages,
             output_config: { effort: spec.effort },
-            betas: [FALLBACK_BETA],
-            fallbacks: 'default',
+            ...(spec.hasServerFallback
+              ? { betas: [FALLBACK_BETA], fallbacks: 'default' as const }
+              : {}),
           },
-          { timeout: Math.min(TURN_TIMEOUT_MS, timeLeft()) },
+          { timeout: Math.min(TURN_TIMEOUT_MS, timeLeft()), signal },
         );
         state.turns += 1;
         const turnUsage = toUsage(response.usage);
@@ -154,8 +187,12 @@ export function createAnthropicProvider(
           (block): block is Anthropic.Beta.Messages.BetaToolUseBlock =>
             block.type === 'tool_use',
         );
-        const terminalUse = uses.find((use) => use.name === terminalTool.name);
-        if (terminalUse) return end('terminal', terminalUse.input);
+        const terminalUse =
+          uses.find((use) => use.name === terminalTool.name) ??
+          uses.find((use) => terminalNames.has(use.name));
+        if (terminalUse) {
+          return end('terminal', terminalUse.input, null, terminalUse.name);
+        }
 
         if (state.asked) return end(isOver() ? 'limit' : 'noTerminal');
 
@@ -165,6 +202,7 @@ export function createAnthropicProvider(
 
         const results: Block[] = [];
         for (const use of uses) {
+          if (signal?.aborted) return end('aborted');
           const isRefused = toolCalls.length >= limits.maxToolCalls;
           if (!isRefused) toolCalls.push(use.name);
           const result = isRefused
@@ -198,6 +236,9 @@ export function createAnthropicProvider(
         messages.push({ role: 'user', content: results });
       }
     } catch (error) {
+      if (signal?.aborted || error instanceof Anthropic.APIUserAbortError) {
+        return end('aborted');
+      }
       return end('error', null, getErrorCode(error));
     }
   }
