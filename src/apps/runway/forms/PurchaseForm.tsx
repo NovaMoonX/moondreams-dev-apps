@@ -48,6 +48,7 @@ import { store, useAppSelector } from '@/store';
 import ReceiptFileInput, {
   type ReceiptChooser,
 } from '@apps/runway/components/ReceiptFileInput';
+import { ActionTitle } from '@apps/runway/components/ActionSection';
 import { ReceiptTile } from '@apps/runway/components/ReceiptsBlock';
 import { pickReceiptFiles } from '@apps/runway/utils/receiptFiles';
 import {
@@ -79,6 +80,7 @@ import {
   VARIES_HINT,
 } from '@apps/runway/constants';
 import { getUsualCardId } from '@apps/runway/engine/cards';
+import { isRefundCandidate, isSameStore } from '@apps/runway/engine/matching';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { needsCostAmount } from '@apps/runway/engine/horizon';
 import { countCostMarks } from '@apps/runway/engine/progress';
@@ -327,6 +329,8 @@ interface PurchaseFormProps {
   heldReceiptCount?: number;
   /** Money in the bank balance already counts (a waiting bank refund), so Free to Spend is no place for it to go back to. */
   isCountedAlready?: boolean;
+  /** On a refund being placed: the purchase it starts as a refund of, which the person can still change. */
+  presetOriginalId?: string | null;
 }
 
 const toHttpsLink = (text: string) => {
@@ -349,6 +353,7 @@ function PurchaseFormBody({
   editing,
   heldReceiptCount = 0,
   isCountedAlready: isCountedProp = false,
+  presetOriginalId = null,
 }: PurchaseFormProps & StartOverProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -453,7 +458,7 @@ function PurchaseFormBody({
           ),
         )
       : ({} as Record<string, string>),
-    originalId: editing?.refundOfId ?? null,
+    originalId: editing?.refundOfId ?? presetOriginalId,
     returnTo: getStartReturnTo(),
     paidByChoice: editing ? (editing.paidByCardId ?? null) : undefined,
   }));
@@ -516,6 +521,7 @@ function PurchaseFormBody({
   const [view, setView] = useState<
     'form' | 'split' | 'original' | 'envelopes' | 'read'
   >('form');
+  const [reopenAfter, setReopenAfter] = useState<string | null>(null);
   const [envelopeSearch, setEnvelopeSearch] = useState('');
   const [isRefund, setIsRefund] = useState(
     restored?.isRefund ?? start.isRefund,
@@ -1007,7 +1013,7 @@ function PurchaseFormBody({
         : {},
     );
     setIsSplit(true);
-    setView('split');
+    openView('split');
   };
 
   const stopSplit = () => {
@@ -1017,7 +1023,7 @@ function PurchaseFormBody({
 
   const leaveSplit = () => {
     if (splitIds.length < 2) stopSplit();
-    setView('form');
+    backToForm();
   };
 
   const toggleRefund = () => {
@@ -1238,14 +1244,24 @@ function PurchaseFormBody({
     }
   };
 
-  const candidates = others.filter(
+  const refundStore = formData.extras.merchant?.trim() || null;
+  const matching = others.filter(
     (purchase) =>
-      purchase.amountCents > 0 &&
+      isRefundCandidate(purchase) &&
       getRefundableCents(purchase, others) > 0 &&
       getPurchaseTitle(purchase, nameOf)
         .toLowerCase()
         .includes(originQuery.trim().toLowerCase()),
   );
+  const candidates = [
+    ...matching.filter((purchase) =>
+      isSameStore(purchase.merchant || purchase.label, refundStore),
+    ),
+    ...matching.filter(
+      (purchase) =>
+        !isSameStore(purchase.merchant || purchase.label, refundStore),
+    ),
+  ];
 
   const usage = purchases
     .slice(0, RECENT_PURCHASES)
@@ -1381,7 +1397,12 @@ function PurchaseFormBody({
     if (isPresetPay && preset !== null) {
       return HORIZON_WORDS.costLineName(preset.cost.name, preset.itemName);
     }
-    if (isRefund) return `Back to ${describeEnvelopes(lines, nameOf)}`;
+    if (isRefund && original !== null) {
+      return SPEND_WORDS.refundGoesTo(
+        describeEnvelopes(lines, nameOf),
+        getPurchaseTitle(original, nameOf),
+      );
+    }
     return describeEnvelopes(lines, nameOf);
   };
   const todayValue = toDateInputValue(today);
@@ -1434,7 +1455,7 @@ function PurchaseFormBody({
                           label: SPEND_WORDS.readReceipt,
                           onClick: () => {
                             setReading({ isBusy: false, message: null });
-                            setView('read');
+                            openView('read');
                           },
                         },
                       ]),
@@ -1455,7 +1476,11 @@ function PurchaseFormBody({
           ? PURCHASE_COST_WORDS.pickHint(preset.cost.name)
           : undefined,
       isAnswered: lines !== null,
-      blocker: isSplit && !isRefund ? SPEND_WORDS.needsShares : null,
+      blocker: isRefund
+        ? SPEND_WORDS.needsReturnTo
+        : isSplit
+          ? SPEND_WORDS.needsShares
+          : null,
       isPreAnswered:
         !isRefund &&
         presetEnvelopeId !== null &&
@@ -1465,10 +1490,10 @@ function PurchaseFormBody({
           {isRefund && (
             <SummaryRow
               label={SPEND_WORDS.refundOf}
-              onClick={() => setView('original')}
+              onClick={() => openView('original')}
               detail={
                 original !== null && returnsToOriginal && lines
-                  ? `Returns to ${describeEnvelopes(lines, nameOf)}.`
+                  ? `${SPEND_WORDS.returnsTo} ${describeEnvelopes(lines, nameOf)}.`
                   : undefined
               }
             >
@@ -1531,7 +1556,7 @@ function PurchaseFormBody({
                       icon={<Search className='h-4 w-4' />}
                       onClick={() => {
                         setEnvelopeSearch('');
-                        setView('envelopes');
+                        openView('envelopes');
                       }}
                     >
                       {FORM_FLOW_WORDS.more}
@@ -1550,7 +1575,7 @@ function PurchaseFormBody({
             <div className='space-y-2'>
               <SummaryRow
                 label={SPEND_WORDS.splitLabel}
-                onClick={() => setView('split')}
+                onClick={() => openView('split')}
               >
                 {splitIds.length === 0 ? (
                   'Pick the envelopes'
@@ -1721,6 +1746,18 @@ function PurchaseFormBody({
     foldAnswered: restored !== null,
   });
   const isAsking = !questions.hasReviewed;
+  // A view opened from a reopened question's sheet would sit under that sheet, so the sheet closes and comes back on return.
+  const openView = (next: Exclude<typeof view, 'form'>) => {
+    const sheetId = questions.hasReviewed ? questions.reopenedId : null;
+    setReopenAfter(sheetId);
+    if (sheetId !== null) questions.close();
+    setView(next);
+  };
+  const backToForm = () => {
+    setView('form');
+    if (reopenAfter !== null) questions.reopen(reopenAfter);
+    setReopenAfter(null);
+  };
 
   const readReceiptFiles = async (files: File[]) => {
     const file = files.find((chosen) => chosen.type.startsWith('image/'));
@@ -1799,7 +1836,7 @@ function PurchaseFormBody({
         }),
       );
       setReading({ isBusy: false, message: null });
-      setView('form');
+      backToForm();
       if (fillsAmount && questions.open?.id === 'amount') {
         questions.moveOnFrom('amount');
       }
@@ -2231,7 +2268,7 @@ function PurchaseFormBody({
               <Button
                 type='button'
                 disabled={splitBlocker !== null}
-                onClick={() => setView('form')}
+                onClick={() => backToForm()}
               >
                 {SPEND_WORDS.splitDone}
               </Button>
@@ -2241,17 +2278,15 @@ function PurchaseFormBody({
       )}
       {view === 'original' && (
         <div className='space-y-3'>
-          <BackLink onBack={() => setView('form')} />
-          <p className='text-muted-foreground text-sm'>
-            {SPEND_WORDS.pickOriginal}
-          </p>
+          <BackLink onBack={() => backToForm()} />
+          <ActionTitle>{SPEND_WORDS.pickOriginal}</ActionTitle>
           <Button
             type='button'
             variant='secondary'
             className='h-10 w-full justify-start'
             onClick={() => {
               setOriginalId(null);
-              setView('form');
+              backToForm();
             }}
           >
             {SPEND_WORDS.noOriginal}
@@ -2274,24 +2309,26 @@ function PurchaseFormBody({
                 <Button
                   type='button'
                   variant='tertiary'
-                  className='text-foreground! h-auto w-full items-start justify-between gap-3 px-3! py-3 text-left font-normal whitespace-normal'
+                  className='text-foreground! h-auto w-full px-3! py-3 text-left font-normal whitespace-normal'
                   onClick={() => {
                     setOriginalId(purchase.id);
-                    setView('form');
+                    backToForm();
                   }}
                 >
-                  <span className='min-w-0'>
-                    <span className='line-clamp-2 font-medium break-words'>
-                      {getPurchaseTitle(purchase, nameOf)}
+                  <span className='flex w-full min-w-0 items-start gap-3'>
+                    <span className='min-w-0 flex-1 text-left'>
+                      <span className='line-clamp-2 font-medium break-words'>
+                        {getPurchaseTitle(purchase, nameOf)}
+                      </span>
+                      <span className='text-muted-foreground mt-0.5 block text-sm'>
+                        {formatDateOrdinalUTC(purchase.date)}
+                      </span>
                     </span>
-                    <span className='text-muted-foreground block text-sm'>
-                      {formatDateOrdinalUTC(purchase.date)}
+                    <span className='shrink-0 font-semibold whitespace-nowrap tabular-nums'>
+                      <SensitiveValue>
+                        {formatCents(purchase.amountCents)}
+                      </SensitiveValue>
                     </span>
-                  </span>
-                  <span className='shrink-0 font-semibold whitespace-nowrap tabular-nums'>
-                    <SensitiveValue>
-                      {formatCents(purchase.amountCents)}
-                    </SensitiveValue>
                   </span>
                 </Button>
               </li>
@@ -2301,7 +2338,7 @@ function PurchaseFormBody({
       )}
       {view === 'read' && (
         <div className='space-y-3'>
-          <BackLink onBack={() => setView('form')} />
+          <BackLink onBack={() => backToForm()} />
           <p className='text-lg font-semibold'>{SPEND_WORDS.readReceipt}</p>
           <p className='text-muted-foreground text-sm'>
             {SPEND_WORDS.readReceiptSends}
@@ -2345,7 +2382,7 @@ function PurchaseFormBody({
               <Button
                 type='button'
                 variant='secondary'
-                onClick={() => setView('form')}
+                onClick={() => backToForm()}
                 disabled={reading.isBusy}
               >
                 Cancel
@@ -2370,7 +2407,7 @@ function PurchaseFormBody({
       )}
       {view === 'envelopes' && (
         <div className='space-y-3'>
-          <BackLink onBack={() => setView('form')} />
+          <BackLink onBack={() => backToForm()} />
           <p className='text-lg font-semibold'>{FORM_FLOW_WORDS.moreTitle}</p>
           {options.length >= RUNWAY_SEARCH_THRESHOLD && (
             <SearchInput
@@ -2395,6 +2432,7 @@ function PurchaseFormBody({
                   onClick={() => {
                     setEnvelopeId(option.id);
                     setView('form');
+                    setReopenAfter(null);
                     if (amount !== null && questions.open?.id === 'envelope')
                       questions.moveOnFrom('envelope');
                   }}
