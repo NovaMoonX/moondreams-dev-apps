@@ -9,7 +9,8 @@ import {
 
 import { db } from '@lib/firebase/config';
 
-import { createSealedReader } from '@apps/runway/security';
+import { createSealedReader } from '@lib/security';
+import { openJson } from '@apps/runway/security';
 import { openPurchase } from '@apps/runway/store/listeners/openLedger';
 import type {
   OpenPurchase,
@@ -31,7 +32,7 @@ export function startPurchasesListener(
 ): Unsubscribe {
   const sequence = { latest: 0 };
   const run = { isStopped: false };
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
 
   const stop = onSnapshot(
     query(
@@ -75,7 +76,7 @@ function startConstrainedPurchasesListener(
 ): Unsubscribe {
   const sequence = { latest: 0 };
   const run = { isStopped: false };
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
 
   const stop = onSnapshot(
     query(

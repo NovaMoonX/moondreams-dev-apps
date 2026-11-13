@@ -2,12 +2,17 @@ import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import { createSealedReader } from '@apps/runway/security';
+import { createSealedReader } from '@lib/security';
+import { openJson } from '@apps/runway/security';
 import type {
   AccountBalanceDoc,
+  CardDetailsAnswer,
+  CardStatementDoc,
+  CardStatementSealed,
   LinkDoc,
   LinkSealed,
   OpenAccountBalance,
+  OpenCardStatement,
   OpenLink,
   OpenReleasedCharge,
   ReleasedChargeDoc,
@@ -58,13 +63,22 @@ function startOpenedListener<TDoc extends { id: string }, TOpen>(
 }
 
 /** Every link the bank sign-ins made; Functions write them, this only reads. */
+const toCardDetails = (
+  data: Pick<LinkDoc, 'cardDetails' | 'needsCardConsent'>,
+): CardDetailsAnswer | null => {
+  const value: unknown = data.cardDetails;
+  if (value === 'shared' || value === 'needsConsent' || value === 'unsupported')
+    return value;
+  return data.needsCardConsent === true ? 'needsConsent' : null;
+};
+
 export function startLinksListener(
   uid: string,
   encryption: RunwayEncryption,
   onChange: (links: OpenLink[]) => void,
   onError: (error: Error) => void,
 ) {
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   return startOpenedListener<LinkDoc, OpenLink>(
     uid,
     'links',
@@ -74,6 +88,8 @@ export function startLinksListener(
         id: data.id,
         status: data.status,
         lastSyncAt: data.lastSyncAt ?? null,
+        needsCardConsent: data.needsCardConsent === true,
+        cardDetails: toCardDetails(data),
         createdAt: data.createdAt,
         institutionName: payload.institutionName ?? '',
         institutionLogo: payload.institutionLogo?.startsWith(
@@ -103,13 +119,54 @@ export function startAccountBalancesListener(
   onChange: (balances: OpenAccountBalance[]) => void,
   onError: (error: Error) => void,
 ) {
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   return startOpenedListener<AccountBalanceDoc, OpenAccountBalance>(
     uid,
     'accountBalances',
     async (data) => {
-      const payload = await read<{ cents: number }>(data.sealed);
-      return { id: data.id, asOf: data.asOf, cents: payload.cents };
+      const payload = await read<{
+        cents: number;
+        availableCents?: number | null;
+        limitCents?: number | null;
+        hasInstantBalance?: boolean | null;
+      }>(data.sealed);
+      return {
+        id: data.id,
+        asOf: data.asOf,
+        cents: payload.cents,
+        availableCents: payload.availableCents ?? null,
+        limitCents: payload.limitCents ?? null,
+        hasInstantBalance: payload.hasInstantBalance ?? null,
+      };
+    },
+    onChange,
+    onError,
+  );
+}
+
+/** What the bank's latest statement says about each linked card (minimum, balance, due date), keyed by the card id. */
+export function startCardStatementsListener(
+  uid: string,
+  encryption: RunwayEncryption,
+  onChange: (statements: OpenCardStatement[]) => void,
+  onError: (error: Error) => void,
+) {
+  const read = createSealedReader(encryption, openJson);
+  return startOpenedListener<CardStatementDoc, OpenCardStatement>(
+    uid,
+    'cardStatements',
+    async (data) => {
+      const payload = await read<Partial<CardStatementSealed>>(data.sealed);
+      return {
+        id: data.id,
+        asOf: data.asOf,
+        minimumCents: payload.minimumCents ?? null,
+        statementCents: payload.statementCents ?? null,
+        statementOn: payload.statementOn ?? null,
+        dueOn: payload.dueOn ?? null,
+        lastPaymentCents: payload.lastPaymentCents ?? null,
+        lastPaymentOn: payload.lastPaymentOn ?? null,
+      };
     },
     onChange,
     onError,
@@ -123,7 +180,7 @@ export function startReleasedChargesListener(
   onChange: (charges: OpenReleasedCharge[]) => void,
   onError: (error: Error) => void,
 ) {
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   return startOpenedListener<ReleasedChargeDoc, OpenReleasedCharge>(
     uid,
     'releasedCharges',

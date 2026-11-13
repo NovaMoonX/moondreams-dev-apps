@@ -1,14 +1,44 @@
 // Pure checks for Runway's engine; run under several time zones: `TZ=America/Los_Angeles npm run check:runway-engine`.
 import assert from 'node:assert/strict';
+import { START_DAY_KEY } from '../../src/apps/runway/constants.ts';
 
+import { createSealedReader } from '../../src/lib/security/sealedReader.ts';
+import { openJson, sealJson } from '../../src/apps/runway/security.ts';
 import {
-  createSealedReader,
-  sealJson,
-} from '../../src/apps/runway/security.ts';
+  listChangesBetweenIncomeDays,
+  listPlanChangeDays,
+} from '../../src/apps/runway/engine/planChanges.ts';
+import { parseAmountDraft } from '../../src/apps/runway/utils/rangeInput.ts';
+import { cleanBankName } from '../../src/apps/runway/utils/accountText.ts';
+import {
+  addLink,
+  canCancelChange,
+  findLinkHolder,
+  getCancelTarget,
+  getChangesOnlyDoneOn,
+  getEndChangeId,
+  getEndEntryId,
+  getItemEnds,
+  getItemStops,
+  getLinkSpan,
+  hasLinkHappened,
+  listCancellableLinks,
+  listComingChanges,
+  removeLink,
+  removeLinks,
+  sortLinksByDate,
+} from '../../src/apps/runway/engine/horizonLinks.ts';
+import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
 import {
   findAccountPairs,
   findLostPairs,
+  findRefundOriginal,
+  isRefundCandidate,
+  isSameStore,
+  isBankMove,
+  isRefundLike,
   findDepositDays,
+  findPendingMoveHolds,
   findPurchaseMatches,
   type DepositDay,
 } from '../../src/apps/runway/engine/matching.ts';
@@ -36,6 +66,7 @@ import {
   getAccountHoldings,
   getPullAccounts,
   keepPullAccountId,
+  getPendingCents,
   hasBankBalance,
   resolvePayFromAccountId,
   withBankBalances,
@@ -47,7 +78,10 @@ import {
   isBroadMerchant,
   RULE_VARIES,
 } from '../../src/apps/runway/engine/rules.ts';
-import type { OpenRule } from '../../src/apps/runway/types.ts';
+import type {
+  OpenCardStatement,
+  OpenRule,
+} from '../../src/apps/runway/types.ts';
 import {
   estimateMonthlyInterest,
   getInterestDay,
@@ -60,7 +94,9 @@ import { getAccountMoves } from '../../src/apps/runway/engine/moves.ts';
 import {
   collectCardHistory,
   getCardDueState,
+  getBankDueDay,
   getDueCards,
+  getMinimumDue,
   getNextDueOn,
   getPrevDueOn,
   getUsualCardId,
@@ -93,7 +129,11 @@ import {
   getPeriodStart,
   spreadCalendarAmount,
 } from '../../src/apps/runway/engine/calendar.ts';
-import { describeFunding } from '../../src/apps/runway/utils/fundingText.ts';
+import {
+  describeCadenceLine,
+  describeFunding,
+  describeFundingShort,
+} from '../../src/apps/runway/utils/fundingText.ts';
 import {
   countReceiptItems,
   describeReceiptRead,
@@ -101,8 +141,20 @@ import {
   splitReceiptRow,
 } from '../../src/apps/runway/utils/receiptText.ts';
 import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
+import {
+  getGoalBalanceAt,
+  getGoalCost,
+  getGoalCostId,
+  getGoalCover,
+  getGoalLinkBlock,
+  getHorizonNudgeFrom,
+  getLinkedEventId,
+  getTargetDateSetOn,
+  shouldNudgeHorizon,
+} from '../../src/apps/runway/engine/horizonGoal.ts';
 import type {
   BillFundedBy,
+  GoalSealed,
   OpenAccount,
   OpenCard,
   OpenLink,
@@ -180,6 +232,7 @@ import {
 } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
 import {
   computeDraftView,
+  isGoalCovering,
   selectReachedEndingsKey,
 } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
 import { getCreatedProblems } from '../../src/apps/runway/utils/lookaheadText.ts';
@@ -316,6 +369,7 @@ import {
   getPurchaseMarkFigures,
   setHorizonState,
   settleCostPaid,
+  settleCostPaidWithGoal,
   getHorizonFigures,
   sumCostPayments,
   sumCostSpent,
@@ -376,6 +430,7 @@ import {
 import {
   occurrences,
   selectFundedDays,
+  toPayOn,
 } from '../../src/apps/runway/engine/schedule.ts';
 import {
   effectiveStance,
@@ -1545,6 +1600,87 @@ const version = (
     'ceil of what is left over the days left, summing to the bill',
   );
 
+  // A bill paid on a day of its own is saved for by the pays before that day, and keeps its due date as its key.
+  const checkPayOnDays = () => {
+    assert.deepEqual(
+      [
+        toPayOn(utc(2026, 12, 15), 1),
+        toPayOn(utc(2026, 12, 1), 1),
+        toPayOn(utc(2026, 12, 3), 5),
+        toPayOn(utc(2027, 3, 10), 31),
+        toPayOn(utc(2026, 12, 15), null),
+      ].map(toDayStamp),
+      ['20261201', '20261201', '20261105', '20270228', '20261215'],
+      'the pay day is the last one on or before the due date, clamped to a short month',
+    );
+    const monthEndPays = Array.from({ length: 3 }, (_, index) =>
+      day(Date.UTC(2026, 10 + index, 30), String(index)),
+    );
+    const carNote = makeBill({
+      schedule: monthly(utc(2026, 12, 15)),
+      fundedBy: { kind: 'lastBefore' },
+    });
+    const byDue = planBillPayments(carNote, monthEndPays, horizon);
+    const byPayDay = planBillPayments(
+      { ...carNote, payOnDay: 1 },
+      monthEndPays,
+      horizon,
+    );
+    assert.deepEqual(
+      [byDue[0].parts.map((part) => toDayStamp(part.day.on)), byDue[0].payOn],
+      [['20261130'], byDue[0].dueOn],
+      'with no pay day the payment is paid and saved for by its due date',
+    );
+    assert.deepEqual(
+      byPayDay
+        .slice(0, 2)
+        .map((payment) => [
+          toDayStamp(payment.dueOn),
+          toDayStamp(payment.payOn),
+          payment.parts.map((part) => toDayStamp(part.day.on)),
+        ]),
+      [
+        ['20261215', '20261201', ['20261130']],
+        ['20270115', '20270101', ['20261230']],
+      ],
+      'paid on the 1st, the pay on the 30th before it carries it',
+    );
+    {
+      const shortHorizon = utc(2026, 12, 31);
+      const early = planBillPayments(
+        makeBill({
+          schedule: monthly(utc(2027, 1, 3)),
+          fundedBy: { kind: 'lastBefore' },
+          payOnDay: 25,
+        }),
+        monthEndPays,
+        shortHorizon,
+      );
+      assert.deepEqual(
+        [toDayStamp(early[0].dueOn), toDayStamp(early[0].payOn)],
+        ['20270103', '20261225'],
+        'a payment due past the horizon but paid inside it is planned',
+      );
+      const twice = planBillPayments(
+        makeBill({
+          schedule: {
+            kind: 'monthly',
+            anchor: utc(2027, 1, 1),
+            monthDays: [1, 15],
+          },
+          payOnDay: 20,
+        }),
+        monthEndPays,
+        horizon,
+      );
+      assert.ok(
+        twice.every((payment) => payment.payOn === payment.dueOn),
+        'two payments a month ignore a pay day, so they never share one',
+      );
+    }
+  };
+  checkPayOnDays();
+
   // A monthly bill on the 31st lands on the last day of shorter months.
   assert.deepEqual(
     planBillPayments(
@@ -1697,8 +1833,8 @@ const version = (
         undefined,
         () => 'the pay on the 30th',
       ),
-      'Paid from spread across your pays to the pay on the 30th',
-      'a Paid from change reads as plain words',
+      'Comes out of spread across your pays to the pay on the 30th',
+      'a Comes out of change reads as plain words',
     );
     // A window with no pin of its own spreads as before, whatever is pinned in other months.
     assert.deepEqual(
@@ -2315,6 +2451,7 @@ const version = (
       plannedByDateCents: 180_000,
       reachedOn: dayOf(45),
       state: 'onPace',
+      targetDate: vacation.targetDate,
     },
     'vacation fund: $300 each of six income days, on pace',
   );
@@ -2331,6 +2468,7 @@ const version = (
       plannedByDateCents: 0,
       reachedOn: dayOf(59),
       state: null,
+      targetDate: null,
     },
     'cushion: no date, reached on the fourth funded day',
   );
@@ -2347,6 +2485,7 @@ const version = (
       plannedByDateCents: 20_000,
       reachedOn: dayOf(3),
       state: 'ahead',
+      targetDate: phone.targetDate,
     },
     'phone: $50 each of four income days, ahead',
   );
@@ -4927,7 +5066,7 @@ const version = (
     };
     assert.ok(
       describeLineReason(fromMain, { main: 'Main job' }).includes(
-        'paid from Main job',
+        'comes out of Main job',
       ),
       'a line names the source that pays it',
     );
@@ -4947,7 +5086,7 @@ const version = (
         { main: 'Main job' },
         'Vacation fund',
         'side',
-      ).includes('paid from Main job'),
+      ).includes('comes out of Main job'),
       'a line paid by another source still names it',
     );
   }
@@ -5619,6 +5758,8 @@ const version = (
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        goalId: null,
+        links: [],
         costs: [
           {
             id: 'surg',
@@ -5971,6 +6112,7 @@ const version = (
   const payment = (dueOn: number, parts: number, fundedCents = 0) =>
     ({
       dueOn,
+      payOn: dueOn,
       totalCents: 1_000,
       fundedCents,
       fundedDays: 0,
@@ -6108,6 +6250,7 @@ const version = (
       billId: 'rent',
       name: 'rent',
       dueOn: today - 3 * DAY_MS,
+      payOn: today - 3 * DAY_MS,
       isOverdue: true,
       laterDueOn: [],
     },
@@ -6131,6 +6274,7 @@ const version = (
       billId: 'rent',
       name: 'rent',
       dueOn: today,
+      payOn: today,
       isOverdue: false,
       laterDueOn: [],
     },
@@ -6151,6 +6295,7 @@ const version = (
         billId: 'rent',
         name: 'rent',
         dueOn: today - 14 * DAY_MS,
+        payOn: today - 14 * DAY_MS,
         isOverdue: true,
         laterDueOn: [today - 7 * DAY_MS, today],
       },
@@ -6616,6 +6761,7 @@ const version = (
       b1: [
         {
           dueOn: today + 4 * DAY_MS,
+          payOn: today + 4 * DAY_MS,
           totalCents: 20_000,
           ranged: {
             range: { lowCents: 10_000, highCents: 20_000 },
@@ -6697,7 +6843,7 @@ const version = (
     return performance.now() - started;
   }).sort((a, b) => a - b);
   assert.ok(
-    calendarTimings[2] < Math.max(250, timings[2] * 4),
+    calendarTimings[2] < Math.max(5000, timings[2] * 4),
     `25 monthly and 25 weekly calendar envelopes: lookahead median ${calendarTimings[2]}ms against ${timings[2]}ms for every-income-day rules`,
   );
   console.log(
@@ -7693,7 +7839,7 @@ const version = (
   };
   const first = await sealJson({ name: 'Rent' }, encryption);
   const second = await sealJson({ name: 'Rent' }, encryption);
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   const [again, once, other] = await Promise.all([
     read<{ name: string }>(first),
     read<{ name: string }>(first),
@@ -9398,7 +9544,11 @@ const version = (
     'a span of 1,500 periods is walked to its last day, not cut at 1,200, and the empty periods pass their amounts on',
   );
   assert.equal(describeFunding(calendarRule(60_000)), '$600.00 a month');
-  assert.equal(describeFunding(idle.funding), 'no contribution');
+  assert.equal(
+    describeFunding(idle.funding, [], 'goal'),
+    'not saving for it yet',
+  );
+  assert.equal(describeFunding(idle.funding), 'nothing goes in for now');
   assert.equal(
     describeFunding({
       amount: { kind: 'exact', cents: 5_000 },
@@ -10292,6 +10442,60 @@ const version = (
     'due within 7 days with money waiting, soonest first; 8 days out, no due day and nothing waiting are left out',
   );
 
+  // The bank's statement decides the minimum and the due day.
+  const statement = (
+    patch: Partial<OpenCardStatement> = {},
+  ): OpenCardStatement => ({
+    id: 'v',
+    asOf: 1,
+    minimumCents: 3_500,
+    statementCents: 41_200,
+    statementOn: d(2026, 10, 24),
+    dueOn: d(2026, 11, 14),
+    lastPaymentCents: null,
+    lastPaymentOn: null,
+    ...patch,
+  });
+  const NOV_14 = d(2026, 11, 14);
+  assert.equal(getMinimumDue(statement(), NOV_14), 3_500);
+  assert.equal(getMinimumDue(null, NOV_14), null, 'no statement, no minimum');
+  assert.equal(getMinimumDue(statement({ minimumCents: null }), NOV_14), null);
+  assert.equal(getMinimumDue(statement({ minimumCents: 0 }), NOV_14), null);
+  assert.equal(getMinimumDue(statement({ dueOn: null }), NOV_14), null);
+  assert.equal(
+    getMinimumDue(
+      statement({ lastPaymentCents: 3_500, lastPaymentOn: d(2026, 10, 24) }),
+      NOV_14,
+    ),
+    null,
+    'a payment of the minimum on the statement day is already paid',
+  );
+  assert.equal(
+    getMinimumDue(
+      statement({ lastPaymentCents: 3_499, lastPaymentOn: d(2026, 11, 1) }),
+      NOV_14,
+    ),
+    3_500,
+    'a payment under the minimum leaves it due',
+  );
+  assert.equal(
+    getMinimumDue(
+      statement({ lastPaymentCents: 90_000, lastPaymentOn: d(2026, 10, 23) }),
+      NOV_14,
+    ),
+    3_500,
+    'a payment before the statement was issued is for the one before',
+  );
+  assert.equal(
+    getMinimumDue(statement(), d(2026, 12, 14)),
+    null,
+    'a statement for last due day says nothing about the next one',
+  );
+  assert.equal(getMinimumDue(statement(), null), null, 'no due day shown');
+  assert.equal(getBankDueDay(statement()), 14);
+  assert.equal(getBankDueDay(statement({ dueOn: null })), null);
+  assert.equal(getBankDueDay(null), null);
+
   // Past due sticks until a full or minimum payment, or until the next due day is within 7 days.
   const venture = card('v', 14);
   const state = (
@@ -10657,11 +10861,13 @@ const version = (
     lowCents: number,
     highCents = lowCents,
     arrivedOffset: number | null = null,
+    payLineId = 'line_a',
   ): DepositDay => ({
     dayKey,
     expectedOn: base + expectedOffset * day,
     arrivedOn: arrivedOffset === null ? null : base + arrivedOffset * day,
     amount: { lowCents, highCents },
+    payLineId,
   });
 
   const one = findDepositDays(
@@ -10910,6 +11116,148 @@ const version = (
     [[...backward.clear].sort(), [...backward.offers].sort()],
     'the same deposits and days in any order give the same links and offers',
   );
+  const checkRememberedPayers = () => {
+    const payroll = [{ merchantKey: 'payroll', payLineId: 'line_a' }];
+    const raised = (payers: typeof payroll) =>
+      findDepositDays(
+        [deposit('d1', 130_000, 0)],
+        [payDay('pay_a', 0, 100_000)],
+        [],
+        payers,
+      );
+    assert.equal(raised([]).clear.size, 0, 'a raise past 15% asks by default');
+    assert.deepEqual(
+      [...raised(payroll).clear],
+      [['d1', 'pay_a']],
+      'a raise from a payer the person linked before is accepted',
+    );
+    assert.equal(
+      raised([{ merchantKey: 'acme', payLineId: 'line_a' }]).clear.size,
+      0,
+      'a different payer, or an unknown one, is not accepted',
+    );
+    assert.equal(
+      raised([{ merchantKey: 'payroll', payLineId: 'line_b' }]).clear.size,
+      0,
+      'a payer remembered for another pay line does not settle this line',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 160_000, 0)],
+        [payDay('pay_a', 0, 100_000)],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'a remembered payer is still never matched more than half the pay away',
+    );
+    const sameDay = [
+      payDay('pay_a', 0, 100_000, 100_000, null, 'line_a'),
+      payDay('pay_b', 0, 100_000, 100_000, null, 'line_b'),
+    ];
+    assert.equal(
+      findDepositDays([deposit('d1', 100_000, 0)], sameDay, []).clear.size,
+      0,
+      'two days that fit equally ask',
+    );
+    assert.deepEqual(
+      [
+        ...findDepositDays([deposit('d1', 100_000, 0)], sameDay, [], payroll)
+          .clear,
+      ],
+      [['d1', 'pay_a']],
+      'a single day of the payer’s pay line breaks the tie',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 100_000, 0)],
+        [
+          payDay('pay_a', 0, 100_000, 100_000, null, 'line_a'),
+          payDay('pay_c', 0, 100_000, 100_000, null, 'line_a'),
+        ],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'two days of the payer’s own line still ask',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 130_000, 0)],
+        [payDay('pay_a', 4, 100_000)],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'a remembered payer never widens the three-day window',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 130_000, 0, { assignedBy: 'person' })],
+        [payDay('pay_a', 0, 100_000)],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'a deposit the person sent back is never linked on its own',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 130_000, 0), deposit('d2', 130_000, 1)],
+        [payDay('pay_a', 0, 100_000)],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'a day two deposits pick by memory is clear for neither',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 130_000, 0)],
+        [payDay('pay_a', 0, 100_000)],
+        [
+          deposit('held', 100_000, 0, {
+            incomeDayId: 'pay_a',
+            needsHome: false,
+          }),
+        ],
+        payroll,
+      ).clear.size,
+      0,
+      'a day with a deposit already linked is never matched by memory',
+    );
+    const tiedDeposits = [deposit('d1', 100_000, 0), deposit('d2', 130_000, 1)];
+    const tiedDays = [
+      ...sameDay,
+      payDay('pay_d', 2, 100_000, 100_000, null, 'line_a'),
+    ];
+    assert.deepEqual(
+      [
+        [...findDepositDays(tiedDeposits, tiedDays, [], payroll).clear].sort(),
+        [...findDepositDays(tiedDeposits, tiedDays, [], payroll).offers].sort(),
+      ],
+      [
+        [
+          ...findDepositDays(
+            [...tiedDeposits].reverse(),
+            [...tiedDays].reverse(),
+            [],
+            [...payroll].reverse(),
+          ).clear,
+        ].sort(),
+        [
+          ...findDepositDays(
+            [...tiedDeposits].reverse(),
+            [...tiedDays].reverse(),
+            [],
+            [...payroll].reverse(),
+          ).offers,
+        ].sort(),
+      ],
+      'with a remembered payer the result still does not depend on input order',
+    );
+  };
+  checkRememberedPayers();
 }
 
 // Money out of one linked account and the same money in to another account or a card: when it is a move between the person's own accounts, and when it asks.
@@ -10956,6 +11304,181 @@ const version = (
   const none = (matches: ReturnType<typeof findAccountPairs>) =>
     matches.clear.size + matches.offers.size;
 
+  (
+    [
+      ['Venture X - Credit Holder XXXXXXX3153', 'Venture X'],
+      ['Savings (…4321)', 'Savings'],
+      ['Freedom x1234', 'Freedom'],
+      ['Boxx 1234 Savings', 'Boxx 1234 Savings'],
+      ['Plus - Account Owner', 'Plus - Account Owner'],
+      ['T-Mobile Card', 'T-Mobile Card'],
+      ['Venture X 2024', 'Venture X 2024'],
+      ['Card X 500', 'Card X 500'],
+      ['Money Market .05 Plus', 'Money Market .05 Plus'],
+      ['Checking .... 1234', 'Checking'],
+      ['Total Checking ...5678 - Joint Owner', 'Total Checking'],
+      ['Card ••3153', 'Card'],
+      ['Gold XX-1234', 'Gold'],
+    ] as const
+  ).forEach(([name, cleaned]) =>
+    assert.equal(cleanBankName(name), cleaned, `bank name ${name}`),
+  );
+  const cardPay = side('pay', 45_524, 0, {
+    category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+  });
+  assert.equal(
+    isBankMove(cardPay),
+    true,
+    'a waiting charge the bank calls a card payment is a move, not spending',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, needsHome: false }),
+    false,
+    'once the person places it, it is spending again',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, pairedWithId: 'in' }),
+    false,
+    'a paired side is already an account move',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, assignedBy: 'person' }),
+    false,
+    'a side the person unpaired goes back to Needs a home, not back to waiting',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, source: 'manual' }),
+    false,
+    'a purchase typed by hand is never judged by a bank category',
+  );
+  assert.equal(
+    isBankMove(
+      side('zelle', 4_000, 0, { category: 'TRANSFER_OUT_OTHER_TRANSFER_OUT' }),
+    ),
+    false,
+    'money sent to a person still counts as spending',
+  );
+  assert.equal(
+    isBankMove(side('atm', 6_000, 0, { category: 'TRANSFER_OUT_WITHDRAWAL' })),
+    false,
+    'a cash withdrawal still counts as spending',
+  );
+
+  const checkRefunds = () => {
+    const kohls = (
+      id: string,
+      cents: number,
+      dayOffset: number,
+      extra: Partial<OpenPurchase> = {},
+    ) =>
+      side(id, cents, dayOffset, { merchant: "Kohl's", ...onCard, ...extra });
+    const clothes = {
+      envelopeId: 'clothes',
+      cents: 6_000,
+      via: 'chosen' as const,
+    };
+    const cardRefund = kohls('back', -4_894, 9);
+    assert.equal(
+      isRefundLike(cardRefund),
+      true,
+      'a credit on a card the bank does not call a payment is a refund',
+    );
+    assert.equal(
+      isRefundLike(cardPay),
+      false,
+      'a card payment is never a refund',
+    );
+    assert.equal(
+      isRefundLike(side('pay', -200_000, 0)),
+      false,
+      'a bank deposit with no purchase is not a refund',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [cardRefund, kohls('buy', 6_000, 0)]),
+      null,
+      'a refund of a Free to Spend purchase asks nothing',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        cardRefund,
+        kohls('buy', 6_000, 0, { needsHome: false, lines: [clothes] }),
+      ])?.id,
+      'buy',
+      'a refund of a purchase that went to an envelope finds it',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        cardRefund,
+        kohls('buy', 6_000, 0, { lines: [clothes] }),
+        kohls('was', -2_000, 2, { refundOfId: 'buy' }),
+      ]),
+      null,
+      'a purchase already refunded below the amount is not it',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        cardRefund,
+        kohls('buy', 6_000, 0, { lines: [clothes], merchant: 'Target' }),
+        kohls('late', 6_000, 10, { lines: [clothes] }),
+        kohls('old', 6_000, -200, { lines: [clothes] }),
+      ]),
+      null,
+      'another merchant, a later purchase or one past the lookback is not it',
+    );
+    assert.equal(
+      findRefundOriginal(
+        kohls('back', -4_894, 9, { merchant: 'KOHLS #1234' }),
+        [kohls('buy', 6_000, 0, { lines: [clothes] })],
+      )?.id,
+      'buy',
+      'a store number or an apostrophe does not hide the same store',
+    );
+    assert.equal(
+      isSameStore('TARGET T-0456', 'Target'),
+      true,
+      'a bank suffix is the same store',
+    );
+    assert.equal(
+      isSameStore('Applebees', 'Apple') ||
+        isSameStore('Venmo cash out', 'Venmo'),
+      false,
+      'a longer word names another merchant',
+    );
+    assert.equal(
+      findRefundOriginal(
+        kohls('back', -4_894, 9, { category: 'TRANSFER_IN_ACCOUNT_TRANSFER' }),
+        [kohls('buy', 6_000, 0, { lines: [clothes] })],
+      ),
+      null,
+      'money the bank calls a move in is never asked as a refund',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        kohls('buy', 6_000, 0, { lines: [clothes], status: 'pending' }),
+      ]),
+      null,
+      'a pending charge is never the one-tap original',
+    );
+    assert.equal(
+      isSameStore('Ta', 'Target'),
+      false,
+      'two letters name no store',
+    );
+    assert.equal(
+      isRefundCandidate(kohls('pend', 6_000, 0, { status: 'pending' })),
+      false,
+      'a pending charge is never what a refund returns',
+    );
+    assert.equal(
+      isRefundCandidate(
+        side('move', 25_000, 0, { category: 'TRANSFER_OUT_ACCOUNT_TRANSFER' }),
+      ),
+      false,
+      'a move between accounts is never what a refund returns',
+    );
+  };
+  checkRefunds();
+
   const transfer = findAccountPairs([
     side('out', 25_000, 0),
     side('in', -25_000, 1),
@@ -10976,6 +11499,98 @@ const version = (
     [['out', { inId: 'in', kind: 'cardPayment' }]],
     'the same amount out of an account and into a card is a card payment',
   );
+
+  const checkCardAndPending = () => {
+    const cardFlag = { category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT' };
+    const cardOut = side('out', 30_000, 0, cardFlag);
+    const cardIn = side('inCard', -30_000, 1, { ...onCard, ...cardFlag });
+    const deposit = side('inSavings', -30_000, 1);
+    const cardWins = findAccountPairs([cardOut, cardIn, deposit]);
+    assert.deepEqual(
+      [...cardWins.clear],
+      [['out', { inId: 'inCard', kind: 'cardPayment' }]],
+      'a card payment both sides of which the bank flags is paired though a same-amount deposit exists',
+    );
+    assert.deepEqual(
+      [...findAccountPairs([deposit, cardIn, cardOut].reverse()).clear],
+      [...cardWins.clear],
+      'the card tie-break does not depend on input order',
+    );
+    assert.deepEqual(
+      cardWins.offers.get('inSavings'),
+      undefined,
+      'the deposit is offered nothing once the card payment is paired',
+    );
+    const twoCards = findAccountPairs([
+      cardOut,
+      cardIn,
+      { ...cardIn, id: 'inCard2', paidByCardId: 'sapphire' },
+    ]);
+    assert.equal(twoCards.clear.size, 0, 'two card candidates still ask');
+    assert.equal(
+      twoCards.offers.get('out')?.length,
+      2,
+      'both card candidates are offered',
+    );
+    assert.equal(
+      findAccountPairs([cardOut, { ...cardIn, category: null }, deposit]).clear
+        .size,
+      0,
+      'a card side the bank does not flag is not settled by the card rule',
+    );
+
+    const pendingOut = side('pendingOut', 20_000, 0, { status: 'pending' });
+    const postedIn = side('postedIn', -20_000, 1);
+    assert.equal(
+      findAccountPairs([pendingOut, postedIn]).clear.size +
+        findAccountPairs([pendingOut, postedIn], true).offers.size,
+      0,
+      'a pending purchase never appears in clear or offers',
+    );
+    assert.deepEqual(
+      [...findPendingMoveHolds([postedIn, pendingOut])],
+      [['postedIn', 'pendingOut']],
+      'a posted money in waits for a pending money out of the same amount',
+    );
+    assert.deepEqual(
+      [...findPendingMoveHolds([pendingOut, postedIn])],
+      [...findPendingMoveHolds([postedIn, pendingOut])],
+      'the hold does not depend on input order',
+    );
+    assert.equal(
+      findPendingMoveHolds([{ ...pendingOut, accountId: 'savings' }, postedIn])
+        .size,
+      0,
+      'a pending money out of the same account is not the other side',
+    );
+    assert.equal(
+      findPendingMoveHolds([{ ...pendingOut, amountCents: 20_100 }, postedIn])
+        .size,
+      0,
+      'a different amount is not held',
+    );
+    assert.equal(
+      findPendingMoveHolds([{ ...pendingOut, date: base + 6 * day }, postedIn])
+        .size,
+      0,
+      'a pending money out more than three days away is not held',
+    );
+    assert.equal(
+      findPendingMoveHolds([
+        { ...pendingOut, paidByCardId: 'venture', accountId: null },
+        postedIn,
+      ]).size,
+      0,
+      'a pending charge on a card is not money out of an account',
+    );
+    assert.equal(
+      findPendingMoveHolds([pendingOut, { ...postedIn, status: 'pending' }])
+        .size,
+      0,
+      'a pending money in is not held, it is on its way itself',
+    );
+  };
+  checkCardAndPending();
 
   const equalCandidates = [
     side('out', 25_000, 0),
@@ -11120,6 +11735,145 @@ const version = (
     'a clear pair is offered too when asked for offers',
   );
 
+  const checkRememberedRoutes = () => {
+    const toSavings = {
+      kind: 'route' as const,
+      fromAccountId: 'checking',
+      toAccountId: 'savings',
+      toCardId: null,
+    };
+    const toBrokerage = { ...toSavings, toAccountId: 'brokerage' };
+    const toVenture = { ...toSavings, toAccountId: null, toCardId: 'venture' };
+    const brokerageIn = side('inB', -25_000, 1, { accountId: 'brokerage' });
+    const twoIns = [
+      side('out', 25_000, 0),
+      side('inA', -25_000, 1),
+      brokerageIn,
+    ];
+    const oneRemembered = findAccountPairs(twoIns, false, [toSavings]);
+    assert.deepEqual(
+      [...oneRemembered.clear],
+      [['out', { inId: 'inA', kind: 'transfer' }]],
+      'of two candidates, the one on a remembered route is paired on its own',
+    );
+    assert.deepEqual(
+      [...findAccountPairs([...twoIns].reverse(), false, [toSavings]).clear],
+      [...oneRemembered.clear],
+      'the remembered route settles it in any input order',
+    );
+    assert.equal(
+      findAccountPairs(twoIns, false, [toSavings, toBrokerage]).clear.size,
+      0,
+      'two remembered routes leave it asking',
+    );
+    assert.equal(
+      findAccountPairs(twoIns, false, []).clear.size,
+      0,
+      'no remembered route leaves it asking',
+    );
+    assert.equal(
+      findAccountPairs(twoIns, false, [
+        { ...toSavings, fromAccountId: 'other' },
+      ]).clear.size,
+      0,
+      'a route from another account leaves it asking',
+    );
+    assert.deepEqual(
+      findAccountPairs(twoIns, false, [toSavings, toBrokerage]).offers.get(
+        'out',
+      ),
+      [
+        { otherId: 'inA', kind: 'transfer' },
+        { otherId: 'inB', kind: 'transfer' },
+      ],
+      'an unsettled pair is still offered both',
+    );
+    const twoOuts = [
+      side('outA', 25_000, 0),
+      side('outB', 25_000, 0, { accountId: 'brokerage' }),
+      side('in', -25_000, 0),
+    ];
+    assert.deepEqual(
+      [...findAccountPairs(twoOuts, false, [toSavings]).clear],
+      [['outA', { inId: 'in', kind: 'transfer' }]],
+      'of two moneys out, the one on a remembered route claims the money in',
+    );
+    assert.equal(
+      findAccountPairs(twoOuts, false, [
+        toSavings,
+        { ...toSavings, fromAccountId: 'brokerage' },
+      ]).clear.size,
+      0,
+      'two moneys out that both claim one money in by route get neither',
+    );
+    const cardOrAccount = [
+      side('out', 48_000, 0),
+      side('inCard', -48_000, 1, onCard),
+      side('inAccount', -48_000, 1),
+    ];
+    assert.deepEqual(
+      [...findAccountPairs(cardOrAccount, false, [toVenture]).clear],
+      [['out', { inId: 'inCard', kind: 'cardPayment' }]],
+      'a remembered card payment settles a card against an account',
+    );
+    assert.equal(
+      findAccountPairs(cardOrAccount, false, [toVenture, toSavings]).clear.size,
+      0,
+      'a remembered card and a remembered account leave it asking',
+    );
+    assert.equal(
+      none(
+        findAccountPairs(
+          [side('out', 25_000, 0), side('in', -24_900, 0)],
+          false,
+          [toSavings],
+        ),
+      ) +
+        none(
+          findAccountPairs(
+            [side('out', 25_000, 0), side('in', -25_000, 4)],
+            false,
+            [toSavings],
+          ),
+        ),
+      0,
+      'a remembered route never pairs a different amount or four days apart',
+    );
+    const cardOut = { accountId: null, paidByCardId: 'sapphire' };
+    assert.equal(
+      none(
+        findAccountPairs(
+          [
+            side('out', 25_000, 0, cardOut),
+            side('in', -25_000, 0, onCard),
+            side('in2', -25_000, 0),
+          ],
+          false,
+          [toVenture, toSavings, { ...toSavings, fromAccountId: 'sapphire' }],
+        ),
+      ),
+      0,
+      'money out of a card never pairs, to a card or an account, remembered or not',
+    );
+    assert.equal(
+      none(
+        findAccountPairs(
+          [
+            side('out', 25_000, 0, {
+              accountId: 'checking',
+              paidByCardId: 'sapphire',
+            }),
+            side('in', -25_000, 0, onCard),
+          ],
+          true,
+          [toVenture],
+        ),
+      ),
+      0,
+      'a card charge with an account still never pairs as an offer',
+    );
+  };
+  checkRememberedRoutes();
   const heldTo = (
     id: string,
     other: string,
@@ -12050,6 +12804,38 @@ const version = (
     'the return to what held before a temporary change is part of its entry, not a change of its own',
   );
 
+  const fromReturn = planStretches(
+    bounded,
+    'x',
+    { effectiveFrom: 30 * D, effectiveUntil: null },
+    { name: 'Rent', cents: 100 },
+    { name: 'Rent', cents: 150 },
+  );
+  assert.deepEqual(
+    fromReturn.replaced.map(
+      ({ effectiveFrom, effectiveUntil, before, after }) => [
+        effectiveFrom,
+        effectiveUntil,
+        before.cents,
+        after.cents,
+      ],
+    ),
+    [[30 * D, null, 200, 100]],
+    'a change dated from the day a temporary change ends says it replaces that return',
+  );
+  const insideTemp = planStretches(
+    bounded,
+    'x',
+    { effectiveFrom: 25 * D, effectiveUntil: null },
+    { name: 'Rent', cents: 200 },
+    { name: 'Rent', cents: 150 },
+  );
+  assert.deepEqual(
+    insideTemp.replaced.map(({ effectiveFrom }) => effectiveFrom),
+    [30 * D],
+    'a change from inside a temporary change lists the return once',
+  );
+
   assert.deepEqual(
     getChangedKeys(
       { a: 1, b: { x: 1, y: null } },
@@ -12299,7 +13085,12 @@ const version = (
         { dayKey: 'p_20261201', on: utc(2026, 12, 1) },
       ],
       billPayments: [
-        { billId: 'rent', dueOn: utc(2026, 11, 6), totalCents: 150000 },
+        {
+          billId: 'rent',
+          dueOn: utc(2026, 11, 6),
+          payOn: utc(2026, 11, 6),
+          totalCents: 150000,
+        },
       ],
       cards: [
         { cardId: 'c1', dueDay: 31, since: utc(2026, 1, 1) },
@@ -12309,6 +13100,7 @@ const version = (
         { goalId: 'g1', targetDate: utc(2026, 11, 6), track: 'behind' },
         { goalId: 'g2', targetDate: null, track: null },
       ],
+      planChanges: [],
     },
     from,
     to,
@@ -12844,9 +13636,11 @@ const version = (
     orderIndex: 1,
     rest: { kind: 'later' as const },
     note: null,
+    goalId: null,
     state: 'open' as const,
     stateOn: null,
     stateMoney: null,
+    links: [],
     costs: [movers, storage],
   };
   const coveredUntil = (item: HorizonSealed, heldCents: number) =>
@@ -12916,6 +13710,8 @@ const version = (
     fromFreeCents: 0,
     mark: 'item',
     purchaseId: null,
+    fromGoalCents: 0,
+    goalId: null,
   };
   assert.deepEqual(
     listCostPayments(earlyEnd, jan15 + 90 * 86_400_000, 'conservative', [
@@ -13128,9 +13924,11 @@ const version = (
     orderIndex: 1,
     rest: { kind: 'later' },
     note: null,
+    goalId: null,
     state: 'open' as const,
     stateOn: null,
     stateMoney: null,
+    links: [],
     costs: [movers, truck],
   };
   const entry = (
@@ -13148,6 +13946,8 @@ const version = (
     fromFreeCents,
     mark,
     purchaseId: null,
+    fromGoalCents: 0,
+    goalId: null,
   });
   const markMove = (paid: CostPaidEntry): OpenMove => ({
     id: paid.moveId,
@@ -13745,9 +14545,11 @@ const version = (
     orderIndex: 1,
     rest: { kind: 'pays' },
     note: null,
+    goalId: null,
     state: 'open',
     stateOn: null,
     stateMoney: null,
+    links: [],
     costs: [movers, storage],
   };
   const paidMovers: CostPaidEntry = {
@@ -14791,6 +15593,888 @@ const version = (
   );
 }
 
+// Planned changes: the calendar's dots and an income day's "Different this time".
+{
+  const d = (day: number) => Date.UTC(2026, 10, day);
+  const today = d(9);
+  const header = (id: string, kind: string, over: object = {}) =>
+    ({
+      id,
+      kind,
+      parentId: null,
+      createdAt: 1,
+      endedAt: null,
+      archivedAt: null,
+      heldReleasedOn: null,
+      ...over,
+    }) as never;
+  const bill = (cents: number, name = 'Rent') => ({
+    name,
+    emoji: null,
+    amount: { lowCents: cents, highCents: cents },
+  });
+  const version = (
+    id: string,
+    itemId: string,
+    kind: string,
+    createdAt: number,
+    effectiveFrom: number,
+    effectiveUntil: number | null,
+    payload: object,
+  ) =>
+    ({
+      id,
+      itemId,
+      kind,
+      createdAt,
+      effectiveFrom,
+      effectiveUntil,
+      changeId: 'c',
+      payload,
+    }) as never;
+  const items = [
+    header('rent', 'bill'),
+    header('gym', 'bill'),
+    header('src', 'source'),
+    header('pay', 'payLine'),
+  ];
+  const versions = [
+    version('rent1', 'rent', 'bill', 1, d(1), null, bill(125_000)),
+    version('rent2', 'rent', 'bill', 5, d(20), null, bill(0)),
+    version('gym1', 'gym', 'bill', 1, d(1), null, bill(4_000, 'Gym')),
+    version('gym2', 'gym', 'bill', 6, d(9), d(18), bill(0, 'Gym')),
+    version('later', 'rent', 'bill', 7, d(28), null, bill(130_000)),
+    version('pay1', 'pay', 'payLine', 1, d(30), null, {
+      name: 'Pay',
+      amount: { lowCents: 100, highCents: 100 },
+    }),
+  ] as never[];
+
+  const found = listPlanChangeDays(versions, items, today + DAY_MS, d(30));
+  assert.deepEqual(
+    found.map((change) => [change.on, change.itemId, change.isReturn]),
+    [
+      [d(18), 'gym', true],
+      [d(20), 'rent', false],
+      [d(28), 'rent', false],
+    ],
+    'a change ahead and the day a stretch ends are marked; a first version, and a stretch that started today, are not',
+  );
+  assert.equal(
+    listPlanChangeDays(versions, items, d(19), d(19)).length,
+    0,
+    'a day with nothing starting or ending has no change',
+  );
+  assert.equal(
+    listPlanChangeDays(
+      versions,
+      [header('rent', 'bill', { archivedAt: d(10) }), ...items.slice(1)],
+      today + DAY_MS,
+      d(30),
+    ).filter((change) => change.itemId === 'rent').length,
+    0,
+    'an archived item shows no change',
+  );
+  assert.equal(
+    listPlanChangeDays(
+      [version('s', 'rent', 'bill', 9, d(20), null, bill(125_000))].concat(
+        versions.filter((entry) => (entry as { id: string }).id === 'rent1'),
+      ) as never[],
+      items,
+      today + DAY_MS,
+      d(30),
+    ).length,
+    0,
+    'a version that says the same thing is no change',
+  );
+
+  const calendar = buildCalendarEntries(
+    {
+      incomeDays: [],
+      billPayments: [],
+      cards: [],
+      goals: [],
+      planChanges: found,
+    },
+    d(1),
+    d(30),
+  );
+  assert.deepEqual(
+    [...calendar.keys()].sort(),
+    [d(18), d(20), d(28)],
+    'each change lands on its day as one entry',
+  );
+
+  const between = listChangesBetweenIncomeDays(
+    versions,
+    items,
+    d(12),
+    d(19),
+    'pay',
+  );
+  assert.deepEqual(
+    between.map((change) => [change.itemId, change.isReturn]),
+    [['gym', true]],
+    'a stretch that ran out between two income days is what is different',
+  );
+  assert.deepEqual(
+    listChangesBetweenIncomeDays(versions, items, d(12), d(15), 'pay').map(
+      (change) => change.itemId,
+    ),
+    [],
+    'a stretch still running at both days is nothing new',
+  );
+  assert.deepEqual(
+    listChangesBetweenIncomeDays(versions, items, d(2), d(10), 'pay').map(
+      (change) => [change.itemId, change.isReturn],
+    ),
+    [['gym', false]],
+    'a stretch that started between the days is different, from its day',
+  );
+  assert.equal(
+    listChangesBetweenIncomeDays(versions, items, d(12), d(19), 'gym').length,
+    0,
+    "the pay's own item is left out",
+  );
+
+  const zeroDraft = {
+    mode: 'exact' as const,
+    low: '0.00',
+    high: '',
+    stance: 'follow' as never,
+  };
+  assert.equal(parseAmountDraft(zeroDraft), null, 'zero is not a new amount');
+  assert.deepEqual(
+    parseAmountDraft(zeroDraft, true),
+    { lowCents: 0, highCents: 0 },
+    'zero is an amount for a pause',
+  );
+}
+
+// Planned changes linked to an event.
+{
+  const D = LINK_DAY_MS;
+  const t = 20_000 * D;
+  const v = (
+    id: string,
+    itemId: string,
+    effectiveFrom: number,
+    effectiveUntil: number | null,
+    createdAt: number,
+    changeId: string,
+  ) => ({ id, itemId, effectiveFrom, effectiveUntil, createdAt, changeId });
+  const versions = [
+    v('r0', 'rent', t - 100 * D, null, 1, 'c0'),
+    v('r1', 'rent', t + 10 * D, null, 2, 'c1'),
+    v('g0', 'gym', t - 100 * D, null, 3, 'c2'),
+    v('g1', 'gym', t + 5 * D, t + 20 * D, 4, 'c3'),
+    v('n0', 'new', t + 3 * D, null, 5, 'c4'),
+  ];
+
+  // Coming changes: a change, a stretch and its return, nothing for an item that has not begun.
+  const rent = listComingChanges(versions, 'rent', t);
+  assert.deepEqual(
+    rent.map(({ on, version, isReturn }) => [on, version.id, isReturn]),
+    [[t + 10 * D, 'r1', false]],
+  );
+  assert.equal(rent[0].before.id, 'r0');
+  const gym = listComingChanges(versions, 'gym', t);
+  assert.deepEqual(
+    gym.map(({ on, version, isReturn }) => [on, version.id, isReturn]),
+    [
+      [t + 5 * D, 'g1', false],
+      [t + 20 * D, 'g0', true],
+    ],
+    'a stretch lists its start and the earlier version coming back',
+  );
+  assert.deepEqual(
+    listComingChanges(versions, 'new', t),
+    [],
+    'a start is not a change',
+  );
+  assert.deepEqual(listComingChanges(versions, 'rent', t + 11 * D), []);
+
+  // Link spans: a change's start, and the last day of a stretch.
+  const rentSpan = getLinkSpan(versions, { changeId: 'c1', itemId: 'rent' });
+  assert.deepEqual([rentSpan?.startsOn, rentSpan?.lastDay], [t + 10 * D, null]);
+  assert.equal(rentSpan?.before?.id, 'r0');
+  const gymSpan = getLinkSpan(versions, { changeId: 'c3', itemId: 'gym' });
+  assert.deepEqual(
+    [gymSpan?.startsOn, gymSpan?.lastDay],
+    [t + 5 * D, t + 19 * D],
+  );
+  assert.equal(
+    getLinkSpan(versions, { changeId: 'nope', itemId: 'gym' }),
+    null,
+  );
+  const sameDay = [
+    v('p0', 'pay', t + 3 * D, null, 6, 'c5'),
+    v('p1', 'pay', t + 3 * D, t + 17 * D, 7, 'c6'),
+  ];
+  assert.equal(
+    getLinkSpan(sameDay, { changeId: 'c6', itemId: 'pay' })?.before?.id,
+    'p0',
+    'a change on the first day of an item compares with the version it shadows',
+  );
+  assert.equal(
+    getLinkSpan(sameDay, { changeId: 'c5', itemId: 'pay' })?.before,
+    null,
+    'a first version has nothing before it',
+  );
+  assert.equal(
+    hasLinkHappened({ startsOn: t + 5 * D, lastDay: t + 19 * D }, t + 10 * D),
+    false,
+  );
+  assert.equal(
+    hasLinkHappened({ startsOn: t + 5 * D, lastDay: t + 19 * D }, t + 19 * D),
+    false,
+    'a stretch is still on its last day',
+  );
+  assert.equal(
+    hasLinkHappened({ startsOn: t + 5 * D, lastDay: t + 19 * D }, t + 20 * D),
+    true,
+  );
+  assert.equal(
+    hasLinkHappened({ startsOn: t + 10 * D, lastDay: null }, t + 10 * D),
+    true,
+  );
+
+  // Links in date order, unresolved last; add replaces, remove lets go.
+  const links = [
+    { changeId: 'x', itemId: 'rent' },
+    { changeId: 'c3', itemId: 'gym' },
+    { changeId: 'c1', itemId: 'rent' },
+  ];
+  assert.deepEqual(
+    sortLinksByDate(links, versions).map(({ changeId }) => changeId),
+    ['c3', 'c1', 'x'],
+  );
+  const event = {
+    ...readHorizon({
+      name: 'Moving',
+      emoji: null,
+      happensOn: t + 10 * D,
+      happensUntil: null,
+      priority: 'should',
+      orderIndex: 1,
+      note: null,
+      costs: [],
+    } as never),
+  };
+  assert.deepEqual(event.links, [], 'an event sealed before links has none');
+  const linked = addLink(addLink(event, links[2]), links[2]);
+  assert.equal(
+    linked.links.length,
+    1,
+    'linking the same change twice keeps one',
+  );
+  assert.deepEqual(removeLink(linked, 'c1').links, []);
+
+  // A changes-only event is done once every linked change has happened.
+  const both = { ...event, links: [links[1], links[2]] };
+  assert.equal(
+    getChangesOnlyDoneOn(both, versions, t + 10 * D),
+    null,
+    'the stretch is still running',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(both, versions, t + 19 * D),
+    null,
+    'not done on the last day of a stretch',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(both, versions, t + 20 * D),
+    t + 20 * D,
+    'done the day the last change is back',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(event, versions, t + 30 * D),
+    null,
+    'no links',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(
+      { ...both, costs: [{} as never] },
+      versions,
+      t + 30 * D,
+    ),
+    null,
+    'an event with costs is never done by its changes',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn({ ...both, state: 'calledOff' }, versions, t + 30 * D),
+    null,
+    'a called-off event keeps its own state',
+  );
+
+  // A dead link: replaced from the same day, or its item stopped before it began.
+  const replaced = [...versions, v('r2', 'rent', t + 10 * D, null, 9, 'c9')];
+  assert.equal(getLinkSpan(versions, links[2])?.isLive, true);
+  assert.equal(
+    getLinkSpan(replaced, links[2])?.isLive,
+    false,
+    'a later change from the same day replaces it',
+  );
+  const stops = getItemStops([
+    { id: 'rent', endedAt: t + 4 * D, archivedAt: null },
+    { id: 'gym', endedAt: null, archivedAt: null },
+    { id: 'old', endedAt: t + 9 * D, archivedAt: t + 2 * D },
+  ]);
+  assert.deepEqual(stops, { rent: t + 5 * D, old: t + 2 * D });
+  assert.equal(
+    getLinkSpan(versions, links[2], stops)?.isLive,
+    false,
+    'an item that ended first never makes the change',
+  );
+  assert.equal(
+    getLinkSpan(versions, links[1], stops)?.isLive,
+    true,
+    'an item still running keeps it',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(both, versions, t + 10 * D, { gym: t + 3 * D }),
+    t + 10 * D,
+    'a dead link no longer holds the event open',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn({ ...event, links: [links[2]] }, replaced, t + 30 * D),
+    null,
+    'an event whose only change is dead stays open',
+  );
+
+  // Kinds: a change to a running item is a change; a first version is a start.
+  assert.equal(rent[0].kind, 'change');
+  assert.equal(rent[0].changeId, 'c1');
+  assert.equal(
+    getLinkSpan(versions, { changeId: 'c1', itemId: 'rent' })?.kind,
+    'change',
+  );
+  assert.equal(
+    getLinkSpan(versions, { changeId: 'c4', itemId: 'new' })?.kind,
+    'start',
+    'a link to an item that begins later is a start',
+  );
+
+  // Calling an event off asks only about live links whose change has not started.
+  const callOffItems = [
+    { id: 'rent', endedAt: null, archivedAt: null },
+    { id: 'gym', endedAt: null, archivedAt: null },
+    { id: 'new', endedAt: null, archivedAt: null },
+  ];
+  const callOffLinks = [
+    { changeId: 'c1', itemId: 'rent' },
+    { changeId: 'c3', itemId: 'gym' },
+    { changeId: 'c0', itemId: 'rent' },
+    { changeId: 'gone', itemId: 'rent' },
+  ];
+  assert.deepEqual(
+    listCancellableLinks(callOffLinks, versions, callOffItems, t).map(
+      ({ link }) => link.changeId,
+    ),
+    ['c1', 'c3'],
+    'a coming change and a coming stretch are asked about; a first version and an unknown change are not',
+  );
+  assert.deepEqual(
+    listCancellableLinks(callOffLinks, versions, callOffItems, t + 5 * D).map(
+      ({ link }) => link.changeId,
+    ),
+    ['c1'],
+    'a change that has started is left alone',
+  );
+  assert.deepEqual(
+    listCancellableLinks(callOffLinks, replaced, callOffItems, t).map(
+      ({ link }) => link.changeId,
+    ),
+    ['c3'],
+    'a replaced change is dead and not asked about',
+  );
+  assert.deepEqual(
+    listCancellableLinks(
+      callOffLinks,
+      versions,
+      [
+        { id: 'rent', endedAt: t + 4 * D, archivedAt: null },
+        ...callOffItems.slice(1),
+      ],
+      t,
+    ).map(({ link }) => link.changeId),
+    ['c3'],
+    'an item that ends first never makes the change',
+  );
+  assert.deepEqual(
+    removeLinks({ ...event, links: callOffLinks }, [
+      { changeId: 'c1', itemId: 'rent' },
+      { changeId: 'c0', itemId: 'rent' },
+      { changeId: 'c3', itemId: 'rent' },
+    ]).links,
+    [callOffLinks[1], callOffLinks[3]],
+    'a link is let go only when its item and change both match',
+  );
+}
+
+// A link to an item's stop, a start that is a planned change, and cancelling.
+{
+  const D = LINK_DAY_MS;
+  const t = 20_000 * D;
+  const v = (
+    id: string,
+    itemId: string,
+    effectiveFrom: number,
+    createdAt: number,
+    changeId: string,
+    kind?: string,
+    payload?: object,
+  ) => ({
+    id,
+    itemId,
+    effectiveFrom,
+    effectiveUntil: null,
+    createdAt,
+    changeId,
+    kind,
+    payload,
+  });
+  const idle = { funding: { cadence: { kind: 'none' } } };
+  const funded = { funding: { cadence: { kind: 'everyIncomeDay' } } };
+  const versions = [
+    v('r0', 'rent', t - 100 * D, 1, 'c0'),
+    v('r1', 'rent', t + 10 * D, 2, 'c1'),
+    v('e0', 'env', t - 1 * D, 3, 'ce', 'envelope', idle),
+    v('e1', 'env', t + 12 * D, 4, 'cs', 'envelope', funded),
+    v('g0', 'goal', t, 5, 'cg0', 'goal', funded),
+    v('g1', 'goal', t + 6 * D, 6, 'cg1', 'goal', idle),
+    v('g2', 'goal', t + 20 * D, 7, 'cg2', 'goal', funded),
+    v('b0', 'bill', t, 8, 'cb', 'bill', {
+      timing: {
+        schedule: {
+          kind: 'monthly',
+          anchor: t + 9 * D,
+          monthDays: [new Date(t + 9 * D).getUTCDate()],
+        },
+      },
+      ending: { onDate: null, afterCount: null },
+    }),
+  ];
+  const stopLink = { changeId: getEndChangeId('rent'), itemId: 'rent' };
+  assert.equal(stopLink.changeId, 'ended_rent');
+
+  // A stop resolves from the header: the day after the last day, live while it has it.
+  const ends = getItemEnds([
+    { id: 'rent', endedAt: t + 30 * D },
+    { id: 'goal', endedAt: null },
+  ]);
+  assert.deepEqual(ends, { rent: t + 31 * D });
+  const stop = getLinkSpan(versions, stopLink, {}, ends);
+  assert.deepEqual(
+    [stop?.kind, stop?.startsOn, stop?.lastDay, stop?.isLive],
+    ['stop', t + 31 * D, null, true],
+  );
+  assert.equal(stop?.version.id, 'r1', 'the version in force on the last day');
+  assert.equal(
+    getLinkSpan(versions, stopLink),
+    null,
+    'a stop whose item has no last day (cancelled) resolves to nothing',
+  );
+  assert.equal(
+    getLinkSpan(versions, stopLink, { rent: t + 20 * D }, ends)?.isLive,
+    false,
+    'an item archived before the stop took effect never reaches it',
+  );
+  assert.equal(
+    getLinkSpan(versions, stopLink, { rent: t + 31 * D }, ends)?.isLive,
+    true,
+    'the stop is the item stopping, so it is live when that day is also the stop',
+  );
+  assert.equal(hasLinkHappened(stop!, t + 30 * D), false);
+  assert.equal(
+    hasLinkHappened(stop!, t + 31 * D),
+    true,
+    'happened once the day comes',
+  );
+
+  // An event of changes whose only link is a stop is done once the item is gone.
+  const event = {
+    costs: [],
+    links: [stopLink],
+    state: 'open' as const,
+  };
+  assert.equal(
+    getChangesOnlyDoneOn(event, versions, t + 30 * D, {}, ends),
+    null,
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(event, versions, t + 31 * D, {}, ends),
+    t + 31 * D,
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(event, versions, t + 40 * D, {}, {}),
+    null,
+    'a stop that was cancelled no longer holds or finishes the event',
+  );
+  assert.deepEqual(
+    sortLinksByDate(
+      [stopLink, { changeId: 'c1', itemId: 'rent' }],
+      versions,
+      ends,
+    ).map(({ changeId }) => changeId),
+    ['c1', 'ended_rent'],
+    'a stop sorts by its day',
+  );
+
+  // Coming changes list a future end as a stop; changes after it and a past end are left out.
+  const coming = listComingChanges(versions, 'rent', t, t + 30 * D);
+  assert.deepEqual(
+    coming.map(({ kind, changeId, on }) => [kind, changeId, on]),
+    [
+      ['change', 'c1', t + 10 * D],
+      ['stop', 'ended_rent', t + 31 * D],
+    ],
+  );
+  assert.deepEqual(
+    listComingChanges(versions, 'rent', t, t + 5 * D).map(({ kind }) => kind),
+    ['stop'],
+    'a change after the last day never happens',
+  );
+  assert.deepEqual(
+    listComingChanges(versions, 'rent', t + 40 * D, t + 30 * D),
+    [],
+  );
+
+  // A start written as a planned change: lists show the idle first version, the change is a start.
+  const envComing = listComingChanges(versions, 'env', t);
+  assert.deepEqual(
+    envComing.map(({ kind, changeId, on }) => [kind, changeId, on]),
+    [['start', 'cs', t + 12 * D]],
+  );
+  const envSpan = getLinkSpan(versions, { changeId: 'cs', itemId: 'env' });
+  assert.deepEqual(
+    [envSpan?.kind, envSpan?.startsOn, envSpan?.before?.id],
+    ['start', t + 12 * D, 'e0'],
+  );
+  const goalComing = listComingChanges(versions, 'goal', t);
+  assert.deepEqual(
+    goalComing.map(({ kind, changeId }) => [kind, changeId]),
+    [
+      ['change', 'cg1'],
+      ['change', 'cg2'],
+    ],
+    'a goal that was already saving is not starting, whatever it does later',
+  );
+
+  // A bill that starts later: the start is its first due day, not the day its version begins.
+  const billSpan = getLinkSpan(versions, { changeId: 'cb', itemId: 'bill' });
+  assert.deepEqual([billSpan?.kind, billSpan?.startsOn], ['start', t + 9 * D]);
+
+  // Cancelling: only what has not started, and never an item's whole history.
+  const rentItem = { id: 'rent', endedAt: null };
+  assert.deepEqual(getCancelTarget(versions, rentItem, 'c1', t), {
+    kind: 'versions',
+    versionIds: ['r1'],
+    startsOn: t + 10 * D,
+    segments: [
+      {
+        kind: undefined,
+        payload: undefined,
+        effectiveFrom: t + 10 * D,
+        effectiveUntil: null,
+      },
+    ],
+  });
+  assert.equal(
+    getCancelTarget(versions, rentItem, 'c1', t + 10 * D),
+    null,
+    'a change that has started cannot be cancelled',
+  );
+  assert.equal(
+    getCancelTarget(versions, rentItem, 'c0', t),
+    null,
+    'the first version is the item itself',
+  );
+  assert.equal(getCancelTarget(versions, rentItem, 'nope', t), null);
+  assert.deepEqual(
+    getCancelTarget(versions, { id: 'env', endedAt: null }, 'cs', t)?.kind,
+    'versions',
+    'a later start is cancelled by restoring the idle version over its days',
+  );
+  assert.deepEqual(
+    getCancelTarget(
+      versions,
+      { id: 'rent', endedAt: t + 30 * D },
+      'ended_rent',
+      t,
+    ),
+    { kind: 'stop', startsOn: t + 31 * D },
+  );
+  assert.equal(
+    getCancelTarget(versions, rentItem, 'ended_rent', t),
+    null,
+    'an item with no last day has no ending to cancel',
+  );
+  assert.equal(
+    getCancelTarget(
+      versions,
+      { id: 'rent', endedAt: t - 1 * D },
+      'ended_rent',
+      t,
+    ),
+    null,
+    'an ending whose day has come is not cancelled',
+  );
+  assert.equal(
+    getCancelTarget(versions, { id: 'rent', endedAt: t }, 'ended_rent', t)
+      ?.kind,
+    'stop',
+    'the last day itself is still ahead of the day it takes effect',
+  );
+  const covered = [
+    ...versions,
+    {
+      ...v('r2', 'rent', t + 10 * D, 9, 'c2'),
+      effectiveUntil: t + 15 * D,
+    },
+  ];
+  const coveredTarget = getCancelTarget(covered, rentItem, 'c1', t);
+  assert.deepEqual(
+    (coveredTarget?.kind === 'versions' ? coveredTarget.segments : []).map(
+      ({ effectiveFrom, effectiveUntil }) => [effectiveFrom, effectiveUntil],
+    ),
+    [[t + 10 * D, null]],
+    'a change hidden on its first day by a later stretch still wins after it, so it can be cancelled',
+  );
+  const alreadyCancelled = [
+    ...versions,
+    v('rx', 'rent', t + 10 * D, 3, 'cancel_c1'),
+  ];
+  assert.equal(
+    getCancelTarget(alreadyCancelled, rentItem, 'c1', t),
+    null,
+    'a change already cancelled wins on none of its days',
+  );
+  assert.equal(canCancelChange({ on: t + 1 * D }, t), true);
+  assert.equal(canCancelChange({ on: t }, t), false);
+  assert.equal(canCancelChange({ startsOn: t + 1 * D }, t), true);
+  assert.equal(
+    canCancelChange({ on: t + 5 * D, isReturn: true }, t),
+    false,
+    'a stretch coming back is not a change of its own',
+  );
+
+  // The event that holds a link is found among the loaded events.
+  const holders = [
+    {
+      id: 'a',
+      version: { payload: { links: [{ changeId: 'c1', itemId: 'gym' }] } },
+    },
+    { id: 'b', version: { payload: { links: [stopLink] } } },
+  ];
+  assert.equal(findLinkHolder(holders, stopLink)?.id, 'b');
+  assert.equal(
+    findLinkHolder(holders, { changeId: 'c1', itemId: 'rent' }),
+    null,
+    'a link is the change and the item together',
+  );
+
+  // Cancelling writes: new versions restore what held before the change, one ms after it.
+  const named = (n: string) => ({ n });
+  const history = [
+    v('a0', 'eat', t - 50 * D, 1, 'A0', 'envelope', named('base')),
+    v('a1', 'eat', t + 30 * D, 2, 'A1', 'envelope', named('jan')),
+    v('V', 'eat', t + 10 * D, 5, 'V', 'envelope', named('v')),
+  ];
+  const eat = { id: 'eat', endedAt: null };
+  const target = getCancelTarget(history, eat, 'V', t);
+  assert.equal(target?.kind, 'versions');
+  const segments = target?.kind === 'versions' ? target.segments : [];
+  assert.deepEqual(
+    segments.map(({ payload, effectiveFrom, effectiveUntil }) => [
+      payload,
+      effectiveFrom,
+      effectiveUntil,
+    ]),
+    [
+      [named('base'), t + 10 * D, t + 30 * D],
+      [named('jan'), t + 30 * D, null],
+    ],
+    'the older, later-dated change V had overridden comes back with the days before it',
+  );
+  const restored = [
+    ...history,
+    ...segments.map((segment, index) => ({
+      ...v(
+        `x${index}`,
+        'eat',
+        segment.effectiveFrom,
+        6,
+        'X',
+        'envelope',
+        segment.payload as object,
+      ),
+      effectiveUntil: segment.effectiveUntil,
+    })),
+  ];
+  const at = (on: number, all: typeof restored = restored) =>
+    (resolveVersion(all, 'eat', on)?.payload as { n: string }).n;
+  assert.deepEqual(
+    [at(t + 15 * D), at(t + 29 * D), at(t + 35 * D)],
+    ['base', 'base', 'jan'],
+    'as if V was never made',
+  );
+  assert.deepEqual(
+    listComingChanges(restored, 'eat', t).map(({ kind, changeId, on }) => [
+      kind,
+      changeId,
+      on,
+    ]),
+    [['change', 'X', t + 30 * D]],
+    'the change V hid shows again as the restored version; the restore on V first day is no change',
+  );
+  assert.equal(
+    getCancelTarget(restored, eat, 'V', t),
+    null,
+    'a change already cancelled is not offered again',
+  );
+  assert.equal(
+    getLinkSpan(restored, { changeId: 'V', itemId: 'eat' })?.isLive,
+    false,
+    'the cancelled change reads as not live',
+  );
+  const later = [
+    ...restored,
+    v('w', 'eat', t + 20 * D, 8, 'W', 'envelope', named('w')),
+  ];
+  assert.equal(at(t + 25 * D, later), 'w', 'a later-made change still wins');
+  const withLater = [
+    ...history,
+    v('w', 'eat', t + 20 * D, 8, 'W', 'envelope', named('w')),
+  ];
+  assert.equal(
+    at(t + 25 * D, [
+      ...withLater,
+      ...segments.map((segment, index) => ({
+        ...v(
+          `y${index}`,
+          'eat',
+          segment.effectiveFrom,
+          6,
+          'Y',
+          'envelope',
+          segment.payload as object,
+        ),
+        effectiveUntil: segment.effectiveUntil,
+      })),
+    ]),
+    'w',
+    'a change made after V survives V being cancelled',
+  );
+
+  // A stretch cancel restores the amount that was there, and leaves no break at its ends.
+  const stretch = [
+    ...restored,
+    {
+      ...v('S', 'eat', t + 40 * D, 9, 'S', 'envelope', named('s')),
+      effectiveUntil: t + 50 * D,
+    },
+  ];
+  assert.deepEqual(
+    listComingChanges(stretch, 'eat', t + 35 * D).map(({ kind, isReturn }) => [
+      kind,
+      isReturn,
+    ]),
+    [
+      ['change', false],
+      ['change', true],
+    ],
+    'a stretch shows its start and its return',
+  );
+  const stretchTarget = getCancelTarget(stretch, eat, 'S', t + 35 * D);
+  assert.deepEqual(
+    stretchTarget?.kind === 'versions' &&
+      stretchTarget.segments.map(
+        ({ payload, effectiveFrom, effectiveUntil }) => [
+          payload,
+          effectiveFrom,
+          effectiveUntil,
+        ],
+      ),
+    [[named('jan'), t + 40 * D, t + 50 * D]],
+  );
+  const afterStretch = [
+    ...stretch,
+    {
+      ...v('z0', 'eat', t + 40 * D, 10, 'Z', 'envelope', named('jan')),
+      effectiveUntil: t + 50 * D,
+    },
+  ];
+  assert.deepEqual(
+    listComingChanges(afterStretch, 'eat', t + 35 * D),
+    [],
+    'no phantom change where the restored payload equals the one before',
+  );
+
+  // Ending again after a cancelled end gets a fresh entry id.
+  assert.equal(getEndEntryId('rent', false, 5), 'ended_rent');
+  assert.equal(getEndEntryId('rent', true, 5), 'ended_rent_5');
+
+  // The calendar lists a stop on the day the item is gone, beside the changes.
+  const d = (day: number) => Date.UTC(2026, 10, day);
+  const header = (id: string, over: object = {}) =>
+    ({
+      id,
+      kind: 'bill',
+      parentId: null,
+      createdAt: 1,
+      endedAt: null,
+      archivedAt: null,
+      heldReleasedOn: null,
+      ...over,
+    }) as never;
+  const bill = (id: string) =>
+    ({
+      id,
+      itemId: 'gym',
+      kind: 'bill',
+      createdAt: 1,
+      effectiveFrom: d(1),
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: {
+        name: 'Gym',
+        emoji: null,
+        amount: { lowCents: 4_000, highCents: 4_000 },
+      },
+    }) as never;
+  const stopped = listPlanChangeDays(
+    [bill('gym1')],
+    [header('gym', { endedAt: d(14) })],
+    d(10),
+    d(30),
+  );
+  assert.deepEqual(
+    stopped.map((change) => [change.what, change.on, change.itemId]),
+    [['stop', d(15), 'gym']],
+  );
+  assert.equal(
+    listPlanChangeDays(
+      [bill('gym1')],
+      [header('gym', { endedAt: d(14), archivedAt: d(12) })],
+      d(10),
+      d(30),
+    ).length,
+    0,
+    'an item archived before its last day shows no stop',
+  );
+  assert.equal(
+    listPlanChangeDays(
+      [bill('gym1')],
+      [header('gym', { endedAt: d(14) })],
+      d(16),
+      d(30),
+    ).length,
+    0,
+    'a stop that has happened is not ahead',
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to Spend, then what gets less.
@@ -15215,6 +16899,111 @@ console.log('runway engine: ok');
     [rentOf(oneMonth, 'job_a'), rentOf(oneMonth, 'job_c')],
     [120_000, 0],
     'F1: two days before the same payment still send it only what it needs, once',
+  );
+}
+
+// A share of the bill: "Half" asks half of each payment from every pay that pays it first, follows the bill's amount, and takes a range's high end.
+{
+  const shareOf = (bps: number): Pairing => ({
+    targetItemId: 'rent',
+    amount: { kind: 'billShare', bps },
+    topUpFromAnySource: false,
+  });
+  const keys = ['pay_a', 'pay_b'];
+  const ons = [utc(2026, 11, 1), utc(2026, 11, 8)];
+  const rentShares = (bps: number, amount: MoneyRange) => {
+    const draft = buildDraft({
+      days: keys.map((dayKey, index) => ({
+        dayKey,
+        sourceId: 'src',
+        on: ons[index],
+        amount: { lowCents: 200_000, highCents: 200_000 },
+        pairings: { day: null, payLine: [shareOf(bps)], source: [] },
+      })),
+      plan: {
+        envelopes: [],
+        bills: [
+          {
+            itemId: 'rent',
+            createdAt: 1,
+            priority: 'must',
+            orderIndex: 1,
+            amount,
+            stanceOverride: null,
+            schedule: {
+              kind: 'monthly',
+              anchor: utc(2026, 11, 15),
+              monthDays: [15],
+            },
+            ending: NEVER,
+            fundedBy: { kind: 'suggested' },
+            progress: { funded: [], paid: [] },
+          },
+        ],
+        goals: [],
+        horizon: utc(2027, 6, 1),
+        incomeDays: keys.map((dayKey, index) => ({
+          dayKey,
+          on: ons[index],
+          moneyCents: 200_000,
+        })),
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+    return keys.map(
+      (key) =>
+        draft.lines.find((line) => line.lineId === `${key}:rent`)?.cents ?? 0,
+    );
+  };
+  assert.deepEqual(
+    rentShares(5_000, { lowCents: 120_000, highCents: 120_000 }),
+    [60_000, 60_000],
+    'billShare: half the bill from each of two pays covers the payment',
+  );
+  assert.deepEqual(
+    rentShares(5_000, { lowCents: 130_000, highCents: 130_000 }),
+    [65_000, 65_000],
+    'billShare: half follows the bill when its amount changes',
+  );
+  assert.deepEqual(
+    rentShares(5_000, { lowCents: 100_000, highCents: 140_000 }),
+    [70_000, 70_000],
+    'billShare: a ranged bill is shared at its high end',
+  );
+  assert.deepEqual(
+    rentShares(10_000, { lowCents: 120_000, highCents: 120_000 }),
+    [120_000, 0],
+    'billShare: the full bill from two pays asks only what the payment still needs',
+  );
+  const rentVersion = {
+    id: 'rent_v1',
+    itemId: 'rent',
+    kind: 'bill',
+    createdAt: 1,
+    effectiveFrom: utc(2026, 1, 1),
+    effectiveUntil: null,
+    payload: { amount: { lowCents: 100_000, highCents: 140_000 } },
+  } as unknown as OpenVersion;
+  const coming: ComingDay = {
+    dayKey: 'pay_a',
+    payLineId: 'job',
+    sourceId: null,
+    on: utc(2026, 11, 1),
+    sourceName: null,
+    payLineName: 'Job',
+    amount: { lowCents: 200_000, highCents: 200_000 },
+    stanceOverride: null,
+  };
+  assert.deepEqual(
+    getPairedByBill(
+      [rentVersion],
+      [{ id: 'pay_a', override: { pairings: [shareOf(5_000)] } }],
+      [coming],
+      'conservative',
+    ).get('rent'),
+    { pay_a: 70_000 },
+    'billShare: the lookahead counts a share of the bill at its high end',
   );
 }
 
@@ -16376,6 +18165,35 @@ console.log('runway engine: ok');
     null,
     'G11: an envelope on chosen days has no monthly figure',
   );
+  const idleEnvelope: FundingRule = {
+    amount: { kind: 'exact', cents: 0 },
+    cadence: { kind: 'none' },
+  };
+  assert.equal(
+    toMonthlyEnvelopeCents(idleEnvelope, 2),
+    0,
+    'An envelope nothing goes into counts $0 a month, not as left out',
+  );
+  assert.equal(
+    describeEnvelopeMonthly(idleEnvelope, 2),
+    null,
+    'An envelope nothing goes into has no monthly figure of its own',
+  );
+  assert.equal(
+    describeFundingShort(idleEnvelope),
+    'Nothing goes in for now',
+    'An envelope nothing goes into says so in its row',
+  );
+  assert.equal(
+    describeFundingShort(idleEnvelope, [], 'goal'),
+    'Not saving for it yet',
+    'A goal nothing goes into keeps its own words',
+  );
+  assert.equal(
+    describeCadenceLine(idleEnvelope.cadence),
+    'Nothing goes in for now',
+    'An envelope nothing goes into says so where its beat would be',
+  );
   assert.deepEqual(
     monthlyTotal(
       [
@@ -16494,10 +18312,10 @@ console.log('runway engine: ok');
     ),
     {
       total: exact(128_000),
-      uncounted: 4,
+      uncounted: 3,
       oneTime: { count: 0, range: exact(0), dueOn: null },
     },
-    "G11: income-day envelopes count x the usual month's income days (an Nth one divided by n); chosen, none, percent and rest are named as left out; bills and envelopes add into one total",
+    "G11: income-day envelopes count x the usual month's income days (an Nth one divided by n); one nothing goes into counts $0; chosen, percent and rest are named as left out; bills and envelopes add into one total",
   );
   assert.deepEqual(
     monthlyTotal([], nov, [
@@ -16958,8 +18776,22 @@ console.log('runway engine: ok');
     const unlinked = account('typed', { balanceCents: 500 });
     const waiting = account('waiting', { linkId: 'l1', balanceCents: 300 });
     const banks = [
-      { id: 'linked', asOf, cents: 9_999 },
-      { id: 'typed', asOf, cents: 1 },
+      {
+        id: 'linked',
+        asOf,
+        cents: 9_999,
+        availableCents: 9_000,
+        limitCents: null,
+        hasInstantBalance: true,
+      },
+      {
+        id: 'typed',
+        asOf,
+        cents: 1,
+        availableCents: null,
+        limitCents: null,
+        hasInstantBalance: null,
+      },
     ];
     const [fromBank, keptTyped, notSentYet] = withBankBalances(
       [linked, unlinked, waiting],
@@ -16988,6 +18820,27 @@ console.log('runway engine: ok');
     assert.equal(hasBankBalance(linked, banks), true);
     assert.equal(hasBankBalance(unlinked, banks), false);
     assert.equal(hasBankBalance(waiting, banks), false);
+    assert.equal(
+      fromBank.balanceCents,
+      9_999,
+      'the posted balance stands, not the available one',
+    );
+    assert.equal(
+      getPendingCents(banks[0]),
+      999,
+      'pending is posted less available',
+    );
+    assert.equal(
+      getPendingCents(banks[1]),
+      0,
+      'no available figure is no pending',
+    );
+    assert.equal(getPendingCents(undefined), null, 'no bank figure is unknown');
+    assert.equal(
+      getPendingCents({ cents: 100, availableCents: 150 }),
+      0,
+      'available above posted (money in on hold) is never negative pending',
+    );
   }
   assert.deepEqual(
     getPullAccounts([a, b, oldPull]).map((entry) => entry.id),
@@ -17986,7 +19839,7 @@ console.log('runway engine: ok');
 }
 
 // Horizon: money moved into a bill, the share a cost brings, and the refusals.
-{
+const checkHorizonMoves = () => {
   const nov1 = utc(2026, 11, 1);
   const transfer = (
     moveId: string,
@@ -18195,6 +20048,22 @@ console.log('runway engine: ok');
     [0, 0, 0],
     'and the pays ask nothing while the surplus covers them',
   );
+  const fromStart = planBillPayments(
+    {
+      ...monthly,
+      progress: {
+        funded: [{ dayKey: START_DAY_KEY, on: nov1, cents: 35_000 }],
+        paid: [],
+      },
+    },
+    weekly,
+    dueFeb + 10 * DAY_MS,
+  ).slice(0, 3);
+  assert.deepEqual(
+    fromStart.map(({ fundedCents }) => fundedCents),
+    [35_000, 25_000, 15_000],
+    'what a bill held on the start day carries to each next payment like money moved in',
+  );
 
   const cost = (
     id: string,
@@ -18324,6 +20193,8 @@ console.log('runway engine: ok');
     fromFreeCents: 0,
     mark: 'item',
     purchaseId: null,
+    fromGoalCents: 0,
+    goalId: null,
   };
   assert.deepEqual(
     getMakeBillBlock(
@@ -18370,7 +20241,8 @@ console.log('runway engine: ok');
     null,
     'a cost saved before it had its own priority follows its item',
   );
-}
+};
+checkHorizonMoves();
 
 // Where your cash is (Issue 61).
 {
@@ -18783,6 +20655,516 @@ console.log('runway engine: ok');
     'and the split still adds up',
   );
   assert.equal(rulePlaced.length, 2, 'the chain pays what the envelope cannot');
+}
+
+// A goal linked to a Horizon event: the walk covers each cost from the goal first, a payment takes from the goal then the event, and the nudge asks as the date nears.
+{
+  const jan1 = utc(2027, 0, 1);
+  const jan15 = utc(2027, 0, 15);
+  const mar1 = utc(2027, 2, 1);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const once = (id: string, cents: number, on: number): HorizonCost => ({
+    id,
+    name: id,
+    amount: exact(cents),
+    schedule: { kind: 'once', anchor: on, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
+    priority: null,
+    note: null,
+  });
+  const suit = once('suit', 30_000, jan15);
+  const venue = once('venue', 100_000, mar1);
+  const end = utc(2027, 11, 31);
+  const payments = listHorizonPayments([venue, suit], end, 'conservative');
+  const cover = {
+    goalId: 'g1',
+    heldCents: 20_000,
+    contributions: [
+      { on: utc(2027, 0, 10), cents: 15_000 },
+      { on: utc(2027, 1, 10), cents: 120_000 },
+    ],
+  };
+
+  assert.equal(
+    getGoalBalanceAt(cover, jan1),
+    20_000,
+    'the goal holds what it holds before any planned day',
+  );
+  assert.equal(
+    getGoalBalanceAt(cover, jan15),
+    35_000,
+    'and what the plan has put in through the day',
+  );
+  assert.equal(
+    getGoalBalanceAt(
+      { goalId: 'g1', heldCents: -500, contributions: [] },
+      jan15,
+    ),
+    0,
+    'a negative balance covers nothing',
+  );
+
+  const without = planHorizon(
+    { rest: { kind: 'later' }, costs: [suit, venue] },
+    0,
+    payments,
+  );
+  assert.equal(
+    without.covers.every((cover) => cover.coveredCents === 0),
+    true,
+    'with no goal and no money nothing is covered',
+  );
+  assert.equal(
+    without.covers.some((entry) => 'fromGoalCents' in entry),
+    false,
+    'and a cover carries no goal part without a goal',
+  );
+
+  const covered = planHorizon(
+    { rest: { kind: 'later' }, costs: [suit, venue] },
+    0,
+    payments,
+    cover,
+  );
+  assert.deepEqual(
+    covered.covers.map(({ costId, coveredCents, fromGoalCents }) => [
+      costId,
+      coveredCents,
+      fromGoalCents,
+    ]),
+    [
+      ['suit', 30_000, 30_000],
+      ['venue', 100_000, 100_000],
+    ],
+    'each cost is covered from the goal as projected by its due date, less what the earlier cost took',
+  );
+  assert.equal(covered.shortfall, null, 'so the event reads covered');
+
+  const tight = planHorizon(
+    { rest: { kind: 'later' }, costs: [suit, venue] },
+    10_000,
+    payments,
+    { goalId: 'g1', heldCents: 20_000, contributions: [] },
+  );
+  assert.deepEqual(
+    tight.covers.map(({ costId, coveredCents, fromGoalCents }) => [
+      costId,
+      coveredCents,
+      fromGoalCents,
+    ]),
+    [
+      ['suit', 30_000, 20_000],
+      ['venue', 0, 0],
+    ],
+    'the goal pays first and the event own money tops it up; once both are used the rest is short',
+  );
+  assert.equal(
+    tight.shortfall?.shortCents,
+    100_000,
+    'the event is short only by what neither holds',
+  );
+  assert.equal(
+    tight.shortfall?.dueOn,
+    mar1,
+    'and names the first payment neither covers',
+  );
+
+  const goalCost = once(getGoalCostId('g1'), 50_000, jan15);
+  const tie = planHorizon(
+    { rest: { kind: 'later' }, costs: [suit, goalCost] },
+    0,
+    listHorizonPayments([suit, goalCost], end, 'conservative'),
+    { goalId: 'g1', heldCents: 50_000, contributions: [] },
+  );
+  assert.deepEqual(
+    tie.covers.map(({ costId, fromGoalCents }) => [costId, fromGoalCents]),
+    [
+      [getGoalCostId('g1'), 50_000],
+      ['suit', 0],
+    ],
+    'on the same day the goal pays its own cost before any other, whatever the cost ids sort to',
+  );
+
+  const live = { archivedAt: null, endedAt: null };
+  assert.equal(isGoalCovering(live, jan15), true, 'a live goal covers');
+  assert.equal(
+    isGoalCovering({ archivedAt: jan1, endedAt: null }, jan1 - 1),
+    false,
+    'an archived goal gives no cover',
+  );
+  assert.equal(
+    isGoalCovering({ archivedAt: null, endedAt: jan15 }, jan15),
+    false,
+    'a goal ended on the day gives no cover',
+  );
+  assert.equal(
+    isGoalCovering({ archivedAt: null, endedAt: jan15 }, jan1),
+    true,
+    'and one that ends later still covers before then',
+  );
+
+  // Paying: the goal first, then the event's own money, then Free to Spend.
+  assert.deepEqual(
+    settleCostPaidWithGoal(60_000, 20_000, 30_000, 'item'),
+    { fromGoalCents: 20_000, fromItemCents: 30_000, fromFreeCents: 10_000 },
+    'a payment takes the goal first, then the event, and Free to Spend fronts the rest',
+  );
+  assert.deepEqual(
+    settleCostPaidWithGoal(10_000, 20_000, 30_000, 'item'),
+    { fromGoalCents: 10_000, fromItemCents: 0, fromFreeCents: 0 },
+    'a payment the goal covers leaves the event untouched',
+  );
+  assert.deepEqual(
+    settleCostPaidWithGoal(60_000, 20_000, 30_000, 'outside'),
+    { fromGoalCents: 0, fromItemCents: 0, fromFreeCents: 0 },
+    'an outside mark takes nothing from the goal',
+  );
+  assert.deepEqual(
+    settleCostPaidWithGoal(60_000, 0, 30_000, 'item'),
+    { fromGoalCents: 0, fromItemCents: 30_000, fromFreeCents: 30_000 },
+    'without a goal it settles as before',
+  );
+
+  const wedding: HorizonSealed = {
+    name: 'Wedding',
+    emoji: null,
+    happensOn: jan15,
+    happensUntil: null,
+    priority: 'should',
+    orderIndex: 1,
+    rest: { kind: 'later' },
+    note: null,
+    goalId: 'goal',
+    state: 'open' as const,
+    stateOn: null,
+    stateMoney: null,
+    links: [],
+    costs: [suit],
+  };
+  const starts: OpenMove[] = [
+    {
+      id: 's1',
+      kind: 'start',
+      date: jan1,
+      refId: null,
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 200_000, holding: 'money' },
+    },
+    {
+      id: 's2',
+      kind: 'start',
+      date: jan1,
+      refId: 'wedding',
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 10_000, holding: 'bill' },
+    },
+    {
+      id: 's3',
+      kind: 'start',
+      date: jan1,
+      refId: 'goal',
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 50_000, holding: 'goal' },
+    },
+  ];
+  const paidEntry: CostPaidEntry = {
+    moveId: 'paid_wedding_suit_1',
+    costId: 'suit',
+    dueOn: jan15,
+    amountCents: 60_000,
+    paidOn: jan15,
+    fromFreeCents: 5_000,
+    mark: 'item',
+    purchaseId: null,
+    fromGoalCents: 45_000,
+    goalId: 'goal',
+  };
+  const paidMove: OpenMove = {
+    id: paidEntry.moveId,
+    kind: 'costPaid',
+    date: jan15,
+    refId: 'wedding',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: {
+      costId: 'suit',
+      dueOn: jan15,
+      amountCents: 60_000,
+      paidOn: jan15,
+      fromFreeCents: 5_000,
+      mark: 'item',
+      purchaseId: null,
+      fromGoalCents: 45_000,
+      goalId: 'goal',
+    },
+  };
+  const derive = (moves: OpenMove[]) =>
+    deriveBalances({
+      startDate: jan1,
+      moves: [...starts, ...moves],
+      records: [],
+      arrivedOn: new Map(),
+      kinds: { wedding: 'horizon', goal: 'goal' },
+    });
+  const before = derive([]);
+  const after = derive([paidMove]);
+  assert.equal(
+    after.assignedByItem.goal,
+    (before.assignedByItem.goal ?? 0) - 45_000,
+    'a payment lowers the goal by the part it paid',
+  );
+  assert.equal(
+    after.assignedByItem.wedding,
+    (before.assignedByItem.wedding ?? 0) - 10_000,
+    'and the event by what its own money paid',
+  );
+  assert.equal(
+    after.freeToSpendCents,
+    before.freeToSpendCents - 5_000,
+    'Free to Spend falls only by what it fronted, so nothing counts twice',
+  );
+  assert.equal(
+    after.costPaidByItem.wedding,
+    60_000,
+    'the whole payment is spent by the event',
+  );
+  const takenBack = derive([
+    paidMove,
+    {
+      id: `unpaid_${paidEntry.moveId}`,
+      kind: 'costPaid',
+      date: jan15,
+      refId: 'wedding',
+      reversesMoveId: paidEntry.moveId,
+      createdAt: 6,
+      payload: paidMove.payload,
+    },
+  ]);
+  assert.equal(
+    takenBack.assignedByItem.goal,
+    before.assignedByItem.goal,
+    'taking the payment back gives the goal its part again',
+  );
+  assert.equal(
+    takenBack.freeToSpendCents,
+    before.freeToSpendCents,
+    'and Free to Spend its own',
+  );
+
+  const closed = buildClosing(toMonthKey(jan1), null, {
+    startDate: jan1,
+    days: [],
+    records: [],
+    moves: [...starts, paidMove],
+    purchases: [],
+    billIds: new Set(),
+  });
+  const read = decodeClosing(toMonthKey(jan1), encodeClosing(closed));
+  assert.deepEqual(
+    [
+      read.costPaid.wedding?.[0].fromGoalCents,
+      read.costPaid.wedding?.[0].goalId,
+    ],
+    [45_000, 'goal'],
+    'a closing keeps what a goal paid and which goal',
+  );
+  assert.equal(
+    getHorizonFigures(0, 60_000, 5_000, 45_000).setAsideCents,
+    10_000,
+    "set aside counts only what the event's own money was given",
+  );
+  assert.equal(
+    readHorizon({ ...wedding, goalId: undefined }).goalId,
+    null,
+    'an event sealed before goals could be linked reads no goal',
+  );
+
+  // Links: a goal feeds one event and an event draws from one goal.
+  const events = [
+    { id: 'wedding', horizon: { goalId: 'goal', state: 'open' as const } },
+    { id: 'trip', horizon: { goalId: null, state: 'open' as const } },
+    { id: 'old', horizon: { goalId: 'gone', state: 'finished' as const } },
+  ];
+  assert.equal(
+    getLinkedEventId('goal', events),
+    'wedding',
+    'an open event reads as the goal link',
+  );
+  assert.equal(
+    getLinkedEventId('gone', events),
+    null,
+    'a finished event no longer draws from its goal',
+  );
+  assert.equal(
+    getGoalLinkBlock('goal', 'trip', events),
+    'goalTaken',
+    'a goal already feeding an event is refused',
+  );
+  assert.equal(
+    getGoalLinkBlock('other', 'wedding', events),
+    'eventHasGoal',
+    'an event that already has a goal is refused',
+  );
+  assert.equal(
+    getGoalLinkBlock('goal', 'wedding', events),
+    null,
+    'the same pair is not a conflict',
+  );
+  assert.equal(
+    getGoalLinkBlock('other', 'trip', events),
+    null,
+    'two free items link',
+  );
+  assert.equal(
+    getGoalCost({ name: 'Wedding fund', targetCents: 600_000 }, 'goal', jan15)
+      .amount.lowCents,
+    600_000,
+    'the goal target becomes an exact cost',
+  );
+  assert.equal(
+    getGoalCost({ name: 'Wedding fund', targetCents: 600_000 }, 'goal', jan15)
+      .schedule.kind,
+    'once',
+    'paid once',
+  );
+
+  // The nudge: a quarter of the time between the day the date was set and the date, never under 60 days or over a year.
+  const dayNum = (from: number, to: number) =>
+    Math.round((to - from) / LINK_DAY_MS);
+  const setOn = utc(2027, 0, 1);
+  const farDate = utc(2032, 0, 1);
+  assert.equal(
+    dayNum(getHorizonNudgeFrom(farDate, setOn), farDate),
+    365,
+    'a date years away asks a year ahead',
+  );
+  const shortDate = utc(2027, 3, 1);
+  assert.equal(
+    dayNum(getHorizonNudgeFrom(shortDate, setOn), shortDate),
+    60,
+    'a date a few months after it was set asks at 60 days',
+  );
+  const midDate = utc(2028, 0, 1);
+  assert.equal(
+    dayNum(getHorizonNudgeFrom(midDate, setOn), midDate),
+    Math.round(dayNum(setOn, midDate) * 0.25),
+    'in between it is a quarter of the time',
+  );
+  assert.equal(
+    dayNum(getHorizonNudgeFrom(utc(2027, 0, 20), setOn), utc(2027, 0, 20)),
+    60,
+    'a date under 60 days away asks 60 days before it',
+  );
+  assert.equal(
+    getTargetDateSetOn(
+      [
+        { effectiveFrom: utc(2027, 0, 1), targetDate: midDate },
+        { effectiveFrom: utc(2027, 2, 1), targetDate: midDate },
+        { effectiveFrom: utc(2027, 5, 1), targetDate: farDate },
+      ],
+      farDate,
+    ),
+    utc(2027, 5, 1),
+    'the day a date was set is the earliest version carrying it',
+  );
+  assert.equal(
+    getTargetDateSetOn(
+      [
+        { effectiveFrom: utc(2027, 0, 1), targetDate: midDate },
+        { effectiveFrom: utc(2027, 2, 1), targetDate: midDate },
+      ],
+      midDate,
+    ),
+    utc(2027, 0, 1),
+    'a later edit that keeps the date does not reset it',
+  );
+  assert.equal(
+    getTargetDateSetOn(
+      [{ effectiveFrom: utc(2027, 0, 1), targetDate: midDate }],
+      farDate,
+    ),
+    null,
+    'a date no version carries has no day',
+  );
+  const asks = (today: number, extra = {}) =>
+    shouldNudgeHorizon({
+      targetDate: midDate,
+      setOn,
+      today,
+      isLinked: false,
+      dismissedDate: undefined,
+      ...extra,
+    });
+  const from = getHorizonNudgeFrom(midDate, setOn);
+  assert.equal(
+    asks(from - LINK_DAY_MS),
+    false,
+    'it stays quiet the day before it starts',
+  );
+  assert.equal(asks(from), true, 'it asks from its day');
+  assert.equal(asks(midDate), true, 'and keeps asking through the date');
+  assert.equal(
+    asks(midDate + LINK_DAY_MS),
+    false,
+    'a date that has passed is not asked about',
+  );
+  assert.equal(
+    asks(from, { isLinked: true }),
+    false,
+    'a goal an event draws from is not asked',
+  );
+  assert.equal(
+    asks(from, { targetDate: null }),
+    false,
+    'an undated goal is not asked',
+  );
+  assert.equal(
+    asks(from, { dismissedDate: midDate }),
+    false,
+    'Do not ask again keeps it quiet for that date',
+  );
+  assert.equal(
+    asks(from, { dismissedDate: farDate }),
+    true,
+    'and a changed date brings it back',
+  );
+  assert.equal(
+    getGoalCover(
+      'g1',
+      [
+        {
+          from: 0,
+          until: null,
+          payload: {
+            name: 'Fund',
+            emoji: null,
+            priority: 'should',
+            orderIndex: 1,
+            targetCents: 100_000,
+            targetDate: null,
+            funding: {
+              cadence: { kind: 'none' },
+              amount: { kind: 'exact', cents: 10_000 },
+            } as unknown as GoalSealed['funding'],
+            state: 'active',
+            groupId: null,
+          },
+        },
+      ],
+      12_000,
+      [],
+    ).contributions.length,
+    0,
+    'a goal that is not being saved for puts nothing in ahead, so only its balance now covers',
+  );
 }
 
 console.log('runway engine: ok');

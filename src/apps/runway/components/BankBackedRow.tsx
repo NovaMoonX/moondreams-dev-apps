@@ -14,10 +14,8 @@ import { formatCents } from '@/utils/moneyUtils';
 import { BANK_BACKED_WORDS } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { setBankBackedSeen } from '@apps/runway/store/actions/planActions';
-import {
-  selectBalances,
-  selectBankBacking,
-} from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBankBacking } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectIsAccountsLoaded,
   selectIsMovesLoaded,

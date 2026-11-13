@@ -9,6 +9,7 @@ interface Page {
   goto: (url: string) => Promise<unknown>;
   reload: () => Promise<unknown>;
   goBack: () => Promise<unknown>;
+  keyboard: { press: (key: string) => Promise<void> };
   waitForTimeout: (ms: number) => Promise<void>;
   url: () => string;
   evaluate: <T>(fn: () => T) => Promise<T>;
@@ -65,6 +66,10 @@ const tap =
   };
 const back: Step = async (page) => {
   await page.goBack();
+  await page.waitForTimeout(600);
+};
+const escape: Step = async (page) => {
+  await page.keyboard.press('Escape');
   await page.waitForTimeout(600);
 };
 // An update's restart reloads the page with entries a long session left: kept markers written by an earlier load on the app's own entries.
@@ -185,12 +190,177 @@ await [1, 6].reduce(
   (done, cpuRate) => done.then(() => runAddForm(cpuRate)),
   Promise.resolve(),
 );
+
+// Asking about a page: the conversation opens over it with one entry of its own, and each way out lands where the person was.
+interface Landing {
+  path: string;
+  hasAsk: boolean;
+  hasView: boolean;
+  text: string;
+  scrollY: number;
+}
+const read = (page: Page) =>
+  page.evaluate(() => ({
+    path: window.location.pathname,
+    hasAsk: new URLSearchParams(window.location.search).has('ask'),
+    hasView: new URLSearchParams(window.location.search).has('view'),
+    text: document.body.innerText,
+    scrollY: window.scrollY,
+  }));
+const scrolled: Step = async (page) => {
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await page.waitForTimeout(200);
+};
+const askJourneys: {
+  name: string;
+  steps: Step[];
+  isRight: (landing: Landing) => boolean;
+}[] = [
+  {
+    name: 'ask from a scrolled page, Back',
+    steps: [scrolled, tap('Ask page'), back],
+    isRight: ({ path, hasAsk, text, scrollY }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      text.includes('Today page') &&
+      !text.includes('Ask open') &&
+      scrollY >= 590,
+  },
+  {
+    name: 'ask from a sheet, Back lands on the sheet',
+    steps: [tap('Open record sheet'), tap('Ask this one'), back],
+    isRight: ({ path, hasAsk, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      text.includes('Sheet of one record') &&
+      !text.includes('Ask open'),
+  },
+  {
+    name: 'ask from a sheet, Escape closes only the ask',
+    steps: [tap('Open record sheet'), tap('Ask this one'), escape],
+    isRight: ({ path, hasAsk, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      text.includes('Sheet of one record') &&
+      !text.includes('Ask open'),
+  },
+  {
+    name: 'ask from a sheet, Back twice closes the sheet',
+    steps: [tap('Open record sheet'), tap('Ask this one'), back, back],
+    isRight: ({ path, hasAsk, text }) =>
+      path === '/helm' && !hasAsk && !text.includes('Sheet of one record'),
+  },
+  {
+    name: 'ask, a reply link to a record, Back to the first page',
+    steps: [tap('Ask page'), tap('Follow link'), back],
+    isRight: ({ path, hasAsk, hasView, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      !hasView &&
+      text.includes('Today page') &&
+      !text.includes('Ask open'),
+  },
+  {
+    name: 'sheet, ask, a reply link to a record, Back to the page',
+    steps: [
+      tap('Open record sheet'),
+      tap('Ask this one'),
+      tap('Follow link'),
+      back,
+    ],
+    isRight: ({ path, hasAsk, hasView, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      !hasView &&
+      text.includes('Today page') &&
+      !text.includes('Sheet of one record'),
+  },
+  {
+    name: 'reload with ask open, Back to the page',
+    steps: [tap('Ask page'), reload, back],
+    isRight: ({ path, hasAsk, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      text.includes('Today page') &&
+      !text.includes('Ask open'),
+  },
+  {
+    name: 'ask closed by its control leaves no entry',
+    steps: [tap('Ask page'), tap('Close ask'), back],
+    isRight: ({ path }) => path === '/home',
+  },
+];
+const runAsk = async (
+  { name, steps, isRight }: (typeof askJourneys)[number],
+  cpuRate: number,
+) => {
+  const page = await browser.newPage();
+  if (cpuRate > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuRate });
+  }
+  await page.goto(`${origin}/home`);
+  await tap('Enter ask page')(page);
+  await steps.reduce(
+    (done, step) => done.then(() => step(page)),
+    Promise.resolve(),
+  );
+  const landing = await read(page);
+  const label = `${name}${cpuRate > 1 ? ` (CPU ×${cpuRate})` : ''}`;
+  const result = isRight(landing);
+  if (!result)
+    failures.push(`${label}: ${JSON.stringify({ ...landing, text: '' })}`);
+  console.log(`${result ? 'ok  ' : 'FAIL'} ${label} → ${landing.path}`);
+};
+await [1, 6].reduce(
+  (done, cpuRate) =>
+    askJourneys.reduce(
+      (inner, journey) => inner.then(() => runAsk(journey, cpuRate)),
+      done,
+    ),
+  Promise.resolve(),
+);
+
+// A step mark counts only in the load that wrote it: after a reload (or a phone restoring the page) Back must not pop onto the old page.
+const runStepMark = async () => {
+  const page = await browser.newPage();
+  await page.goto(`${origin}/home`);
+  const isStep = () =>
+    page.evaluate(() =>
+      (
+        window as unknown as { isHistoryStep: (flag: string) => boolean }
+      ).isHistoryStep('tabStep'),
+    );
+  await page.evaluate(() =>
+    (
+      window as unknown as { markHistoryStep: (flag: string) => void }
+    ).markHistoryStep('tabStep'),
+  );
+  const isSameLoad = await isStep();
+  await page.reload();
+  const isAfterReload = await isStep();
+  await page.evaluate(() => {
+    const oldMark = { tabStep: true };
+    window.history.replaceState({ ...window.history.state, ...oldMark }, '');
+  });
+  const isOldTrue = await isStep();
+  const isRight = isSameLoad && !isAfterReload && !isOldTrue;
+  const label = 'step mark: same load, after a reload, an old `true` mark';
+  if (!isRight)
+    failures.push(
+      `${label}: ${isSameLoad}, ${isAfterReload}, ${isOldTrue} (want true, false, false)`,
+    );
+  console.log(
+    `${isRight ? 'ok  ' : 'FAIL'} ${label} → ${isSameLoad}, ${isAfterReload}, ${isOldTrue}`,
+  );
+};
+await runStepMark();
 await browser.close();
 server.close();
 assert.deepEqual(
   failures,
   [],
-  `A door left the app or missed its target:\n${failures.join('\n')}`,
+  `A door left the app, missed its target or lost the page:\n${failures.join('\n')}`,
 );
 console.log(
   'back-history: every door landed on its target, and a closed form left no entry',
