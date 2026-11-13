@@ -276,6 +276,7 @@ check(
         things: [
           { ...toPublicThing(thing())!, storeUrl: 'javascript:alert(1)' },
         ],
+        bundles: [],
         isMember: false,
       },
       null,
@@ -356,6 +357,7 @@ check(
           paymentMethods: [long, ' ', 'Zelle'],
         },
         things: [],
+        bundles: [],
         isMember: false,
       },
       null,
@@ -791,7 +793,13 @@ const bundleDoc = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 const member = (id: string, extra: Record<string, unknown> = {}) =>
-  thing({ id, title: `Thing ${id}`, askingPriceCents: 1_000, ...extra });
+  thing({
+    id,
+    title: `Thing ${id}`,
+    askingPriceCents: 1_000,
+    bundleId: 'cat-stuff',
+    ...extra,
+  });
 const BUNDLE_KEYS = [
   'goneCount',
   'id',
@@ -840,16 +848,17 @@ check(
   'a bundle clamps its price, orders Pending last and a held one serves its deal',
   () => {
     const items = [
-      member('a'),
-      member('b'),
-      member('c', { status: 'PENDING' }),
+      member('a', { bundleId: 'open' }),
+      member('b', { bundleId: 'open' }),
+      member('c', { status: 'PENDING', bundleId: 'held' }),
+      member('d', { status: 'PENDING', bundleId: 'held' }),
     ];
     const page = toSalePage(sale(), items, false, null, [
       bundleDoc({
         id: 'held',
         status: 'PENDING',
-        itemIds: ['a', 'c'],
-        dealItemIds: ['a', 'c'],
+        itemIds: ['c', 'd'],
+        dealItemIds: ['c', 'd'],
         priceCents: 9_999,
       }),
       bundleDoc({ id: 'open', itemIds: ['a', 'b'], priceCents: 9_999 }),
@@ -891,6 +900,22 @@ check(
     const lone = served({ itemIds: ['a', 'b'] });
     assert.equal(lone.things.find((entry) => entry.id === 'a')?.bundleId, null);
     assert.equal(served({ name: 'x'.repeat(200) }).bundles[0].name.length, 60);
+  },
+);
+
+check(
+  'a thing a bundle lists but that names another bundle is not served in it',
+  () => {
+    const page = toSalePage(
+      sale(),
+      [member('a'), member('b'), member('c', { bundleId: 'other' })],
+      false,
+      null,
+      [bundleDoc({ itemIds: ['a', 'b', 'c'] })],
+    );
+    assert.ok(page.status === 'ok');
+    assert.deepEqual(page.bundles[0].thingIds, ['a', 'b']);
+    assert.equal(page.things.find((entry) => entry.id === 'c')?.bundleId, null);
   },
 );
 

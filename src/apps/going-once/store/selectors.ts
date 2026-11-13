@@ -89,8 +89,10 @@ export const selectStatusSummary = createSelector([selectItems], (items) =>
   getStatusSummary(items),
 );
 
-export const selectBundlesStatus = (state: RootState) =>
-  state.goingOnce.bundles.status;
+/** Whether this sale's bundles have arrived, so a missing bundle id means it is gone rather than still loading. */
+export const selectIsBundlesReady = (state: RootState, saleId: string | null) =>
+  state.goingOnce.bundles.saleId === saleId &&
+  state.goingOnce.bundles.status === 'ready';
 
 export const selectItemsStatus = (state: RootState) =>
   state.goingOnce.items.status;

@@ -87,10 +87,8 @@ export function describeBundleChange(
     change.fromPriceCents === null
       ? ''
       : ` (was ${formatCentsShort(change.fromPriceCents)})`;
-  const thing = (() => {
-    const found = change.itemId === null ? undefined : itemsById[change.itemId];
-    return found === undefined ? 'A thing' : getItemName(found);
-  })();
+  const found = change.itemId === null ? undefined : itemsById[change.itemId];
+  const thing = found === undefined ? 'A thing' : getItemName(found);
   const now = price === null ? '' : ` · now ${price}`;
   switch (change.kind) {
     case 'CREATE':

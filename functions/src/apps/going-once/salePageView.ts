@@ -338,7 +338,7 @@ export function readBundleDeal(
   const dealIds = toIdList(bundle.dealItemIds);
   return [...new Set(toIdList(bundle.itemIds))].filter((id) => {
     const item = itemsById.get(id);
-    if (!isRecord(item)) {
+    if (!isRecord(item) || item.bundleId !== bundle.id) {
       return false;
     }
 

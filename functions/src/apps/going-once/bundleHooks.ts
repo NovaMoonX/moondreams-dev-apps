@@ -26,7 +26,7 @@ export const clipName = (text: unknown, fallback: string) => {
 export function getInquiryLabel(inquiry: DocumentData): string {
   const bundle =
     typeof inquiry.bundleLabelAtSend === 'string'
-      ? inquiry.bundleLabelAtSend.replace(/\s*\(\d+ things\)$/, '')
+      ? inquiry.bundleLabelAtSend.replace(/\s*\(\d+ things?\)$/, '')
       : '';
   return bundle.trim() === ''
     ? clipName(inquiry.itemTitleAtSend, 'A thing')

@@ -41,7 +41,11 @@ import type {
   ItemStatus,
   PaymentMethod,
 } from '@apps/going-once/types';
-import { appendBundleChange, splitPaid } from '@apps/going-once/utils/bundles';
+import {
+  appendBundleChange,
+  applyThingsBack,
+  splitPaid,
+} from '@apps/going-once/utils/bundles';
 import { getItemName } from '@apps/going-once/utils/listing';
 
 export type BundleDraft = {
@@ -384,8 +388,19 @@ const getThingTransition = (
   return transition;
 };
 
+const CONFLICT_CAUSE: Record<BundleStatus, BundleChange['kind'] | null> = {
+  ACTIVE: null,
+  PENDING: 'MARK_PENDING',
+  SOLD: 'MARK_SOLD',
+};
+
 const describeBundleConflict = async (bundle: Bundle, uid: string) => {
-  const who = await readActorName(bundle.history.at(-1)?.byUid ?? null, uid);
+  const cause = CONFLICT_CAUSE[bundle.status];
+  const who = await readActorName(
+    bundle.history.filter((change) => change.kind === cause).at(-1)?.byUid ??
+      null,
+    uid,
+  );
   if (bundle.status === 'SOLD')
     return `${who} already marked the ${bundle.name} bundle sold for ${formatCentsShort(bundle.sale?.priceCents ?? 0)}.`;
   if (bundle.status === 'PENDING')
@@ -495,6 +510,18 @@ export async function changeBundleStatus(
       const raw = await Promise.all(
         ids.map((id) => transaction.get(itemRef(saleId, id))),
       );
+      const isReturning =
+        transition.kind === 'BACK_TO_AVAILABLE' ||
+        transition.kind === 'NOT_SOLD';
+      const heldIds = bundle.dealItemIds ?? [];
+      const outsideRaw =
+        isReturning && bundle.status !== 'ACTIVE'
+          ? await Promise.all(
+              bundle.itemIds
+                .filter((id) => !heldIds.includes(id))
+                .map((id) => transaction.get(itemRef(saleId, id))),
+            )
+          : [];
       const isFinished = saleData?.status === FINISHED_SALE_STATUS;
       if (isFinished && transition.kind === 'MARK_PENDING')
         return { kind: 'REFUSED', message: FINISHED_MESSAGE } as const;
@@ -511,7 +538,7 @@ export async function changeBundleStatus(
         bundle.status === 'ACTIVE'
           ? things.filter(({ stored }) => stored.status === expected)
           : things;
-      if (deal.length === 0)
+      if (deal.length === 0 && !isReturning)
         return { kind: 'REFUSED', message: NOTHING_LEFT_MESSAGE } as const;
       const stale = deal.find(({ stored }) => stored.status !== expected);
       if (stale !== undefined) return { kind: 'CONFLICT', ...stale } as const;
@@ -553,16 +580,33 @@ export async function changeBundleStatus(
           toItemUpdate(stored, clearNext(planned, isCleared), uid, now),
         );
       });
-      transaction.update(
-        bundleRef(saleId, bundleId),
-        toBundleUpdate(
-          transition,
-          bundle,
-          deal.map(({ item }) => item.id),
-          uid,
-          now,
-        ),
+      const update = toBundleUpdate(
+        transition,
+        bundle,
+        deal.map(({ item }) => item.id),
+        uid,
+        now,
       );
+      const came = outsideRaw
+        .filter((found) => found.exists())
+        .map((found) => toItem(found.id, saleId, found.data()))
+        .filter((item) => item.status === 'AVAILABLE');
+      const back =
+        came.length === 0
+          ? {}
+          : applyThingsBack(
+              bundle,
+              update.history,
+              came,
+              [...deal.map(({ item }) => item), ...came].reduce(
+                (total, item) => total + (item.askingPriceCents ?? 0),
+                0,
+              ),
+              uid,
+              now,
+              MAX_STATUS_HISTORY,
+            );
+      transaction.update(bundleRef(saleId, bundleId), { ...update, ...back });
       return { kind: 'DONE', at: now } as const;
     });
     if (outcome.kind === 'DONE')

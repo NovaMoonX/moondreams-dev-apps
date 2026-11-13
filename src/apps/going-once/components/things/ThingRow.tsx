@@ -60,6 +60,8 @@ function ThingRow({
   pick,
 }: ThingRowProps) {
   const longPress = useLongPress(() => onLongPress?.());
+  // Picking starts on a hold and the row stops offering it, so the handlers stay on to swallow the release tap.
+  const isHoldable = onLongPress !== undefined || pick !== undefined;
   const isSaleFinished = useAppSelector((state) =>
     selectIsSaleFinished(state, item.saleId),
   );
@@ -76,12 +78,12 @@ function ThingRow({
       variant='tertiary'
       className={join(
         'border-border bg-card h-auto min-h-16 w-full items-start justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left',
-        onLongPress && 'select-none [-webkit-touch-callout:none]',
+        isHoldable && 'select-none [-webkit-touch-callout:none]',
         pick && !pick.isPickable && '[&>*]:opacity-60',
       )}
-      {...(onLongPress ? longPress : {})}
+      {...(isHoldable ? longPress : {})}
       onClick={(event) => {
-        if (onLongPress) longPress.onClick(event);
+        if (isHoldable) longPress.onClick(event);
         if (event.defaultPrevented) return;
         if (pick) {
           if (pick.isPickable) pick.onToggle();
@@ -107,18 +109,19 @@ function ThingRow({
     </Button>
   );
 
-  if (!pick) return row;
   return (
     <div className='flex items-center gap-2'>
-      <span className='flex size-6 shrink-0 items-center justify-center'>
-        {pick.isPickable && (
-          <Checkbox
-            checked={pick.isChecked}
-            onCheckedChange={pick.onToggle}
-            aria-label={`Pick ${getItemName(item)}`}
-          />
-        )}
-      </span>
+      {pick && (
+        <span className='flex size-6 shrink-0 items-center justify-center'>
+          {pick.isPickable && (
+            <Checkbox
+              checked={pick.isChecked}
+              onCheckedChange={pick.onToggle}
+              aria-label={`Pick ${getItemName(item)}`}
+            />
+          )}
+        </span>
+      )}
       <div className='min-w-0 flex-1'>{row}</div>
     </div>
   );

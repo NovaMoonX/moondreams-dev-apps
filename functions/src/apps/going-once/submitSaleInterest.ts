@@ -18,6 +18,7 @@ import {
   isRecord,
   isSafeId,
   readBundleDeal,
+  SALE_PAGE_LIMITS,
 } from './salePageView.js';
 
 export type SaleInterestResult =
@@ -90,7 +91,10 @@ async function readServedBundle(
       doc.exists ? [[doc.id, doc.data()]] : [],
     ),
   );
-  const deal = readBundleDeal(bundle, items).filter((id) => {
+  const deal = readBundleDeal(
+    { ...bundle, id: itemData.bundleId },
+    items,
+  ).filter((id) => {
     const item = items.get(id);
     return (
       isRecord(item) &&
@@ -100,7 +104,10 @@ async function readServedBundle(
   });
   const name =
     typeof bundle.name === 'string'
-      ? bundle.name.trim().replace(/\s+/g, ' ').slice(0, 60)
+      ? bundle.name
+          .trim()
+          .replace(/\s+/g, ' ')
+          .slice(0, SALE_PAGE_LIMITS.MAX_BUNDLE_NAME_LENGTH)
       : '';
   if (deal.length < 2 || !deal.includes(itemId) || name === '') {
     return null;
@@ -108,6 +115,7 @@ async function readServedBundle(
 
   return {
     id: itemData.bundleId,
+    firstId: deal[0],
     label: `${name} (${deal.length} things)`,
     isSoloLocked:
       itemData.isBundleOnly === true &&
@@ -167,10 +175,16 @@ async function send(
     served !== null && (requestedBundleId !== null || served.isSoloLocked);
   const bundleId = isAboutBundle ? served.id : null;
   const bundleLabelAtSend = isAboutBundle ? served.label : null;
+  const inquiryItemId = isAboutBundle ? served.firstId : itemId;
   const inquiries = saleRef(saleId).collection('inquiries');
-  const inquiry = inquiries.doc(toInquiryId(itemId, contact.key, bundleId));
+  const inquiry = inquiries.doc(
+    toInquiryId(inquiryItemId, contact.key, bundleId),
+  );
   if (!(await inquiry.get()).exists) {
-    const asked = await inquiries.where('itemId', '==', itemId).count().get();
+    const asked = await inquiries
+      .where('itemId', '==', inquiryItemId)
+      .count()
+      .get();
     if (asked.data().count >= INQUIRY_LIMITS.PER_THING) {
       return refuse('full');
     }
@@ -221,7 +235,7 @@ async function send(
     transaction.set(inquiry, {
       id: inquiry.id,
       saleId,
-      itemId,
+      itemId: inquiryItemId,
       itemTitleAtSend,
       bundleId,
       bundleLabelAtSend,

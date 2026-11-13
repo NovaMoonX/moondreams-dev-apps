@@ -36,6 +36,7 @@ import {
   selectItemsById,
   selectItems,
   selectIsSaleFinished,
+  selectIsBundlesReady,
   selectItemsStatus,
   selectPhotoUploads,
   selectSaleById,
@@ -131,6 +132,9 @@ function ItemsSection({
   });
   const bundles = useAppSelector((state) => selectBundles(state, saleId));
   const itemsById = useAppSelector((state) => selectItemsById(state, saleId));
+  const isBundlesReady = useAppSelector((state) =>
+    selectIsBundlesReady(state, saleId),
+  );
   const selection = useSelection();
   const [isMakingBundle, setIsMakingBundle] = useState(false);
   const [query, setQuery] = useState('');
@@ -186,7 +190,7 @@ function ItemsSection({
     .sort((first, second) => second.createdAt - first.createdAt);
   const isPickable = (item: Item) =>
     item.status === 'AVAILABLE' && isListable(item) && item.bundleId === null;
-  const pickedIds = shown
+  const pickedIds = items
     .filter((item) => isPickable(item) && selection.ids.has(item.id))
     .map((item) => item.id);
   const isPicking = selection.isActive && statusView === 'AVAILABLE';
@@ -211,14 +215,9 @@ function ItemsSection({
 
   // A link to a bundle that is gone (unbundled, or from another sale) opens nothing, so the address drops it.
   useEffect(() => {
-    if (
-      openBundleId !== null &&
-      openBundle === null &&
-      status === 'ready' &&
-      items.length > 0
-    )
+    if (openBundleId !== null && openBundle === null && isBundlesReady)
       onCloseBundle();
-  }, [openBundleId, openBundle, status, items.length, onCloseBundle]);
+  }, [openBundleId, openBundle, isBundlesReady, onCloseBundle]);
 
   // A link to a thing that is gone (deleted, or from another sale) opens nothing, so the address drops it.
   useEffect(() => {

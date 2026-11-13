@@ -63,12 +63,11 @@ function BundleFormSheet({
     bundle === null
       ? startItemIds
       : getBundleParts(bundle, itemsById).deal.map((item) => item.id);
-  const initialPrice = (() => {
-    if (bundle !== null) return centsToInputValue(bundle.priceCents);
-    return centsToInputValue(
-      sumAsking(initialIds.flatMap((id) => itemsById[id] ?? [])),
-    );
-  })();
+  const initialPrice = centsToInputValue(
+    bundle === null
+      ? sumAsking(initialIds.flatMap((id) => itemsById[id] ?? []))
+      : bundle.priceCents,
+  );
   const initialOnly =
     bundle === null
       ? []
@@ -112,13 +111,16 @@ function BundleFormSheet({
     isBusy: isSaving,
     onClose,
   });
-  const note = (() => {
+  const getNote = () => {
     if (name.trim() === '') return 'Give the bundle a name';
     if (priceCents === null) return 'Enter the bundle price';
     if (itemIds.length < MIN_BUNDLE_THINGS)
       return `A bundle needs at least ${MIN_BUNDLE_THINGS} things`;
+    if (priceCents > separateCents)
+      return `Keep it at or under ${formatCentsShort(separateCents)}, what they cost separately`;
     return null;
-  })();
+  };
+  const note = getNote();
 
   const toggleOnly = (id: string, isOnly: boolean) =>
     setOnlyIds((current) =>

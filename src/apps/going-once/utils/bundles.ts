@@ -54,6 +54,43 @@ export const adjustBundlePrice = (
   separateCents: number,
 ) => Math.max(0, Math.min(priceCents + deltaCents, separateCents));
 
+/** Raises a bundle's price by each thing that came back while it was held, one THING_BACK history entry per thing; `separateCents` is the new offer's asking total. */
+export const applyThingsBack = (
+  bundle: Bundle,
+  history: BundleChange[],
+  came: Item[],
+  separateCents: number,
+  uid: string,
+  now: number,
+  limit: number,
+) =>
+  came.reduce(
+    (result, item) => {
+      const priceCents = adjustBundlePrice(
+        result.priceCents,
+        askingOf(item),
+        separateCents,
+      );
+      return {
+        priceCents,
+        history: appendBundleChange(
+          result.history,
+          {
+            kind: 'THING_BACK',
+            byUid: uid,
+            at: now,
+            itemId: item.id,
+            itemStatus: 'AVAILABLE',
+            priceCents,
+            fromPriceCents: result.priceCents,
+          },
+          limit,
+        ),
+      };
+    },
+    { priceCents: bundle.priceCents, history },
+  );
+
 /** Whether a thing can't be bought on its own right now: only while its bundle is on offer with two or more things. */
 export const isSoloLocked = (
   item: Item,
@@ -72,7 +109,11 @@ export function shouldSuggestUnbundle(
   parts: BundleParts,
 ): boolean {
   if (bundle.status !== 'ACTIVE' || parts.gone.length === 0) return false;
-  if (bundle.keptAtGoneCount === parts.gone.length) return false;
+  if (
+    bundle.keptAtGoneCount !== null &&
+    parts.gone.length <= bundle.keptAtGoneCount
+  )
+    return false;
   return (
     parts.deal.length <= 1 ||
     parts.goneCents * 2 >= parts.originalCents ||

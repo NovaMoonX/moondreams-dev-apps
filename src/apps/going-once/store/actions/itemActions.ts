@@ -28,6 +28,7 @@ import type { Item, ItemPhoto } from '@apps/going-once/types';
 import {
   adjustBundlePrice,
   appendBundleChange,
+  applyThingsBack,
 } from '@apps/going-once/utils/bundles';
 
 /** The answers a person gives about a thing in this flow. */
@@ -301,36 +302,74 @@ async function deleteBundledItem(
       ? toItem(itemId, saleId, thingSnapshot.data())
       : null;
     const remainingIds = bundle.itemIds.filter((id) => id !== itemId);
+    const heldIds = bundle.dealItemIds ?? [];
     const isLeavingOffer =
       bundle.status === 'ACTIVE' && thing?.status === 'AVAILABLE';
-    const others = isLeavingOffer
-      ? (
-          await Promise.all(
-            remainingIds.map((id) => transaction.get(getItemRef(saleId, id))),
+    const isEmptyingDeal =
+      bundle.status !== 'ACTIVE' &&
+      heldIds.includes(itemId) &&
+      heldIds.every((id) => id === itemId);
+    const others =
+      isLeavingOffer || (isEmptyingDeal && remainingIds.length > 0)
+        ? (
+            await Promise.all(
+              remainingIds.map((id) => transaction.get(getItemRef(saleId, id))),
+            )
           )
-        )
-          .filter((found) => found.exists())
-          .map((found) => toItem(found.id, saleId, found.data()))
-      : [];
+            .filter((found) => found.exists())
+            .map((found) => toItem(found.id, saleId, found.data()))
+        : [];
     transaction.delete(ref);
     if (remainingIds.length === 0) {
       transaction.delete(bundleRef(saleId, bundleId));
       return;
     }
+    const available = others.filter((other) => other.status === 'AVAILABLE');
+    const separateCents = available.reduce(
+      (total, other) => total + (other.askingPriceCents ?? 0),
+      0,
+    );
     const asking = thing?.askingPriceCents ?? 0;
-    const priceCents = isLeavingOffer
-      ? adjustBundlePrice(
-          bundle.priceCents,
-          -asking,
-          others
-            .filter((other) => other.status === 'AVAILABLE')
-            .reduce((total, other) => total + (other.askingPriceCents ?? 0), 0),
-        )
-      : bundle.priceCents;
     const now = Date.now();
     const uid = auth.currentUser?.uid ?? '';
-    transaction.update(bundleRef(saleId, bundleId), {
+    const base = {
       itemIds: remainingIds,
+      lastEditedAt: now,
+      lastEditedBy: uid,
+    };
+    if (isEmptyingDeal) {
+      const reset = {
+        kind: bundle.status === 'SOLD' ? 'NOT_SOLD' : 'BACK_TO_AVAILABLE',
+        byUid: uid,
+        at: now,
+        itemId: null,
+        itemStatus: null,
+        priceCents: null,
+        fromPriceCents: bundle.sale?.priceCents ?? null,
+      } as const;
+      const back = applyThingsBack(
+        bundle,
+        appendBundleChange(bundle.history, reset, MAX_STATUS_HISTORY),
+        available,
+        separateCents,
+        uid,
+        now,
+        MAX_STATUS_HISTORY,
+      );
+      transaction.update(bundleRef(saleId, bundleId), {
+        ...base,
+        ...back,
+        status: 'ACTIVE',
+        dealItemIds: null,
+        sale: null,
+      });
+      return;
+    }
+    const priceCents = isLeavingOffer
+      ? adjustBundlePrice(bundle.priceCents, -asking, separateCents)
+      : bundle.priceCents;
+    transaction.update(bundleRef(saleId, bundleId), {
+      ...base,
       dealItemIds: bundle.dealItemIds?.filter((id) => id !== itemId) ?? null,
       priceCents,
       history: isLeavingOffer
@@ -348,8 +387,6 @@ async function deleteBundledItem(
             MAX_STATUS_HISTORY,
           )
         : bundle.history,
-      lastEditedAt: now,
-      lastEditedBy: uid,
     });
   });
 }

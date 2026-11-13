@@ -290,7 +290,7 @@ export async function seedGoingOnceScale(
     {
       ...bundleBase,
       id: BIG_BUNDLE_ID,
-      name: 'Everything for the garage corner: furniture, small appliances, lamps and every odd extra that went along with them',
+      name: 'Garage corner: furniture, appliances, lamps and odd extras',
       status: 'ACTIVE',
       itemIds: ids(BIG_INDEXES),
       dealItemIds: null,

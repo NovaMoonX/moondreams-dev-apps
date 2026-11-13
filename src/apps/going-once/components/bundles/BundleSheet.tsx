@@ -195,6 +195,13 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
     if (result?.ok) onClose();
   };
 
+  const keepIt = () => {
+    setError(null);
+    keepBundle(bundle.saleId, bundle.id, uid, gone.length).catch(() =>
+      setError("Couldn't keep the bundle. Try again in a moment."),
+    );
+  };
+
   const getSuggestion = () =>
     deal.length === 1
       ? `Only ${getItemName(deal[0])} is left in this bundle.`
@@ -482,10 +489,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
                   size='sm'
                   rounded='full'
                   className='h-10 px-4'
-                  disabled={isWorking}
-                  onClick={() =>
-                    void keepBundle(bundle.saleId, bundle.id, uid, gone.length)
-                  }
+                  onClick={keepIt}
                 >
                   Keep the bundle
                 </Button>

@@ -390,6 +390,7 @@ function planBundleEffect(
     kind: 'UPDATE',
     update: {
       priceCents,
+      ...(isBack ? { keptAtGoneCount: null } : {}),
       history: appendBundleChange(
         bundle.history,
         {

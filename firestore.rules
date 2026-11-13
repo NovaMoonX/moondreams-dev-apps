@@ -496,7 +496,7 @@ service cloud.firestore {
 
     // A bundle (things sold together for one price) is read and written by the sale's members, judged by the sale in
     // its path. It starts Active with two to thirty things and a price in whole cents; who made it and when never
-    // change, and it can only be deleted (Unbundle) while Active, so a held or sold bundle's record stays.
+    // change. Members can delete it in any status, so deleting the last thing of a held or sold bundle takes it along.
     match /apps/going-once/sales/{saleId}/bundles/{bundleId} {
       allow read: if isSaleMember(saleId);
       allow create: if isSaleMember(saleId) && isCreatedByMe()
@@ -516,7 +516,7 @@ service cloud.firestore {
         && request.resource.data.itemIds is list
         && request.resource.data.itemIds.size() <= 30
         && request.resource.data.status in ['ACTIVE', 'PENDING', 'SOLD'];
-      allow delete: if isSaleMember(saleId) && resource.data.status == 'ACTIVE';
+      allow delete: if isSaleMember(saleId);
     }
 
     // A person's own settings (which sales' interest push they turned off) are read and written by them alone, and
