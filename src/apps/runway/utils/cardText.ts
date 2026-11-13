@@ -7,7 +7,7 @@ import {
   CARD_ISSUERS,
   CARD_WORDS,
 } from '@apps/runway/constants';
-import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextFeeOn } from '@apps/runway/engine/cardFees';
 import {
   collectCardHistory,
@@ -210,18 +210,12 @@ export const describeCardsOwed = (
     : CARD_WORDS.nothingOwed;
 };
 
-/** The due day a card's minimum belongs to: the one `getCardDueNow` found, or the next one while it is still outside the warning window; null inside the window with nothing open, since that due day is already paid for or has nothing waiting. */
+/** The due day a card's minimum belongs to: the one `getCardDueNow` found, else the next one. The bank's own last payment decides whether that minimum is paid, never this app's record. */
 export const getMinimumDueOn = (
   card: OpenCard,
   due: DueCard | null,
   today: DateOnly,
-): DateOnly | null => {
-  if (due) return due.dueOn;
-  const next = getNextDueOn(card.dueDay, today);
-  return next !== null && next - today > CARD_DUE_WARN_DAYS * DAY_MS
-    ? next
-    : null;
-};
+): DateOnly | null => due?.dueOn ?? getNextDueOn(card.dueDay, today);
 
 /** A card coming due as one sentence: "Chase is due Nov 3 · $120.00 waiting", "is due today", or "was due Oct 14" when past due; a known minimum comes before what waits: "· $35 minimum, $120.00 waiting". */
 export const describeDueCard = (
