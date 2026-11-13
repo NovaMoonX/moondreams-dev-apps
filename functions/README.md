@@ -99,6 +99,8 @@ Listening and speaking are deployed: `mintVoiceToken` and `streamSpeech` (above)
 
 ## Secrets and config
 
+Helm's secrets, Google APIs and alerts are all set up by `npm run helm:setup` (it skips what exists and is safe to re-run); the per-secret scripts below are what it calls.
+
 | Name | Kind | Used by | Set it with |
 | --- | --- | --- | --- |
 | `TMDB_API_KEY` | Functions secret, **required to deploy** | `searchMovies`, `getPopularMovies`, `getMovie` | `firebase functions:secrets:set TMDB_API_KEY --project moondreams-dev-apps` (paste the TMDB "API Read Access Token" or the v3 API key) |

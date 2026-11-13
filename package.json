@@ -146,6 +146,7 @@
     "pipeline:secrets": "bash scripts/pipelineSecrets.sh",
     "runway:plaid-secrets": "bash scripts/runway/plaidSecrets.sh",
     "ai:anthropic-secret": "bash scripts/ai/anthropicSecret.sh",
+    "helm:setup": "bash scripts/helm/setup.sh",
     "helm:keyring": "bash scripts/helm/keyring.sh",
     "helm:alerts": "bash scripts/helm/alerts.sh",
     "connections:keyring": "bash scripts/connections/keyring.sh",

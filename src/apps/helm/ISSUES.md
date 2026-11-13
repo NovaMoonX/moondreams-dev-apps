@@ -213,7 +213,7 @@ One Undo takes back what the assistant did for a capture, keeping records the pe
 ### Success Criteria
 - [ ] The person can undo a capture's changes and read in Activity what was taken back and what was kept.
 - [ ] `check:helm-undo` passes; offline, Undo says it needs a connection.
-- [ ] To do before ship: "Anthropic doesn't use what Helm sends to train its models." appears in "What the AI sees" only if the check of Anthropic's current API terms and the account's retention setting passes; the PR records what was checked, and the line is left out otherwise.
+- [x] Checked before ship: "Anthropic doesn't use what Helm sends to train its models." appears in "What the AI sees" only if the check of Anthropic's current API terms and the account's retention setting passes; the PR records what was checked, and the line is left out otherwise.
 - [ ] No new rules; stated. Seed has an undone execution.
 - [ ] Conventions: none new; `state-data.md` Undo rule checked.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.

@@ -65,6 +65,10 @@ Later:
 - [ ] Drafting in your style, video, app cards (a Pinch recipe card), a life timeline and milestones from the moments Helm keeps, writes to other apps
 - [ ] A browser extension and other ways to reach the assistant, orders, Apple contacts and sign-in
 
+## Production setup
+
+`npm run helm:setup` does every production setup step Helm needs, in order: both keyrings and their canaries, the Anthropic, Google OAuth, Deepgram and (optionally) Gemini secrets, Google Text-to-Speech, the alerts and a test alert, then offers to copy each keyring to the clipboard for your password manager. It skips what is already done, never prints a secret, and is safe to re-run. The alerts need the merge deployed first, so run `npm run helm:setup -- --after-deploy` after it; `npm run helm:setup -- --dry` prints the plan without changing anything. The few clicks only a browser can do (spend caps, the Google consent screen) are shown as they come up.
+
 ## Docs
 
 - [PRODUCT.md](PRODUCT.md): the full product doc (who it is for, how each part works in detail, build plan)

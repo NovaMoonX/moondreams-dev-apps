@@ -991,7 +991,7 @@ export const HELM_COPY = {
   settingsVoiceDevice: 'On this device',
   voiceDeviceOnlyTitle: 'Keep voice on this device',
   voiceDeviceOnlyOn:
-    "Your speech isn't sent to our voice services, and answers are read by this device's voice. In Chrome, the browser's own listening uses Google.",
+    "Your speech isn't sent to our voice services, and answers are read by this device's voice. The browser still does its own listening: in Chrome that goes to Google, in Safari to Apple.",
   voiceDeviceOnlyOff:
     "Online, Deepgram turns your speech into words for clearer listening. This browser listens when it can't.",
   voiceHandsFreeTitle: 'Answer without tapping',
@@ -1000,13 +1000,13 @@ export const HELM_COPY = {
   voiceHandsFreeOff: 'Tap Talk to answer.',
   voiceWakeTitle: (name: string) => `Hey ${name}`,
   voiceWake: (name: string) =>
-    `While this is open on screen, this browser's own listening waits for "Hey ${name}". In Chrome that listening uses Google.`,
+    `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple.`,
   voiceWakeLocked: "This browser can't listen for a phrase.",
   voiceDone: 'Done',
   voiceModeFailed: "Couldn't change that. Try again.",
   voiceOnPhone: 'Listening with this browser for the rest of today.',
   voiceNotice:
-    "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound. You can change this in Settings.",
+    "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound or use it to train its models. You can change this in Settings.",
   settingsYourData: 'Your data',
   deleteAllTitle: (appName: string) => `Delete all my ${appName} data`,
   deleteAllRowHint: 'Everything it keeps, for good',
@@ -1156,7 +1156,7 @@ export const HELM_COPY = {
     `What you tell ${name}, and the records it needs to file or answer it.`,
   aiSeesWhereLead: 'Where it runs',
   aiSeesWhere: (name: string) =>
-    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. It reaches your things only through its own tools.`,
+    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. Anthropic doesn't use what it's sent to train its models. It reaches your things only through its own tools.`,
   aiSeesStoredLead: 'Stored encrypted',
   aiSeesStored:
     "What you say, your records and every line in Activity are encrypted before they're saved.",

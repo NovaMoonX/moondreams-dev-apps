@@ -945,7 +945,7 @@ Capture text, record names, fact statements, note bodies, synced titles and ever
 
 The capture text, the context package above (synced titles and times included) and, for a question that needs them, what the tools return: mail senders, subjects, snippets and up to 4,000 characters of a message or document. They go to Anthropic's API. Nothing from the model or a tool is logged; logs carry codes, tool names, counts and token counts only.
 
-**To do before ship (owner)**: "Anthropic doesn't use what Helm sends to train its models." is not in "What the AI sees" (issue 7 left it out: the commercial API terms and the account's data-retention setting could not be checked from the build). It ships only after the owner confirms both; the sheet's four blocks are in `HELM_COPY`.
+**Training line**: "What the AI sees" says "Anthropic doesn't use what it's sent to train its models." in its Where it runs block, checked against Anthropic's commercial API data pages (inputs and outputs are not used for training without express permission, and are deleted within 30 days unless flagged by trust and safety or legally required). Deepgram calls carry `mip_opt_out=true`, so Deepgram neither keeps the audio nor trains on it; the browser's own listening goes to Google in Chrome and to Apple in Safari, and the voice copy says so.
 
 ## 6. Answers: records first, then general knowledge
 
