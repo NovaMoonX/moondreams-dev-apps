@@ -1608,7 +1608,7 @@ Voice is three layers that never know about each other: **listening** (speech to
 ```ts
 // src/lib/speech/voice/types.ts (general: no app's words; covered by check:pinch-voice)
 type VoiceRoute = 'cloud' | 'device';
-type SpeechPriority = 'ack' | 'reply' | 'summary';           // ack: "Got it, Friday" · reply: an answer · summary: a long read
+type SpeechPriority = 'ack' | 'reply' | 'summary';           // ack: "Got it. Call Dana on Friday." · reply: an answer · summary: a long read
 interface SttAdapter {
   id: string;                                                // 'deepgram' | 'on-device' | 'browser'
   route: VoiceRoute;

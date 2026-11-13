@@ -74,6 +74,18 @@ const cases: [string, string | null, string | null][] = [
     'Got it. Call Dana tomorrow at 9:30 AM.',
   ],
   [
+    'one task at a moment later this week',
+    ack({
+      created: [
+        {
+          title: 'Call Dana',
+          due: { kind: 'moment', at: Date.UTC(2026, 10, 13, 17, 0) },
+        },
+      ],
+    }),
+    'Got it. Call Dana on Friday at 9 AM.',
+  ],
+  [
     'one task a week or more away',
     ack({
       created: [
