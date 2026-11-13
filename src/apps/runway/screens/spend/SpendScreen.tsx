@@ -50,6 +50,7 @@ import {
   toMonthKey,
 } from '@apps/runway/engine/closings';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { isRefundLike } from '@apps/runway/engine/matching';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
 import { useNow } from '@/hooks/useNow';
 import {
@@ -243,6 +244,7 @@ function SpendScreen() {
     purchase.date >= range.from && purchase.date < range.to;
   const purchases = allSpendPurchases.filter(isInRange);
   const moneyIn = allMoneyIn.filter(isInRange);
+  const refunds = moneyIn.filter(isRefundLike);
   const onItsWay = allOnItsWay.filter(({ purchase }) => isInRange(purchase));
   // A deposit waiting, on its way or linked to a pay is not in the purchase list, so its own sheet opens it.
   const openedDeposit =
@@ -305,10 +307,8 @@ function SpendScreen() {
   const total = purchases
     .filter(isCounted)
     .reduce((sum, purchase) => sum + purchase.amountCents, 0);
-  const moneyInTotal = moneyIn.reduce(
-    (sum, purchase) => sum - purchase.amountCents,
-    0,
-  );
+  const getInTotal = (rows: readonly OpenPurchase[]) =>
+    rows.reduce((sum, purchase) => sum - purchase.amountCents, 0);
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(SPEND_PAGE_SIZE);
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -319,7 +319,8 @@ function SpendScreen() {
   const paidWithOf = (purchase: OpenPurchase) =>
     getPaidWithName(purchase, cards, accounts);
   const getEmptyWhere = (purchase: OpenPurchase) => {
-    if (kindId !== 'moneyIn' || level !== 'link') return undefined;
+    if ((kindId !== 'moneyIn' && kindId !== 'refunds') || level !== 'link')
+      return undefined;
     return purchase.incomeDayId !== null
       ? SPEND_FILTER_WORDS.toPay
       : SPEND_FILTER_WORDS.inFree;
@@ -332,14 +333,18 @@ function SpendScreen() {
       [kind]:
         kind === 'moneyIn'
           ? moneyIn.length
-          : purchases.filter((purchase) => fitsKind(purchase, kind)).length,
+          : kind === 'refunds'
+            ? refunds.length
+            : purchases.filter((purchase) => fitsKind(purchase, kind)).length,
     }),
-    { purchases: 0, moneyIn: 0, notCounted: 0 },
+    { purchases: 0, moneyIn: 0, refunds: 0, notCounted: 0 },
   );
-  // Purchases and Money in split by sign, so they wait until amounts show.
-  const shownKinds = SPEND_KINDS.filter((kind) =>
-    kind === 'notCounted' ? kindCounts.notCounted > 0 : !isHidden,
-  );
+  // Purchases, Money in and Refunds split by sign, so they wait until amounts show.
+  const shownKinds = SPEND_KINDS.filter((kind) => {
+    if (kind === 'notCounted') return kindCounts.notCounted > 0;
+    if (kind === 'refunds') return !isHidden && kindCounts.refunds > 0;
+    return !isHidden;
+  });
   const kindId: SpendKind | null =
     spendKind !== null &&
     (kindCounts[spendKind] > 0 ||
@@ -347,10 +352,12 @@ function SpendScreen() {
     shownKinds.includes(spendKind)
       ? spendKind
       : null;
-  const ofKind =
-    kindId === 'moneyIn'
-      ? moneyIn
-      : purchases.filter((purchase) => fitsKind(purchase, kindId));
+  const getOfKind = () => {
+    if (kindId === 'moneyIn') return moneyIn;
+    if (kindId === 'refunds') return refunds;
+    return purchases.filter((purchase) => fitsKind(purchase, kindId));
+  };
+  const ofKind = getOfKind();
 
   const sources = ofKind.reduce<Map<string, { name: string; count: number }>>(
     (acc, purchase) => {
@@ -606,14 +613,16 @@ function SpendScreen() {
         <div className='space-y-3'>
           <div>
             <p className='text-muted-foreground text-xs'>
-              {kindId === 'moneyIn'
-                ? SPEND_FILTER_WORDS.cameIn
-                : SPEND_PERIOD_WORDS.total}
+              {kindId === 'moneyIn' && SPEND_FILTER_WORDS.cameIn}
+              {kindId === 'refunds' && SPEND_FILTER_WORDS.cameBack}
+              {kindId !== 'moneyIn' &&
+                kindId !== 'refunds' &&
+                SPEND_PERIOD_WORDS.total}
             </p>
             <p className='text-3xl font-semibold tracking-tight tabular-nums'>
               <SensitiveValue>
-                {kindId === 'moneyIn'
-                  ? `+${formatCents(moneyInTotal)}`
+                {kindId === 'moneyIn' || kindId === 'refunds'
+                  ? `+${formatCents(getInTotal(ofKind))}`
                   : formatCents(total)}
               </SensitiveValue>
             </p>
@@ -654,6 +663,11 @@ function SpendScreen() {
                 {kindId === 'moneyIn' && (
                   <p className='text-muted-foreground text-xs'>
                     {SPEND_FILTER_WORDS.moneyInHelp}
+                  </p>
+                )}
+                {kindId === 'refunds' && (
+                  <p className='text-muted-foreground text-xs'>
+                    {SPEND_FILTER_WORDS.refundsHelp}
                   </p>
                 )}
               </FilterSection>
