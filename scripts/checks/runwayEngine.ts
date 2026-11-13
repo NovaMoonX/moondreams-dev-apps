@@ -74,7 +74,6 @@ import {
   findPlacementRun,
   findRulePlacements,
   isBroadMerchant,
-  needsNewHome,
   RULE_VARIES,
 } from '../../src/apps/runway/engine/rules.ts';
 import type {
@@ -20484,15 +20483,6 @@ checkHorizonMoves();
     ),
     [],
     'a rule that asks places nothing',
-  );
-
-  const live = new Set(['e-merchant']);
-  assert.equal(needsNewHome(merchantRule, live), false, 'a live envelope');
-  assert.equal(needsNewHome(kindRule, live), true, 'an envelope that is gone');
-  assert.equal(
-    needsNewHome({ target: RULE_VARIES }, new Set()),
-    false,
-    'a rule that asks needs no envelope',
   );
 
   const own = (

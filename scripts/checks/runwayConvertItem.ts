@@ -6,6 +6,10 @@ import {
   toEnvelopePayload,
   toGoalPayload,
 } from '../../src/apps/runway/engine/convertItem.ts';
+import {
+  needsNewHome,
+  RULE_VARIES,
+} from '../../src/apps/runway/engine/rules.ts';
 import type {
   EnvelopeSealed,
   GoalSealed,
@@ -164,6 +168,23 @@ assert.ok(
     ],
   }),
   "the conversion's own move is not later history",
+);
+
+const live = new Set(['e-merchant']);
+assert.equal(
+  needsNewHome({ target: 'e-merchant' }, live),
+  false,
+  'a rule into a live envelope has a home',
+);
+assert.equal(
+  needsNewHome({ target: 'e-gone' }, live),
+  true,
+  'a rule into an envelope that is gone needs a new home',
+);
+assert.equal(
+  needsNewHome({ target: RULE_VARIES }, new Set()),
+  false,
+  'a rule that asks needs no envelope',
 );
 
 console.log('runway convert item: ok');
