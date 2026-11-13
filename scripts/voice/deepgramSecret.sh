@@ -12,10 +12,14 @@ need() {
 
 need curl "It ships with macOS and most Linux systems."
 need firebase "Install it with: npm install -g firebase-tools"
-firebase login:list 2>/dev/null | grep -q '@' || { echo "✗ The firebase CLI isn't signed in. Run: firebase login" >&2; exit 1; }
+source "$(dirname "$0")/../lib/firebaseLogin.sh"; require_firebase_login
 [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste the key." >&2; exit 1; }
 
-echo "1. Open $KEYS_PAGE, go to API Keys, click \"Create a key\", and give it the \"Member\" role."
+echo "1. Open $KEYS_PAGE, go to API Keys, click \"Create a key\", and fill it in:"
+echo "     - Name: moondreams-voice"
+echo "     - Role: Member"
+echo "     - Expiry, if it asks: never (or the furthest date it allows)"
+echo "   Then copy the key now: Deepgram shows it only once."
 echo "   (A new Deepgram account comes with free credit, enough for the whole benchmark.)"
 printf '2. Paste the key here (it stays hidden) and press Enter: '
 read -rs key || true

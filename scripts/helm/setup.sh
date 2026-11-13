@@ -15,8 +15,10 @@ for arg in "$@"; do
   esac
 done
 
+source scripts/lib/firebaseLogin.sh
+
 CURRENT="starting"
-trap 'echo "✗ Stopped at: $CURRENT. Fix that and run npm run helm:setup again; finished steps are skipped." >&2' ERR
+trap 'status=$?; (( status == 0 )) || echo "✗ Stopped at: $CURRENT. Fix that and run npm run helm:setup again; finished steps are skipped." >&2' EXIT
 
 DONE_LIST=""
 SKIPPED_LIST=""
@@ -149,10 +151,7 @@ check_tools() {
     fi
   fi
   align_gcloud_project
-  if (( ! DRY )) && ! firebase login:list 2>/dev/null | grep -q '@'; then
-    ask "The firebase CLI isn't signed in. Run 'firebase login' now?" y || { echo "✗ Run: firebase login" >&2; exit 1; }
-    firebase login
-  fi
+  (( DRY )) || require_firebase_login
   HAVE_GCLOUD=1
   echo "✓ Tools ready: gcloud signed in as $account, project $PROJECT"
 }

@@ -28,6 +28,7 @@ echo "     - Scopes: add openid, email, https://www.googleapis.com/auth/calendar
 echo "       Gmail's and Drive's scopes are restricted: only the test users can connect them until Google reviews the app. Contacts is read-only; Google's classification of it is unconfirmed."
 echo "  2. Open $CREDENTIALS_PAGE, then Create credentials, OAuth client ID."
 echo "     - Application type: Web application."
+echo "     - Name: Moondreams apps web"
 echo "     - Authorized JavaScript origins: https://apps.moondreams.dev"
 echo "     - Authorized redirect URIs: https://apps.moondreams.dev/helm"
 echo "  3. Save the client, then run: npm run connections:google-secrets"
