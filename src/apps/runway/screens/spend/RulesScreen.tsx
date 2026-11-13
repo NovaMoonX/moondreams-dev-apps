@@ -7,9 +7,10 @@ import {
   Trash2,
 } from 'lucide-react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import AppCheckbox from '@/components/AppCheckbox';
 import FormSheet from '@/components/FormSheet';
 import Pill from '@/components/Pill';
 import SearchInput from '@/components/SearchInput';
@@ -23,11 +24,7 @@ import InlineNotice from '@/components/InlineNotice';
 import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
-import {
-  RULE_WORDS,
-  RUNWAY_SEARCH_THRESHOLD,
-  TICK_HIT_CLASS,
-} from '@apps/runway/constants';
+import { RULE_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { findTakeovers, RULE_VARIES } from '@apps/runway/engine/rules';
 import RuleSheet from '@apps/runway/forms/RuleSheet';
@@ -157,8 +154,7 @@ function GroupHead({
       label={
         isSelecting ? (
           <span className='flex items-center gap-2'>
-            <Checkbox
-              className={TICK_HIT_CLASS}
+            <AppCheckbox
               checked={isAll}
               indeterminate={ticked > 0 && !isAll}
               onCheckedChange={onToggle}

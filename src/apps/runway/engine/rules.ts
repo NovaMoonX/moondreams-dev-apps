@@ -108,21 +108,16 @@ export interface RuleTakeover {
   by: OpenRule;
 }
 
-/** For each rule about to be removed, the remaining rule that would then place purchases it caught; a rule that asks, waits for a new home or ranks above it (so it already won those purchases) is never named. */
+/** For each rule about to be removed, the remaining rule that would then place purchases it caught, ranked as `findRule` ranks them; nothing when the rule that wins next asks or is paused itself (those purchases wait), or when none fits. */
 export function findTakeovers(
   removing: readonly OpenRule[],
   rules: readonly OpenRule[],
   liveEnvelopeIds: ReadonlySet<string>,
 ): RuleTakeover[] {
   const goingIds = new Set(removing.map((rule) => rule.id));
-  const left = rules.filter(
-    (rule) =>
-      !goingIds.has(rule.id) &&
-      rule.target !== RULE_VARIES &&
-      liveEnvelopeIds.has(rule.target),
-  );
+  const left = rules.filter((rule) => !goingIds.has(rule.id));
   return removing.flatMap((removed) => {
-    const isBroad = isBroadMerchant(removed.merchantKey, rules);
+    const isBroad = isBroadMerchant(removed.merchantKey, left);
     const [by] = left
       .filter(
         (rule) =>
@@ -136,7 +131,9 @@ export function findTakeovers(
           !(isBroad && rule.category !== null && rule.merchantKey === null),
       )
       .sort(compareRules);
-    return by ? [{ removed, by }] : [];
+    return by && by.target !== RULE_VARIES && liveEnvelopeIds.has(by.target)
+      ? [{ removed, by }]
+      : [];
   });
 }
 

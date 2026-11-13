@@ -96,4 +96,31 @@ assert.deepEqual(
   'a kind-of-place rule never takes a store that sells everything',
 );
 
+const askOnDiscover = rule({ cardId: 'discover', target: RULE_VARIES });
+const laterDiscover = rule({ cardId: 'discover' });
+assert.deepEqual(
+  findTakeovers([safeway], [safeway, askOnDiscover, laterDiscover], live),
+  [],
+  'an ask rule that ranks next wins, so the live rule under it is not named',
+);
+const pausedDiscover = rule({ cardId: 'discover', target: 'ended' });
+const latestDiscover = rule({ cardId: 'discover' });
+assert.deepEqual(
+  findTakeovers([safeway], [safeway, pausedDiscover, latestDiscover], live),
+  [],
+  'a paused rule that ranks next holds the purchases, so nothing takes over',
+);
+
+const costcoAsk = rule({
+  merchantKey: 'costco wholesale',
+  merchantName: 'Costco Wholesale',
+  target: RULE_VARIES,
+});
+const anyGroceries = rule({ category: null, cardId: 'visa' });
+assert.equal(
+  findTakeovers([costcoAsk], [costcoAsk, anyGroceries], live)[0]?.by.id,
+  anyGroceries.id,
+  'an ask rule being removed no longer makes its store broad',
+);
+
 console.log('runwayRuleTakeover: all checks passed');

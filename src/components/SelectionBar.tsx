@@ -62,10 +62,11 @@ function SelectionBar({
   return (
     <>
       <div
-        className={join(
-          'h-24 [@media(max-height:699px)]:h-20',
-          isStacked && 'h-36 [@media(max-height:699px)]:h-32',
-        )}
+        className={
+          isStacked
+            ? 'h-36 [@media(max-height:699px)]:h-32'
+            : 'h-24 [@media(max-height:699px)]:h-20'
+        }
         aria-hidden='true'
       />
       <div className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-30 border-t backdrop-blur [&_.form-footer]:mx-auto [&_.form-footer]:max-w-2xl [&_.form-footer]:px-4 [&_.form-footer]:pt-3 [&_.form-footer]:pb-[calc(0.75rem+env(safe-area-inset-bottom))] [@media(max-height:699px)]:[&_.form-footer]:pt-2 [@media(max-height:699px)]:[&_.form-footer]:pb-[calc(0.5rem+env(safe-area-inset-bottom))]'>
