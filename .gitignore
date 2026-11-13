@@ -43,3 +43,6 @@ __pycache__/
 # Throwaway screenshot harness (pr-wrap-up), never committed
 harness.html
 src/__harness.tsx
+
+# Voice benchmark output (npm run voice:benchmark)
+voice-benchmark/

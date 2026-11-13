@@ -5,6 +5,8 @@ import { join } from 'node:path';
 const ROOT = 'src/apps/helm/components';
 const COPY_FILE = 'src/apps/helm/constants.ts';
 const DEFAULT_NAME = 'Nomos';
+// An identifier that contains the name (`howNomosSeesYou`) is code, not copy.
+const NAME_AS_WORD = new RegExp(`(?<![A-Za-z])${DEFAULT_NAME}(?![a-z])`);
 const QUOTED_APP_NAME = /['"`>][^'"`<]*\bHelm\b/;
 
 // Line-based: a comment or a console line is ignored, and a template literal's continuation line is checked only when it is quoted.
@@ -38,7 +40,7 @@ const problems = [
   ...copyLines(),
 ].flatMap(({ path, line: rawLine, number }) => {
   const line = withoutComment(rawLine);
-  if (line.includes(DEFAULT_NAME))
+  if (NAME_AS_WORD.test(line))
     return [
       `${path}:${number} names "${DEFAULT_NAME}"; use useAssistantName() and a template in constants.ts`,
     ];

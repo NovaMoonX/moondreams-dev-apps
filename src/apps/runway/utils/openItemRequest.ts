@@ -5,6 +5,8 @@ import type { PlanSection } from '@apps/runway/types';
 export interface OpenItemRequest {
   itemId: string;
   step: string | null;
+  /** The open event the opened item's change form starts as part of; null opens the sheet as usual. */
+  eventId: string | null;
   /** The Plan view to land on when the opened sheet closes, for an item opened from another view's row. */
   returnTo: PlanSection | null;
 }

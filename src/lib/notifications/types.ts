@@ -19,6 +19,8 @@ export interface Reminder {
   recurrence: ReminderRecurrence;
   /** `false` when the page that scheduled it tells the person by itself (a ringing timer), so the in-app toast skips it. Null or missing: it toasts. */
   inAppToast: boolean | null;
+  /** When the sender last pushed it; null until then, and missing on reminders saved before it was read. */
+  lastSentAt: number | null;
   createdBy: string;
   createdAt: number;
 }

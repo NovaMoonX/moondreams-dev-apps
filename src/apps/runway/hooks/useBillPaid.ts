@@ -14,6 +14,8 @@ import {
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
+import { getCoveredCents } from '@apps/runway/engine/billCover';
+import { selectBillCover } from '@apps/runway/store/selectors/billCoverSelectors';
 import type { Cents } from '@apps/runway/types';
 import { countMarks } from '@apps/runway/engine/progress';
 import { inTurn } from '@apps/runway/hooks/paidQueue';
@@ -190,7 +192,13 @@ export function useBillPaid({
     if (amountCents === undefined && needsPaidAmount(payment)) return null;
     const unfundedCents = Math.max(
       0,
-      payment.totalCents - payment.heldNowCents,
+      payment.totalCents -
+        payment.heldNowCents -
+        getCoveredCents(
+          selectBillCover(store.getState()),
+          billId,
+          payment.dueOn,
+        ),
     );
     if (unfundedCents > 0 && !isQuick && amountCents === undefined) {
       const isConfirmed = await confirm({
