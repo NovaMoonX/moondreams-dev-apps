@@ -161,6 +161,10 @@ export interface Item {
   sale: ItemSaleRecord | null;
   /** The last 50 status changes, oldest first. */
   statusHistory: StatusChange[];
+  /** The bundle this thing belongs to; a thing is in at most one. */
+  bundleId: string | null;
+  /** Sold only with its bundle while the bundle has two or more things left in its deal. */
+  isBundleOnly: boolean;
   /** The most recent Copy listing text, so Mark sold can say to take that listing down. */
   listingCopiedAt: number | null;
   listingCopiedBy: string | null;
@@ -168,6 +172,84 @@ export interface Item {
   createdAt: number;
   lastEditedAt: number | null;
   lastEditedBy: string | null;
+}
+
+/** A bundle's state: on offer, held for one buyer as a whole, or sold as a whole. */
+export type BundleStatus = 'ACTIVE' | 'PENDING' | 'SOLD';
+
+/** Which act wrote a bundle history entry; the words of a history row come from it. */
+export type BundleChangeKind =
+  | 'CREATE'
+  | 'EDIT'
+  | 'SET_PRICE'
+  | 'THING_LEFT'
+  | 'THING_BACK'
+  | 'MARK_PENDING'
+  | 'BACK_TO_AVAILABLE'
+  | 'MARK_SOLD'
+  | 'CHANGE_PAID'
+  | 'NOT_SOLD'
+  | 'UNDO_SOLD';
+
+/** One entry of a bundle's history; never carries a buyer's details. */
+export interface BundleChange {
+  kind: BundleChangeKind;
+  byUid: string;
+  at: number;
+  /** The thing that left or came back. */
+  itemId: string | null;
+  /** That thing's status after it left (Pending, Sold, taken off). */
+  itemStatus: ItemStatus | null;
+  /** The bundle price after the change, or what was paid for a sale. */
+  priceCents: number | null;
+  fromPriceCents: number | null;
+}
+
+/** What a bundle sold for as a whole; each thing in its deal carries its share in its own `sale`. */
+export interface BundleSaleRecord {
+  priceCents: number;
+  method: PaymentMethod | null;
+  /** A date-only value (UTC midnight). */
+  soldOn: number;
+  markedBy: string;
+  markedAt: number;
+}
+
+/** Things sold together for less (`apps/going-once/sales/{saleId}/bundles/{bundleId}`). */
+export interface Bundle {
+  id: string;
+  saleId: string;
+  name: string;
+  /** Every thing in the bundle, in order, including ones that have gone on their own. */
+  itemIds: string[];
+  /** What the bundle costs now; drops by a thing's asking price when it goes on its own, never below 0. */
+  priceCents: number;
+  status: BundleStatus;
+  /** The things a hold or a sale of the whole bundle covers; `null` while Active. */
+  dealItemIds: string[] | null;
+  sale: BundleSaleRecord | null;
+  /** How many things had gone when someone chose Keep the bundle; the suggestion returns once another goes. */
+  keptAtGoneCount: number | null;
+  /** The last 50 changes, oldest first. */
+  history: BundleChange[];
+  createdBy: string;
+  createdAt: number;
+  lastEditedAt: number | null;
+  lastEditedBy: string | null;
+}
+
+/** A bundle as the public page shows it: only what is still on offer, and a count of what is gone. */
+export interface PublicBundle {
+  id: string;
+  name: string;
+  priceCents: number;
+  /** The asking prices of `thingIds` added up. */
+  separateCents: number;
+  /** The public things in the deal, in the bundle's order. */
+  thingIds: string[];
+  /** Things that have gone on their own; never their names. */
+  goneCount: number;
+  status: Extract<ItemStatus, 'AVAILABLE' | 'PENDING'>;
 }
 
 /** One photo's two public copies (480px and 1,280px WebP), as Storage paths. */
@@ -190,6 +272,10 @@ export interface PublicThing {
   /** The store's page, an http(s) link, set only when the seller chose to show it. */
   storeUrl: string | null;
   status: Extract<ItemStatus, 'AVAILABLE' | 'PENDING'>;
+  /** The public bundle it is part of. */
+  bundleId: string | null;
+  /** True only while it can't be bought on its own (its bundle still has two or more things on offer). */
+  isBundleOnly: boolean;
   /** Cover first, in the thing's order; only photos whose copies exist. */
   photos: PublicPhoto[];
 }
@@ -201,6 +287,7 @@ export type SalePageResult =
       status: 'ok';
       sale: Pick<Sale, 'name' | 'pickupArea' | 'buyerNote' | 'paymentMethods'>;
       things: PublicThing[];
+      bundles: PublicBundle[];
       /** True when the signed-in visitor is the seller or a co-seller. */
       isMember: boolean;
     };
@@ -217,6 +304,10 @@ export interface Inquiry {
   saleId: string;
   itemId: string;
   itemTitleAtSend: string;
+  /** Set when the buyer asked about a whole bundle; the inquiry sits on its first thing. */
+  bundleId: string | null;
+  /** The bundle as it read when sent ("Cat stuff (4 things)"). */
+  bundleLabelAtSend: string | null;
   /** `null` once the sale's contacts are cleared. */
   name: string | null;
   email: string | null;
@@ -241,6 +332,8 @@ export type InterestResult =
 export interface InterestRequest {
   linkId: string;
   itemId: string;
+  /** Set to ask about the bundle the thing is part of. */
+  bundleId: string | null;
   name: string;
   contact: string;
   message: string;

@@ -103,6 +103,11 @@ export const MAX_BUYER_NAME_LENGTH = 80;
 /** How many status changes a thing keeps. */
 export const MAX_STATUS_HISTORY = 50;
 
+export const MAX_BUNDLE_NAME_LENGTH = 60;
+/** A bundle starts with at least two things and holds at most this many. */
+export const MIN_BUNDLE_THINGS = 2;
+export const MAX_BUNDLE_THINGS = 30;
+
 /** How long after adding a thing its co-seller can still delete it; `firestore.rules` holds the same ten minutes. */
 export const CO_SELLER_DELETE_WINDOW_MS = 10 * 60_000;
 
