@@ -400,18 +400,21 @@ function HorizonEndView({
         ),
         description:
           [
-            holdsMoney
+            holdsMoney && where.kind === 'next'
+              ? mask(HORIZON_END_WORDS.nextYearLinedUpWith(live.name, money))
+              : null,
+            holdsMoney && where.kind !== 'next'
               ? mask(
                   where.kind === 'free'
                     ? HORIZON_END_WORDS.movedFree(money)
                     : where.kind === 'place'
                       ? HORIZON_END_WORDS.movedPlace(money, where.name)
-                      : where.kind === 'next'
-                        ? HORIZON_END_WORDS.movedPlace(money, nextTitle)
-                        : HORIZON_END_WORDS.movedHeld(money),
+                      : HORIZON_END_WORDS.movedHeld(money),
                 )
               : null,
-            makesNext ? HORIZON_END_WORDS.nextYearLinedUp(live.name) : null,
+            makesNext && !(holdsMoney && where.kind === 'next')
+              ? HORIZON_END_WORDS.nextYearLinedUp(live.name)
+              : null,
             changesPick === 'cancel' && fresh.length > 0
               ? HORIZON_END_WORDS.changesStayCancelled
               : null,

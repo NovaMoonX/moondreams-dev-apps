@@ -935,6 +935,8 @@ export const HORIZON_END_WORDS = {
     `Next year's ${name}: around ${around}${startsOn === null ? '' : `, saving from ${startsOn}`}`,
   moneyToNext: (name: string) => `Moves to next year's ${name}`,
   nextYearLinedUp: (name: string) => `Next year's ${name} is lined up.`,
+  nextYearLinedUpWith: (name: string, money: string) =>
+    `Next year's ${name} is lined up and starts with the ${money}.`,
   nextYearQuestion: 'Just this year, or every year?',
   justThisYearTitle: 'Just this year',
   justThisYearBody: "Calls it off, and lines up next year's.",
