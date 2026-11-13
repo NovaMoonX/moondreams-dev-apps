@@ -1003,6 +1003,47 @@ export const HELM_COPY = {
   voiceWake: (name: string) =>
     `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple.`,
   voiceWakeLocked: "This browser can't listen for a phrase.",
+  voiceDeviceOnlyOnOffline:
+    "Your speech isn't sent anywhere: this phone turns it into words itself, and answers are read by this device's voice.",
+  voiceDeviceOnlyOffOffline:
+    "Online, Deepgram turns your speech into words for clearer listening. This phone listens itself when it can't.",
+  voiceWakeOffline: (name: string) =>
+    `While this is open on screen, this phone listens for "Hey ${name}" itself. Nothing you say leaves it.`,
+  voiceOfflineTitle: 'Hear me offline',
+  voiceOfflineOffer: (name: string, sizeMb: number) =>
+    `Talk to ${name} with no connection. Runs on this phone. A one-time download of ${sizeMb} MB from this site, best on Wi-Fi.`,
+  voiceOfflineDownload: 'Download',
+  voiceOfflineDownloading: (loadedMb: number, sizeMb: number) =>
+    `Downloading… ${loadedMb} of ${sizeMb} MB`,
+  voiceOfflineCancel: 'Cancel',
+  voiceOfflineReady: (sizeMb: number) =>
+    `Ready. Talk works offline on this phone. It keeps ${sizeMb} MB here.`,
+  voiceOfflineRemove: 'Remove from this phone',
+  voiceOfflineRemoved: 'Removed. Talk needs a connection again on this phone.',
+  voiceOfflineUndo: 'Undo',
+  voiceOfflineTryAgain: 'Try again',
+  voiceOfflineStopped: 'The download stopped, so nothing was kept.',
+  voiceOfflineNoRoom:
+    "There isn't room on this phone to keep it, so nothing was kept. Free up some space and try again.",
+  voiceOfflineCheckFailed:
+    "The download didn't match what was expected, so nothing was kept.",
+  voiceOfflineStartFailed:
+    "It's downloaded but couldn't start on this phone. Remove it, then download it again.",
+  voiceOfflineCredits: (credits: string) =>
+    `Uses ${credits}, all open source. What you say stays on this phone.`,
+  voiceOfflineBlocked: {
+    browser:
+      "This browser can't run offline listening. Talk needs a connection here.",
+    simd: "This phone's browser is too old to run offline listening. Talk needs a connection here.",
+    audio:
+      "This browser can't share its microphone with offline listening. Talk needs a connection here.",
+    memory:
+      "This phone doesn't have the memory for offline listening. Talk needs a connection here.",
+    space:
+      "This phone doesn't have room for offline listening. Talk needs a connection here.",
+    language:
+      'Offline listening understands English only for now. Talk needs a connection here.',
+  },
   voiceDone: 'Done',
   voiceModeFailed: "Couldn't change that. Try again.",
   voiceOnPhone: 'Listening with this browser for the rest of today.',

@@ -452,27 +452,27 @@ The person can talk over a spoken reply and it stops at once, hearing their firs
 **Files:** `src/lib/speech/onDevice/{capability,modelStore,recognizerWorker,onDeviceStt}.ts`, `src/hooks/useOnDeviceRecognition.ts`, `public/speech/asr/*` + `NOTICE`, `src/lib/speech/voice/{voiceRouter,bargeIn}.ts`, `src/hooks/useVoiceConversation.ts` (wake listening on the model), `scripts/checks/speechShared.ts` (file list widened), `scripts/checks/voiceRouter.ts`, `src/apps/helm/components/voice/VoiceSettings.tsx` ("Hear me offline" row), `vite.config.ts` or the service worker's cache list (the model files), `CLAUDE.md` (Pattern index), `docs/conventions/code.md`
 **Context:** `TECHNICAL.md` section 20 ("On-device recognition", "Routing", "Wake word, barge-in and hands-free"); `useNaturalVoice` and its licence row as the pattern; CLAUDE.md "A vendored third-party asset keeps its licence beside it".
 ### Description
-In voice settings, "Hear me offline" downloads a speech-recognition model to the phone (the row says the size, about 40–75 MB, before it starts), after checking the phone can run it. From then on Helm hears the person with no connection on any phone, talking over a reply works offline too, and "Hey {name}" listens on the phone itself so nothing leaves it.
+In voice settings, "Hear me offline" downloads a speech-recognition model to the phone (the row says the size, 57 MB, before it starts), after checking the phone can run it. From then on Helm hears the person with no connection on any phone, talking over a reply works offline too, and "Hey {name}" listens on the phone itself so nothing leaves it.
 ### Possible Approach
 1. Build sherpa-onnx's WebAssembly speech-recognition-only target with a streaming English Zipformer (int8); measure size and real-time factor on a mid-range Android phone and an iPhone; fall back to `vosk-browser` if it fails. Correct `TECHNICAL.md`'s unverified sizes.
 2. Licences: confirm Apache-2.0 (sherpa-onnx) and MIT (ONNX Runtime) for the release used, prove from the build's file list that eSpeak NG (GPL-3.0) is not inside, and record the model weights' licence; `NOTICE` beside the files and the licences named on the row, as the natural voice does.
 3. `capability.ts` (WebAssembly SIMD, `AudioWorklet`, storage estimate, memory hint) gates the row; `modelStore.ts` downloads from the site's origin with a hash check, a progress line and Cancel, caches it, and removes it on "Remove".
 4. `recognizerWorker.ts` runs the model in a Web Worker on the PCM worklet's frames; `onDeviceStt.ts` is an `SttAdapter`; the router prefers it whenever cloud listening isn't used, and for wake listening.
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** download the model ("Hear me offline").
-- [ ] **Read:** the row's state (size, downloading with progress, ready, can't run here).
-- [ ] **Update:** n/a.
-- [ ] **Delete:** Remove frees the space.
+- [x] **Create:** download the model ("Hear me offline").
+- [x] **Read:** the row's state (size, downloading with progress, ready, can't run here).
+- [x] **Update:** n/a.
+- [x] **Delete:** Remove frees the space.
 ### Success Criteria
 - [ ] The person can turn on "Hear me offline", go into airplane mode, and still talk to Helm, interrupt a reply by voice and say "Hey {name}".
-- [ ] A phone that can't run it, or lacks the space, is told why before any download; a cancelled or failed download leaves nothing cached.
-- [ ] No audio leaves the device while the model listens (network log); the model files are served from the site's origin and checked by hash.
-- [ ] The licences are named in the PR with the eSpeak NG check's evidence; anything not confirmed is listed in the PR as unverified and the owner decides whether to ship it.
-- [ ] `check:pinch-voice` covers `src/lib/speech/onDevice/**` and `useOnDeviceRecognition.ts`; shared code has no Helm words.
-- [ ] No rules or schema change (download state is browser state); stated.
-- [ ] Conventions: `code.md`'s "Voice for any app" bullet gains the on-device model; Pattern index line for `useOnDeviceRecognition`.
+- [x] A phone that can't run it, or lacks the space, is told why before any download; a cancelled or failed download leaves nothing cached.
+- [x] No audio leaves the device while the model listens (network log); the model files are served from the site's origin and checked by hash.
+- [x] The licences are named in the PR with the eSpeak NG check's evidence; anything not confirmed is listed in the PR as unverified and the owner decides whether to ship it.
+- [x] `check:pinch-voice` covers `src/lib/speech/onDevice/**` and `useOnDeviceRecognition.ts`; shared code has no Helm words.
+- [x] No rules or schema change (download state is browser state); stated.
+- [x] Conventions: `code.md`'s "Voice for any app" bullet gains the on-device model; Pattern index line for `useOnDeviceRecognition`.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
-- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+- [x] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 
 ### Issue 18: Connected apps: the site's read contract, grants and the Pinch adapter
 

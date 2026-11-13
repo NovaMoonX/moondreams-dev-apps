@@ -9,6 +9,10 @@ import AppToggle from '@/components/AppToggle';
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  useOnDeviceRecognition,
+  type OnDeviceRecognition,
+} from '@/hooks/useOnDeviceRecognition';
 import { useAppSelector } from '@/store';
 import { canUseBrowserStt } from '@/lib/speech/voice/browserStt';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -71,7 +75,168 @@ function SwitchRow({
   );
 }
 
-/** Where listening may happen: with the voice service while online, or in this browser only. */
+const toMb = (bytes: number) => Math.round(bytes / 1_000_000);
+
+type OfflineAction = 'download' | 'cancel' | 'remove' | 'retry' | null;
+
+const readOffline = (
+  onDevice: OnDeviceRecognition,
+  name: string,
+): { description: string; action: OfflineAction } => {
+  if (onDevice.isDownloading) {
+    return {
+      description: HELM_COPY.voiceOfflineDownloading(
+        toMb(onDevice.loadedBytes),
+        onDevice.sizeMb,
+      ),
+      action: 'cancel',
+    };
+  }
+  if (onDevice.problem === 'start') {
+    return { description: HELM_COPY.voiceOfflineStartFailed, action: 'remove' };
+  }
+  if (onDevice.isOn) {
+    return {
+      description: HELM_COPY.voiceOfflineReady(onDevice.sizeMb),
+      action: 'remove',
+    };
+  }
+  if (onDevice.problem === 'space') {
+    return { description: HELM_COPY.voiceOfflineNoRoom, action: 'retry' };
+  }
+  if (onDevice.problem !== null) {
+    return {
+      description:
+        onDevice.problem === 'check'
+          ? HELM_COPY.voiceOfflineCheckFailed
+          : HELM_COPY.voiceOfflineStopped,
+      action: 'retry',
+    };
+  }
+  return {
+    description: HELM_COPY.voiceOfflineOffer(name, onDevice.sizeMb),
+    action: onDevice.isStored === false ? 'download' : null,
+  };
+};
+
+/** The opt-in download of the recognizer that hears the person on this phone, in each of its states; a phone that can't run it is told why, with a lock and no button. */
+function OfflineListeningRow({
+  onDevice,
+  name,
+}: {
+  onDevice: OnDeviceRecognition;
+  name: string;
+}) {
+  const { addToast } = useToast();
+
+  if (onDevice.block !== null) {
+    return (
+      <SwitchRow
+        title={HELM_COPY.voiceOfflineTitle}
+        description={HELM_COPY.voiceOfflineBlocked[onDevice.block]}
+        checked={false}
+        isLocked
+        onChange={() => undefined}
+      />
+    );
+  }
+
+  const { description, action } = readOffline(onDevice, name);
+  const progress = Math.round(
+    (onDevice.loadedBytes / onDevice.totalBytes) * 100,
+  );
+
+  const remove = () => {
+    onDevice.remove();
+    addToast({
+      title: HELM_COPY.voiceOfflineRemoved,
+      type: 'info',
+      action: { label: HELM_COPY.voiceOfflineUndo, onClick: onDevice.download },
+    });
+  };
+
+  return (
+    <div className='flex flex-col gap-2 text-pretty'>
+      <div>
+        <p className='text-[15px] leading-[21px] font-medium'>
+          {HELM_COPY.voiceOfflineTitle}
+        </p>
+        <p
+          className='text-muted-foreground text-[15px] leading-[21px]'
+          aria-live='polite'
+        >
+          {description}
+        </p>
+      </div>
+      {onDevice.isDownloading && (
+        <div
+          className='bg-muted h-1.5 overflow-hidden rounded-full'
+          role='progressbar'
+          aria-label={HELM_COPY.voiceOfflineTitle}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+        >
+          <div
+            className='bg-primary h-full rounded-full'
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+      {action !== null && (
+        <div>
+          {action === 'download' && (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              onClick={onDevice.download}
+            >
+              {HELM_COPY.voiceOfflineDownload}
+            </Button>
+          )}
+          {action === 'retry' && (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              onClick={onDevice.download}
+            >
+              {HELM_COPY.voiceOfflineTryAgain}
+            </Button>
+          )}
+          {action === 'cancel' && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className='-ml-2'
+              onClick={onDevice.cancel}
+            >
+              {HELM_COPY.voiceOfflineCancel}
+            </Button>
+          )}
+          {action === 'remove' && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className='-ml-2'
+              onClick={remove}
+            >
+              {HELM_COPY.voiceOfflineRemove}
+            </Button>
+          )}
+        </div>
+      )}
+      <p className='text-muted-foreground text-[13px] leading-[18px]'>
+        {HELM_COPY.voiceOfflineCredits(onDevice.credits)}
+      </p>
+    </div>
+  );
+}
+
+/** Where listening may happen: with the voice service while online, or on this device only (the downloaded recognizer, else the browser's own). */
 function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -85,7 +250,10 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
   const isHandsFreeOn = useAppSelector(
     (state) => state.helm.profile?.isHandsFreeOn ?? true,
   );
-  const canListenForPhrase = canUseBrowserStt();
+  const onDevice = useOnDeviceRecognition({
+    lang: navigator.language || 'en-US',
+  });
+  const canListenForPhrase = canUseBrowserStt() || onDevice.isOn;
 
   const change = (isOn: boolean) => {
     if (!user) return;
@@ -131,9 +299,13 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
         <SwitchRow
           title={HELM_COPY.voiceDeviceOnlyTitle}
           description={
-            isDeviceOnly
-              ? HELM_COPY.voiceDeviceOnlyOn
-              : HELM_COPY.voiceDeviceOnlyOff
+            onDevice.isOn
+              ? isDeviceOnly
+                ? HELM_COPY.voiceDeviceOnlyOnOffline
+                : HELM_COPY.voiceDeviceOnlyOffOffline
+              : isDeviceOnly
+                ? HELM_COPY.voiceDeviceOnlyOn
+                : HELM_COPY.voiceDeviceOnlyOff
           }
           checked={isDeviceOnly}
           onChange={change}
@@ -151,14 +323,17 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
         <SwitchRow
           title={HELM_COPY.voiceWakeTitle(name)}
           description={
-            canListenForPhrase
-              ? HELM_COPY.voiceWake(name)
-              : HELM_COPY.voiceWakeLocked
+            onDevice.isOn
+              ? HELM_COPY.voiceWakeOffline(name)
+              : canListenForPhrase
+                ? HELM_COPY.voiceWake(name)
+                : HELM_COPY.voiceWakeLocked
           }
           checked={canListenForPhrase && isWakeWordOn}
           isLocked={!canListenForPhrase}
           onChange={(isOn) => changeSwitch(setWakeWordOn, isOn)}
         />
+        <OfflineListeningRow onDevice={onDevice} name={name} />
       </div>
     </DetailSheet>
   );

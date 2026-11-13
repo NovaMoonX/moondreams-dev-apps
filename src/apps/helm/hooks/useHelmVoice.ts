@@ -13,6 +13,7 @@ import { httpsCallable } from 'firebase/functions';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
 import { createSpeechSource } from '@/lib/speech/voice/speechSource';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
@@ -176,8 +177,18 @@ export function useHelmVoice() {
   const [showsPhoneLine, setShowsPhoneLine] = useState(false);
   const isHomeView = VIEW_KINDS[view] === 'home';
 
+  const lang = navigator.language || 'en-US';
+  // Started ahead of the first listen only where it will be the one listening: the phrase, or no cloud.
+  const onDevice = useOnDeviceRecognition({
+    lang,
+    isWarm:
+      keyStatus === 'ready' &&
+      (isWakeWordOn || voiceMode !== 'cloudWhenOnline'),
+  });
+
   const voice = useVoiceConversation({
-    lang: navigator.language || 'en-US',
+    lang,
+    isOnDeviceReady: onDevice.isOn,
     identity: voiceIdentity,
     endPhrases: END_PHRASES,
     onUtterance: (text, heardBy) => {
@@ -227,23 +238,29 @@ export function useHelmVoice() {
   }
 
   /** The phrase was heard: it starts what a Talk tap starts, from the page in front, or sends the words that came with it. */
-  function wakeUp(rest: string | null) {
+  function wakeUp(rest: string | null, heardBy: { sttProvider: string }) {
     if (!voice.isAvailable) return false;
     const page = isHomeView
       ? null
       : (selectTopScreen(store.getState())?.context ?? null);
     const isStarted =
-      rest === null ? talk(page) === 'started' : sendHeard(rest, page);
+      rest === null
+        ? talk(page) === 'started'
+        : sendHeard(rest, page, heardBy.sttProvider);
     if (isStarted && page !== null && !isAskRequested) void openAsk();
     return isStarted;
   }
 
-  function sendHeard(text: string, page: ScreenContext | null) {
+  function sendHeard(
+    text: string,
+    page: ScreenContext | null,
+    sttProvider: string,
+  ) {
     screen.current = page;
     setNotice(null);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
-    return voice.submit(text, 'browser');
+    return voice.submit(text, sttProvider);
   }
 
   async function handleUtterance(text: string, sttProvider: string) {
