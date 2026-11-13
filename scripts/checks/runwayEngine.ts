@@ -73,7 +73,6 @@ import {
   findRule,
   findPlacementRun,
   findRulePlacements,
-  getSharedTarget,
   isBroadMerchant,
   needsNewHome,
   RULE_VARIES,
@@ -20429,13 +20428,6 @@ checkHorizonMoves();
     false,
     'a rule that asks needs no envelope',
   );
-  assert.equal(
-    getSharedTarget([merchantRule, { ...kindRule, target: 'e-merchant' }]),
-    'e-merchant',
-    'rules that share one item',
-  );
-  assert.equal(getSharedTarget([merchantRule, kindRule]), null, 'they differ');
-  assert.equal(getSharedTarget([]), null, 'none share nothing');
 
   const own = (
     id: string,

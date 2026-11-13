@@ -5445,7 +5445,8 @@ export const RULE_WORDS = {
   changeChanged: (sentence: string) => `Rule changed: ${sentence}.`,
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
   homeHeading: 'Needs a new home',
-  goalNow: (name: string) => `${name} is a goal now`,
+  goalNow: (name: string) => `${name} is a goal now, so this rule is paused`,
+  pickNewEnvelope: 'Pick a new envelope.',
   groupTick: (label: string) => `Pick every rule in ${label}`,
   groupUntick: (label: string) => `Unpick every rule in ${label}`,
   groupPicked: (picked: number, total: number) =>
@@ -5457,10 +5458,10 @@ export const RULE_WORDS = {
   clearAll: 'Clear',
   done: 'Done',
   bulkSend: 'Send to an envelope',
-  bulkSendShort: 'Send',
-  bulkAsk: 'Ask me each time',
+  bulkSendShort: 'Send to…',
+  bulkAsk: 'Ask each time',
   bulkAskShort: 'Ask',
-  bulkDelete: 'Delete',
+  bulkDelete: 'Remove',
   bulkPickTitle: 'Which envelope?',
   bulkPickSub: (count: number) =>
     `${ruleCount(count)} will send purchases here.`,
@@ -5497,9 +5498,9 @@ export const RULE_WORDS = {
   changeUndoMoved: (count: number) =>
     `Put ${ruleCount(count)} back as ${count === 1 ? 'it was' : 'they were'}.`,
   changeUndoRemoved: (count: number) => `Made ${ruleCount(count)} again.`,
-  homeRowTitle: (count: number, goalName: string | null) =>
-    `${count} shop ${count === 1 ? 'rule lost its envelope' : 'rules lost their envelope'}${goalName === null ? '' : ` when ${goalName} became a goal`}`,
-  homeRowSub: 'Purchases they’d sort will be asked about',
+  homeRowTitle: (count: number) =>
+    `${count} shop ${count === 1 ? 'rule needs' : 'rules need'} a new home`,
+  homeRowSub: 'Paused until you pick one',
 } as const;
 
 const listNames = (names: readonly string[]) =>

@@ -4547,7 +4547,7 @@ async function writeSeedPurchases(
 }
 
 /**
- * Jamie's rules, sealed like the app seals them: Safeway, restaurants on the Venture X, everything on the Discover, Amazon asks every time, and Clay Studio points at the archived Pottery class envelope, so Rules lists it under "Needs a new home" and Home shows its row. Rules from an earlier run go first.
+ * Jamie's rules, sealed like the app seals them: Safeway, restaurants on the Venture X, everything on the Discover, Amazon asks every time, and Clay Studio points at the archived Pottery class envelope, so Rules lists it under "Needs a new home". Home's row waits in the quiet slot, which Jamie's warnings keep empty. Rules from an earlier run go first.
  * Only the Amazon charge is left to ask about; the Sweetgreen lunch waits on its merge offer, not on a rule.
  */
 async function seedRules(

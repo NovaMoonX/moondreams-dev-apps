@@ -112,7 +112,7 @@ function RuleSheet({
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
-  const { describe, getCardLabel, getEnvelopeName, findEnvelopeName, isEnded } =
+  const { describe, getCardLabel, getEnvelopeName, describeHome, isEnded } =
     useRuleNames();
   const rules = useAppSelector(selectRules);
   const history = useAppSelector((state) => state.runway.purchases);
@@ -477,7 +477,7 @@ function RuleSheet({
         )}
         {rule && isEnded(rule) && (
           <p className='text-muted-foreground text-sm'>
-            {RULE_WORDS.endedEnvelope(findEnvelopeName(rule.target))}
+            {describeHome(rule)}. {RULE_WORDS.pickNewEnvelope}
           </p>
         )}
         {error && (

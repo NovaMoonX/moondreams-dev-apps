@@ -2169,15 +2169,27 @@ export const selectRulesNeedingHome = createSelector(
   },
 );
 
-/** What each item that was turned into another became, by the old item's id, so a rule can say its envelope is a goal now. */
+/** What each item that was turned into another finally became, by the first item's id, following the chain to its end; an end that is archived is left out, so a rule can say its envelope is a goal now only while that goal is live. */
 export const selectBecameKinds = createSelector(
   [selectItems],
   (items): ReadonlyMap<string, PlanItemDoc['kind']> => {
-    const kinds = new Map(items.map((item) => [item.id, item.kind]));
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const findEnd = (
+      item: PlanItemDoc,
+      seen: ReadonlySet<string>,
+    ): PlanItemDoc | null => {
+      const next = byId.get(item.becameItemId ?? '');
+      if (next === undefined || seen.has(next.id)) return null;
+      return next.becameItemId
+        ? findEnd(next, new Set([...seen, next.id]))
+        : next;
+    };
     return new Map(
       items.flatMap((item) => {
-        const kind = kinds.get(item.becameItemId ?? '');
-        return kind === undefined ? [] : [[item.id, kind] as const];
+        const end = findEnd(item, new Set([item.id]));
+        return end === null || end.archivedAt !== null
+          ? []
+          : [[item.id, end.kind] as const];
       }),
     );
   },

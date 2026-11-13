@@ -190,7 +190,10 @@ const runInChunks = <Input, Done>(
           skipped: [...sofar.skipped, ...result.skipped],
           failed: sofar.failed,
         }),
-        () => ({ ...sofar, failed: [...sofar.failed, ...chunk] }),
+        (reason: unknown) => {
+          console.error(reason);
+          return { ...sofar, failed: [...sofar.failed, ...chunk] };
+        },
       );
     },
     Promise.resolve({ done: [], skipped: [], failed: [] }),

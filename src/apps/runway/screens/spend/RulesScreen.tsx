@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { Repeat } from 'lucide-react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
@@ -37,7 +37,6 @@ import {
   selectAllCards,
   selectEnvelopes,
   selectIsRulesLoaded,
-  selectBecameKinds,
   selectItemLooks,
   selectRules,
   selectRulesNeedingHome,
@@ -50,6 +49,19 @@ interface RulesScreenProps {
 }
 
 const HOME_KEY = 'needs-a-new-home';
+
+const NARROW_QUERY = '(max-width: 359px)';
+const subscribeNarrow = (onChange: () => void) => {
+  const list = window.matchMedia(NARROW_QUERY);
+  list.addEventListener('change', onChange);
+  return () => list.removeEventListener('change', onChange);
+};
+const useIsNarrow = () =>
+  useSyncExternalStore(
+    subscribeNarrow,
+    () => window.matchMedia(NARROW_QUERY).matches,
+    () => false,
+  );
 
 function EnvelopePickSheet({
   count,
@@ -160,7 +172,11 @@ function GroupHead({
               aria-label={tickLabel}
               onClick={onToggle}
             >
-              {label} · {RULE_WORDS.groupPicked(ticked, total)}
+              {label}
+              <span className='max-sm:hidden'>
+                {' '}
+                · {RULE_WORDS.groupPicked(ticked, total)}
+              </span>
             </Button>
           </span>
         ) : (
@@ -186,11 +202,11 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const homeless = useAppSelector((state) =>
     selectRulesNeedingHome(state, today),
   );
-  const becameKinds = useAppSelector(selectBecameKinds);
   const looks = useAppSelector(selectItemLooks);
   const cards = useAppSelector(selectAllCards);
   const isLoaded = useAppSelector(selectIsRulesLoaded);
-  const { describe, findEnvelopeName, getCardLabel } = useRuleNames();
+  const { describe, describeHome, getCardLabel } = useRuleNames();
+  const isNarrow = useIsNarrow();
   const { openView } = useRunwayUrlState();
   const selection = useSelection();
   const [query, setQuery] = useState('');
@@ -239,7 +255,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           ];
     }),
   ];
-  const selected = rules.filter((rule) => selection.ids.has(rule.id));
+  const selected = shown.filter((rule) => selection.ids.has(rule.id));
   const isNothingPicked = selected.length === 0;
   const canAsk = (rule: OpenRule) =>
     rule.merchantKey !== null && rule.target !== RULE_VARIES;
@@ -255,17 +271,9 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     selection.toggle(ids);
   };
 
-  const getDetail = (rule: OpenRule) => {
-    if (!homelessIds.has(rule.id)) return undefined;
-    const name = findEnvelopeName(rule.target);
-    return becameKinds.get(rule.target) === 'goal' && name !== null
-      ? RULE_WORDS.goalNow(name)
-      : RULE_WORDS.endedEnvelope(name);
-  };
-
   const renderRow = (rule: OpenRule, isCardLeftOut: boolean) => {
     const sentence = describe(rule, isCardLeftOut);
-    const detail = getDetail(rule);
+    const detail = homelessIds.has(rule.id) ? describeHome(rule) : undefined;
     return (
       <ItemRow
         key={rule.id}
@@ -581,7 +589,9 @@ function RulesScreen({ onClose }: RulesScreenProps) {
             {
               key: 'ask',
               label: RULE_WORDS.bulkAsk,
-              shortLabel: RULE_WORDS.bulkAskShort,
+              shortLabel: isNarrow
+                ? RULE_WORDS.bulkAskShort
+                : RULE_WORDS.bulkAsk,
               isDisabled: isNothingPicked || isWriting,
               onClick: () => void askEachTime(),
             },
