@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 
 import { useAppSelector } from '@/store';
-import { getGoalTrack, getPace } from '@apps/runway/engine/pace';
-import { fundingAtLevel, getExtras } from '@apps/runway/engine/parts';
+import { getGoalPaceStretches } from '@apps/runway/engine/goalTimeline';
+import { getTimelinePace, getTimelineTrack } from '@apps/runway/engine/pace';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import {
-  isCountedAt,
+  getGoalPaceDial,
+  getGoalPaceFunding,
   usePriorityDial,
 } from '@apps/runway/hooks/usePriorityDial';
 import {
@@ -15,7 +16,6 @@ import {
   selectHeldByItem,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { GoalSealed, Priority } from '@apps/runway/types';
 
 /** Every goal with the pace the plan's coming income days give it, at the priority dial the person has set. */
 export function useGoalPaces(today: number) {
@@ -28,30 +28,20 @@ export function useGoalPaces(today: number) {
   const { dial } = usePriorityDial();
 
   return useMemo(() => {
+    const paceStretchesByGoal = goals.map(({ item }) =>
+      getGoalPaceStretches(versions, item, today, (goal) =>
+        getGoalPaceFunding(goal, dial),
+      ),
+    );
     const priorDays = getPriorDays(
       items,
       versions,
       today,
       comingDays,
-      goals.map(({ version }) => version.payload.funding),
+      paceStretchesByGoal.flatMap((stretches) =>
+        stretches.map(({ goal }) => goal.funding),
+      ),
     );
-    /** The dial a goal's finish date is counted at: only a counted goal with an extra the dial leaves out moves. */
-    const getPaceDial = (goal: GoalSealed): Priority | null => {
-      if (dial === 'want' || !isCountedAt(goal.priority, dial)) return null;
-      const isTrimmed = getExtras(goal).some(
-        (extra) => !isCountedAt(extra.tier, dial),
-      );
-      return isTrimmed ? dial : null;
-    };
-    const getPaceFunding = (goal: GoalSealed) => {
-      const paceDial = getPaceDial(goal);
-      return paceDial === null
-        ? {}
-        : {
-            funding: fundingAtLevel(goal, paceDial) ?? goal.funding,
-            extras: null,
-          };
-    };
     const incomeDays = comingDays.map((day) => ({
       ...day,
       moneyCents: pick(
@@ -60,22 +50,22 @@ export function useGoalPaces(today: number) {
         'income',
       ),
     }));
-    return goals.map(({ item, version }) => {
-      const pace = getPace(
-        {
-          ...version.payload,
-          ...getPaceFunding(version.payload),
-          heldCents: heldByItem[item.id] ?? 0,
-        },
+    return goals.map(({ item, version }, index) => {
+      const paceStretches = paceStretchesByGoal[index];
+      const pace = getTimelinePace(
+        paceStretches,
+        heldByItem[item.id] ?? 0,
         incomeDays,
         priorDays,
+        version.payload,
       );
       return {
         item,
         payload: version.payload,
-        paceDial: getPaceDial(version.payload),
+        paceDial: getGoalPaceDial(version.payload, dial),
         pace,
-        track: getGoalTrack(version.payload, pace),
+        isSavingAhead: paceStretches.some((stretch) => stretch.isSaving),
+        track: getTimelineTrack(pace),
       };
     });
   }, [goals, comingDays, stance, heldByItem, items, versions, today, dial]);

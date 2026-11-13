@@ -1599,6 +1599,8 @@ Per request: the callable checks `request.auth` and App Check, builds the server
 
 ## 20. The voice service
 
+The plain-language overview (one turn, who listens and speaks in each environment, the offline model, the allowances, what happens when something fails) is `docs/voice.md`; this section is the detail and the build log.
+
 Voice is three layers that never know about each other: **listening** (speech to text), **reasoning** (the assistant, section 5) and **speaking** (text to speech). Reasoning only ever sees text in and text out; it never knows which voice listened or spoke. Listening and speaking are a provider-independent service with cloud and device adapters, built general so any app can use it, with Helm supplying only its words, phrases and voice identity.
 
 ### Adapters

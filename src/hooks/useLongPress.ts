@@ -5,6 +5,9 @@ export const LONG_PRESS_MS = 450;
 
 const HOLDING_ATTRIBUTE = 'data-pressing';
 
+/** A finger that travels this far is scrolling or swiping, not holding. */
+const MOVE_SLOP_PX = 10;
+
 const preventDefault = (event: Event) => event.preventDefault();
 
 let releaseGuard: (() => void) | null = null;
@@ -38,12 +41,13 @@ function guardPageUntilRelease(pointerId: number, didHold: () => boolean) {
 /**
  * Press and hold on touch or pen, right-click or the context-menu key on a computer, all calling
  * `onLongPress`; spread the handlers on a link or button and its ordinary tap still works. A scroll
- * cancels the hold, the tap that ends a hold doesn't also activate the element, and nothing gets selected
+ * or a sideways swipe cancels the hold, the tap that ends a hold doesn't also activate the element, and nothing gets selected
  * while the finger is down.
  */
 export function useLongPress(onLongPress: () => void, delayMs = LONG_PRESS_MS) {
   const timerRef = useRef<number | null>(null);
   const didHoldRef = useRef(false);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
 
   const cancel = () => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -56,11 +60,21 @@ export function useLongPress(onLongPress: () => void, delayMs = LONG_PRESS_MS) {
       cancel();
       // A mouse has right-click for this, so a slow click still activates the element.
       if (event.pointerType === 'mouse') return;
+      startRef.current = { x: event.clientX, y: event.clientY };
       guardPageUntilRelease(event.pointerId, () => didHoldRef.current);
       timerRef.current = window.setTimeout(() => {
         didHoldRef.current = true;
         onLongPress();
       }, delayMs);
+    },
+    onPointerMove: (event: PointerEvent) => {
+      const start = startRef.current;
+      if (timerRef.current === null || start === null) return;
+      const travel = Math.hypot(
+        event.clientX - start.x,
+        event.clientY - start.y,
+      );
+      if (travel > MOVE_SLOP_PX) cancel();
     },
     onPointerUp: cancel,
     onPointerLeave: cancel,

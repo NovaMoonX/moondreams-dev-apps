@@ -42,6 +42,14 @@ html.going-once-theme {
   --subview-radius: var(--radius-2xl);
 }
 
+/* A tick is round, like everything else at the sale, and filled with the ink green once ticked. */
+html.going-once-theme {
+  --checkbox-radius: 9999px;
+  --checkbox-border-width: 1.5px;
+  --checkbox-mark-width: 3;
+  --checkbox-filled: 1;
+}
+
 html.going-once-theme.dark {
   --color-background: #16130e;
   --color-foreground: #f3ecdc;
