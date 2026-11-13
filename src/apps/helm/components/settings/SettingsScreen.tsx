@@ -35,6 +35,7 @@ import { useConnections } from '@/lib/connections/useConnections';
 import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { formatClockTime } from '@/utils/formatUtils';
 import { helmAppName, helmTrustStore } from '@apps/helm/queries/helmKeyQueries';
 import {
@@ -62,7 +63,8 @@ function SettingsScreen({
   const tone = useAssistantTone();
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isSeesOpen, setIsSeesOpen] = useState(false);
-  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const { isVoiceSheetRequested, closeSheet } = useHelmUrlState();
+  const [isVoiceOpen, setIsVoiceOpen] = useState(isVoiceSheetRequested);
   const [isDayOpen, setIsDayOpen] = useState(false);
   const { grants: allGrants, isKnown } = useConnections({
     readerAppId: 'helm',
@@ -212,7 +214,10 @@ function SettingsScreen({
       <YourDaySheet isOpen={isDayOpen} onClose={() => setIsDayOpen(false)} />
       <VoiceSettings
         isOpen={isVoiceOpen}
-        onClose={() => setIsVoiceOpen(false)}
+        onClose={() => {
+          setIsVoiceOpen(false);
+          if (isVoiceSheetRequested) void closeSheet();
+        }}
       />
       <WhatTheAiSees isOpen={isSeesOpen} onClose={() => setIsSeesOpen(false)} />
     </>

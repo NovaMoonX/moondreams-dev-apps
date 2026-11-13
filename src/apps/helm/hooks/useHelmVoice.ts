@@ -131,6 +131,7 @@ export function useHelmVoice() {
   const uid = user?.uid ?? null;
   const [note, setNote] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [hasNoticeDoor, setHasNoticeDoor] = useState(false);
   const captures = useAppSelector(selectAllCaptures);
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
@@ -173,7 +174,8 @@ export function useHelmVoice() {
   );
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const topScreen = useAppSelector(selectTopScreen);
-  const { view, isAskRequested, openAsk } = useHelmUrlState();
+  const { view, isAskRequested, openAsk, openVoiceSettings } =
+    useHelmUrlState();
   const [showsPhoneLine, setShowsPhoneLine] = useState(false);
   const isHomeView = VIEW_KINDS[view] === 'home';
 
@@ -197,6 +199,10 @@ export function useHelmVoice() {
     onNothingHeard: (isAsked) => {
       interruptedCaptureId.current = null;
       if (isAsked) showNote(HELM_COPY.talkHeardNothing);
+    },
+    onDeviceListenFailed: (isAsked) => {
+      interruptedCaptureId.current = null;
+      if (isAsked) showNote(HELM_COPY.talkListenFailed);
     },
     onCloudHeld: () => setShowsPhoneLine(true),
     onBargeIn: () => {
@@ -225,6 +231,11 @@ export function useHelmVoice() {
     setNote(text);
     window.clearTimeout(noteId.current);
     noteId.current = window.setTimeout(() => setNote(null), NOTE_MS);
+  }
+
+  function showNotice(text: string, hasDoor: boolean) {
+    setNotice(text);
+    setHasNoticeDoor(hasDoor);
   }
 
   function say(line: string) {
@@ -258,6 +269,7 @@ export function useHelmVoice() {
   ) {
     screen.current = page;
     setNotice(null);
+    setHasNoticeDoor(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
     return voice.submit(text, sttProvider);
@@ -653,11 +665,21 @@ export function useHelmVoice() {
       voice.stop();
       return 'stopped' as const;
     }
+    if (!navigator.onLine && !onDevice.isOn) {
+      showNotice(
+        onDevice.block === null
+          ? HELM_COPY.talkNeedsConnection
+          : HELM_COPY.talkNeedsConnectionBlocked,
+        onDevice.block === null,
+      );
+      return 'blocked' as const;
+    }
     if (!voice.isAvailable) {
-      setNotice(
+      showNotice(
         voice.unavailableReason === 'no-permission'
           ? HELM_COPY.talkNeedsMicrophone
           : HELM_COPY.talkNeedsRecognition,
+        false,
       );
       return 'blocked' as const;
     }
@@ -667,6 +689,7 @@ export function useHelmVoice() {
   function startListening(page: ScreenContext | null) {
     screen.current = page;
     setNotice(null);
+    setHasNoticeDoor(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
     voice.listen();
@@ -678,7 +701,12 @@ export function useHelmVoice() {
     note,
     notice,
     showsPhoneLine,
-    clearNotice: () => setNotice(null),
+    hasNoticeDoor,
+    openVoiceSettings,
+    clearNotice: () => {
+      setNotice(null);
+      setHasNoticeDoor(false);
+    },
     talk,
     setSurfaceShown,
   };

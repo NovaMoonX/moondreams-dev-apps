@@ -466,9 +466,23 @@ function Composer({
     >
       {topSlot && <div className='flex px-1'>{topSlot}</div>}
       {voice.notice !== null && (
-        <p className='text-muted-foreground px-1 text-[13px]' role='status'>
-          {voice.notice}
-        </p>
+        <div
+          className='text-muted-foreground flex flex-col items-start gap-0.5 px-1 text-[13px]'
+          role='status'
+        >
+          <p>{voice.notice}</p>
+          {voice.hasNoticeDoor && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="text-primary relative -ml-2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+              onClick={() => void voice.openVoiceSettings()}
+            >
+              {HELM_COPY.talkOpenVoiceSettings}
+            </Button>
+          )}
+        </div>
       )}
       {isShorthandOpen && canType && showsActions && (
         <ShorthandRow onInsert={insertShorthand} />

@@ -60,6 +60,8 @@ interface VoiceConversationOptions {
   onUtterance: (text: string, heardBy: { sttProvider: string }) => void;
   /** Listening ended with nothing heard (not a cancel). `isAsked` is false when the listen started without a tap (the person's voice opened it after a reply or over a line), where saying so would be a fault the person didn't earn. */
   onNothingHeard?: (isAsked: boolean) => void;
+  /** The model on the device couldn't start or died while listening; `isAsked` is as for `onNothingHeard`. Without it this counts as nothing heard. */
+  onDeviceListenFailed?: (isAsked: boolean) => void;
   /** The opt-in natural voice is downloaded and ready (`useNaturalVoice().isReady`). */
   isNaturalVoiceReady?: boolean;
   /** The opt-in recognition model is downloaded (`useOnDeviceRecognition().isOn`): it listens whenever the cloud doesn't, waits for the wake phrase and hears a barge-in, all on the device. */
@@ -120,6 +122,7 @@ export function useVoiceConversation({
   endPhrases,
   onUtterance,
   onNothingHeard,
+  onDeviceListenFailed,
   isNaturalVoiceReady = false,
   isOnDeviceReady = false,
   quietMs = QUIET_MS,
@@ -131,6 +134,7 @@ export function useVoiceConversation({
 }: VoiceConversationOptions) {
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
@@ -157,6 +161,7 @@ export function useVoiceConversation({
     endPhrases,
     onUtterance,
     onNothingHeard,
+    onDeviceListenFailed,
     isNaturalVoiceReady,
     canHearOnDevice,
     quietMs,
@@ -196,6 +201,7 @@ export function useVoiceConversation({
       endPhrases,
       onUtterance,
       onNothingHeard,
+      onDeviceListenFailed,
       isNaturalVoiceReady,
       canHearOnDevice,
       quietMs,
@@ -294,6 +300,7 @@ export function useVoiceConversation({
     send({ type: 'STOP' });
     setIsListening(false);
     setListeningRoute(null);
+    setIsPreparing(false);
     setHeard('');
     if (run.current.isCancelled) return;
     if (!submit(text, run.current.heardBy)) {
@@ -374,7 +381,14 @@ export function useVoiceConversation({
     else if (code === 'language') setReason('no-recognition');
     run.current.stopListening?.();
     handleFinal('');
-    if (!isLasting) latest.current.onNothingHeard?.(!run.current.isUnasked);
+    if (isLasting) return;
+    const isAsked = !run.current.isUnasked;
+    if (
+      run.current.heardBy === 'on-device' &&
+      latest.current.onDeviceListenFailed
+    ) {
+      latest.current.onDeviceListenFailed(isAsked);
+    } else latest.current.onNothingHeard?.(isAsked);
   };
 
   const listen = (options: { source?: FrameSource | null } = {}) => {
@@ -394,6 +408,10 @@ export function useVoiceConversation({
         isMicGranted.current = true;
         setReason(null);
       },
+      onListening: () => {
+        setIsPreparing(false);
+        armQuiet();
+      },
       onError: handleError,
       preRoll: null,
     };
@@ -408,11 +426,13 @@ export function useVoiceConversation({
       });
     };
     const startDevice = (source: FrameSource | null) => {
-      armQuiet();
       if (latest.current.canHearOnDevice) {
+        window.clearTimeout(run.current.quietId);
+        setIsPreparing(source === null);
         startAdapter(createOnDeviceStt({ source }));
         return;
       }
+      armQuiet();
       source?.stop();
       startAdapter(createBrowserStt({ lang: latest.current.lang }));
     };
@@ -429,7 +449,7 @@ export function useVoiceConversation({
     setIsListening(true);
     setIsThinking(false);
     setHeard('');
-    armQuiet();
+    if (choice !== 'onDevice') armQuiet();
     if (choice === 'cloud' && cloud) {
       startAdapter(
         createDeepgramStt({
@@ -718,6 +738,8 @@ export function useVoiceConversation({
     submit,
     /** The short window after an answer is open: listening for the person to speak, nothing sent yet. */
     isFollowUpOpen,
+    /** Listening has started but the model on the device is still getting ready, so nothing is being heard yet. */
+    isPreparing,
     stop,
     cancel,
     speak,

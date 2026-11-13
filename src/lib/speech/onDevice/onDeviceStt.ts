@@ -177,6 +177,7 @@ export const createOnDeviceStt = ({
         if (recognition.current === null) throw new Error('Not loaded');
         microphone.preRoll.forEach((frame) => recognition.current?.push(frame));
         microphone.subscribe((frame) => recognition.current?.push(frame));
+        options.onListening?.();
       } catch (error) {
         if (state.isDone) return;
         state.isDone = true;
