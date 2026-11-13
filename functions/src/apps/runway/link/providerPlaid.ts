@@ -120,7 +120,11 @@ function toProviderError(code: string): ProviderError {
   );
 }
 
-export async function call<T>(path: string, body: Record<string, unknown>) {
+export async function call<T>(
+  path: string,
+  body: Record<string, unknown>,
+  timeoutMs: number | null = null,
+) {
   const clientId = readSecret(PLAID_CLIENT_ID);
   const secret = readSecret(PLAID_SECRET);
   if (!clientId || !secret) {
@@ -130,6 +134,7 @@ export async function call<T>(path: string, body: Record<string, unknown>) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ client_id: clientId, secret, ...body }),
+    ...(timeoutMs === null ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
   }).catch(() => {
     throw new ProviderError(
       'unavailable',
@@ -147,12 +152,30 @@ interface PlaidAccount {
   mask: string | null;
   type: string;
   subtype: string | null;
-  balances: { current: number | null; last_updated_datetime?: string | null };
+  balances: {
+    current: number | null;
+    available?: number | null;
+    limit?: number | null;
+    last_updated_datetime?: string | null;
+  };
 }
+
+const CAPITAL_ONE = 'ins_128026';
+const APPLE_CARD = 'ins_136439';
+/** A live read can take 30 seconds at some banks; past this the saved balance stands in, so one slow bank never holds up the rest. */
+const LIVE_READ_TIMEOUT_MS = 20_000;
+/** How old a saved balance a live read may fall back to where the bank shares no live one. */
+const SAVED_BALANCE_MAX_AGE_MS = 30 * 86_400_000;
+
+/** Plaid documents these as sharing only a saved balance: Capital One for everything but checking and savings, Apple Card for all. */
+const hasInstantBalance = (institutionId: string | null, type: string) =>
+  institutionId !== APPLE_CARD &&
+  !(institutionId === CAPITAL_ONE && type !== 'depository');
 
 const toRaw = (
   account: PlaidAccount,
   refreshedAt: string | null,
+  institutionId: string | null,
 ): RawAccount => ({
   id: account.account_id,
   name: account.name,
@@ -160,6 +183,9 @@ const toRaw = (
   subtype: account.subtype,
   mask: account.mask,
   currentBalance: account.balances.current,
+  availableBalance: account.balances.available ?? null,
+  limit: account.balances.limit ?? null,
+  hasInstantBalance: hasInstantBalance(institutionId, account.type),
   balanceUpdatedAt: account.balances.last_updated_datetime ?? refreshedAt,
 });
 
@@ -265,21 +291,51 @@ export const plaidProvider: BankDataProvider = {
     return result;
   },
 
-  async listAccounts(grant) {
-    // A live balance read makes the bank sign in again on every call, and banks that ask for a code each time then fail it and lock the link until the person reconnects; Plaid's own refreshes keep these balances current, so one without its own time is dated by the Item's last refresh.
+  async listAccounts(grant, options) {
+    const isLive = options?.isLive === true;
+    const readAt = new Date().toISOString();
+    const item = await call<{
+      item?: { institution_id?: string | null };
+      status?: { transactions?: { last_successful_update?: string | null } };
+    }>('/item/get', { access_token: grant.credential }).catch(() => null);
+    const institutionId = item?.item?.institution_id ?? null;
+    const savedAt = item?.status?.transactions?.last_successful_update ?? null;
+    // A saved read is Plaid's copy from its last refresh of the Item; a live one signs in to the bank now, so it is asked only when the person is looking.
     const { accounts } = await call<{ accounts: PlaidAccount[] }>(
-      '/accounts/get',
-      { access_token: grant.credential },
+      isLive ? '/accounts/balance/get' : '/accounts/get',
+      {
+        access_token: grant.credential,
+        ...(isLive
+          ? {
+              options: {
+                min_last_updated_datetime: new Date(
+                  Date.now() - SAVED_BALANCE_MAX_AGE_MS,
+                )
+                  .toISOString()
+                  .replace(/\.\d{3}Z$/, 'Z'),
+              },
+            }
+          : {}),
+      },
+      isLive ? LIVE_READ_TIMEOUT_MS : null,
     );
     if (accounts.length === 0) throw toProviderError('NO_ACCOUNTS');
-    const refreshedAt = await call<{
-      status?: { transactions?: { last_successful_update?: string | null } };
-    }>('/item/get', { access_token: grant.credential })
-      .then((item) => item.status?.transactions?.last_successful_update ?? null)
-      .catch(() => null);
-    return accounts.map((account) =>
-      normalizeAccount(toRaw(account, refreshedAt)),
-    );
+    return accounts.map((account) => {
+      // Without the institution, a saved balance can't be told from a live one, so none is called live.
+      const raw = {
+        ...toRaw(account, savedAt, institutionId),
+        ...(institutionId === null ? { hasInstantBalance: false } : {}),
+      };
+      return normalizeAccount(
+        isLive && raw.hasInstantBalance
+          ? { ...raw, balanceUpdatedAt: readAt }
+          : raw,
+      );
+    });
+  },
+
+  async refreshTransactions(grant) {
+    await call('/transactions/refresh', { access_token: grant.credential });
   },
 
   async revoke(grant) {

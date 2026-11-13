@@ -24,23 +24,42 @@ export interface RawAccount {
   subtype: string | null;
   mask: string | null;
   currentBalance: number | null;
+  availableBalance: number | null;
+  limit: number | null;
+  hasInstantBalance: boolean;
   /** ISO time the bank last refreshed the balance; null when the provider does not say. */
   balanceUpdatedAt: string | null;
 }
 
-/** A credit account's current balance is already what is owed, so both kinds keep the sign the provider reports. */
+/** A credit account's current balance is already what is owed, so both kinds keep the sign the provider reports. A card's available figure is credit left, not money, so only a bank account keeps it. */
 export function normalizeAccount(raw: RawAccount): NormalizedAccount {
+  const kind = toKind(raw.type);
   const result: NormalizedAccount = {
     providerAccountId: raw.id,
     name: raw.name.trim() || 'Account',
-    kind: toKind(raw.type),
+    kind,
     subtype: raw.subtype || null,
     mask: raw.mask || null,
     balanceCents: toCents(raw.currentBalance),
     balanceAsOf: toEpoch(raw.balanceUpdatedAt),
+    availableCents:
+      kind === 'depository' ? toCents(raw.availableBalance) : null,
+    limitCents: kind === 'credit' ? toCents(raw.limit) : null,
+    hasInstantBalance: raw.hasInstantBalance,
   };
   return result;
 }
+
+/** What an account's stored bank balance seals; null when the bank gave no balance. */
+export const toBalanceSealed = (account: NormalizedAccount) =>
+  account.balanceCents === null
+    ? null
+    : {
+        cents: account.balanceCents,
+        availableCents: account.availableCents,
+        limitCents: account.limitCents,
+        hasInstantBalance: account.hasInstantBalance,
+      };
 
 export interface RawTransaction {
   id: string;

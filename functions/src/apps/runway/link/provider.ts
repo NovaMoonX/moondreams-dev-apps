@@ -12,6 +12,12 @@ export interface NormalizedAccount {
   balanceCents: number | null;
   /** When the bank last refreshed the balance; null when the provider does not say. */
   balanceAsOf: number | null;
+  /** A bank account's current balance less its pending holds; null for a card or when the bank does not say. */
+  availableCents: number | null;
+  /** A card's credit limit; null for a bank account or when the bank does not say. */
+  limitCents: number | null;
+  /** False when the bank shares only a saved balance a few times a day, so a live read cannot make it newer. */
+  hasInstantBalance: boolean;
 }
 
 /** A bank transaction in the shape the app uses; money out is positive, money in negative. */
@@ -91,8 +97,13 @@ export interface BankDataProvider {
   exchange(publicToken: string): Promise<ProviderGrant>;
   /** The institution's name and logo (a PNG data URL), or null when the provider cannot say. */
   getInstitution(grant: ProviderGrant): Promise<ProviderInstitution | null>;
-  /** Every account under the grant, with the provider's latest balances; throws `needsAttention` when it shares none. */
-  listAccounts(grant: ProviderGrant): Promise<NormalizedAccount[]>;
+  /** Every account under the grant, with the provider's latest balances (asked of the bank right now with `isLive`); throws `needsAttention` when it shares none. */
+  listAccounts(
+    grant: ProviderGrant,
+    options?: { isLive: boolean },
+  ): Promise<NormalizedAccount[]>;
+  /** Asks the provider to check the bank for new transactions now; what it finds arrives later through the webhook. */
+  refreshTransactions(grant: ProviderGrant): Promise<void>;
   revoke(grant: ProviderGrant): Promise<void>;
   /** Each transaction's merchant logo and bank name between two `YYYY-MM-DD` days, for purchases brought in before they were kept. */
   listTransactionDetails(

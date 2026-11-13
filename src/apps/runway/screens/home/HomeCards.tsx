@@ -16,6 +16,10 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { describeCardsOwed, getListedCards } from '@apps/runway/utils/cardText';
+import {
+  selectPendingByCard,
+  toPostedByCard,
+} from '@apps/runway/store/selectors/cardPendingSelectors';
 
 interface HomeCardsProps {
   today: DateOnly;
@@ -40,6 +44,7 @@ function HomeCards({ today }: HomeCardsProps) {
     return waiting(b.id) - waiting(a.id);
   });
   const shown = ranked.slice(0, HOME_TILE_COUNT);
+  const pendingByCard = useAppSelector(selectPendingByCard);
   const mask = useMaskedText();
   const { isHidden } = useValuesHidden();
 
@@ -48,7 +53,13 @@ function HomeCards({ today }: HomeCardsProps) {
     <div className='space-y-2'>
       <SectionHeader
         title={CARD_WORDS.homeTitle}
-        subtitle={mask(describeCardsOwed(cards, reserveByCard, isHidden))}
+        subtitle={mask(
+          describeCardsOwed(
+            cards,
+            toPostedByCard(reserveByCard, pendingByCard),
+            isHidden,
+          ),
+        )}
         action={
           cards.length > shown.length && (
             <ShowMoreButton

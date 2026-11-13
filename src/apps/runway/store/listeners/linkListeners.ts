@@ -108,8 +108,20 @@ export function startAccountBalancesListener(
     uid,
     'accountBalances',
     async (data) => {
-      const payload = await read<{ cents: number }>(data.sealed);
-      return { id: data.id, asOf: data.asOf, cents: payload.cents };
+      const payload = await read<{
+        cents: number;
+        availableCents?: number | null;
+        limitCents?: number | null;
+        hasInstantBalance?: boolean | null;
+      }>(data.sealed);
+      return {
+        id: data.id,
+        asOf: data.asOf,
+        cents: payload.cents,
+        availableCents: payload.availableCents ?? null,
+        limitCents: payload.limitCents ?? null,
+        hasInstantBalance: payload.hasInstantBalance ?? null,
+      };
     },
     onChange,
     onError,
