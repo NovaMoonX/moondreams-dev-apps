@@ -1,4 +1,5 @@
 import { DAY_MS } from '@apps/runway/engine/dates';
+import { toDayWord } from '@apps/runway/utils/payFrom';
 import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -57,7 +58,7 @@ const describeFundedByChange = (
     if (payNameOf) return payNameOf(value);
     return value.monthDay === null
       ? 'one pay you picked'
-      : `the pay on ${value.monthDay === 31 ? 'the last day' : `day ${value.monthDay}`}`;
+      : `the pay on ${toDayWord(value.monthDay)}`;
   }
   return PAID_FROM_WORDS.logSpread;
 };

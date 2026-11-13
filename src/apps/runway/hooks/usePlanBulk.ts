@@ -27,7 +27,9 @@ import type {
   GoalSealed,
   OpenVersion,
 } from '@apps/runway/types';
+import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardNamer } from '@apps/runway/utils/cardText';
+import { describePayChoice } from '@apps/runway/utils/payFrom';
 import {
   describeChange,
   isMoneylessChange,
@@ -121,7 +123,12 @@ export function usePlanBulk(view: SelectView) {
         after,
         getCardNamer(state.runway.cards),
         groupName,
-        undefined,
+        (fundedBy) =>
+          describePayChoice(
+            fundedBy,
+            selectResolvedPlan(state, todayAsUtcDate()),
+            true,
+          ),
         accountName,
       ) || 'Updated';
     return isMoneylessChange(before, after)

@@ -18254,6 +18254,32 @@ console.log('runway engine: ok');
   assert.equal(
     getIncomeDaysPerMonth(
       [
+        { ...line('twiceMonthly'), payLineId: 'work' },
+        { ...line('weekly'), payLineId: 'side' },
+      ],
+      nov,
+      null,
+      { payLineId: 'work', monthDay: 15 },
+    ),
+    1,
+    'a rule tied to the pay on the 15th counts one income day a month, not every pay',
+  );
+  assert.equal(
+    getIncomeDaysPerMonth(
+      [
+        { ...line('twiceMonthly'), payLineId: 'work' },
+        { ...line('weekly'), payLineId: 'side' },
+      ],
+      nov,
+      null,
+      { payLineId: 'work', monthDay: null },
+    ),
+    2,
+    'a rule tied to one pay line with no day counts only that line',
+  );
+  assert.equal(
+    getIncomeDaysPerMonth(
+      [
         line('weekly'),
         line('monthly'),
         line('once'),
@@ -21102,7 +21128,6 @@ checkHorizonMoves();
   );
 }
 
-// A funding rule that names one pay says so in its row and in its history.
 {
   const pay = { payLineId: 'work', monthDay: 30 };
   const rule = {

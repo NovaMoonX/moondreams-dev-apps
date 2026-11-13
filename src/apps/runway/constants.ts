@@ -2629,7 +2629,7 @@ export const PAY_ITEMS_WORDS = {
   doorNothing: 'Nothing yet',
   doorSub: (names: readonly string[]) =>
     names.length <= 3
-      ? names.join(', ').replace(/, ([^,]*)$/, ' and $1')
+      ? formatList([...names])
       : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`,
   title: (pay: string) => `What comes out of ${pay}`,
   paidFirst: 'Paid first',
@@ -3367,6 +3367,7 @@ export const FUNDING_PAY_WORDS = {
   suffix: (pay: string) => `from ${pay}`,
   /** The change log's phrase when no one pay is picked. */
   logEveryPay: 'every pay',
+  gone: 'Its pay is no longer in the plan, so nothing goes in',
 } as const;
 
 /** Round 4, package C: Home, Days, Plan and Spend screens. */

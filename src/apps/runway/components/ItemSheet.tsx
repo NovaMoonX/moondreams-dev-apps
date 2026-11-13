@@ -1179,10 +1179,17 @@ function ItemSheet({
         locked={[]}
         initial={pairingsSeed ?? pairings}
         change={{ itemId, kind: version.kind, current: version.payload }}
-        onClose={onClose}
-        onCancel={() => {
+        onClose={() => {
+          if (pairingsSeed === null) return onClose();
           setPairingsSeed(null);
           backToSheet();
+          goTo('payItems');
+        }}
+        onCancel={() => {
+          const isFromPayItems = pairingsSeed !== null;
+          setPairingsSeed(null);
+          backToSheet();
+          if (isFromPayItems) goTo('payItems');
         }}
       />
     );

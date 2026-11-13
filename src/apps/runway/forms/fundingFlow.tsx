@@ -8,16 +8,18 @@ import type { QuestionStep } from '@/hooks/useQuestionFlow';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
+  CALENDAR_PERIODS,
   CALENDAR_PERIOD_LABELS,
   CALENDAR_PERIOD_UNITS,
-  CALENDAR_PERIODS,
   FORM_FLOW_WORDS,
   FUNDING_CADENCE_LABELS,
   FUNDING_PAY_WORDS,
   HOW_OFTEN_WORDS,
   MAX_CHOSEN_DAYS,
+  PAID_FROM_WORDS,
 } from '@apps/runway/constants';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
+import { scopeToSource } from '@apps/runway/engine/calendar';
 import type { ResolvedSource } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   FundingAmount,
@@ -26,7 +28,7 @@ import type {
 } from '@apps/runway/types';
 import { toFundingInput, type HowOften } from '@apps/runway/utils/fundingInput';
 import { describeAmount } from '@apps/runway/utils/fundingText';
-import { describePayChoice, getPayOptions } from '@apps/runway/utils/payFrom';
+import { describePayChoice, listPayOptions } from '@apps/runway/utils/payFrom';
 
 type PaycheckCadence = ReturnType<typeof toFundingInput>['cadence'];
 
@@ -103,6 +105,11 @@ export const getFundingAmount = (
 };
 
 /** The rule the answers make. A calendar rule keeps the day it started on while its period and amount are unchanged. */
+const GONE_PAY = 'gone';
+
+const isSamePay = (a: FundingPay | null, b: FundingPay | null) =>
+  a?.payLineId === b?.payLineId && a?.monthDay === b?.monthDay;
+
 export function buildFundingRule(
   data: FundingFormData,
   context: {
@@ -148,9 +155,15 @@ export function buildFundingRule(
         kind: 'everyNth',
         n,
         anchorDayKey:
-          savedCadence?.kind === 'everyNth' && savedCadence.n === n
+          savedCadence?.kind === 'everyNth' &&
+          savedCadence.n === n &&
+          (saved?.sourceId ?? null) === data.sourceId &&
+          isSamePay(saved?.pay ?? null, data.pay)
             ? savedCadence.anchorDayKey
-            : (comingDays[0]?.dayKey ?? ''),
+            : (scopeToSource(
+                { sourceId: data.sourceId, pay: data.pay },
+                comingDays,
+              )[0]?.dayKey ?? ''),
       },
       ...source,
       ...picked,
@@ -417,7 +430,16 @@ export function buildFundingSteps({
     ),
   };
 
-  const payOptions = getPayOptions(plan);
+  const payOptions = listPayOptions(plan);
+  const pickedPayValue =
+    data.pay === null
+      ? ALL_SOURCES
+      : (payOptions.find(
+          (option) =>
+            option.fundedBy.payLineId === data.pay?.payLineId &&
+            option.fundedBy.monthDay === data.pay.monthDay,
+        )?.value ?? GONE_PAY);
+  const isPayGone = pickedPayValue === GONE_PAY;
   const selectedPay =
     data.pay === null
       ? undefined
@@ -429,7 +451,9 @@ export function buildFundingSteps({
     summaryValue:
       data.pay === null
         ? FUNDING_PAY_WORDS.everyPay
-        : describePayChoice({ kind: 'pay', ...data.pay }, plan),
+        : isPayGone
+          ? PAID_FROM_WORDS.gone
+          : describePayChoice({ kind: 'pay', ...data.pay }, plan),
     isAnswered: true,
     isPreAnswered: true,
     render: ({ moveOn }) => (
@@ -441,17 +465,13 @@ export function buildFundingSteps({
             value: option.value,
             label: option.label,
           })),
+          ...(isPayGone
+            ? [{ value: GONE_PAY, label: PAID_FROM_WORDS.gone }]
+            : []),
         ]}
-        value={
-          data.pay === null
-            ? ALL_SOURCES
-            : (payOptions.find(
-                (option) =>
-                  option.fundedBy.payLineId === data.pay?.payLineId &&
-                  option.fundedBy.monthDay === data.pay.monthDay,
-              )?.value ?? ALL_SOURCES)
-        }
+        value={pickedPayValue}
         onChange={(value) => {
+          if (value === GONE_PAY) return moveOn();
           const found = payOptions.find((option) => option.value === value);
           set({
             pay:
@@ -524,7 +544,9 @@ export function buildFundingSteps({
   const result = [
     often,
     ...(isPaycheck ? [pays] : []),
-    ...(payOptions.length > 0 && !isDraft && data.often !== 'none'
+    ...((payOptions.length > 0 || isPayGone) &&
+    !isDraft &&
+    data.often !== 'none'
       ? [payStep]
       : []),
     ...(data.often === 'none' ? [] : [amountStep]),

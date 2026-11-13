@@ -59,17 +59,14 @@ type Step =
   | { name: 'day'; candidate: Candidate };
 
 interface PayItemsViewProps {
-  /** The pay line or income source whose sheet this opens from. */
   itemId: string;
   kind: 'source' | 'payLine';
   name: string;
   today: number;
-  /** Its own pay-first pairings. */
   pairings: readonly Pairing[];
-  /** Whether the pay repeats; a one-time pay shows only what is paid first. */
+  /** A one-time pay is never a rule's pay, so it shows only what it pays first. */
   isRepeating: boolean;
   onBack: () => void;
-  /** Opens the pay-first editor on this set of pairings. */
   onEditPairings: (initial: Pairing[]) => void;
 }
 
@@ -85,7 +82,6 @@ const capitalize = (text: string) =>
 const matches = (name: string, query: string) =>
   name.toLowerCase().includes(query.trim().toLowerCase());
 
-/** What a pay puts toward bills, envelopes and goals: those it pays first and those that name it in their Comes out of, each opening what can be done with it, and a way to add one. */
 function PayItemsView({
   itemId,
   kind,
@@ -243,7 +239,6 @@ function PayItemsView({
     (candidate) => !memberIds.has(candidate.itemId),
   );
 
-  /** Writes one item's Comes out of through the same bulk path as Plan's pick-several, one history line and one Undo toast; returns whether it saved. */
   const write = async (
     itemKind: Kind,
     target: { itemId: string; name: string },

@@ -144,7 +144,7 @@ function GoalRow({
           fact={
             !isSavingFor(goal)
               ? `${PRIORITY_LABELS[goal.priority]} · ${HOW_OFTEN_WORDS.notBeingAdded.toLowerCase()}`
-              : `${PRIORITY_LABELS[goal.priority]} · ${funding}${payFact === null ? '' : ` · ${payFact}`} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
+              : `${PRIORITY_LABELS[goal.priority]} · ${funding}${payFact === null ? '' : ` · ${payFact.charAt(0).toLowerCase()}${payFact.slice(1)}`} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
           }
           extra={<GoalAccountNote goalId={goalId} />}
           quickChange={{

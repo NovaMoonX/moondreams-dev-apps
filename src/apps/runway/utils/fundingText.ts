@@ -19,7 +19,7 @@ import type {
   PairingAmount,
   PriorityExtra,
 } from '@apps/runway/types';
-import { describePayChoice } from '@apps/runway/utils/payFrom';
+import { describePayChoice, listPayOptions } from '@apps/runway/utils/payFrom';
 
 export const SHARE_BPS = { full: 10_000, half: 5_000 } as const;
 
@@ -155,6 +155,12 @@ export function describeFundingPayFact(
   plan: readonly ResolvedSource[],
 ): string | null {
   if (!funding.pay || funding.cadence.kind === 'none') return null;
+  const { payLineId, monthDay } = funding.pay;
+  const isLive = listPayOptions(plan).some(
+    ({ fundedBy }) =>
+      fundedBy.payLineId === payLineId && fundedBy.monthDay === monthDay,
+  );
+  if (!isLive) return FUNDING_PAY_WORDS.gone;
   const words = FUNDING_PAY_WORDS.suffix(
     describePayChoice({ kind: 'pay', ...funding.pay }, plan, true),
   );
