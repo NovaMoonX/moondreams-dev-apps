@@ -141,7 +141,10 @@ function BundleFormSheet({
       name: name.trim(),
       priceCents,
       itemIds: [...itemIds, ...gone.map((item) => item.id)],
-      bundleOnlyIds: onlyIds.filter((id) => itemIds.includes(id)),
+      bundleOnlyIds: [
+        ...onlyIds.filter((id) => itemIds.includes(id)),
+        ...gone.filter((item) => item.isBundleOnly).map((item) => item.id),
+      ],
     };
     const result = await (
       bundle === null
@@ -217,7 +220,7 @@ function BundleFormSheet({
               className="text-primary relative h-7 px-2 text-sm after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
               onClick={() => setOnlyIds(isAllOnly ? [] : itemIds)}
             >
-              {isAllOnly ? 'None bundle-only' : 'All bundle-only'}
+              {isAllOnly ? 'Clear bundle-only' : 'Make all bundle-only'}
             </Button>
           }
         />
@@ -237,7 +240,10 @@ function BundleFormSheet({
                     checked={onlyIds.includes(item.id)}
                     onCheckedChange={(next) => toggleOnly(item.id, next)}
                   />
-                  Only sold with the bundle
+                  <span className='max-sm:hidden'>
+                    Only sold with the bundle
+                  </span>
+                  <span className='sm:hidden'>Bundle only</span>
                 </label>
               </div>
               {item.askingPriceCents !== null && (

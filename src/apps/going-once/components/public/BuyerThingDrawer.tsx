@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Camera, ExternalLink } from 'lucide-react';
+import { Camera, ChevronRight, ExternalLink } from 'lucide-react';
 
 import CopyTextButton from '@/components/CopyTextButton';
 import DetailSheet from '@/components/DetailSheet';
@@ -93,7 +93,7 @@ function BuyerThingDrawer({
                 >
                   {askAboutBundle === null
                     ? "I'm interested"
-                    : "I'm interested in the bundle"}
+                    : 'Ask about the bundle'}
                 </Button>
               )}
             </div>
@@ -154,12 +154,15 @@ function BuyerThingDrawer({
           <Button
             type='button'
             variant='tertiary'
-            className='text-primary h-auto w-full justify-start p-0! text-left text-sm whitespace-normal'
+            className='text-primary h-auto w-full justify-between gap-2 p-0! text-left text-sm whitespace-normal'
             onClick={() => onOpenBundle(bundle.id)}
           >
-            {thing.isBundleOnly
-              ? `Only sold with the ${bundle.name} bundle · ${formatCentsShort(bundle.priceCents)} for all ${bundle.thingIds.length}`
-              : `Part of ${bundle.name}${savedCents > 0 ? ` · save ${formatCentsShort(savedCents)} together` : ''}`}
+            <span className='min-w-0'>
+              {thing.isBundleOnly
+                ? `Only sold with the ${bundle.name} bundle · ${formatCentsShort(bundle.priceCents)} for all ${bundle.thingIds.length}`
+                : `Part of ${bundle.name}${savedCents > 0 ? ` · save ${formatCentsShort(savedCents)} together` : ''}`}
+            </span>
+            <ChevronRight className='size-4 shrink-0' aria-hidden='true' />
           </Button>
         )}
         {thing.status === 'PENDING' && (

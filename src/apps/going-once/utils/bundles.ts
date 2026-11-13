@@ -72,6 +72,7 @@ export const applyThingsBack = (
         separateCents,
       );
       return {
+        ...result,
         priceCents,
         history: appendBundleChange(
           result.history,
@@ -88,7 +89,11 @@ export const applyThingsBack = (
         ),
       };
     },
-    { priceCents: bundle.priceCents, history },
+    {
+      priceCents: bundle.priceCents,
+      history,
+      keptAtGoneCount: came.length > 0 ? null : bundle.keptAtGoneCount,
+    },
   );
 
 /** Whether a thing can't be bought on its own right now: only while its bundle is on offer with two or more things. */
@@ -103,17 +108,18 @@ export const isSoloLocked = (
   item.status === 'AVAILABLE' &&
   dealCount >= 2;
 
-/** Suggest Unbundle once half the bundle's asking total is gone, one thing is left or the price reached 0; Keep the bundle quiets it until another thing goes. */
+/** Suggest Unbundle once half the bundle's asking total is gone, one thing is left (also after the others were deleted) or the price reached 0; Keep the bundle quiets it until another thing goes. */
 export function shouldSuggestUnbundle(
   bundle: Bundle,
   parts: BundleParts,
 ): boolean {
-  if (bundle.status !== 'ACTIVE' || parts.gone.length === 0) return false;
+  if (bundle.status !== 'ACTIVE') return false;
   if (
     bundle.keptAtGoneCount !== null &&
     parts.gone.length <= bundle.keptAtGoneCount
   )
     return false;
+  if (parts.gone.length === 0) return parts.deal.length === 1;
   return (
     parts.deal.length <= 1 ||
     parts.goneCents * 2 >= parts.originalCents ||

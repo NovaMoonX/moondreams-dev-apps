@@ -12,7 +12,8 @@ const preventDefault = (event: Event) => event.preventDefault();
 
 let releaseGuard: (() => void) | null = null;
 
-// What a hold opens can move the page, so the click that ends it may land on a neighbour; it is swallowed wherever it lands.
+// What a hold opens can move the page, so the click that ends it may land on a neighbour; it is swallowed
+// wherever it lands, until the next touch begins.
 function swallowReleaseClick() {
   const swallow = (event: Event) => {
     event.preventDefault();
@@ -21,9 +22,11 @@ function swallowReleaseClick() {
   };
   const stop = () => {
     document.removeEventListener('click', swallow, true);
+    document.removeEventListener('pointerdown', stop, true);
     window.clearTimeout(timer);
   };
   document.addEventListener('click', swallow, true);
+  document.addEventListener('pointerdown', stop, true);
   const timer = window.setTimeout(stop, 400);
 }
 
@@ -36,7 +39,7 @@ function guardPageUntilRelease(pointerId: number, didHold: () => boolean) {
   document.addEventListener('selectstart', preventDefault, true);
   document.addEventListener('contextmenu', preventDefault, true);
 
-  const release = () => {
+  const release = (isLifted = false) => {
     root.removeAttribute(HOLDING_ATTRIBUTE);
     document.removeEventListener('selectstart', preventDefault, true);
     document.removeEventListener('contextmenu', preventDefault, true);
@@ -44,12 +47,12 @@ function guardPageUntilRelease(pointerId: number, didHold: () => boolean) {
     window.removeEventListener('pointercancel', onPointerEnd, true);
     if (didHold()) {
       window.getSelection()?.removeAllRanges();
-      swallowReleaseClick();
+      if (isLifted) swallowReleaseClick();
     }
     releaseGuard = null;
   };
   const onPointerEnd = (event: globalThis.PointerEvent) => {
-    if (event.pointerId === pointerId) release();
+    if (event.pointerId === pointerId) release(event.type === 'pointerup');
   };
   window.addEventListener('pointerup', onPointerEnd, true);
   window.addEventListener('pointercancel', onPointerEnd, true);

@@ -30,7 +30,7 @@ import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
 import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
 import {
   changeBundleStatus,
-  editBundle,
+  lowerBundleToSeparate,
   keepBundle,
   unbundle,
   type BundleResult,
@@ -120,7 +120,9 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
   const saving = formatSaveShort(bundle.priceCents, parts.separateCents);
   const history = [...bundle.history].reverse();
   const isOverSeparate =
-    bundle.status === 'ACTIVE' && bundle.priceCents > parts.separateCents;
+    bundle.status === 'ACTIVE' &&
+    bundle.itemIds.every((id) => itemsById[id] !== undefined) &&
+    bundle.priceCents > parts.separateCents;
   const holdFacts = getStatusFacts(
     { status: 'PENDING', pending: deal[0]?.pending ?? null, sale: null },
     false,
@@ -203,16 +205,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
   };
 
   const lowerToSeparate = () =>
-    apply(() =>
-      editBundle(bundle.saleId, bundle.id, uid, {
-        name: bundle.name,
-        priceCents: parts.separateCents,
-        itemIds: bundle.itemIds,
-        bundleOnlyIds: bundle.itemIds.filter(
-          (id) => itemsById[id]?.isBundleOnly === true,
-        ),
-      }),
-    );
+    apply(() => lowerBundleToSeparate(bundle.saleId, bundle.id, uid));
 
   const keepIt = () => {
     setError(null);

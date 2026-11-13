@@ -343,6 +343,50 @@ export async function unbundle(
   }
 }
 
+/** Lowers an on-offer bundle's price to what its available things cost separately, read in the transaction; touches nothing else. */
+export async function lowerBundleToSeparate(
+  saleId: string,
+  bundleId: string,
+  uid: string,
+): Promise<BundleResult> {
+  try {
+    return await runTransaction(db, async (transaction): Promise<Outcome> => {
+      const snapshot = await transaction.get(bundleRef(saleId, bundleId));
+      if (!snapshot.exists())
+        return { ok: false, message: GONE_BUNDLE_MESSAGE };
+      const bundle = toBundle(bundleId, saleId, snapshot.data());
+      if (bundle.status !== 'ACTIVE')
+        return { ok: false, message: NOT_ACTIVE_MESSAGE };
+      const things = await readItems(transaction, saleId, bundle.itemIds);
+      const separateCents = things.reduce(
+        (total, item) =>
+          item?.status === 'AVAILABLE'
+            ? total + (item.askingPriceCents ?? 0)
+            : total,
+        0,
+      );
+      const now = Date.now();
+      if (bundle.priceCents > separateCents)
+        transaction.update(bundleRef(saleId, bundleId), {
+          priceCents: separateCents,
+          history: appendBundleChange(
+            bundle.history,
+            toChange('SET_PRICE', uid, now, {
+              priceCents: separateCents,
+              fromPriceCents: bundle.priceCents,
+            }),
+            MAX_STATUS_HISTORY,
+          ),
+          lastEditedAt: now,
+          lastEditedBy: uid,
+        });
+      return { ok: true, id: bundleId, at: now };
+    });
+  } catch (error) {
+    return toFailure(error);
+  }
+}
+
 /** Remembers how many things had gone when the seller chose Keep the bundle; the write is queued offline. */
 export function keepBundle(
   saleId: string,

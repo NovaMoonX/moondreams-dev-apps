@@ -114,7 +114,7 @@ function BuyerBundleDrawer({
                   className='min-w-0 flex-1'
                   onClick={() => setIsAsking(true)}
                 >
-                  I&apos;m interested in the bundle
+                  Ask about the bundle
                 </Button>
               )}
             </div>
