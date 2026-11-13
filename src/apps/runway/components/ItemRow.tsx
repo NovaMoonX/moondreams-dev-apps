@@ -7,17 +7,18 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import SensitiveValue from '@/components/SensitiveValue';
+import { useLongPress } from '@/hooks/useLongPress';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import {
   PRIORITIES_WORDS,
   PRIORITY_DIAL_WORDS,
-  TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 
 /** A row in the priorities list while it is being reordered: tapped to lift, nudged up or down, or fixed in place. */
@@ -53,6 +54,8 @@ interface ItemRowProps {
   isDetailWarning?: boolean;
   /** With `isDetailWarning`, the detail's words read in warning ink too, not only its icon. */
   isDetailInked?: boolean;
+  /** A small dot before the detail: the bank updated this figure a moment ago. */
+  isDetailFresh?: boolean;
   figure?: string | null;
   /** A figure is masked while amounts are hidden; a row that shows what the person is typing turns it off. */
   isPrivate?: boolean;
@@ -66,7 +69,12 @@ interface ItemRowProps {
   /** What a screen reader hears while private amounts are hidden; defaults to the name alone. */
   hiddenAriaLabel?: string;
   /** A row ticked from a checklist: tapping the row ticks it and the chevron opens the sheet. */
-  tick?: { checked: boolean; onChange: (checked: boolean) => void };
+  tick?: {
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    /** What a screen reader hears for the box; defaults to "{name} done". */
+    label?: string;
+  };
   /** Replaces the chevron and the sheet with the controls for placing the row. */
   reorder?: ItemRowReorder;
   /** Just moved by a saved reorder: the row is highlighted for a moment. */
@@ -77,6 +85,8 @@ interface ItemRowProps {
   itemId?: string;
   /** Stands where a ticked row's checkbox does, on a row with nothing to tick; the row's tap opens it. */
   slot?: ReactNode;
+  /** Press and hold (right-click on a computer) on a row that opens: starts picking several. */
+  onLongPress?: () => void;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -89,6 +99,7 @@ function ItemRow({
   isDetailStrong = false,
   isDetailWarning = false,
   isDetailInked = false,
+  isDetailFresh = false,
   warningLine,
   figure,
   isPrivate = true,
@@ -104,8 +115,10 @@ function ItemRow({
   isFigureMuted = false,
   itemId,
   slot,
+  onLongPress,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
+  const longPress = useLongPress(() => onLongPress?.());
   const baseAriaLabel =
     isPrivate && isHidden && givenAriaLabel
       ? (hiddenAriaLabel ?? `${name}. Amount hidden. Open`)
@@ -160,6 +173,12 @@ function ItemRow({
             />
           )}
           <span className='line-clamp-2 text-pretty max-[359px]:line-clamp-3'>
+            {isDetailFresh && (
+              <span
+                className='bg-success mr-1.5 inline-block size-1.5 rounded-full align-middle'
+                aria-hidden='true'
+              />
+            )}
             {detailLead && (
               <>
                 <span
@@ -323,11 +342,10 @@ function ItemRow({
       <li data-item-id={itemId} className='flex items-start'>
         <span className='flex h-16 shrink-0 items-center pl-3'>
           {tick ? (
-            <Checkbox
-              className={TICK_HIT_CLASS}
+            <AppCheckbox
               checked={tick.checked}
               onCheckedChange={(next) => tick.onChange(Boolean(next))}
-              aria-label={`${name} done`}
+              aria-label={tick.label ?? `${name} done`}
             />
           ) : (
             slot
@@ -336,9 +354,19 @@ function ItemRow({
         <Button
           type='button'
           variant='tertiary'
-          className={join(rowClass, 'min-w-0 flex-1')}
+          className={join(
+            rowClass,
+            'min-w-0 flex-1',
+            onLongPress && 'select-none [-webkit-touch-callout:none]',
+          )}
           aria-label={tick && ariaLabel ? `${ariaLabel}. Tick it` : ariaLabel}
-          onClick={tick ? () => tick.onChange(!tick.checked) : onOpen}
+          {...(onLongPress ? longPress : {})}
+          onClick={(event) => {
+            if (onLongPress) longPress.onClick(event);
+            if (event.defaultPrevented) return;
+            if (tick) tick.onChange(!tick.checked);
+            else onOpen?.();
+          }}
         >
           {text}
         </Button>
@@ -382,9 +410,16 @@ function ItemRow({
       <Button
         type='button'
         variant='tertiary'
-        className={rowClass}
+        className={join(
+          rowClass,
+          onLongPress && 'select-none [-webkit-touch-callout:none]',
+        )}
         aria-label={ariaLabel}
-        onClick={onOpen}
+        {...(onLongPress ? longPress : {})}
+        onClick={(event) => {
+          if (onLongPress) longPress.onClick(event);
+          if (!event.defaultPrevented) onOpen();
+        }}
       >
         {badge}
         {text}

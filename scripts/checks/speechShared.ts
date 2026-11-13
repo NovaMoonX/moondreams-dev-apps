@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 import {
   createListeningState,
@@ -33,11 +34,14 @@ import {
   getLocalDayKey,
   planListen,
   planSpeech,
+  planTranscribe,
+  planTranscribeSettle,
   type ListenUsage,
 } from '../../functions/src/voice/usage.ts';
 import {
   costMicros,
   listenCostMicros,
+  transcribeCostMicros,
   TTS_PRICES,
   VOICE_DAILY_BUDGET_CENTS,
   VOICE_UTTERANCE_MS,
@@ -57,7 +61,14 @@ import type { TtsAdapter } from '../../src/lib/speech/voice/types.ts';
 import {
   pickListener,
   pickSpeaker,
+  pickWakeListener,
 } from '../../src/lib/speech/voice/voiceRouter.ts';
+import {
+  isOnDeviceLang,
+  ON_DEVICE_FILES,
+  ON_DEVICE_SIZE_MB,
+} from '../../src/lib/speech/onDevice/config.ts';
+import { toHeardText } from '../../src/lib/speech/onDevice/onDeviceStt.ts';
 import { getVoiceQuality, pickVoice } from '../../src/utils/speechUtils.ts';
 
 const sharedFiles = [
@@ -69,6 +80,7 @@ const sharedFiles = [
     .map((name) => new URL(`../../src/lib/speech/${name}`, import.meta.url)),
   new URL('../../src/hooks/useSpeechCommands.ts', import.meta.url),
   new URL('../../src/hooks/useNaturalVoice.ts', import.meta.url),
+  new URL('../../src/hooks/useOnDeviceRecognition.ts', import.meta.url),
   new URL('../../src/hooks/useVoiceConversation.ts', import.meta.url),
   new URL('../../src/components/NaturalVoiceOption.tsx', import.meta.url),
   ...['../../functions/src/voice/', '../../scripts/voice/'].flatMap((folder) =>
@@ -92,8 +104,9 @@ assert.ok(
     sharedPaths.some((path) =>
       path.endsWith('/voice/providers/geminiTts.ts'),
     ) &&
-    sharedPaths.some((path) => path.endsWith('/voice/benchmark.ts')),
-  'the voice service, its hook, the providers and the benchmark are among the files scanned',
+    sharedPaths.some((path) => path.endsWith('/voice/benchmark.ts')) &&
+    sharedPaths.some((path) => path.endsWith('/voice/transcribe.ts')),
+  'the voice service, its hook, the providers, the benchmark and the recording reader are among the files scanned',
 );
 ['a recipe', 'Helm', 'the Nomos voice'].forEach((planted) =>
   assert.ok(APP_WORDS.test(planted), `"${planted}" is caught as an app word`),
@@ -663,8 +676,14 @@ const CLOUD_ON = {
   isCloudAllowed: true,
   isCloudHeld: false,
   hasCloud: true,
+  isOnDeviceReady: false,
 };
 assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
+assert.equal(
+  pickListener({ ...CLOUD_ON, isOnDeviceReady: true }),
+  'cloud',
+  'the cloud still listens when allowed, with the model downloaded',
+);
 (
   [
     { isOnline: false },
@@ -678,7 +697,41 @@ assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
     'browser',
     `${Object.keys(off)[0]} off listens with the browser`,
   );
+  assert.equal(
+    pickListener({ ...CLOUD_ON, ...off, isOnDeviceReady: true }),
+    'onDevice',
+    `${Object.keys(off)[0]} off listens on the device once the model is downloaded`,
+  );
 });
+assert.equal(pickWakeListener({ isOnDeviceReady: true }), 'onDevice');
+assert.equal(pickWakeListener({ isOnDeviceReady: false }), 'browser');
+assert.ok(isOnDeviceLang('en-GB') && !isOnDeviceLang('fr-FR'));
+assert.equal(
+  toHeardText(['WHAT DO I HAVE TODAY', '']),
+  'What do I have today',
+  'the model words read as a sentence',
+);
+assert.equal(toHeardText(['  ', '']), '', 'silence reads as nothing');
+ON_DEVICE_FILES.forEach((file) => {
+  const served = readFileSync(
+    new URL(`../../public${file.url}`, import.meta.url),
+  );
+  assert.equal(served.length, file.bytes, `${file.url} has the listed size`);
+  assert.equal(
+    createHash('sha256').update(served).digest('hex'),
+    file.sha256,
+    `${file.url} has the listed hash`,
+  );
+});
+assert.ok(
+  readFileSync(
+    new URL('../../public/speech/asr/NOTICE', import.meta.url),
+    'utf8',
+  ).length > 0,
+  'the recognizer files keep their licences beside them',
+);
+assert.equal(ON_DEVICE_SIZE_MB, 57, 'the size the row states is the real one');
+console.log('speechShared: on-device recognition checks passed');
 {
   const requests: MintVoiceTokenRequest[] = [];
   const state = { isFailing: false, isKeyless: false };
@@ -1460,7 +1513,12 @@ const listenLimits = {
   voices: { googleTts: 'g', deepgramAura: 'd', geminiTts: 'm' },
 };
 const worstCase = listenCostMicros(VOICE_UTTERANCE_MS);
-const emptyUsage: ListenUsage = { listenMs: 0, mints: 0, openMints: {} };
+const emptyUsage: ListenUsage = {
+  listenMs: 0,
+  transcribeMs: null,
+  mints: 0,
+  openMints: {},
+};
 const plan = (overrides: Partial<Parameters<typeof planListen>[0]> = {}) =>
   planListen({
     usage: emptyUsage,
@@ -1472,7 +1530,12 @@ const plan = (overrides: Partial<Parameters<typeof planListen>[0]> = {}) =>
     worstCaseMicros: worstCase,
     ...overrides,
   });
-const openUsage: ListenUsage = { listenMs: 0, mints: 1, openMints: { a: 1 } };
+const openUsage: ListenUsage = {
+  listenMs: 0,
+  transcribeMs: null,
+  mints: 1,
+  openMints: { a: 1 },
+};
 assert.equal(
   plan({
     usage: openUsage,
@@ -1487,7 +1550,7 @@ assert.equal(
   'a negative report adds nothing',
 );
 const replayed = plan({
-  usage: { listenMs: 0, mints: 1, openMints: {} },
+  usage: { listenMs: 0, transcribeMs: null, mints: 1, openMints: {} },
   closed: [
     { mintId: 'a', ms: 5_000 },
     { mintId: 'zzz', ms: 5_000 },
@@ -1523,6 +1586,105 @@ assert.equal(
   0,
   'a stream still inside its report window is not charged',
 );
+const fiveMinutes = 300_000;
+const transcribePlan = (
+  overrides: Partial<Parameters<typeof planTranscribe>[0]> = {},
+) =>
+  planTranscribe({
+    usage: { listenMs: 0, transcribeMs: 0 },
+    budgetMicros: 0,
+    limits: listenLimits,
+    worst: { ms: fiveMinutes, micros: transcribeCostMicros(fiveMinutes) },
+    claimed: { ms: fiveMinutes, micros: transcribeCostMicros(fiveMinutes) },
+    ...overrides,
+  });
+assert.equal(
+  transcribeCostMicros(60_000),
+  4_300,
+  'a minute of recording is priced at the pre-recorded rate',
+);
+const reserved = transcribePlan();
+assert.deepEqual(
+  [reserved.held, reserved.transcribeMs, reserved.budgetDeltaMicros],
+  [null, fiveMinutes, transcribeCostMicros(fiveMinutes)],
+  'a recording reserves its worst case',
+);
+assert.equal(
+  transcribePlan({
+    usage: { listenMs: 3_600_000 - fiveMinutes, transcribeMs: 0 },
+  }).held,
+  null,
+  'a recording that just fits is let through',
+);
+assert.equal(
+  transcribePlan({
+    usage: { listenMs: 3_000_000, transcribeMs: 400_000 },
+  }).held,
+  'listenLimit',
+  'listening and recordings share the day, held when the reserve would pass it',
+);
+const claimOf = (ms: number) => ({ ms, micros: transcribeCostMicros(ms) });
+const fourMinutesLeft = { listenMs: 3_600_000 - 240_000, transcribeMs: 0 };
+assert.deepEqual(
+  (({ held, reserved }) => [held, reserved.ms])(
+    transcribePlan({ usage: fourMinutesLeft, claimed: claimOf(10_000) }),
+  ),
+  [null, 10_000],
+  'a short claim is reserved at its own length when the worst case does not fit',
+);
+assert.equal(
+  transcribePlan({ usage: fourMinutesLeft, claimed: claimOf(270_000) }).held,
+  'listenLimit',
+  'a claim longer than what is left is still held',
+);
+assert.deepEqual(
+  transcribePlan({
+    usage: { listenMs: 3_600_000, transcribeMs: 0 },
+  }).budgetDeltaMicros,
+  0,
+  'a held recording charges nothing',
+);
+assert.equal(
+  transcribePlan({
+    budgetMicros: VOICE_DAILY_BUDGET_CENTS * 10_000,
+  }).held,
+  'budgetReached',
+  'the site cap holds a recording',
+);
+assert.equal(
+  plan({ usage: { ...emptyUsage, transcribeMs: 3_600_000 } }).held,
+  'listenLimit',
+  'minutes of recordings count against streamed listening',
+);
+const settledShort = planTranscribeSettle({
+  usage: { transcribeMs: fiveMinutes },
+  reservedMs: fiveMinutes,
+  reservedMicros: transcribeCostMicros(fiveMinutes),
+  actualMs: 42_000,
+  actualMicros: transcribeCostMicros(42_000),
+});
+assert.equal(
+  settledShort.transcribeMs,
+  42_000,
+  'a short one is charged as long as it was',
+);
+assert.ok(
+  settledShort.budgetDeltaMicros < 0,
+  'and the rest of the reserve comes back',
+);
+const settledLong = planTranscribeSettle({
+  usage: { transcribeMs: fiveMinutes },
+  reservedMs: fiveMinutes,
+  reservedMicros: transcribeCostMicros(fiveMinutes),
+  actualMs: fiveMinutes + 6_000,
+  actualMicros: transcribeCostMicros(fiveMinutes + 6_000),
+});
+assert.equal(
+  settledLong.transcribeMs,
+  fiveMinutes + 6_000,
+  'one longer than the reserve is charged in full',
+);
+assert.ok(settledLong.budgetDeltaMicros > 0, 'and its extra cost is added');
 const burst = Array.from({ length: 300 }).reduce<{
   usage: ListenUsage;
   failures: number;

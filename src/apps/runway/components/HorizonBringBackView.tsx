@@ -34,7 +34,7 @@ import {
 import {
   selectBalances,
   selectHeldBy,
-} from '@apps/runway/store/selectors/balanceSelectors';
+} from '@apps/runway/store/selectors/billCoverSelectors';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectAllHorizonItems,

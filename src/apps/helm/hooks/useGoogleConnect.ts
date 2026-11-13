@@ -5,6 +5,9 @@ export interface GoogleConnectOptions {
   accountId?: string | null;
   /** Adding another account: Google asks which one. */
   isAnotherAccount?: boolean;
+  /** What is being connected; Calendar when left out. */
+  connectorId?:
+    'google:calendar' | 'google:gmail' | 'google:drive' | 'google:contacts';
 }
 
 export interface GoogleConnectValue {
@@ -12,6 +15,8 @@ export interface GoogleConnectValue {
   begin: (options?: GoogleConnectOptions) => void;
   /** Opens the calendar picker on a connected account's grant, to change which calendars count. */
   openCalendarPicker: (accountId: string) => void;
+  /** Opens the contacts picker on an account that already shares contacts, or connects one first. */
+  openContacts: () => void;
 }
 
 export const GoogleConnectContext = createContext<GoogleConnectValue | null>(
