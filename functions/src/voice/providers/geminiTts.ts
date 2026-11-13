@@ -6,7 +6,7 @@ const MODEL = 'gemini-3.8-flash-lite-tts';
 export const GEMINI_SAMPLE_RATE = 24_000;
 
 interface SseEvent {
-  error?: unknown;
+  error?: { code?: unknown };
   candidates?: {
     content?: { parts?: { inlineData?: { data?: string } }[] };
   }[];
@@ -14,7 +14,10 @@ interface SseEvent {
 
 const readAudioChunks = (data: string) => {
   const event = JSON.parse(data) as SseEvent;
-  if (event.error) throw failedSpeech('geminiTts', 200);
+  if (event.error) {
+    const { code } = event.error;
+    throw failedSpeech('geminiTts', typeof code === 'number' ? code : 200);
+  }
   return (event.candidates?.[0]?.content?.parts ?? []).flatMap((part) =>
     part.inlineData?.data
       ? [new Uint8Array(Buffer.from(part.inlineData.data, 'base64'))]
@@ -81,7 +84,7 @@ export function createGeminiTts({
   return {
     id: 'geminiTts',
     // Gemini streams raw PCM only, so `format` is ignored.
-    async speak({ text, voiceId, signal }) {
+    async speak({ text, voiceId, signal, delivery }) {
       const res = await fetchImpl(
         `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`,
         {
@@ -91,7 +94,9 @@ export function createGeminiTts({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            contents: [{ parts: [{ text }] }],
+            contents: [
+              { parts: [{ text: delivery ? `${delivery}: ${text}` : text }] },
+            ],
             generationConfig: {
               responseModalities: ['AUDIO'],
               speechConfig: {

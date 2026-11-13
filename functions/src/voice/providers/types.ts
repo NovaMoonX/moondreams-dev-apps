@@ -14,6 +14,8 @@ export interface TtsProvider {
     voiceId: string;
     format: TtsFormat;
     signal?: AbortSignal;
+    /** How to say it ("Say this in a calm, even voice"); only a provider that reads instructions uses it. */
+    delivery?: string;
   }): Promise<TtsSpeech>;
 }
 

@@ -47,7 +47,7 @@ const cases: [string, string | null, string | null][] = [
         },
       ],
     }),
-    'Got it. Call the florist, Friday.',
+    'Got it. Call the florist on Friday.',
   ],
   [
     'one task due tomorrow',
@@ -59,7 +59,7 @@ const cases: [string, string | null, string | null][] = [
         },
       ],
     }),
-    'Got it. Buy the rings, tomorrow.',
+    'Got it. Buy the rings tomorrow.',
   ],
   [
     'one task at a moment, read in the person zone',
@@ -71,7 +71,7 @@ const cases: [string, string | null, string | null][] = [
         },
       ],
     }),
-    'Got it. Call Dana, tomorrow at 9:30 AM.',
+    'Got it. Call Dana tomorrow at 9:30 AM.',
   ],
   [
     'one task a week or more away',
@@ -83,7 +83,7 @@ const cases: [string, string | null, string | null][] = [
         },
       ],
     }),
-    'Got it. Send the invitations, November 20.',
+    'Got it. Send the invitations on November 20.',
   ],
   [
     'a title that ends in a full stop',
@@ -169,7 +169,7 @@ const sealedFor = (inputMode: string) => {
 };
 assert.equal(
   sealedFor('voice').spoken,
-  'Got it. Call the florist, Friday.',
+  'Got it. Call the florist on Friday.',
   'a spoken turn seals its line with the execution',
 );
 assert.equal(sealedFor('typed').spoken, null, 'a typed turn seals no line');

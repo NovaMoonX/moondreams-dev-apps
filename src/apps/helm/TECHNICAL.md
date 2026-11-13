@@ -893,7 +893,7 @@ Two routes, picked on the server before any model call by `nomos/route.ts` (pure
 
 Only a spoken turn gets a spoken line (owner, round 6 second set); a typed turn gets the written reply only. "Mute" on home's dock or in the conversation over a page (round 6e) silences spoken lines for the sitting (the current session, device state only, never stored). The line is stored sealed as `spoken`:
 
-- **Action-only turns** (as built, issue 12: `buildSpokenAck` in `nomos/spoken.ts`, sealed in the execution as `spoken`, null for a typed turn): code builds the line from the execution summary ("Got it. Call the florist, Friday." / "Done. Moved to Friday."), priority `ack`, spoken by the device voice (section 20).
+- **Action-only turns** (as built, issue 12: `buildSpokenAck` in `nomos/spoken.ts`, sealed in the execution as `spoken`, null for a typed turn): code builds the line from the execution summary ("Got it. Call the florist on Friday." / "Done. Moved to Friday."), priority `ack`, spoken by the device voice (section 20).
 - **Answers**: the model writes `answer.spoken` (≤280 characters, plain sentences, no lists, no Markdown; toned), priority `reply`, spoken by the cloud voice. A long answer's spoken part is a summary and the screen holds the rest; reading the whole thing aloud is "Read it all", priority `summary`.
 - **Labels and cautions are code's**: a spoken general part is always introduced by "Not from your records" built by code (section 6), and a health answer's caution is a fixed short spoken line, never toned.
 - **Questions** are spoken as code builds them ("Which Dana: your sister or Dana at work?") and answered by voice through the same option matcher as a tap.

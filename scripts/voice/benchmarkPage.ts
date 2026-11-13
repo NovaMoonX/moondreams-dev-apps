@@ -101,7 +101,12 @@ const median = (values: (number | null)[]) => {
       : (sorted[middle - 1] + sorted[middle]) / 2;
 };
 
-const summaryTable = (providers: Provider[]) => {
+const BASE =
+  new URLSearchParams(window.location.search).get('set') === 'all-voices'
+    ? '/voice-benchmark/all-voices/'
+    : '/voice-benchmark/';
+
+const summaryTable = (providers: Provider[], replyCount: number) => {
   const rows = providers.flatMap((provider) =>
     provider.skipped !== null
       ? [
@@ -140,9 +145,13 @@ const summaryTable = (providers: Provider[]) => {
       h(
         'tr',
         {},
-        ...['Voice', 'First sound', 'Done', 'Stream cut', 'All 12'].map(
-          (text) => h('th', {}, text),
-        ),
+        ...[
+          'Voice',
+          'First sound',
+          'Done',
+          'Stream cut',
+          `All ${replyCount}`,
+        ].map((text) => h('th', {}, text)),
       ),
       ...rows,
     ),
@@ -168,7 +177,7 @@ const providerRow = (provider: Provider, voice: Voice, sample: Sample) => {
           h('audio', {
             controls: '',
             preload: 'none',
-            src: `/voice-benchmark/${sample.file}`,
+            src: `${BASE}${sample.file}`,
           }),
         ]),
     figures,
@@ -339,7 +348,7 @@ const render = (app: HTMLElement, results: Results) => {
     h(
       'section',
       { class: 'card' },
-      summaryTable(results.providers),
+      summaryTable(results.providers, results.replies.length),
       priceNote(),
       h(
         'p',
@@ -353,7 +362,7 @@ const render = (app: HTMLElement, results: Results) => {
 
 const app = document.getElementById('app');
 if (app !== null) {
-  fetch('/voice-benchmark/results.json')
+  fetch(`${BASE}results.json`)
     .then((res) => (res.ok ? (res.json() as Promise<Results>) : null))
     .catch(() => null)
     .then((results) => {
