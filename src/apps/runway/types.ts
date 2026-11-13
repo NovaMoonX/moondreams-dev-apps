@@ -438,7 +438,8 @@ export interface GoalSealed {
 
 /** What an event's costs fall back on once the money put toward it runs out. */
 export type HorizonRest =
-  | { kind: 'pays' }
+  /** `startsOn`: pays before this day give nothing; null starts at once. */
+  | { kind: 'pays'; startsOn: DateOnly | null }
   | { kind: 'onePay'; dayKey: string }
   | { kind: 'outside' }
   | { kind: 'later' };
@@ -487,16 +488,31 @@ export interface HorizonSealed {
   links: HorizonLink[];
   /** The goal this event draws its costs from while it keeps saving; null for none, and for a version sealed before goals could be linked. */
   goalId: string | null;
+  /** Comes back every year: finishing it, or calling off just this year, lines up next year's. */
+  isYearly: boolean;
+  /** The year before's event this one was lined up from; null for one added by hand. */
+  fromId: string | null;
 }
 
 /** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside`, `ending`, `pricedOn` or `endsAfter` existed lacks them. */
 export type HorizonStored = Omit<
   HorizonSealed,
-  'rest' | 'costs' | 'state' | 'stateOn' | 'stateMoney' | 'links' | 'goalId'
+  | 'rest'
+  | 'costs'
+  | 'state'
+  | 'stateOn'
+  | 'stateMoney'
+  | 'links'
+  | 'goalId'
+  | 'isYearly'
+  | 'fromId'
 > & {
+  isYearly?: boolean;
+  fromId?: string | null;
   links?: HorizonLink[];
   goalId?: string | null;
-  rest?: HorizonRest | null;
+  /** A `pays` answer sealed before `startsOn` existed lacks it. */
+  rest?: HorizonRest | { kind: 'pays' } | null;
   state?: HorizonState;
   stateOn?: DateOnly | null;
   stateMoney?: HorizonMoneyLeft | null;

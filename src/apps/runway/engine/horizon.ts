@@ -4,6 +4,7 @@ import type {
   DateOnly,
   HorizonCost,
   HorizonMoneyLeft,
+  HorizonRest,
   HorizonSealed,
   HorizonState,
   HorizonStored,
@@ -198,10 +199,17 @@ export const listUnmarkedOutside = (
     paid,
   ).filter((payment) => payment.paid === null);
 
+const readRest = (rest: HorizonStored['rest']): HorizonRest =>
+  !rest
+    ? { kind: 'later' }
+    : rest.kind === 'pays'
+      ? { kind: 'pays', startsOn: 'startsOn' in rest ? rest.startsOn : null }
+      : rest;
+
 /** A stored payload with the fields later issues added filled in, so a version sealed before them reads as it always meant. */
 export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
   ...stored,
-  rest: stored.rest ?? { kind: 'later' },
+  rest: readRest(stored.rest),
   costs: stored.costs.map((cost) => ({
     ...cost,
     isOutside: cost.isOutside ?? false,
@@ -217,6 +225,8 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
   stateMoney: stored.stateMoney ?? null,
   links: stored.links ?? [],
   goalId: stored.goalId ?? null,
+  isYearly: stored.isYearly ?? false,
+  fromId: stored.fromId ?? null,
 });
 
 /** The due dates of a repeating payment's first occurrences from `from` that `heldCents` covers in full, soonest first. */
