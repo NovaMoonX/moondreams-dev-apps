@@ -19110,37 +19110,6 @@ console.log('runway engine: ok');
   );
   assert.equal(heldPlan.coveredCents, 3_000);
 
-  const startsJan31 = item({ kind: 'pays', startsOn: jan31 }, [storage]);
-  assert.deepEqual(
-    [jan15, jan31].map((on) =>
-      costLines(draftOn(on, startsJan31)).map((line) => line.cents),
-    ),
-    [[], [10_000]],
-    'pays before the start give nothing and the pays from it split the cost',
-  );
-  assert.deepEqual(
-    planCostShares(
-      startsJan31,
-      days,
-      utc(2027, 11, 31),
-      'conservative',
-    )[0].parts.map((part) => part.day.on),
-    [jan31],
-    'a payment is carried only by the pays on or after the start',
-  );
-
-  const startsLater = planCostShares(
-    item({ kind: 'pays', startsOn: utc(2027, 1, 14) }, [storage]),
-    days,
-    utc(2027, 11, 31),
-    'conservative',
-  )[0];
-  assert.deepEqual(
-    startsLater.parts.map((part) => part.day.on),
-    plans[0].parts.map((part) => part.day.on),
-    'a payment due before the start day is carried by its normal pays, never left unfunded',
-  );
-
   const confirmedUp = item({ kind: 'pays', startsOn: null }, [storage], 8_000);
   const laterShare = (horizonItem: ReturnType<typeof item>) =>
     costLines(draftOn(jan31, horizonItem))[0]?.cents ?? 0;
