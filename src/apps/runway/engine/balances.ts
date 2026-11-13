@@ -31,6 +31,17 @@ import {
   settlePaid,
 } from './progress';
 
+/** What a paid mark took from the event's goal, never more than the payment came to less what Free to Spend fronted. */
+const getGoalPart = (entry: {
+  amountCents: Cents;
+  fromFreeCents: Cents;
+  fromGoalCents: Cents;
+}) =>
+  Math.min(
+    Math.max(0, entry.fromGoalCents),
+    Math.max(0, entry.amountCents - Math.max(0, entry.fromFreeCents)),
+  );
+
 export interface BalancesInput {
   startDate: DateOnly | null;
   moves: readonly OpenMove[];
@@ -181,8 +192,23 @@ export function deriveBalances(input: BalancesInput): Balances {
           sum + Math.min(Math.max(0, entry.fromFreeCents), entry.amountCents),
         0,
       ),
+      fromGoalCents: counted.reduce(
+        (sum, entry) => sum + getGoalPart(entry),
+        0,
+      ),
+      goals: counted.flatMap((entry): [string, Cents][] =>
+        entry.goalId !== null && getGoalPart(entry) > 0
+          ? [[entry.goalId, getGoalPart(entry)]]
+          : [],
+      ),
     };
   });
+  const goalConsumed = costMarks
+    .flatMap((mark) => mark.goals)
+    .reduce<Record<string, Cents>>((sums, [goalId, cents]) => {
+      sums[goalId] = (sums[goalId] ?? 0) + cents;
+      return sums;
+    }, {});
   const markedByItem = Object.fromEntries(
     costMarks.map((mark) => [mark.itemId, mark.amountCents]),
   );
@@ -195,13 +221,16 @@ export function deriveBalances(input: BalancesInput): Balances {
   const consumed = Object.fromEntries([
     ...costMarks.map((mark): [string, Cents] => [
       mark.itemId,
-      mark.amountCents - mark.fromFreeCents,
+      mark.amountCents - mark.fromFreeCents - mark.fromGoalCents,
     ]),
     ...paidByBill.map((bill): [string, Cents] => [
       bill.billId,
       bill.amountCents - bill.fromFreeCents,
     ]),
   ]);
+  Object.entries(goalConsumed).forEach(([goalId, cents]) => {
+    consumed[goalId] = (consumed[goalId] ?? 0) + cents;
+  });
 
   const counted =
     startDate === null
@@ -234,6 +263,7 @@ export function deriveBalances(input: BalancesInput): Balances {
       ...Object.keys(spentByItem),
       ...Object.keys(transfers),
       ...costMarks.map((mark) => mark.itemId),
+      ...Object.keys(goalConsumed),
     ].filter((id) => !isCard(id)),
   );
   const assignedByItem = Object.fromEntries(

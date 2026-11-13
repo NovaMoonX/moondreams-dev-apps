@@ -6,7 +6,10 @@ import { CalendarDays } from 'lucide-react';
 import AppLogo from '@/components/AppLogo';
 import ConnectedSourcesList from '@/components/ConnectedSourcesList';
 import SectionHeader from '@/components/SectionHeader';
-import { readConnectorAppId } from '@/lib/connections/contract';
+import {
+  isOutsideAccount,
+  readConnectorAppId,
+} from '@/lib/connections/contract';
 import {
   getConnectorManifest,
   getSourceManifest,
@@ -23,7 +26,11 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
-import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
+import {
+  formatUpdatedAt,
+  getNewestOkAt,
+  isStale,
+} from '@apps/helm/utils/synced';
 import { formatDateShort } from '@/utils/formatUtils';
 
 interface ConnectedAppsScreenProps {
@@ -109,38 +116,52 @@ function ConnectedAppsScreen({
         logo: <AppLogo appId={appId} className={LOGO} />,
         meta: isTrouble
           ? HELM_COPY.connectedStopped
-          : newestOkAt === null
+          : newestOkAt === null || !isStale(newestOkAt, now)
             ? readLine
-            : `${readLine} · ${HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}`,
+            : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`,
         isTrouble,
       };
     })
     .sort((a, b) => a.appName.localeCompare(b.appName));
 
-  const googleConnected = grants
-    .filter((grant) => grant.connectorId === 'google:calendar')
-    .map((grant) => {
-      const account = accounts.find((entry) => entry.id === grant.accountId);
+  const googleAccountIds = [
+    ...new Set(
+      grants
+        .filter((grant) => isOutsideAccount(grant.accountId))
+        .map((grant) => grant.accountId),
+    ),
+  ];
+  const googleConnected = googleAccountIds
+    .map((accountId) => {
+      const own = grants.filter((grant) => grant.accountId === accountId);
+      const lead =
+        own.find((grant) => grant.connectorId === 'google:calendar') ?? own[0];
+      const account = accounts.find((entry) => entry.id === accountId);
       const isTrouble =
-        grant.status !== 'live' || account?.status === 'needsReconnect';
-      const newestOkAt = getNewestOkAt(grant);
-      const readLine = (
-        getConnectorManifest(grant.connectorId)?.categories ?? []
-      )
-        .filter((category) => grant.categories[category.id]?.isOn)
-        .map((category) => category.label)
+        own.some((grant) => grant.status !== 'live') ||
+        account?.status === 'needsReconnect';
+      const newestOkAt = own.reduce<number | null>((newest, grant) => {
+        const at = getNewestOkAt(grant);
+        return at !== null && (newest === null || at > newest) ? at : newest;
+      }, null);
+      const readLine = own
+        .flatMap((grant) =>
+          (getConnectorManifest(grant.connectorId)?.categories ?? [])
+            .filter((category) => grant.categories[category.id]?.isOn)
+            .map((category) => category.label),
+        )
         .join(', ');
       return {
-        id: grant.id,
+        id: lead.id,
         appName: account
           ? HELM_COPY.googleAccountTitle(account.email, account.label)
           : HELM_COPY.googleCalendarName,
         logo: googleLogo,
         meta: isTrouble
           ? HELM_COPY.connectedStopped
-          : newestOkAt === null || readLine === ''
+          : newestOkAt === null || readLine === '' || !isStale(newestOkAt, now)
             ? readLine || HELM_COPY.connectedNothingOn
-            : `${readLine} · ${HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}`,
+            : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`,
         isTrouble,
       };
     })

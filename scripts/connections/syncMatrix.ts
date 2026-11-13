@@ -681,10 +681,14 @@ const main = async () => {
     assert.deepEqual(
       refs(first),
       [
+        `${personal}|fx-cake-tasting`,
         `${personal}|fx-dentist`,
         `${personal}|fx-lunch`,
+        `${personal}|fx-maya`,
         `${personal}|fx-pottery`,
+        `${personal}|fx-starlight`,
         `${shifts}|fx-dinner-shift`,
+        `${shifts}|fx-night-shift`,
       ],
       'a full read copies each event once, the same event on two calendars once',
     );
@@ -697,7 +701,7 @@ const main = async () => {
     );
     assert.equal(lunch?.get('isBusy'), true);
     assert.equal(lunch?.get('isAllDay'), false);
-    assert.equal((await t.grant()).categoryState.events.count, 4);
+    assert.equal((await t.grant()).categoryState.events.count, 8);
     const saved = (await t.cursorRef.get()).get('state') as string;
     assert.ok(saved.includes('fixture-sync'), 'the sync token is saved');
 
@@ -710,7 +714,7 @@ const main = async () => {
     const second = await t.copies();
     assert.equal(
       second.length,
-      5,
+      9,
       'a second run is incremental: the unseen copy is kept',
     );
     assert.ok(
@@ -729,7 +733,7 @@ const main = async () => {
     await t.run();
     assert.equal(
       (await t.copies()).length,
-      4,
+      8,
       'a gone token drops to a full re-read, which clears the unseen',
     );
 
@@ -738,9 +742,12 @@ const main = async () => {
     assert.deepEqual(
       refs(await t.copies()),
       [
+        `${personal}|fx-cake-tasting`,
         `${personal}|fx-dentist`,
         `${personal}|fx-lunch`,
+        `${personal}|fx-maya`,
         `${personal}|fx-pottery`,
+        `${personal}|fx-starlight`,
       ],
       'dropping a calendar drops its copies',
     );
@@ -896,7 +903,7 @@ const main = async () => {
     assert.deepEqual((await t.grant()).errors, []);
     assert.equal(
       (await t.copies()).length,
-      3,
+      6,
       'a restarted read removes the copy the source no longer has',
     );
   }

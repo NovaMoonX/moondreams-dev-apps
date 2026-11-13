@@ -3,11 +3,13 @@ import {
   Archive,
   ListChecks,
   Pencil,
+  Route,
   TriangleAlert,
   Wallet,
 } from 'lucide-react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -35,6 +37,7 @@ import {
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import MemoriesSheet from '@apps/runway/components/MemoriesSheet';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { useHoldsUndo } from '@apps/runway/hooks/useHoldsUndo';
@@ -44,11 +47,13 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import {
   ACCOUNT_WORDS,
+  LINK_WORDS,
   MAX_PURCHASE_CENTS,
+  MEMORY_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
-  TICK_HIT_CLASS,
 } from '@apps/runway/constants';
-import { hasBankBalance } from '@apps/runway/engine/accounts';
+import { getPendingCents, hasBankBalance } from '@apps/runway/engine/accounts';
+import { describeBankUpdated } from '@apps/runway/utils/bankFreshness';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { useAccountInterest } from '@apps/runway/hooks/useAccountInterest';
@@ -59,17 +64,20 @@ import {
   setAccountBalance,
   setAccountHolds,
 } from '@apps/runway/store/actions/accountActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectAccountHoldings,
   selectAccounts,
+  selectAllCards,
   selectEnvelopes,
   selectGoals,
   selectItemLooks,
   selectItemNames,
+  selectRouteMemories,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenAccount } from '@apps/runway/types';
 import { formatApy } from '@apps/runway/utils/accountText';
+import { getCardNamer } from '@apps/runway/utils/cardText';
 
 const MAX_HOLD_LINES = 4;
 
@@ -120,6 +128,9 @@ function AccountSheet({
   const [isUnfolded, setIsUnfolded] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
+  const [isShowingMoves, setIsShowingMoves] = useState(false);
+  const routes = useAppSelector(selectRouteMemories);
+  const cardNameOf = getCardNamer(useAppSelector(selectAllCards));
   const [error, setError] = useState<string | null>(null);
 
   const nameOf = (id: string) =>
@@ -153,18 +164,52 @@ function AccountSheet({
               formatCents(interest.cents),
               formatDateOrdinalUTC(interest.on),
             );
+  const now = useNow(60_000);
+  const bank = useAppSelector((state) =>
+    account.linkId === null
+      ? null
+      : (state.runway.accountBalances.find(
+          (entry) => entry.id === account.id,
+        ) ?? null),
+  );
+  const bankName = useAppSelector((state) =>
+    account.linkId === null
+      ? null
+      : (state.runway.links.find((link) => link.id === account.linkId)
+          ?.institutionName ?? null),
+  );
+  const bankUpdated =
+    bank === null ? null : describeBankUpdated(bank.asOf, now);
+  const pendingCents = getPendingCents(bank ?? undefined) ?? 0;
   const facts = [
     account.balanceOn === null
       ? null
       : isBankBalance
-        ? ACCOUNT_WORDS.bankBalanceOn(formatDateOrdinalUTC(account.balanceOn))
+        ? (bankUpdated?.text ??
+          ACCOUNT_WORDS.bankBalanceOn(formatDateOrdinalUTC(account.balanceOn)))
         : ACCOUNT_WORDS.balanceOn(formatDateOrdinalUTC(account.balanceOn)),
+    isBankBalance && pendingCents > 0
+      ? ACCOUNT_WORDS.pendingAmount(formatCents(pendingCents))
+      : null,
     account.apyBps === null
       ? null
       : ACCOUNT_WORDS.apyFact(formatApy(account.apyBps)),
     account.isPullAccount ? ACCOUNT_WORDS.pullsFrom : null,
-    linkedFact,
+    isBankBalance && bankUpdated !== null ? null : linkedFact,
   ].filter((fact): fact is string => fact !== null);
+
+  const moveRows = routes
+    .filter((route) => route.fromAccountId === account.id)
+    .map((route) => ({
+      id: route.id,
+      name:
+        route.toCardId !== null
+          ? MEMORY_WORDS.paymentTo(cardNameOf(route.toCardId))
+          : MEMORY_WORDS.moveTo(
+              openAccounts.find((other) => other.id === route.toAccountId)
+                ?.name ?? 'another account',
+            ),
+    }));
 
   const goTo = (next: typeof view) => {
     setError(null);
@@ -427,8 +472,7 @@ function AccountSheet({
                     {group.rows.map((row) => (
                       <li key={row.id}>
                         <label className='flex min-h-14 items-center gap-3 px-3 py-2'>
-                          <Checkbox
-                            className={TICK_HIT_CLASS}
+                          <AppCheckbox
                             checked={picked.has(row.id)}
                             onCheckedChange={(next) =>
                               toggle(row.id, Boolean(next))
@@ -496,7 +540,18 @@ function AccountSheet({
               : formatCents(account.balanceCents)
           }
           fact={facts.length === 0 ? null : facts.join(' · ')}
+          isFactFresh={isBankBalance && (bankUpdated?.isFresh ?? false)}
         />
+        {isBankBalance && bank?.hasInstantBalance === true && (
+          <HelpTip
+            title={ACCOUNT_WORDS.autoCheckTitle}
+            badgeLabel={ACCOUNT_WORDS.autoCheckChip}
+          >
+            <p>
+              {ACCOUNT_WORDS.autoCheck(bankName ?? LINK_WORDS.fallbackBank)}
+            </p>
+          </HelpTip>
+        )}
         {interest !== null && interestLine !== null && (
           <HelpTip
             title={ACCOUNT_WORDS.interestTitle(account.name)}
@@ -612,6 +667,16 @@ function AccountSheet({
             subtitle={ACCOUNT_WORDS.changeSub}
             onClick={onChange}
           />
+          {moveRows.length > 0 && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Route />}
+              label={MEMORY_WORDS.movesRow}
+              subtitle={MEMORY_WORDS.movesRowSub}
+              onClick={() => setIsShowingMoves(true)}
+            />
+          )}
           <ActionRow
             isGrouped
             icon={<Archive />}
@@ -642,6 +707,13 @@ function AccountSheet({
       actions={<ValuesEyeButton />}
     >
       {getBody()}
+      {isShowingMoves && moveRows.length > 0 && (
+        <MemoriesSheet
+          title={MEMORY_WORDS.movesTitle}
+          rows={moveRows}
+          onClose={() => setIsShowingMoves(false)}
+        />
+      )}
     </FormSheet>
   );
 }

@@ -71,7 +71,8 @@ export const readConnectorOptions = onCall(
     if (!account.exists || account.get('status') !== 'live')
       throw new HttpsError(
         'failed-precondition',
-        'Reconnect this account to see its calendars.',
+        'Reconnect this account to continue.',
+        { reason: 'reconnect' },
       );
     try {
       return {
@@ -81,7 +82,8 @@ export const readConnectorOptions = onCall(
       if (error instanceof ReconnectNeeded)
         throw new HttpsError(
           'failed-precondition',
-          'Reconnect this account to see its calendars.',
+          'Reconnect this account to continue.',
+          { reason: 'reconnect' },
         );
       logger.warn('connections.options.failed', {
         connectorId,

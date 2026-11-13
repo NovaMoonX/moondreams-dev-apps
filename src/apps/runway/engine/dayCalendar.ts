@@ -1,22 +1,38 @@
 import type { Cents, DateOnly } from '@apps/runway/types';
 
 import { getPrevDueOn } from './cards';
+import type { PlanChange } from './planChanges';
 import type { GoalTrack } from './pace';
 
-export const CALENDAR_KINDS = ['income', 'bill', 'card', 'goal'] as const;
+export const CALENDAR_KINDS = [
+  'income',
+  'bill',
+  'card',
+  'goal',
+  'change',
+] as const;
 export type CalendarKind = (typeof CALENDAR_KINDS)[number];
 
 export type CalendarEntry =
   | { kind: 'income'; on: DateOnly; dayKey: string }
-  | { kind: 'bill'; on: DateOnly; billId: string; totalCents: Cents }
+  | {
+      kind: 'bill';
+      on: DateOnly;
+      dueOn: DateOnly;
+      billId: string;
+      totalCents: Cents;
+    }
   | { kind: 'card'; on: DateOnly; cardId: string }
-  | { kind: 'goal'; on: DateOnly; goalId: string; track: GoalTrack | null };
+  | { kind: 'goal'; on: DateOnly; goalId: string; track: GoalTrack | null }
+  | { kind: 'change'; on: DateOnly; change: PlanChange };
 
 export interface CalendarSources {
   incomeDays: readonly { dayKey: string; on: DateOnly }[];
   billPayments: readonly {
     billId: string;
     dueOn: DateOnly;
+    /** The day it is paid; the entry sits there. */
+    payOn: DateOnly;
     totalCents: Cents;
   }[];
   /** `since` is the first day a due day counts, so a card is not shown due before it existed. */
@@ -30,6 +46,8 @@ export interface CalendarSources {
     targetDate: DateOnly | null;
     track: GoalTrack | null;
   }[];
+  /** Planned changes to a pay, bill, envelope or goal, one per item and day. */
+  planChanges: readonly PlanChange[];
 }
 
 const RANK = new Map<CalendarKind, number>(
@@ -71,10 +89,11 @@ export function buildCalendarEntries(
       .filter(({ on }) => inRange(on))
       .map(({ dayKey, on }): CalendarEntry => ({ kind: 'income', on, dayKey })),
     ...sources.billPayments
-      .filter(({ dueOn }) => inRange(dueOn))
-      .map(({ billId, dueOn, totalCents }): CalendarEntry => ({
+      .filter(({ payOn }) => inRange(payOn))
+      .map(({ billId, dueOn, payOn, totalCents }): CalendarEntry => ({
         kind: 'bill',
-        on: dueOn,
+        on: payOn,
+        dueOn,
         billId,
         totalCents,
       })),
@@ -90,6 +109,13 @@ export function buildCalendarEntries(
         ? [{ kind: 'goal', on: targetDate, goalId, track } as CalendarEntry]
         : [],
     ),
+    ...sources.planChanges
+      .filter(({ on }) => inRange(on))
+      .map((change): CalendarEntry => ({
+        kind: 'change',
+        on: change.on,
+        change,
+      })),
   ];
   return entries
     .sort((a, b) => (RANK.get(a.kind) ?? 0) - (RANK.get(b.kind) ?? 0))

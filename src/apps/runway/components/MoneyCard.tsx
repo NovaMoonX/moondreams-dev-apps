@@ -23,7 +23,7 @@ import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import type { MoneyPoint, MoneyRange } from '@apps/runway/engine/moneyHistory';
 import { useMoneySeries } from '@apps/runway/hooks/useMoneySeries';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import type { DateOnly } from '@apps/runway/types';
 import { describeFreeToSpend } from '@apps/runway/utils/balanceText';
 

@@ -14,6 +14,8 @@ export interface SourceClient {
     req: SyncPageRequest,
   ): Promise<SyncPageResult>;
   deepLink(connectorId: string, ref: string, ctx: SourceCtx): string | null;
+  /** True for a category read only when asked, which a sync never touches. */
+  isLive?(connectorId: string, category: string): boolean;
 }
 
 const getAdapter = (connectorId: string) => {
@@ -35,5 +37,11 @@ export class InProcessSourceClient implements SourceClient {
 
   deepLink(connectorId: string, ref: string, ctx: SourceCtx) {
     return getAdapter(connectorId).deepLink(ref, ctx);
+  }
+
+  isLive(connectorId: string, category: string) {
+    return getAdapter(connectorId).manifest.categories.some(
+      (entry) => entry.id === category && entry.mode === 'live',
+    );
   }
 }

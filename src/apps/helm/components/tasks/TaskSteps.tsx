@@ -7,16 +7,23 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ClipboardList } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import LockedButton from '@/components/LockedButton';
 import TickMark from '@/components/TickMark';
+import { useAppSelector } from '@/store';
 import { HELM_COPY, STEP_LIMIT, TASK_TITLE_CAP } from '@apps/helm/constants';
+import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { createProcedureFromTask } from '@apps/helm/store/actions/procedureActions';
 import {
   moveTaskStep,
   tickTaskStep,
 } from '@apps/helm/store/actions/taskActions';
+import { selectProcedureFromTask } from '@apps/helm/store/selectors/procedureSelectors';
+import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
 import {
   getOrderedSteps,
@@ -59,10 +66,17 @@ interface TaskStepsProps {
   editing: TaskEditing;
   onEdit: (stepId: string) => void;
   onBack: () => void;
+  /** Opens the procedure just made from these steps. */
+  onOpenProcedure: (procedureId: string) => void;
 }
 
 /** The task's steps: each ticked on its own, moved, edited or removed from its menu, with a field at the foot to add one. */
-function TaskSteps({ editing, onEdit, onBack }: TaskStepsProps) {
+function TaskSteps({
+  editing,
+  onEdit,
+  onBack,
+  onOpenProcedure,
+}: TaskStepsProps) {
   const { task, uid, isOffline, run, saveWords } = editing;
   const { addToast } = useToast();
   const steps = getOrderedSteps(task);
@@ -70,6 +84,8 @@ function TaskSteps({ editing, onEdit, onBack }: TaskStepsProps) {
   const [draft, setDraft] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [isMakingProcedure, setIsMakingProcedure] = useState(false);
+  const madeProcedure = useAppSelector(selectProcedureFromTask(task.id));
 
   const reportWords = (outcome: WordsOutcome) => {
     if (outcome === 'saved' || outcome === 'missing') return;
@@ -108,6 +124,35 @@ function TaskSteps({ editing, onEdit, onBack }: TaskStepsProps) {
           ? HELM_COPY.taskWordsUnreadable
           : HELM_COPY.wordsSaveFailed,
     );
+  };
+
+  const makeProcedure = async () => {
+    if (isMakingProcedure) return;
+    setIsMakingProcedure(true);
+    try {
+      const made = await createProcedureFromTask(
+        uid,
+        await getHelmEncryption(uid),
+        task,
+      );
+      if (made.kind === 'made') {
+        made.written.catch((error: unknown) => {
+          console.error('Helm procedure was not saved', error);
+          addToast({ title: HELM_COPY.editFailed, type: 'error' });
+        });
+        addToast({
+          title: made.isCut
+            ? HELM_COPY.procedureFromTaskCut
+            : HELM_COPY.procedureFromTaskMade(made.title),
+          type: 'success',
+        });
+        onOpenProcedure(made.id);
+      }
+    } catch (error) {
+      console.error('Helm procedure was not made', error);
+      addToast({ title: HELM_COPY.editFailed, type: 'error' });
+    }
+    setIsMakingProcedure(false);
   };
 
   const choose = (stepId: string, value: string) => {
@@ -197,6 +242,28 @@ function TaskSteps({ editing, onEdit, onBack }: TaskStepsProps) {
             );
           })}
         </ul>
+      )}
+      {madeProcedure ? (
+        <ActionRow
+          icon={<ClipboardList aria-hidden='true' />}
+          label={HELM_COPY.procedureFromTaskOpen(
+            madeProcedure.title || HELM_COPY.procedureUntitled,
+          )}
+          subtitle={HELM_COPY.procedureStepCount(
+            countSteps(groupSteps(madeProcedure)),
+          )}
+          hasChevron
+          onClick={() => onOpenProcedure(madeProcedure.id)}
+        />
+      ) : (
+        steps.length >= 2 && (
+          <ActionRow
+            icon={<ClipboardList aria-hidden='true' />}
+            label={HELM_COPY.procedureFromTask}
+            isDisabled={isMakingProcedure}
+            onClick={() => void makeProcedure()}
+          />
+        )
       )}
       {steps.length >= STEP_LIMIT ? (
         <p className='text-muted-foreground text-sm'>{HELM_COPY.stepsFull}</p>
