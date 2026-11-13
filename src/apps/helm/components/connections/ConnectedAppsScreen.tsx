@@ -26,7 +26,11 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
-import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
+import {
+  formatUpdatedAt,
+  getNewestOkAt,
+  isStale,
+} from '@apps/helm/utils/synced';
 import { formatDateShort } from '@/utils/formatUtils';
 
 interface ConnectedAppsScreenProps {
@@ -112,9 +116,9 @@ function ConnectedAppsScreen({
         logo: <AppLogo appId={appId} className={LOGO} />,
         meta: isTrouble
           ? HELM_COPY.connectedStopped
-          : newestOkAt === null
+          : newestOkAt === null || !isStale(newestOkAt, now)
             ? readLine
-            : `${readLine} · ${HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}`,
+            : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`,
         isTrouble,
       };
     })
@@ -155,9 +159,9 @@ function ConnectedAppsScreen({
         logo: googleLogo,
         meta: isTrouble
           ? HELM_COPY.connectedStopped
-          : newestOkAt === null || readLine === ''
+          : newestOkAt === null || readLine === '' || !isStale(newestOkAt, now)
             ? readLine || HELM_COPY.connectedNothingOn
-            : `${readLine} · ${HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}`,
+            : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`,
         isTrouble,
       };
     })

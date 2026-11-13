@@ -19,6 +19,7 @@ import {
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import type { NormalizedAccount } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
+import { cleanBankName } from '@apps/runway/utils/accountText';
 
 const NEW_VALUE = 'new';
 const SKIP_VALUE = 'skip';
@@ -147,8 +148,8 @@ function LinkMatchView({
           return (
             <li key={row.providerAccountId}>
               <SummaryRow
-                label={`${row.name}${row.mask ? ` ••${row.mask}` : ''}`}
-                ariaLabel={`${row.name}: ${LINK_WORDS.matchTitle}`}
+                label={`${cleanBankName(row.name)}${row.mask ? ` ••${row.mask}` : ''}`}
+                ariaLabel={`${cleanBankName(row.name)}: ${LINK_WORDS.matchTitle}`}
                 onClick={() => setOpenIndex(index)}
               >
                 {getPickWords(choices[index] ?? { kind: 'skip' })}

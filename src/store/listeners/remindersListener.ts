@@ -24,6 +24,7 @@ export function startRemindersListener(
     normalize: (id, data) => ({
       id,
       ...(data as Omit<Reminder, 'id'>),
+      lastSentAt: (data.lastSentAt as number | undefined) ?? null,
     }),
     onData: onChange,
   });

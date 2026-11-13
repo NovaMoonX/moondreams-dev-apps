@@ -14,6 +14,7 @@ import type {
   NormalizedAccount,
   RunwayEncryption,
 } from '@apps/runway/types';
+import { cleanBankName } from '@apps/runway/utils/accountText';
 
 export interface LinkSession {
   linkId: string;
@@ -47,12 +48,12 @@ export interface LinkSyncResult {
 }
 
 const syncCallable = httpsCallable<
-  { staleOnly?: boolean },
+  { staleOnly?: boolean; fresh?: boolean },
   { results: LinkSyncResult[] }
 >(functions, 'syncRunwayLinks');
 
 const createSessionCallable = httpsCallable<
-  { linkId?: string },
+  { linkId?: string; forCardDetails?: true },
   { linkToken: string }
 >(functions, 'createRunwayLinkSession');
 const reconnectCallable = httpsCallable<
@@ -104,13 +105,14 @@ export async function unlinkLink(linkId: string): Promise<boolean> {
   return response.data.isRevokedAtBank;
 }
 
-/** Asks Functions to bring in what is new from every active bank link, or with `staleOnly` only from those not synced for 15 minutes; safe to repeat. */
+/** Asks Functions to bring in what is new from every active bank link, or with `staleOnly` only from those not synced for 15 minutes, or with `fresh` also asking each bank for its latest balances; safe to repeat. */
 export async function syncLinks(
-  options: { staleOnly?: boolean } = {},
+  options: { staleOnly?: boolean; fresh?: boolean } = {},
 ): Promise<LinkSyncResult[]> {
-  const response = await syncCallable(
-    options.staleOnly ? { staleOnly: true } : {},
-  );
+  const response = await syncCallable({
+    ...(options.staleOnly ? { staleOnly: true } : {}),
+    ...(options.fresh ? { fresh: true } : {}),
+  });
   return response.data.results;
 }
 
@@ -119,6 +121,17 @@ export async function reconnectLink(
   linkId: string,
 ): Promise<LinkReconnectResult | null> {
   const session = await createSessionCallable({ linkId });
+  const opened = await openBankLink(session.data.linkToken);
+  if (opened === null) return null;
+  const response = await reconnectCallable({ linkId });
+  return response.data;
+}
+
+/** Opens the bank's window on an active link asking only for agreement to share card details (no account picking, so another sign-in's accounts never join this one), then syncs it with its statements. Null when the person closed the window. */
+export async function agreeToCardDetails(
+  linkId: string,
+): Promise<LinkReconnectResult | null> {
+  const session = await createSessionCallable({ linkId, forCardDetails: true });
   const opened = await openBankLink(session.data.linkToken);
   if (opened === null) return null;
   const response = await reconnectCallable({ linkId });
@@ -163,20 +176,20 @@ export async function linkChosenAccounts(
         encryption,
         {
           issuer: session.institutionName,
-          name: entry.name,
+          name: cleanBankName(entry.name),
           dueDay: null,
           lastFour: entry.mask,
           payFromAccountId: null,
           owedCents: Math.max(0, entry.balanceCents ?? 0),
         },
-        LINK_WORDS.newCardSummary(entry.name),
+        LINK_WORDS.newCardSummary(cleanBankName(entry.name)),
       );
       created.push(cardId);
       onCreated(index, { kind: 'existing', target: 'card', id: cardId });
       return { ...base, cardId };
     }
     const accountId = await createAccount(uid, encryption, {
-      name: entry.name,
+      name: cleanBankName(entry.name),
       institution: session.institutionName,
       kind: toAccountKind(entry.subtype),
       countedTowardTotal: true,

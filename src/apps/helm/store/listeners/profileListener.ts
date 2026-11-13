@@ -12,6 +12,7 @@ import type { HelmProfile } from '@apps/helm/types';
 const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   assistantName: data.assistantName ?? null,
   assistantTone: data.assistantTone ?? null,
+  theme: data.theme ?? null,
   timeZone: data.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
   dayStartTime: data.dayStartTime ?? DEFAULT_DAY_START_TIME,
   dayEndTime: data.dayEndTime ?? DEFAULT_DAY_END_TIME,

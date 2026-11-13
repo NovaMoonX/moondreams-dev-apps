@@ -115,6 +115,17 @@ export const getLiveRecords = (
           record.connectionEndedAt === null;
   });
 
+/** The copies Today shows: the shared ones and an ended connection's kept ones, leaving out a calendar Google stopped sharing until it is reconnected. */
+export const getTodayRecords = (
+  stored: SyncedRecord[],
+  grants: ConnectionGrantWithId[],
+) =>
+  getLiveRecords(stored, grants, true).filter(
+    (record) =>
+      grants.find((grant) => grant.id === record.grantId)?.status !==
+      'needsReconnect',
+  );
+
 /** The events of the day `at` falls on, all-day first then by start, each thing once (`mergeSameThings`): one event on two accounts, or on a calendar and in an app, shows the authority's copy. */
 export function getDayEvents(
   records: SyncedRecord[],

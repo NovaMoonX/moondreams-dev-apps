@@ -51,6 +51,7 @@ export const MAP_NODES: MapNode[] = [
       'Hint to orchestrate',
       'Plan shape',
       'Automatic compaction',
+      'Keep a run going',
       'Improving the pipeline',
     ],
     lane: 'work',
@@ -59,7 +60,10 @@ export const MAP_NODES: MapNode[] = [
     does: 'Plans the work, briefs the helpers and tells you when it needs you.',
     parts: [
       { name: 'Orchestrate hint', does: 'steers big jobs through the plan' },
-      { name: 'Plan check', does: 'sends back a plan that is too dense to read in a minute' },
+      {
+        name: 'Plan check',
+        does: 'sends back a plan that is too dense to read in a minute',
+      },
       { name: 'Pipeline pulse', does: 'reports working or waiting' },
       {
         name: 'Automatic compaction',

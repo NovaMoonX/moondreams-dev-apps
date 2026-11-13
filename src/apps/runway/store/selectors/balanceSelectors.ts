@@ -193,21 +193,8 @@ export const selectTrackBalanceInputs = createSelector(
   toBalanceInputs('track'),
 );
 
-/** Every balance, summed from the ledger since the starting point and never stored. */
-export const selectBalances = createSelector(
+/** Every balance summed from the ledger alone, before Free to Spend covers any bill; the screens read the covered figures (`billCoverSelectors`). */
+export const selectLedgerOnlyBalances = createSelector(
   [selectBalanceInputs],
   deriveBalances,
 );
-
-export const selectFreeToSpend = (state: RootState) =>
-  selectBalances(state).freeToSpendCents;
-
-/** What one envelope has been assigned since the starting point. */
-export const selectEnvelopeFigure = (state: RootState, itemId: string) =>
-  selectBalances(state).assignedByItem[itemId] ?? 0;
-
-/** What a place holds now; null is Free to Spend. */
-export const selectHeldBy = (state: RootState, placeId: string | null) =>
-  placeId === null
-    ? selectFreeToSpend(state)
-    : selectEnvelopeFigure(state, placeId);

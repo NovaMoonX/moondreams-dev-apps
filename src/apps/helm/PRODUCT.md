@@ -90,17 +90,17 @@ The owner chose a hybrid voice: natural cloud voices online, the phone's own whe
 - **Undo by voice.** "Undo that" or "take that back" undoes the last turn's changes, and says what it took back.
 - **One voice.** Helm has one voice identity: warm, a natural pace, never over-cheerful, urgent without alarm, concise. Whichever provider speaks, it is set to match. Tone (Your Assistant, In Detail) shapes the words; the voice is the same in every tone. Choosing among voices is Next Steps.
 - **"Got it" is instant.** Quick confirmations are spoken by the phone's own voice the moment the change is saved, so nothing waits on the network; answers use the natural cloud voice.
-- **Voice offline, on every phone.** "Hear me offline" is a one-time download of a speech recognizer that runs on the phone (about 40–75 MB until it is measured), off until the person turns it on. It is offered once, the first time Talk is tapped with no connection or with the cloud voice unavailable, and always sits in Settings → Voice; it is kept per phone, removable, and offered only where the phone can run it. Once downloaded, Talk works offline, interrupting included, and replies use the site's natural voice (if downloaded too) or the phone's system voice. What needs the assistant's thinking is kept on the device and done once back online: "Saved on this device. [name] will sort it once you're back online."
+- **Voice offline, on every phone.** "Hear me offline" is a one-time download of a speech recognizer that runs on the phone (57 MB), off until the person turns it on. It is offered once, the first time Talk is tapped with no connection or with the cloud voice unavailable, and always sits in Settings → Voice; it is kept per phone, removable, and offered only where the phone can run it. Once downloaded, Talk works offline, interrupting included, and replies use the site's natural voice (if downloaded too) or the phone's system voice. What needs the assistant's thinking is kept on the device and done once back online: "Saved on this device. [name] will sort it once you're back online."
 - **"Hear me offline", word for word.**
   - Row (Settings → Voice): "Hear me offline" · "Talk to [name] with no connection. Runs on this phone."
-  - Offer (first Talk with no connection): "Talk without a connection? A one-time download, about 40–75 MB. · Download"
+  - Offer (first Talk with no connection): "Talk without a connection? A one-time download of 57 MB. · Download"
   - Turn-on sheet, title: "Hear me offline"
   - Sheet, what it does: "Your phone turns your speech into words itself, so Talk works with no connection."
-  - Sheet, size and where: "A one-time download of about 40–75 MB from [host], kept on this phone only."
+  - Sheet, size and where: "A one-time download of 57 MB from [host], kept on this phone only."
   - Sheet, what leaves: "What you say offline stays on this phone until [name] reads it online."
   - Sheet, licence: "Uses [recognizer], open source under [licence]." (plus, if it carries copyleft: "It includes [part], under the GPL.")
   - Sheet, buttons: "Download" · "Not now"
-  - Downloading: "Downloading… 23 of 60 MB" (the real size once known)
+  - Downloading: "Downloading… 23 of 57 MB"
   - Ready: "Ready. Talk works offline on this phone."
   - Failed: "The download stopped. · Try again"
   - Can't run: "This phone can't run offline listening. Talk needs a connection here."
@@ -286,7 +286,7 @@ The owner's words: "in order to have a timeline for the user and for their peopl
     - "Graduated · 2016"
   - Then "See all 14 moments" when there are more than 3.
   - Add: "Add a date"
-  - Empty: "No key dates yet. Tell [name] a birthday or a moment, or add one."
+  - Empty: one "Add a key date" row (tell [name] a birthday or a moment, or add one there)
   - A row opens a small sheet with its source, Edit, Remove (with Undo) and, for a date that comes back, "Show on Today" (on by default for Birthday, Anniversary and Custom yearly). Adding or changing a date that comes back by hand needs a connection, and the sheet says "Needs a connection to save"; a date said in a turn while offline waits with the turn.
 - **All moments, word for word.** "See all 14 moments" opens a page titled "Grandpa's moments", grouped by decade, then year, newest first:
   - Decade heading: "2020s", "2010s", "1980s"
@@ -463,7 +463,7 @@ Google Calendar is one connection among the others (Connected Apps, In Detail), 
 
 - **Optional, on a tap.** "Connect Google Calendar to plan around your events" is offered on Today, with the reason beside it, never on load. Helm works fully without it.
 - **Read only.** Helm asks Google to read events only, and reads only each event's title, time and calendar: never its description, guests or location. It never creates, changes or deletes an event in the MVP.
-- **While Helm is in testing.** Until Google reviews Helm, Google shows a warning that the app isn't verified, and may ask to reconnect about once a week. The Connect screen says so in one line before the person leaves for Google, so the warning isn't a surprise.
+- **Until Google reviews the app.** Google shows a warning that the app isn't verified (Advanced, then Continue). The consent screen is In production, so there is no weekly reconnect, and up to 100 people can connect the sensitive scopes; the Connect screen says so in one line before the person leaves for Google, so the warning isn't a surprise. The review itself is tracked in `docs/conventions/connections.md` "Google's consent screen is one for the whole project".
 - **Coming back from Google.** Declined: back on Today, nothing changed. Signed in but the calendar permission unticked: "Helm needs permission to see your events to plan around them. Nothing was connected." with Try again.
 - **The real calendar is many calendars.** After connecting, the person picks which ones count as busy; holidays and subscriptions start off. One tap marks a calendar as shifts. An event on two calendars counts once; declined events are ignored; tentative ones count as busy and say so; all-day events show at the top and block nothing unless the person says they do (a day off, a trip). A calendar added in Google later appears in Settings, off; one deleted in Google drops out quietly.
 - **Disconnect.** From its row in Connected apps; Today drops back to the no-calendar version and nothing else changes (Disconnect and Delete, In Detail).
@@ -704,7 +704,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 
 - [ ] Home is a conversation, with the voice dock (Browse · Talk · Type): brief answers in a natural voice, then listening for the reply; every view one tap away through Browse, with no tab bar and no dock off home (O, N, C)
 - [ ] The voice: cloud listening and speech online, the phone's own past the day's allowance, barge-in, spoken replies only to spoken turns, "Got it" at once, "undo that" (O, N, C) (issue 12 built the phone's own voice: Talk, the "Got it" line for a spoken turn, "undo that" and Mute; the cloud voice, barge-in and the wake phrase follow; issue 13 built the voice benchmark, and the default cloud voice is the owner's pick; issue 14 built cloud listening online with the day's allowance and the site's cap, falling back to the phone's listening, and the voice mode in Settings; issue 15 built the cloud voice for answers and summaries, within the day's 30,000 characters and falling back to the phone's voice when it is slow or held, while "Got it" stays on the phone's voice; answers are first spoken with questions, issue 27)
-- [ ] Hear me offline, on every phone: an opt-in download of about 40–75 MB that listens on the phone, interrupting included (N, C)
+- [x] Hear me offline, on every phone: an opt-in download of 57 MB that listens on the phone, interrupting included (N, C)
 - [ ] "Hey [name]" while Helm is open on screen, off until you turn it on (O)
 - [ ] The assistant on every screen, knowing what is in view: "move this to Friday", "who's this?", "add a step" (O, C)
 - [x] Send photos, screenshots, PDFs, voice notes and Markdown files; the assistant keeps each on the record it changed or lets it go, and says which (O, C) (issue 52 built photos: up to 5 a turn, kept on a task or fact or let go and deleted 24 hours later, with Keep it; issue 53 built PDFs, kept on the task they made or let go, Markdown files, kept as a note and, when they read as one, a topic, and voice notes, written out into the field before Send and let go unless kept; keeping on a project or a person comes later)

@@ -34,7 +34,7 @@ Built:
 - The assistant's own voice is ready for answers: a reply or a long read is spoken by the site's cloud voice online and within 30,000 characters a day, and by this phone's voice otherwise or when the cloud voice is slow to start; the quick "Got it" lines stay on this phone's voice so they start at once. Spoken answers arrive with questions in a later issue, so for now every line you hear is this phone's.
 - Short, plain turns ("add milk", "done with the dentist", "thanks") are sorted by a quick, light model; a question, a longer turn or "sort the rest" goes to the fuller one, and the quick one can hand a turn over once. Each route has its own allowance.
 - Ask a question and the answer comes from your tasks and what your connected apps and calendars share, with each source one tap away; what they don't say comes from general knowledge, below "Not from your records" with a caution (a bold one on health), and a question about your own things with nothing behind it says "Nothing in your records answers this." Activity lists each answer.
-- Today plans the day: a strip of days, your events and up to three suggested tasks in real gaps ("40 min · fits before Standup"), each kept, moved to another time or set aside for today; "Plan my day" or "plan tomorrow" asks for it, a past day reads as it was with Bring to today, and Settings sets your day's hours and how full to plan it.
+- Today plans the day: a strip of days, your events and up to three suggested tasks in real gaps ("40 min · fits before Standup"), each kept, moved to another time or set aside for today; "Plan my day" or "plan tomorrow" asks for it, a past day reads as it was with Bring to today, and Settings sets your day's hours and how full to plan it. Settings > Colours picks the app's colours (a calm brown by default, or plum, teal or indigo, each shown in light and dark) and keeps them on every device.
 - The day after a night shift or a late night stays empty with "Plan my day anyway"; a kept task that now overlaps a new event says so and offers another time; a calendar that stopped sharing or couldn't load says so with Reconnect or Try again; an event's sheet gives its day and time and, for an all-day one, "Keeps me busy all day".
 - One event on your calendar and in A-List or Waypoint (or on two Google accounts) shows once with both marks; the calendar's time is shown, and when the app's differs one line says so ("A-List Tracker says 7:00 PM").
 - Dates that come back: say "Mum's birthday is June 3" or add one on a person's page (birthday, anniversary or a custom yearly date such as "Gotcha day", a year optional); Today lists the next week's few, Coming up lists the next twelve months by month, Contacts brings in birthdays, and each date has Undo. Dates are sealed with your key like everything else; only whose they are is readable.
@@ -64,6 +64,10 @@ Next (Core MVP):
 Later:
 - [ ] Drafting in your style, video, app cards (a Pinch recipe card), a life timeline and milestones from the moments Helm keeps, writes to other apps
 - [ ] A browser extension and other ways to reach the assistant, orders, Apple contacts and sign-in
+
+## Production setup
+
+`npm run helm:setup` does every production setup step Helm needs, in order: both keyrings and their canaries, the Anthropic, Google OAuth, Deepgram and (optionally) Gemini secrets, Google Text-to-Speech, the alerts and a test alert, then offers to copy each keyring to the clipboard for your password manager. It skips what is already done, never prints a secret, and is safe to re-run. The alerts need the merge deployed first, so run `npm run helm:setup -- --after-deploy` after it; `npm run helm:setup -- --dry` prints the plan without changing anything. The few clicks only a browser can do (spend caps, the Google consent screen) are shown as they come up.
 
 ## Docs
 
