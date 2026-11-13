@@ -218,6 +218,10 @@ self.onmessage = (event: MessageEvent<ToRecognizerWorker>) => {
   try {
     handle(event.data);
   } catch (error) {
+    if ('id' in event.data && event.data.id !== null) {
+      loaded.streams.get(event.data.id)?.stream.free();
+      loaded.streams.delete(event.data.id);
+    }
     send({
       type: 'failed',
       id: 'id' in event.data ? event.data.id : null,

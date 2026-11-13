@@ -102,10 +102,12 @@ export const loadRecognizer = () => {
     const fail = (error: Error) => {
       window.clearTimeout(timeoutId);
       if (store.worker === worker) {
+        const wasReady = store.status === 'ready';
         worker.terminate();
         store.worker = null;
         store.loading = null;
         setStatus('failed');
+        if (wasReady) failAll();
       }
       reject(error);
     };

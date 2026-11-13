@@ -85,6 +85,7 @@ const fetchChecked = async (
 
 /** Looks for the model on this device; a download left half done (a closed tab) is cleared away. */
 export const refreshOnDeviceStored = async () => {
+  if (store.abort !== null) return;
   try {
     if (!(await caches.has(ON_DEVICE_CACHE_NAME))) {
       setState({ isStored: false });

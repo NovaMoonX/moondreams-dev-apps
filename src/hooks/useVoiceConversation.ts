@@ -87,6 +87,8 @@ export type VoiceListeningRoute = 'cloud' | 'device';
 const QUIET_MS = 8000;
 const FOLLOW_UP_MS = 8000;
 const WAKE_SETTLE_MS = 400;
+const WAKE_RETRIES = 2;
+const WAKE_RETRY_MS = 3000;
 // An end phrase still closing the words this long after it was last heard counts; "that's all I need" keeps going.
 const END_PHRASE_HOLD_MS = 900;
 const TAP_CONFIG = { lockMs: 0 };
@@ -606,6 +608,7 @@ export function useVoiceConversation({
     const session = {
       current: null as { close: () => void } | null,
       startId: 0,
+      retries: 0,
     };
     const open = () => {
       session.current?.close();
@@ -616,6 +619,7 @@ export function useVoiceConversation({
             latest.current.wake?.spellings ?? [],
           );
           if (phrase === null) return;
+          session.retries = 0;
           session.current?.close();
           session.current = null;
           const isStarted =
@@ -626,7 +630,15 @@ export function useVoiceConversation({
         },
         onUnavailable: (code) => {
           session.current = null;
-          if (code === 'denied' || code === 'no-microphone') checkPermission();
+          if (code === 'denied' || code === 'no-microphone') {
+            checkPermission();
+            return;
+          }
+          console.warn('Wake listening on the device stopped', code);
+          if (session.retries >= WAKE_RETRIES) return;
+          session.retries += 1;
+          window.clearTimeout(session.startId);
+          session.startId = window.setTimeout(open, WAKE_RETRY_MS);
         },
       });
     };

@@ -77,13 +77,14 @@ export const createOnDeviceStt = ({
   const run = {
     stop: null as (() => void) | null,
     cancel: null as (() => void) | null,
+    drop: null as (() => void) | null,
   };
   return {
     id: 'on-device',
     route: 'device',
     canStream: true,
     start: async (options) => {
-      run.cancel?.();
+      run.drop?.();
       const state = {
         isDone: false,
         segments: [] as string[],
@@ -104,6 +105,7 @@ export const createOnDeviceStt = ({
         source?.stop();
         run.stop = null;
         run.cancel = null;
+        run.drop = null;
       };
       const deliver = (text: string) => {
         if (state.isDone) return;
@@ -128,17 +130,23 @@ export const createOnDeviceStt = ({
         recognition.current?.close();
         deliver('');
       };
+      const drop = () => {
+        recognition.current?.close();
+        state.isDone = true;
+        release();
+      };
       function handleVisibility() {
         if (document.visibilityState === 'hidden') stop();
       }
       run.stop = stop;
       run.cancel = cancel;
+      run.drop = drop;
       document.addEventListener('visibilitychange', handleVisibility);
       try {
-        const [microphone] = await Promise.all([
-          source === null ? openMicrophone() : Promise.resolve(source),
-          loadRecognizer(),
-        ]);
+        // The model loads before the microphone opens, so a failed load never leaves a microphone running.
+        await loadRecognizer();
+        if (state.isDone) return;
+        const microphone = source ?? (await openMicrophone());
         if (source === null) state.microphone = microphone;
         if (state.isDone) {
           microphone.stop();
@@ -205,8 +213,10 @@ export const listenOnDevice = ({
     state.microphone?.stop();
     state.microphone = null;
   };
-  Promise.all([openMicrophone(), loadRecognizer()])
-    .then(([microphone]) => {
+  loadRecognizer()
+    .then(() => (state.isClosed ? null : openMicrophone()))
+    .then((microphone) => {
+      if (microphone === null) return;
       if (state.isClosed) {
         microphone.stop();
         return;
