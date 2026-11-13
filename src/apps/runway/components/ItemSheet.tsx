@@ -1609,14 +1609,7 @@ function ItemSheet({
                   : CONVERT_WORDS.toGoal
               }
               reason={convertLock.reason}
-              door={
-                convertLock.canMoveIn
-                  ? {
-                      label: SET_HELD_WORDS.open,
-                      onOpen: () => goTo('setHeld'),
-                    }
-                  : undefined
-              }
+              onFix={convertLock.canMoveIn ? () => goTo('setHeld') : undefined}
             />
           ))}
         {canChange &&
@@ -2191,6 +2184,7 @@ function ItemSheet({
         today={today}
         onBack={() => goTo('menu')}
         onClose={onClose}
+        onSetHeld={() => goTo('setHeld')}
       />
     ) : null;
 

@@ -18,6 +18,8 @@ export interface SelectionBarAction {
   isLoading?: boolean;
   /** Red text and edge, for the one action that throws something away. */
   isDestructive?: boolean;
+  /** On a phone, the icon alone (its label stays the button's name), for a fourth control or a label too long to share 320px. */
+  isIconOnPhone?: boolean;
 }
 
 interface SelectionBarProps {
@@ -37,12 +39,17 @@ function SelectionBar({ actions, primary, note }: SelectionBarProps) {
     document.documentElement.setAttribute('data-selection-bar', '');
     return () => document.documentElement.removeAttribute('data-selection-bar');
   }, []);
-  const renderLabel = (action: SelectionBarAction) => (
-    <span className='inline-flex items-center gap-1.5'>
-      {!isPhone && action.icon}
-      {isPhone ? (action.shortLabel ?? action.label) : action.label}
-    </span>
-  );
+  const renderLabel = (action: SelectionBarAction) => {
+    if (isPhone && action.isIconOnPhone && action.icon !== undefined) {
+      return <span className='inline-flex items-center'>{action.icon}</span>;
+    }
+    return (
+      <span className='inline-flex items-center gap-1.5'>
+        {!isPhone && action.icon}
+        {isPhone ? (action.shortLabel ?? action.label) : action.label}
+      </span>
+    );
+  };
 
   return (
     <>
@@ -60,6 +67,7 @@ function SelectionBar({ actions, primary, note }: SelectionBarProps) {
               variant='secondary'
               className={join(
                 'h-11 gap-1.5 px-3 max-sm:px-3.5 [@media(max-height:699px)]:h-10',
+                isPhone && action.isIconOnPhone && 'w-11 px-0! max-sm:px-0!',
                 action.isDestructive &&
                   'border-destructive/60 text-destructive! hover:bg-destructive/10',
               )}

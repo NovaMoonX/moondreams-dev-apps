@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import {
   ArrowLeftRight,
+  CircleAlert,
   Layers,
   Repeat,
   ShoppingBag,
@@ -11,7 +12,6 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import EmptyCard from '@/components/EmptyCard';
-import IconBadge from '@/components/IconBadge';
 import FloatingAction from '@/components/FloatingAction';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import RangeSlider from '@/components/RangeSlider';
@@ -124,7 +124,7 @@ interface DoorButtonProps {
   icon: ReactNode;
   label: string;
   count: number;
-  /** How many of them need the person, drawn on the icon. */
+  /** How many of them need the person, drawn in place of the count. */
   attention: number;
   attentionLabel: string;
   /** Below 360px a half door shows this instead of its label. */
@@ -155,13 +155,7 @@ function DoorButton({
       )}
     >
       <span className='text-muted-foreground flex min-w-0 items-center gap-2'>
-        {attention > 0 ? (
-          <span aria-hidden='true' className='mr-1 inline-flex'>
-            <IconBadge icon={icon} count={attention} urgent />
-          </span>
-        ) : (
-          icon
-        )}
+        {icon}
         <span
           className={join(
             'text-foreground truncate',
@@ -177,7 +171,17 @@ function DoorButton({
         )}
         {attention > 0 && <span className='sr-only'>, {attentionLabel}</span>}
       </span>
-      <span className='text-muted-foreground'>{count}</span>
+      {attention > 0 ? (
+        <span
+          aria-hidden='true'
+          className='text-warning flex items-center gap-1 font-medium'
+        >
+          <CircleAlert className='h-3.5 w-3.5' />
+          {attention}
+        </span>
+      ) : (
+        <span className='text-muted-foreground'>{count}</span>
+      )}
     </Button>
   );
 }

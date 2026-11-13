@@ -2895,7 +2895,6 @@ export const CONVERT_WORDS = {
   target: 'Target',
   byWhen: 'Reach it by (optional)',
   noDate: 'No date',
-  noDateHint: 'Leave it empty if there is no date.',
   farDay: (months: number) =>
     `Pick a date within the next ${months} months, which is as far as the income days are planned, or remove it.`,
   reachedAtOnce: (name: string) =>
@@ -2903,12 +2902,13 @@ export const CONVERT_WORDS = {
   changesHeading: 'What changes',
   moneyStays: (amount: string) => `Its ${amount} and its history move with it.`,
   historyStays: 'Its history moves with it.',
-  wontCarry: (parts: string) => `${parts} won't carry over.`,
-  limit: 'Its limit',
+  wontCarry: (parts: string) =>
+    `${parts.charAt(0).toUpperCase()}${parts.slice(1)} won't carry over.`,
+  limit: 'its limit',
   overflow: 'its overflow',
   homePin: 'its Home pin',
-  targetAndDate: 'Its target and date',
-  targetOnly: 'Its target',
+  targetAndDate: 'its target and date',
+  targetOnly: 'its target',
   paused: 'It is paused, so nothing goes in for now.',
   plannedAhead: (count: number) =>
     `${count} planned ${count === 1 ? 'change' : 'changes'} ahead won't carry over.`,
@@ -5499,8 +5499,8 @@ export const RULE_WORDS = {
   bulkSend: 'Send to an envelope',
   bulkSendShort: 'Send to…',
   bulkAsk: 'Ask each time',
-  bulkAskShort: 'Ask me',
-  bulkSendNarrow: 'Send…',
+  bulkAskShort: 'Always ask',
+  holdToPick: 'Press and hold a rule to fix several at once.',
   bulkDelete: 'Remove',
   bulkPickTitle: 'Which envelope?',
   bulkPickSub: (count: number) =>

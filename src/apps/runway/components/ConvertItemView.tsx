@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Eye } from 'lucide-react';
+import { Eye, Scale } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
 import DateInput from '@/components/DateInput';
@@ -32,6 +33,7 @@ import {
   FORM_FLOW_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_PURCHASE_CENTS,
+  SET_HELD_WORDS,
 } from '@apps/runway/constants';
 import {
   isReachedAtOnce,
@@ -71,6 +73,8 @@ interface ConvertItemViewProps {
   today: number;
   onBack: () => void;
   onClose: () => void;
+  /** Opens the view that sets what it holds, the fix for an item that is over. */
+  onSetHeld: () => void;
 }
 
 /** The view an envelope's or goal's sheet swaps in to make it the other kind: what is asked (a goal's target), what changes, and the shop rules that will need a new home. */
@@ -83,6 +87,7 @@ function ConvertItemView({
   today,
   onBack,
   onClose,
+  onSetHeld,
 }: ConvertItemViewProps) {
   const { user } = useAuth();
   const { isHidden, toggle: showAmounts } = useValuesHidden();
@@ -261,6 +266,15 @@ function ConvertItemView({
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
       <ActionTitle>{action}</ActionTitle>
+      {!isHidden && heldCents < 0 && (
+        <ActionRow
+          icon={<Scale />}
+          label={SET_HELD_WORDS.open}
+          subtitle={CONVERT_WORDS.blockedOver}
+          hasChevron
+          onClick={onSetHeld}
+        />
+      )}
       {isHidden && (
         <Button
           type='button'
@@ -307,11 +321,7 @@ function ConvertItemView({
                 onChange={(event) => setDate(event.target.value)}
                 disabled={isSaving}
               />
-              {date === '' ? (
-                <p className='text-muted-foreground text-sm'>
-                  {CONVERT_WORDS.noDateHint}
-                </p>
-              ) : (
+              {date !== '' && (
                 <div>
                   <RevealChip onClick={() => setDate('')}>
                     {CONVERT_WORDS.noDate}
@@ -343,7 +353,7 @@ function ConvertItemView({
         </ActionSection>
       )}
       <ModalFooterActions
-        note={error ?? (isHidden ? null : blocker)}
+        note={error ?? (isHidden || heldCents < 0 ? null : blocker)}
         cancelAction={
           <Button
             type='button'

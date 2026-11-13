@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
-import { Repeat } from 'lucide-react';
+import { MessageCircleQuestion, Repeat, Send, Trash2 } from 'lucide-react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -84,14 +84,16 @@ function EnvelopePickSheet({
   );
 
   return (
-    <FormSheet isOpen isDrawerWhenShort onClose={onClose} title='Envelopes'>
+    <FormSheet
+      isOpen
+      isDrawerWhenShort
+      onClose={onClose}
+      title={RULE_WORDS.bulkPickTitle}
+    >
       <div className='space-y-3 pb-4'>
-        <div>
-          <h3 className='text-2xl font-semibold'>{RULE_WORDS.bulkPickTitle}</h3>
-          <p className='text-muted-foreground text-sm'>
-            {RULE_WORDS.bulkPickSub(count)}
-          </p>
-        </div>
+        <p className='text-muted-foreground text-sm'>
+          {RULE_WORDS.bulkPickSub(count)}
+        </p>
         {envelopes.length >= RUNWAY_SEARCH_THRESHOLD && (
           <SearchInput
             value={query}
@@ -168,7 +170,7 @@ function GroupHead({
               type='button'
               variant='tertiary'
               size='stripped'
-              className='text-muted-foreground! text-sm font-medium whitespace-normal'
+              className="text-muted-foreground! relative text-sm font-medium whitespace-normal before:absolute before:inset-x-0 before:-inset-y-[10px] before:content-['']"
               aria-label={tickLabel}
               onClick={onToggle}
             >
@@ -576,6 +578,13 @@ function RulesScreen({ onClose }: RulesScreenProps) {
                       ),
                     )}
                   </ul>
+                  {group.key === HOME_KEY &&
+                    group.rows.length > 1 &&
+                    !selection.isActive && (
+                      <p className='text-muted-foreground px-1 text-sm'>
+                        {RULE_WORDS.holdToPick}
+                      </p>
+                    )}
                 </div>
               ))
             )}
@@ -592,12 +601,15 @@ function RulesScreen({ onClose }: RulesScreenProps) {
               shortLabel: isNarrow
                 ? RULE_WORDS.bulkAskShort
                 : RULE_WORDS.bulkAsk,
+              icon: <MessageCircleQuestion className='h-4 w-4' />,
               isDisabled: isNothingPicked || isWriting,
               onClick: () => void askEachTime(),
             },
             {
               key: 'delete',
               label: RULE_WORDS.bulkDelete,
+              icon: <Trash2 className='h-4 w-4' />,
+              isIconOnPhone: true,
               isDestructive: true,
               isDisabled: isNothingPicked || isWriting,
               onClick: () => void removeSelected(),
@@ -606,9 +618,8 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           primary={{
             key: 'send',
             label: RULE_WORDS.bulkSend,
-            shortLabel: isNarrow
-              ? RULE_WORDS.bulkSendNarrow
-              : RULE_WORDS.bulkSendShort,
+            shortLabel: RULE_WORDS.bulkSendShort,
+            icon: <Send className='h-4 w-4' />,
             isDisabled: isNothingPicked,
             isLoading: isWriting,
             onClick: () => setIsPicking(true),

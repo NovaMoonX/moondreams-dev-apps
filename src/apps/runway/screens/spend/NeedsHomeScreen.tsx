@@ -144,16 +144,16 @@ function EnvelopePickSheet({
   );
 
   return (
-    <FormSheet isOpen isDrawerWhenShort onClose={onClose} title='Envelopes'>
+    <FormSheet
+      isOpen
+      isDrawerWhenShort
+      onClose={onClose}
+      title={NEEDS_HOME_WORDS.bulkPickTitle}
+    >
       <div className='space-y-3 pb-4'>
-        <div>
-          <h3 className='text-2xl font-semibold'>
-            {NEEDS_HOME_WORDS.bulkPickTitle}
-          </h3>
-          <p className='text-muted-foreground text-sm'>
-            {NEEDS_HOME_WORDS.bulkPickSub(count)}
-          </p>
-        </div>
+        <p className='text-muted-foreground text-sm'>
+          {NEEDS_HOME_WORDS.bulkPickSub(count)}
+        </p>
         {envelopes.length >= RUNWAY_SEARCH_THRESHOLD && (
           <SearchInput
             value={query}
