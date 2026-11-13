@@ -31,11 +31,7 @@ import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { RULE_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import {
-  findTakeovers,
-  RULE_VARIES,
-  type RuleTakeover,
-} from '@apps/runway/engine/rules';
+import { RULE_VARIES } from '@apps/runway/engine/rules';
 import RuleSheet from '@apps/runway/forms/RuleSheet';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -211,7 +207,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const looks = useAppSelector(selectItemLooks);
   const cards = useAppSelector(selectAllCards);
   const isLoaded = useAppSelector(selectIsRulesLoaded);
-  const { describe, describeHome, describeAfter, getCardLabel, liveIds } =
+  const { describe, describeHome, describeRemoval, getCardLabel } =
     useRuleNames();
   const { openView } = useRunwayUrlState();
   const [landing] = useState(readRulesLanding);
@@ -500,37 +496,12 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     );
   };
 
-  const getAfterLines = (
-    targets: typeof selected,
-    takeovers: readonly RuleTakeover[],
-  ): string[] => {
-    if (targets.length === 1)
-      return [describeAfter(targets[0], takeovers[0]?.by ?? null)];
-    if (takeovers.length === 0) return [RULE_WORDS.waitAll];
-    return [
-      ...takeovers
-        .slice(0, 2)
-        .map(({ removed, by }) => describeAfter(removed, by)),
-      ...(takeovers.length > 2
-        ? [RULE_WORDS.takeoverMore(takeovers.length - 2)]
-        : []),
-      ...(takeovers.length < targets.length ? [RULE_WORDS.waitRest] : []),
-    ];
-  };
-
   const removeSelected = async () => {
     const targets = selected;
     if (targets.length === 0) return;
-    const takeovers = findTakeovers(targets, rules, liveIds);
     const isConfirmed = await confirm({
       title: RULE_WORDS.deleteConfirmTitle(targets.length),
-      message: [
-        RULE_WORDS.deleteConfirmBody(
-          targets.map((rule) => describe(rule)),
-          targets.every((rule) => rule.target === RULE_VARIES),
-        ),
-        ...getAfterLines(targets, takeovers),
-      ].join(' '),
+      message: describeRemoval(targets, rules),
       confirmText: RULE_WORDS.deleteConfirmButton(targets.length),
       destructive: true,
     });

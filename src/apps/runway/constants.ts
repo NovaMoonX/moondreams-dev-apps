@@ -1517,7 +1517,7 @@ export const PACE_WORDS = {
 } as const;
 
 /** Names in a sentence: "A", "A and B", "A, B and C", then three and "N more". */
-const joinNames = (names: readonly string[]) =>
+export const joinNames = (names: readonly string[]) =>
   names.length <= 3
     ? names.length <= 1
       ? (names[0] ?? '')
@@ -5545,18 +5545,16 @@ export const RULE_WORDS = {
   pickEnvelope: 'Pick an envelope',
   remove: 'Remove the rule',
   removeConfirmTitle: 'Remove this rule?',
-  removeConfirm: (sentence: string, isAsk: boolean) =>
-    isAsk
-      ? `“${sentence}” will stop asking. Purchases already placed stay where they are.`
-      : `“${sentence}” will stop sending purchases on its own. Purchases it already placed stay where they are.`,
   removeConfirmButton: 'Remove the rule',
   takeover: (what: string, envelope: string) =>
-    `After this, ${envelope} will catch ${what}.`,
-  takeoverWait: (what: string) => `After this, Needs a home will hold ${what}.`,
+    `${envelope} will catch ${what}.`,
+  takeoverWait: (what: string) => `Needs a home will hold ${what}.`,
+  afterThis: (line: string) => `After this, ${line}`,
   takeoverMore: (count: number) =>
-    `${ruleCount(count)} more will be caught by a broader rule.`,
-  waitAll: 'After this, what they caught will wait in Needs a home.',
-  waitRest: 'What the others caught will wait in Needs a home.',
+    `What ${ruleCount(count)} more caught goes to other envelopes.`,
+  onOtherCards: 'on your other cards',
+  whatTheyCaught: 'what they caught',
+  whatTheRestCaught: 'what the rest caught',
   removed: 'Rule removed',
   removeFailed: 'That did not remove. Nothing was changed.',
   saved: 'Rule saved',
@@ -5629,23 +5627,29 @@ export const RULE_WORDS = {
   askConfirmButton: 'Ask each time',
   askNone:
     "A rule for a card or kind of place can't ask each time. Pick a rule for one place.",
-  deleteConfirmTitle: (count: number) => `Remove ${ruleCount(count)}?`,
-  deleteConfirmBody: (sentences: readonly string[], isAllAsk: boolean) => {
-    const named = sentences.slice(0, 3).map((sentence) => `“${sentence}”`);
-    const rest = sentences.length - named.length;
-    const list =
-      rest > 0
-        ? `${named.join(', ')} and ${rest} more`
-        : named.length > 1
-          ? `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`
-          : named[0];
-    if (isAllAsk)
-      return `${list} will stop asking. Purchases already placed stay where they are.`;
-    return sentences.length === 1
-      ? `${list} will stop sending purchases on its own. Purchases it already placed stay where they are.`
-      : `${list} will stop sending purchases on their own. Purchases they already placed stay where they are.`;
+  deleteConfirmTitle: (count: number) =>
+    count === 1 ? 'Remove this rule?' : `Remove ${ruleCount(count)}?`,
+  deleteConfirmBody: (kinds: {
+    live: readonly string[];
+    ask: readonly string[];
+    paused: readonly string[];
+  }) => {
+    const quote = (sentences: readonly string[]) =>
+      joinNames(sentences.map((sentence) => `“${sentence}”`));
+    const isOne = (sentences: readonly string[]) => sentences.length === 1;
+    return [
+      kinds.live.length > 0 &&
+        `${quote(kinds.live)} will stop sending purchases on ${isOne(kinds.live) ? 'its' : 'their'} own.`,
+      kinds.ask.length > 0 && `${quote(kinds.ask)} will stop asking.`,
+      kinds.paused.length > 0 &&
+        `${quote(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused already.`,
+      'Purchases already placed stay where they are.',
+    ]
+      .filter(Boolean)
+      .join(' ');
   },
-  deleteConfirmButton: (count: number) => `Remove ${ruleCount(count)}`,
+  deleteConfirmButton: (count: number) =>
+    count === 1 ? 'Remove the rule' : `Remove ${ruleCount(count)}`,
   movedMany: (count: number, envelope: string) =>
     `Moved ${ruleCount(count)} to ${envelope}`,
   askedMany: (count: number) =>
