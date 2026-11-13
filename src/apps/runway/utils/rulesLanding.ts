@@ -2,6 +2,8 @@ export interface RulesLanding {
   /** The name of the item the rules sent spending to. */
   name: string;
   ruleIds: readonly string[];
+  /** Takes the change back; the landing's note carries it so no toast covers the note. */
+  undo: () => Promise<boolean>;
 }
 
 const FRESH_MS = 5_000;

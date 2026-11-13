@@ -56,7 +56,6 @@ import type { Cents, EnvelopeSealed, GoalSealed } from '@apps/runway/types';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 import { setRulesLanding } from '@apps/runway/utils/rulesLanding';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 
 export type ConvertSource =
   | { kind: 'envelope'; payload: EnvelopeSealed }
@@ -91,8 +90,7 @@ function ConvertItemView({
 }: ConvertItemViewProps) {
   const { user } = useAuth();
   const { isHidden, toggle: showAmounts } = useValuesHidden();
-  const mask = useMaskedText();
-  const toastConverted = useConvertItemToast();
+  const { announce, undo } = useConvertItemToast();
   const { openView } = useRunwayUrlState();
   const level = useAppSelector(selectLevel);
   const accounts = useAppSelector(selectAccounts);
@@ -206,6 +204,9 @@ function ConvertItemView({
     isHidden || heldCents > 0
       ? CONVERT_WORDS.moneyStays(formatCents(Math.max(heldCents, 0)))
       : CONVERT_WORDS.historyStays,
+    ...(heldRules.length === 0
+      ? []
+      : [CONVERT_WORDS.rulesPause(heldRules.map((rule) => describe(rule)))]),
   ];
 
   const convert = async () => {
@@ -245,12 +246,17 @@ function ConvertItemView({
               payload: toEnvelopePayload(source.payload),
             },
       );
-      toastConverted(written);
       onClose();
-      if (heldRules.length > 0) {
-        setRulesLanding({ name, ruleIds: heldRules.map((rule) => rule.id) });
-        openView('rules');
+      if (heldRules.length === 0) {
+        announce(written);
+        return;
       }
+      setRulesLanding({
+        name,
+        ruleIds: heldRules.map((rule) => rule.id),
+        undo: () => undo(written),
+      });
+      openView('rules');
     } catch (saveError) {
       setError(
         isOfflineFailure(saveError)
@@ -337,17 +343,6 @@ function ConvertItemView({
           ))}
         </ul>
       </ActionSection>
-      {heldRules.length > 0 && (
-        <ActionSection caption={CONVERT_WORDS.rulesCaption(heldRules.length)}>
-          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {heldRules.map((rule) => (
-              <li key={rule.id} className='px-3 py-2 text-sm break-words'>
-                {mask(describe(rule))}
-              </li>
-            ))}
-          </ul>
-        </ActionSection>
-      )}
       <ModalFooterActions
         note={error ?? (isHidden || heldCents < 0 ? null : blocker)}
         cancelAction={

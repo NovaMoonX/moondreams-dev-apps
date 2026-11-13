@@ -49,6 +49,7 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { OpenRule } from '@apps/runway/types';
 import {
   readRulesLanding,
+  type RulesLanding,
   setRulesLanding,
 } from '@apps/runway/utils/rulesLanding';
 
@@ -83,7 +84,7 @@ function EnvelopePickSheet({
       isOpen
       isDrawerWhenShort
       onClose={onClose}
-      title={RULE_WORDS.bulkPickTitle}
+      title={RULE_WORDS.bulkPickTitle(count)}
     >
       <div className='space-y-3 pb-4'>
         <p className='text-muted-foreground text-sm'>
@@ -210,6 +211,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
   useEffect(() => setRulesLanding(null), []);
   const opened = rules.find((rule) => rule.id === openId) ?? null;
   const needle = query.trim().toLowerCase();
@@ -258,11 +260,20 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     landing === null
       ? 0
       : landing.ruleIds.filter((id) => homelessIds.has(id)).length;
+  const landedIds = new Set(landing?.ruleIds ?? []);
   const isNothingPicked = selected.length === 0;
   const canAsk = (rule: OpenRule) =>
     rule.merchantKey !== null && rule.target !== RULE_VARIES;
+  const isNoneAskable = !isNothingPicked && !selected.some(canAsk);
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
+
+  const undoConvert = async (from: RulesLanding) => {
+    setIsUndoing(true);
+    const isUndone = await from.undo();
+    setIsUndoing(false);
+    if (isUndone) selection.exit();
+  };
 
   const begin = (ids: readonly string[]) => {
     if (selection.isActive) {
@@ -275,7 +286,9 @@ function RulesScreen({ onClose }: RulesScreenProps) {
 
   const renderRow = (rule: OpenRule, isCardLeftOut: boolean) => {
     const sentence = describe(rule, isCardLeftOut);
-    const detail = homelessIds.has(rule.id) ? describeHome(rule) : undefined;
+    const isExplained = landingCount > 0 && landedIds.has(rule.id);
+    const detail =
+      homelessIds.has(rule.id) && !isExplained ? describeHome(rule) : undefined;
     return (
       <ItemRow
         key={rule.id}
@@ -537,8 +550,22 @@ function RulesScreen({ onClose }: RulesScreenProps) {
         ) : (
           <>
             {landingCount > 0 && landing !== null && (
-              <InlineNotice tone='info'>
-                {RULE_WORDS.landing(landing.name, landingCount)}
+              <InlineNotice
+                tone='info'
+                title={RULE_WORDS.landingTitle(landing.name)}
+              >
+                <p>{RULE_WORDS.landing(landingCount)}</p>
+                <Button
+                  type='button'
+                  variant='link'
+                  size='stripped'
+                  className='mt-1'
+                  loading={isUndoing}
+                  disabled={isUndoing}
+                  onClick={() => void undoConvert(landing)}
+                >
+                  {RULE_WORDS.landingUndo}
+                </Button>
               </InlineNotice>
             )}
             {selection.isActive && (
@@ -612,14 +639,20 @@ function RulesScreen({ onClose }: RulesScreenProps) {
       </div>
       {selection.isActive && (
         <SelectionBar
-          note={isNothingPicked ? RULE_WORDS.nothingPicked : null}
+          note={
+            isNothingPicked
+              ? RULE_WORDS.nothingPicked
+              : isNoneAskable
+                ? RULE_WORDS.askNone
+                : null
+          }
           isStackedOnPhone
           actions={[
             {
               key: 'ask',
               label: RULE_WORDS.bulkAsk,
               icon: <MessageCircleQuestion className='h-4 w-4' />,
-              isDisabled: isNothingPicked || isWriting,
+              isDisabled: isNothingPicked || isNoneAskable || isWriting,
               onClick: () => void askEachTime(),
             },
             {

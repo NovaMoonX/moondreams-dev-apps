@@ -2951,10 +2951,10 @@ export const CONVERT_WORDS = {
   paused: 'It is paused, so nothing goes in for now.',
   plannedAhead: (count: number) =>
     `${count} planned ${count === 1 ? 'change' : 'changes'} ahead won't carry over.`,
-  rulesCaption: (count: number) =>
-    count === 1
-      ? "1 shop rule sends spending here. A goal can't be spent from, so you'll update it next."
-      : `${count} shop rules send spending here. A goal can't be spent from, so you'll update them next.`,
+  rulesPause: (rules: readonly string[]) =>
+    rules.length === 1
+      ? `Your rule “${rules[0]}” pauses, since a goal can't be spent from. Next you'll send it to another envelope.`
+      : `${rules.length} shop rules that send spending here pause, since a goal can't be spent from. Next you'll send them to another envelope.`,
   lockedTitle: 'Not yet',
   lockedGoalLinked: (event: string) => `Linked to ${event}. Unlink it first.`,
   lockedPartOf: (event: string) => `Part of ${event}. Take it out there first.`,
@@ -5508,7 +5508,7 @@ export const RULE_WORDS = {
   merchantAlone:
     'A place on its own can’t be narrowed to a kind or a card. Untick it to choose those.',
   envelope: 'Which envelope?',
-  askEvery: 'Ask me every time',
+  askEvery: 'Ask which envelope each time',
   save: 'Save',
   anEnvelope: 'an envelope',
   saveAndSend: 'Save and send',
@@ -5529,7 +5529,7 @@ export const RULE_WORDS = {
     `“${sentence}” will stop sending purchases on its own. Purchases it already placed stay where they are.`,
   removeConfirmButton: 'Remove the rule',
   takeover: (rule: string, what: string) =>
-    `After this, ${what} follows your rule “${rule}”.`,
+    `After this, ${what} will follow your rule “${rule}”.`,
   takeoverMore: (count: number) =>
     `${ruleCount(count)} more will be caught by a broader rule.`,
   removed: 'Rule removed',
@@ -5562,10 +5562,12 @@ export const RULE_WORDS = {
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
   homeHeading: 'Needs a new home',
   goalNow: (name: string) => `${name} is a goal now, so this rule is paused`,
-  landing: (name: string, count: number) =>
+  landingTitle: (name: string) => `${name} is a goal now`,
+  landing: (count: number) =>
     count === 1
-      ? `${name} is a goal now, so this rule is paused. Choose where it sends spending instead.`
-      : `${name} is a goal now, so these ${count} rules are paused. Choose where they send spending instead.`,
+      ? 'So this rule is paused. Send it to another envelope below.'
+      : `So these ${count} rules are paused. Send them to another envelope below.`,
+  landingUndo: 'Undo',
   groupTick: (label: string) => `Pick every rule in ${label}`,
   groupUntick: (label: string) => `Unpick every rule in ${label}`,
   groupPicked: (picked: number, total: number) =>
@@ -5576,23 +5578,26 @@ export const RULE_WORDS = {
   selectAll: 'Pick all',
   clearAll: 'Clear',
   done: 'Done',
-  bulkSend: 'Change envelope',
-  bulkAsk: 'Ask me every time',
+  bulkSend: 'Send to another envelope',
+  bulkAsk: 'Ask which envelope',
   pick: 'Select',
   bulkDelete: 'Remove',
-  bulkPickTitle: 'Which envelope?',
+  bulkPickTitle: (count: number) =>
+    `Send ${ruleCount(count)} to which envelope?`,
   bulkPickSub: (count: number) =>
-    `${ruleCount(count)} will send purchases here.`,
+    count === 1
+      ? 'Its purchases will go there from now on.'
+      : 'Their purchases will go there from now on.',
   bulkNoEnvelopes: 'You have no envelope to send them to yet.',
   bulkSearch: 'Search your envelopes',
   bulkNoMatch: 'No envelope matches that.',
   askSkipNote: (stay: number, total: number) =>
     `${stay} of ${total} name a card or kind of place and stay as they are.`,
   askConfirmTitle: (count: number) =>
-    `Have ${ruleCount(count)} ask you every time?`,
-  askConfirmButton: 'Ask me every time',
+    `Have ${ruleCount(count)} ask which envelope each time?`,
+  askConfirmButton: 'Ask each time',
   askNone:
-    'None of these can ask you every time: they name a card or kind of place.',
+    'Only a rule for one place can ask which envelope each time, not one for a card or kind of place.',
   deleteConfirmTitle: (count: number) => `Remove ${ruleCount(count)}?`,
   deleteConfirmBody: (count: number) =>
     count === 1
@@ -5602,7 +5607,7 @@ export const RULE_WORDS = {
   movedMany: (count: number, envelope: string) =>
     `Moved ${ruleCount(count)} to ${envelope}`,
   askedMany: (count: number) =>
-    `${ruleCount(count)} will ask you which envelope every time`,
+    `${ruleCount(count)} will ask which envelope each time`,
   removedMany: (count: number) => `Removed ${ruleCount(count)}`,
   bulkNothing: 'Nothing was changed.',
   bulkFailed: 'That did not save. Nothing was changed.',
@@ -5615,7 +5620,7 @@ export const RULE_WORDS = {
   changeMovedMany: (count: number, envelope: string) =>
     `Moved ${ruleCount(count)} to ${envelope}.`,
   changeAskMany: (count: number) =>
-    `Set ${ruleCount(count)} to ask which envelope every time.`,
+    `Set ${ruleCount(count)} to ask which envelope each time.`,
   changeRemovedMany: (count: number) => `Removed ${ruleCount(count)}.`,
   changeUndoMoved: (count: number) =>
     `Put ${ruleCount(count)} back as ${count === 1 ? 'it was' : 'they were'}.`,

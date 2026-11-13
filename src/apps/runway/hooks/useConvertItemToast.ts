@@ -19,14 +19,14 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
-/** Tells the person an envelope became a goal, or a goal an envelope, with an Undo on the toast that takes it back while the new one has nothing of its own. */
+/** Tells the person an envelope became a goal, or a goal an envelope, with an Undo that takes it back while the new one has nothing of its own; `undo` serves a screen that carries the Undo itself. */
 export function useConvertItemToast() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const mask = useMaskedText();
 
-  const undo = async (written: ConvertWritten) => {
-    if (!user) return;
+  const undo = async (written: ConvertWritten): Promise<boolean> => {
+    if (!user) return false;
     const state = store.getState();
     try {
       const encryption = await getRunwayEncryption(user.uid);
@@ -48,7 +48,7 @@ export function useConvertItemToast() {
           ({ item }) => item.id,
         ),
       });
-      if (!isUndone) return;
+      if (!isUndone) return false;
       addToast({
         title: mask(
           written.from === 'envelope'
@@ -57,6 +57,7 @@ export function useConvertItemToast() {
         ),
         type: 'success',
       });
+      return true;
     } catch (undoError) {
       addToast({
         title: CONVERT_WORDS.undoFailed,
@@ -65,10 +66,11 @@ export function useConvertItemToast() {
           : getErrorMessage(undoError, CONVERT_WORDS.failed),
         type: 'error',
       });
+      return false;
     }
   };
 
-  return (written: ConvertWritten) =>
+  const announce = (written: ConvertWritten) =>
     addToast({
       title: mask(
         written.from === 'envelope'
@@ -81,4 +83,6 @@ export function useConvertItemToast() {
         onClick: () => void undo(written),
       },
     });
+
+  return { announce, undo };
 }
