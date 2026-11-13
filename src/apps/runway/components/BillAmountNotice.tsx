@@ -82,6 +82,13 @@ function BillAmountNotice({ billId, bill, today }: BillAmountNoticeProps) {
         amount: suggested,
         summary: `${bill.name}: ${describe(bill, next)}, from ${formatDateOrdinalUTC(today)}.`,
       });
+      if (!before) {
+        addToast({
+          title: BILL_AMOUNT_HINT_WORDS.alreadyHolds(bill.name),
+          type: 'info',
+        });
+        return;
+      }
       const undoState = { isTaken: false };
       const undo = async () => {
         if (undoState.isTaken) return;
@@ -91,16 +98,14 @@ function BillAmountNotice({ billId, bill, today }: BillAmountNoticeProps) {
         }
         undoState.isTaken = true;
         try {
-          if (before) {
-            await revertBillAmount(user.uid, encryption, {
-              billId,
-              versions: liveBills(),
-              today,
-              wrote: suggested,
-              back: before,
-              summary: `${bill.name}: ${describe(next, bill)}, from ${formatDateOrdinalUTC(today)}.`,
-            });
-          }
+          await revertBillAmount(user.uid, encryption, {
+            billId,
+            versions: liveBills(),
+            today,
+            wrote: suggested,
+            back: before,
+            summary: `${bill.name}: ${describe(next, bill)}, from ${formatDateOrdinalUTC(today)}.`,
+          });
         } catch (undoError) {
           undoState.isTaken = false;
           tell(BILL_AMOUNT_HINT_WORDS.undoFailed, undoError);
@@ -157,7 +162,9 @@ function BillAmountNotice({ billId, bill, today }: BillAmountNoticeProps) {
           size='sm'
           className={NOTICE_QUIET_CLASSES.info}
           disabled={isBusy}
-          onClick={() => dismissRecurring(hint.key)}
+          onClick={() => {
+            if (user) dismissRecurring(user.uid, hint.key);
+          }}
         >
           {BILL_AMOUNT_HINT_WORDS.notThisOne}
         </Button>

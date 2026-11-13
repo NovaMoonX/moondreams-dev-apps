@@ -104,15 +104,16 @@ const selectAllHints = createSelector(
       : NO_HINTS,
 );
 
-/** What the bills' recent bank charges suggest they are charged to, minus what the person declined on this device. Takes today and the declines' version (they live on the device) as its arguments. */
+/** What the bills' recent bank charges suggest they are charged to, minus what the person declined on this device. Takes today, the declines' version (they live on the device) and the signed-in uid as its arguments. */
 export const selectChargedToHints = createSelector(
   [
     (state: RootState, today: number) => selectAllHints(state, today),
     (_state: RootState, _today: number, declines: number) => declines,
+    (_state: RootState, _today: number, _declines: number, uid: string) => uid,
   ],
-  (hints): ChargedToHint[] => {
+  (hints, _declines, uid): ChargedToHint[] => {
     const kept = hints.filter(
-      (hint) => !isChargedToDeclined(hint.billId, hint.place),
+      (hint) => !isChargedToDeclined(uid, hint.billId, hint.place),
     );
     return kept.length === hints.length ? hints : kept;
   },
@@ -123,7 +124,8 @@ export const selectChargedToHint = (
   today: number,
   billId: string,
   declines: number,
+  uid: string,
 ): ChargedToHint | null =>
-  selectChargedToHints(state, today, declines).find(
+  selectChargedToHints(state, today, declines, uid).find(
     (hint) => hint.billId === billId,
   ) ?? null;

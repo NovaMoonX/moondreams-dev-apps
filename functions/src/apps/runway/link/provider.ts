@@ -82,11 +82,11 @@ export interface ProviderRecurringStream {
   category: string | null;
 }
 
-/** `unsupported`: this bank or provider account cannot be read for repeating charges; `notReady`: the provider has not worked them out yet. */
+/** `unsupported`: this bank or provider account cannot be read for repeating charges (`code` is the provider's error code); `notReady`: the provider has not worked them out yet. */
 export type RecurringRead =
   | { kind: 'ok'; streams: ProviderRecurringStream[] }
   | { kind: 'notReady' }
-  | { kind: 'unsupported' };
+  | { kind: 'unsupported'; code: string | null };
 
 export interface TransactionSync {
   added: NormalizedTransaction[];

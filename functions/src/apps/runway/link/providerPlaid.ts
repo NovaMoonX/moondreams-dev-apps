@@ -344,7 +344,6 @@ const RECURRING_UNSUPPORTED_CODES = new Set([
   'PRODUCT_NOT_ENABLED',
   'INVALID_PRODUCT',
   'ADDITIONAL_CONSENT_REQUIRED',
-  'NO_ACCOUNTS',
 ]);
 const UNSUPPORTED_CODES = new Set([
   'PRODUCTS_NOT_SUPPORTED',
@@ -524,7 +523,7 @@ export const plaidProvider: BankDataProvider = {
         const answer: RecurringRead | null = RECURRING_UNSUPPORTED_CODES.has(
           error.code,
         )
-          ? { kind: 'unsupported' }
+          ? { kind: 'unsupported', code: error.code }
           : error.code === 'PRODUCT_NOT_READY'
             ? { kind: 'notReady' }
             : null;

@@ -20,18 +20,20 @@ export const subscribeRecurringDismissals = (listener: () => void) => {
 
 export const getRecurringDismissedVersion = () => version.value;
 
-/** Whether the person dismissed the suggestion with this key; kept on this device only. */
-export function isRecurringDismissed(key: string): boolean {
+const keyFor = (uid: string, key: string) => `${KEY_PREFIX}${uid}:${key}`;
+
+/** Whether this person dismissed the suggestion with this key; kept on this device only, per signed-in person. */
+export function isRecurringDismissed(uid: string, key: string): boolean {
   try {
-    return localStorage.getItem(`${KEY_PREFIX}${key}`) !== null;
+    return localStorage.getItem(keyFor(uid, key)) !== null;
   } catch {
     return false;
   }
 }
 
-export function dismissRecurring(key: string): void {
+export function dismissRecurring(uid: string, key: string): void {
   try {
-    localStorage.setItem(`${KEY_PREFIX}${key}`, '1');
+    localStorage.setItem(keyFor(uid, key), '1');
   } catch {
     // Without storage the suggestion simply comes back on the next visit.
   }

@@ -22,7 +22,7 @@ export const isStreamAmountSteady = (stream: RecurringStream) =>
   Math.abs(stream.averageCents - stream.lastCents) <=
   Math.max(Math.round((stream.lastCents * SAME_PERCENT) / 100), SAME_MIN_CENTS);
 
-/** The schedule a repeating charge suggests from its next expected day; undated when the bank gave no next day or the repeat has no matching kind, so the person sets it. */
+/** The schedule a repeating charge suggests from its next expected day; undated when the bank gave no next day or the repeat has no kind the bill form offers (twice a month), so the person sets it. */
 export function getStreamSchedule(stream: RecurringStream): Schedule {
   const anchor = stream.nextOn;
   const undated: Schedule = { kind: 'once', anchor: null, monthDays: [] };
@@ -32,9 +32,6 @@ export function getStreamSchedule(stream: RecurringStream): Schedule {
   }
   if (stream.frequency === 'biweekly') {
     return { kind: 'everyOtherWeek', anchor, monthDays: [] };
-  }
-  if (stream.frequency === 'semiMonthly') {
-    return { kind: 'twiceMonthly', anchor, monthDays: [] };
   }
   if (stream.frequency === 'monthly') {
     return {

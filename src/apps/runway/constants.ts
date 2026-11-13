@@ -1823,6 +1823,7 @@ export const BILL_AMOUNT_HINT_WORDS = {
   changeIt: (amount: string) => `Change it to ${amount}`,
   notThisOne: 'Not this one',
   done: (name: string, amount: string) => `${name} is now ${amount} from today`,
+  alreadyHolds: (name: string) => `${name} already has that amount from today.`,
   undo: 'Undo',
   undoFailed: 'That could not be undone.',
   saveFailed: 'This did not save. Nothing was changed.',

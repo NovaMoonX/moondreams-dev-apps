@@ -100,14 +100,16 @@ const selectAllHints = createSelector(
       : NO_HINTS,
 );
 
-/** What the bank's repeating charges suggest, minus what the person dismissed on this device. Takes today and the dismissals' version (they live on the device) as its arguments. */
+/** What the bank's repeating charges suggest, minus what the person dismissed on this device. Takes today, the dismissals' version (they live on the device) and the signed-in uid as its arguments. */
 export const selectRecurringHints = createSelector(
   [
     (state: RootState, today: number) => selectAllHints(state, today),
     (_state: RootState, _today: number, dismissals: number) => dismissals,
+    (_state: RootState, _today: number, _dismissals: number, uid: string) =>
+      uid,
   ],
-  (hints): RecurringHint[] => {
-    const kept = hints.filter((hint) => !isRecurringDismissed(hint.key));
+  (hints, _dismissals, uid): RecurringHint[] => {
+    const kept = hints.filter((hint) => !isRecurringDismissed(uid, hint.key));
     return kept.length === hints.length ? hints : kept;
   },
 );
@@ -117,7 +119,8 @@ export const selectBillAmountHint = (
   today: number,
   billId: string,
   dismissals: number,
+  uid: string,
 ) =>
-  selectRecurringHints(state, today, dismissals).find(
+  selectRecurringHints(state, today, dismissals, uid).find(
     (hint) => hint.kind === 'amount' && hint.billId === billId,
   ) ?? null;

@@ -27,7 +27,7 @@ const holds = (payload: BillSealed, amount: MoneyRange) =>
   payload.amount.lowCents === amount.lowCents &&
   payload.amount.highCents === amount.highCents;
 
-/** Sets a bill's amount from today on, in every stretch it already has, so a later version and its end are kept. Returns each stretch's amount before, or null when every stretch already holds it and nothing was written. */
+/** Sets a bill's amount from today on, in each stretch that holds today's current amount, so a later planned change to a different amount and its end are kept. Returns each stretch's amount before, or null when no stretch needed writing. */
 export async function writeBillAmount(
   uid: string,
   encryption: RunwayEncryption,
@@ -40,12 +40,15 @@ export async function writeBillAmount(
   },
 ): Promise<BillAmountBefore | null> {
   const stretches = getStretches(input.versions, input.billId, input.today);
-  if (
-    stretches.length === 0 ||
-    stretches.every((stretch) => holds(stretch.payload, input.amount))
-  ) {
-    return null;
-  }
+  const current = stretches[0]?.payload.amount;
+  const touched = current
+    ? stretches.filter(
+        (stretch) =>
+          holds(stretch.payload, current) &&
+          !holds(stretch.payload, input.amount),
+      )
+    : [];
+  if (touched.length === 0) return null;
   const set = (payload: BillSealed): BillSealed => ({
     ...payload,
     amount: { ...input.amount },
@@ -53,22 +56,22 @@ export async function writeBillAmount(
   await changeItem(uid, encryption, {
     itemId: input.billId,
     kind: 'bill',
-    payload: set(stretches[0].payload),
+    payload: set(touched[0].payload),
     summary: input.summary,
     note: null,
-    effectiveFrom: input.today,
-    stretches: stretches.map((stretch) => ({
+    effectiveFrom: touched[0].effectiveFrom,
+    stretches: touched.map((stretch) => ({
       ...stretch,
       payload: set(stretch.payload),
     })),
   });
-  return stretches.map((stretch) => ({
+  return touched.map((stretch) => ({
     effectiveFrom: stretch.effectiveFrom,
     amount: stretch.payload.amount,
   }));
 }
 
-/** Takes back an amount this action wrote, restoring each stretch's own earlier amount (a stretch that did not exist then takes the nearest earlier one); refuses when any stretch was changed again since. */
+/** Takes back an amount this action wrote, restoring exactly the stretches it wrote; refuses when any of them was changed again since. */
 export async function revertBillAmount(
   uid: string,
   encryption: RunwayEncryption,
@@ -82,30 +85,37 @@ export async function revertBillAmount(
   },
 ): Promise<void> {
   const stretches = getStretches(input.versions, input.billId, input.today);
+  const restored = input.back.map((entry) => ({
+    entry,
+    stretch: stretches.find(
+      (stretch) => stretch.effectiveFrom === entry.effectiveFrom,
+    ),
+  }));
   if (
-    stretches.length === 0 ||
-    input.back.length === 0 ||
-    stretches.some((stretch) => !holds(stretch.payload, input.wrote))
+    restored.length === 0 ||
+    restored.some(
+      ({ stretch }) => !stretch || !holds(stretch.payload, input.wrote),
+    )
   ) {
     throw new BillAmountChanged();
   }
-  const backFor = (from: number): MoneyRange =>
-    (
-      [...input.back]
-        .filter((entry) => entry.effectiveFrom <= from)
-        .sort((a, b) => b.effectiveFrom - a.effectiveFrom)[0] ?? input.back[0]
-    ).amount;
-  const restored = stretches.map((stretch) => ({
-    ...stretch,
-    payload: { ...stretch.payload, amount: backFor(stretch.effectiveFrom) },
-  }));
+  const writes = restored.flatMap(({ entry, stretch }) =>
+    stretch
+      ? [
+          {
+            ...stretch,
+            payload: { ...stretch.payload, amount: entry.amount },
+          },
+        ]
+      : [],
+  );
   await changeItem(uid, encryption, {
     itemId: input.billId,
     kind: 'bill',
-    payload: restored[0].payload,
+    payload: writes[0].payload,
     summary: input.summary,
     note: null,
-    effectiveFrom: input.today,
-    stretches: restored,
+    effectiveFrom: writes[0].effectiveFrom,
+    stretches: writes,
   });
 }

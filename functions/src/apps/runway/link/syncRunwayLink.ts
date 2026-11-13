@@ -581,6 +581,7 @@ const RECURRING_RETRY_MS = 3_600_000;
 /** A check time that makes the next repeating-charges read due in an hour, for an answer that was not ready or failed. */
 const retryRecurringSoon = (grantRef: DocumentReference) =>
   grantRef.update({
+    isRecurringUnsupported: false,
     recurringCheckedAt: Date.now() - RECURRING_GAP_MS + RECURRING_RETRY_MS,
   });
 
@@ -706,13 +707,16 @@ async function writeCardStatements(
   });
 }
 
-/** Seals every live repeating charge of the link's bank accounts (bound or not) into one document; the person decides which to use. */
+const MAX_RECURRING_STREAMS = 200;
+
+/** Seals the live repeating charges of the link's bank accounts into one document, soonest next charge first and capped. Skipped and unbound accounts are kept on purpose: they feed the app's "Is this one of yours?" suggestion, and the document is sealed and owner-only. */
 async function writeRecurringCharges(
   firestore: Firestore,
   uid: string,
   linkId: string,
   grant: ProviderGrant,
   grantRef: DocumentReference,
+  linkRef: DocumentReference,
   planKey: PlanKey,
   providerAccountIds: ReadonlySet<string>,
 ) {
@@ -722,24 +726,48 @@ async function writeRecurringCharges(
     return;
   }
   const now = Date.now();
+  const chargesRef = firestore.doc(
+    planDocPath(uid, 'recurringCharges', linkId),
+  );
   if (read.kind === 'unsupported') {
+    logger.info('runway.sync.recurringUnsupported', {
+      linkId,
+      code: read.code,
+    });
+    await writeUnlessRevoked(firestore, linkRef, (transaction) =>
+      transaction.delete(chargesRef),
+    );
     await grantRef.update({
       recurringCheckedAt: now,
       isRecurringUnsupported: true,
     });
     return;
   }
-  const streams = read.streams.filter(
-    (stream) =>
-      providerAccountIds.has(stream.providerAccountId) &&
-      stream.isActive &&
-      stream.status !== 'tombstoned',
+  const streams = read.streams
+    .filter(
+      (stream) =>
+        providerAccountIds.has(stream.providerAccountId) &&
+        stream.isActive &&
+        stream.status !== 'tombstoned',
+    )
+    .sort((a, b) => {
+      if (a.nextOn === b.nextOn) return 0;
+      if (a.nextOn === null) return 1;
+      if (b.nextOn === null) return -1;
+      return a.nextOn - b.nextOn;
+    })
+    .slice(0, MAX_RECURRING_STREAMS);
+  const isStillLinked = await writeUnlessRevoked(
+    firestore,
+    linkRef,
+    (transaction) =>
+      transaction.set(chargesRef, {
+        id: linkId,
+        asOf: now,
+        sealed: sealWithKey(planKey, { streams }, SEALED_SCHEMA_VERSION),
+      }),
   );
-  await firestore.doc(planDocPath(uid, 'recurringCharges', linkId)).set({
-    id: linkId,
-    asOf: now,
-    sealed: sealWithKey(planKey, { streams }, SEALED_SCHEMA_VERSION),
-  });
+  if (!isStillLinked) return;
   await grantRef.update({
     recurringCheckedAt: now,
     isRecurringUnsupported: false,
@@ -1014,9 +1042,13 @@ export async function syncRunwayLink(
         linkId,
         grant,
         grantRef,
+        linkRef,
         planKey,
         new Set(link.providerAccounts.map((entry) => entry.providerAccountId)),
       ).catch(async (error: unknown) => {
+        if (error instanceof ProviderError && error.code === 'NO_ACCOUNTS') {
+          throw error;
+        }
         logger.warn('runway.sync.recurringFailed', {
           linkId,
           kind: error instanceof ProviderError ? error.kind : 'internal',

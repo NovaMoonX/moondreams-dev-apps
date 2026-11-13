@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import DetailSheet from '@/components/DetailSheet';
 import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import {
@@ -20,25 +21,35 @@ import {
 } from '@apps/runway/utils/recurringText';
 
 interface RecurringPlaceSheetProps {
-  hint: Extract<RecurringHint, { kind: 'place' }>;
+  hint: Extract<RecurringHint, { kind: 'place' }> | null;
+  onFormChange: (isOpen: boolean) => void;
   onClose: () => void;
 }
 
 /** An account the bank sees repeating charges on that is not in the plan: lists them, and "Add it to my plan" goes to the bank's account choice. */
-function RecurringPlaceSheet({ hint, onClose }: RecurringPlaceSheetProps) {
-  const { providerAccount, streams } = hint;
+function RecurringPlaceSheet({
+  hint,
+  onFormChange,
+  onClose,
+}: RecurringPlaceSheetProps) {
+  const { user } = useAuth();
+  const [added, setAdded] = useState<typeof hint>(null);
+  const current = added ?? hint;
+  const providerAccount = current?.providerAccount ?? null;
   const link = useAppSelector(
     (state) =>
-      state.runway.links.find((entry) => entry.id === providerAccount.linkId) ??
-      null,
+      state.runway.links.find(
+        (entry) => entry.id === providerAccount?.linkId,
+      ) ?? null,
   );
-  const [isAdding, setIsAdding] = useState(false);
+  if (!current || !providerAccount) return null;
+  const { streams } = current;
   const name = BILLS_NOTICED_WORDS.placeName(
     cleanBankName(providerAccount.name),
     providerAccount.mask,
   );
 
-  if (isAdding && link) {
+  if (added && link) {
     return <LinkBankScreen addTo={link} onClose={onClose} />;
   }
 
@@ -54,7 +65,10 @@ function RecurringPlaceSheet({ hint, onClose }: RecurringPlaceSheetProps) {
             <Button
               type='button'
               className='w-full'
-              onClick={() => setIsAdding(true)}
+              onClick={() => {
+                setAdded(current);
+                onFormChange(true);
+              }}
             >
               {RECURRING_SHEET_WORDS.addAccount}
             </Button>
@@ -64,7 +78,7 @@ function RecurringPlaceSheet({ hint, onClose }: RecurringPlaceSheetProps) {
             variant='tertiary'
             className='w-full'
             onClick={() => {
-              dismissRecurring(hint.key);
+              if (user) dismissRecurring(user.uid, current.key);
               onClose();
             }}
           >

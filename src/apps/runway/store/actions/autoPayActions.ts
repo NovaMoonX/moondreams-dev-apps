@@ -1,6 +1,5 @@
 import {
   doc,
-  getDoc,
   runTransaction,
   updateDoc,
   type Transaction,
@@ -517,14 +516,16 @@ export async function learnBillMerchant(
   billId: string,
   keys: readonly string[],
 ): Promise<void> {
-  const header = await getDoc(itemRef(uid, billId));
-  const before = await readKeys(
-    header.data() as Partial<PlanItemDoc> | undefined,
-    encryption,
-  );
-  const learned = mergeKeys(keys, before);
-  if (learned.join('|') === before.join('|')) return;
-  await updateDoc(itemRef(uid, billId), {
-    matchSealed: await sealJson(toMatchSealed(learned), encryption),
+  await runTransaction(db, async (transaction) => {
+    const header = await transaction.get(itemRef(uid, billId));
+    const before = await readKeys(
+      header.data() as Partial<PlanItemDoc> | undefined,
+      encryption,
+    );
+    const learned = mergeKeys(keys, before);
+    if (learned.join('|') === before.join('|')) return;
+    transaction.update(itemRef(uid, billId), {
+      matchSealed: await sealJson(toMatchSealed(learned), encryption),
+    });
   });
 }

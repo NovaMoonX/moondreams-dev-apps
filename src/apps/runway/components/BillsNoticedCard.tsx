@@ -9,7 +9,6 @@ import ItemRow from '@apps/runway/components/ItemRow';
 import LevelGate from '@apps/runway/components/LevelGate';
 import RecurringPlaceSheet from '@apps/runway/components/RecurringPlaceSheet';
 import RecurringStreamSheet from '@apps/runway/components/RecurringStreamSheet';
-import type { RecurringHint } from '@apps/runway/engine/recurring';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useChargedToHints } from '@apps/runway/hooks/useChargedTo';
 import { useRecurringHints } from '@apps/runway/hooks/useRecurring';
@@ -53,10 +52,19 @@ function BillsNoticedCard({ today, onOpenBill }: BillsNoticedCardProps) {
   const accounts = useAppSelector(selectAllAccounts);
   const emojiOf = useLiveEmojiResolver();
   const [isUnfolded, setIsUnfolded] = useState(false);
-  const [openHint, setOpenHint] = useState<Extract<
-    RecurringHint,
-    { kind: 'newBill' | 'place' }
-  > | null>(null);
+  const [open, setOpen] = useState<{
+    key: string;
+    kind: 'newBill' | 'place';
+  } | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const openHint =
+    recurringHints.find(
+      (hint) => hint.key === open?.key && hint.kind === open.kind,
+    ) ?? null;
+  const closeHint = () => {
+    setOpen(null);
+    setIsFormOpen(false);
+  };
 
   const nameOf = getPlaceNamer(cards, accounts);
   const payloadOf = (billId: string) =>
@@ -116,7 +124,7 @@ function BillsNoticedCard({ today, onOpenBill }: BillsNoticedCardProps) {
           ariaLabel: BILLS_NOTICED_WORDS.newAria(name, line),
           hiddenAriaLabel: BILLS_NOTICED_WORDS.newHiddenAria(name),
           isPrivate: true,
-          onOpen: () => setOpenHint(hint),
+          onOpen: () => setOpen({ key: hint.key, kind: 'newBill' }),
         },
       ];
     }
@@ -133,13 +141,13 @@ function BillsNoticedCard({ today, onOpenBill }: BillsNoticedCardProps) {
         detail: line,
         ariaLabel: BILLS_NOTICED_WORDS.placeAria(name, line),
         isPrivate: false,
-        onOpen: () => setOpenHint(hint),
+        onOpen: () => setOpen({ key: hint.key, kind: 'place' }),
       },
     ];
   });
 
   const rows = [...chargedRows, ...recurringRows];
-  if (rows.length === 0 && openHint === null) return null;
+  if (rows.length === 0 && !isFormOpen) return null;
 
   const hidden = rows.length - SHOWN_ROWS;
   const shown = hidden > 0 && !isUnfolded ? rows.slice(0, SHOWN_ROWS) : rows;
@@ -184,16 +192,18 @@ function BillsNoticedCard({ today, onOpenBill }: BillsNoticedCardProps) {
           </ShowMoreButton>
         )}
       </section>
-      {openHint?.kind === 'newBill' && (
+      {open?.kind === 'newBill' && (openHint || isFormOpen) && (
         <RecurringStreamSheet
-          hint={openHint}
-          onClose={() => setOpenHint(null)}
+          hint={openHint?.kind === 'newBill' ? openHint : null}
+          onFormChange={setIsFormOpen}
+          onClose={closeHint}
         />
       )}
-      {openHint?.kind === 'place' && (
+      {open?.kind === 'place' && (openHint || isFormOpen) && (
         <RecurringPlaceSheet
-          hint={openHint}
-          onClose={() => setOpenHint(null)}
+          hint={openHint?.kind === 'place' ? openHint : null}
+          onFormChange={setIsFormOpen}
+          onClose={closeHint}
         />
       )}
     </LevelGate>

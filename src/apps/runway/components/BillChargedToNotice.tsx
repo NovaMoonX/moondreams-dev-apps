@@ -164,7 +164,9 @@ function BillChargedToNotice({
           size='sm'
           className={NOTICE_QUIET_CLASSES.info}
           disabled={isBusy}
-          onClick={() => declineChargedTo(billId, hint.place)}
+          onClick={() => {
+            if (user) declineChargedTo(user.uid, billId, hint.place);
+          }}
         >
           {CHARGED_TO_HINT_WORDS.notThisOne}
         </Button>

@@ -30,7 +30,8 @@ import {
 import { dismissRecurring } from '@apps/runway/utils/recurringDismissed';
 
 interface RecurringStreamSheetProps {
-  hint: Extract<RecurringHint, { kind: 'newBill' }>;
+  hint: Extract<RecurringHint, { kind: 'newBill' }> | null;
+  onFormChange: (isOpen: boolean) => void;
   onClose: () => void;
 }
 
@@ -42,24 +43,33 @@ const Fact = ({ label, children }: { label: string; children: ReactNode }) => (
 );
 
 /** A repeating charge the bank found that is not a bill yet: what it looks like, and "Add it as a bill" opens the new-bill form filled from it. */
-function RecurringStreamSheet({ hint, onClose }: RecurringStreamSheetProps) {
+function RecurringStreamSheet({
+  hint,
+  onFormChange,
+  onClose,
+}: RecurringStreamSheetProps) {
   const { user } = useAuth();
   const cards = useAppSelector(selectAllCards);
   const accounts = useAppSelector(selectAllAccounts);
-  const [isAdding, setIsAdding] = useState(false);
-  const { stream, place } = hint;
+  const [added, setAdded] = useState<typeof hint>(null);
+  const current = added ?? hint;
+  if (!current) return null;
+  const { stream, place } = current;
   const name = getStreamName(stream);
   const amount = isStreamAmountSteady(stream)
     ? formatCents(stream.lastCents)
     : RECURRING_SHEET_WORDS.about(formatCents(stream.averageCents));
 
-  if (isAdding) {
+  if (added) {
     return (
       <BillForm
         isOpen
         title='Bill'
         onClose={onClose}
-        onCancel={() => setIsAdding(false)}
+        onCancel={() => {
+          setAdded(null);
+          onFormChange(false);
+        }}
         fromCharge={{
           initial: getStreamBill(stream, place),
           onCreated: (billId) => {
@@ -91,7 +101,10 @@ function RecurringStreamSheet({ hint, onClose }: RecurringStreamSheetProps) {
           <Button
             type='button'
             className='w-full'
-            onClick={() => setIsAdding(true)}
+            onClick={() => {
+              setAdded(current);
+              onFormChange(true);
+            }}
           >
             {RECURRING_SHEET_WORDS.addBill}
           </Button>
@@ -100,7 +113,7 @@ function RecurringStreamSheet({ hint, onClose }: RecurringStreamSheetProps) {
             variant='tertiary'
             className='w-full'
             onClick={() => {
-              dismissRecurring(hint.key);
+              if (user) dismissRecurring(user.uid, current.key);
               onClose();
             }}
           >
