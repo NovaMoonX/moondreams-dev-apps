@@ -74,6 +74,7 @@ export function startLinksListener(
         id: data.id,
         status: data.status,
         lastSyncAt: data.lastSyncAt ?? null,
+        needsCardConsent: data.needsCardConsent === true,
         createdAt: data.createdAt,
         institutionName: payload.institutionName ?? '',
         institutionLogo: payload.institutionLogo?.startsWith(
