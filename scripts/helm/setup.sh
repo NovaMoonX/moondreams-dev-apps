@@ -103,6 +103,23 @@ step() {
 
 # ---- tools and sign-in
 
+# The keyring canary talks to Firestore with the application default credentials, which bill the quota project saved in that file, so a machine whose gcloud still points at another project fails there.
+align_gcloud_project() {
+  local current quota
+  current="$(gcloud config get-value project 2>/dev/null || true)"
+  quota="$(python3 -I -c "import json,os;print(json.load(open(os.path.expanduser('~/.config/gcloud/application_default_credentials.json'))).get('quota_project_id') or '')" 2>/dev/null || true)"
+  if [[ "$current" != "$PROJECT" ]]; then
+    if (( DRY )); then echo "• gcloud's default project is '${current:-none}', not $PROJECT."
+    elif ask "gcloud's default project is '${current:-none}'. Switch it to $PROJECT?" y; then gcloud config set project "$PROJECT" >/dev/null 2>&1
+    else echo "• Leaving gcloud on '${current:-none}'; every step here names $PROJECT itself."; fi
+  fi
+  if [[ -n "$quota" && "$quota" != "$PROJECT" ]]; then
+    if (( DRY )); then echo "• The application default credentials bill '$quota', not $PROJECT."
+    elif ask "The application default credentials bill '$quota'. Switch them to $PROJECT?" y; then gcloud auth application-default set-quota-project "$PROJECT" >/dev/null 2>&1
+    else echo "• Leaving the credentials on '$quota'; the keyring canary step may fail with an API-not-enabled error."; fi
+  fi
+}
+
 check_tools() {
   CURRENT="Checking the tools"
   if ! command -v gcloud >/dev/null 2>&1; then
@@ -131,6 +148,7 @@ check_tools() {
       gcloud auth application-default login
     fi
   fi
+  align_gcloud_project
   if (( ! DRY )) && ! firebase login:list 2>/dev/null | grep -q '@'; then
     ask "The firebase CLI isn't signed in. Run 'firebase login' now?" y || { echo "✗ Run: firebase login" >&2; exit 1; }
     firebase login
