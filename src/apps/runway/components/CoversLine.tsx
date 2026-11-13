@@ -10,6 +10,8 @@ import { readCovers } from '@apps/runway/utils/coversText';
 export interface CoversRest {
   short: string | null;
   note: string;
+  /** The tip's title when it is about the short phrase rather than where the rest comes from. */
+  title?: string;
 }
 
 interface CoversLineProps {
@@ -50,7 +52,7 @@ function CoversLine({
   );
   const notes = [...rangeNotes, ...(rest ? [rest.note] : [])];
   const getTitle = () => {
-    if (rangeNotes.length === 0) return HORIZON_WORDS.restHelpTitle;
+    if (rangeNotes.length === 0) return rest?.title ?? HORIZON_WORDS.restHelpTitle;
     return rest ? words.helpBothTitle : words.helpTitle;
   };
   const line = [text, rest?.short ? `${rest.short}.` : null]

@@ -272,10 +272,13 @@ function HorizonSheet({
       rest.kind === 'pays' && rest.startsOn !== null && rest.startsOn > today
         ? formatDateOrdinalUTC(rest.startsOn)
         : null;
-    return {
-      short: from === null ? null : HORIZON_WORDS.savingStarts(from),
-      note: HORIZON_WORDS.restPaysNote(from),
-    };
+    return from === null
+      ? { short: null, note: HORIZON_WORDS.restPaysNote }
+      : {
+          short: HORIZON_WORDS.savingStarts(from),
+          note: HORIZON_WORDS.startHelpNote,
+          title: HORIZON_WORDS.startHelpTitle,
+        };
   };
   const when =
     horizon.happensUntil === null
@@ -297,7 +300,6 @@ function HorizonSheet({
           hasRepeats,
         ),
     when,
-    horizon.isYearly && HORIZON_WORDS.everyYear,
   ]
     .filter(Boolean)
     .join('\u00A0· ');
@@ -1100,17 +1102,15 @@ function HorizonSheet({
                 <MaskedText>{outsideLine}</MaskedText>
               </p>
             )}
-            {stage === 'open' && waitingOn.length > 0 && (
-              <p className='pt-2'>
-                {HORIZON_END_WORDS.finishWaits(waitingOn.length)}
-              </p>
-            )}
           </div>
           <div className='space-y-2'>
             {!isChangesOnly && (
               <>
                 <p className='text-muted-foreground text-sm font-medium'>
                   {HORIZON_WORDS.costsCaption}
+                  {stage === 'open' &&
+                    waitingOn.length > 0 &&
+                    HORIZON_END_WORDS.finishWaits(waitingOn.length)}
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {costs.map((cost) => (

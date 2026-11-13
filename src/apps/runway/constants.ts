@@ -573,11 +573,11 @@ export const HORIZON_WORDS = {
   putHolds: (name: string, amount: string) => `${name} has ${amount}`,
   needsPutOrNotNow: 'Pick where it comes from, or Not now.',
   restOutsideNote: 'The rest is on you, outside the plan.',
-  restPaysNote: (from: string | null) =>
-    from === null
-      ? 'The rest comes from your pays before each cost is due.'
-      : `The rest comes from your pays from ${from}, before each cost is due. Pays before then give nothing.`,
+  restPaysNote: 'The rest comes from your pays before each cost is due.',
   restHelpTitle: 'Where the rest comes from',
+  startHelpTitle: 'When saving starts',
+  startHelpNote:
+    'From then on, each pay puts a share toward the next cost before it is due. Pays before then give nothing.',
   restOnePayNote: (date: string) => `The rest comes from the ${date} pay.`,
   putMore: 'Put more toward it',
   putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',
@@ -797,8 +797,7 @@ export const HORIZON_END_WORDS = {
   placeSearch: 'Search',
   placeNoMatch: 'No envelope or goal matches',
   finishConfirm: 'Finish',
-  finishWaits: (count: number) =>
-    `${count} ${count === 1 ? 'cost' : 'costs'} to pay before you can finish`,
+  finishWaits: (count: number) => ` · ${count} to pay`,
   placeCaption: 'Move it to',
   placePicked: (place: string) => `It moves to ${place}`,
   placeNone: 'There is no envelope or goal to move it to yet.',
