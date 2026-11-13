@@ -2,8 +2,8 @@
 require_firebase_login() {
   [[ "${FIREBASE_LOGIN_CHECKED:-}" == "1" ]] && return 0
   if ! firebase projects:list --json >/dev/null 2>&1; then
-    [[ -t 0 ]] || { echo "✗ The firebase CLI's sign-in has expired. Run: firebase login --reauth" >&2; exit 1; }
-    echo "The firebase CLI's sign-in is missing or has expired, so it needs a fresh one."
+    [[ -t 0 ]] || { echo "✗ The firebase CLI can't reach your projects (signed out, expired, or offline). Run: firebase login --reauth" >&2; exit 1; }
+    echo "The firebase CLI can't reach your projects (signed out, expired, or offline). If you are online, a fresh sign-in fixes it."
     firebase login --reauth
     firebase projects:list --json >/dev/null 2>&1 || { echo "✗ The firebase CLI still can't reach your projects. Run: firebase login --reauth" >&2; exit 1; }
   fi
