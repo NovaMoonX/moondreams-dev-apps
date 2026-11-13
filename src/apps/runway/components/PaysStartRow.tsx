@@ -19,9 +19,13 @@ interface PaysStartRowProps {
 /** "Saving starts · Today": the one folded row under "My pays before each cost is due", whose editor picks a later day for the pays to start saving. */
 function PaysStartRow({ value, onChange, today, lastDate }: PaysStartRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
-  // Below four choice cards it can sit under the fold on a short screen.
+  // Below four choice cards it can sit under the fold on a short screen; the sheet must finish opening first.
   useEffect(() => {
-    rowRef.current?.scrollIntoView({ block: 'nearest' });
+    const timer = window.setTimeout(
+      () => rowRef.current?.scrollIntoView({ block: 'center' }),
+      400,
+    );
+    return () => window.clearTimeout(timer);
   }, []);
   return (
     <div ref={rowRef}>
