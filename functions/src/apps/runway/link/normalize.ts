@@ -1,6 +1,7 @@
 import type {
   AccountKind,
   NormalizedAccount,
+  NormalizedCardStatement,
   NormalizedTransaction,
 } from './provider.js';
 
@@ -131,6 +132,41 @@ export function normalizeTransaction(
     bankName: toBankName(raw.merchantName, raw.name),
     category: raw.category?.trim().toUpperCase() || null,
     isPending: raw.isPending,
+  };
+  return result;
+}
+
+export interface RawCardStatement {
+  accountId: string;
+  /** Dollars. */
+  minimumPayment: number | null;
+  lastStatementBalance: number | null;
+  /** `YYYY-MM-DD`. */
+  lastStatementIssueDate: string | null;
+  nextPaymentDueDate: string | null;
+  lastPaymentAmount: number | null;
+  lastPaymentDate: string | null;
+}
+
+const toNonNegativeCents = (amount: number | null | undefined) => {
+  const cents = toCents(amount);
+  return cents !== null && cents >= 0 ? cents : null;
+};
+
+const toOptionalDay = (date: string | null | undefined) =>
+  typeof date === 'string' ? toDateOnly(date) : null;
+
+export function normalizeCardStatement(
+  raw: RawCardStatement,
+): NormalizedCardStatement {
+  const result: NormalizedCardStatement = {
+    providerAccountId: raw.accountId,
+    minimumCents: toNonNegativeCents(raw.minimumPayment),
+    statementCents: toNonNegativeCents(raw.lastStatementBalance),
+    statementOn: toOptionalDay(raw.lastStatementIssueDate),
+    dueOn: toOptionalDay(raw.nextPaymentDueDate),
+    lastPaymentCents: toNonNegativeCents(raw.lastPaymentAmount),
+    lastPaymentOn: toOptionalDay(raw.lastPaymentDate),
   };
   return result;
 }

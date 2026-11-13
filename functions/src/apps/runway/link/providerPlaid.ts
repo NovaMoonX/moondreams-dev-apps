@@ -1,7 +1,9 @@
+import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
 
 import {
   normalizeAccount,
+  normalizeCardStatement,
   normalizeTransaction,
   toBankName,
   toHttpsUrl,
@@ -11,6 +13,7 @@ import {
   asProviderCode,
   ProviderError,
   type BankDataProvider,
+  type CardStatementRead,
   type NormalizedTransaction,
   type ProviderGrant,
   type TransactionDetails,
@@ -235,27 +238,68 @@ const toLogoUrl = (logo: string | null | undefined) =>
     ? `data:image/png;base64,${logo}`
     : null;
 
+interface PlaidCreditLiability {
+  account_id: string;
+  minimum_payment_amount?: number | null;
+  last_statement_balance?: number | null;
+  last_statement_issue_date?: string | null;
+  next_payment_due_date?: string | null;
+  last_payment_amount?: number | null;
+  last_payment_date?: string | null;
+}
+
+const NEEDS_CONSENT_CODES = new Set([
+  'ADDITIONAL_CONSENT_REQUIRED',
+  'ACCESS_NOT_GRANTED',
+]);
+const UNSUPPORTED_CODES = new Set([
+  'PRODUCTS_NOT_SUPPORTED',
+  'PRODUCT_NOT_ENABLED',
+  'NO_LIABILITY_ACCOUNTS',
+  'INVALID_PRODUCT',
+]);
+
+const createLinkToken = (body: Record<string, unknown>) =>
+  call<{ link_token: string }>('/link/token/create', body);
+
 export const plaidProvider: BankDataProvider = {
   async createLinkSession(uid, update) {
-    const { link_token } = await call<{ link_token: string }>(
-      '/link/token/create',
-      {
-        user: { client_user_id: uid },
-        client_name: 'Runway',
-        country_codes: ['US'],
-        language: 'en',
-        ...(update
-          ? {
-              access_token: update.accessToken,
-              update: { account_selection_enabled: update.accountSelection },
-            }
-          : {
-              products: ['transactions'],
-              transactions: { days_requested: LINK_DAYS_REQUESTED },
-            }),
-        ...(isEmulator() ? {} : { webhook: webhookUrl() }),
-      },
-    );
+    const base = {
+      user: { client_user_id: uid },
+      client_name: 'Runway',
+      country_codes: ['US'],
+      language: 'en',
+      ...(isEmulator() ? {} : { webhook: webhookUrl() }),
+    };
+    if (update) {
+      const { link_token } = await createLinkToken({
+        ...base,
+        access_token: update.accessToken,
+        update: { account_selection_enabled: update.accountSelection },
+        ...(update.askCardConsent
+          ? { additional_consented_products: ['liabilities'] }
+          : {}),
+      });
+      return { linkToken: link_token };
+    }
+    const fresh = {
+      ...base,
+      products: ['transactions'],
+      transactions: { days_requested: LINK_DAYS_REQUESTED },
+    };
+    const { link_token } = await createLinkToken({
+      ...fresh,
+      additional_consented_products: ['liabilities'],
+    }).catch((error: unknown) => {
+      if (
+        !(error instanceof ProviderError) ||
+        error.code !== 'INVALID_PRODUCT'
+      ) {
+        throw error;
+      }
+      logger.warn('runway.link.cardDetailsUnavailable');
+      return createLinkToken(fresh);
+    });
     return { linkToken: link_token };
   },
 
@@ -332,6 +376,46 @@ export const plaidProvider: BankDataProvider = {
           : raw,
       );
     });
+  },
+
+  async listCardStatements(grant) {
+    const read = await call<{
+      liabilities?: { credit?: PlaidCreditLiability[] | null };
+    }>('/liabilities/get', { access_token: grant.credential }).then(
+      (response) => response,
+      (error: unknown) => {
+        if (!(error instanceof ProviderError) || error.code === null) {
+          throw error;
+        }
+        const answer: CardStatementRead | null = NEEDS_CONSENT_CODES.has(
+          error.code,
+        )
+          ? { kind: 'needsConsent' }
+          : UNSUPPORTED_CODES.has(error.code)
+            ? { kind: 'unsupported' }
+            : error.code === 'PRODUCT_NOT_READY'
+              ? { kind: 'notReady' }
+              : null;
+        if (answer === null) throw error;
+        return answer;
+      },
+    );
+    if ('kind' in read) return read;
+    const answer: CardStatementRead = {
+      kind: 'ok',
+      statements: (read.liabilities?.credit ?? []).map((entry) =>
+        normalizeCardStatement({
+          accountId: entry.account_id,
+          minimumPayment: entry.minimum_payment_amount ?? null,
+          lastStatementBalance: entry.last_statement_balance ?? null,
+          lastStatementIssueDate: entry.last_statement_issue_date ?? null,
+          nextPaymentDueDate: entry.next_payment_due_date ?? null,
+          lastPaymentAmount: entry.last_payment_amount ?? null,
+          lastPaymentDate: entry.last_payment_date ?? null,
+        }),
+      ),
+    };
+    return answer;
   },
 
   async refreshTransactions(grant) {

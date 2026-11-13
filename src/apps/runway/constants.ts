@@ -4760,6 +4760,21 @@ export const CARD_WORDS = {
   dueInDays: (days: number) =>
     days === 1 ? 'Due tomorrow' : `Due in ${days} days`,
   dueToday: 'Due today',
+  dueFromBank: (bank: string) => `Due date from ${bank}`,
+  dueFromBankTitle: 'Due date',
+  dueFromBankSummary: (date: string, bank: string) => `${date}, from ${bank}`,
+  dueFromBankBody: (bank: string) =>
+    `${bank} sets this date, so Runway follows it. If you unlink the card, the day you typed comes back.`,
+  statementCaption: (bank: string) => `From your ${bank} statement`,
+  minimumDue: 'Minimum due',
+  statementBalance: 'Statement balance',
+  statementIssued: (date: string) => `Issued\u00a0${date}`,
+  minimumShort: (amount: string) => `${amount}\u00a0minimum`,
+  minimumQuick: (amount: string) => `Minimum ${amount}`,
+  everythingQuick: (amount: string) => `Everything waiting ${amount}`,
+  quickAmounts: 'Or pay',
+  consentRow: 'Get the minimum from your bank',
+  consentRowHelp: 'Your bank asks you to agree once before it shares it',
   homeTitle: 'Cards',
   homeSeeAll: 'See all',
   totalOwed: (amount: string) => `${amount} waiting to be paid on your cards`,
@@ -4768,6 +4783,20 @@ export const CARD_WORDS = {
     `${name} is due\u00a0${date} · ${amount} waiting`,
   dueTodayWarning: (name: string, amount: string) =>
     `${name} is due today · ${amount} waiting`,
+  dueWarningMinimum: (
+    name: string,
+    date: string,
+    minimum: string,
+    amount: string,
+  ) => `${name} is due\u00a0${date} · ${minimum} minimum, ${amount} waiting`,
+  dueTodayWarningMinimum: (name: string, minimum: string, amount: string) =>
+    `${name} is due today · ${minimum} minimum, ${amount} waiting`,
+  dueWarningPastMinimum: (
+    name: string,
+    date: string,
+    minimum: string,
+    amount: string,
+  ) => `${name} was due\u00a0${date} · ${minimum} minimum, ${amount} waiting`,
   dueWarningOpen: 'Pay it off',
   dueWarningPast: (name: string, date: string, amount: string) =>
     `${name} was due\u00a0${date} · ${amount} waiting`,

@@ -7,6 +7,7 @@ import type {
   DateOnly,
   OpenAccount,
   OpenAccountBalance,
+  OpenCardStatement,
   OpenLink,
   OpenCard,
   OpenExpense,
@@ -55,6 +56,8 @@ export interface RunwayState {
   accountBalances: OpenAccountBalance[];
   /** The bank balances have been read once, so a linked account is not drawn as holding nothing. */
   isAccountBalancesLoaded: boolean;
+  /** What the bank's latest statement says about each linked card. */
+  cardStatements: OpenCardStatement[];
   /** Every expense group. */
   expenses: OpenExpense[];
   /** Every always-do-this rule, and whether they have been read once, so no pass runs on a rule list that is still arriving. */
@@ -123,6 +126,7 @@ const initialState: RunwayState = {
   isLinksLoaded: false,
   accountBalances: [],
   isAccountBalancesLoaded: false,
+  cardStatements: [],
   expenses: [],
   rules: [],
   isRulesLoaded: false,
@@ -234,6 +238,9 @@ export const runwaySlice = createSlice({
       state.accounts = withBankBalances(state.savedAccounts, action.payload);
       state.isAccountBalancesLoaded = true;
     },
+    setCardStatements: (state, action: PayloadAction<OpenCardStatement[]>) => {
+      state.cardStatements = action.payload;
+    },
     setMoves: (
       state,
       action: PayloadAction<{ from: DateOnly; moves: OpenMove[] }>,
@@ -332,6 +339,7 @@ export const {
   setAccounts,
   setLinks,
   setAccountBalances,
+  setCardStatements,
   setExpenses,
   setRules,
   setMemories,
