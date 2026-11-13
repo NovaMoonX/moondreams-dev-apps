@@ -7,6 +7,7 @@ import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import FactsSection from '@apps/helm/components/who/FactsSection';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import PlaceEditSheet from '@apps/helm/components/who/PlaceEditSheet';
 import PhotosSection from '@apps/helm/components/media/PhotosSection';
@@ -16,6 +17,7 @@ import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { forgetPlace } from '@apps/helm/store/actions/placeActions';
 import {
   countLinkedTasks,
+  countOnlyFacts,
   ForgetPartialError,
 } from '@apps/helm/store/actions/whoActions';
 
@@ -23,12 +25,19 @@ const { option } = DropdownMenuFactories;
 
 interface PlaceDetailProps {
   placeId: string | null;
+  /** Where Back lands when it is not Home. */
+  backLabel?: string;
   onBack: () => void;
   onHome: () => void;
 }
 
 /** One place the person named: its name, its address when there is one and the open tasks linked to it. */
-function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
+function PlaceDetail({
+  placeId,
+  backLabel = 'Home',
+  onBack,
+  onHome,
+}: PlaceDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -71,7 +80,13 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
       console.error('Helm links were not counted', error);
       return null;
     });
-    if (linkedCount === null) {
+    const factCount = await countOnlyFacts(user.uid, place.id).catch(
+      (error: unknown) => {
+        console.error('Helm facts were not counted', error);
+        return null;
+      },
+    );
+    if (linkedCount === null || factCount === null) {
       addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
       return;
     }
@@ -81,6 +96,7 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
         place.name,
         linkedCount,
         place.photoMediaIds.length,
+        factCount,
       ),
       confirmText: HELM_COPY.forgetAction,
       destructive: true,
@@ -143,7 +159,7 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
   return (
     <>
       <HelmHeader
-        backLabel='Home'
+        backLabel={backLabel}
         onBack={onBack}
         onHome={onHome}
         menu={menu}
@@ -189,6 +205,10 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
               name={place.name}
               photoIds={place.photoMediaIds}
               mainId={place.photoMediaIds[0] ?? null}
+            />
+            <FactsSection
+              subject={{ kind: 'place', id: place.id }}
+              name={place.name}
             />
             <section className='space-y-3'>
               <SectionDivider label={HELM_COPY.whoTasksTitle} />

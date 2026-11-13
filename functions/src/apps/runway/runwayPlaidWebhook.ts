@@ -19,7 +19,7 @@ if (getApps().length === 0) {
 
 /**
  * Plaid's webhook. A request that does not carry a valid signed header over its own body is answered 401 and does
- * nothing. A valid "updates available" notice syncs the link its item belongs to, answering within eight seconds
+ * nothing. A valid "updates available" or card-details notice syncs the link its item belongs to, answering within eight seconds
  * either way. Logs counts and ids only.
  */
 export const runwayPlaidWebhook = onRequest(
@@ -52,7 +52,11 @@ export const runwayPlaidWebhook = onRequest(
       item_id?: unknown;
       error?: { error_code?: unknown } | null;
     };
+    const isStatementsNotice =
+      body.webhook_type === 'LIABILITIES' &&
+      body.webhook_code === 'DEFAULT_UPDATE';
     const isSyncNotice =
+      isStatementsNotice ||
       (body.webhook_type === 'TRANSACTIONS' &&
         body.webhook_code === 'SYNC_UPDATES_AVAILABLE') ||
       (body.webhook_type === 'ITEM' && body.webhook_code === 'LOGIN_REPAIRED');
@@ -68,7 +72,10 @@ export const runwayPlaidWebhook = onRequest(
         const { uid, linkId } = owner.data() as ItemIndexDoc;
         /* Plaid retries a webhook not answered within 10 seconds. A sync still running then is answered anyway:
            its cursor moves only after its writes commit, so the next notice or the backstop picks up the rest. */
-        const sync = syncRunwayLink(firestore, loadKeyring(), uid, linkId).then(
+        const sync = syncRunwayLink(firestore, loadKeyring(), uid, linkId, {
+          isFresh: false,
+          isStatementsDue: isStatementsNotice,
+        }).then(
           (result) => {
             logger.info('runway.webhook.synced', {
               linkId,

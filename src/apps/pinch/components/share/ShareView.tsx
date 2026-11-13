@@ -1,7 +1,8 @@
 import { useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Link2, Link2Off, RefreshCw, Share2 } from 'lucide-react';
@@ -119,7 +120,7 @@ function IncludeChoices({
           className='flex min-h-12 cursor-pointer items-start gap-3 py-2'
         >
           <span className='mt-0.5 inline-flex shrink-0'>
-            <Checkbox
+            <AppCheckbox
               aria-label={row.label}
               checked={includes[row.key]}
               disabled={isDisabled}

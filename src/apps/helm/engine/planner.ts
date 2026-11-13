@@ -18,6 +18,7 @@ export interface PlannerTask {
   isUrgent: boolean;
   durationMinutes: number | null;
   energy: Energy | null;
+  placeIds: string[];
 }
 
 export interface BusyBlock {
@@ -36,6 +37,8 @@ export interface PlannerInput {
   hasCalendar: boolean;
   /** Set when the day follows a night out or a shift and the person hasn't asked for a plan anyway. */
   restDay: RestDayKind | null;
+  /** The place the person said they are at right now; tasks linked to it come first among equals. */
+  currentPlaceId: string | null;
   busy: BusyBlock[];
   slots: Record<string, PlanSlot>;
   tasks: PlannerTask[];
@@ -162,10 +165,14 @@ const getDueRank = (task: PlannerTask, timeZone: string, now: number) => {
   return away <= DUE_SOON_DAYS ? 2 : 3;
 };
 
+const isHereTask = (task: PlannerTask, currentPlaceId: string | null) =>
+  currentPlaceId !== null && task.placeIds.includes(currentPlaceId);
+
 const rankTasks = (
   tasks: PlannerTask[],
   timeZone: string,
   now: number,
+  currentPlaceId: string | null,
 ): PlannerTask[] =>
   tasks
     .map((task, index) => ({
@@ -175,6 +182,9 @@ const rankTasks = (
     }))
     .sort(
       (first, second) =>
+        Math.min(first.dueRank, 2) - Math.min(second.dueRank, 2) ||
+        Number(isHereTask(second.task, currentPlaceId)) -
+          Number(isHereTask(first.task, currentPlaceId)) ||
         first.dueRank - second.dueRank ||
         (first.dueRank < 3 && first.task.due && second.task.due
           ? getDueSortKey(first.task.due) - getDueSortKey(second.task.due)
@@ -189,6 +199,12 @@ const rankTasks = (
     .map(({ task }) => task);
 
 const getDuePhrase = (task: PlannerTask, input: PlannerInput) => {
+  if (
+    isHereTask(task, input.currentPlaceId) &&
+    getDueRank(task, input.timeZone, input.now) > 1
+  ) {
+    return PLANNER_COPY.home;
+  }
   if (task.due) {
     if (isOverdue(task.due, input.timeZone, input.now)) {
       return PLANNER_COPY.overdue;
@@ -276,6 +292,7 @@ const getCandidates = (input: PlannerInput) => {
     input.tasks.filter((task) => !decided.has(task.id)),
     input.timeZone,
     input.now,
+    input.currentPlaceId,
   );
 };
 
