@@ -2054,6 +2054,7 @@ export const SPEND_WORDS = {
   newPurchase: 'Add a purchase',
   envelopeAdd: 'Add a purchase',
   sheetTitle: 'Purchase',
+  refundSheetTitle: 'Refund',
   empty:
     'Nothing spent yet. Add what you spend and each envelope shows what is left.',
   loading: 'Getting your purchases.',
@@ -2185,6 +2186,7 @@ export const SPEND_WORDS = {
   add: 'Add',
   needsAmount: 'Enter the amount.',
   needsEnvelope: 'Pick the envelope.',
+  needsReturnTo: 'Pick where it goes back to.',
   needsDay: 'Pick a day you were tracking, not one ahead.',
   needsShares: 'Say how much each envelope takes.',
   needsTwo: 'Pick at least two envelopes.',
@@ -5058,6 +5060,9 @@ export const NEEDS_HOME_WORDS = {
   keepFree: 'Keep in Free to Spend',
   keepFreeSub: 'Still counts, with no envelope',
   keptFree: 'Kept in Free to Spend',
+  keepRefundFree: 'Leave it in Free to Spend',
+  keepRefundFreeSub: 'It’s already counted there. No envelope gets it back',
+  keptRefundFree: 'Left in Free to Spend',
   historyOne: 'A purchase from before you linked is history now',
   historyMany: (count: number) =>
     `${count} purchases from before you linked are history now`,

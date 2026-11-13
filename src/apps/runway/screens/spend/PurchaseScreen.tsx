@@ -648,6 +648,7 @@ function PurchaseScreen({
         key={editTarget.key}
         isOpen
         editing={editTarget.purchase}
+        isCountedAlready={isWaiting}
         heldReceiptCount={receipts.length}
         onClose={() => setEditTarget(null)}
         onCancel={() => setEditTarget(null)}
