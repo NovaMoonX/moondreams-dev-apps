@@ -5,6 +5,7 @@ import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import { formatMoment } from '@/utils/yearlyDateUtils';
+import { getDateTimeFormat } from '@/utils/timezoneUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenWho } from '@apps/helm/types';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -27,13 +28,11 @@ const ROW_HEIGHT = 60;
 const rowDate = (moment: WhoMoment) =>
   moment.month === null
     ? null
-    : new Date(
-        Date.UTC(2000, moment.month - 1, moment.day ?? 1),
-      ).toLocaleDateString('en-US', {
+    : getDateTimeFormat({
         month: 'short',
         day: moment.precision === 'day' ? 'numeric' : undefined,
         timeZone: 'UTC',
-      });
+      }).format(new Date(Date.UTC(2000, moment.month - 1, moment.day ?? 1)));
 
 function MomentRow({
   moment,

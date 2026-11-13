@@ -190,6 +190,11 @@ function TurnCard({
       >
         {formatTime(lastMessage.createdAt)}
       </time>
+      {capture.arrivedVia === 'dropBox' && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.arrivedViaDropBox}
+        </p>
+      )}
       {showsReading && !capture.isUnreadable && !hasCard && (
         <div className='flex max-w-[84%] justify-end'>
           <ReadChips

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 
 export interface LinkedItem {
   id: string;
@@ -28,7 +28,7 @@ function Choice({ checked, onCheckedChange, label, detail }: { checked: boolean;
   return (
     <label className='flex cursor-pointer items-start gap-3'>
       <span className='mt-0.5 inline-flex w-5 shrink-0 justify-center'>
-        <Checkbox checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
+        <AppCheckbox checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
       </span>
       <span className='min-w-0'>
         <span className='block font-medium'>{label}</span>

@@ -1,7 +1,9 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import InlineNotice from '@/components/InlineNotice';
+import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
 
 interface DraftRestoredNoticeProps {
   /** Puts the form back to how it opens normally. */
@@ -36,9 +38,8 @@ function DraftRestoredNotice({
       <p>We kept what you typed before the app closed.</p>
       <Button
         type='button'
-        variant='outline'
         size='sm'
-        className="relative mt-2 after:absolute after:-inset-1.5 after:content-['']"
+        className={join('mt-2', NOTICE_ACTION_CLASSES.info)}
         onClick={() => void askToStartOver()}
       >
         Start over

@@ -1,4 +1,5 @@
 import {
+  type DocumentData,
   type DocumentReference,
   type Firestore,
   type Timestamp,
@@ -28,6 +29,7 @@ import {
   SEALED_SCHEMA_VERSION,
   type LinkSealed,
 } from './linkShared.js';
+import { toBalanceSealed } from './normalize.js';
 import { ProviderError, type ProviderGrant } from './provider.js';
 import {
   applyTransactions,
@@ -406,36 +408,278 @@ async function syncPurchases(
   return totals;
 }
 
+/** Asks closer together than this reuse the last one: Plaid allows each Item 30 live balance reads an hour. */
+const FRESH_GAP_MS = 2 * 60_000;
+
+/** Claims this link's fresh ask, so two devices or a double tap ask the bank once; false when one ran too recently. */
+const claimFreshAsk = (firestore: Firestore, grantRef: DocumentReference) =>
+  firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(grantRef);
+    const lastFreshAt: unknown = snapshot.data()?.lastFreshAt;
+    const now = Date.now();
+    if (typeof lastFreshAt === 'number' && now - lastFreshAt < FRESH_GAP_MS) {
+      return false;
+    }
+    transaction.update(grantRef, { lastFreshAt: now });
+    return true;
+  });
+
+/** A live read the bank answered with a sign-in request turns live reads off for this link and falls back to the saved balances. */
+async function readAccounts(
+  linkId: string,
+  grant: ProviderGrant,
+  grantRef: DocumentReference,
+  isLive: boolean,
+) {
+  if (!isLive) {
+    return { accounts: await provider.listAccounts(grant), isTurnedOff: false };
+  }
+  try {
+    return {
+      accounts: await provider.listAccounts(grant, { isLive: true }),
+      isTurnedOff: false,
+    };
+  } catch (error) {
+    if (!(error instanceof ProviderError) || error.code === 'NO_ACCOUNTS') {
+      throw error;
+    }
+    // The purchases synced just before, so a sign-in request here came from the live read itself: it stays off for this link, a reconnect included.
+    if (error.kind === 'needsAttention') {
+      await grantRef.update({ isLiveBalanceOff: true }).catch(() => {
+        logger.warn('runway.sync.liveOffWriteFailed', { linkId });
+      });
+    }
+    logger.warn('runway.sync.liveBalanceFailed', {
+      linkId,
+      kind: error.kind,
+      code: error.code,
+      isTurnedOff: error.kind === 'needsAttention',
+    });
+    return {
+      accounts: await provider.listAccounts(grant),
+      isTurnedOff: error.kind === 'needsAttention',
+    };
+  }
+}
+
 async function writeBalances(
   firestore: Firestore,
   uid: string,
+  linkId: string,
   grant: ProviderGrant,
+  grantRef: DocumentReference,
   planKey: PlanKey,
   targets: ReadonlyMap<string, Target>,
+  isAskingNow: boolean,
+  wasLiveOff: boolean,
 ) {
-  const accounts = await provider.listAccounts(grant);
+  const { accounts, isTurnedOff } = await readAccounts(
+    linkId,
+    grant,
+    grantRef,
+    isAskingNow && !wasLiveOff,
+  );
+  const isLiveOff = wasLiveOff || isTurnedOff;
   const now = Date.now();
-  const writes = accounts.flatMap((account): Write[] => {
+  const entries = accounts.flatMap((account) => {
     const target = targets.get(account.providerAccountId);
     const targetId = target?.accountId ?? target?.cardId ?? null;
-    if (targetId === null || account.balanceCents === null) return [];
+    const read = toBalanceSealed(account);
+    if (targetId === null || read === null) return [];
+    // The app reads this as whether the balance gets the five-minute check, which stops for a link whose live reads are off.
+    const sealed = {
+      ...read,
+      hasInstantBalance: read.hasInstantBalance && !isLiveOff,
+    };
+    // A saved balance with no date can't say how old it is, so it is left out rather than shown as new.
+    if (account.balanceAsOf === null && !account.hasInstantBalance) return [];
+    const asOf = Math.min(account.balanceAsOf ?? now, now);
+    return [
+      {
+        ref: firestore.doc(planDocPath(uid, 'accountBalances', targetId)),
+        targetId,
+        asOf,
+        sealed,
+      },
+    ];
+  });
+  if (entries.length === 0) return;
+  // A saved read can be older than a live one made moments ago, and must never put an earlier balance back.
+  await firestore.runTransaction(async (transaction) => {
+    const stored = await transaction.getAll(
+      ...entries.map((entry) => entry.ref),
+    );
+    const storedById = new Map(
+      stored.map((snapshot) => [snapshot.id, snapshot.data()]),
+    );
+    entries.forEach((entry) => {
+      const previous = storedById.get(entry.targetId);
+      if (typeof previous?.asOf !== 'number' || previous.asOf <= entry.asOf) {
+        transaction.set(entry.ref, {
+          id: entry.targetId,
+          asOf: entry.asOf,
+          sealed: sealWithKey(planKey, entry.sealed, SEALED_SCHEMA_VERSION),
+        });
+        return;
+      }
+      // A newer live balance stays, but once live reads are off it must stop claiming the five-minute check.
+      const kept = isLiveOff ? openStoredBalance(planKey, previous) : null;
+      if (kept?.hasInstantBalance !== true) return;
+      transaction.update(entry.ref, {
+        sealed: sealWithKey(
+          planKey,
+          { ...kept, hasInstantBalance: false },
+          SEALED_SCHEMA_VERSION,
+        ),
+      });
+    });
+  });
+}
+
+const STATEMENTS_GAP_MS = 12 * 3_600_000;
+const STATEMENTS_UNSUPPORTED_GAP_MS = 7 * 86_400_000;
+const STATEMENTS_RETRY_MS = 3_600_000;
+
+/** A check time that makes the next statement read due in an hour, for an answer that was not ready or failed. */
+const retryStatementsSoon = (grantRef: DocumentReference) =>
+  grantRef.update({
+    statementsCheckedAt: Date.now() - STATEMENTS_GAP_MS + STATEMENTS_RETRY_MS,
+  });
+
+const areStatementsDue = (
+  grantDoc: ProviderGrantDoc,
+  isStatementsDue: boolean,
+  now: number,
+) => {
+  if (isStatementsDue) return true;
+  const checkedAt = grantDoc.statementsCheckedAt;
+  if (typeof checkedAt !== 'number') return true;
+  return (
+    now - checkedAt >=
+    (grantDoc.isStatementsUnsupported === true
+      ? STATEMENTS_UNSUPPORTED_GAP_MS
+      : STATEMENTS_GAP_MS)
+  );
+};
+
+type CardDetailsAnswer = 'shared' | 'needsConsent' | 'unsupported';
+
+const toCardDetailsAnswer = (value: unknown): CardDetailsAnswer | null =>
+  value === 'shared' || value === 'needsConsent' || value === 'unsupported'
+    ? value
+    : null;
+
+/** Keeps the link's readable answer about card details in step with the provider's, writing only on a change. */
+async function setCardDetails(
+  firestore: Firestore,
+  linkRef: DocumentReference,
+  had: CardDetailsAnswer | null,
+  value: CardDetailsAnswer,
+) {
+  if (had === value) return;
+  await writeUnlessRevoked(firestore, linkRef, (transaction) =>
+    transaction.update(linkRef, {
+      cardDetails: value,
+      needsCardConsent: null,
+    }),
+  );
+}
+
+async function writeCardStatements(
+  firestore: Firestore,
+  uid: string,
+  linkId: string,
+  grant: ProviderGrant,
+  grantRef: DocumentReference,
+  linkRef: DocumentReference,
+  planKey: PlanKey,
+  targets: ReadonlyMap<string, Target>,
+  hadAnswer: CardDetailsAnswer | null,
+) {
+  const read = await provider.listCardStatements(grant);
+  if (read.kind === 'notReady') {
+    await retryStatementsSoon(grantRef);
+    return;
+  }
+  const now = Date.now();
+  if (read.kind === 'needsConsent') {
+    await grantRef.update({
+      statementsCheckedAt: now,
+      isStatementsUnsupported: false,
+    });
+    await setCardDetails(firestore, linkRef, hadAnswer, 'needsConsent');
+    return;
+  }
+  if (read.kind === 'unsupported') {
+    await grantRef.update({
+      statementsCheckedAt: now,
+      isStatementsUnsupported: true,
+    });
+    await setCardDetails(firestore, linkRef, hadAnswer, 'unsupported');
+    return;
+  }
+  const answered = new Set(
+    read.statements.map((statement) => statement.providerAccountId),
+  );
+  const dropped = [...targets.entries()].flatMap(
+    ([providerAccountId, target]): Write[] =>
+      target.cardId === null || answered.has(providerAccountId)
+        ? []
+        : [
+            {
+              kind: 'delete',
+              ref: firestore.doc(
+                planDocPath(uid, 'cardStatements', target.cardId),
+              ),
+              lastUpdateTime: null,
+            },
+          ],
+  );
+  const written = read.statements.flatMap((statement): Write[] => {
+    const cardId = targets.get(statement.providerAccountId)?.cardId ?? null;
+    if (cardId === null) return [];
     return [
       {
         kind: 'set',
-        ref: firestore.doc(planDocPath(uid, 'accountBalances', targetId)),
+        ref: firestore.doc(planDocPath(uid, 'cardStatements', cardId)),
         data: {
-          id: targetId,
-          asOf: Math.min(account.balanceAsOf ?? now, now),
+          id: cardId,
+          asOf: now,
           sealed: sealWithKey(
             planKey,
-            { cents: account.balanceCents },
+            {
+              minimumCents: statement.minimumCents,
+              statementCents: statement.statementCents,
+              statementOn: statement.statementOn,
+              dueOn: statement.dueOn,
+              lastPaymentCents: statement.lastPaymentCents,
+              lastPaymentOn: statement.lastPaymentOn,
+            },
             SEALED_SCHEMA_VERSION,
           ),
         },
       },
     ];
   });
-  await commitWrites(firestore, writes);
+  await commitWrites(firestore, [...written, ...dropped]);
+  await grantRef.update({
+    statementsCheckedAt: now,
+    isStatementsUnsupported: false,
+  });
+  await setCardDetails(firestore, linkRef, hadAnswer, 'shared');
+  logger.info('runway.sync.statementsWritten', {
+    linkId,
+    count: written.length,
+    dropped: dropped.length,
+  });
+}
+
+function openStoredBalance(planKey: PlanKey, data: DocumentData) {
+  try {
+    return openWithKey(planKey.key, data.sealed as SealedPayload);
+  } catch {
+    return null;
+  }
 }
 
 /* An unlink can land while a sync runs, so every write that marks the link live re-reads it in the
@@ -553,7 +797,7 @@ async function fillTransactionDetails(
 
 /**
  * Brings one link's new bank transactions in as purchases waiting in Needs a home, then refreshes the balances and the
- * sync time. One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
+ * sync time, and, for a link with a card, that card's statement (at most twice a day unless asked). One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
  * counts and the link id only.
  */
 export async function syncRunwayLink(
@@ -561,6 +805,9 @@ export async function syncRunwayLink(
   keyring: Keyring,
   uid: string,
   linkId: string,
+  options: { isFresh: boolean; isStatementsDue?: boolean } = {
+    isFresh: false,
+  },
 ): Promise<LinkSyncResult> {
   const empty = { linkId, created: 0, updated: 0, removed: 0 };
   const grantRef = firestore.doc(`${grantsPath(uid)}/${linkId}`);
@@ -605,6 +852,21 @@ export async function syncRunwayLink(
     const targets = targetsByProviderAccount(link.providerAccounts);
     if (targets.size === 0) return { ...empty, state: 'skipped' };
 
+    const isAskingNow =
+      options.isFresh &&
+      linkSnapshot.data()?.status === 'active' &&
+      (await claimFreshAsk(firestore, grantRef));
+    // Plaid checks the bank on its own a few times a day; this asks it to check now, and what it finds arrives through the webhook.
+    if (isAskingNow) {
+      await provider.refreshTransactions(grant).catch((error: unknown) => {
+        logger.warn('runway.sync.refreshFailed', {
+          linkId,
+          kind: error instanceof ProviderError ? error.kind : 'internal',
+          code: error instanceof ProviderError ? error.code : null,
+        });
+      });
+    }
+
     const totals = await syncPurchases(
       firestore,
       uid,
@@ -616,18 +878,53 @@ export async function syncRunwayLink(
       grantDoc.cursor ?? null,
     );
     // The purchases just came through, so a failed balance read sends the person to reconnect only when the bank shares no accounts at all.
-    await writeBalances(firestore, uid, grant, planKey, targets).catch(
-      (error: unknown) => {
-        if (error instanceof ProviderError && error.code === 'NO_ACCOUNTS') {
-          throw error;
-        }
-        logger.warn('runway.sync.balancesFailed', {
+    await writeBalances(
+      firestore,
+      uid,
+      linkId,
+      grant,
+      grantRef,
+      planKey,
+      targets,
+      isAskingNow,
+      grantDoc.isLiveBalanceOff === true,
+    ).catch((error: unknown) => {
+      if (error instanceof ProviderError && error.code === 'NO_ACCOUNTS') {
+        throw error;
+      }
+      logger.warn('runway.sync.balancesFailed', {
+        linkId,
+        kind: error instanceof ProviderError ? error.kind : 'internal',
+        code: error instanceof ProviderError ? error.code : null,
+      });
+    });
+    const hasCardTarget = [...targets.values()].some(
+      (target) => target.cardId !== null,
+    );
+    if (
+      hasCardTarget &&
+      areStatementsDue(grantDoc, options.isStatementsDue === true, Date.now())
+    ) {
+      const hadAnswer = toCardDetailsAnswer(linkSnapshot.data()?.cardDetails);
+      await writeCardStatements(
+        firestore,
+        uid,
+        linkId,
+        grant,
+        grantRef,
+        linkRef,
+        planKey,
+        targets,
+        hadAnswer,
+      ).catch(async (error: unknown) => {
+        logger.warn('runway.sync.statementsFailed', {
           linkId,
           kind: error instanceof ProviderError ? error.kind : 'internal',
           code: error instanceof ProviderError ? error.code : null,
         });
-      },
-    );
+        await retryStatementsSoon(grantRef).catch(() => undefined);
+      });
+    }
     const wereDetailsFilled =
       typeof linkSnapshot.data()?.detailsFilledAt === 'number';
     const detailsFilledNow =

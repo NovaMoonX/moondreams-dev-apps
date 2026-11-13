@@ -66,7 +66,7 @@ import {
   confirmDay,
   DayChangedElsewhere,
 } from '@apps/runway/store/actions/dayActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectComingDays,
   selectLinkedDeposit,

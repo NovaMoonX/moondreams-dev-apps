@@ -4,9 +4,9 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
+import AddRow from '@apps/helm/components/who/AddRow';
 import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import { HELM_COPY } from '@apps/helm/constants';
-import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useKeyDates, type WhoKeyDate } from '@apps/helm/hooks/useKeyDates';
 import type { OpenWho } from '@apps/helm/types';
 import { formatKeyDateRow } from '@apps/helm/utils/keyDateText';
@@ -24,33 +24,39 @@ const toHint = (date: WhoKeyDate) =>
 
 /** The dates that come back for one who, each opening its sheet, with "Add a date" in the header. Read from the index alone. */
 function KeyDatesList({ who }: KeyDatesListProps) {
-  const assistant = useAssistantName();
   const { dates, isLoaded, isFailed } = useKeyDates(who.id);
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
+  const isEmpty = dates.length === 0 && isLoaded && !isFailed;
+
   return (
     <section className='space-y-3'>
-      <SectionDivider
-        label={HELM_COPY.keyDatesHeading}
-        trailing={
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
-            onClick={() => setIsAdding(true)}
-          >
-            {HELM_COPY.keyDateAdd}
-          </Button>
-        }
-      />
-      {dates.length === 0 ? (
-        (isFailed || isLoaded) && (
+      {isEmpty ? (
+        <AddRow
+          label={HELM_COPY.keyDateAddRow}
+          onClick={() => setIsAdding(true)}
+        />
+      ) : (
+        <SectionDivider
+          label={HELM_COPY.keyDatesHeading}
+          trailing={
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+              onClick={() => setIsAdding(true)}
+            >
+              {HELM_COPY.keyDateAdd}
+            </Button>
+          }
+        />
+      )}
+      {isEmpty ? null : dates.length === 0 ? (
+        isFailed && (
           <p className='text-muted-foreground text-[15px] text-pretty'>
-            {isFailed
-              ? HELM_COPY.keyDatesUnreadable
-              : HELM_COPY.keyDatesEmpty(assistant)}
+            {HELM_COPY.keyDatesUnreadable}
           </p>
         )
       ) : (
