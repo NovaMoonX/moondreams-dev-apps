@@ -1,7 +1,9 @@
 import { formatList } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
+import type { ThemeOption } from '@/components/ThemePicker';
 import type {
   AssistantTone,
+  HelmTheme,
   MediaKind,
   ProcedureVersionReason,
   TopicVersionReason,
@@ -17,6 +19,100 @@ import {
 
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
 export const DEFAULT_ASSISTANT_TONE: AssistantTone = 'composed';
+
+export const DEFAULT_HELM_THEME: HelmTheme = 'chestnut';
+
+/** The four palettes with the colours their preview cards draw; they match the blocks in `helm.css`. */
+export const HELM_THEMES: ThemeOption<HelmTheme>[] = [
+  {
+    id: 'chestnut',
+    name: 'Chestnut & Sand',
+    light: {
+      background: '#f7f3ee',
+      card: '#fffdfa',
+      foreground: '#2e241d',
+      muted: '#6b5d51',
+      primary: '#7a5434',
+      primaryForeground: '#ffffff',
+      border: '#e5dccf',
+    },
+    dark: {
+      background: '#15110e',
+      card: '#1e1915',
+      foreground: '#f1e9e1',
+      muted: '#ad9d8e',
+      primary: '#e0bf9c',
+      primaryForeground: '#17110c',
+      border: '#382e26',
+    },
+  },
+  {
+    id: 'plum',
+    name: 'Plum & Pewter',
+    light: {
+      background: '#f7f5f7',
+      card: '#ffffff',
+      foreground: '#2a2130',
+      muted: '#655b6b',
+      primary: '#53375f',
+      primaryForeground: '#ffffff',
+      border: '#e4dfe6',
+    },
+    dark: {
+      background: '#151018',
+      card: '#1e1822',
+      foreground: '#efe9f2',
+      muted: '#a99eae',
+      primary: '#d3b8e0',
+      primaryForeground: '#150f18',
+      border: '#352c3b',
+    },
+  },
+  {
+    id: 'teal',
+    name: 'Mist & Deep Teal',
+    light: {
+      background: '#f3f6f6',
+      card: '#ffffff',
+      foreground: '#172a2e',
+      muted: '#52666a',
+      primary: '#14555e',
+      primaryForeground: '#ffffff',
+      border: '#dae3e4',
+    },
+    dark: {
+      background: '#0d1517',
+      card: '#152023',
+      foreground: '#e6eef0',
+      muted: '#97aaae',
+      primary: '#86ccd6',
+      primaryForeground: '#081316',
+      border: '#273639',
+    },
+  },
+  {
+    id: 'indigo',
+    name: 'Porcelain & Indigo',
+    light: {
+      background: '#f8f8fb',
+      card: '#ffffff',
+      foreground: '#1b1e33',
+      muted: '#5a5e78',
+      primary: '#3a3f8c',
+      primaryForeground: '#ffffff',
+      border: '#e1e2ec',
+    },
+    dark: {
+      background: '#0e0f1a',
+      card: '#161828',
+      foreground: '#e8e9f5',
+      muted: '#9fa3c0',
+      primary: '#b1b6f6',
+      primaryForeground: '#0e0f1a',
+      border: '#2a2d45',
+    },
+  },
+];
 
 /** Each tone with a fixed sample of the same answer, shown before saving; no model writes these. */
 export const ASSISTANT_TONES: {
@@ -1308,6 +1404,11 @@ export const HELM_COPY = {
   planUnreadable: 'This plan could not be opened.',
   planTaskGone: 'A task that is done or removed',
   settingsAssistant: 'Your assistant',
+  settingsColours: 'Colours',
+  coloursHint: 'Pick the colours you like. They follow you to every device.',
+  coloursLabel: 'Colour theme',
+  coloursLight: 'Light',
+  coloursDark: 'Dark',
   assistantRow: 'Name and tone',
   assistantSheetTitle: 'Your assistant',
   assistantLine: (name: string, tone: string) => `${name} · ${tone}`,

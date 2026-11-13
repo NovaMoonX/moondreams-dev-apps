@@ -148,12 +148,14 @@ const SEED_PROFILES = [
     timeZone: 'America/Los_Angeles',
     assistantName: null,
     assistantTone: null,
+    theme: null,
   },
   {
     user: FIXTURE_USERS.partnerTwo,
     timeZone: 'America/New_York',
     assistantName: 'Juniper',
     assistantTone: 'warm',
+    theme: 'plum',
   },
 ];
 
@@ -4791,11 +4793,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const batch = context.firestore.batch();
 
   const turnCounts = await Promise.all(
-    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone }) => {
+    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone, theme }) => {
       batch.set(users.doc(user.uid), {
         timeZone,
         assistantName,
         assistantTone,
+        theme,
         dayStartTime: DEFAULT_DAY_START_TIME,
         dayEndTime: DEFAULT_DAY_END_TIME,
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,

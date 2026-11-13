@@ -24,6 +24,8 @@ The canvas has one clickable shell: home is the conversation with {Name}, Talk w
 
 ### Look: "the household's private secretary"
 
+**Colours are a choice (round 3).** The default is Chestnut & Sand, a calm brown; Settings has a "Colours" section (after Your assistant) with four cards, each previewing the palette in light and dark side by side: Chestnut & Sand, Plum & Pewter, Mist & Deep Teal, Porcelain & Indigo. Tapping one recolours the app at once and is remembered on every device. The description below is the original Mist & Deep Teal direction.
+
 The owner's words: cool colours that inspire confidence, "an experienced butler for a family with lineage". Helm should feel like good stationery and a quiet, assured person who has run the house for years: cool mist paper and deep blue-teal ink (its own palette, apart from every other app's), white cards, one restrained cool accent (verdigris, the green-grey of old copper), and a serif face for titles over the site's clean sans. No nautical words, no crests in copy, no flourish. The full token table, type scale, radii, logo and mark are in `canvas.md` "Look and tokens"; they go into `helm.css` on `html.helm-theme` and into `.claude/rules/helm.md`.
 
 - **Palette roles.** Mist page, white cards, deep blue-teal for the one filled button per screen and the Talk button; a pale teal tint for the assistant's lines, the reply card, the context chip and selected pills; verdigris only for "your call" (above). Overdue is the one warm colour (amber text); destructive is red text, never a fill except in its confirm.

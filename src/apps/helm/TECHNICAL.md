@@ -88,6 +88,7 @@ type VoiceMode = 'cloudWhenOnline' | 'deviceOnly';             // round 6: devic
 interface HelmProfile {
   assistantName: string | null;        // null = DEFAULT_ASSISTANT_NAME ("Nomos"); 1–16 chars passing readAssistantName; also the wake word
   assistantTone: AssistantTone | null; // null = 'composed'
+  theme: HelmTheme | null; // 'chestnut' | 'plum' | 'teal' | 'indigo'; null = 'chestnut'
   selfWhoId: string | null;            // round 6: the person's own who record, made with the profile
   timeZone: string;                    // IANA; set from the device on first open, editable
   dayStartTime: string;                // "HH:mm" floating: the earliest a slot may start
@@ -908,6 +909,10 @@ Each attachment (section 23) is opened on the server and goes in as: a photo, an
 ### Sessions and the screen
 
 Step 3 of the flow reads the session's last 6 turns (what was said, the sealed summary of each turn's executions (up to 3) and the task ids in their `effectRefs`) and every task the screen context names (focus and visible as titles; tasks are the only collection a page shows so far, section 21); each gets an alias in the same book as `<open_tasks>` (a task already listed keeps its alias), so a command can target it. They reach the model as `<screen>` and `<earlier_turns>` blocks, left out when empty. The prompt says "this" is the focus, "these" the visible list in order, and earlier turns are context to follow, never to file again. The turn is found by `sessionId == ` and `turnIndex <` this turn's, newest first, limit 6 (the `captures` index in section 14), then handed over oldest first; a turn without a `sessionId` or `turnIndex` reads none.
+
+### Colour theme
+
+`HelmProfile.theme` (a required key, null reads as chestnut; the profile listener reads a legacy profile without it as null) is written alone by `setHelmTheme` (field-scoped `updateDoc`), from Settings' "Colours" section (`ColoursSection`, which uses the shared `ThemePicker` with `HELM_THEMES`; a pick writes in the background and a failure toasts). It is not sealed, like `assistantTone`. `firestore.rules` accepts the key only as null or one of the four ids on create and update. `useHelmTheme` sets `data-helm-theme` on `<html>` while Helm is mounted (none for chestnut) and removes it on unmount; the last theme is cached in localStorage (`helm-theme`) so the first paint before the profile loads is not the default. `helm.css` keeps chestnut and every token that does not vary on `html.helm-theme`; the others override on `html.helm-theme[data-helm-theme='plum']` and its `.dark` form, which carry the same keys so a dark override always wins. Every text pair in each theme is at least 4.5:1.
 
 ### Name and tone
 

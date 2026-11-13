@@ -145,6 +145,14 @@ def main():
         check(f'profile read [{a}]', get(path, tok), a == 'o')
         check(f'profile update [{a}]', commit(tok, [put(path, dict(profile, planFillPercent=60))]), a == 'o')
         check(f'profile delete [{a}]', commit(tok, [rm(path)]), False)
+    admin([put(path, profile)])
+    for theme, allowed in [('plum', True), (None, True), ('neon', False), (3, False)]:
+        check(f'profile theme {theme!r} update [o]', commit(o_tok, [put(path, dict(profile, theme=theme))]), allowed)
+    check("profile theme 'plum' update [x]", commit(x_tok, [put(path, dict(profile, theme='plum'))]), False)
+    check("profile theme 'plum' update [a]", commit(None, [put(path, dict(profile, theme='plum'))]), False)
+    admin([rm(path)])
+    check("profile theme 'neon' create [o]", commit(o_tok, [put_new(path, dict(profile, theme='neon'))]), False)
+    check("profile theme 'teal' create [o]", commit(o_tok, [put_new(path, dict(profile, theme='teal'))]), True)
     check('profile create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}', profile)]), False)
 
     # A turn is the owner's alone: read, list, create, update and delete.
