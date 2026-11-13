@@ -4828,8 +4828,28 @@ export const CARD_WORDS = {
   minimumQuick: (amount: string) => `Minimum ${amount}`,
   everythingQuick: (amount: string) => `Everything waiting ${amount}`,
   quickAmounts: 'Or pay',
-  consentRow: 'Get the minimum from your bank',
-  consentRowHelp: 'Your bank asks you to agree once before it shares it',
+  minimumDueOn: (date: string) => `Due\u00a0${date}`,
+  minimumWasDue: (date: string) => `Was due\u00a0${date}`,
+  minimumPaid: 'Paid',
+  minimumPaidDetail: (amount: string, date: string) =>
+    `You paid ${amount} on\u00a0${date}`,
+  minimumNone: 'Nothing to pay on this statement',
+  minimumNotShared: (bank: string) =>
+    `${bank} doesn\u2019t share this card\u2019s minimum`,
+  offerBadge: 'New',
+  offerTitle: 'See your minimum payment',
+  offerBody: (bank: string) =>
+    `${bank} shares it once you agree. Not every card has one.`,
+  offerCovers: (names: string) => `Covers ${names} too`,
+  offerSeparate: (bank: string) =>
+    `This card is on its own ${bank} sign-in, so it asks separately`,
+  offerAction: (bank: string) => `Agree at ${bank}`,
+  offerLater: 'Not now',
+  offerRow: (bank: string) => `Get the minimum from ${bank}`,
+  offerRowHelp: 'Agree once and it shows here',
+  offerDone: (bank: string) =>
+    `Done. The minimum shows here as soon as ${bank} sends it`,
+  offerFailed: (bank: string) => `Couldn\u2019t reach ${bank}. Try again`,
   homeTitle: 'Cards',
   homeSeeAll: 'See all',
   totalOwed: (amount: string) => `${amount} waiting to be paid on your cards`,

@@ -53,7 +53,7 @@ const syncCallable = httpsCallable<
 >(functions, 'syncRunwayLinks');
 
 const createSessionCallable = httpsCallable<
-  { linkId?: string },
+  { linkId?: string; forCardDetails?: true },
   { linkToken: string }
 >(functions, 'createRunwayLinkSession');
 const reconnectCallable = httpsCallable<
@@ -121,6 +121,17 @@ export async function reconnectLink(
   linkId: string,
 ): Promise<LinkReconnectResult | null> {
   const session = await createSessionCallable({ linkId });
+  const opened = await openBankLink(session.data.linkToken);
+  if (opened === null) return null;
+  const response = await reconnectCallable({ linkId });
+  return response.data;
+}
+
+/** Opens the bank's window on an active link asking only for agreement to share card details (no account picking, so another sign-in's accounts never join this one), then syncs it with its statements. Null when the person closed the window. */
+export async function agreeToCardDetails(
+  linkId: string,
+): Promise<LinkReconnectResult | null> {
+  const session = await createSessionCallable({ linkId, forCardDetails: true });
   const opened = await openBankLink(session.data.linkToken);
   if (opened === null) return null;
   const response = await reconnectCallable({ linkId });
