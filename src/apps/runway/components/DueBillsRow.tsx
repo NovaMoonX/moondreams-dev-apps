@@ -21,7 +21,6 @@ interface DueBillsRowProps {
   onOpenBill: (billId: string) => void;
 }
 
-/** The bills due today or late as one row on Bills that opens the list with its Mark paid; only its icon chip takes the warning colour once one is late. Nothing is drawn while none is due. */
 function DueBillsRow({ lookahead, today, onOpenBill }: DueBillsRowProps) {
   const costRows = useDueCostRows(lookahead, today);
   const { isAllDueOpen, closeAllDue } = useRunwayUrlState();

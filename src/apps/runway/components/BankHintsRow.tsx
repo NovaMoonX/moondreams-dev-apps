@@ -27,11 +27,11 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getPlaceNamer } from '@apps/runway/utils/chargedToText';
 
-/** One kind of suggestion the bank leaves: its heading in the sheet, its count in the row's line and its rows. A new kind is one more entry in `useBankHintGroups`. */
 interface BankHintGroup {
   id: string;
   heading: string;
-  summary: string;
+  phrase: string;
+  firstName: string;
   help: ReactNode;
   rows: ReactNode[];
 }
@@ -41,7 +41,6 @@ interface AutoCheckRowProps {
   emoji: string | null;
 }
 
-/** A payment the app marked or could not place by itself: it opens the question it needs answered. */
 function AutoCheckRow({ check, emoji }: AutoCheckRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const name =
@@ -98,25 +97,24 @@ const useBankHintGroups = (
   const payloadOf = (billId: string) =>
     bills.find(({ item }) => item.id === billId)?.version.payload ?? null;
 
-  const elsewhere = hints.flatMap((hint) => {
+  const named = hints.flatMap((hint) => {
     const payload = payloadOf(hint.billId);
-    return payload
-      ? [
-          <ItemRow
-            key={hint.billId}
-            name={payload.name}
-            emoji={emojiOf(payload.emoji, payload.groupId)}
-            detail={CHARGED_TO_HINT_WORDS.rowLine(nameOf(hint.place))}
-            ariaLabel={CHARGED_TO_HINT_WORDS.openAria(
-              payload.name,
-              nameOf(hint.place),
-            )}
-            isPrivate={false}
-            onOpen={() => onOpenBill(hint.billId)}
-          />,
-        ]
-      : [];
+    return payload ? [{ hint, payload }] : [];
   });
+  const elsewhere = named.map(({ hint, payload }) => (
+    <ItemRow
+      key={hint.billId}
+      name={payload.name}
+      emoji={emojiOf(payload.emoji, payload.groupId)}
+      detail={CHARGED_TO_HINT_WORDS.rowLine(nameOf(hint.place))}
+      ariaLabel={CHARGED_TO_HINT_WORDS.openAria(
+        payload.name,
+        nameOf(hint.place),
+      )}
+      isPrivate={false}
+      onOpen={() => onOpenBill(hint.billId)}
+    />
+  ));
   const toCheck = checks.map((check) => {
     const payload = payloadOf(check.billId);
     return (
@@ -132,14 +130,16 @@ const useBankHintGroups = (
     {
       id: 'toCheck',
       heading: BANK_HINTS_WORDS.toCheckHeading,
-      summary: BANK_HINTS_WORDS.toCheckCount(toCheck.length),
+      phrase: BANK_HINTS_WORDS.toCheckPhrase,
+      firstName: checks[0]?.billName || AUTO_PAY_WORDS.fallbackBillName,
       help: null,
       rows: toCheck,
     },
     {
       id: 'chargedElsewhere',
       heading: BANK_HINTS_WORDS.chargedElsewhereHeading,
-      summary: BANK_HINTS_WORDS.chargedElsewhereCount(elsewhere.length),
+      phrase: BANK_HINTS_WORDS.chargedElsewherePhrase,
+      firstName: named[0]?.payload.name ?? '',
       help: (
         <HelpTip title={BANK_HINTS_WORDS.chargedElsewhereHelpTitle}>
           <p>{CHARGED_TO_HINT_WORDS.headingHelp}</p>
@@ -156,7 +156,6 @@ interface BankHintsRowProps {
   onOpenBill: (billId: string) => void;
 }
 
-/** What is worth a look, as one quiet row on Bills that opens a sheet holding each kind in its own group. Nothing is drawn while there is none. */
 function BankHintsRow({ today, onOpenBill }: BankHintsRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const groups = useBankHintGroups(today, (billId) => {
@@ -177,8 +176,12 @@ function BankHintsRow({ today, onOpenBill }: BankHintsRowProps) {
           className='text-muted-foreground h-5 w-5 shrink-0'
           aria-hidden='true'
         />
-        <span className='text-muted-foreground min-w-0 flex-1 text-sm break-words'>
-          {BANK_HINTS_WORDS.line(groups.map(({ summary }) => summary))}
+        <span className='text-muted-foreground min-w-0 flex-1 text-sm text-balance break-words'>
+          {BANK_HINTS_WORDS.line(
+            groups[0].firstName,
+            groups[0].phrase,
+            groups.reduce((sum, { rows }) => sum + rows.length, 0) - 1,
+          )}
         </span>
         <ChevronRight
           className='text-muted-foreground h-4 w-4 shrink-0'

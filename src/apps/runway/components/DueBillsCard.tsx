@@ -361,7 +361,6 @@ function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
   );
 }
 
-/** Rows Home's card shows before it folds the rest behind "See all". */
 const SHOWN_DUE = 3;
 
 interface DueBillsCardProps {
@@ -370,7 +369,6 @@ interface DueBillsCardProps {
   today: number;
   /** Opens the bill where the screen can; the default goes to the Bills section. */
   onOpenBill?: (billId: string) => void;
-  /** `door` is Home's card: three rows, then "See all" on the section header, which opens Bills. `all` is the bare list of every row, inside the sheet Bills opens from its to-pay row. */
   overflow: 'door' | 'all';
 }
 

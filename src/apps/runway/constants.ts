@@ -1763,9 +1763,10 @@ export const PAID_FROM_WORDS = {
 /** The Bills screen's one quiet row for what the bank suggested, and the sheet it opens. */
 export const BANK_HINTS_WORDS = {
   title: 'Heads-up',
-  line: (parts: readonly string[]) => `Heads-up: ${parts.join(' · ')}`,
-  toCheckCount: (count: number) => `${count} to check`,
-  chargedElsewhereCount: (count: number) => `${count} charged elsewhere`,
+  line: (firstName: string, phrase: string, more: number) =>
+    `Heads-up: ${firstName} ${phrase}${more > 0 ? ` · ${more}\u00a0more` : ''}`,
+  toCheckPhrase: 'to check',
+  chargedElsewherePhrase: 'charged elsewhere',
   toCheckHeading: 'To check',
   chargedElsewhereHeading: 'Charged elsewhere',
   chargedElsewhereHelpTitle: 'Charged somewhere else?',
