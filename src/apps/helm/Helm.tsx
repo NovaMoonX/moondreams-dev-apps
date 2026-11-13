@@ -16,18 +16,39 @@ import GoogleConnectProvider from '@apps/helm/components/connections/GoogleConne
 import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedAppsScreen';
 import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
+import SearchScreen from '@apps/helm/components/search/SearchScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
+import ProcedureScreen from '@apps/helm/components/procedures/ProcedureScreen';
+import RunScreen from '@apps/helm/components/procedures/RunScreen';
+import ProceduresView from '@apps/helm/components/procedures/ProceduresView';
+import KnowledgeView from '@apps/helm/components/knowledge/KnowledgeView';
+import TopicScreen from '@apps/helm/components/knowledge/TopicScreen';
+import ProjectDetail from '@apps/helm/components/projects/ProjectDetail';
+import ProjectsView from '@apps/helm/components/projects/ProjectsView';
 import PlaceDetail from '@apps/helm/components/who/PlaceDetail';
 import WhoDetail from '@apps/helm/components/who/WhoDetail';
 import WhoView from '@apps/helm/components/who/WhoView';
 import TasksView from '@apps/helm/components/tasks/TasksView';
+import ComingUpView from '@apps/helm/components/comingUp/ComingUpView';
 import TodayView from '@apps/helm/components/today/TodayView';
 import { HelmVoiceContext, useHelmVoice } from '@apps/helm/hooks/useHelmVoice';
 import { useHelmSync } from '@apps/helm/hooks/useHelmSync';
 import { useHelmTheme } from '@apps/helm/hooks/useHelmTheme';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import { HELM_COPY } from '@apps/helm/constants';
+import type { HelmView } from '@apps/helm/types';
 import { VIEW_KINDS } from '@apps/helm/screen/views';
 import { selectTopScreen } from '@apps/helm/store/screenSlice';
+
+const ORIGIN_LABELS: Partial<Record<HelmView, string>> = {
+  home: HELM_COPY.homeTitle,
+  today: HELM_COPY.backToday,
+  comingUp: HELM_COPY.comingUpTitle,
+  people: HELM_COPY.peopleTitle,
+  projects: HELM_COPY.projectsTitle,
+  procedures: HELM_COPY.proceduresTitle,
+  search: HELM_COPY.searchTitle,
+};
 
 function HelmApp() {
   const { user, loading } = useAuth();
@@ -37,6 +58,8 @@ function HelmApp() {
     view,
     grant,
     item,
+    query,
+    setQuery,
     isBrowseOpen,
     isAskRequested,
     closeAsk,
@@ -45,6 +68,9 @@ function HelmApp() {
     showView,
     goHome,
     goBack,
+    origin,
+    goBackToOrigin,
+    goUpTo,
   } = useHelmUrlState();
 
   useHelmTheme();
@@ -72,6 +98,11 @@ function HelmApp() {
 
   if (loading) return <Loading />;
 
+  const toBackLabel = (fallback: string) =>
+    origin === null
+      ? fallback
+      : (ORIGIN_LABELS[origin] ?? HELM_COPY.backGeneric);
+  const isFromSearch = origin === 'search';
   const focusComposer = () => composerRef.current?.focus();
   // Without the key nothing opens, so every view gives way to home and its state card, with no dock until typing can be kept.
   const isHome = isLocked || VIEW_KINDS[view] === 'home';
@@ -98,6 +129,7 @@ function HelmApp() {
             composerRef={composerRef}
             onComposerFocusChange={setIsComposing}
             onOpenSettings={() => showView('settings')}
+            onOpenSearch={() => showView('search')}
           />
         )}
         {!isLocked && view === 'today' && (
@@ -105,6 +137,16 @@ function HelmApp() {
             onBack={goHome}
             onHome={goHome}
             onOpenTasks={() => showView('tasks')}
+            onOpenComingUp={() => showView('comingUp')}
+            onOpenWho={(whoId) => showView('who', whoId)}
+          />
+        )}
+        {!isLocked && view === 'comingUp' && (
+          <ComingUpView
+            backLabel={toBackLabel(HELM_COPY.backToday)}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+            onOpenWho={(whoId) => showView('who', whoId)}
           />
         )}
         {!isLocked && view === 'tasks' && (
@@ -119,6 +161,14 @@ function HelmApp() {
             onOpenActivity={() => showView('activity')}
             onOpenConnectedApps={() => showView('connectedApps')}
             onOpenSeesYou={() => showView('howNomosSeesYou')}
+          />
+        )}
+        {!isLocked && view === 'search' && (
+          <SearchScreen
+            query={query}
+            onQueryChange={(text) => void setQuery(text)}
+            onBack={goBack}
+            onOpenView={(next, id) => void showView(next, id)}
           />
         )}
         {!isLocked && view === 'activity' && <ActivityScreen onBack={goBack} />}
@@ -139,13 +189,95 @@ function HelmApp() {
           />
         )}
         {!isLocked && view === 'who' && (
-          <WhoDetail whoId={item} onBack={goBack} onHome={goHome} />
+          <WhoDetail
+            whoId={item}
+            backLabel={toBackLabel(HELM_COPY.peopleTitle)}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+          />
+        )}
+        {!isLocked && view === 'projects' && (
+          <ProjectsView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenProject={(projectId) => showView('project', projectId)}
+          />
+        )}
+        {!isLocked && view === 'project' && (
+          <ProjectDetail
+            projectId={item}
+            backLabel={toBackLabel(HELM_COPY.projectsTitle)}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+            onOpenWho={(whoId) => showView('who', whoId)}
+            onOpenRun={(runId) => showView('run', runId)}
+          />
+        )}
+        {!isLocked && view === 'knowledge' && (
+          <KnowledgeView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenTopic={(topicId) => showView('topic', topicId)}
+          />
+        )}
+        {!isLocked && view === 'topic' && (
+          <TopicScreen
+            key={item}
+            topicId={item}
+            backLabel={isFromSearch ? HELM_COPY.searchTitle : undefined}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+            onOpenTopic={(topicId) => showView('topic', topicId)}
+            onOpenParent={(topicId) => void goUpTo('topic', topicId)}
+          />
+        )}
+        {!isLocked && view === 'procedures' && (
+          <ProceduresView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenProcedure={(procedureId) =>
+              showView('procedure', procedureId)
+            }
+          />
+        )}
+        {!isLocked && view === 'procedure' && (
+          <ProcedureScreen
+            key={item}
+            procedureId={item}
+            backLabel={toBackLabel(HELM_COPY.proceduresTitle)}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+            onOpenRun={(runId) => showView('run', runId)}
+          />
+        )}
+        {!isLocked && view === 'run' && (
+          <RunScreen
+            key={item}
+            runId={item}
+            originLabel={origin === null ? null : toBackLabel('')}
+            onBackToOrigin={goBackToOrigin}
+            onBackUp={(procedureId) =>
+              procedureId === null
+                ? void goBack()
+                : void goUpTo('procedure', procedureId)
+            }
+            onHome={goHome}
+          />
         )}
         {!isLocked && view === 'howNomosSeesYou' && (
-          <HowNomosSeesYou onBack={goBack} onHome={goHome} />
+          <HowNomosSeesYou
+            backLabel={isFromSearch ? HELM_COPY.searchTitle : undefined}
+            onBack={isFromSearch ? goBackToOrigin : goBack}
+            onHome={goHome}
+          />
         )}
         {!isLocked && view === 'place' && (
-          <PlaceDetail placeId={item} onBack={goBack} onHome={goHome} />
+          <PlaceDetail
+            placeId={item}
+            backLabel={isFromSearch ? HELM_COPY.searchTitle : undefined}
+            onBack={isFromSearch ? goBackToOrigin : goBack}
+            onHome={goHome}
+          />
         )}
         {isAskRequested && !isLocked && screen && (
           <AskConversation entry={screen} onClose={() => void closeAsk()} />

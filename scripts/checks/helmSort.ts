@@ -65,7 +65,7 @@ const FRIDAY = Date.UTC(2026, 10, 13);
 const TOMORROW = Date.UTC(2026, 10, 10);
 const span = (id: string, text: string) => {
   const start = TEXT.indexOf(text);
-  return { id, text, start, end: start + text.length };
+  return { id, text, start, end: start + text.length, precision: null };
 };
 const READING: CaptureReading = {
   people: [span('people:5', 'Dana')],
@@ -218,6 +218,7 @@ test('a sound reply resolves its alias and its day', () => {
     isUrgent: false,
     whoRefs: ['$w1'],
     placeRefs: [],
+    projectRef: null,
   });
   assert.deepEqual(commands[1], { kind: 'completeTask', taskId: TASK_IDS[0] });
 });
@@ -738,6 +739,8 @@ test("a noted fact is confirmed only when stated with the person's own words, an
     tierSetBy: 'person' as const,
     mentionDayKeys: [],
     taskLinkCount: 0,
+    yearlyDateCount: 0,
+    momentCount: 0,
     hasRole: false,
   };
   const mention = {
@@ -786,6 +789,7 @@ test("a noted fact is confirmed only when stated with the person's own words, an
         known,
         knownPlaces: [],
         assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
         dayKey: '2026-11-10',
         capturedAt: NOW,
       },
@@ -931,6 +935,85 @@ test("a noted fact is confirmed only when stated with the person's own words, an
   assert.equal(settled.status, 'sorted');
 });
 
+test('a date that comes back raises a passing who to regular, and the summary says what was noted', () => {
+  const NOW = Date.UTC(2026, 10, 10, 18, 0);
+  const maya = {
+    id: 'who-maya',
+    kind: 'person' as const,
+    name: 'Maya',
+    aliases: [],
+    lastMentionedAt: null,
+    tier: 'passing' as const,
+    tierSetBy: 'nomos' as 'nomos' | 'person',
+    mentionDayKeys: [],
+    taskLinkCount: 0,
+    yearlyDateCount: 0,
+    momentCount: 0,
+    hasRole: false,
+  };
+  const plan = (known = [maya]) =>
+    planWrites({
+      commands: [],
+      keyDates: [
+        {
+          kind: 'setKeyDate',
+          whoRefs: ['$w1'],
+          isAboutMe: false,
+          keyDateId: null,
+          keyKind: 'birthday',
+          label: null,
+          comesBack: null,
+          quote: null,
+          date: { month: 3, day: 3, year: null },
+          precision: null,
+        },
+      ],
+      existing: new Map(),
+      captureId: CAPTURE_ID,
+      executionId: 'exec-date',
+      now: NOW + 1000,
+      seal,
+      newId: createIdCounter(),
+      people: {
+        mentions: [
+          {
+            ref: '$w1',
+            name: 'Maya',
+            kind: 'person' as const,
+            relation: null,
+            species: null,
+            organizationKind: null,
+          },
+        ],
+        places: [],
+        known,
+        knownPlaces: [],
+        assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
+        dayKey: '2026-11-10',
+        capturedAt: NOW,
+      },
+    });
+  const made = plan();
+  assert.equal(made.whoUpdates[0]?.data.tier, 'regular');
+  assert.equal(made.whoUpdates[0]?.data.yearlyDateCount, 1);
+  assert.equal(
+    plan([{ ...maya, tierSetBy: 'person' }]).whoUpdates[0]?.data.tier,
+    undefined,
+    'a tier the person set stays',
+  );
+  const execution = buildExecution(made, {
+    commands: [],
+    captureId: CAPTURE_ID,
+    now: NOW,
+    seal,
+  });
+  assert.equal(
+    openForHelm(KEY, execution.sealed as SealedPayload).summary,
+    "Noted Maya's birthday: March 3",
+  );
+});
+
 test('a fact that contradicts a kept one keeps both, marks both and asks which is true', async () => {
   const NOW = Date.UTC(2026, 10, 10, 18, 0);
   const text = 'Dana says centerpieces are $2,100 now';
@@ -944,6 +1027,8 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
     tierSetBy: 'person' as const,
     mentionDayKeys: [],
     taskLinkCount: 0,
+    yearlyDateCount: 0,
+    momentCount: 0,
     hasRole: false,
   };
   const older: ExistingFact = {
@@ -1000,6 +1085,7 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
         known: [dana],
         knownPlaces: [],
         assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
         dayKey: '2026-11-10',
         capturedAt: NOW,
       },

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import SectionDivider from '@/components/SectionDivider';
@@ -14,7 +14,7 @@ import {
   formatRelativeDayUTC,
 } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
-import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
+import ChecklistGroup from '@/components/ChecklistGroup';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import MoveRow from '@apps/runway/components/MoveRow';
@@ -36,7 +36,6 @@ import {
   HORIZON_WORDS,
   ITEM_SHEET_R2_WORDS,
   PAID_AMOUNT_WORDS,
-  TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getLineTitle } from '@apps/runway/engine/differences';
@@ -357,7 +356,6 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   );
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const isMarkingRef = useRef(false);
-  const [markTries, setMarkTries] = useState(0);
   const done = new Set(doneIds);
 
   const billIds = new Set(
@@ -426,7 +424,6 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   const markAll = async () => {
     if (!user || isMarkingRef.current) return;
     if (!navigator.onLine) {
-      setMarkTries((count) => count + 1);
       addToast({
         title: CHECKLIST_R3_WORDS.markAllFailed,
         description: CHECKLIST_R3_WORDS.needsConnection,
@@ -458,7 +455,6 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
           );
     const dayLines = { dayId: day.dayKey, lineIds };
     if (varyingNote && unpaid.length === 0 && lineIds.length === 0) {
-      setMarkTries((count) => count + 1);
       addToast({ title: varyingNote, type: 'info' });
       return;
     }
@@ -538,7 +534,6 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
     } finally {
       isMarkingRef.current = false;
       setIsMarkingAll(false);
-      setMarkTries((count) => count + 1);
     }
   };
 
@@ -588,9 +583,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
               <TickMark />
             </span>
           ) : (
-            <Checkbox
-              key={markTries}
-              className={TICK_HIT_CLASS}
+            <AppCheckbox
               checked={isMarkingAll}
               indeterminate={!isMarkingAll && doneCount > 0}
               disabled={isMarkingAll}

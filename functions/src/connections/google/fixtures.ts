@@ -358,6 +358,7 @@ interface FixtureMail {
   subject: string;
   text: string;
   sentDaysAgo: number;
+  to?: string;
 }
 
 const tastingLabel = () =>
@@ -386,8 +387,80 @@ const mailFor = (email: string | null): FixtureMail[] =>
       ]
     : [];
 
+const SENT_TO_SAM = 'Sam Rivera <sam.rivera@example.com>';
+const SENT_SIGNATURE = '\n\n-- \nAlex Morgan\nHarbor Events';
+const SENT_QUOTE =
+  '\n\nOn Tue, Mar 4, 2025 at 9:12 AM Sam Rivera <sam.rivera@example.com> wrote:\n> Can you send the numbers?\n> Thanks';
+
+const sentMailFor = (email: string | null): FixtureMail[] =>
+  email === 'personal@example.com'
+    ? [
+        [
+          'Sam Rivera <sam.rivera@example.com>',
+          'Hi Sam,\n\n- Slides are attached\n- Budget is in tab two\n- Venue is booked\n\nThanks,\nAlex',
+        ],
+        [
+          SENT_TO_SAM,
+          'Hi Sam,\n\nCan we move the walk-through to Thursday?\n\nThanks,\nAlex',
+        ],
+        [
+          SENT_TO_SAM,
+          `Hi Sam,\n\nThe florist confirmed. Next steps:\n- Send the guest count\n- Pick the table linens\n\nThanks,\nAlex${SENT_QUOTE}`,
+        ],
+        [
+          SENT_TO_SAM,
+          `Hi Sam,\n\nLooping you in on the vendor list before Friday.\n\nThanks,\nAlex${SENT_SIGNATURE}`,
+        ],
+        [
+          SENT_TO_SAM,
+          'Hi Sam,\n\nThe quote came in under budget, so we can keep the extra hour.\n\nThanks,\nAlex',
+        ],
+        [
+          'Venue Desk <desk@venue.example>',
+          'Hello,\n\nWe would like to confirm Saturday for the rehearsal.\n- 40 guests\n- Setup at noon\n\nThanks,\nAlex',
+        ],
+        [
+          'Linen Co <orders@linenco.example>',
+          'Hello,\n\nPlease hold twelve ivory runners for the 14th.\n\nThanks,\nAlex',
+        ],
+        [
+          'Taylor Brooks <taylor@harborevents.example>',
+          'Hi Taylor,\n\nSlides are in the shared folder. Steps for the walk-through:\n- Meet at the gate\n- Check the loading dock\n\nThanks,\nAlex',
+        ],
+        [
+          'Mom <mom@gmail.com>',
+          'hi mom, dinner sunday works. can i bring the pie?\n\nlove you\n\nAlex',
+        ],
+        ['Mom <mom@gmail.com>', 'ok! see you at 6. tell dad hi\n\nAlex'],
+        [
+          'Jordan Lee <jordan.lee@gmail.com>',
+          'hey, are you free saturday? thinking the lake\n\nAlex',
+        ],
+        [
+          'Jordan Lee <jordan.lee@gmail.com>',
+          'haha yes. cheers, bringing snacks\n\nAlex',
+        ],
+        [
+          'Priya Raman <priya@example.com>',
+          'Hi Priya, thanks for the invite, I will be there. Cheers, Alex',
+        ],
+        [
+          'Jordan Lee <jordan.lee@gmail.com>',
+          'running 10 late, sorry! start without me\n\nAlex',
+        ],
+      ].map(([to, text], index) => ({
+        id: `5e47000000${String(index + 1).padStart(6, '0')}`,
+        from: '"Alex Morgan" <personal@example.com>',
+        to,
+        subject: `Sent ${index + 1}`,
+        text,
+        sentDaysAgo: index + 1,
+      }))
+    : [];
+
 const mailHeaders = (mail: FixtureMail) => [
   { name: 'From', value: mail.from },
+  ...(mail.to ? [{ name: 'To', value: mail.to }] : []),
   { name: 'Subject', value: mail.subject },
   { name: 'Date', value: new Date(sentAt(mail)).toUTCString() },
 ];
@@ -410,11 +483,14 @@ const answerMail = (
   params: URLSearchParams,
   email: string | null,
 ): FixtureAnswer => {
-  const messages = mailFor(email);
+  const isSent = (params.get('q') ?? '').includes('in:sent');
+  const messages = [...mailFor(email), ...sentMailFor(email)];
   if (pathname === MAIL_PATH) {
-    const found = messages.filter((mail) =>
-      matchesQuery(mail, params.get('q') ?? ''),
-    );
+    const found = isSent
+      ? sentMailFor(email)
+      : mailFor(email).filter((mail) =>
+          matchesQuery(mail, params.get('q') ?? ''),
+        );
     return {
       status: 200,
       body: {
@@ -594,6 +670,7 @@ interface FixtureContact {
   emails: string[];
   phones: string[];
   hasPhoto: boolean;
+  birthday?: { month: number; day: number; year?: number };
 }
 
 const PEOPLE_LIST_PATH = '/v1/people/me/connections';
@@ -609,6 +686,7 @@ const CONTACTS_BY_EMAIL: Record<string, FixtureContact[]> = {
       emails: ['dana.whitfield@example.com'],
       phones: ['+1 415 555 0142'],
       hasPhoto: true,
+      birthday: { month: 6, day: 3 },
     },
     {
       id: 'c1000000002',
@@ -630,6 +708,7 @@ const CONTACTS_BY_EMAIL: Record<string, FixtureContact[]> = {
       emails: ['priya@example.com'],
       phones: [],
       hasPhoto: true,
+      birthday: { month: 4, day: 22 },
     },
     {
       id: 'c1000000005',
@@ -644,6 +723,7 @@ const CONTACTS_BY_EMAIL: Record<string, FixtureContact[]> = {
       emails: ['lena.fischer@example.com'],
       phones: ['+49 30 5550 1188'],
       hasPhoto: true,
+      birthday: { month: 3, day: 14, year: 1988 },
     },
     {
       id: 'c1000000007',
@@ -689,6 +769,9 @@ const toPerson = (contact: FixtureContact) => ({
     metadata: { primary: true },
   })),
   phoneNumbers: contact.phones.map((value) => ({ value })),
+  ...(contact.birthday && {
+    birthdays: [{ date: contact.birthday, metadata: { primary: true } }],
+  }),
   photos: [
     contact.hasPhoto
       ? { url: photoUrlOf(contact), metadata: { primary: true } }

@@ -14,11 +14,11 @@ import {
   resolveCurrentOrNext,
   resolveVersion,
 } from '@apps/runway/engine/resolve';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectLedgerOnlyBalances as selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectCardsWithBankDue } from '@apps/runway/store/selectors/cardStatementSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
-  selectAllCards,
   selectBillPayments,
   selectListedDays,
   type ListedDay,
@@ -54,7 +54,7 @@ export const selectAccountMoves = createSelector(
     selectListedDays,
     selectBillPayments,
     selectAccounts,
-    selectAllCards,
+    selectCardsWithBankDue,
     selectBalances,
     selectLevel,
     selectVersions,
@@ -97,7 +97,7 @@ export const selectAccountMoves = createSelector(
                 {
                   id: billId,
                   name: version.payload.name,
-                  dueOn: payment.dueOn,
+                  dueOn: payment.payOn,
                   cents: payment.totalCents,
                   paidByCardId: isTrack
                     ? (version.payload.paidByCardId ?? null)
