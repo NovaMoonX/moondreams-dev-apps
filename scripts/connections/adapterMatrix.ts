@@ -1,14 +1,38 @@
 // Run against the Firestore emulator: `npm run check:adapters`.
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import {
+  DocumentReference,
+  Firestore,
+  Query,
+  getFirestore,
+} from 'firebase-admin/firestore';
 
 import { createAListAdapter } from '../../functions/src/apps/a-list/share/adapter.ts';
+import { gcmEncrypt } from '../../functions/src/appKeys/gcm.ts';
 import { createGoingOnceAdapter } from '../../functions/src/apps/going-once/share/adapter.ts';
 import { createNineLivesAdapter } from '../../functions/src/apps/nine-lives/share/adapter.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
+import { createRunwayAdapter } from '../../functions/src/apps/runway/share/adapter.ts';
+import {
+  DEV_KEYRING,
+  deriveSeedDataKey,
+  sealWithKey,
+  wrapDataKey,
+} from '../../functions/src/apps/runway/planKey.ts';
 import { createWaypointAdapter } from '../../functions/src/apps/waypoint/share/adapter.ts';
+import { createWorthTheWaitAdapter } from '../../functions/src/apps/worth-the-wait/share/adapter.ts';
+import {
+  createGoogleContactsAdapter,
+  isContactRef,
+  isGooglePhotoUrl,
+  listContacts,
+  readContacts,
+  toContactOption,
+} from '../../functions/src/connections/google/contacts.ts';
+import { querySiteLive } from '../../functions/src/connections/liveRouter.ts';
 import {
   applyCategoryChanges,
   buildNewGrant,
@@ -1810,5 +1834,985 @@ assert.equal(
   waypointAdapter.deepLink('trips/x/personalChecklist/y', waypointCtx(OWNER)),
   '/waypoint?trip=x',
 );
+
+const SPACE_KEY =
+  'd953f53d9d6c3b3d2a748beca467f20b4b74d7cb7cc17a0e7a7f315f8b3e756f';
+const WRONG_KEY = SPACE_KEY.split('').reverse().join('');
+const STRANGER = 'stranger-uid';
+const ITEM_SECRET = 'SECRET ITEM WORDS';
+const INVITE_SECRET = 'SECRET-INVITE-CODE';
+
+const sealed = (text: string, key = SPACE_KEY) => {
+  const { ciphertext, nonce } = gcmEncrypt(
+    Buffer.from(key, 'hex'),
+    Buffer.from(text),
+    null,
+  );
+  return {
+    value: ciphertext,
+    ciphertext,
+    nonce,
+    keyId: 'wtw-key',
+    keyVersion: 1,
+    algorithm: 'AES-256-GCM',
+  };
+};
+const waitSpaces = firestore.collection('apps/worth-the-wait/spaces');
+const waitSpace = (members: string[], key: string) => ({
+  createdBy: members[0],
+  members,
+  inviteCode: INVITE_SECRET,
+  activeAction: null,
+  encryption: { appId: 'worth-the-wait', keyId: 'wtw-key', keyVersion: 1, key },
+});
+const waitItem = (isRevealed: boolean) => ({
+  authorId: OWNER,
+  content: sealed(ITEM_SECRET),
+  isRevealed,
+  revealedAt: isRevealed ? NOW : null,
+  revealedMethod: isRevealed ? 'raffle' : null,
+  createdAt: NOW - 5,
+  lastEditedAt: NOW - 4,
+});
+const waitBox = async (
+  space: string,
+  id: string,
+  name: string,
+  emoji: string,
+  revealedFlags: boolean[],
+  key = SPACE_KEY,
+) => {
+  const box = waitSpaces.doc(space).collection('boxes').doc(id);
+  await box.set({
+    name: sealed(name, key),
+    emoji: sealed(emoji, key),
+    description: sealed('SECRET DESCRIPTION'),
+    isDefault: false,
+    createdBy: OWNER,
+    revealHistory: [],
+    revealRequestedBy: [],
+  });
+  await Promise.all(
+    revealedFlags.map((flag, index) =>
+      box.collection('items').doc(`i${index}`).set(waitItem(flag)),
+    ),
+  );
+};
+await Promise.all([
+  waitSpaces.doc('wtw-home').set(waitSpace([OWNER, HOUSEMATE], SPACE_KEY)),
+  waitSpaces.doc('wtw-stranger').set(waitSpace([STRANGER], SPACE_KEY)),
+]);
+await Promise.all([
+  waitBox('wtw-home', 'dates', 'Date ideas', '🍿', [true, true, false]),
+  waitBox('wtw-home', 'trips', 'Trips', '✈️', [false]),
+  waitBox('wtw-home', 'empty', 'Gifts', '🎁', []),
+  waitBox('wtw-home', 'garbled', 'Garbled', '🔒', [true], WRONG_KEY),
+  waitBox('wtw-stranger', 'hidden', 'Hidden box', '🙈', [true, false]),
+]);
+
+const itemReads: string[] = [];
+const pathOfQuery = (query: unknown) => {
+  const options = (
+    query as {
+      _queryOptions?: {
+        parentPath?: { relativeName?: string };
+        collectionId?: string;
+      };
+    }
+  )._queryOptions;
+  return `${options?.parentPath?.relativeName ?? ''}/${options?.collectionId ?? ''}`;
+};
+const watch = (
+  target: { prototype: object },
+  method: string,
+  pathOf: (self: unknown, args: unknown[]) => string,
+) => {
+  const proto = target.prototype as Record<string, unknown>;
+  const original = proto[method] as (...args: unknown[]) => unknown;
+  proto[method] = function (this: unknown, ...args: unknown[]) {
+    const path = pathOf(this, args);
+    if (/(^|\/)items(\/|$)/.test(path)) itemReads.push(`${method} ${path}`);
+    return original.apply(this, args);
+  };
+  return () => {
+    proto[method] = original;
+  };
+};
+const unwatch = [
+  watch(Query, 'get', (self) => pathOfQuery(self)),
+  watch(Query, 'stream', (self) => pathOfQuery(self)),
+  watch(DocumentReference, 'get', (self) => (self as { path: string }).path),
+  watch(Firestore, 'getAll', (_self, args) =>
+    args.map((ref) => (ref as { path?: string }).path ?? '').join(' '),
+  ),
+];
+
+const waitAdapter = createWorthTheWaitAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+});
+assert.deepEqual(
+  waitAdapter.manifest.categories.map((category) => [
+    category.id,
+    category.isOnAtConnect,
+  ]),
+  [['boxCounts', false]],
+);
+const waitCtx = (uid: string) => ({
+  uid,
+  accountId: 'site',
+  grant: buildNewGrant(
+    {
+      readerAppId: 'helm',
+      connectorId: 'app:worth-the-wait',
+      accountId: 'site',
+      categoryIds: ['boxCounts'],
+      options: null,
+    },
+    waitAdapter.manifest,
+    NOW,
+  ),
+});
+const readWait = (uid: string, category = 'boxCounts') =>
+  waitAdapter.syncPage(waitCtx(uid), {
+    category,
+    cursor: null,
+    resumeState: null,
+    windowStart: WINDOW_START,
+  });
+const runWait = async (uid: string, category = 'boxCounts') => {
+  const page = await readWait(uid, category);
+  assert.equal(page.isFull, true);
+  assert.equal(page.isDone, true);
+  return page.records;
+};
+
+// The box sealed under another key stays unknown, so the read is not full and no copy is deleted.
+const ownerPage = await readWait(OWNER);
+assert.equal(ownerPage.isFull, false);
+assert.equal(ownerPage.isDone, true);
+const boxCounts = ownerPage.records;
+assert.deepEqual(refs(boxCounts).sort(), [
+  'spaces/wtw-home/boxes/dates',
+  'spaces/wtw-home/boxes/empty',
+  'spaces/wtw-home/boxes/trips',
+]);
+const countsOf = (ref: string) => {
+  const record = boxCounts.find((one) => one.sourceRef === ref);
+  assert.ok(record, ref);
+  assert.equal(record.kind, 'countSummary');
+  return [record.title, record.subtitle, record.extra];
+};
+assert.deepEqual(countsOf('spaces/wtw-home/boxes/dates'), [
+  'Date ideas',
+  '🍿',
+  { items: 3, revealed: 2, notYetRevealed: 1 },
+]);
+assert.deepEqual(countsOf('spaces/wtw-home/boxes/trips'), [
+  'Trips',
+  '✈️',
+  { items: 1, revealed: 0, notYetRevealed: 1 },
+]);
+assert.deepEqual(countsOf('spaces/wtw-home/boxes/empty'), [
+  'Gifts',
+  '🎁',
+  { items: 0, revealed: 0, notYetRevealed: 0 },
+]);
+assertShape(boxCounts);
+boxCounts.forEach((record) => {
+  assert.deepEqual(
+    Object.keys(record.extra).sort(),
+    [...EXTRA_KEYS.countSummary].sort(),
+  );
+  assert.ok(
+    !flatten(record).some(
+      (value) =>
+        typeof value === 'string' &&
+        /SECRET|INVITE|invite|description/i.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+
+assert.deepEqual(
+  refs((await readWait(HOUSEMATE)).records).sort(),
+  refs(boxCounts).sort(),
+);
+assert.deepEqual(await runWait(OTHER), []);
+assert.deepEqual(refs(await runWait(STRANGER)), [
+  'spaces/wtw-stranger/boxes/hidden',
+]);
+await assert.rejects(() => runWait(OWNER, 'nothing'), /Unknown category/);
+assert.equal(await waitAdapter.status(waitCtx(OWNER)), 'ok');
+assert.equal(await waitAdapter.status(waitCtx(OTHER)), 'noAccess');
+assert.equal(
+  waitAdapter.deepLink('spaces/wtw-home/boxes/dates', waitCtx(OWNER)),
+  '/worth-the-wait',
+);
+
+assert.deepEqual(itemReads, [], 'only the two counts may touch items');
+await firestore
+  .collection('apps/worth-the-wait/spaces/wtw-home/boxes/dates/items')
+  .get();
+assert.equal(itemReads.length, 1, 'the spy sees an item query');
+unwatch.forEach((restore) => restore());
+
+// One sealed summary opened under the plan's key; only totals and names leave.
+const RUNWAY_FORBIDDEN = [
+  'SECRET ACCOUNT NAME',
+  'SECRET CARD',
+  'SECRET INCOME SOURCE',
+  'SECRET RECEIPT',
+  'SECRET TRANSACTION',
+  'SECRET NOTE LINE',
+];
+const runwayKey = deriveSeedDataKey(DEV_KEYRING, OWNER);
+const runwaySummary = {
+  computedAt: NOW - 60_000,
+  currency: 'USD',
+  freeToSpendCents: 123_456,
+  nextIncomeOn: '2026-11-15',
+  dueBeforeIncomeCents: 45_000,
+  bills: [
+    { name: 'Overdue', amountCents: 9_000, dueOn: '2026-11-09' },
+    { name: 'Rent', amountCents: 150_000, dueOn: '2026-11-14' },
+    { name: 'Phone', amountCents: 6_000, dueOn: '2026-11-20' },
+    { name: 'Broken date', amountCents: 100, dueOn: '2026-02-31' },
+    { name: '', amountCents: 100, dueOn: '2026-11-20' },
+    { name: 'Fractional', amountCents: 1.5, dueOn: '2026-11-20' },
+  ],
+  horizon: [
+    {
+      name: 'Lisbon',
+      targetCents: 300_000,
+      setAsideCents: 80_000,
+      targetOn: '2027-03-01',
+    },
+    {
+      name: 'Someday',
+      targetCents: 50_000,
+      setAsideCents: 0,
+      targetOn: null,
+    },
+    { name: 'No target', setAsideCents: 0 },
+  ],
+  accountName: RUNWAY_FORBIDDEN[0],
+  accounts: [{ name: RUNWAY_FORBIDDEN[0], balanceCents: 987_654 }],
+  card: { name: RUNWAY_FORBIDDEN[1], owedCents: 555 },
+  incomeSource: RUNWAY_FORBIDDEN[2],
+  receipt: { url: RUNWAY_FORBIDDEN[3] },
+  transactions: [{ merchant: RUNWAY_FORBIDDEN[4], cents: 777 }],
+  note: RUNWAY_FORBIDDEN[5],
+};
+const runwayPlans = firestore.collection('apps/runway/plans');
+const runwayWrapped = (uid: string) =>
+  firestore.doc(`apps/runway/server/${uid}/keys/data`);
+const WRONG_RUNWAY_UID = 'runway-wrong-key';
+await Promise.all([
+  runwayWrapped(OWNER).set(wrapDataKey(DEV_KEYRING, OWNER, runwayKey, NOW)),
+  runwayPlans.doc(OWNER).set({
+    uid: OWNER,
+    notify: { needsHome: false },
+    sealed: { value: 'x', nonce: 'y' },
+    shareSummary: sealWithKey(
+      { ...runwayKey, keyVersion: 1 },
+      runwaySummary,
+      1,
+    ),
+  }),
+  runwayPlans.doc(WRONG_RUNWAY_UID).set({
+    uid: WRONG_RUNWAY_UID,
+    shareSummary: sealWithKey(
+      { ...runwayKey, keyVersion: 1 },
+      runwaySummary,
+      1,
+    ),
+  }),
+  runwayWrapped(WRONG_RUNWAY_UID).set(
+    wrapDataKey(
+      DEV_KEYRING,
+      WRONG_RUNWAY_UID,
+      deriveSeedDataKey(DEV_KEYRING, 'someone-else'),
+      NOW,
+    ),
+  ),
+  runwayPlans.doc('runway-legacy').set({ uid: 'runway-legacy' }),
+]);
+
+const runwayPlanWith = (uid: string, shareSummary: unknown) =>
+  Promise.all([
+    runwayWrapped(uid).set(wrapDataKey(DEV_KEYRING, uid, runwayKey, NOW)),
+    runwayPlans.doc(uid).set({ uid, shareSummary }),
+  ]);
+const sealRunway = (summary: Record<string, unknown>) =>
+  sealWithKey({ ...runwayKey, keyVersion: 1 }, summary, 1);
+await Promise.all([
+  runwayPlanWith('runway-cleared', null),
+  runwayPlanWith(
+    'runway-bad-total',
+    sealRunway({ ...runwaySummary, freeToSpendCents: '123456' }),
+  ),
+  runwayPlanWith(
+    'runway-twins',
+    sealRunway({
+      ...runwaySummary,
+      bills: [
+        { name: 'Gym', amountCents: 3_000, dueOn: '2026-11-20' },
+        { name: 'Gym', amountCents: 3_000, dueOn: '2026-11-20' },
+      ],
+      horizon: [
+        { name: 'Trip', targetCents: 1_000, setAsideCents: 0, targetOn: null },
+        { name: 'Trip', targetCents: 1_000, setAsideCents: 0, targetOn: null },
+      ],
+    }),
+  ),
+]);
+
+const runwayAdapter = createRunwayAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+  keyring: () => DEV_KEYRING,
+  now: () => NOW,
+});
+assert.deepEqual(
+  runwayAdapter.manifest.categories.map((category) => [
+    category.id,
+    category.isOnAtConnect,
+  ]),
+  [
+    ['moneySummary', true],
+    ['upcomingBills', false],
+    ['horizon', false],
+    ['transactions', false],
+  ],
+);
+assert.equal(
+  runwayAdapter.manifest.categories.find(({ id }) => id === 'transactions')
+    ?.mode,
+  'live',
+);
+const runwayCtx = (uid: string) => ({
+  uid,
+  accountId: 'site',
+  grant: buildNewGrant(
+    {
+      readerAppId: 'helm',
+      connectorId: 'app:runway',
+      accountId: 'site',
+      categoryIds: ['moneySummary'],
+      options: null,
+    },
+    runwayAdapter.manifest,
+    NOW,
+  ),
+});
+const readRunway = (uid: string, category: string) =>
+  runwayAdapter.syncPage(runwayCtx(uid), {
+    category,
+    cursor: null,
+    resumeState: null,
+    windowStart: WINDOW_START,
+  });
+const runRunway = async (uid: string, category: string) => {
+  const page = await readRunway(uid, category);
+  assert.equal(page.isFull, true);
+  assert.equal(page.isDone, true);
+  return page.records;
+};
+
+const runwayMoney = await runRunway(OWNER, 'moneySummary');
+const runwayBills = await runRunway(OWNER, 'upcomingBills');
+const runwayHorizon = await runRunway(OWNER, 'horizon');
+[...runwayMoney, ...runwayBills, ...runwayHorizon].forEach((record) =>
+  assertShape([record]),
+);
+assert.equal(runwayMoney.length, 1);
+const [summaryRecord] = runwayMoney;
+assert.ok(summaryRecord);
+assert.equal(summaryRecord.sourceRef, 'plan/summary');
+assert.equal(summaryRecord.kind, 'moneySummary');
+assert.equal(summaryRecord.title, 'Free to Spend');
+assert.equal(summaryRecord.amountCents, 123_456);
+assert.equal(summaryRecord.currency, 'USD');
+assert.equal(summaryRecord.sourceUpdatedAt, NOW - 60_000);
+assert.deepEqual(summaryRecord.extra, {
+  nextIncomeAt: Date.UTC(2026, 10, 15),
+  dueBeforeIncomeCents: 45_000,
+});
+assert.match(summaryRecord.detail ?? '', /\$450\.00.*2026-11-15/);
+assert.deepEqual(
+  titles(runwayBills),
+  ['Phone', 'Rent'],
+  'a bill already past is dropped',
+);
+runwayBills.forEach((record) => {
+  assert.equal(record.kind, 'task');
+  assert.equal(record.isAllDay, true);
+  assert.match(record.sourceRef, /^bills\/[0-9a-f]{16}$/);
+});
+assert.equal(
+  runwayBills.find((record) => record.title === 'Rent')?.dueAt,
+  Date.UTC(2026, 10, 14),
+);
+assert.equal(
+  new Set(refs(runwayBills)).size,
+  runwayBills.length,
+  'each bill has its own stable ref',
+);
+assert.deepEqual(titles(runwayHorizon), ['Lisbon', 'Someday']);
+const lisbon = runwayHorizon.find((record) => record.title === 'Lisbon');
+assert.equal(lisbon?.kind, 'project');
+assert.equal(lisbon?.amountCents, 300_000);
+assert.equal(lisbon?.dueAt, Date.UTC(2027, 2, 1));
+assert.match(lisbon?.detail ?? '', /\$800\.00 set aside of \$3,000\.00/);
+assert.equal(
+  runwayHorizon.find((record) => record.title === 'Someday')?.dueAt,
+  null,
+);
+
+const runwayOutput = JSON.stringify([
+  ...runwayMoney,
+  ...runwayBills,
+  ...runwayHorizon,
+]);
+[...RUNWAY_FORBIDDEN, runwayKey.key.toString('hex'), '987654', '555'].forEach(
+  (secret) =>
+    assert.ok(!runwayOutput.includes(secret), `Runway output has ${secret}`),
+);
+
+// No summary, a legacy plan or a key that will not open is unknown, so older copies stay.
+await Promise.all(
+  [OTHER, 'runway-legacy', WRONG_RUNWAY_UID].map(async (uid) => {
+    const page = await readRunway(uid, 'moneySummary');
+    assert.deepEqual(page.records, [], uid);
+    assert.equal(page.isFull, false, uid);
+  }),
+);
+
+// A summary cleared on purpose is a full, empty read, so older copies go.
+await Promise.all(
+  ['moneySummary', 'upcomingBills', 'horizon'].map(async (category) => {
+    const page = await readRunway('runway-cleared', category);
+    assert.deepEqual(page.records, [], category);
+    assert.equal(page.isFull, true, category);
+  }),
+);
+const badTotal = await readRunway('runway-bad-total', 'moneySummary');
+assert.deepEqual(badTotal.records, []);
+assert.equal(badTotal.isFull, false, 'a malformed total is unknown');
+await Promise.all(
+  ['upcomingBills', 'horizon'].map(async (category) => {
+    const twins = (await runRunway('runway-twins', category)).map(
+      (record) => record.sourceRef,
+    );
+    assert.equal(twins.length, 2, category);
+    assert.equal(new Set(twins).size, 2, `${category} twins stay distinct`);
+  }),
+);
+await assert.rejects(() => readRunway(OWNER, 'nothing'), /Unknown category/);
+assert.equal(await runwayAdapter.status(runwayCtx(OWNER)), 'ok');
+assert.equal(await runwayAdapter.status(runwayCtx(OTHER)), 'noAccess');
+assert.equal(
+  runwayAdapter.deepLink('plan/summary', runwayCtx(OWNER)),
+  '/runway',
+);
+
+const dayText = (at: number) => new Date(at).toISOString().slice(0, 10);
+const TX_SECRETS = [
+  'TX NOTE SECRET',
+  'TX RECEIPT SECRET',
+  'https://tx-link.example/secret',
+  'tx-card-secret',
+  'tx-account-secret',
+  'TX BANK NAME SECRET',
+];
+const sealTx = (fields: Record<string, unknown>) =>
+  sealWithKey({ ...runwayKey, keyVersion: 1 }, fields, 1);
+const baseTx = {
+  merchant: null,
+  label: null,
+  note: null,
+  bankName: null,
+  category: null,
+  lines: [] as unknown[],
+  refundOfId: null,
+  incomeDayId: null,
+  pairedWithId: null,
+  pairKind: null,
+  cardPaymentMoveId: null,
+  paidByCardId: null,
+  link: null,
+  receiptText: null,
+};
+const txDoc = (
+  uid: string,
+  id: string,
+  daysAgo: number,
+  fields: Record<string, unknown>,
+  docFields: Record<string, unknown> = {},
+) =>
+  runwayPlans
+    .doc(uid)
+    .collection('purchases')
+    .doc(id)
+    .set({
+      date: TODAY - daysAgo * DAY,
+      accountId: TX_SECRETS[4],
+      sealed: sealTx({ ...baseTx, ...fields }),
+      ...docFields,
+    });
+const txLine = (envelopeId: string | null, cents: number) => ({
+  envelopeId,
+  cents,
+  via: 'direct',
+});
+const txVersion = (id: string, createdAt: number, name: string) =>
+  runwayPlans
+    .doc(OWNER)
+    .collection('versions')
+    .doc(id)
+    .set({
+      itemId: 'env-groceries',
+      kind: 'envelope',
+      createdAt,
+      sealed: sealTx({ name }),
+    });
+const TX_RICH = {
+  note: TX_SECRETS[0],
+  receiptText: TX_SECRETS[1],
+  link: TX_SECRETS[2],
+  paidByCardId: TX_SECRETS[3],
+  bankName: TX_SECRETS[5],
+};
+await Promise.all([
+  txDoc(OWNER, 'costco-1', 18, {
+    ...TX_RICH,
+    merchant: 'Costco Wholesale',
+    amountCents: 8_800,
+    lines: [txLine('env-groceries', 8_800)],
+  }),
+  txDoc(OWNER, 'costco-2', 3, {
+    ...TX_RICH,
+    label: 'Gas at Costco',
+    merchant: 'Shell',
+    amountCents: 1_200,
+    lines: [txLine(null, 1_200)],
+  }),
+  txDoc(OWNER, 'costco-refund', 1, {
+    ...TX_RICH,
+    merchant: 'Costco Wholesale',
+    amountCents: -500,
+    refundOfId: 'costco-1',
+    lines: [txLine('env-groceries', -500)],
+  }),
+  txDoc(OWNER, 'deposit', 2, {
+    merchant: 'Costco Payroll',
+    amountCents: -250_000,
+    incomeDayId: 'day-1',
+  }),
+  txDoc(OWNER, 'unlinked-credit', 2, {
+    merchant: 'Costco Gift Card',
+    amountCents: -900,
+  }),
+  txDoc(OWNER, 'transfer-out', 4, {
+    merchant: 'Costco Savings Transfer',
+    amountCents: 30_000,
+    pairedWithId: 'transfer-in',
+    pairKind: 'transfer',
+  }),
+  txDoc(OWNER, 'transfer-in', 4, {
+    merchant: 'Costco Savings Transfer',
+    amountCents: -30_000,
+    pairedWithId: 'transfer-out',
+    pairKind: 'transfer',
+  }),
+  txDoc(OWNER, 'card-payment', 5, {
+    merchant: 'Costco Card Payment',
+    amountCents: 20_000,
+    pairedWithId: 'card-side',
+    cardPaymentMoveId: 'move-1',
+  }),
+  txDoc(OWNER, 'bill-charge', 7, {
+    merchant: 'Costco Insurance',
+    amountCents: 2_500,
+    billRef: { billId: 'bill-1', dueOn: '2026-11-01' },
+  }),
+  txDoc(
+    OWNER,
+    'waiting-credit',
+    8,
+    { merchant: 'Costco Waiting Credit', amountCents: -1_100 },
+    { needsHome: true },
+  ),
+  txDoc(
+    OWNER,
+    'waiting-charge',
+    9,
+    { merchant: "Trader Joe's", amountCents: 1_900 },
+    { needsHome: true },
+  ),
+  txDoc(OWNER, 'target', 6, {
+    merchant: 'Target',
+    amountCents: 4_000,
+    lines: [txLine('env-groceries', 3_000), txLine('env-fun', 1_000)],
+  }),
+  txDoc(OWNER, 'old', 100, { merchant: 'Costco Wholesale', amountCents: 700 }),
+  txDoc(OWNER, 'ancient', 430, {
+    merchant: 'Costco Wholesale',
+    amountCents: 600,
+  }),
+  txVersion('v-1', 1, 'Groceries'),
+  txVersion('v-2', 2, 'Food'),
+]);
+const queryTx = (uid: string, args: unknown) =>
+  runwayAdapter.query!(runwayCtx(uid), { category: 'transactions', args });
+const costco = await queryTx(OWNER, {
+  payee: 'costco',
+  from: dayText(TODAY - 30 * DAY),
+  to: dayText(TODAY),
+});
+assertShape(costco.records);
+assert.deepEqual(
+  costco.records.map((record) => [record.title, record.amountCents]),
+  [
+    ['Costco Wholesale', -500],
+    ['Costco Gift Card', -900],
+    ['Gas at Costco', 1_200],
+    ['Costco Insurance', 2_500],
+    ['Costco Wholesale', 8_800],
+  ],
+  'newest first; deposits and pairs are left out, a credit, a bill charge and a charge with no lines stay in',
+);
+assert.equal(costco.matchedCount, 5);
+assert.equal(costco.totalCents, 11_100, 'a refund and a credit subtract');
+assert.equal(costco.from, dayText(TODAY - 30 * DAY));
+assert.equal(costco.to, dayText(TODAY));
+assert.equal(costco.currency, 'USD');
+assert.equal(costco.isPartial, false);
+costco.records.forEach((record) => {
+  assert.equal(record.kind, 'transaction');
+  assert.equal(record.currency, 'USD');
+  assert.equal(record.isAllDay, true);
+  assert.deepEqual(Object.keys(record.extra), ['category']);
+  assert.equal(record.subtitle, null);
+  assert.equal(record.detail, null);
+  assert.equal(record.placeLabel, null);
+  assert.match(record.sourceRef, /^purchases\/[0-9a-f]{16}$/);
+});
+assert.deepEqual(
+  costco.records.map((record) => record.extra.category),
+  ['Food', 'Free to Spend', 'Free to Spend', 'Bill', 'Food'],
+  'the envelope is named by its newest version',
+);
+assert.equal(costco.records[4]?.startAt, TODAY - 18 * DAY);
+const costcoOutput = JSON.stringify(costco);
+[...TX_SECRETS, 'Costco Payroll', 'Savings Transfer', 'Card Payment'].forEach(
+  (secret) =>
+    assert.ok(!costcoOutput.includes(secret), `Transactions have ${secret}`),
+);
+const apostrophe = await queryTx(OWNER, { payee: 'Trader Joes' });
+assert.deepEqual(
+  apostrophe.records.map((record) => [record.title, record.amountCents]),
+  [["Trader Joe's", 1_900]],
+  'a payee typed without its apostrophe still fits, and a waiting charge counts',
+);
+assert.equal((await queryTx(OWNER, { payee: "Trader Joe's" })).matchedCount, 1);
+const everyone = await queryTx(OWNER, {
+  payee: null,
+  from: dayText(TODAY - 30 * DAY),
+  to: dayText(TODAY),
+});
+assert.deepEqual(
+  everyone.records
+    .filter((record) => record.title === 'Target')
+    .map((record) => record.extra.category),
+  ['Split'],
+);
+assert.equal(
+  (await queryTx(OWNER, { payee: 'Cheesecake Factory' })).matchedCount,
+  0,
+);
+assert.equal(
+  (await queryTx(OWNER, {})).matchedCount,
+  everyone.matchedCount,
+  'no range is the last 30 days',
+);
+assert.equal(
+  (await queryTx(OWNER, 'garbage')).matchedCount,
+  everyone.matchedCount,
+  'malformed arguments fall back to the defaults',
+);
+const longRange = await queryTx(OWNER, {
+  payee: 'Costco Wholesale',
+  from: '2020-01-01',
+  to: dayText(TODAY),
+});
+assert.equal(longRange.matchedCount, 3, 'the oldest 13+ months are cut off');
+assert.equal(longRange.from, '2025-10-10', 'the range read is named');
+const clamped = await queryTx(OWNER, { from: '2020-01-01', to: '2026-03-31' });
+assert.equal(clamped.from, '2025-02-28', '13 months before a 31st clamps');
+const edge = (from: string) =>
+  queryTx(OWNER, { from, to: '2026-11-30' }).then((read) => read.from);
+assert.equal(
+  await edge('2025-10-29'),
+  '2025-10-30',
+  'one day past the cap is cut',
+);
+assert.equal(
+  await edge('2025-10-30'),
+  '2025-10-30',
+  'the cap day itself stays',
+);
+assert.equal(await edge('2025-11-15'), '2025-11-15');
+const leap = await queryTx(OWNER, { from: '2020-01-01', to: '2025-03-31' });
+assert.equal(leap.from, '2024-02-29', 'a leap February keeps its 29th');
+const noEnd = await queryTx(OWNER, {});
+assert.deepEqual(
+  [noEnd.from, noEnd.to],
+  [dayText(TODAY - 30 * DAY), dayText(TODAY)],
+  'no range names the default days',
+);
+const monthEnd = await queryTx(OWNER, { to: '2026-12-31' });
+assert.equal(
+  monthEnd.from,
+  '2026-12-01',
+  'a 31-day month ends 30 days after its first',
+);
+assert.deepEqual(
+  (await queryTx(OWNER, { from: '2026-11-09', to: '2026-11-01' })).records,
+  [],
+  'a backwards range is empty',
+);
+await assert.rejects(
+  () =>
+    runwayAdapter.query!(runwayCtx(OWNER), {
+      category: 'moneySummary',
+      args: {},
+    }),
+  /Unknown category/,
+);
+
+await runwayPlanWith('runway-many', null);
+await Promise.all(
+  Array.from({ length: 25 }, (_, index) =>
+    txDoc('runway-many', `bulk-${index}`, index % 20, {
+      merchant: 'Bulk Mart',
+      amountCents: 100,
+    }),
+  ),
+);
+const many = await queryTx('runway-many', { payee: 'Bulk Mart' });
+assert.equal(many.records.length, 20);
+assert.equal(many.matchedCount, 25);
+assert.equal(many.totalCents, 2_500);
+assert.equal(many.currency, null, 'no currency is known, so none is made up');
+const manyDays = many.records.map((record) => record.startAt ?? 0);
+assert.deepEqual(
+  manyDays,
+  [...manyDays].sort((a, b) => b - a),
+);
+
+await runwayPlanWith('runway-huge', null);
+await Promise.all(
+  [0, 1].map(async (half) => {
+    const batch = firestore.batch();
+    Array.from({ length: 255 }, (_, index) => {
+      batch.set(
+        runwayPlans
+          .doc('runway-huge')
+          .collection('purchases')
+          .doc(`huge-${half}-${index}`),
+        {
+          date: TODAY - (index % 25) * DAY,
+          sealed: sealTx({ ...baseTx, merchant: 'Huge', amountCents: 10 }),
+        },
+      );
+    });
+    await batch.commit();
+  }),
+);
+const huge = await queryTx('runway-huge', { payee: 'Huge' });
+assert.equal(huge.matchedCount, 500);
+assert.equal(huge.isPartial, true);
+
+await runwayPlanWith('runway-unreadable', null);
+await Promise.all([
+  txDoc('runway-unreadable', 'fine', 1, { merchant: 'Fine', amountCents: 100 }),
+  runwayPlans
+    .doc('runway-unreadable')
+    .collection('purchases')
+    .doc('garbled')
+    .set({ date: TODAY - DAY, sealed: { value: 'x', nonce: 'y' } }),
+]);
+const unreadable = await queryTx('runway-unreadable', {});
+assert.equal(unreadable.matchedCount, 1);
+assert.equal(
+  unreadable.isPartial,
+  true,
+  'a purchase that would not open is said',
+);
+const readable = await queryTx(OWNER, {});
+assert.equal(readable.isPartial, false);
+
+await runwayPlanWith('runway-exact', null);
+await Promise.all(
+  Array.from({ length: 500 }, (_, index) =>
+    txDoc('runway-exact', `exact-${index}`, index % 25, {
+      merchant: 'Exact',
+      amountCents: 10,
+    }),
+  ),
+);
+const exact = await queryTx('runway-exact', { payee: 'Exact' });
+assert.equal(exact.matchedCount, 500);
+assert.equal(exact.isPartial, false, 'exactly the scan cap is not a cut');
+
+await txDoc(WRONG_RUNWAY_UID, 'wrong-key', 1, {
+  merchant: 'Costco Wholesale',
+  amountCents: 100,
+});
+const wrongKey = await queryTx(WRONG_RUNWAY_UID, {});
+assert.deepEqual(wrongKey.records, []);
+assert.equal(
+  wrongKey.isPartial,
+  true,
+  'a purchase that cannot be opened is said',
+);
+await assert.rejects(() => queryTx(OTHER, {}));
+
+const txGrant = (isOn: boolean, status: string) =>
+  firestore.doc('connections/tx-owner/grants/helm__app:runway__site').set({
+    readerAppId: 'helm',
+    connectorId: 'app:runway',
+    accountId: 'site',
+    status,
+    categories: { transactions: { isOn, changedAt: NOW } },
+  });
+const routed = (category: string) =>
+  querySiteLive(firestore, {
+    uid: 'tx-owner',
+    readerAppId: 'helm',
+    connectorId: 'app:runway',
+    category,
+    args: {},
+  });
+await txGrant(false, 'live');
+assert.deepEqual(await routed('transactions'), {
+  ok: false,
+  reason: 'notGranted',
+});
+await txGrant(true, 'ended');
+assert.deepEqual(await routed('transactions'), {
+  ok: false,
+  reason: 'notGranted',
+});
+await txGrant(true, 'live');
+assert.deepEqual(await routed('moneySummary'), {
+  ok: false,
+  reason: 'notGranted',
+});
+assert.deepEqual(
+  await querySiteLive(firestore, {
+    uid: 'tx-owner',
+    readerAppId: 'helm',
+    connectorId: 'google:gmail',
+    category: 'transactions',
+    args: {},
+  }),
+  { ok: false, reason: 'notGranted' },
+);
+
+// A plan's key reaches the adapter only through the shared unwrap.
+const runwayShareDir = new URL(
+  '../../functions/src/apps/runway/share/',
+  import.meta.url,
+);
+readdirSync(runwayShareDir)
+  .filter((file) => file.endsWith('.ts'))
+  .forEach((file) => {
+    const source = readFileSync(new URL(file, runwayShareDir), 'utf8');
+    assert.ok(!/appKeys\/wrap/.test(source), `${file} imports the key wrap`);
+    assert.ok(
+      !/unwrapDataKey|unwrapStoredKey|wrapDataKey/.test(source),
+      `${file} unwraps a key itself`,
+    );
+    [
+      ...source.matchAll(
+        /import\s*\{([^}]*)\}\s*from\s*'([^']*getRunwayKey[^']*)'/g,
+      ),
+    ].forEach(([, names]) =>
+      assert.deepEqual(
+        (names ?? '')
+          .split(',')
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .sort(),
+        ['RUNWAY_MASTER_KEYS', 'loadKeyring'],
+        `${file} takes only the keyring from the key file`,
+      ),
+    );
+  });
+
+// Google Contacts: a live, pick-only source that copies nothing on its own.
+process.env.FUNCTIONS_EMULATOR = 'true';
+const contactsAdapter = createGoogleContactsAdapter();
+assert.deepEqual(
+  contactsAdapter.manifest.categories.map((category) => category.mode),
+  ['live'],
+);
+const contactPage = await contactsAdapter.syncPage(waitCtx(OWNER), {
+  category: 'contacts',
+  cursor: null,
+  resumeState: null,
+  windowStart: WINDOW_START,
+});
+assert.deepEqual(contactPage.records, []);
+assert.equal(contactPage.isDone, true);
+
+const personal = await listContacts('fixture', 'personal@example.com');
+assert.ok(personal.length > 1);
+assert.ok(
+  personal.every((contact) => isContactRef(contact.resourceName)),
+  'every listed contact has a well-formed name',
+);
+const picked = personal[0];
+assert.ok(picked);
+assert.deepEqual(
+  (
+    await readContacts('fixture', 'personal@example.com', [
+      picked.resourceName,
+      'people/../../etc',
+      'people/not-a-real-contact',
+    ])
+  ).map((contact) => contact.resourceName),
+  [picked.resourceName],
+  'a forged name is ignored and only the real one is read',
+);
+assert.notDeepEqual(
+  (await listContacts('fixture', 'work@example.com')).map(
+    (contact) => contact.resourceName,
+  ),
+  personal.map((contact) => contact.resourceName),
+  'each account lists its own contacts',
+);
+const option = toContactOption(picked);
+assert.deepEqual(Object.keys(option).sort(), [
+  'colour',
+  'detail',
+  'id',
+  'isOnByDefault',
+  'isPrimary',
+  'name',
+  'photoUrl',
+]);
+assert.ok(isGooglePhotoUrl('https://lh3.googleusercontent.com/a/photo=s100'));
+[
+  'http://lh3.googleusercontent.com/a',
+  'https://evil.example.com/a',
+  'https://lh3.googleusercontent.com.evil.com/a',
+  'https://lh3.googleusercontent.com:8443/a',
+  'https://169.254.169.254/latest',
+  'not a url',
+].forEach((url) => assert.equal(isGooglePhotoUrl(url), false, url));
 
 console.log('Adapter matrix passed.');

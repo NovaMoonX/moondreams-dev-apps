@@ -11,6 +11,7 @@ import { X } from 'lucide-react';
 import Drawer from '@/components/Drawer';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { formatMoment } from '@/utils/yearlyDateUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { CaptureReading, TaskDue } from '@apps/helm/types';
 import {
@@ -25,6 +26,8 @@ interface ReadChipsProps {
   /** Left out where the reading is only shown: the chips then have no "Read as text" and no calendar. */
   onDismiss: ((key: string, label: string) => void) | null;
   onPickDay: ((key: string, day: number) => void) | null;
+  /** Drawn inside the composer's card: one sideways row with a fade at its right edge. */
+  isInCard?: boolean;
 }
 
 interface Chip {
@@ -66,6 +69,17 @@ const formatDue = (due: TaskDue, timeZone: string) => {
   });
 };
 
+/** A date read only to its month, year or decade ("Mar 2015", "the 1980s"); there is no day to fix. */
+const formatCoarse = (due: TaskDue, precision: 'month' | 'year' | 'decade') => {
+  const date = new Date(due.kind === 'day' ? due.date : due.at);
+  return formatMoment({
+    precision,
+    month: precision === 'month' ? date.getUTCMonth() + 1 : null,
+    day: null,
+    year: date.getUTCFullYear(),
+  });
+};
+
 const toChips = (reading: CaptureReading, timeZone: string): Chip[] => [
   ...reading.people.map((token) => ({
     key: getReadingKey('people', token.text),
@@ -87,8 +101,10 @@ const toChips = (reading: CaptureReading, timeZone: string): Chip[] => [
     : []),
   ...reading.dates.map((span) => ({
     key: getReadingKey('dates', span.text),
-    label: formatDue(span.due, timeZone),
-    due: span.due,
+    label: span.precision
+      ? formatCoarse(span.due, span.precision)
+      : formatDue(span.due, timeZone),
+    due: span.precision ? null : span.due,
   })),
 ];
 
@@ -103,6 +119,7 @@ function ReadChips({
   timeZone,
   onDismiss,
   onPickDay,
+  isInCard = false,
 }: ReadChipsProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -149,7 +166,12 @@ function ReadChips({
         className={join(
           'flex items-center gap-1.5',
           isPhone
-            ? '-mx-4 [scrollbar-width:none] overflow-x-auto overscroll-x-contain px-4 [&::-webkit-scrollbar]:hidden'
+            ? join(
+                '[scrollbar-width:none] overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:hidden',
+                isInCard
+                  ? '-mx-3 [mask-image:linear-gradient(to_right,#000_calc(100%-28px),transparent)] py-1 pr-9 pl-3'
+                  : '-mx-4 px-4',
+              )
             : 'flex-wrap',
         )}
       >
@@ -160,7 +182,7 @@ function ReadChips({
                 type='button'
                 variant='tertiary'
                 size='sm'
-                className='h-7 max-w-[16rem] min-w-0 rounded-full px-2.5 text-[13px] tabular-nums'
+                className="relative h-7 max-w-[16rem] min-w-0 rounded-full px-2.5 text-[13px] tabular-nums before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                 aria-label={HELM_COPY.changeDay(chip.label)}
                 onClick={() =>
                   setOpenKey((current) =>

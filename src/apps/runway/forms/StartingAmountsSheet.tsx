@@ -190,9 +190,18 @@ function StartingAmountsSheet({
               ),
           ),
     ),
-    amounts: Object.fromEntries(
-      Object.entries(started.byItem).map(([id, cents]) => [id, toText(cents)]),
-    ),
+    amounts: Object.fromEntries([
+      ...bills.flatMap(({ item, version }) =>
+        started.byItem[item.id] === undefined &&
+        (version.payload.startingCents ?? 0) > 0
+          ? [[item.id, toText(version.payload.startingCents ?? 0)]]
+          : [],
+      ),
+      ...Object.entries(started.byItem).map(([id, cents]) => [
+        id,
+        toText(cents),
+      ]),
+    ]),
   }));
   const kept = useFormDraft({
     key: `${FORM_DRAFT_PREFIX}starting-amounts`,
