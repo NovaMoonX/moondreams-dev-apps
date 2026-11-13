@@ -360,8 +360,8 @@ function RuleSheet({
         <div className='scroll-cue max-h-[45dvh] space-y-2 overflow-y-auto'>
           {removal.stops !== '' && <p>{removal.stops}</p>}
           <div className='space-y-1'>
-            {removal.next.map((line) => (
-              <p key={line}>{line}</p>
+            {removal.next.map((line, index) => (
+              <p key={`${index}-${line}`}>{line}</p>
             ))}
           </div>
         </div>

@@ -15,6 +15,7 @@ import {
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardName } from '@apps/runway/utils/cardText';
+import { toDisplayCase } from '@/utils/optionMatchUtils';
 import type { RuleSealed } from '@apps/runway/types';
 import { describeRule, getCategoryLabel } from '@apps/runway/utils/ruleText';
 
@@ -77,10 +78,15 @@ export function useRuleNames() {
       const isAsk = (rule: OpenRule) => rule.target === RULE_VARIES;
       const toKey = ({ by, isAsk }: NextPlace) =>
         by?.target ?? (isAsk ? ASKS : WAITS);
-      const nameOf = (rule: OpenRule) =>
-        rule.merchantName ??
-        rule.merchantKey ??
-        (rule.category === null ? null : kindLabel(rule.category));
+      const nameOf = (rule: OpenRule) => {
+        const store =
+          rule.merchantName ??
+          (rule.merchantKey === null ? null : toDisplayCase(rule.merchantKey));
+        const kind = rule.category === null ? null : kindLabel(rule.category);
+        return store !== null && kind !== null
+          ? `${store} ${kind}`
+          : (store ?? kind);
+      };
       const placesOf = (removed: OpenRule) => {
         const own = nextHomes.filter((home) => home.removed.id === removed.id);
         if (removed.merchantKey === null && removed.category === null)
@@ -232,7 +238,11 @@ export function useRuleNames() {
       ].map(({ kind, scope, stores }) =>
         toLine(
           toKey(kind),
-          RULE_WORDS.kindOf(listAll(stores), kindLabel(kind.category), scope),
+          RULE_WORDS.kindOf(
+            listAll([...new Set(stores)]),
+            kindLabel(kind.category),
+            scope,
+          ),
         ),
       );
       const waitLine = byKey.some(([key]) => key === WAITS)
@@ -248,14 +258,18 @@ export function useRuleNames() {
         ...kindLines.slice(0, Math.max(0, room - shownFirst.length)),
       ];
       const hidden = total - shown.length;
-      const shortNames = (keep: (rule: OpenRule) => boolean) =>
-        targets.filter(keep).map((rule) => {
-          const name = nameOf(rule);
-          if (name === null) return `everything on ${onYourCard(rule.cardId)}`;
-          return rule.merchantKey === null && rule.cardId !== null
-            ? `${name} on ${onYourCard(rule.cardId)}`
-            : name;
-        });
+      const shortNames = (keep: (rule: OpenRule) => boolean) => [
+        ...new Set(
+          targets.filter(keep).map((rule) => {
+            const name = nameOf(rule);
+            if (name === null)
+              return `everything on ${onYourCard(rule.cardId)}`;
+            return rule.cardId === null
+              ? name
+              : `${name} on ${onYourCard(rule.cardId)}`;
+          }),
+        ),
+      ];
       const capitalise = (line: string) =>
         `${line.charAt(0).toUpperCase()}${line.slice(1)}`;
       return {
