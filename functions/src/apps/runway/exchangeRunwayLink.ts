@@ -112,6 +112,7 @@ export const exchangeRunwayLink = onCall(
         lastSyncAt: null,
         createdAt: now,
         needsCardConsent: null,
+        cardDetails: null,
         sealed: sealWithKey(planKey, { ...linkSealed }, SEALED_SCHEMA_VERSION),
       });
       await batch.commit();

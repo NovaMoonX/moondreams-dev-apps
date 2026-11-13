@@ -1597,6 +1597,7 @@ async function writeSeedCards(
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
     needsCardConsent: null,
+    cardDetails: 'shared',
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
@@ -1849,6 +1850,7 @@ async function writeSeedAccounts(
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
     needsCardConsent: null,
+    cardDetails: null,
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
@@ -3949,6 +3951,7 @@ async function seedUnlinkedPlan(
     id: linkId,
     status: 'revoked',
     needsCardConsent: null,
+    cardDetails: null,
     lastSyncAt: unlinkedAt,
     createdAt: linkedAt,
     sealed: await sealJson(

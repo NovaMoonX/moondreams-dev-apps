@@ -1,12 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import {
-  Archive,
-  CalendarClock,
-  History,
-  Landmark,
-  Pencil,
-  Receipt,
-} from 'lucide-react';
+import { useState } from 'react';
+import { Archive, History, Pencil } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -38,9 +31,8 @@ import {
 } from '@apps/runway/utils/cardFeePlan';
 import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
-import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
-import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
-import { getBankDueDay, getMinimumDue } from '@apps/runway/engine/cards';
+import CardStatementSection from '@apps/runway/components/CardStatementSection';
+import { getBankDueDay } from '@apps/runway/engine/cards';
 import {
   getLinkedStatement,
   selectCardsWithBankDue,
@@ -79,9 +71,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import {
   describeCardDue,
-  describeStatementIssued,
   getCardDueNow,
-  getMinimumDueOn,
   getCardName,
 } from '@apps/runway/utils/cardText';
 
@@ -158,17 +148,6 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
   );
 }
 
-function StatementIcon({ icon }: { icon: ReactNode }) {
-  return (
-    <span
-      className='bg-accent text-muted-foreground grid size-9 shrink-0 place-items-center rounded-full [&>svg]:size-4'
-      aria-hidden='true'
-    >
-      {icon}
-    </span>
-  );
-}
-
 /** What a card row opens: what it waits for as the figure, then paying it off, changing it, archiving it and its history. */
 function CardSheet({
   card: typedCard,
@@ -242,13 +221,7 @@ function CardSheet({
   const statement = useAppSelector((state) =>
     getLinkedStatement(state.runway, card),
   );
-  const minimumCents = getMinimumDue(
-    statement,
-    getMinimumDueOn(card, due, today),
-  );
   const isDueFromBank = getBankDueDay(statement) !== null;
-  const { reconnect, busyId } = useReconnectLink();
-  const canLink = useCanLinkBank();
   const bankUpdated =
     bank === null ? null : describeBankUpdated(bank.asOf, now);
 
@@ -433,27 +406,6 @@ function CardSheet({
               linkId={card.linkId}
               onOpen={() => setIsLinking(true)}
             />
-            {canLink &&
-              link?.needsCardConsent === true &&
-              link.status === 'active' && (
-                <ActionRow
-                  isGrouped
-                  icon={<Landmark />}
-                  label={
-                    busyId === link.id
-                      ? LINK_WORDS.refreshing
-                      : CARD_WORDS.consentRow
-                  }
-                  subtitle={CARD_WORDS.consentRowHelp}
-                  isDisabled={busyId !== null}
-                  onClick={() =>
-                    void reconnect(
-                      link.id,
-                      link.institutionName || LINK_WORDS.yourBank,
-                    )
-                  }
-                />
-              )}
             <ActionRow
               isGrouped
               hasChevron
@@ -478,29 +430,12 @@ function CardSheet({
               onClick={() => setView('history')}
             />
           </ActionGroup>
-          {statement !== null && minimumCents !== null && (
-            <ActionSection
-              caption={CARD_WORDS.statementCaption(
-                bankName || LINK_WORDS.fallbackBank,
-              )}
-            >
-              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                <ItemRow
-                  name={CARD_WORDS.minimumDue}
-                  leading={<StatementIcon icon={<CalendarClock />} />}
-                  figure={formatCents(minimumCents)}
-                />
-                {statement.statementCents !== null && (
-                  <ItemRow
-                    name={CARD_WORDS.statementBalance}
-                    leading={<StatementIcon icon={<Receipt />} />}
-                    detail={describeStatementIssued(statement.statementOn)}
-                    figure={formatCents(statement.statementCents)}
-                  />
-                )}
-              </ul>
-            </ActionSection>
-          )}
+          <CardStatementSection
+            card={card}
+            link={link}
+            statement={statement}
+            today={today}
+          />
           <CardBills cardId={card.id} today={today} onClose={onClose} />
         </div>
       )}
