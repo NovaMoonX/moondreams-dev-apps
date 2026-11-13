@@ -3,6 +3,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { resetAllState } from '@/store/actions/globalActions';
 import type {
+  Bundle,
   Inquiry,
   Item,
   Sale,
@@ -23,6 +24,8 @@ export interface GoingOnceState {
   openSale: { sale: Sale | null; status: LoadStatus };
   /** Tagged with the sale they were read for, so a stale list is never shown. */
   items: { saleId: string | null; items: Item[]; status: LoadStatus };
+  /** Tagged with the sale they were read for, like the things. */
+  bundles: { saleId: string | null; items: Bundle[]; status: LoadStatus };
   inquiries: {
     saleId: string | null;
     new: { items: Inquiry[]; status: LoadStatus };
@@ -48,6 +51,7 @@ const initialState: GoingOnceState = {
   sales: { items: [], status: 'loading' },
   openSale: { sale: null, status: 'loading' },
   items: { saleId: null, items: [], status: 'loading' },
+  bundles: { saleId: null, items: [], status: 'loading' },
   inquiries: {
     saleId: null,
     new: { items: [], status: 'loading' },
@@ -101,6 +105,25 @@ export const goingOnceSlice = createSlice({
     clearItems(state) {
       state.items = initialState.items;
     },
+    setBundles(
+      state,
+      action: PayloadAction<{ saleId: string; bundles: Bundle[] }>,
+    ) {
+      state.bundles = {
+        saleId: action.payload.saleId,
+        items: action.payload.bundles,
+        status: 'ready',
+      };
+    },
+    setBundlesError(state, action: PayloadAction<string>) {
+      state.bundles =
+        state.bundles.saleId === action.payload
+          ? { ...state.bundles, status: 'error' }
+          : { saleId: action.payload, items: [], status: 'error' };
+    },
+    clearBundles(state) {
+      state.bundles = initialState.bundles;
+    },
     setInquiries(
       state,
       action: PayloadAction<{
@@ -150,9 +173,9 @@ export const goingOnceSlice = createSlice({
     retryLoading(state) {
       state.loadAttempt += 1;
       if (state.sales.status === 'error') state.sales.status = 'loading';
-      if (state.openSale.status === 'error')
-        state.openSale.status = 'loading';
+      if (state.openSale.status === 'error') state.openSale.status = 'loading';
       if (state.items.status === 'error') state.items.status = 'loading';
+      if (state.bundles.status === 'error') state.bundles.status = 'loading';
       if (state.inquiries.new.status === 'error')
         state.inquiries.new.status = 'loading';
       if (state.inquiries.handled.status === 'error')
@@ -184,6 +207,9 @@ export const {
   setItems,
   setItemsError,
   clearItems,
+  setBundles,
+  setBundlesError,
+  clearBundles,
   setInquiries,
   setInquiriesError,
   clearInquiries,

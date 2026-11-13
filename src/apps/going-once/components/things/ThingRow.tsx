@@ -1,5 +1,8 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AppCheckbox from '@/components/AppCheckbox';
+import { useLongPress } from '@/hooks/useLongPress';
 import { useAppSelector } from '@/store';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import ThingThumb from '@apps/going-once/components/things/ThingThumb';
@@ -19,6 +22,12 @@ interface ThingRowProps {
   /** Photos of this thing being saved right now. */
   uploadingCount: number;
   onOpen: () => void;
+  /** The bundle it is in, named after its status. */
+  bundleName?: string | null;
+  /** Press and hold (right-click on a computer) starts picking things for a bundle. */
+  onLongPress?: () => void;
+  /** While picking: whether this thing can go in a bundle, and whether it is ticked. */
+  pick?: { isPickable: boolean; isChecked: boolean; onToggle: () => void };
 }
 
 /** The row's muted line after its status dot: the word (when the status doesn't say it) and what follows. */
@@ -43,18 +52,46 @@ const getLine = (
 };
 
 /** A thing in the list: its cover, name, its status as a dot and word with what follows, and its asking price. */
-function ThingRow({ item, uploadingCount, onOpen }: ThingRowProps) {
+function ThingRow({
+  item,
+  uploadingCount,
+  onOpen,
+  bundleName = null,
+  onLongPress,
+  pick,
+}: ThingRowProps) {
+  const longPress = useLongPress(() => onLongPress?.());
+  // Picking starts on a hold and the row stops offering it, so the handlers stay on to swallow the release tap.
+  const isHoldable = onLongPress !== undefined || pick !== undefined;
   const isSaleFinished = useAppSelector((state) =>
     selectIsSaleFinished(state, item.saleId),
   );
-  const { label, facts } = getLine(item, uploadingCount, isSaleFinished);
+  const line = getLine(item, uploadingCount, isSaleFinished);
+  const { label } = line;
+  const facts =
+    bundleName === null
+      ? line.facts
+      : `${line.facts === '' ? '·' : `${line.facts} ·`} In ${bundleName}`;
 
-  return (
+  const row = (
     <Button
       type='button'
       variant='tertiary'
-      className='border-border bg-card h-auto min-h-16 w-full items-start justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left'
-      onClick={onOpen}
+      className={join(
+        'border-border bg-card h-auto min-h-16 w-full items-start justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left',
+        isHoldable && 'select-none [-webkit-touch-callout:none]',
+        pick && !pick.isPickable && '[&>*]:opacity-60',
+      )}
+      {...(isHoldable ? longPress : {})}
+      onClick={(event) => {
+        if (isHoldable) longPress.onClick(event);
+        if (event.defaultPrevented) return;
+        if (pick) {
+          if (pick.isPickable) pick.onToggle();
+          return;
+        }
+        onOpen();
+      }}
     >
       <ThingThumb item={item} />
       <span className='min-w-0 flex-1'>
@@ -71,6 +108,23 @@ function ThingRow({ item, uploadingCount, onOpen }: ThingRowProps) {
         <PriceTag askingPriceCents={item.askingPriceCents} />
       )}
     </Button>
+  );
+
+  return (
+    <div className='flex items-center gap-2'>
+      {pick && (
+        <span className='flex size-6 shrink-0 items-center justify-center'>
+          {pick.isPickable && (
+            <AppCheckbox
+              checked={pick.isChecked}
+              onCheckedChange={pick.onToggle}
+              aria-label={`Pick ${getItemName(item)}`}
+            />
+          )}
+        </span>
+      )}
+      <div className='min-w-0 flex-1'>{row}</div>
+    </div>
   );
 }
 

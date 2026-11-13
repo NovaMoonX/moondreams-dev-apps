@@ -30,6 +30,7 @@ import PhotoStrip from '@/components/PhotoStrip';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
+import { useIsDeferred } from '@/lib/undo/deferredUndo';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { centsToInputValue, formatCentsShort } from '@/utils/moneyUtils';
@@ -57,10 +58,17 @@ import {
   type StatusTransition,
 } from '@apps/going-once/store/actions/statusActions';
 import {
+  selectBundleById,
   selectIsSaleFinished,
+  selectItemsById,
   selectSaleById,
 } from '@apps/going-once/store/selectors';
-import type { Inquiry, Item } from '@apps/going-once/types';
+import type { BundleStatus, Inquiry, Item } from '@apps/going-once/types';
+import {
+  getBundleParts,
+  isSoloLocked,
+  toUnbundleKey,
+} from '@apps/going-once/utils/bundles';
 import {
   formatSentAt,
   getInquirerName,
@@ -101,6 +109,8 @@ interface ThingDrawerProps {
   sold: StatusFigures;
   /** Opens straight on Mark pending, held for this person. */
   holdFor: Inquiry | null;
+  /** Opens the sheet of the bundle this thing is part of. */
+  onOpenBundle: (bundleId: string) => void;
 }
 
 type View =
@@ -154,6 +164,26 @@ function StoreLink({ item }: { item: Item }) {
 }
 
 const INTEREST_SHOWN = 3;
+
+/** The status acts a thing in a held or sold bundle, or one only sold with its bundle, leaves to the bundle. */
+const BUNDLE_HIDDEN_ACTIONS = [
+  'markSold',
+  'changeHold',
+  'backToAvailable',
+  'changePaid',
+  'notSold',
+];
+
+const getBundleNote = (
+  name: string,
+  status: BundleStatus,
+  isSoloOnly: boolean,
+  isWithBundle: boolean,
+) => {
+  if (isSoloOnly) return `Only sold with the ${name} bundle`;
+  if (!isWithBundle) return `Part of ${name}`;
+  return `${status === 'SOLD' ? 'Sold' : 'Held'} with the ${name} bundle`;
+};
 
 /** What a draft still lacks, all of it: "add a photo and a price", or "save it" once nothing is missing. */
 const getDraftNeeds = (item: Item) => {
@@ -216,9 +246,33 @@ function ThingDrawer({
   onModify,
   sold,
   holdFor,
+  onOpenBundle,
 }: ThingDrawerProps) {
+  const storedBundle = useAppSelector((state) =>
+    selectBundleById(state, item.saleId, item.bundleId),
+  );
+  const isUnbundling = useIsDeferred(toUnbundleKey(item.bundleId ?? ''));
+  const bundle = isUnbundling ? null : storedBundle;
+  const itemsById = useAppSelector((state) =>
+    selectItemsById(state, item.saleId),
+  );
+  const dealCount =
+    bundle === null ? 0 : getBundleParts(bundle, itemsById).deal.length;
+  const isSoloOnly = isSoloLocked(item, bundle, dealCount);
+  const isWithBundle =
+    bundle !== null &&
+    bundle.status !== 'ACTIVE' &&
+    (bundle.dealItemIds ?? []).includes(item.id);
+  const isBundleBound = isSoloOnly || isWithBundle;
+  const isLastOfBundle =
+    bundle !== null &&
+    bundle.status === 'ACTIVE' &&
+    item.isBundleOnly &&
+    item.status === 'AVAILABLE' &&
+    dealCount < 2;
   const [views, setViews] = useState<View[]>(() =>
     holdFor !== null &&
+    !isBundleBound &&
     getThingOffer(item.status, isListable(item)) === 'MARK_PENDING'
       ? ['markPending']
       : [],
@@ -487,9 +541,27 @@ function ThingDrawer({
       hasChevron: true,
       onClick: () => open('history'),
     },
-  ].filter((action) => action !== null);
+  ]
+    .filter((action) => action !== null)
+    .filter(
+      (action) =>
+        !(isBundleBound && BUNDLE_HIDDEN_ACTIONS.includes(action.key)) &&
+        !(isWithBundle && action.key === 'takeOff'),
+    );
 
   const primary = () => {
+    if (isBundleBound && bundle !== null)
+      return (
+        <Button
+          type='button'
+          size='lg'
+          rounded='full'
+          className='min-w-0 flex-1 whitespace-nowrap max-[359px]:px-4'
+          onClick={() => onOpenBundle(bundle.id)}
+        >
+          Open bundle
+        </Button>
+      );
     if (offer === null) return <span className='flex-1' aria-hidden='true' />;
     const actions: Record<NonNullable<typeof offer>, [string, () => void]> = {
       FINISH: ['Finish adding', onFinish],
@@ -703,7 +775,11 @@ function ThingDrawer({
           item={item}
           inquiry={asker}
           now={now}
-          canHold={offer === 'MARK_PENDING' && asker.contactClearedAt === null}
+          canHold={
+            offer === 'MARK_PENDING' &&
+            !isBundleBound &&
+            asker.contactClearedAt === null
+          }
           isSaleFinished={isSaleFinished}
           footerNode={footerNode}
           onBack={back}
@@ -750,6 +826,35 @@ function ThingDrawer({
             </Button>
           )}
         </div>
+        {bundle !== null && (
+          <div className='text-muted-foreground flex flex-wrap items-center gap-x-1 text-sm'>
+            <span className='min-w-0 break-words'>
+              {getBundleNote(
+                bundle.name,
+                bundle.status,
+                isSoloOnly,
+                isWithBundle,
+              )}
+              {!isBundleBound && ' ·'}
+            </span>
+            {!isBundleBound && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className="text-foreground! relative h-auto p-0 text-sm font-medium after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']"
+                onClick={() => onOpenBundle(bundle.id)}
+              >
+                Open bundle
+              </Button>
+            )}
+          </div>
+        )}
+        {isLastOfBundle && bundle !== null && (
+          <p className='text-muted-foreground text-sm text-pretty'>
+            Only one thing is left in {bundle.name}, so it can sell on its own.
+          </p>
+        )}
         {isUnderFloor(item) && item.floorPriceCents !== null && (
           <p className='text-muted-foreground text-sm'>
             🔒 Sold under your floor price of{' '}

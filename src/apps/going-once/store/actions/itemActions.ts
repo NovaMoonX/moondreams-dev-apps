@@ -9,13 +9,27 @@ import {
   type DocumentReference,
 } from 'firebase/firestore';
 
-import { db } from '@/lib/firebase/config';
+import { auth, db } from '@/lib/firebase/config';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import { generateUuid } from '@/utils';
 import { getStorageErrorMessage } from '@/utils/errorUtils';
-import { MAX_ITEM_PHOTOS } from '@apps/going-once/constants';
+import {
+  MAX_ITEM_PHOTOS,
+  MAX_STATUS_HISTORY,
+} from '@apps/going-once/constants';
 import { photoUploadEnded, photoUploadStarted } from '@apps/going-once/store';
+import {
+  bundleRef,
+  isUnavailable,
+} from '@apps/going-once/store/actions/statusActions';
+import { toBundle } from '@apps/going-once/store/listeners/toBundle';
+import { toItem } from '@apps/going-once/store/listeners/toItem';
 import type { Item, ItemPhoto } from '@apps/going-once/types';
+import {
+  adjustBundlePrice,
+  appendBundleChange,
+  applyThingsBack,
+} from '@apps/going-once/utils/bundles';
 
 /** The answers a person gives about a thing in this flow. */
 export type ItemFields = Partial<
@@ -87,6 +101,8 @@ export function createItem(
     pending: null,
     sale: null,
     statusHistory: [],
+    bundleId: null,
+    isBundleOnly: false,
     listingCopiedAt: null,
     listingCopiedBy: null,
     createdBy: uid,
@@ -267,16 +283,134 @@ export async function removeItemPhoto(
     );
 }
 
+/** Deletes a bundled thing and takes it out of its bundle in one transaction: an offer's price drops by what the thing was asking, and a bundle left with nothing goes too. */
+async function deleteBundledItem(
+  saleId: string,
+  itemId: string,
+  bundleId: string,
+) {
+  const ref = getItemRef(saleId, itemId);
+  await runTransaction(db, async (transaction) => {
+    const bundleSnapshot = await transaction.get(bundleRef(saleId, bundleId));
+    const thingSnapshot = await transaction.get(ref);
+    if (!bundleSnapshot.exists()) {
+      transaction.delete(ref);
+      return;
+    }
+    const bundle = toBundle(bundleSnapshot.id, saleId, bundleSnapshot.data());
+    const thing = thingSnapshot.exists()
+      ? toItem(itemId, saleId, thingSnapshot.data())
+      : null;
+    const remainingIds = bundle.itemIds.filter((id) => id !== itemId);
+    const heldIds = bundle.dealItemIds ?? [];
+    const isLeavingOffer =
+      bundle.status === 'ACTIVE' && thing?.status === 'AVAILABLE';
+    const isEmptyingDeal =
+      bundle.status !== 'ACTIVE' &&
+      heldIds.includes(itemId) &&
+      heldIds.every((id) => id === itemId);
+    const others =
+      isLeavingOffer || (isEmptyingDeal && remainingIds.length > 0)
+        ? (
+            await Promise.all(
+              remainingIds.map((id) => transaction.get(getItemRef(saleId, id))),
+            )
+          )
+            .filter((found) => found.exists())
+            .map((found) => toItem(found.id, saleId, found.data()))
+        : [];
+    transaction.delete(ref);
+    if (remainingIds.length === 0) {
+      transaction.delete(bundleRef(saleId, bundleId));
+      return;
+    }
+    const available = others.filter((other) => other.status === 'AVAILABLE');
+    const separateCents = available.reduce(
+      (total, other) => total + (other.askingPriceCents ?? 0),
+      0,
+    );
+    const asking = thing?.askingPriceCents ?? 0;
+    const now = Date.now();
+    const uid = auth.currentUser?.uid ?? '';
+    const base = {
+      itemIds: remainingIds,
+      lastEditedAt: now,
+      lastEditedBy: uid,
+    };
+    if (isEmptyingDeal) {
+      const reset = {
+        kind: bundle.status === 'SOLD' ? 'NOT_SOLD' : 'BACK_TO_AVAILABLE',
+        byUid: uid,
+        at: now,
+        itemId: null,
+        itemStatus: null,
+        priceCents: null,
+        fromPriceCents: bundle.sale?.priceCents ?? null,
+      } as const;
+      const back = applyThingsBack(
+        bundle,
+        appendBundleChange(bundle.history, reset, MAX_STATUS_HISTORY),
+        available,
+        separateCents,
+        uid,
+        now,
+        MAX_STATUS_HISTORY,
+      );
+      transaction.update(bundleRef(saleId, bundleId), {
+        ...base,
+        ...back,
+        status: 'ACTIVE',
+        dealItemIds: null,
+        sale: null,
+      });
+      return;
+    }
+    const priceCents = isLeavingOffer
+      ? adjustBundlePrice(bundle.priceCents, -asking, separateCents)
+      : bundle.priceCents;
+    transaction.update(bundleRef(saleId, bundleId), {
+      ...base,
+      dealItemIds: bundle.dealItemIds?.filter((id) => id !== itemId) ?? null,
+      priceCents,
+      history: isLeavingOffer
+        ? appendBundleChange(
+            bundle.history,
+            {
+              kind: 'THING_LEFT',
+              byUid: uid,
+              at: now,
+              itemId,
+              itemStatus: null,
+              priceCents,
+              fromPriceCents: bundle.priceCents,
+            },
+            MAX_STATUS_HISTORY,
+          )
+        : bundle.history,
+    });
+  });
+}
+
 /**
  * Deletes the thing, then its photo files once it is gone (a file that won't delete is logged, and the sale's delete sweeps it).
+ * A bundled thing is also taken out of its bundle in the same transaction, which needs a connection; offline it is deleted alone and the bundle simply skips it.
  * The write queues offline and never settles there, so the caller isn't held on it: `onFailed` hears a refusal.
  */
 export function deleteItem(
   saleId: string,
-  item: Pick<Item, 'id' | 'photos'>,
+  item: Pick<Item, 'id' | 'photos'> & Partial<Pick<Item, 'bundleId'>>,
   onFailed: (error: unknown) => void,
 ): void {
-  void deleteDoc(getItemRef(saleId, item.id)).then(
+  const deleteAlone = () => deleteDoc(getItemRef(saleId, item.id));
+  const bundleId = item.bundleId ?? null;
+  const deleted =
+    bundleId === null
+      ? deleteAlone()
+      : deleteBundledItem(saleId, item.id, bundleId).catch((error: unknown) => {
+          if (isUnavailable(error)) return deleteAlone();
+          throw error;
+        });
+  void deleted.then(
     () =>
       Promise.all(
         item.photos.map((photo) =>

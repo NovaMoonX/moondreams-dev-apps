@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Camera, ExternalLink } from 'lucide-react';
+import { Camera, ChevronRight, ExternalLink } from 'lucide-react';
 
 import CopyTextButton from '@/components/CopyTextButton';
 import DetailSheet from '@/components/DetailSheet';
@@ -14,11 +14,14 @@ import PriceTag from '@apps/going-once/components/things/PriceTag';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import { CONDITION_LABELS } from '@apps/going-once/constants';
 import { usePublicPhotoUrls } from '@apps/going-once/queries/publicPhotoQueries';
-import type { PublicThing } from '@apps/going-once/types';
+import type { PublicBundle, PublicThing } from '@apps/going-once/types';
 import { getThingPagePath } from '@apps/going-once/utils/listing';
 
 interface BuyerThingDrawerProps {
   thing: PublicThing;
+  /** The served bundle the thing is part of. */
+  bundle: PublicBundle | null;
+  onOpenBundle: (id: string) => void;
   linkId: string;
   /** How the sale says buyers can pay; shown on the interest form. */
   paymentMethods: string[];
@@ -28,6 +31,8 @@ interface BuyerThingDrawerProps {
 /** A thing's public details in a drawer (a modal from `sm`): only the fields the page is allowed to carry. */
 function BuyerThingDrawer({
   thing,
+  bundle,
+  onOpenBundle,
   linkId,
   paymentMethods,
   onClose,
@@ -38,6 +43,9 @@ function BuyerThingDrawer({
     null,
   );
   const photos = usePublicPhotoUrls(thing.photos, 'm');
+  const askAboutBundle = thing.isBundleOnly ? bundle : null;
+  const savedCents =
+    bundle === null ? 0 : bundle.separateCents - bundle.priceCents;
   const facts = [
     thing.condition === null ? null : CONDITION_LABELS[thing.condition],
     thing.brandModel,
@@ -83,7 +91,9 @@ function BuyerThingDrawer({
                   className='min-w-0 flex-1'
                   onClick={() => setIsAsking(true)}
                 >
-                  I&apos;m interested
+                  {askAboutBundle === null
+                    ? "I'm interested"
+                    : 'Ask about the bundle'}
                 </Button>
               )}
             </div>
@@ -94,6 +104,7 @@ function BuyerThingDrawer({
       {isAsking && (
         <InterestView
           thing={thing}
+          bundle={askAboutBundle}
           linkId={linkId}
           paymentMethods={paymentMethods}
           footerNode={footerNode}
@@ -138,6 +149,21 @@ function BuyerThingDrawer({
           <p className='text-sm wrap-break-word whitespace-pre-wrap'>
             {thing.description}
           </p>
+        )}
+        {bundle !== null && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='text-primary h-auto w-full justify-between gap-2 p-0! text-left text-sm whitespace-normal'
+            onClick={() => onOpenBundle(bundle.id)}
+          >
+            <span className='min-w-0'>
+              {thing.isBundleOnly
+                ? `Only sold with the ${bundle.name} bundle · ${formatCentsShort(bundle.priceCents)} for all ${bundle.thingIds.length}`
+                : `Part of ${bundle.name}${savedCents > 0 ? ` · save ${formatCentsShort(savedCents)} together` : ''}`}
+            </span>
+            <ChevronRight className='size-4 shrink-0' aria-hidden='true' />
+          </Button>
         )}
         {thing.status === 'PENDING' && (
           <InlineNotice tone='info'>

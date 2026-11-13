@@ -494,6 +494,31 @@ service cloud.firestore {
           && resource.data.get('pending', null) == null);
     }
 
+    // A bundle (things sold together for one price) is read and written by the sale's members, judged by the sale in
+    // its path. It starts Active with two to thirty things and a price in whole cents; who made it and when never
+    // change. Members can delete it in any status, so deleting the last thing of a held or sold bundle takes it along.
+    match /apps/going-once/sales/{saleId}/bundles/{bundleId} {
+      allow read: if isSaleMember(saleId);
+      allow create: if isSaleMember(saleId) && isCreatedByMe()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.itemIds is list
+        && request.resource.data.itemIds.size() >= 2
+        && request.resource.data.itemIds.size() <= 30
+        && request.resource.data.priceCents is int
+        && request.resource.data.priceCents >= 0
+        && request.resource.data.status == 'ACTIVE';
+      allow update: if isSaleMember(saleId) && isCreatedByKept()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'saleId', 'id'])
+        && request.resource.data.priceCents is int
+        && request.resource.data.priceCents >= 0
+        && request.resource.data.itemIds is list
+        && request.resource.data.itemIds.size() <= 30
+        && request.resource.data.status in ['ACTIVE', 'PENDING', 'SOLD'];
+      allow delete: if isSaleMember(saleId);
+    }
+
     // A person's own settings (which sales' interest push they turned off) are read and written by them alone, and
     // hold only that list. The push function reads them with the admin SDK. `pushBundles` (the push window's state)
     // has no rule, so no client reads or writes it.

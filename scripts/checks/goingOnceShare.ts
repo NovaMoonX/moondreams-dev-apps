@@ -17,6 +17,7 @@ import {
   isListable as isListableOnServer,
   publicCopyPath,
   readCopyablePhotos,
+  readBundleDeal,
   sealPage,
   toPublicSale,
   toPublicThing,
@@ -29,6 +30,7 @@ import {
 } from '../../functions/src/apps/going-once/inquiryView.ts';
 import { OPEN_SALE_STATUS } from '../../functions/src/apps/going-once/finishPlan.ts';
 import * as clientConstants from '../../src/apps/going-once/constants.ts';
+import { getBundleParts } from '../../src/apps/going-once/utils/bundles.ts';
 import { readContact as readContactOnClient } from '../../src/apps/going-once/utils/contact.ts';
 import {
   isListable as isListableOnClient,
@@ -110,9 +112,11 @@ const sale = (extra: Record<string, unknown> = {}) => ({
 const THING_KEYS = [
   'askingPriceCents',
   'brandModel',
+  'bundleId',
   'condition',
   'description',
   'id',
+  'isBundleOnly',
   'originalPriceCents',
   'photos',
   'size',
@@ -124,7 +128,7 @@ const THING_KEYS = [
 check("every cap and list here equals the app's own", () => {
   const client: Record<string, unknown> = clientConstants;
   Object.entries(SALE_PAGE_LIMITS)
-    .filter(([name]) => name !== 'MAX_PAGE_THINGS')
+    .filter(([name]) => !['MAX_PAGE_THINGS', 'MAX_PAGE_BUNDLES'].includes(name))
     .forEach(([name, value]) =>
       assert.equal(
         client[name],
@@ -272,6 +276,7 @@ check(
         things: [
           { ...toPublicThing(thing())!, storeUrl: 'javascript:alert(1)' },
         ],
+        bundles: [],
         isMember: false,
       },
       null,
@@ -352,6 +357,7 @@ check(
           paymentMethods: [long, ' ', 'Zelle'],
         },
         things: [],
+        bundles: [],
         isMember: false,
       },
       null,
@@ -383,6 +389,7 @@ check(
       ['b', 'a'],
     );
     assert.deepEqual(Object.keys(page).sort(), [
+      'bundles',
       'isMember',
       'sale',
       'status',
@@ -412,6 +419,7 @@ check(
     const sealed = sealPage(tampered as never, null);
     assert.ok(sealed.status === 'ok');
     assert.deepEqual(Object.keys(sealed).sort(), [
+      'bundles',
       'isMember',
       'sale',
       'status',
@@ -769,6 +777,209 @@ check(
     assert.equal(readContactOnServer('(206) 555-0142')?.key, '2065550142');
   },
 );
+
+const bundleDoc = (extra: Record<string, unknown> = {}) => ({
+  id: 'cat-stuff',
+  saleId: 'sale-id-secret',
+  name: '  Cat stuff ',
+  itemIds: ['a', 'b', 'c', 'd'],
+  priceCents: 2_000,
+  status: 'ACTIVE',
+  dealItemIds: null,
+  sale: { buyerName: 'Buyer secret' },
+  history: [{ byUid: OWNER }],
+  createdBy: OWNER,
+  createdAt: 1,
+  ...extra,
+});
+const member = (id: string, extra: Record<string, unknown> = {}) =>
+  thing({
+    id,
+    title: `Thing ${id}`,
+    askingPriceCents: 1_000,
+    bundleId: 'cat-stuff',
+    ...extra,
+  });
+const BUNDLE_KEYS = [
+  'goneCount',
+  'id',
+  'name',
+  'priceCents',
+  'separateCents',
+  'status',
+  'thingIds',
+];
+
+check(
+  'a bundle is served with its public keys and only a count of what is gone',
+  () => {
+    const items = [
+      member('a', { isBundleOnly: true }),
+      member('b'),
+      member('c'),
+      member('d', { status: 'SOLD' }),
+    ];
+    const page = toSalePage(sale(), items, false, null, [bundleDoc()]);
+    assert.ok(page.status === 'ok');
+    assert.equal(page.bundles.length, 1);
+    const [bundle] = page.bundles;
+    assert.deepEqual(Object.keys(bundle).sort(), BUNDLE_KEYS);
+    assert.deepEqual(bundle.thingIds, ['a', 'b', 'c']);
+    assert.equal(bundle.name, 'Cat stuff');
+    assert.equal(bundle.goneCount, 1);
+    assert.equal(bundle.separateCents, 3_000);
+    assert.equal(bundle.priceCents, 2_000);
+    assert.equal(bundle.status, 'AVAILABLE');
+    const body = JSON.stringify(page);
+    ['Thing d', '"d"', OWNER, 'Buyer secret', 'sale-id-secret'].forEach(
+      (value) => assert.ok(!body.includes(value), `leaked ${value}`),
+    );
+    const byId = Object.fromEntries(
+      page.things.map((entry) => [entry.id, entry]),
+    );
+    assert.equal(byId.a.bundleId, 'cat-stuff');
+    assert.equal(byId.a.isBundleOnly, true);
+    assert.equal(byId.b.isBundleOnly, false);
+    assert.equal(byId.d, undefined);
+  },
+);
+
+check(
+  'a bundle clamps its price, orders Pending last and a held one serves its deal',
+  () => {
+    const items = [
+      member('a', { bundleId: 'open' }),
+      member('b', { bundleId: 'open' }),
+      member('c', { status: 'PENDING', bundleId: 'held' }),
+      member('d', { status: 'PENDING', bundleId: 'held' }),
+    ];
+    const page = toSalePage(sale(), items, false, null, [
+      bundleDoc({
+        id: 'held',
+        status: 'PENDING',
+        itemIds: ['c', 'd'],
+        dealItemIds: ['c', 'd'],
+        priceCents: 9_999,
+      }),
+      bundleDoc({ id: 'open', itemIds: ['a', 'b'], priceCents: 9_999 }),
+    ]);
+    assert.ok(page.status === 'ok');
+    assert.deepEqual(
+      page.bundles.map((bundle) => bundle.id),
+      ['open', 'held'],
+    );
+    assert.ok(
+      page.bundles.every(
+        (bundle) => bundle.priceCents === bundle.separateCents,
+      ),
+    );
+    assert.equal(page.bundles[1].status, 'PENDING');
+    const byId = Object.fromEntries(
+      page.things.map((entry) => [entry.id, entry]),
+    );
+    assert.equal(byId.a.bundleId, 'open');
+  },
+);
+
+check(
+  'a bundle with fewer than two listable things, a sold one or an unsafe id is not served',
+  () => {
+    const items = [member('a'), member('b', { photos: [] }), member('c')];
+    const served = (extra: Record<string, unknown>) => {
+      const page = toSalePage(sale(), items, false, null, [
+        bundleDoc({ itemIds: ['a', 'b', 'c'], ...extra }),
+      ]);
+      assert.ok(page.status === 'ok');
+      return page;
+    };
+    assert.equal(served({ itemIds: ['a', 'b'] }).bundles.length, 0);
+    assert.equal(served({ status: 'SOLD' }).bundles.length, 0);
+    assert.equal(served({ id: '../x' }).bundles.length, 0);
+    assert.equal(served({ name: '  ' }).bundles.length, 0);
+    assert.equal(served({}).bundles.length, 1);
+    const lone = served({ itemIds: ['a', 'b'] });
+    assert.equal(lone.things.find((entry) => entry.id === 'a')?.bundleId, null);
+    assert.equal(served({ name: 'x'.repeat(200) }).bundles[0].name.length, 60);
+  },
+);
+
+check(
+  'a thing a bundle lists but that names another bundle is not served in it',
+  () => {
+    const page = toSalePage(
+      sale(),
+      [member('a'), member('b'), member('c', { bundleId: 'other' })],
+      false,
+      null,
+      [bundleDoc({ itemIds: ['a', 'b', 'c'] })],
+    );
+    assert.ok(page.status === 'ok');
+    assert.deepEqual(page.bundles[0].thingIds, ['a', 'b']);
+    assert.equal(page.things.find((entry) => entry.id === 'c')?.bundleId, null);
+  },
+);
+
+check('the final pass drops a bundle id a thing does not belong to', () => {
+  const page = toSalePage(sale(), [member('a'), member('b')], false, null, [
+    bundleDoc({ itemIds: ['a', 'b'] }),
+  ]);
+  assert.ok(page.status === 'ok');
+  const sealed = sealPage(
+    {
+      ...page,
+      things: page.things.map((entry) => ({
+        ...entry,
+        bundleId: 'other',
+        isBundleOnly: true,
+      })),
+      bundles: [
+        ...page.bundles,
+        { ...page.bundles[0], id: 'one', thingIds: ['a'] },
+      ],
+    },
+    null,
+  );
+  assert.ok(sealed.status === 'ok');
+  assert.equal(sealed.bundles.length, 1);
+  assert.ok(
+    sealed.things.every(
+      (entry) => entry.bundleId === null && !entry.isBundleOnly,
+    ),
+  );
+});
+
+check('the server reads a bundle deal like the app does', () => {
+  const stored = [
+    member('a'),
+    member('b', { status: 'PENDING' }),
+    member('c', { status: 'SOLD' }),
+  ] as unknown as Record<string, unknown>[];
+  const byId = new Map(stored.map((entry) => [entry.id as string, entry]));
+  [
+    bundleDoc({ itemIds: ['a', 'b', 'c'] }),
+    bundleDoc({
+      status: 'PENDING',
+      itemIds: ['a', 'b', 'c'],
+      dealItemIds: ['b', 'c'],
+    }),
+  ].forEach((doc) =>
+    assert.deepEqual(
+      readBundleDeal(doc, byId),
+      getBundleParts(doc as never, Object.fromEntries(byId) as never).deal.map(
+        (entry) => entry.id,
+      ),
+    ),
+  );
+});
+
+check('a bundle inquiry id differs from a solo one and is stable', () => {
+  const solo = toInquiryId('a', '2065550142');
+  const bundle = toInquiryId('a', '2065550142', 'cat-stuff');
+  assert.notEqual(solo, bundle);
+  assert.equal(bundle, toInquiryId('a', '2065550142', 'cat-stuff'));
+  assert.notEqual(bundle, toInquiryId('a', '2065550142', 'other'));
+  assert.equal(solo, toInquiryId('a', '2065550142', null));
+});
 
 check('the copied listing text holds only what buyers already see', () => {
   const base = {

@@ -40,6 +40,7 @@ import {
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const FREE = 'free';
 const OUTSIDE = 'outside';
@@ -173,6 +174,7 @@ function PutTowardView({
       addToast({
         title: mask(HORIZON_WORDS.putMoreDone(money, name)),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: MOVE_WORDS.undo,
           onClick: () =>

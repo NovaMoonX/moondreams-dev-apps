@@ -35,8 +35,7 @@ import {
   type PackageEdit,
   type PackageTake,
 } from '@apps/pinch/utils/packages';
-
-const UNDO_TOAST_MS = 6000;
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const inFlight = new Set<string>();
 const undone = new Set<string>();
@@ -81,7 +80,7 @@ export function usePackageActions(uid: string) {
       title,
       description,
       type: 'success',
-      duration: UNDO_TOAST_MS,
+      duration: UNDO_WINDOW_MS,
       action: {
         label: 'Undo',
         onClick: () => {

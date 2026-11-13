@@ -45,6 +45,7 @@ import {
 import type { HorizonSealed, Stance } from '@apps/runway/types';
 import { describeCost, describeCostWhen } from '@apps/runway/utils/horizonText';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 type Answer = 'bring' | 'start';
 
@@ -266,6 +267,7 @@ function HorizonBringBackView({
             ? undefined
             : mask(backWords.description),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: HORIZON_END_WORDS.undo,
           onClick: () => void undo(written),

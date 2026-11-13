@@ -127,6 +127,7 @@ import {
 import { resolveGroupRename } from '@apps/runway/utils/groupChoice';
 import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 type StartingChoice = Priority | 'none';
 type PriorityRow = 'all' | GroupSection;
@@ -910,6 +911,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         addToast({
           title: GROUP_WORDS.dueToast(saved.length),
           type: 'success',
+          duration: UNDO_WINDOW_MS,
           action: {
             label: ITEM_SHEET_R2_WORDS.undo,
             onClick: () => void undoDueDates(saved),

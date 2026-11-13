@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  getInquiryLabel,
   goingOnceBundleHooks,
   isInquiryWaiting,
   isItemFresh,
@@ -392,5 +393,17 @@ payloads.forEach((payload) => {
     assert.equal(text.includes(secret), false, `payload leaks ${secret}`),
   );
 });
+
+assert.equal(
+  getInquiryLabel({
+    itemTitleAtSend: 'Cat tree',
+    bundleLabelAtSend: 'Cat stuff (4 things)',
+  }),
+  'Cat stuff',
+);
+assert.equal(
+  getInquiryLabel({ itemTitleAtSend: 'Cat tree', bundleLabelAtSend: null }),
+  'Cat tree',
+);
 
 console.log('going-once push: ok');

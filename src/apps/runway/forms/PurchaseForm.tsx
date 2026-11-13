@@ -149,6 +149,7 @@ import PurchaseEffectNotice, {
 } from '@apps/runway/components/PurchaseEffectNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import DateInput from '@/components/DateInput';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const ORIGIN_PAGE = 20;
 const MOST_USED_SHOWN = 5;
@@ -1191,6 +1192,7 @@ function PurchaseFormBody({
               ? mask(PURCHASE_COST_WORDS.addedFree(formatCents(fromFreeCents)))
               : undefined,
           type: 'success',
+          duration: UNDO_WINDOW_MS,
           action: {
             label: MOVE_WORDS.undo,
             onClick: () =>

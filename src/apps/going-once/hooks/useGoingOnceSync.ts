@@ -9,10 +9,13 @@ import {
   type AppDispatch,
 } from '@/store';
 import {
+  clearBundles,
   clearInquiries,
   clearItems,
   clearOpenSale,
   clearSaleInvites,
+  setBundles,
+  setBundlesError,
   setInquiries,
   setInquiriesError,
   setItems,
@@ -38,6 +41,7 @@ import {
 import {
   canReadSale,
   isPermissionDenied,
+  startOpenSaleBundlesListener,
   startOpenSaleItemsListener,
   startOpenSaleListener,
 } from '@apps/going-once/store/listeners/openSaleListener';
@@ -202,6 +206,16 @@ export function useGoingOnceSync(
         dispatch(setItemsError());
       },
     );
+    const unsubscribeBundles = listenWithRetry(
+      (onError) =>
+        startOpenSaleBundlesListener(
+          saleId,
+          (bundles) => dispatch(setBundles({ saleId, bundles })),
+          onError,
+        ),
+      canRetry,
+      () => dispatch(setBundlesError(saleId)),
+    );
     const unsubscribeNew = listenWithRetry(
       (onError) =>
         startNewInquiriesListener(
@@ -226,8 +240,10 @@ export function useGoingOnceSync(
       unsubscribeNew();
       unsubscribeHandled();
       unsubscribeItems();
+      unsubscribeBundles();
       dispatch(clearInquiries());
       dispatch(clearItems());
+      dispatch(clearBundles());
     };
   }, [uid, saleId, dispatch, loadAttempt]);
 }

@@ -42,8 +42,7 @@ import {
   type BulkAction,
   type NewContainerInput,
 } from '@apps/pinch/utils/containers';
-
-const UNDO_TOAST_MS = 6000;
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface PutAwayOptions {
   /** False when the caller's own screen confirms the save and offers its Undo (`undoSaved`). */
@@ -90,7 +89,7 @@ export function useContainerActions(uid: string) {
       title,
       description,
       type: 'success',
-      duration: UNDO_TOAST_MS,
+      duration: UNDO_WINDOW_MS,
       action: {
         label: 'Undo',
         onClick: () => {

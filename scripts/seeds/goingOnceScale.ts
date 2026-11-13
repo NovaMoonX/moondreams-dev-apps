@@ -104,6 +104,52 @@ const buildThing = (index: number) => {
   };
 };
 
+const ids = (indexes: number[]) =>
+  indexes.map((index) => `seed-go-${buildThing(index).id}`);
+const getAsking = (index: number) => buildThing(index).askingPriceCents;
+const sumAsking = (indexes: number[]) =>
+  indexes.reduce((total, index) => total + getAsking(index), 0);
+
+const FREE_INDEXES = Array.from(
+  { length: THING_COUNT },
+  (_, index) => index,
+).filter(
+  (index) =>
+    !buildThing(index).isUnlisted &&
+    buildStatus(index, { maya: '', theo: '' }).kind === 'AVAILABLE',
+);
+const BIG_INDEXES = FREE_INDEXES.slice(0, 12);
+const SMALL_INDEXES = FREE_INDEXES.slice(12, 15);
+/** Held together for one buyer; the last went off the list on its own first. */
+const HELD_INDEXES = [15, 27, 39, 43];
+const HELD_DEAL_INDEXES = HELD_INDEXES.slice(0, 3);
+
+/** Enough small bundles that the Things tab folds its bundles list behind "Show all". */
+const PAIR_INDEXES = FREE_INDEXES.slice(15)
+  .filter((index) => !HELD_INDEXES.includes(index))
+  .slice(0, 6);
+const PAIR_NAMES = ['Desk pair', 'Lamp pair', 'Kitchen pair'];
+const toPairId = (pair: number) => `seed-go-bundle-scale-pair-${pair + 1}`;
+
+const BIG_BUNDLE_ID = 'seed-go-bundle-scale-big';
+const SMALL_BUNDLE_ID = 'seed-go-bundle-scale-small';
+const HELD_BUNDLE_ID = 'seed-go-bundle-scale-held';
+
+const getBundleOf = (index: number) => {
+  if (BIG_INDEXES.includes(index))
+    return { id: BIG_BUNDLE_ID, isOnly: BIG_INDEXES.indexOf(index) < 2 };
+  if (SMALL_INDEXES.includes(index))
+    return { id: SMALL_BUNDLE_ID, isOnly: false };
+  if (HELD_INDEXES.includes(index))
+    return { id: HELD_BUNDLE_ID, isOnly: false };
+  if (PAIR_INDEXES.includes(index))
+    return {
+      id: toPairId(Math.floor(PAIR_INDEXES.indexOf(index) / 2)),
+      isOnly: false,
+    };
+  return null;
+};
+
 /** Seeds Maya's second sale with 50 things (about 100 photos in the Storage emulator, 6 of them drafts) for checking that the Things tab stays fast; returns the documents written. Emulators only. */
 export async function seedGoingOnceScale(
   context: SeedContext,
@@ -210,8 +256,18 @@ export async function seedGoingOnceScale(
           ...EMPTY_OPTIONALS,
           ...thing.optionals,
           photos,
+          bundleId: getBundleOf(index)?.id ?? null,
+          isBundleOnly: getBundleOf(index)?.isOnly ?? false,
           ...buildSeedStatus(
-            buildStatus(index, { maya: maya.uid, theo: theo.uid }),
+            HELD_DEAL_INDEXES.includes(index)
+              ? {
+                  kind: 'PENDING',
+                  by: theo.uid,
+                  buyerName: 'Priya',
+                  pickup: 'saturday',
+                  daysAgo: 1,
+                }
+              : buildStatus(index, { maya: maya.uid, theo: theo.uid }),
             context.now,
           ),
           createdBy: maya.uid,
@@ -220,6 +276,127 @@ export async function seedGoingOnceScale(
           lastEditedBy: null,
         });
     }),
+  );
+
+  const bundleBase = {
+    saleId: SALE_ID,
+    sale: null,
+    keptAtGoneCount: null,
+    createdBy: maya.uid,
+    lastEditedAt: null,
+    lastEditedBy: null,
+  };
+  const emptyChange = {
+    itemId: null,
+    itemStatus: null,
+    priceCents: null,
+    fromPriceCents: null,
+  };
+  const bigPrice = Math.max(0, sumAsking(BIG_INDEXES) - 10000);
+  const heldStart = Math.max(0, sumAsking(HELD_INDEXES) - 2000);
+  const heldPrice = Math.max(
+    0,
+    Math.min(heldStart - getAsking(43), sumAsking(HELD_DEAL_INDEXES)),
+  );
+  const pairBundles = PAIR_NAMES.map((name, pair) => {
+    const members = PAIR_INDEXES.slice(pair * 2, pair * 2 + 2);
+    const priceCents = Math.max(0, sumAsking(members) - 500);
+    const at = context.now - (pair + 1) * 60 * 60 * 1000;
+    return {
+      ...bundleBase,
+      id: toPairId(pair),
+      name,
+      status: 'ACTIVE',
+      itemIds: ids(members),
+      dealItemIds: null,
+      priceCents,
+      history: [
+        { ...emptyChange, kind: 'CREATE', byUid: maya.uid, at, priceCents },
+      ],
+      createdAt: at,
+    };
+  });
+  const bundles = [
+    ...pairBundles,
+    {
+      ...bundleBase,
+      id: BIG_BUNDLE_ID,
+      name: 'Garage corner: furniture, appliances, lamps and odd extras',
+      status: 'ACTIVE',
+      itemIds: ids(BIG_INDEXES),
+      dealItemIds: null,
+      priceCents: bigPrice,
+      history: [
+        {
+          ...emptyChange,
+          kind: 'CREATE',
+          byUid: maya.uid,
+          at: context.now - 3 * DAY_MS,
+          priceCents: bigPrice,
+        },
+      ],
+      createdAt: context.now - 3 * DAY_MS,
+    },
+    {
+      ...bundleBase,
+      id: SMALL_BUNDLE_ID,
+      name: 'Starter set',
+      status: 'ACTIVE',
+      itemIds: ids(SMALL_INDEXES),
+      dealItemIds: null,
+      priceCents: Math.max(0, sumAsking(SMALL_INDEXES) - 1500),
+      history: [
+        {
+          ...emptyChange,
+          kind: 'CREATE',
+          byUid: theo.uid,
+          at: context.now - 2 * DAY_MS,
+          priceCents: Math.max(0, sumAsking(SMALL_INDEXES) - 1500),
+        },
+      ],
+      createdAt: context.now - 2 * DAY_MS,
+    },
+    {
+      ...bundleBase,
+      id: HELD_BUNDLE_ID,
+      name: 'Held set',
+      status: 'PENDING',
+      itemIds: ids(HELD_INDEXES),
+      dealItemIds: ids(HELD_DEAL_INDEXES),
+      priceCents: heldPrice,
+      history: [
+        {
+          ...emptyChange,
+          kind: 'CREATE',
+          byUid: maya.uid,
+          at: context.now - 4 * DAY_MS,
+          priceCents: heldStart,
+        },
+        {
+          ...emptyChange,
+          kind: 'THING_LEFT',
+          byUid: maya.uid,
+          at: context.now - 3 * DAY_MS,
+          itemId: ids([43])[0],
+          itemStatus: 'WITHDRAWN',
+          priceCents: heldPrice,
+          fromPriceCents: heldStart,
+        },
+        {
+          ...emptyChange,
+          kind: 'MARK_PENDING',
+          byUid: theo.uid,
+          at: context.now - DAY_MS,
+          priceCents: heldPrice,
+        },
+      ],
+      createdAt: context.now - 4 * DAY_MS,
+    },
+  ];
+  await Promise.all(
+    bundles.map((bundle) =>
+      sale.collection('bundles').doc(bundle.id).set(bundle),
+    ),
   );
 
   // Handled far outnumbers the Inbox's 30 so older pages load, and every third one shares a handled time with its neighbours to exercise the page cursor's tie-break; every fifth sender and message is long.
@@ -259,6 +436,7 @@ export async function seedGoingOnceScale(
       2 +
       waitingEmails.length +
       THING_COUNT +
+      bundles.length +
       NEW_INQUIRY_COUNT +
       HANDLED_INQUIRY_COUNT,
   };

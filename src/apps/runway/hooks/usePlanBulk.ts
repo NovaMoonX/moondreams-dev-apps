@@ -34,6 +34,7 @@ import {
   describeChange,
   isMoneylessChange,
 } from '@apps/runway/utils/changeText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 type MemberPayload = BillSealed | EnvelopeSealed | GoalSealed;
 type MemberKind = 'bill' | 'envelope' | 'goal';
@@ -296,6 +297,7 @@ export function usePlanBulk(view: SelectView) {
       description:
         kept.length === 0 ? undefined : PLAN_SELECT_WORDS.pinsKept(kept),
       type: failed.length === 0 && kept.length === 0 ? 'success' : 'warning',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: PLAN_SELECT_WORDS.undo,
         onClick: () => void undo(uid, written),

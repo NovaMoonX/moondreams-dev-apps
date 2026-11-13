@@ -324,8 +324,14 @@ function InquiryDrawer({
                 />
               </Button>
             )}
+            {inquiry.bundleId !== null && (
+              <p className='text-muted-foreground text-sm break-words'>
+                Bundle: {inquiry.bundleLabelAtSend ?? 'a bundle'}
+              </p>
+            )}
             {!isSaleFinished &&
               clearedAt === null &&
+              inquiry.bundleId === null &&
               item !== null &&
               item.status === 'AVAILABLE' &&
               isListable(item) && (

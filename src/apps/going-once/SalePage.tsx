@@ -15,6 +15,8 @@ import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useNoIndex } from '@/hooks/useNoIndex';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
+import BuyerBundleCard from '@apps/going-once/components/public/BuyerBundleCard';
+import BuyerBundleDrawer from '@apps/going-once/components/public/BuyerBundleDrawer';
 import BuyerCard from '@apps/going-once/components/public/BuyerCard';
 import BuyerThingDrawer from '@apps/going-once/components/public/BuyerThingDrawer';
 import {
@@ -24,7 +26,11 @@ import {
 } from '@apps/going-once/constants';
 import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
 import { salePageQueryOptions } from '@apps/going-once/queries/salePageQueries';
-import type { PublicThing, SalePageResult } from '@apps/going-once/types';
+import type {
+  PublicBundle,
+  PublicThing,
+  SalePageResult,
+} from '@apps/going-once/types';
 import { getThingPagePath } from '@apps/going-once/utils/listing';
 import { formatPaymentMethods } from '@apps/going-once/utils/paymentMethods';
 
@@ -44,15 +50,53 @@ const matchesSearch = (thing: PublicThing, query: string) => {
   );
 };
 
+const getBundleThings = (bundle: PublicBundle, things: PublicThing[]) =>
+  bundle.thingIds.flatMap((id) => {
+    const thing = things.find((candidate) => candidate.id === id);
+    return thing === undefined ? [] : [thing];
+  });
+
+const matchesBundleSearch = (
+  bundle: PublicBundle,
+  things: PublicThing[],
+  query: string,
+) => {
+  const needle = query.trim().toLowerCase();
+  return (
+    needle === '' ||
+    bundle.name.toLowerCase().includes(needle) ||
+    getBundleThings(bundle, things).some((thing) =>
+      thing.title.toLowerCase().includes(needle),
+    )
+  );
+};
+
 function Cards({
   things,
+  bundles = [],
+  allThings = things,
   onOpen,
+  onOpenBundle,
 }: {
   things: PublicThing[];
+  bundles?: PublicBundle[];
+  allThings?: PublicThing[];
   onOpen: (id: string) => void;
+  onOpenBundle?: (id: string) => void;
 }) {
   return (
     <ul className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4'>
+      {bundles.map((bundle, index) => (
+        <li key={`bundle-${bundle.id}`} className='min-w-0'>
+          <LazyMount estimatedHeight={CARD_HEIGHT} eager={index < EAGER_CARDS}>
+            <BuyerBundleCard
+              bundle={bundle}
+              things={getBundleThings(bundle, allThings)}
+              onOpen={() => onOpenBundle?.(bundle.id)}
+            />
+          </LazyMount>
+        </li>
+      ))}
       {things.map((thing, index) => (
         <li key={thing.id} className='min-w-0'>
           <LazyMount estimatedHeight={CARD_HEIGHT} eager={index < EAGER_CARDS}>
@@ -137,8 +181,12 @@ function OwnPageBand() {
 }
 
 // The address follows the open thing so it can be copied from the bar; the drawer's own back entry sits on top of it.
-const showAddress = (path: string) => {
-  const kept = `${path}${window.location.search}`;
+const showAddress = (path: string, bundleId: string | null = null) => {
+  const params = new URLSearchParams(window.location.search);
+  if (bundleId === null) params.delete('bundle');
+  else params.set('bundle', bundleId);
+  const search = params.toString();
+  const kept = `${path}${search === '' ? '' : `?${search}`}`;
   if (`${window.location.pathname}${window.location.search}` === kept) return;
   window.history.replaceState(window.history.state, '', kept);
 };
@@ -152,7 +200,14 @@ interface SaleViewProps {
 
 function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
   const [query, setQuery] = useState('');
-  const { sale, things } = page;
+  const { sale, things, bundles } = page;
+  const [openBundleId, setOpenBundleId] = useState<string | null>(() => {
+    const wanted = new URLSearchParams(window.location.search).get('bundle');
+    return linkedThingId === null &&
+      bundles.some((bundle) => bundle.id === wanted)
+      ? wanted
+      : null;
+  });
   const [openId, setOpenId] = useState<string | null>(() =>
     things.some((thing) => thing.id === linkedThingId) ? linkedThingId : null,
   );
@@ -163,19 +218,42 @@ function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
   );
   const openThingById = (id: string) => {
     showAddress(getThingPagePath(linkId, id));
+    setOpenBundleId(null);
     setOpenId(id);
   };
   const closeThing = () => {
     showAddress(`${SALE_PAGE_PATH}${linkId}`);
     setOpenId(null);
   };
+  const openBundleById = (id: string) => {
+    showAddress(`${SALE_PAGE_PATH}${linkId}`, id);
+    setOpenId(null);
+    setOpenBundleId(id);
+  };
+  const closeBundle = () => {
+    showAddress(`${SALE_PAGE_PATH}${linkId}`);
+    setOpenBundleId(null);
+  };
   const hasSearch = things.length >= SEARCH_FROM_ITEMS;
   const shown = things.filter(
     (thing) => !hasSearch || matchesSearch(thing, query),
   );
+  const shownBundles = bundles.filter(
+    (bundle) => !hasSearch || matchesBundleSearch(bundle, things, query),
+  );
+  const availableBundles = shownBundles.filter(
+    (bundle) => bundle.status === 'AVAILABLE',
+  );
+  const pendingBundles = shownBundles.filter(
+    (bundle) => bundle.status === 'PENDING',
+  );
   const available = shown.filter((thing) => thing.status === 'AVAILABLE');
   const pending = shown.filter((thing) => thing.status === 'PENDING');
   const openThing = things.find((thing) => thing.id === openId) ?? null;
+  const openBundle =
+    bundles.find((bundle) => bundle.id === openBundleId) ?? null;
+  const bundleOfOpenThing =
+    bundles.find((bundle) => bundle.id === openThing?.bundleId) ?? null;
   const allAvailable = things.filter((thing) => thing.status === 'AVAILABLE');
   const allPending = things.filter((thing) => thing.status === 'PENDING');
   const summary = [
@@ -234,26 +312,50 @@ function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
           placeholder={`Search ${things.length} things`}
         />
       )}
-      {things.length > 0 && shown.length === 0 && (
+      {things.length > 0 && shown.length === 0 && shownBundles.length === 0 && (
         <p className='text-muted-foreground text-center text-sm'>
           Nothing matches that. Try another word.
         </p>
       )}
-      {available.length > 0 && (
-        <Cards things={available} onOpen={openThingById} />
+      {(available.length > 0 || availableBundles.length > 0) && (
+        <Cards
+          things={available}
+          bundles={availableBundles}
+          allThings={things}
+          onOpen={openThingById}
+          onOpenBundle={openBundleById}
+        />
       )}
-      {pending.length > 0 && (
+      {(pending.length > 0 || pendingBundles.length > 0) && (
         <>
           <SectionDivider label='Pending' />
-          <Cards things={pending} onOpen={openThingById} />
+          <Cards
+            things={pending}
+            bundles={pendingBundles}
+            allThings={things}
+            onOpen={openThingById}
+            onOpenBundle={openBundleById}
+          />
         </>
       )}
       {openThing && (
         <BuyerThingDrawer
           thing={openThing}
+          bundle={bundleOfOpenThing}
+          onOpenBundle={openBundleById}
           linkId={linkId}
           paymentMethods={sale.paymentMethods ?? []}
           onClose={closeThing}
+        />
+      )}
+      {openBundle && (
+        <BuyerBundleDrawer
+          bundle={openBundle}
+          things={getBundleThings(openBundle, things)}
+          linkId={linkId}
+          paymentMethods={sale.paymentMethods ?? []}
+          onOpenThing={openThingById}
+          onClose={closeBundle}
         />
       )}
     </div>

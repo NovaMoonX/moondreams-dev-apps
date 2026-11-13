@@ -7,9 +7,10 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { toBundle } from '@apps/going-once/store/listeners/toBundle';
 import { toItem } from '@apps/going-once/store/listeners/toItem';
 import { toSale } from '@apps/going-once/store/listeners/toSale';
-import type { Item, Sale } from '@apps/going-once/types';
+import type { Bundle, Item, Sale } from '@apps/going-once/types';
 
 export const isPermissionDenied = (error: unknown) =>
   (error as { code?: string } | null)?.code === 'permission-denied';
@@ -47,6 +48,24 @@ export function startOpenSaleItemsListener(
       onChange(
         snapshot.docs.map((docSnapshot) =>
           toItem(docSnapshot.id, saleId, docSnapshot.data()),
+        ),
+      ),
+    onError,
+  );
+}
+
+/** Every bundle in the sale on screen. */
+export function startOpenSaleBundlesListener(
+  saleId: string,
+  onChange: (bundles: Bundle[]) => void,
+  onError: (error: unknown) => void,
+): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'apps', 'going-once', 'sales', saleId, 'bundles'),
+    (snapshot) =>
+      onChange(
+        snapshot.docs.map((docSnapshot) =>
+          toBundle(docSnapshot.id, saleId, docSnapshot.data()),
         ),
       ),
     onError,
