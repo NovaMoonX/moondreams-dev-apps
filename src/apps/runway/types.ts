@@ -662,10 +662,14 @@ export interface LinkDoc {
   status: LinkStatus;
   lastSyncAt: number | null;
   createdAt: number;
-  /** True while the bank wants the person to agree once before it shares card details (the minimum, the statement); missing on a link written before card details, read as false. */
+  /** @deprecated Superseded by `cardDetails`; read only on a link not synced since, written null. */
   needsCardConsent: boolean | null;
+  /** The bank's last answer about card details: shared, waiting for the person's agreement, or not offered for this sign-in; null until first asked, and missing on a link written before it was kept. */
+  cardDetails: CardDetailsAnswer | null;
   sealed: Sealed;
 }
+
+export type CardDetailsAnswer = 'shared' | 'needsConsent' | 'unsupported';
 
 export type ProviderAccountKind = 'depository' | 'credit' | 'other';
 
@@ -695,6 +699,7 @@ export interface OpenLink extends LinkSealed {
   lastSyncAt: number | null;
   createdAt: number;
   needsCardConsent: boolean;
+  cardDetails: CardDetailsAnswer | null;
 }
 
 /** What the bank last said an account or card holds; written by Functions. */

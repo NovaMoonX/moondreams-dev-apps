@@ -5,6 +5,7 @@ import { db } from '@lib/firebase/config';
 import { createSealedReader } from '@apps/runway/security';
 import type {
   AccountBalanceDoc,
+  CardDetailsAnswer,
   CardStatementDoc,
   CardStatementSealed,
   LinkDoc,
@@ -66,6 +67,15 @@ function startOpenedListener<TDoc extends { id: string }, TOpen>(
 }
 
 /** Every link the bank sign-ins made; Functions write them, this only reads. */
+const toCardDetails = (
+  data: Pick<LinkDoc, 'cardDetails' | 'needsCardConsent'>,
+): CardDetailsAnswer | null => {
+  const value: unknown = data.cardDetails;
+  if (value === 'shared' || value === 'needsConsent' || value === 'unsupported')
+    return value;
+  return data.needsCardConsent === true ? 'needsConsent' : null;
+};
+
 export function startLinksListener(
   uid: string,
   encryption: RunwayEncryption,
@@ -83,6 +93,7 @@ export function startLinksListener(
         status: data.status,
         lastSyncAt: data.lastSyncAt ?? null,
         needsCardConsent: data.needsCardConsent === true,
+        cardDetails: toCardDetails(data),
         createdAt: data.createdAt,
         institutionName: payload.institutionName ?? '',
         institutionLogo: payload.institutionLogo?.startsWith(

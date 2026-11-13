@@ -1598,6 +1598,7 @@ async function writeSeedCards(
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
     needsCardConsent: null,
+    cardDetails: 'shared',
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
@@ -1917,6 +1918,7 @@ async function writeSeedAccounts(
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
     needsCardConsent: null,
+    cardDetails: null,
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
@@ -4040,6 +4042,7 @@ async function seedUnlinkedPlan(
     id: linkId,
     status: 'revoked',
     needsCardConsent: null,
+    cardDetails: null,
     lastSyncAt: unlinkedAt,
     createdAt: linkedAt,
     sealed: await sealJson(
@@ -4156,7 +4159,7 @@ async function seedUnlinkedPlan(
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
 /**
- * Jamie's spending (twelve rows, one group, an overspent dinner, a split and its refund) plus what waits in Needs a home from the bank link: a pending coffee, debits, deposits, two account moves and an unclear pair. One purchase a rule already placed.
+ * Jamie's spending (twelve rows, one group, an overspent dinner, a split and its refund) plus what waits in Needs a home from the bank link: a pending coffee, debits, deposits, a card refund, two account moves and an unclear pair. One purchase a rule already placed.
  * The Sweetgreen lunch fits the restaurants rule and waits only because its merge offer (the typed one lacks the tip) is unanswered.
  */
 async function writeSeedPurchases(
@@ -4403,6 +4406,15 @@ async function writeSeedPurchases(
       accountId: null,
       cardId: SEED_DISCOVER_CARD,
       category: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES',
+    },
+    {
+      id: 'seed-link-card-refund',
+      daysAgo: 1,
+      merchant: "Kohl's",
+      amountCents: -4_894,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
     },
     {
       id: 'seed-link-deposit-refund',
