@@ -249,8 +249,7 @@ function CardFormBody({
   const bankDueOn = useAppSelector((state) =>
     editing === undefined
       ? null
-      : (getLinkedStatement(state.runway.cardStatements, editing)?.dueOn ??
-        null),
+      : (getLinkedStatement(state.runway, editing)?.dueOn ?? null),
   );
   const bankName = useAppSelector((state) =>
     editing === undefined || editing.linkId === null

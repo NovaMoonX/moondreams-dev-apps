@@ -82,6 +82,7 @@ import {
   describeCardDue,
   describeStatementIssued,
   getCardDueNow,
+  getMinimumDueOn,
   getCardName,
 } from '@apps/runway/utils/cardText';
 
@@ -240,9 +241,12 @@ function CardSheet({
       : (state.runway.links.find((entry) => entry.id === card.linkId) ?? null),
   );
   const statement = useAppSelector((state) =>
-    getLinkedStatement(state.runway.cardStatements, card),
+    getLinkedStatement(state.runway, card),
   );
-  const minimumCents = getMinimumDue(statement);
+  const minimumCents = getMinimumDue(
+    statement,
+    getMinimumDueOn(card, due, today),
+  );
   const isDueFromBank = getBankDueDay(statement) !== null;
   const { reconnect, busyId } = useReconnectLink();
   const canLink = useCanLinkBank();

@@ -1594,6 +1594,7 @@ async function writeSeedCards(
     status: 'active',
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
+    needsCardConsent: null,
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
@@ -1845,6 +1846,7 @@ async function writeSeedAccounts(
     status: 'active',
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
+    needsCardConsent: null,
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
@@ -3944,6 +3946,7 @@ async function seedUnlinkedPlan(
   batch.set(context.firestore.doc(`${plan}/links/${linkId}`), {
     id: linkId,
     status: 'revoked',
+    needsCardConsent: null,
     lastSyncAt: unlinkedAt,
     createdAt: linkedAt,
     sealed: await sealJson(

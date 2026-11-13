@@ -18,6 +18,7 @@ import {
   describeCardDue,
   describeMinimumShort,
   getCardDueNow,
+  getMinimumDueOn,
   getCardNameWithLastFour,
 } from '@apps/runway/utils/cardText';
 
@@ -42,10 +43,8 @@ function CardRow({
       (entry) => entry.id === typedCard.id,
     ) ?? typedCard;
   const name = getCardNameWithLastFour(card, allCards);
-  const minimumCents = getMinimumDue(
-    useAppSelector((state) =>
-      getLinkedStatement(state.runway.cardStatements, card),
-    ),
+  const statement = useAppSelector((state) =>
+    getLinkedStatement(state.runway, card),
   );
   const moves = useAppSelector((state) => state.runway.moves);
   const startDate = useAppSelector(
@@ -57,6 +56,10 @@ function CardRow({
     moves,
     today,
     startDate,
+  );
+  const minimumCents = getMinimumDue(
+    statement,
+    getMinimumDueOn(card, due, today),
   );
   const pendingCents = getCardPendingCents(
     useAppSelector(selectPendingByCard),

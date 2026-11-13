@@ -10454,14 +10454,16 @@ const version = (
     lastPaymentOn: null,
     ...patch,
   });
-  assert.equal(getMinimumDue(statement()), 3_500);
-  assert.equal(getMinimumDue(null), null, 'no statement, no minimum');
-  assert.equal(getMinimumDue(statement({ minimumCents: null })), null);
-  assert.equal(getMinimumDue(statement({ minimumCents: 0 })), null);
-  assert.equal(getMinimumDue(statement({ dueOn: null })), null);
+  const NOV_14 = d(2026, 11, 14);
+  assert.equal(getMinimumDue(statement(), NOV_14), 3_500);
+  assert.equal(getMinimumDue(null, NOV_14), null, 'no statement, no minimum');
+  assert.equal(getMinimumDue(statement({ minimumCents: null }), NOV_14), null);
+  assert.equal(getMinimumDue(statement({ minimumCents: 0 }), NOV_14), null);
+  assert.equal(getMinimumDue(statement({ dueOn: null }), NOV_14), null);
   assert.equal(
     getMinimumDue(
       statement({ lastPaymentCents: 3_500, lastPaymentOn: d(2026, 10, 24) }),
+      NOV_14,
     ),
     null,
     'a payment of the minimum on the statement day is already paid',
@@ -10469,6 +10471,7 @@ const version = (
   assert.equal(
     getMinimumDue(
       statement({ lastPaymentCents: 3_499, lastPaymentOn: d(2026, 11, 1) }),
+      NOV_14,
     ),
     3_500,
     'a payment under the minimum leaves it due',
@@ -10476,10 +10479,17 @@ const version = (
   assert.equal(
     getMinimumDue(
       statement({ lastPaymentCents: 90_000, lastPaymentOn: d(2026, 10, 23) }),
+      NOV_14,
     ),
     3_500,
     'a payment before the statement was issued is for the one before',
   );
+  assert.equal(
+    getMinimumDue(statement(), d(2026, 12, 14)),
+    null,
+    'a statement for last due day says nothing about the next one',
+  );
+  assert.equal(getMinimumDue(statement(), null), null, 'no due day shown');
   assert.equal(getBankDueDay(statement()), 14);
   assert.equal(getBankDueDay(statement({ dueOn: null })), null);
   assert.equal(getBankDueDay(null), null);

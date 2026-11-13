@@ -48,14 +48,16 @@ export function getPrevDueOn(
   return result;
 }
 
-/** The minimum the bank asks for, or null when it asks for none: no statement or due date, no minimum above zero, or a payment the bank already shows since the statement that covers it. */
+/** The minimum the bank asks for by `forDueOn`, or null when it asks for none: no statement, a statement for another due day, no minimum above zero, or a payment the bank already shows since the statement that covers it. */
 export function getMinimumDue(
   statement: OpenCardStatement | null | undefined,
+  forDueOn: DateOnly | null,
 ): Cents | null {
-  if (!statement) return null;
+  if (!statement || forDueOn === null) return null;
   const { minimumCents, dueOn, statementOn, lastPaymentCents, lastPaymentOn } =
     statement;
-  if (minimumCents === null || minimumCents <= 0 || dueOn === null) return null;
+  if (minimumCents === null || minimumCents <= 0 || dueOn !== forDueOn)
+    return null;
   const isPaid =
     statementOn !== null &&
     lastPaymentOn !== null &&

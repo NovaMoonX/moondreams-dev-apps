@@ -42,7 +42,10 @@ import {
 } from '@apps/runway/store/actions/cardActions';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { getMinimumDue } from '@apps/runway/engine/cards';
-import { getLinkedStatement } from '@apps/runway/store/selectors/cardStatementSelectors';
+import {
+  getLinkedStatement,
+  selectCardsWithBankDue,
+} from '@apps/runway/store/selectors/cardStatementSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { CardPaymentCovers, OpenCard } from '@apps/runway/types';
 import {
@@ -53,7 +56,9 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   describeCardPaid,
   describeCardTakenBack,
+  getCardDueNow,
   getCardName,
+  getMinimumDueOn,
 } from '@apps/runway/utils/cardText';
 
 interface PayCardSheetProps {
@@ -92,9 +97,26 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const balances = useAppSelector(selectBalances);
   const reserveCents = Math.max(0, balances.reserveByCard[card.id] ?? 0);
   const name = getCardName(card, cards);
+  const bankDueCard =
+    useAppSelector(selectCardsWithBankDue).find(
+      (entry) => entry.id === card.id,
+    ) ?? card;
+  const moves = useAppSelector((state) => state.runway.moves);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? 0,
+  );
   const minimumCents = getMinimumDue(
-    useAppSelector((state) =>
-      getLinkedStatement(state.runway.cardStatements, card),
+    useAppSelector((state) => getLinkedStatement(state.runway, card)),
+    getMinimumDueOn(
+      bankDueCard,
+      getCardDueNow(
+        bankDueCard,
+        { [card.id]: reserveCents },
+        moves,
+        today,
+        startDate,
+      ),
+      today,
     ),
   );
   const [initial] = useState(() => ({

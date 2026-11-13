@@ -655,7 +655,7 @@ export interface LinkDoc {
   lastSyncAt: number | null;
   createdAt: number;
   /** True while the bank wants the person to agree once before it shares card details (the minimum, the statement); missing on a link written before card details, read as false. */
-  needsCardConsent?: boolean;
+  needsCardConsent: boolean | null;
   sealed: Sealed;
 }
 

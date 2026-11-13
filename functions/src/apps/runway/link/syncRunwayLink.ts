@@ -538,6 +538,13 @@ async function writeBalances(
 
 const STATEMENTS_GAP_MS = 12 * 3_600_000;
 const STATEMENTS_UNSUPPORTED_GAP_MS = 7 * 86_400_000;
+const STATEMENTS_RETRY_MS = 3_600_000;
+
+/** A check time that makes the next statement read due in an hour, for an answer that was not ready or failed. */
+const retryStatementsSoon = (grantRef: DocumentReference) =>
+  grantRef.update({
+    statementsCheckedAt: Date.now() - STATEMENTS_GAP_MS + STATEMENTS_RETRY_MS,
+  });
 
 const areStatementsDue = (
   grantDoc: ProviderGrantDoc,
@@ -578,7 +585,10 @@ async function writeCardStatements(
   hadConsentFlag: boolean | null,
 ) {
   const read = await provider.listCardStatements(grant);
-  if (read.kind === 'notReady') return;
+  if (read.kind === 'notReady') {
+    await retryStatementsSoon(grantRef);
+    return;
+  }
   const now = Date.now();
   if (read.kind === 'needsConsent') {
     await grantRef.update({
@@ -597,7 +607,24 @@ async function writeCardStatements(
     });
     return;
   }
-  const writes = read.statements.flatMap((statement): Write[] => {
+  const answered = new Set(
+    read.statements.map((statement) => statement.providerAccountId),
+  );
+  const dropped = [...targets.entries()].flatMap(
+    ([providerAccountId, target]): Write[] =>
+      target.cardId === null || answered.has(providerAccountId)
+        ? []
+        : [
+            {
+              kind: 'delete',
+              ref: firestore.doc(
+                planDocPath(uid, 'cardStatements', target.cardId),
+              ),
+              lastUpdateTime: null,
+            },
+          ],
+  );
+  const written = read.statements.flatMap((statement): Write[] => {
     const cardId = targets.get(statement.providerAccountId)?.cardId ?? null;
     if (cardId === null) return [];
     return [
@@ -623,7 +650,7 @@ async function writeCardStatements(
       },
     ];
   });
-  await commitWrites(firestore, writes);
+  await commitWrites(firestore, [...written, ...dropped]);
   await grantRef.update({
     statementsCheckedAt: now,
     isStatementsUnsupported: false,
@@ -633,7 +660,8 @@ async function writeCardStatements(
   }
   logger.info('runway.sync.statementsWritten', {
     linkId,
-    count: writes.length,
+    count: written.length,
+    dropped: dropped.length,
   });
 }
 
@@ -879,12 +907,13 @@ export async function syncRunwayLink(
         planKey,
         targets,
         typeof consentFlag === 'boolean' ? consentFlag : null,
-      ).catch((error: unknown) => {
+      ).catch(async (error: unknown) => {
         logger.warn('runway.sync.statementsFailed', {
           linkId,
           kind: error instanceof ProviderError ? error.kind : 'internal',
           code: error instanceof ProviderError ? error.code : null,
         });
+        await retryStatementsSoon(grantRef).catch(() => undefined);
       });
     }
     const wereDetailsFilled =

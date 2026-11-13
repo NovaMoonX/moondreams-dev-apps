@@ -241,6 +241,12 @@ export const attachRunwayAccounts = onCall(
             : targetRef('cards', targetId),
           { linkId },
         );
+        // A statement left from a card's earlier link would read as this bank's until the next read replaces it.
+        if (choice.cardId !== null) {
+          transaction.delete(
+            firestore.doc(planDocPath(uid, 'cardStatements', targetId)),
+          );
+        }
         if (sealed !== null) {
           transaction.set(
             firestore.doc(planDocPath(uid, 'accountBalances', targetId)),
@@ -252,6 +258,11 @@ export const attachRunwayAccounts = onCall(
           );
         }
       });
+      if (written.some(({ choice }) => choice.cardId !== null)) {
+        transaction.update(firestore.doc(`${grantsPath(uid)}/${linkId}`), {
+          statementsCheckedAt: null,
+        });
+      }
       return {
         attached: written.length,
         balances: written.flatMap(({ targetId, cents }) =>
