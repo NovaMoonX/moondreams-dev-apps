@@ -35,6 +35,7 @@ import {
   CARD_FEE_WORDS,
   CARD_ISSUERS,
   HELD_WORDS,
+  LINK_WORDS,
   CARD_WORDS,
   FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
@@ -94,6 +95,7 @@ import {
   resolveIssuer,
 } from '@apps/runway/utils/cardText';
 import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
+import { getLinkedStatement } from '@apps/runway/store/selectors/cardStatementSelectors';
 import MonthDayGrid from '@apps/runway/components/MonthDayGrid';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -244,6 +246,18 @@ function CardFormBody({
     (state) => state.runway.plan?.startDate ?? null,
   );
   const today = todayAsUtcDate(useNow(60_000));
+  const bankDueOn = useAppSelector((state) =>
+    editing === undefined
+      ? null
+      : (getLinkedStatement(state.runway.cardStatements, editing)?.dueOn ??
+        null),
+  );
+  const bankName = useAppSelector((state) =>
+    editing === undefined || editing.linkId === null
+      ? null
+      : (state.runway.links.find((link) => link.id === editing.linkId)
+          ?.institutionName ?? null),
+  );
   const assignedByItem = useAppSelector(
     (state) => selectBalances(state).assignedByItem,
   );
@@ -465,40 +479,52 @@ function CardFormBody({
       : []),
     {
       id: 'due',
-      title: CARD_WORDS.dueTitle,
+      title:
+        bankDueOn === null ? CARD_WORDS.dueTitle : CARD_WORDS.dueFromBankTitle,
       summaryLabel: CARD_WORDS.dueLabel,
-      summaryValue: formData.hasNoDueDay
-        ? CARD_WORDS.noDueDay
-        : formData.dueDay === null
-          ? ''
-          : CARD_WORDS.dueSummaryDay(
-              formData.dueDay,
-              toOrdinal(formData.dueDay),
-            ),
-      isAnswered: isDueAnswered,
+      summaryValue:
+        bankDueOn !== null
+          ? CARD_WORDS.dueFromBankSummary(
+              formatDateOrdinalUTC(bankDueOn),
+              bankName || LINK_WORDS.fallbackBank,
+            )
+          : formData.hasNoDueDay
+            ? CARD_WORDS.noDueDay
+            : formData.dueDay === null
+              ? ''
+              : CARD_WORDS.dueSummaryDay(
+                  formData.dueDay,
+                  toOrdinal(formData.dueDay),
+                ),
+      isAnswered: bankDueOn !== null || isDueAnswered,
       blocker: CARD_WORDS.needsDue,
-      render: ({ moveOn }) => (
-        <div className='space-y-3'>
-          <MonthDayGrid
-            label={CARD_WORDS.dueTitle}
-            value={formData.dueDay}
-            onPick={(day) => {
-              set({ dueDay: day, hasNoDueDay: false });
-              moveOn();
-            }}
-          />
-          <div>
-            <RevealChip
-              onClick={() => {
-                set({ dueDay: null, hasNoDueDay: true });
+      render: ({ moveOn }) =>
+        bankDueOn !== null ? (
+          <p className='text-muted-foreground text-sm'>
+            {CARD_WORDS.dueFromBankBody(bankName || LINK_WORDS.fallbackBank)}
+          </p>
+        ) : (
+          <div className='space-y-3'>
+            <MonthDayGrid
+              label={CARD_WORDS.dueTitle}
+              value={formData.dueDay}
+              onPick={(day) => {
+                set({ dueDay: day, hasNoDueDay: false });
                 moveOn();
               }}
-            >
-              {CARD_WORDS.noDueDay}
-            </RevealChip>
+            />
+            <div>
+              <RevealChip
+                onClick={() => {
+                  set({ dueDay: null, hasNoDueDay: true });
+                  moveOn();
+                }}
+              >
+                {CARD_WORDS.noDueDay}
+              </RevealChip>
+            </div>
           </div>
-        </div>
-      ),
+        ),
     },
     {
       id: 'annualFee',

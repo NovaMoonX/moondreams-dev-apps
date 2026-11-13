@@ -76,7 +76,10 @@ import {
   isBroadMerchant,
   RULE_VARIES,
 } from '../../src/apps/runway/engine/rules.ts';
-import type { OpenRule } from '../../src/apps/runway/types.ts';
+import type {
+  OpenCardStatement,
+  OpenRule,
+} from '../../src/apps/runway/types.ts';
 import {
   estimateMonthlyInterest,
   getInterestDay,
@@ -89,7 +92,9 @@ import { getAccountMoves } from '../../src/apps/runway/engine/moves.ts';
 import {
   collectCardHistory,
   getCardDueState,
+  getBankDueDay,
   getDueCards,
+  getMinimumDue,
   getNextDueOn,
   getPrevDueOn,
   getUsualCardId,
@@ -10434,6 +10439,50 @@ const version = (
     ],
     'due within 7 days with money waiting, soonest first; 8 days out, no due day and nothing waiting are left out',
   );
+
+  // The bank's statement decides the minimum and the due day.
+  const statement = (
+    patch: Partial<OpenCardStatement> = {},
+  ): OpenCardStatement => ({
+    id: 'v',
+    asOf: 1,
+    minimumCents: 3_500,
+    statementCents: 41_200,
+    statementOn: d(2026, 10, 24),
+    dueOn: d(2026, 11, 14),
+    lastPaymentCents: null,
+    lastPaymentOn: null,
+    ...patch,
+  });
+  assert.equal(getMinimumDue(statement()), 3_500);
+  assert.equal(getMinimumDue(null), null, 'no statement, no minimum');
+  assert.equal(getMinimumDue(statement({ minimumCents: null })), null);
+  assert.equal(getMinimumDue(statement({ minimumCents: 0 })), null);
+  assert.equal(getMinimumDue(statement({ dueOn: null })), null);
+  assert.equal(
+    getMinimumDue(
+      statement({ lastPaymentCents: 3_500, lastPaymentOn: d(2026, 10, 24) }),
+    ),
+    null,
+    'a payment of the minimum on the statement day is already paid',
+  );
+  assert.equal(
+    getMinimumDue(
+      statement({ lastPaymentCents: 3_499, lastPaymentOn: d(2026, 11, 1) }),
+    ),
+    3_500,
+    'a payment under the minimum leaves it due',
+  );
+  assert.equal(
+    getMinimumDue(
+      statement({ lastPaymentCents: 90_000, lastPaymentOn: d(2026, 10, 23) }),
+    ),
+    3_500,
+    'a payment before the statement was issued is for the one before',
+  );
+  assert.equal(getBankDueDay(statement()), 14);
+  assert.equal(getBankDueDay(statement({ dueOn: null })), null);
+  assert.equal(getBankDueDay(null), null);
 
   // Past due sticks until a full or minimum payment, or until the next due day is within 7 days.
   const venture = card('v', 14);

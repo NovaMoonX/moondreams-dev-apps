@@ -27,6 +27,7 @@ import {
 } from '@apps/runway/utils/lookaheadText';
 import {
   describeDueCard,
+  getDueMinimum,
   describeDueNote,
   getCardName,
 } from '@apps/runway/utils/cardText';
@@ -37,6 +38,7 @@ import type { Lookahead } from '@apps/runway/engine/lookahead';
 import CardSheets, {
   type OpenedCard,
 } from '@apps/runway/components/CardSheets';
+import { getLinkedStatement } from '@apps/runway/store/selectors/cardStatementSelectors';
 import DueCardRow from '@apps/runway/components/DueCardRow';
 import MoveWarningRow from '@apps/runway/components/MoveWarningRow';
 import {
@@ -181,8 +183,13 @@ function LookaheadWarnings({
           many: ACCOUNT_MOVE_WORDS.warnMany,
         }
       : PROBLEM_WORDS;
+  const statements = useAppSelector((state) => state.runway.cardStatements);
   const describeDue = (due: DueCard) =>
-    describeDueCard(getCardName(due.card, allCards), due);
+    describeDueCard(
+      getCardName(due.card, allCards),
+      due,
+      getDueMinimum(getLinkedStatement(statements, due.card), due),
+    );
   const openPay = (due: DueCard) => {
     closeFixes();
     setPaying({ cardId: due.card.id, view: 'pay' });
