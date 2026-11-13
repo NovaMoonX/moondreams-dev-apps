@@ -8,15 +8,6 @@ import {
   RULE_VARIES,
   type NextPlace,
 } from '@apps/runway/engine/rules';
-
-const ASKS = '~asks';
-const kindLabel = (category: string) => {
-  const label = getCategoryLabel(category);
-  return /^[A-Z][a-z]/.test(label)
-    ? `${label.charAt(0).toLowerCase()}${label.slice(1)}`
-    : label;
-};
-const WAITS = '~waits';
 import {
   selectAllCards,
   selectBecameKinds,
@@ -26,6 +17,15 @@ import {
 import { getCardName } from '@apps/runway/utils/cardText';
 import type { RuleSealed } from '@apps/runway/types';
 import { describeRule, getCategoryLabel } from '@apps/runway/utils/ruleText';
+
+const ASKS = '~asks';
+const kindLabel = (category: string) => {
+  const label = getCategoryLabel(category);
+  return /^[A-Z][a-z]/.test(label)
+    ? `${label.charAt(0).toLowerCase()}${label.slice(1)}`
+    : label;
+};
+const WAITS = '~waits';
 
 /** A rule as a sentence, and whether its envelope has ended (then it is not applied). */
 export function useRuleNames() {
@@ -93,7 +93,10 @@ export function useRuleNames() {
             scope: '',
           }));
         const subject =
-          removed.merchantName ?? kindLabel(removed.category ?? '');
+          removed.merchantName ??
+          (removed.category === null
+            ? (removed.merchantKey ?? '')
+            : kindLabel(removed.category));
         const rest = own.find(({ cardId }) => cardId === null);
         const named = own.filter(
           (home) =>
@@ -155,66 +158,96 @@ export function useRuleNames() {
         toLine(key, describeWhat(entries)),
       );
       const kindLines = [
-        ...targets
-          .flatMap((removed) => {
-            const own = nextHomes.filter(
-              (home) => home.removed.id === removed.id,
-            );
-            return own.flatMap((home) =>
-              home.byKind.map((kind) => ({
-                id: `${removed.id}|${kind.category}|${toKey(kind)}`,
-                removed,
-                kind,
-                cardId: home.cardId,
-                count: own.length,
-              })),
-            );
-          })
+        ...[
+          ...targets
+            .flatMap((removed) => {
+              const own = nextHomes.filter(
+                (home) => home.removed.id === removed.id,
+              );
+              return own.flatMap((home) =>
+                home.byKind
+                  .filter((kind) => !(kind.isAsk && isAsk(removed)))
+                  .map((kind) => ({
+                    id: `${removed.id}|${kind.category}|${toKey(kind)}`,
+                    removed,
+                    kind,
+                    cardId: home.cardId,
+                    count: own.length,
+                  })),
+              );
+            })
+            .reduce<
+              Map<
+                string,
+                {
+                  removed: OpenRule;
+                  kind: NextPlace & { category: string };
+                  cards: (string | null)[];
+                  count: number;
+                }
+              >
+            >(
+              (groups, { id, removed, kind, cardId, count }) =>
+                groups.set(id, {
+                  removed,
+                  kind,
+                  count,
+                  cards: [...(groups.get(id)?.cards ?? []), cardId],
+                }),
+              new Map(),
+            )
+            .values(),
+        ]
+          .map(({ removed, kind, cards, count }) => ({
+            kind,
+            store: removed.merchantName ?? removed.merchantKey ?? '',
+            scope:
+              cards.length === count
+                ? null
+                : joinNames([
+                    ...cards.flatMap((cardId) =>
+                      cardId === null ? [] : [onYourCard(cardId)],
+                    ),
+                    ...(cards.includes(null) ? [RULE_WORDS.otherCards] : []),
+                  ]),
+          }))
           .reduce<
             Map<
               string,
               {
-                removed: OpenRule;
                 kind: NextPlace & { category: string };
-                cards: (string | null)[];
-                count: number;
+                scope: string | null;
+                stores: string[];
               }
             >
-          >(
-            (groups, { id, removed, kind, cardId, count }) =>
-              groups.set(id, {
-                removed,
-                kind,
-                count,
-                cards: [...(groups.get(id)?.cards ?? []), cardId],
-              }),
-            new Map(),
-          )
+          >((groups, { kind, store, scope }) => {
+            const id = `${kind.category}|${toKey(kind)}|${scope ?? ''}`;
+            return groups.set(id, {
+              kind,
+              scope,
+              stores: [...(groups.get(id)?.stores ?? []), store],
+            });
+          }, new Map())
           .values(),
-      ].map(({ removed, kind, cards, count }) =>
+      ].map(({ kind, scope, stores }) =>
         toLine(
           toKey(kind),
-          RULE_WORDS.kindOf(
-            removed.merchantName ?? '',
-            kindLabel(kind.category),
-            cards.length === count || cards.includes(null)
-              ? null
-              : joinNames(cards.map(onYourCard)),
-          ),
+          RULE_WORDS.kindOf(listAll(stores), kindLabel(kind.category), scope),
         ),
       );
       const waitLine = byKey.some(([key]) => key === WAITS)
         ? lines.slice(-1)
         : [];
       const firstLines = lines.slice(0, lines.length - waitLine.length);
-      const room = Math.max(0, 3 - waitLine.length);
+      const total = lines.length + kindLines.length;
+      const room = Math.max(0, (total === 4 ? 4 : 3) - waitLine.length);
       const shownFirst = firstLines.slice(0, room);
       const shown = [
         ...shownFirst,
         ...waitLine,
         ...kindLines.slice(0, Math.max(0, room - shownFirst.length)),
       ];
-      const hidden = lines.length + kindLines.length - shown.length;
+      const hidden = total - shown.length;
       const shortNames = (keep: (rule: OpenRule) => boolean) =>
         targets
           .filter(keep)
@@ -222,12 +255,10 @@ export function useRuleNames() {
             (rule) =>
               rule.merchantName ??
               (rule.category === null
-                ? `everything on ${getCardLabel(rule.cardId) ?? 'a card'}`
+                ? `everything on ${onYourCard(rule.cardId)}`
                 : [
                     kindLabel(rule.category),
-                    rule.cardId === null
-                      ? ''
-                      : `on ${getCardLabel(rule.cardId)}`,
+                    rule.cardId === null ? '' : `on ${onYourCard(rule.cardId)}`,
                   ]
                     .filter(Boolean)
                     .join(' ')),
@@ -236,7 +267,6 @@ export function useRuleNames() {
         `${line.charAt(0).toUpperCase()}${line.slice(1)}`;
       return {
         stops: RULE_WORDS.deleteConfirmBody({
-          live: shortNames((rule) => !isEnded(rule) && !isAsk(rule)),
           ask: shortNames(isAsk),
           paused: shortNames(isEnded),
         }),

@@ -5560,6 +5560,7 @@ export const RULE_WORDS = {
   staysSame: 'Where purchases go next stays the same.',
   placedStay: 'Purchases already placed stay where they are.',
   onOtherCards: 'on your other cards',
+  otherCards: 'your other cards',
   removed: 'Rule removed',
   removeFailed: 'That did not remove. Nothing was changed.',
   saved: 'Rule saved',
@@ -5635,7 +5636,6 @@ export const RULE_WORDS = {
   deleteConfirmTitle: (count: number) =>
     count === 1 ? 'Remove this rule?' : `Remove ${ruleCount(count)}?`,
   deleteConfirmBody: (kinds: {
-    live: readonly string[];
     ask: readonly string[];
     paused: readonly string[];
   }) => {
@@ -5643,8 +5643,6 @@ export const RULE_WORDS = {
       `Your ${names.length === 1 ? 'rule' : 'rules'} for ${joinNames(names)}`;
     const isOne = (names: readonly string[]) => names.length === 1;
     return [
-      kinds.live.length > 0 &&
-        `${name(kinds.live)} will stop sending purchases on ${isOne(kinds.live) ? 'its' : 'their'} own.`,
       kinds.ask.length > 0 && `${name(kinds.ask)} will stop asking.`,
       kinds.paused.length > 0 &&
         `${name(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused, so right now ${isOne(kinds.paused) ? 'its' : 'their'} purchases wait in Needs a home.`,

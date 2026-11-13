@@ -504,7 +504,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
       title: RULE_WORDS.deleteConfirmTitle(targets.length),
       message: (
         <div className='scroll-cue max-h-[45dvh] space-y-2 overflow-y-auto'>
-          <p>{removal.stops}</p>
+          {removal.stops !== '' && <p>{removal.stops}</p>}
           <p>{removal.next}</p>
         </div>
       ),
