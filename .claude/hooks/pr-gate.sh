@@ -49,15 +49,11 @@ own_commits=$(git rev-list "origin/$default_branch..HEAD" --count 2>/dev/null) |
 
 base=$(git merge-base "origin/$default_branch" HEAD 2>/dev/null || echo "")
 [[ -n "$base" ]] || exit 0
-# A stacked PR is measured from the branch under it: the nearest pushed branch
-# whose tip is already in HEAD, when that is closer than the default branch.
-best=$(git rev-list --count "$base..HEAD" 2>/dev/null || echo 0)
-while read -r ref; do
-  [[ "$ref" == "origin/$current_branch" || "$ref" == "origin/HEAD" ]] && continue
-  tip=$(git rev-parse "$ref" 2>/dev/null) || continue
-  n=$(git rev-list --count "$tip..HEAD" 2>/dev/null) || continue
-  if [[ "$n" -gt 0 && "$n" -lt "$best" ]]; then best=$n; base=$tip; fi
-done < <(git for-each-ref --merged HEAD --format='%(refname:short)' refs/remotes/origin 2>/dev/null)
+# A stacked PR (`branch.<head>.prBase`) is measured from the branch under it.
+stack_base=$(git config "branch.$current_branch.prBase" 2>/dev/null || true)
+if [[ -n "$stack_base" && "$stack_base" != "$default_branch" ]]; then
+  base=$(git merge-base "origin/$stack_base" HEAD 2>/dev/null || echo "$base")
+fi
 echo "$head_sha" > "$marker_file"
 
 # The delta since the last pass, or the whole PR on the first one.
