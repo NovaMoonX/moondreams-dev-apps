@@ -154,6 +154,52 @@ async function sealLaterStart(
   };
 }
 
+/** The three new documents of an envelope or goal: its header, its first version and the change entry that says why. Written together by whoever makes the item. */
+export function buildNewItemDocs(input: {
+  kind: 'envelope' | 'goal';
+  id: string;
+  now: number;
+  startDate: number;
+  changeId: string;
+  /** The items the change entry names. */
+  itemIds: string[];
+  /** The first version's payload, sealed. */
+  versionSealed: Sealed;
+  changeSealed: Sealed;
+  /** Set only when the entry changes what the plan covers from a day. */
+  changeEffectiveFrom: DateOnly | null;
+}) {
+  const header: PlanItemDoc = {
+    id: input.id,
+    kind: input.kind,
+    parentId: null,
+    createdAt: input.now,
+    endedAt: null,
+    archivedAt: null,
+    heldReleasedOn: null,
+    becameItemId: null,
+  };
+  const version: PlanVersionDoc = {
+    id: generateUuid(),
+    itemId: input.id,
+    kind: input.kind,
+    createdAt: input.now,
+    effectiveFrom: input.startDate,
+    effectiveUntil: null,
+    changeId: input.changeId,
+    sealed: input.versionSealed,
+  };
+  const change: ChangeDoc = {
+    id: input.changeId,
+    kind: 'planChange',
+    createdAt: input.now,
+    effectiveFrom: input.changeEffectiveFrom,
+    itemIds: input.itemIds,
+    sealed: input.changeSealed,
+  };
+  return { header, version, change };
+}
+
 export interface CreateIncomeInput {
   /** An existing source to add the pay line to; null names a new one. */
   sourceId: string | null;
@@ -232,6 +278,7 @@ export async function createIncome(
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   });
   const firstVersion = (
     itemId: string,
@@ -341,33 +388,17 @@ export async function createEnvelope(
         }),
   ]);
 
-  const header: PlanItemDoc = {
+  const { header, version, change } = buildNewItemDocs({
+    kind: 'envelope',
     id: envelopeId,
-    kind: 'envelope',
-    parentId: null,
-    createdAt: now,
-    endedAt: null,
-    archivedAt: null,
-    heldReleasedOn: null,
-  };
-  const version: PlanVersionDoc = {
-    id: generateUuid(),
-    itemId: envelopeId,
-    kind: 'envelope',
-    createdAt: now,
-    effectiveFrom: startDate,
-    effectiveUntil: null,
+    now,
+    startDate,
     changeId,
-    sealed: later?.idleSealed ?? envelopeSealed,
-  };
-  const change: ChangeDoc = {
-    id: changeId,
-    kind: 'planChange',
-    createdAt: now,
-    effectiveFrom: later === null ? startDate : null,
     itemIds: [envelopeId],
-    sealed: changeSealed,
-  };
+    versionSealed: later?.idleSealed ?? envelopeSealed,
+    changeSealed,
+    changeEffectiveFrom: later === null ? startDate : null,
+  });
 
   await commitPlanWrites(
     uid,
@@ -430,6 +461,7 @@ export async function buildGroupDocs(
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   };
   const version: PlanVersionDoc = {
     id: generateUuid(),
@@ -498,6 +530,7 @@ export async function createBill(
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   };
   const version: PlanVersionDoc = {
     id: generateUuid(),
@@ -604,33 +637,17 @@ export async function createGoal(
         }),
   ]);
 
-  const header: PlanItemDoc = {
+  const { header, version, change } = buildNewItemDocs({
+    kind: 'goal',
     id: goalId,
-    kind: 'goal',
-    parentId: null,
-    createdAt: now,
-    endedAt: null,
-    archivedAt: null,
-    heldReleasedOn: null,
-  };
-  const version: PlanVersionDoc = {
-    id: generateUuid(),
-    itemId: goalId,
-    kind: 'goal',
-    createdAt: now,
-    effectiveFrom: startDate,
-    effectiveUntil: null,
+    now,
+    startDate,
     changeId,
-    sealed: later?.idleSealed ?? goalSealed,
-  };
-  const change: ChangeDoc = {
-    id: changeId,
-    kind: 'planChange',
-    createdAt: now,
-    effectiveFrom: later === null ? startDate : null,
     itemIds: [goalId],
-    sealed: changeSealed,
-  };
+    versionSealed: later?.idleSealed ?? goalSealed,
+    changeSealed,
+    changeEffectiveFrom: later === null ? startDate : null,
+  });
 
   await commitPlanWrites(
     uid,

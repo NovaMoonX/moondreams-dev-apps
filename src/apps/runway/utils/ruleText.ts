@@ -37,7 +37,7 @@ export interface RuleNames {
   isCardLeftOut?: boolean;
 }
 
-/** The rule as a sentence: "Restaurants on Venture X go to Dining out", "Safeway goes to Groceries", "Amazon: ask me every time". */
+/** The rule as a sentence: "Restaurants on Venture X go to Dining out", "Safeway goes to Groceries", "Amazon: ask which envelope each time". */
 export function describeRule(rule: RuleSealed, names: RuleNames): string {
   const { merchantName, category, cardId } = rule;
   if (merchantName !== null && rule.target === RULE_VARIES) {

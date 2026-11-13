@@ -565,3 +565,21 @@ html[data-pressing] * {
   user-select: none !important;
   -webkit-touch-callout: none !important;
 }
+
+/* A capped scroll box on a popover surface shows a soft edge only where more text is hidden:
+   the covers scroll with the content and hide each shadow once its end is reached. */
+.scroll-cue {
+  --scroll-cue-cover: var(--color-popover);
+  --scroll-cue-shadow: color-mix(in oklab, var(--color-foreground) 30%, transparent);
+  background:
+    linear-gradient(var(--scroll-cue-cover) 30%, transparent) top / 100% 2rem no-repeat local,
+    linear-gradient(transparent, var(--scroll-cue-cover) 70%) bottom / 100% 2rem no-repeat local,
+    radial-gradient(farthest-side at 50% 0, var(--scroll-cue-shadow), transparent) top / 100% 0.75rem
+      no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, var(--scroll-cue-shadow), transparent) bottom / 100%
+      0.75rem no-repeat scroll;
+}
+
+.dark .scroll-cue {
+  --scroll-cue-shadow: color-mix(in oklab, var(--color-foreground) 45%, transparent);
+}

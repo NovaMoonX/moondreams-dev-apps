@@ -22,6 +22,7 @@ import {
   ReceiptText,
   Route,
   Ruler,
+  Shuffle,
   ShoppingBag,
   Undo2,
   Unlink,
@@ -77,6 +78,8 @@ import {
 import GoalBalanceView, {
   GoalBalanceDoor,
 } from '@apps/runway/components/GoalBalanceView';
+import ConvertItemView from '@apps/runway/components/ConvertItemView';
+import ConvertLockRow from '@apps/runway/components/ConvertLockRow';
 import MoveLeftoverView from '@apps/runway/components/MoveLeftoverView';
 import SetHeldView from '@apps/runway/components/SetHeldView';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
@@ -94,6 +97,7 @@ import {
   CARD_WORDS,
   CHANGE_WORDS,
   COMING_WORDS,
+  CONVERT_WORDS,
   PART_OF_WORDS,
   GOAL_CHART_WORDS,
   CHECK_WORDS,
@@ -237,6 +241,7 @@ type View =
   | 'check'
   | 'group'
   | 'move'
+  | 'convert'
   | 'setHeld'
   | 'setAside'
   | 'heldIn'
@@ -354,6 +359,7 @@ const VIEW_NOTES: Record<View, string> = {
   check: '',
   group: '',
   move: '',
+  convert: '',
   setHeld: '',
   setAside: '',
   heldIn: '',
@@ -1213,6 +1219,42 @@ function ItemSheet({
   const isPinned = homePins.pins.includes(itemId);
   const isStoppable = isArchivable && (endedAt === null || endedAt >= today);
   const isTrackEnvelope = itemKind === 'envelope' && isTrackingLevel(level);
+  const partOfEvent =
+    events.find(
+      ({ version: eventVersion }) =>
+        eventVersion.payload.state === 'open' &&
+        eventVersion.payload.links.some((link) => link.itemId === itemId),
+    ) ?? null;
+  const canConvert =
+    canChange &&
+    (itemKind === 'envelope' || itemKind === 'goal') &&
+    isArchivable &&
+    endedAt === null &&
+    hasStarted;
+  const getConvertLock = () => {
+    if (linkedEvent !== null) {
+      return {
+        reason: CONVERT_WORDS.lockedGoalLinked(
+          linkedEvent.version.payload.name,
+        ),
+        canMoveIn: false,
+      };
+    }
+    if (partOfEvent !== null) {
+      return {
+        reason: CONVERT_WORDS.lockedPartOf(partOfEvent.version.payload.name),
+        canMoveIn: false,
+      };
+    }
+    if (heldCents < 0 && !isHidden) {
+      return {
+        reason: CONVERT_WORDS.lockedOver(payload.name, formatCents(-heldCents)),
+        canMoveIn: true,
+      };
+    }
+    return null;
+  };
+  const convertLock = canConvert ? getConvertLock() : null;
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
   const hasBillRow =
     itemKind === 'bill' &&
@@ -1581,6 +1623,35 @@ function ItemSheet({
               onClick={() => goTo('move')}
             />
           )}
+        {canConvert &&
+          (convertLock === null ? (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Shuffle />}
+              label={
+                itemKind === 'goal'
+                  ? CONVERT_WORDS.toEnvelope
+                  : CONVERT_WORDS.toGoal
+              }
+              subtitle={
+                itemKind === 'goal'
+                  ? CONVERT_WORDS.toEnvelopeSub
+                  : CONVERT_WORDS.toGoalSub
+              }
+              onClick={() => goTo('convert')}
+            />
+          ) : (
+            <ConvertLockRow
+              label={
+                itemKind === 'goal'
+                  ? CONVERT_WORDS.toEnvelope
+                  : CONVERT_WORDS.toGoal
+              }
+              reason={convertLock.reason}
+              onFix={convertLock.canMoveIn ? () => goTo('setHeld') : undefined}
+            />
+          ))}
         {canChange &&
           (itemKind === 'envelope' || itemKind === 'goal') &&
           isArchivable &&
@@ -2161,6 +2232,25 @@ function ItemSheet({
     />
   );
 
+  const convertView =
+    itemKind === 'envelope' || itemKind === 'goal' ? (
+      <ConvertItemView
+        itemId={itemId}
+        source={
+          itemKind === 'goal'
+            ? { kind: 'goal', payload: payload as GoalSealed }
+            : { kind: 'envelope', payload: payload as EnvelopeSealed }
+        }
+        heldCents={heldCents}
+        isPinned={isPinned}
+        plannedCount={comingChanges.length}
+        today={today}
+        onBack={() => goTo('menu')}
+        onClose={onClose}
+        onSetHeld={() => goTo('setHeld')}
+      />
+    ) : null;
+
   const setHeldView = (
     <SetHeldView
       itemId={itemId}
@@ -2472,36 +2562,38 @@ function ItemSheet({
                 ? groupView
                 : view === 'spill'
                   ? spillView
-                  : view === 'move'
-                    ? moveView
-                    : view === 'setHeld'
-                      ? setHeldView
-                      : view === 'setAside'
-                        ? billSetAsideView
-                        : view === 'heldIn'
-                          ? heldInView
-                          : view === 'horizonPlan'
-                            ? horizonPlanView
-                            : view === 'planChoice'
-                              ? planChoiceView
-                              : view === 'comingList'
-                                ? comingListView
-                                : view === 'changeSheet' && changeSheetView
-                                  ? changeSheetView
-                                  : view === 'horizonLink' && horizonLinkView
-                                    ? horizonLinkView
-                                    : view === 'payItems' && payItemsView
-                                      ? payItemsView
-                                      : view === 'pins'
-                                        ? pinsView
-                                        : view === 'dayAction' &&
-                                            dayAction?.renderView
-                                          ? dayAction.renderView({
-                                              onBack: () => goTo('menu'),
-                                              onClose,
-                                              openChange,
-                                            })
-                                          : action
+                  : view === 'convert' && convertView
+                    ? convertView
+                    : view === 'move'
+                      ? moveView
+                      : view === 'setHeld'
+                        ? setHeldView
+                        : view === 'setAside'
+                          ? billSetAsideView
+                          : view === 'heldIn'
+                            ? heldInView
+                            : view === 'horizonPlan'
+                              ? horizonPlanView
+                              : view === 'planChoice'
+                                ? planChoiceView
+                                : view === 'comingList'
+                                  ? comingListView
+                                  : view === 'changeSheet' && changeSheetView
+                                    ? changeSheetView
+                                    : view === 'horizonLink' && horizonLinkView
+                                      ? horizonLinkView
+                                      : view === 'payItems' && payItemsView
+                                        ? payItemsView
+                                        : view === 'pins'
+                                          ? pinsView
+                                          : view === 'dayAction' &&
+                                              dayAction?.renderView
+                                            ? dayAction.renderView({
+                                                onBack: () => goTo('menu'),
+                                                onClose,
+                                                openChange,
+                                              })
+                                            : action
         }
       >
         {menu}

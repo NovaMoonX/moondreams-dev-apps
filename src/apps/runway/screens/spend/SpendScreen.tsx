@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import {
   ArrowLeftRight,
+  CircleAlert,
   Layers,
   Repeat,
   ShoppingBag,
@@ -60,6 +61,7 @@ import {
   selectAccountPairs,
   selectAllCards,
   selectRules,
+  selectRulesNeedingHome,
   selectMoneyIn,
   selectOnItsWay,
   selectSpendPurchases,
@@ -123,6 +125,9 @@ interface DoorButtonProps {
   icon: ReactNode;
   label: string;
   count: number;
+  /** How many of them need the person, drawn in place of the count. */
+  attention: number;
+  attentionLabel: string;
   /** Below 360px a half door shows this instead of its label. */
   narrowLabel: string;
   isHalf: boolean;
@@ -135,6 +140,8 @@ function DoorButton({
   label,
   narrowLabel,
   count,
+  attention,
+  attentionLabel,
   isHalf,
   onClick,
 }: DoorButtonProps) {
@@ -163,8 +170,19 @@ function DoorButton({
             {narrowLabel}
           </span>
         )}
+        {attention > 0 && <span className='sr-only'>, {attentionLabel}</span>}
       </span>
-      <span className='text-muted-foreground'>{count}</span>
+      {attention > 0 ? (
+        <span
+          aria-hidden='true'
+          className='flex items-center gap-1 font-medium text-(--runway-warning-ink)'
+        >
+          <CircleAlert className='text-warning h-3.5 w-3.5' />
+          {attention}
+        </span>
+      ) : (
+        <span className='text-muted-foreground'>{count}</span>
+      )}
     </Button>
   );
 }
@@ -213,6 +231,9 @@ function SpendScreen() {
   const ruleCount = useAppSelector(selectRules).length;
   const isRulesLoaded = useAppSelector(selectIsRulesLoaded);
   const today = todayAsUtcDate(useNow(60_000));
+  const homelessCount = useAppSelector((state) =>
+    selectRulesNeedingHome(state, today),
+  ).length;
   const periodFor = useAppSelector((state) => state.runway.periodFor);
   const periodFailedFor = useAppSelector(
     (state) => state.runway.periodFailedFor,
@@ -276,6 +297,8 @@ function SpendScreen() {
                 shortLabel: RULE_WORDS.doorLabel,
                 narrowLabel: RULE_WORDS.doorLabel,
                 count: ruleCount,
+                attention: homelessCount,
+                attentionLabel: RULE_WORDS.doorNeedsHome(homelessCount),
                 onClick: () => openView('rules'),
               },
             ]
@@ -709,6 +732,8 @@ function SpendScreen() {
                     label={row.length > 1 ? door.shortLabel : door.label}
                     narrowLabel={door.narrowLabel}
                     count={door.count}
+                    attention={door.attention ?? 0}
+                    attentionLabel={door.attentionLabel ?? ''}
                     isHalf={row.length > 1}
                     onClick={door.onClick}
                   />

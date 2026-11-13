@@ -38,6 +38,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import DraftPickUpRow from '@apps/runway/components/DraftPickUpRow';
 import HorizonNudge from '@apps/runway/components/HorizonNudge';
 import PrioritiesNudge from '@apps/runway/components/PrioritiesNudge';
+import RulesNeedHomeRow from '@apps/runway/components/RulesNeedHomeRow';
 import TrackInviteCard from '@apps/runway/components/TrackInviteCard';
 import HomeCards from '@apps/runway/screens/home/HomeCards';
 import { selectHomeMoves } from '@apps/runway/store/selectors/moveSelectors';
@@ -55,6 +56,7 @@ import {
   selectIsRecordsReady,
   selectListedDays,
   selectPairedBy,
+  selectRulesNeedingHome,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getHomeHorizonShort } from '@apps/runway/utils/lookaheadText';
@@ -87,6 +89,10 @@ function HomeScreen() {
   const homeMoves = useAppSelector((state) => selectHomeMoves(state, today));
   const isTrack = useAppSelector((state) =>
     isTrackingLevel(selectLevel(state)),
+  );
+  const isLink = useAppSelector((state) => selectLevel(state) === 'link');
+  const rulesNeedingHome = useAppSelector((state) =>
+    selectRulesNeedingHome(state, today),
   );
   const moves = useAppSelector((state) => state.runway.moves);
   const startDate = useAppSelector(
@@ -144,6 +150,14 @@ function HomeScreen() {
         getHomeHorizonShort(lookahead, today).length >
         0);
 
+  const isQuietSlotHeld =
+    lookahead === null ||
+    hasWarnings ||
+    lookahead.due.length > 0 ||
+    dueCosts.length > 0 ||
+    checks.length > 0;
+  const hasRulesRow = isLink && rulesNeedingHome.length > 0 && !isQuietSlotHeld;
+
   return (
     <div className='space-y-6'>
       <div className='space-y-2'>
@@ -178,14 +192,9 @@ function HomeScreen() {
           onPickUpPurchase={() => setIsAddingPurchase(true)}
         />
       )}
+      {hasRulesRow && <RulesNeedHomeRow rules={rulesNeedingHome} />}
       <PrioritiesNudge
-        isHeldBack={
-          lookahead === null ||
-          hasWarnings ||
-          lookahead.due.length > 0 ||
-          dueCosts.length > 0 ||
-          checks.length > 0
-        }
+        isHeldBack={isQuietSlotHeld || hasRulesRow}
         otherwise={<HorizonNudge otherwise={<TrackInviteCard />} />}
       />
       <LevelGate level='track'>

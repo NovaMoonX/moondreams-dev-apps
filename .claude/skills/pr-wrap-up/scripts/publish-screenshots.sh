@@ -36,5 +36,5 @@ done
 SHA="$(git -C "$WT" rev-parse HEAD)"
 for file in "${files[@]}"; do
   name="$(basename "$file")"
-  echo "![${name%.png}](https://github.com/$SLUG/blob/$SHA/pr-$PR/$name?raw=true)"
+  echo "![${name%.png}](https://raw.githubusercontent.com/$SLUG/$SHA/pr-$PR/$name)"
 done

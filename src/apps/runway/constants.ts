@@ -1517,7 +1517,7 @@ export const PACE_WORDS = {
 } as const;
 
 /** Names in a sentence: "A", "A and B", "A, B and C", then three and "N more". */
-const joinNames = (names: readonly string[]) =>
+export const joinNames = (names: readonly string[]) =>
   names.length <= 3
     ? names.length <= 1
       ? (names[0] ?? '')
@@ -2925,6 +2925,74 @@ export const MOVE_WORDS = {
   failed: 'This did not save. Nothing was changed.',
   undoFailed: 'That was not undone.',
   offline: 'Moving money needs a connection. Nothing was changed.',
+} as const;
+
+/** Turning a goal into an envelope and an envelope into a goal: the money and the history stay, a new item of the other kind takes over. */
+export const CONVERT_WORDS = {
+  toEnvelope: 'Make it an envelope',
+  toEnvelopeSub: 'Keep the money, spend from it as you go',
+  toGoal: 'Make it a goal',
+  toGoalSub: 'Keep the money, save toward a target',
+  target: 'Target',
+  byWhen: 'Reach it by (optional)',
+  noDate: 'No date',
+  farDay: (months: number) =>
+    `Pick a date within the next ${months} months, which is as far as the income days are planned, or remove it.`,
+  reachedAtOnce: (name: string) =>
+    `${name} already holds the target, so the goal would be reached at once.`,
+  changesHeading: 'What changes',
+  moneyStays: (amount: string) => `Its ${amount} and its history move with it.`,
+  historyStays: 'Its history moves with it.',
+  wontCarry: (parts: string) =>
+    `${parts.charAt(0).toUpperCase()}${parts.slice(1)} won't carry over.`,
+  limit: 'its limit',
+  overflow: 'its overflow',
+  homePin: 'its Home pin',
+  targetAndDate: 'its target and date',
+  targetOnly: 'its target',
+  paused: 'It is paused, so nothing goes in for now.',
+  plannedAhead: (count: number) =>
+    `${count} planned ${count === 1 ? 'change' : 'changes'} ahead won't carry over.`,
+  rulesPause: (rules: readonly string[]) =>
+    rules.length === 1
+      ? `Your rule “${rules[0]}” pauses, since a goal can't be spent from. Next you'll send it to another envelope.`
+      : `${rules.length} shop rules that send spending here pause, since a goal can't be spent from. Next you'll send them to another envelope.`,
+  lockedTitle: 'Not yet',
+  lockedGoalLinked: (event: string) => `Linked to ${event}. Unlink it first.`,
+  lockedPartOf: (event: string) => `Part of ${event}. Take it out there first.`,
+  lockedOver: (name: string, amount: string) =>
+    `${name} is ${amount} over. Set what it holds first.`,
+  showToSet: 'Show amounts to set the target',
+  blockedOver: 'It is over. Set what it holds first.',
+  showToConvert: 'Show amounts to see what moves across first',
+  payWontCarry: (names: string) =>
+    `${names} won't put money into it first anymore.`,
+  daysWontCarry: (count: number) =>
+    `${count} income ${count === 1 ? 'day' : 'days'} ahead with changes for it won't carry over.`,
+  spillWontCarry: (names: string[]) =>
+    names.length === 1
+      ? `${names[0]}'s extra won't spill into it anymore.`
+      : `The extra from ${formatList(names)} won't spill into it anymore.`,
+  toGoalSummary: (name: string, amount: string | null) =>
+    `Made ${name} a goal${amount === null ? '' : `, ${amount} moved across`}.`,
+  toEnvelopeSummary: (name: string, amount: string | null) =>
+    `Made ${name} an envelope${amount === null ? '' : `, ${amount} moved across`}.`,
+  undoSummary: (name: string, was: 'envelope' | 'goal') =>
+    `Undid making ${name} ${was === 'envelope' ? 'a goal' : 'an envelope'}. It is ${was === 'envelope' ? 'an envelope' : 'a goal'} again.`,
+  nowGoal: (name: string) => `${name} is now a goal`,
+  nowEnvelope: (name: string) => `${name} is now an envelope`,
+  undoneGoal: (name: string) => `${name} is an envelope again`,
+  undoneEnvelope: (name: string) => `${name} is a goal again`,
+  undo: 'Undo',
+  undoFailed: 'That was not undone.',
+  undoShort: (name: string) =>
+    `${name} has used some of the money since, so this can't be undone.`,
+  undoLater: (name: string) =>
+    `${name} has its own history now, so this can't be undone.`,
+  undoChanged: 'It was changed since, so nothing was undone.',
+  alreadyDone: 'That was already changed.',
+  offline: 'This needs a connection. Nothing was changed.',
+  failed: 'This did not save. Nothing was changed.',
 } as const;
 
 export const SET_HELD_WORDS = {
@@ -5433,9 +5501,14 @@ export const CATEGORY_PRIMARIES = [
   'OTHER',
 ] as const;
 
+const ruleCount = (count: number) =>
+  count === 1 ? '1 rule' : `${count} rules`;
+
 export const RULE_WORDS = {
   title: 'Rules',
   doorLabel: 'Rules',
+  doorNeedsHome: (count: number) =>
+    `${ruleCount(count)} ${count === 1 ? 'needs' : 'need'} a new envelope`,
   empty: 'No rules yet. Make one from a purchase with “Always do this”.',
   loading: 'Getting your rules.',
   anyCard: 'Any card',
@@ -5455,7 +5528,7 @@ export const RULE_WORDS = {
   merchantAlone:
     'A place on its own can’t be narrowed to a kind or a card. Untick it to choose those.',
   envelope: 'Which envelope?',
-  askEvery: 'Ask me every time',
+  askEvery: 'Ask which envelope each time',
   save: 'Save',
   anEnvelope: 'an envelope',
   saveAndSend: 'Save and send',
@@ -5471,16 +5544,32 @@ export const RULE_WORDS = {
   pickOne: 'Tick at least one thing for the rule to catch.',
   pickEnvelope: 'Pick an envelope',
   remove: 'Remove the rule',
-  removeConfirmTitle: 'Remove this rule?',
-  removeConfirm: (sentence: string) =>
-    `“${sentence}” will stop sending purchases on its own. Purchases it already placed stay where they are.`,
-  removeConfirmButton: 'Remove the rule',
+  takeover: (what: string, envelope: string) =>
+    `${what} will go to ${envelope}.`,
+  takeoverWait: (what: string) => `${what} will wait in Needs a home.`,
+  takeoverAsk: (what: string) => `${what} will ask which envelope each time.`,
+  kindOf: (store: string, kind: string, cards: string | null) =>
+    `${store} purchases the bank labels “${kind}”${cards === null ? '' : ` on ${cards}`}`,
+  everythingElseOn: (card: string) =>
+    `purchases on ${card} that no other rule covers`,
+  afterThis: (line: string) => `After this, ${line}`,
+  takeoverMore: (count: number) =>
+    `${count} more ${count === 1 ? 'change' : 'changes'} like these.`,
+  nothingMoves:
+    'Where purchases go next stays the same: a closer rule already sends them.',
+  staysSame: 'Where purchases go next stays the same.',
+  placedStay: 'Purchases already placed stay where they are.',
+  onOtherCards: 'on your other cards',
+  otherCards: 'your other cards',
   removed: 'Rule removed',
   removeFailed: 'That did not remove. Nothing was changed.',
   saved: 'Rule saved',
   made: 'Rule made',
   gone: 'This rule was changed or removed on another device.',
-  endedEnvelope: (name: string) => `${name} has ended, so this rule is paused`,
+  endedEnvelope: (name: string | null) =>
+    name === null
+      ? 'Its envelope has ended, so this rule is paused'
+      : `${name} has ended, so this rule is paused`,
   noEnvelope: 'an envelope that has ended',
   placedBy: (envelope: string) => `Went to ${envelope}`,
   placedBySub: (sentence: string) => `Your rule: ${sentence}`,
@@ -5500,6 +5589,98 @@ export const RULE_WORDS = {
   changeMade: (sentence: string) => `Rule made: ${sentence}.`,
   changeChanged: (sentence: string) => `Rule changed: ${sentence}.`,
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
+  homeHeading: 'Needs a new envelope',
+  goalNow: (name: string) => `${name} is a goal now, so this rule is paused`,
+  pausedRestart: 'Pick an envelope and save to start it again.',
+  landingTitle: (count: number) =>
+    count === 1
+      ? 'This rule needs a new envelope'
+      : `These ${count} rules need a new envelope`,
+  landing: (name: string, count: number) =>
+    count === 1
+      ? `${name} became a goal, and a goal can't be spent from, so it's paused. Pick where it should send purchases.`
+      : `${name} became a goal, and a goal can't be spent from, so they're paused. Pick where they should send purchases.`,
+  landingUndo: 'Undo making it a goal',
+  groupTick: (label: string) => `Pick every rule in ${label}`,
+  groupUntick: (label: string) => `Unpick every rule in ${label}`,
+  groupPicked: (picked: number, total: number) =>
+    `${picked} of ${total} picked`,
+  pickRule: (sentence: string) => `Pick ${sentence}`,
+  nothingPicked: 'Pick the rules to change',
+  pickedCount: (count: number) => `${ruleCount(count)} picked`,
+  selectAll: 'Pick all',
+  clearAll: 'Clear',
+  done: 'Done',
+  bulkSend: 'Send to another envelope',
+  bulkAsk: 'Ask me which envelope',
+  pick: 'Select',
+  bulkDelete: 'Remove',
+  bulkPickTitle: (count: number) =>
+    count === 1
+      ? 'Where should this rule send purchases?'
+      : `Where should these ${count} rules send purchases?`,
+  bulkPickSub: (names: readonly string[]) =>
+    names.length === 1
+      ? `“${names[0]}” will send its purchases there from now on.`
+      : 'Their purchases will go there from now on.',
+  bulkNoEnvelopes: 'You have no envelope to send them to yet.',
+  bulkSearch: 'Search your envelopes',
+  bulkNoMatch: 'No envelope matches that.',
+  askSkipNote: (stay: number, total: number) =>
+    `${stay} of ${total} name a card or kind of place and stay as they are.`,
+  askConfirmTitle: (count: number) =>
+    `Have ${ruleCount(count)} ask which envelope each time?`,
+  askConfirmButton: 'Ask each time',
+  askNone:
+    "A rule for a card or kind of place can't ask each time. Pick a rule for one place.",
+  deleteConfirmTitle: (count: number) =>
+    count === 1 ? 'Remove this rule?' : `Remove ${ruleCount(count)}?`,
+  deleteConfirmBody: (kinds: {
+    all: readonly string[];
+    ask: readonly string[];
+    paused: readonly string[];
+  }) => {
+    const name = (names: readonly string[]) =>
+      `Your ${names.length === 1 ? 'rule' : 'rules'} for ${joinNames(names)}`;
+    const isOne = (names: readonly string[]) => names.length === 1;
+    return [
+      kinds.all.length > 0 &&
+        `This removes your rules for ${joinNames(kinds.all)}.`,
+      kinds.ask.length > 0 &&
+        `${name(kinds.ask)} will stop asking which envelope each time.`,
+      kinds.paused.length > 0 &&
+        `${name(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused, so right now ${isOne(kinds.paused) ? 'its' : 'their'} purchases wait in Needs a home.`,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  },
+
+  deleteConfirmButton: (count: number) =>
+    count === 1 ? 'Remove this rule' : `Remove ${ruleCount(count)}`,
+  movedMany: (count: number, envelope: string) =>
+    `Moved ${ruleCount(count)} to ${envelope}`,
+  askedMany: (count: number) =>
+    `${ruleCount(count)} will ask which envelope each time`,
+  removedMany: (count: number) => `Removed ${ruleCount(count)}`,
+  bulkNothing: 'Nothing was changed.',
+  bulkFailed: 'That did not save. Nothing was changed.',
+  leftAlone: (names: readonly string[]) =>
+    `${listNames(names)} changed on another device, so ${names.length === 1 ? 'it' : 'they'} stayed as ${names.length === 1 ? 'it is' : 'they are'}.`,
+  notSaved: (count: number) => `${ruleCount(count)} did not save.`,
+  undoneMany: (count: number) => `Put ${ruleCount(count)} back`,
+  undoLeft: (names: readonly string[]) =>
+    `${listNames(names)} changed since, so ${names.length === 1 ? 'it' : 'they'} stayed as ${names.length === 1 ? 'it is' : 'they are'}.`,
+  changeMovedMany: (count: number, envelope: string) =>
+    `Moved ${ruleCount(count)} to ${envelope}.`,
+  changeAskMany: (count: number) =>
+    `Set ${ruleCount(count)} to ask which envelope each time.`,
+  changeRemovedMany: (count: number) => `Removed ${ruleCount(count)}.`,
+  changeUndoMoved: (count: number) =>
+    `Put ${ruleCount(count)} back as ${count === 1 ? 'it was' : 'they were'}.`,
+  changeUndoRemoved: (count: number) => `Made ${ruleCount(count)} again.`,
+  homeRowTitle: (count: number) =>
+    `${count} shop ${count === 1 ? 'rule needs' : 'rules need'} a new envelope`,
+  homeRowSub: 'Paused until you pick one',
 } as const;
 
 const listNames = (names: readonly string[]) =>

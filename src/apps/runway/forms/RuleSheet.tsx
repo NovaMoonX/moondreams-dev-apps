@@ -9,14 +9,12 @@ import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
+import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
-import {
-  RULE_WORDS,
-  SPEND_WORDS,
-} from '@apps/runway/constants';
+import { RULE_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   isBroadMerchant,
@@ -112,7 +110,14 @@ function RuleSheet({
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
-  const { describe, getCardLabel, getEnvelopeName, isEnded } = useRuleNames();
+  const {
+    describe,
+    describeRemoval,
+    getCardLabel,
+    getEnvelopeName,
+    describeHome,
+    isEnded,
+  } = useRuleNames();
   const rules = useAppSelector(selectRules);
   const history = useAppSelector((state) => state.runway.purchases);
   const envelopes = useAppSelector((state) =>
@@ -348,10 +353,21 @@ function RuleSheet({
   const remove = async () => {
     if (!user || !rule || isBusy) return;
     const entry = describe(rule);
+    const removal = describeRemoval([rule], rules);
     const isConfirmed = await confirm({
-      title: RULE_WORDS.removeConfirmTitle,
-      message: RULE_WORDS.removeConfirm(entry),
-      confirmText: RULE_WORDS.removeConfirmButton,
+      title: RULE_WORDS.deleteConfirmTitle(1),
+      message: (
+        <div className='scroll-cue max-h-[45dvh] space-y-2 overflow-y-auto'>
+          {removal.stops !== '' && <p>{removal.stops}</p>}
+          <div className='space-y-1'>
+            {removal.next.map((line, index) => (
+              <p key={`${index}-${line}`}>{line}</p>
+            ))}
+          </div>
+        </div>
+      ),
+      confirmText: RULE_WORDS.deleteConfirmButton(1),
+      destructive: true,
     });
     if (!isConfirmed) return;
     setIsBusy(true);
@@ -410,6 +426,13 @@ function RuleSheet({
     >
       <div className='space-y-4 pb-4'>
         {onBack && <BackLink onBack={onBack} />}
+        {rule && isEnded(rule) && (
+          <InlineNotice tone='warning'>
+            <p>
+              {describeHome(rule)}. {RULE_WORDS.pausedRestart}
+            </p>
+          </InlineNotice>
+        )}
         {stayName !== null && (
           <p className='text-muted-foreground text-sm'>
             {RULE_WORDS.changesFuture(stayName)}
@@ -471,11 +494,6 @@ function RuleSheet({
         {sentence !== '' && (
           <p className='text-sm' role='status'>
             {sentence}
-          </p>
-        )}
-        {rule && isEnded(rule) && (
-          <p className='text-muted-foreground text-sm'>
-            {RULE_WORDS.endedEnvelope(getEnvelopeName(rule.target))}
           </p>
         )}
         {error && (

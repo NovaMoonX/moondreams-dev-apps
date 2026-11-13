@@ -339,6 +339,7 @@ function HorizonForm({
             endedAt: null,
             archivedAt: null,
             heldReleasedOn: null,
+            becameItemId: null,
           },
           version: {
             itemId: horizonId,

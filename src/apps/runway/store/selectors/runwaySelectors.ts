@@ -91,6 +91,7 @@ import {
   isBankMove,
   type DepositDay,
 } from '@apps/runway/engine/matching';
+import { needsNewHome } from '@apps/runway/engine/rules';
 import { readHomePins } from '@apps/runway/utils/homePins';
 import type {
   BillFundedBy,
@@ -2157,6 +2158,43 @@ export const selectRules = createSelector([selectRuleList], (rules) =>
 
 export const selectIsRulesLoaded = (state: RootState) =>
   state.runway.isRulesLoaded;
+
+/** The rules whose envelope is gone (archived, ended or made a goal), oldest first; empty until the plan and the rules have loaded, so a slow load never looks like a loss. */
+export const selectRulesNeedingHome = createSelector(
+  [selectRules, selectEnvelopes, selectIsPlanItemsLoaded, selectIsRulesLoaded],
+  (rules, envelopes, isPlanLoaded, isRulesLoaded) => {
+    const liveIds = new Set(envelopes.map(({ item }) => item.id));
+    return isPlanLoaded && isRulesLoaded
+      ? rules.filter((rule) => needsNewHome(rule, liveIds))
+      : [];
+  },
+);
+
+/** What each item that was turned into another finally became, by the first item's id, following the chain to its end; an end that is archived is left out, so a rule can say its envelope is a goal now only while that goal is live. */
+export const selectBecameKinds = createSelector(
+  [selectItems],
+  (items): ReadonlyMap<string, PlanItemDoc['kind']> => {
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const findEnd = (
+      item: PlanItemDoc,
+      seen: ReadonlySet<string>,
+    ): PlanItemDoc | null => {
+      const next = byId.get(item.becameItemId ?? '');
+      if (next === undefined || seen.has(next.id)) return null;
+      return next.becameItemId
+        ? findEnd(next, new Set([...seen, next.id]))
+        : next;
+    };
+    return new Map(
+      items.flatMap((item) => {
+        const end = findEnd(item, new Set([item.id]));
+        return end === null || end.archivedAt !== null
+          ? []
+          : [[item.id, end.kind] as const];
+      }),
+    );
+  },
+);
 
 export const selectIsMemoriesLoaded = (state: RootState) =>
   state.runway.isMemoriesLoaded;

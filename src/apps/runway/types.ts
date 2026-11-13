@@ -563,6 +563,8 @@ export interface PlanItemDoc {
   heldReleasedOn: DateOnly | null;
   /** A bill's learned merchant names (`MatchSealed`), sealed; null or missing when it has learned none. */
   matchSealed?: Sealed | null;
+  /** The item this one was turned into (an envelope made a goal, or a goal made an envelope); null on any other header (a legacy header has no key and reads as null). */
+  becameItemId: string | null;
 }
 
 /** What a bill that pays itself has learned about its charges: the comparable forms of the merchant names a matched charge carried, newest first. */

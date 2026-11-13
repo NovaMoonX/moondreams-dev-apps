@@ -33,9 +33,13 @@ export interface Selection {
   toggle: (ids: readonly string[]) => void;
 }
 
-/** A pick-several mode for a list: which ids are ticked, with Escape leaving the mode unless a dialog or an open menu is above it. The screen leaves it on the back gesture through its own `onBack`, and reads what is ticked against what is still on screen, so an id that has gone is never counted. */
-export function useSelection(): Selection {
-  const [selected, setSelected] = useState<ReadonlySet<string> | null>(null);
+/** A pick-several mode for a list (started with `initialIds` ticked when a screen is opened to act on them): which ids are ticked, with Escape leaving the mode unless a dialog or an open menu is above it. The screen leaves it on the back gesture through its own `onBack`, and reads what is ticked against what is still on screen, so an id that has gone is never counted. */
+export function useSelection(
+  initialIds: readonly string[] | null = null,
+): Selection {
+  const [selected, setSelected] = useState<ReadonlySet<string> | null>(() =>
+    initialIds === null ? null : new Set(initialIds),
+  );
   const isActive = selected !== null;
 
   const start = useCallback(() => setSelected(NOTHING), []);

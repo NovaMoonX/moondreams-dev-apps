@@ -154,12 +154,43 @@ export async function setNotify(
   });
 }
 
-type SealedPatch = Partial<
+export type SealedPatch = Partial<
   Pick<
     PlanSealedFields,
     'holdsPrompt' | 'bankBackedSeenAt' | 'horizonNudgeDismissed' | 'homePins'
   >
 >;
+
+/** The plan's sealed fields as they stand, opened. */
+export async function openPlanFields(
+  plan: PlanDoc,
+  encryption: RunwayEncryption,
+): Promise<Partial<PlanSealedFields>> {
+  return plan.sealed
+    ? await openJson<PlanSealedFields>(plan.sealed, encryption)
+    : {};
+}
+
+/** The plan's sealed fields with one change laid over what is there, sealed again. */
+export async function sealPlanFields(
+  current: Partial<PlanSealedFields>,
+  encryption: RunwayEncryption,
+  patch: SealedPatch,
+) {
+  return sealJson(
+    {
+      currencyCode: current.currencyCode ?? DEFAULT_CURRENCY_CODE,
+      notifyHour: current.notifyHour ?? null,
+      notifyTimeZone: current.notifyTimeZone ?? null,
+      holdsPrompt: current.holdsPrompt ?? null,
+      bankBackedSeenAt: current.bankBackedSeenAt ?? null,
+      horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
+      homePins: current.homePins ?? null,
+      ...patch,
+    } satisfies PlanSealedFields,
+    encryption,
+  );
+}
 
 /** Re-seals the plan's sealed fields with one change, reading the plan fresh so a second device's change to another field is kept. */
 async function patchSealedFields(
@@ -172,21 +203,11 @@ async function patchSealedFields(
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
     const plan = snapshot.data() as PlanDoc;
-    const current: Partial<PlanSealedFields> = plan.sealed
-      ? await openJson<PlanSealedFields>(plan.sealed, encryption)
-      : {};
-    const sealed = await sealJson(
-      {
-        currencyCode: current.currencyCode ?? DEFAULT_CURRENCY_CODE,
-        notifyHour: current.notifyHour ?? null,
-        notifyTimeZone: current.notifyTimeZone ?? null,
-        holdsPrompt: current.holdsPrompt ?? null,
-        bankBackedSeenAt: current.bankBackedSeenAt ?? null,
-        horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
-        homePins: current.homePins ?? null,
-        ...(typeof patch === 'function' ? patch(current) : patch),
-      } satisfies PlanSealedFields,
+    const current = await openPlanFields(plan, encryption);
+    const sealed = await sealPlanFields(
+      current,
       encryption,
+      typeof patch === 'function' ? patch(current) : patch,
     );
     transaction.update(ref, { sealed, updatedAt: Date.now() });
   });

@@ -9,6 +9,12 @@ import type { OpenPurchase, OpenRule } from '@apps/runway/types';
 /** The `target` of a rule that asks every time. */
 export const RULE_VARIES = 'varies';
 
+/** Whether a rule names an envelope that is no longer live (archived, ended or turned into a goal), so it sorts nothing until it is given another. A rule that asks every time names none. */
+export const needsNewHome = (
+  rule: Pick<OpenRule, 'target'>,
+  liveEnvelopeIds: ReadonlySet<string>,
+): boolean => rule.target !== RULE_VARIES && !liveEnvelopeIds.has(rule.target);
+
 /** Stores that sell everything, so what they sold says nothing about the kind of place. */
 const BROAD_MERCHANTS = [
   'amazon',
@@ -72,6 +78,11 @@ const getTier = (rule: OpenRule): number =>
         ? 2
         : 3;
 
+const compareRules = (a: OpenRule, b: OpenRule) =>
+  getTier(a) - getTier(b) ||
+  a.createdAt - b.createdAt ||
+  a.id.localeCompare(b.id);
+
 /** The most specific rule that fits a purchase, or null. A kind-of-place rule skips a broad merchant, and a rule that asks every time comes back with `isAsk`. */
 export function findRule(
   facts: RuleFacts,
@@ -87,15 +98,88 @@ export function findRule(
     (rule.category === null || rule.category === facts.category) &&
     (rule.cardId === null || rule.cardId === facts.cardId) &&
     !(isBroad && rule.category !== null && rule.merchantKey === null);
-  const [best] = rules
-    .filter(fits)
-    .sort(
-      (a, b) =>
-        getTier(a) - getTier(b) ||
-        a.createdAt - b.createdAt ||
-        a.id.localeCompare(b.id),
-    );
+  const [best] = rules.filter(fits).sort(compareRules);
   return best ? { rule: best, isAsk: best.target === RULE_VARIES } : null;
+}
+
+/** Where purchases go under the rule that now wins them: placed by a live rule (`by`), asked each time, or waiting (no rule fits, or the one that wins is paused). */
+export interface NextPlace {
+  by: OpenRule | null;
+  isAsk: boolean;
+}
+
+export interface NextHome extends NextPlace {
+  removed: OpenRule;
+  /** The card these purchases are on; null for every card no rule names. */
+  cardId: string | null;
+  /** For a store rule: each kind of place a kind-of-place rule left would win for this store's purchases the bank files under it, where that differs from the rest. */
+  byKind: (NextPlace & { category: string })[];
+}
+
+const toPlace = (
+  match: RuleMatch | null,
+  liveEnvelopeIds: ReadonlySet<string>,
+): NextPlace => ({
+  by:
+    match !== null && !match.isAsk && !needsNewHome(match.rule, liveEnvelopeIds)
+      ? match.rule
+      : null,
+  isAsk: match?.isAsk ?? false,
+});
+
+/** Where the purchases each removed rule wins today go once it is gone, card by card, by `findRule`'s own ranking; a card where the rule wins nothing (a more specific rule outranks it) has no entry. The main answer is for purchases with no kind of place; a store rule's `byKind` adds the kinds of place a rule left would still claim. */
+export function findNextHomes(
+  removing: readonly OpenRule[],
+  rules: readonly OpenRule[],
+  liveEnvelopeIds: ReadonlySet<string>,
+): NextHome[] {
+  const goingIds = new Set(removing.map((rule) => rule.id));
+  const left = rules.filter((rule) => !goingIds.has(rule.id));
+  const namedCards = [
+    ...new Set(
+      rules.flatMap((rule) => (rule.cardId === null ? [] : [rule.cardId])),
+    ),
+  ];
+  const leftKinds = [
+    ...new Set(
+      left.flatMap((rule) =>
+        rule.merchantKey === null && rule.category !== null
+          ? [rule.category]
+          : [],
+      ),
+    ),
+  ];
+  return removing.flatMap((removed) =>
+    (removed.cardId === null ? [...namedCards, null] : [removed.cardId])
+      .map((cardId) => ({
+        cardId,
+        facts: {
+          merchant: removed.merchantKey,
+          category: removed.category,
+          cardId,
+        },
+      }))
+      .filter(({ facts }) => findRule(facts, rules)?.rule.id === removed.id)
+      .map(({ cardId, facts }) => {
+        const place = toPlace(findRule(facts, left), liveEnvelopeIds);
+        const byKind =
+          removed.merchantKey === null || removed.category !== null
+            ? []
+            : leftKinds.flatMap((category) => {
+                const kindFacts = { ...facts, category };
+                if (findRule(kindFacts, rules)?.rule.id !== removed.id)
+                  return [];
+                const match = findRule(kindFacts, left);
+                if (match === null || match.rule.category === null) return [];
+                const kind = toPlace(match, liveEnvelopeIds);
+                return kind.by?.id === place.by?.id &&
+                  kind.isAsk === place.isAsk
+                  ? []
+                  : [{ ...kind, category }];
+              });
+        return { removed, cardId, ...place, byKind };
+      }),
+  );
 }
 
 export interface RulePlacement {
