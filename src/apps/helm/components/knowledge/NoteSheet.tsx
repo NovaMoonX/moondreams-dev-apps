@@ -8,12 +8,14 @@ import CopyTextButton from '@/components/CopyTextButton';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
 import LinkedText from '@/components/LinkedText';
+import MarkdownText from '@/components/MarkdownText';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Pill from '@/components/Pill';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
+import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import { NoteTopicsFields } from '@apps/helm/components/knowledge/NoteTopicsSheet';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -33,6 +35,15 @@ interface NoteSheetProps {
   noteId: string | null;
   onClose: () => void;
 }
+
+const LEADING_H1 = /^\s*#[ \t]+(.+?)[ \t]*#*[ \t]*(?:\r?\n|$)/;
+
+const withoutTitleHeading = (body: string, title: string) => {
+  const heading = LEADING_H1.exec(body);
+  return heading && heading[1].trim().slice(0, 80) === title
+    ? body.slice(heading[0].length).trimStart()
+    : body;
+};
 
 /** One note: its words with tappable links, where it came from, its topics, and Copy, Edit and Delete. */
 function NoteSheet({ noteId, onClose }: NoteSheetProps) {
@@ -82,6 +93,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
         user.uid,
         note.id,
         selectAllTopics(store.getState()),
+        store.getState().helm.media.items,
       );
       write.catch((error: unknown) => {
         console.error('Helm note was not deleted', error);
@@ -196,9 +208,16 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
                 <span className='min-w-0'>{HELM_COPY.answerHealthCaution}</span>
               </p>
             )}
-            {note.body && (
-              <LinkedText text={note.body} className='text-[15px]' />
-            )}
+            {note.body &&
+              (note.source === 'importedFile' ? (
+                <MarkdownText
+                  text={withoutTitleHeading(note.body, note.title)}
+                  className='text-[15px] break-words'
+                />
+              ) : (
+                <LinkedText text={note.body} className='text-[15px]' />
+              ))}
+            <KeptMediaSection record={{ kind: 'note', id: note.id }} />
             <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
               <p className='text-muted-foreground min-w-0 text-[13px]'>
                 {origin.join(' · ')}

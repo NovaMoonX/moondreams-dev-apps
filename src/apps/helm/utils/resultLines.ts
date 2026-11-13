@@ -9,7 +9,10 @@ export interface ResultLine {
   title: string;
   detail: string | null;
   /** The record a tap on the row opens. */
-  ref?: { collection: 'notes' | 'topics'; id: string };
+  ref?: {
+    collection: 'notes' | 'topics' | 'procedures' | 'procedureRuns';
+    id: string;
+  };
   /** A line the turn said without writing anything, so an Undo has nothing to take back on it. */
   isNoEffect?: boolean;
 }
@@ -47,6 +50,34 @@ export function buildResultLines(
                 title,
                 detail: null,
                 ref: { collection: 'topics', id: ref.docId },
+              },
+            ]
+          : [];
+      }
+      if (ref.collection === 'procedures') {
+        const title = toText(effect?.written['sealed.title']);
+        return title
+          ? [
+              {
+                key: `${ref.docId}:${index}`,
+                docId: ref.docId,
+                title,
+                detail: null,
+                ref: { collection: 'procedures', id: ref.docId },
+              },
+            ]
+          : [];
+      }
+      if (ref.collection === 'procedureRuns') {
+        const title = toText(effect?.written['sealed.title']);
+        return title
+          ? [
+              {
+                key: `${ref.docId}:${index}`,
+                docId: ref.docId,
+                title,
+                detail: null,
+                ref: { collection: 'procedureRuns', id: ref.docId },
               },
             ]
           : [];
@@ -147,22 +178,36 @@ export function buildResultLines(
       ];
     },
   );
-  const lines = effectLines.filter(
-    (line, index) =>
-      line.ref?.collection !== 'topics' ||
-      effectLines.findIndex(
-        (other) =>
-          other.ref?.collection === 'topics' && other.title === line.title,
-      ) === index,
+  const lines = effectLines.filter((line, index) =>
+    line.ref?.collection === 'notes'
+      ? !effectLines.some(
+          (other) =>
+            other.ref?.collection === 'topics' && other.title === line.title,
+        )
+      : line.ref?.collection !== 'topics' ||
+        effectLines.findIndex(
+          (other) =>
+            other.ref?.collection === 'topics' && other.title === line.title,
+        ) === index,
   );
-  const noteLines = (execution.lines ?? []).map((line, index): ResultLine => ({
-    key: `line:${index}`,
-    docId: line.ref.id,
-    title: line.text,
-    detail: null,
-    ref: line.ref,
-    isNoEffect: true,
-  }));
+  const noteLines = (execution.lines ?? [])
+    .filter(
+      (line) =>
+        !lines.some(
+          (row) =>
+            row.ref?.collection === line.ref.collection &&
+            row.ref.id === line.ref.id &&
+            row.title === line.text,
+        ),
+    )
+    .map((line, index): ResultLine => ({
+      key: `line:${index}`,
+      docId: line.ref.id,
+      title: line.text,
+      detail: null,
+      ref: line.ref,
+      isNoEffect: true,
+    }));
   return [...lines, ...noteLines];
 }
 

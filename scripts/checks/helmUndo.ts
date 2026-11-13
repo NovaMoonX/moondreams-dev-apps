@@ -6,6 +6,7 @@ import {
   getTakenBackIds,
   planReopen,
   planUndo,
+  procedureEffectKind,
   topicEffectKind,
   type UndoPlan,
   type UndoTarget,
@@ -16,6 +17,8 @@ import type {
   EffectRef,
   ExecutionEffect,
   OpenExecution,
+  ProcedureSealed,
+  RunSealed,
   TaskSealed,
   TopicSealed,
 } from '../../src/apps/helm/types.ts';
@@ -1311,7 +1314,9 @@ test('a turn that made a note and added to a topic takes back both, the topic as
     result.deletes.map((entry) => entry.docId),
     ['n1'],
   );
-  assert.deepEqual(result.versionRestores, [{ docId: 'car', from: 5, to: 4 }]);
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'car', collection: 'topics', from: 5, to: 4 },
+  ]);
   assert.equal(
     result.undoSealed.summary,
     'Took back 1 note and 1 change to Car care',
@@ -1333,7 +1338,9 @@ test('a version change alone is taken back, and says the topic', () => {
       [topicTarget('car', { version: 5, writeClaim: null })],
     ),
   );
-  assert.deepEqual(result.versionRestores, [{ docId: 'car', from: 5, to: 4 }]);
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'car', collection: 'topics', from: 5, to: 4 },
+  ]);
   assert.equal(result.undoSealed.summary, 'Took back 1 change to Car care');
   assert.equal(result.report, 'Took back 1 change to Car care.');
   assert.equal(result.deletes.length, 0);
@@ -1514,7 +1521,7 @@ test('a grouping goes back as one change: the child moves out, its version is re
     ['parent'],
   );
   assert.deepEqual(result.versionRestores, [
-    { docId: 'washing', from: 3, to: 2 },
+    { docId: 'washing', collection: 'topics', from: 3, to: 2 },
   ]);
   assert.equal(result.updates.length, 1);
   assert.equal(result.undoSealed.summary, 'Took back grouping under Car care');
@@ -1539,6 +1546,27 @@ test('a made parent stays when it was written, used, or a child stayed under it'
   );
   assert.equal(stayed.deletes.length, 0);
   assert.equal(stayed.updates.length, 0);
+});
+
+test('a topic made from a file goes at the version the import wrote, and stays once it is edited', () => {
+  const imported = [
+    topicEntry(
+      'create',
+      'pack',
+      { 'sealed.title': 'Made Packing list', importedVersion: 1 },
+      null,
+    ),
+  ];
+  const target = (version: number) => [
+    topicTarget('pack', { ...FRESH_PARENT, version }, 'Packing list'),
+  ];
+  const fresh = asWrite(plan(execution(imported), target(1)));
+  assert.deepEqual(
+    fresh.deletes.map((entry) => entry.docId),
+    ['pack'],
+  );
+  const edited = plan(execution(imported), target(2));
+  assert.equal(edited.kind, 'refused');
 });
 
 test('an old filing effect still takes the note back out and ignores the new shapes', () => {
@@ -1724,6 +1752,312 @@ test('deleting a task leaves other photos and discarded ones alone', () => {
       NOW,
     ),
     [],
+  );
+});
+
+const procedureSealed = (title: string): ProcedureSealed => ({
+  title,
+  steps: { a: { text: 'Laptop', detail: null } },
+  groups: {},
+});
+
+const procedureTarget = (
+  data: Record<string, unknown> | null,
+  title = 'Packing for a work trip',
+): [string, UndoTarget] => [
+  'pack',
+  { docId: 'pack', data, opened: data ? procedureSealed(title) : null },
+];
+
+const PROCEDURE_MADE_LINE = 'New procedure: Packing for a work trip · 12 steps';
+const PROCEDURE_CHANGED_LINE =
+  'Changed Packing for a work trip: added the laptop charger';
+
+const procedureMade = {
+  ref: { op: 'create', collection: 'procedures', docId: 'pack' } as EffectRef,
+  effect: {
+    written: {
+      'sealed.title': PROCEDURE_MADE_LINE,
+      'sealed.name': 'Packing for a work trip',
+      version: 1,
+    },
+    previous: null,
+  } as ExecutionEffect,
+};
+
+const procedureRevised = {
+  ref: { op: 'update', collection: 'procedures', docId: 'pack' } as EffectRef,
+  effect: {
+    written: {
+      version: 3,
+      change: 'revised',
+      'sealed.title': PROCEDURE_CHANGED_LINE,
+      'sealed.name': 'Packing for a work trip',
+    },
+    previous: {
+      version: 2,
+      'sealed.title': PROCEDURE_CHANGED_LINE,
+      'sealed.name': 'Packing for a work trip',
+    },
+  } as ExecutionEffect,
+};
+
+test('procedureEffectKind tells a made procedure from a new version', () => {
+  assert.equal(procedureEffectKind(procedureMade.effect), 'made');
+  assert.equal(procedureEffectKind(procedureRevised.effect), 'version');
+});
+
+test('a procedure the turn made is deleted while it is at version 1', () => {
+  const result = asWrite(
+    plan(execution([procedureMade]), [procedureTarget({ version: 1 })]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'pack', collection: 'procedures' },
+  ]);
+  assert.equal(result.versionRestores.length, 0);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 change to Packing for a work trip',
+  );
+  assert.equal(result.report, 'Took back 1 change to Packing for a work trip.');
+});
+
+test('a procedure the person changed since is kept, not deleted', () => {
+  const result = asRefused(
+    plan(execution([procedureMade]), [procedureTarget({ version: 2 })]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a revised procedure goes back as a new version holding the earlier one', () => {
+  const result = asWrite(
+    plan(execution([procedureRevised]), [procedureTarget({ version: 3 })]),
+  );
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'pack', collection: 'procedures', from: 3, to: 2 },
+  ]);
+  assert.equal(result.deletes.length, 0);
+  assert.deepEqual(result.undoSealed.effects[0].written, {
+    version: 4,
+    change: 'restored',
+    'sealed.title': PROCEDURE_CHANGED_LINE,
+  });
+});
+
+test('a revised procedure edited since is kept', () => {
+  const result = asRefused(
+    plan(execution([procedureRevised]), [procedureTarget({ version: 4 })]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a made procedure that is already gone is counted as gone', () => {
+  const result = asRefused(
+    plan(execution([procedureMade]), [procedureTarget(null)]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+});
+
+test('a turn that made a procedure and a note takes back both and says so', () => {
+  const result = asWrite(
+    plan(execution([noteMade, procedureMade]), [
+      noteTarget(),
+      procedureTarget({ version: 1 }),
+    ]),
+  );
+  assert.deepEqual(result.deletes.map((entry) => entry.docId).sort(), [
+    'n1',
+    'pack',
+  ]);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 note and 1 change to Packing for a work trip',
+  );
+  assert.equal(
+    result.report,
+    'Took back 1 note. 1 change to Packing for a work trip too.',
+  );
+});
+
+test('a procedure result line names the procedure and opens it', () => {
+  const lines = buildResultLines(
+    execution([procedureMade, procedureRevised]),
+    new Map(),
+    'America/Los_Angeles',
+    NOW,
+  );
+  assert.deepEqual(
+    lines.map((line) => [line.title, line.ref]),
+    [
+      [PROCEDURE_MADE_LINE, { collection: 'procedures', id: 'pack' }],
+      [PROCEDURE_CHANGED_LINE, { collection: 'procedures', id: 'pack' }],
+    ],
+  );
+});
+
+test('procedure undo copy counts one change by name and several by number', () => {
+  assert.equal(
+    HELM_COPY.undoProcedureChanges(1, 'Cabin'),
+    'Took back 1 change to Cabin',
+  );
+  assert.equal(
+    HELM_COPY.undoProcedureChanges(2, null),
+    'Took back 2 changes to procedures',
+  );
+  assert.equal(
+    HELM_COPY.undoReportProceduresToo(1, null),
+    '1 change to a procedure too.',
+  );
+});
+
+const runSealed = (): RunSealed => ({
+  title: 'Packing for a work trip',
+  steps: { a: { text: 'Laptop', detail: null } },
+  groups: {},
+  attachedLabel: 'Portland weekend',
+});
+
+const runTarget = (
+  data: Record<string, unknown> | null,
+): [string, UndoTarget] => [
+  'run1',
+  { docId: 'run1', data, opened: data ? runSealed() : null },
+];
+
+const RUN_STARTED_LINE = 'Started Packing for a work trip for Portland weekend';
+const RUN_TICKED_LINE = 'Ticked Laptop on Packing for a work trip';
+
+const runStarted = {
+  ref: {
+    op: 'create',
+    collection: 'procedureRuns',
+    docId: 'run1',
+  } as EffectRef,
+  effect: {
+    written: {
+      'sealed.title': RUN_STARTED_LINE,
+      'sealed.name': 'Packing for a work trip',
+    },
+    previous: null,
+  } as ExecutionEffect,
+};
+
+const runTicked = {
+  ref: {
+    op: 'update',
+    collection: 'procedureRuns',
+    docId: 'run1',
+  } as EffectRef,
+  effect: {
+    written: { 'stepState.a.doneAt': EARLIER, 'sealed.title': RUN_TICKED_LINE },
+    previous: { 'stepState.a.doneAt': null, 'sealed.title': RUN_TICKED_LINE },
+  } as ExecutionEffect,
+};
+
+const ticked = (doneAt: number | null, editedAt = EARLIER) => ({
+  lastEditedAt: editedAt,
+  stepState: { a: { order: 0, groupId: null, doneAt, isExtra: false } },
+});
+
+test('a run the turn started is deleted while nothing was ticked on it', () => {
+  const result = asWrite(
+    plan(execution([runStarted]), [runTarget({ lastEditedAt: null })]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'run1', collection: 'procedureRuns' },
+  ]);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back the run of Packing for a work trip',
+  );
+  assert.equal(result.report, 'Took back the run of Packing for a work trip.');
+});
+
+test('a started run the person ticked since is kept', () => {
+  const result = asRefused(
+    plan(execution([runStarted]), [runTarget(ticked(NOW, NOW))]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a started run is deleted once a later tick on it was undone', () => {
+  const result = asWrite(
+    plan(execution([runStarted]), [runTarget(ticked(null, EARLIER))]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'run1', collection: 'procedureRuns' },
+  ]);
+});
+
+test('a started run with a step ticked by hand is kept whatever its edit stamp', () => {
+  const result = asRefused(
+    plan(execution([runStarted]), [runTarget(ticked(NOW, EARLIER))]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a tick by voice is unticked while it is still the way it was left', () => {
+  const result = asWrite(
+    plan(execution([runTicked]), [runTarget(ticked(EARLIER))]),
+  );
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].collection, 'procedureRuns');
+  assert.equal(result.updates[0].fields['stepState.a.doneAt'], null);
+  assert.equal(result.undoSealed.summary, 'Unticked 1 step');
+  assert.equal(result.report, 'Unticked 1 step.');
+});
+
+test('a tick the person undid by hand is kept', () => {
+  const result = asRefused(
+    plan(execution([runTicked]), [runTarget(ticked(null))]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a run result line names what was done and opens the run', () => {
+  const lines = buildResultLines(
+    execution([runStarted, runTicked]),
+    new Map(),
+    'America/Los_Angeles',
+    NOW,
+  );
+  assert.deepEqual(
+    lines.map((line) => [line.title, line.ref]),
+    [
+      [RUN_STARTED_LINE, { collection: 'procedureRuns', id: 'run1' }],
+      [RUN_TICKED_LINE, { collection: 'procedureRuns', id: 'run1' }],
+    ],
+  );
+});
+
+test('run undo copy counts ticks and joins them with a taken-back run', () => {
+  assert.equal(HELM_COPY.undoRunChanges([], 3), 'Unticked 3 steps');
+  assert.equal(
+    HELM_COPY.undoRunChanges(['Cabin'], 2),
+    'Took back the run of Cabin and unticked 2 steps',
+  );
+  assert.equal(
+    HELM_COPY.undoReportRunsToo(['Cabin', 'Trip'], 0),
+    'Took back 2 runs.',
+  );
+});
+
+test('a turn that made a note and a run takes back both and says so', () => {
+  const result = asWrite(
+    plan(execution([noteMade, runStarted]), [
+      noteTarget(),
+      runTarget({ lastEditedAt: null }),
+    ]),
+  );
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 note and took back the run of Packing for a work trip',
+  );
+  assert.equal(
+    result.report,
+    'Took back 1 note. Took back the run of Packing for a work trip.',
   );
 });
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarCheck, CalendarDays, Tag } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
@@ -8,7 +9,7 @@ import AppToggle from '@/components/AppToggle';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
 import SectionHeader from '@/components/SectionHeader';
-import SettingsGroup from '@/components/SettingsGroup';
+import SettingsSection from '@apps/helm/components/settings/SettingsSection';
 import SettingsRow from '@/components/SettingsRow';
 import {
   grantConnection,
@@ -40,6 +41,7 @@ import {
   formatUpdatedAt,
   getGrantCopyCount,
   getNewestOkAt,
+  isLiveCategory,
   isStale,
 } from '@apps/helm/utils/synced';
 
@@ -271,7 +273,14 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const hasError = Object.values(grant.categoryState).some(
     (state) => state.lastError !== null,
   );
-  const freshnessLine = (categoryId: string) => {
+  const onIds = Object.entries(grant.categories)
+    .filter(([, entry]) => entry.isOn)
+    .map(([id]) => id);
+  const isLiveOnly =
+    onIds.length > 0 &&
+    onIds.every((id) => isLiveCategory(grant.connectorId, id));
+  const freshnessLine = (categoryId: string, mode: 'sync' | 'live') => {
+    if (mode === 'live') return HELM_COPY.connectionLiveLine;
     const state = grant.categoryState[categoryId];
     if (state?.lastError) return HELM_COPY.syncedCouldNot;
     if (!state || state.lastOkAt === null) return HELM_COPY.syncedWaiting;
@@ -374,7 +383,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 : HELM_COPY.googleReadOnly(name)}
       </p>
       {isGoogle && !isOffline && (
-        <SettingsGroup title={HELM_COPY.connectionAccountLabel}>
+        <SettingsSection title={HELM_COPY.connectionAccountLabel}>
           <SettingsRow
             icon={<Tag className='size-5' aria-hidden='true' />}
             title={HELM_COPY.googleLabelRow}
@@ -396,7 +405,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 hasChevron
               />
             )}
-        </SettingsGroup>
+        </SettingsSection>
       )}
       <section className='flex flex-col gap-3'>
         <SectionHeader title={HELM_COPY.connectionReads(name)} />
@@ -418,11 +427,20 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     <span className='text-muted-foreground block text-[13px] text-pretty'>
                       {category.detail}
                     </span>
-                    {isOn && !isContactsGrant && freshnessLine(category.id) && (
-                      <span className='text-muted-foreground block text-[13px] text-pretty'>
-                        {freshnessLine(category.id)}
-                      </span>
-                    )}
+                    {isOn &&
+                      !isContactsGrant &&
+                      freshnessLine(category.id, category.mode) && (
+                        <span
+                          className={join(
+                            'text-muted-foreground block text-pretty',
+                            category.mode === 'live'
+                              ? 'mt-1 text-xs'
+                              : 'text-[13px]',
+                          )}
+                        >
+                          {freshnessLine(category.id, category.mode)}
+                        </span>
+                      )}
                   </span>
                   {isOffline ? (
                     locked
@@ -554,7 +572,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             </li>
           )}
         </ul>
-        {!hasStopped && !isContactsGrant && (
+        {!hasStopped && !isContactsGrant && !isLiveOnly && (
           <div className='flex items-center justify-between gap-3'>
             <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
               {newestOkAt === null

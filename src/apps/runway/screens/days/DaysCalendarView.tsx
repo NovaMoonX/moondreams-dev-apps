@@ -1,4 +1,3 @@
-import { isSavingFor } from '@apps/runway/engine/pace';
 import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -17,7 +16,17 @@ import GoalRow from '@apps/runway/components/GoalRow';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { DAYS_CALENDAR_WORDS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
-import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  addUtcMonths,
+  DAY_MS,
+  todayAsUtcDate,
+} from '@apps/runway/engine/dates';
+import { listPlanChangeDays } from '@apps/runway/engine/planChanges';
+import PlanChangeRow from '@apps/runway/components/PlanChangeRow';
+import PlanChangesDoor from '@apps/runway/screens/days/PlanChangesDoor';
+import { findLinkHolder } from '@apps/runway/engine/horizonLinks';
+import { listStartChanges } from '@apps/runway/utils/comingChangeText';
+import { describePlanChangeGoes } from '@apps/runway/utils/planChangeText';
 import {
   buildCalendarEntries,
   type CalendarEntry,
@@ -27,7 +36,8 @@ import { useGoalPaces } from '@apps/runway/hooks/useGoalPaces';
 import { Dot } from '@apps/runway/screens/days/CalendarDot';
 import { getDotKind } from '@apps/runway/utils/calendarDots';
 import DaysCalendarCell from '@apps/runway/screens/days/DaysCalendarCell';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import { selectCardsWithBankDue } from '@apps/runway/store/selectors/cardStatementSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectBillPayments,
@@ -35,12 +45,15 @@ import {
   selectCards,
   selectEffectiveSplit,
   selectHeldByItem,
+  selectAllHorizonItems,
   selectListedDays,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { formatDayTitle } from '@apps/runway/utils/dayTitle';
 import { isTrackingLevel } from '@apps/runway/engine/level';
+
+const MAX_AGENDA_CHANGES = 3;
 
 const CALENDAR_STYLES = {
   containerClassName: 'border-0 bg-transparent p-0 shadow-none',
@@ -82,6 +95,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
   const bills = useAppSelector((state) => selectBills(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const cards = useAppSelector(selectCards);
+  const bankDueCards = useAppSelector(selectCardsWithBankDue);
   const isTracking = isTrackingLevel(useAppSelector(selectLevel));
   const reserveByCard = useAppSelector(selectBalances).reserveByCard;
   const stance = useAppSelector(selectStance);
@@ -90,6 +104,9 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
     (state) => state.runway.plan?.startDate ?? null,
   );
   const paces = useGoalPaces(today);
+  const planItems = useAppSelector((state) => state.runway.items);
+  const planVersions = useAppSelector((state) => state.runway.versions);
+  const events = useAppSelector((state) => selectAllHorizonItems(state, today));
   const { openDay } = useRunwayUrlState();
 
   const thisIndex = toIndex(today);
@@ -121,26 +138,54 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
     () => ({
       incomeDays: days,
       billPayments: Object.entries(payments).flatMap(([billId, list]) =>
-        list.flatMap(({ dueOn, totalCents, paid }) =>
+        list.flatMap(({ dueOn, payOn, totalCents, paid }) =>
           paid !== null || dueOn >= (startDate ?? today)
-            ? [{ billId, dueOn, totalCents }]
+            ? [{ billId, dueOn, payOn, totalCents }]
             : [],
         ),
       ),
       cards: isTracking
         ? cards.map((card) => ({
             cardId: card.id,
-            dueDay: card.dueDay,
+            dueDay:
+              bankDueCards.find((entry) => entry.id === card.id)?.dueDay ??
+              card.dueDay,
             since: Math.max(startDate ?? 0, todayAsUtcDate(card.createdAt)),
           }))
         : [],
-      goals: paces.flatMap(({ item, payload, pace, track }) =>
-        pace.isComplete || !isSavingFor(payload)
+      goals: paces.flatMap(({ item, pace, isSavingAhead, track }) =>
+        pace.isComplete || !isSavingAhead
           ? []
-          : [{ goalId: item.id, targetDate: payload.targetDate, track }],
+          : [{ goalId: item.id, targetDate: pace.targetDate, track }],
       ),
+      planChanges: [
+        ...listPlanChangeDays(
+          planVersions,
+          planItems,
+          today + DAY_MS,
+          addUtcMonths(today, LOOKAHEAD_MONTHS + 1),
+        ),
+        ...listStartChanges(
+          planVersions,
+          planItems,
+          today,
+          (link) => findLinkHolder(events, link) !== null,
+        ),
+      ],
     }),
-    [days, payments, cards, isTracking, paces, today, startDate],
+    [
+      days,
+      payments,
+      cards,
+      bankDueCards,
+      isTracking,
+      paces,
+      today,
+      startDate,
+      planVersions,
+      planItems,
+      events,
+    ],
   );
   const monthStart = monthStartOf(monthIndex);
   const monthEnd = monthStartOf(monthIndex + 1) - DAY_MS;
@@ -207,11 +252,19 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
       ['card', DAYS_CALENDAR_WORDS.legend.card],
       ['goal', DAYS_CALENDAR_WORDS.legend.goal],
       ['goalBehind', DAYS_CALENDAR_WORDS.legend.goalBehind],
+      ['change', DAYS_CALENDAR_WORDS.legend.planChange],
     ] as const
   ).filter(([kind]) => dotKinds.has(kind));
 
   const dayDays = new Map(days.map((day) => [day.dayKey, day]));
   const openBill = bills.find(({ item }) => item.id === openBillRef?.billId);
+  const changeEntries = selectedEntries.filter(
+    (entry): entry is Extract<CalendarEntry, { kind: 'change' }> =>
+      entry.kind === 'change',
+  );
+  const otherEntries = selectedEntries.filter(
+    (entry) => entry.kind !== 'change',
+  );
   const getRow = (entry: CalendarEntry) => {
     if (entry.kind === 'income') {
       const day = dayDays.get(entry.dayKey);
@@ -228,17 +281,19 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
       const bill = bills.find(({ item }) => item.id === entry.billId);
       return bill ? (
         <BillRow
-          key={`${entry.billId}${entry.on}`}
+          key={`${entry.billId}${entry.dueOn}`}
           bill={bill.version.payload}
           payment={
             (payments[entry.billId] ?? []).find(
-              (payment) => payment.dueOn === entry.on,
+              (payment) => payment.dueOn === entry.dueOn,
             ) ?? null
           }
           planStance={stance}
           today={today}
           figureKind='payment'
-          onOpen={() => setOpenBillRef({ billId: entry.billId, on: entry.on })}
+          onOpen={() =>
+            setOpenBillRef({ billId: entry.billId, on: entry.dueOn })
+          }
         />
       ) : null;
     }
@@ -254,6 +309,16 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           onOpen={() => setOpenCard({ cardId: card.id, view: 'menu' })}
         />
       ) : null;
+    }
+    if (entry.kind === 'change') {
+      return (
+        <PlanChangeRow
+          key={`${entry.change.itemId}${entry.on}`}
+          change={entry.change}
+          today={today}
+          text={describePlanChangeGoes(entry.change)}
+        />
+      );
     }
     const goal = paces.find(({ item }) => item.id === entry.goalId);
     return goal ? (
@@ -301,6 +366,16 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           />
         </div>
       </div>
+      {legend.length > 0 && (
+        <ul className='text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs'>
+          {legend.map(([kind, label]) => (
+            <li key={kind} className='flex items-center gap-1'>
+              <Dot kind={kind} />
+              {label}
+            </li>
+          ))}
+        </ul>
+      )}
       <Calendar
         key={monthIndex}
         mode='single'
@@ -338,16 +413,6 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           );
         }}
       />
-      {legend.length > 0 && (
-        <ul className='text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs'>
-          {legend.map(([kind, label]) => (
-            <li key={kind} className='flex items-center gap-1'>
-              <Dot kind={kind} />
-              {label}
-            </li>
-          ))}
-        </ul>
-      )}
       {monthLine && (
         <p className='text-muted-foreground text-sm'>
           <MaskedText>{monthLine}</MaskedText>
@@ -361,7 +426,16 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           </p>
         ) : (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {selectedEntries.map(getRow)}
+            {otherEntries.map(getRow)}
+            {changeEntries.length > MAX_AGENDA_CHANGES ? (
+              <PlanChangesDoor
+                changes={changeEntries.map((entry) => entry.change)}
+                day={formatDayTitle(selectedOn)}
+                today={today}
+              />
+            ) : (
+              changeEntries.map(getRow)
+            )}
           </ul>
         )}
       </div>

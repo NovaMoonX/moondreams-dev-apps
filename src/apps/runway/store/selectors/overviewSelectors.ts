@@ -1,8 +1,11 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectLedgerOnlyBalances as selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectUsualMonthPlan } from '@apps/runway/store/selectors/usualMonthSelectors';
 import {
+  getEventGoalCover,
+  selectAllHorizonItems,
   selectBillPayments,
   selectBills,
   selectComingDays,
@@ -16,12 +19,70 @@ import {
   getHorizonPaceCents,
   getLiveCosts,
 } from '@apps/runway/engine/horizon';
+import { getGoalCostId, type GoalCover } from '@apps/runway/engine/horizonGoal';
+import { isSavingFor } from '@apps/runway/engine/pace';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
 import type { Priority } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 const selectOn = (_state: RootState, on: number) => on;
 const selectDial = (_state: RootState, _on: number, dial: Priority) => dial;
+
+/** What the goal each open event draws from holds now and puts in on the coming income days, by event id; an event with no live goal has none. */
+export const selectGoalCovers = createSelector(
+  [
+    selectAllHorizonItems,
+    selectBalances,
+    selectComingDays,
+    selectStance,
+    (state: RootState) => state.runway.items,
+    (state: RootState) => state.runway.versions,
+    selectOn,
+  ],
+  (
+    events,
+    balances,
+    comingDays,
+    stance,
+    items,
+    versions,
+    today,
+  ): Record<string, GoalCover> =>
+    Object.fromEntries(
+      events.flatMap(({ item, version }) => {
+        const cover = getEventGoalCover(
+          version.payload,
+          items,
+          versions,
+          today,
+          comingDays,
+          balances.assignedByItem,
+          stance,
+        );
+        return cover === null ? [] : [[item.id, cover]];
+      }),
+    ),
+);
+
+/** The dated goals counted at `dial` whose pace already covers their event's goal cost, so the month total leaves that cost out; a goal funded by whatever is left, or with no date, has no such pace. */
+const selectPacedGoalIds = createSelector(
+  [
+    (state: RootState, on: number) => selectUsualMonthPlan(state, on).goals,
+    selectDial,
+  ],
+  (goals, dial) =>
+    new Set(
+      goals
+        .filter(
+          ({ version: { payload } }) =>
+            isSavingFor(payload) &&
+            payload.targetDate !== null &&
+            payload.funding.amount.kind !== 'rest' &&
+            isCountedAt(payload.priority, dial),
+        )
+        .map(({ item }) => item.id),
+    ),
+);
 
 /** The steady amount a month the costs of open Horizon items counted at `dial` need, each cost at its own priority, to meet every payment on its due date from what is not yet held; the usual-month basis the dated goals use. */
 export const selectHorizonMonthCents = createSelector(
@@ -32,8 +93,19 @@ export const selectHorizonMonthCents = createSelector(
     selectStance,
     selectOn,
     selectDial,
+    selectGoalCovers,
+    selectPacedGoalIds,
   ],
-  (items, balances, costPaid, stance, today, dial): number =>
+  (
+    items,
+    balances,
+    costPaid,
+    stance,
+    today,
+    dial,
+    covers,
+    pacedGoalIds,
+  ): number =>
     items.reduce(
       (sum, { item, version }) =>
         sum +
@@ -46,14 +118,21 @@ export const selectHorizonMonthCents = createSelector(
             costPaid[item.id],
             balances.costPaidByItem[item.id] ?? 0,
             balances.costFromFreeByItem[item.id] ?? 0,
+            covers[item.id] ?? null,
           ).plan.covers,
           new Set(
             getLiveCosts(version.payload)
-              .filter((cost) =>
-                isCountedAt(
-                  getCostPriority(cost, version.payload.priority),
-                  dial,
-                ),
+              .filter(
+                (cost) =>
+                  isCountedAt(
+                    getCostPriority(cost, version.payload.priority),
+                    dial,
+                  ) &&
+                  !(
+                    version.payload.goalId !== null &&
+                    cost.id === getGoalCostId(version.payload.goalId) &&
+                    pacedGoalIds.has(version.payload.goalId)
+                  ),
               )
               .map(({ id }) => id),
           ),
@@ -77,7 +156,7 @@ export const selectBillsDueBeforePay = createSelector(
     const cents = bills
       .filter(({ version }) => isCountedAt(version.payload.priority, dial))
       .flatMap(({ item }) => payments[item.id] ?? [])
-      .filter(({ paid, dueOn }) => paid === null && dueOn < nextPay.on)
+      .filter(({ paid, payOn }) => paid === null && payOn < nextPay.on)
       .reduce((sum, { totalCents }) => sum + totalCents, 0);
     return { cents, payOn: nextPay.on };
   },
@@ -92,8 +171,9 @@ export const selectHorizonShortCents = createSelector(
     selectStance,
     selectOn,
     selectDial,
+    selectGoalCovers,
   ],
-  (items, balances, costPaid, stance, today, dial): number =>
+  (items, balances, costPaid, stance, today, dial, covers): number =>
     items.reduce(
       (sum, { item, version }) =>
         sum +
@@ -106,6 +186,7 @@ export const selectHorizonShortCents = createSelector(
             costPaid[item.id],
             balances.costPaidByItem[item.id] ?? 0,
             balances.costFromFreeByItem[item.id] ?? 0,
+            covers[item.id] ?? null,
           ).plan,
           new Set(
             getLiveCosts(version.payload)

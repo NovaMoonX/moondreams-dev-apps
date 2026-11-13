@@ -11,6 +11,8 @@ export interface ChangeFlowValue {
   candidate: ItemPayload | null;
   /** Offered under an effect warning that says why a pay is short. */
   warningActions?: ReactNode;
+  /** The change is a pause: it can only be "for a while", so the choice of when it starts is not drawn. */
+  isPause?: boolean;
 }
 
 /** What the form being edited hands to the "From when" and effect section it draws as its last field. */

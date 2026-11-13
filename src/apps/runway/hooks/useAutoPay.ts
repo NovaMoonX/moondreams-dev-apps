@@ -89,7 +89,7 @@ async function writeAutoMark(uid: string, mark: AutoMark) {
       dueOn: mark.dueOn,
       amountCents: mark.amountCents,
       fundedCents: payment ? getHeldFor(payment, mark.amountCents) : 0,
-      paidOn: mark.dueOn,
+      paidOn: mark.paidOn,
       cardId: getMarkCardId(state, mark.billId, mark.dueOn),
       marks: countMarks(state.runway.moves, mark.billId, mark.dueOn),
       auto: { isEstimate: mark.isEstimate, purchaseId: null },

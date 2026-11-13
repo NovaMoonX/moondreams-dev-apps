@@ -31,6 +31,12 @@ export default defineConfig([
             },
             {
               name: '@moondreamsdev/dreamer-ui/components',
+              importNames: ['Checkbox'],
+              message:
+                "Use '@/components/AppCheckbox': it takes the app theme's shape, weight and accent, keeps its tick readable in dark mode and has a 40px target.",
+            },
+            {
+              name: '@moondreamsdev/dreamer-ui/components',
               importNames: ['Drawer'],
               message:
                 "Use '@/components/Drawer': it closes with a swipe down anywhere on the sheet, the same way its close control does.",
@@ -44,6 +50,12 @@ export default defineConfig([
           selector: "JSXAttribute[name.name='type'][value.value='date']",
           message:
             "Use '@/components/DateInput': an empty native date input draws as a blank box on phones, and DateInput shows the format or a placeholder.",
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name=/^(replaceState|pushState)$/] > ObjectExpression > Property > Literal[value=true]",
+          message:
+            "Mark a Back step with markHistoryStep/isHistoryStep ('@/hooks/useBackHistory'): history.state outlives a reload, so a `true` mark from an earlier load pops onto the old page and loads the app again.",
         },
       ],
     },

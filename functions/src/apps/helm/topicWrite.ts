@@ -472,7 +472,8 @@ export type VersionReason =
   | 'revisedOnRequest'
   | 'sourceRemoved'
   | 'moved'
-  | 'grouped';
+  | 'grouped'
+  | 'imported';
 
 export const pickReason = (
   version: number,

@@ -74,18 +74,27 @@ export function createAnthropicProvider(
       content:
         typeof message.content === 'string'
           ? message.content
-          : message.content.map((part): Block =>
-              part.type === 'text'
-                ? { type: 'text', text: part.text }
-                : {
+          : message.content.map((part): Block => {
+              if (part.type === 'text')
+                return { type: 'text', text: part.text };
+              return part.type === 'image'
+                ? {
                     type: 'image',
                     source: {
                       type: 'base64',
                       media_type: part.mediaType,
                       data: part.data,
                     },
-                  },
-            ),
+                  }
+                : {
+                    type: 'document',
+                    source: {
+                      type: 'base64',
+                      media_type: part.mediaType,
+                      data: part.data,
+                    },
+                  };
+            }),
     }));
     const terminals = [terminalTool, ...extraTerminalTools];
     const terminalNames = new Set(terminals.map((tool) => tool.name));

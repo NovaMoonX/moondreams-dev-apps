@@ -10,7 +10,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
+import { formatClock } from '@/utils/durationUtils';
+import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import KeptMediaViewer from '@apps/helm/components/media/KeptMediaViewer';
+import { MediaKindIcon } from '@apps/helm/components/media/MediaKindIcon';
 import MediaThumb from '@apps/helm/components/media/MediaThumb';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
 import FactSheet from '@apps/helm/components/who/FactSheet';
@@ -25,8 +28,10 @@ import {
   selectExecutionsById,
   selectOpenTasksById,
 } from '@apps/helm/store/selectors/captureSelectors';
+import { selectNoteById } from '@apps/helm/store/selectors/knowledgeSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
-import type { MediaAttachment, OpenCapture } from '@apps/helm/types';
+import type { MediaAttachment, OpenCapture, OpenMedia } from '@apps/helm/types';
+import { shortenFileName } from '@apps/helm/utils/fileNames';
 import { isMediaExpired } from '@apps/helm/utils/mediaCaps';
 import { getKeepTarget, getKeptEffect } from '@apps/helm/utils/mediaKeep';
 
@@ -39,7 +44,31 @@ interface TurnPhotosProps {
   capture: OpenCapture;
 }
 
-/** The photos sent with a turn, above its words; one that is already deleted is a quiet tile that says so. */
+/** What a file or recording sent with a turn looks like in its tile: an icon and its name (a recording just says so). */
+function FileTile({ media }: { media: OpenMedia }) {
+  return (
+    <span className='bg-muted text-muted-foreground flex size-20 flex-col items-center justify-center gap-1 rounded-xl p-1.5'>
+      <MediaKindIcon kind={media.kind} className='size-5 shrink-0' />
+      <span className='line-clamp-2 w-full text-center text-[11px] leading-tight break-words'>
+        {media.kind === 'voiceNote'
+          ? media.durationMs === null
+            ? HELM_COPY.mediaVoiceTile
+            : HELM_COPY.attachVoiceMeta(formatClock(media.durationMs))
+          : shortenFileName(
+              media.fileName ?? HELM_COPY.mediaWord(media.kind),
+              20,
+            )}
+      </span>
+      {media.kind === 'pdf' && media.pageCount !== null && (
+        <span className='w-full truncate text-center text-[11px] leading-tight'>
+          {HELM_COPY.mediaPdfPages(media.pageCount)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The photos and files sent with a turn, above its words; one that is already deleted is a quiet tile that says so. */
 export function TurnPhotos({ capture }: TurnPhotosProps) {
   const media = useAppSelector((state) => state.helm.media.items);
   if (capture.attachmentIds.length === 0) return null;
@@ -49,7 +78,9 @@ export function TurnPhotos({ capture }: TurnPhotosProps) {
         const found = media.find((entry) => entry.id === id);
         return (
           <li key={id}>
-            {found ? (
+            {found && found.kind !== 'photo' ? (
+              <FileTile media={found} />
+            ) : found ? (
               <MediaThumb
                 media={found}
                 alt={HELM_COPY.attachThumbLabel(index + 1)}
@@ -150,6 +181,7 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
   const executionsById = useAppSelector(selectExecutionsById);
   const tasksById = useAppSelector(selectOpenTasksById);
   const facts = useAppSelector((state) => state.helm.facts.items);
+  const noteById = useAppSelector(selectNoteById);
   const [isWorking, setIsWorking] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const now = useNow(60_000);
@@ -187,12 +219,13 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
   }
   if (media.status === 'discarded') {
     const canKeep = !media.isUnreadable;
+    const fileName = media.fileName ?? HELM_COPY.mediaWord(media.kind);
     const hoursLeft =
       media.deleteAfter === null
         ? null
         : media.deleteAfter - now <= HOUR_MS
           ? 0
-          : Math.ceil((media.deleteAfter - now) / HOUR_MS);
+          : Math.min(24, Math.ceil((media.deleteAfter - now) / HOUR_MS));
     const keep = async () => {
       if (isWorking) return;
       if (!navigator.onLine) {
@@ -208,6 +241,8 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
         const result = await keepLetGoMedia(uid, await getHelmEncryption(uid), {
           captureId: capture.id,
           mediaId,
+          kind: media.kind,
+          fileName: media.fileName,
           target: getKeepTarget(executions),
         });
         if (result === 'gone') {
@@ -221,9 +256,26 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
       }
     };
     return (
-      <p className={LINE}>
-        <span className='text-muted-foreground min-w-0 flex-1'>
-          {canKeep ? HELM_COPY.mediaNotKeptIn(hoursLeft) : HELM_COPY.mediaLetGo}
+      <p className={join(LINE, 'flex-wrap gap-y-1')}>
+        <span className='text-muted-foreground min-w-0 basis-full sm:flex-1 sm:basis-0'>
+          {media.kind === 'photo' ? (
+            canKeep ? (
+              HELM_COPY.mediaNotKeptIn(hoursLeft)
+            ) : (
+              HELM_COPY.mediaLetGo(media.kind)
+            )
+          ) : (
+            <>
+              <span className='block break-words'>
+                {media.kind === 'voiceNote'
+                  ? HELM_COPY.mediaVoiceNotKept
+                  : HELM_COPY.mediaReadNotKept(shortenFileName(fileName))}
+              </span>
+              <span className='block'>
+                {HELM_COPY.mediaNotKeptHours(hoursLeft)}
+              </span>
+            </>
+          )}
         </span>
         {canKeep && (
           <Button
@@ -234,7 +286,9 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
             className={SMALL_ACTION}
             onClick={() => void keep()}
           >
-            {HELM_COPY.mediaKeepIt}
+            {media.kind === 'voiceNote'
+              ? HELM_COPY.mediaKeepRecording
+              : HELM_COPY.mediaKeepIt}
           </Button>
         )}
       </p>
@@ -253,14 +307,20 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
       : record?.kind === 'fact'
         ? facts.find((entry) => entry.id === record.id)?.statement
         : undefined;
+  const noteTitle =
+    record?.kind === 'note' ? noteById.get(record.id)?.title : undefined;
   const title =
     typeof effectTitle === 'string' && effectTitle
       ? effectTitle
-      : (storedTitle ?? null);
+      : (noteTitle ?? storedTitle ?? null);
+  const noun = HELM_COPY.mediaNoun(media.kind, media.fileName);
   const getLabel = () => {
-    if (!record || !title) return HELM_COPY.mediaKeptNoRecord;
+    if (!record || !title) return HELM_COPY.mediaKeptNoRecord(noun);
+    if (record.kind === 'note' && media.decidedBy !== 'person') {
+      return HELM_COPY.mediaSeeNote(noteTitle || title);
+    }
     return media.decidedBy === 'person'
-      ? HELM_COPY.mediaKeptOn(title)
+      ? HELM_COPY.mediaKeptOn(noun, title)
       : HELM_COPY.mediaSeeOn(title);
   };
   const label = getLabel();
@@ -268,7 +328,9 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
     record === null ||
     (record.kind === 'fact'
       ? facts.some((entry) => entry.id === record.id)
-      : tasksById.has(record.id));
+      : record.kind === 'note'
+        ? noteById.has(record.id)
+        : tasksById.has(record.id));
   const canUndo = media.decidedBy === 'person' && keptBy !== null;
 
   const undo = async () => {
@@ -337,6 +399,12 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
         <KeptMediaViewer
           media={media}
           record={null}
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+      {record?.kind === 'note' && (
+        <NoteSheet
+          noteId={isOpen ? record.id : null}
           onClose={() => setIsOpen(false)}
         />
       )}

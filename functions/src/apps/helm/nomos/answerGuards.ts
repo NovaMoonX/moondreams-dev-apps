@@ -1,4 +1,6 @@
-import type { SearchedEntry } from './aliases.js';
+import { readConnectorAppId } from '../../../vendor/connectionsContract.js';
+import { connectorLabel } from '../syncedCopies.js';
+import type { QuoteEntry, QuoteRecord, SearchedEntry } from './aliases.js';
 import {
   QUOTE_CAP,
   type AnswerCommand,
@@ -21,6 +23,8 @@ export interface AnswerQuote {
   sourceLabel: string;
   at: number | null;
   text: string | null;
+  /** Set on a record read from an app; null on a mail or document quote and on quotes kept before it existed. */
+  record: QuoteRecord | null;
   deepLink: string | null;
   deletedAt: number | null;
 }
@@ -128,8 +132,15 @@ export function buildAnswer(
       index,
   );
   const hasRecordsText = !!command.fromRecordsText;
+  const hasEmptyAppSearch = searched.some(
+    (entry) =>
+      entry.found === 0 &&
+      entry.failed === null &&
+      readConnectorAppId(entry.connectorId) !== null,
+  );
   const fromRecords =
-    command.fromRecordsText && sources.length + quotes.length > 0
+    command.fromRecordsText &&
+    (sources.length + quotes.length > 0 || hasEmptyAppSearch)
       ? oneLine(command.fromRecordsText)
       : null;
   if (hasRecordsText && !fromRecords) onDrop('answer-unsourced');
@@ -170,16 +181,20 @@ export function buildAnswer(
   const quoteIds = Object.fromEntries(
     kept.map((quote) => [quote.alias, newId()]),
   );
+  const toSourceLabel = (quote: QuoteEntry) =>
+    quote.connectorId === 'google:drive'
+      ? `Document · ${quote.title}`
+      : readConnectorAppId(quote.connectorId) !== null
+        ? `${connectorLabel(quote.connectorId)} · ${quote.title}`
+        : `Email from ${toSenderName(quote.from)}`;
   answer.quotes = kept.map((quote) => ({
     id: quoteIds[quote.alias],
     connectorId: quote.connectorId,
     accountId: quote.accountId,
-    sourceLabel:
-      quote.connectorId === 'google:drive'
-        ? `Document · ${quote.title}`
-        : `Email from ${toSenderName(quote.from)}`,
+    sourceLabel: toSourceLabel(quote),
     at: quote.at,
     text: toQuoteText(quote.snippet),
+    record: quote.record ?? null,
     deepLink: quote.deepLink,
     deletedAt: null,
   }));
@@ -205,12 +220,16 @@ export function buildAnswer(
 
 /** The Activity line for an answer: from general knowledge only when no record part was kept. */
 const toQuotedSources = (quotes: CaptureAnswer['quotes']) => {
-  const isDocument = quotes.some(
-    (quote) => quote.connectorId === 'google:drive',
-  );
-  const isEmail = quotes.some((quote) => quote.connectorId !== 'google:drive');
-  if (isDocument && isEmail) return 'an email and a document';
-  return isDocument ? 'a document' : 'an email';
+  const toName = (connectorId: string) =>
+    connectorId === 'google:drive'
+      ? 'a document'
+      : readConnectorAppId(connectorId) !== null
+        ? connectorLabel(connectorId)
+        : 'an email';
+  const names = [...new Set(quotes.map((quote) => toName(quote.connectorId)))];
+  return names.length > 1
+    ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+    : (names[0] ?? 'an email');
 };
 
 export const summarizeAnswer = (answer: CaptureAnswer) => {

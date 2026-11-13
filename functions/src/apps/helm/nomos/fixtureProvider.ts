@@ -5,6 +5,7 @@ import {
 } from '../../../ai/modelProvider.js';
 import { EMPTY_USAGE } from '../../../ai/models.js';
 import { toSenderName } from './answerGuards.js';
+import { getLocalDay, toKnownZone } from '../syncedCopies.js';
 import type { CaptureReading } from './commands.js';
 
 const SPLIT_RE = /\n|,(?!\d)|\band\b/gi;
@@ -392,6 +393,96 @@ async function readMailAnswer(
           }),
         ]
       : []),
+  ];
+}
+
+const SPEND_QUESTION_RE =
+  /\b(?:spend|spent|paid|pay)\b.*?\bat\s+(?:the\s+)?([\p{L}][\p{L}&'.-]*(?:\s+(?!(?:last|this|recently|in|on|over|during)\b)[\p{L}][\p{L}&'.-]*)?)/iu;
+
+const SPEND_ASK_RE = /\b(?:spend|spent)\b/i;
+
+const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
+
+const SPEND_DAY = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+const toSpendDay = (day: string) =>
+  SPEND_DAY.format(Date.parse(`${day}T00:00:00Z`));
+
+const toSpendRange = (question: string, now: number, timeZone: string) => {
+  const today = getLocalDay(now, toKnownZone(timeZone));
+  const [year, month] = [
+    new Date(today).getUTCFullYear(),
+    new Date(today).getUTCMonth(),
+  ];
+  if (/last month/i.test(question)) {
+    return {
+      from: toDayText(Date.UTC(year, month - 1, 1)),
+      to: toDayText(Date.UTC(year, month, 0)),
+    };
+  }
+  return /this month/i.test(question)
+    ? { from: toDayText(Date.UTC(year, month, 1)), to: toDayText(today) }
+    : { from: toDayText(today - 30 * 86_400_000), to: toDayText(today) };
+};
+
+interface SpendResult {
+  records?: { alias?: string; payee: string; amount: string }[];
+  matchedCount?: number;
+  total?: string;
+  from?: string | null;
+  to?: string | null;
+}
+
+async function readSpendAnswer(
+  text: string,
+  client: ToolLoopRequest['mcpClient'] | undefined,
+  toolCalls: string[],
+  timeZone: string,
+) {
+  const question = text.trim();
+  const named = SPEND_QUESTION_RE.exec(question)?.[1];
+  const isAnyPayee =
+    named === undefined &&
+    question.endsWith('?') &&
+    SPEND_ASK_RE.test(question);
+  if (!client || (named === undefined && !isAnyPayee)) return null;
+  const offered = (await client.listTools().catch(() => ({ tools: [] }))).tools;
+  if (!offered.some((tool) => tool.name === 'search_app_records')) return null;
+  const found = await callJson<SpendResult>(
+    client,
+    toolCalls,
+    'search_app_records',
+    {
+      app: 'app:runway',
+      category: 'transactions',
+      ...(named !== undefined && { payee: named }),
+      ...toSpendRange(question, Date.now(), timeZone),
+    },
+  );
+  if (!found || typeof found.matchedCount !== 'number') return null;
+  const range =
+    found.from && found.to
+      ? ` between ${toSpendDay(found.from)} and ${toSpendDay(found.to)}`
+      : '';
+  const at = named === undefined ? '' : ` at ${named}`;
+  const aliases = (found.records ?? []).flatMap((record) =>
+    record.alias ? [record.alias] : [],
+  );
+  const count = `${found.matchedCount} ${found.matchedCount === 1 ? 'purchase' : 'purchases'}`;
+  return [
+    toAnswer({
+      scope: 'yourThings',
+      question,
+      fromRecordsText:
+        found.matchedCount === 0
+          ? `No purchases${at}${range}.`
+          : `You spent ${found.total}${at}${range} across ${count}.`,
+      quoteAliases: aliases.slice(0, 3),
+    }),
   ];
 }
 
@@ -1333,6 +1424,190 @@ const readTopicWork = (text: string, message: string) => {
   return null;
 };
 
+const PACKING_STEPS: [string, string | null][] = [
+  ['Check the weather at the destination', null],
+  ['Confirm the hotel booking', null],
+  ['Two work shirts', 'Clothes'],
+  ['Trousers', 'Clothes'],
+  ['Shoes for the meeting', 'Clothes'],
+  ['Sleepwear', 'Clothes'],
+  ['Toiletry bag', 'Clothes'],
+  ['Laptop', 'Electronics'],
+  ['Phone charger', 'Electronics'],
+  ['Headphones', 'Electronics'],
+  ['ID or passport', 'Documents'],
+  ['Printed agenda', 'Documents'],
+];
+
+interface ProcedureOpenBlock {
+  procedure: string;
+  steps: {
+    step: string;
+    text: string;
+    detail: string | null;
+    group: string | null;
+  }[];
+}
+
+const toProcedureCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    procedureAlias: null,
+    procedureSteps: [],
+    fromTaskAlias: null,
+    changeSummary: null,
+    requestQuote: null,
+    ...fields,
+  });
+
+const toRunCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    procedureAlias: null,
+    projectRef: null,
+    runStepAliases: null,
+    requestQuote: null,
+    ...fields,
+  });
+
+/** The emulator's stand-in for starting and ticking a run: "Start packing for the Pacific Northwest weekend" starts the procedure whose title says packing, for the trip in the synced records when there is one, and "done with the charger" ticks every undone step of an open run that names a charger. Null for any other words, or when the procedure or the steps are not in the context. */
+const readRunWork = (text: string, message: string) => {
+  const quote = text.trim().replace(/[.!]+$/, '');
+  if (/\bstart packing for the pacific northwest weekend\b/i.test(text)) {
+    const procedure = (
+      readBlock<{ procedure: string; title: string }[]>(
+        message,
+        'your_procedures',
+      ) ?? []
+    ).find((entry) => /packing/i.test(entry.title));
+    const trip = (
+      readBlock<{ alias: string; title: string; kind: string }[]>(
+        message,
+        'synced_records',
+      ) ?? []
+    ).find(
+      (entry) =>
+        entry.kind === 'trip' && /pacific northwest/i.test(entry.title),
+    );
+    return procedure
+      ? {
+          commands: [
+            toRunCommand({
+              kind: 'startRun',
+              procedureAlias: procedure.procedure,
+              aboutAlias: trip?.alias ?? null,
+              requestQuote: quote,
+            }),
+          ],
+          mentions: [],
+          places: [],
+        }
+      : null;
+  }
+  if (/\bdone with the charger\b/i.test(text)) {
+    const aliases = (
+      readBlock<{ undone: { step: string; text: string }[] }[]>(
+        message,
+        'open_runs',
+      ) ?? []
+    )
+      .map((run) =>
+        run.undone
+          .filter((step) => /charger/i.test(step.text))
+          .map((step) => step.step),
+      )
+      .find((found) => found.length > 0);
+    return aliases
+      ? {
+          commands: [
+            toRunCommand({
+              kind: 'tickRun',
+              runStepAliases: aliases,
+              requestQuote: quote,
+            }),
+          ],
+          mentions: [],
+          places: [],
+        }
+      : null;
+  }
+  return null;
+};
+
+/** The emulator's stand-in for the ways a procedure is made and changed: "Make me a packing routine for work trips", "make this a routine" on an open task, and "Add a step for the laptop charger" with a procedure open (with none open it names no procedure, which code drops). Null for any other words. */
+const readProcedureWork = (text: string, message: string) => {
+  const open = readBlock<ProcedureOpenBlock>(message, 'procedure_open');
+  if (/\bpacking routine for work trips?\b/i.test(text)) {
+    return {
+      commands: [
+        toProcedureCommand({
+          kind: 'createProcedure',
+          title: 'Packing for a work trip',
+          requestQuote: 'make me a packing routine',
+          procedureSteps: PACKING_STEPS.map(([stepText, group]) => ({
+            stepAlias: null,
+            text: stepText,
+            detail: null,
+            group,
+          })),
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  if (
+    /\bmake (this|these|it|them|the steps)\b.*\b(routine|procedure)\b/i.test(
+      text,
+    )
+  ) {
+    return {
+      commands: [
+        toProcedureCommand({
+          kind: 'createProcedure',
+          title: 'Routine',
+          requestQuote: text.trim().replace(/[.!]+$/, ''),
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  if (/\badd a step for the laptop charger\b/i.test(text)) {
+    const kept = (open?.steps ?? []).map((step) => ({
+      stepAlias: step.step,
+      text: step.text,
+      detail: step.detail,
+      group: step.group,
+    }));
+    const at = kept.findIndex((step) => step.text === 'Laptop') + 1;
+    const added = {
+      stepAlias: null,
+      text: 'Laptop charger',
+      detail: null,
+      group: 'Electronics',
+    };
+    return {
+      commands: [
+        toProcedureCommand({
+          kind: 'reviseProcedure',
+          procedureAlias: open?.procedure ?? null,
+          procedureSteps: [
+            ...kept.slice(0, at === 0 ? kept.length : at),
+            added,
+            ...(at === 0 ? [] : kept.slice(at)),
+          ],
+          changeSummary: 'added the laptop charger',
+          requestQuote: 'add a step for the laptop charger',
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  return null;
+};
+
 /** The emulator's stand-in for "remember that cakes keep 3 days in the fridge" or "note: the wifi at the cabin is …": one createNote of the words after the lead, filed under every topic whose name shares its first four letters with a word of them (or that a few kitchen words stand for). Null for any other words. */
 const readNote = (text: string, message: string) => {
   const match = LEAD_RE.exec(text);
@@ -1425,10 +1700,10 @@ function createTextFixtureProvider(
           toolCalls: [],
         };
       }
-      const grown = readTopicWork(
-        text,
-        messageText(messages[0]?.content ?? ''),
-      );
+      const grown =
+        readRunWork(text, messageText(messages[0]?.content ?? '')) ??
+        readProcedureWork(text, messageText(messages[0]?.content ?? '')) ??
+        readTopicWork(text, messageText(messages[0]?.content ?? ''));
       if (grown) {
         return {
           terminalInput: grown,
@@ -1517,6 +1792,25 @@ function createTextFixtureProvider(
       if (mail) {
         return {
           terminalInput: { commands: mail },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls,
+        };
+      }
+      const spend = await readSpendAnswer(
+        text,
+        mcpClient,
+        toolCalls,
+        readBlock<{ timeZone?: string }>(
+          messageText(messages[0]?.content ?? ''),
+          'context',
+        )?.timeZone ?? 'UTC',
+      );
+      if (spend) {
+        return {
+          terminalInput: { commands: spend },
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,
@@ -1643,7 +1937,33 @@ const wordsOf = (value: string) =>
     ).filter((word) => !FILLER.has(word) && !KEEP_PHOTO_RE.test(word)),
   );
 
-/** Emulator stand-in for photos: words that call the photo a quote, receipt, letter, form or invoice (or say keep) keep each one on the first open task sharing a word with them, else on a task made from the words; any other photo is read and let go, and the usual splitter files the words. */
+const VET_FILE_RE = /\b(vet|visit|booster|appointment|invoice|contract)\b/i;
+const TOPIC_FILE_NAME_RE = /packing|checklist|list/i;
+const TOPIC_WORD_RE = /\btopic\b/i;
+const NOTE_WORD_RE = /\b(note|keep)\b/i;
+const PDF_TASK_REF = '$new9';
+const PDF_TITLE_CHARS = 50;
+
+interface ListedFile {
+  alias: string;
+  kind: string;
+  name: string;
+  text: string | null;
+}
+
+const createTaskCommand = (ref: string, title: string) => ({
+  kind: 'createTask',
+  ref,
+  taskAlias: null,
+  title: title.charAt(0).toUpperCase() + title.slice(1),
+  dueSpanId: null,
+  isUrgent: null,
+  whoRefs: [],
+  placeRefs: [],
+  projectRef: null,
+});
+
+/** Emulator stand-in for photos and files. Photos: words that call the photo a quote, receipt, letter, form or invoice (or say keep) keep each one on the first open task sharing a word with them, else on a task made from the words; any other photo is read and let go. A PDF that speaks of a vet, visit, booster, appointment, invoice or contract is kept on the first open task sharing a word with it, else on a new task named from its first line; any other PDF is let go. A Markdown file is judged by the person's words and the file's name only, never by what it says: "topic", or a name with packing, checklist or list, makes a topic; "note" or "keep" a note; anything else is let go. The usual splitter files the words. */
 export function createFixtureProvider(
   text: string,
   reading: CaptureReading,
@@ -1653,60 +1973,104 @@ export function createFixtureProvider(
     runToolLoop: async (request) => {
       const result = await base.runToolLoop(request);
       const message = messageText(request.messages[0]?.content ?? '');
-      const photos = readBlock<{ alias: string }[]>(message, 'attachments');
+      const attachments =
+        readBlock<{ alias: string; kind: string }[]>(message, 'attachments') ??
+        [];
       if (
-        !photos?.length ||
+        attachments.length === 0 ||
         result.endedBy !== 'terminal' ||
         result.terminalName !== 'file_results'
       ) {
         return result;
       }
+      const files = readBlock<ListedFile[]>(message, 'files') ?? [];
+      const openTasks =
+        readBlock<{ alias: string; title: string }[]>(message, 'open_tasks') ??
+        [];
       const isKeep = KEEP_PHOTO_RE.test(text) && !NOT_KEEP_PHOTO_RE.test(text);
       const mine = wordsOf(text);
-      const task = isKeep
-        ? (
-            readBlock<{ alias: string; title: string }[]>(
-              message,
-              'open_tasks',
-            ) ?? []
-          ).find((entry) =>
+      const photoTask = isKeep
+        ? openTasks.find((entry) =>
             [...wordsOf(entry.title)].some((word) => mine.has(word)),
           )
         : undefined;
       const title = text.trim().replace(/[.!]+$/, '');
-      const made = isKeep && !task && hasMeaning(title);
-      const target = task?.alias ?? '$new1';
-      const media = photos.map(({ alias }) => ({
+      const hasPhotos = attachments.some(({ kind }) => kind === 'photo');
+      const photoMade = isKeep && !photoTask && hasMeaning(title);
+      const toPhoto = ({ alias }: { alias: string }) => ({
         alias,
-        decision: isKeep && (task || made) ? 'keep' : 'discard',
+        decision: isKeep && (photoTask || photoMade) ? 'keep' : 'discard',
         caption: isKeep ? 'A photo you sent' : 'A screenshot',
-        attachTo: isKeep && (task || made) ? [target] : [],
-      }));
-      if (!isKeep) {
+        attachTo:
+          isKeep && (photoTask || photoMade)
+            ? [photoTask?.alias ?? '$new1']
+            : [],
+        asNote: false,
+        asTopic: false,
+        topicAliases: [],
+      });
+      const pdfs = attachments.flatMap(({ alias, kind }) => {
+        const file = files.find((entry) => entry.alias === alias);
+        const said = `${file?.name ?? ''} ${file?.text ?? ''}`;
+        return kind === 'pdf' && file && VET_FILE_RE.test(said)
+          ? [
+              {
+                alias,
+                said,
+                firstLine: (file.text ?? file.name).split('\n')[0],
+              },
+            ]
+          : [];
+      });
+      const pdfWords = (said: string) => wordsOf(said);
+      const pdfTask = (said: string) =>
+        openTasks.find((entry) =>
+          [...wordsOf(entry.title)].some((word) => pdfWords(said).has(word)),
+        );
+      const pdfNeedsNew = pdfs.some(({ said }) => !pdfTask(said));
+      const pdfTitle = `Vet visit: ${(pdfs.find(({ said }) => !pdfTask(said))?.firstLine ?? '').slice(0, PDF_TITLE_CHARS).trim()}`;
+      const toFile = ({ alias, kind }: { alias: string; kind: string }) => {
+        const file = files.find((entry) => entry.alias === alias);
+        const pdf = pdfs.find((entry) => entry.alias === alias);
+        const isNotKept = NOT_KEEP_PHOTO_RE.test(text);
+        const asTopic =
+          kind === 'markdown' &&
+          !isNotKept &&
+          (TOPIC_WORD_RE.test(text) ||
+            TOPIC_FILE_NAME_RE.test(file?.name ?? ''));
+        const asNote =
+          kind === 'markdown' &&
+          !isNotKept &&
+          (asTopic || NOTE_WORD_RE.test(text));
+        const isKept = asNote || pdf !== undefined;
         return {
-          ...result,
-          terminalInput: { ...(result.terminalInput as object), media },
+          alias,
+          decision: isKept ? 'keep' : 'discard',
+          caption: isKept ? `Sent as ${file?.name ?? 'a file'}` : null,
+          attachTo: pdf ? [pdfTask(pdf.said)?.alias ?? PDF_TASK_REF] : [],
+          asNote,
+          asTopic,
+          topicAliases: [],
         };
-      }
+      };
+      const media = attachments.map((entry) =>
+        entry.kind === 'photo' ? toPhoto(entry) : toFile(entry),
+      );
+      const usesPhotoPath = hasPhotos && isKeep;
+      const first = usesPhotoPath
+        ? {
+            commands: photoMade ? [createTaskCommand('$new1', title)] : [],
+            ...readEntities(text, reading),
+          }
+        : (result.terminalInput as { commands?: unknown[] });
       return {
         ...result,
         terminalInput: {
-          commands: made
-            ? [
-                {
-                  kind: 'createTask',
-                  ref: '$new1',
-                  taskAlias: null,
-                  title: title.charAt(0).toUpperCase() + title.slice(1),
-                  dueSpanId: null,
-                  isUrgent: null,
-                  whoRefs: [],
-                  placeRefs: [],
-                  projectRef: null,
-                },
-              ]
-            : [],
-          ...readEntities(text, reading),
+          ...first,
+          commands: [
+            ...(first.commands ?? []),
+            ...(pdfNeedsNew ? [createTaskCommand(PDF_TASK_REF, pdfTitle)] : []),
+          ],
           media,
         },
       };

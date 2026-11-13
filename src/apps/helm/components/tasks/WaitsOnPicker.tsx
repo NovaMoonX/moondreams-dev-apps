@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 
 import BackLink from '@/components/BackLink';
 import { HELM_COPY, WAITS_ON_LIMIT } from '@apps/helm/constants';
@@ -38,7 +40,7 @@ function WaitsOnPicker({
             return (
               <li key={task.id}>
                 <label className='flex min-h-12 items-center gap-3 py-1'>
-                  <Checkbox
+                  <AppCheckbox
                     checked={isChosen}
                     disabled={isFull && !isChosen}
                     onCheckedChange={(isOn) =>

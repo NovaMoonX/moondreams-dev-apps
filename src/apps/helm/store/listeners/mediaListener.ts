@@ -15,6 +15,7 @@ import { MEDIA_LIMIT } from '@apps/helm/constants';
 import type {
   Media,
   MediaAttachment,
+  MediaKind,
   MediaSealed,
   OpenMedia,
 } from '@apps/helm/types';
@@ -24,13 +25,18 @@ const toError = (error: unknown) =>
 
 const toText = (value: unknown) => (typeof value === 'string' ? value : null);
 
+const KINDS: MediaKind[] = ['photo', 'pdf', 'voiceNote', 'markdown'];
+
+const toKind = (value: unknown): MediaKind =>
+  KINDS.find((kind) => kind === value) ?? 'photo';
+
 const toAttachments = (value: unknown): MediaAttachment[] =>
   Array.isArray(value)
     ? value.filter(
         (entry): entry is MediaAttachment =>
           typeof entry === 'object' &&
           entry !== null &&
-          ['who', 'place', 'task', 'fact'].includes(
+          ['who', 'place', 'task', 'fact', 'note'].includes(
             (entry as MediaAttachment).kind,
           ) &&
           typeof (entry as MediaAttachment).id === 'string',
@@ -45,11 +51,13 @@ async function openMedia(
   const data = entry.data() as Partial<Media>;
   const base = {
     id: entry.id,
-    kind: 'photo',
+    kind: toKind(data.kind),
     role: data.role ?? 'photo',
     status: data.status ?? 'kept',
     mimeType: data.mimeType ?? 'image/webp',
     hasThumb: data.hasThumb ?? false,
+    durationMs: data.durationMs ?? null,
+    pageCount: data.pageCount ?? null,
     attachedTo: toAttachments(data.attachedTo),
     decidedBy: data.decidedBy ?? null,
     createdAt: data.createdAt ?? 0,
@@ -59,25 +67,31 @@ async function openMedia(
     executionId: data.executionId ?? null,
   } as const;
   try {
-    if (!data.sealed) throw new Error('This photo has no sealed details.');
+    if (!data.sealed) throw new Error('This file has no sealed details.');
     const payload = await read<Partial<MediaSealed>>(data.sealed);
     const bytesNonce = toText(payload.bytesNonce);
     const keyId = toText(payload.keyId);
-    if (!bytesNonce || !keyId) throw new Error('This photo has no nonce.');
+    if (!keyId || (!bytesNonce && base.kind !== 'markdown')) {
+      throw new Error('This file has no nonce.');
+    }
     return {
       ...base,
       bytesNonce,
       thumbNonce: toText(payload.thumbNonce),
       caption: toText(payload.caption),
+      fileName: toText(payload.fileName),
+      text: toText(payload.text),
       keyId,
       isUnreadable: false,
     };
   } catch {
     return {
       ...base,
-      bytesNonce: '',
+      bytesNonce: null,
       thumbNonce: null,
       caption: null,
+      fileName: null,
+      text: null,
       keyId: '',
       isUnreadable: true,
     };
