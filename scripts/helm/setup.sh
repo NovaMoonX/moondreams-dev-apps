@@ -213,8 +213,8 @@ deepgram_run() {
     return 0
   fi
   bash scripts/voice/deepgramSecret.sh
-  add BROWSER_LIST "Deepgram spending guard (console.deepgram.com, Billing, Usage alerts)"
-  pause "Set the usage alert with the steps above, then press Enter: "
+  add BROWSER_LIST "Deepgram spend alert, if its console offers one (optional)"
+  pause "Set a spend alert if you see one (or skip it), then press Enter: "
 }
 
 tts_done() { api_enabled texttospeech.googleapis.com; }
