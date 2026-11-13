@@ -2169,11 +2169,18 @@ export const selectRulesNeedingHome = createSelector(
   },
 );
 
-/** What kind each plan item is, by id, so a rule can say its target became a goal. */
-export const selectItemKinds = createSelector(
+/** What each item that was turned into another became, by the old item's id, so a rule can say its envelope is a goal now. */
+export const selectBecameKinds = createSelector(
   [selectItems],
-  (items): ReadonlyMap<string, PlanItemDoc['kind']> =>
-    new Map(items.map((item) => [item.id, item.kind])),
+  (items): ReadonlyMap<string, PlanItemDoc['kind']> => {
+    const kinds = new Map(items.map((item) => [item.id, item.kind]));
+    return new Map(
+      items.flatMap((item) => {
+        const kind = kinds.get(item.becameItemId ?? '');
+        return kind === undefined ? [] : [[item.id, kind] as const];
+      }),
+    );
+  },
 );
 
 export const selectIsMemoriesLoaded = (state: RootState) =>

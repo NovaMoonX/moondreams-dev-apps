@@ -5421,7 +5421,10 @@ export const RULE_WORDS = {
   saved: 'Rule saved',
   made: 'Rule made',
   gone: 'This rule was changed or removed on another device.',
-  endedEnvelope: (name: string) => `${name} has ended, so this rule is paused`,
+  endedEnvelope: (name: string | null) =>
+    name === null
+      ? 'Its envelope has ended, so this rule is paused'
+      : `${name} has ended, so this rule is paused`,
   noEnvelope: 'an envelope that has ended',
   placedBy: (envelope: string) => `Went to ${envelope}`,
   placedBySub: (sentence: string) => `Your rule: ${sentence}`,

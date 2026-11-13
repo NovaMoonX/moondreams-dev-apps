@@ -37,6 +37,7 @@ export function useRuleNames() {
       }),
     isEnded: (rule: RuleSealed) => needsNewHome(rule, liveIds),
     getEnvelopeName,
+    findEnvelopeName: (target: string) => looks.get(target)?.name ?? null,
     getCardLabel,
   };
 }

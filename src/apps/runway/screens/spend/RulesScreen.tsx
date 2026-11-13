@@ -37,7 +37,7 @@ import {
   selectAllCards,
   selectEnvelopes,
   selectIsRulesLoaded,
-  selectItemKinds,
+  selectBecameKinds,
   selectItemLooks,
   selectRules,
   selectRulesNeedingHome,
@@ -186,11 +186,11 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const homeless = useAppSelector((state) =>
     selectRulesNeedingHome(state, today),
   );
-  const kinds = useAppSelector(selectItemKinds);
+  const becameKinds = useAppSelector(selectBecameKinds);
   const looks = useAppSelector(selectItemLooks);
   const cards = useAppSelector(selectAllCards);
   const isLoaded = useAppSelector(selectIsRulesLoaded);
-  const { describe, getEnvelopeName, getCardLabel } = useRuleNames();
+  const { describe, findEnvelopeName, getCardLabel } = useRuleNames();
   const { openView } = useRunwayUrlState();
   const selection = useSelection();
   const [query, setQuery] = useState('');
@@ -257,8 +257,8 @@ function RulesScreen({ onClose }: RulesScreenProps) {
 
   const getDetail = (rule: OpenRule) => {
     if (!homelessIds.has(rule.id)) return undefined;
-    const name = getEnvelopeName(rule.target);
-    return kinds.get(rule.target) === 'goal'
+    const name = findEnvelopeName(rule.target);
+    return becameKinds.get(rule.target) === 'goal' && name !== null
       ? RULE_WORDS.goalNow(name)
       : RULE_WORDS.endedEnvelope(name);
   };

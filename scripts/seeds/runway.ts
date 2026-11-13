@@ -2549,7 +2549,7 @@ async function writeSeedEnvelopes(
         priority: 'must',
         orderIndex: 1,
         groupId: 'seed-group-home',
-        maxCents: null,
+        maxCents: 90_000,
         spillTo: [],
         funding: { amount: exact(15_000), cadence: { kind: 'everyIncomeDay' } },
         extras: [{ tier: 'want', cents: 5_000, orderIndex: 9 }],

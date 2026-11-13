@@ -184,6 +184,7 @@ export function startItemsListener(
           endedAt: data.endedAt ?? null,
           archivedAt: data.archivedAt ?? null,
           heldReleasedOn: readHeldReleasedOn(data),
+          becameItemId: data.becameItemId ?? null,
         })),
       );
       sequence.latest += 1;

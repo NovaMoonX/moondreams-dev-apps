@@ -208,7 +208,10 @@ export async function convertItem(
     transaction.set(subRef(uid, 'items', newItemId), docs.header);
     transaction.set(subRef(uid, 'versions', docs.version.id), docs.version);
     transaction.set(subRef(uid, 'changes', changeId), docs.change);
-    transaction.update(subRef(uid, 'items', itemId), { archivedAt: date });
+    transaction.update(subRef(uid, 'items', itemId), {
+      archivedAt: date,
+      becameItemId: newItemId,
+    });
     if (moveSealed !== null) {
       markLedgerWrite(transaction, uid, planData, [date]);
       transaction.set(subRef(uid, 'moves', moveId), {
@@ -376,7 +379,10 @@ export async function undoConvertItem(
       itemIds: [itemId, newItemId],
       sealed: changeSealed,
     });
-    transaction.update(subRef(uid, 'items', itemId), { archivedAt: null });
+    transaction.update(subRef(uid, 'items', itemId), {
+      archivedAt: null,
+      becameItemId: null,
+    });
     transaction.update(subRef(uid, 'items', newItemId), { archivedAt: date });
     holders.forEach((holder) => {
       if (holder === null) return;
