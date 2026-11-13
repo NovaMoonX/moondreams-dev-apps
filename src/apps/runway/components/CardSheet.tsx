@@ -32,6 +32,7 @@ import {
 import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
 import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
+import { describeBankUpdated } from '@apps/runway/utils/bankFreshness';
 import SheetHead from '@apps/runway/components/SheetHead';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import {
@@ -57,6 +58,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { OpenCard } from '@apps/runway/types';
+import HelpTip from '@/components/HelpTip';
 import { useNow } from '@/hooks/useNow';
 import CardHistoryView from '@apps/runway/components/CardHistoryView';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -151,7 +153,8 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const [isArchiving, setIsArchiving] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const reserveCents = balances.reserveByCard[card.id] ?? 0;
-  const today = todayAsUtcDate(useNow(60_000));
+  const now = useNow(60_000);
+  const today = todayAsUtcDate(now);
   const [view, setView] = useState<'menu' | 'history' | 'purchase' | 'archive'>(
     'menu',
   );
@@ -195,6 +198,8 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       : (state.runway.links.find((link) => link.id === card.linkId)
           ?.institutionName ?? null),
   );
+  const bankUpdated =
+    bank === null ? null : describeBankUpdated(bank.asOf, now);
 
   const archive = async (choice: HeldChoice | null) => {
     if (!user || isArchiving) return;
@@ -345,15 +350,19 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               pendingCents > 0
                 ? CARD_WORDS.pendingAmount(formatCents(pendingCents))
                 : null,
-              linkedFact,
+              bankUpdated?.text ?? linkedFact,
             ]
               .filter(Boolean)
               .join(' \u00b7 ')}
+            isFactFresh={bankUpdated?.isFresh ?? false}
           />
           {bank?.hasInstantBalance === false && (
-            <p className='text-muted-foreground text-sm'>
-              {CARD_WORDS.slowBank(bankName ?? LINK_WORDS.fallbackBank)}
-            </p>
+            <HelpTip
+              title={CARD_WORDS.slowBankTitle}
+              badgeLabel={CARD_WORDS.slowBankChip}
+            >
+              <p>{CARD_WORDS.slowBank(bankName ?? LINK_WORDS.fallbackBank)}</p>
+            </HelpTip>
           )}
           <Button
             type='button'

@@ -544,9 +544,12 @@ function AccountSheet({
           isFactFresh={isBankBalance && (bankUpdated?.isFresh ?? false)}
         />
         {isBankBalance && bank?.hasInstantBalance === false && (
-          <p className='text-muted-foreground text-sm'>
-            {ACCOUNT_WORDS.slowBank(bankName ?? LINK_WORDS.fallbackBank)}
-          </p>
+          <HelpTip
+            title={ACCOUNT_WORDS.slowBankTitle}
+            badgeLabel={ACCOUNT_WORDS.slowBankChip}
+          >
+            <p>{ACCOUNT_WORDS.slowBank(bankName ?? LINK_WORDS.fallbackBank)}</p>
+          </HelpTip>
         )}
         {interest !== null && interestLine !== null && (
           <HelpTip

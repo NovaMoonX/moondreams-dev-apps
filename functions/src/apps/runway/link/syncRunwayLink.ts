@@ -470,6 +470,8 @@ async function writeBalances(
     const targetId = target?.accountId ?? target?.cardId ?? null;
     const sealed = toBalanceSealed(account);
     if (targetId === null || sealed === null) return [];
+    // A saved balance with no date can't say how old it is, so it is left out rather than shown as new.
+    if (account.balanceAsOf === null && !account.hasInstantBalance) return [];
     const asOf = Math.min(account.balanceAsOf ?? now, now);
     return [
       {

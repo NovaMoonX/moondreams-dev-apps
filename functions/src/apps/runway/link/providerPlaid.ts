@@ -162,9 +162,9 @@ interface PlaidAccount {
 
 const CAPITAL_ONE = 'ins_128026';
 const APPLE_CARD = 'ins_136439';
-/** How old a saved balance a live read may fall back to where the bank shares no live one. */
 /** A live read can take 30 seconds at some banks; past this the saved balance stands in, so one slow bank never holds up the rest. */
 const LIVE_READ_TIMEOUT_MS = 20_000;
+/** How old a saved balance a live read may fall back to where the bank shares no live one. */
 const SAVED_BALANCE_MAX_AGE_MS = 30 * 86_400_000;
 
 /** Plaid documents these as sharing only a saved balance: Capital One for everything but checking and savings, Apple Card for all. */

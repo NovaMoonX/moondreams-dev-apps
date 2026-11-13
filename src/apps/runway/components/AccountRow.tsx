@@ -28,7 +28,10 @@ function AccountRow({ account, unassignedCents, onOpen }: AccountRowProps) {
         ) ?? null),
   );
   const bankFacts = bank === null ? null : describeBankFacts(bank, now);
-  const bankLine = [describeAccountLine(account), bankFacts?.text]
+  const bankLine = [
+    describeAccountLine(account),
+    isShort ? null : bankFacts?.text,
+  ]
     .filter(Boolean)
     .join(' · ');
   const detail = isShort
