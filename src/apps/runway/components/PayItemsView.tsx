@@ -41,7 +41,11 @@ import {
   describeAmount,
   describeFundingShort,
 } from '@apps/runway/utils/fundingText';
-import { listPayOptions, toDayWord } from '@apps/runway/utils/payFrom';
+import {
+  describePayChoice,
+  listPayOptions,
+  toDayWord,
+} from '@apps/runway/utils/payFrom';
 
 type Kind = PayMember['kind'];
 
@@ -385,7 +389,7 @@ function PayItemsView({
                 },
                 PAY_ITEMS_WORDS.added(
                   candidate.name,
-                  picked.label.replace(/^The /, 'the '),
+                  describePayChoice(picked.fundedBy, plan, true),
                 ),
               ),
             )
