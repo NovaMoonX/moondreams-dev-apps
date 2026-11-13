@@ -162,9 +162,16 @@ export async function writeCanary(
   if (!Object.hasOwn(keyring.keys, masterKeyId)) {
     throw new Refusal(`Refused: ${masterKeyId} is not in the keyring.`);
   }
-  await firestore
-    .doc(app.keyCheckPath(masterKeyId))
-    .create(app.makeKeyCheck(keyring, masterKeyId, now));
+  try {
+    await firestore
+      .doc(app.keyCheckPath(masterKeyId))
+      .create(app.makeKeyCheck(keyring, masterKeyId, now));
+  } catch (error) {
+    const isAlreadyThere = (error as { code?: number }).code === 6;
+    if (isAlreadyThere)
+      throw new Refusal(`The canary for ${masterKeyId} already exists.`);
+    throw error;
+  }
   return { canary: masterKeyId };
 }
 

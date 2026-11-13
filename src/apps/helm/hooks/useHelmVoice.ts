@@ -13,6 +13,7 @@ import { httpsCallable } from 'firebase/functions';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
 import { createSpeechSource } from '@/lib/speech/voice/speechSource';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
@@ -130,6 +131,7 @@ export function useHelmVoice() {
   const uid = user?.uid ?? null;
   const [note, setNote] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [hasNoticeDoor, setHasNoticeDoor] = useState(false);
   const captures = useAppSelector(selectAllCaptures);
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
@@ -172,12 +174,23 @@ export function useHelmVoice() {
   );
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const topScreen = useAppSelector(selectTopScreen);
-  const { view, isAskRequested, openAsk } = useHelmUrlState();
+  const { view, isAskRequested, openAsk, openVoiceSettings } =
+    useHelmUrlState();
   const [showsPhoneLine, setShowsPhoneLine] = useState(false);
   const isHomeView = VIEW_KINDS[view] === 'home';
 
+  const lang = navigator.language || 'en-US';
+  // Started ahead of the first listen only where it will be the one listening: the phrase, or no cloud.
+  const onDevice = useOnDeviceRecognition({
+    lang,
+    isWarm:
+      keyStatus === 'ready' &&
+      (isWakeWordOn || voiceMode !== 'cloudWhenOnline'),
+  });
+
   const voice = useVoiceConversation({
-    lang: navigator.language || 'en-US',
+    lang,
+    isOnDeviceReady: onDevice.isOn,
     identity: voiceIdentity,
     endPhrases: END_PHRASES,
     onUtterance: (text, heardBy) => {
@@ -186,6 +199,10 @@ export function useHelmVoice() {
     onNothingHeard: (isAsked) => {
       interruptedCaptureId.current = null;
       if (isAsked) showNote(HELM_COPY.talkHeardNothing);
+    },
+    onDeviceListenFailed: (isAsked) => {
+      interruptedCaptureId.current = null;
+      if (isAsked) showNote(HELM_COPY.talkListenFailed);
     },
     onCloudHeld: () => setShowsPhoneLine(true),
     onBargeIn: () => {
@@ -216,6 +233,11 @@ export function useHelmVoice() {
     noteId.current = window.setTimeout(() => setNote(null), NOTE_MS);
   }
 
+  function showNotice(text: string, hasDoor: boolean) {
+    setNotice(text);
+    setHasNoticeDoor(hasDoor);
+  }
+
   function say(line: string) {
     voice.settle();
     showNote(line);
@@ -227,23 +249,30 @@ export function useHelmVoice() {
   }
 
   /** The phrase was heard: it starts what a Talk tap starts, from the page in front, or sends the words that came with it. */
-  function wakeUp(rest: string | null) {
+  function wakeUp(rest: string | null, heardBy: { sttProvider: string }) {
     if (!voice.isAvailable) return false;
     const page = isHomeView
       ? null
       : (selectTopScreen(store.getState())?.context ?? null);
     const isStarted =
-      rest === null ? talk(page) === 'started' : sendHeard(rest, page);
+      rest === null
+        ? talk(page) === 'started'
+        : sendHeard(rest, page, heardBy.sttProvider);
     if (isStarted && page !== null && !isAskRequested) void openAsk();
     return isStarted;
   }
 
-  function sendHeard(text: string, page: ScreenContext | null) {
+  function sendHeard(
+    text: string,
+    page: ScreenContext | null,
+    sttProvider: string,
+  ) {
     screen.current = page;
     setNotice(null);
+    setHasNoticeDoor(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
-    return voice.submit(text, 'browser');
+    return voice.submit(text, sttProvider);
   }
 
   async function handleUtterance(text: string, sttProvider: string) {
@@ -636,11 +665,21 @@ export function useHelmVoice() {
       voice.stop();
       return 'stopped' as const;
     }
+    if (!navigator.onLine && !onDevice.isOn) {
+      showNotice(
+        onDevice.block === null
+          ? HELM_COPY.talkNeedsConnection
+          : HELM_COPY.talkNeedsConnectionBlocked,
+        onDevice.block === null,
+      );
+      return 'blocked' as const;
+    }
     if (!voice.isAvailable) {
-      setNotice(
+      showNotice(
         voice.unavailableReason === 'no-permission'
           ? HELM_COPY.talkNeedsMicrophone
           : HELM_COPY.talkNeedsRecognition,
+        false,
       );
       return 'blocked' as const;
     }
@@ -650,6 +689,7 @@ export function useHelmVoice() {
   function startListening(page: ScreenContext | null) {
     screen.current = page;
     setNotice(null);
+    setHasNoticeDoor(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
     voice.listen();
@@ -661,7 +701,12 @@ export function useHelmVoice() {
     note,
     notice,
     showsPhoneLine,
-    clearNotice: () => setNotice(null),
+    hasNoticeDoor,
+    openVoiceSettings,
+    clearNotice: () => {
+      setNotice(null);
+      setHasNoticeDoor(false);
+    },
     talk,
     setSurfaceShown,
   };

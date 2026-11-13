@@ -56,6 +56,7 @@ export interface HelmState {
   /** Raised by Try again; asking for the key again follows it. */
   keyAttempt: number;
   isKeyRetrying: boolean;
+  /** Set while the app is open on this browser's kept key: when the server last confirmed it (0 when unknown), for the "As of" line. */
   /** Refusals in a row, so a Try again that fails again can say so. */
   keyRefusals: number;
   /** The profile, and whether the first snapshot has arrived, so a missing profile is never mistaken for one still loading. */

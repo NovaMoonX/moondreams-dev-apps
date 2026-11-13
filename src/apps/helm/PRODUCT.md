@@ -90,17 +90,17 @@ The owner chose a hybrid voice: natural cloud voices online, the phone's own whe
 - **Undo by voice.** "Undo that" or "take that back" undoes the last turn's changes, and says what it took back.
 - **One voice.** Helm has one voice identity: warm, a natural pace, never over-cheerful, urgent without alarm, concise. Whichever provider speaks, it is set to match. Tone (Your Assistant, In Detail) shapes the words; the voice is the same in every tone. Choosing among voices is Next Steps.
 - **"Got it" is instant.** Quick confirmations are spoken by the phone's own voice the moment the change is saved, so nothing waits on the network; answers use the natural cloud voice.
-- **Voice offline, on every phone.** "Hear me offline" is a one-time download of a speech recognizer that runs on the phone (about 40–75 MB until it is measured), off until the person turns it on. It is offered once, the first time Talk is tapped with no connection or with the cloud voice unavailable, and always sits in Settings → Voice; it is kept per phone, removable, and offered only where the phone can run it. Once downloaded, Talk works offline, interrupting included, and replies use the site's natural voice (if downloaded too) or the phone's system voice. What needs the assistant's thinking is kept on the device and done once back online: "Saved on this device. [name] will sort it once you're back online."
+- **Voice offline, on every phone.** "Hear me offline" is a one-time download of a speech recognizer that runs on the phone (57 MB), off until the person turns it on. It is offered once, the first time Talk is tapped with no connection or with the cloud voice unavailable, and always sits in Settings → Voice; it is kept per phone, removable, and offered only where the phone can run it. Once downloaded, Talk works offline, interrupting included, and replies use the site's natural voice (if downloaded too) or the phone's system voice. What needs the assistant's thinking is kept on the device and done once back online: "Saved on this device. [name] will sort it once you're back online."
 - **"Hear me offline", word for word.**
   - Row (Settings → Voice): "Hear me offline" · "Talk to [name] with no connection. Runs on this phone."
-  - Offer (first Talk with no connection): "Talk without a connection? A one-time download, about 40–75 MB. · Download"
+  - Offer (first Talk with no connection): "Talk without a connection? A one-time download of 57 MB. · Download"
   - Turn-on sheet, title: "Hear me offline"
   - Sheet, what it does: "Your phone turns your speech into words itself, so Talk works with no connection."
-  - Sheet, size and where: "A one-time download of about 40–75 MB from [host], kept on this phone only."
+  - Sheet, size and where: "A one-time download of 57 MB from [host], kept on this phone only."
   - Sheet, what leaves: "What you say offline stays on this phone until [name] reads it online."
   - Sheet, licence: "Uses [recognizer], open source under [licence]." (plus, if it carries copyleft: "It includes [part], under the GPL.")
   - Sheet, buttons: "Download" · "Not now"
-  - Downloading: "Downloading… 23 of 60 MB" (the real size once known)
+  - Downloading: "Downloading… 23 of 57 MB"
   - Ready: "Ready. Talk works offline on this phone."
   - Failed: "The download stopped. · Try again"
   - Can't run: "This phone can't run offline listening. Talk needs a connection here."
@@ -286,7 +286,7 @@ The owner's words: "in order to have a timeline for the user and for their peopl
     - "Graduated · 2016"
   - Then "See all 14 moments" when there are more than 3.
   - Add: "Add a date"
-  - Empty: "No key dates yet. Tell [name] a birthday or a moment, or add one."
+  - Empty: one "Add a key date" row (tell [name] a birthday or a moment, or add one there)
   - A row opens a small sheet with its source, Edit, Remove (with Undo) and, for a date that comes back, "Show on Today" (on by default for Birthday, Anniversary and Custom yearly). Adding or changing a date that comes back by hand needs a connection, and the sheet says "Needs a connection to save"; a date said in a turn while offline waits with the turn.
 - **All moments, word for word.** "See all 14 moments" opens a page titled "Grandpa's moments", grouped by decade, then year, newest first:
   - Decade heading: "2020s", "2010s", "1980s"
@@ -463,7 +463,7 @@ Google Calendar is one connection among the others (Connected Apps, In Detail), 
 
 - **Optional, on a tap.** "Connect Google Calendar to plan around your events" is offered on Today, with the reason beside it, never on load. Helm works fully without it.
 - **Read only.** Helm asks Google to read events only, and reads only each event's title, time and calendar: never its description, guests or location. It never creates, changes or deletes an event in the MVP.
-- **While Helm is in testing.** Until Google reviews Helm, Google shows a warning that the app isn't verified, and may ask to reconnect about once a week. The Connect screen says so in one line before the person leaves for Google, so the warning isn't a surprise.
+- **Until Google reviews the app.** Google shows a warning that the app isn't verified (Advanced, then Continue). The consent screen is In production, so there is no weekly reconnect, and up to 100 people can connect the sensitive scopes; the Connect screen says so in one line before the person leaves for Google, so the warning isn't a surprise. The review itself is tracked in `docs/conventions/connections.md` "Google's consent screen is one for the whole project".
 - **Coming back from Google.** Declined: back on Today, nothing changed. Signed in but the calendar permission unticked: "Helm needs permission to see your events to plan around them. Nothing was connected." with Try again.
 - **The real calendar is many calendars.** After connecting, the person picks which ones count as busy; holidays and subscriptions start off. One tap marks a calendar as shifts. An event on two calendars counts once; declined events are ignored; tentative ones count as busy and say so; all-day events show at the top and block nothing unless the person says they do (a day off, a trip). A calendar added in Google later appears in Settings, off; one deleted in Google drops out quietly.
 - **Disconnect.** From its row in Connected apps; Today drops back to the no-calendar version and nothing else changes (Disconnect and Delete, In Detail).
@@ -496,7 +496,7 @@ Each source shares as little as serves the people above. **On** is what a new co
 | Going Once | Pickups you're meeting, and where each sale stands | Pickups set (event: the thing and the day); your sales (project: name and how many are available, pending, sold) | | Buyers' names, contacts and messages; floor prices; private notes; prices paid |
 | Nine Lives | What's coming up for your cats | Your cats (pet: name); vet visits coming up (event: cat, clinic, time); vaccination and preventive due dates (task: cat, what, when); clinics (place: name, phone, address) | Conditions and symptoms per cat (knowledge) | Uploaded records and documents, expenses, weights, litter logs |
 | Pinch | What you're eating and what you need to buy | Planned meals (event: meal, day, slot); the shopping list's unticked items (task) | Food near its date in the fridge, freezer or pantry (task) | Recipes' text, prices and costs, nutrition, cooking history |
-| Runway | Whether money is fine for what you're planning, and, if you choose, what you spent | Money summary (money summary: Free to Spend now, the next income day and what is due before it, as one total) | Bills coming up (task: name, amount, due day); Horizon events (project: name, target, set aside so far); Transactions (date, where, amount, envelope), read when a question needs them and never kept | Accounts and balances, cards, income sources, receipts, bank sign-ins |
+| Runway | Whether money is fine for what you're planning, and, if you choose, what you spent | Money summary (money summary: Free to Spend now, the next income day and what is due before it, as one total) | Bills coming up (task: name, amount, due day); Horizon events (project: name, target, set aside so far); Transactions (date, where, amount, category), read only when a question asks; only the rows an answer quotes are kept (up to 5, blanked when the connection ends) | Accounts and balances, cards, income sources, receipts, bank sign-ins |
 | Waypoint | Your trips, their plans, and what's yours to do | Trips you're in (trip: name, dates, places); the timeline's activities, flights, drives, stays and rentals (event and place, in the trip's time zone); Before the Road tasks assigned to you or private to you (task) | What you owe and are owed per trip (money summary) | Other members' private tasks, contact details and suggestions; expense lines; receipts; the album |
 | Worth the Wait | Counts only, by design | | Box counts (each box's name and emoji, how many items it holds, how many are revealed and how many not yet), counted without reading any item | Any item's words, revealed or not, yours or theirs; who wrote what; invite codes |
 | Google Calendar | Fixed events Today plans around | Events from the calendars you pick (event: title, time, calendar) | | Descriptions, guests, locations, attachments |
@@ -546,7 +546,7 @@ A source that adds something later adds it **Off**, and the connection's page sa
 - **Gmail and Drive** are read only when a question needs them, from the moment they are connected; each answer says when they were searched. Gmail's sent-mail style switch starts off (How You Write, In Detail).
 - **Google Contacts** reads nothing until the person ticks people in its picker, and only those.
 - **Worth the Wait** connects with nothing on; its one category, Box counts, says what it holds before it is switched on: "Helm will see your boxes and how many things are in each, and how many are revealed. It never sees what anyone wrote."
-- **Runway's Transactions** starts off; its switch says what turning it on means: "Lets Helm answer questions like 'what did I spend at Costco?'. Helm reads each purchase's date, place, amount and envelope when a question needs them, and keeps none of them."
+- **Runway's Transactions** starts off; its switch says what turning it on means: "Lets Helm answer questions like 'what did I spend at Costco?'. Helm reads each purchase's date, place, amount and category only when you ask, and keeps just the few an answer quotes (up to 5, blanked when the connection ends)."
 
 ### Keeping and Deleting, In Detail
 
@@ -556,7 +556,7 @@ The owner's blueprint stopped at "distinguish live data"; this is how long Helm 
 |---|---|---|
 | A copy from a site app or Google Calendar | While connected: what is current or coming up, and the last 30 days; older drops out at the next sync | Disconnect with the box ticked, Delete all my Helm data, or deleting it in its app |
 | A copy after a disconnect, box unticked | 90 days, then deleted | "Delete now" on the connection's row |
-| Mail, Drive and Runway transactions read to answer | Only while answering; never stored | Nothing to delete, beyond quotes |
+| Mail, Drive and Runway transactions read to answer | Only while answering; only the rows an answer quotes are kept (up to 5) | Nothing to delete, beyond quotes, which are blanked when the connection ends |
 | Lines an answer quoted | With the answer in Activity, sealed | Replaced when the source's copies are deleted; gone with Delete all |
 | A past day's events (title and time) | With that day's plan, as today | With Delete all |
 | A connection's grant | Until disconnect or Delete all; held on Helm's server only | Ends at once, and the provider is asked to forget it |
@@ -704,7 +704,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 
 - [ ] Home is a conversation, with the voice dock (Browse · Talk · Type): brief answers in a natural voice, then listening for the reply; every view one tap away through Browse, with no tab bar and no dock off home (O, N, C)
 - [ ] The voice: cloud listening and speech online, the phone's own past the day's allowance, barge-in, spoken replies only to spoken turns, "Got it" at once, "undo that" (O, N, C) (issue 12 built the phone's own voice: Talk, the "Got it" line for a spoken turn, "undo that" and Mute; the cloud voice, barge-in and the wake phrase follow; issue 13 built the voice benchmark, and the default cloud voice is the owner's pick; issue 14 built cloud listening online with the day's allowance and the site's cap, falling back to the phone's listening, and the voice mode in Settings; issue 15 built the cloud voice for answers and summaries, within the day's 30,000 characters and falling back to the phone's voice when it is slow or held, while "Got it" stays on the phone's voice; answers are first spoken with questions, issue 27)
-- [ ] Hear me offline, on every phone: an opt-in download of about 40–75 MB that listens on the phone, interrupting included (N, C)
+- [x] Hear me offline, on every phone: an opt-in download of 57 MB that listens on the phone, interrupting included (N, C)
 - [ ] "Hey [name]" while Helm is open on screen, off until you turn it on (O)
 - [ ] The assistant on every screen, knowing what is in view: "move this to Friday", "who's this?", "add a step" (O, C)
 - [x] Send photos, screenshots, PDFs, voice notes and Markdown files; the assistant keeps each on the record it changed or lets it go, and says which (O, C) (issue 52 built photos: up to 5 a turn, kept on a task or fact or let go and deleted 24 hours later, with Keep it; issue 53 built PDFs, kept on the task they made or let go, Markdown files, kept as a note and, when they read as one, a topic, and voice notes, written out into the field before Send and let go unless kept; keeping on a project or a person comes later)
@@ -734,10 +734,11 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Answers from your own records with their sources, short when spoken; general knowledge only when they don't say, clearly marked, with a stronger caution on health (O, C)
 - [x] Rename the assistant and choose one of four tones (O) (issue 58)
 - [x] Activity: every turn and change, with Undo; Search across everything Helm keeps (O, C) (issue 59 built Search: one field over people, tasks open and done, dates and moments, facts, notes, topics, projects, procedures, places, photo captions and connected apps' copies, from home and from Browse)
-- [ ] Trust this browser so Helm opens offline for up to 30 days at a time; the site's Sign out everywhere (O)
-- [ ] Everything stored encrypted, kept files and photos included; delete all of my Helm data (O, N, C)
+- [x] Trust this browser so Helm opens offline for up to 30 days at a time (O) (issue 61)
+- [x] The site's Sign out everywhere (O) (issue 62)
+- [x] Everything stored encrypted, kept files and photos included; delete all of my Helm data (O, N, C) (issue 63 built the delete)
 - [ ] Connected apps: connect, choose what each may read, see status and errors, disconnect with or without deleting copies; the site's account page lists every connection; every copied thing shows its source (O, N)
-- [ ] Pinch, Google Calendar (busy and shifts calendars, several accounts), A-List, Going Once, Nine Lives (cats as pets), Waypoint, Runway (summary; bills, Horizon and transactions when switched on) and Worth the Wait (box counts) connected (O, N)
+- [ ] Pinch, Google Calendar (busy and shifts calendars, several accounts), A-List, Going Once, Nine Lives (cats as pets), Waypoint, Runway (summary; bills, Horizon and transactions when switched on) and Worth the Wait (box counts) connected (O, N) (issue 25 built Runway's summary, bills and Horizon; issue 30 built Runway's transactions, read when a question needs them)
 - [x] Gmail and Drive: answers that search and read your mail, Docs and PDFs, citing each (O)
 
 ### Next Steps

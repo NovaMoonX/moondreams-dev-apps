@@ -70,7 +70,7 @@ function HowNomosSeesYou({
       <HelmHeader backLabel={backLabel} onBack={onBack} onHome={onHome} />
       <main className='space-y-4 pt-4'>
         <div className='flex items-start justify-between gap-3'>
-          <h1 className='helm-serif text-[28px] leading-[34px] text-pretty'>
+          <h1 className='helm-serif min-w-0 text-[28px] leading-[34px] text-balance'>
             {HELM_COPY.seesYouTitle(assistant)}
           </h1>
           {selfWhoId && (

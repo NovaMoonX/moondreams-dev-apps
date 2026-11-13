@@ -1,4 +1,5 @@
 import type {
+  FundingPay,
   Cents,
   Ending,
   FundingRule,
@@ -20,6 +21,8 @@ export interface GroupEnvelopeMember {
   funding: FundingRule;
   /** The first day the envelope is in the plan. */
   startsOn: number;
+  /** The last day it is in the plan; it counts nothing in a month after it. */
+  endedAt?: number | null;
   /** The income days a usual month holds for the pay its rule counts (`getIncomeDaysPerMonth`). */
   incomeDaysPerMonth: number;
 }
@@ -67,21 +70,26 @@ const CALENDAR_FACTORS: Record<string, [number, number]> = {
   yearly: [1, 12],
 };
 
-/** How many income days a usual month holds: each live pay line at its monthly beat, a one-off or irregular line at none; only one source's lines when `sourceId` is given. */
+/** How many income days a usual month holds: each live pay line at its monthly beat, a one-off or irregular line at none; only one source's lines when `sourceId` is given, and only one pay when `pay` is (one a month when it names a day of the month). */
 export function getIncomeDaysPerMonth(
   lines: readonly (Pick<GroupMember, 'schedule' | 'startsOn' | 'ending'> & {
     sourceId: string;
+    payLineId?: string;
   })[],
   on: number,
   sourceId: string | null = null,
+  pay: FundingPay | null = null,
 ): number {
   const day = new Date(on);
   const monthStart = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), 1);
   const nextMonth = Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 1);
   return lines
     .filter((line) => sourceId === null || line.sourceId === sourceId)
+    .filter((line) => pay === null || line.payLineId === pay.payLineId)
     .reduce((total, { schedule, startsOn, ending }) => {
-      const factor = getMonthlyFactor(schedule);
+      const beat = getMonthlyFactor(schedule);
+      const factor =
+        beat && pay?.monthDay != null ? ([1, beat[1]] as const) : beat;
       const isLive =
         startsOn < nextMonth &&
         (ending.onDate === null || ending.onDate >= monthStart);
@@ -89,13 +97,14 @@ export function getIncomeDaysPerMonth(
     }, 0);
 }
 
-/** An envelope's fixed amount for a usual month as a ratio; null when its amount or beat is not fixed. */
+/** An envelope's fixed amount for a usual month as a ratio (nothing for one nothing goes into); null when its amount or beat is not fixed. */
 const getEnvelopeWeight = ({
   funding,
   incomeDaysPerMonth,
 }: GroupEnvelopeMember): [number, number] | null => {
-  if (funding.amount.kind !== 'exact') return null;
   const { cadence } = funding;
+  if (cadence.kind === 'none') return [0, 1];
+  if (funding.amount.kind !== 'exact') return null;
   if (cadence.kind === 'calendar')
     return CALENDAR_FACTORS[cadence.period] ?? null;
   if (incomeDaysPerMonth === 0) return null;
@@ -143,8 +152,13 @@ export function monthlyTotal(
     if (!isLive(member) || isOnce(member)) return [0, 1];
     return getMonthlyFactor(member.schedule);
   });
-  const hasBegun = ({ startsOn, funding: { cadence } }: GroupEnvelopeMember) =>
+  const hasBegun = ({
+    startsOn,
+    endedAt,
+    funding: { cadence },
+  }: GroupEnvelopeMember) =>
     startsOn < nextMonth &&
+    (endedAt == null || endedAt >= monthStart) &&
     (cadence.kind !== 'calendar' ||
       cadence.startsOn === null ||
       cadence.startsOn < nextMonth);

@@ -9,6 +9,7 @@ import { getStorage } from 'firebase-admin/storage';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { isSignInRecent } from '../../auth/recentSignIn.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import {
   grantsPath,
@@ -24,16 +25,11 @@ if (getApps().length === 0) {
 }
 
 export const DELETE_PLAN_PHRASE = 'delete my plan';
-export const RECENT_SIGN_IN_MS = 5 * 60 * 1000;
 const CHUNK = 300;
 
 const planPath = (uid: string) => `apps/runway/plans/${uid}`;
 const serverPath = (uid: string) => `apps/runway/server/${uid}`;
 const receiptsPrefix = (uid: string) => `apps/runway/receipts/${uid}/`;
-
-const isSignInRecent = (authTimeSeconds: unknown, now: number) =>
-  typeof authTimeSeconds === 'number' &&
-  now - authTimeSeconds * 1000 <= RECENT_SIGN_IN_MS;
 
 const isPhraseRight = (value: unknown) =>
   typeof value === 'string' &&

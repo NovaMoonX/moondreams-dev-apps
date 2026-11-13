@@ -1,14 +1,17 @@
 import { WifiOff } from 'lucide-react';
 
 import { HELM_COPY } from '@apps/helm/constants';
+import { helmAppName } from '@apps/helm/queries/helmKeyQueries';
 
-/** Opened with no connection in a browser that keeps no key: the turns can't be opened until the device is back online; `canSave` says whether typing is still kept on this device. */
+/** Opened with no connection in a browser that keeps no key, or whose kept key has lapsed: the turns can't be opened until the device is back online; `canSave` says whether typing is still kept on this device. */
 function NeedsConnectionState({
   name,
   canSave,
+  isTrustLapsed,
 }: {
   name: string;
   canSave: boolean;
+  isTrustLapsed: boolean;
 }) {
   return (
     <section className='helm-card flex flex-col gap-2 p-4' role='status'>
@@ -24,6 +27,11 @@ function NeedsConnectionState({
           ? HELM_COPY.outboxIntro(name)
           : HELM_COPY.needsConnectionBody(name)}
       </p>
+      {isTrustLapsed && (
+        <p className='text-muted-foreground text-[15px] text-pretty'>
+          {HELM_COPY.trustLapsedBody(helmAppName)}
+        </p>
+      )}
     </section>
   );
 }

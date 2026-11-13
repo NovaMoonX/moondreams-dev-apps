@@ -47,6 +47,7 @@ import {
   clearPendingDeviceWork,
   getSignOutQuestions,
 } from '@/lib/auth/signOutChecks';
+import { keepSignOutNote } from '@/lib/auth/signOutNote';
 import { forgetDeviceSecretsFor } from '@/lib/security';
 import { forgetThisBrowserFor } from '@/lib/security/trustedBrowsers';
 import {
@@ -416,15 +417,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setRememberedAccounts(forgetSavedAccount(uid));
   }, []);
 
-  const logOut = useCallback(async () => {
+  const logOut = useCallback(async (options?: { hasAskedFirst?: boolean; landingNote?: string }) => {
     const uid = auth.currentUser?.uid;
     if (uid) {
-      const questions = getSignOutQuestions(uid);
-      const isConfirmed = await questions.reduce(
-        async (previous, question) =>
-          (await previous) && confirm({ ...question, destructive: true }),
-        Promise.resolve(true),
-      );
+      const isConfirmed =
+        options?.hasAskedFirst === true ||
+        (await getSignOutQuestions(uid).reduce(
+          async (previous, question) =>
+            (await previous) && confirm({ ...question, destructive: true }),
+          Promise.resolve(true),
+        ));
       if (!isConfirmed) return;
       clearPendingDeviceWork(uid);
     }
@@ -464,6 +466,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
     if (uid) await dropAccountSession(uid);
     await signOut(auth).catch((error) => console.error('Sign-out error:', error));
+    if (options?.landingNote) keepSignOutNote(options.landingNote);
     window.location.href = '/';
   }, [confirm]);
 
