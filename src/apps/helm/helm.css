@@ -34,6 +34,10 @@ html.helm-theme {
 
   --radius-md: 0.625rem;
   --radius-lg: 0.875rem;
+  --checkbox-radius: 0.375rem;
+  --checkbox-border-width: 1.5px;
+  --checkbox-mark-width: 3;
+  --checkbox-filled: 1;
 
   --helm-serif: 'Source Serif 4', 'Iowan Old Style', Charter, Georgia, serif;
 
