@@ -6,20 +6,20 @@ Three cloud voices are compared with the site's natural voice before any cloud v
 
 Each is spoken after `toSpokenText`, as the site will.
 
-| # | Kind | Tone | Reply |
-| --- | --- | --- | --- |
-| 1 | got-it | Composed | Got it. Call Dana on Friday. |
-| 2 | got-it | Warm | Got it. Call Dana on Friday, and I'll keep it handy. |
-| 3 | answer | Composed | Your cake tasting is today at 3:00 PM at Sweet Layer Bakery. |
-| 4 | answer | Warm | Your cake tasting is today at 3:00 PM at Sweet Layer Bakery. Hope it's a good one. |
-| 5 | general | Composed | This isn't from your records, and it may be out of date. A frosted cake keeps about three days in the fridge. |
-| 6 | general | Warm | This isn't from your records, and it may be out of date. A frosted cake usually keeps about three days in the fridge, covered. |
-| 7 | caution | Composed | Biscuit's next flea treatment is due Saturday. For anything about the dose, check with the vet first. |
-| 8 | caution | Warm | Biscuit's next flea treatment is due Saturday. If you're unsure about the dose, a quick word with the vet first is worth it. |
-| 9 | question | Composed | Do you mean Dana Lee or Dana Ortiz? |
-| 10 | question | Warm | Just to be sure, do you mean Dana Lee or Dana Ortiz? |
-| 11 | summary | Composed | This week you have four things. Tuesday, the dentist at 9:30 AM. Wednesday, renew the car registration. Thursday, Mia's recital at 6:00 PM at Lincoln Hall. Friday, call Dana about the lease. |
-| 12 | summary | Warm | Here's your week. Tuesday, the dentist at 9:30 AM. Wednesday, renew the car registration. Thursday, Mia's recital at 6:00 PM at Lincoln Hall, which should be lovely. Friday, call Dana about the lease. That's everything so far. |
+| #   | Kind     | Tone     | Reply                                                                                                                                                                                                                              |
+| --- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | got-it   | Composed | Got it. Call Dana on Friday.                                                                                                                                                                                                       |
+| 2   | got-it   | Warm     | Got it. Call Dana on Friday, and I'll keep it handy.                                                                                                                                                                               |
+| 3   | answer   | Composed | Your cake tasting is today at 3:00 PM at Sweet Layer Bakery.                                                                                                                                                                       |
+| 4   | answer   | Warm     | Your cake tasting is today at 3:00 PM at Sweet Layer Bakery. Hope it's a good one.                                                                                                                                                 |
+| 5   | general  | Composed | This isn't from your records, and it may be out of date. A frosted cake keeps about three days in the fridge.                                                                                                                      |
+| 6   | general  | Warm     | This isn't from your records, and it may be out of date. A frosted cake usually keeps about three days in the fridge, covered.                                                                                                     |
+| 7   | caution  | Composed | Biscuit's next flea treatment is due Saturday. For anything about the dose, check with the vet first.                                                                                                                              |
+| 8   | caution  | Warm     | Biscuit's next flea treatment is due Saturday. If you're unsure about the dose, a quick word with the vet first is worth it.                                                                                                       |
+| 9   | question | Composed | Do you mean Dana Lee or Dana Ortiz?                                                                                                                                                                                                |
+| 10  | question | Warm     | Just to be sure, do you mean Dana Lee or Dana Ortiz?                                                                                                                                                                               |
+| 11  | summary  | Composed | This week you have four things. Tuesday, the dentist at 9:30 AM. Wednesday, renew the car registration. Thursday, Mia's recital at 6:00 PM at Lincoln Hall. Friday, call Dana about the lease.                                     |
+| 12  | summary  | Warm     | Here's your week. Tuesday, the dentist at 9:30 AM. Wednesday, renew the car registration. Thursday, Mia's recital at 6:00 PM at Lincoln Hall, which should be lovely. Friday, call Dana about the lease. That's everything so far. |
 
 ## How to run it
 

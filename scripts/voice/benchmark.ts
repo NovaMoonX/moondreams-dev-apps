@@ -31,7 +31,6 @@ const PROJECT = 'moondreams-dev-apps';
 const ABORT_AFTER_MS = 300;
 /** A request that has not finished by now is a hang, not a slow voice. */
 const REQUEST_TIMEOUT_MS = 30_000;
-/** Waits before each retry when a provider says to slow down or is briefly unavailable. */
 const RETRY_WAITS_MS = [20_000, 40_000, 80_000];
 const RETRY_STATUSES = new Set([429, 500, 503]);
 const DOC_PATH = new URL('../../docs/voice-benchmark.md', import.meta.url);
@@ -68,7 +67,6 @@ const OUT_DIR = new URL(
 );
 const NEXT_DIR = new URL('.next/', OUT_DIR);
 
-/** The 30 voices Chirp 3 HD and Gemini share, with Gemini's one-word description of each. */
 const SHARED_VOICES: readonly [string, string][] = [
   ['Achernar', 'soft'],
   ['Achird', 'friendly'],
@@ -114,7 +112,6 @@ const voicesFor = (
           label: `${name} (${feel})`,
         }));
 
-/** What Gemini is asked for each tone; the other providers take no instructions. */
 const DELIVERY: Record<string, string> = {
   Composed: 'Say this in a calm, even, composed voice',
   Warm: 'Say this in a warm, relaxed, unhurried voice',
