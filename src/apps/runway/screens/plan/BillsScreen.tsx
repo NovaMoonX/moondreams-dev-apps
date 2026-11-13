@@ -19,8 +19,8 @@ import {
   GROUP_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
-import { useAutoChecks } from '@apps/runway/hooks/useAutoPay';
-import DueBillsCard from '@apps/runway/components/DueBillsCard';
+import BankHintsRow from '@apps/runway/components/BankHintsRow';
+import DueBillsRow from '@apps/runway/components/DueBillsRow';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
 import PlanBulkActions, {
@@ -42,7 +42,6 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
 import { describePlanTotal, isUndatedBill } from '@apps/runway/utils/billText';
-import { useDueCostRows } from '@apps/runway/hooks/useDueCostRows';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import GroupSheet from '@apps/runway/forms/GroupSheet';
 import {
@@ -69,10 +68,6 @@ function BillsScreen() {
   );
   const bills = useAppSelector((state) => selectBills(state, today));
   const lookahead = useDeferredLookahead(today, isLoaded);
-  const dueCosts = useDueCostRows(lookahead, today);
-  const { checks } = useAutoChecks();
-  const hasDue =
-    (lookahead?.due.length ?? 0) + dueCosts.length + checks.length > 0;
   const groups = useAppSelector((state) => selectGroups(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);
@@ -234,15 +229,18 @@ function BillsScreen() {
     return (
       <div className='space-y-3'>
         {!isNarrowed && !isSelecting && (
-          <DueBillsCard
+          <DueBillsRow
             lookahead={lookahead}
             today={today}
             onOpenBill={setOpenBillId}
-            overflow='unfold'
           />
         )}
-        {hasDue && !isNarrowed && !isSelecting && (
-          <SectionDivider label={BILL_WORDS.allBills} />
+        {hasSearch && (
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder='Search bills'
+          />
         )}
         {isAllDated && !isSelecting && (
           <InlineNotice
@@ -284,12 +282,8 @@ function BillsScreen() {
               }
             />
           ))}
-        {hasSearch && (
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder='Search bills'
-          />
+        {!isNarrowed && !isSelecting && (
+          <BankHintsRow today={today} onOpenBill={setOpenBillId} />
         )}
         {visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No bill matches that.</p>
