@@ -605,6 +605,9 @@ async function writeCardStatements(
       statementsCheckedAt: now,
       isStatementsUnsupported: true,
     });
+    if (hadConsentFlag !== false) {
+      await setNeedsCardConsent(firestore, linkRef, false);
+    }
     return;
   }
   const answered = new Set(

@@ -150,7 +150,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const getCovers = (): CardPaymentCovers => {
     if (!isBelowFull) return 'full';
     if (minimumCents !== null)
-      return paidCents === minimumCents ? 'minimum' : 'part';
+      return paidCents >= minimumCents ? 'minimum' : 'part';
     return isMinimum ? 'minimum' : 'part';
   };
   const covers = getCovers();
