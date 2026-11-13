@@ -2886,6 +2886,67 @@ export const MOVE_WORDS = {
   offline: 'Moving money needs a connection. Nothing was changed.',
 } as const;
 
+/** Turning a goal into an envelope and an envelope into a goal: the money and the history stay, a new item of the other kind takes over. */
+export const CONVERT_WORDS = {
+  toEnvelope: 'Make it an envelope',
+  toEnvelopeSub: 'Keep the money, spend from it as you go',
+  toGoal: 'Make it a goal',
+  toGoalSub: 'Keep the money, save toward a target',
+  titleToEnvelope: (name: string) => `Make ${name} an envelope`,
+  titleToGoal: (name: string) => `Make ${name} a goal`,
+  target: 'Target',
+  byWhen: 'Reach it by (optional)',
+  noDate: 'No date',
+  noDateHint: 'Leave it empty if there is no date.',
+  farDay: (months: number) =>
+    `Pick a date within the next ${months} months, which is as far as the income days are planned, or remove it.`,
+  reachedAtOnce: (name: string) =>
+    `${name} already holds the target, so the goal would be reached at once.`,
+  changesHeading: 'What changes',
+  moneyStays: (amount: string) => `Its ${amount} and its history move with it.`,
+  historyStays: 'Its history moves with it.',
+  wontCarry: (parts: string) => `${parts} won't carry over.`,
+  limit: 'Its limit',
+  overflow: 'its overflow',
+  homePin: 'its Home pin',
+  targetAndDate: 'Its target and date',
+  targetOnly: 'Its target',
+  paused: 'It is paused, so nothing goes in for now.',
+  plannedAhead: (count: number) =>
+    `${count} planned ${count === 1 ? 'change' : 'changes'} ahead won't carry over.`,
+  rulesCaption: (count: number) =>
+    count === 1
+      ? "1 shop rule sends spending here. A goal can't be spent from, so you'll update it next."
+      : `${count} shop rules send spending here. A goal can't be spent from, so you'll update them next.`,
+  lockedTitle: 'Not yet',
+  lockedGoalLinked: (event: string) => `Linked to ${event}. Unlink it first.`,
+  lockedPartOf: (event: string) => `Part of ${event}. Take it out there first.`,
+  lockedOver: (name: string, amount: string) =>
+    `${name} is ${amount} over. Cover it first.`,
+  lockedOverHidden: (name: string) =>
+    `${name} can't change yet. Show amounts to see why.`,
+  toGoalSummary: (name: string, amount: string | null) =>
+    `Made ${name} a goal${amount === null ? '' : `, ${amount} moved across`}.`,
+  toEnvelopeSummary: (name: string, amount: string | null) =>
+    `Made ${name} an envelope${amount === null ? '' : `, ${amount} moved across`}.`,
+  undoSummary: (name: string, was: 'envelope' | 'goal') =>
+    `Undid making ${name} ${was === 'envelope' ? 'a goal' : 'an envelope'}. It is ${was === 'envelope' ? 'an envelope' : 'a goal'} again.`,
+  nowGoal: (name: string) => `${name} is now a goal`,
+  nowEnvelope: (name: string) => `${name} is now an envelope`,
+  undoneGoal: (name: string) => `${name} is an envelope again`,
+  undoneEnvelope: (name: string) => `${name} is a goal again`,
+  undo: 'Undo',
+  undoFailed: 'That was not undone.',
+  undoShort: (name: string) =>
+    `${name} has used some of the money since, so this can't be undone.`,
+  undoLater: (name: string) =>
+    `${name} has its own history now, so this can't be undone.`,
+  undoChanged: 'It was changed since, so nothing was undone.',
+  alreadyDone: 'That was already changed.',
+  offline: 'This needs a connection. Nothing was changed.',
+  failed: 'This did not save. Nothing was changed.',
+} as const;
+
 export const SET_HELD_WORDS = {
   open: 'Set what it holds now',
   title: (name: string) => `What ${name} holds now`,
