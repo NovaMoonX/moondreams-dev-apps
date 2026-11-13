@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Hourglass } from 'lucide-react';
+import { CalendarCheck, Hourglass } from 'lucide-react';
 
 import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -525,7 +525,11 @@ function TaskSheet({
             }
             rightActions={
               plannedKey !== null && doneAt === null && sources ? (
-                <p className='text-muted-foreground text-sm'>
+                <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
+                  <CalendarCheck
+                    className='size-4 shrink-0'
+                    aria-hidden='true'
+                  />
                   {HELM_COPY.planPlannedOn(
                     formatDayWord(plannedKey, sources.todayKey),
                   )}

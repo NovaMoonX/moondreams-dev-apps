@@ -17,7 +17,7 @@ import {
   getAccountHoldings,
   getHolderById,
 } from '@apps/runway/engine/accounts';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectLedgerOnlyBalances as selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   deriveBillProgress,
   deriveHeldByItem,
@@ -39,6 +39,7 @@ import {
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
 import {
+  compareDays,
   planBillPayments,
   type BillPayment,
 } from '@apps/runway/engine/demands';
@@ -47,18 +48,29 @@ import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { getFixedByBill } from '@apps/runway/engine/billShare';
 import {
+  getFundingRunsOf,
+  getStretchesOf,
+} from '@apps/runway/engine/billStretches';
+import {
   listHorizonPayments,
   type CostPaidEntry,
   type CostPayment,
 } from '@apps/runway/engine/horizon';
+import {
+  getChangesOnlyDoneOn,
+  getItemEnds,
+  getItemStops,
+} from '@apps/runway/engine/horizonLinks';
 import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
+import { getGoalStretches } from '@apps/runway/engine/goalTimeline';
 import { findReturning } from '@apps/runway/engine/stretch';
 import {
   resolve,
   resolveCurrentOrNext,
   resolveVersion,
 } from '@apps/runway/engine/resolve';
-import { readStance } from '@apps/runway/engine/stance';
+import { getGoalCover, type GoalCover } from '@apps/runway/engine/horizonGoal';
+import { effectiveStance, pick, readStance } from '@apps/runway/engine/stance';
 import {
   LOOKAHEAD_MONTHS,
   OVERDUE_DAYS,
@@ -70,7 +82,16 @@ import {
   DAY_MS,
   toDayKey,
 } from '@apps/runway/engine/dates';
-import { findLostPairs, type DepositDay } from '@apps/runway/engine/matching';
+import {
+  findAccountPairs,
+  findDepositDays,
+  findLostPairs,
+  findPendingMoveHolds,
+  findRefundOriginal,
+  isBankMove,
+  type DepositDay,
+} from '@apps/runway/engine/matching';
+import { readHomePins } from '@apps/runway/utils/homePins';
 import type {
   BillFundedBy,
   BillVersion,
@@ -81,7 +102,7 @@ import type {
   Pairing,
   EnvelopeSealed,
   EnvelopeVersion,
-  FundingAmount,
+  PairingAmount,
   FundingRule,
   GoalSealed,
   MoneyRange,
@@ -89,6 +110,7 @@ import type {
   PurchasePairKind,
   GoalVersion,
   GroupVersion,
+  HorizonSealed,
   HorizonVersion,
   OpenVersion,
   PayLineVersion,
@@ -179,7 +201,7 @@ export const selectResolvedPlan = createSelector(
 
 export interface PairedBy {
   sourceName: string;
-  amount: FundingAmount;
+  amount: PairingAmount;
 }
 
 /** For each bill, envelope or goal a pairing names, the sources that send it money and how much: a pairing replaces the item's own rule on that source's income days. */
@@ -571,6 +593,19 @@ export const selectEnvelopes = createSelector(
   },
 );
 
+const selectSavedHomePins = (state: RootState) =>
+  state.runway.plan?.homePins ?? null;
+
+/** The envelopes pinned to Home that are still listed on the date, in the person's order. */
+export const selectHomePins = createSelector(
+  [selectSavedHomePins, selectEnvelopes],
+  (saved, envelopes) =>
+    readHomePins(
+      saved,
+      envelopes.map(({ item }) => item.id),
+    ),
+);
+
 export interface ResolvedBill {
   item: PlanItemDoc;
   version: BillVersion;
@@ -712,24 +747,59 @@ export const selectHorizonVersionId = (
   selectAllHorizonItems(state, on).find(({ item }) => item.id === itemId)
     ?.version.id;
 
-/** The Horizon items still in the plan on a date: the ones that are not finished or called off. */
+/** The day each archived or ended item stops counting, by item id. */
+export const selectItemStops = createSelector([selectItems], getItemStops);
+
+/** The first day each ended item is gone, by item id; a link to an item's ending resolves from it. */
+export const selectItemEnds = createSelector([selectItems], getItemEnds);
+
+/** The Horizon items still in the plan on a date: the ones that are not finished or called off, and not an event of changes alone whose changes have all happened. */
 export const selectHorizonItems = createSelector(
+  [
+    selectAllHorizonItems,
+    selectVersions,
+    selectOn,
+    selectItemStops,
+    selectItemEnds,
+  ],
+  (all, versions, on, stops, ends): ResolvedHorizon[] =>
+    all.filter(
+      ({ version }) =>
+        version.payload.state === 'open' &&
+        getChangesOnlyDoneOn(version.payload, versions, on, stops, ends) ===
+          null,
+    ),
+);
+
+/** Every event still open, a finished-by-its-changes one included, which a change can still be linked to. */
+export const selectOpenHorizonItems = createSelector(
   [selectAllHorizonItems],
   (all): ResolvedHorizon[] =>
     all.filter(({ version }) => version.payload.state === 'open'),
 );
 
-/** The finished and called-off Horizon items, the latest first. */
+/** The finished and called-off Horizon items, and the events of changes alone that have all happened, the latest first. */
 export const selectDoneHorizonItems = createSelector(
-  [selectAllHorizonItems],
-  (all): ResolvedHorizon[] =>
-    all
-      .filter(({ version }) => version.payload.state !== 'open')
+  [
+    selectAllHorizonItems,
+    selectVersions,
+    selectOn,
+    selectItemStops,
+    selectItemEnds,
+  ],
+  (all, versions, on, stops, ends): ResolvedHorizon[] => {
+    const getDoneOn = ({ version }: ResolvedHorizon) =>
+      version.payload.state !== 'open'
+        ? (version.payload.stateOn ?? 0)
+        : getChangesOnlyDoneOn(version.payload, versions, on, stops, ends);
+    return all
+      .filter((entry) => getDoneOn(entry) !== null)
       .sort(
         (a, b) =>
-          (b.version.payload.stateOn ?? 0) - (a.version.payload.stateOn ?? 0) ||
+          (getDoneOn(b) ?? 0) - (getDoneOn(a) ?? 0) ||
           a.item.id.localeCompare(b.item.id),
-      ),
+      );
+  },
 );
 
 export interface DraftView {
@@ -828,6 +898,52 @@ const draftCaches = new WeakMap<object, Map<string, DraftView>>();
 const priorDayCaches = new WeakMap<object, Map<string, ComingDay[]>>();
 
 /** The income days before the ones listed that fall in the first period of a calendar rule, which take their share of a period's amount first; none when no rule is on the calendar. */
+/** Whether a goal covers an event's costs on `on`: not archived and not ended on or before it. */
+export const isGoalCovering = (
+  header: Pick<PlanItemDoc, 'archivedAt' | 'endedAt'>,
+  on: number,
+) =>
+  (header.archivedAt ?? null) === null &&
+  ((header.endedAt ?? null) === null || on < (header.endedAt ?? 0));
+
+/** What the goal an open event draws from holds and will put in, read at `today` with the days the plan has ahead; null when the event has no covering goal. */
+export function getEventGoalCover(
+  payload: Pick<HorizonSealed, 'goalId' | 'state'>,
+  items: RootState['runway']['items'],
+  versions: RootState['runway']['versions'],
+  today: number,
+  days: readonly ComingDay[],
+  heldByItem: Readonly<Record<string, number>>,
+  stance: ReturnType<typeof readStance>,
+): GoalCover | null {
+  const { goalId } = payload;
+  if (goalId === null || payload.state !== 'open') return null;
+  const header = items.find((item) => item.id === goalId);
+  if (!header || !isGoalCovering(header, today)) return null;
+  const stretches = getGoalStretches(versions, header, today);
+  if (stretches.length === 0) return null;
+  return getGoalCover(
+    goalId,
+    stretches,
+    heldByItem[goalId] ?? 0,
+    days.map((day) => ({
+      ...day,
+      moneyCents: pick(
+        effectiveStance(stance, day.stanceOverride),
+        day.amount,
+        'income',
+      ),
+    })),
+    getPriorDays(
+      items,
+      versions,
+      today,
+      days,
+      stretches.map(({ payload }) => payload.funding),
+    ),
+  );
+}
+
 export function getPriorDays(
   items: RootState['runway']['items'],
   versions: RootState['runway']['versions'],
@@ -858,6 +974,8 @@ export interface DraftViewOptions {
   coming?: readonly ComingDay[];
   /** False for a draft that is used once and not kept, such as one step of a lookahead. */
   isCached?: boolean;
+  /** The days before this one are already in `heldByItem`, so the walk does not count them again. */
+  carriesEarlier?: boolean;
 }
 
 export function computeDraftView(
@@ -923,14 +1041,27 @@ export function computeDraftView(
     day.on,
     previousOn,
   );
-  const payLinePairings =
-    resolveCurrentOrNext(versions.filter(isPayLine), day.payLineId, day.on)
-      ?.payload.pairings ?? [];
-  const sourcePairings =
-    day.sourceId === null
-      ? []
-      : (resolveCurrentOrNext(versions.filter(isSource), day.sourceId, day.on)
-          ?.payload.pairings ?? []);
+  const payLineVersions = versions.filter(isPayLine);
+  const sourceVersions = versions.filter(isSource);
+  const getPairingSets = (entry: ComingDay) => ({
+    day:
+      openDays.find(({ id }) => id === entry.dayKey)?.override.pairings ?? null,
+    payLine:
+      resolveCurrentOrNext(payLineVersions, entry.payLineId, entry.on)?.payload
+        .pairings ?? [],
+    source:
+      entry.sourceId === null
+        ? []
+        : (resolveCurrentOrNext(sourceVersions, entry.sourceId, entry.on)
+            ?.payload.pairings ?? []),
+  });
+  const { payLine: payLinePairings, source: sourcePairings } =
+    getPairingSets(day);
+  const earlierDays = options.carriesEarlier
+    ? []
+    : days
+        .filter((entry) => compareDays(entry, day) < 0)
+        .map((entry) => ({ ...entry, pairings: getPairingSets(entry) }));
   const priorDays = getPriorDays(
     items,
     versions,
@@ -957,11 +1088,18 @@ export function computeDraftView(
           ]),
           resolved.map(({ version }) => version.id),
           resolvedBills.map(({ version }) => version.id),
+          resolvedBills.map(({ item }) => getStretchesOf(versions, item)),
+          [...resolved, ...resolvedGoals].map(({ item }) =>
+            getFundingRunsOf(versions, item.id),
+          ),
+          options.carriesEarlier ?? false,
+          earlierDays.map((entry) => [entry.dayKey, entry.pairings]),
           resolvedGoals.map(({ version }) => version.id),
           resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
           resolvedHorizon.map(({ item, version }) => [
             version.id,
             heldByItem[item.id] ?? 0,
+            heldByItem[version.payload.goalId ?? ''] ?? 0,
             hashProgress(billProgress[item.id]),
           ]),
           resolved.map(({ item, version }) =>
@@ -1003,6 +1141,7 @@ export function computeDraftView(
       orderIndex: payload.orderIndex,
       funding: payload.funding,
       extras: payload.extras ?? null,
+      fundingRuns: getFundingRunsOf(versions, item.id),
       maxCents: payload.maxCents,
       heldCents: heldByItem[item.id] ?? 0,
     };
@@ -1020,6 +1159,8 @@ export function computeDraftView(
     schedule: version.payload.timing.schedule,
     ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
+    payOnDay: version.payload.payOnDay ?? null,
+    stretches: getStretchesOf(versions, item),
     fixed: fixedByBill.get(item.id),
     paired: pairedByBill.get(item.id),
     oneTimePayLineIds,
@@ -1034,6 +1175,15 @@ export function computeDraftView(
     costs: version.payload.costs,
     state: version.payload.state,
     heldCents: heldByItem[item.id] ?? 0,
+    goalCover: getEventGoalCover(
+      version.payload,
+      items,
+      versions,
+      today,
+      days,
+      heldByItem,
+      stance,
+    ),
     paid: billProgress[item.id]?.costPaid ?? [],
     repaid: billProgress[item.id]?.repaid,
     fixed: Object.fromEntries(
@@ -1052,6 +1202,7 @@ export function computeDraftView(
       orderIndex: payload.orderIndex,
       funding: payload.funding,
       extras: payload.extras ?? null,
+      fundingRuns: getFundingRunsOf(versions, item.id),
       targetCents: version.payload.targetCents,
       heldCents: heldByItem[item.id] ?? 0,
     };
@@ -1068,6 +1219,8 @@ export function computeDraftView(
       },
     ],
     plan: {
+      carriesEarlier: options.carriesEarlier ?? false,
+      earlierDays,
       envelopes,
       bills,
       goals,
@@ -1108,8 +1261,8 @@ export function computeDraftView(
     const inside = payments.find(
       (payment, index) =>
         payment.paid === null &&
-        day.on <= payment.dueOn &&
-        (index === 0 || day.on > payments[index - 1].dueOn),
+        day.on <= payment.payOn &&
+        (index === 0 || day.on > payments[index - 1].payOn),
     );
     const name = resolvedBills.find(({ item }) => item.id === bill.itemId)
       ?.version.payload.name;
@@ -1252,6 +1405,8 @@ export const selectBillPayments = createSelector(
               schedule: payload.timing.schedule,
               ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
+              payOnDay: payload.payOnDay ?? null,
+              stretches: getStretchesOf(versions, item),
               fixed: fixedByBill.get(item.id),
               paired: pairedByBill.get(item.id),
               oneTimePayLineIds,
@@ -1426,27 +1581,140 @@ const selectPurchases = (state: RootState) => state.runway.purchases;
 const selectPeriodPurchases = (state: RootState) =>
   state.runway.periodPurchases;
 
-/** The recent window's purchases and those of the period Spend is showing, newest day first and, within a day, the last one added first. */
-export const selectSpendPurchases = createSelector(
+const byNewest = (a: OpenPurchase, b: OpenPurchase) =>
+  b.date - a.date ||
+  b.createdAt - a.createdAt ||
+  (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+const selectKnownPurchases = createSelector(
   [selectPurchases, selectPeriodPurchases],
   (purchases, periodPurchases) => {
     const known = new Set(purchases.map((purchase) => purchase.id));
-    const result = [
+    return [
       ...purchases,
       ...periodPurchases.filter((purchase) => !known.has(purchase.id)),
-    ]
+    ];
+  },
+);
+
+/** The recent window's purchases and those of the period Spend is showing, newest day first and, within a day, the last one added first. A card payment or move the bank flagged waits under Account moves instead. */
+export const selectSpendPurchases = createSelector(
+  [selectKnownPurchases],
+  (purchases) => {
+    const result = purchases
       .filter(
         (purchase) =>
           purchase.incomeDayId === null &&
           purchase.pairedWithId === null &&
-          !(purchase.needsHome && purchase.amountCents < 0),
+          !(purchase.needsHome && purchase.amountCents < 0) &&
+          !isBankMove(purchase),
       )
-      .sort(
-        (a, b) =>
-          b.date - a.date ||
-          b.createdAt - a.createdAt ||
-          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-      );
+      .sort(byNewest);
+    return result;
+  },
+);
+
+/** Posted money in held by a pending money out that may be its other side, by the money in's id → the pending purchase. */
+const selectPendingHolds = createSelector(
+  [selectKnownPurchases, (state: RootState) => state.runway.needsHome],
+  (purchases, waiting) => {
+    const known = new Set(purchases.map((purchase) => purchase.id));
+    const all = [
+      ...purchases,
+      ...waiting.filter((purchase) => !known.has(purchase.id)),
+    ];
+    const byId = new Map(all.map((purchase) => [purchase.id, purchase]));
+    const { offers } = findAccountPairs(waiting, true);
+    const result = new Map(
+      [...findPendingMoveHolds(all)].flatMap(
+        ([inId, outId]): [string, OpenPurchase][] => {
+          const out = byId.get(outId);
+          return out === undefined || (offers.get(inId)?.length ?? 0) > 0
+            ? []
+            : [[inId, out]];
+        },
+      ),
+    );
+    return result;
+  },
+);
+
+const isPendingMoneyIn = (purchase: OpenPurchase) =>
+  purchase.source === 'link' &&
+  purchase.amountCents < 0 &&
+  purchase.status === 'pending' &&
+  purchase.pairedWithId === null &&
+  purchase.incomeDayId === null;
+
+/** Money that came in, newest first: deposits (linked to a pay or not), refunds and money in left out, never a move between the person's own accounts, paired or likely (a waiting side with a pair offer), and never money still on its way (`selectOnItsWay`). Spend's Money in and Free to Spend's "Money in this month" both read it. */
+export const selectMoneyIn = createSelector(
+  [
+    selectKnownPurchases,
+    (state: RootState) => state.runway.needsHome,
+    selectPendingHolds,
+  ],
+  (purchases, waiting, holds) => {
+    const { offers } = findAccountPairs(waiting, true);
+    const result = purchases
+      .filter(
+        (purchase) =>
+          purchase.amountCents < 0 &&
+          purchase.pairedWithId === null &&
+          purchase.status !== 'pending' &&
+          !holds.has(purchase.id) &&
+          !isBankMove(purchase) &&
+          !(purchase.needsHome && (offers.get(purchase.id)?.length ?? 0) > 0),
+      )
+      .sort(byNewest);
+    return result;
+  },
+);
+
+export interface OnItsWayEntry {
+  purchase: OpenPurchase;
+  /** The pending money out a posted money in waits for; null for money in that is itself pending. */
+  heldBy: OpenPurchase | null;
+}
+
+/** Money in the bank has not settled, newest first: pending money in, and posted money in held by a pending money out that may be its other side. Never counted and never asked about until it clears. */
+export const selectOnItsWay = createSelector(
+  [selectKnownPurchases, selectPendingHolds],
+  (purchases, holds) => {
+    const result = purchases
+      .filter(
+        (purchase) =>
+          isPendingMoneyIn(purchase) ||
+          (holds.has(purchase.id) && purchase.pairedWithId === null),
+      )
+      .sort(byNewest)
+      .map((purchase): OnItsWayEntry => ({
+        purchase,
+        heldBy: holds.get(purchase.id) ?? null,
+      }));
+    return result;
+  },
+);
+
+/** Card payments and moves the bank flagged that are not paired yet, newest first: they wait under Account moves rather than in spending. Money in on its way waits there instead. */
+export const selectWaitingBankMoves = createSelector(
+  [
+    selectKnownPurchases,
+    (state: RootState) => state.runway.needsHome,
+    selectPendingHolds,
+  ],
+  (purchases, waiting, holds) => {
+    const known = new Set(purchases.map((purchase) => purchase.id));
+    const result = [
+      ...purchases,
+      ...waiting.filter((purchase) => !known.has(purchase.id)),
+    ]
+      .filter(
+        (purchase) =>
+          isBankMove(purchase) &&
+          !isPendingMoneyIn(purchase) &&
+          !holds.has(purchase.id),
+      )
+      .sort(byNewest);
     return result;
   },
 );
@@ -1475,6 +1743,7 @@ export const selectDepositDays = createSelector(
       expectedOn: day.on,
       arrivedOn: day.arrivedOn,
       amount,
+      payLineId: day.payLineId,
     });
     return [
       ...listed.open.flatMap((day) =>
@@ -1658,7 +1927,73 @@ export const selectLostPairs = createSelector(
         ),
 );
 
-/** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading (lost deposits with it), and history the person placed by hand that may be counted twice. */
+/** True while "I'm not sorting yet" is on. */
+export const selectIsSortingPaused = (state: RootState) =>
+  state.runway.plan?.sorting?.isPaused ?? false;
+
+const selectSorting = (state: RootState) => state.runway.plan?.sorting ?? null;
+
+/** The money in Needs a home has a question for: a pairing or pay link it lost, a move or a pay day it may be, or a refund of a purchase that went to an envelope or goal (`findRefundOriginal`). At Link the rest, a card refund of a Free to Spend purchase included, is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in and its Refunds. Money in still pending, and a posted side held by a pending money out, never asks: it is on its way. */
+export const selectMoneyInAsks = createSelector(
+  [
+    selectWaitingList,
+    selectLostDeposits,
+    selectLostPairs,
+    selectDepositDays,
+    selectPurchases,
+    selectPendingHolds,
+  ],
+  (waitingList, lostDeposits, lostPairs, days, purchases, holds) => {
+    const lost = [
+      ...lostDeposits.map((entry) => ({
+        ...entry,
+        needsHome: true,
+        incomeDayId: null,
+      })),
+      ...lostPairs.map((entry) => ({
+        ...entry,
+        needsHome: true,
+        pairedWithId: null,
+        pairKind: null,
+      })),
+    ];
+    const waiting = [
+      ...waitingList,
+      ...lost.filter(
+        (entry, index) =>
+          !waitingList.some((other) => other.id === entry.id) &&
+          lost.findIndex((other) => other.id === entry.id) === index,
+      ),
+    ];
+    const { offers } = findAccountPairs(waiting, true);
+    const byId = new Map(waiting.map((purchase) => [purchase.id, purchase]));
+    // A move the bank flagged waits under Account moves and offers this side there.
+    const mayPair = (id: string) =>
+      (offers.get(id) ?? []).some(({ otherId }) => {
+        const other = byId.get(otherId);
+        return other !== undefined && !isBankMove(other);
+      });
+    const deposits = findDepositDays(waiting, days, purchases);
+    const result = new Set(
+      waiting
+        .filter(
+          (purchase) =>
+            purchase.amountCents < 0 &&
+            (lost.some((entry) => entry.id === purchase.id) ||
+              (purchase.status !== 'pending' &&
+                !holds.has(purchase.id) &&
+                (mayPair(purchase.id) ||
+                  findRefundOriginal(purchase, purchases) !== null ||
+                  deposits.offers.has(purchase.id) ||
+                  deposits.clear.has(purchase.id)))),
+        )
+        .map((purchase) => purchase.id),
+    );
+    return result;
+  },
+);
+
+/** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading when there is something to ask (`selectMoneyInAsks`), and history the person placed by hand that may be counted twice. A card payment or move the bank flagged waits under Account moves instead. */
 export const selectNeedsHome = createSelector(
   [
     selectWaitingList,
@@ -1666,8 +2001,18 @@ export const selectNeedsHome = createSelector(
     selectLostPairs,
     selectHistoryPurchases,
     selectHistoryDuplicates,
+    selectSorting,
+    selectMoneyInAsks,
   ],
-  (waitingList, lostDeposits, lostPairs, historyPurchases, duplicates) => {
+  (
+    waitingList,
+    lostDeposits,
+    lostPairs,
+    historyPurchases,
+    duplicates,
+    sorting,
+    moneyInAsks,
+  ) => {
     const lost = [...lostDeposits, ...lostPairs];
     const waiting = [
       ...waitingList,
@@ -1683,8 +2028,21 @@ export const selectNeedsHome = createSelector(
         b.createdAt - a.createdAt ||
         (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
-    const spending = sorted.filter((purchase) => purchase.amountCents >= 0);
-    const moneyIn = sorted.filter((purchase) => purchase.amountCents < 0);
+    const sortable = sorted.filter((purchase) => !isBankMove(purchase));
+    const alwaysShown = new Set(lost.map((entry) => entry.id));
+    const pairs = sorting === null ? null : findAccountPairs(sorted, true);
+    const isQuiet = (purchase: OpenPurchase) =>
+      sorting !== null &&
+      purchase.amountCents > 0 &&
+      (sorting.isPaused || purchase.createdAt < sorting.from) &&
+      !alwaysShown.has(purchase.id) &&
+      !(pairs?.offers.has(purchase.id) || pairs?.clear.has(purchase.id));
+    const spending = sortable.filter(
+      (purchase) => purchase.amountCents >= 0 && !isQuiet(purchase),
+    );
+    const moneyIn = sortable.filter(
+      (purchase) => purchase.amountCents < 0 && moneyInAsks.has(purchase.id),
+    );
     const listed = new Set(sorted.map((purchase) => purchase.id));
     const maybeTwice = historyPurchases
       .filter(
@@ -1698,6 +2056,68 @@ export const selectNeedsHome = createSelector(
           (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       );
     const result = { spending, moneyIn, maybeTwice };
+    return result;
+  },
+);
+
+export interface NeedsHomeMove {
+  /** The money out; the row opens it. */
+  purchase: OpenPurchase;
+  /** The money in each offered pairing would use, nearest day first. */
+  others: { purchase: OpenPurchase; kind: PurchasePairKind }[];
+  /** Whether either side has more than one candidate, so no account or card name tells the row apart. */
+  isAmbiguous: boolean;
+}
+
+/** `selectNeedsHome` split for the screen, quickest first: moves and card payments (one per money out that has an offer), the money in nothing offers, history that may be in twice, and the remaining charges. Nothing is in two sections. */
+export const selectNeedsHomeSections = createSelector(
+  [selectNeedsHome],
+  ({ spending, moneyIn, maybeTwice }) => {
+    const all = [...spending, ...moneyIn];
+    const { offers } = findAccountPairs(
+      all.map((purchase) => ({
+        ...purchase,
+        needsHome: true,
+        pairedWithId: null,
+        pairKind: null,
+      })),
+      true,
+    );
+    const byId = new Map(all.map((purchase) => [purchase.id, purchase]));
+    const moves = spending.flatMap((purchase): NeedsHomeMove[] => {
+      const others = (offers.get(purchase.id) ?? []).flatMap(
+        ({ otherId, kind }) => {
+          const other = byId.get(otherId);
+          return other ? [{ purchase: other, kind }] : [];
+        },
+      );
+      return others.length === 0
+        ? []
+        : [
+            {
+              purchase,
+              others,
+              isAmbiguous:
+                others.length > 1 ||
+                others.some(
+                  (entry) => (offers.get(entry.purchase.id) ?? []).length > 1,
+                ),
+            },
+          ];
+    });
+    const inMoves = new Set(
+      moves.flatMap(({ others }) => others.map((entry) => entry.purchase.id)),
+    );
+    const movedIds = new Set([
+      ...moves.map(({ purchase }) => purchase.id),
+      ...inMoves,
+    ]);
+    const result = {
+      moves,
+      moneyIn: moneyIn.filter((purchase) => !inMoves.has(purchase.id)),
+      maybeTwice,
+      charges: spending.filter((purchase) => !movedIds.has(purchase.id)),
+    };
     return result;
   },
 );
@@ -1737,6 +2157,23 @@ export const selectRules = createSelector([selectRuleList], (rules) =>
 
 export const selectIsRulesLoaded = (state: RootState) =>
   state.runway.isRulesLoaded;
+
+export const selectIsMemoriesLoaded = (state: RootState) =>
+  state.runway.isMemoriesLoaded;
+
+/** The moves between accounts the person paired by hand. */
+export const selectRouteMemories = createSelector(
+  [(state: RootState) => state.runway.memories],
+  (memories) =>
+    memories.flatMap((memory) => (memory.kind === 'route' ? [memory] : [])),
+);
+
+/** The payers the person linked to a pay line by hand. */
+export const selectPayerMemories = createSelector(
+  [(state: RootState) => state.runway.memories],
+  (memories) =>
+    memories.flatMap((memory) => (memory.kind === 'payer' ? [memory] : [])),
+);
 
 /** The cards that can take a new charge, oldest first. */
 export const selectCards = createSelector([selectAllCards], (cards) =>

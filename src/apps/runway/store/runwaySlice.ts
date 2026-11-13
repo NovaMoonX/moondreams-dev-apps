@@ -7,9 +7,11 @@ import type {
   DateOnly,
   OpenAccount,
   OpenAccountBalance,
+  OpenCardStatement,
   OpenLink,
   OpenCard,
   OpenExpense,
+  OpenMemory,
   OpenRule,
   OpenChange,
   OpenDay,
@@ -54,11 +56,16 @@ export interface RunwayState {
   accountBalances: OpenAccountBalance[];
   /** The bank balances have been read once, so a linked account is not drawn as holding nothing. */
   isAccountBalancesLoaded: boolean;
+  /** What the bank's latest statement says about each linked card. */
+  cardStatements: OpenCardStatement[];
   /** Every expense group. */
   expenses: OpenExpense[];
   /** Every always-do-this rule, and whether they have been read once, so no pass runs on a rule list that is still arriving. */
   rules: OpenRule[];
   isRulesLoaded: boolean;
+  /** The moves and payers the person confirmed by hand, and whether they have been read once, so no pass runs before they arrive. */
+  memories: OpenMemory[];
+  isMemoriesLoaded: boolean;
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
   /** Every purchase waiting for a home, whatever its date, and whether they have been read once. */
@@ -119,9 +126,12 @@ const initialState: RunwayState = {
   isLinksLoaded: false,
   accountBalances: [],
   isAccountBalancesLoaded: false,
+  cardStatements: [],
   expenses: [],
   rules: [],
   isRulesLoaded: false,
+  memories: [],
+  isMemoriesLoaded: false,
   purchases: [],
   needsHome: [],
   isNeedsHomeLoaded: false,
@@ -203,6 +213,10 @@ export const runwaySlice = createSlice({
       state.rules = action.payload;
       state.isRulesLoaded = true;
     },
+    setMemories: (state, action: PayloadAction<OpenMemory[]>) => {
+      state.memories = action.payload;
+      state.isMemoriesLoaded = true;
+    },
     setCards: (state, action: PayloadAction<OpenCard[]>) => {
       state.cards = action.payload;
       state.isCardsLoaded = true;
@@ -223,6 +237,9 @@ export const runwaySlice = createSlice({
       state.accountBalances = action.payload;
       state.accounts = withBankBalances(state.savedAccounts, action.payload);
       state.isAccountBalancesLoaded = true;
+    },
+    setCardStatements: (state, action: PayloadAction<OpenCardStatement[]>) => {
+      state.cardStatements = action.payload;
     },
     setMoves: (
       state,
@@ -322,8 +339,10 @@ export const {
   setAccounts,
   setLinks,
   setAccountBalances,
+  setCardStatements,
   setExpenses,
   setRules,
+  setMemories,
   setPurchases,
   setLinkHistoryPurchases,
   setPeriodPurchases,

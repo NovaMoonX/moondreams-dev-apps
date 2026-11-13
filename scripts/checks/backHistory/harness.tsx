@@ -4,10 +4,14 @@ import { createRoot } from 'react-dom/client';
 import Subview from '@/components/Subview';
 import {
   afterBackLayersClose,
+  isHistoryStep,
   keepEntryFor,
+  markHistoryStep,
   usePageHistory,
   useSheetHistory,
 } from '@/hooks/useBackHistory';
+
+Object.assign(window, { isHistoryStep, markHistoryStep });
 
 // A stand-in app on the real history hook: a sheet (`sheet`), a page opened from it (`day`) and a door out of it (`target`).
 const listeners = new Set<() => void>();

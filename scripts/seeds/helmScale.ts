@@ -10,6 +10,7 @@ import {
   wrappedKeyPath,
 } from '../../functions/src/apps/helm/helmKey.ts';
 import { NINE_LIVES_SHARES } from '../../functions/src/apps/nine-lives/share/manifest.ts';
+import { RUNWAY_SHARES } from '../../functions/src/apps/runway/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
 import { WAYPOINT_SHARES } from '../../functions/src/apps/waypoint/share/manifest.ts';
 import {
@@ -614,6 +615,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       timeZone: OWNER_TIME_ZONE,
       assistantName: null,
       assistantTone: null,
+      theme: null,
       dayStartTime: DEFAULT_DAY_START_TIME,
       dayEndTime: DEFAULT_DAY_END_TIME,
       planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
@@ -1240,12 +1242,13 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     put('captures', `captures/${entry.id}`, entry.capture),
   );
 
-  // Synced copies: 1,500 from four apps, with each app's grant counting what it holds.
+  // Synced copies: 1,501 from five apps, with each app's grant counting what it holds.
   const sources = [
     { app: 'pinch', shares: PINCH_SHARES.shares },
     { app: 'a-list', shares: A_LIST_SHARES.shares },
     { app: 'waypoint', shares: WAYPOINT_SHARES.shares },
     { app: 'nine-lives', shares: NINE_LIVES_SHARES.shares },
+    { app: 'runway', shares: RUNWAY_SHARES.shares },
   ].map(({ app, shares }) => {
     const connectorId = toAppConnectorId(app);
     return {
@@ -1257,7 +1260,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   type Copy = {
     source: number;
     category: string;
-    kind: 'event' | 'task' | 'place' | 'trip' | 'pet';
+    kind: 'event' | 'task' | 'place' | 'trip' | 'pet' | 'moneySummary';
     title: string;
     subtitle: string | null;
     startAt: number | null;
@@ -1265,6 +1268,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     isAllDay: boolean;
     dueAt: number | null;
     placeLabel: string | null;
+    detail: string | null;
+    amountCents: number | null;
+    currency: string | null;
   };
   const eventAt = () => spreadDay(now) + between(8, 21) * 3_600_000;
   const makeCopy = (
@@ -1276,23 +1282,25 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     const startAt = kind === 'event' || kind === 'trip' ? eventAt() : null;
     const isTask = kind === 'task';
     const title =
-      category === 'plannedMeals'
-        ? `${MEALS[index % 6]} ${index + 1}`
-        : category === 'shoppingList'
-          ? `${SHOPPING[index % 8]} ${index + 1}`
-          : category === 'plannedShowings'
-            ? `Showing ${index + 1}: ${pick(['Starlight Harbor', 'Galaxy Drift', 'Paper Moons', 'The Long Quiet'])}`
-            : category === 'savedTheaters'
-              ? `${THEATERS[index % 4]} ${index + 1}`
-              : category === 'trips'
-                ? `${pick(SHARE_PLACES)} weekend ${index + 1}`
-                : category === 'itinerary'
-                  ? `${pick(['Flight', 'Dinner', 'Tour', 'Check-in'])} ${index + 1}`
-                  : category === 'myTasks'
-                    ? `${pick(TASK_VERBS)} ${pick(TASK_OBJECTS)} ${index + 1}`
-                    : category === 'cats'
-                      ? `${PET_NAMES[index % 10]} ${index + 1}`
-                      : `${PET_NAMES[index % 10]}: ${pick(['Advantage Multi', 'Heartgard', 'Nexgard'])} ${index + 1}`;
+      category === 'moneySummary'
+        ? 'Free to Spend'
+        : category === 'plannedMeals'
+          ? `${MEALS[index % 6]} ${index + 1}`
+          : category === 'shoppingList'
+            ? `${SHOPPING[index % 8]} ${index + 1}`
+            : category === 'plannedShowings'
+              ? `Showing ${index + 1}: ${pick(['Starlight Harbor', 'Galaxy Drift', 'Paper Moons', 'The Long Quiet'])}`
+              : category === 'savedTheaters'
+                ? `${THEATERS[index % 4]} ${index + 1}`
+                : category === 'trips'
+                  ? `${pick(SHARE_PLACES)} weekend ${index + 1}`
+                  : category === 'itinerary'
+                    ? `${pick(['Flight', 'Dinner', 'Tour', 'Check-in'])} ${index + 1}`
+                    : category === 'myTasks'
+                      ? `${pick(TASK_VERBS)} ${pick(TASK_OBJECTS)} ${index + 1}`
+                      : category === 'cats'
+                        ? `${PET_NAMES[index % 10]} ${index + 1}`
+                        : `${PET_NAMES[index % 10]}: ${pick(['Advantage Multi', 'Heartgard', 'Nexgard'])} ${index + 1}`;
     return {
       source,
       category,
@@ -1305,6 +1313,12 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       dueAt: isTask ? dayStart(spreadDay(now)) : null,
       placeLabel:
         kind === 'place' || kind === 'event' ? pick(SHARE_PLACES) : null,
+      detail:
+        kind === 'moneySummary'
+          ? `Nothing is due before the next income on ${new Date(dayStart(now) + 3 * DAY_MS).toISOString().slice(0, 10)}`
+          : null,
+      amountCents: kind === 'moneySummary' ? 84_250 : null,
+      currency: kind === 'moneySummary' ? 'USD' : null,
     };
   };
   const plans: [number, string, Copy['kind'], number][] = [
@@ -1317,6 +1331,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     [2, 'myTasks', 'task', 100],
     [3, 'cats', 'pet', 25],
     [3, 'dueCare', 'task', 350],
+    [4, 'moneySummary', 'moneySummary', 1],
   ];
   const copies = plans.flatMap(([source, category, kind, count]) =>
     range(count).map((index) => makeCopy(source, category, kind, index)),
@@ -1355,10 +1370,10 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           {
             title: copy.title,
             subtitle: copy.subtitle,
-            detail: null,
+            detail: copy.detail,
             placeLabel: copy.placeLabel,
-            amountCents: null,
-            currency: null,
+            amountCents: copy.amountCents,
+            currency: copy.currency,
             deepLink: '/',
             extra: {},
           },

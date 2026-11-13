@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react';
 
 import {
   Button,
-  Checkbox,
   Form,
   FormFactories,
   Input,
   Label,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Link2, Tag } from 'lucide-react';
@@ -325,7 +325,7 @@ function ProductFormSheet({
               label: '',
               renderComponent: (props) => (
                 <label className='flex min-h-10 cursor-pointer items-center gap-3 select-none'>
-                  <Checkbox
+                  <AppCheckbox
                     aria-label='Make this the default'
                     checked={props.value === true}
                     onCheckedChange={(checked) =>

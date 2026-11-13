@@ -77,17 +77,14 @@ function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
 
   return (
     <section className='space-y-3'>
-      <SectionDivider
-        label={
-          shown.length >= PHOTOS_PER_RECORD - 3
-            ? HELM_COPY.photosTitleCounted(shown.length)
-            : HELM_COPY.photosTitle
-        }
-      />
-      {shown.length === 0 && (
-        <p className='text-muted-foreground text-[15px] text-pretty'>
-          {HELM_COPY.photosEmpty(name)}
-        </p>
+      {shown.length > 0 && (
+        <SectionDivider
+          label={
+            shown.length >= PHOTOS_PER_RECORD - 3
+              ? HELM_COPY.photosTitleCounted(shown.length)
+              : HELM_COPY.photosTitle
+          }
+        />
       )}
       {shown.length > 0 && tile(shown[0], 0)}
       {shown.length > 1 && (

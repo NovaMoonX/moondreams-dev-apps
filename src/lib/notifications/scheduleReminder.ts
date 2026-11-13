@@ -41,6 +41,7 @@ export async function scheduleReminder(input: ScheduleReminderInput): Promise<Re
     link: input.link,
     recurrence: input.recurrence ?? 'none',
     inAppToast: input.inAppToast ?? null,
+    lastSentAt: null,
     createdBy: input.createdBy,
     createdAt: Date.now(),
   };

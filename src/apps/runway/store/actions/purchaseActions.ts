@@ -156,7 +156,13 @@ async function readLiveCostMark(
     );
     return opened.kind === 'costPaid' &&
       opened.payload.purchaseId === previous.id
-      ? { moveId, itemId: ref.itemId, ...opened.payload }
+      ? {
+          moveId,
+          itemId: ref.itemId,
+          ...opened.payload,
+          fromGoalCents: opened.payload.fromGoalCents ?? 0,
+          goalId: opened.payload.goalId ?? null,
+        }
       : lookup(index + 1);
   };
   return lookup(0);
@@ -334,6 +340,8 @@ async function setCostMark(
     moveId,
     itemId: cost.ref.itemId,
     ...payload,
+    fromGoalCents: 0,
+    goalId: null,
   };
   const change = await getCostPaidChange(
     encryption,
@@ -692,6 +700,72 @@ export const returnPurchaseToWaiting = (
     true,
     placement,
   );
+
+export interface PurchaseAssignment {
+  purchase: OpenPurchase;
+  lines: PurchaseLine[];
+  summary: string;
+}
+
+const ASSIGNS_PER_CHUNK = 3;
+
+/** A later chunk of a bulk assign failed after earlier ones were written; `written` holds each purchase as it now stands. */
+export class PartlyAssignedError extends Error {
+  constructor(
+    readonly written: OpenPurchase[],
+    readonly cause: unknown,
+  ) {
+    super('Some purchases were placed before a later write failed.');
+  }
+}
+
+/** Places several waiting purchases, a few transactions at a time, each one refusing when its purchase changed elsewhere. Resolves with each purchase as written, so an Undo can return exactly those; a failure after some were written throws `PartlyAssignedError` carrying them. */
+export async function assignPurchases(
+  uid: string,
+  encryption: RunwayEncryption,
+  entries: readonly PurchaseAssignment[],
+): Promise<OpenPurchase[]> {
+  const chunks = Array.from(
+    { length: Math.ceil(entries.length / ASSIGNS_PER_CHUNK) },
+    (_, index) =>
+      entries.slice(index * ASSIGNS_PER_CHUNK, (index + 1) * ASSIGNS_PER_CHUNK),
+  );
+  return chunks.reduce<Promise<OpenPurchase[]>>(async (previous, chunk) => {
+    const before = await previous;
+    const settled = await Promise.allSettled(
+      chunk.map(async ({ purchase, lines, summary }) => {
+        const updatedAt = await assignPurchase(
+          uid,
+          encryption,
+          purchase,
+          lines,
+          summary,
+        );
+        return {
+          ...purchase,
+          lines,
+          needsHome: false,
+          incomeDayId: null,
+          pairedWithId: null,
+          pairKind: null,
+          cardPaymentMoveId: null,
+          tickedDayKey: null,
+          updatedAt,
+        } satisfies OpenPurchase;
+      }),
+    );
+    const wrote = settled.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    );
+    const failure = settled.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    const written = [...before, ...wrote];
+    if (failure === undefined) return written;
+    if (written.length === 0) throw failure.reason;
+    throw new PartlyAssignedError(written, failure.reason);
+  }, Promise.resolve([]));
+}
 
 /** Moves a deposit between Needs a home and an income day (or from a day no screen shows to another) in one transaction that refuses when another device changed it first or the day was marked as not arrived. A change-log entry is written with it; resolves with the deposit's new `updatedAt`. A confirmed day's split is never read or written. */
 async function setDepositDay(

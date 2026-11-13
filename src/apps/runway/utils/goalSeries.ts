@@ -13,7 +13,7 @@ interface GoalSeriesInput {
   targetCents: Cents;
   targetDate: DateOnly | null;
   startDate: DateOnly | null;
-  /** What confirmed days put into the goal, by the day the money arrived. */
+  /** What confirmed days and moves put into (or a move took out of) the goal, by the day it happened. */
   splits: readonly { on: DateOnly; cents: Cents }[];
   /** What the plan puts in on each coming income day. */
   contributions: readonly { on: DateOnly; cents: Cents }[];

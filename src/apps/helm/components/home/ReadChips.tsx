@@ -26,6 +26,8 @@ interface ReadChipsProps {
   /** Left out where the reading is only shown: the chips then have no "Read as text" and no calendar. */
   onDismiss: ((key: string, label: string) => void) | null;
   onPickDay: ((key: string, day: number) => void) | null;
+  /** Drawn inside the composer's card: one sideways row with a fade at its right edge. */
+  isInCard?: boolean;
 }
 
 interface Chip {
@@ -117,6 +119,7 @@ function ReadChips({
   timeZone,
   onDismiss,
   onPickDay,
+  isInCard = false,
 }: ReadChipsProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -163,7 +166,12 @@ function ReadChips({
         className={join(
           'flex items-center gap-1.5',
           isPhone
-            ? '-mx-4 [scrollbar-width:none] overflow-x-auto overscroll-x-contain px-4 [&::-webkit-scrollbar]:hidden'
+            ? join(
+                '[scrollbar-width:none] overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:hidden',
+                isInCard
+                  ? '-mx-3 [mask-image:linear-gradient(to_right,#000_calc(100%-28px),transparent)] py-1 pr-9 pl-3'
+                  : '-mx-4 px-4',
+              )
             : 'flex-wrap',
         )}
       >
@@ -174,7 +182,7 @@ function ReadChips({
                 type='button'
                 variant='tertiary'
                 size='sm'
-                className='h-7 max-w-[16rem] min-w-0 rounded-full px-2.5 text-[13px] tabular-nums'
+                className="relative h-7 max-w-[16rem] min-w-0 rounded-full px-2.5 text-[13px] tabular-nums before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                 aria-label={HELM_COPY.changeDay(chip.label)}
                 onClick={() =>
                   setOpenKey((current) =>

@@ -3,7 +3,6 @@ import { CreditCard } from 'lucide-react';
 import { useAppSelector } from '@/store';
 import {
   ACCOUNT_WORDS,
-  AUTO_PAY_WORDS,
   BILL_PAY_WORDS,
 } from '@apps/runway/constants';
 import {
@@ -21,7 +20,7 @@ import {
 import type { BillVersion } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
 
-/** A bill's "Paid with" row, naming its card or account and opening that question of its form; undefined when the bill has no way of paying to choose. */
+/** A bill's "Charged to" row, naming its card or account and opening that question of its form; undefined when the bill has no way of paying to choose. */
 export function usePaidWithAction(billId: string, today: number) {
   const isTracking = isTrackingLevel(useAppSelector(selectLevel));
   const allCards = useAppSelector(selectAllCards);
@@ -59,11 +58,9 @@ export function usePaidWithAction(billId: string, today: number) {
       ? ACCOUNT_WORDS.payFromNone
       : BILL_PAY_WORDS.fromBank;
   };
-  const selfPaying =
-    isTracking && bill.paysItself ? ` · ${AUTO_PAY_WORDS.formSummary}` : '';
   return {
     label: BILL_PAY_WORDS.label,
-    subtitle: `${getWay()}${selfPaying}`,
+    subtitle: getWay(),
     step: 'paidWith',
     icon: <CreditCard />,
   };
