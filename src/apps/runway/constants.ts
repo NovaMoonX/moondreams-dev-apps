@@ -1765,7 +1765,7 @@ export const PAID_FROM_WORDS = {
 /** What Runway says when a bill's recent bank charges were on a card or account other than the one the bill names. */
 export const CHARGED_TO_HINT_WORDS = {
   summary: (count: number, place: string, named: string | null) =>
-    `${named ? `It's set to ${named}, but its` : 'No card or account is set, and its'} last ${count === 1 ? 'bank charge was' : `${count} bank charges were`} on ${place}.`,
+    `${named ? `It's set to ${named}, but its` : "It's set to your bank account, but its"} last ${count === 1 ? 'bank charge was' : `${count} bank charges were`} on ${place}.`,
   fromToday: 'Applies from today, for every payment after.',
   chargeIt: (place: string) => `Charge it to ${place}`,
   notThisOne: 'Not this one',
