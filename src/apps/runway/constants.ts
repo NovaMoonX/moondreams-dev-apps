@@ -479,7 +479,7 @@ export const HORIZON_WORDS = {
   yearlyEveryMeaning: 'It comes around again each year.',
   everyYear: 'every year',
   restPaysFromSummary: (date: string) => `My pays from ${date}`,
-  startingLabel: 'Starting',
+  startingLabel: 'Saving starts',
   startingTitle: 'When do your pays start saving for it?',
   startingToday: 'Today',
   startingPick: 'Pick a day',
@@ -488,8 +488,6 @@ export const HORIZON_WORDS = {
   startingBeforeCost: (cost: string, date: string) =>
     `${cost} is due ${date}, before saving starts.`,
   savingStarts: (date: string) => `Saving starts ${date}`,
-  savingStartsNote: (date: string) =>
-    `Saving starts ${date}. Pays before then give nothing.`,
   restTitle: 'Where does the rest come from?',
   rest: 'The rest',
   needsRest: 'Pick where the rest comes from.',
@@ -578,7 +576,7 @@ export const HORIZON_WORDS = {
   restPaysNote: (from: string | null) =>
     from === null
       ? 'The rest comes from your pays before each cost is due.'
-      : `The rest comes from your pays from ${from}, before each cost is due.`,
+      : `The rest comes from your pays from ${from}, before each cost is due. Pays before then give nothing.`,
   restOnePayNote: (date: string) => `The rest comes from the ${date} pay.`,
   putMore: 'Put more toward it',
   putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',
@@ -931,21 +929,25 @@ export const HORIZON_END_WORDS = {
     `${cost} repeats with no end. End it or make it a bill to finish.`,
   nextYearTitle: (name: string) => `Next year's ${name}`,
   nextYearBody: 'It starts with what is left.',
-  nextYearLine: (name: string, around: string, startsOn: string | null) =>
-    `Next year's ${name}: around ${around}${startsOn === null ? '' : `, saving from ${startsOn}`}`,
+  nextYearLine: (name: string, around: string) =>
+    `Next year's ${name}: around ${around}.`,
+  nextYearSaving: (startsOn: string | null) =>
+    startsOn === null
+      ? 'Your pays start saving for it right away.'
+      : `Your pays start saving for it on ${startsOn}.`,
   moneyToNext: (name: string) => `Moves to next year's ${name}`,
   nextYearLinedUp: (name: string) => `Next year's ${name} is lined up.`,
   nextYearLinedUpWith: (name: string, money: string) =>
     `Next year's ${name} is lined up and starts with the ${money}.`,
-  nextYearQuestion: 'Just this year, or every year?',
-  justThisYearTitle: 'Just this year',
-  justThisYearBody: "Calls it off, and lines up next year's.",
-  everyYearTitle: 'Every year',
-  everyYearBody: "Calls it off, and doesn't line up another.",
-  needsYearChoice: 'Choose just this year or every year.',
+  nextYearQuestion: 'Skip just this year, or stop it for good?',
+  justThisYearTitle: 'Skip this year',
+  justThisYearBody: "Next year's is lined up.",
+  everyYearTitle: 'Stop for good',
+  everyYearBody: 'No more after this one.',
+  needsYearChoice: 'Choose skip this year or stop for good.',
   yearRowLabel: 'Which years',
   yearAnswer: (isEveryYear: boolean) =>
-    isEveryYear ? 'Every year' : 'Just this year',
+    isEveryYear ? 'Stop for good' : 'Skip this year',
   linedUpSummary: (name: string, year: number) =>
     `Lined up ${name} for ${year}.`,
   undoLinedUpSummary: (name: string, year: number) =>

@@ -1078,15 +1078,6 @@ function HorizonSheet({
               </p>
             </InlineNotice>
           )}
-          {horizon.rest.kind === 'pays' &&
-            horizon.rest.startsOn !== null &&
-            horizon.rest.startsOn > today && (
-              <p className='text-muted-foreground text-sm'>
-                {HORIZON_WORDS.savingStartsNote(
-                  formatDateOrdinalUTC(horizon.rest.startsOn),
-                )}
-              </p>
-            )}
           {horizon.rest.kind === 'outside' && plan.coveredUntil !== null && (
             <p className='text-muted-foreground text-sm'>
               {HORIZON_WORDS.restOutsideNote}

@@ -821,11 +821,13 @@ function HorizonEndView({
           {HORIZON_END_WORDS.nextYearLine(
             horizon.name,
             formatDateOrdinalUTC(nextHorizon.happensOn),
-            nextHorizon.rest.kind === 'pays' &&
-              nextHorizon.rest.startsOn !== null
-              ? formatDateOrdinalUTC(nextHorizon.rest.startsOn)
-              : null,
           )}
+          {nextHorizon.rest.kind === 'pays' &&
+            ` ${HORIZON_END_WORDS.nextYearSaving(
+              nextHorizon.rest.startsOn === null
+                ? null
+                : formatDateOrdinalUTC(nextHorizon.rest.startsOn),
+            )}`}
         </p>
       )}
       {isCallOff && isReasonOpen && (
