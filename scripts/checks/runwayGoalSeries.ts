@@ -43,6 +43,26 @@ assert.equal(full.reachedOn, at(42), 'reached on the day the plan gets there');
 assert.equal(full.points.at(-1)?.x, at(60), 'runs on to the target date');
 assert.equal(full.hasProjection, true);
 
+const movedOut = getGoalSeries({
+  ...base,
+  heldCents: 0,
+  splits: [
+    { on: at(-14), cents: 10_000 },
+    { on: at(-3), cents: -10_000 },
+  ],
+  contributions: [],
+});
+assert.deepEqual(
+  movedOut.points.filter((p) => p.y !== null).map((p) => [p.x, p.y]),
+  [
+    [at(-30), 0],
+    [at(-14), 10_000],
+    [at(-3), 0],
+    [today, 0],
+  ],
+  'money moved out steps the line down on its day, never below the start',
+);
+
 const short = getGoalSeries({
   ...base,
   contributions: base.contributions.slice(0, 1),

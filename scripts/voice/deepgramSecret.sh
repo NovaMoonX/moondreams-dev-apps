@@ -12,10 +12,15 @@ need() {
 
 need curl "It ships with macOS and most Linux systems."
 need firebase "Install it with: npm install -g firebase-tools"
-firebase login:list 2>/dev/null | grep -q '@' || { echo "✗ The firebase CLI isn't signed in. Run: firebase login" >&2; exit 1; }
+source "$(dirname "$0")/../lib/firebaseLogin.sh"; require_firebase_login
+source "$(dirname "$0")/../lib/functionsSecret.sh"; exit_if_secret_saved DEEPGRAM_API_KEY "$PROJECT"
 [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste the key." >&2; exit 1; }
 
-echo "1. Open $KEYS_PAGE, go to API Keys, click \"Create a key\", and give it the \"Member\" role."
+echo "1. Open $KEYS_PAGE, go to API Keys, click \"Create a key\", and fill it in:"
+echo "     - Name: moondreams-voice"
+echo "     - Role: Member"
+echo "     - Expiry, if it asks: never (or the furthest date it allows)"
+echo "   Then copy the key now: Deepgram shows it only once."
 echo "   (A new Deepgram account comes with free credit, enough for the whole benchmark.)"
 printf '2. Paste the key here (it stays hidden) and press Enter: '
 read -rs key || true
@@ -39,8 +44,27 @@ fi
 printf %s "$key" | firebase functions:secrets:set DEEPGRAM_API_KEY --project "$PROJECT" --data-file=-
 echo "✓ DEEPGRAM_API_KEY saved in Firebase (running this again adds a new version)"
 
+# Functions read this secret at run time without binding it, so the runtime account needs read access to it.
+grant_read() {
+  local name="$1"
+  if command -v gcloud >/dev/null 2>&1; then
+    local number
+    number=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+    gcloud secrets add-iam-policy-binding "$name" --project="$PROJECT" \
+      --member="serviceAccount:${number}-compute@developer.gserviceaccount.com" \
+      --role="roles/secretmanager.secretAccessor" >/dev/null
+    echo "✓ The functions can read $name"
+  else
+    echo "• gcloud isn't installed, so give the functions read access in the browser (one time):"
+    echo "  1. Open https://console.cloud.google.com/security/secret-manager/secret/$name/permissions?project=$PROJECT"
+    echo "  2. Grant access → New principal: the account ending in -compute@developer.gserviceaccount.com"
+    echo "  3. Role: Secret Manager Secret Accessor → Save"
+  fi
+}
+grant_read DEEPGRAM_API_KEY
+
 echo
-echo "Last, set a low usage alert so a surprise never costs much:"
-echo "  1. Open $KEYS_PAGE and click Billing in the left menu"
-echo "  2. Click \"Usage alerts\""
-echo "  3. Click \"Add alert\", type a small amount (for example 5 dollars) and your email, then click \"Save\""
+echo "Optional, a spend alert on Deepgram's side:"
+echo "  Each app that listens through Deepgram already caps its own daily use, so this is only a second guard."
+echo "  Open $KEYS_PAGE and look under Billing (or Settings) for a usage, spend or balance alert; if there is one, set it to a few dollars with your email."
+echo "  Deepgram's menus change and these names are unconfirmed, so if you don't see one, skip it: nothing else depends on it."

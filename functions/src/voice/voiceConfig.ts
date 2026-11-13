@@ -48,3 +48,39 @@ export const costMicros = (
   const price = TTS_PRICES[provider];
   return price.micros * (price.per === 'character' ? characters : audioSeconds);
 };
+
+/** The most the site spends on voice in one UTC day, across every app and person. */
+export const VOICE_DAILY_BUDGET_CENTS = 500;
+
+/** What one recording written out may be: at most five minutes and 10 MiB, with a few seconds of grace for the provider's own measure. */
+export const TRANSCRIBE_MAX_MS = 5 * 60_000;
+export const TRANSCRIBE_MAX_BYTES = 10 * 1024 * 1024;
+export const TRANSCRIBE_GRACE_MS = 5_000;
+
+/** The longest one listening turn is counted as. */
+export const VOICE_UTTERANCE_MS = 60_000;
+
+export const VOICE_TOKEN_TTL_SECONDS = 60;
+
+export const STT_MODEL = 'nova-3';
+
+/** Millionths of a dollar per minute of streamed listening, read from the provider's docs (search results) and unverified until the first real run. */
+export const STT_PRICES = {
+  deepgramStream: { perMinuteMicros: 7_700, readOn: '2026-11-09' },
+  deepgramPrerecorded: { perMinuteMicros: 4_300, readOn: '2026-11-11' },
+} as const;
+
+/** The cost in millionths of a dollar of listening for `ms`, rounded up. */
+export const listenCostMicros = (ms: number) =>
+  Math.ceil((STT_PRICES.deepgramStream.perMinuteMicros * ms) / 60_000);
+
+/** The cost in millionths of a dollar of writing out `ms` of a recording, rounded up. Unverified until the first real run. */
+export const transcribeCostMicros = (ms: number) =>
+  Math.ceil((STT_PRICES.deepgramPrerecorded.perMinuteMicros * ms) / 60_000);
+
+export interface VoiceAppLimits {
+  listenMsPerDay: number;
+  mintsPerDay: number;
+  spokenCharsPerDay: number;
+  voices: Record<TtsProviderId, string>;
+}

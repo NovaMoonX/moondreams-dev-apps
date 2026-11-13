@@ -2,27 +2,53 @@ import type { SpeechPriority } from '@/lib/speech/voice/types';
 
 interface ListenerInput {
   isOnline: boolean;
-  /** No cloud adapter exists yet, so this is read by nothing. */
-  isCloudAvailable?: boolean;
+  /** The person's mode allows listening in the cloud. */
+  isCloudAllowed: boolean;
+  /** The cloud turned this device away for today. */
+  isCloudHeld: boolean;
+  /** The app supplied a way to get a token. */
+  hasCloud: boolean;
+  /** The opt-in recognition model is downloaded and hears this language. */
+  isOnDeviceReady: boolean;
 }
 
 interface SpeakerInput {
   isOnline: boolean;
   priority: SpeechPriority;
   isNaturalVoiceReady: boolean;
-  /** No cloud adapter exists yet, so this is read by nothing. */
-  isCloudAvailable?: boolean;
+  /** The person's mode allows speaking in the cloud. */
+  isCloudAllowed: boolean;
+  /** The cloud turned this device away for today. */
+  isCloudHeld: boolean;
+  /** The app supplied a speech source. */
+  hasCloud: boolean;
 }
 
-export type ListenerChoice = 'browser';
-export type SpeakerChoice = 'natural' | 'system';
+export type ListenerChoice = 'cloud' | 'onDevice' | 'browser';
+export type SpeakerChoice = 'cloud' | 'natural' | 'system';
 
-/** Which adapter listens to an utterance: the browser's recognition, the only one so far. A cloud adapter joins by adding a choice and the inputs it needs. */
-export const pickListener = (input: ListenerInput): ListenerChoice => {
-  void input;
-  return 'browser';
-};
+/** Which adapter listens to an utterance: the cloud's only when online, allowed, not held today and the app has a token source; otherwise the on-device model when it is downloaded, else the browser's recognition. */
+export const pickListener = (input: ListenerInput): ListenerChoice =>
+  input.isOnline && input.isCloudAllowed && !input.isCloudHeld && input.hasCloud
+    ? 'cloud'
+    : input.isOnDeviceReady
+      ? 'onDevice'
+      : 'browser';
 
-/** Which adapter speaks a line: the natural voice when it is ready, else the system voice. */
+/** Which recognizer waits for a wake phrase: the on-device model when it is downloaded (nothing leaves the device), else the browser's own. Never the cloud. */
+export const pickWakeListener = (input: {
+  isOnDeviceReady: boolean;
+}): Exclude<ListenerChoice, 'cloud'> =>
+  input.isOnDeviceReady ? 'onDevice' : 'browser';
+
+/** Which adapter speaks a line: the cloud's for a reply or summary when online, allowed, not held today and the app has a speech source; else the natural voice when it is ready, else the system voice. */
 export const pickSpeaker = (input: SpeakerInput): SpeakerChoice =>
-  input.isNaturalVoiceReady ? 'natural' : 'system';
+  input.isOnline &&
+  input.priority !== 'ack' &&
+  input.isCloudAllowed &&
+  !input.isCloudHeld &&
+  input.hasCloud
+    ? 'cloud'
+    : input.isNaturalVoiceReady
+      ? 'natural'
+      : 'system';
