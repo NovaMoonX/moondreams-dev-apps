@@ -123,7 +123,7 @@ assert.equal(
 
 const matched = charge('a', at(-3), {
   paidByCardId: 'venture',
-  billRef: { billId: 'netflix', dueOn: at(-3) },
+  billRef: { billId: 'netflix', dueOn: at(-3), moveId: 'm1' },
 });
 assert.equal(
   find(
@@ -139,7 +139,7 @@ assert.equal(
     [
       charge('a', at(-60), {
         merchant: 'OTHER',
-        billRef: { billId: 'netflix', dueOn: at(-60) },
+        billRef: { billId: 'netflix', dueOn: at(-60), moveId: 'm2' },
       }),
     ],
   ).length,
