@@ -606,7 +606,9 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           primary={{
             key: 'send',
             label: RULE_WORDS.bulkSend,
-            shortLabel: RULE_WORDS.bulkSendShort,
+            shortLabel: isNarrow
+              ? RULE_WORDS.bulkSendNarrow
+              : RULE_WORDS.bulkSendShort,
             isDisabled: isNothingPicked,
             isLoading: isWriting,
             onClick: () => setIsPicking(true),

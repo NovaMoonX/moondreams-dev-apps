@@ -2892,8 +2892,6 @@ export const CONVERT_WORDS = {
   toEnvelopeSub: 'Keep the money, spend from it as you go',
   toGoal: 'Make it a goal',
   toGoalSub: 'Keep the money, save toward a target',
-  titleToEnvelope: (name: string) => `Make ${name} an envelope`,
-  titleToGoal: (name: string) => `Make ${name} a goal`,
   target: 'Target',
   byWhen: 'Reach it by (optional)',
   noDate: 'No date',
@@ -2922,12 +2920,11 @@ export const CONVERT_WORDS = {
   lockedGoalLinked: (event: string) => `Linked to ${event}. Unlink it first.`,
   lockedPartOf: (event: string) => `Part of ${event}. Take it out there first.`,
   lockedOver: (name: string, amount: string) =>
-    `${name} is ${amount} over. Cover it first.`,
-  moveMoneyIn: 'Move money in',
+    `${name} is ${amount} over. Set what it holds first.`,
   showToSet: 'Show amounts to set the target',
   fromLimitBefore: 'From its ',
   fromLimitAfter: ' limit',
-  blockedOver: 'It is over. Move money in to cover it first.',
+  blockedOver: 'It is over. Set what it holds first.',
   showToConvert: 'Show amounts to see what moves across first',
   payWontCarry: (names: string) =>
     `${names} won't put money into it first anymore.`,
@@ -5418,6 +5415,8 @@ const ruleCount = (count: number) =>
 export const RULE_WORDS = {
   title: 'Rules',
   doorLabel: 'Rules',
+  doorNeedsHome: (count: number) =>
+    `${ruleCount(count)} ${count === 1 ? 'needs' : 'need'} a new home`,
   empty: 'No rules yet. Make one from a purchase with “Always do this”.',
   loading: 'Getting your rules.',
   anyCard: 'Any card',
@@ -5487,7 +5486,6 @@ export const RULE_WORDS = {
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
   homeHeading: 'Needs a new home',
   goalNow: (name: string) => `${name} is a goal now, so this rule is paused`,
-  pickNewEnvelope: 'Pick a new envelope.',
   groupTick: (label: string) => `Pick every rule in ${label}`,
   groupUntick: (label: string) => `Unpick every rule in ${label}`,
   groupPicked: (picked: number, total: number) =>
@@ -5501,7 +5499,8 @@ export const RULE_WORDS = {
   bulkSend: 'Send to an envelope',
   bulkSendShort: 'Send to…',
   bulkAsk: 'Ask each time',
-  bulkAskShort: 'Ask',
+  bulkAskShort: 'Ask me',
+  bulkSendNarrow: 'Send…',
   bulkDelete: 'Remove',
   bulkPickTitle: 'Which envelope?',
   bulkPickSub: (count: number) =>

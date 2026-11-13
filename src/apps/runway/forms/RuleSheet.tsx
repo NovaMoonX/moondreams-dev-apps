@@ -448,6 +448,11 @@ function RuleSheet({
           </ul>
         </div>
         <div className='space-y-2'>
+          {rule && isEnded(rule) && (
+            <p className='text-muted-foreground text-sm'>
+              {describeHome(rule)}.
+            </p>
+          )}
           <p className='text-sm font-medium'>{RULE_WORDS.envelope}</p>
           <PillGroup
             label={RULE_WORDS.envelope}
@@ -473,11 +478,6 @@ function RuleSheet({
         {sentence !== '' && (
           <p className='text-sm' role='status'>
             {sentence}
-          </p>
-        )}
-        {rule && isEnded(rule) && (
-          <p className='text-muted-foreground text-sm'>
-            {describeHome(rule)}. {RULE_WORDS.pickNewEnvelope}
           </p>
         )}
         {error && (

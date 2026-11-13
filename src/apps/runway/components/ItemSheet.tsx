@@ -1612,7 +1612,7 @@ function ItemSheet({
               door={
                 convertLock.canMoveIn
                   ? {
-                      label: CONVERT_WORDS.moveMoneyIn,
+                      label: SET_HELD_WORDS.open,
                       onOpen: () => goTo('setHeld'),
                     }
                   : undefined

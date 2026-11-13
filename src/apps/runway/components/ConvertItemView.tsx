@@ -181,9 +181,6 @@ function ConvertItemView({
             : CONVERT_WORDS.targetAndDate,
         ];
   const lines = [
-    heldCents > 0
-      ? CONVERT_WORDS.moneyStays(formatCents(heldCents))
-      : CONVERT_WORDS.historyStays,
     ...(carriedParts.length === 0
       ? []
       : [CONVERT_WORDS.wontCarry(formatList(carriedParts))]),
@@ -200,6 +197,10 @@ function ConvertItemView({
     ...(spillNames.length === 0
       ? []
       : [CONVERT_WORDS.spillWontCarry(spillNames)]),
+    // While hidden one sentence stands for both, so it never tells an empty or negative balance apart.
+    isHidden || heldCents > 0
+      ? CONVERT_WORDS.moneyStays(formatCents(Math.max(heldCents, 0)))
+      : CONVERT_WORDS.historyStays,
   ];
 
   const convert = async () => {
@@ -259,27 +260,23 @@ function ConvertItemView({
   return (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
-      <ActionTitle>
-        {isToGoal
-          ? CONVERT_WORDS.titleToGoal(name)
-          : CONVERT_WORDS.titleToEnvelope(name)}
-      </ActionTitle>
+      <ActionTitle>{action}</ActionTitle>
+      {isHidden && (
+        <Button
+          type='button'
+          variant='secondary'
+          className='text-foreground! relative h-auto min-h-11 w-full justify-between rounded-2xl px-3! py-2 font-normal'
+          onClick={showAmounts}
+        >
+          <span>
+            {isToGoal ? CONVERT_WORDS.showToSet : CONVERT_WORDS.showToConvert}
+          </span>
+          <Eye className='text-muted-foreground h-5 w-5' aria-hidden='true' />
+        </Button>
+      )}
       {isToGoal && (
         <>
-          {isHidden ? (
-            <Button
-              type='button'
-              variant='secondary'
-              className='text-foreground! relative h-auto min-h-11 w-full justify-between rounded-2xl px-3! py-2 font-normal'
-              onClick={showAmounts}
-            >
-              <span>{CONVERT_WORDS.showToSet}</span>
-              <Eye
-                className='text-muted-foreground h-5 w-5'
-                aria-hidden='true'
-              />
-            </Button>
-          ) : (
+          {!isHidden && (
             <AmountHero
               label={CONVERT_WORDS.target}
               value={amountValue}
@@ -346,7 +343,7 @@ function ConvertItemView({
         </ActionSection>
       )}
       <ModalFooterActions
-        note={error ?? blocker}
+        note={error ?? (isHidden ? null : blocker)}
         cancelAction={
           <Button
             type='button'
