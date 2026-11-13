@@ -87,6 +87,7 @@ import {
   findDepositDays,
   findLostPairs,
   findPendingMoveHolds,
+  findRefundOriginal,
   isBankMove,
   type DepositDay,
 } from '@apps/runway/engine/matching';
@@ -1932,7 +1933,7 @@ export const selectIsSortingPaused = (state: RootState) =>
 
 const selectSorting = (state: RootState) => state.runway.plan?.sorting ?? null;
 
-/** The money in Needs a home has a question for: a pairing or pay link it lost, on a card (card payment, refund or an unseen account), or with a move or a pay day it may be. At Link the rest is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in. Money in still pending, and a posted side held by a pending money out, never asks: it is on its way. */
+/** The money in Needs a home has a question for: a pairing or pay link it lost, a move or a pay day it may be, or a refund of a purchase that went to an envelope or goal (`findRefundOriginal`). At Link the rest, a card refund of a Free to Spend purchase included, is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in and its Refunds. Money in still pending, and a posted side held by a pending money out, never asks: it is on its way. */
 export const selectMoneyInAsks = createSelector(
   [
     selectWaitingList,
@@ -1981,8 +1982,8 @@ export const selectMoneyInAsks = createSelector(
             (lost.some((entry) => entry.id === purchase.id) ||
               (purchase.status !== 'pending' &&
                 !holds.has(purchase.id) &&
-                ((purchase.paidByCardId ?? null) !== null ||
-                  mayPair(purchase.id) ||
+                (mayPair(purchase.id) ||
+                  findRefundOriginal(purchase, purchases) !== null ||
                   deposits.offers.has(purchase.id) ||
                   deposits.clear.has(purchase.id)))),
         )
