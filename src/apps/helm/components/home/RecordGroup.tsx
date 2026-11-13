@@ -22,11 +22,26 @@ function RecordGroup({ quotes }: { quotes: AnswerQuote[] }) {
       .find((link) => link?.startsWith('/') && !link.startsWith('//')) ?? null;
   const appName = nameOf(quotes[0].connectorId);
   return (
-    <div className='flex flex-col gap-2'>
+    <div className='flex flex-col gap-1.5'>
       {live.length > 0 && (
-        <p className='text-muted-foreground text-[13px]'>
-          {HELM_COPY.syncedFrom(appName)}
-        </p>
+        <div className='flex min-h-7 items-center justify-between gap-3'>
+          <p className='text-muted-foreground text-[13px] font-medium'>
+            {HELM_COPY.syncedFrom(appName)}
+          </p>
+          {route && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              aria-label={HELM_COPY.syncedOpenIn(appName)}
+              className='relative -mr-2 shrink-0 after:absolute after:inset-x-0 after:-inset-y-1.5'
+              onClick={() => afterBackLayersClose(() => navigate(route))}
+            >
+              {HELM_COPY.recordGroupOpen}
+              <ChevronRight className='ml-0.5 size-3.5' aria-hidden='true' />
+            </Button>
+          )}
+        </div>
       )}
       {live.length > 0 && (
         <ul className='flex flex-col gap-2.5'>
@@ -56,18 +71,6 @@ function RecordGroup({ quotes }: { quotes: AnswerQuote[] }) {
         <p className='text-muted-foreground text-[13px]'>
           {HELM_COPY.quoteRecordDisconnected}
         </p>
-      )}
-      {live.length > 0 && route && (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          className='relative -ml-2 self-start after:absolute after:inset-x-0 after:-inset-y-1.5'
-          onClick={() => afterBackLayersClose(() => navigate(route))}
-        >
-          {HELM_COPY.syncedOpenIn(appName)}
-          <ChevronRight className='ml-0.5 size-3.5' aria-hidden='true' />
-        </Button>
       )}
     </div>
   );

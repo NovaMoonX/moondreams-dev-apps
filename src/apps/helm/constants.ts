@@ -835,6 +835,7 @@ export const HELM_COPY = {
     `Updated ${when} · read only in ${name}`,
   syncedKept: (date: string) => `No longer updated · deletes ${date}`,
   syncedOpenIn: (app: string) => `Open in ${app}`,
+  recordGroupOpen: 'Open',
   syncedGroup: (category: string, app: string) => `${category} · ${app}`,
   syncedTodayFromApps: 'From your apps',
   syncedMore: (count: number) => `${count} more`,
