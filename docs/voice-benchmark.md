@@ -43,7 +43,7 @@ Then:
 npm run voice:benchmark
 ```
 
-To run one provider again and keep the others' last readings (Gemini after it was throttled):
+To run one provider again and keep the others' last readings (Gemini after it was throttled). Their readings of a reply whose words have changed since are left out, and the table above stays as it was when a provider has no earlier run to keep:
 
 ```
 npm run voice:benchmark -- --only geminiTts
@@ -55,9 +55,9 @@ To hear every one of the 30 voices Chirp 3 HD and Gemini share, each reading fou
 npm run voice:listen
 ```
 
-A provider that answers 429, 500 or 503 is waited on (20, 40, then 80 seconds) and asked again; a failure that outlasts the waits is named in the table ("3 failed: geminiTts answered 429"). A 429 that never clears usually means the key's daily allowance is spent: a key from a project with billing on lifts it. Gemini is asked for each reply's tone ("Say this in a calm, even, composed voice" or "…warm, relaxed, unhurried…"); the other providers take no instructions. `-- --runs 3` changes how many times each reply is read.
+A provider that answers 429, 500 or 503 is waited on (20, 40, then 80 seconds) and asked again; a failure that outlasts the waits is named in the table ("3 failed: geminiTts answered 429"). A 429 that never clears usually means the key's daily allowance is spent: a key from a project with billing on lifts it. Gemini is asked for each reply's tone ("Say this in a calm, even, composed voice" or "…warm, relaxed, unhurried…"); the other providers take no instructions. `-- --runs 3` changes how many times each reply is read (1 to 20).
 
-A voice whose key is missing is skipped with one line. Each voice makes one untimed warm-up call first (connection and token setup stay out of the medians), then the run renders each reply five times, keeps the first audio, writes `voice-benchmark/` (ignored by git) and this page's table, then opens the listening page. `-- --no-open` skips the page; `-- --fixture` makes tones with made-up timings to try the page without keys (it writes no docs and refuses to replace a real run unless you add `-- --force`). A run is built in `voice-benchmark/.next/` and swapped in only when it finishes, so a crash or Ctrl-C leaves the previous run. The "Stream cut" column is the time for the response stream to close after an abort on this machine, not when the audio goes quiet; it is n/a when the stream had already ended. A failed voice does not stop its provider's other voices; only a 401 or 403 does.
+A voice whose key is missing is skipped with one line. Each voice makes one untimed warm-up call first (connection and token setup stay out of the medians), then the run renders each reply five times, keeps the first audio, writes `voice-benchmark/` (ignored by git) and this page's table, then opens the listening page. `-- --no-open` skips the page; `-- --fixture` makes tones with made-up timings to try the page without keys (it writes no docs and refuses to replace a real run unless you add `-- --force`). A run is built in `voice-benchmark/.next/` and swapped in only when it finishes, so a crash or Ctrl-C leaves the previous run. The "Stream cut" column is the time for the response stream to close after an abort on this machine, not when the audio goes quiet; it is n/a when the stream had already ended. A failed voice does not stop its provider's other voices; a 401 or 403, or a 429, 500 or 503 that outlasts the retry waits, does.
 
 ## Results
 

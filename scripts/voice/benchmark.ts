@@ -54,13 +54,15 @@ const isFixture = process.argv.includes('--fixture');
 const isOpening = !process.argv.includes('--no-open');
 const isForced = process.argv.includes('--force');
 const isAllVoices = process.argv.includes('--all-voices');
-const onlyIds = (argValue('--only') ?? '')
+const askedIds = (argValue('--only') ?? '')
   .split(',')
   .map((id) => id.trim())
-  .filter((id): id is TtsProviderId =>
-    PROVIDER_IDS.includes(id as TtsProviderId),
-  );
-const RUNS = Number(argValue('--runs')) || (isAllVoices ? 1 : 5);
+  .filter((id) => id !== '');
+const onlyIds = askedIds.filter((id): id is TtsProviderId =>
+  PROVIDER_IDS.includes(id as TtsProviderId),
+);
+const runsArg = argValue('--runs');
+const RUNS = runsArg === null ? (isAllVoices ? 1 : 5) : Number(runsArg);
 const OUT_DIR = new URL(
   isAllVoices ? '../../voice-benchmark/all-voices/' : '../../voice-benchmark/',
   import.meta.url,
@@ -420,6 +422,12 @@ const saveSample = (
 };
 
 const isAuthFailure = (message: string) => /answered (401|403)$/.test(message);
+// Reached only once every retry wait is spent: the quota is gone for today,
+// so the provider's other voices would each wait out the same retries.
+const isSpentQuota = (message: string) => {
+  const status = statusOf(message);
+  return status !== null && RETRY_STATUSES.has(status);
+};
 
 const runReply = async (
   provider: TtsProvider,
@@ -446,17 +454,17 @@ const runReply = async (
 const runVoice = async (
   provider: TtsProvider,
   voice: { id: string; label: string },
-  auth: { error: string | null },
+  halt: { error: string | null },
 ): Promise<VoiceResult> => {
   const noteFailure = (error: unknown) => {
     const message = messageOf(error);
-    if (isAuthFailure(message)) auth.error = message;
+    if (isAuthFailure(message) || isSpentQuota(message)) halt.error = message;
     return message;
   };
   // One untimed call first, so connection and token setup stay out of the medians.
   const voiceError =
-    auth.error ??
-    (RUNS === 1
+    halt.error ??
+    (isAllVoices
       ? null
       : await speakOnce(
           provider,
@@ -466,7 +474,7 @@ const runVoice = async (
         ).then(() => null, noteFailure));
   const progress = { done: 0 };
   const samples = await inSequence(RUN_REPLIES, async (item) => {
-    const blocked = auth.error ?? voiceError;
+    const blocked = halt.error ?? voiceError;
     const sample =
       blocked !== null
         ? failedSample(item, blocked)
@@ -481,7 +489,7 @@ const runVoice = async (
   });
   process.stdout.write('\r\x1b[K');
   const abortMs =
-    auth.error !== null || voiceError !== null || isAllVoices
+    halt.error !== null || voiceError !== null || isAllVoices
       ? null
       : await probeStreamCut(
           provider,
@@ -575,36 +583,38 @@ const makeTone = (seconds: number, hertz: number) => {
 };
 
 const runFixture = (): ProviderResult[] =>
-  PROVIDER_IDS.map((id, providerIndex) => ({
-    id,
-    skipped: null,
-    voices: voicesFor(id).map((voice, voiceIndex) => ({
-      id: voice.id,
-      label: voice.label,
-      abortMs: 40 + providerIndex * 30 + voiceIndex * 5,
-      samples: RUN_REPLIES.map((item, replyIndex) => {
-        const characters = toSpokenText(item.text).length;
-        const firstByteMs =
-          200 + providerIndex * 120 + voiceIndex * 15 + replyIndex * 5;
-        const audioSeconds = characters / 15;
-        const file = `samples/${id}-${voice.id}-${item.id}.wav`;
-        writeFileSync(
-          new URL(file, NEXT_DIR),
-          makeTone(0.6, 220 + providerIndex * 110 + voiceIndex * 40),
-        );
-        return {
-          replyId: item.id,
-          file,
-          characters,
-          firstByteMs,
-          totalMs: firstByteMs + characters * 12,
-          audioSeconds,
-          costMicros: costMicros(id, { characters, audioSeconds }),
-          error: null,
-        };
-      }),
-    })),
-  }));
+  PROVIDER_IDS.filter((id) => voicesFor(id).length > 0).map(
+    (id, providerIndex) => ({
+      id,
+      skipped: null,
+      voices: voicesFor(id).map((voice, voiceIndex) => ({
+        id: voice.id,
+        label: voice.label,
+        abortMs: 40 + providerIndex * 30 + voiceIndex * 5,
+        samples: RUN_REPLIES.map((item, replyIndex) => {
+          const characters = toSpokenText(item.text).length;
+          const firstByteMs =
+            200 + providerIndex * 120 + voiceIndex * 15 + replyIndex * 5;
+          const audioSeconds = characters / 15;
+          const file = `samples/${id}-${voice.id}-${item.id}.wav`;
+          writeFileSync(
+            new URL(file, NEXT_DIR),
+            makeTone(0.6, 220 + providerIndex * 110 + voiceIndex * 40),
+          );
+          return {
+            replyId: item.id,
+            file,
+            characters,
+            firstByteMs,
+            totalMs: firstByteMs + characters * 12,
+            audioSeconds,
+            costMicros: costMicros(id, { characters, audioSeconds }),
+            error: null,
+          };
+        }),
+      })),
+    }),
+  );
 
 const dollars = (micros: number) => `$${(micros / 1_000_000).toFixed(4)}`;
 const seconds = (ms: number | null) =>
@@ -685,6 +695,7 @@ const readPrevious = () => {
     ) as {
       ranAt: string;
       isFixture?: boolean;
+      replies?: Reply[];
       providers: ProviderResult[];
     };
   } catch {
@@ -697,7 +708,28 @@ const carryPrevious = (id: TtsProviderId): ProviderResult | null => {
   const previous = readPrevious();
   const found = previous?.providers.find((provider) => provider.id === id);
   if (!previous || previous.isFixture !== false || !found) return null;
-  found.voices
+  const sameWords = new Set(
+    (previous.replies ?? [])
+      .filter((old) =>
+        RUN_REPLIES.some(
+          (item) => item.id === old.id && item.text === old.text,
+        ),
+      )
+      .map((old) => old.id),
+  );
+  const voices = found.voices.map((voice) => ({
+    ...voice,
+    samples: voice.samples.filter((sample) => sameWords.has(sample.replyId)),
+  }));
+  const dropped =
+    found.voices.flatMap((voice) => voice.samples).length -
+    voices.flatMap((voice) => voice.samples).length;
+  if (dropped > 0) {
+    console.log(
+      `${PROVIDER_NAMES[id]}: left out ${dropped} earlier readings of replies whose words have changed.`,
+    );
+  }
+  voices
     .flatMap((voice) => voice.samples)
     .flatMap((sample) => (sample.file === null ? [] : [sample.file]))
     .filter((file) => existsSync(new URL(file, OUT_DIR)))
@@ -707,8 +739,10 @@ const carryPrevious = (id: TtsProviderId): ProviderResult | null => {
         readFileSync(new URL(file, OUT_DIR)),
       ),
     );
-  return { ...found, ranAt: found.ranAt ?? previous.ranAt };
+  return { ...found, voices, ranAt: found.ranAt ?? previous.ranAt };
 };
+
+const NOT_RUN = 'Not run this time.';
 
 const runProviders = async (ranAt: string) => {
   const built = (await buildProviders()).filter(
@@ -721,7 +755,7 @@ const runProviders = async (ranAt: string) => {
         console.log(`${PROVIDER_NAMES[entry.id]}: kept from the earlier run.`);
         return carried;
       }
-      return { id: entry.id, ranAt, skipped: 'Not run this time.', voices: [] };
+      return { id: entry.id, ranAt, skipped: NOT_RUN, voices: [] };
     }
     if (entry.provider === null) {
       console.log(entry.skipped);
@@ -729,9 +763,9 @@ const runProviders = async (ranAt: string) => {
     }
     const provider = entry.provider;
     console.log(`${PROVIDER_NAMES[entry.id]}:`);
-    const auth = { error: null as string | null };
+    const halt = { error: null as string | null };
     const voices = await inSequence(voicesFor(entry.id), (voice) =>
-      runVoice(provider, voice, auth),
+      runVoice(provider, voice, halt),
     );
     return { id: entry.id, ranAt, skipped: null, voices };
   });
@@ -758,8 +792,13 @@ const swapIn = () => {
 };
 
 const main = async () => {
-  if (argValue('--only') !== null && onlyIds.length === 0) {
+  if (argValue('--only') !== null && onlyIds.length !== askedIds.length) {
     console.log(`--only takes one or more of: ${PROVIDER_IDS.join(', ')}.`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!Number.isInteger(RUNS) || RUNS < 1 || RUNS > 20) {
+    console.log('--runs takes a whole number from 1 to 20.');
     process.exitCode = 1;
     return;
   }
@@ -798,7 +837,13 @@ const main = async () => {
   );
   swapIn();
   console.log(`Wrote ${new URL('results.json', OUT_DIR).pathname}`);
-  if (!isFixture && !isAllVoices) writeDoc(providers, ranAt);
+  const isPartial = providers.some((provider) => provider.skipped === NOT_RUN);
+  if (isPartial) {
+    console.log(
+      'Left docs/voice-benchmark.md as it was: some providers had no earlier run to keep.',
+    );
+  }
+  if (!isFixture && !isAllVoices && !isPartial) writeDoc(providers, ranAt);
   if (!isOpening) return;
   console.log('Opening the benchmark page…');
   spawnSync(
