@@ -2625,6 +2625,46 @@ export const ITEM_SHEET_WORDS = {
   notArrivedSub: 'Takes this day off your plan until you put it back',
 } as const;
 
+/** A pay's "Comes out of this pay" list: the bills, envelopes and goals tied to it, those paid first, and the way to add or release one. */
+export const PAY_ITEMS_WORDS = {
+  door: 'Comes out of this pay',
+  doorNothing: 'Nothing yet',
+  doorSub: (names: readonly string[]) =>
+    names.length <= 3
+      ? formatList([...names])
+      : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`,
+  title: (pay: string) => `What comes out of ${pay}`,
+  paidFirst: 'Paid first',
+  alsoPay: 'Also from this pay',
+  alsoSource: 'Also from this income',
+  onDay: (day: string) => `On ${day}`,
+  anyPay: 'Any of its pays',
+  empty: 'Nothing comes out of this pay yet.',
+  search: 'Search this pay',
+  paidFirstEach: (amount: string) => `${amount} each pay`,
+  payFirst: 'Pay it first',
+  payFirstSub: 'Out of this pay before anything else',
+  payFirstDaySub: (day: string) =>
+    `Out of every pay of this line before anything else, not only ${day}`,
+  stop: 'Stop taking it from this pay',
+  stopBillSub: 'It goes back to Spread across my pays',
+  stopOtherSub: 'It goes back to every pay',
+  add: 'Add to this pay',
+  addTitle: (pay: string) => `What should come out of ${pay}?`,
+  addNone: 'Every bill, envelope and goal that can is already here.',
+  addSearch: 'Search bills, envelopes and goals',
+  dayTitle: (name: string) => `Which pay should ${name} come out of?`,
+  dayBodyMonthly: 'Only out of the pay on that day',
+  dayBodyPay: 'Out of every pay it makes',
+  addDay: (name: string) => `Add ${name}`,
+  added: (name: string, pay: string) => `${name} now comes out of ${pay}`,
+  stoppedBill: (name: string) => `${name} goes back to Spread across my pays`,
+  stoppedOther: (name: string) => `${name} goes back to every pay`,
+  bill: 'Bill',
+  envelope: 'Envelope',
+  goal: 'Goal',
+} as const;
+
 export const PAID_HISTORY_WORDS = {
   summary: (name: string, due: string, amount: string) =>
     `Marked ${name} paid: ${amount} due\u00a0${due}.`,
@@ -3323,6 +3363,18 @@ export const HOW_OFTEN_WORDS = {
   holdingNotRecorded: (name: string) =>
     `${name} was added, but what is in it now did not record. Add it under Where things stand.`,
   notBeingAdded: 'Not saving for it yet',
+} as const;
+
+/** The "Comes out of" question an envelope's or goal's funding asks when there is more than one pay. */
+export const FUNDING_PAY_WORDS = {
+  title: 'Which pay does it come out of?',
+  label: 'Comes out of',
+  everyPay: 'Every pay',
+  percentOfPay: (pay: string) => `of ${pay}`,
+  suffix: (pay: string) => `from ${pay}`,
+  /** The change log's phrase when no one pay is picked. */
+  logEveryPay: 'every pay',
+  gone: 'Its pay is no longer in the plan, so nothing goes in',
 } as const;
 
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
