@@ -374,7 +374,7 @@ export function BillSheet({
       key={`${pickedStep ?? 'sheet'}:${preset?.round ?? 0}`}
       startsAtStep={pickedStep ?? startsAtStep}
       presetEventId={presetEventId}
-      presetAmount={preset?.amount}
+      presetAmount={pickedStep === 'amount' ? preset?.amount : undefined}
       extra={
         <>
           {madeFrom && (

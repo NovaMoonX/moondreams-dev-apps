@@ -62,6 +62,61 @@ const middleOf = (range: MoneyRange) =>
 const QUIET_PRIMARY_CLASSES =
   "relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']";
 
+/** Works the effect out from the store as it is now; throws when a preview can't be built. */
+const readAmountEffect = (
+  versions: readonly OpenVersion[],
+  billId: string,
+  bill: BillSealed,
+  lowCents: number,
+  highCents: number,
+  today: number,
+) => {
+  const next: BillSealed = { ...bill, amount: { lowCents, highCents } };
+  const plan = planStretches<OpenVersion, ItemPayload>(
+    versions,
+    billId,
+    { effectiveFrom: today, effectiveUntil: null },
+    bill,
+    next,
+  );
+  const change: PreviewChange = {
+    kind: 'versions',
+    versions: plan.written.map(
+      (stretch) =>
+        ({
+          itemId: billId,
+          kind: 'bill',
+          effectiveFrom: stretch.effectiveFrom,
+          effectiveUntil: stretch.effectiveUntil,
+          changeId: 'what-if',
+          payload: stretch.payload,
+        }) as PreviewVersion,
+    ),
+  };
+  const state = store.getState();
+  const { before, after } = previewLookahead(state, today, change);
+  const cover = previewBillCover(state, change);
+  const covered = cover.after.payments
+    .map((payment) => ({
+      payment,
+      more:
+        payment.coveredCents -
+        (cover.before.payments.find(
+          (entry) =>
+            entry.billId === payment.billId && entry.dueOn === payment.dueOn,
+        )?.coveredCents ?? 0),
+    }))
+    .filter(({ payment, more }) => payment.billId === billId && more > 0)
+    .sort((a, b) => a.payment.dueOn - b.payment.dueOn)[0];
+  return {
+    createsProblem:
+      getCreatedProblems(before.problems, after.problems).length > 0,
+    covered: covered
+      ? { cents: covered.more, dueOn: covered.payment.dueOn }
+      : null,
+  };
+};
+
 /** What saving the bank's amount from today would do to the plan: a Thing to fix it would create, and the first payment Free to Spend would cover more of. */
 function useAmountEffect(
   billId: string,
@@ -75,55 +130,35 @@ function useAmountEffect(
   const isReady = useAppSelector(
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
+  const { lowCents, highCents } = suggested;
   return useMemo(() => {
     if (!isReady) return null;
-    const next: BillSealed = { ...bill, amount: { ...suggested } };
-    const plan = planStretches<OpenVersion, ItemPayload>(
-      versions,
-      billId,
-      { effectiveFrom: today, effectiveUntil: null },
-      bill,
-      next,
-    );
-    const change: PreviewChange = {
-      kind: 'versions',
-      versions: plan.written.map(
-        (stretch) =>
-          ({
-            itemId: billId,
-            kind: 'bill',
-            effectiveFrom: stretch.effectiveFrom,
-            effectiveUntil: stretch.effectiveUntil,
-            changeId: 'what-if',
-            payload: stretch.payload,
-          }) as PreviewVersion,
-      ),
-    };
-    const state = store.getState();
-    const { before, after } = previewLookahead(state, today, change);
-    const cover = previewBillCover(state, change);
-    const covered = cover.after.payments
-      .map((payment) => ({
-        payment,
-        more:
-          payment.coveredCents -
-          (cover.before.payments.find(
-            (entry) =>
-              entry.billId === payment.billId && entry.dueOn === payment.dueOn,
-          )?.coveredCents ?? 0),
-      }))
-      .filter(({ payment, more }) => payment.billId === billId && more > 0)
-      .sort((a, b) => a.payment.dueOn - b.payment.dueOn)[0];
-    return {
-      createsProblem:
-        getCreatedProblems(before.problems, after.problems).length > 0,
-      covered: covered
-        ? { cents: covered.more, dueOn: covered.payment.dueOn }
-        : null,
-    };
-    // The plan slices are what the previews read; the store snapshot is read at that moment.
+    try {
+      return readAmountEffect(
+        versions,
+        billId,
+        bill,
+        lowCents,
+        highCents,
+        today,
+      );
+    } catch {
+      // A preview that can't be worked out sends the person to the Change form, which shows its own.
+      return { createsProblem: true, covered: null };
+    }
+    // Items and days feed the previews through the store snapshot they read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isReady, items, versions, days, billId, bill, suggested, today]);
+  }, [
+    isReady,
+    items,
+    versions,
+    days,
+    billId,
+    bill,
+    lowCents,
+    highCents,
+    today,
+  ]);
 }
 
 const formatDash = (range: MoneyRange) =>
