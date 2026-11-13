@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import FallbackImage from '@/components/FallbackImage';
@@ -52,7 +54,7 @@ function ContactRow({
   return (
     <div className='border-border border-b last:border-b-0'>
       <label className='flex min-h-16 items-center gap-3 px-4 py-2'>
-        <Checkbox
+        <AppCheckbox
           checked={isTicked}
           disabled={isIn || (isFull && !isTicked)}
           onCheckedChange={() => onToggle(option.id)}

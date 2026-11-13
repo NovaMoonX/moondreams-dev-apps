@@ -10,6 +10,24 @@ import type {
 
 export const isLastFour = (text: string) => /^\d{4}$/.test(text);
 
+// A bank's account name can carry its masked number ("XXXXXXX3153", "...3153", "••3153") and who holds it ("- Credit Holder").
+// One mask character must touch its digits ("x1234"); only a run of them may have a space ("XX 1234"), so "Venture X 2024" stays.
+const MASKED_NUMBER =
+  /\s*(?:[([]\s*)?(?<![A-Za-z0-9])(?:[Xx*•.…]{2,}\s*-?\s*|[Xx*•…])\d{2,6}(?![\d.])(?:\s*[)\]])?/g;
+const HOLDER_PART =
+  /\s+[-–—]\s+[^-–—]*\b(?:holder|user|member|owner)\b[^-–—]*$/i;
+
+/** An account or card name as a person would say it: "Venture X - Credit Holder XXXXXXX3153" reads "Venture X". */
+export const cleanBankName = (name: string) => {
+  const unmasked = name.replace(MASKED_NUMBER, '');
+  // Who holds it is only dropped beside a masked number, so a name's own words stay.
+  const cleaned = (unmasked === name ? name : unmasked.replace(HOLDER_PART, ''))
+    .replace(/\s+[-–—]\s*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned || name.trim();
+};
+
 /** The bank, then the last 4 digits when given: "Capital One ••1234". */
 export const describeAccountLine = (
   account: Pick<OpenAccount, 'institution' | 'lastFour'>,

@@ -28,6 +28,14 @@
       "collectionGroup": "captures",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "inputMode", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "captures",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
@@ -38,6 +46,14 @@
       "fields": [
         { "fieldPath": "sessionId", "order": "ASCENDING" },
         { "fieldPath": "turnIndex", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "media",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "deleteAfter", "order": "ASCENDING" }
       ]
     },
     {
@@ -118,6 +134,22 @@
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "lastSyncAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procedureRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "procedureId", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procedureRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "attachedTo.id", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
       ]
     },
     {

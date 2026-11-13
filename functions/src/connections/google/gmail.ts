@@ -2,6 +2,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 import { GOOGLE_GMAIL_MANIFEST } from './gmailManifest.js';
 import { googleGet } from './client.js';
+import { readAddresses, toWrittenText } from './mailText.js';
 import type { SourceAdapter } from '../registry.js';
 import { GOOGLE_SECRETS } from '../tokens.js';
 
@@ -187,6 +188,79 @@ export async function readMail(
       MAX_TEXT,
     ),
   };
+}
+
+export interface SentMail {
+  to: string[];
+  at: number;
+  text: string;
+}
+
+const SENT_QUERY = 'in:sent newer_than:6m';
+const MAX_SENT = 300;
+const SENT_PAGE = 100;
+const SENT_READS_AT_ONCE = 20;
+
+const chunk = <T>(items: T[], size: number): T[][] =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, (index + 1) * size),
+  );
+
+/** Reads the person's sent mail from the last six months as plain written text, newest first, up to 300 messages. */
+export async function listSentMail(
+  token: string,
+  email: string,
+  { max }: { max: number },
+): Promise<SentMail[]> {
+  const limit = Math.max(0, Math.min(Math.floor(max), MAX_SENT));
+  const readRefs = async (
+    found: string[],
+    pageToken: string | null,
+  ): Promise<string[]> => {
+    if (found.length >= limit) return found.slice(0, limit);
+    const params = new URLSearchParams({
+      q: SENT_QUERY,
+      maxResults: String(Math.min(SENT_PAGE, limit - found.length)),
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const page = await googleGet<{
+      messages?: { id?: string }[];
+      nextPageToken?: string;
+    }>(token, `${MAIL_API}?${params}`, fixtureFor(email));
+    const refs = [
+      ...found,
+      ...(page.messages ?? [])
+        .map((message) => message.id)
+        .filter((id): id is string => typeof id === 'string' && isMailRef(id)),
+    ];
+    return page.nextPageToken
+      ? readRefs(refs, page.nextPageToken)
+      : refs.slice(0, limit);
+  };
+  const refs = await readRefs([], null);
+  const mails = await chunk(refs, SENT_READS_AT_ONCE).reduce(
+    async (done, group) => [
+      ...(await done),
+      ...(await Promise.all(
+        group.map(async (ref): Promise<SentMail> => {
+          const resource = await googleGet<MailResource>(
+            token,
+            `${MAIL_API}/${ref}?format=full`,
+            fixtureFor(email),
+          );
+          return {
+            to: readAddresses(header(resource.payload, 'to')),
+            at: toTime(resource),
+            text: resource.payload
+              ? toWrittenText(readText(resource.payload))
+              : '',
+          };
+        }),
+      )),
+    ],
+    Promise.resolve<SentMail[]>([]),
+  );
+  return mails.filter((mail) => mail.text !== '');
 }
 
 /** Mail is read when asked, so this source has nothing to copy. */

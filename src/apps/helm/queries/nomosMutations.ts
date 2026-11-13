@@ -112,6 +112,69 @@ export async function sortCapture(
   }
 }
 
+export interface TopicWriteResult {
+  status: 'written' | 'current' | 'busy' | 'limited' | 'failed';
+  version: number;
+  broughtIn: number;
+  waiting: number;
+  retry: 'soon' | 'tomorrow' | null;
+}
+
+const writeHelmTopicCallable = httpsCallable<
+  { topicId: string },
+  TopicWriteResult
+>(functions, 'writeHelmTopic');
+
+/** What this tab knows of a topic's write: out now, held back for the day (with how many wait), held back for a few minutes, or not made. A topic with no entry has nothing to report. */
+export type TopicWriteState =
+  | { kind: 'writing' }
+  | { kind: 'limited'; waiting: number }
+  | { kind: 'soon' }
+  | { kind: 'failed' };
+
+const topicWrites = new Map<string, TopicWriteState>();
+const topicWriteListeners = new Set<() => void>();
+
+const setTopicWrite = (topicId: string, state: TopicWriteState | null) => {
+  if (state) topicWrites.set(topicId, state);
+  else topicWrites.delete(topicId);
+  topicWriteListeners.forEach((listener) => listener());
+};
+
+export const getTopicWriteState = (topicId: string) =>
+  topicWrites.get(topicId) ?? null;
+
+export const subscribeTopicWrites = (listener: () => void) => {
+  topicWriteListeners.add(listener);
+  return () => {
+    topicWriteListeners.delete(listener);
+  };
+};
+
+/** Asks the server to bring a topic's new notes into its document, once at a time per topic. A failure leaves the document as it was. */
+export async function writeTopic(topicId: string): Promise<void> {
+  if (topicWrites.get(topicId)?.kind === 'writing') return;
+  setTopicWrite(topicId, { kind: 'writing' });
+  try {
+    const { status, waiting, retry } = (
+      await writeHelmTopicCallable({ topicId })
+    ).data;
+    setTopicWrite(
+      topicId,
+      status === 'limited'
+        ? { kind: 'limited', waiting }
+        : status === 'busy' && retry === 'soon'
+          ? { kind: 'soon' }
+          : status === 'failed'
+            ? { kind: 'failed' }
+            : null,
+    );
+  } catch (error) {
+    console.error('Helm could not write a topic', error);
+    setTopicWrite(topicId, { kind: 'failed' });
+  }
+}
+
 export interface QuestionAnswerInput {
   by: 'tap' | 'voice';
   optionId?: string;

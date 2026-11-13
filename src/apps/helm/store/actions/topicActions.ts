@@ -6,17 +6,26 @@ import {
   type DocumentData,
   getDoc,
   getDocFromCache,
+  getDocs,
   runTransaction,
   setDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils';
 import {
+  CLAIM_MS,
+  HELM_COPY,
   NOTE_TOPICS_MAX,
+  SECTION_HEADING_MAX,
+  SECTION_MARKDOWN_MAX,
+  SECTION_SOURCES_MAX,
   TOPIC_DEPTH_MAX,
+  TOPIC_DOCUMENT_MAX,
   TOPIC_NAME_MAX,
+  TOPIC_SECTIONS_MAX,
 } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
 import type {
@@ -28,6 +37,9 @@ import type {
   Topic,
   TopicDepth,
   TopicSealed,
+  TopicSection,
+  TopicVersion,
+  TopicVersionSealed,
 } from '@apps/helm/types';
 import {
   createRefusal,
@@ -270,6 +282,22 @@ const refile = (uid: string, topicId: string, noteIds: string[]) =>
     Promise.resolve(0),
   );
 
+/** Removes a topic's versions, which a deleted topic leaves behind. Its Undo does not bring them back. */
+async function deleteVersions(uid: string, topicId: string) {
+  const versions = await getDocs(
+    collection(doc(topicsOf(uid), topicId), 'versions'),
+  );
+  await toChunks(versions.docs).reduce(
+    (chain, chunk) =>
+      chain.then(() => {
+        const batch = writeBatch(db);
+        chunk.forEach((entry) => batch.delete(entry.ref));
+        return batch.commit();
+      }),
+    Promise.resolve(),
+  );
+}
+
 /** Deletes a topic and keeps every note; each subtopic moves up a level. Notes go first and the topic last, so a failure never deletes a topic notes still name. Undo puts it all back where it is still as the delete left it. Needs a connection. */
 export async function deleteTopic(
   uid: string,
@@ -355,6 +383,9 @@ export async function deleteTopic(
   } catch (error) {
     await abandon(error);
   }
+  await deleteVersions(uid, topicId).catch((error: unknown) =>
+    console.error('Helm topic history was not deleted', error),
+  );
   const restoreChildren = (placements: TopicPlacement[], shift: number) =>
     runTransaction(db, async (transaction) => {
       const snapshots = await Promise.all(
@@ -420,4 +451,273 @@ export async function deleteTopic(
       return skipped > 0 ? 'skipped' : 'restored';
     },
   };
+}
+
+export type DocumentChange =
+  | 'saved'
+  | 'offline'
+  | 'missing'
+  | 'unreadable'
+  | 'changed'
+  | 'busy'
+  | 'tooMany'
+  | 'tooLong'
+  | 'first';
+
+/** What a hand-written part is made of. */
+export interface SectionWords {
+  heading: string | null;
+  level: TopicSection['level'];
+  markdown: string;
+}
+
+interface VersionPlan {
+  sections: TopicSection[];
+  reason: TopicVersion['reason'];
+  restoredFromVersion: number | null;
+  changeSummary: string;
+}
+
+type VersionStep = VersionPlan | Exclude<DocumentChange, 'saved' | 'offline'>;
+
+/** A topic's version document as the person's device writes it: made by the person, holding every part of the document at that version. */
+export async function buildVersionDoc(
+  encryption: HelmEncryption,
+  input: {
+    version: number;
+    sections: TopicSection[];
+    reason: TopicVersion['reason'];
+    restoredFromVersion: number | null;
+    changeSummary: string;
+    executionId: string | null;
+    now: number;
+  },
+): Promise<TopicVersion> {
+  return {
+    version: input.version,
+    restoredFromVersion: input.restoredFromVersion,
+    createdBy: 'person',
+    reason: input.reason,
+    noteIds: [],
+    sourceCaptureId: null,
+    executionId: input.executionId,
+    createdAt: input.now,
+    sealed: await sealJson<TopicVersionSealed>(
+      {
+        sections: input.sections,
+        changeSummary: input.changeSummary.slice(0, 200),
+        requestQuote: null,
+        parentName: null,
+      },
+      encryption,
+    ),
+  };
+}
+
+const documentLength = (sections: TopicSection[]) =>
+  sections.reduce((total, section) => total + section.markdown.length, 0);
+
+/** Writes the topic's next version in one transaction that re-reads the topic first: `expectedVersion` (when given) must still be its newest, and a write the server is making holds it for 90 seconds. Needs a connection. */
+async function writeVersion(
+  uid: string,
+  encryption: HelmEncryption,
+  topicId: string,
+  expectedVersion: number | null,
+  plan: (
+    topic: TopicSealed & { version: number },
+    readVersion: (version: number) => Promise<TopicVersionSealed | null>,
+  ) => Promise<VersionStep>,
+): Promise<DocumentChange> {
+  if (!navigator.onLine) return 'offline';
+  const ref = doc(topicsOf(uid), topicId);
+  try {
+    return await runTransaction(
+      db,
+      async (transaction): Promise<DocumentChange> => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists()) return 'missing';
+        const live = snapshot.data() as Topic;
+        if (expectedVersion !== null && live.version !== expectedVersion) {
+          return 'changed';
+        }
+        if (live.writeClaim && Date.now() - live.writeClaim.at < CLAIM_MS) {
+          return 'busy';
+        }
+        const opened = await openJson<TopicSealed>(
+          live.sealed as Sealed,
+          encryption,
+        ).catch(() => null);
+        if (!opened) return 'unreadable';
+        const step = await plan(
+          { ...opened, version: live.version },
+          async (version) => {
+            const earlier = await transaction.get(
+              doc(ref, 'versions', String(version)),
+            );
+            return earlier.exists()
+              ? await openJson<TopicVersionSealed>(
+                  (earlier.data() as TopicVersion).sealed,
+                  encryption,
+                ).catch(() => null)
+              : null;
+          },
+        );
+        if (typeof step === 'string') return step;
+        const now = Date.now();
+        const version = live.version + 1;
+        transaction.update(ref, {
+          sealed: await sealJson<TopicSealed>(
+            { ...opened, sections: step.sections },
+            encryption,
+          ),
+          version,
+          lastEditedAt: now,
+        });
+        transaction.set(
+          doc(ref, 'versions', String(version)),
+          await buildVersionDoc(encryption, {
+            version,
+            sections: step.sections,
+            reason: step.reason,
+            restoredFromVersion: step.restoredFromVersion,
+            changeSummary: step.changeSummary,
+            executionId: null,
+            now,
+          }),
+        );
+        return 'saved';
+      },
+    );
+  } catch (error) {
+    if (isUnavailable(error)) return 'offline';
+    throw error;
+  }
+}
+
+const toSectionWords = (words: SectionWords): SectionWords => ({
+  heading: words.heading?.trim().slice(0, SECTION_HEADING_MAX) || null,
+  level: words.level,
+  markdown: words.markdown.trim().slice(0, SECTION_MARKDOWN_MAX),
+});
+
+/** Edits one part by hand, or adds a new one at the end when `sectionId` is null. The part becomes the person's own, with a version and a "you wrote this" source. */
+export function saveTopicSection(
+  uid: string,
+  encryption: HelmEncryption,
+  topicId: string,
+  sectionId: string | null,
+  input: SectionWords,
+  expectedVersion: number | null = null,
+): Promise<DocumentChange> {
+  const words = toSectionWords(input);
+  return writeVersion(
+    uid,
+    encryption,
+    topicId,
+    expectedVersion,
+    async (topic) => {
+      const at = Date.now();
+      const mark = { kind: 'person' as const, at };
+      const sections =
+        sectionId === null
+          ? [
+              ...topic.sections,
+              {
+                id: generateUuid(),
+                ...words,
+                writtenBy: 'person' as const,
+                sources: [mark],
+              },
+            ]
+          : topic.sections.map((section) =>
+              section.id === sectionId
+                ? {
+                    ...section,
+                    ...words,
+                    writtenBy: 'person' as const,
+                    sources: [...section.sources, mark].slice(
+                      -SECTION_SOURCES_MAX,
+                    ),
+                  }
+                : section,
+            );
+      if (
+        sectionId !== null &&
+        !topic.sections.some((s) => s.id === sectionId)
+      ) {
+        return 'missing';
+      }
+      if (sections.length > TOPIC_SECTIONS_MAX) return 'tooMany';
+      if (documentLength(sections) > TOPIC_DOCUMENT_MAX) return 'tooLong';
+      return {
+        sections,
+        reason: 'personEdit',
+        restoredFromVersion: null,
+        changeSummary:
+          sectionId === null
+            ? HELM_COPY.historySummaryAdded(words.heading)
+            : HELM_COPY.historySummaryEdited(words.heading),
+      };
+    },
+  );
+}
+
+/** Takes one part out of the document as a new version, so History can bring it back; `expectedVersion` is the newest the caller saw. */
+export function removeTopicSection(
+  uid: string,
+  encryption: HelmEncryption,
+  topicId: string,
+  sectionId: string,
+  expectedVersion: number | null,
+): Promise<DocumentChange> {
+  return writeVersion(
+    uid,
+    encryption,
+    topicId,
+    expectedVersion,
+    async (topic) => {
+      const removed = topic.sections.find(
+        (section) => section.id === sectionId,
+      );
+      if (!removed) return 'missing';
+      return {
+        sections: topic.sections.filter((section) => section.id !== sectionId),
+        reason: 'personEdit',
+        restoredFromVersion: null,
+        changeSummary: HELM_COPY.historySummaryRemoved(
+          removed.heading || removed.markdown.trim().slice(0, 40),
+        ),
+      };
+    },
+  );
+}
+
+/** Writes a version's parts again as the newest version; `expectedVersion` is the newest the caller saw. Restoring the newest's predecessor is Undo, which refuses on the first version. */
+export function restoreTopicVersion(
+  uid: string,
+  encryption: HelmEncryption,
+  topicId: string,
+  expectedVersion: number,
+  target: number,
+): Promise<DocumentChange> {
+  if (target < 1 || target >= expectedVersion) {
+    return Promise.resolve(target < 1 ? 'first' : 'changed');
+  }
+  return writeVersion(
+    uid,
+    encryption,
+    topicId,
+    expectedVersion,
+    async (_topic, readVersion) => {
+      const earlier = await readVersion(target);
+      return earlier
+        ? {
+            sections: earlier.sections,
+            reason: 'restored',
+            restoredFromVersion: target,
+            changeSummary: HELM_COPY.historySummaryRestored(target),
+          }
+        : 'missing';
+    },
+  );
 }

@@ -132,7 +132,9 @@ function QuestionCard({
 
   const answerOnServer = async (value: QuestionAnswerValue, text?: string) => {
     if (
-      (value.shape !== 'pickOne' && value.shape !== 'pickSeveral') ||
+      (value.shape !== 'pickOne' &&
+        value.shape !== 'pickSeveral' &&
+        value.shape !== 'yesNo') ||
       isOffline
     )
       return;
@@ -152,7 +154,7 @@ function QuestionCard({
     if (result.kind === 'done' && result.executionId && isInSheet && user) {
       const { uid } = user;
       const { executionId } = result;
-      const optionId = value.shape === 'pickOne' ? value.optionId : null;
+      const optionId = value.shape === 'pickSeveral' ? null : value.optionId;
       const kept = question.options.find((option) => option.id === optionId);
       const title =
         question.kind !== 'whichIsTrue'

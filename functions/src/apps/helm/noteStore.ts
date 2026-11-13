@@ -19,6 +19,7 @@ const toDocState = (value: unknown) =>
     : 'empty';
 
 export interface OpenTopicRecord extends ContextTopic {
+  emoji: string | null;
   parentId: string | null;
   docState: 'empty' | 'current' | 'behind' | 'writing' | 'failed';
   pendingNoteIds: string[];
@@ -36,6 +37,10 @@ export const openTopicRecord = (
     return {
       id,
       name: words.name,
+      emoji:
+        typeof words.emoji === 'string' && words.emoji !== ''
+          ? words.emoji
+          : null,
       parentId: typeof data.parentId === 'string' ? data.parentId : null,
       docState: toDocState(data.docState),
       pendingNoteIds: Array.isArray(data.pendingNoteIds)
@@ -94,6 +99,8 @@ export async function readContextTopics(
 
 export interface HintedNote extends ContextNote {
   body: string;
+  isUnchecked: boolean;
+  topicIds: string[];
 }
 
 /** The notes the device ranked for what was typed, opened under the caller's own uid: ids that are not ids, repeats, missing and unreadable notes are dropped and at most 8 are kept. A failed read is logged and leaves the turn without hints. */
@@ -118,7 +125,20 @@ export async function readHintedNotes(
       try {
         const words = openForHelm(key, data.sealed as SealedPayload);
         return typeof words.title === 'string' && typeof words.body === 'string'
-          ? [{ id: snapshot.id, title: words.title, body: words.body }]
+          ? [
+              {
+                id: snapshot.id,
+                title: words.title,
+                body: words.body,
+                isUnchecked:
+                  data.isFromGeneralAnswer === true && data.checkedAt == null,
+                topicIds: Array.isArray(data.topicIds)
+                  ? data.topicIds.filter(
+                      (id): id is string => typeof id === 'string',
+                    )
+                  : [],
+              },
+            ]
           : [];
       } catch {
         return [];

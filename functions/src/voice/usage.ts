@@ -10,6 +10,8 @@ import {
 
 export interface ListenUsage {
   listenMs: number;
+  /** Recordings written out, in milliseconds; they share the day's listening allowance. */
+  transcribeMs: number | null;
   mints: number;
   openMints: Record<string, number>;
 }
@@ -96,7 +98,12 @@ export function planListen({
     if (budgetMicros + worstCaseMicros > VOICE_DAILY_BUDGET_CENTS * 10_000) {
       return 'budgetReached';
     }
-    if (settled.listenMs >= limits.listenMsPerDay) return 'listenLimit';
+    if (
+      settled.listenMs + (settled.transcribeMs ?? 0) >=
+      limits.listenMsPerDay
+    ) {
+      return 'listenLimit';
+    }
     if (settled.mints >= limits.mintsPerDay) return 'mintLimit';
     return null;
   };
@@ -120,11 +127,12 @@ const budgetPath = (dayKey: string) => `voiceBudget/${dayKey}`;
 
 const readUsage = (data: FirebaseFirestore.DocumentData | undefined) => ({
   listenMs: typeof data?.listenMs === 'number' ? data.listenMs : 0,
+  transcribeMs: typeof data?.transcribeMs === 'number' ? data.transcribeMs : 0,
   mints: typeof data?.mints === 'number' ? data.mints : 0,
   openMints: (data?.openMints ?? {}) as Record<string, number>,
 });
 
-/** Counts one listening turn against the person's day and the site's day in one transaction; returns why it was held, or null. */
+/** Counts one listening turn against the person's day and the site's day in one transaction; returns why it was held, or the amount counted. */
 export async function reserveListen(
   firestore: Firestore,
   {
@@ -254,7 +262,7 @@ export function planSpeech({
     : { spokenChars: spoken, budgetDeltaMicros: 0, held };
 }
 
-/** Counts one spoken line against the person's day and the site's day in one transaction; returns why it was held, or null. */
+/** Counts one spoken line against the person's day and the site's day in one transaction; returns why it was held, or the amount counted. */
 export async function reserveSpeech(
   firestore: Firestore,
   {
@@ -353,6 +361,184 @@ export async function releaseSpeech(
   } catch {
     logger.error('voice.speechReleaseFailed', {
       event: 'voice.speechReleaseFailed',
+    });
+  }
+}
+
+export type TranscribeHeld = 'listenLimit' | 'budgetReached';
+
+export type TranscribeReserve = { ms: number; micros: number };
+
+/** Whether a recording fits the person's day (listening and recordings share it) and the site's day; when it does, the worst case is counted at once, or the claimed length when only that fits. */
+export function planTranscribe({
+  usage,
+  budgetMicros,
+  limits,
+  worst,
+  claimed,
+}: {
+  usage: { listenMs: number; transcribeMs: number };
+  budgetMicros: number;
+  limits: VoiceAppLimits;
+  worst: TranscribeReserve;
+  claimed: TranscribeReserve;
+}): {
+  transcribeMs: number;
+  budgetDeltaMicros: number;
+  reserved: TranscribeReserve;
+  held: TranscribeHeld | null;
+} {
+  const getHeld = (reserve: TranscribeReserve): TranscribeHeld | null => {
+    if (budgetMicros + reserve.micros > VOICE_DAILY_BUDGET_CENTS * 10_000) {
+      return 'budgetReached';
+    }
+    return usage.listenMs + usage.transcribeMs + reserve.ms >
+      limits.listenMsPerDay
+      ? 'listenLimit'
+      : null;
+  };
+  const worstHeld = getHeld(worst);
+  const reserved = worstHeld === null ? worst : claimed;
+  const held = worstHeld === null ? null : getHeld(claimed);
+  return held === null
+    ? {
+        transcribeMs: usage.transcribeMs + reserved.ms,
+        budgetDeltaMicros: reserved.micros,
+        reserved,
+        held,
+      }
+    : {
+        transcribeMs: usage.transcribeMs,
+        budgetDeltaMicros: 0,
+        reserved,
+        held,
+      };
+}
+
+/** Replaces a recording's reserved worst case with what the provider measured, so a longer one than claimed is charged in full. */
+export const planTranscribeSettle = ({
+  usage,
+  reservedMs,
+  reservedMicros,
+  actualMs,
+  actualMicros,
+}: {
+  usage: { transcribeMs: number };
+  reservedMs: number;
+  reservedMicros: number;
+  actualMs: number;
+  actualMicros: number;
+}) => ({
+  transcribeMs: Math.max(0, usage.transcribeMs - reservedMs + actualMs),
+  budgetDeltaMicros: actualMicros - reservedMicros,
+});
+
+/** Counts one recording's reserve against the person's day and the site's day in one transaction; returns why it was held, or the amount counted. */
+export async function reserveTranscribe(
+  firestore: Firestore,
+  {
+    uid,
+    limits,
+    now,
+    timeZone,
+    worst,
+    claimed,
+  }: {
+    uid: string;
+    limits: VoiceAppLimits;
+    now: number;
+    timeZone: string;
+    worst: TranscribeReserve;
+    claimed: TranscribeReserve;
+  },
+): Promise<
+  { held: TranscribeHeld } | { held: null; reserved: TranscribeReserve }
+> {
+  const usageRef = firestore.doc(usagePath(uid, getLocalDayKey(now, timeZone)));
+  const budgetRef = firestore.doc(budgetPath(getUtcDayKey(now)));
+  const plan = await firestore.runTransaction(async (transaction) => {
+    const [usageSnapshot, budgetSnapshot] = await Promise.all([
+      transaction.get(usageRef),
+      transaction.get(budgetRef),
+    ]);
+    const budgetCost = budgetSnapshot.data()?.costMicros;
+    const result = planTranscribe({
+      usage: readUsage(usageSnapshot.data()),
+      budgetMicros: typeof budgetCost === 'number' ? budgetCost : 0,
+      limits,
+      worst,
+      claimed,
+    });
+    if (result.held === null) {
+      transaction.set(
+        usageRef,
+        { transcribeMs: result.transcribeMs },
+        { merge: true },
+      );
+      transaction.set(
+        budgetRef,
+        { costMicros: FieldValue.increment(result.budgetDeltaMicros) },
+        { merge: true },
+      );
+    }
+    return result;
+  });
+  if (plan.held === 'budgetReached')
+    logger.warn('voice.budgetReached', { event: 'voice.budgetReached' });
+  else if (plan.held !== null)
+    logger.info(`voice.${plan.held}`, { event: `voice.${plan.held}` });
+  return plan.held === null
+    ? { held: null, reserved: plan.reserved }
+    : { held: plan.held };
+}
+
+/** Best effort: swaps a recording's reservation for its measured length and cost; a failure leaves the worst case counted. */
+export async function settleTranscribe(
+  firestore: Firestore,
+  {
+    uid,
+    now,
+    timeZone,
+    reservedMs,
+    reservedMicros,
+    actualMs,
+    actualMicros,
+  }: {
+    uid: string;
+    now: number;
+    timeZone: string;
+    reservedMs: number;
+    reservedMicros: number;
+    actualMs: number;
+    actualMicros: number;
+  },
+) {
+  const usageRef = firestore.doc(usagePath(uid, getLocalDayKey(now, timeZone)));
+  const budgetRef = firestore.doc(budgetPath(getUtcDayKey(now)));
+  try {
+    await firestore.runTransaction(async (transaction) => {
+      const usage = readUsage((await transaction.get(usageRef)).data());
+      const settled = planTranscribeSettle({
+        usage,
+        reservedMs,
+        reservedMicros,
+        actualMs,
+        actualMicros,
+      });
+      transaction.set(
+        usageRef,
+        { transcribeMs: settled.transcribeMs },
+        { merge: true },
+      );
+      transaction.set(
+        budgetRef,
+        { costMicros: FieldValue.increment(settled.budgetDeltaMicros) },
+        { merge: true },
+      );
+    });
+  } catch {
+    logger.error('voice.transcribeSettleFailed', {
+      event: 'voice.transcribeSettleFailed',
     });
   }
 }

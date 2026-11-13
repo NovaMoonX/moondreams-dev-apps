@@ -12,7 +12,12 @@ import { DAY_MS } from './dates';
 import { percentOf } from './money';
 import { getCalendarCents } from './calendar';
 import { selectRuleDays } from './schedule';
-import { getPartAsks, splitAcrossParts } from './parts';
+import {
+  getPartAsks,
+  getRunAsker,
+  splitAcrossParts,
+  type FundingRun,
+} from './parts';
 
 /** What one funded day asks of an exact or percentage goal; a `rest` goal's ask is not known ahead. */
 const getDayAsk = (funding: FundingRule, day: PaceDay) => {
@@ -34,6 +39,15 @@ export interface PaceDay {
   moneyCents?: Cents;
 }
 
+/** The days a goal's version holds: `from` inclusive, `until` exclusive, null when it holds on. */
+export interface PaceWindow {
+  from: number;
+  until: number | null;
+}
+
+const isInWindow = (window: PaceWindow, on: number) =>
+  on >= window.from && (window.until === null || on < window.until);
+
 export interface PaceGoal {
   targetCents: Cents;
   targetDate: DateOnly | null;
@@ -44,6 +58,8 @@ export interface PaceGoal {
   priority?: Priority;
   orderIndex?: number;
   extras?: readonly PriorityExtra[] | null;
+  /** The goal's funding as each of its versions set it, so a day before the drafted one asks by its own. */
+  fundingRuns?: readonly FundingRun[];
 }
 
 export interface Pace {
@@ -59,6 +75,8 @@ export interface Pace {
   reachedOn: PaceDay | null;
   /** Null when the goal has no date or is complete. */
   state: PaceState | null;
+  /** The date the goal was judged against: the one in force at the end of the days read. */
+  targetDate: DateOnly | null;
 }
 
 /**
@@ -75,11 +93,21 @@ export function planGoalContributions<D extends PaceDay>(
     | 'priority'
     | 'orderIndex'
     | 'extras'
+    | 'fundingRuns'
   >,
   incomeDays: readonly D[],
   priorDays: readonly PaceDay[] = [],
+  options: {
+    /** Only days inside it count: one version's stretch of the goal's plan. */
+    window?: PaceWindow;
+    /** Days before this are not counted: what they gave is already in `heldCents`. */
+    skipBefore?: number;
+    /** Days that ask by the goal's own funding whatever its runs say. */
+    ownDayKeys?: ReadonlySet<string>;
+  } = {},
 ): { day: D; cents: Cents; shares?: Cents[] }[] {
   const funded = selectRuleDays(goal.funding, incomeDays);
+  const runAsk = getRunAsker(goal.fundingRuns, incomeDays, priorDays);
   const calendar = getCalendarCents(goal.funding, funded, priorDays);
   const partAsks =
     goal.priority === undefined
@@ -99,14 +127,20 @@ export function planGoalContributions<D extends PaceDay>(
     parts: { day: D; cents: Cents; shares?: Cents[] }[];
   }>(
     (acc, day) => {
+      if (options.window && !isInWindow(options.window, day.on)) return acc;
       const isRest = goal.funding.amount.kind === 'rest';
       const asks = partAsks?.(day.dayKey) ?? null;
-      const ask = asks
-        ? asks.reduce((sum, part) => sum + part, 0)
-        : calendar
-          ? (calendar.get(day.dayKey) ?? 0)
-          : getDayAsk(goal.funding, day);
-      const cents = isRest ? acc.left : Math.min(ask, acc.left);
+      const ask =
+        runAsk && !options.ownDayKeys?.has(day.dayKey)
+          ? runAsk(day)
+          : asks
+            ? asks.reduce((sum, part) => sum + part, 0)
+            : calendar
+              ? (calendar.get(day.dayKey) ?? 0)
+              : getDayAsk(goal.funding, day);
+      const isSkipped =
+        options.skipBefore !== undefined && day.on < options.skipBefore;
+      const cents = isSkipped ? 0 : isRest ? acc.left : Math.min(ask, acc.left);
       const entry = asks
         ? { day, cents, shares: splitAcrossParts(asks, cents) }
         : { day, cents };
@@ -131,32 +165,119 @@ const getState = (
   return fundedByDate > contributionCount ? 'ahead' : 'onPace';
 };
 
+/** The goal as one stretch of the plan: what its version asks while it holds, and whether money goes in. */
+export interface PaceStretch extends PaceWindow {
+  goal: Omit<PaceGoal, 'heldCents'>;
+  isSaving: boolean;
+}
+
 /**
- * What it takes per income day to reach a goal by its date, and where the plan stands against that.
- * Ahead means the target is reached at least one funded day before the date, on pace means on the
- * last funded day that fits, behind means the date comes first.
+ * What the goal puts in on each income day, each day by the stretch in force on it: a stretch that is
+ * not saving (paused, not yet started, ended) puts in nothing, and the money put in earlier counts
+ * toward a later stretch's target. Also the days the stretches' cadences fund, for reading "ahead".
  */
-export function getPace(
-  goal: PaceGoal,
+export function planGoalTimeline<D extends PaceDay>(
+  stretches: readonly PaceStretch[],
+  heldCents: Cents,
+  incomeDays: readonly D[],
+  priorDays: readonly PaceDay[] = [],
+): {
+  contributions: { day: D; cents: Cents; shares?: Cents[] }[];
+  fundedDays: D[];
+} {
+  const result = [...stretches]
+    .sort((a, b) => a.from - b.from)
+    .reduce<{
+      held: Cents;
+      contributions: { day: D; cents: Cents; shares?: Cents[] }[];
+      fundedDays: D[];
+    }>(
+      (acc, stretch) => {
+        const { funding } = stretch.goal;
+        const parts =
+          stretch.isSaving && funding.amount.kind !== 'rest'
+            ? planGoalContributions(
+                { ...stretch.goal, heldCents: acc.held },
+                incomeDays,
+                priorDays,
+                { window: stretch },
+              )
+            : [];
+        return {
+          held: acc.held + parts.reduce((sum, part) => sum + part.cents, 0),
+          contributions: [...acc.contributions, ...parts],
+          fundedDays: [
+            ...acc.fundedDays,
+            ...(stretch.isSaving
+              ? selectRuleDays(funding, incomeDays).filter((day) =>
+                  isInWindow(stretch, day.on),
+                )
+              : []),
+          ],
+        };
+      },
+      { held: heldCents, contributions: [], fundedDays: [] },
+    );
+  return result;
+}
+
+const NO_GOAL: Omit<PaceGoal, 'heldCents'> = {
+  targetCents: 0,
+  targetDate: null,
+  funding: { amount: { kind: 'exact', cents: 0 }, cadence: { kind: 'none' } },
+};
+
+/**
+ * Where the plan stands against a goal whose version changes: each income day puts in what its stretch
+ * asks, judged against the last stretch's target and date; with no stretches (ended) nothing goes in.
+ */
+export function getTimelinePace(
+  stretches: readonly PaceStretch[],
+  heldCents: Cents,
   incomeDays: readonly PaceDay[],
   priorDays: readonly PaceDay[] = [],
+  ended: Omit<PaceGoal, 'heldCents'> = NO_GOAL,
 ): Pace {
-  const remaining = Math.max(0, goal.targetCents - goal.heldCents);
+  const last = [...stretches].sort((a, b) => b.from - a.from)[0] ?? {
+    goal: ended,
+  };
+  const date = last.goal.targetDate;
+  const remaining = Math.max(0, last.goal.targetCents - heldCents);
   const isComplete = remaining === 0;
-  const date = goal.targetDate;
+  const isFunding = (stretch: PaceStretch) =>
+    stretch.isSaving && stretch.goal.funding.cadence.kind !== 'none';
+  const starts = stretches.filter(isFunding).map((stretch) => stretch.from);
+  const savingFrom = starts.length === 0 ? -Infinity : Math.min(...starts);
   const counted =
-    date === null ? [] : incomeDays.filter((day) => day.on <= date);
-  const isRest = goal.funding.amount.kind === 'rest';
-  const contributions = isRest
-    ? []
-    : planGoalContributions(goal, incomeDays, priorDays);
+    date === null
+      ? []
+      : incomeDays.filter((day) => day.on <= date && day.on >= savingFrom);
+  const isRest = last.goal.funding.amount.kind === 'rest';
+  const { contributions, fundedDays } = planGoalTimeline(
+    stretches,
+    heldCents,
+    incomeDays,
+    priorDays,
+  );
   const planned = contributions.reduce((sum, part) => sum + part.cents, 0);
   const plannedByDateCents = contributions
     .filter((part) => date !== null && part.day.on <= date)
     .reduce((sum, part) => sum + part.cents, 0);
-  const funded = selectRuleDays(goal.funding, incomeDays);
   const fundedByDate =
-    date === null ? 0 : funded.filter((day) => day.on <= date).length;
+    date === null ? 0 : fundedDays.filter((day) => day.on <= date).length;
+  const reachedOn = contributions.reduce<{
+    sum: Cents;
+    day: PaceDay | null;
+  }>(
+    (acc, part) => {
+      const sum = acc.sum + part.cents;
+      return {
+        sum,
+        day: acc.day === null && sum >= remaining ? part.day : acc.day,
+      };
+    },
+    { sum: 0, day: null },
+  ).day;
 
   const result: Pace = {
     isComplete,
@@ -167,15 +288,9 @@ export function getPace(
         ? null
         : Math.ceil(remaining / counted.length),
     plannedByDateCents,
-    reachedOn:
-      !isComplete && planned >= remaining
-        ? (contributions[contributions.length - 1]?.day ?? null)
-        : null,
+    reachedOn: !isComplete && planned >= remaining ? reachedOn : null,
     state:
-      date === null ||
-      isComplete ||
-      isRest ||
-      goal.funding.cadence.kind === 'none'
+      date === null || isComplete || isRest || !stretches.some(isFunding)
         ? null
         : getState(
             contributions.length,
@@ -183,8 +298,23 @@ export function getPace(
             remaining,
             fundedByDate,
           ),
+    targetDate: date,
   };
   return result;
+}
+
+/** What it takes per income day to reach a goal by its date, and whether the plan is ahead, on pace or behind. */
+export function getPace(
+  goal: PaceGoal,
+  incomeDays: readonly PaceDay[],
+  priorDays: readonly PaceDay[] = [],
+): Pace {
+  return getTimelinePace(
+    [{ goal, from: -Infinity, until: null, isSaving: true }],
+    goal.heldCents,
+    incomeDays,
+    priorDays,
+  );
 }
 
 export type GoalTrack = 'onTrack' | 'behind';
@@ -193,6 +323,12 @@ export type GoalTrack = 'onTrack' | 'behind';
 export const isSavingFor = (
   goal: Pick<GoalSealed, 'state' | 'funding'>,
 ): boolean => goal.state !== 'paused' && goal.funding.cadence.kind !== 'none';
+
+/** Whether a goal read over the coming days is on track: null with no date, a complete goal, or no day money goes in. */
+export function getTimelineTrack(pace: Pace): GoalTrack | null {
+  if (pace.state === null) return null;
+  return pace.state === 'behind' ? 'behind' : 'onTrack';
+}
 
 /** Whether a goal with a date is on track: null for a goal with no date, a paused or complete one, or one with no pace to measure. */
 export function getGoalTrack(

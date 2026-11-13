@@ -106,14 +106,17 @@ function ResultLines({
   });
 
   return (
-    <div ref={card} className='flex w-full flex-col items-start gap-2'>
+    <div
+      ref={card}
+      className='flex w-full flex-col items-start gap-2 empty:hidden'
+    >
       {execution.isUnreadable ? (
         <p className='text-muted-foreground pl-[30px] text-[13px]'>
           {HELM_COPY.unreadable}
         </p>
       ) : (
         <>
-          {execution.summary && (
+          {execution.summary && execution.category !== 'answer' && (
             <AssistantLine>{toSentence(execution.summary)}</AssistantLine>
           )}
           {lines.length > 0 && (
