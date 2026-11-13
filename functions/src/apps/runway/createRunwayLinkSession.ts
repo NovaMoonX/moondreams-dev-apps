@@ -81,6 +81,7 @@ export const createRunwayLinkSession = onCall(
       provider.createLinkSession(uid, {
         accessToken: grant.credential,
         accountSelection: true,
+        askCardConsent: linkSnapshot.data()?.needsCardConsent === true,
       }),
     );
     logger.info('runway.link.reconnectSessionCreated');

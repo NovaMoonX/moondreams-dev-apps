@@ -32,6 +32,7 @@ import {
   HOME_WORDS,
   SPEND_WORDS,
 } from '@apps/runway/constants';
+import { selectCardsWithBankDue } from '@apps/runway/store/selectors/cardStatementSelectors';
 import { getDueCards } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import DraftPickUpRow from '@apps/runway/components/DraftPickUpRow';
@@ -47,7 +48,6 @@ import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
-  selectAllCards,
   selectHasIncome,
   selectEnvelopes,
   selectIsDaysLoaded,
@@ -85,7 +85,7 @@ function HomeScreen() {
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
-  const allCards = useAppSelector(selectAllCards);
+  const bankDueCards = useAppSelector(selectCardsWithBankDue);
   const homeMoves = useAppSelector((state) => selectHomeMoves(state, today));
   const isTrack = useAppSelector((state) =>
     isTrackingLevel(selectLevel(state)),
@@ -132,7 +132,7 @@ function HomeScreen() {
   const shown = orderHomeTiles(envelopes, pins, hasMoney, HOME_TILE_COUNT);
   const dueCards = isTrack
     ? getDueCards(
-        getListedCards(allCards, balances.reserveByCard),
+        getListedCards(bankDueCards, balances.reserveByCard),
         balances.reserveByCard,
         moves,
         today,

@@ -656,6 +656,8 @@ export interface LinkDoc {
   status: LinkStatus;
   lastSyncAt: number | null;
   createdAt: number;
+  /** True while the bank wants the person to agree once before it shares card details (the minimum, the statement); missing on a link written before card details, read as false. */
+  needsCardConsent: boolean | null;
   sealed: Sealed;
 }
 
@@ -686,6 +688,7 @@ export interface OpenLink extends LinkSealed {
   status: LinkStatus;
   lastSyncAt: number | null;
   createdAt: number;
+  needsCardConsent: boolean;
 }
 
 /** What the bank last said an account or card holds; written by Functions. */
@@ -705,6 +708,31 @@ export interface OpenAccountBalance {
   limitCents: Cents | null;
   /** True when the balance gets the five-minute check: the bank shares it instantly and this link's live reads are on; null when unknown. */
   hasInstantBalance: boolean | null;
+}
+
+/** What the bank's latest statement says about a linked card, keyed by the card id; written by Functions. */
+export interface CardStatementDoc {
+  id: string;
+  /** When Runway last read it from the bank. */
+  asOf: number;
+  sealed: Sealed;
+}
+
+export interface CardStatementSealed {
+  /** The minimum the bank asks for by `dueOn`; null when the bank does not say. */
+  minimumCents: Cents | null;
+  /** What the card owed when the last statement was issued. */
+  statementCents: Cents | null;
+  statementOn: DateOnly | null;
+  /** The bank's next due date; null when no payment is expected. */
+  dueOn: DateOnly | null;
+  lastPaymentCents: Cents | null;
+  lastPaymentOn: DateOnly | null;
+}
+
+export interface OpenCardStatement extends CardStatementSealed {
+  id: string;
+  asOf: number;
 }
 
 /** An account as the bank describes it, before the person says which of theirs it is. */
