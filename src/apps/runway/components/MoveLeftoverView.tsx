@@ -9,6 +9,8 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
+import SearchInput from '@/components/SearchInput';
+import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
@@ -29,6 +31,7 @@ import {
   MAX_NOTE_LENGTH,
   MAX_PURCHASE_CENTS,
   MOVE_WORDS,
+  RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { deriveBalances } from '@apps/runway/engine/balances';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -50,19 +53,30 @@ import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 const FREE = 'free';
 
 interface MoveLeftoverViewProps {
-  envelopeId: string;
+  itemId: string;
+  kind: 'envelope' | 'goal';
   name: string;
-  /** What the envelope has left. */
+  /** What the envelope has left, or what the goal holds. */
   leftCents: Cents;
+  /** Envelopes are places only where they track what is left in them. */
+  hasEnvelopes: boolean;
   today: number;
   onBack: () => void;
 }
 
-/** The view an envelope's sheet swaps in to move what is left in it to another envelope, a goal or Free to Spend. Nothing is picked until the person picks it. */
+interface Place {
+  id: string;
+  name: string;
+  emoji: string | null;
+}
+
+/** The view an envelope's or goal's sheet swaps in to move its money to Free to Spend, an envelope or another goal. Nothing is picked until the person picks it. */
 function MoveLeftoverView({
-  envelopeId,
+  itemId: envelopeId,
+  kind,
   name,
   leftCents,
+  hasEnvelopes,
   today,
   onBack,
 }: MoveLeftoverViewProps) {
@@ -80,36 +94,61 @@ function MoveLeftoverView({
     isHidden ? '' : centsToInputValue(leftCents),
   );
   const [pick, setPick] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const [isNoting, setIsNoting] = useState(false);
   const [note, setNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const places = [
-    ...envelopes
-      .filter(({ item }) => item.id !== envelopeId)
-      .map(({ item, version }) => ({
-        id: item.id,
-        name: version.payload.name,
-        emoji: emojiOf(version.payload.emoji, version.payload.groupId),
-      })),
-    ...goals
-      .filter(({ version }) => version.payload.state !== 'paused')
-      .map(({ item, version }) => ({
-        id: item.id,
-        name: version.payload.name,
-        emoji: emojiOf(version.payload.emoji, version.payload.groupId),
-      })),
-  ];
-  const options: PillOption<string>[] = [
-    { value: FREE, label: MOVE_WORDS.freeToSpend },
-    ...places.map(({ id, name: placeName, emoji }) => ({
-      value: id,
-      label: placeName,
-      emoji: emoji ?? undefined,
-    })),
-  ];
+  const envelopePlaces: Place[] = hasEnvelopes
+    ? envelopes
+        .filter(({ item }) => item.id !== envelopeId)
+        .map(({ item, version }) => ({
+          id: item.id,
+          name: version.payload.name,
+          emoji: emojiOf(version.payload.emoji, version.payload.groupId),
+        }))
+    : [];
+  const goalPlaces: Place[] = goals
+    .filter(
+      ({ item, version }) =>
+        item.id !== envelopeId && version.payload.state !== 'paused',
+    )
+    .map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+      emoji: emojiOf(version.payload.emoji, version.payload.groupId),
+    }));
+  const places = [...envelopePlaces, ...goalPlaces];
+  const hasSearch = places.length >= RUNWAY_SEARCH_THRESHOLD;
+  const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
+  const toOptions = (list: Place[]): PillOption<string>[] =>
+    list
+      .filter(
+        ({ name: placeName }) =>
+          trimmedQuery === '' || placeName.toLowerCase().includes(trimmedQuery),
+      )
+      .map(({ id, name: placeName, emoji }) => ({
+        value: id,
+        label: placeName,
+        emoji: emoji ?? undefined,
+      }));
+  const sections = [
+    { label: MOVE_WORDS.envelopes, options: toOptions(envelopePlaces) },
+    { label: MOVE_WORDS.goals, options: toOptions(goalPlaces) },
+  ].filter((section) => section.options.length > 0);
+  const search = (text: string) => {
+    setQuery(text);
+    requestAnimationFrame(() =>
+      resultsRef.current?.scrollIntoView({ block: 'nearest' }),
+    );
+  };
+  const choose = (value: string) => {
+    setPick(value);
+    setQuery('');
+  };
 
   const parsed = parseMoneyToCents(amount);
   const cents =
@@ -122,7 +161,9 @@ function MoveLeftoverView({
       : (places.find(({ id }) => id === pick)?.name ?? null);
   const getBlocker = () => {
     if (cents === null) return MOVE_WORDS.needsAmount;
-    if (cents > leftCents) return MOVE_WORDS.tooMuch;
+    if (cents > leftCents) {
+      return kind === 'goal' ? MOVE_WORDS.tooMuchSaved : MOVE_WORDS.tooMuch;
+    }
     if (toName === null) return MOVE_WORDS.needsPlace;
     return null;
   };
@@ -269,11 +310,45 @@ function MoveLeftoverView({
       <ActionSection caption={MOVE_WORDS.moveTo}>
         <div className='space-y-3'>
           <PillGroup
-            label={MOVE_WORDS.places}
-            options={options}
+            label={MOVE_WORDS.freeToSpend}
+            options={[{ value: FREE, label: MOVE_WORDS.freeToSpend }]}
             value={pick}
-            onChange={setPick}
+            onChange={choose}
           />
+          {hasSearch && (
+            <div
+              onKeyDown={(event) =>
+                event.key === 'Enter' && event.preventDefault()
+              }
+            >
+              <SearchInput
+                value={query}
+                onChange={search}
+                placeholder={
+                  hasEnvelopes ? MOVE_WORDS.search : MOVE_WORDS.searchGoals
+                }
+              />
+            </div>
+          )}
+          <div ref={resultsRef} className='space-y-3'>
+            {sections.map((section) => (
+              <div key={section.label} className='space-y-2'>
+                <SectionDivider label={section.label} />
+                <PillGroup
+                  label={section.label}
+                  options={section.options}
+                  value={pick}
+                  onChange={choose}
+                  isSearchable={false}
+                />
+              </div>
+            ))}
+            {trimmedQuery !== '' && sections.length === 0 && (
+              <p className='text-muted-foreground text-sm'>
+                {MOVE_WORDS.noMatch(query.trim())}
+              </p>
+            )}
+          </div>
         </div>
       </ActionSection>
       {rows.length > 0 && (

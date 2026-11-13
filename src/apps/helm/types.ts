@@ -1,6 +1,7 @@
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
+import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
 
 export type { SharedKind };
 
@@ -21,8 +22,12 @@ export type HelmView =
   | 'project'
   | 'knowledge'
   | 'topic'
+  | 'procedures'
+  | 'procedure'
+  | 'run'
   | 'howNomosSeesYou'
-  | 'comingUp';
+  | 'comingUp'
+  | 'search';
 
 export type Sealed = EncryptedFieldPayload;
 
@@ -30,7 +35,17 @@ export type HelmEncryption = AppEncryption<'helm'>;
 
 export type VoiceMode = 'cloudWhenOnline' | 'deviceOnly';
 
+export type AssistantTone = 'composed' | 'warm' | 'brief' | 'formal';
+
+export type HelmTheme = 'chestnut' | 'plum' | 'teal' | 'indigo';
+
 export interface HelmProfile {
+  /** The person's own name for the assistant; null reads as the default. Always read through readAssistantName. */
+  assistantName: string | null;
+  /** How the assistant's answers sound; null reads as composed. */
+  assistantTone: AssistantTone | null;
+  /** The colour theme; null reads as chestnut. */
+  theme: HelmTheme | null;
   /** IANA zone, set from the device on first open. */
   timeZone: string;
   /** Floating "HH:mm": the earliest a slot may start. */
@@ -58,8 +73,42 @@ export interface HelmProfile {
   selfWhoId: string | null;
   /** Where the person said they are, holding for a few hours from when they said it; never the device's location. */
   currentPlace: { placeId: string; saidAt: number } | null;
+  /** The createdAt of the newest typed capture the style learner has read; null until it has run, and on a profile from before it. */
+  styleLearnedThroughAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+export type StyleScope = 'general' | 'occasion' | 'audience';
+
+export interface StyleTrait {
+  /** A description of how the person writes, at most 120 characters; a quoted sign-off at most 30. */
+  text: string;
+  isPersonSet: boolean;
+  /** How many pieces of writing showed it; 0 when the person wrote it. */
+  exampleCount: number;
+}
+
+export interface StyleSealed {
+  label: string;
+  /** At most 12, by id. */
+  traits: Record<string, StyleTrait>;
+  /** At most 6, each at most 80 characters. */
+  avoid: string[];
+  /** Notes the person removed, each as `text.trim().replace(/\s+/g, ' ').toLowerCase()`; the last 30, so learning never brings one back. */
+  removed: string[];
+}
+
+/** One writing-style note set at `apps/helm/users/{uid}/style/{styleId}`; no run of more than 30 characters of what the person typed is stored. */
+export interface StyleProfile {
+  scope: StyleScope;
+  audienceWhoId: string | null;
+  learnedFrom: ('helmText' | 'sentMail')[];
+  sampleCount: number;
+  personEditedAt: number | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
 }
 
 export type CaptureStatus =
@@ -204,6 +253,10 @@ export interface ScreenContext {
   visible: RecordRef[];
   /** The open topic's id on the topic view; null on every other. */
   topicId: string | null;
+  /** The open procedure's id on the procedure view; null on every other. */
+  procedureId: string | null;
+  /** The open run's id on the run view; null on every other. */
+  runId: string | null;
   v: 1;
 }
 
@@ -218,6 +271,8 @@ export interface Capture {
   answersQuestion: { captureId: string; questionId: string } | null;
   /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
   ttsProvider: string | null;
+  /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
+  arrivedVia: 'direct' | 'dropBox';
   medium: 'web';
   sessionId: string;
   turnIndex: number;
@@ -289,6 +344,13 @@ export type SourceRef =
       label: string | null;
     };
 
+/** A record read from another app, as the answer kept it. */
+export interface AnswerRecord {
+  name: string;
+  detail: string | null;
+  amount: string;
+}
+
 export interface AnswerQuote {
   id: string;
   connectorId: string;
@@ -297,6 +359,8 @@ export interface AnswerQuote {
   /** When the quoted message was sent; null on quotes kept before it was recorded. */
   at: number | null;
   text: string | null;
+  /** Null on a mail or document quote and on app records kept before it was stored; those are read from `sourceLabel` and `text`. */
+  record: AnswerRecord | null;
   deepLink: string | null;
   deletedAt: number | null;
 }
@@ -686,6 +750,96 @@ export interface OpenTopicVersion
   id: string;
 }
 
+export interface ProcedureSealed {
+  title: string;
+  steps: Record<string, StepBody>;
+  groups: Record<string, { name: string }>;
+}
+
+/** `apps/helm/users/{uid}/procedures/{id}`: a routine kept once, its steps in named groups. */
+export interface Procedure {
+  stepState: Record<string, StepPlace>;
+  groupOrder: string[];
+  version: number;
+  createdBy: 'person' | 'nomos';
+  sourceCaptureId: string | null;
+  sourceTaskId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface OpenProcedure
+  extends Omit<Procedure, 'sealed'>, ProcedureSealed {
+  id: string;
+}
+
+export type ProcedureVersionReason =
+  'created' | 'personEdit' | 'revisedOnRequest' | 'restored' | 'fromRun';
+
+/** `procedures/{id}/versions/{n}`: one change to a procedure; never rewritten. */
+export interface ProcedureVersion {
+  version: number;
+  restoredFromVersion: number | null;
+  createdBy: 'person' | 'nomos';
+  reason: ProcedureVersionReason;
+  stepState: Record<string, StepPlace>;
+  groupOrder: string[];
+  sourceCaptureId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface ProcedureVersionSealed extends ProcedureSealed {
+  changeSummary: string;
+  requestQuote: string | null;
+}
+
+export interface OpenProcedureVersion
+  extends Omit<ProcedureVersion, 'sealed'>, ProcedureVersionSealed {
+  id: string;
+}
+
+/** What a run is for: a project, or a trip or event copied from another app; null for a run that is for nothing. */
+export type RunAttachment = { kind: 'project' | 'synced'; id: string } | null;
+
+export interface RunStepPlace extends StepPlace {
+  doneAt: number | null;
+  /** A step added for this run alone. */
+  isExtra: boolean;
+}
+
+export interface RunSealed {
+  title: string;
+  steps: Record<string, StepBody>;
+  groups: Record<string, { name: string }>;
+  /** What the run is for, kept so it still reads after the trip or event leaves the calendar. */
+  attachedLabel: string | null;
+}
+
+/** `apps/helm/users/{uid}/procedureRuns/{id}`: one go at a procedure, holding the steps it started with. */
+export interface ProcedureRun {
+  procedureId: string;
+  procedureVersion: number;
+  attachedTo: RunAttachment;
+  /** The trip's or event's first day, a date-only UTC midnight; null for a run that is for nothing. */
+  dueOn: number | null;
+  stepState: Record<string, RunStepPlace>;
+  groupOrder: string[];
+  startedAt: number;
+  finishedAt: number | null;
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface OpenRun extends Omit<ProcedureRun, 'sealed'>, RunSealed {
+  id: string;
+}
+
 export type MediaStatus = 'uploading' | 'received' | 'kept' | 'discarded';
 
 /** A record a medium shows on, by id. */
@@ -797,7 +951,9 @@ export interface EffectRef {
     | 'keyDates'
     | 'projects'
     | 'notes'
-    | 'topics';
+    | 'topics'
+    | 'procedures'
+    | 'procedureRuns';
   docId: string;
 }
 

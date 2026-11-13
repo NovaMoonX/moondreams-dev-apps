@@ -41,24 +41,118 @@ export const hasReviseCue = (text: string) =>
     .split(' ')
     .some((word) => REVISE_CUES.has(word));
 
+const PROCEDURE_CUES = new Set([
+  'routine',
+  'routines',
+  'procedure',
+  'procedures',
+  'checklist',
+]);
+
+const PROCEDURE_REVISE_CUES = new Set([
+  ...REVISE_CUES,
+  'add',
+  'delete',
+  'drop',
+  'split',
+  'group',
+  'move',
+  'rename',
+  'reorder',
+  'put',
+  'merge',
+  'shorter',
+]);
+
+const hasWordIn = (cues: Set<string>, text: string) =>
+  toComparable(text)
+    .split(' ')
+    .some((word) => cues.has(word));
+
+/** Whether the words name a routine, procedure or checklist, as a word of its own. */
+export const hasProcedureCue = (text: string) =>
+  hasWordIn(PROCEDURE_CUES, text);
+
+/** Whether the words ask to change a procedure's steps. */
+export const hasProcedureReviseCue = (text: string) =>
+  hasWordIn(PROCEDURE_REVISE_CUES, text);
+
+const RUN_START_CUES = new Set([
+  'start',
+  'starting',
+  'begin',
+  'run',
+  'running',
+  'use',
+  'kick',
+]);
+
+/** Whether the words ask to begin something: one of the cue words, as a word of its own. */
+export const hasRunStartCue = (text: string) => hasWordIn(RUN_START_CUES, text);
+
+const TICK_CUES = new Set([
+  'done',
+  'did',
+  'finished',
+  'packed',
+  'tick',
+  'ticked',
+  'checked',
+  'got',
+  'grabbed',
+  'bought',
+  'sorted',
+  'handled',
+  'complete',
+  'completed',
+]);
+
+const TICK_REFUSALS = [
+  'not',
+  'havent',
+  'hasnt',
+  'didnt',
+  'dont',
+  'never',
+  'forgot',
+  'still need',
+  'yet to',
+  'need to',
+  'needs to',
+];
+
+/** Whether the words say something is done and do not negate it: a done-word and none of the refusals, as whole words. */
+export const hasTickCue = (text: string) => {
+  const padded = ` ${toComparable(text.replace(/['\u2019]/g, ''))} `;
+  return (
+    hasWordIn(TICK_CUES, text) &&
+    !TICK_REFUSALS.some((phrase) => padded.includes(` ${phrase} `))
+  );
+};
+
 /** Short plain turns go to the quick model; a turn with photos or files, a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
 export const pickRoute = ({
   text,
   mode,
   isAnswer = false,
   hasTopicFocus = false,
+  hasProcedureFocus = false,
   hasMedia = false,
 }: {
   text: string;
   mode: 'full' | 'rest';
   isAnswer?: boolean;
   hasTopicFocus?: boolean;
+  hasProcedureFocus?: boolean;
   hasMedia?: boolean;
 }): Route => {
   const trimmed = text.trim();
   if (hasMedia) return 'full';
   if (isAnswer && mode === 'full') return 'quick';
   if (hasTopicFocus && mode === 'full' && hasReviseCue(trimmed)) return 'full';
+  if (mode === 'full' && hasProcedureCue(trimmed)) return 'full';
+  if (hasProcedureFocus && mode === 'full' && hasProcedureReviseCue(trimmed))
+    return 'full';
   return mode === 'full' &&
     trimmed.length <= MAX_QUICK_CHARS &&
     !isQuestion(trimmed)

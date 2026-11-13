@@ -33,6 +33,7 @@ import {
 } from '../../src/apps/helm/constants.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import { openJson, sealBytes, sealJson } from '../../src/apps/helm/security.ts';
+import { toStepState } from '../../src/apps/helm/utils/stepGroups.ts';
 import {
   getMediaObjectPath,
   getMediaObjectPaths,
@@ -71,6 +72,12 @@ import type {
   Task,
   TaskDue,
   TaskSealed,
+  Procedure,
+  ProcedureSealed,
+  StyleProfile,
+  StyleSealed,
+  ProcedureVersion,
+  ProcedureVersionSealed,
   Topic,
   TopicDepth,
   TopicSealed,
@@ -90,12 +97,14 @@ import { A_LIST_SHARES } from '../../functions/src/apps/a-list/share/manifest.ts
 import { GOING_ONCE_SHARES } from '../../functions/src/apps/going-once/share/manifest.ts';
 import { NINE_LIVES_SHARES } from '../../functions/src/apps/nine-lives/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
+import { RUNWAY_SHARES } from '../../functions/src/apps/runway/share/manifest.ts';
 import { WAYPOINT_SHARES } from '../../functions/src/apps/waypoint/share/manifest.ts';
 import { WORTH_THE_WAIT_SHARES } from '../../functions/src/apps/worth-the-wait/share/manifest.ts';
 import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
+import { formatMoney } from '../../functions/src/utils/formatMoney.ts';
 import { getShowtime } from './aList.ts';
 import { getSeedPickupOn } from './goingOnce.ts';
-import { readEmulatorKeyring } from './runway.ts';
+import { buildSampleShareSummary, readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -106,7 +115,14 @@ import {
 interface CopyDefinition {
   category: string;
   sourceRef: string;
-  kind: 'event' | 'task' | 'place' | 'project' | 'pet' | 'trip';
+  kind:
+    | 'event'
+    | 'task'
+    | 'place'
+    | 'project'
+    | 'pet'
+    | 'trip'
+    | 'moneySummary';
   title: string;
   subtitle: string | null;
   startAt: number | null;
@@ -116,6 +132,10 @@ interface CopyDefinition {
   isAllDay?: boolean;
   placeLabel?: string;
   extra?: Record<string, string | number>;
+  detail?: string;
+  amountCents?: number;
+  currency?: string;
+  sourceUpdatedAt?: number;
 }
 
 const DAY_MS = 86_400_000;
@@ -123,8 +143,20 @@ const MINUTE_MS = 60_000;
 
 // Alex keeps Pacific Time, so the first open shows a profile that was made earlier; Jamie's zone differs from the emulator's.
 const SEED_PROFILES = [
-  { user: FIXTURE_USERS.partnerOne, timeZone: 'America/Los_Angeles' },
-  { user: FIXTURE_USERS.partnerTwo, timeZone: 'America/New_York' },
+  {
+    user: FIXTURE_USERS.partnerOne,
+    timeZone: 'America/Los_Angeles',
+    assistantName: null,
+    assistantTone: null,
+    theme: null,
+  },
+  {
+    user: FIXTURE_USERS.partnerTwo,
+    timeZone: 'America/New_York',
+    assistantName: 'Juniper',
+    assistantTone: 'warm',
+    theme: 'plum',
+  },
 ];
 
 const SORT_DELAY_MS = 4_000;
@@ -289,6 +321,8 @@ const MOVE_SCREEN: ScreenContext = {
     { collection: 'tasks', id: 'seed-task-3-1' },
   ],
   topicId: null,
+  procedureId: null,
+  runId: null,
   v: 1,
 };
 
@@ -558,6 +592,7 @@ async function buildBackToBack(input: {
         interruptedCaptureId: null,
         answersQuestion: null,
         ttsProvider: null,
+        arrivedVia: 'direct',
         medium: 'web',
         sessionId: `seed-${uid}-today`,
         turnIndex: turnIndexFrom + order,
@@ -876,6 +911,7 @@ async function buildGmailTurn(input: {
         text: 'Your cake tasting is at 2:00 PM. See you then!',
         deepLink:
           'https://mail.google.com/mail/?authuser=personal@example.com#all/18f0c0de00000001',
+        record: null,
         deletedAt: null,
       },
     ],
@@ -896,6 +932,7 @@ async function buildGmailTurn(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: `seed-${uid}-answers`,
     turnIndex: 6,
@@ -1032,6 +1069,7 @@ async function buildAnswerTurns(input: {
         interruptedCaptureId: null,
         answersQuestion: null,
         ttsProvider: null,
+        arrivedVia: 'direct',
         medium: 'web',
         sessionId: `seed-${uid}-answers`,
         turnIndex: order,
@@ -1320,7 +1358,7 @@ async function buildPlanDays(input: {
   return { days, task: { id: 'seed-task-plan-done', task: doneTask } };
 }
 
-const toWho = (
+export const toWho = (
   fields: Pick<Who, 'kind' | 'tier' | 'tierSetBy' | 'isSelf' | 'createdBy'> &
     Partial<Pick<Who, 'lastMentionedAt'>>,
   createdAt: number,
@@ -1341,7 +1379,10 @@ const toWho = (
   sealed,
 });
 
-const wordsOf = (name: string, extra: Partial<WhoSealed> = {}): WhoSealed => ({
+export const wordsOf = (
+  name: string,
+  extra: Partial<WhoSealed> = {},
+): WhoSealed => ({
   name,
   aliases: [],
   relation: null,
@@ -1396,7 +1437,7 @@ function makeSquarePng(
 }
 
 /** One kept photo of a who or place: a flat-colour PNG sealed with the person's key, its document and the two sealed objects to upload. */
-async function buildSeedPhoto(input: {
+export async function buildSeedPhoto(input: {
   uid: string;
   id: string;
   attachedTo: Media['attachedTo'][number];
@@ -1448,7 +1489,7 @@ async function buildSeedPhoto(input: {
 }
 
 /** Uploads a seeded sealed object to the Storage emulator; a bucket the app isn't configured for leaves the photo unreadable. */
-async function uploadSealedSeed(path: string, bytes: Uint8Array) {
+export async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   const bucket =
     process.env.STORAGE_BUCKET ??
     process.env.VITE_FIREBASE_STORAGE_BUCKET ??
@@ -1665,6 +1706,7 @@ async function buildNoteTurn(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: `seed-${uid}-answers`,
     turnIndex: 7,
@@ -2303,6 +2345,7 @@ async function buildKnowledge(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct' as const,
     medium: 'web' as const,
     sessionId: `seed-${uid}-growth`,
     turnIndex,
@@ -2444,6 +2487,494 @@ async function buildKnowledge(input: {
   };
 }
 
+interface SeedProcedureStep {
+  id: string;
+  text: string;
+  detail?: string | null;
+  groupId: string | null;
+}
+
+interface SeedProcedureVersion {
+  by: 'nomos' | 'person';
+  reason: ProcedureVersion['reason'];
+  at: number;
+  summary: string;
+  requestQuote?: string;
+  title: string;
+  steps: SeedProcedureStep[];
+}
+
+/** Alex's two procedures: Packing for a work trip (made by the assistant on request in three groups, a charger added when asked and a pair of shoes renamed by hand, 13 steps at version 3) and Closing the cabin (made by hand, 7 steps in no group at version 2). Two documents plus five versions under `versions/{n}`. */
+async function buildProcedures(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
+  const { now, encryption } = input;
+  const GROUPS = {
+    clothes: { id: 'seed-group-clothes', name: 'Clothes' },
+    electronics: { id: 'seed-group-electronics', name: 'Electronics' },
+    documents: { id: 'seed-group-documents', name: 'Documents' },
+  };
+  const step = (
+    id: string,
+    text: string,
+    groupId: string | null = null,
+  ): SeedProcedureStep => ({ id, text, groupId });
+  const packingStart = [
+    step('seed-step-pack-weather', 'Check the weather at the destination'),
+    step('seed-step-pack-hotel', 'Confirm the hotel booking'),
+    step('seed-step-pack-shirts', 'Two work shirts', GROUPS.clothes.id),
+    step('seed-step-pack-trousers', 'Trousers', GROUPS.clothes.id),
+    step('seed-step-pack-shoes', 'Shoes for the meeting', GROUPS.clothes.id),
+    step('seed-step-pack-sleepwear', 'Sleepwear', GROUPS.clothes.id),
+    step('seed-step-pack-toiletry', 'Toiletry bag', GROUPS.clothes.id),
+    step('seed-step-pack-laptop', 'Laptop', GROUPS.electronics.id),
+    step(
+      'seed-step-pack-phone-charger',
+      'Phone charger',
+      GROUPS.electronics.id,
+    ),
+    step('seed-step-pack-headphones', 'Headphones', GROUPS.electronics.id),
+    step('seed-step-pack-id', 'ID or passport', GROUPS.documents.id),
+    step('seed-step-pack-agenda', 'Printed agenda', GROUPS.documents.id),
+  ];
+  const charger = step(
+    'seed-step-pack-laptop-charger',
+    'Laptop charger',
+    GROUPS.electronics.id,
+  );
+  const withCharger = [
+    ...packingStart.slice(0, 8),
+    charger,
+    ...packingStart.slice(8),
+  ];
+  const withSmartShoes = withCharger.map((entry) =>
+    entry.id === 'seed-step-pack-shoes'
+      ? { ...entry, text: 'Smart shoes' }
+      : entry,
+  );
+  const packingGroups = Object.values(GROUPS);
+  const packingVersions: SeedProcedureVersion[] = [
+    {
+      by: 'nomos',
+      reason: 'created',
+      at: now - 6 * DAY_MS,
+      summary: '',
+      title: 'Packing for a work trip',
+      steps: packingStart,
+    },
+    {
+      by: 'nomos',
+      reason: 'revisedOnRequest',
+      at: now - 5 * DAY_MS,
+      summary: 'Added the laptop charger',
+      requestQuote: 'add a step for the laptop charger',
+      title: 'Packing for a work trip',
+      steps: withCharger,
+    },
+    {
+      by: 'person',
+      reason: 'personEdit',
+      at: now - 2 * DAY_MS,
+      summary: 'You changed Smart shoes',
+      title: 'Packing for a work trip',
+      steps: withSmartShoes,
+    },
+  ];
+  const cabinStart = [
+    step('seed-step-cabin-water', 'Turn off the water main'),
+    step('seed-step-cabin-pipes', 'Drain the pipes'),
+    step('seed-step-cabin-fridge', 'Empty the fridge'),
+    step('seed-step-cabin-unplug', 'Unplug appliances'),
+    step('seed-step-cabin-shutters', 'Close the shutters'),
+    step('seed-step-cabin-lock', 'Lock up and check every door'),
+  ];
+  const cabinFinal = [
+    ...cabinStart.slice(0, 5),
+    step('seed-step-cabin-thermostat', 'Set the thermostat to 50°F'),
+    cabinStart[5],
+  ];
+  const cabinVersions: SeedProcedureVersion[] = [
+    {
+      by: 'person',
+      reason: 'created',
+      at: now - 20 * DAY_MS,
+      summary: '',
+      title: 'Closing the cabin',
+      steps: cabinStart,
+    },
+    {
+      by: 'person',
+      reason: 'personEdit',
+      at: now - 12 * DAY_MS,
+      summary: 'You added 1 step',
+      title: 'Closing the cabin',
+      steps: cabinFinal,
+    },
+  ];
+  const partsOf = (
+    title: string,
+    steps: SeedProcedureStep[],
+    groups: { id: string; name: string }[],
+  ) => ({
+    stepState: toStepState(
+      [
+        ...steps.filter((entry) => entry.groupId === null),
+        ...groups.flatMap((group) =>
+          steps.filter((entry) => entry.groupId === group.id),
+        ),
+      ].map(({ id, groupId }) => ({ id, groupId })),
+    ),
+    groupOrder: groups.map((group) => group.id),
+    body: {
+      title,
+      steps: Object.fromEntries(
+        steps.map((entry) => [
+          entry.id,
+          { text: entry.text, detail: entry.detail ?? null },
+        ]),
+      ),
+      groups: Object.fromEntries(
+        groups.map((group) => [group.id, { name: group.name }]),
+      ),
+    } satisfies ProcedureSealed,
+  });
+  const build = async (
+    id: string,
+    createdBy: 'nomos' | 'person',
+    groups: { id: string; name: string }[],
+    history: SeedProcedureVersion[],
+  ) => {
+    const latest = history[history.length - 1];
+    const parts = partsOf(latest.title, latest.steps, groups);
+    return {
+      id,
+      procedure: {
+        stepState: parts.stepState,
+        groupOrder: parts.groupOrder,
+        version: history.length,
+        createdBy,
+        sourceCaptureId: null,
+        sourceTaskId: null,
+        executionId: null,
+        createdAt: history[0].at,
+        lastEditedAt: latest.at,
+        sealed: await sealJson<ProcedureSealed>(parts.body, encryption),
+      } satisfies Procedure,
+      versions: await Promise.all(
+        history.map(async (entry, index) => {
+          const own = partsOf(entry.title, entry.steps, groups);
+          return {
+            procedureId: id,
+            id: String(index + 1),
+            version: {
+              version: index + 1,
+              restoredFromVersion: null,
+              createdBy: entry.by,
+              reason: entry.reason,
+              stepState: own.stepState,
+              groupOrder: own.groupOrder,
+              sourceCaptureId: null,
+              executionId: null,
+              createdAt: entry.at,
+              sealed: await sealJson<ProcedureVersionSealed>(
+                {
+                  ...own.body,
+                  changeSummary: entry.summary,
+                  requestQuote: entry.requestQuote ?? null,
+                },
+                encryption,
+              ),
+            } satisfies ProcedureVersion,
+          };
+        }),
+      ),
+    };
+  };
+  const built = [
+    await build(
+      'seed-procedure-packing',
+      'nomos',
+      packingGroups,
+      packingVersions,
+    ),
+    await build('seed-procedure-cabin', 'person', [], cabinVersions),
+  ];
+  return {
+    procedures: built.map(({ id, procedure }) => ({ id, procedure })),
+    versions: built.flatMap(({ versions }) => versions),
+    basis: {
+      packing: { steps: withSmartShoes, groups: packingGroups },
+      cabin: { steps: cabinStart },
+    },
+  };
+}
+
+interface SeedRunSource {
+  steps: SeedProcedureStep[];
+  groups?: { id: string; name: string }[];
+}
+
+/** Alex's two runs of those procedures: Packing for a work trip at version 3, open for the Waypoint trip (5 of 13 steps ticked, the chargers still to do, and one step added just this time, "Umbrella"), and Closing the cabin at version 1, finished three weeks ago for the finished Move project with every step ticked; the procedure has since gained a step, so the run keeps its own steps. Two documents under `procedureRuns/{id}`. */
+async function buildRuns(input: {
+  now: number;
+  encryption: HelmEncryption;
+  packing: SeedRunSource;
+  cabin: SeedRunSource;
+}) {
+  const { now, encryption } = input;
+  const anchor = new Date(now + 10 * DAY_MS);
+  const tripStart = Date.UTC(
+    anchor.getUTCFullYear(),
+    anchor.getUTCMonth(),
+    anchor.getUTCDate(),
+  );
+  const waypointGrantId = toGrantId(
+    'helm',
+    toAppConnectorId('waypoint'),
+    SITE_ACCOUNT_ID,
+  );
+  const tripCopyId = createHash('sha256')
+    .update(`${waypointGrantId}|trips|trips/seed-waypoint-trip`)
+    .digest('hex')
+    .slice(0, 40);
+  const doneFirst = new Set([
+    'seed-step-pack-weather',
+    'seed-step-pack-hotel',
+    'seed-step-pack-shirts',
+    'seed-step-pack-trousers',
+    'seed-step-pack-sleepwear',
+  ]);
+  const umbrella = { id: 'seed-step-run-umbrella', text: 'Umbrella' };
+  const build = async (
+    id: string,
+    run: {
+      procedureId: string;
+      title: string;
+      source: SeedRunSource;
+      version: number;
+      attachedTo: { kind: 'project' | 'synced'; id: string };
+      attachedLabel: string;
+      dueOn: number | null;
+      startedAt: number;
+      finishedAt: number | null;
+      doneAt: (stepId: string) => number | null;
+      extra: { id: string; text: string } | null;
+      createdBy: 'person' | 'nomos';
+    },
+  ) => {
+    const groups = run.source.groups ?? [];
+    const ordered = [
+      ...run.source.steps.filter((entry) => entry.groupId === null),
+      ...groups.flatMap((group) =>
+        run.source.steps.filter((entry) => entry.groupId === group.id),
+      ),
+    ];
+    const rows = [
+      ...ordered.map((entry) => ({
+        id: entry.id,
+        text: entry.text,
+        groupId: entry.groupId,
+        isExtra: false,
+      })),
+      ...(run.extra
+        ? [
+            {
+              id: run.extra.id,
+              text: run.extra.text,
+              groupId: null,
+              isExtra: true,
+            },
+          ]
+        : []),
+    ];
+    return {
+      id,
+      run: {
+        procedureId: run.procedureId,
+        procedureVersion: run.version,
+        attachedTo: run.attachedTo,
+        dueOn: run.dueOn,
+        stepState: Object.fromEntries(
+          rows.map((row, index) => [
+            row.id,
+            {
+              order: index,
+              groupId: row.groupId,
+              doneAt: run.doneAt(row.id),
+              isExtra: row.isExtra,
+            },
+          ]),
+        ),
+        groupOrder: groups.map((group) => group.id),
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        createdBy: run.createdBy,
+        executionId: null,
+        lastEditedAt: run.finishedAt ?? run.startedAt + 2 * MINUTE_MS,
+        sealed: await sealJson(
+          {
+            title: run.title,
+            steps: Object.fromEntries(
+              rows.map((row) => [row.id, { text: row.text, detail: null }]),
+            ),
+            groups: Object.fromEntries(
+              groups.map((group) => [group.id, { name: group.name }]),
+            ),
+            attachedLabel: run.attachedLabel,
+          },
+          encryption,
+        ),
+      },
+    };
+  };
+  const finishedAt = now - 21 * DAY_MS;
+  return [
+    await build('seed-run-packing-trip', {
+      procedureId: 'seed-procedure-packing',
+      title: 'Packing for a work trip',
+      source: input.packing,
+      version: 3,
+      attachedTo: { kind: 'synced', id: tripCopyId },
+      attachedLabel: 'Pacific Northwest Weekend',
+      dueOn: tripStart,
+      startedAt: now - 3 * 60 * MINUTE_MS,
+      finishedAt: null,
+      doneAt: (stepId) =>
+        doneFirst.has(stepId) ? now - 2 * 60 * MINUTE_MS : null,
+      extra: umbrella,
+      createdBy: 'nomos',
+    }),
+    await build('seed-run-cabin-move', {
+      procedureId: 'seed-procedure-cabin',
+      title: 'Closing the cabin',
+      source: input.cabin,
+      version: 1,
+      attachedTo: { kind: 'project', id: 'seed-project-move' },
+      attachedLabel: 'Move',
+      dueOn: null,
+      startedAt: finishedAt - 3 * 60 * MINUTE_MS,
+      finishedAt,
+      doneAt: () => finishedAt - 60 * MINUTE_MS,
+      extra: null,
+      createdBy: 'person',
+    }),
+  ];
+}
+
+/** Alex's writing style: `style/general`, learned from 34 typed messages (four learned traits, one the person set, and two lines to avoid), plus two learned from sent mail: `style/mail-work` (Work email, 3 traits) and `style/mail-who-seed-who-sam-rivera` (Sam Rivera, 2 traits). Three documents. */
+async function buildStyle(input: {
+  now: number;
+  encryption: HelmEncryption;
+}): Promise<{ id: string; style: StyleProfile }[]> {
+  const { now, encryption } = input;
+  const editedAt = now - 2 * DAY_MS;
+  const words: StyleSealed = {
+    label: 'General',
+    traits: {
+      'short-sentences': {
+        text: 'Short sentences',
+        isPersonSet: false,
+        exampleCount: 27,
+      },
+      'lowercase-starts-in-quick-notes': {
+        text: 'Lowercase starts in quick notes',
+        isPersonSet: false,
+        exampleCount: 19,
+      },
+      'signs-off-cheers': {
+        text: "Signs off 'Cheers,'",
+        isPersonSet: false,
+        exampleCount: 11,
+      },
+      'plain-words-over-formal-ones': {
+        text: 'Plain words over formal ones',
+        isPersonSet: false,
+        exampleCount: 22,
+      },
+      'warm-but-brief': {
+        text: 'Warm but brief',
+        isPersonSet: true,
+        exampleCount: 0,
+      },
+    },
+    avoid: ['No exclamation marks', 'No emoji'],
+    removed: [],
+  };
+  const fromMail = async (
+    id: string,
+    audienceWhoId: string | null,
+    label: string,
+    traits: [string, string, number][],
+    sampleCount: number,
+  ) => ({
+    id,
+    style: {
+      scope: audienceWhoId ? ('audience' as const) : ('occasion' as const),
+      audienceWhoId,
+      learnedFrom: ['sentMail' as const],
+      sampleCount,
+      personEditedAt: null,
+      createdAt: now - DAY_MS,
+      lastEditedAt: now - DAY_MS,
+      sealed: await sealJson<StyleSealed>(
+        {
+          label,
+          traits: Object.fromEntries(
+            traits.map(([traitId, text, exampleCount]) => [
+              traitId,
+              { text, isPersonSet: false, exampleCount },
+            ]),
+          ),
+          avoid: [],
+          removed: [],
+        },
+        encryption,
+      ),
+    },
+  });
+  return [
+    {
+      id: 'general',
+      style: {
+        scope: 'general',
+        audienceWhoId: null,
+        learnedFrom: ['helmText'],
+        sampleCount: 34,
+        personEditedAt: editedAt,
+        createdAt: now - 6 * DAY_MS,
+        lastEditedAt: editedAt,
+        sealed: await sealJson<StyleSealed>(words, encryption),
+      },
+    },
+    await fromMail(
+      'mail-work',
+      null,
+      'Work email',
+      [
+        [
+          'bullet-points-for-steps',
+          'Bullet points for anything with steps',
+          31,
+        ],
+        ['opens-with-the-persons-name', "Opens with the person's name", 44],
+        ['signs-thanks-alex', "Signs 'Thanks, Alex'", 38],
+      ],
+      120,
+    ),
+    await fromMail(
+      'mail-who-seed-who-sam-rivera',
+      'seed-who-sam-rivera',
+      'Sam Rivera',
+      [
+        ['first-name-and-a-quick-hello', 'First name and a quick hello', 9],
+        ['short-and-to-the-point', 'Short and to the point', 11],
+      ],
+      14,
+    ),
+  ];
+}
+
 /** Alex's three turns that sent a photo: the venue's quote, kept on a task the turn made (with its Execution), a screenshot the assistant let go that is deleted in 20 hours unless kept, and a receipt whose photo is already deleted. Seven documents plus the two sealed objects of the first two photos. */
 async function buildPhotoTurns(input: {
   uid: string;
@@ -2473,6 +3004,7 @@ async function buildPhotoTurns(input: {
       interruptedCaptureId: null,
       answersQuestion: null,
       ttsProvider: null,
+      arrivedVia: 'direct',
       medium: 'web',
       sessionId,
       turnIndex: index,
@@ -2767,6 +3299,7 @@ async function buildFileTurns(input: {
       interruptedCaptureId: null,
       answersQuestion: null,
       ttsProvider: null,
+      arrivedVia: 'direct',
       medium: 'web',
       sessionId,
       turnIndex: index,
@@ -3441,6 +3974,7 @@ async function buildPeople(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: 'seed-alex-question',
     turnIndex: 0,
@@ -3522,6 +4056,7 @@ async function buildPeople(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: 'seed-alex-asked',
     turnIndex: 0,
@@ -3584,6 +4119,7 @@ async function buildPeople(input: {
     interruptedCaptureId: null,
     answersQuestion: null,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: 'seed-alex-who',
     turnIndex: 0,
@@ -3623,6 +4159,7 @@ async function buildPeople(input: {
   const factAt = now - 4 * DAY_MS;
   const factCapture: Capture = {
     ...capture,
+    arrivedVia: 'dropBox',
     sessionId: 'seed-alex-facts',
     turnIndex: 0,
     seenAt: factAt + MINUTE_MS,
@@ -4256,9 +4793,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const batch = context.firestore.batch();
 
   const turnCounts = await Promise.all(
-    SEED_PROFILES.map(async ({ user, timeZone }) => {
+    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone, theme }) => {
       batch.set(users.doc(user.uid), {
         timeZone,
+        assistantName,
+        assistantTone,
+        theme,
         dayStartTime: DEFAULT_DAY_START_TIME,
         dayEndTime: DEFAULT_DAY_END_TIME,
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
@@ -4275,6 +4815,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         hasSeenVoiceNotice: false,
         selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
         currentPlace: null,
+        styleLearnedThroughAt:
+          user.uid === FIXTURE_USERS.partnerOne.uid ? context.now : null,
         createdAt,
         lastEditedAt: null,
       });
@@ -4330,6 +4872,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             interruptedCaptureId: null,
             answersQuestion: null,
             ttsProvider: spoken === undefined ? null : 'natural',
+            arrivedVia: 'direct',
             medium: 'web',
             sessionId: `seed-${user.uid}-${turn.session}`,
             turnIndex: ALL_TURNS.filter(
@@ -4887,6 +5430,51 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           ),
         );
       }
+      const procedures = people
+        ? await buildProcedures({ now: context.now, encryption })
+        : null;
+      if (procedures) {
+        procedures.procedures.forEach((entry) =>
+          batch.set(
+            person.collection('procedures').doc(entry.id),
+            entry.procedure,
+          ),
+        );
+        procedures.versions.forEach((entry) =>
+          batch.set(
+            person
+              .collection('procedures')
+              .doc(entry.procedureId)
+              .collection('versions')
+              .doc(entry.id),
+            entry.version,
+          ),
+        );
+      }
+      const runs = procedures
+        ? await buildRuns({
+            now: context.now,
+            encryption,
+            packing: procedures.basis.packing,
+            cabin: procedures.basis.cabin,
+          })
+        : null;
+      if (runs) {
+        runs.forEach((entry) =>
+          batch.set(
+            person.collection('procedureRuns').doc(entry.id),
+            entry.run,
+          ),
+        );
+      }
+      const style = people
+        ? await buildStyle({ now: context.now, encryption })
+        : null;
+      if (style) {
+        style.forEach((entry) =>
+          batch.set(person.collection('style').doc(entry.id), entry.style),
+        );
+      }
       const peopleCount = people
         ? (photoTurns
             ? photoTurns.captures.length + photoTurns.media.length + 2
@@ -4915,7 +5503,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               knowledge.versions.length +
               knowledge.captures.length +
               knowledge.executions.length
-            : 0)
+            : 0) +
+          (procedures
+            ? procedures.procedures.length + procedures.versions.length
+            : 0) +
+          (runs ? runs.length : 0) +
+          (style ? style.length : 0)
         : 0;
       const backToBackCount =
         peopleCount +
@@ -5037,7 +5630,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         dueAt: copy.dueAt,
         calendarKey: null,
         isBusy: null,
-        sourceUpdatedAt: syncedAt - DAY_MS,
+        sourceUpdatedAt: copy.sourceUpdatedAt ?? syncedAt - DAY_MS,
         contentHash: `seed-${id}`,
         syncedAt: endedAt ?? syncedAt,
         transformVersion: 1,
@@ -5048,10 +5641,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           {
             title: copy.title,
             subtitle: copy.subtitle,
-            detail: null,
+            detail: copy.detail ?? null,
             placeLabel: copy.placeLabel ?? null,
-            amountCents: null,
-            currency: null,
+            amountCents: copy.amountCents ?? null,
+            currency: copy.currency ?? null,
             deepLink: copy.deepLink,
             extra: copy.extra ?? {},
           },
@@ -5487,6 +6080,109 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     grantId: waypointGrantId,
   });
 
+  const runwayConnectorId = toAppConnectorId('runway');
+  const runwayGrantId = toGrantId('helm', runwayConnectorId, SITE_ACCOUNT_ID);
+  const runwaySummary = buildSampleShareSummary(context.now);
+  const runwayNextIncomeAt = runwaySummary.nextIncomeOn
+    ? Date.parse(`${runwaySummary.nextIncomeOn}T00:00:00Z`)
+    : null;
+  const runwayCopies: CopyDefinition[] = [
+    {
+      category: 'moneySummary',
+      sourceRef: 'plan/summary',
+      kind: 'moneySummary',
+      title: 'Free to Spend',
+      subtitle: null,
+      startAt: null,
+      dueAt: null,
+      isAllDay: false,
+      detail:
+        runwaySummary.dueBeforeIncomeCents > 0
+          ? `${formatMoney(
+              runwaySummary.dueBeforeIncomeCents,
+              runwaySummary.currency,
+            )} is due before the next income on ${runwaySummary.nextIncomeOn}`
+          : `Nothing is due before the next income on ${runwaySummary.nextIncomeOn}`,
+      amountCents: runwaySummary.freeToSpendCents,
+      currency: runwaySummary.currency,
+      sourceUpdatedAt: runwaySummary.computedAt,
+      extra: {
+        dueBeforeIncomeCents: runwaySummary.dueBeforeIncomeCents,
+        ...(runwayNextIncomeAt === null
+          ? {}
+          : { nextIncomeAt: runwayNextIncomeAt }),
+      },
+      deepLink: '/runway',
+    },
+  ];
+  const runwayGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: runwayConnectorId,
+    accountId: SITE_ACCOUNT_ID,
+    categories: {
+      moneySummary: { isOn: true, changedAt: connectedAt },
+      upcomingBills: { isOn: false, changedAt: connectedAt },
+      horizon: { isOn: false, changedAt: connectedAt },
+      transactions: { isOn: true, changedAt: connectedAt },
+    },
+    options: null,
+    status: 'live',
+    categoryState: Object.fromEntries(
+      RUNWAY_SHARES.shares.flatMap((share) =>
+        share.categories.map((category) => [
+          category.id,
+          {
+            lastOkAt: category.mode === 'live' ? null : syncedAt,
+            lastError: null,
+            count: runwayCopies.filter((copy) => copy.category === category.id)
+              .length,
+          },
+        ]),
+      ),
+    ),
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: syncedAt,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('grants')
+      .doc(runwayGrantId),
+    runwayGrant,
+  );
+  writeCopies(FIXTURE_USERS.partnerOne.uid, runwayCopies, null, {
+    connectorId: runwayConnectorId,
+    grantId: runwayGrantId,
+  });
+  // Jamie's plan is the one that tracks spending, so a question about a store has rows to find there.
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerTwo.uid)
+      .collection('grants')
+      .doc(runwayGrantId),
+    {
+      ...runwayGrant,
+      categories: {
+        ...runwayGrant.categories,
+        moneySummary: { isOn: false, changedAt: connectedAt },
+      },
+      categoryState: Object.fromEntries(
+        Object.entries(runwayGrant.categoryState).map(([id, state]) => [
+          id,
+          { ...state, count: 0 },
+        ]),
+      ),
+    } satisfies ConnectionGrant,
+  );
+
   const worthTheWaitConnectorId = toAppConnectorId('worth-the-wait');
   const worthTheWaitGrantId = toGrantId(
     'helm',
@@ -5805,6 +6501,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       nineLivesCopies.length +
       1 +
       waypointCopies.length +
+      1 +
       1 +
       6,
   };

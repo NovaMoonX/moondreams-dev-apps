@@ -76,6 +76,7 @@ const plan = (
       known: [dana],
       knownPlaces: [],
       assistantName: 'Nomos',
+      assistantNames: ['Nomos'],
       dayKey: '2026-11-10',
       capturedAt: NOW,
     },

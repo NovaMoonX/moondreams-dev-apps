@@ -29,6 +29,8 @@ const withoutPage = (context: ScreenContext): ScreenContext => ({
   focus: null,
   visible: [],
   topicId: null,
+  procedureId: null,
+  runId: null,
   v: 1,
 });
 
@@ -68,25 +70,6 @@ function AskConversation({ entry: liveEntry, onClose }: AskConversationProps) {
           loadsEarlier={false}
         />
         <div className='form-footer flex flex-col gap-3'>
-          <div className='flex'>
-            <span className='bg-secondary text-secondary-foreground inline-flex h-8 max-w-full items-center gap-1 rounded-full pr-1 pl-3 text-[13px]'>
-              <span className='min-w-0 truncate'>{chip}</span>
-              {!isChipRemoved && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='icon'
-                  rounded='full'
-                  aria-label={HELM_COPY.chipRemove(chip)}
-                  className="relative size-6 min-h-0 min-w-6 shrink-0 p-0 before:absolute before:-inset-2 before:content-['']"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => setIsChipRemoved(true)}
-                >
-                  <X className='size-3.5' aria-hidden='true' />
-                </Button>
-              )}
-            </span>
-          </div>
           <VoiceStatus
             hasControls
             screen={screen}
@@ -100,6 +83,25 @@ function AskConversation({ entry: liveEntry, onClose }: AskConversationProps) {
               waitingPlaceholder={null}
               screen={screen}
               draftKey={ASK_DRAFT_KEY}
+              topSlot={
+                <span className='bg-secondary text-secondary-foreground inline-flex h-8 max-w-full items-center gap-1 rounded-full pr-1 pl-3 text-[13px]'>
+                  <span className='min-w-0 truncate'>{chip}</span>
+                  {!isChipRemoved && (
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='icon'
+                      rounded='full'
+                      aria-label={HELM_COPY.chipRemove(chip)}
+                      className="relative size-6 min-h-0 min-w-6 shrink-0 p-0 before:absolute before:-inset-2 before:content-['']"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => setIsChipRemoved(true)}
+                    >
+                      <X className='size-3.5' aria-hidden='true' />
+                    </Button>
+                  )}
+                </span>
+              }
             />
           </div>
         </div>

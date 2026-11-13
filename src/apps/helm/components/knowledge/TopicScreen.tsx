@@ -21,7 +21,7 @@ import SectionSourcesSheet from '@apps/helm/components/knowledge/SectionSourcesS
 import TopicFormSheet from '@apps/helm/components/knowledge/TopicFormSheet';
 import TopicMoveSheet from '@apps/helm/components/knowledge/TopicMoveSheet';
 import TopicRow from '@apps/helm/components/knowledge/TopicRow';
-import VersionsSheet from '@apps/helm/components/knowledge/VersionsSheet';
+import TopicVersionsSheet from '@apps/helm/components/knowledge/TopicVersionsSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { CLAIM_MS, HELM_COPY } from '@apps/helm/constants';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
@@ -61,6 +61,8 @@ const HEADING_CLASS = {
 
 interface TopicScreenProps {
   topicId: string | null;
+  /** Where Back lands when it is not Knowledge. */
+  backLabel?: string;
   onBack: () => void;
   onHome: () => void;
   onOpenTopic: (topicId: string) => void;
@@ -82,6 +84,7 @@ const moveFailure = (kind: Exclude<TopicMove['kind'], 'moved'>) =>
 /** One topic: its path, how much it holds, its subtopics and its notes, with a menu to rename, add under, move or delete it. */
 function TopicScreen({
   topicId,
+  backLabel = HELM_COPY.knowledgeTitle,
   onBack,
   onHome,
   onOpenTopic,
@@ -356,7 +359,7 @@ function TopicScreen({
   return (
     <>
       <HelmHeader
-        backLabel={parent ? parent.name : HELM_COPY.knowledgeTitle}
+        backLabel={parent ? parent.name : backLabel}
         onBack={leave}
         onHome={onHome}
         menu={menu}
@@ -560,7 +563,7 @@ function TopicScreen({
             version={topic.version}
             section={editingSection}
           />
-          <VersionsSheet
+          <TopicVersionsSheet
             isOpen={isHistoryOpen}
             onClose={() => setIsHistoryOpen(false)}
             topic={topic}

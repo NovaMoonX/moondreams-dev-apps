@@ -12,6 +12,8 @@ import type {
   OpenExecution,
   ProjectSealed,
   TaskSealed,
+  ProcedureSealed,
+  RunSealed,
   TopicSealed,
   WhoSealed,
 } from '@apps/helm/types';
@@ -36,6 +38,8 @@ export interface UndoTarget {
     | ProjectSealed
     | NoteSealed
     | TopicSealed
+    | ProcedureSealed
+    | RunSealed
     | null;
   /** For a date that was removed: whether the person it belonged to is still there; for a topic that was moved: whether its old parent is. */
   isOwnerHere?: boolean;
@@ -54,8 +58,13 @@ export type UndoPlan =
         collection: EffectRef['collection'];
         reseal: TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | null;
       }[];
-      /** Topics whose document goes back to an earlier version, written as a new version `from + 1` holding the parts of `to`. */
-      versionRestores: { docId: string; from: number; to: number }[];
+      /** Topics and procedures whose document goes back to an earlier version, written as a new version `from + 1` holding the parts of `to`. */
+      versionRestores: {
+        docId: string;
+        collection: 'topics' | 'procedures';
+        from: number;
+        to: number;
+      }[];
       /** Dates the assistant removed, written back under the same ids. */
       creates: {
         docId: string;
@@ -347,6 +356,20 @@ const planRecreate = (
 const isKnowledge = (name: EffectRef['collection'] | undefined) =>
   name === 'notes' || name === 'topics';
 
+const isRunUntouched = (data: Record<string, unknown>) => {
+  const steps =
+    typeof data.stepState === 'object' && data.stepState !== null
+      ? Object.values(data.stepState as Record<string, unknown>)
+      : [];
+  return (
+    (data.finishedAt ?? null) === null &&
+    steps.every((step) => {
+      const state = step as { doneAt?: unknown; isExtra?: unknown };
+      return (state.doneAt ?? null) === null && state.isExtra !== true;
+    })
+  );
+};
+
 const planRecord = (
   target: UndoTarget,
   entries: { ref: EffectRef; effect: ExecutionEffect }[],
@@ -393,7 +416,10 @@ const planRecord = (
     if (updated.hasKeptEntry) return { kind: 'kept', title };
     // Its own later effects stamp the record with the execution's time, which is not an edit since.
     const isUntouched =
-      target.data.lastEditedAt === null || target.data.lastEditedAt === madeAt;
+      create.ref.collection === 'procedureRuns'
+        ? isRunUntouched(target.data)
+        : target.data.lastEditedAt === null ||
+          target.data.lastEditedAt === madeAt;
     return isUntouched
       ? {
           kind: 'deleted',
@@ -412,7 +438,7 @@ const planRecord = (
     Object.keys(updated.sealedFields).length > 0
       ? (updated.opened as Exclude<
           UndoTarget['opened'],
-          NoteSealed | TopicSealed
+          NoteSealed | TopicSealed | ProcedureSealed | RunSealed
         >)
       : null;
   const restoredTitle = toOpenedTitle(updated.opened) || title;
@@ -468,11 +494,34 @@ const toTopicName = (target: UndoTarget, fallback: string) =>
     ? target.opened.name
     : fallback;
 
+const toRunName = (target: UndoTarget, fallback: string) =>
+  target.opened && 'attachedLabel' in target.opened && target.opened.title
+    ? target.opened.title
+    : fallback;
+
+const isTickPath = (path: string) => /^stepState\..+\.doneAt$/.test(path);
+
+const toProcedureName = (target: UndoTarget, fallback: string) =>
+  target.opened && 'steps' in target.opened && target.opened.title
+    ? target.opened.title
+    : fallback;
+
+export type ProcedureEffectKind = 'made' | 'version';
+
+/** A procedure effect is the one the turn made (nothing before it) or a new version of one that was there. */
+export const procedureEffectKind = (
+  effect: ExecutionEffect,
+): ProcedureEffectKind =>
+  effect.previous === null || !('version' in effect.written)
+    ? 'made'
+    : 'version';
+
 /** A version a turn wrote goes back only while it is still the newest and nothing is writing the topic. */
 const planVersionBack = (
   target: UndoTarget,
   entries: Entry[],
   now: number,
+  nameOf: (target: UndoTarget, fallback: string) => string = toTopicName,
 ): RecordOutcome => {
   const first = entries[0]?.effect;
   const last = entries[entries.length - 1]?.effect;
@@ -480,7 +529,7 @@ const planVersionBack = (
     toText(last?.written['sealed.title']) ?? HELM_COPY.resultTaskFallback;
   const from = toNumber(last?.written.version);
   const to = toNumber(first?.previous?.version);
-  const keptTitle = toTopicName(target, title);
+  const keptTitle = nameOf(target, title);
   if (from === null || to === null) return { kind: 'kept', title: keptTitle };
   if (target.data === null) return { kind: 'gone' };
   if (target.data.version !== from || isClaimLive(target.data, now)) {
@@ -587,13 +636,20 @@ export function planUndo(input: {
   const isEntityDoc = (docId: string) =>
     isEntity(collectionOf.get(docId) ?? 'tasks');
   const isTopicDoc = (docId: string) => collectionOf.get(docId) === 'topics';
+  const isProcedureDoc = (docId: string) =>
+    collectionOf.get(docId) === 'procedures';
+  const isRunDoc = (docId: string) =>
+    collectionOf.get(docId) === 'procedureRuns';
   const isMediaDoc = (docId: string) => collectionOf.get(docId) === 'media';
   const targetOf = (docId: string) =>
     targets.get(docId) ?? { docId, data: null, opened: null };
   const recordOutcomes = groups
     .filter(
       ([docId]) =>
-        !isEntityDoc(docId) && !isMediaDoc(docId) && !isTopicDoc(docId),
+        !isEntityDoc(docId) &&
+        !isMediaDoc(docId) &&
+        !isTopicDoc(docId) &&
+        !isProcedureDoc(docId),
     )
     .map(([docId, entries]) => ({
       docId,
@@ -761,6 +817,50 @@ export function planUndo(input: {
     ...placementOutcomes,
     ...madeOutcomes,
   ];
+  // A procedure the turn made goes only while it is still at its first version; a revision goes back like a topic's.
+  const procedureOutcomes = groups
+    .filter(([docId]) => isProcedureDoc(docId))
+    .map(([docId, entries]): { docId: string; outcome: RecordOutcome } => {
+      const target = targetOf(docId);
+      const made = entries.find(
+        (entry) => procedureEffectKind(entry.effect) === 'made',
+      );
+      if (!made) {
+        return {
+          docId,
+          outcome: planVersionBack(
+            target,
+            entries.filter(
+              (entry) => procedureEffectKind(entry.effect) === 'version',
+            ),
+            now,
+            toProcedureName,
+          ),
+        };
+      }
+      const title =
+        toText(made.effect.written['sealed.title']) ??
+        HELM_COPY.resultTaskFallback;
+      const keptTitle = toProcedureName(
+        target,
+        toText(made.effect.written['sealed.name']) ?? title,
+      );
+      if (target.data === null) return { docId, outcome: { kind: 'gone' } };
+      return {
+        docId,
+        outcome:
+          target.data.version === 1
+            ? {
+                kind: 'deleted',
+                title,
+                effect: {
+                  written: { 'sealed.title': title },
+                  previous: made.effect.written,
+                },
+              }
+            : { kind: 'kept', title: keptTitle },
+      };
+    });
   // A photo an import added goes with its person: when the person is taken back or restored, or already gone.
   const photoOutcomes = groups
     .filter(([docId]) => isMediaDoc(docId))
@@ -828,21 +928,25 @@ export function planUndo(input: {
             : { kind: 'skipped' };
       return { docId, outcome };
     });
-  const kept = [...outcomes, ...topicOutcomes].flatMap(({ outcome }) =>
-    outcome.kind === 'kept' ? [outcome.title] : [],
+  const kept = [...outcomes, ...topicOutcomes, ...procedureOutcomes].flatMap(
+    ({ outcome }) => (outcome.kind === 'kept' ? [outcome.title] : []),
   );
-  const goneIds = [...outcomes, ...topicOutcomes].flatMap(
+  const goneIds = [...outcomes, ...topicOutcomes, ...procedureOutcomes].flatMap(
     ({ docId, outcome }) => (outcome.kind === 'gone' ? [docId] : []),
   );
   const gone = goneIds.length;
-  const done = [...outcomes, ...topicOutcomes, ...photoOutcomes].flatMap(
-    ({ docId, outcome }) =>
-      outcome.kind === 'deleted' ||
-      outcome.kind === 'restored' ||
-      outcome.kind === 'versionBack' ||
-      outcome.kind === 'recreated'
-        ? [{ docId, outcome }]
-        : [],
+  const done = [
+    ...outcomes,
+    ...topicOutcomes,
+    ...procedureOutcomes,
+    ...photoOutcomes,
+  ].flatMap(({ docId, outcome }) =>
+    outcome.kind === 'deleted' ||
+    outcome.kind === 'restored' ||
+    outcome.kind === 'versionBack' ||
+    outcome.kind === 'recreated'
+      ? [{ docId, outcome }]
+      : [],
   );
   const isImport = original.category === 'import';
   const isFactDoc = (docId: string) => collectionOf.get(docId) === 'facts';
@@ -870,7 +974,9 @@ export function planUndo(input: {
         !isKeyDateDoc(docId) &&
         !isProjectDoc(docId) &&
         !isNoteDoc(docId) &&
-        !isTopicDoc(docId),
+        !isTopicDoc(docId) &&
+        !isProcedureDoc(docId) &&
+        !isRunDoc(docId),
   );
   const photosLetGo = done.filter(
     ({ docId, outcome }) => isMediaDoc(docId) && outcome.kind === 'restored',
@@ -907,6 +1013,39 @@ export function planUndo(input: {
       ({ outcome }) =>
         outcome.kind === 'restored' && 'parentId' in outcome.fields,
     );
+  const procedureChanges = done.filter(
+    ({ docId, outcome }) =>
+      isProcedureDoc(docId) &&
+      (outcome.kind === 'versionBack' || outcome.kind === 'deleted'),
+  );
+  const procedureCount = new Set(procedureChanges.map(({ docId }) => docId))
+    .size;
+  const procedureNames = [
+    ...new Set(
+      procedureChanges.flatMap(({ docId }) => {
+        const opened = targetOf(docId).opened;
+        return opened && 'steps' in opened && opened.title
+          ? [opened.title]
+          : [];
+      }),
+    ),
+  ];
+  const procedureName = procedureNames.length === 1 ? procedureNames[0] : null;
+  const runsDeleted = done.filter(
+    ({ docId, outcome }) => isRunDoc(docId) && outcome.kind === 'deleted',
+  );
+  const runsUnticked = done.filter(
+    ({ docId, outcome }) => isRunDoc(docId) && outcome.kind === 'restored',
+  );
+  const runCount = runsDeleted.length + runsUnticked.length;
+  const runTitles = runsDeleted.map(({ docId, outcome }) =>
+    toRunName(targetOf(docId), outcome.title),
+  );
+  const untickedCount = runsUnticked.reduce(
+    (total, { outcome }) =>
+      total + Object.keys(outcome.effect.written).filter(isTickPath).length,
+    0,
+  );
   if (
     photosLetGo.length === 0 &&
     notesDone.length === 0 &&
@@ -914,7 +1053,9 @@ export function planUndo(input: {
     factsDone.length === 0 &&
     datesDone.length === 0 &&
     projectsDone.length === 0 &&
-    topicCount === 0
+    topicCount === 0 &&
+    procedureCount === 0 &&
+    runCount === 0
   ) {
     return refuse(
       'nothingToTakeBack',
@@ -1001,13 +1142,15 @@ export function planUndo(input: {
           ]
             .filter(Boolean)
             .join(' ');
-  const isTopicsOnly =
-    topicCount > 0 &&
+  const isOnlyKnowledge =
     notesDone.length === 0 &&
     records.length === 0 &&
     factCount === 0 &&
     dateCount === 0 &&
     projectCount === 0;
+  const isTopicsOnly = topicCount > 0 && isOnlyKnowledge;
+  const isProceduresOnly =
+    procedureCount > 0 && topicCount === 0 && isOnlyKnowledge;
   const photoCount = photosLetGo.length;
   const isPhotosOnly =
     photoCount > 0 &&
@@ -1016,7 +1159,18 @@ export function planUndo(input: {
     factCount === 0 &&
     dateCount === 0 &&
     projectCount === 0 &&
-    topicCount === 0;
+    topicCount === 0 &&
+    procedureCount === 0 &&
+    runCount === 0;
+  const isRunsOnly =
+    runCount > 0 &&
+    notesDone.length === 0 &&
+    records.length === 0 &&
+    factCount === 0 &&
+    dateCount === 0 &&
+    projectCount === 0 &&
+    topicCount === 0 &&
+    procedureCount === 0;
   const photosToo = photoCount > 0 ? HELM_COPY.undoReportPhotosToo : '';
   const withTopics = isTopicsOnly
     ? HELM_COPY.undoReportTopics(
@@ -1029,9 +1183,24 @@ export function planUndo(input: {
     : topicCount > 0
       ? `${baseReport} ${HELM_COPY.undoReportTopicsToo(topicCount, topicName, isGrouping)}`
       : baseReport;
+  const withProcedures = isProceduresOnly
+    ? HELM_COPY.undoReportProcedures(
+        procedureCount,
+        procedureName,
+        kept.length,
+        gone,
+      )
+    : procedureCount > 0
+      ? `${withTopics} ${HELM_COPY.undoReportProceduresToo(procedureCount, procedureName)}`
+      : withTopics;
+  const withRuns = isRunsOnly
+    ? HELM_COPY.undoReportRuns(runTitles, untickedCount, kept.length, gone)
+    : runCount > 0
+      ? `${withProcedures} ${HELM_COPY.undoReportRunsToo(runTitles, untickedCount)}`
+      : withProcedures;
   const report = isPhotosOnly
     ? HELM_COPY.undoReportPhotos(photoCount)
-    : [withTopics, photosToo].filter(Boolean).join(' ');
+    : [withRuns, photosToo].filter(Boolean).join(' ');
   const baseSummary =
     records.length === 0
       ? isNotesOnly
@@ -1052,6 +1221,21 @@ export function planUndo(input: {
           : kept.length > 0
             ? HELM_COPY.tookBackKept(counted.length, kept.length)
             : HELM_COPY.tookBack(counted.length);
+  const topicSummary = isTopicsOnly
+    ? HELM_COPY.undoTopicChanges(topicCount, topicName, isGrouping)
+    : topicCount > 0
+      ? `${baseSummary} and ${HELM_COPY.undoTopicPhrase(topicCount, topicName, isGrouping)}`
+      : baseSummary;
+  const summary = isProceduresOnly
+    ? HELM_COPY.undoProcedureChanges(procedureCount, procedureName)
+    : procedureCount > 0
+      ? `${topicSummary} and ${HELM_COPY.undoProcedurePhrase(procedureCount, procedureName)}`
+      : topicSummary;
+  const withRunsSummary = isRunsOnly
+    ? HELM_COPY.undoRunChanges(runTitles, untickedCount)
+    : runCount > 0
+      ? `${summary} and ${HELM_COPY.undoRunPhrase(runTitles, untickedCount)}`
+      : summary;
   const deletes = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted'
       ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]
@@ -1088,7 +1272,17 @@ export function planUndo(input: {
     creates,
     versionRestores: done.flatMap(({ docId, outcome }) =>
       outcome.kind === 'versionBack'
-        ? [{ docId, from: outcome.from, to: outcome.to }]
+        ? [
+            {
+              docId,
+              collection:
+                collectionOf.get(docId) === 'procedures'
+                  ? ('procedures' as const)
+                  : ('topics' as const),
+              from: outcome.from,
+              to: outcome.to,
+            },
+          ]
         : [],
     ),
     undoExecution: {
@@ -1115,11 +1309,7 @@ export function planUndo(input: {
     undoSealed: {
       summary: isPhotosOnly
         ? HELM_COPY.tookBackPhotos(photoCount)
-        : isTopicsOnly
-          ? HELM_COPY.undoTopicChanges(topicCount, topicName, isGrouping)
-          : topicCount > 0
-            ? `${baseSummary} and ${HELM_COPY.undoTopicPhrase(topicCount, topicName, isGrouping)}`
-            : baseSummary,
+        : withRunsSummary,
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,
@@ -1133,6 +1323,9 @@ export function planUndo(input: {
       ...datesDone,
       ...notesDone,
       ...topicChanges,
+      ...procedureChanges,
+      ...runsDeleted,
+      ...runsUnticked,
     ].map(({ outcome }) => outcome.title),
     kept,
     gone,

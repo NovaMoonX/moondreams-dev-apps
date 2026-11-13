@@ -56,6 +56,28 @@ export const TOPIC_COMMAND_KINDS = [
   'createParentTopic',
 ] as const;
 
+/** The kinds the reply may carry that make or change a procedure; each is read from its own list and is no `NomosCommand`. */
+export const PROCEDURE_COMMAND_KINDS = [
+  'createProcedure',
+  'reviseProcedure',
+] as const;
+
+export const PROCEDURE_STEPS_MAX = 60;
+export const PROCEDURE_STEP_TEXT_CAP = 200;
+export const PROCEDURE_STEP_DETAIL_CAP = 500;
+export const PROCEDURE_TITLE_CAP = 80;
+export const PROCEDURE_GROUPS_MAX = 12;
+export const PROCEDURE_GROUP_NAME_CAP = 40;
+export const PROCEDURE_SUMMARY_CAP = 200;
+
+/** The kinds the reply may carry that start a run of a procedure or tick its steps; each is read from its own list and is no `NomosCommand`. */
+export const RUN_COMMAND_KINDS = ['startRun', 'tickRun'] as const;
+
+export const RUN_STEPS_MAX = 80;
+export const RUN_EXTRA_MAX = 20;
+export const RUN_EXTRA_TEXT_CAP = 200;
+export const MAX_TICKS_PER_TURN = 20;
+
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
 
 export type RememberField = (typeof REMEMBER_FIELDS)[number];
@@ -390,6 +412,63 @@ export type TopicCommand =
   | MoveTopicCommand
   | CreateParentTopicCommand;
 
+/** One step of a procedure as the model wrote it; a step with an id is one already there, kept by id. */
+export interface ModelProcedureStep {
+  stepId: string | null;
+  text: string;
+  detail: string | null;
+  group: string | null;
+}
+
+/** A new procedure from the person's words, or from the focused task's steps when `fromTaskId` is set (the model's steps are then ignored); `isTruncated` is true when steps past the cap were cut. */
+export interface CreateProcedureCommand {
+  kind: 'createProcedure';
+  title: string;
+  steps: ModelProcedureStep[];
+  fromTaskId: string | null;
+  requestQuote: string;
+  isTruncated: boolean;
+}
+
+/** A change to a procedure the person asked for in words: its whole new list of steps, checked against the version the model read; `isOverCap` is true when the list passes the cap. */
+export interface ReviseProcedureCommand {
+  kind: 'reviseProcedure';
+  procedureId: string;
+  title: string | null;
+  steps: ModelProcedureStep[];
+  changeSummary: string;
+  requestQuote: string;
+  seenVersion: number;
+  isOverCap: boolean;
+}
+
+/** A make request for a task that already has a procedure; it makes nothing and only says so. */
+export interface ProcedureExistsCommand {
+  kind: 'procedureExists';
+  title: string;
+}
+
+export type ProcedureCommand =
+  CreateProcedureCommand | ReviseProcedureCommand | ProcedureExistsCommand;
+
+/** A new run of a procedure, for a synced trip or event (`about`), a project named in words (`projectRef`), or for nothing; a synced copy wins over a project. */
+export interface StartRunCommand {
+  kind: 'startRun';
+  procedureId: string;
+  about: SyncedCopy | null;
+  projectRef: string | null;
+  requestQuote: string;
+}
+
+/** Steps of open runs the person said are done; each is one the context listed as not yet done. */
+export interface TickRunCommand {
+  kind: 'tickRun';
+  steps: { runId: string; stepId: string }[];
+  requestQuote: string;
+}
+
+export type RunCommand = StartRunCommand | TickRunCommand;
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -580,11 +659,22 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'changeSummary',
             'requestQuote',
             'topicChanges',
+            'procedureAlias',
+            'procedureSteps',
+            'fromTaskAlias',
+            'runStepAliases',
           ],
           properties: {
             kind: {
               type: 'string',
-              enum: [...COMMAND_KINDS, ...TOPIC_COMMAND_KINDS, 'answer', 'ask'],
+              enum: [
+                ...COMMAND_KINDS,
+                ...TOPIC_COMMAND_KINDS,
+                ...PROCEDURE_COMMAND_KINDS,
+                ...RUN_COMMAND_KINDS,
+                'answer',
+                'ask',
+              ],
             },
             ref: nullable(
               'string',
@@ -596,7 +686,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             title: nullable(
               'string',
-              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters. createParentTopic: the new topic's name, at most ${PARENT_NAME_CAP} characters.`,
+              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters. createParentTopic: the new topic's name, at most ${PARENT_NAME_CAP} characters. createProcedure: the procedure's name, at most ${PROCEDURE_TITLE_CAP} characters. reviseProcedure: the new name, or null to keep it.`,
             ),
             dueSpanId: nullable(
               'string',
@@ -663,7 +753,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             aboutAlias: nullable(
               'string',
-              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with. ask: the alias of the open task the question is about, or null.',
+              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with. ask: the alias of the open task the question is about, or null. startRun: the alias (e1, s1, …) of the trip or event in <synced_records> the run is for, only when the person names it; null otherwise.',
             ),
             aboutField: {
               type: ['string', 'null'],
@@ -807,7 +897,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             projectRef: nullable(
               'string',
-              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole and addMilestone: the name of the project. null otherwise.',
+              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole and addMilestone: the name of the project. startRun: the name of the project from <open_projects> the run is for, only when the person names it and no trip or event. null otherwise.',
             ),
             projectEmoji: nullable(
               'string',
@@ -872,11 +962,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             changeSummary: nullable(
               'string',
-              'reviseTopic: what changed, in plain words, at most 200 characters.',
+              'reviseTopic and reviseProcedure: what changed, in plain words, at most 200 characters.',
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic: the words of the capture that ask for the change, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun and tickRun: the words of the capture that ask for it, copied exactly.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -922,6 +1012,46 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
                   ),
                 },
               },
+            },
+            procedureAlias: nullable(
+              'string',
+              "reviseProcedure and startRun: the alias of the procedure in <your_procedures> (the open procedure is <procedure_open>'s procedure); null otherwise.",
+            ),
+            procedureSteps: {
+              type: ['array', 'null'],
+              description: `createProcedure: the steps in order, at most ${PROCEDURE_STEPS_MAX}. reviseProcedure: the whole new list of steps in order, not only the changes. null otherwise.`,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['stepAlias', 'text', 'detail', 'group'],
+                properties: {
+                  stepAlias: nullable(
+                    'string',
+                    'reviseProcedure: the alias (ps1, ps2, …) of a step of <procedure_open> that stays, even when reworded; null for a new step.',
+                  ),
+                  text: {
+                    type: 'string',
+                    description: `One short imperative step, at most ${PROCEDURE_STEP_TEXT_CAP} characters.`,
+                  },
+                  detail: nullable(
+                    'string',
+                    `A line of extra help, at most ${PROCEDURE_STEP_DETAIL_CAP} characters, or null.`,
+                  ),
+                  group: nullable(
+                    'string',
+                    `The name of the group the step belongs to, at most ${PROCEDURE_GROUP_NAME_CAP} characters, or null for no group.`,
+                  ),
+                },
+              },
+            },
+            fromTaskAlias: nullable(
+              'string',
+              "createProcedure: the alias of the open task whose steps become the procedure, when the person asks to make a task's steps a procedure; null otherwise.",
+            ),
+            runStepAliases: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `tickRun: the alias (rs1, rs2, …) of each step of <open_runs> the person says is done, at most ${MAX_TICKS_PER_TURN}; null otherwise.`,
             },
           },
         },

@@ -113,6 +113,12 @@ const ALLOWED: Allowed[] = [
   {
     file: 'src/lib/connections/sources.ts',
     kind: 'word',
+    match: 'runway',
+    why: "The source registry re-exports each app's manifest.",
+  },
+  {
+    file: 'src/lib/connections/sources.ts',
+    kind: 'word',
     match: 'waypoint',
     why: "The source registry re-exports each app's manifest.",
   },
@@ -138,6 +144,12 @@ const ALLOWED: Allowed[] = [
     file: 'functions/src/connections/registry.ts',
     kind: 'word',
     match: 'nine lives',
+    why: 'The source table is keyed by connector id and imports the one adapter each app owns.',
+  },
+  {
+    file: 'functions/src/connections/registry.ts',
+    kind: 'word',
+    match: 'runway',
     why: 'The source table is keyed by connector id and imports the one adapter each app owns.',
   },
   {
