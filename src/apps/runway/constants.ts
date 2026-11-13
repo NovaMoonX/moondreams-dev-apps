@@ -5531,6 +5531,10 @@ export const RULE_WORDS = {
   removeConfirm: (sentence: string) =>
     `“${sentence}” will stop sending purchases on its own. Purchases it already placed stay where they are.`,
   removeConfirmButton: 'Remove the rule',
+  takeover: (rule: string, what: string) =>
+    `After this, ${what} follows your rule “${rule}”.`,
+  takeoverMore: (count: number) =>
+    `${ruleCount(count)} more will be caught by a broader rule.`,
   removed: 'Rule removed',
   removeFailed: 'That did not remove. Nothing was changed.',
   saved: 'Rule saved',
@@ -5561,6 +5565,10 @@ export const RULE_WORDS = {
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
   homeHeading: 'Needs a new home',
   goalNow: (name: string) => `${name} is a goal now, so this rule is paused`,
+  landing: (name: string, count: number) =>
+    count === 1
+      ? `${name} is a goal now, so this rule is paused. Choose where it sends spending instead.`
+      : `${name} is a goal now, so these ${count} rules are paused. Choose where they send spending instead.`,
   groupTick: (label: string) => `Pick every rule in ${label}`,
   groupUntick: (label: string) => `Unpick every rule in ${label}`,
   groupPicked: (picked: number, total: number) =>
@@ -5571,9 +5579,8 @@ export const RULE_WORDS = {
   selectAll: 'Pick all',
   clearAll: 'Clear',
   done: 'Done',
-  bulkSend: 'Send to an envelope',
-  bulkSendShort: 'Send to…',
-  bulkAsk: 'Always ask',
+  bulkSend: 'Change envelope',
+  bulkAsk: 'Ask me every time',
   pick: 'Select',
   bulkDelete: 'Remove',
   bulkPickTitle: 'Which envelope?',
@@ -5584,17 +5591,21 @@ export const RULE_WORDS = {
   bulkNoMatch: 'No envelope matches that.',
   askSkipNote: (stay: number, total: number) =>
     `${stay} of ${total} name a card or kind of place and stay as they are.`,
-  askConfirmTitle: (count: number) => `Ask every time for ${ruleCount(count)}?`,
-  askConfirmButton: 'Always ask',
+  askConfirmTitle: (count: number) =>
+    `Have ${ruleCount(count)} ask you every time?`,
+  askConfirmButton: 'Ask me every time',
   askNone:
-    'None of these can ask every time: they name a card or kind of place.',
+    'None of these can ask you every time: they name a card or kind of place.',
   deleteConfirmTitle: (count: number) => `Remove ${ruleCount(count)}?`,
-  deleteConfirmBody:
-    'They will stop sending purchases on their own. Purchases they already placed stay where they are.',
+  deleteConfirmBody: (count: number) =>
+    count === 1
+      ? 'It will stop sending purchases on its own. Purchases it already placed stay where they are.'
+      : 'They will stop sending purchases on their own. Purchases they already placed stay where they are.',
   deleteConfirmButton: (count: number) => `Remove ${ruleCount(count)}`,
   movedMany: (count: number, envelope: string) =>
     `Moved ${ruleCount(count)} to ${envelope}`,
-  askedMany: (count: number) => `${ruleCount(count)} will ask every time`,
+  askedMany: (count: number) =>
+    `${ruleCount(count)} will ask you which envelope every time`,
   removedMany: (count: number) => `Removed ${ruleCount(count)}`,
   bulkNothing: 'Nothing was changed.',
   bulkFailed: 'That did not save. Nothing was changed.',
@@ -5607,7 +5618,7 @@ export const RULE_WORDS = {
   changeMovedMany: (count: number, envelope: string) =>
     `Moved ${ruleCount(count)} to ${envelope}.`,
   changeAskMany: (count: number) =>
-    `Set ${ruleCount(count)} to ask every time.`,
+    `Set ${ruleCount(count)} to ask which envelope every time.`,
   changeRemovedMany: (count: number) => `Removed ${ruleCount(count)}.`,
   changeUndoMoved: (count: number) =>
     `Put ${ruleCount(count)} back as ${count === 1 ? 'it was' : 'they were'}.`,

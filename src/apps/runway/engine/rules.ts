@@ -78,6 +78,11 @@ const getTier = (rule: OpenRule): number =>
         ? 2
         : 3;
 
+const compareRules = (a: OpenRule, b: OpenRule) =>
+  getTier(a) - getTier(b) ||
+  a.createdAt - b.createdAt ||
+  a.id.localeCompare(b.id);
+
 /** The most specific rule that fits a purchase, or null. A kind-of-place rule skips a broad merchant, and a rule that asks every time comes back with `isAsk`. */
 export function findRule(
   facts: RuleFacts,
@@ -93,15 +98,46 @@ export function findRule(
     (rule.category === null || rule.category === facts.category) &&
     (rule.cardId === null || rule.cardId === facts.cardId) &&
     !(isBroad && rule.category !== null && rule.merchantKey === null);
-  const [best] = rules
-    .filter(fits)
-    .sort(
-      (a, b) =>
-        getTier(a) - getTier(b) ||
-        a.createdAt - b.createdAt ||
-        a.id.localeCompare(b.id),
-    );
+  const [best] = rules.filter(fits).sort(compareRules);
   return best ? { rule: best, isAsk: best.target === RULE_VARIES } : null;
+}
+
+export interface RuleTakeover {
+  removed: OpenRule;
+  /** The rule that places what the removed one caught, or some of it (only on its card). */
+  by: OpenRule;
+}
+
+/** For each rule about to be removed, the remaining rule that would then place purchases it caught; a rule that asks, waits for a new home or ranks above it (so it already won those purchases) is never named. */
+export function findTakeovers(
+  removing: readonly OpenRule[],
+  rules: readonly OpenRule[],
+  liveEnvelopeIds: ReadonlySet<string>,
+): RuleTakeover[] {
+  const goingIds = new Set(removing.map((rule) => rule.id));
+  const left = rules.filter(
+    (rule) =>
+      !goingIds.has(rule.id) &&
+      rule.target !== RULE_VARIES &&
+      liveEnvelopeIds.has(rule.target),
+  );
+  return removing.flatMap((removed) => {
+    const isBroad = isBroadMerchant(removed.merchantKey, rules);
+    const [by] = left
+      .filter(
+        (rule) =>
+          compareRules(removed, rule) < 0 &&
+          (rule.merchantKey === null ||
+            rule.merchantKey === removed.merchantKey) &&
+          (rule.category === null || rule.category === removed.category) &&
+          (rule.cardId === null ||
+            removed.cardId === null ||
+            rule.cardId === removed.cardId) &&
+          !(isBroad && rule.category !== null && rule.merchantKey === null),
+      )
+      .sort(compareRules);
+    return by ? [{ removed, by }] : [];
+  });
 }
 
 export interface RulePlacement {

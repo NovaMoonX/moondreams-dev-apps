@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ListChecks,
   MessageCircleQuestion,
@@ -19,6 +19,7 @@ import SelectionBar from '@/components/SelectionBar';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useLongPress } from '@/hooks/useLongPress';
+import InlineNotice from '@/components/InlineNotice';
 import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -28,7 +29,7 @@ import {
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { RULE_VARIES } from '@apps/runway/engine/rules';
+import { findTakeovers, RULE_VARIES } from '@apps/runway/engine/rules';
 import RuleSheet from '@apps/runway/forms/RuleSheet';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -49,6 +50,10 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { OpenRule } from '@apps/runway/types';
+import {
+  readRulesLanding,
+  setRulesLanding,
+} from '@apps/runway/utils/rulesLanding';
 
 interface RulesScreenProps {
   onClose: () => void;
@@ -200,13 +205,16 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const looks = useAppSelector(selectItemLooks);
   const cards = useAppSelector(selectAllCards);
   const isLoaded = useAppSelector(selectIsRulesLoaded);
-  const { describe, describeHome, getCardLabel } = useRuleNames();
+  const { describe, describeHome, describeTakeover, getCardLabel, liveIds } =
+    useRuleNames();
   const { openView } = useRunwayUrlState();
-  const selection = useSelection();
+  const [landing] = useState(readRulesLanding);
+  const selection = useSelection(landing?.ruleIds ?? null);
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
+  useEffect(() => setRulesLanding(null), []);
   const opened = rules.find((rule) => rule.id === openId) ?? null;
   const needle = query.trim().toLowerCase();
   const homelessIds = new Set(homeless.map((rule) => rule.id));
@@ -250,6 +258,10 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     }),
   ];
   const selected = shown.filter((rule) => selection.ids.has(rule.id));
+  const landingCount =
+    landing === null
+      ? 0
+      : landing.ruleIds.filter((id) => homelessIds.has(id)).length;
   const isNothingPicked = selected.length === 0;
   const canAsk = (rule: OpenRule) =>
     rule.merchantKey !== null && rule.target !== RULE_VARIES;
@@ -466,9 +478,16 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const removeSelected = async () => {
     const targets = selected;
     if (targets.length === 0) return;
+    const takeovers = findTakeovers(targets, rules, liveIds);
     const isConfirmed = await confirm({
       title: RULE_WORDS.deleteConfirmTitle(targets.length),
-      message: RULE_WORDS.deleteConfirmBody,
+      message: [
+        RULE_WORDS.deleteConfirmBody(targets.length),
+        ...takeovers.slice(0, 2).map(describeTakeover),
+        ...(takeovers.length > 2
+          ? [RULE_WORDS.takeoverMore(takeovers.length - 2)]
+          : []),
+      ].join(' '),
       confirmText: RULE_WORDS.deleteConfirmButton(targets.length),
     });
     if (!isConfirmed) return;
@@ -521,6 +540,11 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           </div>
         ) : (
           <>
+            {landingCount > 0 && landing !== null && (
+              <InlineNotice tone='info'>
+                {RULE_WORDS.landing(landing.name, landingCount)}
+              </InlineNotice>
+            )}
             {selection.isActive && (
               <div className='space-y-2'>
                 <SectionHeader
@@ -593,6 +617,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
       {selection.isActive && (
         <SelectionBar
           note={isNothingPicked ? RULE_WORDS.nothingPicked : null}
+          isStackedOnPhone
           actions={[
             {
               key: 'ask',
@@ -614,7 +639,6 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           primary={{
             key: 'send',
             label: RULE_WORDS.bulkSend,
-            shortLabel: RULE_WORDS.bulkSendShort,
             icon: <Send className='h-4 w-4' />,
             isDisabled: isNothingPicked,
             isLoading: isWriting,

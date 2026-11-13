@@ -1,7 +1,11 @@
 import { useAppSelector } from '@/store';
 import { RULE_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { needsNewHome, RULE_VARIES } from '@apps/runway/engine/rules';
+import {
+  needsNewHome,
+  RULE_VARIES,
+  type RuleTakeover,
+} from '@apps/runway/engine/rules';
 import {
   selectAllCards,
   selectBecameKinds,
@@ -10,7 +14,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardName } from '@apps/runway/utils/cardText';
 import type { RuleSealed } from '@apps/runway/types';
-import { describeRule } from '@apps/runway/utils/ruleText';
+import { describeRule, getCategoryLabel } from '@apps/runway/utils/ruleText';
 
 /** A rule as a sentence, and whether its envelope has ended (then it is not applied). */
 export function useRuleNames() {
@@ -40,12 +44,31 @@ export function useRuleNames() {
         card: getCardLabel(rule.cardId),
       }),
     isEnded,
+    liveIds,
     describeHome: (rule: RuleSealed) => {
       if (!isEnded(rule)) return undefined;
       const name = looks.get(rule.target)?.name ?? null;
       return becameKinds.get(rule.target) === 'goal' && name !== null
         ? RULE_WORDS.goalNow(name)
         : RULE_WORDS.endedEnvelope(name);
+    },
+    describeTakeover: ({ removed, by }: RuleTakeover) => {
+      const subject =
+        removed.merchantName ??
+        (removed.category !== null
+          ? getCategoryLabel(removed.category)
+          : `everything on ${getCardLabel(removed.cardId) ?? 'a card'}`);
+      const onCard =
+        removed.cardId === null && by.cardId !== null
+          ? ` on ${getCardLabel(by.cardId) ?? 'a card'}`
+          : '';
+      return RULE_WORDS.takeover(
+        describeRule(by, {
+          envelope: getEnvelopeName(by.target),
+          card: getCardLabel(by.cardId),
+        }),
+        `${subject}${onCard}`,
+      );
     },
     getEnvelopeName,
     getCardLabel,

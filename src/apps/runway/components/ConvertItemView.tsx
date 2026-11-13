@@ -54,6 +54,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, EnvelopeSealed, GoalSealed } from '@apps/runway/types';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
+import { setRulesLanding } from '@apps/runway/utils/rulesLanding';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 
@@ -246,7 +247,10 @@ function ConvertItemView({
       );
       toastConverted(written);
       onClose();
-      if (heldRules.length > 0) openView('rules');
+      if (heldRules.length > 0) {
+        setRulesLanding({ name, ruleIds: heldRules.map((rule) => rule.id) });
+        openView('rules');
+      }
     } catch (saveError) {
       setError(
         isOfflineFailure(saveError)

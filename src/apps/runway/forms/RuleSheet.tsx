@@ -22,6 +22,7 @@ import {
   isBroadMerchant,
   RULE_VARIES,
   toMerchantKey,
+  findTakeovers,
 } from '@apps/runway/engine/rules';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
 import { placingByHand } from '@apps/runway/hooks/useRuleMatch';
@@ -112,8 +113,15 @@ function RuleSheet({
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
-  const { describe, getCardLabel, getEnvelopeName, describeHome, isEnded } =
-    useRuleNames();
+  const {
+    describe,
+    describeTakeover,
+    getCardLabel,
+    getEnvelopeName,
+    describeHome,
+    isEnded,
+    liveIds,
+  } = useRuleNames();
   const rules = useAppSelector(selectRules);
   const history = useAppSelector((state) => state.runway.purchases);
   const envelopes = useAppSelector((state) =>
@@ -351,7 +359,10 @@ function RuleSheet({
     const entry = describe(rule);
     const isConfirmed = await confirm({
       title: RULE_WORDS.removeConfirmTitle,
-      message: RULE_WORDS.removeConfirm(entry),
+      message: [
+        RULE_WORDS.removeConfirm(entry),
+        ...findTakeovers([rule], rules, liveIds).map(describeTakeover),
+      ].join(' '),
       confirmText: RULE_WORDS.removeConfirmButton,
     });
     if (!isConfirmed) return;

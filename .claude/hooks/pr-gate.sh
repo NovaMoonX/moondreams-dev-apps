@@ -93,7 +93,7 @@ steps=("Make sure an open pull request exists for '$current_branch'; if none, op
 if has "$delta_files" "$code_re" || has "$delta_files" "$rules_re" || has "$delta_files" '^functions/'; then
   steps+=("Run the validator agent over the PR.")
   if has "$delta_files" "$ui_re"; then
-    steps+=("Re-take and re-publish the screenshots of every screen this push changed (pr-wrap-up §1).")
+    steps+=("Re-take and re-publish the screenshots of every screen this push changed (pr-wrap-up §1), then run check-screenshots.sh on the saved body.")
   fi
   if has "$delta_files" "$rules_re"; then
     steps+=("Re-run the rules rows of the Regression check against the emulator, against the base rules too (pr-wrap-up §2).")
