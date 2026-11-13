@@ -11441,6 +11441,27 @@ const version = (
       'a bank suffix is the same store',
     );
     assert.equal(
+      isSameStore('Applebees', 'Apple') ||
+        isSameStore('Venmo cash out', 'Venmo'),
+      false,
+      'a longer word names another merchant',
+    );
+    assert.equal(
+      findRefundOriginal(
+        kohls('back', -4_894, 9, { category: 'TRANSFER_IN_ACCOUNT_TRANSFER' }),
+        [kohls('buy', 6_000, 0, { lines: [clothes] })],
+      ),
+      null,
+      'money the bank calls a move in is never asked as a refund',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        kohls('buy', 6_000, 0, { lines: [clothes], status: 'pending' }),
+      ]),
+      null,
+      'a pending charge is never the one-tap original',
+    );
+    assert.equal(
       isSameStore('Ta', 'Target'),
       false,
       'two letters name no store',

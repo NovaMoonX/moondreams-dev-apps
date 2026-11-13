@@ -1255,10 +1255,11 @@ function PurchaseFormBody({
   );
   const candidates = [
     ...matching.filter((purchase) =>
-      isSameStore(purchase.merchant, refundStore),
+      isSameStore(purchase.merchant || purchase.label, refundStore),
     ),
     ...matching.filter(
-      (purchase) => !isSameStore(purchase.merchant, refundStore),
+      (purchase) =>
+        !isSameStore(purchase.merchant || purchase.label, refundStore),
     ),
   ];
 
@@ -1475,7 +1476,11 @@ function PurchaseFormBody({
           ? PURCHASE_COST_WORDS.pickHint(preset.cost.name)
           : undefined,
       isAnswered: lines !== null,
-      blocker: isSplit && !isRefund ? SPEND_WORDS.needsShares : null,
+      blocker: isRefund
+        ? SPEND_WORDS.needsReturnTo
+        : isSplit
+          ? SPEND_WORDS.needsShares
+          : null,
       isPreAnswered:
         !isRefund &&
         presetEnvelopeId !== null &&
@@ -1488,7 +1493,7 @@ function PurchaseFormBody({
               onClick={() => openView('original')}
               detail={
                 original !== null && returnsToOriginal && lines
-                  ? `Goes to ${describeEnvelopes(lines, nameOf)}.`
+                  ? `${SPEND_WORDS.returnsTo} ${describeEnvelopes(lines, nameOf)}.`
                   : undefined
               }
             >

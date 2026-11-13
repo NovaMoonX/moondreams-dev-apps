@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowLeftRight, CalendarPlus, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -46,8 +46,10 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
   const cards = useAppSelector((state) => state.runway.cards);
   const accounts = useAppSelector((state) => state.runway.accounts);
   const looks = useAppSelector(selectItemLooks);
-  const refundOriginal = useAppSelector((state) =>
-    findRefundOriginal(purchase, state.runway.purchases),
+  const purchases = useAppSelector((state) => state.runway.purchases);
+  const refundOriginal = useMemo(
+    () => findRefundOriginal(purchase, purchases),
+    [purchase, purchases],
   );
   const isAsked = useAppSelector((state) =>
     selectMoneyInAsks(state, today).has(purchase.id),
@@ -162,8 +164,8 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
         <LeaveOutRow
           purchase={purchase}
           onDone={onClose}
-          label={NEEDS_HOME_WORDS.unseenRow}
-          subtitle={NEEDS_HOME_WORDS.unseenRowSub}
+          label={NEEDS_HOME_WORDS.notRefundRow}
+          subtitle={NEEDS_HOME_WORDS.notRefundRowSub}
         />
       )}
     </ActionGroup>
@@ -292,7 +294,7 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
       <div className='space-y-4 pb-4'>
         <SheetHead
           label={
-            isRefundLike(purchase)
+            isRefundLike(purchase) || refundOriginal !== null
               ? NEEDS_HOME_WORDS.refundLabel
               : NEEDS_HOME_WORDS.moneyIn
           }
