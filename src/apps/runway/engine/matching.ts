@@ -1,5 +1,6 @@
 import { toComparable } from '@/utils/optionMatchUtils';
 import { DAY_MS } from '@apps/runway/engine/dates';
+import { getRefundableCents } from '@apps/runway/engine/purchases';
 import type {
   Cents,
   DateOnly,
@@ -286,6 +287,47 @@ export const isBankMove = (purchase: OpenPurchase) =>
   purchase.incomeDayId === null &&
   (purchase.billRef ?? null) === null &&
   OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
+
+/** Money in that is a refund: one tied to a purchase, one typed by hand, or a credit on a card the bank doesn't call a payment or a move. Money paired as a move or linked to a pay is never one. */
+export const isRefundLike = (purchase: OpenPurchase) =>
+  purchase.amountCents < 0 &&
+  purchase.pairedWithId === null &&
+  purchase.incomeDayId === null &&
+  !OWN_MOVE_CATEGORIES.has(purchase.category ?? '') &&
+  (purchase.refundOfId !== null ||
+    purchase.source !== 'link' ||
+    (purchase.paidByCardId ?? null) !== null);
+
+/** How far back a bank refund looks for the purchase it returns. */
+export const REFUND_LOOKBACK_DAYS = 120;
+
+const getMerchantKey = (purchase: OpenPurchase) =>
+  toComparable(purchase.merchant?.trim() || purchase.label?.trim() || '');
+
+/** The one purchase a waiting bank refund most likely returns, when that purchase went to an envelope or goal: same merchant, on or before the refund's day within `REFUND_LOOKBACK_DAYS`, with at least the refund left to return; the newest wins. Null when none does, since a refund of a Free to Spend purchase already counts where it belongs. */
+export function findRefundOriginal(
+  refund: OpenPurchase,
+  purchases: readonly OpenPurchase[],
+): OpenPurchase | null {
+  const key = getMerchantKey(refund);
+  if (refund.amountCents >= 0 || key === '') return null;
+  const result =
+    purchases
+      .filter(
+        (purchase) =>
+          purchase.id !== refund.id &&
+          purchase.amountCents > 0 &&
+          purchase.date <= refund.date &&
+          purchase.date >= refund.date - REFUND_LOOKBACK_DAYS * DAY_MS &&
+          purchase.lines.some(
+            (line) => line.cents > 0 && line.envelopeId !== null,
+          ) &&
+          getMerchantKey(purchase) === key &&
+          getRefundableCents(purchase, purchases) >= -refund.amountCents,
+      )
+      .sort((a, b) => b.date - a.date || b.createdAt - a.createdAt)[0] ?? null;
+  return result;
+}
 
 /** The two sides of a move between the person's own accounts are paired only this close in date. */
 export const PAIR_DAYS = 3;

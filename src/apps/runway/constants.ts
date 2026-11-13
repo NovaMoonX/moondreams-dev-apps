@@ -3616,7 +3616,12 @@ export const SPEND_PERIODS = ['month', 'lastMonth', '30', '90'] as const;
 export const DEFAULT_SPEND_PERIOD = 'month' as const;
 
 /** What Spend's Kind filter narrows to, as the URL keeps it; none shows every purchase and refund that counts. */
-export const SPEND_KINDS = ['purchases', 'moneyIn', 'notCounted'] as const;
+export const SPEND_KINDS = [
+  'purchases',
+  'moneyIn',
+  'refunds',
+  'notCounted',
+] as const;
 
 export const SPEND_FILTER_WORDS = {
   label: 'Filter purchases',
@@ -3624,6 +3629,7 @@ export const SPEND_FILTER_WORDS = {
   kinds: {
     purchases: 'Purchases',
     moneyIn: 'Money in',
+    refunds: 'Refunds',
     notCounted: 'Not counted',
   },
   paidWith: 'Card or account',
@@ -3635,6 +3641,8 @@ export const SPEND_FILTER_WORDS = {
   notCountedHelp: 'Left out of spending, or from before you linked.',
   moneyInHelp:
     'Deposits and refunds. Moves between your own accounts are left out.',
+  refundsHelp: 'Money a store or a card gave back.',
+  cameBack: 'Came back',
   inFree: 'In Free to Spend',
   toPay: 'Your pay',
   cameIn: 'Came in',
@@ -5050,6 +5058,13 @@ export const NEEDS_HOME_WORDS = {
   cardPaymentKind: 'Card payment',
   refundRow: 'This is a refund',
   refundRowSub: 'It goes back where the purchase came from',
+  refundOfRow: (name: string, day: string) => `Refund of ${name}, ${day}`,
+  refundOfRowSub: (where: string) => `Goes back to ${where}`,
+  refundOtherRow: 'A refund of something else',
+  refundOtherRowSub: 'Pick the purchase, or where it goes back',
+  refundAlreadyIn: 'A refund, already counted in Free to Spend.',
+  putBackRow: 'Put it back in an envelope',
+  putBackRowSub: 'Only if what it refunds came out of one',
   unseenRow: 'A payment from an account Runway doesn’t see',
   unseenRowSub: 'It will not count as income',
   select: 'Select',

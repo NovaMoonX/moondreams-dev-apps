@@ -34,7 +34,9 @@ import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
 import {
   findAccountPairs,
   findLostPairs,
+  findRefundOriginal,
   isBankMove,
+  isRefundLike,
   findDepositDays,
   findPendingMoveHolds,
   findPurchaseMatches,
@@ -11360,6 +11362,66 @@ const version = (
     isBankMove(side('atm', 6_000, 0, { category: 'TRANSFER_OUT_WITHDRAWAL' })),
     false,
     'a cash withdrawal still counts as spending',
+  );
+
+  const kohls = (
+    id: string,
+    cents: number,
+    dayOffset: number,
+    extra: Partial<OpenPurchase> = {},
+  ) => side(id, cents, dayOffset, { merchant: "Kohl's", ...onCard, ...extra });
+  const clothes = {
+    envelopeId: 'clothes',
+    cents: 6_000,
+    via: 'chosen' as const,
+  };
+  const cardRefund = kohls('back', -4_894, 9);
+  assert.equal(
+    isRefundLike(cardRefund),
+    true,
+    'a credit on a card the bank does not call a payment is a refund',
+  );
+  assert.equal(
+    isRefundLike(cardPay),
+    false,
+    'a card payment is never a refund',
+  );
+  assert.equal(
+    isRefundLike(side('pay', -200_000, 0)),
+    false,
+    'a bank deposit with no purchase is not a refund',
+  );
+  assert.equal(
+    findRefundOriginal(cardRefund, [cardRefund, kohls('buy', 6_000, 0)]),
+    null,
+    'a refund of a Free to Spend purchase asks nothing',
+  );
+  assert.equal(
+    findRefundOriginal(cardRefund, [
+      cardRefund,
+      kohls('buy', 6_000, 0, { needsHome: false, lines: [clothes] }),
+    ])?.id,
+    'buy',
+    'a refund of a purchase that went to an envelope finds it',
+  );
+  assert.equal(
+    findRefundOriginal(cardRefund, [
+      cardRefund,
+      kohls('buy', 6_000, 0, { lines: [clothes] }),
+      kohls('was', -2_000, 2, { refundOfId: 'buy' }),
+    ]),
+    null,
+    'a purchase already refunded below the amount is not it',
+  );
+  assert.equal(
+    findRefundOriginal(cardRefund, [
+      cardRefund,
+      kohls('buy', 6_000, 0, { lines: [clothes], merchant: 'Target' }),
+      kohls('late', 6_000, 10, { lines: [clothes] }),
+      kohls('old', 6_000, -200, { lines: [clothes] }),
+    ]),
+    null,
+    'another merchant, a later purchase or one past the lookback is not it',
   );
 
   const transfer = findAccountPairs([
