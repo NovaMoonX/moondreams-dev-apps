@@ -10,6 +10,7 @@ import CardSheets, {
 import { CARD_WORDS, HOME_TILE_COUNT } from '@apps/runway/constants';
 import { getNextDueOn } from '@apps/runway/engine/cards';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import { selectCardsWithBankDue } from '@apps/runway/store/selectors/cardStatementSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly } from '@apps/runway/types';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -33,8 +34,14 @@ function HomeCards({ today }: HomeCardsProps) {
   const [open, setOpen] = useState<OpenedCard | null>(null);
   const cards = getListedCards(allCards, reserveByCard);
   const waiting = (id: string) => reserveByCard[id] ?? 0;
+  const bankDueCards = useAppSelector(selectCardsWithBankDue);
   const dueOf = (card: (typeof cards)[number]) =>
-    waiting(card.id) > 0 ? getNextDueOn(card.dueDay, today) : null;
+    waiting(card.id) > 0
+      ? getNextDueOn(
+          (bankDueCards.find((entry) => entry.id === card.id) ?? card).dueDay,
+          today,
+        )
+      : null;
   const ranked = [...cards].sort((a, b) => {
     const dueA = dueOf(a);
     const dueB = dueOf(b);
