@@ -909,6 +909,7 @@ async function buildGmailTurn(input: {
         text: 'Your cake tasting is at 2:00 PM. See you then!',
         deepLink:
           'https://mail.google.com/mail/?authuser=personal@example.com#all/18f0c0de00000001',
+        record: null,
         deletedAt: null,
       },
     ],
