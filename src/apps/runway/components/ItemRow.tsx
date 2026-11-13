@@ -7,7 +7,8 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import SensitiveValue from '@/components/SensitiveValue';
@@ -18,7 +19,6 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import {
   PRIORITIES_WORDS,
   PRIORITY_DIAL_WORDS,
-  TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 
 /** A row in the priorities list while it is being reordered: tapped to lift, nudged up or down, or fixed in place. */
@@ -342,8 +342,7 @@ function ItemRow({
       <li data-item-id={itemId} className='flex items-start'>
         <span className='flex h-16 shrink-0 items-center pl-3'>
           {tick ? (
-            <Checkbox
-              className={TICK_HIT_CLASS}
+            <AppCheckbox
               checked={tick.checked}
               onCheckedChange={(next) => tick.onChange(Boolean(next))}
               aria-label={tick.label ?? `${name} done`}
