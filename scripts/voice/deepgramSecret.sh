@@ -16,7 +16,7 @@ source "$(dirname "$0")/../lib/firebaseLogin.sh"; require_firebase_login
 [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste the key." >&2; exit 1; }
 
 echo "1. Open $KEYS_PAGE, go to API Keys, click \"Create a key\", and fill it in:"
-echo "     - Name: moondreams-helm"
+echo "     - Name: moondreams-voice"
 echo "     - Role: Member"
 echo "     - Expiry, if it asks: never (or the furthest date it allows)"
 echo "   Then copy the key now: Deepgram shows it only once."
