@@ -1,6 +1,8 @@
 import type { Cents, DateOnly, OpenPurchase } from '@apps/runway/types';
 
-import { isNamedLike } from './autoPay';
+import { toComparable } from '@/utils/optionMatchUtils';
+
+import { areKeysNamedLike, getMerchantKeys } from './autoPay';
 import { DAY_MS, addUtcDays } from './dates';
 
 /** The card or account something is charged to. */
@@ -62,16 +64,27 @@ const getMargin = (cents: Cents) =>
     AMOUNT_MARGIN_MIN_CENTS,
   );
 
-const isLikePayment = (bill: ChargedToBill, purchase: OpenPurchase) =>
-  isNamedLike(bill, purchase) &&
+interface Charge {
+  purchase: OpenPurchase;
+  keys: readonly string[];
+}
+
+const isLikePayment = (
+  bill: ChargedToBill,
+  billName: string,
+  charge: Charge,
+) =>
   bill.payments.some(
     (payment) =>
       [payment.dueOn, payment.payOn ?? payment.dueOn].some(
-        (on) => Math.abs(purchase.date - on) <= NEAR_PAYMENT_DAYS * DAY_MS,
+        (on) =>
+          Math.abs(charge.purchase.date - on) <= NEAR_PAYMENT_DAYS * DAY_MS,
       ) &&
-      purchase.amountCents >= payment.lowCents - getMargin(payment.lowCents) &&
-      purchase.amountCents <= payment.highCents + getMargin(payment.highCents),
-  );
+      charge.purchase.amountCents >=
+        payment.lowCents - getMargin(payment.lowCents) &&
+      charge.purchase.amountCents <=
+        payment.highCents + getMargin(payment.highCents),
+  ) && areKeysNamedLike(billName, bill.merchantKeys, charge.keys);
 
 /** The bills whose recent bank charges were on a card or account other than the one the bill names. A bill that names none needs one charge; one that names a place needs its two newest charges on the same other place. */
 export function findChargedToHints(input: {
@@ -82,25 +95,25 @@ export function findChargedToHints(input: {
   isOpenPlace: (place: ChargedPlace) => boolean;
 }): ChargedToHint[] {
   const from = addUtcDays(input.today, -WINDOW_DAYS);
-  const charges = [
-    ...new Map(
-      input.purchases.map((purchase) => [purchase.id, purchase]),
-    ).values(),
-  ].filter(
+  const inWindow = input.purchases.filter(
     (purchase) =>
-      isCandidate(purchase) &&
       purchase.date >= from &&
       purchase.date <= input.today &&
+      isCandidate(purchase) &&
       !input.isLinkHistory(purchase),
   );
+  const charges: Charge[] = [
+    ...new Map(inWindow.map((purchase) => [purchase.id, purchase])).values(),
+  ].map((purchase) => ({ purchase, keys: getMerchantKeys(purchase) }));
   return input.bills.flatMap((bill): ChargedToHint[] => {
+    const billName = toComparable(bill.name);
     const evidence = charges
-      .filter((purchase) =>
-        purchase.billRef
-          ? purchase.billRef.billId === bill.id
-          : isLikePayment(bill, purchase),
+      .filter((charge) =>
+        charge.purchase.billRef
+          ? charge.purchase.billRef.billId === bill.id
+          : isLikePayment(bill, billName, charge),
       )
-      .flatMap((purchase) => {
+      .flatMap(({ purchase }) => {
         const place = getChargePlace(purchase);
         return place ? [{ purchase, place }] : [];
       })

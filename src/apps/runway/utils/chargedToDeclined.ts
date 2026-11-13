@@ -10,9 +10,16 @@ const version = { value: 0 };
 
 /** Changes whenever a suggestion is declined. */
 export const subscribeChargedToDeclines = (listener: () => void) => {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== null && !event.key.startsWith(KEY_PREFIX)) return;
+    version.value += 1;
+    listener();
+  };
   listeners.add(listener);
+  window.addEventListener('storage', onStorage);
   return () => {
     listeners.delete(listener);
+    window.removeEventListener('storage', onStorage);
   };
 };
 

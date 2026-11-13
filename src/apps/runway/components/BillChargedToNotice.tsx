@@ -96,11 +96,14 @@ function BillChargedToNotice({
         place: hint.place,
         summary: `${bill.name}: ${describe(bill, next)}, from ${formatDateOrdinalUTC(today)}.`,
       });
+      const undoState = { isTaken: false };
       const undo = async () => {
+        if (undoState.isTaken) return;
         if (!navigator.onLine) {
           addToast({ title: CHARGED_TO_HINT_WORDS.offline, type: 'error' });
           return;
         }
+        undoState.isTaken = true;
         try {
           if (before) {
             await revertChargedTo(user.uid, encryption, {
@@ -113,6 +116,7 @@ function BillChargedToNotice({
             });
           }
         } catch (undoError) {
+          undoState.isTaken = false;
           tell(CHARGED_TO_HINT_WORDS.undoFailed, undoError);
         }
       };
