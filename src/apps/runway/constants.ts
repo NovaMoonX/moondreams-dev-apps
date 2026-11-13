@@ -4940,6 +4940,9 @@ export const NEEDS_HOME_WORDS = {
   keepFree: 'Keep in Free to Spend',
   keepFreeSub: 'Still counts, with no envelope',
   keptFree: 'Kept in Free to Spend',
+  keepRefundFree: 'Leave it in Free to Spend',
+  keepRefundFreeSub: 'It’s already counted there. No envelope gets it back',
+  keptRefundFree: 'Left in Free to Spend',
   historyOne: 'A purchase from before you linked is history now',
   historyMany: (count: number) =>
     `${count} purchases from before you linked are history now`,

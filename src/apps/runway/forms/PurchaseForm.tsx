@@ -325,6 +325,8 @@ interface PurchaseFormProps {
   editing?: OpenPurchase;
   /** How many receipts the purchase already holds, so the cap counts them. */
   heldReceiptCount?: number;
+  /** Money in the bank balance already counts (a waiting bank refund), so Free to Spend is no place for it to go back to. */
+  isCountedAlready?: boolean;
 }
 
 const toHttpsLink = (text: string) => {
@@ -346,6 +348,7 @@ function PurchaseFormBody({
   presetCost = null,
   editing,
   heldReceiptCount = 0,
+  isCountedAlready: isCountedProp = false,
 }: PurchaseFormProps & StartOverProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -415,7 +418,7 @@ function PurchaseFormBody({
   }));
   const editingLines = editing?.lines ?? [];
   const isCountedAlready =
-    editing !== undefined && editing.amountCents < 0 && editing.needsHome;
+    editing !== undefined && editing.amountCents < 0 && isCountedProp;
   const editingChosen =
     editing !== undefined && editing.amountCents > 0
       ? unspill(editingLines)
