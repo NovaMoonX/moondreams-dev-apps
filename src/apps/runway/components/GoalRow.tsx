@@ -10,6 +10,7 @@ import {
   ITEM_SHEET_R2_WORDS,
   PACE_STATE_LABELS,
   PACE_WORDS,
+  PLAN_SELECT_WORDS,
   PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
@@ -17,7 +18,13 @@ import { isSavingFor, type Pace } from '@apps/runway/engine/pace';
 import type { GoalSealed, Priority } from '@apps/runway/types';
 import { getExtras } from '@apps/runway/engine/parts';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
-import { describeFundingShort } from '@apps/runway/utils/fundingText';
+import { useAppSelector } from '@/store';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  describeFundingPayFact,
+  describeFundingShort,
+} from '@apps/runway/utils/fundingText';
 
 interface GoalRowProps {
   goalId: string;
@@ -36,8 +43,12 @@ interface GoalRowProps {
   /** Words put before the pace on the row's line, such as why it is listed on a day. */
   detailLead?: string | null;
   /** A warning elsewhere asked for this goal: its sheet is open at this step (null for the sheet itself) until `onRequestDone`. */
-  request?: { step: string | null } | null;
+  request?: { step: string | null; eventId: string | null } | null;
   onRequestDone?: () => void;
+  /** While picking several: the row's tap ticks it and the chevron still opens it. */
+  select?: { checked: boolean; onChange: (checked: boolean) => void };
+  /** Press and hold (right-click on a computer): starts picking several with this one ticked. */
+  onHold?: () => void;
 }
 
 /** The pace in a few words: "Ahead, reaches it Oct 29", "Behind, $40.00 short by Nov 25". */
@@ -52,11 +63,11 @@ const describePaceShort = (
   const reaches = pace.reachedOn
     ? `reaches it ${formatDateOrdinalUTC(pace.reachedOn.on)}`
     : PACE_WORDS.notReached;
-  if (goal.targetDate !== null && pace.state === 'behind') {
+  if (pace.targetDate !== null && pace.state === 'behind') {
     const short = pace.remainingCents - pace.plannedByDateCents;
-    return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateOrdinalUTC(goal.targetDate)}`;
+    return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateOrdinalUTC(pace.targetDate)}`;
   }
-  if (goal.targetDate === null || pace.state === null || savedCents === 0) {
+  if (pace.targetDate === null || pace.state === null || savedCents === 0) {
     return reaches.charAt(0).toUpperCase() + reaches.slice(1);
   }
   return `${PACE_STATE_LABELS[pace.state]}, ${reaches}`;
@@ -77,6 +88,8 @@ function GoalRow({
   detailLead = null,
   request = null,
   onRequestDone,
+  select,
+  onHold,
 }: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const emoji = useItemEmoji(goal.emoji, goal.groupId);
@@ -87,7 +100,11 @@ function GoalRow({
       ? ''
       : ` ${PRIORITY_DIAL_WORDS.paceSuffix[paceDial]}`
   }`;
-  const funding = describeFundingShort(goal.funding, getExtras(goal));
+  const funding = describeFundingShort(goal.funding, getExtras(goal), 'goal');
+  const plan = useAppSelector((state) =>
+    selectResolvedPlan(state, todayAsUtcDate()),
+  );
+  const payFact = describeFundingPayFact(goal.funding, plan);
 
   return (
     <>
@@ -107,12 +124,19 @@ function GoalRow({
         isHighlighted={isHighlighted}
         isFaded={isFaded}
         itemId={goalId}
+        tick={
+          select && !reorder
+            ? { ...select, label: PLAN_SELECT_WORDS.tick(goal.name) }
+            : undefined
+        }
+        onLongPress={reorder ? undefined : onHold}
       />
       {(isOpen || request !== null) && (
         <ItemSheet
           itemId={goalId}
           kind='goal'
           startsAtStep={request?.step ?? undefined}
+          presetEventId={request?.eventId ?? undefined}
           today={today}
           figureLabel='Saved'
           figure={formatCents(savedCents)}
@@ -120,7 +144,7 @@ function GoalRow({
           fact={
             !isSavingFor(goal)
               ? `${PRIORITY_LABELS[goal.priority]} · ${HOW_OFTEN_WORDS.notBeingAdded.toLowerCase()}`
-              : `${PRIORITY_LABELS[goal.priority]} · ${funding} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
+              : `${PRIORITY_LABELS[goal.priority]} · ${funding}${payFact === null ? '' : ` · ${payFact.charAt(0).toLowerCase()}${payFact.slice(1)}`} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
           }
           extra={<GoalAccountNote goalId={goalId} />}
           quickChange={{

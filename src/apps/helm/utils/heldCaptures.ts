@@ -2,7 +2,6 @@ import { formatTime } from '@/utils/formatUtils';
 import {
   DAY_MS,
   HELM_COPY,
-  QUESTIONS_PER_TURN,
   SWEEP_LEASE_MS,
   TASK_TITLE_CAP,
 } from '@apps/helm/constants';
@@ -22,9 +21,16 @@ const hasOpenQuestion = (capture: OpenCapture, kinds: string[]) =>
     (question) => kinds.includes(question.kind) && question.answeredAt === null,
   );
 
-/** Whether the turn still waits on a which-person or which-place answer, read from what is readable so a turn whose words won't open still shows. */
+/** Whether the turn still waits on a question the person answers by choosing or writing (which person or place, which fact is true, or one the assistant asked), read from what is readable so a turn whose words won't open still shows. */
 export const hasOpenChoice = (capture: OpenCapture) =>
-  hasOpenQuestion(capture, ['whichPerson', 'whichPlace']);
+  hasOpenQuestion(capture, [
+    'whichPerson',
+    'whichPlace',
+    'whichIsTrue',
+    'whichTopic',
+    'groupTopics',
+    'asked',
+  ]);
 
 export interface OpenQuestion {
   id: string;
@@ -32,7 +38,7 @@ export interface OpenQuestion {
   skippedAt: number | null;
 }
 
-/** The which-person and which-place questions a turn still asks, oldest first, at most as many as a turn shows. */
+/** Every question a turn still asks that can be shown, oldest first; a turn's card shows the first few and the rest wait in Needs you. */
 export const getOpenQuestions = (capture: OpenCapture): OpenQuestion[] =>
   Object.entries(capture.questionState)
     .filter(([, state]) => state.answeredAt === null)
@@ -47,8 +53,19 @@ export const getOpenQuestions = (capture: OpenCapture): OpenQuestion[] =>
             },
           ]
         : [],
-    )
-    .slice(0, QUESTIONS_PER_TURN);
+    );
+
+/** The questions the assistant asked that were answered, oldest first, each with the answer it kept. */
+export const getAnsweredQuestions = (capture: OpenCapture) =>
+  Object.entries(capture.questionState)
+    .filter(([, state]) => state.answeredAt !== null && state.kind === 'asked')
+    .sort(([, a], [, b]) => a.askedAt - b.askedAt)
+    .flatMap(([id]) => {
+      const question = capture.questions[id];
+      return question?.answer
+        ? [{ id, question, answer: question.answer }]
+        : [];
+    });
 
 export const toHeldKind = (capture: OpenCapture): HeldKind | null => {
   if (capture.status === 'failed') return 'failed';

@@ -32,10 +32,18 @@ const getLine = (
     return { reason: HELM_COPY.couldNotRead, trailing: time };
   }
   if (kind === 'question') {
+    const open = getOpenQuestions(capture);
     return {
-      reason:
-        getOpenQuestions(capture)[0]?.question.prompt ?? HELM_COPY.unreadable,
-      trailing: time,
+      reason: open[0]?.question.prompt ?? HELM_COPY.unreadable,
+      trailing: [
+        open.length > 1 ? HELM_COPY.questionRowMore(open.length - 1) : null,
+        open.length > 0 && open.every((entry) => entry.skippedAt !== null)
+          ? HELM_COPY.questionRowSkipped
+          : null,
+        time,
+      ]
+        .filter(Boolean)
+        .join(' · '),
     };
   }
   if (kind === 'failed') {

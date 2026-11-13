@@ -1,20 +1,27 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import {
+  FieldValue,
   getFirestore,
   type DocumentReference,
   type Firestore,
+  type QueryDocumentSnapshot,
   type Transaction,
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import {
+  HttpsError,
+  onCall,
+  type CallableRequest,
+} from 'firebase-functions/v2/https';
+import { getStorage } from 'firebase-admin/storage';
 
 import { createAnthropicProvider } from '../../ai/providers/anthropic.js';
-import type { ModelProvider } from '../../ai/modelProvider.js';
+import type { ModelProvider, ToolLoopContent } from '../../ai/modelProvider.js';
 import { getUsageCost } from '../../ai/models.js';
 import type { Keyring } from '../../appKeys/keyring.js';
 import type { SealedPayload } from '../../appKeys/seal.js';
-import { isRunningInEmulator } from '../../emulator.js';
+import { isForcedFixture, isRunningInEmulator } from '../../emulator.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from './getHelmKey.js';
 import {
   openForHelm,
@@ -30,8 +37,51 @@ import {
   restFailureFields,
   settleAttempts,
 } from './sortAttempts.js';
-import type { LiveGrant } from '../../connections/liveRouter.js';
+import type { LiveGrant, SiteLiveGrant } from '../../connections/liveRouter.js';
+import {
+  readContextKeyDates,
+  readIndexIn,
+  writeIndexIn,
+} from './keyDateStore.js';
+import {
+  KEY_DATE_KINDS,
+  KEY_DATE_PRECISIONS,
+  MAX_MOMENTS_PER_WHO,
+} from './nomos/commands.js';
+import { namedMomentWhoIds, type KeyDateRecord } from './nomos/planKeyDates.js';
+import { readActiveProjectsIn, readContextProjects } from './projectStore.js';
+import {
+  openTopicRecord,
+  readContextTopics,
+  readHintedNotes,
+  type HintedNote,
+  type OpenTopicRecord,
+} from './noteStore.js';
+import {
+  blocksOf,
+  openLiveProcedure,
+  openTaskSteps,
+  readContextProcedures,
+  readFocusedProcedure,
+  readProcedureVersionNumbers,
+  writeProcedureVersionIn,
+  type LiveProcedure,
+} from './procedureStore.js';
+import {
+  openLiveRun,
+  openRunDocs,
+  procedureOpenRunsQuery,
+  readLiveProcedureIds,
+  readOpenRuns,
+  toContextRun,
+} from './runStore.js';
 import { createHelmMcpServer } from './mcp/server.js';
+import {
+  openMedia,
+  type OpenedMedia,
+  type UnreadableReason,
+} from './media/openMedia.js';
+import { sweepExpiredMedia } from './media/sweepMedia.js';
 import {
   createQuoteBook,
   createSearchedLog,
@@ -40,6 +90,12 @@ import {
 import {
   buildContext,
   readMadeTitles,
+  topicDocumentFor,
+  type ContextFact,
+  type ContextFocusedTopic,
+  type ContextProcedure,
+  MAX_CONTEXT_PROCEDURES,
+  type ContextSelfFact,
   type ContextTask,
   type EarlierTurn,
 } from './nomos/buildContext.js';
@@ -48,29 +104,71 @@ import {
   MENTION_KINDS,
   toReading,
   type AnswerCommand,
+  type AskCommand,
   type CaptureReading,
+  type CreateNoteCommand,
+  type MediaDecision,
   type MentionRead,
+  type NoteFactCommand,
+  type KeyDateCommand,
+  type ProjectCommand,
+  MAX_CONTEXT_PROJECTS,
+  MAX_CONTEXT_TOPICS,
+  MAX_HINT_NOTES,
   type NomosCommand,
+  type TopicCommand,
+  type ProcedureCommand,
+  type RunCommand,
   type PlaceRead,
   type PlanDayCommand,
   type RememberCommand,
+  type SetCurrentPlaceCommand,
   type TaskDue,
   DEFAULT_ASSISTANT_NAME,
 } from './nomos/commands.js';
 import { buildFactWrite, settleRemember } from './nomos/remember.js';
+import {
+  planSetCurrentPlace,
+  type CurrentPlace,
+} from './nomos/currentPlace.js';
 import { buildAnswer, settleLiveTurn } from './nomos/answerGuards.js';
+import {
+  describeAnsweredQuestion,
+  planAnswerTurn,
+  type AskedCapture,
+} from './nomos/answerTurn.js';
+import {
+  ALREADY_ANSWERED_LINE,
+  ASK_DEFERRED_LINE,
+  NOTHING_CHANGED_LINE,
+  buildAnswerKeptLine,
+  buildPhotosNotOpenedLine,
+  buildFileNotReadLine,
+} from './nomos/summaries.js';
 import {
   buildAnswerExecution,
   buildExecution,
+  countOpenAsked,
   hasOpenMoreToSort,
+  planAsks,
   planWrites,
   settleCapture,
+  type ExistingFact,
   type ExistingTask,
+  type KeptNote,
   type KnownWhoState,
+  type MediaInput,
+  type NoteTopicState,
   type PeopleInput,
   type QuestionStateEntry,
 } from './nomos/executeCommands.js';
-import { readContextSynced, toKnownZone } from './syncedCopies.js';
+import {
+  getLocalDay,
+  MAX_CONTEXT_TRIPS,
+  readContextSynced,
+  readSyncedTrips,
+  toKnownZone,
+} from './syncedCopies.js';
 import { getDayIn } from './nomos/spoken.js';
 import { matchWho } from './nomos/matchEntities.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
@@ -81,24 +179,44 @@ import {
   type JoinedRead,
 } from './nomos/joinedTurn.js';
 import {
+  isNamedIn,
   normalizeNomosReply,
   NomosReplyError,
 } from './nomos/normalizeNomosReply.js';
+import { refreshRevisions } from './reviseAgain.js';
+import {
+  openLiveTopic,
+  readVersionNumbers,
+  writeTopicVersionIn,
+  type LiveTopic,
+} from './topicVersionStore.js';
+import type { PlacedTopic } from './nomos/planTopicCommands.js';
 import { decide } from './nomos/policy.js';
 import {
   HAND_OVER_TOOL,
+  hasReviseCue,
+  hasProcedureCue,
+  hasProcedureReviseCue,
   isQuestion,
   pickRoute,
   runRouted,
   type Route,
 } from './nomos/route.js';
+import { readAssistantName } from './assistantName.js';
+import { toStyleNotes, toStyleWords } from './styleLearner.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   INTERRUPTED_PROMPT,
+  APP_RECORDS_PROMPT,
   MAIL_PROMPT,
   MAX_CONTEXT_TASKS,
+  MEDIA_PROMPT,
   REST_PROMPT,
+  STYLE_PROMPT,
   SYSTEM_PROMPT,
+  toPersonaPrompt,
+  TOPIC_PROMPT,
+  PROCEDURE_PROMPT,
 } from './nomos/prompt.js';
 
 if (getApps().length === 0) {
@@ -114,7 +232,25 @@ const EARLIER_EXECUTIONS = 3;
 const EARLIER_RECORDS = 10;
 const MAX_JOINED = 9;
 const MAX_LISTED = 50;
+const MAX_OPEN_ASKED_READ = 200;
+
+const readPlaceName = (key: HelmKey, sealed: unknown) => {
+  try {
+    const words = openForHelm(key, sealed as SealedPayload);
+    return typeof words.name === 'string' && words.name ? words.name : 'Home';
+  } catch {
+    return 'Home';
+  }
+};
+
+const toCurrentPlace = (value: unknown): CurrentPlace | null => {
+  const { placeId, saidAt } = (value ?? {}) as Partial<CurrentPlace>;
+  return typeof placeId === 'string' && typeof saidAt === 'number'
+    ? { placeId, saidAt }
+    : null;
+};
 const MAX_FACTS_READ = 20;
+const MAX_REPEAT_FACTS_READ = 300;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 // Leaves the rest of the call for a hand-over; a restart with less than this plus a full run's minimum left skips the quick route.
 const QUICK_LOOP_MILLIS = 15_000;
@@ -172,7 +308,9 @@ interface CaptureDoc {
   turnIndex?: number;
   turnLeadId?: string | null;
   inputMode?: string;
+  attachmentIds?: string[];
   route?: Route | null;
+  answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
   interruptedCaptureId: string | null;
@@ -225,6 +363,7 @@ const readEarlyAnswer = (
 };
 
 const readApiKey = () => {
+  if (isForcedFixture('anthropic')) return '';
   try {
     return ANTHROPIC_API_KEY.value();
   } catch {
@@ -237,6 +376,18 @@ const readLiveGrants = (firestore: Firestore, uid: string) =>
     .then(({ listLiveGrants }) => listLiveGrants(firestore, uid, 'helm'))
     .catch((error): LiveGrant[] => {
       logger.warn('helm.live.grantsFailed', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+      return [];
+    });
+
+const readSiteGrants = (firestore: Firestore, uid: string) =>
+  import('../../connections/liveRouter.js')
+    .then(({ listSiteLiveGrants }) =>
+      listSiteLiveGrants(firestore, uid, 'helm'),
+    )
+    .catch((error): SiteLiveGrant[] => {
+      logger.warn('helm.live.siteGrantsFailed', {
         cause: error instanceof Error ? error.name : 'error',
       });
       return [];
@@ -260,6 +411,22 @@ export function loadKeyringOrFail(): Keyring {
     );
   }
 }
+
+/** The general style's descriptions for a turn's free writing; nothing when it is missing or will not open. */
+const readStyleNotes = (firestore: Firestore, base: string, key: HelmKey) =>
+  firestore
+    .doc(`${base}/style/general`)
+    .get()
+    .then((snapshot) =>
+      snapshot.exists
+        ? toStyleNotes(
+            toStyleWords(
+              openForHelm(key, snapshot.get('sealed') as SealedPayload),
+            ),
+          )
+        : null,
+    )
+    .catch(() => null);
 
 const openTitle = (key: HelmKey, sealed: SealedPayload) => {
   try {
@@ -395,6 +562,8 @@ interface Claimed {
   capture: CaptureDoc;
   mode: SortMode;
   startedAt: number;
+  /** The notes the device ranked for what was typed, ids only; the rest of the call reads them under the caller's own uid. */
+  noteIds: string[];
 }
 
 async function readAlreadyMade(
@@ -438,11 +607,17 @@ async function readPeople(
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
+    calledAs: string | null;
     timeZone: string;
     capturedAt: number;
   },
 ): Promise<PeopleInput | undefined> {
   const { firestore, base, key, captureRef, mentions, places } = input;
+  const assistantNames = [
+    input.assistantName,
+    input.calledAs,
+    DEFAULT_ASSISTANT_NAME,
+  ].filter((name) => name !== null);
   if (mentions.length === 0 && places.length === 0) return undefined;
   const [whoSnap, placeSnap] = await Promise.all(
     ['who', 'places'].map((name) =>
@@ -488,6 +663,12 @@ async function readPeople(
         mentionDayKeys: [],
         taskLinkCount: 0,
         hasRole: false,
+        yearlyDateCount: Number.isFinite(doc.get('yearlyDateCount'))
+          ? Number(doc.get('yearlyDateCount'))
+          : 0,
+        momentCount: Number.isFinite(doc.get('momentCount'))
+          ? Number(doc.get('momentCount'))
+          : 0,
       },
     ];
   });
@@ -510,8 +691,8 @@ async function readPeople(
     logger.warn('helm.sort.peopleUnreadable', unreadable);
   }
   const matched = new Set(
-    matchWho({ mentions, known, assistantName: input.assistantName }).flatMap(
-      (match) => (match.kind === 'match' ? [match.id] : []),
+    matchWho({ mentions, known, assistantNames }).flatMap((match) =>
+      match.kind === 'match' ? [match.id] : [],
     ),
   );
   const zone = toKnownZone(input.timeZone);
@@ -552,9 +733,398 @@ async function readPeople(
     known: withHistory,
     knownPlaces,
     assistantName: input.assistantName,
+    assistantNames,
     dayKey: String(getDayIn(input.capturedAt, zone)),
     capturedAt: input.capturedAt,
   };
+}
+
+const MAX_KEPT_READS = 20;
+
+export const openKeyDate = (
+  key: HelmKey,
+  snap: { id: string; get: (field: string) => unknown },
+): [string, KeyDateRecord] | null => {
+  try {
+    const words = openForHelm(key, snap.get('sealed') as SealedPayload);
+    const kind = KEY_DATE_KINDS.find((entry) => entry === words.kind);
+    const month = typeof words.month === 'number' ? words.month : null;
+    const shape = snap.get('shape') === 'moment' ? 'moment' : 'yearly';
+    if (
+      typeof snap.get('whoId') !== 'string' ||
+      !kind ||
+      (shape === 'yearly' && month === null)
+    ) {
+      return null;
+    }
+    const precision = KEY_DATE_PRECISIONS.find(
+      (entry) => entry === words.precision,
+    );
+    return [
+      snap.id,
+      {
+        whoId: snap.get('whoId') as string,
+        shape,
+        source: snap.get('source') as KeyDateRecord['source'],
+        createdAt: Number(snap.get('createdAt') ?? 0),
+        sealed: {
+          kind,
+          label: typeof words.label === 'string' ? words.label : null,
+          month,
+          day: typeof words.day === 'number' ? words.day : null,
+          year: typeof words.year === 'number' ? words.year : null,
+          precision: precision ?? null,
+          captureId:
+            typeof words.captureId === 'string' ? words.captureId : null,
+        },
+      },
+    ];
+  } catch {
+    return null;
+  }
+};
+
+/** The yearly index, the key date documents the commands name, the birthday and passed-away date each person the turn may mean keeps, and the counters of the people they belong to, read in the turn's transaction. */
+async function readKeyDateState(
+  transaction: Transaction,
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  input: {
+    keyDates: KeyDateCommand[];
+    selfWhoId: string | null;
+    candidateWhoIds: string[];
+    momentWhoIds: string[];
+  },
+) {
+  const index = await readIndexIn(transaction, firestore, base, key).catch(
+    (error: unknown) => {
+      logger.error('helm.keyDates.indexUnreadable', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    },
+  );
+  if (!index) {
+    return {
+      index: null,
+      existing: new Map<string, KeyDateRecord>(),
+      kept: new Map<string, { id: string; record: KeyDateRecord }>(),
+      moments: new Map<string, { id: string; record: KeyDateRecord }[]>(),
+      whoCounts: new Map<string, number>(),
+      momentCounts: new Map<string, number>(),
+    };
+  }
+  const candidates = [
+    ...new Set([
+      ...input.candidateWhoIds,
+      ...(input.selfWhoId ? [input.selfWhoId] : []),
+    ]),
+  ].slice(0, MAX_KEPT_READS);
+  const setKinds = input.keyDates.flatMap((command) =>
+    command.kind === 'setKeyDate' ? [command.keyKind] : [],
+  );
+  const birthdayIds = setKinds.includes('birthday')
+    ? candidates.flatMap((whoId) =>
+        (index.byWho[whoId] ?? [])
+          .filter((entry) => entry[1] === 'birthday')
+          .map((entry) => entry[0]),
+      )
+    : [];
+  const ids = [
+    ...new Set([
+      ...input.keyDates.flatMap((command) =>
+        command.kind === 'removeKeyDate'
+          ? [command.keyDateId]
+          : command.keyDateId
+            ? [command.keyDateId]
+            : [],
+      ),
+      ...birthdayIds,
+    ]),
+  ];
+  const [snaps, momentSnaps] = await Promise.all([
+    ids.length > 0
+      ? transaction.getAll(
+          ...ids.map((id) => firestore.doc(`${base}/keyDates/${id}`)),
+        )
+      : [],
+    input.momentWhoIds.length > 0
+      ? Promise.all(
+          input.momentWhoIds
+            .slice(0, MAX_KEPT_READS)
+            .map((whoId) =>
+              transaction.get(
+                firestore
+                  .collection(`${base}/keyDates`)
+                  .where('whoId', '==', whoId)
+                  .where('shape', '==', 'moment')
+                  .limit(MAX_MOMENTS_PER_WHO),
+              ),
+            ),
+        )
+      : [],
+  ]);
+  const existing = new Map(
+    snaps.flatMap((snap): [string, KeyDateRecord][] => {
+      const opened = snap.exists ? openKeyDate(key, snap) : null;
+      return opened ? [opened] : [];
+    }),
+  );
+  const storedMoments = momentSnaps
+    .flatMap((result) => result.docs)
+    .flatMap((snap) => {
+      const opened = openKeyDate(key, snap);
+      return opened ? [{ id: opened[0], record: opened[1] }] : [];
+    });
+  const moments = storedMoments.reduce(
+    (byWho, entry) =>
+      byWho.set(entry.record.whoId, [
+        ...(byWho.get(entry.record.whoId) ?? []),
+        entry,
+      ]),
+    new Map<string, { id: string; record: KeyDateRecord }[]>(),
+  );
+  const kept = new Map(
+    [
+      ...[...existing.entries()].filter(
+        ([, record]) => record.sealed.kind === 'birthday',
+      ),
+      ...storedMoments
+        .filter(({ record }) => record.sealed.kind === 'passedAway')
+        .map(({ id, record }): [string, KeyDateRecord] => [id, record]),
+    ].map(([id, record]): [string, { id: string; record: KeyDateRecord }] => [
+      `${record.whoId}:${record.sealed.kind}`,
+      { id, record },
+    ]),
+  );
+  const whoIds = [
+    ...new Set([
+      ...[...existing.values()].map((record) => record.whoId),
+      ...(input.selfWhoId ? [input.selfWhoId] : []),
+    ]),
+  ];
+  const whoSnaps =
+    whoIds.length > 0
+      ? await transaction.getAll(
+          ...whoIds.map((id) => firestore.doc(`${base}/who/${id}`)),
+        )
+      : [];
+  const countsOf = (field: string) =>
+    new Map(
+      whoSnaps.flatMap((snap): [string, number][] =>
+        snap.exists
+          ? [
+              [
+                snap.id,
+                Number.isFinite(snap.get(field)) ? Number(snap.get(field)) : 0,
+              ],
+            ]
+          : [],
+      ),
+    );
+  return {
+    index,
+    existing,
+    kept,
+    moments,
+    whoCounts: countsOf('yearlyDateCount'),
+    momentCounts: countsOf('momentCount'),
+  };
+}
+
+const MAX_CONTEXT_FACTS = 20;
+const MAX_SELF_FACTS = 30;
+const MAX_CONTEXT_SUBJECTS = 10;
+const MAX_CONTEXT_SUBJECT_READS = 100;
+
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** What the person's records hold about themself, and about the people and places the words name, for the model to answer from: confirmed facts as said, inferred ones as guesses. A failed read gives none, so a turn never waits on it. */
+async function readContextFacts(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  text: string,
+  selfWhoId: string | null,
+): Promise<{ facts: ContextFact[]; selfFacts: ContextSelfFact[] }> {
+  try {
+    const factSnap = await firestore
+      .collection(`${base}/facts`)
+      .where('status', 'in', ['confirmed', 'inferred'])
+      .orderBy('createdAt', 'desc')
+      .limit(MAX_REPEAT_FACTS_READ)
+      .get();
+    const subjectIdsOf = (doc: QueryDocumentSnapshot) => {
+      const ids: unknown = doc.get('subjectIds');
+      return isStringList(ids) ? ids : [];
+    };
+    const byOf = (doc: QueryDocumentSnapshot) =>
+      doc.get('status') === 'confirmed' ? 'said' : 'inferred';
+    const selfFacts = selfWhoId
+      ? factSnap.docs
+          .flatMap((doc): ContextSelfFact[] => {
+            const kind: unknown = doc.get('kind');
+            if (
+              (kind !== 'preference' &&
+                kind !== 'favorite' &&
+                kind !== 'identity') ||
+              !subjectIdsOf(doc).includes(selfWhoId)
+            ) {
+              return [];
+            }
+            try {
+              const words = openForHelm(
+                key,
+                doc.get('sealed') as SealedPayload,
+              );
+              return typeof words.statement === 'string'
+                ? [
+                    {
+                      id: doc.id,
+                      kind,
+                      topic:
+                        typeof words.topic === 'string' ? words.topic : null,
+                      value:
+                        typeof words.value === 'string' ? words.value : null,
+                      statement: words.statement,
+                      by: byOf(doc),
+                    },
+                  ]
+                : [];
+            } catch {
+              return [];
+            }
+          })
+          .slice(0, MAX_SELF_FACTS)
+      : [];
+    const selfIds = new Set(selfFacts.map((fact) => fact.id));
+    const subjectIds = [
+      ...new Set(
+        factSnap.docs
+          .filter((doc) => !selfIds.has(doc.id))
+          .flatMap(subjectIdsOf),
+      ),
+    ].slice(0, MAX_CONTEXT_SUBJECT_READS);
+    if (subjectIds.length === 0) return { facts: [], selfFacts };
+    const subjectSnaps = await firestore.getAll(
+      ...subjectIds.flatMap((id) => [
+        firestore.doc(`${base}/who/${id}`),
+        firestore.doc(`${base}/places/${id}`),
+      ]),
+    );
+    const named = subjectSnaps
+      .filter((doc) => doc.exists)
+      .flatMap((doc) => {
+        try {
+          const words = openForHelm(key, doc.get('sealed') as SealedPayload);
+          const names = [
+            words.name,
+            ...(isStringList(words.aliases) ? words.aliases : []),
+          ].filter((name): name is string => typeof name === 'string');
+          const isNamed = names.some(
+            (name) =>
+              name.trim() !== '' &&
+              new RegExp(
+                `(^|[^\\p{L}\\p{N}])${escapeRegExp(name.trim())}($|[^\\p{L}\\p{N}])`,
+                'iu',
+              ).test(text),
+          );
+          return isNamed && typeof words.name === 'string'
+            ? [{ id: doc.id, name: words.name }]
+            : [];
+        } catch {
+          return [];
+        }
+      })
+      .slice(0, MAX_CONTEXT_SUBJECTS);
+    if (named.length === 0) return { facts: [], selfFacts };
+    const facts = factSnap.docs
+      .flatMap((doc): ContextFact[] => {
+        if (selfIds.has(doc.id)) return [];
+        const ids = subjectIdsOf(doc);
+        const subject = named.find((entry) => ids.includes(entry.id));
+        if (!subject) return [];
+        try {
+          const words = openForHelm(key, doc.get('sealed') as SealedPayload);
+          return typeof words.statement === 'string'
+            ? [
+                {
+                  id: doc.id,
+                  subject: subject.name,
+                  statement: words.statement,
+                  by: byOf(doc),
+                },
+              ]
+            : [];
+        } catch {
+          return [];
+        }
+      })
+      .slice(0, MAX_CONTEXT_FACTS);
+    return { facts, selfFacts };
+  } catch (error) {
+    logger.warn('helm.sort.factsUnread', {
+      message: error instanceof Error ? error.message : 'unknown',
+    });
+    return { facts: [], selfFacts: [] };
+  }
+}
+
+/** The person's confirmed and inferred facts, newest first and opened, for the repeat check; one that won't open is left out. */
+async function readSubjectFacts(
+  transaction: Transaction,
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+): Promise<ExistingFact[]> {
+  const snapshot = await transaction.get(
+    firestore
+      .collection(`${base}/facts`)
+      .where('status', 'in', ['confirmed', 'inferred'])
+      .orderBy('createdAt', 'desc')
+      .limit(MAX_REPEAT_FACTS_READ),
+  );
+  return snapshot.docs.flatMap((doc): ExistingFact[] => {
+    try {
+      const words = openForHelm(key, doc.get('sealed') as SealedPayload);
+      const subjectIds: unknown = doc.get('subjectIds');
+      const status: unknown = doc.get('status');
+      const kind: unknown = doc.get('kind');
+      const stated: unknown = doc.get('stated');
+      const disputedWithId: unknown = doc.get('disputedWithId');
+      const createdAt: unknown = doc.get('createdAt');
+      return typeof words.statement === 'string' &&
+        isStringList(subjectIds) &&
+        (status === 'confirmed' || status === 'inferred')
+        ? [
+            {
+              id: doc.id,
+              status,
+              statement: words.statement,
+              subjectIds,
+              kind:
+                kind === 'preference' ||
+                kind === 'favorite' ||
+                kind === 'identity'
+                  ? kind
+                  : 'world',
+              topic: typeof words.topic === 'string' ? words.topic : null,
+              stated:
+                stated === 'personSaid' || stated === 'personCorrected'
+                  ? stated
+                  : 'nomosInferred',
+              createdAt: typeof createdAt === 'number' ? createdAt : 0,
+              disputedWithId:
+                typeof disputedWithId === 'string' ? disputedWithId : null,
+            },
+          ]
+        : [];
+    } catch {
+      return [];
+    }
+  });
 }
 
 /** The tasks a page showed, read again under the capture's own account: a missing one or one that won't open is left out. */
@@ -598,6 +1168,68 @@ async function readScreenTasks(
       return task ? [{ ...task, position }] : [];
     }),
   };
+}
+
+async function readFocusedTopic(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  topicId: string | null,
+): Promise<ContextFocusedTopic | null> {
+  if (!topicId) return null;
+  try {
+    const data = (
+      await firestore.doc(`${base}/topics/${topicId}`).get()
+    ).data();
+    if (!data) return null;
+    const words = openForHelm(key, data.sealed as SealedPayload);
+    const sections = Array.isArray(words.sections)
+      ? (words.sections as {
+          id: string;
+          heading: string | null;
+          markdown: string;
+          writtenBy: 'nomos' | 'person';
+          sources: { noteId?: string | null }[];
+        }[])
+      : [];
+    return typeof words.name === 'string'
+      ? {
+          id: topicId,
+          name: words.name,
+          version: typeof data.version === 'number' ? data.version : 0,
+          sections: sections.map((section) => ({
+            id: section.id,
+            heading: section.heading,
+            markdown: section.markdown,
+            writtenBy: section.writtenBy === 'person' ? 'person' : 'nomos',
+            noteIds: section.sources.flatMap((source) =>
+              typeof source.noteId === 'string' ? [source.noteId] : [],
+            ),
+          })),
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readCitedNotes(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  topic: ContextFocusedTopic | null,
+  already: HintedNote[],
+): Promise<HintedNote[]> {
+  const known = new Set(already.map((note) => note.id));
+  const ids = [
+    ...new Set(topic?.sections.flatMap((section) => section.noteIds) ?? []),
+  ].filter((id) => !known.has(id));
+  const room = MAX_HINT_NOTES - already.length;
+  return room > 0 && ids.length > 0
+    ? (await readHintedNotes(firestore, base, key, ids.slice(0, room))).map(
+        (note) => ({ ...note, body: '' }),
+      )
+    : [];
 }
 
 /** The last turns of this turn's conversation, oldest first: what was said, the summary of what was done and the tasks it touched. A turn from before conversations were kept has none. */
@@ -695,6 +1327,60 @@ async function readEarlierTurns(
   return turns.flat().reverse();
 }
 
+interface AnswerTurn {
+  ref: { captureId: string; questionId: string };
+  value: unknown;
+  words: string;
+}
+
+/** The turn and question an answer turn points at, when both ids are well formed. */
+const readAnswersQuestion = (capture: CaptureDoc) => {
+  const ref = capture.answersQuestion;
+  return ref &&
+    typeof ref.captureId === 'string' &&
+    ID_RE.test(ref.captureId) &&
+    typeof ref.questionId === 'string' &&
+    ID_RE.test(ref.questionId)
+    ? { captureId: ref.captureId, questionId: ref.questionId }
+    : null;
+};
+
+const toAskedCapture = (
+  key: HelmKey,
+  data: CaptureDoc | undefined,
+): AskedCapture | null => {
+  const words = data ? openTitle(key, data.sealed) : null;
+  return data && words
+    ? {
+        status: data.status,
+        questionState: data.questionState ?? {},
+        opened: words.sealed,
+      }
+    : null;
+};
+
+/** The key dates the open "which is true now?" questions of one capture ask about. */
+const openClashIdsOf = (asked: AskedCapture | null): string[] => {
+  const questions = asked?.opened.questions;
+  return !asked || typeof questions !== 'object' || questions === null
+    ? []
+    : Object.entries(questions).flatMap(([id, question]) => {
+        const held: unknown = (question as { heldCommands?: unknown })
+          .heldCommands;
+        const first: unknown = Array.isArray(held) ? held[0] : null;
+        const keyDateId =
+          typeof first === 'object' &&
+          first !== null &&
+          (first as { kind?: unknown }).kind === 'settleKeyDate'
+            ? (first as { keyDateId?: unknown }).keyDateId
+            : null;
+        return asked.questionState[id]?.answeredAt === null &&
+          typeof keyDateId === 'string'
+          ? [keyDateId]
+          : [];
+      });
+};
+
 async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const { firestore, uid, capture, mode } = claimed;
   const base = `apps/helm/users/${uid}`;
@@ -704,14 +1390,115 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   });
   const opened = openForHelm(key, capture.sealed);
   const leadText = typeof opened.text === 'string' ? opened.text : null;
-  if (!leadText) throw new SortFailure('unreadable');
+  const hasAttachments =
+    mode === 'full' && (capture.attachmentIds ?? []).length > 0;
+  if (leadText === null || (!leadText && !hasAttachments)) {
+    throw new SortFailure('unreadable');
+  }
+  const answersQuestion = readAnswersQuestion(capture);
+  const answerTurn: AnswerTurn | null = answersQuestion
+    ? {
+        ref: answersQuestion,
+        value: opened.questionAnswer ?? null,
+        words: leadText,
+      }
+    : null;
+  const askedBefore = answersQuestion
+    ? toAskedCapture(
+        key,
+        (
+          await firestore
+            .doc(`${base}/captures/${answersQuestion.captureId}`)
+            .get()
+        ).data() as CaptureDoc | undefined,
+      )
+    : null;
+  const answeredPlan = answerTurn
+    ? planAnswerTurn({
+        asked: askedBefore,
+        questionId: answerTurn.ref.questionId,
+        value: answerTurn.value,
+        words: answerTurn.words,
+        by: 'tap',
+        turnCaptureId: claimed.captureRef.id,
+        now: Date.now(),
+      })
+    : null;
+  if (answerTurn && answeredPlan?.kind === 'stale') {
+    return writeResult({
+      ...claimed,
+      key,
+      commands: [],
+      answer: null,
+      remember: [],
+      noteFacts: [],
+      keyDates: [],
+      projects: [],
+      notes: [],
+      topicCommands: [],
+      procedureCommands: [],
+      runCommands: [],
+      topics: [],
+      hinted: [],
+      captureText: '',
+      planDay: null,
+      setCurrentPlace: null,
+      asks: [],
+      answerTurn,
+      mentions: [],
+      places: [],
+      assistantName: null,
+      calledAs: null,
+      searched: createSearchedLog(),
+      hasMore: false,
+      base,
+      joinedIds: [],
+      messageCount: 1,
+      route: 'quick',
+      timeZone: 'UTC',
+      isSpoken: capture.inputMode === 'voice',
+      media: null,
+    });
+  }
+  const answeredQuestion =
+    answerTurn && answersQuestion
+      ? describeAnsweredQuestion(
+          (
+            (askedBefore?.opened.questions ?? {}) as Record<
+              string,
+              { prompt: string; options: { label: string }[] }
+            >
+          )[answersQuestion.questionId],
+          leadText,
+        )
+      : null;
   const leadMessage: JoinedMessage = {
     text: leadText,
     reading: toReading(opened.reading),
   };
 
+  const answersAQuestion = answerTurn !== null;
+  const attached =
+    hasAttachments && !answersAQuestion
+      ? await openMedia({
+          firestore,
+          bucket: getStorage().bucket(),
+          base,
+          uid,
+          key,
+          captureId: claimed.captureRef.id,
+          listed: capture.attachmentIds,
+        })
+      : {
+          media: [],
+          voiceIds: [],
+          unreadable: [],
+          unopened: [],
+          refused: [],
+        };
+
   const profileRead = firestore.doc(base).get();
-  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced] =
+  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced, style] =
     await Promise.all([
       profileRead,
       firestore
@@ -738,6 +1525,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               ),
             ),
       ),
+      mode === 'rest' ? null : readStyleNotes(firestore, base, key),
     ]);
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
@@ -750,6 +1538,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     ];
   });
   const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
+  const assistantName =
+    readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
 
   const readJoined = async (): Promise<
     JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean }
@@ -808,6 +1598,120 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const timeLeft = () =>
       claimed.startedAt + CALL_BUDGET_MS - Date.now() - RESTART_MARGIN_MS;
     const combined = combineMessages(read.messages);
+    const { facts, selfFacts } =
+      mode === 'rest'
+        ? { facts: [], selfFacts: [] }
+        : await readContextFacts(
+            firestore,
+            base,
+            key,
+            combined.text,
+            (profile.data()?.selfWhoId as string | null | undefined) ?? null,
+          );
+    const selfWhoId =
+      (profile.data()?.selfWhoId as string | null | undefined) ?? null;
+    const { keyDates: contextKeyDates, upcoming } =
+      mode === 'rest'
+        ? { keyDates: [], upcoming: [] }
+        : await readContextKeyDates(firestore, base, key, {
+            text: combined.text,
+            selfWhoId,
+            todayKey: new Date(
+              getDayIn(capture.createdAt, toKnownZone(timeZone)),
+            )
+              .toISOString()
+              .slice(0, 10),
+          });
+    const projects =
+      mode === 'rest'
+        ? []
+        : await readContextProjects(
+            firestore,
+            base,
+            key,
+            MAX_CONTEXT_PROJECTS,
+          ).catch((error): Awaited<ReturnType<typeof readContextProjects>> => {
+            logger.warn('helm.sort.projectsUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          });
+    const [
+      topics,
+      hintedNotes,
+      focusedTopic,
+      procedureRecords,
+      focusedLive,
+      openRunRecords,
+    ] =
+      mode === 'rest'
+        ? [[], [], null, [], null, []]
+        : await Promise.all([
+            readContextTopics(firestore, base, key, MAX_CONTEXT_TOPICS),
+            readHintedNotes(firestore, base, key, claimed.noteIds),
+            readFocusedTopic(
+              firestore,
+              base,
+              key,
+              sanitizeScreen(capture.screen)?.topicId ?? null,
+            ),
+            readContextProcedures(firestore, base, key, MAX_CONTEXT_PROCEDURES),
+            readFocusedProcedure(
+              firestore,
+              base,
+              key,
+              sanitizeScreen(capture.screen)?.procedureId ?? null,
+            ),
+            readOpenRuns(
+              firestore,
+              base,
+              key,
+              sanitizeScreen(capture.screen)?.runId ?? null,
+            ),
+          ]);
+    const screenRunId = sanitizeScreen(capture.screen)?.runId ?? null;
+    const contextRuns = [...openRunRecords]
+      .sort(
+        (a, b) => Number(b.id === screenRunId) - Number(a.id === screenRunId),
+      )
+      .map((run) => toContextRun(run, run.id === screenRunId));
+    const trips =
+      mode !== 'rest' && procedureRecords.length > 0
+        ? await readSyncedTrips(firestore, uid, key, {
+            firstDay: getLocalDay(capture.createdAt, toKnownZone(timeZone)),
+            limit: MAX_CONTEXT_TRIPS,
+          }).catch((error): Awaited<ReturnType<typeof readSyncedTrips>> => {
+            logger.warn('helm.sort.tripsUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          })
+        : [];
+    const contextSynced = [
+      ...synced,
+      ...trips.filter((trip) => !synced.some((copy) => copy.id === trip.id)),
+    ];
+    const contextProcedures: ContextProcedure[] = procedureRecords.map(
+      (procedure) => ({
+        id: procedure.id,
+        title: procedure.title,
+        stepCount: Object.keys(procedure.steps).length,
+      }),
+    );
+    const topicDocument = topicDocumentFor(
+      combined.text,
+      focusedTopic !== null,
+    );
+    const hinted = [
+      ...hintedNotes,
+      ...(await readCitedNotes(
+        firestore,
+        base,
+        key,
+        topicDocument === 'whole' ? focusedTopic : null,
+        hintedNotes,
+      )),
+    ];
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -815,26 +1719,109 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       createdAt: capture.createdAt,
       timeZone,
       tasks,
-      synced,
+      synced: contextSynced,
       alreadyMade,
       screen,
       earlierTurns,
+      answeredQuestion,
+      facts,
+      selfFacts,
+      keyDates: contextKeyDates,
+      upcoming,
+      projects,
+      topics,
+      style,
+      notes: toContextNotes(hinted, combined.text),
+      focusedTopic: topicDocument ? focusedTopic : null,
+      topicDocument,
+      procedures: contextProcedures,
+      focusedProcedure: focusedLive
+        ? {
+            id: focusedLive.id,
+            title: focusedLive.title,
+            version: focusedLive.version,
+            blocks: blocksOf(focusedLive),
+          }
+        : null,
+      runs: contextRuns,
+      attachments: attached.media.map((item) => ({
+        alias: item.alias,
+        kind: item.kind,
+      })),
+      files: attached.media.flatMap((item) => (item.file ? [item.file] : [])),
     });
+    const topicVersions = new Map<string, number>(
+      focusedTopic && topicDocument === 'whole' && hasReviseCue(combined.text)
+        ? [[focusedTopic.id, focusedTopic.version]]
+        : [],
+    );
+    const isOtherTopicNamed =
+      hasReviseCue(combined.text) &&
+      topics.some(
+        (topic) =>
+          topic.id !== focusedTopic?.id && isNamedIn(combined.text, topic.name),
+      );
+    const procedureVersions = new Map<string, number>(
+      focusedLive && hasProcedureReviseCue(combined.text)
+        ? [[focusedLive.id, focusedLive.version]]
+        : [],
+    );
+    const procedureNames = new Map<string, string>([
+      ...procedureRecords.map((procedure): [string, string] => [
+        procedure.id,
+        procedure.title,
+      ]),
+      ...(focusedLive
+        ? [[focusedLive.id, focusedLive.title] as [string, string]]
+        : []),
+    ]);
+    const procedureTitleByTask = new Map<string, string>(
+      procedureRecords.flatMap((procedure): [string, string][] =>
+        procedure.sourceTaskId
+          ? [[procedure.sourceTaskId, procedure.title]]
+          : [],
+      ),
+    );
+    const isProcedureSearchOffered =
+      procedureRecords.length > 0 &&
+      hasProcedureReviseCue(combined.text) &&
+      (hasProcedureCue(combined.text) ||
+        procedureRecords.some(
+          (procedure) =>
+            procedure.id !== focusedLive?.id &&
+            isNamedIn(combined.text, procedure.title),
+        ));
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
       mode !== 'rest' && isQuestion(combined.text.trim())
         ? await readLiveGrants(firestore, uid)
+        : [];
+    const siteGrants =
+      mode !== 'rest' && isQuestion(combined.text.trim())
+        ? await readSiteGrants(firestore, uid)
         : [];
     const quotes = createQuoteBook();
     const searched = createSearchedLog();
     const system = [
       SYSTEM_PROMPT,
       liveGrants.length > 0 ? MAIL_PROMPT : null,
+      siteGrants.length > 0 ? APP_RECORDS_PROMPT : null,
+      topics.length > 0 ? TOPIC_PROMPT : null,
+      style ? STYLE_PROMPT : null,
+      mode !== 'rest' &&
+      (procedureRecords.length > 0 ||
+        contextRuns.length > 0 ||
+        focusedLive !== null ||
+        hasProcedureCue(combined.text))
+        ? PROCEDURE_PROMPT
+        : null,
       mode === 'rest' ? REST_PROMPT : null,
+      attached.media.length > 0 ? MEDIA_PROMPT : null,
       typeof capture.interruptedCaptureId === 'string' &&
       capture.interruptedCaptureId !== ''
         ? INTERRUPTED_PROMPT
         : null,
+      toPersonaPrompt(assistantName, profile.data()?.assistantTone),
     ]
       .filter((part) => part !== null)
       .join('\n\n');
@@ -847,15 +1834,36 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         timeZone,
         firestore,
         liveGrants,
+        siteGrants,
         quotes,
         searched,
+        topicRead: isOtherTopicNamed
+          ? {
+              topics: context.topics,
+              sections: context.sections,
+              versions: topicVersions,
+            }
+          : undefined,
+        procedureRead: isProcedureSearchOffered
+          ? {
+              procedures: context.procedures,
+              steps: context.procedureSteps,
+              versions: procedureVersions,
+              names: procedureNames,
+            }
+          : undefined,
       });
       const maxMillis = canHandOver ? QUICK_LOOP_MILLIS : LOOP_LIMITS.maxMillis;
       const loop = await provider
         .runToolLoop({
           role,
           system,
-          messages: [{ role: 'user', content: context.message }],
+          messages: [
+            {
+              role: 'user',
+              content: toMessageContent(context.message, attached.media),
+            },
+          ],
           mcpClient: mcp.client,
           terminalTool: FILE_RESULTS_TOOL,
           extraTerminalTools: canHandOver ? [HAND_OVER_TOOL] : [],
@@ -898,7 +1906,18 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       route:
         isRestart && timeLeft() < QUICK_LOOP_MILLIS + MIN_RESTART_MS
           ? 'full'
-          : pickRoute({ text: combined.text, mode }),
+          : pickRoute({
+              text: combined.text,
+              mode,
+              isAnswer: answerTurn !== null,
+              hasTopicFocus: focusedTopic !== null,
+              hasProcedureFocus: focusedLive !== null,
+              hasMedia:
+                attached.media.length +
+                  attached.voiceIds.length +
+                  attached.unreadable.length >
+                0,
+            }),
       runOn,
       reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
       isAborted: () => signal.aborted,
@@ -927,6 +1946,15 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       route: routed.route,
       quotes,
       searched,
+      topics,
+      hinted,
+      topicVersions,
+      focusedTopicId: focusedTopic?.id ?? null,
+      procedureVersions,
+      procedureNames,
+      procedureTitleByTask,
+      focusedProcedureId: focusedLive?.id ?? null,
+      focusedTaskId: screen?.focus?.id ?? null,
     };
   };
 
@@ -952,7 +1980,23 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     quietMs: SETTLE_QUIET_MS,
     maxWaitMs: SETTLE_MAX_MS,
   });
-  const { loop, context, combined, route, quotes, searched } = result;
+  const {
+    loop,
+    context,
+    combined,
+    route,
+    quotes,
+    searched,
+    topics,
+    hinted,
+    topicVersions,
+    focusedTopicId,
+    procedureVersions,
+    procedureNames,
+    procedureTitleByTask,
+    focusedProcedureId,
+    focusedTaskId,
+  } = result;
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
       loop.endedBy === 'error'
@@ -965,10 +2009,46 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reading: combined.reading,
     aliases: context.aliases,
     synced: context.synced,
+    facts: context.facts,
+    keyDates: context.keyDates,
+    topics: context.topics,
+    notes: context.notes,
+    parts: context.parts,
+    sections: context.sections,
+    topicNames: new Map(topics.map((topic) => [topic.id, topic.name])),
+    focusedTopicId,
+    topicVersions,
+    procedures: context.procedures,
+    procedureSteps: context.procedureSteps,
+    procedureNames,
+    procedureTitleByTask,
+    focusedProcedureId,
+    focusedTaskId,
+    procedureVersions,
+    runSteps: context.runSteps,
+    captureText: combined.text,
     quotes,
     alreadyMade,
     timeZone,
+    attachments: attached.media.map((item) => ({
+      alias: item.alias,
+      kind: item.kind,
+    })),
   });
+  reply.mediaDropped.forEach((code) =>
+    logger.info('helm.media.dropped', { code }),
+  );
+  reply.askDropped.forEach((code) => logger.info('helm.ask.dropped', { code }));
+  reply.noteDropped.forEach((code) =>
+    logger.info('helm.sort.noteDropped', { code }),
+  );
+  reply.topicDropped.forEach((code) =>
+    logger.info('helm.topic.dropped', { code }),
+  );
+  reply.procedureDropped.forEach((code) =>
+    logger.info('helm.procedure.dropped', { code }),
+  );
+  reply.runDropped.forEach((code) => logger.info('helm.run.dropped', { code }));
   const answer = mode === 'full' ? reply.answer : null;
   const commands = reply.commands.filter(
     (command) => decide(command) === 'automatic',
@@ -980,10 +2060,39 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     commands,
     answer,
     remember: mode === 'full' ? reply.remember : [],
+    noteFacts: mode === 'full' ? reply.noteFacts : [],
+    keyDates: mode === 'full' ? reply.keyDates : [],
+    projects: mode === 'full' ? reply.projects : [],
+    notes: mode === 'full' ? reply.notes : [],
+    topicCommands: mode === 'full' ? reply.topicCommands : [],
+    procedureCommands: mode === 'full' ? reply.procedureCommands : [],
+    runCommands: mode === 'full' ? reply.runCommands : [],
+    topics,
+    hinted,
+    media: {
+      items: attached.media,
+      decisions: reply.media,
+      letGoIds: [
+        ...attached.unopened,
+        ...attached.refused,
+        ...attached.voiceIds,
+        ...attached.unreadable.map((entry) => entry.id),
+      ],
+      unopenedCount: attached.unopened.length,
+      unreadable: attached.unreadable.map(({ name, reason }) => ({
+        name,
+        reason,
+      })),
+    },
+    captureText: combined.text,
     planDay: mode === 'full' ? reply.planDay : null,
+    setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
+    asks: mode === 'full' ? reply.asks : [],
+    answerTurn,
     mentions: reply.mentions,
     places: reply.places,
-    assistantName: combined.reading.addressedAs?.text ?? DEFAULT_ASSISTANT_NAME,
+    assistantName,
+    calledAs: combined.reading.addressedAs?.text ?? null,
     searched,
     hasMore: reply.hasMore,
     base,
@@ -995,16 +2104,107 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   });
 }
 
+/** The photos and files a turn sent, as the call read them, and what the model decided about each. */
+interface SentMedia {
+  items: OpenedMedia[];
+  decisions: MediaDecision[];
+  /** Media code lets go without a decision: refused over the cap, not opened, unreadable, or a recording. */
+  letGoIds: string[];
+  unopenedCount: number;
+  unreadable: { name: string; reason: UnreadableReason }[];
+}
+
+const toMessageContent = (
+  message: string,
+  media: OpenedMedia[],
+): string | ToolLoopContent[] =>
+  media.every((item) => item.blocks.length === 0)
+    ? message
+    : [
+        { type: 'text', text: message },
+        ...media.flatMap((item): ToolLoopContent[] =>
+          item.blocks.length === 0
+            ? []
+            : [
+                {
+                  type: 'text',
+                  text: `${item.kind === 'photo' ? 'Photo' : 'File'} ${item.alias}:`,
+                },
+                ...item.blocks,
+              ],
+        ),
+      ];
+
+const TITLE_SHOWN_CHARS = 80;
+
+/** The title each existing task or fact a keep names shows under, read in the transaction; one that is gone or won't open has none, so a keep on it is let go. */
+const readMediaTitles = async (
+  transaction: Transaction,
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  decisions: MediaDecision[],
+): Promise<Map<string, string>> => {
+  const wanted = [
+    ...new Map(
+      decisions
+        .filter((decision) => decision.decision === 'keep')
+        .flatMap((decision) => decision.targets)
+        .filter((target) => !target.ref.startsWith('$new'))
+        .map((target) => [`${target.kind}:${target.ref}`, target]),
+    ).entries(),
+  ];
+  const snapshots = await Promise.all(
+    wanted.map(([, target]) =>
+      transaction.get(
+        firestore.doc(
+          `${base}/${target.kind === 'task' ? 'tasks' : 'facts'}/${target.ref}`,
+        ),
+      ),
+    ),
+  );
+  return new Map(
+    wanted.flatMap(([mapKey, target], index): [string, string][] => {
+      const sealed = snapshots[index].get('sealed') as
+        SealedPayload | undefined;
+      if (!sealed) return [];
+      try {
+        const words = openForHelm(key, sealed);
+        const text = target.kind === 'task' ? words.title : words.statement;
+        return typeof text === 'string' && text
+          ? [[mapKey, text.slice(0, TITLE_SHOWN_CHARS)]]
+          : [];
+      } catch {
+        return [];
+      }
+    }),
+  );
+};
+
 async function writeResult(
   input: Claimed & {
     key: HelmKey;
     commands: NomosCommand[];
     answer: AnswerCommand | null;
     remember: RememberCommand[];
+    noteFacts: NoteFactCommand[];
+    keyDates: KeyDateCommand[];
+    projects: ProjectCommand[];
+    notes: CreateNoteCommand[];
+    topicCommands: TopicCommand[];
+    procedureCommands: ProcedureCommand[];
+    runCommands: RunCommand[];
+    topics: OpenTopicRecord[];
+    hinted: HintedNote[];
+    captureText: string;
     planDay: PlanDayCommand | null;
+    setCurrentPlace: SetCurrentPlaceCommand | null;
+    asks: AskCommand[];
+    answerTurn: AnswerTurn | null;
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
+    calledAs: string | null;
     searched: SearchedLog;
     hasMore: boolean;
     base: string;
@@ -1013,6 +2213,7 @@ async function writeResult(
     route: Route;
     timeZone: string;
     isSpoken: boolean;
+    media: SentMedia | null;
   },
 ): Promise<SortResult> {
   const {
@@ -1023,10 +2224,24 @@ async function writeResult(
     key,
     answer,
     remember,
+    noteFacts,
+    keyDates,
+    projects: projectCommands,
+    notes,
+    topicCommands: requestedTopicCommands,
+    procedureCommands,
+    runCommands,
+    topics: contextTopics,
+    hinted,
+    captureText,
     planDay: requestedPlanDay,
+    setCurrentPlace: requestedHome,
+    asks,
+    answerTurn,
     mentions,
     places,
     assistantName,
+    calledAs,
     searched,
     hasMore,
     base,
@@ -1036,6 +2251,7 @@ async function writeResult(
     route,
     timeZone,
     isSpoken,
+    media: sentMedia,
   } = input;
   const tasksPath = `${base}/tasks`;
   const built = answer
@@ -1043,6 +2259,22 @@ async function writeResult(
         answer,
         (code) => logger.info('helm.answer.dropped', { code }),
         searched.entries(),
+        undefined,
+        new Map(
+          hinted.map((note) => {
+            const topic = note.topicIds
+              .map((id) => contextTopics.find((entry) => entry.id === id))
+              .find((entry) => entry !== undefined);
+            return [
+              note.id,
+              {
+                title: note.title,
+                topicPath: topic?.path || null,
+                topicEmoji: topic?.emoji ?? null,
+              },
+            ];
+          }),
+        ),
       )
     : null;
   const { commands, refused: settledRefused } = settleLiveTurn(
@@ -1058,7 +2290,6 @@ async function writeResult(
       ? new Date(requestedPlanDay.date.date).toISOString().slice(0, 10)
       : null;
   const aboutId = remember[0]?.about?.id ?? null;
-  const spokenLine = built && isSpoken ? built.spoken : null;
   const targetIds = [
     ...new Set(
       commands.flatMap((command) =>
@@ -1068,26 +2299,165 @@ async function writeResult(
       ),
     ),
   ];
+  const isClashable = keyDates.some(
+    (command) =>
+      command.kind === 'setKeyDate' &&
+      (command.keyKind === 'birthday' || command.keyKind === 'passedAway'),
+  );
+  const askedRef = answerTurn
+    ? captureRef.parent.doc(answerTurn.ref.captureId)
+    : null;
+  const topicCommands = await refreshRevisions(
+    firestore,
+    {
+      uid: input.uid,
+      base,
+      key,
+      apiKey: readApiKey(),
+      captureText,
+      now: Date.now(),
+    },
+    requestedTopicCommands,
+  );
+  const touchedTopicIds = [
+    ...new Set([
+      ...notes.flatMap((note) => note.topicIds),
+      ...topicCommands.flatMap((command) =>
+        command.kind === 'createParentTopic'
+          ? command.childIds
+          : command.kind === 'moveTopic'
+            ? [command.topicId, ...(command.parentId ? [command.parentId] : [])]
+            : [command.topicId],
+      ),
+    ]),
+  ];
+  const reviseIds = [
+    ...new Set(
+      procedureCommands.flatMap((command) =>
+        command.kind === 'reviseProcedure' ? [command.procedureId] : [],
+      ),
+    ),
+  ];
+  const runProcedureIds = [
+    ...new Set(
+      runCommands.flatMap((command) =>
+        command.kind === 'startRun' ? [command.procedureId] : [],
+      ),
+    ),
+  ];
+  const tickRunIds = [
+    ...new Set(
+      runCommands.flatMap((command) =>
+        command.kind === 'tickRun'
+          ? command.steps.map((step) => step.runId)
+          : [],
+      ),
+    ),
+  ];
+  const fromTaskIds = [
+    ...new Set(
+      procedureCommands.flatMap((command) =>
+        command.kind === 'createProcedure' && command.fromTaskId
+          ? [command.fromTaskId]
+          : [],
+      ),
+    ),
+  ];
+  const needsTree = topicCommands.some(
+    (command) =>
+      command.kind === 'moveTopic' || command.kind === 'createParentTopic',
+  );
   const result = await firestore.runTransaction(async (transaction) => {
-    const [captureSnap, requestSnap, factsSnap, copySnap, ...targetSnaps] =
-      await Promise.all([
-        transaction.get(captureRef),
-        transaction.get(requestRef),
-        aboutId
-          ? transaction.get(
-              firestore
-                .collection(`${base}/facts`)
-                .where('syncedIds', 'array-contains', aboutId)
-                .limit(MAX_FACTS_READ),
-            )
-          : Promise.resolve(null),
-        aboutId
-          ? transaction.get(firestore.doc(`${base}/synced/${aboutId}`))
-          : Promise.resolve(null),
-        ...targetIds.map((id) =>
+    const [
+      captureSnap,
+      requestSnap,
+      askedSnap,
+      openAskedSnap,
+      factsSnap,
+      copySnap,
+      homeSnap,
+      profileSnap,
+      noteCountSnap,
+      topicSnaps,
+      treeSnap,
+      procedureSnaps,
+      procedureTaskSnaps,
+      runSnaps,
+      openRunsSnaps,
+      ...targetSnaps
+    ] = await Promise.all([
+      transaction.get(captureRef),
+      transaction.get(requestRef),
+      askedRef ? transaction.get(askedRef) : Promise.resolve(null),
+      asks.length > 0 || isClashable
+        ? transaction.get(
+            captureRef.parent
+              .where('status', '==', 'needsYou')
+              .limit(MAX_OPEN_ASKED_READ),
+          )
+        : Promise.resolve(null),
+      aboutId
+        ? transaction.get(
+            firestore
+              .collection(`${base}/facts`)
+              .where('syncedIds', 'array-contains', aboutId)
+              .limit(MAX_FACTS_READ),
+          )
+        : Promise.resolve(null),
+      aboutId
+        ? transaction.get(firestore.doc(`${base}/synced/${aboutId}`))
+        : Promise.resolve(null),
+      requestedHome
+        ? transaction.get(
+            firestore
+              .collection(`${base}/places`)
+              .where('isHome', '==', true)
+              .limit(1),
+          )
+        : Promise.resolve(null),
+      requestedHome || noteFacts.length > 0 || keyDates.length > 0
+        ? transaction.get(firestore.doc(base))
+        : Promise.resolve(null),
+      notes.length > 0
+        ? transaction.get(firestore.collection(`${base}/notes`).count())
+        : Promise.resolve(null),
+      Promise.all(
+        touchedTopicIds.map((id) =>
+          transaction.get(firestore.doc(`${base}/topics/${id}`)),
+        ),
+      ),
+      needsTree
+        ? transaction.get(
+            firestore
+              .collection(`${base}/topics`)
+              .select('parentId', 'depth')
+              .limit(MAX_CONTEXT_TOPICS),
+          )
+        : Promise.resolve(null),
+      Promise.all(
+        [...new Set([...reviseIds, ...runProcedureIds])].map((id) =>
+          transaction.get(firestore.doc(`${base}/procedures/${id}`)),
+        ),
+      ),
+      Promise.all(
+        fromTaskIds.map((id) =>
           transaction.get(firestore.doc(`${tasksPath}/${id}`)),
         ),
-      ]);
+      ),
+      Promise.all(
+        tickRunIds.map((id) =>
+          transaction.get(firestore.doc(`${base}/procedureRuns/${id}`)),
+        ),
+      ),
+      Promise.all(
+        runProcedureIds.map((id) =>
+          transaction.get(procedureOpenRunsQuery(firestore, base, id)),
+        ),
+      ),
+      ...targetIds.map((id) =>
+        transaction.get(firestore.doc(`${tasksPath}/${id}`)),
+      ),
+    ]);
     const answered = readAnswered(requestSnap.data(), captureRef.id);
     if (answered) return answered;
     const copyHash: unknown = copySnap?.get('contentHash');
@@ -1114,8 +2484,30 @@ async function writeResult(
     ) {
       return null;
     }
+    const now = Date.now();
+    const turn = answerTurn
+      ? planAnswerTurn({
+          asked: toAskedCapture(
+            key,
+            askedSnap?.data() as CaptureDoc | undefined,
+          ),
+          questionId: answerTurn.ref.questionId,
+          value: answerTurn.value,
+          words: answerTurn.words,
+          by: capture.inputMode === 'voice' ? 'voice' : 'tap',
+          turnCaptureId: captureRef.id,
+          now,
+        })
+      : null;
+    const isStale = turn?.kind === 'stale';
+    const reply = isStale ? null : built;
+    const asksNow = isStale ? [] : asks;
     const people =
-      commands.length > 0
+      (commands.length > 0 ||
+        noteFacts.length > 0 ||
+        keyDates.length > 0 ||
+        projectCommands.length > 0) &&
+      !isStale
         ? await readPeople(transaction, {
             firestore,
             base,
@@ -1124,10 +2516,52 @@ async function writeResult(
             mentions,
             places,
             assistantName,
+            calledAs,
             timeZone,
             capturedAt: capture.createdAt,
           })
         : undefined;
+    const existingProjects =
+      (projectCommands.length > 0 ||
+        runCommands.some(
+          (command) => command.kind === 'startRun' && command.projectRef,
+        ) ||
+        commands.some(
+          (command) => command.kind === 'createTask' && command.projectRef,
+        )) &&
+      !isStale
+        ? await readActiveProjectsIn(transaction, firestore, base, key)
+        : [];
+    const existingFacts =
+      noteFacts.length > 0 && !isStale
+        ? await readSubjectFacts(transaction, firestore, base, key)
+        : [];
+    const selfWhoId = (profileSnap?.get('selfWhoId') as string | null) ?? null;
+    const keyDateRead =
+      keyDates.length > 0 && !isStale
+        ? await readKeyDateState(transaction, firestore, base, key, {
+            keyDates,
+            selfWhoId,
+            candidateWhoIds: (people?.known ?? []).map((who) => who.id),
+            momentWhoIds: namedMomentWhoIds({
+              commands: keyDates,
+              whoIdOf: new Map(
+                people
+                  ? matchWho({
+                      mentions: people.mentions,
+                      known: people.known,
+                      assistantNames: people.assistantNames,
+                    }).flatMap((match, index): [string, string][] =>
+                      match.kind === 'match'
+                        ? [[people.mentions[index].ref, match.id]]
+                        : [],
+                    )
+                  : [],
+              ),
+              selfWhoId,
+            }),
+          })
+        : null;
     const joinedRefs = (ids: string[]) =>
       ids.map((id) => captureRef.parent.doc(id));
     const listedNow = [
@@ -1175,11 +2609,180 @@ async function writeResult(
         ];
       }),
     );
-    const now = Date.now();
+    const mediaIds = sentMedia
+      ? [
+          ...new Set([
+            ...sentMedia.items.map((item) => item.id),
+            ...sentMedia.letGoIds,
+          ]),
+        ]
+      : [];
+    const [mediaSnaps, mediaTitles] = await Promise.all([
+      Promise.all(
+        mediaIds.map((id) =>
+          transaction.get(firestore.doc(`${base}/media/${id}`)),
+        ),
+      ),
+      sentMedia && !isStale
+        ? readMediaTitles(
+            transaction,
+            firestore,
+            base,
+            key,
+            sentMedia.decisions,
+          )
+        : Promise.resolve(new Map<string, string>()),
+    ]);
+    const stillReceived = new Set(
+      mediaSnaps
+        .filter(
+          (snapshot) =>
+            snapshot.get('status') === 'received' &&
+            snapshot.get('sourceCaptureId') === captureRef.id,
+        )
+        .map((snapshot) => snapshot.id),
+    );
     const executionRef = firestore.collection(`${base}/executions`).doc();
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
-    const plan = planWrites({
-      commands,
+    const homeDoc = profileSnap?.exists ? homeSnap?.docs[0] : undefined;
+    const homeWords =
+      requestedHome && !isStale
+        ? planSetCurrentPlace({
+            profileId: firestore.doc(base).id,
+            home: homeDoc
+              ? {
+                  id: homeDoc.id,
+                  name: readPlaceName(key, homeDoc.get('sealed')),
+                }
+              : null,
+            previous: toCurrentPlace(profileSnap?.get('currentPlace')),
+            saidAt: capture.createdAt,
+            now,
+            timeZone,
+          })
+        : null;
+    const home = typeof homeWords === 'string' ? null : homeWords;
+    const homeRefusal = typeof homeWords === 'string' ? homeWords : null;
+    const topicStates = new Map<string, NoteTopicState>(
+      topicSnaps.flatMap((snapshot): [string, NoteTopicState][] => {
+        const data = snapshot.data();
+        const topic = data ? openTopicRecord(key, snapshot.id, data) : null;
+        return topic
+          ? [
+              [
+                snapshot.id,
+                {
+                  name: topic.name,
+                  path:
+                    contextTopics.find((entry) => entry.id === snapshot.id)
+                      ?.path ?? topic.name,
+                  docState: topic.docState,
+                  pendingNoteIds: topic.pendingNoteIds,
+                },
+              ],
+            ]
+          : [];
+      }),
+    );
+    const keptNotes: KeptNote[] = hinted;
+    const liveTopics = new Map<string, LiveTopic>(
+      topicSnaps.flatMap((snapshot): [string, LiveTopic][] => {
+        const data = snapshot.data();
+        const topic = data ? openLiveTopic(key, snapshot.id, data) : null;
+        return topic ? [[snapshot.id, topic]] : [];
+      }),
+    );
+    const treeRows = new Map<
+      string,
+      { parentId: string | null; depth: number }
+    >(
+      (treeSnap?.docs ?? []).map((doc) => [
+        doc.id,
+        {
+          parentId:
+            typeof doc.get('parentId') === 'string'
+              ? (doc.get('parentId') as string)
+              : null,
+          depth: Number(doc.get('depth') ?? 1),
+        },
+      ]),
+    );
+    const topicTree: PlacedTopic[] = [
+      ...new Map(
+        [
+          ...contextTopics.map((topic): PlacedTopic => ({
+            id: topic.id,
+            name: topic.name,
+            parentId: topic.parentId,
+            depth: topic.path.split(' › ').length,
+          })),
+          ...[...liveTopics.values()].map((topic): PlacedTopic => ({
+            id: topic.id,
+            name: topic.name,
+            parentId: topic.parentId,
+            depth: topic.depth,
+          })),
+        ].map((topic): [string, PlacedTopic] => [
+          topic.id,
+          { ...topic, ...treeRows.get(topic.id) },
+        ]),
+      ).values(),
+    ];
+    const liveProcedures = new Map<string, LiveProcedure | null>(
+      procedureSnaps.map((snapshot) => {
+        const data = snapshot.data();
+        return [
+          snapshot.id,
+          data ? openLiveProcedure(key, snapshot.id, data) : null,
+        ];
+      }),
+    );
+    const liveRuns = new Map(
+      runSnaps.map((snapshot) => {
+        const data = snapshot.data();
+        return [snapshot.id, data ? openLiveRun(key, snapshot.id, data) : null];
+      }),
+    );
+    const tickedProcedureIds = [...liveRuns.values()].flatMap((run) =>
+      run ? [run.procedureId] : [],
+    );
+    const stillThere = await readLiveProcedureIds(
+      firestore,
+      base,
+      tickedProcedureIds,
+      (refs) => transaction.getAll(...refs),
+    );
+    const goneProcedureIds = new Set(
+      tickedProcedureIds.filter((id) => !stillThere.has(id)),
+    );
+    const procedureTasks = new Map(
+      procedureTaskSnaps.map((snapshot) => {
+        const data = snapshot.data();
+        return [snapshot.id, data ? openTaskSteps(key, data) : null];
+      }),
+    );
+    const written = planWrites({
+      notes: isStale ? [] : notes,
+      topics: topicStates,
+      keptNotes,
+      noteCount: noteCountSnap?.data().count ?? 0,
+      commands: isStale ? [] : commands,
+      topicCommands: isStale ? [] : topicCommands,
+      procedureCommands: isStale ? [] : procedureCommands,
+      liveProcedures,
+      procedureTasks,
+      runCommands: isStale ? [] : runCommands,
+      liveRuns,
+      openRuns: openRunDocs(
+        key,
+        openRunsSnaps.flatMap((snapshot) => snapshot.docs),
+      ),
+      goneProcedureIds,
+      liveTopics,
+      topicTree,
+      capturedAt: capture.createdAt,
+      projectCommands: isStale ? [] : projectCommands,
+      existingProjects,
       existing,
       captureId: captureRef.id,
       executionId: executionRef.id,
@@ -1187,11 +2790,115 @@ async function writeResult(
       seal,
       newId: () => firestore.collection(tasksPath).doc().id,
       people,
+      noteFacts: isStale ? [] : noteFacts,
+      captureText,
+      existingFacts,
+      timeZone,
+      selfWhoId,
+      media:
+        sentMedia && !isStale
+          ? ({
+              decisions: sentMedia.decisions,
+              items: new Map(
+                sentMedia.items
+                  .filter((item) => stillReceived.has(item.id))
+                  .map((item) => [
+                    item.alias,
+                    { id: item.id, kind: item.kind, words: item.words },
+                  ]),
+              ),
+              letGoIds: sentMedia.letGoIds.filter((id) =>
+                stillReceived.has(id),
+              ),
+              titles: mediaTitles,
+              executionId: executionRef.id,
+            } satisfies MediaInput)
+          : undefined,
+      keyDates: isStale ? [] : keyDates,
+      keyDateIndex: keyDateRead?.index ?? undefined,
+      isKeyDateIndexUnreadable:
+        keyDateRead !== null && keyDateRead.index === null,
+      existingKeyDates: keyDateRead?.existing,
+      whoCounts: keyDateRead?.whoCounts,
+      momentCounts: keyDateRead?.momentCounts,
+      keptKeyDates: keyDateRead?.kept,
+      storedMoments: keyDateRead?.moments,
+      openClashIds: new Set(
+        (openAskedSnap?.docs ?? []).flatMap((doc) =>
+          openClashIdsOf(toAskedCapture(key, doc.data() as CaptureDoc)),
+        ),
+      ),
     });
-    const isFiling = plan.effects.length > 0;
-    if (!isFiling && commands.length > 0 && mode === 'full' && !built) {
+    const withHome = home
+      ? {
+          ...written,
+          effectRefs: [...written.effectRefs, home.ref],
+          effects: [...written.effects, home.effect],
+        }
+      : written;
+    const plan = sentMedia
+      ? {
+          ...withHome,
+          notKept: [
+            ...withHome.notKept,
+            ...(sentMedia.unopenedCount > 0
+              ? [buildPhotosNotOpenedLine(sentMedia.unopenedCount)]
+              : []),
+            ...sentMedia.unreadable.map((entry) =>
+              buildFileNotReadLine(entry.name, entry.reason),
+            ),
+          ],
+        }
+      : withHome;
+    const isFiling = plan.effects.length > 0 || plan.lines.length > 0;
+    if (
+      !isFiling &&
+      commands.length > 0 &&
+      mode === 'full' &&
+      !built &&
+      !answerTurn
+    ) {
       throw new SortFailure('nothingToFile');
     }
+    const askPlan = planAsks({
+      asks: asksNow,
+      openAsked: openAskedSnap
+        ? countOpenAsked(
+            openAskedSnap.docs.map((doc) => doc.get('questionState')),
+          )
+        : 0,
+      now,
+      newId: () => crypto.randomUUID(),
+    });
+    const questions = [...plan.questions, ...askPlan.questions];
+    const firstQuestion = isSpoken ? (questions[0]?.spoken ?? null) : null;
+    const versionNumbers = await Promise.all(
+      [...new Set(plan.topicVersions.map((version) => version.topicId))].map(
+        async (topicId): Promise<[string, number[]]> => [
+          topicId,
+          await readVersionNumbers(
+            transaction,
+            firestore.doc(`${base}/topics/${topicId}`),
+          ),
+        ],
+      ),
+    );
+
+    const procedureVersionNumbers = new Map<string, number[]>(
+      await Promise.all(
+        [
+          ...new Set(
+            plan.procedureVersions.map((version) => version.procedureId),
+          ),
+        ].map(async (id): Promise<[string, number[]]> => [
+          id,
+          await readProcedureVersionNumbers(
+            transaction,
+            firestore.doc(`${base}/procedures/${id}`),
+          ),
+        ]),
+      ),
+    );
 
     if (isFiling) {
       plan.creates.forEach(({ id, data }) =>
@@ -1209,23 +2916,150 @@ async function writeResult(
       plan.placeCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/places/${id}`), data),
       );
-      transaction.create(
-        executionRef,
-        buildExecution(plan, {
-          commands,
-          captureId: captureRef.id,
+      plan.factCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/facts/${id}`), data),
+      );
+      [...plan.factConfirms, ...plan.factDisputes].forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/facts/${id}`), data),
+      );
+      plan.projectCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/projects/${id}`), data),
+      );
+      plan.projectUpdates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/projects/${id}`), data),
+      );
+      plan.keyDateCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/keyDates/${id}`), data),
+      );
+      plan.keyDateUpdates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/keyDates/${id}`), data),
+      );
+      plan.keyDateDeletes.forEach((id) =>
+        transaction.delete(firestore.doc(`${base}/keyDates/${id}`)),
+      );
+      plan.noteCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/notes/${id}`), data),
+      );
+      plan.mediaKept.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/media/${id}`), data),
+      );
+      const versionsWritten = new Map<string, number[]>(versionNumbers);
+      plan.topicVersions.forEach((version) => {
+        const live = liveTopics.get(version.topicId);
+        if (!live) return;
+        const newVersion = writeTopicVersionIn(transaction, {
+          topicRef: firestore.doc(`${base}/topics/${version.topicId}`),
+          currentVersion: version.currentVersion,
+          existingVersions: versionsWritten.get(version.topicId) ?? [],
+          currentWords: live.words,
+          sections: version.sections,
+          reason: version.reason,
+          noteIds: version.noteIds,
+          sourceCaptureId: version.sourceCaptureId,
+          executionId: version.executionId,
+          changeSummary: version.changeSummary,
+          requestQuote: version.requestQuote,
+          parentName: version.parentName,
+          docState: version.docState,
+          pendingNoteIds: version.pendingNoteIds,
+          topicFields: version.topicFields,
           now,
           seal,
-          messageCount,
-          inputMode: isSpoken ? 'voice' : capture.inputMode,
-          timeZone,
+        });
+        versionsWritten.set(version.topicId, [
+          ...(versionsWritten.get(version.topicId) ?? []),
+          newVersion,
+        ]);
+      });
+      plan.procedureCreates.forEach(({ id, doc, version1 }) => {
+        const ref = firestore.doc(`${base}/procedures/${id}`);
+        transaction.create(ref, doc);
+        transaction.create(ref.collection('versions').doc('1'), version1);
+      });
+      plan.procedureVersions.forEach((planned) =>
+        writeProcedureVersionIn(transaction, {
+          procedureRef: firestore.doc(
+            `${base}/procedures/${planned.procedureId}`,
+          ),
+          planned,
+          existingVersions:
+            procedureVersionNumbers.get(planned.procedureId) ?? [],
+          now,
+          seal,
         }),
       );
+      plan.runCreates.forEach(({ id, doc }) =>
+        transaction.create(firestore.doc(`${base}/procedureRuns/${id}`), doc),
+      );
+      plan.runTicks.forEach(({ runId, stepIds }) =>
+        transaction.update(firestore.doc(`${base}/procedureRuns/${runId}`), {
+          ...Object.fromEntries(
+            stepIds.map((stepId) => [`stepState.${stepId}.doneAt`, now]),
+          ),
+          lastEditedAt: now,
+        }),
+      );
+      plan.topicPlacements.forEach(({ id, parentId, depth }) =>
+        transaction.update(firestore.doc(`${base}/topics/${id}`), {
+          parentId,
+          depth,
+        }),
+      );
+      plan.topicCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/topics/${id}`), data),
+      );
+      plan.topicVersionCreates.forEach(({ topicId, id, data }) =>
+        transaction.create(
+          firestore.doc(`${base}/topics/${topicId}/versions/${id}`),
+          data,
+        ),
+      );
+      plan.topicUpdates.forEach(({ id, docState, addPendingIds }) =>
+        transaction.update(firestore.doc(`${base}/topics/${id}`), {
+          docState,
+          pendingNoteIds: FieldValue.arrayUnion(...addPendingIds),
+        }),
+      );
+      if (plan.keyDateIndex && keyDateRead?.index) {
+        writeIndexIn(transaction, firestore, base, {
+          byWho: plan.keyDateIndex.byWho,
+          rebuiltAt: keyDateRead.index.rebuiltAt,
+          existingIds: keyDateRead.index.existingIds,
+          now,
+          seal,
+        });
+      }
+      if (home) transaction.update(firestore.doc(base), home.data);
+      transaction.create(
+        executionRef,
+        buildExecution(
+          { ...plan, questions },
+          {
+            homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
+            questionRef: answerTurn?.ref ?? null,
+            commands,
+            captureId: captureRef.id,
+            now,
+            seal,
+            messageCount,
+            inputMode: isSpoken ? 'voice' : capture.inputMode,
+            timeZone,
+          },
+        ),
+      );
     }
-    const answerExecutionRef = built
+    plan.mediaLetGo.forEach(({ id, data }) =>
+      transaction.update(firestore.doc(`${base}/media/${id}`), data),
+    );
+    const spokenAnswer = reply && isSpoken ? reply.spoken : null;
+    const spokenLine =
+      spokenAnswer && !isFiling && firstQuestion
+        ? `${spokenAnswer} ${firstQuestion}`
+        : spokenAnswer;
+    const answerExecutionRef = reply
       ? firestore.collection(`${base}/executions`).doc()
       : null;
-    if (built && answerExecutionRef) {
+    if (reply && answerExecutionRef) {
       const factRef = firestore.collection(`${base}/facts`).doc();
       const factWrite = noted.fact
         ? buildFactWrite({
@@ -1242,7 +3076,7 @@ async function writeResult(
         answerExecutionRef,
         buildAnswerExecution({
           captureId: captureRef.id,
-          answer: built.answer,
+          answer: reply.answer,
           spoken: spokenLine,
           now,
           seal,
@@ -1251,17 +3085,49 @@ async function writeResult(
         }),
       );
     }
+    const quietLine = isStale
+      ? ALREADY_ANSWERED_LINE
+      : askPlan.isDeferred
+        ? ASK_DEFERRED_LINE
+        : isFiling
+          ? null
+          : (homeRefusal ??
+            firstQuestion ??
+            (reply
+              ? null
+              : plan.notKept.length > 0
+                ? plan.notKept.join('. ')
+                : answerTurn && commands.length > 0
+                  ? NOTHING_CHANGED_LINE
+                  : answerTurn && turn?.kind === 'apply'
+                    ? buildAnswerKeptLine(answerTurn.words)
+                    : null));
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,
       hasPlanDay: planDayKey !== null,
+      hasHome: requestedHome !== null,
+      hasFacts:
+        noteFacts.length +
+          keyDates.length +
+          notes.length +
+          topicCommands.length +
+          procedureCommands.length +
+          runCommands.length +
+          written.projectCreates.length +
+          written.projectUpdates.length >
+          0 && !isStale,
+      hasMedia:
+        !isStale &&
+        !!sentMedia &&
+        sentMedia.items.length + sentMedia.letGoIds.length > 0,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:
-        built && answerExecutionRef
+        reply && answerExecutionRef
           ? {
               executionId: answerExecutionRef.id,
-              sealed: built.answer,
+              sealed: reply.answer,
               spoken: spokenLine
                 ? { text: spokenLine, priority: 'reply', builtBy: 'code' }
                 : null,
@@ -1272,8 +3138,20 @@ async function writeResult(
       opened: openForHelm(key, capture.sealed),
       questionState: capture.questionState ?? {},
       executionIds: capture.executionIds ?? [],
-      questions: isFiling ? plan.questions : [],
+      questions,
+      hadAsks: asksNow.length > 0,
+      isAnswerTurn: answerTurn !== null,
+      line: quietLine,
     });
+    if (askedRef && turn?.kind === 'apply') {
+      transaction.update(askedRef, {
+        questionState: turn.questionState,
+        sealed: seal(turn.sealed),
+        status: turn.status,
+        ...(turn.status === 'sorted' &&
+          askedSnap?.get('status') !== 'sorted' && { sortedAt: now }),
+      });
+    }
     if (mode === 'full') {
       sortedJoined.forEach((snapshot) =>
         transaction.update(snapshot.ref, {
@@ -1292,7 +3170,7 @@ async function writeResult(
         ? {
             joinedCaptureIds: joinedIds,
             turnLeadId: null,
-            quotedSourceKeys: built?.quotedSourceKeys ?? [],
+            quotedSourceKeys: reply?.quotedSourceKeys ?? [],
             planDayKey,
           }
         : {}),
@@ -1320,7 +3198,10 @@ async function writeResult(
       settled.status,
       isFiling ? executionRef.id : (answerExecutionRef?.id ?? null),
       releasedJoined.map((snapshot) => snapshot.id),
-      { hasAnswer: built !== null, spoken: spokenLine },
+      {
+        hasAnswer: reply !== null,
+        spoken: isSpoken ? (spokenLine ?? quietLine) : null,
+      },
     );
     transaction.set(requestRef, {
       result: sorted,
@@ -1332,7 +3213,7 @@ async function writeResult(
       status: settled.status,
       commands: commands.length,
       effects: plan.effects.length,
-      hasAnswer: built !== null,
+      hasAnswer: reply !== null,
       hasFact: noted.fact !== null,
       ...plan.counts,
     });
@@ -1350,10 +3231,15 @@ const readInput = (data: unknown) => {
     captureId?: unknown;
     requestKey?: unknown;
     mode?: unknown;
+    noteIds?: unknown;
   };
   const mode = input.mode ?? 'full';
+  const noteIds = input.noteIds ?? [];
   if (
     (mode !== 'full' && mode !== 'rest') ||
+    !Array.isArray(noteIds) ||
+    noteIds.length > MAX_HINT_NOTES ||
+    !noteIds.every((id) => typeof id === 'string' && ID_RE.test(id)) ||
     typeof input.captureId !== 'string' ||
     typeof input.requestKey !== 'string' ||
     !ID_RE.test(input.captureId) ||
@@ -1365,8 +3251,15 @@ const readInput = (data: unknown) => {
     captureId: input.captureId,
     requestKey: input.requestKey,
     mode: mode as SortMode,
+    noteIds: noteIds as string[],
   };
 };
+
+/** The hinted notes as the model sees them: bodies only when the turn is a question, titles alone otherwise. */
+export const toContextNotes = (hinted: HintedNote[], text: string) =>
+  isQuestion(text.trim())
+    ? hinted
+    : hinted.map(({ id, title }) => ({ id, title }));
 
 export const sortHelmCapture = onCall(
   {
@@ -1382,61 +3275,88 @@ export const sortHelmCapture = onCall(
     ],
   },
   async (request): Promise<SortResult> => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
+    try {
+      return await sortRequest(request);
+    } finally {
+      const uid = request.auth?.uid;
+      if (uid) {
+        await sweepExpiredMedia({
+          firestore: getFirestore(),
+          bucket: getStorage().bucket(),
+          uid,
+          now: Date.now(),
+        }).catch((error: unknown) =>
+          logger.warn('helm.media.sweepUnavailable', {
+            cause: error instanceof Error ? error.name : 'error',
+          }),
+        );
+      }
     }
-    const startedAt = Date.now();
-    const { captureId, requestKey, mode } = readInput(request.data);
-    const firestore = getFirestore();
-    const captureRef = firestore.doc(
-      `apps/helm/users/${uid}/captures/${captureId}`,
-    );
-    const requestRef = firestore.doc(
-      `apps/helm/server/${uid}/sortRequests/${requestKey}`,
-    );
-
-    const [stored, snapshot] = await Promise.all([
-      requestRef.get(),
-      captureRef.get(),
-    ]);
-    const answered = readAnswered(stored.data(), captureId);
-    if (answered) return answered;
-    const early = snapshot.data() as CaptureDoc | undefined;
-    if (!early) throw new HttpsError('not-found', 'This capture is gone.');
-    if (mode === 'rest' && !hasOpenMoreToSort(early.questionState)) {
-      throw new HttpsError(
-        'failed-precondition',
-        'There is nothing left to sort here.',
-      );
-    }
-    const answer = readEarlyAnswer(early, Date.now(), mode);
-    if (answer) return answer;
-
-    const keyring = loadKeyringOrFail();
-    const claim = await claimCapture(firestore, captureRef, Date.now(), mode);
-    if (!claim) return toResult('received');
-    if (claim === 'failed' || claim === 'needsYou') return toResult(claim);
-
-    return sortClaimed({
-      firestore,
-      uid,
-      keyring,
-      captureRef,
-      requestRef,
-      mode,
-      startedAt,
-      ...claim,
-    }).catch((error: unknown) => {
-      if (error instanceof HttpsError) throw error;
-      const failure =
-        error instanceof SortFailure
-          ? error
-          : new SortFailure(
-              error instanceof NomosReplyError ? error.code : 'unexpected',
-            );
-      logger.warn('helm.sort.failed', { code: failure.code });
-      return failClaim(firestore, captureRef, claim.claimId, failure, {}, mode);
-    });
   },
 );
+
+async function sortRequest(request: CallableRequest): Promise<SortResult> {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
+  }
+  const startedAt = Date.now();
+  const { captureId, requestKey, mode, noteIds } = readInput(request.data);
+  const firestore = getFirestore();
+  const captureRef = firestore.doc(
+    `apps/helm/users/${uid}/captures/${captureId}`,
+  );
+  const requestRef = firestore.doc(
+    `apps/helm/server/${uid}/sortRequests/${requestKey}`,
+  );
+
+  const [stored, snapshot] = await Promise.all([
+    requestRef.get(),
+    captureRef.get(),
+  ]);
+  const answered = readAnswered(stored.data(), captureId);
+  if (answered) return answered;
+  const early = snapshot.data() as CaptureDoc | undefined;
+  if (!early) throw new HttpsError('not-found', 'This capture is gone.');
+  if (mode === 'rest' && !hasOpenMoreToSort(early.questionState)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'There is nothing left to sort here.',
+    );
+  }
+  const answer = readEarlyAnswer(early, Date.now(), mode);
+  if (answer) return answer;
+
+  const keyring = loadKeyringOrFail();
+  const claim = await claimCapture(firestore, captureRef, Date.now(), mode);
+  if (!claim) return toResult('received');
+  if (claim === 'failed' || claim === 'needsYou') return toResult(claim);
+
+  return sortClaimed({
+    firestore,
+    uid,
+    keyring,
+    captureRef,
+    requestRef,
+    mode,
+    startedAt,
+    noteIds,
+    ...claim,
+  }).catch((error: unknown) => {
+    if (error instanceof HttpsError) throw error;
+    const failure =
+      error instanceof SortFailure
+        ? error
+        : new SortFailure(
+            error instanceof NomosReplyError ? error.code : 'unexpected',
+          );
+    logger.warn('helm.sort.failed', { code: failure.code });
+    if (failure.code === 'unexpected' && error instanceof Error) {
+      logger.error('helm.sort.unexpected', {
+        name: error.name,
+        at: error.stack?.split('\n').slice(1, 4).join(' | ') ?? null,
+      });
+    }
+    return failClaim(firestore, captureRef, claim.claimId, failure, {}, mode);
+  });
+}

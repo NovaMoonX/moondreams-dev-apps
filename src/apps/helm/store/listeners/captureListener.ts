@@ -75,16 +75,40 @@ const isOption = (value: unknown) => {
   );
 };
 
-/** Keeps the questions that ask which person or place, in the shape the card draws; any other question is left to its own surface. */
+const SHAPES = [
+  'pickOne',
+  'pickSeveral',
+  'yesNo',
+  'freeText',
+  'dateTime',
+  'pickRecord',
+  'number',
+];
+
+const toRecordKinds = (value: unknown): HelmQuestion['recordKinds'] =>
+  Array.isArray(value)
+    ? value.filter(
+        (kind): kind is 'who' | 'place' => kind === 'who' || kind === 'place',
+      )
+    : [];
+
+/** Opens the questions a turn asked, in the shape the cards draw, filling what an older one lacks; one that is not shaped like the contract is left out. */
 const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
   Object.fromEntries(
     Object.entries(
       typeof value === 'object' && value !== null ? value : {},
     ).flatMap(([id, entry]) => {
       const question = entry as Partial<HelmQuestion> | null;
+      const isKnown =
+        question?.kind === 'whichPerson' ||
+        question?.kind === 'whichPlace' ||
+        question?.kind === 'whichIsTrue' ||
+        question?.kind === 'whichTopic' ||
+        question?.kind === 'groupTopics' ||
+        question?.kind === 'asked';
       return typeof question === 'object' &&
         question !== null &&
-        (question.kind === 'whichPerson' || question.kind === 'whichPlace') &&
+        isKnown &&
         typeof question.prompt === 'string' &&
         Array.isArray(question.options) &&
         question.options.every(isOption)
@@ -93,11 +117,21 @@ const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
               id,
               {
                 ...question,
+                builtBy: question.kind === 'asked' ? 'model' : 'code',
+                shape: SHAPES.includes(question.shape ?? '')
+                  ? question.shape
+                  : 'pickOne',
                 options: question.options.map((option) => ({
                   ...option,
                   detail: option.detail ?? null,
                   ref: option.ref ?? null,
                 })),
+                allowsSomethingElse: question.allowsSomethingElse ?? false,
+                noneOption: question.noneOption ?? false,
+                recordKinds: toRecordKinds(question.recordKinds),
+                dateMode: question.dateMode ?? null,
+                number: question.number ?? null,
+                aboutRef: question.aboutRef ?? null,
                 answer: question.answer ?? null,
               } as HelmQuestion,
             ],
@@ -125,7 +159,9 @@ async function openCapture(
     inputMode: data.inputMode ?? 'typed',
     sttProvider: data.sttProvider ?? null,
     interruptedCaptureId: data.interruptedCaptureId ?? null,
+    answersQuestion: data.answersQuestion ?? null,
     ttsProvider: data.ttsProvider ?? null,
+    arrivedVia: data.arrivedVia === 'dropBox' ? 'dropBox' : 'direct',
     medium: data.medium ?? 'web',
     sessionId: data.sessionId ?? entry.id,
     turnIndex: data.turnIndex ?? 0,
@@ -141,8 +177,13 @@ async function openCapture(
     executionIds: data.executionIds ?? [],
     turnLeadId: toLeadId(data.turnLeadId),
     joinedCaptureIds: toIds(data.joinedCaptureIds),
+    attachmentIds: toIds(data.attachmentIds),
     seenAt: data.seenAt ?? null,
     quotedSourceKeys: toIds(data.quotedSourceKeys),
+    answerSavedNoteId:
+      typeof data.answerSavedNoteId === 'string'
+        ? data.answerSavedNoteId
+        : null,
     whoIds: toIds(data.whoIds),
     placeIds: toIds(data.placeIds),
     planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,
@@ -159,6 +200,8 @@ async function openCapture(
       reading: normalizeReading(payload.reading),
       answer: normalizeAnswer(payload.answer),
       questions: toQuestions(payload.questions),
+      line:
+        typeof payload.spoken?.text === 'string' ? payload.spoken.text : null,
       isUnreadable: false,
     };
   } catch {
@@ -168,6 +211,7 @@ async function openCapture(
       reading: EMPTY_READING,
       answer: null,
       questions: {},
+      line: null,
       isUnreadable: true,
     };
   }

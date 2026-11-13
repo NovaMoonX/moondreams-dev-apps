@@ -17,6 +17,8 @@ import {
   normalizeSaid,
   toWakeSpellings,
 } from '../../src/apps/helm/utils/voicePhrases.ts';
+import type { HelmQuestion } from '../../src/apps/helm/types.ts';
+import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
 import { readWakePhrase } from '../../src/lib/speech/speechText.ts';
 
 const NOW = Date.UTC(2026, 10, 9, 20, 0);
@@ -143,6 +145,7 @@ const commands: NomosCommand[] = [
     isUrgent: false,
     whoRefs: [],
     placeRefs: [],
+    projectRef: null,
   },
 ];
 const sealedFor = (inputMode: string) => {
@@ -230,6 +233,34 @@ assert.equal(
   wake('Hey Nomos', 'Pepper'),
   undefined,
   'the old name no longer wakes it',
+);
+
+const dayQuestion: HelmQuestion = {
+  kind: 'asked',
+  builtBy: 'model',
+  shape: 'dateTime',
+  prompt: 'When is it due?',
+  options: [],
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: 'date',
+  number: null,
+  aboutRef: null,
+  answer: null,
+};
+const readDay = (text: string) =>
+  matchSpokenAnswer(text, dayQuestion, { now: NOW, timeZone: ZONE });
+assert.equal(readDay('Friday')?.kind, 'answer', 'a day on its own is placed');
+assert.equal(
+  readDay('on Friday please')?.kind,
+  'answer',
+  'a day with filler words is placed',
+);
+assert.equal(
+  readDay('remind me Friday to call Dana'),
+  null,
+  'a day inside another request is not an answer',
 );
 
 console.log(
