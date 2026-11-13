@@ -218,4 +218,44 @@ assert.deepEqual(
   'a store that sells everything is never caught by a kind-of-place rule',
 );
 
+const safewayOnVisa = rule({
+  merchantKey: 'safeway',
+  merchantName: 'Safeway',
+  cardId: 'visa',
+  target: 'dining',
+});
+assert.deepEqual(
+  findNextHomes([safeway], [safeway, safewayOnVisa, groceriesKind], live)
+    .filter(({ cardId }) => cardId === 'visa')
+    .map(({ byKind }) => byKind),
+  [[]],
+  'a store rule left on a card outranks every kind-of-place rule there',
+);
+const groceriesAsk = rule({
+  category: 'FOOD_AND_DRINK_GROCERIES',
+  target: RULE_VARIES,
+});
+assert.deepEqual(
+  findNextHomes([safeway], [safeway, groceriesAsk], live)[0]?.byKind.map(
+    ({ id }) => id,
+  ),
+  [groceriesAsk.id],
+  'a kind-of-place rule that asks still wins those purchases, so it is named',
+);
+const groceriesOnVisa = rule({
+  category: 'FOOD_AND_DRINK_GROCERIES',
+  cardId: 'visa',
+  target: 'dining',
+});
+assert.deepEqual(
+  findNextHomes([safeway], [safeway, groceriesKind, groceriesOnVisa], live).map(
+    ({ cardId, byKind }) => [cardId, byKind.map(({ id }) => id)],
+  ),
+  [
+    ['visa', [groceriesOnVisa.id]],
+    [null, [groceriesKind.id]],
+  ],
+  'on a card with its own kind-of-place rule, that one wins; other cards keep the general one',
+);
+
 console.log('runwayRuleTakeover: all checks passed');

@@ -143,7 +143,19 @@ export function useRuleNames() {
       const hidden = lines.length - shown.length;
       const isAsk = (rule: OpenRule) => rule.target === RULE_VARIES;
       const sentences = (keep: (rule: OpenRule) => boolean) =>
-        targets.filter(keep).map((rule) => describeOne(rule));
+        targets.filter(keep).map((rule) => ({
+          sentence: describeOne(rule),
+          short:
+            rule.merchantName ??
+            (rule.category === null
+              ? `everything on ${getCardLabel(rule.cardId) ?? 'a card'}`
+              : [
+                  getCategoryLabel(rule.category),
+                  rule.cardId === null ? '' : `on ${getCardLabel(rule.cardId)}`,
+                ]
+                  .filter(Boolean)
+                  .join(' ')),
+        }));
       const kindLines = [
         ...new Map(
           nextHomes
@@ -152,24 +164,17 @@ export function useRuleNames() {
         ).values(),
       ]
         .slice(0, 2)
-        .map((rule) =>
-          RULE_WORDS.kindFirst(
-            [
-              getCategoryLabel(rule.category ?? ''),
-              rule.cardId === null ? '' : `on ${onYourCard(rule.cardId)}`,
-            ]
-              .filter(Boolean)
-              .join(' '),
-            getEnvelopeName(rule.target),
-          ),
-        );
-      const noLongerAsking = [
-        ...new Set(
-          nextHomes
-            .filter(({ removed, by }) => removed.target === RULE_VARIES && by)
-            .map(({ removed }) => removed.merchantName ?? describeOne(removed)),
-        ),
-      ];
+        .map((rule) => {
+          const kind = [
+            getCategoryLabel(rule.category ?? ''),
+            rule.cardId === null ? '' : `on ${onYourCard(rule.cardId)}`,
+          ]
+            .filter(Boolean)
+            .join(' ');
+          if (isAsk(rule)) return RULE_WORDS.kindAsks(kind);
+          if (isEnded(rule)) return RULE_WORDS.kindWaits(kind);
+          return RULE_WORDS.kindFirst(kind, getEnvelopeName(rule.target));
+        });
       const capitalise = (line: string) =>
         `${line.charAt(0).toUpperCase()}${line.slice(1)}`;
       return {
@@ -185,11 +190,7 @@ export function useRuleNames() {
                 index === 0 ? RULE_WORDS.afterThis(line) : capitalise(line),
               )),
           ...(hidden > 0 ? [RULE_WORDS.takeoverMore(hidden)] : []),
-          ...(noLongerAsking.length > 0
-            ? [RULE_WORDS.noAskAnymore(joinNames(noLongerAsking))]
-            : []),
           ...kindLines,
-          RULE_WORDS.placedStay,
         ].join(' '),
       };
     },

@@ -5501,6 +5501,12 @@ export const CATEGORY_PRIMARIES = [
   'OTHER',
 ] as const;
 
+/** A rule as its full sentence, and as the short name a long list uses. */
+export interface RuleNaming {
+  sentence: string;
+  short: string;
+}
+
 const ruleCount = (count: number) =>
   count === 1 ? '1 rule' : `${count} rules`;
 
@@ -5547,10 +5553,12 @@ export const RULE_WORDS = {
   takeover: (what: string, envelope: string) =>
     `${envelope} will catch ${what}.`,
   takeoverWait: (what: string) => `${what} will wait in Needs a home.`,
-  placedStay: 'Purchases already placed stay where they are.',
   kindFirst: (kind: string, envelope: string) =>
-    `If the bank labels one as ${kind}, it still goes to ${envelope}.`,
-  noAskAnymore: (names: string) => `${names} won't ask first anymore.`,
+    `A purchase the bank files under ${kind} still goes to ${envelope}.`,
+  kindAsks: (kind: string) =>
+    `A purchase the bank files under ${kind} still asks which envelope.`,
+  kindWaits: (kind: string) =>
+    `A purchase the bank files under ${kind} still waits in Needs a home.`,
   everythingElseOn: (card: string) => `everything else on ${card}`,
   afterThis: (line: string) => `After this, ${line}`,
   takeoverMore: (count: number) =>
@@ -5633,23 +5641,24 @@ export const RULE_WORDS = {
   deleteConfirmTitle: (count: number) =>
     count === 1 ? 'Remove this rule?' : `Remove ${ruleCount(count)}?`,
   deleteConfirmBody: (kinds: {
-    live: readonly string[];
-    ask: readonly string[];
-    paused: readonly string[];
+    live: readonly RuleNaming[];
+    ask: readonly RuleNaming[];
+    paused: readonly RuleNaming[];
   }) => {
-    const isCounted =
+    const isShort =
       kinds.live.length + kinds.ask.length + kinds.paused.length > 3;
-    const name = (sentences: readonly string[]) =>
-      isCounted
-        ? ruleCount(sentences.length)
-        : joinNames(sentences.map((sentence) => `“${sentence}”`));
-    const isOne = (sentences: readonly string[]) => sentences.length === 1;
+    const name = (rules: readonly RuleNaming[]) =>
+      isShort
+        ? `Your ${rules.length === 1 ? 'rule' : 'rules'} for ${joinNames(rules.map(({ short }) => short))}`
+        : joinNames(rules.map(({ sentence }) => `“${sentence}”`));
+    const isOne = (rules: readonly RuleNaming[]) => rules.length === 1;
     return [
       kinds.live.length > 0 &&
         `${name(kinds.live)} will stop sending purchases on ${isOne(kinds.live) ? 'its' : 'their'} own.`,
       kinds.ask.length > 0 && `${name(kinds.ask)} will stop asking.`,
       kinds.paused.length > 0 &&
-        `${name(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused already, so ${isOne(kinds.paused) ? 'its' : 'their'} purchases wait in Needs a home for now.`,
+        `${name(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused already, so right now ${isOne(kinds.paused) ? 'its' : 'their'} purchases wait in Needs a home.`,
+      'Purchases already placed stay where they are.',
     ]
       .filter(Boolean)
       .join(' ');
