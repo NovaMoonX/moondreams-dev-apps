@@ -204,7 +204,7 @@ function PayItemsView({
       PAY_ITEMS_WORDS.anyPay
     );
   };
-  const hasHeadings = hasPaidFirst || groups.length > 1;
+  const hasHeadings = hasPaidFirst || groups.length > 1 || options.length > 1;
   const rowCount = pairings.length + tied.length;
   const isSearchable = rowCount >= RUNWAY_SEARCH_THRESHOLD;
   const filter = isSearchable ? query : '';
@@ -243,6 +243,7 @@ function PayItemsView({
     itemKind: Kind,
     target: { itemId: string; name: string },
     pay: FundingPay | null,
+    title: string,
   ) => {
     const bulk = bulkOf(itemKind);
     const plans = bulk.plan([target], (payload) => {
@@ -264,7 +265,10 @@ function PayItemsView({
         },
       };
     });
-    const failed = await bulk.run(plans, { clearsPins: itemKind === 'bill' });
+    const failed = await bulk.run(plans, {
+      clearsPins: itemKind === 'bill',
+      title,
+    });
     return failed !== null && failed.length === 0;
   };
 
@@ -301,7 +305,11 @@ function PayItemsView({
             hasChevron
             icon={<ChevronsUp />}
             label={PAY_ITEMS_WORDS.payFirst}
-            subtitle={PAY_ITEMS_WORDS.payFirstSub}
+            subtitle={
+              member.pay.monthDay !== null && options.length > 1
+                ? PAY_ITEMS_WORDS.payFirstDaySub(toDayWord(member.pay.monthDay))
+                : PAY_ITEMS_WORDS.payFirstSub
+            }
             onClick={() =>
               onEditPairings([
                 ...pairings,
@@ -329,6 +337,9 @@ function PayItemsView({
                   member.kind,
                   { itemId: member.itemId, name: payload.name },
                   null,
+                  member.kind === 'bill'
+                    ? PAY_ITEMS_WORDS.stoppedBill(payload.name)
+                    : PAY_ITEMS_WORDS.stoppedOther(payload.name),
                 ),
               )
             }
@@ -372,6 +383,10 @@ function PayItemsView({
                   payLineId: picked.fundedBy.payLineId,
                   monthDay: picked.fundedBy.monthDay,
                 },
+                PAY_ITEMS_WORDS.added(
+                  candidate.name,
+                  picked.label.replace(/^The /, 'the '),
+                ),
               ),
             )
           }
@@ -402,6 +417,7 @@ function PayItemsView({
             payLineId: only.fundedBy.payLineId,
             monthDay: only.fundedBy.monthDay,
           },
+          PAY_ITEMS_WORDS.added(candidate.name, name),
         ),
       );
     };
@@ -505,12 +521,16 @@ function PayItemsView({
           );
         })}
       </div>
-      {isRepeating && options.length > 0 && (
+      {(!isRepeating || options.length > 0) && (
         <Button
           type='button'
           variant='secondary'
           className='w-full'
           onClick={() => {
+            if (!isRepeating) {
+              onEditPairings([...pairings]);
+              return;
+            }
             setAddQuery('');
             setStep({ name: 'add' });
           }}
