@@ -62,13 +62,10 @@ export function useRuleNames() {
         removed.cardId === null && by.cardId !== null
           ? ` on ${getCardLabel(by.cardId) ?? 'a card'}`
           : '';
-      return RULE_WORDS.takeover(
-        describeRule(by, {
-          envelope: getEnvelopeName(by.target),
-          card: getCardLabel(by.cardId),
-        }),
-        `${subject}${onCard}`,
-      );
+      const what = `${subject}${onCard}`;
+      if (by.target === RULE_VARIES) return RULE_WORDS.takeoverAsk(what);
+      if (needsNewHome(by, liveIds)) return RULE_WORDS.takeoverWait(what);
+      return RULE_WORDS.takeover(what, getEnvelopeName(by.target));
     },
     getEnvelopeName,
     getCardLabel,

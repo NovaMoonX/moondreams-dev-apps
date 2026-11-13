@@ -5508,7 +5508,7 @@ export const RULE_WORDS = {
   title: 'Rules',
   doorLabel: 'Rules',
   doorNeedsHome: (count: number) =>
-    `${ruleCount(count)} ${count === 1 ? 'needs' : 'need'} a new home`,
+    `${ruleCount(count)} ${count === 1 ? 'needs' : 'need'} a new envelope`,
   empty: 'No rules yet. Make one from a purchase with “Always do this”.',
   loading: 'Getting your rules.',
   anyCard: 'Any card',
@@ -5548,8 +5548,12 @@ export const RULE_WORDS = {
   removeConfirm: (sentence: string) =>
     `“${sentence}” will stop sending purchases on its own. Purchases it already placed stay where they are.`,
   removeConfirmButton: 'Remove the rule',
-  takeover: (rule: string, what: string) =>
-    `After this, ${what} will follow your rule “${rule}”.`,
+  takeover: (what: string, envelope: string) =>
+    `After this, ${what} will go to ${envelope}.`,
+  takeoverAsk: (what: string) =>
+    `After this, ${what} will ask which envelope each time.`,
+  takeoverWait: (what: string) =>
+    `After this, ${what} will wait in Needs a home.`,
   takeoverMore: (count: number) =>
     `${ruleCount(count)} more will be caught by a broader rule.`,
   removed: 'Rule removed',
@@ -5580,7 +5584,7 @@ export const RULE_WORDS = {
   changeMade: (sentence: string) => `Rule made: ${sentence}.`,
   changeChanged: (sentence: string) => `Rule changed: ${sentence}.`,
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
-  homeHeading: 'Needs a new home',
+  homeHeading: 'Needs a new envelope',
   goalNow: (name: string) => `${name} is a goal now, so this rule is paused`,
   landingTitle: (count: number) =>
     count === 1
@@ -5660,7 +5664,7 @@ export const RULE_WORDS = {
     `Put ${ruleCount(count)} back as ${count === 1 ? 'it was' : 'they were'}.`,
   changeUndoRemoved: (count: number) => `Made ${ruleCount(count)} again.`,
   homeRowTitle: (count: number) =>
-    `${count} shop ${count === 1 ? 'rule needs' : 'rules need'} a new home`,
+    `${count} shop ${count === 1 ? 'rule needs' : 'rules need'} a new envelope`,
   homeRowSub: 'Paused until you pick one',
 } as const;
 

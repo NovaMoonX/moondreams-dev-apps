@@ -76,7 +76,7 @@ interface ConvertItemViewProps {
   onSetHeld: () => void;
 }
 
-/** The view an envelope's or goal's sheet swaps in to make it the other kind: what is asked (a goal's target), what changes, and the shop rules that will need a new home. */
+/** The view an envelope's or goal's sheet swaps in to make it the other kind: what is asked (a goal's target), what changes, and the shop rules that will need a new envelope. */
 function ConvertItemView({
   itemId,
   source,

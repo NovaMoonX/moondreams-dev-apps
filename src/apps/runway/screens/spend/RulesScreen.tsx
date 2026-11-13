@@ -22,7 +22,10 @@ import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useLongPress } from '@/hooks/useLongPress';
 import InlineNotice from '@/components/InlineNotice';
-import { NOTICE_QUIET_CLASSES } from '@/components/noticeActionClasses';
+import {
+  NOTICE_ACTION_CLASSES,
+  NOTICE_QUIET_CLASSES,
+} from '@/components/noticeActionClasses';
 import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -263,7 +266,14 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     landing === null
       ? 0
       : landing.ruleIds.filter((id) => homelessIds.has(id)).length;
-  const landedIds = new Set(landing?.ruleIds ?? []);
+  const landedHomeless =
+    landing === null ? [] : landing.ruleIds.filter((id) => homelessIds.has(id));
+  const isLanded = landedHomeless.length > 0;
+  const pickLanded = () => {
+    selection.start();
+    selection.toggle(landedHomeless);
+    setIsPicking(true);
+  };
   const isNothingPicked = selected.length === 0;
   const canAsk = (rule: OpenRule) =>
     rule.merchantKey !== null && rule.target !== RULE_VARIES;
@@ -290,9 +300,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
 
   const renderRow = (rule: OpenRule, isCardLeftOut: boolean) => {
     const sentence = describe(rule, isCardLeftOut);
-    const isExplained = landingCount > 0 && landedIds.has(rule.id);
-    const detail =
-      homelessIds.has(rule.id) && !isExplained ? describeHome(rule) : undefined;
+    const detail = homelessIds.has(rule.id) ? describeHome(rule) : undefined;
     return (
       <ItemRow
         key={rule.id}
@@ -560,6 +568,17 @@ function RulesScreen({ onClose }: RulesScreenProps) {
                 title={RULE_WORDS.landingTitle(landingCount)}
               >
                 <p>{RULE_WORDS.landing(landing.name, landingCount)}</p>
+                {!selection.isActive && (
+                  <Button
+                    type='button'
+                    variant='primary'
+                    size='sm'
+                    className={join('mt-2 mr-3', NOTICE_ACTION_CLASSES.info)}
+                    onClick={pickLanded}
+                  >
+                    {RULE_WORDS.bulkSend}
+                  </Button>
+                )}
                 {!isUndoTried && (
                   <Button
                     type='button'
@@ -592,24 +611,27 @@ function RulesScreen({ onClose }: RulesScreenProps) {
                     </Button>
                   }
                 />
-                <div className='flex flex-wrap items-center gap-2'>
-                  <Pill
-                    isThin
-                    isSelected={false}
-                    onClick={() => selection.toggle(allShownIds)}
-                  >
-                    {isAllPicked ? RULE_WORDS.clearAll : RULE_WORDS.selectAll}
-                  </Pill>
-                </div>
+                {!isLanded && (
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <Pill
+                      isThin
+                      isSelected={false}
+                      onClick={() => selection.toggle(allShownIds)}
+                    >
+                      {isAllPicked ? RULE_WORDS.clearAll : RULE_WORDS.selectAll}
+                    </Pill>
+                  </div>
+                )}
               </div>
             )}
-            {rules.length >= RUNWAY_SEARCH_THRESHOLD && (
-              <SearchInput
-                value={query}
-                onChange={setQuery}
-                placeholder={RULE_WORDS.search}
-              />
-            )}
+            {rules.length >= RUNWAY_SEARCH_THRESHOLD &&
+              !(isLanded && selection.isActive) && (
+                <SearchInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder={RULE_WORDS.search}
+                />
+              )}
             {groups.length === 0 ? (
               <p className='text-muted-foreground text-sm'>
                 {RULE_WORDS.noMatch}
