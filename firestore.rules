@@ -235,9 +235,15 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    // A profile written before themes has no key; a written one is null or a palette Helm ships.
+    function isHelmTheme(data) {
+      return !('theme' in data) || data.theme == null || data.theme in ['chestnut', 'plum', 'teal', 'indigo'];
+    }
+
     // A profile is private to one person and only the server deletes it, so a stray client can't half-delete a Helm.
     match /apps/helm/users/{uid} {
-      allow read, create, update: if isHelmOwner(uid);
+      allow read: if isHelmOwner(uid);
+      allow create, update: if isHelmOwner(uid) && isHelmTheme(request.resource.data);
     }
 
     // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out.
@@ -253,13 +259,59 @@ service cloud.firestore {
       allow read, create, delete: if isHelmOwner(uid);
     }
 
+    // A procedure's steps and their groups are sealed; the readable part is its shape, so the number of steps and groups stays capped.
+    match /apps/helm/users/{uid}/procedures/{procedureId} {
+      function isProcedureShape(data) {
+        return data.keys().hasAll(['stepState', 'groupOrder', 'version', 'createdBy', 'sealed'])
+          && data.stepState is map && data.stepState.size() <= 60
+          && data.groupOrder is list && data.groupOrder.size() <= 12
+          && data.version is int && data.version >= 1
+          && data.createdBy in ['person', 'nomos']
+          && data.sealed is map;
+      }
+      allow read, delete: if isHelmOwner(uid);
+      allow create, update: if isHelmOwner(uid) && isProcedureShape(request.resource.data);
+    }
+
+    // A procedure's versions are history: the owner reads, adds and trims them, and nobody rewrites one.
+    match /apps/helm/users/{uid}/procedures/{procedureId}/versions/{version} {
+      allow read, create, delete: if isHelmOwner(uid);
+    }
+
+    // A run is one go through a procedure: its words are sealed, the readable part is its place and ticks, so its size stays capped and it attaches only to a project or a synced copy.
+    match /apps/helm/users/{uid}/procedureRuns/{runId} {
+      function isRunShape(data) {
+        return data.keys().hasAll(['procedureId', 'procedureVersion', 'attachedTo', 'dueOn', 'stepState', 'groupOrder', 'startedAt', 'finishedAt', 'createdBy', 'executionId', 'lastEditedAt', 'sealed'])
+          && data.procedureId is string
+          && data.procedureVersion is int && data.procedureVersion >= 1
+          && (data.attachedTo == null
+            || (data.attachedTo is map
+              && data.attachedTo.keys().hasOnly(['kind', 'id'])
+              && data.attachedTo.kind in ['project', 'synced']
+              && data.attachedTo.id is string && data.attachedTo.id.size() <= 128))
+          && (data.dueOn == null || data.dueOn is int)
+          && data.stepState is map && data.stepState.size() <= 80
+          && data.groupOrder is list && data.groupOrder.size() <= 12
+          && data.startedAt is int
+          && (data.finishedAt == null || data.finishedAt is int)
+          && data.createdBy in ['person', 'nomos']
+          && data.sealed is map;
+      }
+      allow read, delete: if isHelmOwner(uid);
+      allow create, update: if isHelmOwner(uid) && isRunShape(request.resource.data);
+    }
+
     // A medium's document names sealed bytes in Storage and what they show on; the words in it stay sealed, so the shape checked here is the readable part.
     match /apps/helm/users/{uid}/media/{mediaId} {
       function isMediumShape(data) {
-        return data.kind == 'photo'
+        return data.kind in ['photo', 'pdf', 'voiceNote', 'markdown']
           && data.role in ['attachment', 'photo']
           && data.status in ['uploading', 'received', 'kept', 'discarded']
-          && data.mimeType is string && data.mimeType.matches('image/.*') && data.mimeType.size() <= 100
+          && data.mimeType is string && data.mimeType.size() <= 100
+          && ((data.kind == 'photo' && data.mimeType.matches('image/.*'))
+            || (data.kind == 'pdf' && data.mimeType == 'application/pdf')
+            || (data.kind == 'voiceNote' && data.mimeType.matches('audio/.*'))
+            || (data.kind == 'markdown' && data.mimeType in ['text/markdown', 'text/plain']))
           && data.hasThumb is bool
           && data.attachedTo is list && data.attachedTo.size() <= 10
           && data.createdAt is int
@@ -267,6 +319,24 @@ service cloud.firestore {
       }
       allow read, delete: if isHelmOwner(uid);
       allow create, update: if isHelmOwner(uid) && isMediumShape(request.resource.data);
+    }
+
+    // A style profile's words are sealed; the readable part is its scope, who it is about and how much writing it rests on.
+    match /apps/helm/users/{uid}/style/{styleId} {
+      function isStyleShape(data) {
+        return data.keys().hasOnly(['scope', 'audienceWhoId', 'learnedFrom', 'sampleCount', 'personEditedAt', 'createdAt', 'lastEditedAt', 'sealed'])
+          && data.keys().hasAll(['scope', 'audienceWhoId', 'learnedFrom', 'sampleCount', 'personEditedAt', 'createdAt', 'lastEditedAt', 'sealed'])
+          && data.scope in ['general', 'occasion', 'audience']
+          && (data.audienceWhoId == null || (data.audienceWhoId is string && data.audienceWhoId.size() <= 128))
+          && data.learnedFrom is list && data.learnedFrom.size() <= 2
+          && data.sampleCount is int && data.sampleCount >= 0
+          && (data.personEditedAt == null || data.personEditedAt is int)
+          && data.createdAt is int
+          && (data.lastEditedAt == null || data.lastEditedAt is int)
+          && data.sealed is map;
+      }
+      allow read, delete: if isHelmOwner(uid);
+      allow create, update: if isHelmOwner(uid) && isStyleShape(request.resource.data);
     }
 
     // Copies of what another app shares are read by their owner and written only by the platform's functions; `synced` stays out of the list above on purpose.
@@ -375,7 +445,7 @@ service cloud.firestore {
     // (apps/runway/server, apps/runway/keyChecks) have no match, so only Functions reach them.
     // Versions, changes, moves and a day's records are append-only: their ids come from their own
     // fields, so writing the same record twice is refused rather than overwriting it.
-    // `links` and `accountBalances` are written only by Functions (bank data), and a card's or account's `linkId`
+    // `links`, `accountBalances` and `cardStatements` are written only by Functions (bank data), and a card's or account's `linkId`
     // is set only by `attachRunwayAccounts`: a client creates them unlinked and never changes it. A purchase brought
     // in from a bank (`source` 'link', a `dedupeKey`) is made only by Functions: a client creates purchases with
     // neither and never changes either. `releasedCharges` notes (a pending charge the bank dropped) are made only by
@@ -383,7 +453,7 @@ service cloud.firestore {
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
-        && !(document[0] in ['links', 'accountBalances', 'releasedCharges'])
+        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'releasedCharges'])
         && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null)
         && (document[0] != 'purchases' || (request.resource.data.get('dedupeKey', null) == null && request.resource.data.get('source', null) != 'link'));
     }
@@ -397,7 +467,7 @@ service cloud.firestore {
         && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules']
         && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
         && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null)));
-      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'releasedCharges'];
+      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges'];
     }
 
     match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {

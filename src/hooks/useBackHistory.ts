@@ -241,6 +241,24 @@ const useHistoryLayer = (
   }, [isOpen, kind, dialogId]);
 };
 
+/** Marks the current entry as a step this page load pushed, so Back may pop it; a mark an earlier load left never counts. */
+export function markHistoryStep(
+  flag: string,
+  state: Record<string, unknown> = window.history.state ?? {},
+) {
+  window.history.replaceState({ ...state, [flag]: LOAD_ID }, '');
+}
+
+/** Whether the current entry is a step this page load marked with `markHistoryStep`. */
+export function isHistoryStep(flag: string) {
+  const state: unknown = window.history.state;
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    (state as Record<string, unknown>)[flag] === LOAD_ID
+  );
+}
+
 /** A screen opened over a layer about to close would take that layer's history entry, so Back would skip the layer; a plain entry pushed first keeps it. Only when the URL (or `address`, pushed with it) carries `param`; every kept entry is written here, so it carries this load's stamp. */
 export function keepEntryFor(param: string, address?: URL) {
   const search = address?.search ?? window.location.search;

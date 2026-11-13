@@ -245,9 +245,144 @@ export const describeTopicChanges = (count: number) =>
     ? null
     : plural(count, 'Changed a topic', `Changed ${count} topics`);
 
+/** "Made a procedure" or "Made 2 procedures", then "Changed a procedure" or "Changed 2 procedures". */
+export const describeProcedureChanges = (made: number, changed: number) =>
+  [
+    made === 0
+      ? null
+      : plural(made, 'Made a procedure', `Made ${made} procedures`),
+    changed === 0
+      ? null
+      : plural(changed, 'Changed a procedure', `Changed ${changed} procedures`),
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ') || null;
+
+/** "New procedure: Packing for a work trip · 12 steps". */
+export const buildProcedureMadeLine = (title: string, stepCount: number) =>
+  `New procedure: ${title} · ${plural(stepCount, '1 step', `${stepCount} steps`)}`;
+
+/** "Changed Packing for a work trip: added the laptop charger". */
+export const buildProcedureChangedLine = (title: string, summary: string) =>
+  `Changed ${title}: ${summary === '' ? 'Updated the steps' : summary}`;
+
+export const buildProcedureRacedLine = (title: string) =>
+  `${title} changed while this was made · Ask again`;
+
+export const buildProcedureUnchangedLine = (title: string) =>
+  `${title} is already like that`;
+
+export const buildProcedureFullLine = (title: string, max: number) =>
+  `${title} can hold ${max} steps · Nothing changed`;
+
+export const buildProcedureTruncatedLine = (max: number) =>
+  `Kept the first ${max} steps`;
+
+export const buildProcedureLostLine = (title: string) =>
+  `${title} not changed · It would have lost steps. Ask again`;
+
+export const buildProcedureNoStepsLine = () =>
+  'No steps to make a procedure from';
+
+/** "Packing for a work trip is already a procedure". */
+export const buildProcedureExistsLine = (title: string) =>
+  `${title} is already a procedure`;
+
+export const buildProcedureRoomLine = () =>
+  'Too much to save in one go · Ask again for the procedure';
+
+export const buildProcedureGroupsLine = (name: string, max: number) =>
+  `${name} wasn't kept as a group · ${max} groups at most`;
+
+export const buildProcedureGoneLine = () => 'That procedure is gone';
+
+/** "Started a run" or "Started 2 runs", then "Ticked a step" or "Ticked 2 steps". */
+export const describeRunChanges = (started: number, ticked: number) =>
+  [
+    started === 0
+      ? null
+      : plural(started, 'Started a run', `Started ${started} runs`),
+    ticked === 0
+      ? null
+      : plural(ticked, 'Ticked a step', `Ticked ${ticked} steps`),
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ') || null;
+
+/** "Started Packing for a work trip for Pacific Northwest Weekend", or "Started Packing for a work trip" for a run of its own. */
+export const buildRunStartedLine = (title: string, label: string | null) =>
+  label === null ? `Started ${title}` : `Started ${title} for ${label}`;
+
+/** "Ticked Phone charger on Packing for a work trip", "Ticked Phone charger and Passport on …", "Ticked Phone charger, Passport and 1 more on …". */
+export const buildRunTickedLine = (title: string, stepTexts: string[]) => {
+  const [first = '', second = ''] = stepTexts;
+  const named =
+    stepTexts.length <= 2
+      ? stepTexts.join(' and ')
+      : `${first}, ${second} and ${stepTexts.length - 2} more`;
+  return `Ticked ${named} on ${title}`;
+};
+
+/** "Packing for a work trip is already running for Pacific Northwest Weekend". */
+export const buildRunExistsLine = (title: string, label: string | null) =>
+  label === null
+    ? `${title} is already running`
+    : `${title} is already running for ${label}`;
+
+export const buildRunNoStepsLine = (title: string) =>
+  `${title} has no steps to run yet`;
+
+export const buildRunRoomLine = () =>
+  'Too much to save in one go · Ask again for the run';
+
+export const buildRunAlreadyTickedLine = () => 'Already ticked';
+
+export const buildRunGoneLine = () => 'That run is finished or gone';
+
 /** "Saved a note" or "Saved 2 notes", for the summary of a turn that kept some. */
 export const describeNotes = (count: number) =>
   count === 0 ? null : plural(count, 'Saved a note', `Saved ${count} notes`);
+
+/** The line for photos that would not open: "Couldn't open one photo". */
+export const buildPhotosNotOpenedLine = (count: number) =>
+  count === 1 ? "Couldn't open one photo" : `Couldn't open ${count} photos`;
+
+/** The line for a file that would not read, naming it and saying what to do about that reason. */
+export const buildFileNotReadLine = (
+  name: string,
+  reason: 'locked' | 'unreadable' | 'tooManyPages' | 'tooLarge',
+) =>
+  ({
+    tooLarge: `Didn't read ${name}: the files in this turn were too big together. Send it on its own.`,
+    locked: `${name} is locked. Unlock it and send it again.`,
+    tooManyPages: `${name} has too many pages to read. Send the pages that matter.`,
+    unreadable: `Couldn't read ${name}. It may be protected or scanned too faintly.`,
+  })[reason];
+
+/** What a turn kept of what it was sent: "Kept the photo", "Kept 2 photos", "Kept the PDF" or, for mixed kinds, "Kept 3 files"; each one's own line under the card names where it went. */
+export const describeKeptPhotos = (
+  titles: string[],
+  kinds: string[] = titles.map(() => 'photo'),
+) => {
+  if (titles.length === 0) return null;
+  const word = kinds.every((kind) => kind === kinds[0])
+    ? ({ photo: 'photo', pdf: 'PDF' } as Record<string, string>)[kinds[0]]
+    : undefined;
+  return titles.length === 1
+    ? `Kept the ${word ?? 'file'}`
+    : `Kept ${titles.length} ${word ? `${word}s` : 'files'}`;
+};
+
+/** "Kept {file} as a note", for a Markdown file kept as a note. */
+export const buildFileNoteLine = (name: string) => `Kept ${name} as a note`;
+
+/** "Made the topic {name} from {file}". */
+export const buildFileTopicLine = (topic: string, name: string) =>
+  `Made the topic ${topic} from ${name}`;
+
+/** Said when a file was too long to become a topic. */
+export const FILE_TOPIC_TOO_LONG_LINE =
+  'Kept as a note; too long to make a topic';
 
 /** "Saved a note." or "Saved a note in Kitchen." */
 export const buildSpokenNote = (topicName: string | null) =>

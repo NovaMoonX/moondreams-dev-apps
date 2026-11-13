@@ -1,10 +1,12 @@
 import AnswerSources from '@apps/helm/components/home/AnswerSources';
 import QuoteLine from '@apps/helm/components/home/QuoteLine';
+import RecordGroup from '@apps/helm/components/home/RecordGroup';
 import SearchedLine from '@apps/helm/components/home/SearchedLine';
 import GeneralKnowledgeCard from '@apps/helm/components/home/GeneralKnowledgeCard';
 import SaveToKnowledge from '@apps/helm/components/home/SaveToKnowledge';
 import { HELM_COPY } from '@apps/helm/constants';
-import type { CaptureAnswer } from '@apps/helm/types';
+import { readConnectorAppId } from '@/lib/connections/contract';
+import type { AnswerQuote, CaptureAnswer } from '@apps/helm/types';
 
 interface AnswerCardProps {
   answer: CaptureAnswer;
@@ -22,6 +24,17 @@ function AnswerCard({ answer, isInset = false, capture }: AnswerCardProps) {
     (scope === 'both' && answer.searched.length === 0
       ? null
       : HELM_COPY.answerNothingInRecords);
+  const quotes = fromRecords === null ? [] : answer.quotes;
+  const appGroups = quotes
+    .filter((quote) => readConnectorAppId(quote.connectorId) !== null)
+    .reduce(
+      (groups, quote) =>
+        groups.set(quote.connectorId, [
+          ...(groups.get(quote.connectorId) ?? []),
+          quote,
+        ]),
+      new Map<string, AnswerQuote[]>(),
+    );
   return (
     <div
       className={
@@ -44,11 +57,17 @@ function AnswerCard({ answer, isInset = false, capture }: AnswerCardProps) {
           {fromRecords !== null && (
             <AnswerSources sources={answer.sources} canOpen={isInset} />
           )}
-          {((fromRecords !== null && answer.quotes.length > 0) ||
-            answer.searched.length > 0) && (
-            <div className='divide-border border-border flex flex-col divide-y border-t'>
-              {(fromRecords === null ? [] : answer.quotes).map((quote) => (
-                <QuoteLine key={quote.id} quote={quote} />
+          {(quotes.length > 0 || answer.searched.length > 0) && (
+            <div className='flex flex-col gap-3.5 pt-1'>
+              {quotes
+                .filter(
+                  (quote) => readConnectorAppId(quote.connectorId) === null,
+                )
+                .map((quote) => (
+                  <QuoteLine key={quote.id} quote={quote} />
+                ))}
+              {[...appGroups].map(([connectorId, group]) => (
+                <RecordGroup key={connectorId} quotes={group} />
               ))}
               {answer.searched.map((searched) => (
                 <SearchedLine

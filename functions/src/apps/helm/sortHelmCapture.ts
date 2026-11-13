@@ -9,14 +9,19 @@ import {
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import {
+  HttpsError,
+  onCall,
+  type CallableRequest,
+} from 'firebase-functions/v2/https';
+import { getStorage } from 'firebase-admin/storage';
 
 import { createAnthropicProvider } from '../../ai/providers/anthropic.js';
-import type { ModelProvider } from '../../ai/modelProvider.js';
+import type { ModelProvider, ToolLoopContent } from '../../ai/modelProvider.js';
 import { getUsageCost } from '../../ai/models.js';
 import type { Keyring } from '../../appKeys/keyring.js';
 import type { SealedPayload } from '../../appKeys/seal.js';
-import { isRunningInEmulator } from '../../emulator.js';
+import { isForcedFixture, isRunningInEmulator } from '../../emulator.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from './getHelmKey.js';
 import {
   openForHelm,
@@ -32,7 +37,7 @@ import {
   restFailureFields,
   settleAttempts,
 } from './sortAttempts.js';
-import type { LiveGrant } from '../../connections/liveRouter.js';
+import type { LiveGrant, SiteLiveGrant } from '../../connections/liveRouter.js';
 import {
   readContextKeyDates,
   readIndexIn,
@@ -52,7 +57,31 @@ import {
   type HintedNote,
   type OpenTopicRecord,
 } from './noteStore.js';
+import {
+  blocksOf,
+  openLiveProcedure,
+  openTaskSteps,
+  readContextProcedures,
+  readFocusedProcedure,
+  readProcedureVersionNumbers,
+  writeProcedureVersionIn,
+  type LiveProcedure,
+} from './procedureStore.js';
+import {
+  openLiveRun,
+  openRunDocs,
+  procedureOpenRunsQuery,
+  readLiveProcedureIds,
+  readOpenRuns,
+  toContextRun,
+} from './runStore.js';
 import { createHelmMcpServer } from './mcp/server.js';
+import {
+  openMedia,
+  type OpenedMedia,
+  type UnreadableReason,
+} from './media/openMedia.js';
+import { sweepExpiredMedia } from './media/sweepMedia.js';
 import {
   createQuoteBook,
   createSearchedLog,
@@ -64,6 +93,8 @@ import {
   topicDocumentFor,
   type ContextFact,
   type ContextFocusedTopic,
+  type ContextProcedure,
+  MAX_CONTEXT_PROCEDURES,
   type ContextSelfFact,
   type ContextTask,
   type EarlierTurn,
@@ -76,6 +107,7 @@ import {
   type AskCommand,
   type CaptureReading,
   type CreateNoteCommand,
+  type MediaDecision,
   type MentionRead,
   type NoteFactCommand,
   type KeyDateCommand,
@@ -85,6 +117,8 @@ import {
   MAX_HINT_NOTES,
   type NomosCommand,
   type TopicCommand,
+  type ProcedureCommand,
+  type RunCommand,
   type PlaceRead,
   type PlanDayCommand,
   type RememberCommand,
@@ -108,6 +142,8 @@ import {
   ASK_DEFERRED_LINE,
   NOTHING_CHANGED_LINE,
   buildAnswerKeptLine,
+  buildPhotosNotOpenedLine,
+  buildFileNotReadLine,
 } from './nomos/summaries.js';
 import {
   buildAnswerExecution,
@@ -121,11 +157,18 @@ import {
   type ExistingTask,
   type KeptNote,
   type KnownWhoState,
+  type MediaInput,
   type NoteTopicState,
   type PeopleInput,
   type QuestionStateEntry,
 } from './nomos/executeCommands.js';
-import { readContextSynced, toKnownZone } from './syncedCopies.js';
+import {
+  getLocalDay,
+  MAX_CONTEXT_TRIPS,
+  readContextSynced,
+  readSyncedTrips,
+  toKnownZone,
+} from './syncedCopies.js';
 import { getDayIn } from './nomos/spoken.js';
 import { matchWho } from './nomos/matchEntities.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
@@ -152,19 +195,28 @@ import { decide } from './nomos/policy.js';
 import {
   HAND_OVER_TOOL,
   hasReviseCue,
+  hasProcedureCue,
+  hasProcedureReviseCue,
   isQuestion,
   pickRoute,
   runRouted,
   type Route,
 } from './nomos/route.js';
+import { readAssistantName } from './assistantName.js';
+import { toStyleNotes, toStyleWords } from './styleLearner.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   INTERRUPTED_PROMPT,
+  APP_RECORDS_PROMPT,
   MAIL_PROMPT,
   MAX_CONTEXT_TASKS,
+  MEDIA_PROMPT,
   REST_PROMPT,
+  STYLE_PROMPT,
   SYSTEM_PROMPT,
+  toPersonaPrompt,
   TOPIC_PROMPT,
+  PROCEDURE_PROMPT,
 } from './nomos/prompt.js';
 
 if (getApps().length === 0) {
@@ -256,6 +308,7 @@ interface CaptureDoc {
   turnIndex?: number;
   turnLeadId?: string | null;
   inputMode?: string;
+  attachmentIds?: string[];
   route?: Route | null;
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
   joinedCaptureIds?: string[];
@@ -310,6 +363,7 @@ const readEarlyAnswer = (
 };
 
 const readApiKey = () => {
+  if (isForcedFixture('anthropic')) return '';
   try {
     return ANTHROPIC_API_KEY.value();
   } catch {
@@ -322,6 +376,18 @@ const readLiveGrants = (firestore: Firestore, uid: string) =>
     .then(({ listLiveGrants }) => listLiveGrants(firestore, uid, 'helm'))
     .catch((error): LiveGrant[] => {
       logger.warn('helm.live.grantsFailed', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+      return [];
+    });
+
+const readSiteGrants = (firestore: Firestore, uid: string) =>
+  import('../../connections/liveRouter.js')
+    .then(({ listSiteLiveGrants }) =>
+      listSiteLiveGrants(firestore, uid, 'helm'),
+    )
+    .catch((error): SiteLiveGrant[] => {
+      logger.warn('helm.live.siteGrantsFailed', {
         cause: error instanceof Error ? error.name : 'error',
       });
       return [];
@@ -345,6 +411,22 @@ export function loadKeyringOrFail(): Keyring {
     );
   }
 }
+
+/** The general style's descriptions for a turn's free writing; nothing when it is missing or will not open. */
+const readStyleNotes = (firestore: Firestore, base: string, key: HelmKey) =>
+  firestore
+    .doc(`${base}/style/general`)
+    .get()
+    .then((snapshot) =>
+      snapshot.exists
+        ? toStyleNotes(
+            toStyleWords(
+              openForHelm(key, snapshot.get('sealed') as SealedPayload),
+            ),
+          )
+        : null,
+    )
+    .catch(() => null);
 
 const openTitle = (key: HelmKey, sealed: SealedPayload) => {
   try {
@@ -525,11 +607,17 @@ async function readPeople(
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
+    calledAs: string | null;
     timeZone: string;
     capturedAt: number;
   },
 ): Promise<PeopleInput | undefined> {
   const { firestore, base, key, captureRef, mentions, places } = input;
+  const assistantNames = [
+    input.assistantName,
+    input.calledAs,
+    DEFAULT_ASSISTANT_NAME,
+  ].filter((name) => name !== null);
   if (mentions.length === 0 && places.length === 0) return undefined;
   const [whoSnap, placeSnap] = await Promise.all(
     ['who', 'places'].map((name) =>
@@ -603,8 +691,8 @@ async function readPeople(
     logger.warn('helm.sort.peopleUnreadable', unreadable);
   }
   const matched = new Set(
-    matchWho({ mentions, known, assistantName: input.assistantName }).flatMap(
-      (match) => (match.kind === 'match' ? [match.id] : []),
+    matchWho({ mentions, known, assistantNames }).flatMap((match) =>
+      match.kind === 'match' ? [match.id] : [],
     ),
   );
   const zone = toKnownZone(input.timeZone);
@@ -645,6 +733,7 @@ async function readPeople(
     known: withHistory,
     knownPlaces,
     assistantName: input.assistantName,
+    assistantNames,
     dayKey: String(getDayIn(input.capturedAt, zone)),
     capturedAt: input.capturedAt,
   };
@@ -1301,7 +1390,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   });
   const opened = openForHelm(key, capture.sealed);
   const leadText = typeof opened.text === 'string' ? opened.text : null;
-  if (!leadText) throw new SortFailure('unreadable');
+  const hasAttachments =
+    mode === 'full' && (capture.attachmentIds ?? []).length > 0;
+  if (leadText === null || (!leadText && !hasAttachments)) {
+    throw new SortFailure('unreadable');
+  }
   const answersQuestion = readAnswersQuestion(capture);
   const answerTurn: AnswerTurn | null = answersQuestion
     ? {
@@ -1343,6 +1436,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       projects: [],
       notes: [],
       topicCommands: [],
+      procedureCommands: [],
+      runCommands: [],
       topics: [],
       hinted: [],
       captureText: '',
@@ -1353,6 +1448,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       mentions: [],
       places: [],
       assistantName: null,
+      calledAs: null,
       searched: createSearchedLog(),
       hasMore: false,
       base,
@@ -1361,6 +1457,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       route: 'quick',
       timeZone: 'UTC',
       isSpoken: capture.inputMode === 'voice',
+      media: null,
     });
   }
   const answeredQuestion =
@@ -1380,8 +1477,28 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reading: toReading(opened.reading),
   };
 
+  const answersAQuestion = answerTurn !== null;
+  const attached =
+    hasAttachments && !answersAQuestion
+      ? await openMedia({
+          firestore,
+          bucket: getStorage().bucket(),
+          base,
+          uid,
+          key,
+          captureId: claimed.captureRef.id,
+          listed: capture.attachmentIds,
+        })
+      : {
+          media: [],
+          voiceIds: [],
+          unreadable: [],
+          unopened: [],
+          refused: [],
+        };
+
   const profileRead = firestore.doc(base).get();
-  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced] =
+  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced, style] =
     await Promise.all([
       profileRead,
       firestore
@@ -1408,6 +1525,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               ),
             ),
       ),
+      mode === 'rest' ? null : readStyleNotes(firestore, base, key),
     ]);
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
@@ -1420,6 +1538,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     ];
   });
   const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
+  const assistantName =
+    readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
 
   const readJoined = async (): Promise<
     JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean }
@@ -1516,9 +1636,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             });
             return [];
           });
-    const [topics, hintedNotes, focusedTopic] =
+    const [
+      topics,
+      hintedNotes,
+      focusedTopic,
+      procedureRecords,
+      focusedLive,
+      openRunRecords,
+    ] =
       mode === 'rest'
-        ? [[], [], null]
+        ? [[], [], null, [], null, []]
         : await Promise.all([
             readContextTopics(firestore, base, key, MAX_CONTEXT_TOPICS),
             readHintedNotes(firestore, base, key, claimed.noteIds),
@@ -1528,7 +1655,49 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               key,
               sanitizeScreen(capture.screen)?.topicId ?? null,
             ),
+            readContextProcedures(firestore, base, key, MAX_CONTEXT_PROCEDURES),
+            readFocusedProcedure(
+              firestore,
+              base,
+              key,
+              sanitizeScreen(capture.screen)?.procedureId ?? null,
+            ),
+            readOpenRuns(
+              firestore,
+              base,
+              key,
+              sanitizeScreen(capture.screen)?.runId ?? null,
+            ),
           ]);
+    const screenRunId = sanitizeScreen(capture.screen)?.runId ?? null;
+    const contextRuns = [...openRunRecords]
+      .sort(
+        (a, b) => Number(b.id === screenRunId) - Number(a.id === screenRunId),
+      )
+      .map((run) => toContextRun(run, run.id === screenRunId));
+    const trips =
+      mode !== 'rest' && procedureRecords.length > 0
+        ? await readSyncedTrips(firestore, uid, key, {
+            firstDay: getLocalDay(capture.createdAt, toKnownZone(timeZone)),
+            limit: MAX_CONTEXT_TRIPS,
+          }).catch((error): Awaited<ReturnType<typeof readSyncedTrips>> => {
+            logger.warn('helm.sort.tripsUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          })
+        : [];
+    const contextSynced = [
+      ...synced,
+      ...trips.filter((trip) => !synced.some((copy) => copy.id === trip.id)),
+    ];
+    const contextProcedures: ContextProcedure[] = procedureRecords.map(
+      (procedure) => ({
+        id: procedure.id,
+        title: procedure.title,
+        stepCount: Object.keys(procedure.steps).length,
+      }),
+    );
     const topicDocument = topicDocumentFor(
       combined.text,
       focusedTopic !== null,
@@ -1550,7 +1719,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       createdAt: capture.createdAt,
       timeZone,
       tasks,
-      synced,
+      synced: contextSynced,
       alreadyMade,
       screen,
       earlierTurns,
@@ -1561,9 +1730,25 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       upcoming,
       projects,
       topics,
+      style,
       notes: toContextNotes(hinted, combined.text),
       focusedTopic: topicDocument ? focusedTopic : null,
       topicDocument,
+      procedures: contextProcedures,
+      focusedProcedure: focusedLive
+        ? {
+            id: focusedLive.id,
+            title: focusedLive.title,
+            version: focusedLive.version,
+            blocks: blocksOf(focusedLive),
+          }
+        : null,
+      runs: contextRuns,
+      attachments: attached.media.map((item) => ({
+        alias: item.alias,
+        kind: item.kind,
+      })),
+      files: attached.media.flatMap((item) => (item.file ? [item.file] : [])),
     });
     const topicVersions = new Map<string, number>(
       focusedTopic && topicDocument === 'whole' && hasReviseCue(combined.text)
@@ -1576,22 +1761,67 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         (topic) =>
           topic.id !== focusedTopic?.id && isNamedIn(combined.text, topic.name),
       );
+    const procedureVersions = new Map<string, number>(
+      focusedLive && hasProcedureReviseCue(combined.text)
+        ? [[focusedLive.id, focusedLive.version]]
+        : [],
+    );
+    const procedureNames = new Map<string, string>([
+      ...procedureRecords.map((procedure): [string, string] => [
+        procedure.id,
+        procedure.title,
+      ]),
+      ...(focusedLive
+        ? [[focusedLive.id, focusedLive.title] as [string, string]]
+        : []),
+    ]);
+    const procedureTitleByTask = new Map<string, string>(
+      procedureRecords.flatMap((procedure): [string, string][] =>
+        procedure.sourceTaskId
+          ? [[procedure.sourceTaskId, procedure.title]]
+          : [],
+      ),
+    );
+    const isProcedureSearchOffered =
+      procedureRecords.length > 0 &&
+      hasProcedureReviseCue(combined.text) &&
+      (hasProcedureCue(combined.text) ||
+        procedureRecords.some(
+          (procedure) =>
+            procedure.id !== focusedLive?.id &&
+            isNamedIn(combined.text, procedure.title),
+        ));
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
       mode !== 'rest' && isQuestion(combined.text.trim())
         ? await readLiveGrants(firestore, uid)
+        : [];
+    const siteGrants =
+      mode !== 'rest' && isQuestion(combined.text.trim())
+        ? await readSiteGrants(firestore, uid)
         : [];
     const quotes = createQuoteBook();
     const searched = createSearchedLog();
     const system = [
       SYSTEM_PROMPT,
       liveGrants.length > 0 ? MAIL_PROMPT : null,
+      siteGrants.length > 0 ? APP_RECORDS_PROMPT : null,
       topics.length > 0 ? TOPIC_PROMPT : null,
+      style ? STYLE_PROMPT : null,
+      mode !== 'rest' &&
+      (procedureRecords.length > 0 ||
+        contextRuns.length > 0 ||
+        focusedLive !== null ||
+        hasProcedureCue(combined.text))
+        ? PROCEDURE_PROMPT
+        : null,
       mode === 'rest' ? REST_PROMPT : null,
+      attached.media.length > 0 ? MEDIA_PROMPT : null,
       typeof capture.interruptedCaptureId === 'string' &&
       capture.interruptedCaptureId !== ''
         ? INTERRUPTED_PROMPT
         : null,
+      toPersonaPrompt(assistantName, profile.data()?.assistantTone),
     ]
       .filter((part) => part !== null)
       .join('\n\n');
@@ -1604,6 +1834,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         timeZone,
         firestore,
         liveGrants,
+        siteGrants,
         quotes,
         searched,
         topicRead: isOtherTopicNamed
@@ -1613,13 +1844,26 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               versions: topicVersions,
             }
           : undefined,
+        procedureRead: isProcedureSearchOffered
+          ? {
+              procedures: context.procedures,
+              steps: context.procedureSteps,
+              versions: procedureVersions,
+              names: procedureNames,
+            }
+          : undefined,
       });
       const maxMillis = canHandOver ? QUICK_LOOP_MILLIS : LOOP_LIMITS.maxMillis;
       const loop = await provider
         .runToolLoop({
           role,
           system,
-          messages: [{ role: 'user', content: context.message }],
+          messages: [
+            {
+              role: 'user',
+              content: toMessageContent(context.message, attached.media),
+            },
+          ],
           mcpClient: mcp.client,
           terminalTool: FILE_RESULTS_TOOL,
           extraTerminalTools: canHandOver ? [HAND_OVER_TOOL] : [],
@@ -1667,6 +1911,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               mode,
               isAnswer: answerTurn !== null,
               hasTopicFocus: focusedTopic !== null,
+              hasProcedureFocus: focusedLive !== null,
+              hasMedia:
+                attached.media.length +
+                  attached.voiceIds.length +
+                  attached.unreadable.length >
+                0,
             }),
       runOn,
       reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
@@ -1700,6 +1950,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       hinted,
       topicVersions,
       focusedTopicId: focusedTopic?.id ?? null,
+      procedureVersions,
+      procedureNames,
+      procedureTitleByTask,
+      focusedProcedureId: focusedLive?.id ?? null,
+      focusedTaskId: screen?.focus?.id ?? null,
     };
   };
 
@@ -1736,6 +1991,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     hinted,
     topicVersions,
     focusedTopicId,
+    procedureVersions,
+    procedureNames,
+    procedureTitleByTask,
+    focusedProcedureId,
+    focusedTaskId,
   } = result;
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
@@ -1758,11 +2018,26 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     topicNames: new Map(topics.map((topic) => [topic.id, topic.name])),
     focusedTopicId,
     topicVersions,
+    procedures: context.procedures,
+    procedureSteps: context.procedureSteps,
+    procedureNames,
+    procedureTitleByTask,
+    focusedProcedureId,
+    focusedTaskId,
+    procedureVersions,
+    runSteps: context.runSteps,
     captureText: combined.text,
     quotes,
     alreadyMade,
     timeZone,
+    attachments: attached.media.map((item) => ({
+      alias: item.alias,
+      kind: item.kind,
+    })),
   });
+  reply.mediaDropped.forEach((code) =>
+    logger.info('helm.media.dropped', { code }),
+  );
   reply.askDropped.forEach((code) => logger.info('helm.ask.dropped', { code }));
   reply.noteDropped.forEach((code) =>
     logger.info('helm.sort.noteDropped', { code }),
@@ -1770,6 +2045,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   reply.topicDropped.forEach((code) =>
     logger.info('helm.topic.dropped', { code }),
   );
+  reply.procedureDropped.forEach((code) =>
+    logger.info('helm.procedure.dropped', { code }),
+  );
+  reply.runDropped.forEach((code) => logger.info('helm.run.dropped', { code }));
   const answer = mode === 'full' ? reply.answer : null;
   const commands = reply.commands.filter(
     (command) => decide(command) === 'automatic',
@@ -1786,8 +2065,25 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     projects: mode === 'full' ? reply.projects : [],
     notes: mode === 'full' ? reply.notes : [],
     topicCommands: mode === 'full' ? reply.topicCommands : [],
+    procedureCommands: mode === 'full' ? reply.procedureCommands : [],
+    runCommands: mode === 'full' ? reply.runCommands : [],
     topics,
     hinted,
+    media: {
+      items: attached.media,
+      decisions: reply.media,
+      letGoIds: [
+        ...attached.unopened,
+        ...attached.refused,
+        ...attached.voiceIds,
+        ...attached.unreadable.map((entry) => entry.id),
+      ],
+      unopenedCount: attached.unopened.length,
+      unreadable: attached.unreadable.map(({ name, reason }) => ({
+        name,
+        reason,
+      })),
+    },
     captureText: combined.text,
     planDay: mode === 'full' ? reply.planDay : null,
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
@@ -1795,7 +2091,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     answerTurn,
     mentions: reply.mentions,
     places: reply.places,
-    assistantName: combined.reading.addressedAs?.text ?? DEFAULT_ASSISTANT_NAME,
+    assistantName,
+    calledAs: combined.reading.addressedAs?.text ?? null,
     searched,
     hasMore: reply.hasMore,
     base,
@@ -1806,6 +2103,83 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     isSpoken: read.isSpoken,
   });
 }
+
+/** The photos and files a turn sent, as the call read them, and what the model decided about each. */
+interface SentMedia {
+  items: OpenedMedia[];
+  decisions: MediaDecision[];
+  /** Media code lets go without a decision: refused over the cap, not opened, unreadable, or a recording. */
+  letGoIds: string[];
+  unopenedCount: number;
+  unreadable: { name: string; reason: UnreadableReason }[];
+}
+
+const toMessageContent = (
+  message: string,
+  media: OpenedMedia[],
+): string | ToolLoopContent[] =>
+  media.every((item) => item.blocks.length === 0)
+    ? message
+    : [
+        { type: 'text', text: message },
+        ...media.flatMap((item): ToolLoopContent[] =>
+          item.blocks.length === 0
+            ? []
+            : [
+                {
+                  type: 'text',
+                  text: `${item.kind === 'photo' ? 'Photo' : 'File'} ${item.alias}:`,
+                },
+                ...item.blocks,
+              ],
+        ),
+      ];
+
+const TITLE_SHOWN_CHARS = 80;
+
+/** The title each existing task or fact a keep names shows under, read in the transaction; one that is gone or won't open has none, so a keep on it is let go. */
+const readMediaTitles = async (
+  transaction: Transaction,
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  decisions: MediaDecision[],
+): Promise<Map<string, string>> => {
+  const wanted = [
+    ...new Map(
+      decisions
+        .filter((decision) => decision.decision === 'keep')
+        .flatMap((decision) => decision.targets)
+        .filter((target) => !target.ref.startsWith('$new'))
+        .map((target) => [`${target.kind}:${target.ref}`, target]),
+    ).entries(),
+  ];
+  const snapshots = await Promise.all(
+    wanted.map(([, target]) =>
+      transaction.get(
+        firestore.doc(
+          `${base}/${target.kind === 'task' ? 'tasks' : 'facts'}/${target.ref}`,
+        ),
+      ),
+    ),
+  );
+  return new Map(
+    wanted.flatMap(([mapKey, target], index): [string, string][] => {
+      const sealed = snapshots[index].get('sealed') as
+        SealedPayload | undefined;
+      if (!sealed) return [];
+      try {
+        const words = openForHelm(key, sealed);
+        const text = target.kind === 'task' ? words.title : words.statement;
+        return typeof text === 'string' && text
+          ? [[mapKey, text.slice(0, TITLE_SHOWN_CHARS)]]
+          : [];
+      } catch {
+        return [];
+      }
+    }),
+  );
+};
 
 async function writeResult(
   input: Claimed & {
@@ -1818,6 +2192,8 @@ async function writeResult(
     projects: ProjectCommand[];
     notes: CreateNoteCommand[];
     topicCommands: TopicCommand[];
+    procedureCommands: ProcedureCommand[];
+    runCommands: RunCommand[];
     topics: OpenTopicRecord[];
     hinted: HintedNote[];
     captureText: string;
@@ -1828,6 +2204,7 @@ async function writeResult(
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
+    calledAs: string | null;
     searched: SearchedLog;
     hasMore: boolean;
     base: string;
@@ -1836,6 +2213,7 @@ async function writeResult(
     route: Route;
     timeZone: string;
     isSpoken: boolean;
+    media: SentMedia | null;
   },
 ): Promise<SortResult> {
   const {
@@ -1851,6 +2229,8 @@ async function writeResult(
     projects: projectCommands,
     notes,
     topicCommands: requestedTopicCommands,
+    procedureCommands,
+    runCommands,
     topics: contextTopics,
     hinted,
     captureText,
@@ -1861,6 +2241,7 @@ async function writeResult(
     mentions,
     places,
     assistantName,
+    calledAs,
     searched,
     hasMore,
     base,
@@ -1870,6 +2251,7 @@ async function writeResult(
     route,
     timeZone,
     isSpoken,
+    media: sentMedia,
   } = input;
   const tasksPath = `${base}/tasks`;
   const built = answer
@@ -1949,6 +2331,38 @@ async function writeResult(
       ),
     ]),
   ];
+  const reviseIds = [
+    ...new Set(
+      procedureCommands.flatMap((command) =>
+        command.kind === 'reviseProcedure' ? [command.procedureId] : [],
+      ),
+    ),
+  ];
+  const runProcedureIds = [
+    ...new Set(
+      runCommands.flatMap((command) =>
+        command.kind === 'startRun' ? [command.procedureId] : [],
+      ),
+    ),
+  ];
+  const tickRunIds = [
+    ...new Set(
+      runCommands.flatMap((command) =>
+        command.kind === 'tickRun'
+          ? command.steps.map((step) => step.runId)
+          : [],
+      ),
+    ),
+  ];
+  const fromTaskIds = [
+    ...new Set(
+      procedureCommands.flatMap((command) =>
+        command.kind === 'createProcedure' && command.fromTaskId
+          ? [command.fromTaskId]
+          : [],
+      ),
+    ),
+  ];
   const needsTree = topicCommands.some(
     (command) =>
       command.kind === 'moveTopic' || command.kind === 'createParentTopic',
@@ -1966,6 +2380,10 @@ async function writeResult(
       noteCountSnap,
       topicSnaps,
       treeSnap,
+      procedureSnaps,
+      procedureTaskSnaps,
+      runSnaps,
+      openRunsSnaps,
       ...targetSnaps
     ] = await Promise.all([
       transaction.get(captureRef),
@@ -2016,6 +2434,26 @@ async function writeResult(
               .limit(MAX_CONTEXT_TOPICS),
           )
         : Promise.resolve(null),
+      Promise.all(
+        [...new Set([...reviseIds, ...runProcedureIds])].map((id) =>
+          transaction.get(firestore.doc(`${base}/procedures/${id}`)),
+        ),
+      ),
+      Promise.all(
+        fromTaskIds.map((id) =>
+          transaction.get(firestore.doc(`${tasksPath}/${id}`)),
+        ),
+      ),
+      Promise.all(
+        tickRunIds.map((id) =>
+          transaction.get(firestore.doc(`${base}/procedureRuns/${id}`)),
+        ),
+      ),
+      Promise.all(
+        runProcedureIds.map((id) =>
+          transaction.get(procedureOpenRunsQuery(firestore, base, id)),
+        ),
+      ),
       ...targetIds.map((id) =>
         transaction.get(firestore.doc(`${tasksPath}/${id}`)),
       ),
@@ -2078,12 +2516,16 @@ async function writeResult(
             mentions,
             places,
             assistantName,
+            calledAs,
             timeZone,
             capturedAt: capture.createdAt,
           })
         : undefined;
     const existingProjects =
       (projectCommands.length > 0 ||
+        runCommands.some(
+          (command) => command.kind === 'startRun' && command.projectRef,
+        ) ||
         commands.some(
           (command) => command.kind === 'createTask' && command.projectRef,
         )) &&
@@ -2108,7 +2550,7 @@ async function writeResult(
                   ? matchWho({
                       mentions: people.mentions,
                       known: people.known,
-                      assistantName: people.assistantName,
+                      assistantNames: people.assistantNames,
                     }).flatMap((match, index): [string, string][] =>
                       match.kind === 'match'
                         ? [[people.mentions[index].ref, match.id]]
@@ -2166,6 +2608,39 @@ async function writeResult(
           ],
         ];
       }),
+    );
+    const mediaIds = sentMedia
+      ? [
+          ...new Set([
+            ...sentMedia.items.map((item) => item.id),
+            ...sentMedia.letGoIds,
+          ]),
+        ]
+      : [];
+    const [mediaSnaps, mediaTitles] = await Promise.all([
+      Promise.all(
+        mediaIds.map((id) =>
+          transaction.get(firestore.doc(`${base}/media/${id}`)),
+        ),
+      ),
+      sentMedia && !isStale
+        ? readMediaTitles(
+            transaction,
+            firestore,
+            base,
+            key,
+            sentMedia.decisions,
+          )
+        : Promise.resolve(new Map<string, string>()),
+    ]);
+    const stillReceived = new Set(
+      mediaSnaps
+        .filter(
+          (snapshot) =>
+            snapshot.get('status') === 'received' &&
+            snapshot.get('sourceCaptureId') === captureRef.id,
+        )
+        .map((snapshot) => snapshot.id),
     );
     const executionRef = firestore.collection(`${base}/executions`).doc();
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
@@ -2253,6 +2728,39 @@ async function writeResult(
         ]),
       ).values(),
     ];
+    const liveProcedures = new Map<string, LiveProcedure | null>(
+      procedureSnaps.map((snapshot) => {
+        const data = snapshot.data();
+        return [
+          snapshot.id,
+          data ? openLiveProcedure(key, snapshot.id, data) : null,
+        ];
+      }),
+    );
+    const liveRuns = new Map(
+      runSnaps.map((snapshot) => {
+        const data = snapshot.data();
+        return [snapshot.id, data ? openLiveRun(key, snapshot.id, data) : null];
+      }),
+    );
+    const tickedProcedureIds = [...liveRuns.values()].flatMap((run) =>
+      run ? [run.procedureId] : [],
+    );
+    const stillThere = await readLiveProcedureIds(
+      firestore,
+      base,
+      tickedProcedureIds,
+      (refs) => transaction.getAll(...refs),
+    );
+    const goneProcedureIds = new Set(
+      tickedProcedureIds.filter((id) => !stillThere.has(id)),
+    );
+    const procedureTasks = new Map(
+      procedureTaskSnaps.map((snapshot) => {
+        const data = snapshot.data();
+        return [snapshot.id, data ? openTaskSteps(key, data) : null];
+      }),
+    );
     const written = planWrites({
       notes: isStale ? [] : notes,
       topics: topicStates,
@@ -2260,6 +2768,16 @@ async function writeResult(
       noteCount: noteCountSnap?.data().count ?? 0,
       commands: isStale ? [] : commands,
       topicCommands: isStale ? [] : topicCommands,
+      procedureCommands: isStale ? [] : procedureCommands,
+      liveProcedures,
+      procedureTasks,
+      runCommands: isStale ? [] : runCommands,
+      liveRuns,
+      openRuns: openRunDocs(
+        key,
+        openRunsSnaps.flatMap((snapshot) => snapshot.docs),
+      ),
+      goneProcedureIds,
       liveTopics,
       topicTree,
       capturedAt: capture.createdAt,
@@ -2277,6 +2795,25 @@ async function writeResult(
       existingFacts,
       timeZone,
       selfWhoId,
+      media:
+        sentMedia && !isStale
+          ? ({
+              decisions: sentMedia.decisions,
+              items: new Map(
+                sentMedia.items
+                  .filter((item) => stillReceived.has(item.id))
+                  .map((item) => [
+                    item.alias,
+                    { id: item.id, kind: item.kind, words: item.words },
+                  ]),
+              ),
+              letGoIds: sentMedia.letGoIds.filter((id) =>
+                stillReceived.has(id),
+              ),
+              titles: mediaTitles,
+              executionId: executionRef.id,
+            } satisfies MediaInput)
+          : undefined,
       keyDates: isStale ? [] : keyDates,
       keyDateIndex: keyDateRead?.index ?? undefined,
       isKeyDateIndexUnreadable:
@@ -2292,13 +2829,27 @@ async function writeResult(
         ),
       ),
     });
-    const plan = home
+    const withHome = home
       ? {
           ...written,
           effectRefs: [...written.effectRefs, home.ref],
           effects: [...written.effects, home.effect],
         }
       : written;
+    const plan = sentMedia
+      ? {
+          ...withHome,
+          notKept: [
+            ...withHome.notKept,
+            ...(sentMedia.unopenedCount > 0
+              ? [buildPhotosNotOpenedLine(sentMedia.unopenedCount)]
+              : []),
+            ...sentMedia.unreadable.map((entry) =>
+              buildFileNotReadLine(entry.name, entry.reason),
+            ),
+          ],
+        }
+      : withHome;
     const isFiling = plan.effects.length > 0 || plan.lines.length > 0;
     if (
       !isFiling &&
@@ -2330,6 +2881,22 @@ async function writeResult(
             firestore.doc(`${base}/topics/${topicId}`),
           ),
         ],
+      ),
+    );
+
+    const procedureVersionNumbers = new Map<string, number[]>(
+      await Promise.all(
+        [
+          ...new Set(
+            plan.procedureVersions.map((version) => version.procedureId),
+          ),
+        ].map(async (id): Promise<[string, number[]]> => [
+          id,
+          await readProcedureVersionNumbers(
+            transaction,
+            firestore.doc(`${base}/procedures/${id}`),
+          ),
+        ]),
       ),
     );
 
@@ -2373,6 +2940,9 @@ async function writeResult(
       plan.noteCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/notes/${id}`), data),
       );
+      plan.mediaKept.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/media/${id}`), data),
+      );
       const versionsWritten = new Map<string, number[]>(versionNumbers);
       plan.topicVersions.forEach((version) => {
         const live = liveTopics.get(version.topicId);
@@ -2401,6 +2971,34 @@ async function writeResult(
           newVersion,
         ]);
       });
+      plan.procedureCreates.forEach(({ id, doc, version1 }) => {
+        const ref = firestore.doc(`${base}/procedures/${id}`);
+        transaction.create(ref, doc);
+        transaction.create(ref.collection('versions').doc('1'), version1);
+      });
+      plan.procedureVersions.forEach((planned) =>
+        writeProcedureVersionIn(transaction, {
+          procedureRef: firestore.doc(
+            `${base}/procedures/${planned.procedureId}`,
+          ),
+          planned,
+          existingVersions:
+            procedureVersionNumbers.get(planned.procedureId) ?? [],
+          now,
+          seal,
+        }),
+      );
+      plan.runCreates.forEach(({ id, doc }) =>
+        transaction.create(firestore.doc(`${base}/procedureRuns/${id}`), doc),
+      );
+      plan.runTicks.forEach(({ runId, stepIds }) =>
+        transaction.update(firestore.doc(`${base}/procedureRuns/${runId}`), {
+          ...Object.fromEntries(
+            stepIds.map((stepId) => [`stepState.${stepId}.doneAt`, now]),
+          ),
+          lastEditedAt: now,
+        }),
+      );
       plan.topicPlacements.forEach(({ id, parentId, depth }) =>
         transaction.update(firestore.doc(`${base}/topics/${id}`), {
           parentId,
@@ -2409,6 +3007,12 @@ async function writeResult(
       );
       plan.topicCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/topics/${id}`), data),
+      );
+      plan.topicVersionCreates.forEach(({ topicId, id, data }) =>
+        transaction.create(
+          firestore.doc(`${base}/topics/${topicId}/versions/${id}`),
+          data,
+        ),
       );
       plan.topicUpdates.forEach(({ id, docState, addPendingIds }) =>
         transaction.update(firestore.doc(`${base}/topics/${id}`), {
@@ -2444,6 +3048,9 @@ async function writeResult(
         ),
       );
     }
+    plan.mediaLetGo.forEach(({ id, data }) =>
+      transaction.update(firestore.doc(`${base}/media/${id}`), data),
+    );
     const spokenAnswer = reply && isSpoken ? reply.spoken : null;
     const spokenLine =
       spokenAnswer && !isFiling && firstQuestion
@@ -2505,9 +3112,15 @@ async function writeResult(
           keyDates.length +
           notes.length +
           topicCommands.length +
+          procedureCommands.length +
+          runCommands.length +
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,
+      hasMedia:
+        !isStale &&
+        !!sentMedia &&
+        sentMedia.items.length + sentMedia.letGoIds.length > 0,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:
@@ -2662,62 +3275,88 @@ export const sortHelmCapture = onCall(
     ],
   },
   async (request): Promise<SortResult> => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
+    try {
+      return await sortRequest(request);
+    } finally {
+      const uid = request.auth?.uid;
+      if (uid) {
+        await sweepExpiredMedia({
+          firestore: getFirestore(),
+          bucket: getStorage().bucket(),
+          uid,
+          now: Date.now(),
+        }).catch((error: unknown) =>
+          logger.warn('helm.media.sweepUnavailable', {
+            cause: error instanceof Error ? error.name : 'error',
+          }),
+        );
+      }
     }
-    const startedAt = Date.now();
-    const { captureId, requestKey, mode, noteIds } = readInput(request.data);
-    const firestore = getFirestore();
-    const captureRef = firestore.doc(
-      `apps/helm/users/${uid}/captures/${captureId}`,
-    );
-    const requestRef = firestore.doc(
-      `apps/helm/server/${uid}/sortRequests/${requestKey}`,
-    );
-
-    const [stored, snapshot] = await Promise.all([
-      requestRef.get(),
-      captureRef.get(),
-    ]);
-    const answered = readAnswered(stored.data(), captureId);
-    if (answered) return answered;
-    const early = snapshot.data() as CaptureDoc | undefined;
-    if (!early) throw new HttpsError('not-found', 'This capture is gone.');
-    if (mode === 'rest' && !hasOpenMoreToSort(early.questionState)) {
-      throw new HttpsError(
-        'failed-precondition',
-        'There is nothing left to sort here.',
-      );
-    }
-    const answer = readEarlyAnswer(early, Date.now(), mode);
-    if (answer) return answer;
-
-    const keyring = loadKeyringOrFail();
-    const claim = await claimCapture(firestore, captureRef, Date.now(), mode);
-    if (!claim) return toResult('received');
-    if (claim === 'failed' || claim === 'needsYou') return toResult(claim);
-
-    return sortClaimed({
-      firestore,
-      uid,
-      keyring,
-      captureRef,
-      requestRef,
-      mode,
-      startedAt,
-      noteIds,
-      ...claim,
-    }).catch((error: unknown) => {
-      if (error instanceof HttpsError) throw error;
-      const failure =
-        error instanceof SortFailure
-          ? error
-          : new SortFailure(
-              error instanceof NomosReplyError ? error.code : 'unexpected',
-            );
-      logger.warn('helm.sort.failed', { code: failure.code });
-      return failClaim(firestore, captureRef, claim.claimId, failure, {}, mode);
-    });
   },
 );
+
+async function sortRequest(request: CallableRequest): Promise<SortResult> {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
+  }
+  const startedAt = Date.now();
+  const { captureId, requestKey, mode, noteIds } = readInput(request.data);
+  const firestore = getFirestore();
+  const captureRef = firestore.doc(
+    `apps/helm/users/${uid}/captures/${captureId}`,
+  );
+  const requestRef = firestore.doc(
+    `apps/helm/server/${uid}/sortRequests/${requestKey}`,
+  );
+
+  const [stored, snapshot] = await Promise.all([
+    requestRef.get(),
+    captureRef.get(),
+  ]);
+  const answered = readAnswered(stored.data(), captureId);
+  if (answered) return answered;
+  const early = snapshot.data() as CaptureDoc | undefined;
+  if (!early) throw new HttpsError('not-found', 'This capture is gone.');
+  if (mode === 'rest' && !hasOpenMoreToSort(early.questionState)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'There is nothing left to sort here.',
+    );
+  }
+  const answer = readEarlyAnswer(early, Date.now(), mode);
+  if (answer) return answer;
+
+  const keyring = loadKeyringOrFail();
+  const claim = await claimCapture(firestore, captureRef, Date.now(), mode);
+  if (!claim) return toResult('received');
+  if (claim === 'failed' || claim === 'needsYou') return toResult(claim);
+
+  return sortClaimed({
+    firestore,
+    uid,
+    keyring,
+    captureRef,
+    requestRef,
+    mode,
+    startedAt,
+    noteIds,
+    ...claim,
+  }).catch((error: unknown) => {
+    if (error instanceof HttpsError) throw error;
+    const failure =
+      error instanceof SortFailure
+        ? error
+        : new SortFailure(
+            error instanceof NomosReplyError ? error.code : 'unexpected',
+          );
+    logger.warn('helm.sort.failed', { code: failure.code });
+    if (failure.code === 'unexpected' && error instanceof Error) {
+      logger.error('helm.sort.unexpected', {
+        name: error.name,
+        at: error.stack?.split('\n').slice(1, 4).join(' | ') ?? null,
+      });
+    }
+    return failClaim(firestore, captureRef, claim.claimId, failure, {}, mode);
+  });
+}

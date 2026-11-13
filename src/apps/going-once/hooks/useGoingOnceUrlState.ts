@@ -1,6 +1,8 @@
 import { parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useNavigate } from 'react-router-dom';
 
+import { isHistoryStep, markHistoryStep } from '@/hooks/useBackHistory';
+
 import {
   DEFAULT_GOING_ONCE_TAB,
   GOING_ONCE_TABS,
@@ -58,10 +60,7 @@ export function useGoingOnceUrlState() {
     void setRequestedView(null, { history: 'replace' });
     clearInbox();
     void setSaleId(id, { history: 'push' }).then(() =>
-      window.history.replaceState(
-        { ...window.history.state, goingOnceSaleStep: true },
-        '',
-      ),
+      markHistoryStep('goingOnceSaleStep'),
     );
   };
   const openThing = (id: string) => setThingId(id, { history: 'replace' });
@@ -69,7 +68,7 @@ export function useGoingOnceUrlState() {
   const closeSale = () => {
     void closeThing();
     clearInbox();
-    if (window.history.state?.goingOnceSaleStep) {
+    if (isHistoryStep('goingOnceSaleStep')) {
       navigate(-1);
       return;
     }

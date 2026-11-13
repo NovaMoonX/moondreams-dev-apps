@@ -385,7 +385,7 @@ export function isDueBeforeNext(
     (entry) =>
       entry.itemId === itemId && entry.pairing === null && entry.bill !== null,
   );
-  return line?.bill ? line.bill.dueOn < nextOn : null;
+  return line?.bill ? (line.bill.payOn ?? line.bill.dueOn) < nextOn : null;
 }
 
 export interface PriorityMove<P> {

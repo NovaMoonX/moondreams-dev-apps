@@ -162,6 +162,7 @@ const plan = (
     known: options.who ?? [],
     knownPlaces: [],
     assistantName: null,
+    assistantNames: [],
     dayKey: '2026-11-10',
     capturedAt: 4000,
   };

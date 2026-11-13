@@ -34,6 +34,7 @@ function SectionSourcesSheet({
   const { user } = useAuth();
   const { addToast } = useToast();
   const noteById = useAppSelector(selectNoteById);
+  const media = useAppSelector((state) => state.helm.media.items);
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
   const rowOf = (
@@ -81,8 +82,11 @@ function SectionSourcesSheet({
       };
     }
     if (source.kind === 'file') {
+      const file = media.find((entry) => entry.id === source.mediaId);
       return {
-        text: HELM_COPY.sourceFile,
+        text: file?.fileName
+          ? HELM_COPY.sourceFileNamed(file.fileName)
+          : HELM_COPY.sourceFile,
         noteId: noteTitle(source.noteId) === null ? null : source.noteId,
         unCheckedNoteId: null,
       };

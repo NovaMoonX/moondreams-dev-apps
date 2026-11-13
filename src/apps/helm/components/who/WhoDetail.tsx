@@ -342,13 +342,9 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
                 ownerId={who.id}
               />
             </section>
-            <section className='space-y-3'>
-              <SectionDivider label={HELM_COPY.whoMentionsTitle} />
-              {mentions.length === 0 ? (
-                <p className='text-muted-foreground text-[15px] text-pretty'>
-                  {HELM_COPY.whoMentionsEmpty}
-                </p>
-              ) : (
+            {mentions.length > 0 && (
+              <section className='space-y-3'>
+                <SectionDivider label={HELM_COPY.whoMentionsTitle} />
                 <ul className='helm-card divide-border divide-y overflow-hidden'>
                   {shownMentions.map((capture) => (
                     <li key={capture.id} className='px-4 py-3'>
@@ -364,18 +360,18 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
                     </li>
                   ))}
                 </ul>
-              )}
-              {mentions.length > MENTIONS_SHOWN && (
-                <ShowMoreButton
-                  isOpen={isAllMentions}
-                  onClick={() => setIsAllMentions((isOpen) => !isOpen)}
-                >
-                  {isAllMentions
-                    ? HELM_COPY.showFewerMentions
-                    : HELM_COPY.showAllMentions(mentions.length)}
-                </ShowMoreButton>
-              )}
-            </section>
+                {mentions.length > MENTIONS_SHOWN && (
+                  <ShowMoreButton
+                    isOpen={isAllMentions}
+                    onClick={() => setIsAllMentions((isOpen) => !isOpen)}
+                  >
+                    {isAllMentions
+                      ? HELM_COPY.showFewerMentions
+                      : HELM_COPY.showAllMentions(mentions.length)}
+                  </ShowMoreButton>
+                )}
+              </section>
+            )}
           </>
         )}
       </main>

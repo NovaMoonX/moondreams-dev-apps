@@ -1,7 +1,8 @@
-import type {
-  ModelProvider,
-  TerminalTool,
-  ToolLoopRequest,
+import {
+  messageText,
+  type ModelProvider,
+  type TerminalTool,
+  type ToolLoopRequest,
 } from '../../ai/modelProvider.js';
 import { EMPTY_USAGE } from '../../ai/models.js';
 import { toComparable } from '../../vendor/optionMatchUtils.js';
@@ -471,7 +472,8 @@ export type VersionReason =
   | 'revisedOnRequest'
   | 'sourceRemoved'
   | 'moved'
-  | 'grouped';
+  | 'grouped'
+  | 'imported';
 
 export const pickReason = (
   version: number,
@@ -798,7 +800,7 @@ const answer = (terminalInput: unknown, name: string) => ({
 /** The emulator's writer: one section per new note, a bulleted list of its sentences under its title, each citing the note; a first version opens with a short introduction citing them all. */
 export const createTopicFixtureProvider = (): ModelProvider => ({
   runToolLoop: async ({ messages }: ToolLoopRequest) => {
-    const message = messages[0]?.content ?? '';
+    const message = messageText(messages[0]?.content ?? '');
     const topic = readBlock<{ name: string }>(message, 'topic');
     if (readBlock(message, 'subtopics')) {
       const children =
