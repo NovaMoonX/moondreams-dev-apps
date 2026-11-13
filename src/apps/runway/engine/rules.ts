@@ -102,15 +102,32 @@ export function findRule(
   return best ? { rule: best, isAsk: best.target === RULE_VARIES } : null;
 }
 
-export interface NextHome {
+/** Where purchases go under the rule that now wins them: placed by a live rule (`by`), asked each time, or waiting (no rule fits, or the one that wins is paused). */
+export interface NextPlace {
+  by: OpenRule | null;
+  isAsk: boolean;
+}
+
+export interface NextHome extends NextPlace {
   removed: OpenRule;
   /** The card these purchases are on; null for every card no rule names. */
   cardId: string | null;
-  /** The live rule that places them once the removed one is gone; null when they wait (no rule fits, or the one that wins asks or is paused). */
-  by: OpenRule | null;
+  /** For a store rule: each kind of place a kind-of-place rule left would win for this store's purchases the bank files under it, where that differs from the rest. */
+  byKind: (NextPlace & { category: string })[];
 }
 
-/** Where the purchases each removed rule wins today go once it is gone, card by card, by `findRule`'s own ranking; a card where the rule wins nothing (a more specific rule outranks it) has no entry. A card-wide rule is read for purchases with no kind of place. */
+const toPlace = (
+  match: RuleMatch | null,
+  liveEnvelopeIds: ReadonlySet<string>,
+): NextPlace => ({
+  by:
+    match !== null && !match.isAsk && !needsNewHome(match.rule, liveEnvelopeIds)
+      ? match.rule
+      : null,
+  isAsk: match?.isAsk ?? false,
+});
+
+/** Where the purchases each removed rule wins today go once it is gone, card by card, by `findRule`'s own ranking; a card where the rule wins nothing (a more specific rule outranks it) has no entry. The main answer is for purchases with no kind of place; a store rule's `byKind` adds the kinds of place a rule left would still claim. */
 export function findNextHomes(
   removing: readonly OpenRule[],
   rules: readonly OpenRule[],
@@ -121,6 +138,15 @@ export function findNextHomes(
   const namedCards = [
     ...new Set(
       rules.flatMap((rule) => (rule.cardId === null ? [] : [rule.cardId])),
+    ),
+  ];
+  const leftKinds = [
+    ...new Set(
+      left.flatMap((rule) =>
+        rule.merchantKey === null && rule.category !== null
+          ? [rule.category]
+          : [],
+      ),
     ),
   ];
   return removing.flatMap((removed) =>
@@ -135,12 +161,23 @@ export function findNextHomes(
       }))
       .filter(({ facts }) => findRule(facts, rules)?.rule.id === removed.id)
       .map(({ cardId, facts }) => {
-        const after = findRule(facts, left);
-        const isPlaced =
-          after !== null &&
-          !after.isAsk &&
-          !needsNewHome(after.rule, liveEnvelopeIds);
-        return { removed, cardId, by: isPlaced ? after.rule : null };
+        const place = toPlace(findRule(facts, left), liveEnvelopeIds);
+        const byKind =
+          removed.merchantKey === null || removed.category !== null
+            ? []
+            : leftKinds.flatMap((category) => {
+                const kindFacts = { ...facts, category };
+                if (findRule(kindFacts, rules)?.rule.id !== removed.id)
+                  return [];
+                const match = findRule(kindFacts, left);
+                if (match === null || match.rule.category === null) return [];
+                const kind = toPlace(match, liveEnvelopeIds);
+                return kind.by?.id === place.by?.id &&
+                  kind.isAsk === place.isAsk
+                  ? []
+                  : [{ ...kind, category }];
+              });
+        return { removed, cardId, ...place, byKind };
       }),
   );
 }

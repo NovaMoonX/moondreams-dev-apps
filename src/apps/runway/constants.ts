@@ -5547,14 +5547,18 @@ export const RULE_WORDS = {
   takeover: (what: string, envelope: string) =>
     `${what} will go to ${envelope}.`,
   takeoverWait: (what: string) => `${what} will wait in Needs a home.`,
+  takeoverAsk: (what: string) => `${what} will ask which envelope each time.`,
+  kindOf: (store: string, kind: string, cards: string | null) =>
+    `${store} purchases${cards === null ? '' : ` on ${cards}`} the bank calls ${kind}`,
   everythingElseOn: (card: string) =>
     `everything on ${card} that your other rules don't send`,
   afterThis: (line: string) => `After this, ${line}`,
   takeoverMore: (count: number) =>
-    `${count} more ${count === 1 ? 'envelope takes' : 'envelopes take'} the rest.`,
+    `${count} more ${count === 1 ? 'change' : 'changes'} like these.`,
   nothingMoves:
     'Where purchases go next stays the same: a closer rule already sends them.',
   staysSame: 'Where purchases go next stays the same.',
+  placedStay: 'Purchases already placed stay where they are.',
   onOtherCards: 'on your other cards',
   removed: 'Rule removed',
   removeFailed: 'That did not remove. Nothing was changed.',
@@ -5643,8 +5647,7 @@ export const RULE_WORDS = {
         `${name(kinds.live)} will stop sending purchases on ${isOne(kinds.live) ? 'its' : 'their'} own.`,
       kinds.ask.length > 0 && `${name(kinds.ask)} will stop asking.`,
       kinds.paused.length > 0 &&
-        `${name(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused already, so right now ${isOne(kinds.paused) ? 'its' : 'their'} purchases wait in Needs a home.`,
-      'Purchases already placed stay where they are.',
+        `${name(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused, so right now ${isOne(kinds.paused) ? 'its' : 'their'} purchases wait in Needs a home.`,
     ]
       .filter(Boolean)
       .join(' ');

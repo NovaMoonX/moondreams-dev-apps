@@ -6,7 +6,17 @@ import {
   findNextHomes,
   needsNewHome,
   RULE_VARIES,
+  type NextPlace,
 } from '@apps/runway/engine/rules';
+
+const ASKS = '~asks';
+const kindLabel = (category: string) => {
+  const label = getCategoryLabel(category);
+  return /^[A-Z][a-z]/.test(label)
+    ? `${label.charAt(0).toLowerCase()}${label.slice(1)}`
+    : label;
+};
+const WAITS = '~waits';
 import {
   selectAllCards,
   selectBecameKinds,
@@ -64,41 +74,43 @@ export function useRuleNames() {
       };
       const nextHomes = findNextHomes(targets, rules, liveIds);
       const goingIds = new Set(targets.map((rule) => rule.id));
+      const isAsk = (rule: OpenRule) => rule.target === RULE_VARIES;
+      const toKey = ({ by, isAsk }: NextPlace) =>
+        by?.target ?? (isAsk ? ASKS : WAITS);
       const placesOf = (removed: OpenRule) => {
-        if (removed.merchantKey === null && removed.category === null)
-          return nextHomes
-            .filter((home) => home.removed.id === removed.id)
-            .map(({ by }) => ({
-              target: by?.target ?? null,
-              subject: rules.some(
-                (rule) =>
-                  !goingIds.has(rule.id) &&
-                  (rule.merchantKey !== null || rule.category !== null) &&
-                  (rule.cardId === null || rule.cardId === removed.cardId),
-              )
-                ? RULE_WORDS.everythingElseOn(onYourCard(removed.cardId))
-                : `everything on ${onYourCard(removed.cardId)}`,
-              scope: '',
-            }));
-        const subject =
-          removed.merchantName ?? getCategoryLabel(removed.category ?? '');
         const own = nextHomes.filter((home) => home.removed.id === removed.id);
+        if (removed.merchantKey === null && removed.category === null)
+          return own.map((home) => ({
+            key: toKey(home),
+            subject: rules.some(
+              (rule) =>
+                !goingIds.has(rule.id) &&
+                (rule.merchantKey !== null || rule.category !== null) &&
+                (rule.cardId === null || rule.cardId === removed.cardId),
+            )
+              ? RULE_WORDS.everythingElseOn(onYourCard(removed.cardId))
+              : `everything on ${onYourCard(removed.cardId)}`,
+            scope: '',
+          }));
+        const subject =
+          removed.merchantName ?? kindLabel(removed.category ?? '');
         const rest = own.find(({ cardId }) => cardId === null);
         const named = own.filter(
-          ({ cardId, by }) =>
-            cardId !== null && (rest === undefined || by?.id !== rest.by?.id),
+          (home) =>
+            home.cardId !== null &&
+            (rest === undefined || toKey(home) !== toKey(rest)),
         );
         return [
-          ...named.map(({ cardId, by }) => ({
-            target: by?.target ?? null,
+          ...named.map((home) => ({
+            key: toKey(home),
             subject,
-            scope: `on ${onYourCard(cardId)}`,
+            scope: `on ${onYourCard(home.cardId)}`,
           })),
           ...(rest === undefined
             ? []
             : [
                 {
-                  target: rest.by?.target ?? null,
+                  key: toKey(rest),
                   subject,
                   scope: named.length > 0 ? RULE_WORDS.onOtherCards : '',
                 },
@@ -107,16 +119,17 @@ export function useRuleNames() {
       };
       const homes = targets.flatMap((removed) =>
         placesOf(removed).filter(
-          ({ target }) => target !== null || !isEnded(removed),
+          ({ key }) => key !== WAITS || (!isEnded(removed) && !isAsk(removed)),
         ),
       );
-      const byTarget = [
-        ...homes.reduce<Map<string | null, typeof homes>>(
+      const order = (key: string) => (key === WAITS ? 2 : key === ASKS ? 1 : 0);
+      const byKey = [
+        ...homes.reduce<Map<string, typeof homes>>(
           (groups, home) =>
-            groups.set(home.target, [...(groups.get(home.target) ?? []), home]),
+            groups.set(home.key, [...(groups.get(home.key) ?? []), home]),
           new Map(),
         ),
-      ].sort(([a], [b]) => Number(a === null) - Number(b === null));
+      ].sort(([a], [b]) => order(a) - order(b));
       const listAll = (names: readonly string[]) =>
         names.length > 1 && names.length <= 6
           ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
@@ -132,21 +145,76 @@ export function useRuleNames() {
           .map(([scope, subjects]) => `${listAll(subjects)} ${scope}`);
         return listAll([...scoped, ...(scopes.get('') ?? [])]);
       };
-      const lines = byTarget.map(([target, entries]) =>
-        target === null
-          ? RULE_WORDS.takeoverWait(describeWhat(entries))
-          : RULE_WORDS.takeover(describeWhat(entries), getEnvelopeName(target)),
+      const toLine = (key: string, what: string) =>
+        key === WAITS
+          ? RULE_WORDS.takeoverWait(what)
+          : key === ASKS
+            ? RULE_WORDS.takeoverAsk(what)
+            : RULE_WORDS.takeover(what, getEnvelopeName(key));
+      const lines = byKey.map(([key, entries]) =>
+        toLine(key, describeWhat(entries)),
       );
-      const waitLine = byTarget.some(([target]) => target === null)
+      const kindLines = [
+        ...targets
+          .flatMap((removed) => {
+            const own = nextHomes.filter(
+              (home) => home.removed.id === removed.id,
+            );
+            return own.flatMap((home) =>
+              home.byKind.map((kind) => ({
+                id: `${removed.id}|${kind.category}|${toKey(kind)}`,
+                removed,
+                kind,
+                cardId: home.cardId,
+                count: own.length,
+              })),
+            );
+          })
+          .reduce<
+            Map<
+              string,
+              {
+                removed: OpenRule;
+                kind: NextPlace & { category: string };
+                cards: (string | null)[];
+                count: number;
+              }
+            >
+          >(
+            (groups, { id, removed, kind, cardId, count }) =>
+              groups.set(id, {
+                removed,
+                kind,
+                count,
+                cards: [...(groups.get(id)?.cards ?? []), cardId],
+              }),
+            new Map(),
+          )
+          .values(),
+      ].map(({ removed, kind, cards, count }) =>
+        toLine(
+          toKey(kind),
+          RULE_WORDS.kindOf(
+            removed.merchantName ?? '',
+            kindLabel(kind.category),
+            cards.length === count || cards.includes(null)
+              ? null
+              : joinNames(cards.map(onYourCard)),
+          ),
+        ),
+      );
+      const waitLine = byKey.some(([key]) => key === WAITS)
         ? lines.slice(-1)
         : [];
-      const envelopeLines = lines.slice(0, lines.length - waitLine.length);
+      const firstLines = lines.slice(0, lines.length - waitLine.length);
+      const room = Math.max(0, 3 - waitLine.length);
+      const shownFirst = firstLines.slice(0, room);
       const shown = [
-        ...envelopeLines.slice(0, 3 - waitLine.length),
+        ...shownFirst,
         ...waitLine,
+        ...kindLines.slice(0, Math.max(0, room - shownFirst.length)),
       ];
-      const hidden = lines.length - shown.length;
-      const isAsk = (rule: OpenRule) => rule.target === RULE_VARIES;
+      const hidden = lines.length + kindLines.length - shown.length;
       const shortNames = (keep: (rule: OpenRule) => boolean) =>
         targets
           .filter(keep)
@@ -156,7 +224,7 @@ export function useRuleNames() {
               (rule.category === null
                 ? `everything on ${getCardLabel(rule.cardId) ?? 'a card'}`
                 : [
-                    getCategoryLabel(rule.category),
+                    kindLabel(rule.category),
                     rule.cardId === null
                       ? ''
                       : `on ${getCardLabel(rule.cardId)}`,
@@ -175,7 +243,7 @@ export function useRuleNames() {
         next: [
           ...(shown.length === 0
             ? [
-                targets.some(isEnded)
+                targets.some((rule) => isEnded(rule) || isAsk(rule))
                   ? RULE_WORDS.staysSame
                   : RULE_WORDS.nothingMoves,
               ]
@@ -183,6 +251,7 @@ export function useRuleNames() {
                 index === 0 ? RULE_WORDS.afterThis(line) : capitalise(line),
               )),
           ...(hidden > 0 ? [RULE_WORDS.takeoverMore(hidden)] : []),
+          RULE_WORDS.placedStay,
         ].join(' '),
       };
     },

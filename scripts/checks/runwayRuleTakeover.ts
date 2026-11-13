@@ -205,4 +205,99 @@ assert.deepEqual(
   'a paused rule holds its purchases today, so removing it hands them on',
 );
 
+const kinds = (removing: OpenRule[], all: OpenRule[]) =>
+  findNextHomes(removing, all, live).map(({ cardId, isAsk, byKind }) => [
+    cardId,
+    isAsk,
+    byKind.map(({ category, by, isAsk: asks }) => [
+      category,
+      by?.id ?? null,
+      asks,
+    ]),
+  ]);
+
+assert.deepEqual(
+  kinds([safeway], rules),
+  [
+    [
+      'discover',
+      false,
+      [['FOOD_AND_DRINK_RESTAURANT', restaurantsOnDiscover.id, false]],
+    ],
+    [null, false, [['FOOD_AND_DRINK_RESTAURANT', restaurants.id, false]]],
+  ],
+  'a store the bank files as a restaurant still goes to the restaurant rule, card by card',
+);
+assert.equal(
+  findRule(
+    {
+      merchant: 'Safeway',
+      category: 'FOOD_AND_DRINK_RESTAURANT',
+      cardId: 'discover',
+    },
+    [discover, restaurantsOnDiscover, restaurants],
+  )?.rule.id,
+  restaurantsOnDiscover.id,
+  'the engine agrees for a Safeway charge filed as a restaurant',
+);
+
+const amazonStore = rule({
+  merchantKey: 'amazon',
+  merchantName: 'Amazon',
+  target: 'everyday',
+});
+assert.deepEqual(
+  kinds([amazonStore], [amazonStore, discover, restaurantsOnDiscover]),
+  [
+    ['discover', false, []],
+    [null, false, []],
+  ],
+  'a store that sells everything is never caught by a kind-of-place rule, and a card rule is no kind',
+);
+
+const askingRestaurants = rule({
+  category: 'FOOD_AND_DRINK_RESTAURANT',
+  target: RULE_VARIES,
+});
+const pausedGroceries = rule({
+  category: 'FOOD_AND_DRINK_GROCERIES',
+  target: 'ended',
+});
+assert.deepEqual(
+  kinds([safeway], [safeway, askingRestaurants, pausedGroceries]),
+  [[null, false, [['FOOD_AND_DRINK_RESTAURANT', null, true]]]],
+  'an asking kind rule asks; a paused one waits like the rest, so it adds nothing',
+);
+
+const askingDiscover = rule({ cardId: 'discover', target: RULE_VARIES });
+assert.deepEqual(
+  kinds([safeway], [safeway, askingDiscover]),
+  [
+    ['discover', true, []],
+    [null, false, []],
+  ],
+  'a card rule that asks is told apart from waiting',
+);
+
+const groceriesEverywhere = rule({
+  category: 'FOOD_AND_DRINK_GROCERIES',
+  target: 'everyday',
+});
+assert.deepEqual(
+  kinds([safeway], [safeway, discover, groceriesEverywhere]),
+  [
+    [
+      'discover',
+      false,
+      [['FOOD_AND_DRINK_GROCERIES', groceriesEverywhere.id, false]],
+    ],
+    [
+      null,
+      false,
+      [['FOOD_AND_DRINK_GROCERIES', groceriesEverywhere.id, false]],
+    ],
+  ],
+  'a kind rule is named even when it ends in the same envelope only if it is a different rule',
+);
+
 console.log('runwayRuleTakeover: all checks passed');
