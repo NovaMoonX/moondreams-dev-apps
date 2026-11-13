@@ -575,7 +575,7 @@ async function writeSeedHorizon(
         rest: { kind: 'later' },
         note: null,
         goalId: null,
-        isYearly: false,
+        isYearly: true,
         fromId: null,
         state: 'open' as const,
         stateOn: null,
