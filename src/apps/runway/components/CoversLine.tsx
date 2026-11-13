@@ -52,7 +52,8 @@ function CoversLine({
   );
   const notes = [...rangeNotes, ...(rest ? [rest.note] : [])];
   const getTitle = () => {
-    if (rangeNotes.length === 0) return rest?.title ?? HORIZON_WORDS.restHelpTitle;
+    if (rangeNotes.length === 0)
+      return rest?.title ?? HORIZON_WORDS.restHelpTitle;
     return rest ? words.helpBothTitle : words.helpTitle;
   };
   const line = [text, rest?.short ? `${rest.short}.` : null]
