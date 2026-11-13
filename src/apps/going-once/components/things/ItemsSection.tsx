@@ -13,7 +13,7 @@ import SelectionBar from '@/components/SelectionBar';
 import SortControl from '@/components/SortControl';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useSelection } from '@/hooks/useSelection';
-import { useDeferredActions } from '@/lib/undo/deferredUndo';
+import { commitDeferred, useHiddenDeferredKeys } from '@/lib/undo/deferredUndo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import BundleFormSheet from '@apps/going-once/components/bundles/BundleFormSheet';
 import BundleRow from '@apps/going-once/components/bundles/BundleRow';
@@ -134,9 +134,9 @@ function ItemsSection({
     return resume === undefined ? null : { resume };
   });
   const storedBundles = useAppSelector((state) => selectBundles(state, saleId));
-  const deferred = useDeferredActions();
+  const hiddenKeys = useHiddenDeferredKeys();
   const isUnbundling = (bundleId: string) =>
-    deferred.some((action) => action.key === toUnbundleKey(bundleId));
+    hiddenKeys.has(toUnbundleKey(bundleId));
   const bundles = storedBundles.filter((bundle) => !isUnbundling(bundle.id));
   const itemsById = useAppSelector((state) => selectItemsById(state, saleId));
   const isBundlesReady = useAppSelector((state) =>
@@ -214,6 +214,19 @@ function ItemsSection({
   const canGroup =
     pickedIds.length >= MIN_BUNDLE_THINGS &&
     pickedIds.length <= MAX_BUNDLE_THINGS;
+  // A picked thing freed by an Unbundle still waiting on its Undo is still bundled on the server, so that write goes first.
+  const startBundle = async () => {
+    const waiting = [
+      ...new Set(
+        pickedIds.flatMap((id) => {
+          const bundleId = itemsById[id]?.bundleId ?? null;
+          return bundleId === null ? [] : [toUnbundleKey(bundleId)];
+        }),
+      ),
+    ];
+    await Promise.all(waiting.map(commitDeferred));
+    setIsMakingBundle(true);
+  };
   const takenOffRef = useRef<HTMLDivElement | null>(null);
 
   const showTakenOff = () => {
@@ -524,7 +537,7 @@ function ItemsSection({
             label: 'Group into a bundle',
             shortLabel: 'Group into a bundle',
             isDisabled: !canGroup,
-            onClick: () => setIsMakingBundle(true),
+            onClick: () => void startBundle(),
           }}
         />
       )}

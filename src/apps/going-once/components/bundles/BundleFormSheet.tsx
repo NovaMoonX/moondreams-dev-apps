@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
 
-import { Button, Checkbox, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { Plus, X } from 'lucide-react';
 
+import AppCheckbox from '@/components/AppCheckbox';
 import Field from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -236,7 +237,7 @@ function BundleFormSheet({
                   {getItemName(item)}
                 </p>
                 <label className='text-muted-foreground flex items-center gap-2 text-sm'>
-                  <Checkbox
+                  <AppCheckbox
                     checked={onlyIds.includes(item.id)}
                     onCheckedChange={(next) => toggleOnly(item.id, next)}
                   />

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import FallbackImage from '@/components/FallbackImage';
 
@@ -32,13 +32,16 @@ const SEAMS: Record<number, Array<[number, number, number, number]>> = {
 interface PhotoMosaicProps {
   /** Most important first: the first photo takes the largest piece. `null` is a photo still loading, which keeps its piece. Past four, the rest are left out. */
   urls: (string | null)[];
-  /** Drawn alone when there is no photo, and in place of any photo that fails to load. */
+  /** Drawn alone when there is no photo, or when every photo fails to load. */
   placeholder: ReactNode;
 }
 
-/** One cover for a group of things that each have a photo: one fills it, two split on the diagonal, three put the first on the left half, four make quarters. Fills its positioned parent. */
+/** One cover for a group of things that each have a photo: one fills it, two split on the diagonal, three put the first on the left half, four make quarters; a photo that fails to load gives its piece to the rest. Fills its positioned parent. */
 function PhotoMosaic({ urls, placeholder }: PhotoMosaicProps) {
-  const shown = urls.slice(0, MAX_PHOTOS);
+  const [failed, setFailed] = useState<string[]>([]);
+  const shown = urls
+    .filter((url) => url === null || !failed.includes(url))
+    .slice(0, MAX_PHOTOS);
   const pieces = PIECES[shown.length] ?? [];
   const seams = SEAMS[shown.length] ?? [];
 
@@ -53,7 +56,7 @@ function PhotoMosaic({ urls, placeholder }: PhotoMosaicProps) {
     <span className='absolute inset-0 block'>
       {shown.map((url, index) => (
         <span
-          key={pieces[index]}
+          key={url ?? `loading-${index}`}
           className='absolute inset-0 grid place-items-center'
           style={{ clipPath: pieces[index] }}
         >
@@ -62,7 +65,11 @@ function PhotoMosaic({ urls, placeholder }: PhotoMosaicProps) {
               src={url}
               alt=''
               className='absolute inset-0 size-full object-cover'
-              fallback={placeholder}
+              onError={() =>
+                setFailed((current) =>
+                  current.includes(url) ? current : [...current, url],
+                )
+              }
             />
           )}
         </span>

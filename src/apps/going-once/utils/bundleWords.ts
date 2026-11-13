@@ -154,6 +154,17 @@ export function formatBundleSold(bundle: Bundle): string | null {
     .join(' · ');
 }
 
+/** Names what went on its own, scaling to many: "Bookshelf went on its own", "Bookshelf and 2 other things went on their own". */
+export function describeGone(gone: Item[]): string {
+  const [first, ...rest] = gone;
+  if (first === undefined) return 'Nothing went on its own';
+  const name = getItemName(first);
+  if (rest.length === 0) return `${name} went on its own`;
+  const others =
+    rest.length === 1 ? getItemName(rest[0]) : `${rest.length} other things`;
+  return `${name} and ${others} went on their own`;
+}
+
 /** The row's muted line after its status: "4 things · save $10", or the unbundle hint. */
 export function formatBundleFacts(
   bundle: Bundle,
@@ -167,7 +178,7 @@ export function formatBundleFacts(
   return [
     formatThingCount(count),
     isSuggesting
-      ? 'Most of it went on its own'
+      ? `${parts.gone.length} ${parts.gone.length === 1 ? 'went on its own' : 'went on their own'}`
       : formatSaveShort(bundle.priceCents, parts.separateCents),
   ]
     .filter((part) => part !== null)

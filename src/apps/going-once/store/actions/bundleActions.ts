@@ -315,27 +315,35 @@ export async function unbundle(
   saleId: string,
   bundleId: string,
   uid: string,
+  expectedStatus: BundleStatus,
 ): Promise<BundleResult> {
   try {
-    return await runTransaction(db, async (transaction): Promise<Outcome> => {
-      const snapshot = await transaction.get(bundleRef(saleId, bundleId));
-      if (!snapshot.exists())
-        return { ok: false, message: GONE_BUNDLE_MESSAGE };
-      const bundle = toBundle(bundleId, saleId, snapshot.data());
-      const things = await readItems(transaction, saleId, bundle.itemIds);
-      const now = Date.now();
-      transaction.delete(bundleRef(saleId, bundleId));
-      things.forEach((thing) => {
-        if (thing === null || thing.bundleId !== bundleId) return;
-        transaction.update(itemRef(saleId, thing.id), {
-          bundleId: null,
-          isBundleOnly: false,
-          lastEditedAt: now,
-          lastEditedBy: uid,
+    const outcome = await runTransaction(
+      db,
+      async (transaction): Promise<Outcome | { conflict: Bundle }> => {
+        const snapshot = await transaction.get(bundleRef(saleId, bundleId));
+        if (!snapshot.exists())
+          return { ok: false, message: GONE_BUNDLE_MESSAGE };
+        const bundle = toBundle(bundleId, saleId, snapshot.data());
+        if (bundle.status !== expectedStatus) return { conflict: bundle };
+        const things = await readItems(transaction, saleId, bundle.itemIds);
+        const now = Date.now();
+        transaction.delete(bundleRef(saleId, bundleId));
+        things.forEach((thing) => {
+          if (thing === null || thing.bundleId !== bundleId) return;
+          transaction.update(itemRef(saleId, thing.id), {
+            bundleId: null,
+            isBundleOnly: false,
+            lastEditedAt: now,
+            lastEditedBy: uid,
+          });
         });
-      });
-      return { ok: true, id: bundleId, at: now };
-    });
+        return { ok: true, id: bundleId, at: now };
+      },
+    );
+    if (!('conflict' in outcome)) return outcome;
+    const conflict = await describeBundleConflict(outcome.conflict, uid);
+    return { ok: false, message: `${conflict} It stays a bundle.` };
   } catch (error) {
     return toFailure(error);
   }

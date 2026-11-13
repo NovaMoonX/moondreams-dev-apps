@@ -1,6 +1,7 @@
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AppCheckbox from '@/components/AppCheckbox';
 import { useLongPress } from '@/hooks/useLongPress';
 import { useAppSelector } from '@/store';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
@@ -114,7 +115,7 @@ function ThingRow({
       {pick && (
         <span className='flex size-6 shrink-0 items-center justify-center'>
           {pick.isPickable && (
-            <Checkbox
+            <AppCheckbox
               checked={pick.isChecked}
               onCheckedChange={pick.onToggle}
               aria-label={`Pick ${getItemName(item)}`}

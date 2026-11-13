@@ -1,13 +1,14 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, Ellipsis } from 'lucide-react';
+import { ChevronRight, Ellipsis, History, Pencil, Split } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
-import EllipsisDropdown from '@/components/EllipsisDropdown';
 import InlineNotice from '@/components/InlineNotice';
 import {
   NOTICE_ACTION_CLASSES,
@@ -50,6 +51,7 @@ import {
 } from '@apps/going-once/utils/bundles';
 import {
   describeBundleChangeLine,
+  describeGone,
   describePriceMove,
   formatBundleSold,
   formatSaveShort,
@@ -65,7 +67,7 @@ import {
   type SoldDraft,
 } from '@apps/going-once/utils/statusDrafts';
 
-type View = 'markPending' | 'markSold' | 'changePaid' | 'history';
+type View = 'more' | 'markPending' | 'markSold' | 'changePaid' | 'history';
 
 interface BundleSheetProps {
   bundle: Bundle;
@@ -75,10 +77,18 @@ interface BundleSheetProps {
   onOpenThing: (itemId: string) => void;
 }
 
-const { option } = DropdownMenuFactories;
-const CHANGE = 'change';
-const UNBUNDLE = 'unbundle';
-const HISTORY = 'history';
+const UNBUNDLE_WORDS: Record<Bundle['status'], { toast: string; row: string }> =
+  {
+    ACTIVE: { toast: '', row: 'Each thing goes back on sale on its own' },
+    PENDING: {
+      toast: ' · its things stay held',
+      row: 'Each thing stays held on its own',
+    },
+    SOLD: {
+      toast: ' · its things stay sold',
+      row: 'Each thing stays sold, with its share of what was paid',
+    },
+  };
 
 /** A bundle in full: what it costs against buying its things separately, the things in the deal and the ones that went on their own, its history, and the acts for its status. */
 function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
@@ -97,6 +107,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { isWorking, run } = useSingleFlight();
+  const { addToast } = useToast();
   const { pending: undoable, showUndo, undo } = useUndoRemoval();
   const [hold, setHold] = useState<HoldDraft>(() => getHoldStart(null, now));
   const [soldDraft, setSoldDraft] = useState<SoldDraft>(() =>
@@ -143,7 +154,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
 
   const open = (next: View) => {
     setError(null);
-    if (next === 'history') {
+    if (next === 'history' || next === 'more') {
       setViews((current) => [...current, next]);
       return;
     }
@@ -194,38 +205,36 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
   };
 
   const startUnbundle = () => {
+    const { status } = bundle;
     deferAction(
       toUnbundleKey(bundle.id),
-      `Unbundled ${bundle.name}`,
+      `Unbundled ${bundle.name}${UNBUNDLE_WORDS[status].toast}`,
       async () => {
-        const result = await unbundle(bundle.saleId, bundle.id, uid);
+        const result = await unbundle(bundle.saleId, bundle.id, uid, status);
         return result.ok ? null : result.message;
       },
     );
     onClose();
   };
 
-  const moreItems = [
-    ...(bundle.status === 'ACTIVE'
-      ? [option({ label: 'Change name, price or things', value: CHANGE })]
-      : []),
-    option({ label: 'Unbundle', value: UNBUNDLE }),
-    option({ label: 'History', value: HISTORY }),
-  ];
-  const moreMenu = (
-    <EllipsisDropdown
-      ariaLabel='More for this bundle'
+  const isMoreOpen = view === 'more';
+  const moreButton = (
+    <Button
+      type='button'
       variant='secondary'
-      icon={<Ellipsis className='size-5' aria-hidden='true' />}
-      className='text-foreground! size-10 min-w-10 shrink-0 rounded-full p-0'
+      size='icon'
+      rounded='full'
+      aria-label='More for this bundle'
+      aria-expanded={isMoreOpen}
       disabled={isWorking}
-      items={moreItems}
-      onItemSelect={(value) => {
-        if (value === CHANGE) setIsEditing(true);
-        else if (value === UNBUNDLE) startUnbundle();
-        else open('history');
-      }}
-    />
+      onClick={() => (isMoreOpen ? back() : open('more'))}
+      className={join(
+        'text-foreground! size-10 min-w-10 shrink-0 p-0',
+        isMoreOpen && 'bg-accent!',
+      )}
+    >
+      <Ellipsis className='size-5' aria-hidden='true' />
+    </Button>
   );
 
   const lowerToSeparate = () =>
@@ -233,15 +242,25 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
 
   const keepIt = () => {
     setError(null);
-    keepBundle(bundle.saleId, bundle.id, uid, gone.length).catch(() =>
-      setError("Couldn't keep the bundle. Try again in a moment."),
-    );
+    keepBundle(bundle.saleId, bundle.id, uid, gone.length)
+      .then(() =>
+        addToast({
+          title: `Kept ${bundle.name} as a bundle`,
+          description: "We'll ask again if another thing goes.",
+        }),
+      )
+      .catch(() =>
+        setError("Couldn't keep the bundle. Try again in a moment."),
+      );
   };
 
-  const getSuggestion = () =>
-    deal.length === 1
-      ? `Only ${getItemName(deal[0])} is left in this bundle.`
-      : "Most of it went on its own. Sell what's left separately?";
+  const getSuggestion = () => {
+    if (deal.length === 1)
+      return `Only ${getItemName(deal[0])} is left in this bundle.`;
+    if (gone.length === 0)
+      return `The bundle is ${formatCentsShort(bundle.priceCents)} now. Sell its things separately?`;
+    return `${describeGone(gone)}. Sell what's left separately?`;
+  };
 
   const renderThing = (id: string) => {
     const item = itemsById[id];
@@ -325,7 +344,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
           >
             Mark sold
           </Button>
-          {moreMenu}
+          {moreButton}
         </>
       );
     if (bundle.status === 'PENDING')
@@ -353,7 +372,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
           >
             Mark sold
           </Button>
-          {moreMenu}
+          {moreButton}
         </>
       );
     return (
@@ -382,7 +401,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
           <span className='max-[360px]:hidden'>Not sold after all</span>
           <span className='min-[360px]:hidden'>Not sold</span>
         </Button>
-        {moreMenu}
+        {moreButton}
       </>
     );
   };
@@ -434,8 +453,45 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
       onClose={closeSheet}
       title={bundle.name}
       viewKey={view ?? 'bundle'}
-      footer={view === null ? frontFooter : <div ref={setFooterNode} />}
+      footer={
+        view === null || isMoreOpen ? frontFooter : <div ref={setFooterNode} />
+      }
     >
+      {isMoreOpen && (
+        <div className='space-y-5'>
+          <BackLink onBack={back} label={bundle.name} />
+          <ActionGroup isRoomy>
+            {bundle.status === 'ACTIVE' && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={<Pencil />}
+                label='Change name, price or things'
+                subtitle='Add or take out things, or set a new price'
+                hasChevron
+                onClick={() => setIsEditing(true)}
+              />
+            )}
+            <ActionRow
+              isGrouped
+              isRoomy
+              icon={<Split />}
+              label='Unbundle'
+              subtitle={UNBUNDLE_WORDS[bundle.status].row}
+              onClick={startUnbundle}
+            />
+            <ActionRow
+              isGrouped
+              isRoomy
+              icon={<History />}
+              label='History'
+              subtitle='Who changed what, and when'
+              hasChevron
+              onClick={() => open('history')}
+            />
+          </ActionGroup>
+        </div>
+      )}
       {view === 'markPending' && (
         <BundlePendingView
           bundle={bundle}
