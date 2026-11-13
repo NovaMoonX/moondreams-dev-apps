@@ -142,6 +142,8 @@ export interface PeopleInput {
   known: KnownWhoState[];
   knownPlaces: KnownPlace[];
   assistantName: string | null;
+  /** Every name the assistant answers to this turn (its own, the one the person said, the default), so none is filed as a person or place. */
+  assistantNames: string[];
   /** The day the capture was made, in the person's zone. */
   dayKey: string;
   capturedAt: number;
@@ -810,12 +812,12 @@ function settleEntities(input: PlanInput) {
   const whoMatches = matchWho({
     mentions: people.mentions,
     known: people.known,
-    assistantName: people.assistantName,
+    assistantNames: people.assistantNames,
   });
   const placeMatches = matchPlaces({
     names: people.places.map((place) => place.name),
     known: people.knownPlaces,
-    assistantName: people.assistantName,
+    assistantNames: people.assistantNames,
   });
   const whoSettled = people.mentions.flatMap((mention, index) => {
     const match = whoMatches[index];

@@ -121,6 +121,13 @@ export function useCaptureSweep(uid: string | null) {
     (state) =>
       state.helm.keyStatus === 'ready' && state.helm.waitingCaptures.isLoaded,
   );
+  // A turn that lands as received after open (one imported from the drop box) is a moment to sort again.
+  const receivedCount = useAppSelector(
+    (state) =>
+      state.helm.waitingCaptures.captures.filter(
+        (capture) => capture.status === 'received',
+      ).length,
+  );
   const sweep = useRef<ReturnType<typeof createSweep> | null>(null);
 
   useEffect(() => {
@@ -135,7 +142,7 @@ export function useCaptureSweep(uid: string | null) {
 
   useEffect(() => {
     if (uid && isReady) void sweep.current?.run();
-  }, [uid, isReady]);
+  }, [uid, isReady, receivedCount]);
 
   useEffect(() => {
     const handleOnline = () => void sweep.current?.run();
