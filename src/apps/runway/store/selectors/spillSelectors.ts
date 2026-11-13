@@ -2,7 +2,7 @@ import type { RootState } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getCountedFrom } from '@apps/runway/engine/purchases';
 import { resolveSpill, type SpillChains } from '@apps/runway/engine/spill';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectLedgerOnlyBalances as selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectEnvelopes } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly, PurchaseLine } from '@apps/runway/types';
 

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import { getFirstMoneyDay } from '@apps/runway/engine/horizonLinks';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AmountField from '@/components/AmountField';
 import AppToggle from '@/components/AppToggle';
 import RevealChip from '@/components/RevealChip';
 import SummaryRow from '@/components/SummaryRow';
@@ -26,11 +27,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { useStore } from 'react-redux';
 import { useAppSelector, type RootState } from '@/store';
+import { getEventLink } from '@apps/runway/utils/eventLink';
+import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import { generateUuid } from '@/utils/idUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   BILL_EVERY_UNIT_LABELS,
   BILL_EVERY_UNITS,
@@ -44,6 +47,8 @@ import {
   ACCOUNT_WORDS,
   AUTO_PAY_WORDS,
   BILL_PAY_WORDS,
+  BILL_SET_ASIDE_WORDS,
+  MAX_PURCHASE_CENTS,
   CARD_WORDS,
   FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
@@ -58,6 +63,7 @@ import {
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
+  PART_OF_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
@@ -72,7 +78,7 @@ import ChoiceCards from '@apps/runway/components/ChoiceCards';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import { makeCostABill } from '@apps/runway/store/actions/horizonActions';
 import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectCostPaid,
   selectCostPayments,
@@ -86,6 +92,7 @@ import { getBillPins } from '@apps/runway/engine/billShare';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
+import { recordHolding } from '@apps/runway/store/actions/moveActions';
 import {
   isAmountDraft,
   isFlag,
@@ -95,6 +102,7 @@ import {
   isPickOrCreate,
   isText,
   isTextList,
+  isWholeNumber,
   keptChangeChecks,
   readDraftFields,
   withDraftDefaults,
@@ -111,12 +119,13 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import BackLink from '@/components/BackLink';
+import ChoiceCard from '@apps/runway/components/ChoiceCard';
 import QuickChange from '@apps/runway/components/QuickChange';
+import { isCardFeeBill } from '@apps/runway/engine/cardFees';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
-import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
   describePayChoice,
   getPayOptions,
@@ -163,8 +172,18 @@ import type {
   Priority,
   Schedule,
 } from '@apps/runway/types';
-import { getIntervalMonths } from '@apps/runway/engine/schedule';
-import { describeEveryMonths } from '@apps/runway/utils/billText';
+import {
+  getIntervalMonths,
+  occurrences,
+  toPayOn,
+} from '@apps/runway/engine/schedule';
+import {
+  describeDueAnswer,
+  describeEveryMonths,
+  describePayOnDay,
+} from '@apps/runway/utils/billText';
+import MonthDayGrid from '@apps/runway/components/MonthDayGrid';
+import { LAST_DAY } from '@apps/runway/utils/monthDays';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import {
   NEW_GROUP_ID,
@@ -215,12 +234,20 @@ interface BillFormData {
   accountId: string | null;
   /** The app counts each payment as paid on its due day. */
   paysItself: boolean;
+  /** What is already set aside for it, asked only when a bill is added. */
+  setAside: string;
+  /** The day of the month the person pays it; null pays on the due date. */
+  payOnDay: number | null;
 }
 
 interface BillDraft extends KeptChange {
   formData: BillFormData;
   isPriorityChosen: boolean;
 }
+
+const isNullableDay = (value: unknown) =>
+  value === null ||
+  (isWholeNumber(value) && Number(value) >= 1 && Number(value) <= LAST_DAY);
 
 const parseBillDraft = (stored: unknown): BillDraft | null => {
   const draft = readDraftFields<BillDraft>(stored, {
@@ -233,6 +260,8 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
         withDraftDefaults(draft.formData, {
           accountId: null,
           paysItself: false,
+          setAside: '',
+          payOnDay: null,
         }),
         {
           name: isText,
@@ -254,6 +283,8 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
           paidByCardId: isNullableText,
           accountId: isNullableText,
           paysItself: isFlag,
+          setAside: isText,
+          payOnDay: isNullableDay,
           isLater: isFlag,
         },
       )
@@ -286,6 +317,14 @@ interface BillFormProps {
   editing?: { itemId: string; payload: BillSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** The open event a change from here is part of when the form opens. */
+  presetEventId?: string;
+  /** The change is for a later day: its "When it starts" opens on that question. */
+  planAhead?: 'date' | 'stretch';
+  /** The open event a new bill is part of; the bill starts on its first due day. */
+  eventId?: string;
+  /** The day a new bill is planned to start, asked before the form opens; its first due day starts there. */
+  startsOn?: number;
   /** What the form calls the thing it adds; an expense that is coming is not a bill. */
   noun?: 'bill' | 'expense';
   /** A question to open first when changing a bill ("amount"); every answer starts folded otherwise. */
@@ -303,6 +342,7 @@ export type BillStepId =
   | 'amount'
   | 'due'
   | 'repeats'
+  | 'payOn'
   | 'ends'
   | 'funding'
   | 'priority'
@@ -327,6 +367,7 @@ const EMPTY_BILL: BillSealed = {
   paidByCardId: null,
   accountId: null,
   paysItself: false,
+  payOnDay: null,
 };
 
 const priorityOptions = PRIORITIES.map((value) => ({
@@ -352,6 +393,18 @@ const getEveryMonths = (data: BillFormData): number | null => {
     ? months
     : null;
 };
+
+/** A day of the month to pay on means something for a bill paid at most once a month. */
+const canPayOnDay = (frequency: Frequency | null) =>
+  frequency !== null &&
+  frequency !== 'weekly' &&
+  frequency !== 'everyOtherWeek';
+
+const payOnOptions = (['due', 'day'] as const).map((value) => ({
+  value,
+  label:
+    value === 'due' ? FORM_FLOW_WORDS.payOnDue : FORM_FLOW_WORDS.payOnSetDay,
+}));
 
 const isRepeatAnswered = (data: BillFormData) =>
   data.frequency !== null &&
@@ -379,6 +432,19 @@ const toSchedule = (
         ? [new Date(anchor).getUTCDate()]
         : [],
   };
+};
+
+const NEXT_DUE_REACH = 800 * 86_400_000;
+const NO_ENDING = { onDate: null, afterCount: null };
+
+/** A repeating bill's next due day from today, which its edit shows in place of the first one it was given. */
+const getNextDue = (payload: BillSealed, today: number) => {
+  const { schedule } = payload.timing;
+  if (schedule.kind === 'once' || schedule.anchor === null) return null;
+  return (
+    occurrences(schedule, payload.ending, today, today + NEXT_DUE_REACH)[0] ??
+    null
+  );
 };
 
 /** A saved schedule as the form's repeat answers. */
@@ -432,42 +498,6 @@ const paidFromOptions = BILL_PAID_FROMS.map((value) => ({
   value,
   label: PAID_FROM_WORDS[value],
 }));
-
-interface PaidFromChoiceProps {
-  label: string;
-  meaning: string;
-  isChosen: boolean;
-  onPick: () => void;
-}
-
-function PaidFromChoice({
-  label,
-  meaning,
-  isChosen,
-  onPick,
-}: PaidFromChoiceProps) {
-  return (
-    <Button
-      type='button'
-      variant='tertiary'
-      role='radio'
-      aria-checked={isChosen}
-      className={join(
-        'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-2! text-left font-normal whitespace-normal',
-        isChosen &&
-          'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
-      )}
-      onClick={onPick}
-    >
-      <span className='text-[15px] leading-[1.125rem] font-medium'>
-        {label}
-      </span>
-      <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
-        {meaning}
-      </span>
-    </Button>
-  );
-}
 
 const toPickLabel = (pick: { name: string; emoji: string }) =>
   `${pick.emoji} ${pick.name}`;
@@ -581,6 +611,8 @@ const getEditingData = (
     paidByCardId: payload.paidByCardId ?? null,
     accountId: payload.accountId ?? null,
     paysItself: payload.paysItself === true,
+    setAside: '',
+    payOnDay: payload.payOnDay ?? null,
   };
 };
 
@@ -635,6 +667,10 @@ function BillFormBody({
   title,
   editing,
   presetDayKey,
+  presetEventId,
+  planAhead,
+  eventId,
+  startsOn,
   noun = 'bill',
   openStep = null,
   draft,
@@ -673,6 +709,12 @@ function BillFormBody({
   const openAccounts = useAppSelector(selectAccounts);
   const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const isTracking = isTrackingLevel(useAppSelector(selectLevel));
+  const [nextDue] = useState(() =>
+    editing ? getNextDue(editing.payload, today) : null,
+  );
+  const [savedData] = useState(() =>
+    editing ? getEditingData(editing.payload, false) : null,
+  );
   const [startData] = useState<BillFormData>(() =>
     editing || draft?.initial || fromCost
       ? {
@@ -704,12 +746,13 @@ function BillFormBody({
           ...(draft?.forName
             ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
             : {}),
+          ...(nextDue === null ? {} : { startDate: toDateInputValue(nextDue) }),
         }
       : {
           name: '',
           amount: EMPTY_AMOUNT_DRAFT,
           priority: 'should',
-          startDate: '',
+          startDate: startsOn === undefined ? '' : toDateInputValue(startsOn),
           isLater: false,
           frequency: null,
           everyCount: '',
@@ -726,6 +769,8 @@ function BillFormBody({
           paidByCardId: null,
           accountId: null,
           paysItself: false,
+          setAside: '',
+          payOnDay: null,
         },
   );
   const startsChosen =
@@ -735,7 +780,7 @@ function BillFormBody({
       ? null
       : `${FORM_DRAFT_PREFIX}${noun}:${editing?.itemId ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
-  const draftBase = editing ? startData : null;
+  const draftBase = editing ? savedData : null;
   const kept = useFormDraft({
     key: draftKey,
     base: draftBase,
@@ -761,6 +806,9 @@ function BillFormBody({
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<BillFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
+  const [isPayOnDayShown, setIsPayOnDayShown] = useState(
+    formData.payOnDay !== null,
+  );
 
   const planStance = useAppSelector(selectStance);
   const isOnce = formData.frequency === 'once';
@@ -775,6 +823,12 @@ function BillFormBody({
   const canChoose = isOnce && dueDays.length > 0;
   const isChosen = canChoose && formData.funding === 'chosen';
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
+  const planStart = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? null,
+  );
+  const setAsideCents = parseMoneyToCents(formData.setAside);
+  const startingCents =
+    setAsideCents !== null && setAsideCents > 0 ? setAsideCents : 0;
   const openDays = useAppSelector((state) => state.runway.days);
   const store = useStore<RootState>();
   const savedPay =
@@ -798,6 +852,28 @@ function BillFormBody({
           (pin) => formatDateOrdinalUTC(pin.expectedOn),
         )
       : [];
+  /** A date that still lands on the saved schedule keeps that schedule (or its first date when the new repeat still lands on the date), so an edit never moves where the bill started counting. */
+  const toBillSchedule = (data: BillFormData, frequency: Frequency) => {
+    if (data.isLater) return toSchedule(data, frequency, null);
+    const picked = fromDateInputValue(data.startDate);
+    if (picked === undefined) return undefined;
+    const saved = editing?.payload.timing.schedule;
+    const isOnSaved =
+      saved !== undefined &&
+      saved.anchor !== null &&
+      saved.kind !== 'once' &&
+      occurrences(saved, NO_ENDING, picked, picked).length > 0;
+    if (!saved || !isOnSaved) return toSchedule(data, frequency, picked);
+    const isSameRepeat =
+      frequency === savedData?.frequency &&
+      savedData !== null &&
+      getEveryMonths(data) === getEveryMonths(savedData);
+    if (isSameRepeat) return saved;
+    const rebuilt = toSchedule(data, frequency, saved.anchor);
+    return occurrences(rebuilt, NO_ENDING, picked, picked).length > 0
+      ? rebuilt
+      : toSchedule(data, frequency, picked);
+  };
   const canPickPay = !isOnce && formData.frequency !== null;
   const savedFundedBy = editing?.payload.fundedBy.kind ?? null;
   const canAskPaidFrom =
@@ -808,7 +884,8 @@ function BillFormBody({
         formData.frequency !== null &&
         hasPaysToChoose(
           comingDays,
-          toSchedule(formData, formData.frequency, dueDate),
+          toBillSchedule(formData, formData.frequency) ??
+            toSchedule(formData, formData.frequency, dueDate),
           today,
           getOneTimePayIds(plan),
         )));
@@ -857,6 +934,7 @@ function BillFormBody({
     return PAID_FROM_WORDS[formData.paidFrom];
   };
 
+  const isFeeBill = editing !== undefined && isCardFeeBill(editing.payload);
   const savedCardId = editing?.payload.paidByCardId ?? null;
   const cardOptions = allCards.filter(
     (card) =>
@@ -901,6 +979,14 @@ function BillFormBody({
   const isDueValid =
     formData.isLater ||
     (dueDate !== undefined && (editing !== undefined || dueDate >= today));
+  const getDueSummary = (on: number) => {
+    const schedule =
+      formData.frequency === null
+        ? undefined
+        : toBillSchedule(formData, formData.frequency);
+    const day = schedule ? describeDueAnswer(schedule, on) : null;
+    return day ?? formatDateOrdinalUTC(on);
+  };
   const canLater =
     editing === undefined
       ? fromCost === undefined
@@ -998,7 +1084,7 @@ function BillFormBody({
       ]
     : [];
 
-  const steps: QuestionStep[] = [
+  const allSteps: QuestionStep[] = [
     ...bringStep,
     {
       id: 'name',
@@ -1069,13 +1155,13 @@ function BillFormBody({
     },
     {
       id: 'due',
-      title: FORM_FLOW_WORDS.dueTitle,
+      title: isOnce ? FORM_FLOW_WORDS.dueTitle : FORM_FLOW_WORDS.nextDueTitle,
       summaryLabel: FORM_FLOW_WORDS.due,
       summaryValue: formData.isLater
         ? FORM_FLOW_WORDS.dueLaterSummary
         : dueDate === undefined
           ? ''
-          : formatDateOrdinalUTC(dueDate),
+          : getDueSummary(dueDate),
       isAnswered: isDueValid,
       blocker:
         dueDate !== undefined && !isDueValid ? FORM_FLOW_WORDS.pastDay : null,
@@ -1193,6 +1279,54 @@ function BillFormBody({
         </div>
       ),
     },
+    ...(canPayOnDay(formData.frequency) && !formData.isLater
+      ? [
+          {
+            id: 'payOn',
+            title: FORM_FLOW_WORDS.payOnTitle,
+            summaryLabel: FORM_FLOW_WORDS.payOn,
+            summaryValue: describePayOnDay(formData.payOnDay),
+            isAnswered: true,
+            isPreAnswered: true,
+            render: ({ moveOn }: QuestionControls) => (
+              <div className='space-y-3'>
+                <PillGroup
+                  label={FORM_FLOW_WORDS.payOnTitle}
+                  options={payOnOptions}
+                  value={isPayOnDayShown ? 'day' : 'due'}
+                  onChange={(choice) => {
+                    if (choice === 'due') {
+                      set({ payOnDay: null });
+                      setIsPayOnDayShown(false);
+                      moveOn();
+                      return;
+                    }
+                    setIsPayOnDayShown(true);
+                  }}
+                />
+                {isPayOnDayShown && (
+                  <MonthDayGrid
+                    label={FORM_FLOW_WORDS.payOnDayLabel}
+                    value={formData.payOnDay}
+                    onPick={(payOnDay) => {
+                      set({ payOnDay });
+                      moveOn();
+                    }}
+                  />
+                )}
+                {formData.payOnDay !== null && dueDate !== undefined && (
+                  <p className='text-muted-foreground text-sm text-pretty'>
+                    {FORM_FLOW_WORDS.payOnNote(
+                      formatDateOrdinalUTC(toPayOn(dueDate, formData.payOnDay)),
+                      formatDateOrdinalUTC(dueDate),
+                    )}
+                  </p>
+                )}
+              </div>
+            ),
+          },
+        ]
+      : []),
     ...(isOnce || formData.frequency === null
       ? []
       : [
@@ -1302,7 +1436,7 @@ function BillFormBody({
                     className='space-y-2'
                   >
                     {paidFromChoices.map(({ value, label }) => (
-                      <PaidFromChoice
+                      <ChoiceCard
                         key={value}
                         label={label}
                         meaning={PAID_FROM_WORDS[`${value}Meaning`]}
@@ -1348,6 +1482,33 @@ function BillFormBody({
             },
           ]
         : []),
+    ...(editing || draft || fromCost
+      ? []
+      : [
+          {
+            id: 'setAside',
+            title: BILL_SET_ASIDE_WORDS.addTitle,
+            summaryLabel: BILL_SET_ASIDE_WORDS.addLabel,
+            summaryValue:
+              setAsideCents !== null && setAsideCents > 0
+                ? formatCents(setAsideCents)
+                : BILL_SET_ASIDE_WORDS.addNone,
+            isAnswered:
+              formData.setAside.trim() === '' ||
+              (setAsideCents !== null && setAsideCents <= MAX_PURCHASE_CENTS),
+            isPreAnswered: true,
+            blocker: FORM_FLOW_WORDS.badAmount,
+            render: () => (
+              <AmountField
+                isHero
+                label={BILL_SET_ASIDE_WORDS.addAmount}
+                value={formData.setAside}
+                onChange={(setAside) => set({ setAside })}
+                hint={BILL_SET_ASIDE_WORDS.addHint}
+              />
+            ),
+          } satisfies QuestionStep,
+        ]),
     ...(draft && !draft.forName
       ? []
       : [
@@ -1492,6 +1653,9 @@ function BillFormBody({
       ),
     },
   ];
+  const steps = isFeeBill
+    ? allSteps.filter(({ id }) => id === 'priority' || id === 'funding')
+    : allSteps;
   const [isAll, setIsAll] = useState(false);
   const maskNote = (note: string | null | undefined) =>
     note ? mask(note) : null;
@@ -1535,13 +1699,15 @@ function BillFormBody({
 
   const buildBill = (data: BillFormData): BillSealed | null => {
     const amount = parseAmountDraft(data.amount);
-    const anchor = data.isLater ? null : fromDateInputValue(data.startDate);
     const ending = buildEnding(data);
+    const schedule =
+      data.frequency === null
+        ? undefined
+        : toBillSchedule(data, data.frequency);
     if (
       amount === null ||
-      anchor === undefined ||
+      schedule === undefined ||
       !ending ||
-      data.frequency === null ||
       !isRepeatAnswered(data)
     )
       return null;
@@ -1561,7 +1727,7 @@ function BillFormBody({
       amount,
       timing: {
         kind: 'date',
-        schedule: toSchedule(data, data.frequency, anchor),
+        schedule,
       },
       ending,
       fundedBy,
@@ -1574,7 +1740,33 @@ function BillFormBody({
         isAccountsLoaded,
       ),
       paysItself: isTracking ? data.paysItself : startData.paysItself,
+      ...(editing
+        ? editing.payload.startingCents === undefined
+          ? {}
+          : { startingCents: editing.payload.startingCents }
+        : planStart !== null || startingCents === 0
+          ? {}
+          : { startingCents }),
+      payOnDay:
+        canPayOnDay(data.frequency) && !data.isLater ? data.payOnDay : null,
     };
+    if (isFeeBill && editing) {
+      const locked = editing.payload;
+      return {
+        ...result,
+        name: locked.name,
+        emoji: locked.emoji,
+        amount: locked.amount,
+        timing: locked.timing,
+        ending: locked.ending,
+        stanceOverride: locked.stanceOverride,
+        groupId: locked.groupId,
+        paidByCardId: locked.paidByCardId ?? null,
+        accountId: locked.accountId ?? null,
+        paysItself: locked.paysItself === true,
+        cardFeeOf: locked.cardFeeOf ?? null,
+      };
+    }
     return result;
   };
 
@@ -1663,10 +1855,13 @@ function BillFormBody({
             isAccountsLoaded,
           ),
           paysItself: editing.payload.paysItself === true,
+          payOnDay: editing.payload.payOnDay ?? null,
         }
       : EMPTY_BILL,
     candidate,
     presetDayKey,
+    presetEventId,
+    planAhead,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     afterSave: isFundingChanged ? clearStalePins : undefined,
@@ -1677,7 +1872,7 @@ function BillFormBody({
   const editBlocker = flow.getBlocker(blocker);
   const isChangeDirty =
     flow.note.trim() !== '' ||
-    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+    JSON.stringify(flow.from) !== JSON.stringify(flow.initialFrom);
   const isDirty =
     JSON.stringify(formData) !== JSON.stringify(startData) ||
     isChangeDirty ||
@@ -1805,11 +2000,46 @@ function BillFormBody({
         onClose();
         return;
       }
-      await createBill(user.uid, encryption, {
+      const { billId } = await createBill(user.uid, encryption, {
         startDate: today,
         bill,
         newGroup: resolveGroup(formData).newGroup,
+        link: getEventLink(
+          selectAllHorizonItems(store.getState(), today),
+          eventId ?? null,
+          {
+            today,
+            itemName: bill.name,
+            what: PART_OF_WORDS.starts,
+            from: getFirstMoneyDay({
+              itemId: '',
+              createdAt: 0,
+              effectiveFrom: today,
+              effectiveUntil: null,
+              id: '',
+              changeId: '',
+              kind: 'bill',
+              payload: bill,
+            }),
+          },
+        ),
       });
+      if (planStart !== null && startingCents > 0) {
+        const isRecorded = await recordHolding(
+          user.uid,
+          encryption,
+          planStart,
+          { holding: 'bill', refId: billId, amountCents: startingCents },
+        ).catch((holdingError) => {
+          console.error(holdingError);
+          return false;
+        });
+        if (!isRecorded)
+          addToast({
+            title: BILL_SET_ASIDE_WORDS.notRecorded(bill.name),
+            type: 'warning',
+          });
+      }
       onClose();
     } catch (saveError) {
       setError(
@@ -1862,7 +2092,7 @@ function BillFormBody({
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps
-        isReason={flow.step === 'reason'}
+        isReason={flow.step !== 'form'}
         reason={<ChangeReason flow={flow} onClose={requestClose} />}
       >
         <ChangeFlowContext value={flowValue}>
@@ -1878,9 +2108,16 @@ function BillFormBody({
                 step={quickStep}
                 flow={questions}
                 rowIds={
-                  quickStep.id === 'funding' ? [] : ['name', 'due', 'repeats']
+                  isFeeBill
+                    ? quickStep.id === 'funding'
+                      ? []
+                      : ['funding']
+                    : quickStep.id === 'funding'
+                      ? []
+                      : ['name', 'due', 'repeats']
                 }
                 after={changeSection}
+                isAfterFirst={flow.isPlanning}
                 isAll={isAll}
                 onAll={() => setIsAll(true)}
                 onBack={() => setIsAll(false)}
