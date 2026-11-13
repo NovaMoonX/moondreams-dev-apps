@@ -39,6 +39,27 @@ export interface NormalizedTransaction {
   isPending: boolean;
 }
 
+/** A card's latest statement as the bank reports it; every figure is null when the bank does not say. */
+export interface NormalizedCardStatement {
+  providerAccountId: string;
+  minimumCents: number | null;
+  statementCents: number | null;
+  /** Date-only: UTC midnight. */
+  statementOn: number | null;
+  /** Date-only: UTC midnight. */
+  dueOn: number | null;
+  lastPaymentCents: number | null;
+  /** Date-only: UTC midnight. */
+  lastPaymentOn: number | null;
+}
+
+/** `needsConsent`: the person must agree to share card details; `unsupported`: this bank or provider account cannot; `notReady`: the provider has not prepared them yet. */
+export type CardStatementRead =
+  | { kind: 'ok'; statements: NormalizedCardStatement[] }
+  | { kind: 'needsConsent' }
+  | { kind: 'unsupported' }
+  | { kind: 'notReady' };
+
 export interface TransactionSync {
   added: NormalizedTransaction[];
   modified: NormalizedTransaction[];
@@ -92,7 +113,11 @@ export interface BankDataProvider {
   /** With `update`, a token that reopens an existing connection (and lets the person pick accounts again) instead of making a new one. */
   createLinkSession(
     uid: string,
-    update?: { accessToken: string; accountSelection: boolean },
+    update?: {
+      accessToken: string;
+      accountSelection: boolean;
+      askCardConsent: boolean;
+    },
   ): Promise<{ linkToken: string }>;
   exchange(publicToken: string): Promise<ProviderGrant>;
   /** The institution's name and logo (a PNG data URL), or null when the provider cannot say. */
@@ -102,6 +127,8 @@ export interface BankDataProvider {
     grant: ProviderGrant,
     options?: { isLive: boolean },
   ): Promise<NormalizedAccount[]>;
+  /** The statement details of every credit account under the grant; call only for a grant with a card linked. */
+  listCardStatements(grant: ProviderGrant): Promise<CardStatementRead>;
   /** Asks the provider to check the bank for new transactions now; what it finds arrives later through the webhook. */
   refreshTransactions(grant: ProviderGrant): Promise<void>;
   revoke(grant: ProviderGrant): Promise<void>;
