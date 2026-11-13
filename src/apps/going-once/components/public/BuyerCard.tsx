@@ -48,6 +48,11 @@ function BuyerCard({ thing, onOpen }: BuyerCardProps) {
             <StatusDot status='PENDING' className='text-muted-foreground' />
           )}
         </span>
+        {thing.bundleId !== null && (
+          <span className='text-muted-foreground text-xs'>
+            {thing.isBundleOnly ? 'Bundle only' : 'In a bundle'}
+          </span>
+        )}
       </span>
     </Button>
   );

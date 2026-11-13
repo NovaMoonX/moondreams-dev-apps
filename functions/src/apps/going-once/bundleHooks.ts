@@ -22,6 +22,17 @@ export const clipName = (text: unknown, fallback: string) => {
     : name;
 };
 
+/** What a push calls an inquiry: the bundle when it is about one (its label minus the "(n things)" count), otherwise the thing as it was sent. */
+export function getInquiryLabel(inquiry: DocumentData): string {
+  const bundle =
+    typeof inquiry.bundleLabelAtSend === 'string'
+      ? inquiry.bundleLabelAtSend.replace(/\s*\(\d+ things\)$/, '')
+      : '';
+  return bundle.trim() === ''
+    ? clipName(inquiry.itemTitleAtSend, 'A thing')
+    : clipName(bundle, 'A bundle');
+}
+
 const toUrl = (path: string) => toAppUrl(path) ?? APP_ORIGIN;
 
 const salePath = (saleId: string) =>

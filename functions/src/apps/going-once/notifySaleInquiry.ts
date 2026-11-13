@@ -7,6 +7,7 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { queueBundledPush } from '../../notifications/bundledPush.js';
 import {
   clipName,
+  getInquiryLabel,
   getInquiryUrl,
   isNewInterest,
   isPushOff,
@@ -62,7 +63,7 @@ export const notifySaleInquiry = onDocumentWritten(
       const item = {
         key: inquiryId,
         groupId: saleId,
-        label: clipName(after.itemTitleAtSend, 'A thing'),
+        label: getInquiryLabel(after),
         groupLabel: clipName(sale.name, 'Your sale'),
         url: getInquiryUrl(saleId, inquiryId),
         queuedAt: now,

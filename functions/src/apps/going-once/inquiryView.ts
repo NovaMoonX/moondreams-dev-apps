@@ -48,11 +48,17 @@ export function readContact(raw: unknown): ReadContact | null {
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 
-/** 26 base32 characters of SHA-256 over the thing and the normalised contact, so a double tap or a resend is the same document. */
-export function toInquiryId(itemId: string, contactKey: string): string {
-  const bits = [
-    ...createHash('sha256').update(`${itemId}\n${contactKey}`).digest(),
-  ]
+/** 26 base32 characters of SHA-256 over the thing, the normalised contact and, for a bundle, the bundle, so a double tap or a resend is the same document and a bundle inquiry never lands on a solo one. A solo id is unchanged. */
+export function toInquiryId(
+  itemId: string,
+  contactKey: string,
+  bundleId: string | null = null,
+): string {
+  const key =
+    bundleId === null
+      ? `${itemId}\n${contactKey}`
+      : `${itemId}\n${contactKey}\nbundle:${bundleId}`;
+  const bits = [...createHash('sha256').update(key).digest()]
     .map((byte) => byte.toString(2).padStart(8, '0'))
     .join('');
   return Array.from(

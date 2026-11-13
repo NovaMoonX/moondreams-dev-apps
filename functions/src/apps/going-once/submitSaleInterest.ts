@@ -17,6 +17,7 @@ import {
   isListable,
   isRecord,
   isSafeId,
+  readBundleDeal,
 } from './salePageView.js';
 
 export type SaleInterestResult =
@@ -56,6 +57,65 @@ function isThrottled(address: string, now: number): boolean {
   return recent.length >= INQUIRY_LIMITS.THROTTLE_SENDS;
 }
 
+/** The bundle a thing is served in right now (on offer or held, two or more listable things in its deal, this one among them), or null. */
+async function readServedBundle(
+  saleId: string,
+  itemId: string,
+  itemData: Record<string, unknown>,
+) {
+  if (!isSafeId(itemData.bundleId)) {
+    return null;
+  }
+
+  const bundle = (
+    await saleRef(saleId).collection('bundles').doc(itemData.bundleId).get()
+  ).data();
+  if (
+    !isRecord(bundle) ||
+    (bundle.status !== 'ACTIVE' && bundle.status !== 'PENDING') ||
+    !Array.isArray(bundle.itemIds)
+  ) {
+    return null;
+  }
+
+  const ids = [...new Set(bundle.itemIds.filter(isSafeId))].slice(0, 100);
+  const docs =
+    ids.length === 0
+      ? []
+      : await getFirestore().getAll(
+          ...ids.map((id) => saleRef(saleId).collection('items').doc(id)),
+        );
+  const items = new Map<string, unknown>(
+    docs.flatMap((doc): [string, unknown][] =>
+      doc.exists ? [[doc.id, doc.data()]] : [],
+    ),
+  );
+  const deal = readBundleDeal(bundle, items).filter((id) => {
+    const item = items.get(id);
+    return (
+      isRecord(item) &&
+      PUBLIC_STATUSES.some((status) => status === item.status) &&
+      isListable(item)
+    );
+  });
+  const name =
+    typeof bundle.name === 'string'
+      ? bundle.name.trim().replace(/\s+/g, ' ').slice(0, 60)
+      : '';
+  if (deal.length < 2 || !deal.includes(itemId) || name === '') {
+    return null;
+  }
+
+  return {
+    id: itemData.bundleId,
+    label: `${name} (${deal.length} things)`,
+    isSoloLocked:
+      itemData.isBundleOnly === true &&
+      bundle.status === 'ACTIVE' &&
+      itemData.status === 'AVAILABLE',
+  };
+}
+
 const toText = (value: unknown, max: number) =>
   typeof value === 'string'
     ? value.trim().replace(/\s+/g, ' ').slice(0, max)
@@ -64,6 +124,7 @@ const toText = (value: unknown, max: number) =>
 async function send(
   linkId: string,
   itemId: string,
+  requestedBundleId: string | null,
   name: string,
   contact: NonNullable<ReturnType<typeof readContact>>,
   message: string | null,
@@ -97,8 +158,17 @@ async function send(
     return refuse('not_available');
   }
 
+  const served = await readServedBundle(saleId, itemId, itemData);
+  if (requestedBundleId !== null && served?.id !== requestedBundleId) {
+    return refuse('not_available');
+  }
+
+  const isAboutBundle =
+    served !== null && (requestedBundleId !== null || served.isSoloLocked);
+  const bundleId = isAboutBundle ? served.id : null;
+  const bundleLabelAtSend = isAboutBundle ? served.label : null;
   const inquiries = saleRef(saleId).collection('inquiries');
-  const inquiry = inquiries.doc(toInquiryId(itemId, contact.key));
+  const inquiry = inquiries.doc(toInquiryId(itemId, contact.key, bundleId));
   if (!(await inquiry.get()).exists) {
     const asked = await inquiries.where('itemId', '==', itemId).count().get();
     if (asked.data().count >= INQUIRY_LIMITS.PER_THING) {
@@ -130,6 +200,7 @@ async function send(
         phone: contact.phone,
         message,
         itemTitleAtSend,
+        bundleLabelAtSend,
         status: 'NEW',
         handledBy: null,
         handledAt: null,
@@ -152,6 +223,8 @@ async function send(
       saleId,
       itemId,
       itemTitleAtSend,
+      bundleId,
+      bundleLabelAtSend,
       name,
       email: contact.email,
       phone: contact.phone,
@@ -216,6 +289,13 @@ export const submitSaleInterest = onCall(
     if (!isLinkId(data.linkId) || !isSafeId(data.itemId)) {
       return refuse('not_found');
     }
+    if (
+      data.bundleId !== undefined &&
+      data.bundleId !== null &&
+      !isSafeId(data.bundleId)
+    ) {
+      return refuse('not_found');
+    }
 
     const now = Date.now();
     if (isThrottled(request.rawRequest.ip ?? `link:${data.linkId}`, now)) {
@@ -225,6 +305,7 @@ export const submitSaleInterest = onCall(
     return send(
       data.linkId,
       data.itemId,
+      isSafeId(data.bundleId) ? data.bundleId : null,
       name,
       contact,
       message === '' ? null : message,

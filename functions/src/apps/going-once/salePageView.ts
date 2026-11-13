@@ -11,7 +11,11 @@ export const SALE_PAGE_LIMITS = {
   MAX_PAYMENT_METHOD_LENGTH: 30,
   MAX_STORE_URL_LENGTH: 2000,
   MAX_PAGE_THINGS: 300,
+  MAX_BUNDLE_NAME_LENGTH: 60,
+  MAX_PAGE_BUNDLES: 100,
 } as const;
+
+const BUNDLE_STATUSES = ['ACTIVE', 'PENDING'] as const;
 
 export const PUBLIC_CONDITIONS = [
   'NEW',
@@ -74,7 +78,19 @@ export interface PublicThing {
   originalPriceCents: number | null;
   storeUrl: string | null;
   status: PublicStatus;
+  bundleId: string | null;
+  isBundleOnly: boolean;
   photos: PublicPhoto[];
+}
+
+export interface PublicBundle {
+  id: string;
+  name: string;
+  priceCents: number;
+  separateCents: number;
+  thingIds: string[];
+  goneCount: number;
+  status: PublicStatus;
 }
 
 export type SalePageResult =
@@ -83,6 +99,7 @@ export type SalePageResult =
       status: 'ok';
       sale: PublicSale;
       things: PublicThing[];
+      bundles: PublicBundle[];
       isMember: boolean;
     };
 
@@ -294,6 +311,8 @@ export function toPublicThing(
       raw.showOriginalPrice === true ? toCents(raw.originalPriceCents) : null,
     storeUrl: raw.showBoughtUrl === true ? toStoreUrl(raw.boughtUrl) : null,
     status,
+    bundleId: null,
+    isBundleOnly: false,
     photos: toPublicPhotos(raw, listing),
   };
 }
@@ -303,6 +322,153 @@ export const orderThings = (things: PublicThing[]) => [
   ...things.filter((thing) => thing.status === 'AVAILABLE'),
   ...things.filter((thing) => thing.status === 'PENDING'),
 ];
+
+const toIdList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter(isSafeId) : [];
+
+/** The ids of a bundle's deal in the bundle's order: Available things while it is Active, the held ones while it is Pending. */
+export function readBundleDeal(
+  bundle: unknown,
+  itemsById: ReadonlyMap<string, unknown>,
+): string[] {
+  if (!isRecord(bundle)) {
+    return [];
+  }
+
+  const dealIds = toIdList(bundle.dealItemIds);
+  return [...new Set(toIdList(bundle.itemIds))].filter((id) => {
+    const item = itemsById.get(id);
+    if (!isRecord(item)) {
+      return false;
+    }
+
+    return bundle.status === 'ACTIVE'
+      ? item.status === 'AVAILABLE'
+      : dealIds.includes(id);
+  });
+}
+
+/** A bundle's public form from the things already shaped for the page; null unless two or more of its deal are among them. The price is clamped to what the things cost apart. */
+function shapeBundle(
+  bundle: {
+    id: unknown;
+    name: unknown;
+    priceCents: unknown;
+    status: unknown;
+    thingIds: string[];
+    goneCount: unknown;
+  },
+  things: PublicThing[],
+): PublicBundle | null {
+  const byId = new Map(things.map((thing) => [thing.id, thing]));
+  const served = [...new Set(bundle.thingIds)].flatMap((id) => {
+    const thing = byId.get(id);
+    return thing === undefined ? [] : [thing];
+  });
+  const name = toText(bundle.name, SALE_PAGE_LIMITS.MAX_BUNDLE_NAME_LENGTH);
+  const status = toStatus(bundle.status);
+  const priceCents = toCents(bundle.priceCents);
+  if (
+    served.length < 2 ||
+    name === null ||
+    status === null ||
+    priceCents === null ||
+    !isSafeId(bundle.id)
+  ) {
+    return null;
+  }
+
+  const separateCents = served.reduce(
+    (total, thing) => total + thing.askingPriceCents,
+    0,
+  );
+  const goneCount =
+    typeof bundle.goneCount === 'number' &&
+    Number.isSafeInteger(bundle.goneCount)
+      ? Math.max(0, Math.min(bundle.goneCount, 1000))
+      : 0;
+  return {
+    id: bundle.id,
+    name,
+    priceCents: Math.max(0, Math.min(priceCents, separateCents)),
+    separateCents,
+    thingIds: served.map((thing) => thing.id),
+    goneCount,
+    status,
+  };
+}
+
+/** The bundles a page serves and which of the page's things sit in one; a bundle shows only with two or more listable things in its deal, and `goneCount` is a count of the rest. */
+export function toPublicBundles(
+  rawBundles: unknown[],
+  rawItems: unknown[],
+  things: PublicThing[],
+): {
+  bundles: PublicBundle[];
+  inBundle: Map<string, { bundleId: string; isBundleOnly: boolean }>;
+} {
+  const itemsById = new Map(
+    rawItems.flatMap((item): [string, unknown][] =>
+      isRecord(item) && isSafeId(item.id) ? [[item.id, item]] : [],
+    ),
+  );
+  const shaped = rawBundles
+    .slice(0, SALE_PAGE_LIMITS.MAX_PAGE_BUNDLES)
+    .flatMap((raw) => {
+      if (
+        !isRecord(raw) ||
+        !BUNDLE_STATUSES.some((status) => status === raw.status)
+      ) {
+        return [];
+      }
+
+      const bundle = shapeBundle(
+        {
+          id: raw.id,
+          name: raw.name,
+          priceCents: raw.priceCents,
+          status: raw.status === 'PENDING' ? 'PENDING' : 'AVAILABLE',
+          thingIds: readBundleDeal(raw, itemsById),
+          goneCount: 0,
+        },
+        things,
+      );
+      return bundle === null
+        ? []
+        : [
+            {
+              bundle: {
+                ...bundle,
+                goneCount:
+                  new Set(toIdList(raw.itemIds)).size - bundle.thingIds.length,
+              },
+              isActive: raw.status === 'ACTIVE',
+            },
+          ];
+    });
+  const ordered = [
+    ...shaped.filter(({ bundle }) => bundle.status === 'AVAILABLE'),
+    ...shaped.filter(({ bundle }) => bundle.status === 'PENDING'),
+  ];
+  const inBundle = ordered.reduce(
+    (found, { bundle, isActive }) =>
+      bundle.thingIds.reduce((inner, id) => {
+        const stored = itemsById.get(id);
+        return inner.has(id)
+          ? inner
+          : inner.set(id, {
+              bundleId: bundle.id,
+              isBundleOnly:
+                isActive && isRecord(stored) && stored.isBundleOnly === true,
+            });
+      }, found),
+    new Map<string, { bundleId: string; isBundleOnly: boolean }>(),
+  );
+  return {
+    bundles: ordered.map(({ bundle }) => bundle),
+    inBundle,
+  };
+}
 
 const readCopyPath = (value: unknown) => {
   const match =
@@ -374,6 +540,8 @@ export function sealPage(
       originalPriceCents: toCents(thing.originalPriceCents),
       storeUrl: toStoreUrl(thing.storeUrl),
       status,
+      bundleId: isSafeId(thing.bundleId) ? thing.bundleId : null,
+      isBundleOnly: thing.isBundleOnly === true && isSafeId(thing.bundleId),
       photos:
         linkId === null || !Array.isArray(thing.photos)
           ? []
@@ -383,10 +551,41 @@ export function sealPage(
     };
     return isSafeId(sealed.id) ? [sealed] : [];
   });
+  const shown = orderThings(things).slice(0, SALE_PAGE_LIMITS.MAX_PAGE_THINGS);
+  const bundles = (Array.isArray(page.bundles) ? page.bundles : [])
+    .slice(0, SALE_PAGE_LIMITS.MAX_PAGE_BUNDLES)
+    .flatMap((bundle) => {
+      const sealed = isRecord(bundle)
+        ? shapeBundle(
+            {
+              id: bundle.id,
+              name: bundle.name,
+              priceCents: bundle.priceCents,
+              status: bundle.status,
+              goneCount: bundle.goneCount,
+              thingIds: toIdList(bundle.thingIds),
+            },
+            shown,
+          )
+        : null;
+      return sealed === null ? [] : [sealed];
+    });
   return {
     status: 'ok',
     sale,
-    things: orderThings(things).slice(0, SALE_PAGE_LIMITS.MAX_PAGE_THINGS),
+    things: shown.map((thing) => {
+      const bundle = bundles.find(
+        (candidate) =>
+          candidate.id === thing.bundleId &&
+          candidate.thingIds.includes(thing.id),
+      );
+      return {
+        ...thing,
+        bundleId: bundle?.id ?? null,
+        isBundleOnly: bundle !== undefined && thing.isBundleOnly,
+      };
+    }),
+    bundles,
     isMember: page.isMember === true,
   };
 }
@@ -397,21 +596,31 @@ export function toSalePage(
   items: unknown[],
   isMember: boolean,
   listing: CopyListing | null = null,
+  bundles: unknown[] = [],
 ): SalePageResult {
   const publicSale = toPublicSale(sale);
   if (publicSale === null) {
     return NOT_FOUND_RESULT;
   }
 
-  const things = items.flatMap((item) => {
+  const listed = items.flatMap((item) => {
     const thing = toPublicThing(item, listing);
     return thing === null ? [] : [thing];
   });
+  const served = toPublicBundles(bundles, items, listed);
+  const things = listed.map((thing) => ({
+    ...thing,
+    ...(served.inBundle.get(thing.id) ?? {
+      bundleId: null,
+      isBundleOnly: false,
+    }),
+  }));
   return sealPage(
     {
       status: 'ok',
       sale: publicSale,
       things: orderThings(things).slice(0, SALE_PAGE_LIMITS.MAX_PAGE_THINGS),
+      bundles: served.bundles,
       isMember,
     },
     listing?.linkId ?? null,
