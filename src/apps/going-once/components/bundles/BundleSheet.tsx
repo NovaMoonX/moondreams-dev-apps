@@ -9,6 +9,10 @@ import { ChevronDown, ChevronRight, Ellipsis } from 'lucide-react';
 import DetailSheet from '@/components/DetailSheet';
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import InlineNotice from '@/components/InlineNotice';
+import {
+  NOTICE_ACTION_CLASSES,
+  NOTICE_QUIET_CLASSES,
+} from '@/components/noticeActionClasses';
 import SectionDivider from '@/components/SectionDivider';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
@@ -220,7 +224,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
   const getSuggestion = () =>
     deal.length === 1
       ? `Only ${getItemName(deal[0])} is left in this bundle.`
-      : "Most of this bundle has gone on its own. Sell what's left separately?";
+      : "Most of it went on its own. Sell what's left separately?";
 
   const renderThing = (id: string) => {
     const item = itemsById[id];
@@ -287,17 +291,18 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
             variant='secondary'
             size='lg'
             rounded='full'
-            className='max-[359px]:px-4'
+            className='min-w-0 flex-1 basis-0 whitespace-nowrap max-[359px]:px-3'
             disabled={isWorking}
             onClick={() => open('markPending')}
           >
-            Mark pending
+            <span className='max-[360px]:hidden'>Mark pending</span>
+            <span className='min-[360px]:hidden'>Pending</span>
           </Button>
           <Button
             type='button'
             size='lg'
             rounded='full'
-            className='min-w-0 flex-1 whitespace-nowrap'
+            className='min-w-0 flex-1 basis-0 whitespace-nowrap max-[359px]:px-3'
             disabled={isWorking}
             onClick={() => open('markSold')}
           >
@@ -328,17 +333,18 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
             variant='secondary'
             size='lg'
             rounded='full'
-            className='max-[359px]:px-4'
+            className='min-w-0 flex-1 basis-0 whitespace-nowrap max-[359px]:px-3'
             disabled={isWorking}
             onClick={() => void transition({ kind: 'BACK_TO_AVAILABLE' })}
           >
-            Back to available
+            <span className='max-[360px]:hidden'>Back to available</span>
+            <span className='min-[360px]:hidden'>Put back</span>
           </Button>
           <Button
             type='button'
             size='lg'
             rounded='full'
-            className='min-w-0 flex-1 whitespace-nowrap'
+            className='min-w-0 flex-1 basis-0 whitespace-nowrap max-[359px]:px-3'
             disabled={isWorking}
             onClick={() => open('markSold')}
           >
@@ -353,22 +359,24 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
           variant='secondary'
           size='lg'
           rounded='full'
-          className='max-[359px]:px-4'
+          className='min-w-0 flex-1 basis-0 whitespace-nowrap max-[359px]:px-3'
           disabled={isWorking}
           onClick={() => open('changePaid')}
         >
-          Change what was paid
+          <span className='max-[360px]:hidden'>Change what was paid</span>
+          <span className='min-[360px]:hidden'>Change paid</span>
         </Button>
         <Button
           type='button'
           variant='secondary'
           size='lg'
           rounded='full'
-          className='min-w-0 flex-1 whitespace-nowrap'
+          className='min-w-0 flex-1 basis-0 whitespace-nowrap max-[359px]:px-3'
           disabled={isWorking}
           onClick={() => void notSoldAfterAll()}
         >
-          Not sold after all
+          <span className='max-[360px]:hidden'>Not sold after all</span>
+          <span className='min-[360px]:hidden'>Not sold</span>
         </Button>
       </>
     );
@@ -493,8 +501,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
               <Button
                 type='button'
                 size='sm'
-                rounded='full'
-                className='h-10 px-4'
+                className={NOTICE_ACTION_CLASSES.info}
                 disabled={isWorking}
                 onClick={() => void lowerToSeparate()}
               >
@@ -505,30 +512,26 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
         )}
         {isSuggesting && (
           <InlineNotice tone='info'>
-            <div className='space-y-3'>
-              <p>{getSuggestion()}</p>
-              <div className='flex flex-wrap gap-2'>
-                <Button
-                  type='button'
-                  size='sm'
-                  rounded='full'
-                  className='h-10 px-4'
-                  disabled={isWorking}
-                  onClick={() => void unbundleLeft()}
-                >
-                  Unbundle what&apos;s left
-                </Button>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  rounded='full'
-                  className='h-10 px-4'
-                  onClick={keepIt}
-                >
-                  Keep the bundle
-                </Button>
-              </div>
+            <p className='text-pretty'>{getSuggestion()}</p>
+            <div className='mt-2 flex flex-wrap items-center gap-x-5 gap-y-2'>
+              <Button
+                type='button'
+                size='sm'
+                className={NOTICE_ACTION_CLASSES.info}
+                disabled={isWorking}
+                onClick={() => void unbundleLeft()}
+              >
+                Unbundle what&apos;s left
+              </Button>
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className={NOTICE_QUIET_CLASSES.info}
+                onClick={keepIt}
+              >
+                Keep the bundle
+              </Button>
             </div>
           </InlineNotice>
         )}

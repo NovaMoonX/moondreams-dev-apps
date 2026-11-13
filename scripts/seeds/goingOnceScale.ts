@@ -124,6 +124,13 @@ const SMALL_INDEXES = FREE_INDEXES.slice(12, 15);
 const HELD_INDEXES = [15, 27, 39, 43];
 const HELD_DEAL_INDEXES = HELD_INDEXES.slice(0, 3);
 
+/** Enough small bundles that the Things tab folds its bundles list behind "Show all". */
+const PAIR_INDEXES = FREE_INDEXES.slice(15)
+  .filter((index) => !HELD_INDEXES.includes(index))
+  .slice(0, 6);
+const PAIR_NAMES = ['Desk pair', 'Lamp pair', 'Kitchen pair'];
+const toPairId = (pair: number) => `seed-go-bundle-scale-pair-${pair + 1}`;
+
 const BIG_BUNDLE_ID = 'seed-go-bundle-scale-big';
 const SMALL_BUNDLE_ID = 'seed-go-bundle-scale-small';
 const HELD_BUNDLE_ID = 'seed-go-bundle-scale-held';
@@ -135,6 +142,11 @@ const getBundleOf = (index: number) => {
     return { id: SMALL_BUNDLE_ID, isOnly: false };
   if (HELD_INDEXES.includes(index))
     return { id: HELD_BUNDLE_ID, isOnly: false };
+  if (PAIR_INDEXES.includes(index))
+    return {
+      id: toPairId(Math.floor(PAIR_INDEXES.indexOf(index) / 2)),
+      isOnly: false,
+    };
   return null;
 };
 
@@ -286,7 +298,26 @@ export async function seedGoingOnceScale(
     0,
     Math.min(heldStart - getAsking(43), sumAsking(HELD_DEAL_INDEXES)),
   );
+  const pairBundles = PAIR_NAMES.map((name, pair) => {
+    const members = PAIR_INDEXES.slice(pair * 2, pair * 2 + 2);
+    const priceCents = Math.max(0, sumAsking(members) - 500);
+    const at = context.now - (pair + 1) * 60 * 60 * 1000;
+    return {
+      ...bundleBase,
+      id: toPairId(pair),
+      name,
+      status: 'ACTIVE',
+      itemIds: ids(members),
+      dealItemIds: null,
+      priceCents,
+      history: [
+        { ...emptyChange, kind: 'CREATE', byUid: maya.uid, at, priceCents },
+      ],
+      createdAt: at,
+    };
+  });
   const bundles = [
+    ...pairBundles,
     {
       ...bundleBase,
       id: BIG_BUNDLE_ID,
