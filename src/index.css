@@ -408,6 +408,8 @@ html[data-installed-app] *::-webkit-scrollbar {
 
   .app-checkbox:is([aria-checked='true'], [aria-checked='mixed']) {
     border-color: var(--_accent);
+    background-color: var(--_accent);
+    color: var(--_accent-foreground);
     background-color: color-mix(in oklab, var(--_accent) calc(var(--checkbox-filled) * 100%), transparent);
     color: color-mix(in oklab, var(--_accent-foreground) calc(var(--checkbox-filled) * 100%), var(--_accent));
   }
