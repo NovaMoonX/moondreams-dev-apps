@@ -48,7 +48,6 @@ export function getPrevDueOn(
   return result;
 }
 
-/** The minimum the bank asks for by `forDueOn`, or null when it asks for none: no statement, a statement for another due day, no minimum above zero, or a payment the bank already shows since the statement that covers it. */
 /** Whether the bank shows a payment of at least the minimum since the statement was made. */
 const isMinimumPaid = (statement: OpenCardStatement, minimumCents: Cents) =>
   statement.statementOn !== null &&
@@ -57,6 +56,7 @@ const isMinimumPaid = (statement: OpenCardStatement, minimumCents: Cents) =>
   statement.lastPaymentOn >= statement.statementOn &&
   statement.lastPaymentCents >= minimumCents;
 
+/** The minimum the bank asks for by `forDueOn`, or null when it asks for none: no statement, a statement for another due day, no minimum above zero, or a payment the bank already shows since the statement that covers it. */
 export function getMinimumDue(
   statement: OpenCardStatement | null | undefined,
   forDueOn: DateOnly | null,

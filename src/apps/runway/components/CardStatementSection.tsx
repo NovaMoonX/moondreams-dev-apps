@@ -168,7 +168,7 @@ function CardStatementSection({
       (other) =>
         other.id !== link.id &&
         other.status === 'active' &&
-        other.cardDetails === 'shared' &&
+        link.institutionName !== '' &&
         other.institutionName === link.institutionName,
     );
     const scope =
