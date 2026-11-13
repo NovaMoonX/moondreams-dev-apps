@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 // The site's header (with the dev account switcher's menu inside it) sits at 35, and its menu
 // can't climb out of that layer, so a pinned app surface above 30 paints over it.
+// Reads Tailwind classes only: inline zIndex and app stylesheets are out of its reach.
 const APP_CEILING = 30;
 const ROOT = 'src/apps';
 
@@ -13,33 +14,67 @@ const listFiles = (dir: string): string[] =>
     return /\.(tsx|ts)$/.test(name) ? [path] : [];
   });
 
-const readLayer = (token: string): number | null => {
-  const match = /^z-(?:\[(\d+)\]|(\d+))$/.exec(token);
+const stripComments = (source: string) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+const PAREN_STEPS: Record<string, number> = { '(': 1, ')': -1 };
+
+const readBalanced = (source: string, open: number): string => {
+  const end = Array.from(source.slice(open)).reduce<{
+    depth: number;
+    at: number;
+  }>(
+    (state, char, index) => {
+      if (state.at >= 0) return state;
+      const depth = state.depth + (PAREN_STEPS[char] ?? 0);
+      return { depth, at: depth === 0 ? index : -1 };
+    },
+    { depth: 0, at: -1 },
+  ).at;
+  return source.slice(open, end < 0 ? undefined : open + end + 1);
+};
+
+/** Each className value or join(...) call, so a class list split over several lines is read as one. */
+const readClassLists = (source: string): { text: string; offset: number }[] => {
+  const calls = Array.from(source.matchAll(/\bjoin\(/g)).map((match) => ({
+    text: readBalanced(source, (match.index ?? 0) + 4),
+    offset: match.index ?? 0,
+  }));
+  const literals = Array.from(
+    source.matchAll(/className=(?:'[^']*'|"[^"]*"|\{`[^`]*`\})/g),
+  ).map((match) => ({ text: match[0], offset: match.index ?? 0 }));
+  return [...calls, ...literals];
+};
+
+const toUtility = (token: string) =>
+  token.replace(/^(?:[^\s:'"`]+:)+/, '').replace(/^!|!$/g, '');
+
+const readLayer = (utility: string): number | null => {
+  const match = /^z-(?:\[(\d+)\]|(\d+))$/.exec(utility);
   if (!match) return null;
   return Number(match[1] ?? match[2]);
 };
 
-const findOffenders = (path: string): string[] =>
-  readFileSync(path, 'utf8')
-    .split('\n')
-    .flatMap((line, index) => {
-      const tokens = line.split(/[\s'"`]+/);
-      const isPinned = tokens.some((token) =>
-        /^(max-\w+:|sm:|md:|lg:)*(fixed|sticky)$/.test(token),
-      );
-      if (!isPinned) return [];
-      const layers = tokens
-        .map((token) => readLayer(token.replace(/^([\w-]+:)+/, '')))
-        .filter(
-          (layer): layer is number => layer !== null && layer > APP_CEILING,
-        );
-      return layers.map(
+const findOffenders = (path: string): string[] => {
+  const source = stripComments(readFileSync(path, 'utf8'));
+  return readClassLists(source).flatMap(({ text, offset }) => {
+    const utilities = text.split(/[\s'"`,(){}?&|]+/).map(toUtility);
+    if (
+      !utilities.some((utility) => utility === 'fixed' || utility === 'sticky')
+    )
+      return [];
+    const line = source.slice(0, offset).split('\n').length;
+    return utilities
+      .map(readLayer)
+      .filter((layer): layer is number => layer !== null && layer > APP_CEILING)
+      .map(
         (layer) =>
-          `${path}:${index + 1} pins at z-${layer}, above the app ceiling of ${APP_CEILING}`,
+          `${path}:${line} pins at z-${layer}, above the app ceiling of ${APP_CEILING}`,
       );
-    });
+  });
+};
 
-const offenders = listFiles(ROOT).flatMap(findOffenders);
+const offenders = Array.from(new Set(listFiles(ROOT).flatMap(findOffenders)));
 
 if (offenders.length > 0) {
   console.error(offenders.join('\n'));
