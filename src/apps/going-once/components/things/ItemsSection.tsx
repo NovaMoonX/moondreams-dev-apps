@@ -13,6 +13,7 @@ import SelectionBar from '@/components/SelectionBar';
 import SortControl from '@/components/SortControl';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useSelection } from '@/hooks/useSelection';
+import { useDeferredActions } from '@/lib/undo/deferredUndo';
 import { useAppDispatch, useAppSelector } from '@/store';
 import BundleFormSheet from '@apps/going-once/components/bundles/BundleFormSheet';
 import BundleRow from '@apps/going-once/components/bundles/BundleRow';
@@ -42,6 +43,7 @@ import {
   selectSaleById,
 } from '@apps/going-once/store/selectors';
 import type { Bundle, BundleStatus, Item } from '@apps/going-once/types';
+import { toUnbundleKey } from '@apps/going-once/utils/bundles';
 import { isSaleSeller } from '@apps/going-once/utils/roles';
 import {
   isListable,
@@ -131,7 +133,11 @@ function ItemsSection({
     const resume = items.find((item) => item.id === resumeId);
     return resume === undefined ? null : { resume };
   });
-  const bundles = useAppSelector((state) => selectBundles(state, saleId));
+  const storedBundles = useAppSelector((state) => selectBundles(state, saleId));
+  const deferred = useDeferredActions();
+  const isUnbundling = (bundleId: string) =>
+    deferred.some((action) => action.key === toUnbundleKey(bundleId));
+  const bundles = storedBundles.filter((bundle) => !isUnbundling(bundle.id));
   const itemsById = useAppSelector((state) => selectItemsById(state, saleId));
   const isBundlesReady = useAppSelector((state) =>
     selectIsBundlesReady(state, saleId),
@@ -198,7 +204,9 @@ function ItemsSection({
     ? bundlesInView.slice(0, BUNDLES_FIRST)
     : bundlesInView;
   const isPickable = (item: Item) =>
-    item.status === 'AVAILABLE' && isListable(item) && item.bundleId === null;
+    item.status === 'AVAILABLE' &&
+    isListable(item) &&
+    (item.bundleId === null || isUnbundling(item.bundleId));
   const pickedIds = items
     .filter((item) => isPickable(item) && selection.ids.has(item.id))
     .map((item) => item.id);

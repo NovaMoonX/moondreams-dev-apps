@@ -310,7 +310,7 @@ export async function editBundle(
   }
 }
 
-/** Deletes a bundle that is still on offer and frees every thing in it. */
+/** Deletes a bundle in any status and frees every thing in it; each keeps its own status, a hold or a sale included. */
 export async function unbundle(
   saleId: string,
   bundleId: string,
@@ -322,8 +322,6 @@ export async function unbundle(
       if (!snapshot.exists())
         return { ok: false, message: GONE_BUNDLE_MESSAGE };
       const bundle = toBundle(bundleId, saleId, snapshot.data());
-      if (bundle.status !== 'ACTIVE')
-        return { ok: false, message: NOT_ACTIVE_MESSAGE };
       const things = await readItems(transaction, saleId, bundle.itemIds);
       const now = Date.now();
       transaction.delete(bundleRef(saleId, bundleId));

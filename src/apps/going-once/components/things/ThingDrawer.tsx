@@ -30,6 +30,7 @@ import PhotoStrip from '@/components/PhotoStrip';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
+import { useIsDeferred } from '@/lib/undo/deferredUndo';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { centsToInputValue, formatCentsShort } from '@/utils/moneyUtils';
@@ -63,7 +64,11 @@ import {
   selectSaleById,
 } from '@apps/going-once/store/selectors';
 import type { BundleStatus, Inquiry, Item } from '@apps/going-once/types';
-import { getBundleParts, isSoloLocked } from '@apps/going-once/utils/bundles';
+import {
+  getBundleParts,
+  isSoloLocked,
+  toUnbundleKey,
+} from '@apps/going-once/utils/bundles';
 import {
   formatSentAt,
   getInquirerName,
@@ -243,9 +248,11 @@ function ThingDrawer({
   holdFor,
   onOpenBundle,
 }: ThingDrawerProps) {
-  const bundle = useAppSelector((state) =>
+  const storedBundle = useAppSelector((state) =>
     selectBundleById(state, item.saleId, item.bundleId),
   );
+  const isUnbundling = useIsDeferred(toUnbundleKey(item.bundleId ?? ''));
+  const bundle = isUnbundling ? null : storedBundle;
   const itemsById = useAppSelector((state) =>
     selectItemsById(state, item.saleId),
   );

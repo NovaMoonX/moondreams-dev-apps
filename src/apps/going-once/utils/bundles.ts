@@ -149,3 +149,7 @@ export function splitPaid(totalCents: number, askings: number[]): number[] {
 /** "Cat stuff (4 things)", the label an inquiry keeps of the bundle it asked about. */
 export const toBundleLabel = (name: string, count: number) =>
   `${name} (${count} ${count === 1 ? 'thing' : 'things'})`;
+
+/** The deferred-action key of a bundle being unbundled, while its Undo is offered. */
+export const toUnbundleKey = (bundleId: string) =>
+  `going-once:unbundle:${bundleId}`;

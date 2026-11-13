@@ -7,6 +7,7 @@ import { Provider } from 'react-redux';
 import { RouterProvider } from 'react-router-dom';
 
 import AppToast from '@components/AppToast';
+import DeferredUndoHost from '@components/DeferredUndoHost';
 import { TOAST_TYPE_STYLES } from '@components/toastTypeStyles';
 import { AppCatalogProvider } from '@contexts/AppCatalogContext';
 import { AuthProvider } from '@contexts/AuthContext';
@@ -58,6 +59,7 @@ function App() {
                 <AuthProvider>
                   <AppCatalogProvider>
                     <AppShell />
+                    <DeferredUndoHost />
                   </AppCatalogProvider>
                 </AuthProvider>
               </NetworkStatusProvider>

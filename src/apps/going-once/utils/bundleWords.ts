@@ -3,7 +3,11 @@ import { formatCentsShort } from '@/utils/moneyUtils';
 import { PAYMENT_METHOD_LABELS } from '@apps/going-once/constants';
 import type { Bundle, BundleChange, Item } from '@apps/going-once/types';
 import { getItemName } from '@apps/going-once/utils/listing';
-import { splitPaid, type BundleParts } from '@apps/going-once/utils/bundles';
+import {
+  getBundleParts,
+  splitPaid,
+  type BundleParts,
+} from '@apps/going-once/utils/bundles';
 import { formatChangeTime } from '@apps/going-once/utils/status';
 
 /** What buyers save by buying the deal as a bundle; never below 0. */
@@ -59,9 +63,18 @@ export function describePriceMove(
   const thing = itemsById[last.itemId];
   const name = thing === undefined ? 'A thing' : getItemName(thing);
   const now = formatCentsShort(bundle.priceCents);
-  return last.kind === 'THING_LEFT'
-    ? `${name} ${describeLeaving(last)}, so the bundle is ${now} now`
-    : `${name} came back, so the bundle is ${now} now`;
+  if (last.kind === 'THING_BACK')
+    return `${name} came back, so the bundle is ${now} now`;
+  const others = getBundleParts(bundle, itemsById).gone.filter(
+    (item) => item.id !== last.itemId,
+  );
+  if (others.length === 0)
+    return `${name} ${describeLeaving(last)}, so the bundle is ${now} now`;
+  const rest =
+    others.length === 1
+      ? getItemName(others[0])
+      : `${others.length} other things`;
+  return `${name} and ${rest} went on their own, so the bundle is ${now} now`;
 }
 
 const describeLeaving = (change: BundleChange) => {

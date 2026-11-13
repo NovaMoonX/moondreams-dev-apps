@@ -2,10 +2,10 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronDown, ChevronRight, Ellipsis } from 'lucide-react';
+import { ChevronRight, Ellipsis } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import InlineNotice from '@/components/InlineNotice';
@@ -17,6 +17,7 @@ import SectionDivider from '@/components/SectionDivider';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
+import { deferAction } from '@/lib/undo/deferredUndo';
 import { useAppSelector } from '@/store';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import BundleFormSheet from '@apps/going-once/components/bundles/BundleFormSheet';
@@ -45,6 +46,7 @@ import type { Bundle } from '@apps/going-once/types';
 import {
   getBundleParts,
   shouldSuggestUnbundle,
+  toUnbundleKey,
 } from '@apps/going-once/utils/bundles';
 import {
   describeBundleChangeLine,
@@ -63,7 +65,7 @@ import {
   type SoldDraft,
 } from '@apps/going-once/utils/statusDrafts';
 
-type View = 'markPending' | 'markSold' | 'changePaid';
+type View = 'markPending' | 'markSold' | 'changePaid' | 'history';
 
 interface BundleSheetProps {
   bundle: Bundle;
@@ -76,10 +78,10 @@ interface BundleSheetProps {
 const { option } = DropdownMenuFactories;
 const CHANGE = 'change';
 const UNBUNDLE = 'unbundle';
+const HISTORY = 'history';
 
 /** A bundle in full: what it costs against buying its things separately, the things in the deal and the ones that went on their own, its history, and the acts for its status. */
 function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
-  const { confirm } = useActionModal();
   const now = useNow();
   const itemsById = useAppSelector((state) =>
     selectItemsById(state, bundle.saleId),
@@ -93,7 +95,6 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
   const [views, setViews] = useState<View[]>([]);
   const [footerNode, setFooterNode] = useState<HTMLElement | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { isWorking, run } = useSingleFlight();
   const { pending: undoable, showUndo, undo } = useUndoRemoval();
@@ -142,6 +143,10 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
 
   const open = (next: View) => {
     setError(null);
+    if (next === 'history') {
+      setViews((current) => [...current, next]);
+      return;
+    }
     const draft =
       next === 'markPending'
         ? getHoldStart(null, now)
@@ -188,21 +193,40 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
       );
   };
 
-  const askUnbundle = async () => {
-    const isConfirmed = await confirm({
-      title: `Unbundle ${bundle.name}?`,
-      message: `Its ${deal.length} things go back to being sold on their own.`,
-      confirmText: 'Unbundle',
-    });
-    if (!isConfirmed) return;
-    const result = await apply(() => unbundle(bundle.saleId, bundle.id, uid));
-    if (result?.ok) onClose();
+  const startUnbundle = () => {
+    deferAction(
+      toUnbundleKey(bundle.id),
+      `Unbundled ${bundle.name}`,
+      async () => {
+        const result = await unbundle(bundle.saleId, bundle.id, uid);
+        return result.ok ? null : result.message;
+      },
+    );
+    onClose();
   };
 
-  const unbundleLeft = async () => {
-    const result = await apply(() => unbundle(bundle.saleId, bundle.id, uid));
-    if (result?.ok) onClose();
-  };
+  const moreItems = [
+    ...(bundle.status === 'ACTIVE'
+      ? [option({ label: 'Change name, price or things', value: CHANGE })]
+      : []),
+    option({ label: 'Unbundle', value: UNBUNDLE }),
+    option({ label: 'History', value: HISTORY }),
+  ];
+  const moreMenu = (
+    <EllipsisDropdown
+      ariaLabel='More for this bundle'
+      variant='secondary'
+      icon={<Ellipsis className='size-5' aria-hidden='true' />}
+      className='text-foreground! size-10 min-w-10 shrink-0 rounded-full p-0'
+      disabled={isWorking}
+      items={moreItems}
+      onItemSelect={(value) => {
+        if (value === CHANGE) setIsEditing(true);
+        else if (value === UNBUNDLE) startUnbundle();
+        else open('history');
+      }}
+    />
+  );
 
   const lowerToSeparate = () =>
     apply(() => lowerBundleToSeparate(bundle.saleId, bundle.id, uid));
@@ -236,7 +260,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
               {getItemName(item)}
             </span>
             {item.isBundleOnly && (
-              <span className='text-muted-foreground mt-0.5 line-clamp-2 block text-sm font-normal break-words'>
+              <span className='text-muted-foreground mt-0.5 line-clamp-2 text-sm font-normal break-words'>
                 Only with the bundle
               </span>
             )}
@@ -301,21 +325,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
           >
             Mark sold
           </Button>
-          <EllipsisDropdown
-            ariaLabel='More for this bundle'
-            variant='secondary'
-            icon={<Ellipsis className='size-5' aria-hidden='true' />}
-            className='text-foreground! size-10 min-w-10 shrink-0 rounded-full p-0'
-            disabled={isWorking}
-            items={[
-              option({ label: 'Change name, price or things', value: CHANGE }),
-              option({ label: 'Unbundle', value: UNBUNDLE }),
-            ]}
-            onItemSelect={(value) => {
-              if (value === CHANGE) setIsEditing(true);
-              else void askUnbundle();
-            }}
-          />
+          {moreMenu}
         </>
       );
     if (bundle.status === 'PENDING')
@@ -343,6 +353,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
           >
             Mark sold
           </Button>
+          {moreMenu}
         </>
       );
     return (
@@ -371,6 +382,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
           <span className='max-[360px]:hidden'>Not sold after all</span>
           <span className='min-[360px]:hidden'>Not sold</span>
         </Button>
+        {moreMenu}
       </>
     );
   };
@@ -453,6 +465,21 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
           onDone={toFront}
         />
       )}
+      {view === 'history' && (
+        <div className='space-y-5'>
+          <BackLink onBack={back} label='History' />
+          <ul className='divide-border border-border divide-y overflow-hidden rounded-2xl border'>
+            {history.map((change, index) => (
+              <li
+                key={`${change.at}-${change.kind}-${index}`}
+                className='px-3 py-2.5 break-words'
+              >
+                {describeBundleChangeLine(change, { getName, itemsById })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className={join('space-y-4', view !== null && 'hidden')}>
         <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
           <StatusDot
@@ -460,10 +487,11 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
           />
           <PriceTag askingPriceCents={bundle.priceCents} />
         </div>
-        <p className='text-muted-foreground text-sm'>
-          Separately {separately}
-          {saving !== null && ` · ${saving}`}
-        </p>
+        {saving !== null && !isOverSeparate && (
+          <p className='text-muted-foreground text-sm'>
+            Separately {separately} · {saving}
+          </p>
+        )}
         {priceMove !== null && (
           <p className='text-muted-foreground text-sm text-pretty'>
             {priceMove}
@@ -512,7 +540,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
                 size='sm'
                 className={NOTICE_ACTION_CLASSES.info}
                 disabled={isWorking}
-                onClick={() => void unbundleLeft()}
+                onClick={startUnbundle}
               >
                 Unbundle what&apos;s left
               </Button>
@@ -539,36 +567,6 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
             </ul>
           </>
         )}
-        <section className='space-y-2'>
-          <Button
-            type='button'
-            variant='tertiary'
-            className='text-muted-foreground! h-10 w-full justify-between px-1 text-sm'
-            aria-expanded={isHistoryOpen}
-            onClick={() => setIsHistoryOpen((current) => !current)}
-          >
-            History
-            <ChevronDown
-              className={join(
-                'size-4 transition-none',
-                isHistoryOpen && 'rotate-180',
-              )}
-              aria-hidden='true'
-            />
-          </Button>
-          {isHistoryOpen && (
-            <ul className='divide-border border-border divide-y overflow-hidden rounded-2xl border'>
-              {history.map((change, index) => (
-                <li
-                  key={`${change.at}-${change.kind}-${index}`}
-                  className='px-3 py-2.5 text-sm break-words'
-                >
-                  {describeBundleChangeLine(change, { getName, itemsById })}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
       </div>
     </DetailSheet>
   );
