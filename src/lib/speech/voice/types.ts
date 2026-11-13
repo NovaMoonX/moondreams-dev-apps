@@ -15,6 +15,8 @@ export interface SttStartOptions {
   onFinal: (text: string) => void;
   onSpeechStart: () => void;
   onError: (code: SttErrorCode) => void;
+  /** The adapter is ready to hear and the microphone is live; only an adapter that takes a while to get ready calls it. */
+  onListening?: () => void;
   /** The audio just before the tap, for adapters that keep a buffer; always null for now. */
   preRoll: Float32Array | null;
 }

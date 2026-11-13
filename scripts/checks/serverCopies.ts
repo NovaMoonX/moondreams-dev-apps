@@ -35,11 +35,112 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/going-once/share/manifest.ts',
+    dest: 'functions/src/apps/going-once/share/manifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
+    },
+  },
+  {
+    src: 'src/apps/nine-lives/share/manifest.ts',
+    dest: 'functions/src/apps/nine-lives/share/manifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
+    },
+  },
+  {
+    src: 'src/apps/waypoint/share/manifest.ts',
+    dest: 'functions/src/apps/waypoint/share/manifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
+    },
+  },
+  {
+    src: 'src/apps/runway/share/manifest.ts',
+    dest: 'functions/src/apps/runway/share/manifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
+    },
+  },
+  {
+    src: 'src/apps/worth-the-wait/share/manifest.ts',
+    dest: 'functions/src/apps/worth-the-wait/share/manifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
+    },
+  },
+  {
     src: 'src/lib/connections/google/calendarManifest.ts',
     dest: 'functions/src/connections/google/calendarManifest.ts',
     importRewrites: {
       '@/lib/connections/contract': '../../vendor/connectionsContract.js',
     },
+  },
+  {
+    src: 'src/lib/connections/google/gmailManifest.ts',
+    dest: 'functions/src/connections/google/gmailManifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../vendor/connectionsContract.js',
+    },
+  },
+  {
+    src: 'src/lib/connections/google/driveManifest.ts',
+    dest: 'functions/src/connections/google/driveManifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../vendor/connectionsContract.js',
+    },
+  },
+  {
+    src: 'src/lib/connections/google/contactsManifest.ts',
+    dest: 'functions/src/connections/google/contactsManifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../vendor/connectionsContract.js',
+    },
+  },
+  {
+    src: 'src/utils/stringUtils.ts',
+    dest: 'functions/src/vendor/stringUtils.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/utils/optionMatchUtils.ts',
+    dest: 'functions/src/vendor/optionMatchUtils.ts',
+    importRewrites: { '@/utils/stringUtils': './stringUtils.js' },
+  },
+  {
+    src: 'src/apps/helm/engine/whoTier.ts',
+    dest: 'functions/src/apps/helm/nomos/whoTier.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/utils/keyDateIndex.ts',
+    dest: 'functions/src/apps/helm/keyDateIndex.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/utils/topicTree.ts',
+    dest: 'functions/src/apps/helm/topicTree.ts',
+    importRewrites: { '@apps/helm/constants': './topicLimits.js' },
+  },
+  {
+    src: 'src/apps/helm/utils/stepGroups.ts',
+    dest: 'functions/src/apps/helm/stepGroups.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/utils/assistantName.ts',
+    dest: 'functions/src/apps/helm/assistantName.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/utils/mediaCaps.ts',
+    dest: 'functions/src/apps/helm/media/mediaCaps.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/utils/yearlyDateUtils.ts',
+    dest: 'functions/src/vendor/yearlyDateUtils.ts',
+    importRewrites: {},
   },
 ];
 

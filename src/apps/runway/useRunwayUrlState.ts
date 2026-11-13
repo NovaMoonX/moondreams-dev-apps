@@ -1,4 +1,5 @@
 import {
+  parseAsArrayOf,
   parseAsBoolean,
   parseAsInteger,
   parseAsString,
@@ -8,7 +9,11 @@ import {
 import { createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { keepEntryFor } from '@/hooks/useBackHistory';
+import {
+  isHistoryStep,
+  keepEntryFor,
+  markHistoryStep,
+} from '@/hooks/useBackHistory';
 
 import {
   CHANGE_LOG_SPANS,
@@ -17,6 +22,7 @@ import {
   DEFAULT_CHANGE_LOG_SPAN,
   DEFAULT_PLAN_SECTION,
   DEFAULT_SPEND_PERIOD,
+  SPEND_KINDS,
   SPEND_PERIODS,
   MAX_CHANGE_LOG_PAGE,
   DEFAULT_RUNWAY_TAB,
@@ -97,6 +103,22 @@ export function useRunwayUrlState() {
     'spendEnvelope',
     parseAsString,
   );
+  const [requestedSpendKind, setRequestedSpendKind] = useQueryState(
+    'spendKind',
+    parseAsStringLiteral(SPEND_KINDS),
+  );
+  const [requestedSpendFrom, setRequestedSpendFrom] = useQueryState(
+    'spendFrom',
+    parseAsArrayOf(parseAsString),
+  );
+  const [requestedSpendMin, setRequestedSpendMin] = useQueryState(
+    'spendMin',
+    parseAsInteger,
+  );
+  const [requestedSpendMax, setRequestedSpendMax] = useQueryState(
+    'spendMax',
+    parseAsInteger,
+  );
 
   const [requestedPurchase, setRequestedPurchase] = useQueryState(
     'purchase',
@@ -140,6 +162,12 @@ export function useRunwayUrlState() {
     setRequestedView('cashPosition', { history: 'replace' });
   const closeCashPosition = () =>
     setRequestedView('freeToSpend', { history: 'replace' });
+  const openHeldView = (
+    held:
+      'heldBills' | 'heldGoals' | 'heldEnvelopes' | 'heldHorizon' | 'heldCards',
+  ) => setRequestedView(held, { history: 'replace' });
+  const closeHeldView = () =>
+    setRequestedView('freeToSpend', { history: 'replace' });
 
   const [requestedFixes, setRequestedFixes] = useQueryState(
     'fixes',
@@ -153,8 +181,9 @@ export function useRunwayUrlState() {
     itemId: string,
     step: string | null = null,
     returnTo: PlanSection | null = null,
+    eventId: string | null = null,
   ) => {
-    setOpenItemRequest({ itemId, step, returnTo });
+    setOpenItemRequest({ itemId, step, returnTo, eventId });
     return Promise.resolve();
   };
   const openDueBill = (billId: string) => openItemAt(billId, 'due');
@@ -241,7 +270,7 @@ export function useRunwayUrlState() {
     const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
     void backLayerKey;
     void backLayerSeq;
-    window.history.replaceState({ ...entry, runwayTabStep: true }, '');
+    markHistoryStep('runwayTabStep', entry);
   };
   const showTab = async (tab: RunwayTab) => {
     if (tab === activeTab) return;
@@ -251,7 +280,7 @@ export function useRunwayUrlState() {
     if (requestedUndatedBills !== null) closeUndatedBills();
     if (requestedAllDue !== null) closeAllDue();
     if (tab === DEFAULT_RUNWAY_TAB) {
-      if (window.history.state?.runwayTabStep) {
+      if (isHistoryStep('runwayTabStep')) {
         navigate(-1);
         return;
       }
@@ -288,6 +317,16 @@ export function useRunwayUrlState() {
   };
   const showSpendEnvelope = (envelopeId: string | null) =>
     setRequestedSpendEnvelope(envelopeId, { history: 'replace' });
+  const showSpendKind = (kind: (typeof SPEND_KINDS)[number] | null) =>
+    setRequestedSpendKind(kind, { history: 'replace' });
+  const showSpendFrom = (sourceIds: string[]) =>
+    setRequestedSpendFrom(sourceIds.length > 0 ? sourceIds : null, {
+      history: 'replace',
+    });
+  const showSpendAmount = (min: number | null, max: number | null) => {
+    void setRequestedSpendMin(min, { history: 'replace' });
+    void setRequestedSpendMax(max, { history: 'replace' });
+  };
 
   const planSection: PlanSection = requestedSection ?? DEFAULT_PLAN_SECTION;
   const showPlanSection = (section: PlanSection) => {
@@ -304,7 +343,12 @@ export function useRunwayUrlState() {
   const showOnPlan = async (
     section: PlanSection,
     target:
-      | { itemId: string; step?: string; returnTo?: PlanSection }
+      | {
+          itemId: string;
+          step?: string;
+          returnTo?: PlanSection;
+          eventId?: string;
+        }
       | 'undatedBills',
   ) => {
     // Unconditional: run after a sheet's back steps, this render's `requestedDay` can predate the address.
@@ -320,6 +364,7 @@ export function useRunwayUrlState() {
       target.itemId,
       target.step ?? null,
       target.returnTo ?? null,
+      target.eventId ?? null,
     );
   };
 
@@ -359,7 +404,7 @@ export function useRunwayUrlState() {
     window.history.replaceState(window.history.state, '', address);
     closeView();
     if (section) showPlanSection(section);
-    showTab(tab);
+    return showTab(tab);
   };
 
   const state = {
@@ -377,6 +422,10 @@ export function useRunwayUrlState() {
     showTab,
     showSpend,
     spendEnvelope: requestedSpendEnvelope,
+    spendKind: requestedSpendKind,
+    spendFrom: requestedSpendFrom ?? [],
+    spendMin: requestedSpendMin,
+    spendMax: requestedSpendMax,
     purchaseId: requestedPurchase,
     checkEnvelope: requestedCheckEnvelope,
     isCheckFromFreeToSpend: requestedCheckFrom === true,
@@ -386,9 +435,14 @@ export function useRunwayUrlState() {
     closeCheckBalance,
     openCashPosition,
     closeCashPosition,
+    openHeldView,
+    closeHeldView,
     openPurchase,
     closePurchase,
     showSpendEnvelope,
+    showSpendKind,
+    showSpendFrom,
+    showSpendAmount,
     planSection,
     showPlanSection,
     openDayKey: requestedDay,
@@ -437,6 +491,10 @@ export function useRunwayUrlState() {
     view: null,
     startMethod: null,
     spendEnvelope: null,
+    spendKind: null,
+    spendFrom: [],
+    spendMin: null,
+    spendMax: null,
     purchaseId: null,
     checkEnvelope: null,
     isCheckFromFreeToSpend: false,

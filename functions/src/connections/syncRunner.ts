@@ -240,7 +240,10 @@ async function runLeased(
   const windowStart = startedAt - SYNC_WINDOW_DAYS * DAY_MS;
   const results = await sequence(
     Object.entries(grant.categories)
-      .filter(([, category]) => category.isOn)
+      .filter(
+        ([category, state]) =>
+          state.isOn && !deps.source.isLive?.(grant.connectorId, category),
+      )
       .map(
         ([category]) =>
           () =>

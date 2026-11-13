@@ -10,6 +10,7 @@ import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   finishGoogleConnection,
+  grantConnection,
   startGoogleConnection,
 } from '@/lib/connections/connectionCalls';
 import type { FinishGoogleConnectionResult } from '@/lib/connections/contract';
@@ -26,7 +27,12 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import CalendarPicker, {
   type CalendarPickerTarget,
 } from '@apps/helm/components/connections/CalendarPicker';
+import ContactsPicker from '@apps/helm/components/contacts/ContactsPicker';
 import { HELM_COPY } from '@apps/helm/constants';
+import {
+  CONTACTS_CONNECTOR_ID,
+  CONTACTS_SCOPE,
+} from '@apps/helm/queries/contactsQueries';
 import {
   GoogleConnectContext,
   type GoogleConnectOptions,
@@ -34,12 +40,77 @@ import {
 } from '@apps/helm/hooks/useGoogleConnect';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
+type GoogleConnectorId = NonNullable<GoogleConnectOptions['connectorId']>;
+
 interface Intro {
+  connectorId: GoogleConnectorId;
   accountId: string | null;
   isAnotherAccount: boolean;
   /** A line already known when the sheet opens, such as a refusal on the way back from Google. */
   failure: string | null;
 }
+
+const CONNECTOR_KEY = 'helm-google-connector';
+
+/** The category a restricted connector switches on at connect, the one its row in the account's page offers. */
+const toRestrictedCategory = (connectorId: string) =>
+  connectorId === 'google:gmail'
+    ? 'mail'
+    : connectorId === 'google:drive'
+      ? 'documents'
+      : null;
+
+const toReadOnlyLine = (connectorId: GoogleConnectorId, name: string) =>
+  connectorId === 'google:gmail'
+    ? HELM_COPY.googleGmailReadOnly(name)
+    : connectorId === 'google:drive'
+      ? HELM_COPY.googleDriveReadOnly(name)
+      : connectorId === 'google:contacts'
+        ? HELM_COPY.googleContactsReadOnly(name)
+        : HELM_COPY.googleConnectReadOnly(name);
+
+const toIntroTitle = (connectorId: GoogleConnectorId, isReconnect: boolean) => {
+  if (connectorId === 'google:gmail') {
+    return isReconnect
+      ? HELM_COPY.googleGmailReconnectTitle
+      : HELM_COPY.googleGmailTitle;
+  }
+  if (connectorId === 'google:drive') {
+    return isReconnect
+      ? HELM_COPY.googleDriveReconnectTitle
+      : HELM_COPY.googleDriveTitle;
+  }
+  if (connectorId === 'google:contacts') {
+    return isReconnect
+      ? HELM_COPY.googleContactsReconnectTitle
+      : HELM_COPY.googleContactsTitle;
+  }
+  return isReconnect
+    ? HELM_COPY.googleReconnectTitle
+    : HELM_COPY.googleConnectTitle;
+};
+
+const keepConnector = (connectorId: GoogleConnectorId | null) => {
+  try {
+    if (connectorId === null) sessionStorage.removeItem(CONNECTOR_KEY);
+    else sessionStorage.setItem(CONNECTOR_KEY, connectorId);
+  } catch {
+    // Private browsing can refuse storage; a return then falls back to the calendar.
+  }
+};
+
+const readKeptConnector = (): GoogleConnectorId => {
+  try {
+    const kept = sessionStorage.getItem(CONNECTOR_KEY);
+    return kept === 'google:gmail' ||
+      kept === 'google:drive' ||
+      kept === 'google:contacts'
+      ? kept
+      : 'google:calendar';
+  } catch {
+    return 'google:calendar';
+  }
+};
 
 const isPopupPage = () =>
   window.opener !== null && (window.opener as Window) !== window;
@@ -51,17 +122,20 @@ const toFailureLine = (error: unknown, name: string) =>
 
 /** The whole trip to Google and back: where to go, the person's answer, and what the server made of it. */
 const connectGoogle = async ({
+  connectorId,
   accountId,
   isAnotherAccount,
-}: Pick<Intro, 'accountId' | 'isAnotherAccount'>) => {
+}: Pick<Intro, 'connectorId' | 'accountId' | 'isAnotherAccount'>) => {
   const { authUrl, state } = await startGoogleConnection({
     readerAppId: 'helm',
-    connectorId: 'google:calendar',
+    connectorId,
     redirectUri: `${window.location.origin}/helm`,
     accountId,
     isAnotherAccount,
   });
+  keepConnector(connectorId);
   const result = await requestGoogleAuthCode({ authUrl, state });
+  if (result !== 'redirected') keepConnector(null);
   return typeof result === 'string' ? result : finishGoogleConnection(result);
 };
 
@@ -113,7 +187,7 @@ function IntroForm({
         </p>
       )}
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {HELM_COPY.googleConnectReadOnly(name)}
+        {toReadOnlyLine(intro.connectorId, name)}
       </p>
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.googleConnectTesting(name)}
@@ -167,9 +241,11 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   const [returned] = useState(() =>
     readGoogleAuthReturn(window.location.search),
   );
+  const [returnedConnector] = useState(readKeptConnector);
   const [intro, setIntro] = useState<Intro | null>(() =>
     returned && 'error' in returned && !isPopupPage()
       ? {
+          connectorId: returnedConnector,
           accountId: null,
           isAnotherAccount: false,
           failure:
@@ -180,33 +256,105 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
       : null,
   );
   const [picker, setPicker] = useState<CalendarPickerTarget | null>(null);
+  const [contactsAccountId, setContactsAccountId] = useState<string | null>(
+    null,
+  );
+  const [isContactsOpen, setIsContactsOpen] = useState(false);
   const introAccount = intro?.accountId
     ? (accounts.find((entry) => entry.id === intro.accountId) ?? null)
     : null;
+
+  const contactsAccount = accounts.find(
+    (entry) =>
+      entry.status === 'live' &&
+      entry.grantedScopes.includes(CONTACTS_SCOPE) &&
+      grants.some(
+        (grant) =>
+          grant.connectorId === CONTACTS_CONNECTOR_ID &&
+          grant.accountId === entry.id &&
+          grant.status !== 'ended' &&
+          grant.categories.contacts?.isOn === true,
+      ),
+  );
+  const contactsAccountKey = contactsAccount?.id ?? null;
 
   const value = useMemo<GoogleConnectValue>(
     () => ({
       begin: (options: GoogleConnectOptions = {}) =>
         setIntro({
+          connectorId: options.connectorId ?? 'google:calendar',
           accountId: options.accountId ?? null,
           isAnotherAccount: options.isAnotherAccount ?? false,
           failure: null,
         }),
       openCalendarPicker: (accountId) => setPicker({ accountId, mode: 'edit' }),
+      openContacts: () => {
+        if (contactsAccountKey !== null) {
+          setContactsAccountId(contactsAccountKey);
+          setIsContactsOpen(true);
+          return;
+        }
+        setIntro({
+          connectorId: CONTACTS_CONNECTOR_ID,
+          accountId: null,
+          isAnotherAccount: false,
+          failure: null,
+        });
+      },
     }),
-    [],
+    [contactsAccountKey],
   );
+
+  const openContactsFor = (accountId: string) => {
+    setContactsAccountId(accountId);
+    setIsContactsOpen(true);
+  };
 
   const handleFinished = (finished: FinishGoogleConnectionResult) => {
     setIntro(null);
     const hasGrant = grants.some(
       (grant) =>
-        grant.connectorId === 'google:calendar' &&
+        grant.connectorId === finished.connectorId &&
         grant.accountId === finished.accountId &&
         grant.status !== 'ended',
     );
+    if (finished.connectorId === CONTACTS_CONNECTOR_ID) {
+      if (finished.hasLiveGrant || hasGrant)
+        return openContactsFor(finished.accountId);
+      grantConnection({
+        readerAppId: 'helm',
+        connectorId: finished.connectorId,
+        accountId: finished.accountId,
+        categoryIds: ['contacts'],
+        options: null,
+      })
+        .then(() => openContactsFor(finished.accountId))
+        .catch((error: unknown) => {
+          console.error('Helm contacts were not connected', error);
+          addToast({ title: HELM_COPY.googleContactsFailed, type: 'error' });
+        });
+      return;
+    }
     if (finished.hasLiveGrant || hasGrant) {
       addToast({ title: HELM_COPY.googleReconnected, type: 'success' });
+      return;
+    }
+    const restrictedCategory = toRestrictedCategory(finished.connectorId);
+    if (restrictedCategory) {
+      const isDrive = finished.connectorId === 'google:drive';
+      grantConnection({
+        readerAppId: 'helm',
+        connectorId: finished.connectorId,
+        accountId: finished.accountId,
+        categoryIds: [restrictedCategory],
+        options: null,
+      }).catch((error: unknown) => {
+        console.error('Helm restricted connector was not connected', error);
+        addToast({
+          title: isDrive ? HELM_COPY.driveFailed : HELM_COPY.gmailFailed,
+          type: 'error',
+        });
+      });
       return;
     }
     setPicker({ accountId: finished.accountId, mode: 'connect' });
@@ -215,6 +363,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   const onReturnFailed = (error: unknown) => {
     console.error('Helm Google connection did not finish', error);
     setIntro({
+      connectorId: returnedConnector,
       accountId: null,
       isAnotherAccount: false,
       failure: toFailureLine(error, name),
@@ -223,7 +372,10 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!returned || handOffGoogleAuthReturn()) return;
-    if ('error' in returned) stripReturnQuery();
+    if ('error' in returned) {
+      stripReturnQuery();
+      keepConnector(null);
+    }
   }, [returned]);
 
   const isReturningWithCode =
@@ -241,6 +393,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     queryFn: async () => {
       if (!returned || !('code' in returned)) return false;
       stripReturnQuery();
+      keepConnector(null);
       const kept = takeGoogleAuthState();
       try {
         if (kept !== null && kept !== returned.state)
@@ -260,8 +413,8 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
         isOpen={intro !== null}
         onClose={() => setIntro(null)}
         title={
-          intro?.accountId
-            ? HELM_COPY.googleReconnectTitle
+          intro
+            ? toIntroTitle(intro.connectorId, !!intro.accountId)
             : HELM_COPY.googleConnectTitle
         }
       >
@@ -282,6 +435,21 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
         )}
       </FormSheet>
       <CalendarPicker target={picker} onClose={() => setPicker(null)} />
+      {isContactsOpen && (
+        <ContactsPicker
+          accountId={contactsAccountId}
+          onClose={() => setIsContactsOpen(false)}
+          onReconnect={(accountId) => {
+            setIsContactsOpen(false);
+            setIntro({
+              connectorId: CONTACTS_CONNECTOR_ID,
+              accountId,
+              isAnotherAccount: false,
+              failure: null,
+            });
+          }}
+        />
+      )}
     </GoogleConnectContext.Provider>
   );
 }
