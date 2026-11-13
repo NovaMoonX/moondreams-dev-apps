@@ -192,9 +192,7 @@ google_done() { secret_has GOOGLE_OAUTH_CLIENT && api_enabled calendar-json.goog
 google_run() {
   bash scripts/connections/googleSetup.sh
   if ! secret_has GOOGLE_OAUTH_CLIENT; then
-    echo
-    echo "  Then, on that same consent screen page, open Audience and click \"Publish app\", then \"Confirm\", so it is \"In production\" (sign-ins stop expiring after 7 days). Google shows a \"hasn't verified this app\" screen; click Advanced, then Continue."
-    add BROWSER_LIST "Google consent screen: test users, scopes, publishing status; and the Web OAuth client"
+    add BROWSER_LIST "Google consent screen: scopes and In production status; and the Web OAuth client"
     pause "Finish the clicks above, then press Enter to paste the client ID and secret: "
     bash scripts/connections/googleSecrets.sh
   fi
@@ -358,4 +356,4 @@ fi
 [[ -n "$SKIPPED_LIST" ]] && { echo "Skipped by choice:"; printf '%s' "$SKIPPED_LIST" | sed 's/^/  • /'; }
 [[ -n "$DEFERRED_LIST" ]] && { echo "Waiting for the deploy (run: npm run helm:setup -- --after-deploy):"; printf '%s' "$DEFERRED_LIST" | sed 's/^/  • /'; }
 [[ -n "$BROWSER_LIST" ]] && { echo "Browser steps this run showed you (a script can't check them):"; printf '%s' "$BROWSER_LIST" | sed 's/^/  • /'; }
-echo "Still yours, in the browser: for Gmail and Drive, add each tester's address on the consent screen's test users and on the \"Gmail and Drive\" switch at https://apps.moondreams.dev/admin?view=apps&app=helm&section=features."
+echo "Still yours, in the browser: to give someone Gmail and Drive, turn on their \"Gmail and Drive\" switch at https://apps.moondreams.dev/admin?view=apps&app=helm&section=features."
