@@ -360,6 +360,8 @@ async function writeSeedHorizon(
     note: null,
   });
   const feb1 = nextCalendarDay(today, 1, 1);
+  const nextYear = (month: number, day: number) =>
+    Date.UTC(new Date(today).getUTCFullYear() + 1, month, day);
   const dec20 = nextCalendarDay(today, 11, 20);
 
   const allItems: { id: string; payload: HorizonSealed }[] = [
@@ -375,6 +377,8 @@ async function writeSeedHorizon(
         rest: { kind: 'outside' },
         note: null,
         goalId: null,
+        isYearly: false,
+        fromId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
@@ -427,9 +431,11 @@ async function writeSeedHorizon(
         happensUntil: null,
         priority: 'must',
         orderIndex: 21,
-        rest: { kind: 'pays' },
+        rest: { kind: 'pays', startsOn: null },
         note: null,
         goalId: null,
+        isYearly: false,
+        fromId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
@@ -467,6 +473,8 @@ async function writeSeedHorizon(
         rest: { kind: 'later' },
         note: null,
         goalId: 'seed-goal-wedding',
+        isYearly: false,
+        fromId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
@@ -502,6 +510,8 @@ async function writeSeedHorizon(
         rest: { kind: 'later' },
         note: null,
         goalId: null,
+        isYearly: false,
+        fromId: null,
         state: 'finished' as const,
         stateOn: today - 3 * DAY_MS,
         stateMoney: null,
@@ -523,6 +533,8 @@ async function writeSeedHorizon(
         rest: { kind: 'later' },
         note: null,
         goalId: null,
+        isYearly: false,
+        fromId: null,
         state: 'calledOff' as const,
         stateOn: today - 2 * DAY_MS,
         stateMoney: {
@@ -563,6 +575,8 @@ async function writeSeedHorizon(
         rest: { kind: 'later' },
         note: null,
         goalId: null,
+        isYearly: false,
+        fromId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
@@ -590,6 +604,8 @@ async function writeSeedHorizon(
         rest: { kind: 'later' },
         note: null,
         goalId: null,
+        isYearly: false,
+        fromId: null,
         state: 'finished' as const,
         stateOn: today - DAY_MS,
         stateMoney: {
@@ -601,6 +617,49 @@ async function writeSeedHorizon(
         links: [],
         costs: [
           cost('seed-cost-shed', 'Shed', 22_500, 22_500, today - 8 * DAY_MS),
+        ],
+      },
+    },
+    {
+      id: 'seed-horizon-guys-trip',
+      payload: {
+        name: 'Guys trip',
+        emoji: '🍻',
+        happensOn: nextYear(10, 15),
+        happensUntil: nextYear(10, 18),
+        priority: 'want',
+        orderIndex: 25,
+        rest: { kind: 'pays', startsOn: nextYear(0, 1) },
+        note: null,
+        goalId: null,
+        isYearly: true,
+        fromId: null,
+        state: 'open' as const,
+        stateOn: null,
+        stateMoney: null,
+        links: [],
+        costs: [
+          cost(
+            'seed-cost-trip-flights',
+            'Flights',
+            60_000,
+            60_000,
+            nextYear(7, 31),
+          ),
+          cost(
+            'seed-cost-trip-lodging',
+            'Lodging',
+            80_000,
+            80_000,
+            nextYear(7, 31),
+          ),
+          cost(
+            'seed-cost-trip-fun',
+            'Food and fun',
+            40_000,
+            60_000,
+            nextYear(10, 15),
+          ),
         ],
       },
     },

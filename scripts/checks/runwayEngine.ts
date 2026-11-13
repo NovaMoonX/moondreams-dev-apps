@@ -5752,6 +5752,8 @@ const version = (
         stateOn: null,
         stateMoney: null,
         goalId: null,
+        isYearly: false,
+        fromId: null,
         links: [],
         costs: [
           {
@@ -13465,6 +13467,8 @@ const version = (
     rest: { kind: 'later' as const },
     note: null,
     goalId: null,
+    isYearly: false,
+    fromId: null,
     state: 'open' as const,
     stateOn: null,
     stateMoney: null,
@@ -13753,6 +13757,8 @@ const version = (
     rest: { kind: 'later' },
     note: null,
     goalId: null,
+    isYearly: false,
+    fromId: null,
     state: 'open' as const,
     stateOn: null,
     stateMoney: null,
@@ -14374,6 +14380,8 @@ const version = (
     rest: { kind: 'pays', startsOn: null },
     note: null,
     goalId: null,
+    isYearly: false,
+    fromId: null,
     state: 'open',
     stateOn: null,
     stateMoney: null,
@@ -19062,6 +19070,18 @@ console.log('runway engine: ok');
     'a payment is carried only by the pays on or after the start',
   );
 
+  const startsLater = planCostShares(
+    item({ kind: 'pays', startsOn: utc(2027, 1, 14) }, [storage]),
+    days,
+    utc(2027, 11, 31),
+    'conservative',
+  )[0];
+  assert.deepEqual(
+    startsLater.parts.map((part) => part.day.on),
+    plans[0].parts.map((part) => part.day.on),
+    'a payment due before the start day is carried by its normal pays, never left unfunded',
+  );
+
   const confirmedUp = item({ kind: 'pays', startsOn: null }, [storage], 8_000);
   const laterShare = (horizonItem: ReturnType<typeof item>) =>
     costLines(draftOn(jan31, horizonItem))[0]?.cents ?? 0;
@@ -20689,6 +20709,8 @@ checkHorizonMoves();
     rest: { kind: 'later' },
     note: null,
     goalId: 'goal',
+    isYearly: false,
+    fromId: null,
     state: 'open' as const,
     stateOn: null,
     stateMoney: null,

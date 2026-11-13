@@ -1,12 +1,17 @@
 import { formatDateOrdinalUTC, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
-import { HORIZON_WORDS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+import {
+  DEFAULT_STANCE,
+  HORIZON_WORDS,
+  LOOKAHEAD_MONTHS,
+} from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
   getHorizonFigures,
   getHorizonStage,
   getNextUnpaidPayment,
   type CostPaidEntry,
+  listCostPayments,
   listHorizonPayments,
   planHorizon,
 } from '@apps/runway/engine/horizon';
@@ -201,21 +206,29 @@ export function formatDateRangeOrdinalUTC(from: number, to: number) {
   return `${startDay} to ${lastDay}${endYear.map((year) => `,${year}`).join('')}`;
 }
 
-/** The sentence that refuses a start day after a cost's first due date, naming the earliest such cost; null when every cost is due on or after it. */
+/** The sentence that refuses a start day after a cost's next unpaid payment, naming the earliest such cost; costs outside the plan, made bills or removed are not asked. Null when every cost's next payment is due on or after it. */
 export function getPaysStartBlocker(
-  costs: readonly Pick<HorizonCost, 'name' | 'schedule'>[],
+  costs: readonly HorizonCost[],
   startsOn: number | null,
+  paid: readonly CostPaidEntry[] = [],
 ) {
   if (startsOn === null) return null;
   const late = costs
     .filter(
-      ({ schedule }) => schedule.anchor !== null && schedule.anchor < startsOn,
+      ({ isOutside, becameBillId, endsAfter }) =>
+        !isOutside && becameBillId === null && endsAfter === null,
     )
-    .sort((a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0))[0];
+    .flatMap((cost) => {
+      const next = listCostPayments(cost, startsOn, DEFAULT_STANCE, paid).find(
+        (payment) => payment.paid === null,
+      );
+      return next && next.dueOn < startsOn ? [{ cost, dueOn: next.dueOn }] : [];
+    })
+    .sort((a, b) => a.dueOn - b.dueOn)[0];
   return late
     ? HORIZON_WORDS.startingBeforeCost(
-        late.name,
-        formatDateOrdinalUTC(late.schedule.anchor ?? 0),
+        late.cost.name,
+        formatDateOrdinalUTC(late.dueOn),
       )
     : null;
 }

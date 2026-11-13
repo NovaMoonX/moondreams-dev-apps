@@ -1097,7 +1097,9 @@ export function planCostShares(
               (day) =>
                 day.on > previous &&
                 day.on <= cover.dueOn &&
-                (startsOn === null || day.on >= startsOn),
+                (startsOn === null ||
+                  cover.dueOn < startsOn ||
+                  day.on >= startsOn),
             );
       const shared = getCostDayShares(
         eligible,

@@ -38,6 +38,7 @@ const horizon: HorizonSealed = {
     cost('flight', { amount: { lowCents: 1, highCents: 99 } }),
     cost('bill', { becameBillId: 'b1', becameBillOn: day('2026-06-01') }),
     cost('gone', { endsAfter: day('2026-03-01') }),
+    cost('goal-goal-1', { amount: { lowCents: 50_000, highCents: 50_000 } }),
     cost('club', {
       schedule: { kind: 'monthly', anchor: day('2026-01-05'), monthDays: [5] },
       ending: { onDate: day('2026-12-05'), afterCount: null },
@@ -67,7 +68,7 @@ const entry = (costId: string, amountCents: number) => ({
 
 const next = getNextYearHorizon(
   horizon,
-  [entry('hotel', 12_345), entry('club', 3_000)],
+  [entry('hotel', 12_345), entry('club', 3_000), entry('goal-goal-1', 41_000)],
   'this-id',
 );
 
@@ -93,16 +94,22 @@ assert.deepEqual(
 );
 assert.deepEqual(
   next.costs.map((kept) => kept.name),
-  ['hotel', 'flight', 'club'],
+  ['hotel', 'flight', 'goal-goal-1', 'club'],
   'a cost that became a bill or was removed is left out',
 );
 assert.equal(
   new Set([...next.costs.map((kept) => kept.id), 'hotel', 'flight', 'club'])
     .size,
-  6,
+  7,
   'every kept cost gets a new id',
 );
-const [hotel, flight, club] = next.costs;
+const [hotel, flight, goalCost, club] = next.costs;
+assert.equal(goalCost.id, 'goal-goal-1', 'the goal cost keeps its id');
+assert.deepEqual(
+  goalCost.amount,
+  { lowCents: 50_000, highCents: 50_000 },
+  'the goal cost keeps its planned amount, not what was paid',
+);
 assert.deepEqual(
   hotel.amount,
   { lowCents: 12_345, highCents: 12_345 },

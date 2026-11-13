@@ -6,6 +6,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import AppToggle from '@/components/AppToggle';
 import DateInput from '@/components/DateInput';
 import EmojiField from '@/components/EmojiField';
 import { PillGroup } from '@/components/PillGroup';
@@ -33,6 +34,7 @@ import { addUtcMonths } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
 import {
   selectBills,
+  selectCostPaid,
   selectComingDays,
   selectEnvelopes,
   selectGoals,
@@ -81,6 +83,7 @@ function HorizonChangeForm({
   const goals = useAppSelector((state) => selectGoals(state, today));
   const horizons = useAppSelector((state) => selectHorizonItems(state, today));
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const paid = useAppSelector(selectCostPaid)[itemId] ?? [];
   const [name, setName] = useState(horizon.name);
   const [emoji, setEmoji] = useState<string | null>(horizon.emoji);
   const [date, setDate] = useState(toDateInputValue(horizon.happensOn));
@@ -96,6 +99,7 @@ function HorizonChangeForm({
     horizon.rest.kind === 'pays' ? horizon.rest.startsOn : null,
   );
   const [priority, setPriority] = useState<Priority>(horizon.priority);
+  const [isYearly, setIsYearly] = useState(horizon.isYearly);
 
   const trimmed = name.trim();
   const happensOn = fromDateInputValue(date);
@@ -126,6 +130,7 @@ function HorizonChangeForm({
       ? getPaysStartBlocker(
           horizon.costs,
           startsOn !== null && startsOn > today ? startsOn : null,
+          paid,
         )
       : null;
 
@@ -169,6 +174,7 @@ function HorizonChangeForm({
                   priority,
                 ),
           rest: getRest(),
+          isYearly,
         };
 
   const { isHidden } = useValuesHidden();
@@ -345,6 +351,30 @@ function HorizonChangeForm({
                 }}
               />
             ))}
+        </div>
+      ),
+    },
+    {
+      id: 'yearly',
+      title: HORIZON_WORDS.yearlyTitle,
+      summaryLabel: HORIZON_WORDS.yearly,
+      summaryValue: isYearly
+        ? HORIZON_WORDS.yearlyEvery
+        : HORIZON_WORDS.yearlyOnce,
+      isAnswered: true,
+      render: () => (
+        <div className='flex items-center justify-between gap-3'>
+          <div className='min-w-0 space-y-0.5'>
+            <p className='font-medium'>{HORIZON_WORDS.yearlyEvery}</p>
+            <p className='text-muted-foreground text-sm'>
+              {HORIZON_WORDS.yearlyEveryMeaning}
+            </p>
+          </div>
+          <AppToggle
+            aria-label={HORIZON_WORDS.yearlyEvery}
+            checked={isYearly}
+            onCheckedChange={setIsYearly}
+          />
         </div>
       ),
     },

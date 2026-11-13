@@ -681,7 +681,7 @@ export const getNextVersionId = (baseVersionId: string, stretch = 0) => {
   return `${root}~${generation}${stretch === 0 ? '' : `_${stretch}`}`;
 };
 
-/** The open event lined up from `itemId`, and whether it is still as it was made: one version and no move but the one that carried money in. Null when none was lined up. */
+/** The event lined up from `itemId` that is not archived, and whether it is still as it was made: open, one version and no move but the one that carried money in. One that was ended or touched is the one reported when several exist. Null when none was lined up. */
 export function findNextYearOf(
   itemId: string,
   carryMoveId: string | null,
@@ -699,33 +699,37 @@ export function findNextYearOf(
   happensOn: DateOnly;
   isUntouched: boolean;
 } | null {
-  const made = versions.find(
-    (version) =>
-      version.kind === 'horizon' &&
-      (version.payload as HorizonSealed).fromId === itemId &&
-      items.some(
-        (item) =>
-          item.id === version.itemId &&
-          item.archivedAt === null &&
-          item.endedAt === null,
-      ),
-  );
-  if (!made) return null;
-  const own = versions.filter((version) => version.itemId === made.itemId);
-  const isMoved = moves.some(
-    (move) =>
-      move.id !== carryMoveId &&
-      (move.refId === made.itemId ||
-        (move.kind === 'transfer' &&
-          (move.payload.fromId === made.itemId ||
-            move.payload.toId === made.itemId))),
-  );
-  return {
-    itemId: made.itemId,
-    versionId: made.id,
-    happensOn: (made.payload as HorizonSealed).happensOn,
-    isUntouched: own.length === 1 && !isMoved,
+  const readMade = (made: (typeof versions)[number]) => {
+    const own = versions.filter((version) => version.itemId === made.itemId);
+    const isMoved = moves.some(
+      (move) =>
+        move.id !== carryMoveId &&
+        (move.refId === made.itemId ||
+          (move.kind === 'transfer' &&
+            (move.payload.fromId === made.itemId ||
+              move.payload.toId === made.itemId))),
+    );
+    const isEnded = items.some(
+      (item) => item.id === made.itemId && item.endedAt !== null,
+    );
+    return {
+      itemId: made.itemId,
+      versionId: made.id,
+      happensOn: (made.payload as HorizonSealed).happensOn,
+      isUntouched: own.length === 1 && !isMoved && !isEnded,
+    };
   };
+  const found = versions
+    .filter(
+      (version) =>
+        version.kind === 'horizon' &&
+        (version.payload as HorizonSealed).fromId === itemId &&
+        items.some(
+          (item) => item.id === version.itemId && item.archivedAt === null,
+        ),
+    )
+    .map(readMade);
+  return found.find(({ isUntouched }) => !isUntouched) ?? found[0] ?? null;
 }
 
 const nextYear = (date: DateOnly) => addUtcMonths(date, 12);
@@ -755,13 +759,16 @@ export function getNextYearHorizon(
     costs: horizon.costs
       .filter((cost) => cost.becameBillId === null && cost.endsAfter === null)
       .map((cost) => {
+        const isGoalCost =
+          horizon.goalId !== null && cost.id === getGoalCostId(horizon.goalId);
         const cameTo = paid
           .filter((entry) => entry.costId === cost.id)
           .reduce((sum, entry) => sum + entry.amountCents, 0);
-        const isSettled = cost.schedule.kind === 'once' && cameTo > 0;
+        const isSettled =
+          !isGoalCost && cost.schedule.kind === 'once' && cameTo > 0;
         return {
           ...cost,
-          id: generateUuid(),
+          id: isGoalCost ? cost.id : generateUuid(),
           amount: isSettled
             ? { lowCents: cameTo, highCents: cameTo }
             : cost.amount,
