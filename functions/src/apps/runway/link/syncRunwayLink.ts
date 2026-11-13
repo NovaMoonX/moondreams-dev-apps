@@ -562,14 +562,26 @@ const areStatementsDue = (
   );
 };
 
-/** Keeps the readable `needsCardConsent` flag in step with the provider's answer, writing only on a change. */
-async function setNeedsCardConsent(
+type CardDetailsAnswer = 'shared' | 'needsConsent' | 'unsupported';
+
+const toCardDetailsAnswer = (value: unknown): CardDetailsAnswer | null =>
+  value === 'shared' || value === 'needsConsent' || value === 'unsupported'
+    ? value
+    : null;
+
+/** Keeps the link's readable answer about card details in step with the provider's, writing only on a change. */
+async function setCardDetails(
   firestore: Firestore,
   linkRef: DocumentReference,
-  value: boolean,
+  had: CardDetailsAnswer | null,
+  value: CardDetailsAnswer,
 ) {
+  if (had === value) return;
   await writeUnlessRevoked(firestore, linkRef, (transaction) =>
-    transaction.update(linkRef, { needsCardConsent: value }),
+    transaction.update(linkRef, {
+      cardDetails: value,
+      needsCardConsent: null,
+    }),
   );
 }
 
@@ -582,7 +594,7 @@ async function writeCardStatements(
   linkRef: DocumentReference,
   planKey: PlanKey,
   targets: ReadonlyMap<string, Target>,
-  hadConsentFlag: boolean | null,
+  hadAnswer: CardDetailsAnswer | null,
 ) {
   const read = await provider.listCardStatements(grant);
   if (read.kind === 'notReady') {
@@ -595,9 +607,7 @@ async function writeCardStatements(
       statementsCheckedAt: now,
       isStatementsUnsupported: false,
     });
-    if (hadConsentFlag !== true) {
-      await setNeedsCardConsent(firestore, linkRef, true);
-    }
+    await setCardDetails(firestore, linkRef, hadAnswer, 'needsConsent');
     return;
   }
   if (read.kind === 'unsupported') {
@@ -605,9 +615,7 @@ async function writeCardStatements(
       statementsCheckedAt: now,
       isStatementsUnsupported: true,
     });
-    if (hadConsentFlag !== false) {
-      await setNeedsCardConsent(firestore, linkRef, false);
-    }
+    await setCardDetails(firestore, linkRef, hadAnswer, 'unsupported');
     return;
   }
   const answered = new Set(
@@ -658,9 +666,7 @@ async function writeCardStatements(
     statementsCheckedAt: now,
     isStatementsUnsupported: false,
   });
-  if (hadConsentFlag !== false) {
-    await setNeedsCardConsent(firestore, linkRef, false);
-  }
+  await setCardDetails(firestore, linkRef, hadAnswer, 'shared');
   logger.info('runway.sync.statementsWritten', {
     linkId,
     count: written.length,
@@ -899,7 +905,7 @@ export async function syncRunwayLink(
       hasCardTarget &&
       areStatementsDue(grantDoc, options.isStatementsDue === true, Date.now())
     ) {
-      const consentFlag: unknown = linkSnapshot.data()?.needsCardConsent;
+      const hadAnswer = toCardDetailsAnswer(linkSnapshot.data()?.cardDetails);
       await writeCardStatements(
         firestore,
         uid,
@@ -909,7 +915,7 @@ export async function syncRunwayLink(
         linkRef,
         planKey,
         targets,
-        typeof consentFlag === 'boolean' ? consentFlag : null,
+        hadAnswer,
       ).catch(async (error: unknown) => {
         logger.warn('runway.sync.statementsFailed', {
           linkId,
