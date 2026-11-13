@@ -29,22 +29,30 @@ function utcCalendarDaysBetween(fromMs: number, toMs: number): number {
   return Math.round((startOfUtcDay(toMs) - startOfUtcDay(fromMs)) / DAY_MS);
 }
 
-/** The next occurrence (today or later) of `timestamp`'s UTC month/day, anchored to `nowMs`'s year (or the following year, if this year's date has already passed). */
-export function nextOccurrenceOnOrAfter(timestamp: number, nowMs: number): number {
+/** `timestamp`'s UTC month/day in `year`, as UTC midnight; 29 February falls on the 28th in a year without one. */
+function occurrenceIn(timestamp: number, year: number): number {
   const source = new Date(timestamp);
-  const now = new Date(nowMs);
-  const occurrence = Date.UTC(now.getUTCFullYear(), source.getUTCMonth(), source.getUTCDate());
+  const isLeapYear = new Date(Date.UTC(year, 1, 29)).getUTCMonth() === 1;
+  const isMissingLeapDay =
+    source.getUTCMonth() === 1 && source.getUTCDate() === 29 && !isLeapYear;
 
-  return occurrence < startOfUtcDay(nowMs) ? Date.UTC(now.getUTCFullYear() + 1, source.getUTCMonth(), source.getUTCDate()) : occurrence;
+  return Date.UTC(year, source.getUTCMonth(), isMissingLeapDay ? 28 : source.getUTCDate());
 }
 
-/** The most recent occurrence (today or earlier) of `timestamp`'s UTC month/day, anchored to `nowMs`'s year (or the prior year, if this year's date hasn't happened yet). */
-function lastOccurrenceOnOrBefore(timestamp: number, nowMs: number): number {
-  const source = new Date(timestamp);
-  const now = new Date(nowMs);
-  const occurrence = Date.UTC(now.getUTCFullYear(), source.getUTCMonth(), source.getUTCDate());
+/** The next occurrence (today or later) of `timestamp`'s UTC month/day, as UTC midnight; 29 February falls on the 28th in a year without one. */
+export function nextOccurrenceOnOrAfter(timestamp: number, nowMs: number): number {
+  const year = new Date(nowMs).getUTCFullYear();
+  const occurrence = occurrenceIn(timestamp, year);
 
-  return occurrence > startOfUtcDay(nowMs) ? Date.UTC(now.getUTCFullYear() - 1, source.getUTCMonth(), source.getUTCDate()) : occurrence;
+  return occurrence < startOfUtcDay(nowMs) ? occurrenceIn(timestamp, year + 1) : occurrence;
+}
+
+/** The most recent occurrence (today or earlier) of `timestamp`'s UTC month/day, anchored to `nowMs`'s year (or the prior year, if this year's date hasn't happened yet); 29 February falls on the 28th in a year without one. */
+function lastOccurrenceOnOrBefore(timestamp: number, nowMs: number): number {
+  const year = new Date(nowMs).getUTCFullYear();
+  const occurrence = occurrenceIn(timestamp, year);
+
+  return occurrence > startOfUtcDay(nowMs) ? occurrenceIn(timestamp, year - 1) : occurrence;
 }
 
 /** Cats whose birthday falls within the next 7 days, counting today as day 0 — never cats whose birthday already passed. */

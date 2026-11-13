@@ -14,13 +14,13 @@ const CAPTION = {
   idle: HELM_COPY.talk,
   listening: HELM_COPY.talkListening,
   thinking: HELM_COPY.talkStop,
-  speaking: HELM_COPY.talkStop,
+  speaking: HELM_COPY.talk,
 } as const;
 
-/** The dock's Talk button: tap to listen, tap again to send, and it becomes Stop while the turn is being worked on or spoken. */
+/** The dock's Talk button: tap to listen, tap again to send, and it becomes Stop while the turn is being worked on, and a tap while a line is being said stops the line and listens. */
 function VoiceControl({ onBlocked }: VoiceControlProps) {
   const voice = useHelmVoiceContext();
-  const isStop = voice.state === 'thinking' || voice.state === 'speaking';
+  const isStop = voice.state === 'thinking';
   const label = isStop
     ? HELM_COPY.talkStop
     : voice.state === 'listening'

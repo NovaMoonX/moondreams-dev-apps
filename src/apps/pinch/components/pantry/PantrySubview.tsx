@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
@@ -389,7 +390,7 @@ function PantrySubview({
         <div className='flex items-start gap-1'>
           <label className='flex min-h-14 min-w-0 flex-1 cursor-pointer items-start gap-3 py-2 select-none'>
             <span className='mt-0.5 inline-flex shrink-0'>
-              <Checkbox
+              <AppCheckbox
                 aria-label={`All ${list.length} packages of ${row.name}`}
                 checked={isEveryTicked(list)}
                 onCheckedChange={() => toggleAll(list)}

@@ -58,7 +58,10 @@ function VoiceStatus({
   const isLoud = voice.state === 'listening' || voice.state === 'speaking';
   const text =
     voice.state === 'listening'
-      ? voice.heard || HELM_COPY.talkListeningHint
+      ? voice.heard ||
+        (voice.isPreparing
+          ? HELM_COPY.talkGettingReady
+          : HELM_COPY.talkListeningHint)
       : voice.state === 'speaking'
         ? voice.saying
         : voice.state === 'idle'
@@ -142,10 +145,16 @@ function VoiceStatus({
             type='button'
             variant='secondary'
             className={BUTTON}
-            onClick={() => voice.talk(null)}
+            onClick={() =>
+              voice.talk(voice.state === 'speaking' ? screen : null)
+            }
           >
-            <Square className='size-3.5 fill-current' aria-hidden='true' />
-            {HELM_COPY.talkStop}
+            {voice.state === 'speaking' ? (
+              <Mic className='size-4' aria-hidden='true' />
+            ) : (
+              <Square className='size-3.5 fill-current' aria-hidden='true' />
+            )}
+            {voice.state === 'speaking' ? HELM_COPY.talk : HELM_COPY.talkStop}
           </Button>
         </div>
       )}

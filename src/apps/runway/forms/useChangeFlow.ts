@@ -10,6 +10,7 @@ import {
   ACCOUNT_WORDS,
   CARRY_WORDS,
   CHANGE_WORDS,
+  PART_OF_WORDS,
   PAY_SHARE_WORDS,
 } from '@apps/runway/constants';
 import type { BillPin } from '@apps/runway/engine/billShare';
@@ -38,6 +39,7 @@ import {
 import {
   selectAllAccounts,
   selectAllCards,
+  selectAllHorizonItems,
   selectComingDays,
   selectGroups,
   selectHorizonVersionId,
@@ -46,7 +48,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeChange,
-  isIdleGoal,
+  isIdleItem,
   isMoneylessChange,
   isSamePayload,
   type ItemPayload,
@@ -55,7 +57,8 @@ import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describePayChoice } from '@apps/runway/utils/payFrom';
 import {
   getChangeSpan,
-  INITIAL_FROM_WHEN,
+  getFromWhenOptions,
+  getPlanAheadFrom,
   type ChangeSpan,
   type FromWhenValue,
 } from '@apps/runway/utils/fromWhen';
@@ -67,6 +70,8 @@ import type {
   ItemKind,
   OpenVersion,
 } from '@apps/runway/types';
+
+export type ChangeStep = 'form' | 'when' | 'reason';
 
 /** What an afterSave step cleared, so the toast can offer an Undo. */
 export interface PinsCleared {
@@ -96,7 +101,19 @@ interface UseChangeFlowArgs {
   /** A kept draft's note and "from when", when the form starts from one. */
   initialNote?: string;
   initialFrom?: FromWhenValue;
+  /** The open event the change is part of when the form opens, as when it was started from that event. */
+  presetEventId?: string | null;
+  /** The change is planned for a later day: it starts on that question, and the "When it starts" row offers only later starts. */
+  planAhead?: 'date' | 'stretch' | null;
 }
+
+/** The kinds of item whose planned change can belong to an event. */
+const LINKABLE_KINDS: readonly ItemKind[] = [
+  'payLine',
+  'bill',
+  'envelope',
+  'goal',
+];
 
 /** What one income day's own version of an envelope or goal may differ in. */
 const getDayOnlyBlocker = (
@@ -173,13 +190,20 @@ export function useChangeFlow({
   afterSave,
   clearsPins = false,
   initialNote = '',
-  initialFrom = INITIAL_FROM_WHEN,
+  initialFrom,
+  presetEventId = null,
+  planAhead = null,
 }: UseChangeFlowArgs) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const store = useStore<RootState>();
   const today = todayAsUtcDate();
-  const days = useAppSelector((state) => selectComingDays(state, today));
+  const allDays = useAppSelector((state) => selectComingDays(state, today));
+  // A pay changed for a number of income days counts its own days; everything else is funded on every income day.
+  const days =
+    kind === 'payLine'
+      ? allDays.filter(({ payLineId }) => payLineId === itemId)
+      : allDays;
   const groups = useAppSelector((state) => selectGroups(state, today));
   const allCards = useAppSelector(selectAllCards);
   const allAccounts = useAppSelector(selectAllAccounts);
@@ -187,8 +211,14 @@ export function useChangeFlow({
     selectResolvedPlan(state, today),
   );
   const allVersions = useAppSelector((state) => state.runway.versions);
-  const [from, setFrom] = useState(initialFrom);
-  const [step, setStepState] = useState<'form' | 'reason'>('form');
+  const startFrom = initialFrom ?? getPlanAheadFrom(planAhead);
+  const [from, setFrom] = useState(startFrom);
+  const [eventId, setEventId] = useState<string | null>(presetEventId);
+  const [step, setStepState] = useState<ChangeStep>('form');
+  // A kept draft that already chose a start keeps it chosen.
+  const [hasPickedWhen, setHasPickedWhen] = useState(
+    initialFrom !== undefined && initialFrom.choice !== 'now',
+  );
   const reviewedRef = useRef<StretchPlan<ItemPayload>['written'] | null>(null);
   const [note, setNote] = useState(initialNote);
   const [error, setError] = useState<string | null>(null);
@@ -201,14 +231,14 @@ export function useChangeFlow({
     presetDayKey,
   });
   const isUnchanged = candidate !== null && isSamePayload(current, candidate);
-  // A goal idle today and in every later stretch moves no money whatever changes; a funded stretch ahead keeps the full flow.
+  // A goal or envelope idle today and in every later stretch moves no money whatever changes; a funded stretch ahead keeps the full flow.
   const isIdleThroughout =
-    isIdleGoal(candidate ?? current) &&
+    isIdleItem(candidate ?? current) &&
     getVersionStretches<OpenVersion, ItemPayload>(
       allVersions,
       itemId,
       today,
-    ).every(({ payload }) => isIdleGoal(payload));
+    ).every(({ payload }) => isIdleItem(payload));
   const isMoneyless =
     candidate !== null &&
     !isUnchanged &&
@@ -217,6 +247,8 @@ export function useChangeFlow({
     ? { kind: 'version', effectiveFrom: today, effectiveUntil: null }
     : askedSpan;
   const spanBlocker = isMoneyless ? null : askedBlocker;
+  const isLinkable =
+    LINKABLE_KINDS.includes(kind) && span?.kind === 'version' && !isMoneyless;
   const effectiveFrom =
     span?.kind === 'version'
       ? span.effectiveFrom
@@ -241,9 +273,29 @@ export function useChangeFlow({
             ACCOUNT_WORDS.payFromNone,
         );
 
-  const setStep = (next: 'form' | 'reason') => {
-    reviewedRef.current = next === 'reason' ? (plan?.written ?? null) : null;
-    setStepState(next);
+  // An edit opened from an income day's screen asks when it starts in its own step, between the form and the reason.
+  const presetDay = days.find(({ dayKey }) => dayKey === presetDayKey) ?? null;
+  const asksWhen =
+    planAhead === null &&
+    startFrom.choice !== 'date' &&
+    startFrom.choice !== 'stretch' &&
+    !isMoneyless &&
+    getFromWhenOptions({
+      kind,
+      days,
+      presetDayKey,
+      today,
+      isPlanning: false,
+    }).length > 1;
+  const setStep = (next: ChangeStep) => {
+    const target =
+      next === 'reason' && step === 'form' && asksWhen ? 'when' : next;
+    reviewedRef.current = target === 'reason' ? (plan?.written ?? null) : null;
+    setStepState(target);
+  };
+  const pickWhen = (choice: FromWhenValue['choice']) => {
+    setFrom((value) => ({ ...value, choice }));
+    setHasPickedWhen(true);
   };
   const getPlan = (versions: readonly OpenVersion[]) =>
     candidate === null || span?.kind !== 'version'
@@ -341,9 +393,38 @@ export function useChangeFlow({
           setStep('form');
           return;
         }
+        const event = isLinkable
+          ? selectAllHorizonItems(state, today).find(
+              ({ item }) => item.id === eventId,
+            )
+          : undefined;
+        if (
+          isLinkable &&
+          eventId !== null &&
+          event?.version.payload.state !== 'open'
+        ) {
+          setError(PART_OF_WORDS.eventGone);
+          setEventId(null);
+          setStep('form');
+          return;
+        }
         await changeItem(user.uid, encryption, {
           itemId,
           kind,
+          link: event
+            ? {
+                eventId: event.item.id,
+                horizon: event.version.payload,
+                baseVersionId: event.version.id,
+                on: today,
+                summary: PART_OF_WORDS.linkedLine(
+                  candidate.name,
+                  summaryText || 'Updated',
+                  formatDateOrdinalUTC(span.effectiveFrom),
+                  event.version.payload.name,
+                ),
+              }
+            : null,
           payload: candidate,
           newGroup,
           summary,
@@ -440,6 +521,13 @@ export function useChangeFlow({
     }
   };
 
+  const whenBlocker = !hasPickedWhen
+    ? CHANGE_WORDS.whenBlocker
+    : (spanBlocker ??
+      (span?.kind === 'day' && candidate !== null
+        ? getDayOnlyBlocker(kind, current, candidate)
+        : null));
+
   const getBlocker = (formBlocker: string | null) => {
     if (formBlocker !== null) return formBlocker;
     if (spanBlocker !== null) return spanBlocker;
@@ -459,8 +547,15 @@ export function useChangeFlow({
     getBlocker,
     from,
     setFrom,
+    initialFrom: startFrom,
+    isPlanning: planAhead !== null,
     step,
     setStep,
+    asksWhen,
+    presetDay,
+    hasPickedWhen,
+    pickWhen,
+    whenBlocker,
     note,
     setNote,
     error,
@@ -473,6 +568,9 @@ export function useChangeFlow({
     isUnchanged,
     isMoneyless,
     isIdleThroughout,
+    isLinkable,
+    eventId,
+    setEventId,
     replaced,
     summaryText,
     today,

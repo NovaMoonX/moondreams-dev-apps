@@ -1,5 +1,8 @@
 import { useRef, useState } from 'react';
 
+import { isCardFeeGroup } from '@apps/runway/engine/cardFees';
+import { isTrackingLevel } from '@apps/runway/engine/level';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -43,6 +46,7 @@ import {
 import {
   BILL_WORDS,
   FORM_FLOW_WORDS,
+  CARD_FEE_WORDS,
   GROUP_WORDS,
   HOW_OFTEN_WORDS,
   ITEM_SHEET_R2_WORDS,
@@ -190,6 +194,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const group = useAppSelector((state) =>
     selectGroups(state, today).find(({ item }) => item.id === groupId),
   );
+  const isManaged = isCardFeeGroup(groupId);
+  const level = useAppSelector(selectLevel);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isPickingEmoji, setIsPickingEmoji] = useState(false);
   const [emoji, setEmoji] = useState('');
@@ -1374,100 +1380,110 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 );
               })}
             </div>
-            <ActionGroup>
-              <ActionRow
-                isGrouped
-                hasChevron
-                icon={<Receipt />}
-                label={GROUP_WORDS.addBill(payload.name)}
-                onClick={() => setAdding('bill')}
-              />
-              {settableBills.length > 0 && (
+            {isManaged ? (
+              <p className='text-muted-foreground text-sm'>
+                {isTrackingLevel(level)
+                  ? CARD_FEE_WORDS.groupNote
+                  : CARD_FEE_WORDS.groupNotePlan}
+              </p>
+            ) : (
+              <ActionGroup>
                 <ActionRow
                   isGrouped
-                  hasChevron={!dueRecord?.undo}
-                  icon={<CalendarDays />}
-                  label={GROUP_WORDS.setDue}
-                  subtitle={
-                    dueRecord?.note ??
-                    GROUP_WORDS.setDueSub(
-                      settableBills.length,
-                      settableBills.length === billCount,
-                    )
-                  }
-                  trailing={
-                    dueRecord?.undo ? (
-                      <Button
-                        type='button'
-                        variant='secondary'
-                        size='sm'
-                        rounded='full'
-                        loading={isUndoingDue}
-                        disabled={isUndoingDue}
-                        className="relative mr-3 after:absolute after:-inset-1.5 after:content-['']"
-                        onClick={() => void undoDueDates(dueRecord.undo ?? [])}
-                      >
-                        {ITEM_SHEET_R2_WORDS.undo}
-                      </Button>
-                    ) : undefined
+                  hasChevron
+                  icon={<Receipt />}
+                  label={GROUP_WORDS.addBill(payload.name)}
+                  onClick={() => setAdding('bill')}
+                />
+                {settableBills.length > 0 && (
+                  <ActionRow
+                    isGrouped
+                    hasChevron={!dueRecord?.undo}
+                    icon={<CalendarDays />}
+                    label={GROUP_WORDS.setDue}
+                    subtitle={
+                      dueRecord?.note ??
+                      GROUP_WORDS.setDueSub(
+                        settableBills.length,
+                        settableBills.length === billCount,
+                      )
+                    }
+                    trailing={
+                      dueRecord?.undo ? (
+                        <Button
+                          type='button'
+                          variant='secondary'
+                          size='sm'
+                          rounded='full'
+                          loading={isUndoingDue}
+                          disabled={isUndoingDue}
+                          className="relative mr-3 after:absolute after:-inset-1.5 after:content-['']"
+                          onClick={() =>
+                            void undoDueDates(dueRecord.undo ?? [])
+                          }
+                        >
+                          {ITEM_SHEET_R2_WORDS.undo}
+                        </Button>
+                      ) : undefined
+                    }
+                    onClick={() => {
+                      setDueText('');
+                      setError(null);
+                      setIsSettingDue(true);
+                    }}
+                  />
+                )}
+                <ActionRow
+                  isGrouped
+                  hasChevron
+                  icon={<Wallet />}
+                  label={GROUP_WORDS.addEnvelope(payload.name)}
+                  onClick={() => setAdding('envelope')}
+                />
+                <ActionRow
+                  isGrouped
+                  hasChevron
+                  icon={<Target />}
+                  label={GROUP_WORDS.addGoal(payload.name)}
+                  onClick={() => setAdding('goal')}
+                />
+                <ActionRow
+                  isGrouped
+                  hasChevron
+                  icon={<Smile />}
+                  label={
+                    payload.emoji === null
+                      ? GROUP_WORDS.chooseEmoji(payload.name)
+                      : GROUP_WORDS.changeEmoji(payload.name)
                   }
                   onClick={() => {
-                    setDueText('');
+                    setEmoji(payload.emoji ?? '');
                     setError(null);
-                    setIsSettingDue(true);
+                    setIsPickingEmoji(true);
                   }}
                 />
-              )}
-              <ActionRow
-                isGrouped
-                hasChevron
-                icon={<Wallet />}
-                label={GROUP_WORDS.addEnvelope(payload.name)}
-                onClick={() => setAdding('envelope')}
-              />
-              <ActionRow
-                isGrouped
-                hasChevron
-                icon={<Target />}
-                label={GROUP_WORDS.addGoal(payload.name)}
-                onClick={() => setAdding('goal')}
-              />
-              <ActionRow
-                isGrouped
-                hasChevron
-                icon={<Smile />}
-                label={
-                  payload.emoji === null
-                    ? GROUP_WORDS.chooseEmoji(payload.name)
-                    : GROUP_WORDS.changeEmoji(payload.name)
-                }
-                onClick={() => {
-                  setEmoji(payload.emoji ?? '');
-                  setError(null);
-                  setIsPickingEmoji(true);
-                }}
-              />
-              <ActionRow
-                isGrouped
-                hasChevron
-                icon={<Pencil />}
-                label={GROUP_WORDS.rename(payload.name)}
-                onClick={() => {
-                  setName(payload.name);
-                  setError(null);
-                  setIsRenaming(true);
-                }}
-              />
-              <ActionRow
-                isGrouped
-                isDestructive
-                icon={<Archive />}
-                label={GROUP_WORDS.archive(payload.name)}
-                subtitle={GROUP_WORDS.archiveSub}
-                isDisabled={isSaving}
-                onClick={() => void archive()}
-              />
-            </ActionGroup>
+                <ActionRow
+                  isGrouped
+                  hasChevron
+                  icon={<Pencil />}
+                  label={GROUP_WORDS.rename(payload.name)}
+                  onClick={() => {
+                    setName(payload.name);
+                    setError(null);
+                    setIsRenaming(true);
+                  }}
+                />
+                <ActionRow
+                  isGrouped
+                  isDestructive
+                  icon={<Archive />}
+                  label={GROUP_WORDS.archive(payload.name)}
+                  subtitle={GROUP_WORDS.archiveSub}
+                  isDisabled={isSaving}
+                  onClick={() => void archive()}
+                />
+              </ActionGroup>
+            )}
             {error && <p className='text-destructive text-sm'>{error}</p>}
           </>
         )}

@@ -3,6 +3,7 @@ import type {
   Cents,
   DateOnly,
   OpenCard,
+  OpenCardStatement,
   OpenMove,
   OpenPurchase,
 } from '@apps/runway/types';
@@ -45,6 +46,62 @@ export function getPrevDueOn(
       ? thisMonth
       : dueInMonth(dueDay, month === 0 ? year - 1 : year, (month + 11) % 12);
   return result;
+}
+
+/** Whether the bank shows a payment of at least the minimum since the statement was made. */
+const isMinimumPaid = (statement: OpenCardStatement, minimumCents: Cents) =>
+  statement.statementOn !== null &&
+  statement.lastPaymentOn !== null &&
+  statement.lastPaymentCents !== null &&
+  statement.lastPaymentOn >= statement.statementOn &&
+  statement.lastPaymentCents >= minimumCents;
+
+/** The minimum the bank asks for by `forDueOn`, or null when it asks for none: no statement, a statement for another due day, no minimum above zero, or a payment the bank already shows since the statement that covers it. */
+export function getMinimumDue(
+  statement: OpenCardStatement | null | undefined,
+  forDueOn: DateOnly | null,
+): Cents | null {
+  if (!statement || forDueOn === null) return null;
+  const { minimumCents, dueOn } = statement;
+  if (minimumCents === null || minimumCents <= 0 || dueOn !== forDueOn)
+    return null;
+  return isMinimumPaid(statement, minimumCents) ? null : minimumCents;
+}
+
+export type StatementMinimum =
+  | { kind: 'due'; cents: Cents; dueOn: DateOnly | null }
+  | { kind: 'paid'; cents: Cents; paidCents: Cents; paidOn: DateOnly }
+  | { kind: 'none' }
+  | { kind: 'notShared' };
+
+/** What the bank's latest statement says about its minimum, whatever due day the app is on: owed, already paid since the statement, nothing (a $0 minimum) or not shared. */
+export function getStatementMinimum(
+  statement: OpenCardStatement,
+): StatementMinimum {
+  const { minimumCents, dueOn, lastPaymentCents, lastPaymentOn } = statement;
+  if (minimumCents === null) return { kind: 'notShared' };
+  if (minimumCents <= 0) return { kind: 'none' };
+  if (
+    isMinimumPaid(statement, minimumCents) &&
+    lastPaymentCents !== null &&
+    lastPaymentOn !== null
+  ) {
+    return {
+      kind: 'paid',
+      cents: minimumCents,
+      paidCents: lastPaymentCents,
+      paidOn: lastPaymentOn,
+    };
+  }
+  return { kind: 'due', cents: minimumCents, dueOn };
+}
+
+/** The day of the month the bank's due date falls on, or null when it names none. */
+export function getBankDueDay(
+  statement: OpenCardStatement | null | undefined,
+): number | null {
+  const dueOn = statement?.dueOn ?? null;
+  return dueOn === null ? null : new Date(dueOn).getUTCDate();
 }
 
 export interface DueCard {

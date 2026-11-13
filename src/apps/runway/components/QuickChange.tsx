@@ -20,6 +20,8 @@ interface QuickChangeProps {
   rowIds: string[];
   /** What sits between the rows and "More details": when the change starts and what it does. */
   after?: ReactNode;
+  /** A change planned for a later day asks when it starts right under the question, before the other rows. */
+  isAfterFirst?: boolean;
   /** Shows the fields that are not on the front instead of the question. */
   isAll: boolean;
   onAll: () => void;
@@ -36,6 +38,7 @@ function QuickChange({
   flow,
   rowIds,
   after = null,
+  isAfterFirst = false,
   isAll,
   onAll,
   onBack,
@@ -110,12 +113,13 @@ function QuickChange({
         </p>
       ) : (
         <>
+          {isAfterFirst && after}
           {rows.length > 0 && (
             <div className='[@media(max-height:419px)]:[&_.space-y-2]:grid [@media(max-height:419px)]:[&_.space-y-2]:grid-cols-3 [@media(max-height:419px)]:[&_.space-y-2]:gap-2 [@media(max-height:419px)]:[&_.space-y-2>*]:m-0!'>
               <QuestionFlow flow={toRows(rows)} shouldFocus={false} />
             </div>
           )}
-          {after}
+          {!isAfterFirst && after}
           {rest.length > 0 && (
             <Button
               type='button'
