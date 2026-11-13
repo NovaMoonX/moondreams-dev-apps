@@ -37,7 +37,7 @@ import {
 } from '@apps/runway/components/ShortfallJourney';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   CONFIRM_COVER_WORDS,
   CONFIRM_FLOW_WORDS,

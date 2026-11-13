@@ -27,3 +27,15 @@ export const readStoredResult = <Result>(
   captureId: string,
 ): Result | null =>
   stored?.captureId === captureId ? (stored.result ?? null) : null;
+
+/** What a failed "sort the rest" call writes: back to the person's question, with the failure's code unless the caller overrides it. */
+export const restFailureFields = (
+  code: string,
+  extra: Record<string, unknown> = {},
+) => ({
+  status: 'needsYou' as const,
+  lastErrorCode: code,
+  claimId: null,
+  claimedAt: null,
+  ...extra,
+});

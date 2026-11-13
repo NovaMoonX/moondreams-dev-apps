@@ -12,7 +12,16 @@ export const hasBankBalance = (
 ) =>
   account.linkId !== null && balances.some((entry) => entry.id === account.id);
 
-/** Each linked account with a figure from its bank takes it as its balance, dated the day the bank gave it; the bank is the source of truth once linked. */
+/** What a bank account has on hold that has not posted: its balance less what is available; 0 when none, null without a bank figure. */
+export const getPendingCents = (
+  bank: Pick<OpenAccountBalance, 'cents' | 'availableCents'> | undefined,
+): Cents | null => {
+  if (bank === undefined) return null;
+  if (bank.availableCents === null) return 0;
+  return Math.max(0, bank.cents - bank.availableCents);
+};
+
+/** Each linked account with a figure from its bank takes its posted balance, dated the day the bank gave it; the bank is the source of truth once linked. */
 export const withBankBalances = (
   accounts: readonly OpenAccount[],
   balances: readonly OpenAccountBalance[],

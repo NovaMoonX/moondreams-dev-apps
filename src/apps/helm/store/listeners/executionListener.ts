@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -27,7 +28,7 @@ const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your activity did not open.');
 
 /** An execution that won't open is kept, saying nothing, so its turn can say it couldn't be opened. */
-async function openExecution(
+export async function openExecution(
   entry: DocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenExecution> {
@@ -40,6 +41,8 @@ async function openExecution(
     autonomyLevel: data.autonomyLevel ?? 2,
     state: data.state ?? 'succeeded',
     effectRefs: data.effectRefs ?? [],
+    linkedWhoIds: data.linkedWhoIds ?? [],
+    linkedPlaceIds: data.linkedPlaceIds ?? [],
     undoesExecutionId: data.undoesExecutionId ?? null,
     undoneByExecutionId: data.undoneByExecutionId ?? null,
     questionRef: data.questionRef ?? null,
@@ -56,6 +59,9 @@ async function openExecution(
       summary: payload.summary ?? '',
       effects: payload.effects ?? [],
       undoReport: payload.undoReport ?? null,
+      spoken: payload.spoken ?? null,
+      goneIds: payload.goneIds ?? null,
+      lines: payload.lines ?? [],
       isUnreadable: false,
     };
   } catch {
@@ -64,6 +70,9 @@ async function openExecution(
       summary: '',
       effects: [],
       undoReport: null,
+      spoken: null,
+      goneIds: null,
+      lines: [],
       isUnreadable: true,
     };
   }
@@ -97,6 +106,37 @@ export function startRecentExecutionsListener(
       onChange(opened);
     },
     (error) => onError(toError(error)),
+  );
+
+  return () => {
+    run.isStopped = true;
+    stop();
+  };
+}
+
+/** The newest `count` executions, live. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+export function startActivityListener(
+  uid: string,
+  read: SealedReader,
+  count: number,
+  onChange: (executions: OpenExecution[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const sequence = { latest: 0 };
+  const run = { isStopped: false };
+
+  const stop = onSnapshot(
+    query(executionsOf(uid), orderBy('createdAt', 'desc'), limit(count)),
+    async (snapshot) => {
+      sequence.latest += 1;
+      const current = sequence.latest;
+      const opened = await openExecutions(snapshot.docs, read);
+      if (current !== sequence.latest || run.isStopped) return;
+      onChange(opened);
+    },
+    (error) => {
+      if (!run.isStopped) onError(toError(error));
+    },
   );
 
   return () => {

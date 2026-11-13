@@ -33,16 +33,68 @@ type ValidTiles<Tiles extends readonly BrowseTile[]> = CountOf<
 const TILES = [
   { view: 'today', importance: 'lead', grows: null },
   { view: 'inbox', importance: 'major', grows: 'openQuestions' },
+  { view: 'tasks', importance: 'minor', grows: null },
+  { view: 'people', importance: 'minor', grows: null },
+  { view: 'projects', importance: 'minor', grows: null },
+  { view: 'knowledge', importance: 'minor', grows: null },
+  { view: 'procedures', importance: 'minor', grows: null },
+  { view: 'comingUp', importance: 'minor', grows: null },
+  { view: 'howNomosSeesYou', importance: 'minor', grows: null },
 ] as const satisfies readonly BrowseTile[];
 
 // More than one lead or three major tiles fails to typecheck here.
 export const BROWSE_TILES = TILES satisfies ValidTiles<typeof TILES>;
 
-/** Connected apps, Settings and Activity join once their screens exist. */
-export const BROWSE_FOOT: readonly HelmView[] = [];
+export const BROWSE_FOOT: readonly HelmView[] = [
+  'connectedApps',
+  'settings',
+  'activity',
+];
+
+/** Where Back from a view lands; a view that is not listed goes home. */
+export const VIEW_PARENTS: Partial<Record<HelmView, HelmView>> = {
+  today: 'home',
+  inbox: 'home',
+  tasks: 'today',
+  comingUp: 'today',
+  settings: 'home',
+  activity: 'settings',
+  connectedApps: 'settings',
+  connection: 'connectedApps',
+  people: 'home',
+  who: 'people',
+  place: 'home',
+  projects: 'home',
+  project: 'projects',
+  knowledge: 'home',
+  topic: 'knowledge',
+  procedures: 'home',
+  procedure: 'procedures',
+  run: 'procedures',
+  howNomosSeesYou: 'home',
+  search: 'home',
+};
 
 export const VIEW_KINDS = {
   home: 'home',
   today: 'content',
   inbox: 'content',
+  tasks: 'content',
+  comingUp: 'content',
+  settings: 'utility',
+  activity: 'utility',
+  connectedApps: 'utility',
+  connection: 'utility',
+  people: 'content',
+  who: 'content',
+  place: 'content',
+  projects: 'content',
+  project: 'content',
+  knowledge: 'content',
+  topic: 'content',
+  procedures: 'content',
+  procedure: 'content',
+  run: 'content',
+  howNomosSeesYou: 'content',
+  search: 'utility',
 } satisfies Record<HelmView, 'home' | 'content' | 'utility'>;
