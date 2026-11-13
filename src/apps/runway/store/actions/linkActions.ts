@@ -48,7 +48,7 @@ export interface LinkSyncResult {
 }
 
 const syncCallable = httpsCallable<
-  { staleOnly?: boolean },
+  { staleOnly?: boolean; fresh?: boolean },
   { results: LinkSyncResult[] }
 >(functions, 'syncRunwayLinks');
 
@@ -105,13 +105,14 @@ export async function unlinkLink(linkId: string): Promise<boolean> {
   return response.data.isRevokedAtBank;
 }
 
-/** Asks Functions to bring in what is new from every active bank link, or with `staleOnly` only from those not synced for 15 minutes; safe to repeat. */
+/** Asks Functions to bring in what is new from every active bank link, or with `staleOnly` only from those not synced for 15 minutes, or with `fresh` also asking each bank for its latest balances; safe to repeat. */
 export async function syncLinks(
-  options: { staleOnly?: boolean } = {},
+  options: { staleOnly?: boolean; fresh?: boolean } = {},
 ): Promise<LinkSyncResult[]> {
-  const response = await syncCallable(
-    options.staleOnly ? { staleOnly: true } : {},
-  );
+  const response = await syncCallable({
+    ...(options.staleOnly ? { staleOnly: true } : {}),
+    ...(options.fresh ? { fresh: true } : {}),
+  });
   return response.data.results;
 }
 

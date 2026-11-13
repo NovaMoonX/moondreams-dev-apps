@@ -28,6 +28,7 @@ import {
   SEALED_SCHEMA_VERSION,
   type LinkSealed,
 } from './linkShared.js';
+import { toBalanceSealed } from './normalize.js';
 import { ProviderError, type ProviderGrant } from './provider.js';
 import {
   applyTransactions,
@@ -406,31 +407,93 @@ async function syncPurchases(
   return totals;
 }
 
+/** Asks closer together than this reuse the last one: Plaid allows each Item 30 live balance reads an hour. */
+const FRESH_GAP_MS = 2 * 60_000;
+
+/** Claims this link's fresh ask, so two devices or a double tap ask the bank once; false when one ran too recently. */
+const claimFreshAsk = (firestore: Firestore, grantRef: DocumentReference) =>
+  firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(grantRef);
+    const lastFreshAt: unknown = snapshot.data()?.lastFreshAt;
+    const now = Date.now();
+    if (typeof lastFreshAt === 'number' && now - lastFreshAt < FRESH_GAP_MS) {
+      return false;
+    }
+    transaction.update(grantRef, { lastFreshAt: now });
+    return true;
+  });
+
+/** A live read the bank answered with a sign-in request turns live reads off for this link and falls back to the saved balances. */
+async function readAccounts(
+  linkId: string,
+  grant: ProviderGrant,
+  grantRef: DocumentReference,
+  isLive: boolean,
+) {
+  if (!isLive) return provider.listAccounts(grant);
+  try {
+    return await provider.listAccounts(grant, { isLive: true });
+  } catch (error) {
+    if (!(error instanceof ProviderError) || error.code === 'NO_ACCOUNTS') {
+      throw error;
+    }
+    if (error.kind === 'needsAttention') {
+      await grantRef.update({ isLiveBalanceOff: true });
+    }
+    logger.warn('runway.sync.liveBalanceFailed', {
+      linkId,
+      kind: error.kind,
+      code: error.code,
+      isTurnedOff: error.kind === 'needsAttention',
+    });
+    return provider.listAccounts(grant);
+  }
+}
+
 async function writeBalances(
   firestore: Firestore,
   uid: string,
+  linkId: string,
   grant: ProviderGrant,
+  grantRef: DocumentReference,
   planKey: PlanKey,
   targets: ReadonlyMap<string, Target>,
+  isLive: boolean,
 ) {
-  const accounts = await provider.listAccounts(grant);
+  const accounts = await readAccounts(linkId, grant, grantRef, isLive);
   const now = Date.now();
-  const writes = accounts.flatMap((account): Write[] => {
+  const entries = accounts.flatMap((account) => {
     const target = targets.get(account.providerAccountId);
     const targetId = target?.accountId ?? target?.cardId ?? null;
-    if (targetId === null || account.balanceCents === null) return [];
+    const sealed = toBalanceSealed(account);
+    if (targetId === null || sealed === null) return [];
+    const asOf = Math.min(account.balanceAsOf ?? now, now);
+    return [
+      {
+        ref: firestore.doc(planDocPath(uid, 'accountBalances', targetId)),
+        targetId,
+        asOf,
+        sealed,
+      },
+    ];
+  });
+  if (entries.length === 0) return;
+  const stored = await firestore.getAll(...entries.map((entry) => entry.ref));
+  const storedAsOf = new Map(
+    stored.map((snapshot) => [snapshot.id, snapshot.data()?.asOf as unknown]),
+  );
+  // A saved read can be older than a live one made moments ago, and must never put an earlier balance back.
+  const writes = entries.flatMap((entry): Write[] => {
+    const previous = storedAsOf.get(entry.targetId);
+    if (typeof previous === 'number' && previous > entry.asOf) return [];
     return [
       {
         kind: 'set',
-        ref: firestore.doc(planDocPath(uid, 'accountBalances', targetId)),
+        ref: entry.ref,
         data: {
-          id: targetId,
-          asOf: Math.min(account.balanceAsOf ?? now, now),
-          sealed: sealWithKey(
-            planKey,
-            { cents: account.balanceCents },
-            SEALED_SCHEMA_VERSION,
-          ),
+          id: entry.targetId,
+          asOf: entry.asOf,
+          sealed: sealWithKey(planKey, entry.sealed, SEALED_SCHEMA_VERSION),
         },
       },
     ];
@@ -561,6 +624,7 @@ export async function syncRunwayLink(
   keyring: Keyring,
   uid: string,
   linkId: string,
+  options: { isFresh: boolean } = { isFresh: false },
 ): Promise<LinkSyncResult> {
   const empty = { linkId, created: 0, updated: 0, removed: 0 };
   const grantRef = firestore.doc(`${grantsPath(uid)}/${linkId}`);
@@ -605,6 +669,19 @@ export async function syncRunwayLink(
     const targets = targetsByProviderAccount(link.providerAccounts);
     if (targets.size === 0) return { ...empty, state: 'skipped' };
 
+    const isAskingNow =
+      options.isFresh && (await claimFreshAsk(firestore, grantRef));
+    // Plaid checks the bank on its own a few times a day; this asks it to check now, and what it finds arrives through the webhook.
+    if (isAskingNow) {
+      await provider.refreshTransactions(grant).catch((error: unknown) => {
+        logger.warn('runway.sync.refreshFailed', {
+          linkId,
+          kind: error instanceof ProviderError ? error.kind : 'internal',
+          code: error instanceof ProviderError ? error.code : null,
+        });
+      });
+    }
+
     const totals = await syncPurchases(
       firestore,
       uid,
@@ -616,18 +693,25 @@ export async function syncRunwayLink(
       grantDoc.cursor ?? null,
     );
     // The purchases just came through, so a failed balance read sends the person to reconnect only when the bank shares no accounts at all.
-    await writeBalances(firestore, uid, grant, planKey, targets).catch(
-      (error: unknown) => {
-        if (error instanceof ProviderError && error.code === 'NO_ACCOUNTS') {
-          throw error;
-        }
-        logger.warn('runway.sync.balancesFailed', {
-          linkId,
-          kind: error instanceof ProviderError ? error.kind : 'internal',
-          code: error instanceof ProviderError ? error.code : null,
-        });
-      },
-    );
+    await writeBalances(
+      firestore,
+      uid,
+      linkId,
+      grant,
+      grantRef,
+      planKey,
+      targets,
+      isAskingNow && grantDoc.isLiveBalanceOff !== true,
+    ).catch((error: unknown) => {
+      if (error instanceof ProviderError && error.code === 'NO_ACCOUNTS') {
+        throw error;
+      }
+      logger.warn('runway.sync.balancesFailed', {
+        linkId,
+        kind: error instanceof ProviderError ? error.kind : 'internal',
+        code: error instanceof ProviderError ? error.code : null,
+      });
+    });
     const wereDetailsFilled =
       typeof linkSnapshot.data()?.detailsFilledAt === 'number';
     const detailsFilledNow =

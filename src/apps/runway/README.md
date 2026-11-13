@@ -15,6 +15,7 @@ Runway is an income-first budget planner for money that does not arrive or leave
 ## Status
 
 Built:
+
 - [x] Income with pay lines, exact or range amounts, and endings
 - [x] Bills, envelopes and goals with priorities and a planning stance
 - [x] Bills grouped under a name (Home, Subscriptions) with what they come to a month
@@ -36,7 +37,7 @@ Built:
 - [x] Purchases from a linked bank wait in Needs a home and are filed in a tap; one you already typed by hand is matched to the bank's, so it counts once
 - [x] Rules: always send a place, a kind of place or a card to an envelope, made from a waiting purchase, changed or removed in Spend > Rules
 - [x] Unlink a bank: new purchases stop and everything that came in stays; unlinking the last bank moves the plan from Link to Track, stopping tracking moves it to Plan, and moving back up restores the same data
-Next:
+      Next:
 - [ ] Horizon: plan an event's costs, set money aside for it, see how far it goes, set each price, then pay it, make it a bill, finish it, or call the event off and bring it back later
 - [x] Dates that read with an ordinal ("Feb 1st") everywhere in Runway
 - [ ] Start from gross pay with taxes and deductions
@@ -45,6 +46,18 @@ Next:
 - [ ] What if: a scratch copy of the plan
 - [ ] Import purchases from a CSV
 - [ ] Reminders for bills and income days
+
+## Plaid
+
+Runway links banks through Plaid. Keep this list current whenever a change starts or stops using a Plaid product.
+
+- **Plan:** Trial. Bank logins in use: 6 of 20 (Plaid Dashboard, Nov 2026).
+- **Products in use:**
+  - Transactions: imports charges, deposits and pending ones (`/transactions/sync`, the `SYNC_UPDATES_AVAILABLE` webhook).
+  - Transactions Refresh: asks Plaid to check the bank now when the person opens Runway, pulls down or taps refresh (at most once every 2 minutes per bank; Plaid allows 120 an hour per login).
+  - Balance: a live balance read on those same asks (`/accounts/balance/get`; Plaid allows 30 an hour per login and bills each call). Other syncs use the cached `/accounts/get`.
+- **Known gaps:** Capital One cards and Apple Card share only cached balances, so their sheets say so; Capital One checking and savings are live.
+- **Leaving Trial:** on the Production request form, ask for Transactions, Transactions Refresh and Balance. Plaid keeps only the products named there.
 
 ## Docs
 

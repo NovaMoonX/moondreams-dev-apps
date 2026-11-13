@@ -5,6 +5,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import { grantsPath, openGrant, type ProviderGrantDoc } from './link/grant.js';
+import { toBalanceSealed } from './link/normalize.js';
 import {
   LINK_CORS,
   LINK_SECRETS,
@@ -227,23 +228,26 @@ export const attachRunwayAccounts = onCall(
         const targetId = choice.accountId ?? choice.cardId;
         const reading = liveByProvider.get(choice.providerAccountId);
         const cents = reading?.balanceCents ?? null;
+        const sealed = reading ? toBalanceSealed(reading) : null;
         const asOf = Math.min(reading?.balanceAsOf ?? now, now);
-        return targetId === null ? [] : [{ choice, targetId, cents, asOf }];
+        return targetId === null
+          ? []
+          : [{ choice, targetId, cents, sealed, asOf }];
       });
-      written.forEach(({ choice, targetId, cents, asOf }) => {
+      written.forEach(({ choice, targetId, sealed, asOf }) => {
         transaction.update(
           choice.accountId
             ? targetRef('accounts', targetId)
             : targetRef('cards', targetId),
           { linkId },
         );
-        if (cents !== null) {
+        if (sealed !== null) {
           transaction.set(
             firestore.doc(planDocPath(uid, 'accountBalances', targetId)),
             {
               id: targetId,
               asOf,
-              sealed: sealWithKey(planKey, { cents }, SEALED_SCHEMA_VERSION),
+              sealed: sealWithKey(planKey, sealed, SEALED_SCHEMA_VERSION),
             },
           );
         }

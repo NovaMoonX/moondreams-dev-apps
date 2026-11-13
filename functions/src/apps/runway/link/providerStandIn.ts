@@ -18,6 +18,9 @@ const ACCOUNTS: NormalizedAccount[] = [
     mask: '6604',
     balanceCents: 31_275,
     balanceAsOf: null,
+    availableCents: null,
+    limitCents: 1_000_000,
+    hasInstantBalance: true,
   },
   {
     providerAccountId: 'stand-in-checking',
@@ -27,6 +30,9 @@ const ACCOUNTS: NormalizedAccount[] = [
     mask: '2290',
     balanceCents: 182_640,
     balanceAsOf: null,
+    availableCents: 176_215,
+    limitCents: null,
+    hasInstantBalance: true,
   },
 ];
 
@@ -138,6 +144,7 @@ export const standInProvider: BankDataProvider = {
   }),
   getInstitution: async () => ({ name: 'Chase', logo: null }),
   listAccounts: async () => ACCOUNTS,
+  refreshTransactions: async () => undefined,
   listTransactionDetails: async () => [],
   revoke: async () => undefined,
   syncTransactions: async (_grant, cursor) => {

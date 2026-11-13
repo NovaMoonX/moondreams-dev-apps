@@ -46,12 +46,14 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import {
   ACCOUNT_WORDS,
+  LINK_WORDS,
   MAX_PURCHASE_CENTS,
   MEMORY_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
-import { hasBankBalance } from '@apps/runway/engine/accounts';
+import { getPendingCents, hasBankBalance } from '@apps/runway/engine/accounts';
+import { describeBankUpdated } from '@apps/runway/utils/bankFreshness';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { useAccountInterest } from '@apps/runway/hooks/useAccountInterest';
@@ -162,12 +164,33 @@ function AccountSheet({
               formatCents(interest.cents),
               formatDateOrdinalUTC(interest.on),
             );
+  const now = useNow(30_000);
+  const bank = useAppSelector((state) =>
+    account.linkId === null
+      ? null
+      : (state.runway.accountBalances.find(
+          (entry) => entry.id === account.id,
+        ) ?? null),
+  );
+  const bankName = useAppSelector((state) =>
+    account.linkId === null
+      ? null
+      : (state.runway.links.find((link) => link.id === account.linkId)
+          ?.institutionName ?? null),
+  );
+  const bankUpdated =
+    bank === null ? null : describeBankUpdated(bank.asOf, now);
+  const pendingCents = getPendingCents(bank ?? undefined) ?? 0;
   const facts = [
     account.balanceOn === null
       ? null
       : isBankBalance
-        ? ACCOUNT_WORDS.bankBalanceOn(formatDateOrdinalUTC(account.balanceOn))
+        ? (bankUpdated?.text ??
+          ACCOUNT_WORDS.bankBalanceOn(formatDateOrdinalUTC(account.balanceOn)))
         : ACCOUNT_WORDS.balanceOn(formatDateOrdinalUTC(account.balanceOn)),
+    isBankBalance && pendingCents > 0
+      ? ACCOUNT_WORDS.pendingAmount(formatCents(pendingCents))
+      : null,
     account.apyBps === null
       ? null
       : ACCOUNT_WORDS.apyFact(formatApy(account.apyBps)),
@@ -518,7 +541,13 @@ function AccountSheet({
               : formatCents(account.balanceCents)
           }
           fact={facts.length === 0 ? null : facts.join(' · ')}
+          isFactFresh={isBankBalance && (bankUpdated?.isFresh ?? false)}
         />
+        {isBankBalance && bank?.hasInstantBalance === false && (
+          <p className='text-muted-foreground text-sm'>
+            {ACCOUNT_WORDS.slowBank(bankName ?? LINK_WORDS.fallbackBank)}
+          </p>
+        )}
         {interest !== null && interestLine !== null && (
           <HelpTip
             title={ACCOUNT_WORDS.interestTitle(account.name)}

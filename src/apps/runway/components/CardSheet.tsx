@@ -39,7 +39,12 @@ import {
   CARD_FEE_WORDS,
   CARD_WORDS,
   HELD_WORDS,
+  LINK_WORDS,
 } from '@apps/runway/constants';
+import {
+  getCardPendingCents,
+  selectPendingByCard,
+} from '@apps/runway/store/selectors/cardPendingSelectors';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -173,6 +178,23 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   );
 
   const linkedFact = useLinkedFact(card.linkId);
+  const pendingCents = getCardPendingCents(
+    useAppSelector(selectPendingByCard),
+    card.id,
+    reserveCents,
+  );
+  const bank = useAppSelector((state) =>
+    card.linkId === null
+      ? null
+      : (state.runway.accountBalances.find((entry) => entry.id === card.id) ??
+        null),
+  );
+  const bankName = useAppSelector((state) =>
+    card.linkId === null
+      ? null
+      : (state.runway.links.find((link) => link.id === card.linkId)
+          ?.institutionName ?? null),
+  );
 
   const archive = async (choice: HeldChoice | null) => {
     if (!user || isArchiving) return;
@@ -315,16 +337,24 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
             label={
               reserveCents > 0 ? CARD_WORDS.reserveLabel : CARD_WORDS.allPaid
             }
-            figure={formatCents(Math.max(0, reserveCents))}
+            figure={formatCents(Math.max(0, reserveCents - pendingCents))}
             fact={[
               reserveCents < 0
                 ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
                 : describeCardDue(card, today, due),
+              pendingCents > 0
+                ? CARD_WORDS.pendingAmount(formatCents(pendingCents))
+                : null,
               linkedFact,
             ]
               .filter(Boolean)
               .join(' \u00b7 ')}
           />
+          {bank?.hasInstantBalance === false && (
+            <p className='text-muted-foreground text-sm'>
+              {CARD_WORDS.slowBank(bankName ?? LINK_WORDS.fallbackBank)}
+            </p>
+          )}
           <Button
             type='button'
             variant={reserveCents > 0 ? 'primary' : 'secondary'}

@@ -3,6 +3,10 @@ import { formatCents } from '@/utils/moneyUtils';
 import BankBadge from '@apps/runway/components/BankBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { CARD_WORDS } from '@apps/runway/constants';
+import {
+  getCardPendingCents,
+  selectPendingByCard,
+} from '@apps/runway/store/selectors/cardPendingSelectors';
 import type { DateOnly, OpenCard } from '@apps/runway/types';
 import {
   describeCardDue,
@@ -38,19 +42,28 @@ function CardRow({
     today,
     startDate,
   );
+  const pendingCents = getCardPendingCents(
+    useAppSelector(selectPendingByCard),
+    card.id,
+    reserveCents,
+  );
+  const detail =
+    describeCardDue(card, today, due) ??
+    (reserveCents > 0
+      ? CARD_WORDS.waiting
+      : reserveCents < 0
+        ? CARD_WORDS.paidAhead(formatCents(-reserveCents))
+        : CARD_WORDS.nothingToPay);
   return (
     <ItemRow
       name={name}
       leading={<BankBadge name={card.issuer} linkId={card.linkId} />}
       detail={
-        describeCardDue(card, today, due) ??
-        (reserveCents > 0
-          ? CARD_WORDS.waiting
-          : reserveCents < 0
-            ? CARD_WORDS.paidAhead(formatCents(-reserveCents))
-            : CARD_WORDS.nothingToPay)
+        pendingCents > 0
+          ? `${detail} · ${CARD_WORDS.pendingAmount(formatCents(pendingCents))}`
+          : detail
       }
-      figure={formatCents(Math.max(0, reserveCents))}
+      figure={formatCents(Math.max(0, reserveCents - pendingCents))}
       ariaLabel={`${name}. Open`}
       onOpen={onOpen}
     />

@@ -2548,8 +2548,12 @@ export const NOTIFY_FIRST_HOUR = 8;
 export const NOTIFY_LAST_HOUR = 21;
 export const DEFAULT_NOTIFY_HOUR = 19;
 
-/** Back in the app after this long away, the banks are asked for what is new. */
-export const RETURN_PULL_AFTER_MS = 15 * 60_000;
+/** Opening or returning to the app asks the banks for their latest figures, unless this device asked this recently. */
+export const FRESH_ASK_GAP_MS = 2 * 60_000;
+/** While the app stays in front, the banks are asked again this often. */
+export const FRESH_ASK_EVERY_MS = 5 * 60_000;
+/** A bank figure this recent wears the "just updated" dot. */
+export const FRESH_DOT_MS = 5 * 60_000;
 
 export const NOTIFY_WORDS = {
   rowLabel: 'Notifications',
@@ -4396,6 +4400,12 @@ export const ACCOUNT_WORDS = {
   leftOut: (names: string) => `Not counted: ${names}`,
   balanceOn: (day: string) => `As of ${day}`,
   bankBalanceOn: (day: string) => `From your bank, ${day}`,
+  updatedJustNow: 'Updated just now',
+  updatedMinutes: (minutes: number) => `Updated ${minutes} min ago`,
+  updatedHours: (hours: number) => `Updated ${hours} hr ago`,
+  pendingAmount: (amount: string) => `${amount}\u00a0pending`,
+  slowBank: (bank: string) =>
+    `${bank} shares this account's balance a few times a day, not instantly.`,
   holdsTitle: 'What it holds',
   holdsEmpty: 'Nothing is held here yet.',
   notYetGivenAJob: 'Not yet given a job',
@@ -4578,6 +4588,9 @@ export const CARD_WORDS = {
     'Add the cards you spend on. What you charge waits here until you pay the card.',
   waiting: 'Waiting to be paid',
   nothingToPay: 'Nothing to pay',
+  pendingAmount: (amount: string) => `${amount}\u00a0pending`,
+  slowBank: (bank: string) =>
+    `${bank} shares this card's balance a few times a day. Runway keeps it current from your charges.`,
   reserveLabel: 'Waiting to be paid',
   payOff: (name: string) => `Pay off ${name.replace(/ (\S+)$/, '\u00a0$1')}`,
   payOffShort: 'Pay off',
@@ -5162,6 +5175,7 @@ export const LINK_WORDS = {
   rowLabel: 'Link to your bank',
   rowHelp: 'Bring its balance in from your bank',
   rowLinked: (when: string) => `Linked \u00b7 updated ${when}`,
+  fallbackBank: 'Your bank',
   methodCardTitle: 'How do you want to add the card?',
   methodAccountTitle: 'How do you want to add the account?',
   refresh: 'Refresh from your bank',

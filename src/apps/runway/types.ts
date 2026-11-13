@@ -697,6 +697,12 @@ export interface OpenAccountBalance {
   id: string;
   asOf: number;
   cents: Cents;
+  /** A bank account's balance less pending holds; null when the bank does not send it, always null for a card. */
+  availableCents: Cents | null;
+  /** A card's credit limit; null for an account. */
+  limitCents: Cents | null;
+  /** False when the bank only shares a saved balance a few times a day; null when unknown. */
+  hasInstantBalance: boolean | null;
 }
 
 /** An account as the bank describes it, before the person says which of theirs it is. */
