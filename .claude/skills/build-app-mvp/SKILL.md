@@ -158,9 +158,12 @@ Start this once every MVP PR is merged up and reviewed.
 6. **Keep the conventions current while you fix.** Both agents' rule candidates feed `docs/conventions/` (design rules in `design-ux.md` or `app-look.md`, product rules in `product.md`, one app's rules in its rules file), folded into the nearest bullet, never appended, per `pr-wrap-up` §5. When the owner says a review agent should have caught something, that agent's file in `.claude/agents/` is amended too (`docs/conventions/agents.md`).
 7. **Update `src/apps/<id>/PRODUCT.md` and its short `README.md`** to match what was actually built. Also update the root README and `functions/README.md` if they're affected.
 8. **Label the polish PR `patch`**, commit, push, and open the polish PR with the top MVP branch as its base. Run the same review as the MVP PRs.
-9. **Post the overview comment on the polish PR**, built from `references/overview-comment.md`. It replaces any per-PR "what's left" notes.
+9. **Post the overview comment on the polish PR**, built from `references/overview-comment.md`. It replaces any per-PR "what's left" notes. Before posting, build the app's `<app>:setup` script that bundles every setup step (the reference says how), and check every privacy or vendor-terms line yourself against the vendor's own pages (if the network blocks them, fix the environment with the environment tools rather than asking the owner).
+10. **Merge it yourself once the owner says the setup is done.** The owner never chooses how a stack merges. Copy every lower PR's `Resolves` line into the polish PR's body, merge `main` into the polish branch, retarget it to `main`, and merge it once through the merge lock (`orchestrate` "Merging a run's PRs", squash like every other PR), then close the lower PRs with a one-line comment pointing at the polish PR and delete their branches. One deploy, and no half-built app in production.
 
 ## Final report to the user
+
+It opens with one line naming the polish PR as the place to review everything, with links to the PR and to its overview comment: that PR holds every change and the comment holds what to do (owner: "this should always be outputted at the end of building the mvp"). Every later card about the stack repeats that line, and points at the overview comment for the setup instead of listing steps per PR.
 
 - the stack in merge order, with PR links;
 - what each review caught;
