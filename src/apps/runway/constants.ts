@@ -1778,11 +1778,11 @@ export const CHARGED_TO_HINT_WORDS = {
   heading: 'Charged somewhere else?',
   headingHelp:
     'We compare the bank charges from the last 75 days with the card or account each bill names. Nothing changes until you say yes on the bill.',
-  rowLine: (place: string) => `Last bank charge was on ${place}`,
+  rowLine: (place: string) => `Last charged on ${place}`,
   more: (count: number) => `Show ${count} more`,
   fewer: 'Show fewer',
   openAria: (name: string, place: string) =>
-    `${name}. Last bank charge was on ${place}. Open`,
+    `${name}. Last charged on ${place}. Open`,
 } as const;
 
 /** A bill's share of one paycheck: changing what this pay puts toward it, and keeping that for every pay. */

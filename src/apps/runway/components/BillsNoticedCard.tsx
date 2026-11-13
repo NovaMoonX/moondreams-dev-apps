@@ -68,6 +68,7 @@ function BillsNoticedCard({ today, onOpenBill }: BillsNoticedCardProps) {
                 payload.name,
                 nameOf(hint.place),
               )}
+              isPrivate={false}
               onOpen={() => onOpenBill(hint.billId)}
             />
           ))}
