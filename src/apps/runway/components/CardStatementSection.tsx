@@ -205,6 +205,7 @@ function CardStatementSection({
             type='button'
             variant='secondary'
             size='sm'
+            className='min-h-10'
             disabled={isBusy}
             onClick={() => void agree()}
           >
@@ -214,6 +215,7 @@ function CardStatementSection({
             type='button'
             variant='tertiary'
             size='sm'
+            className='min-h-10'
             disabled={isBusy}
             onClick={() => setIsOfferHidden(true)}
           >
