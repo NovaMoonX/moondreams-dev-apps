@@ -1,10 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { CalendarClock, Landmark, Receipt } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import ActionRow from '@/components/ActionRow';
+import FeatureOffer from '@/components/FeatureOffer';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useAppSelector } from '@/store';
 import { formatList } from '@/utils/formatUtils';
@@ -147,17 +146,6 @@ function CardStatementSection({
         setIsBusy(false);
       }
     };
-    if (isOfferHidden) {
-      return (
-        <ActionRow
-          icon={<Landmark />}
-          label={isBusy ? LINK_WORDS.refreshing : CARD_WORDS.offerRow(bank)}
-          subtitle={CARD_WORDS.offerRowHelp}
-          isDisabled={isBusy}
-          onClick={() => void agree()}
-        />
-      );
-    }
     const others = cards.filter(
       (other) =>
         other.id !== card.id &&
@@ -184,45 +172,25 @@ function CardStatementSection({
           ? CARD_WORDS.offerSeparate(bank)
           : null;
     return (
-      <section
-        aria-label={CARD_WORDS.offerTitle}
-        className='border-border bg-card space-y-3 rounded-2xl border p-4'
-      >
-        <div className='space-y-1'>
-          <p className='text-primary text-xs font-semibold'>
-            {CARD_WORDS.offerBadge}
-          </p>
-          <p className='font-semibold'>{CARD_WORDS.offerTitle}</p>
-          <p className='text-muted-foreground text-sm'>
-            {CARD_WORDS.offerBody(bank)}
-          </p>
-          {scope !== null && (
-            <p className='text-muted-foreground text-sm'>{scope}</p>
-          )}
-        </div>
-        <div className='flex flex-wrap gap-2'>
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            className='min-h-10'
-            disabled={isBusy}
-            onClick={() => void agree()}
-          >
-            {isBusy ? LINK_WORDS.refreshing : CARD_WORDS.offerAction(bank)}
-          </Button>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className='min-h-10'
-            disabled={isBusy}
-            onClick={() => setIsOfferHidden(true)}
-          >
-            {CARD_WORDS.offerLater}
-          </Button>
-        </div>
-      </section>
+      <FeatureOffer
+        title={CARD_WORDS.offerTitle}
+        body={CARD_WORDS.offerBody(bank)}
+        scope={scope}
+        badge={CARD_WORDS.offerBadge}
+        actionLabel={
+          isBusy ? LINK_WORDS.refreshing : CARD_WORDS.offerAction(bank)
+        }
+        laterLabel={CARD_WORDS.offerLater}
+        isBusy={isBusy}
+        onAction={() => void agree()}
+        onLater={() => setIsOfferHidden(true)}
+        folded={{
+          isFolded: isOfferHidden,
+          icon: <Landmark />,
+          label: isBusy ? LINK_WORDS.refreshing : CARD_WORDS.offerRow(bank),
+          subtitle: CARD_WORDS.offerRowHelp,
+        }}
+      />
     );
   }
 
@@ -233,7 +201,9 @@ function CardStatementSection({
   return (
     <ActionSection caption={CARD_WORDS.statementCaption(bank)}>
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-        {statement !== null && <MinimumRow statement={statement} today={today} />}
+        {statement !== null && (
+          <MinimumRow statement={statement} today={today} />
+        )}
         {statement !== null && statement.statementCents !== null && (
           <ItemRow
             name={CARD_WORDS.statementBalance}
