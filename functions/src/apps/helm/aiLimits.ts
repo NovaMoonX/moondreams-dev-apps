@@ -5,6 +5,7 @@ export const AI_LIMITS = {
   quick: { perWindow: 60, perDay: 400 },
   full: { perWindow: 20, perDay: 150 },
 };
+export const TOPIC_WRITES_PER_DAY = 30;
 export const AI_WINDOW_MS = 10 * 60 * 1000;
 /** Project-wide daily stop, in cents. */
 export const AI_DAILY_BUDGET_CENTS = 1000;
@@ -34,6 +35,7 @@ const budgetPath = (dayKey: string) => `apps/helm/aiBudget/${dayKey}`;
 interface UsageDoc {
   quick?: { day: number; recent: number[] };
   full?: { day: number; recent: number[] };
+  topicWrites?: number;
 }
 
 /** Counts one call against the person's allowance on a route, after an advisory read of the project's day so concurrent calls never lock on the shared budget; says why when either is spent. */
@@ -84,3 +86,30 @@ export async function recordAiSpend(
       { merge: true },
     );
 }
+
+/** Counts one topic write against the person's day; false when the day's 30 are spent. */
+export const reserveTopicWrite = (
+  firestore: Firestore,
+  uid: string,
+  now: number,
+): Promise<boolean> => {
+  const usageRef = firestore.doc(usagePath(uid, getDayKey(now)));
+  return firestore.runTransaction(async (transaction) => {
+    const used =
+      ((await transaction.get(usageRef)).data() as UsageDoc | undefined)
+        ?.topicWrites ?? 0;
+    if (used >= TOPIC_WRITES_PER_DAY) return false;
+    transaction.set(usageRef, { topicWrites: used + 1 }, { merge: true });
+    return true;
+  });
+};
+
+/** Gives back a topic write that was counted but never ran. */
+export const releaseTopicWrite = (
+  firestore: Firestore,
+  uid: string,
+  now: number,
+) =>
+  firestore
+    .doc(usagePath(uid, getDayKey(now)))
+    .set({ topicWrites: FieldValue.increment(-1) }, { merge: true });

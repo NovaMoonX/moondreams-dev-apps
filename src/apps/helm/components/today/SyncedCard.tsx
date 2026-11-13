@@ -1,14 +1,20 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarDays, ChevronRight, Clock } from 'lucide-react';
+import { CalendarDays, ChevronRight, Clock, ListChecks } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import { readConnectorAppId } from '@/lib/connections/contract';
+import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import DiscrepancyLine from '@apps/helm/components/today/DiscrepancyLine';
 import { HELM_COPY } from '@apps/helm/constants';
 import { findOtherTime, findPlace } from '@apps/helm/engine/authority';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
+import {
+  getRunsAttachedTo,
+  selectOpenRuns,
+} from '@apps/helm/store/selectors/runSelectors';
 import type { SyncedRecord } from '@apps/helm/types';
+import { getRunProgress } from '@apps/helm/utils/runSteps';
 import { formatClock } from '@apps/helm/utils/planDays';
 
 interface SyncedCardProps {
@@ -63,6 +69,11 @@ export function SyncedCard({
 }: EventCardProps) {
   const { sourceNameOf } = useSourceAppName();
   const other = findOtherTime(record, alsoIn);
+  const openRuns = useAppSelector(selectOpenRuns);
+  const runs = getRunsAttachedTo(openRuns, [
+    record.id,
+    ...alsoIn.map((copy) => copy.id),
+  ]);
   const second = alsoIn[0] ?? null;
   const detail = [
     timeLine(record),
@@ -104,6 +115,21 @@ export function SyncedCard({
             )}
           </span>
         )}
+        {runs.map((run) => {
+          const { done, total } = getRunProgress(run);
+          return (
+            <span
+              key={run.id}
+              className='text-foreground flex items-start gap-1 text-[13px] break-words'
+            >
+              <ListChecks
+                className='mt-[3px] size-3.5 shrink-0'
+                aria-hidden='true'
+              />
+              {[run.title, HELM_COPY.runProgress(done, total)].join(' · ')}
+            </span>
+          );
+        })}
         <DiscrepancyLine record={record} />
       </span>
       <ChevronRight

@@ -34,6 +34,7 @@ jobs:
       - run: npm run check:pipeline-map
       - run: npm run check:pipeline-answers
       - run: npm run check:owner-inbox
+      - run: npm run check:z-layers
       # The deploy opens callables by reading this list; a line it can't read stops the deploy after the functions are out.
       - run: npm run fb:invoker -- --all --dry
   check_pinch:
@@ -86,3 +87,14 @@ jobs:
       - run: npm run check:helm-sort
       - run: npm run check:helm-screen
       - run: npm run check:helm-topic-tree
+      - run: npm run check:helm-notes
+      - run: npm run check:helm-note-search
+      - run: npm run check:helm-topic-write
+      - run: npm run check:helm-procedures
+      - run: npm run check:helm-procedure-steps
+      - run: npm run check:helm-runs
+      - run: npm run check:helm-style
+      - run: npm run check:helm-assistant
+      - run: npm run check:helm-search
+      - run: npm run check:helm-drop-box
+      - run: npm run check:helm-trust

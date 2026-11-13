@@ -11,6 +11,7 @@ import {
 } from '@apps/runway/store/actions/itemActions';
 import { recordHolding } from '@apps/runway/store/actions/moveActions';
 import { resolveGroupChoice } from '@apps/runway/utils/groupChoice';
+import { isCardFeeGroup } from '@apps/runway/engine/cardFees';
 import type { StartDraft } from '@apps/runway/utils/startDraft';
 import type { Priority, RunwayEncryption } from '@apps/runway/types';
 
@@ -88,7 +89,7 @@ export async function commitStartDraft(
     forEmoji: string | null | undefined,
   ) => {
     const choice = resolveGroupChoice(NEW_CHOICE, forName ?? '', [
-      ...existing.groups,
+      ...existing.groups.filter((group) => !isCardFeeGroup(group.id)),
       ...madeGroups,
     ]);
     return choice.newGroup === null

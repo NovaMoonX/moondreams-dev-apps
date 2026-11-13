@@ -358,6 +358,7 @@ class HelmSinkSession implements SinkSession {
             ? {
                 ...(quote as Record<string, unknown>),
                 text: null,
+                record: null,
                 deepLink: null,
                 deletedAt: (quote as Record<string, unknown>).deletedAt ?? now,
               }
