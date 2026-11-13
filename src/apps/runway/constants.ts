@@ -2186,6 +2186,7 @@ export const SPEND_WORDS = {
   add: 'Add',
   needsAmount: 'Enter the amount.',
   needsEnvelope: 'Pick the envelope.',
+  needsReturnTo: 'Pick where it goes back to.',
   needsDay: 'Pick a day you were tracking, not one ahead.',
   needsShares: 'Say how much each envelope takes.',
   needsTwo: 'Pick at least two envelopes.',

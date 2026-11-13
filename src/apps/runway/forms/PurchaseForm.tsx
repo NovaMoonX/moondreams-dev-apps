@@ -414,6 +414,8 @@ function PurchaseFormBody({
     },
   }));
   const editingLines = editing?.lines ?? [];
+  const isCountedAlready =
+    editing !== undefined && editing.amountCents < 0 && editing.needsHome;
   const editingChosen =
     editing !== undefined && editing.amountCents > 0
       ? unspill(editingLines)
@@ -422,6 +424,11 @@ function PurchaseFormBody({
     editing !== undefined &&
     editing.amountCents > 0 &&
     editingChosen.length > 1;
+  const getStartReturnTo = () => {
+    if (isCountedAlready) return '';
+    if (!editing || editing.amountCents >= 0) return FREE_VALUE;
+    return editingLines[0]?.envelopeId ?? FREE_VALUE;
+  };
   const [start] = useState(() => ({
     envelopeId:
       editing && !startsSplit && editing.amountCents > 0
@@ -444,10 +451,7 @@ function PurchaseFormBody({
         )
       : ({} as Record<string, string>),
     originalId: editing?.refundOfId ?? null,
-    returnTo:
-      editing && editing.amountCents < 0
-        ? (editingLines[0]?.envelopeId ?? FREE_VALUE)
-        : FREE_VALUE,
+    returnTo: getStartReturnTo(),
     paidByChoice: editing ? (editing.paidByCardId ?? null) : undefined,
   }));
   const draftKey = `${FORM_DRAFT_PREFIX}purchase:${editing?.id ?? (preset ? `cost:${preset.itemId}:${preset.cost.id}` : 'new')}`;
@@ -494,9 +498,10 @@ function PurchaseFormBody({
           splitIds.map((id) => [id, draft.shares[id] ?? '']),
         ),
         returnTo:
-          draft.returnTo === FREE_VALUE || known.has(draft.returnTo)
+          (draft.returnTo === FREE_VALUE && !isCountedAlready) ||
+          known.has(draft.returnTo)
             ? draft.returnTo
-            : FREE_VALUE,
+            : start.returnTo,
         paidBy: isCardKnown ? draft.paidBy : { isPicked: false, cardId: null },
       };
     },
@@ -900,7 +905,7 @@ function PurchaseFormBody({
     if (!isRefund && refundedCents > amount) return SPEND_WORDS.belowRefunds;
     if (lines === null) {
       if (isSplit && !isRefund) return SPEND_WORDS.needsShares;
-      return SPEND_WORDS.needsEnvelope;
+      return isRefund ? SPEND_WORDS.needsReturnTo : SPEND_WORDS.needsEnvelope;
     }
     if (
       heldRef !== null &&
@@ -1476,10 +1481,14 @@ function PurchaseFormBody({
               </p>
               <PillGroup
                 label={SPEND_WORDS.returnsTo}
-                options={[
-                  { value: FREE_VALUE, label: SPEND_WORDS.freeToSpend },
-                  ...allPills,
-                ]}
+                options={
+                  isCountedAlready
+                    ? allPills
+                    : [
+                        { value: FREE_VALUE, label: SPEND_WORDS.freeToSpend },
+                        ...allPills,
+                      ]
+                }
                 value={returnTo}
                 onChange={(id) => {
                   setReturnTo(id);

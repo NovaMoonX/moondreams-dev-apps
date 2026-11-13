@@ -107,6 +107,7 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
         subtitle={NEEDS_HOME_WORDS.refundRowSub}
         onClick={() => setForm('refund')}
       />
+      <LeaveOutRow purchase={purchase} onDone={onClose} isKeepFree />
       <LeaveOutRow
         purchase={purchase}
         onDone={onClose}
