@@ -196,6 +196,13 @@ Problems we've hit before, so we don't hit them again.
 - **Fix:** each page load stamps its marks with its own id and ignores marks without it, and opening Bills always clears a day the address may still hold.
 - **Telling it apart:** `npm run check:back-history` restarts a stand-in app after a long session and taps a door; it fails on the old hook with the landing on `/home`. In a session, `history.state` on the entries behind the app holding `keptFor` with a `keptLoad` that isn't the current load's is this problem.
 
+### Runway's Home tab loads the whole app again after it reopens on another tab
+
+- **Symptom:** the owner's phone reopened Runway on Plan, Days or Spend after the app had been in the background, and tapping Home showed the site's loading spinner and then "Getting your plan ready" (a full load) instead of switching tabs.
+- **Cause:** only leaving Home adds a history entry, and the tab entry it leads to is marked so that tapping Home steps back to it (`showTab`). `history.state` survives a reload or a phone restoring a page it threw away, so the reopened page read the earlier load's mark as its own and stepped back onto Home's entry, which belonged to the earlier page, and the browser loaded the app for it. The spinner followed by "Getting your plan ready" is a full page load, which only that step back explains; desktop Chromium keeps those entries live across a plain reload, so the reload itself could not be reproduced in the sandbox.
+- **Fix:** every Back step mark is written with `markHistoryStep` and read with `isHistoryStep` (`useBackHistory`), stamped with this page load's id, so a mark from an earlier load switches to Home in place; the admin dashboard and Going Once's sale page had the same `true` mark and moved onto it. ESLint refuses a `true` mark, and `check:back-history` checks one across a reload.
+- **Telling it apart:** on the reopened tab, `history.state.runwayTabStep` is `true` (old build) or holds another load's id; `isHistoryStep('runwayTabStep')` is false there. A reload that happens without tapping Home is the system throwing the page away, not this.
+
 ### Pinch-zoom on a full-screen photo works on one phone and not another
 
 - **Symptom:** in a full-screen photo (Going Once's thing photos, the admin's screenshots) two fingers do nothing on a OnePlus 12, while the same page zooms on a Galaxy Fold.

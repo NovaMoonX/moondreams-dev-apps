@@ -17,6 +17,7 @@ idea ─▶ plan-app ─▶ issues ─▶ orchestrate ─▶ push ─▶ pr-gate
 | Large or multi-issue work | `.claude/skills/orchestrate/SKILL.md` | the session, delegating build chunks and checks | session + sonnet `implementer` + haiku `validator` | a few tool calls, or a change that needs the conversation's context |
 | A new app's MVP | `.claude/skills/build-app-mvp/SKILL.md` | the session, as an orchestrator | as above | – |
 | What a push needs | `.claude/hooks/pr-gate.sh` (Stop hook) | the hook, in bash, once per pushed clean HEAD | none | the branch is the default, dirty, unpushed, or the HEAD was already gated |
+| Keep a run going | `.claude/hooks/run-keepalive.sh` (Stop), `scripts/runState.sh` (`npm run run:state`), `orchestrate` "A run never goes quiet" | the hook, in bash, at each turn's end while a run is recorded: it lets the turn end only while a background helper is working or a recorded wait is under 110 minutes, and otherwise names the next step once | none | no run recorded, the run is blocked on the owner, or the hook already held the last stop |
 | Wrap-up | `.claude/skills/pr-wrap-up/SKILL.md` | the session | session | the parts the gate didn't name (a docs-only push gets none) |
 | Review | `orchestrate` "Sizing the review" + `.claude/agents/` | the agents for the size (no outside reviewer) | haiku validator, sonnet reviewers, opus `lead-reviewer` for L | docs-only diffs (validator only) |
 | Status | `orchestrate` "The PR status comment" | the session, after each push and review | session | never on a PR you drive |
@@ -53,7 +54,7 @@ idea ─▶ plan-app ─▶ issues ─▶ orchestrate ─▶ push ─▶ pr-gate
 
 Every part of the pipeline is open to change, not only the review agents: the skills, both hooks, every agent file, the conventions files, the issue script, the PR body's shape and the status comment. Whoever is running it (you, the session model) watches for the signals below in every task, and acts on each one in the same turn as the work that showed it.
 
-**Signals.** The owner corrects a choice or rejects a finding; the owner finds a problem a step passed; a hook fires when it shouldn't or stays quiet when it should; an agent's brief comes back wrong or it reaches past its scope; a step costs more than it catches (a review that found nothing on a kind of change it always finds nothing on); a manual step is done twice; a skill's instruction contradicts another's; an agent can't do its job with its tools; something added mid-session can't be used yet (a new agent file loads only on a new session).
+**Signals.** The owner corrects a choice or rejects a finding; the owner finds a problem a step passed; a bug is fixed (whoever found it); a hook fires when it shouldn't or stays quiet when it should; an agent's brief comes back wrong or it reaches past its scope; a step costs more than it catches (a review that found nothing on a kind of change it always finds nothing on); a manual step is done twice; a skill's instruction contradicts another's; an agent can't do its job with its tools; something added mid-session can't be used yet (a new agent file loads only on a new session).
 
 **For each signal, decide:**
 1. **Name the class, not the instance**, and the one owner file that should change (the table above). A fix that would touch two owners means one of them is the owner and the other points at it.
@@ -74,7 +75,9 @@ Every part of the pipeline is open to change, not only the review agents: the sk
 5. **Not worth it** (a one-off, or a fix that costs more than it prevents): leave it, and say nothing.
 6. **Log it** in `pipeline-log.md`: one row per change or proposal, with its scope (an app id, or 'shared'), newest first. Before changing a step, read its rows: three corrections of one agent or hook mean its design is wrong, not its wording, and that is a proposal to redesign it.
 
-**A retro ends every orchestrated run** (a multi-issue run, a new app, a size L PR): in your final message, three lines at most on what cost the most, what a review missed or flagged as noise, and which briefs came back; each line becomes a change or a proposal by the rules above, or is dropped.
+**A bug fix asks how it got through, in the same PR.** Before a fix PR is called done, name the step that should have stopped the bug and why it didn't: a check no agent runs, a journey no walk took, data no seed holds, a product question nobody asked. Each answer is a signal handled by the rules above (a change when confident, a proposal when not), and the PR body carries it as a collapsed `How it got through` block: one line per gap, each with the file that now covers it, or "a one-off: nothing would have caught it more cheaply". A fix also checks the product around the bug, not only the line that failed: the flow it repairs is walked as the person who hit it, at their level, and a choice that changes nothing there is a second finding (owner, Runway bank refund: the form couldn't save, and once fixed it offered "Back to Free to Spend" at Link, where the money already counts).
+
+**A retro ends every orchestrated run** (a multi-issue run, a new app, a size L PR): in your final message, three lines at most on what cost the most, what a review missed or flagged as noise, and which briefs came back; each line becomes a change or a proposal by the rules above, or is dropped. A plan that took more than one round of the owner's answers has its own retro at approval (`orchestrate` "A plan that took more than one round ends in a plan retro").
 
 ## Changing the pipeline
 

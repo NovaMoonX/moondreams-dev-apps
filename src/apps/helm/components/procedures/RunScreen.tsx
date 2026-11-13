@@ -2,14 +2,15 @@ import { useState } from 'react';
 
 import {
   Button,
-  Checkbox,
   DropdownMenuFactories,
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Plus, Trash2 } from 'lucide-react';
 
-import ChecklistGroup, { TICK_HIT_CLASS } from '@/components/ChecklistGroup';
+import ChecklistGroup from '@/components/ChecklistGroup';
 import LockedButton from '@/components/LockedButton';
 import RevealChip from '@/components/RevealChip';
 import TickMark from '@/components/TickMark';
@@ -376,8 +377,7 @@ function RunScreen({
                     <TickMark />
                   </span>
                 ) : (
-                  <Checkbox
-                    className={TICK_HIT_CLASS}
+                  <AppCheckbox
                     checked={false}
                     indeterminate={done > 0}
                     onCheckedChange={(next) =>

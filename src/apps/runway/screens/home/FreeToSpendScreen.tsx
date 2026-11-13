@@ -1,8 +1,10 @@
 import { useState } from 'react';
 
 import {
+  ArrowDownLeft,
   Calculator,
   ChevronRight,
+  Clock,
   Landmark,
   Wallet,
   WalletCards,
@@ -19,6 +21,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import Subview from '@/components/Subview';
 import { useNow } from '@/hooks/useNow';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
@@ -36,16 +39,22 @@ import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import { CheckBalanceBody } from '@apps/runway/screens/home/CheckBalanceScreen';
 import { WhereYourCashIsBody } from '@apps/runway/screens/home/WhereYourCashIsScreen';
 import LevelGate from '@apps/runway/components/LevelGate';
+import { DEFAULT_SPEND_PERIOD } from '@apps/runway/constants';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import {
+  selectMoneyIn,
+  selectOnItsWay,
+} from '@apps/runway/store/selectors/runwaySelectors';
+import { getSpendRange } from '@apps/runway/utils/spendPeriod';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { canChangeStart } from '@apps/runway/utils/startingCorrection';
-import type { PlanSection } from '@apps/runway/types';
-import {
-  selectBalances,
-  selectBankBacking,
-} from '@apps/runway/store/selectors/balanceSelectors';
+import HeldBreakdownView from '@apps/runway/screens/home/HeldBreakdownView';
+import { selectBankBacking } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectIsMovesLoaded,
   selectIsRecordsReady,
@@ -57,11 +66,14 @@ interface FreeToSpendScreenProps {
   onClose: () => void;
 }
 
+type HeldViewName =
+  'heldBills' | 'heldGoals' | 'heldEnvelopes' | 'heldHorizon' | 'heldCards';
+
 interface SumRow {
   sign: string;
   name: string;
   value: string;
-  section?: PlanSection;
+  view?: HeldViewName;
   /** What the row counts, behind an info icon beside its name. */
   help?: string;
   isEmphasised?: boolean;
@@ -81,8 +93,46 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     closeCheckBalance,
     openCashPosition,
     closeCashPosition,
+    openHeldView,
+    closeHeldView,
     leaveViewForTab,
+    showSpendKind,
+    showSpendPeriod,
   } = useRunwayUrlState();
+  const mask = useMaskedText();
+  const { isHidden, toggle: toggleHidden } = useValuesHidden();
+  const now = useNow(60_000);
+  const monthRange = getSpendRange(DEFAULT_SPEND_PERIOD, todayAsUtcDate(now));
+  const monthMoneyIn = useAppSelector(selectMoneyIn).filter(
+    (purchase) =>
+      purchase.date >= monthRange.from && purchase.date < monthRange.to,
+  );
+  const onItsWayCents = useAppSelector(selectOnItsWay)
+    .filter(
+      ({ purchase, heldBy }) =>
+        heldBy === null &&
+        purchase.date >= monthRange.from &&
+        purchase.date < monthRange.to,
+    )
+    .reduce((sum, { purchase }) => sum - purchase.amountCents, 0);
+  // Money with no envelopes and no pay raised Free to Spend itself; a pay or a refund to envelopes went to the plan.
+  const sumIn = (straight: boolean) => {
+    const cents = monthMoneyIn
+      .filter(
+        (purchase) =>
+          (purchase.lines.length === 0 && purchase.incomeDayId === null) ===
+          straight,
+      )
+      .reduce((sum, purchase) => sum - purchase.amountCents, 0);
+    return cents === 0 ? null : formatCents(cents);
+  };
+  // The tab's own history entry is written first, so the filter lands on it rather than on Home's; a hidden total opens to a list it can be checked against, so amounts show first.
+  const openMoneyIn = async () => {
+    if (isHidden) toggleHidden();
+    await leaveViewForTab('spend');
+    showSpendKind('moneyIn');
+    showSpendPeriod(DEFAULT_SPEND_PERIOD);
+  };
   const isChecking = view === 'checkAmount';
   const isCheckingBalance = view === 'checkBalance';
   const isViewingCash = view === 'cashPosition';
@@ -99,6 +149,42 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   );
   const figure = getFreeToSpendFigure(balances);
   const free = describeFreeToSpend(figure);
+  const envelopesName =
+    level === 'link'
+      ? FREE_SUM_WORDS.envelopesLink
+      : isTrackingLevel(level)
+        ? FREE_SUM_WORDS.envelopesTrack
+        : FREE_SUM_WORDS.envelopesPlan;
+  const heldViews = {
+    heldBills: {
+      kind: 'bills',
+      name: FREE_SUM_WORDS.bills,
+      totalCents: balances.assignedToBillsCents,
+    },
+    heldGoals: {
+      kind: 'goals',
+      name: FREE_SUM_WORDS.goals,
+      totalCents: balances.assignedToGoalsCents,
+    },
+    heldEnvelopes: {
+      kind: 'envelopes',
+      name: envelopesName,
+      totalCents: balances.assignedToEnvelopesCents,
+    },
+    heldHorizon: {
+      kind: 'horizon',
+      name: FREE_SUM_WORDS.horizon,
+      totalCents: balances.assignedToHorizonCents,
+    },
+    heldCards: {
+      kind: 'cards',
+      name: FREE_SUM_WORDS.cards,
+      totalCents: balances.assignedToCardsCents,
+    },
+  } as const;
+  const heldView = view !== null && view in heldViews ? view : null;
+  const held =
+    heldView === null ? null : heldViews[heldView as keyof typeof heldViews];
   const rows: SumRow[] = [
     {
       sign: '',
@@ -111,20 +197,15 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     },
     {
       sign: '+',
-      name:
-        level === 'link'
-          ? FREE_SUM_WORDS.envelopesLink
-          : isTrackingLevel(level)
-            ? FREE_SUM_WORDS.envelopesTrack
-            : FREE_SUM_WORDS.envelopesPlan,
+      name: envelopesName,
       value: formatCents(balances.assignedToEnvelopesCents),
-      section: 'envelopes',
+      view: 'heldEnvelopes',
     },
     {
       sign: '+',
       name: FREE_SUM_WORDS.goals,
       value: formatCents(balances.assignedToGoalsCents),
-      section: 'goals',
+      view: 'heldGoals',
     },
     ...(balances.assignedToHorizonCents !== 0
       ? [
@@ -132,7 +213,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             sign: '+',
             name: FREE_SUM_WORDS.horizon,
             value: formatCents(balances.assignedToHorizonCents),
-            section: 'horizon' as const,
+            view: 'heldHorizon' as const,
           },
         ]
       : []),
@@ -140,7 +221,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       sign: '+',
       name: FREE_SUM_WORDS.bills,
       value: formatCents(balances.assignedToBillsCents),
-      section: 'bills',
+      view: 'heldBills',
     },
     ...(balances.assignedToCardsCents !== 0
       ? [
@@ -148,7 +229,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             sign: '+',
             name: FREE_SUM_WORDS.cards,
             value: formatCents(balances.assignedToCardsCents),
-            section: 'cards' as const,
+            view: 'heldCards' as const,
             help: CARD_WORDS.freeWaitingHelp,
           },
         ]
@@ -165,10 +246,6 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             : undefined,
     },
   ];
-  const openSection = (section: PlanSection) => {
-    leaveViewForTab('plan', section);
-  };
-  const now = useNow(60_000);
   const startCreatedAt = useAppSelector((state) =>
     state.runway.moves
       .filter((move) => move.kind === 'start' && move.reversesMoveId === null)
@@ -192,12 +269,14 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     if (isChecking) return CHECK_WORDS.title;
     if (isCheckingBalance) return BALANCE_CHECK_WORDS.title;
     if (isViewingCash) return CASH_POSITION_WORDS.title;
+    if (held) return held.name;
     return sheetKey === null ? HOME_WORDS.freeToSpend : 'Where things stand';
   };
   const getBack = () => {
     if (isChecking) return closeCheckAmount;
     if (isCheckingBalance) return closeCheckBalance;
     if (isViewingCash) return closeCashPosition;
+    if (held) return closeHeldView;
     return sheetKey === null ? undefined : () => setSheetKey(null);
   };
 
@@ -214,6 +293,12 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
         <CheckBalanceBody onOpenDays={() => leaveViewForTab('days')} />
       ) : isViewingCash ? (
         <WhereYourCashIsBody />
+      ) : held ? (
+        <HeldBreakdownView
+          kind={held.kind}
+          name={held.name}
+          totalCents={held.totalCents}
+        />
       ) : sheetKey !== null ? (
         <StartingAmountsSheet
           key={sheetKey}
@@ -279,7 +364,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                     <SensitiveValue>{row.value}</SensitiveValue>
                   </span>,
                   <span key='chevron' className='flex justify-center'>
-                    {row.section && (
+                    {row.view && (
                       <ChevronRight
                         className='text-muted-foreground h-4 w-4'
                         aria-hidden='true'
@@ -289,10 +374,10 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 ];
                 const rowClass =
                   'grid min-h-12 grid-cols-[1.25rem_minmax(0,1fr)_auto_1rem] items-center gap-x-2 px-3 py-2';
-                const { section } = row;
+                const { view: rowView } = row;
                 return (
                   <div key={row.name}>
-                    {section && row.help ? (
+                    {rowView && row.help ? (
                       <div className={join(rowClass, 'relative')}>
                         {cells}
                         <Button
@@ -301,10 +386,10 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                           size='stripped'
                           className='absolute inset-0 size-full rounded-none'
                           aria-label={`${row.name}. See what makes it up`}
-                          onClick={() => openSection(section)}
+                          onClick={() => openHeldView(rowView)}
                         />
                       </div>
-                    ) : section ? (
+                    ) : rowView ? (
                       <Button
                         type='button'
                         variant='tertiary'
@@ -314,7 +399,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                           'text-foreground! grid! w-full text-left font-normal',
                         )}
                         aria-label={`${row.name}. See what makes it up`}
-                        onClick={() => openSection(section)}
+                        onClick={() => openHeldView(rowView)}
                       >
                         {cells}
                       </Button>
@@ -373,6 +458,32 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 subtitle={CASH_POSITION_WORDS.openSub}
                 onClick={openCashPosition}
               />
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<ArrowDownLeft />}
+                label={FREE_SUM_WORDS.moneyIn}
+                subtitle={
+                  monthMoneyIn.length === 0
+                    ? FREE_SUM_WORDS.moneyInNone
+                    : mask(FREE_SUM_WORDS.moneyInSub(sumIn(true), sumIn(false)))
+                }
+                onClick={() => void openMoneyIn()}
+              />
+              {onItsWayCents > 0 && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<Clock />}
+                  label={FREE_SUM_WORDS.onItsWay}
+                  subtitle={mask(
+                    FREE_SUM_WORDS.onItsWaySub(formatCents(onItsWayCents)),
+                  )}
+                  onClick={() => void openMoneyIn()}
+                />
+              )}
             </LevelGate>
           </ActionGroup>
           {!isStartOpen && !isBankBacked && (

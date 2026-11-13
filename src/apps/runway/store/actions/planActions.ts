@@ -12,7 +12,14 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   DEFAULT_CURRENCY_CODE,
   HOLDS_ASK_LATER_DAYS,
+  HOME_PIN_WORDS,
+  HOME_TILE_COUNT,
 } from '@apps/runway/constants';
+import {
+  moveInList,
+  readHomePins,
+  withHiddenPins,
+} from '@apps/runway/utils/homePins';
 import { toDayStamp } from '@apps/runway/engine/dates';
 import {
   getLevel,
@@ -59,6 +66,8 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       notifyTimeZone: null,
       holdsPrompt: null,
       bankBackedSeenAt: null,
+      horizonNudgeDismissed: null,
+      homePins: null,
     } satisfies PlanSealedFields,
     encryption,
   );
@@ -77,11 +86,20 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       trackingPeriods: [],
       dirtyFrom: null,
       notify: { needsHome: false },
+      sorting: null,
       keyId: encryption.keyId,
       sealed,
       shareSummary: null,
     };
     transaction.set(planRef, plan);
+  });
+}
+
+/** Turns "I'm not sorting yet" on or off, stamping now so a charge from before never comes back when it is turned off. */
+export async function setSortingPaused(uid: string, isPaused: boolean) {
+  await updateDoc(doc(db, 'apps', 'runway', 'plans', uid), {
+    sorting: { isPaused, from: Date.now() },
+    updatedAt: Date.now(),
   });
 }
 
@@ -124,6 +142,8 @@ export async function setNotify(
             : patch.timeZone,
         holdsPrompt: current.holdsPrompt ?? null,
         bankBackedSeenAt: current.bankBackedSeenAt ?? null,
+        horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
+        homePins: current.homePins ?? null,
       } satisfies PlanSealedFields,
       encryption,
     );
@@ -135,11 +155,18 @@ export async function setNotify(
   });
 }
 
+type SealedPatch = Partial<
+  Pick<
+    PlanSealedFields,
+    'holdsPrompt' | 'bankBackedSeenAt' | 'horizonNudgeDismissed' | 'homePins'
+  >
+>;
+
 /** Re-seals the plan's sealed fields with one change, reading the plan fresh so a second device's change to another field is kept. */
 async function patchSealedFields(
   uid: string,
   encryption: RunwayEncryption,
-  patch: Partial<Pick<PlanSealedFields, 'holdsPrompt' | 'bankBackedSeenAt'>>,
+  patch: SealedPatch | ((current: Partial<PlanSealedFields>) => SealedPatch),
 ) {
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
   await runTransaction(db, async (transaction) => {
@@ -156,7 +183,9 @@ async function patchSealedFields(
         notifyTimeZone: current.notifyTimeZone ?? null,
         holdsPrompt: current.holdsPrompt ?? null,
         bankBackedSeenAt: current.bankBackedSeenAt ?? null,
-        ...patch,
+        horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
+        homePins: current.homePins ?? null,
+        ...(typeof patch === 'function' ? patch(current) : patch),
       } satisfies PlanSealedFields,
       encryption,
     );
@@ -187,6 +216,76 @@ export async function setBankBackedSeen(
   encryption: RunwayEncryption,
 ) {
   await patchSealedFields(uid, encryption, { bankBackedSeenAt: Date.now() });
+}
+
+/** Stops asking about Horizon for one goal at its current target date; a changed date asks again. Reads the plan fresh so another goal's answer is kept. */
+export async function dismissHorizonNudge(
+  uid: string,
+  encryption: RunwayEncryption,
+  goalId: string,
+  targetDate: DateOnly,
+) {
+  const ref = doc(db, 'apps', 'runway', 'plans', uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
+    const plan = snapshot.data() as PlanDoc;
+    const current: Partial<PlanSealedFields> = plan.sealed
+      ? await openJson<PlanSealedFields>(plan.sealed, encryption)
+      : {};
+    const sealed = await sealJson(
+      {
+        currencyCode: current.currencyCode ?? DEFAULT_CURRENCY_CODE,
+        notifyHour: current.notifyHour ?? null,
+        notifyTimeZone: current.notifyTimeZone ?? null,
+        holdsPrompt: current.holdsPrompt ?? null,
+        bankBackedSeenAt: current.bankBackedSeenAt ?? null,
+        horizonNudgeDismissed: {
+          ...(current.horizonNudgeDismissed ?? {}),
+          [goalId]: targetDate,
+        },
+        homePins: current.homePins ?? null,
+      } satisfies PlanSealedFields,
+      encryption,
+    );
+    transaction.update(ref, { sealed, updatedAt: Date.now() });
+  });
+}
+
+/** Pins an envelope to Home's next free tile, or unpins it; reads the plan fresh so another device's pins are kept, and refuses a pin past the cap. */
+export async function setHomePin(
+  uid: string,
+  encryption: RunwayEncryption,
+  itemId: string,
+  isPinned: boolean,
+  liveIds: string[],
+) {
+  await patchSealedFields(uid, encryption, (current) => {
+    const saved = current.homePins ?? null;
+    const pins = readHomePins(saved, liveIds);
+    const save = (next: string[]) => ({
+      homePins: withHiddenPins(next, saved, liveIds),
+    });
+    if (!isPinned) return save(pins.filter((id) => id !== itemId));
+    if (pins.includes(itemId)) return save(pins);
+    if (pins.length >= HOME_TILE_COUNT) throw new Error(HOME_PIN_WORDS.full);
+    return save([...pins, itemId]);
+  });
+}
+
+/** Moves a pinned envelope one place earlier or later on Home. */
+export async function moveHomePin(
+  uid: string,
+  encryption: RunwayEncryption,
+  itemId: string,
+  step: -1 | 1,
+  liveIds: string[],
+) {
+  await patchSealedFields(uid, encryption, (current) => {
+    const saved = current.homePins ?? null;
+    const moved = moveInList(readHomePins(saved, liveIds), itemId, step);
+    return { homePins: withHiddenPins(moved, saved, liveIds) };
+  });
 }
 
 const planPath = (uid: string) => doc(db, 'apps', 'runway', 'plans', uid);
