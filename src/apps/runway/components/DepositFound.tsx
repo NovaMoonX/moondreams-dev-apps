@@ -7,13 +7,13 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionRow from '@/components/ActionRow';
 import InlineNotice from '@/components/InlineNotice';
+import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { NOTICE_MAIN_BUTTON } from '@apps/runway/components/noticeButtonClasses';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CORRECT_WORDS,
@@ -80,9 +80,8 @@ export function DepositFound({
           )}
           {onCorrect !== null && (
             <Button
-              variant='outline'
               size='sm'
-              className={join('mt-2', NOTICE_MAIN_BUTTON.info)}
+              className={join('mt-2', NOTICE_ACTION_CLASSES.info)}
               onClick={onCorrect}
             >
               {CORRECT_WORDS.door}

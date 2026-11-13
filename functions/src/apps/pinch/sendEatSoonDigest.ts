@@ -10,6 +10,7 @@ import {
   getDigestLink,
   getDigestMessage,
   getDigestRun,
+  readReminders,
   mergeDigestItems,
   toDigestItems,
   toPackageDigestItems,
@@ -24,7 +25,6 @@ if (getApps().length === 0) {
 const SETTINGS_PATH = 'apps/pinch/settings';
 const BOX_LIMIT = 100;
 const PACKAGE_LIMIT = 100;
-const DEFAULT_LEAD_DAYS = 1;
 
 interface DigestContext {
   today: number;
@@ -106,31 +106,6 @@ export interface DigestRun {
 }
 
 export type SendDigest = (sent: DigestSent) => Promise<void>;
-
-const readReminders = (data: Record<string, unknown>) => {
-  const reminders = (data.reminders ?? {}) as Record<string, unknown>;
-  const hour = reminders.hour;
-  const leadDays = reminders.leadDays;
-  return {
-    reminders,
-    hour:
-      typeof hour === 'number' &&
-      Number.isInteger(hour) &&
-      hour >= 0 &&
-      hour <= 23
-        ? hour
-        : null,
-    leadDays:
-      typeof leadDays === 'number' &&
-      Number.isInteger(leadDays) &&
-      leadDays >= 1 &&
-      leadDays <= 3
-        ? leadDays
-        : DEFAULT_LEAD_DAYS,
-    timeZone:
-      typeof reminders.timeZone === 'string' ? reminders.timeZone : null,
-  };
-};
 
 /** Takes the day's note for a person inside a transaction, so two runs that overlap send one: the stamp is written before the push, which makes a failed send a skipped day rather than a doubled one. */
 const claimDay = (firestore: Firestore, uid: string, day: string) =>

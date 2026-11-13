@@ -2,7 +2,11 @@ import {
   startPcmCapture,
   PCM_SAMPLE_RATE,
 } from '@/lib/speech/voice/pcmWorklet';
-import type { CloudHeldReason, SttAdapter } from '@/lib/speech/voice/types';
+import type {
+  CloudHeldReason,
+  FrameSource,
+  SttAdapter,
+} from '@/lib/speech/voice/types';
 import type { VoiceTokenAnswer } from '@/lib/speech/voice/voiceToken';
 
 const LISTEN_URL = 'wss://api.deepgram.com/v1/listen';
@@ -17,6 +21,8 @@ interface DeepgramSttOptions {
   lang: string;
   getToken: () => Promise<VoiceTokenAnswer>;
   tokenWaitMs?: number;
+  /** A microphone already open (a speech gate that heard the person start): its pre-roll is sent first, then its live frames, and the stream releases it when it ends. Without one the stream opens the microphone itself. */
+  source?: FrameSource | null;
   /** The cloud could not take this listen; `reason` is the limit that held it, null for any other cause. Nothing was delivered. */
   onUnavailable: (reason: CloudHeldReason | null) => void;
   /** A minted stream has ended, after `ms` open (0 when it never opened). */
@@ -70,6 +76,7 @@ export const createDeepgramStt = ({
   lang,
   getToken,
   tokenWaitMs = 1500,
+  source = null,
   onUnavailable,
   onClosed,
 }: DeepgramSttOptions): SttAdapter => {
@@ -89,29 +96,32 @@ export const createDeepgramStt = ({
         void tokenRequest.then((answer) => {
           if (answer?.status === 'ready') onClosed(answer.mintId, 0);
         });
-      const stream = await navigator.mediaDevices
-        .getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            channelCount: 1,
-          },
-        })
-        .catch((error: unknown) => {
-          const name = error instanceof DOMException ? error.name : '';
-          if (name === 'NotAllowedError' || name === 'SecurityError') {
-            options.onError('denied');
-          } else if (name === 'NotFoundError') {
-            options.onError('no-microphone');
-          } else onUnavailable(null);
-          return null;
-        });
-      if (!stream) {
+      const stream = source
+        ? null
+        : await navigator.mediaDevices
+            .getUserMedia({
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                channelCount: 1,
+              },
+            })
+            .catch((error: unknown) => {
+              const name = error instanceof DOMException ? error.name : '';
+              if (name === 'NotAllowedError' || name === 'SecurityError') {
+                options.onError('denied');
+              } else if (name === 'NotFoundError') {
+                options.onError('no-microphone');
+              } else onUnavailable(null);
+              return null;
+            });
+      if (!source && !stream) {
         releaseToken();
         return;
       }
       if (run.asked !== null) {
-        stream.getTracks().forEach((track) => track.stop());
+        stream?.getTracks().forEach((track) => track.stop());
+        source?.stop();
         releaseToken();
         options.onFinal('');
         return;
@@ -136,7 +146,8 @@ export const createDeepgramStt = ({
       };
       const read = () => [...state.finals, state.interim].join(' ').trim();
       const releaseMicrophone = () => {
-        stream.getTracks().forEach((track) => track.stop());
+        stream?.getTracks().forEach((track) => track.stop());
+        source?.stop();
         state.capture?.stop();
         state.capture = null;
       };
@@ -216,16 +227,21 @@ export const createDeepgramStt = ({
       document.addEventListener('visibilitychange', handleVisibility);
       run.stop = stop;
       run.cancel = cancel;
-      startPcmCapture({ stream, onFrame: send }).then(
-        (capture) => {
-          if (state.isDone || state.isClosing) capture.stop();
-          else state.capture = capture;
-        },
-        (error: unknown) => {
-          console.error('Microphone capture did not start', error);
-          fail(null);
-        },
-      );
+      if (source) {
+        source.preRoll.forEach(send);
+        source.subscribe(send);
+      } else if (stream) {
+        startPcmCapture({ stream, onFrame: send }).then(
+          (capture) => {
+            if (state.isDone || state.isClosing) capture.stop();
+            else state.capture = capture;
+          },
+          (error: unknown) => {
+            console.error('Microphone capture did not start', error);
+            fail(null);
+          },
+        );
+      }
 
       const timeout = new Promise<null>((resolve) =>
         window.setTimeout(() => resolve(null), tokenWaitMs),

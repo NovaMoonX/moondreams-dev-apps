@@ -2,6 +2,8 @@ export type VoiceRoute = 'cloud' | 'device';
 
 export type CloudHeldReason = 'listenLimit' | 'mintLimit' | 'budgetReached';
 
+export type SpeechHeldReason = 'speechLimit' | 'budgetReached';
+
 /** ack: a code-built confirmation of what was done · reply: an answer · summary: a long read. */
 export type SpeechPriority = 'ack' | 'reply' | 'summary';
 
@@ -13,8 +15,20 @@ export interface SttStartOptions {
   onFinal: (text: string) => void;
   onSpeechStart: () => void;
   onError: (code: SttErrorCode) => void;
+  /** The adapter is ready to hear and the microphone is live; only an adapter that takes a while to get ready calls it. */
+  onListening?: () => void;
   /** The audio just before the tap, for adapters that keep a buffer; always null for now. */
   preRoll: Float32Array | null;
+}
+
+/** A microphone already open and running through the capture worklet: the frames from just before it was handed over, then the live ones. */
+export interface FrameSource {
+  /** 16 kHz mono 16-bit little-endian frames, oldest first. */
+  preRoll: ArrayBuffer[];
+  /** Gets every later frame, including any that arrived before this call; call once. */
+  subscribe: (onFrame: (frame: ArrayBuffer) => void) => void;
+  /** Releases the microphone. */
+  stop: () => void;
 }
 
 export interface SttAdapter {
@@ -38,7 +52,8 @@ export interface TtsSpeakOptions {
 export interface TtsAdapter {
   id: string;
   route: VoiceRoute;
-  speak: (text: string, options: TtsSpeakOptions) => Promise<void>;
+  /** Resolves with the id of what actually played (provider-qualified for the cloud, the fallback's id when it stood in); void means this adapter's id. */
+  speak: (text: string, options: TtsSpeakOptions) => Promise<string | void>;
   /** True when the audio goes through the page's audio graph, so the browser's echo cancellation hears it. */
   isPlayingThroughWebAudio: boolean;
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isForcedFixture, isRunningInEmulator } from '../emulator.js';
 
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -94,9 +95,10 @@ export const mintVoiceToken = onCall(
         : 'UTC';
     const closed = toClosed(data.closed);
 
-    const apiKey = await secretReader(KEY_NAME, AbortSignal.timeout(4_000));
-    const isEmulatorStub =
-      apiKey === null && process.env.FUNCTIONS_EMULATOR === 'true';
+    const apiKey = isForcedFixture('deepgram')
+      ? null
+      : await secretReader(KEY_NAME, AbortSignal.timeout(4_000));
+    const isEmulatorStub = apiKey === null && isRunningInEmulator();
     if (apiKey === null && !isEmulatorStub) {
       if (!keyState.isMissingLogged) {
         keyState.isMissingLogged = true;

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 import {
   createListeningState,
@@ -22,6 +23,7 @@ import {
   readWakePhrase,
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
+import { createSpeechGate } from '../../src/lib/speech/voice/bargeIn.ts';
 import { createDeepgramAura } from '../../functions/src/voice/providers/deepgramAura.ts';
 import { createGeminiTts } from '../../functions/src/voice/providers/geminiTts.ts';
 import { createGoogleTts } from '../../functions/src/voice/providers/googleTts.ts';
@@ -31,17 +33,24 @@ import type { TtsProvider } from '../../functions/src/voice/providers/types.ts';
 import {
   getLocalDayKey,
   planListen,
+  planSpeech,
+  planTranscribe,
+  planTranscribeSettle,
   type ListenUsage,
 } from '../../functions/src/voice/usage.ts';
 import {
   costMicros,
   listenCostMicros,
+  transcribeCostMicros,
   TTS_PRICES,
   VOICE_DAILY_BUDGET_CENTS,
   VOICE_UTTERANCE_MS,
   type TtsProviderId,
 } from '../../functions/src/voice/voiceConfig.ts';
+import { readSpeechRequest } from '../../functions/src/voice/streamSpeech.ts';
 import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
+import { createCloudTts } from '../../src/lib/speech/voice/cloudTts.ts';
+import type { SpeechSource } from '../../src/lib/speech/voice/speechSource.ts';
 import { createPlaybackQueue } from '../../src/lib/speech/voice/playbackQueue.ts';
 import {
   createVoiceTokenSource,
@@ -52,7 +61,14 @@ import type { TtsAdapter } from '../../src/lib/speech/voice/types.ts';
 import {
   pickListener,
   pickSpeaker,
+  pickWakeListener,
 } from '../../src/lib/speech/voice/voiceRouter.ts';
+import {
+  isOnDeviceLang,
+  ON_DEVICE_FILES,
+  ON_DEVICE_SIZE_MB,
+} from '../../src/lib/speech/onDevice/config.ts';
+import { toHeardText } from '../../src/lib/speech/onDevice/onDeviceStt.ts';
 import { getVoiceQuality, pickVoice } from '../../src/utils/speechUtils.ts';
 
 const sharedFiles = [
@@ -64,6 +80,7 @@ const sharedFiles = [
     .map((name) => new URL(`../../src/lib/speech/${name}`, import.meta.url)),
   new URL('../../src/hooks/useSpeechCommands.ts', import.meta.url),
   new URL('../../src/hooks/useNaturalVoice.ts', import.meta.url),
+  new URL('../../src/hooks/useOnDeviceRecognition.ts', import.meta.url),
   new URL('../../src/hooks/useVoiceConversation.ts', import.meta.url),
   new URL('../../src/components/NaturalVoiceOption.tsx', import.meta.url),
   ...['../../functions/src/voice/', '../../scripts/voice/'].flatMap((folder) =>
@@ -87,8 +104,9 @@ assert.ok(
     sharedPaths.some((path) =>
       path.endsWith('/voice/providers/geminiTts.ts'),
     ) &&
-    sharedPaths.some((path) => path.endsWith('/voice/benchmark.ts')),
-  'the voice service, its hook, the providers and the benchmark are among the files scanned',
+    sharedPaths.some((path) => path.endsWith('/voice/benchmark.ts')) &&
+    sharedPaths.some((path) => path.endsWith('/voice/transcribe.ts')),
+  'the voice service, its hook, the providers, the benchmark and the recording reader are among the files scanned',
 );
 ['a recipe', 'Helm', 'the Nomos voice'].forEach((planted) =>
   assert.ok(APP_WORDS.test(planted), `"${planted}" is caught as an app word`),
@@ -346,6 +364,148 @@ assert.equal(
 
 console.log('speechShared: all checks passed');
 
+{
+  const FRAME_SAMPLES = 480;
+  const frameAt = (index: number, make: (sample: number) => number) =>
+    Int16Array.from({ length: FRAME_SAMPLES }, (_, offset) =>
+      Math.round(make(index * FRAME_SAMPLES + offset) * 32767),
+    );
+  const tone = (hz: number, amplitude: number) => (sample: number) =>
+    amplitude * Math.sin((2 * Math.PI * hz * sample) / 16000);
+  const voiced = (amplitude: number) => {
+    const parts = [tone(180, 1), tone(540, 0.6), tone(1260, 0.3)];
+    return (sample: number) =>
+      (amplitude / 1.9) * parts.reduce((sum, part) => sum + part(sample), 0);
+  };
+  const quiet = () => 0;
+  const room = (sample: number) => 0.002 * Math.sin(sample * 12.9898);
+  const run = (
+    signals: { frames: number; make: (sample: number) => number }[],
+  ) => {
+    const gate = createSpeechGate();
+    const frames = signals.flatMap(({ frames: count, make }) =>
+      Array.from({ length: count }, () => make),
+    );
+    return frames.map((make, index) => gate.push(frameAt(index, make)));
+  };
+
+  assert.ok(
+    !run([{ frames: 200, make: quiet }]).some((read) => read.isTriggered),
+    'silence never triggers the speech gate',
+  );
+  assert.ok(
+    !run([{ frames: 200, make: room }]).some((read) => read.isTriggered),
+    'a quiet room never triggers the speech gate',
+  );
+  const spoken = run([
+    { frames: 30, make: room },
+    { frames: 7, make: voiced(0.3) },
+  ]);
+  assert.equal(
+    spoken.findIndex((read) => read.isTriggered),
+    36,
+    '200 ms of voice triggers the speech gate on its seventh frame',
+  );
+  const trigger = spoken[36];
+  assert.equal(
+    trigger.preRoll.length,
+    10,
+    'the pre-roll holds the last 300 ms',
+  );
+  assert.ok(
+    trigger.preRoll
+      .slice(-7)
+      .every((frame) => frame.some((sample) => Math.abs(sample) > 2000)) &&
+      trigger.preRoll
+        .slice(0, 3)
+        .every((frame) => frame.every((sample) => Math.abs(sample) < 200)),
+    'the pre-roll is the quiet before the voice and then the voice itself',
+  );
+  assert.deepEqual(
+    spoken.slice(0, 36).map((read) => read.preRoll.length),
+    Array.from({ length: 36 }, () => 0),
+    'nothing is handed over before the trigger',
+  );
+  assert.ok(
+    !run([
+      { frames: 30, make: room },
+      { frames: 1, make: voiced(0.6) },
+      { frames: 30, make: room },
+      { frames: 1, make: voiced(0.6) },
+      { frames: 30, make: room },
+    ]).some((read) => read.isTriggered),
+    'a click or two loud frames apart is not speech',
+  );
+  const hum = (amplitude: number) => voiced(amplitude);
+  assert.ok(
+    !run([{ frames: 400, make: hum(0.2) }]).some((read) => read.isTriggered),
+    'a steady hum that was there when the gate opened never triggers it',
+  );
+  assert.ok(
+    !run([
+      { frames: 10, make: () => 0 },
+      { frames: 400, make: hum(0.2) },
+    ]).some((read) => read.isTriggered),
+    'a hum that starts after the zeros of a microphone still starting never triggers it',
+  );
+  assert.ok(
+    run([
+      { frames: 40, make: () => 0 },
+      { frames: 7, make: voiced(0.3) },
+    ]).some((read) => read.isTriggered),
+    'a voice still triggers it after a long digital silence',
+  );
+  const swell = (sample: number) =>
+    hum(0.01 * 1.004 ** Math.floor(sample / FRAME_SAMPLES))(sample);
+  assert.ok(
+    !run([{ frames: 600, make: swell }]).some((read) => read.isTriggered),
+    'a hum that swells slowly is followed by the noise floor and never triggers it',
+  );
+  assert.ok(
+    !run([
+      { frames: 100, make: (sample) => 0.3 * Math.sin(sample * 1.7) },
+    ]).some((read) => read.isTriggered),
+    'hiss outside the voice band never triggers the speech gate',
+  );
+  const runAt20 = (
+    signals: { frames: number; make: (sample: number) => number }[],
+  ) => {
+    const gate = createSpeechGate({ frameMs: 20 });
+    const frames = signals.flatMap(({ frames: count, make }) =>
+      Array.from({ length: count }, () => make),
+    );
+    return frames.map((make, index) =>
+      gate.push(
+        Int16Array.from({ length: 320 }, (_, offset) =>
+          Math.round(make(index * 320 + offset) * 32767),
+        ),
+      ),
+    );
+  };
+  const spokenAt20 = runAt20([
+    { frames: 45, make: room },
+    { frames: 10, make: voiced(0.3) },
+  ]);
+  assert.equal(
+    spokenAt20.findIndex((read) => read.isTriggered),
+    54,
+    "with the microphone's 20 ms frames, 200 ms of voice triggers the gate on its tenth frame",
+  );
+  assert.equal(
+    spokenAt20[54]?.preRoll.length,
+    15,
+    'with 20 ms frames the pre-roll holds the last 300 ms',
+  );
+  assert.ok(
+    !runAt20([
+      { frames: 15, make: quiet },
+      { frames: 600, make: hum(0.2) },
+    ]).some((read) => read.isTriggered),
+    'with 20 ms frames a hum after a microphone still starting never triggers it',
+  );
+  console.log('speechShared: speech gate checks passed');
+}
+
 const voice = (
   name: string,
   lang: string,
@@ -516,8 +676,14 @@ const CLOUD_ON = {
   isCloudAllowed: true,
   isCloudHeld: false,
   hasCloud: true,
+  isOnDeviceReady: false,
 };
 assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
+assert.equal(
+  pickListener({ ...CLOUD_ON, isOnDeviceReady: true }),
+  'cloud',
+  'the cloud still listens when allowed, with the model downloaded',
+);
 (
   [
     { isOnline: false },
@@ -531,7 +697,41 @@ assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
     'browser',
     `${Object.keys(off)[0]} off listens with the browser`,
   );
+  assert.equal(
+    pickListener({ ...CLOUD_ON, ...off, isOnDeviceReady: true }),
+    'onDevice',
+    `${Object.keys(off)[0]} off listens on the device once the model is downloaded`,
+  );
 });
+assert.equal(pickWakeListener({ isOnDeviceReady: true }), 'onDevice');
+assert.equal(pickWakeListener({ isOnDeviceReady: false }), 'browser');
+assert.ok(isOnDeviceLang('en-GB') && !isOnDeviceLang('fr-FR'));
+assert.equal(
+  toHeardText(['WHAT DO I HAVE TODAY', '']),
+  'What do I have today',
+  'the model words read as a sentence',
+);
+assert.equal(toHeardText(['  ', '']), '', 'silence reads as nothing');
+ON_DEVICE_FILES.forEach((file) => {
+  const served = readFileSync(
+    new URL(`../../public${file.url}`, import.meta.url),
+  );
+  assert.equal(served.length, file.bytes, `${file.url} has the listed size`);
+  assert.equal(
+    createHash('sha256').update(served).digest('hex'),
+    file.sha256,
+    `${file.url} has the listed hash`,
+  );
+});
+assert.ok(
+  readFileSync(
+    new URL('../../public/speech/asr/NOTICE', import.meta.url),
+    'utf8',
+  ).length > 0,
+  'the recognizer files keep their licences beside them',
+);
+assert.equal(ON_DEVICE_SIZE_MB, 57, 'the size the row states is the real one');
+console.log('speechShared: on-device recognition checks passed');
 {
   const requests: MintVoiceTokenRequest[] = [];
   const state = { isFailing: false, isKeyless: false };
@@ -583,35 +783,54 @@ assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
     'a report the server could not count (held unavailable) is sent again',
   );
 }
+const SPEAKER_ON = {
+  isOnline: true,
+  priority: 'reply',
+  isNaturalVoiceReady: false,
+  isCloudAllowed: true,
+  isCloudHeld: false,
+  hasCloud: true,
+} as const;
+assert.equal(
+  pickSpeaker(SPEAKER_ON),
+  'cloud',
+  'a reply with all on is spoken in the cloud',
+);
+assert.equal(
+  pickSpeaker({ ...SPEAKER_ON, priority: 'summary' }),
+  'cloud',
+  'a summary is spoken in the cloud',
+);
+assert.equal(
+  pickSpeaker({ ...SPEAKER_ON, priority: 'ack', isNaturalVoiceReady: true }),
+  'natural',
+  'an ack never goes to the cloud',
+);
+assert.equal(
+  pickSpeaker({ ...SPEAKER_ON, priority: 'ack' }),
+  'system',
+  'an ack goes to the system voice when the natural one is not ready',
+);
 (
   [
-    [{ isOnline: true, priority: 'ack', isNaturalVoiceReady: true }, 'natural'],
-    [{ isOnline: true, priority: 'ack', isNaturalVoiceReady: false }, 'system'],
-    [
-      { isOnline: false, priority: 'reply', isNaturalVoiceReady: true },
-      'natural',
-    ],
-    [
-      { isOnline: true, priority: 'summary', isNaturalVoiceReady: false },
-      'system',
-    ],
-    [
-      {
-        isOnline: true,
-        priority: 'reply',
-        isNaturalVoiceReady: false,
-        isCloudAvailable: true,
-      },
-      'system',
-    ],
+    { isOnline: false },
+    { isCloudAllowed: false },
+    { isCloudHeld: true },
+    { hasCloud: false },
   ] as const
-).forEach(([input, expected]) =>
+).forEach((off) => {
+  const key = Object.keys(off)[0];
   assert.equal(
-    pickSpeaker(input),
-    expected,
-    `${JSON.stringify(input)} speaks with ${expected}`,
-  ),
-);
+    pickSpeaker({ ...SPEAKER_ON, ...off }),
+    'system',
+    `${key} off speaks with the system voice`,
+  );
+  assert.equal(
+    pickSpeaker({ ...SPEAKER_ON, ...off, isNaturalVoiceReady: true }),
+    'natural',
+    `${key} off speaks with the natural voice when it is ready`,
+  );
+});
 
 const played: string[] = [];
 const finishers = new Map<string, () => void>();
@@ -710,6 +929,122 @@ assert.deepEqual(
   'clear stops what plays and drops what waits',
 );
 console.log('speechShared: voice router and playback queue checks passed');
+
+{
+  const calls: string[] = [];
+  const held: string[] = [];
+  const fallback: TtsAdapter = {
+    id: 'system',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: async (text) => {
+      calls.push(text);
+    },
+  };
+  const controller = new AbortController();
+  const options = {
+    priority: 'reply' as const,
+    signal: controller.signal,
+    onStart: () => undefined,
+    onEnd: () => undefined,
+  };
+  const fetched: string[] = [];
+  const cloudWith = (
+    fetchSpeech: SpeechSource['fetchSpeech'],
+    firstByteMs = 20,
+  ) =>
+    createCloudTts({
+      source: {
+        fetchSpeech: (text, priority, signal) => {
+          fetched.push(text);
+          return fetchSpeech(text, priority, signal);
+        },
+      },
+      fallback,
+      firstByteMs,
+      onHeld: (reason) => held.push(reason),
+    });
+  const heldResult = await cloudWith(async () => ({
+    status: 'held',
+    reason: 'speechLimit',
+  })).speak('Hello there', options);
+  assert.equal(heldResult, 'system', 'a held answer is spoken by the fallback');
+  assert.deepEqual(held, ['speechLimit'], 'a held answer reports its reason');
+  assert.equal(
+    await cloudWith(async () => ({ status: 'unavailable' })).speak(
+      'Two',
+      options,
+    ),
+    'system',
+    'an unavailable answer is spoken by the fallback',
+  );
+  assert.equal(
+    await cloudWith(() => new Promise<never>(() => undefined)).speak(
+      'Three',
+      options,
+    ),
+    'system',
+    'a source that never answers falls back after the first-byte clock',
+  );
+  const fetchedBefore = fetched.length;
+  assert.equal(
+    await cloudWith(async () => ({ status: 'unavailable' })).speak(
+      'word '.repeat(130),
+      options,
+    ),
+    'system',
+    'a long text goes straight to the fallback',
+  );
+  assert.equal(fetched.length, fetchedBefore, 'a long text is never fetched');
+  const callsBefore = calls.length;
+  const aborting = new AbortController();
+  const pending = cloudWith(
+    () => new Promise<never>(() => undefined),
+    200,
+  ).speak('Four', { ...options, signal: aborting.signal });
+  aborting.abort();
+  await pending;
+  assert.equal(
+    calls.length,
+    callsBefore,
+    'an abort before the first byte plays nothing',
+  );
+  const startedWith: string[] = [];
+  const spokeBy = await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({
+        status: 'ready',
+        provider: 'googleTts',
+        body: new ReadableStream<Uint8Array>({
+          start: (stream) => {
+            stream.enqueue(new Uint8Array([1, 2, 3]));
+            stream.close();
+          },
+        }),
+      }),
+    },
+    fallback,
+    player: {
+      decode: async (bytes) => {
+        startedWith.push(`decoded ${bytes.byteLength}`);
+        return {} as AudioBuffer;
+      },
+      play: async (_audio, _signal, onStart) => onStart(),
+    },
+  }).speak('Five', options);
+  assert.equal(
+    spokeBy,
+    'cloud:googleTts',
+    'a played answer reports the cloud and its provider',
+  );
+  assert.deepEqual(startedWith, ['decoded 3'], 'the whole answer is decoded');
+  assert.equal(
+    calls.includes('Five'),
+    false,
+    'a played answer never reaches the fallback',
+  );
+}
+console.log('speechShared: cloud voice checks passed');
 
 const apiKey = 'sk-test-key-123';
 interface Call {
@@ -1175,9 +1510,15 @@ const listenLimits = {
   listenMsPerDay: 3_600_000,
   mintsPerDay: 300,
   spokenCharsPerDay: 30_000,
+  voices: { googleTts: 'g', deepgramAura: 'd', geminiTts: 'm' },
 };
 const worstCase = listenCostMicros(VOICE_UTTERANCE_MS);
-const emptyUsage: ListenUsage = { listenMs: 0, mints: 0, openMints: {} };
+const emptyUsage: ListenUsage = {
+  listenMs: 0,
+  transcribeMs: null,
+  mints: 0,
+  openMints: {},
+};
 const plan = (overrides: Partial<Parameters<typeof planListen>[0]> = {}) =>
   planListen({
     usage: emptyUsage,
@@ -1189,7 +1530,12 @@ const plan = (overrides: Partial<Parameters<typeof planListen>[0]> = {}) =>
     worstCaseMicros: worstCase,
     ...overrides,
   });
-const openUsage: ListenUsage = { listenMs: 0, mints: 1, openMints: { a: 1 } };
+const openUsage: ListenUsage = {
+  listenMs: 0,
+  transcribeMs: null,
+  mints: 1,
+  openMints: { a: 1 },
+};
 assert.equal(
   plan({
     usage: openUsage,
@@ -1204,7 +1550,7 @@ assert.equal(
   'a negative report adds nothing',
 );
 const replayed = plan({
-  usage: { listenMs: 0, mints: 1, openMints: {} },
+  usage: { listenMs: 0, transcribeMs: null, mints: 1, openMints: {} },
   closed: [
     { mintId: 'a', ms: 5_000 },
     { mintId: 'zzz', ms: 5_000 },
@@ -1240,6 +1586,105 @@ assert.equal(
   0,
   'a stream still inside its report window is not charged',
 );
+const fiveMinutes = 300_000;
+const transcribePlan = (
+  overrides: Partial<Parameters<typeof planTranscribe>[0]> = {},
+) =>
+  planTranscribe({
+    usage: { listenMs: 0, transcribeMs: 0 },
+    budgetMicros: 0,
+    limits: listenLimits,
+    worst: { ms: fiveMinutes, micros: transcribeCostMicros(fiveMinutes) },
+    claimed: { ms: fiveMinutes, micros: transcribeCostMicros(fiveMinutes) },
+    ...overrides,
+  });
+assert.equal(
+  transcribeCostMicros(60_000),
+  4_300,
+  'a minute of recording is priced at the pre-recorded rate',
+);
+const reserved = transcribePlan();
+assert.deepEqual(
+  [reserved.held, reserved.transcribeMs, reserved.budgetDeltaMicros],
+  [null, fiveMinutes, transcribeCostMicros(fiveMinutes)],
+  'a recording reserves its worst case',
+);
+assert.equal(
+  transcribePlan({
+    usage: { listenMs: 3_600_000 - fiveMinutes, transcribeMs: 0 },
+  }).held,
+  null,
+  'a recording that just fits is let through',
+);
+assert.equal(
+  transcribePlan({
+    usage: { listenMs: 3_000_000, transcribeMs: 400_000 },
+  }).held,
+  'listenLimit',
+  'listening and recordings share the day, held when the reserve would pass it',
+);
+const claimOf = (ms: number) => ({ ms, micros: transcribeCostMicros(ms) });
+const fourMinutesLeft = { listenMs: 3_600_000 - 240_000, transcribeMs: 0 };
+assert.deepEqual(
+  (({ held, reserved }) => [held, reserved.ms])(
+    transcribePlan({ usage: fourMinutesLeft, claimed: claimOf(10_000) }),
+  ),
+  [null, 10_000],
+  'a short claim is reserved at its own length when the worst case does not fit',
+);
+assert.equal(
+  transcribePlan({ usage: fourMinutesLeft, claimed: claimOf(270_000) }).held,
+  'listenLimit',
+  'a claim longer than what is left is still held',
+);
+assert.deepEqual(
+  transcribePlan({
+    usage: { listenMs: 3_600_000, transcribeMs: 0 },
+  }).budgetDeltaMicros,
+  0,
+  'a held recording charges nothing',
+);
+assert.equal(
+  transcribePlan({
+    budgetMicros: VOICE_DAILY_BUDGET_CENTS * 10_000,
+  }).held,
+  'budgetReached',
+  'the site cap holds a recording',
+);
+assert.equal(
+  plan({ usage: { ...emptyUsage, transcribeMs: 3_600_000 } }).held,
+  'listenLimit',
+  'minutes of recordings count against streamed listening',
+);
+const settledShort = planTranscribeSettle({
+  usage: { transcribeMs: fiveMinutes },
+  reservedMs: fiveMinutes,
+  reservedMicros: transcribeCostMicros(fiveMinutes),
+  actualMs: 42_000,
+  actualMicros: transcribeCostMicros(42_000),
+});
+assert.equal(
+  settledShort.transcribeMs,
+  42_000,
+  'a short one is charged as long as it was',
+);
+assert.ok(
+  settledShort.budgetDeltaMicros < 0,
+  'and the rest of the reserve comes back',
+);
+const settledLong = planTranscribeSettle({
+  usage: { transcribeMs: fiveMinutes },
+  reservedMs: fiveMinutes,
+  reservedMicros: transcribeCostMicros(fiveMinutes),
+  actualMs: fiveMinutes + 6_000,
+  actualMicros: transcribeCostMicros(fiveMinutes + 6_000),
+});
+assert.equal(
+  settledLong.transcribeMs,
+  fiveMinutes + 6_000,
+  'one longer than the reserve is charged in full',
+);
+assert.ok(settledLong.budgetDeltaMicros > 0, 'and its extra cost is added');
 const burst = Array.from({ length: 300 }).reduce<{
   usage: ListenUsage;
   failures: number;
@@ -1286,5 +1731,102 @@ assert.deepEqual(
   [heldPlan.held, heldPlan.usage.listenMs, heldPlan.budgetDeltaMicros],
   ['budgetReached', 7_000, 0],
   'a held plan saves the closed reports and charges nothing',
+);
+// speaking server
+const speechLimits = listenLimits;
+const speak = (over: Partial<Parameters<typeof planSpeech>[0]> = {}) =>
+  planSpeech({
+    usage: { spokenChars: 0 },
+    budgetMicros: 0,
+    limits: speechLimits,
+    characters: 100,
+    costMicros: 3_000,
+    ...over,
+  });
+const speakOk = speak({ usage: { spokenChars: 500 } });
+assert.deepEqual(
+  [speakOk.held, speakOk.spokenChars, speakOk.budgetDeltaMicros],
+  [null, 600, 3_000],
+  'a line under the limit adds its characters and charges its cost',
+);
+assert.equal(
+  speak({ usage: { spokenChars: 29_900 } }).held,
+  null,
+  'exactly reaching the daily characters is allowed',
+);
+assert.equal(
+  speak({ usage: { spokenChars: 29_901 } }).held,
+  'speechLimit',
+  'one character over is held at the speech limit',
+);
+assert.equal(
+  speak({
+    budgetMicros: VOICE_DAILY_BUDGET_CENTS * 10_000 - 3_000 + 1,
+  }).held,
+  'budgetReached',
+  'a budget one cost short is held',
+);
+const speakHeld = speak({ usage: { spokenChars: 29_901 } });
+assert.deepEqual(
+  [speakHeld.spokenChars, speakHeld.budgetDeltaMicros],
+  [29_901, 0],
+  'a held line charges nothing',
+);
+const speechOrigin = 'https://apps.moondreams.dev';
+const speechBody = {
+  appId: 'helm',
+  text: 'Hello there',
+  priority: 'reply',
+  timeZone: 'Not/AZone',
+};
+const read = (over: Partial<Parameters<typeof readSpeechRequest>[0]> = {}) =>
+  readSpeechRequest({
+    method: 'POST',
+    origin: speechOrigin,
+    body: speechBody,
+    allowedOrigins: [speechOrigin],
+    ...over,
+  });
+const readFailure = (result: ReturnType<typeof read>) =>
+  result.ok ? null : [result.status, result.error];
+assert.deepEqual(
+  readFailure(read({ method: 'GET' })),
+  [405, 'method'],
+  'GET is refused',
+);
+assert.deepEqual(
+  readFailure(read({ origin: 'https://evil.example' })),
+  [403, 'origin'],
+  'another origin is refused',
+);
+assert.deepEqual(
+  readFailure(read({ origin: undefined })),
+  [403, 'origin'],
+  'no origin is refused',
+);
+assert.deepEqual(
+  readFailure(read({ body: { ...speechBody, text: 'a'.repeat(601) } })),
+  [413, 'too-long'],
+  '601 characters are too long',
+);
+assert.deepEqual(
+  readFailure(read({ body: { ...speechBody, text: '   ' } })),
+  [400, 'text'],
+  'empty text is refused',
+);
+assert.deepEqual(
+  readFailure(read({ body: { ...speechBody, appId: 'nope' } })),
+  [400, 'app'],
+  'an unknown app is refused',
+);
+const goodRead = read();
+assert.ok(
+  goodRead.ok && goodRead.text === 'Hello there' && goodRead.appId === 'helm',
+  'a good request passes',
+);
+const longZone = read({ body: { ...speechBody, timeZone: 'x'.repeat(65) } });
+assert.ok(
+  longZone.ok && longZone.timeZone === 'UTC',
+  'a bad time zone is read as UTC',
 );
 console.log('speechShared: voice provider checks passed');

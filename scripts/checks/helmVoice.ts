@@ -15,7 +15,11 @@ import { UNDO_PHRASES } from '../../src/apps/helm/constants.ts';
 import {
   isUndoPhrase,
   normalizeSaid,
+  toWakeSpellings,
 } from '../../src/apps/helm/utils/voicePhrases.ts';
+import type { HelmQuestion } from '../../src/apps/helm/types.ts';
+import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
+import { readWakePhrase } from '../../src/lib/speech/speechText.ts';
 
 const NOW = Date.UTC(2026, 10, 9, 20, 0);
 const ZONE = 'America/Los_Angeles';
@@ -139,6 +143,9 @@ const commands: NomosCommand[] = [
     title: 'Call the florist',
     due: { kind: 'day', date: Date.UTC(2026, 10, 13) },
     isUrgent: false,
+    whoRefs: [],
+    placeRefs: [],
+    projectRef: null,
   },
 ];
 const sealedFor = (inputMode: string) => {
@@ -198,4 +205,64 @@ assert.deepEqual(
   'the undo phrases',
 );
 
-console.log('check:helm-voice: spoken lines and undo phrases passed.');
+const wake = (heard: string, name = 'Nomos') =>
+  readWakePhrase(heard, toWakeSpellings(name))?.rests[0] ?? undefined;
+assert.equal(wake('Hey Nomos'), '', 'the phrase alone wakes it');
+assert.equal(wake('hey, Nomos.'), '', 'punctuation is ignored');
+assert.equal(
+  wake('Okay hey Nomos call Sam at five'),
+  'call sam at five',
+  'what follows the phrase is the turn',
+);
+assert.equal(
+  wake('Nomos call Sam'),
+  undefined,
+  'the name alone does not wake it',
+);
+assert.equal(
+  wake('tell Sam hey Nomos'),
+  undefined,
+  'the phrase is only matched at the start',
+);
+assert.equal(
+  wake('Hey Pepper', 'Pepper'),
+  '',
+  'renaming the assistant renames the phrase',
+);
+assert.equal(
+  wake('Hey Nomos', 'Pepper'),
+  undefined,
+  'the old name no longer wakes it',
+);
+
+const dayQuestion: HelmQuestion = {
+  kind: 'asked',
+  builtBy: 'model',
+  shape: 'dateTime',
+  prompt: 'When is it due?',
+  options: [],
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: 'date',
+  number: null,
+  aboutRef: null,
+  answer: null,
+};
+const readDay = (text: string) =>
+  matchSpokenAnswer(text, dayQuestion, { now: NOW, timeZone: ZONE });
+assert.equal(readDay('Friday')?.kind, 'answer', 'a day on its own is placed');
+assert.equal(
+  readDay('on Friday please')?.kind,
+  'answer',
+  'a day with filler words is placed',
+);
+assert.equal(
+  readDay('remind me Friday to call Dana'),
+  null,
+  'a day inside another request is not an answer',
+);
+
+console.log(
+  'check:helm-voice: spoken lines, undo phrases and the wake phrase passed.',
+);

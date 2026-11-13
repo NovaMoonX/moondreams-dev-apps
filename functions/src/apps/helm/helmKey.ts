@@ -31,6 +31,9 @@ export const deriveSeedDataKey = (keyring: Keyring, uid: string) =>
 export const wrappedKeyPath = (uid: string) =>
   `apps/helm/server/${uid}/keys/data`;
 
+export const dropBoxKeyPath = (uid: string) =>
+  `apps/helm/server/${uid}/keys/dropBox`;
+
 /** What a master key's canary seals: a fixed value, so a wrong key or a damaged document is told apart from a healthy one. */
 export const KEY_CHECK_VALUE = 'helm-master-key-check-v1';
 
