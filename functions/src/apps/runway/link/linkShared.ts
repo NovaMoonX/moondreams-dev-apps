@@ -28,6 +28,7 @@ export const provider: BankDataProvider = {
   exchange: (publicToken) => pickProvider().exchange(publicToken),
   getInstitution: (grant) => pickProvider().getInstitution(grant),
   listAccounts: (grant, options) => pickProvider().listAccounts(grant, options),
+  listCardStatements: (grant) => pickProvider().listCardStatements(grant),
   refreshTransactions: (grant) => pickProvider().refreshTransactions(grant),
   listTransactionDetails: (grant, startDate, endDate) =>
     pickProvider().listTransactionDetails(grant, startDate, endDate),

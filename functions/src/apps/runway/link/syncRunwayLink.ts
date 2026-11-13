@@ -536,6 +536,107 @@ async function writeBalances(
   });
 }
 
+const STATEMENTS_GAP_MS = 12 * 3_600_000;
+const STATEMENTS_UNSUPPORTED_GAP_MS = 7 * 86_400_000;
+
+const areStatementsDue = (
+  grantDoc: ProviderGrantDoc,
+  isStatementsDue: boolean,
+  now: number,
+) => {
+  if (isStatementsDue) return true;
+  const checkedAt = grantDoc.statementsCheckedAt;
+  if (typeof checkedAt !== 'number') return true;
+  return (
+    now - checkedAt >=
+    (grantDoc.isStatementsUnsupported === true
+      ? STATEMENTS_UNSUPPORTED_GAP_MS
+      : STATEMENTS_GAP_MS)
+  );
+};
+
+/** Keeps the readable `needsCardConsent` flag in step with the provider's answer, writing only on a change. */
+async function setNeedsCardConsent(
+  firestore: Firestore,
+  linkRef: DocumentReference,
+  value: boolean,
+) {
+  await writeUnlessRevoked(firestore, linkRef, (transaction) =>
+    transaction.update(linkRef, { needsCardConsent: value }),
+  );
+}
+
+async function writeCardStatements(
+  firestore: Firestore,
+  uid: string,
+  linkId: string,
+  grant: ProviderGrant,
+  grantRef: DocumentReference,
+  linkRef: DocumentReference,
+  planKey: PlanKey,
+  targets: ReadonlyMap<string, Target>,
+  hadConsentFlag: boolean | null,
+) {
+  const read = await provider.listCardStatements(grant);
+  if (read.kind === 'notReady') return;
+  const now = Date.now();
+  if (read.kind === 'needsConsent') {
+    await grantRef.update({
+      statementsCheckedAt: now,
+      isStatementsUnsupported: false,
+    });
+    if (hadConsentFlag !== true) {
+      await setNeedsCardConsent(firestore, linkRef, true);
+    }
+    return;
+  }
+  if (read.kind === 'unsupported') {
+    await grantRef.update({
+      statementsCheckedAt: now,
+      isStatementsUnsupported: true,
+    });
+    return;
+  }
+  const writes = read.statements.flatMap((statement): Write[] => {
+    const cardId = targets.get(statement.providerAccountId)?.cardId ?? null;
+    if (cardId === null) return [];
+    return [
+      {
+        kind: 'set',
+        ref: firestore.doc(planDocPath(uid, 'cardStatements', cardId)),
+        data: {
+          id: cardId,
+          asOf: now,
+          sealed: sealWithKey(
+            planKey,
+            {
+              minimumCents: statement.minimumCents,
+              statementCents: statement.statementCents,
+              statementOn: statement.statementOn,
+              dueOn: statement.dueOn,
+              lastPaymentCents: statement.lastPaymentCents,
+              lastPaymentOn: statement.lastPaymentOn,
+            },
+            SEALED_SCHEMA_VERSION,
+          ),
+        },
+      },
+    ];
+  });
+  await commitWrites(firestore, writes);
+  await grantRef.update({
+    statementsCheckedAt: now,
+    isStatementsUnsupported: false,
+  });
+  if (hadConsentFlag !== false) {
+    await setNeedsCardConsent(firestore, linkRef, false);
+  }
+  logger.info('runway.sync.statementsWritten', {
+    linkId,
+    count: writes.length,
+  });
+}
+
 function openStoredBalance(planKey: PlanKey, data: DocumentData) {
   try {
     return openWithKey(planKey.key, data.sealed as SealedPayload);
@@ -659,7 +760,7 @@ async function fillTransactionDetails(
 
 /**
  * Brings one link's new bank transactions in as purchases waiting in Needs a home, then refreshes the balances and the
- * sync time. One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
+ * sync time, and, for a link with a card, that card's statement (at most twice a day unless asked). One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
  * counts and the link id only.
  */
 export async function syncRunwayLink(
@@ -667,7 +768,9 @@ export async function syncRunwayLink(
   keyring: Keyring,
   uid: string,
   linkId: string,
-  options: { isFresh: boolean } = { isFresh: false },
+  options: { isFresh: boolean; isStatementsDue?: boolean } = {
+    isFresh: false,
+  },
 ): Promise<LinkSyncResult> {
   const empty = { linkId, created: 0, updated: 0, removed: 0 };
   const grantRef = firestore.doc(`${grantsPath(uid)}/${linkId}`);
@@ -758,6 +861,32 @@ export async function syncRunwayLink(
         code: error instanceof ProviderError ? error.code : null,
       });
     });
+    const hasCardTarget = [...targets.values()].some(
+      (target) => target.cardId !== null,
+    );
+    if (
+      hasCardTarget &&
+      areStatementsDue(grantDoc, options.isStatementsDue === true, Date.now())
+    ) {
+      const consentFlag: unknown = linkSnapshot.data()?.needsCardConsent;
+      await writeCardStatements(
+        firestore,
+        uid,
+        linkId,
+        grant,
+        grantRef,
+        linkRef,
+        planKey,
+        targets,
+        typeof consentFlag === 'boolean' ? consentFlag : null,
+      ).catch((error: unknown) => {
+        logger.warn('runway.sync.statementsFailed', {
+          linkId,
+          kind: error instanceof ProviderError ? error.kind : 'internal',
+          code: error instanceof ProviderError ? error.code : null,
+        });
+      });
+    }
     const wereDetailsFilled =
       typeof linkSnapshot.data()?.detailsFilledAt === 'number';
     const detailsFilledNow =
