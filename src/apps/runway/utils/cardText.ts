@@ -240,10 +240,6 @@ export const describeDueCard = (
     : CARD_WORDS.dueWarning(name, date, amount);
 };
 
-/** "Due Nov 14th" for the day the bank asks for a payment by. */
-export const describeBankDueOn = (dueOn: DateOnly) =>
-  CARD_WORDS.dueOn(dayOf(dueOn));
-
 /** "Issued Oct 24th" for the day a statement was made. */
 export const describeStatementIssued = (statementOn: DateOnly | null) =>
   statementOn === null ? null : CARD_WORDS.statementIssued(dayOf(statementOn));

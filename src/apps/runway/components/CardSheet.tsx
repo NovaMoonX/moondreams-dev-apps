@@ -78,7 +78,6 @@ import CardHistoryView from '@apps/runway/components/CardHistoryView';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import {
-  describeBankDueOn,
   describeCardDue,
   describeStatementIssued,
   getCardDueNow,
@@ -489,11 +488,6 @@ function CardSheet({
                 <ItemRow
                   name={CARD_WORDS.minimumDue}
                   leading={<StatementIcon icon={<CalendarClock />} />}
-                  detail={
-                    statement.dueOn === null
-                      ? null
-                      : describeBankDueOn(statement.dueOn)
-                  }
                   figure={formatCents(minimumCents)}
                 />
                 {statement.statementCents !== null && (

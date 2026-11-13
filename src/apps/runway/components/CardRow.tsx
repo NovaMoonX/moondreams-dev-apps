@@ -90,7 +90,7 @@ function CardRow({
     <ItemRow
       name={name}
       leading={<BankBadge name={card.issuer} linkId={card.linkId} />}
-      detail={parts.join(' · ')}
+      detail={parts.join(' ·\u00a0')}
       figure={formatCents(Math.max(0, reserveCents - pendingCents))}
       ariaLabel={`${name}. Open`}
       onOpen={onOpen}
