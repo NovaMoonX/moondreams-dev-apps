@@ -838,6 +838,9 @@ export function buildHelmTools(scope: HelmToolScope) {
           typeof entry.extra.category === 'string'
             ? entry.extra.category
             : null;
+        const detail = [cents < 0 ? 'Refund' : null, category]
+          .filter((part) => part !== null)
+          .join(' \u00b7 ');
         const snippet = [
           cents < 0 ? `Refund ${money(-cents)}` : money(cents),
           category,
@@ -854,6 +857,11 @@ export function buildHelmTools(scope: HelmToolScope) {
               from: entry.title,
               at: entry.startAt ?? null,
               snippet,
+              record: {
+                name: entry.title,
+                detail: detail || null,
+                amount: money(Math.abs(cents)),
+              },
               deepLink: router.isLiveDeepLink(app, appPath) ? appPath : null,
             }),
           }),
