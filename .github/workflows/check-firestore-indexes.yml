@@ -33,6 +33,7 @@ jobs:
       - run: npm run check:pipeline-answers
       - run: npm run check:owner-inbox
       - run: npm run check:z-layers
+      - run: npm run check:undo-window
       # The deploy opens callables by reading this list; a line it can't read stops the deploy after the functions are out.
       - run: npm run fb:invoker -- --all --dry
   check_pinch:

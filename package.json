@@ -68,6 +68,7 @@
     "check:pipeline-map": "node scripts/checks/pipelineMap.ts",
     "check:board": "node scripts/checks/board.ts",
     "check:z-layers": "node scripts/checks/zLayers.ts",
+    "check:undo-window": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/undoWindow.ts",
     "check:app-people": "node scripts/checks/appPeople.ts",
     "inbox:build": "node scripts/ownerInbox/run.ts",
     "check:back-history": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/backHistory.ts",

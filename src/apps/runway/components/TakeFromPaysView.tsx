@@ -23,6 +23,7 @@ import {
   selectHorizonVersionId,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed } from '@apps/runway/types';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface TakeFromPaysViewProps {
   itemId: string;
@@ -96,6 +97,7 @@ function TakeFromPaysView({
       addToast({
         title: HORIZON_WORDS.takeFromPaysDone(live.name),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: PAY_SHARE_WORDS.undo,
           onClick: () => {

@@ -18,6 +18,7 @@ import {
   describePurchaseKeptFree,
   describePurchaseReturned,
 } from '@apps/runway/utils/purchaseText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const getWords = (purchase: OpenPurchase, isKeepFree: boolean) => {
   if (isKeepFree) {
@@ -102,6 +103,7 @@ function LeaveOutRow({
       addToast({
         title: words.done,
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: NEEDS_HOME_WORDS.undo,
           onClick: () =>

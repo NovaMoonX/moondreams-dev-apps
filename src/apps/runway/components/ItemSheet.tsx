@@ -220,6 +220,7 @@ import {
 } from '@apps/runway/utils/groupChoice';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 import { isCardFeeBill, isCardFeeGroup } from '@apps/runway/engine/cardFees';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 type View =
   | 'menu'
@@ -589,6 +590,7 @@ function ItemSheet({
       addToast({
         title: HELD_WORDS.released(name),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: HELD_WORDS.undo,
           onClick: () =>

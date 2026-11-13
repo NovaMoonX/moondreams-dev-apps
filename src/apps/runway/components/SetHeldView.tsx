@@ -37,6 +37,7 @@ import { selectBalanceInputs } from '@apps/runway/store/selectors/balanceSelecto
 import type { Cents, OpenMove } from '@apps/runway/types';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface SetHeldViewProps {
   itemId: string;
@@ -311,6 +312,7 @@ function SetHeldView({
           ? BILL_SET_ASIDE_WORDS.moved(money, name)
           : SET_HELD_WORDS.moved(name),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: MOVE_WORDS.undo,
           onClick: () =>

@@ -52,6 +52,7 @@ import {
   describeCardTakenBack,
   getCardName,
 } from '@apps/runway/utils/cardText';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 interface PayCardSheetProps {
   card: OpenCard;
@@ -237,6 +238,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
       addToast({
         title: mask(getPaidToast(covers, formatCents(paidCents))),
         type: 'success',
+        duration: UNDO_WINDOW_MS,
         action: {
           label: CARD_WORDS.undo,
           onClick: () =>

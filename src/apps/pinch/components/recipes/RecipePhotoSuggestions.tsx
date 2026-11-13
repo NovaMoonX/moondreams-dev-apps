@@ -18,6 +18,7 @@ import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
 import { webPhotosQueryOptions } from '@apps/pinch/queries/photoQueries';
 import type { WebPhoto } from '@apps/pinch/types';
 import { getPhotoQuery, getPhotoQueryKey } from '@apps/pinch/utils/recipeCover';
+import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const POT = '🍲';
 
@@ -110,6 +111,7 @@ function RecipePhotoSuggestions({
       id,
       title: 'Photo suggestions are off',
       type: 'info',
+      duration: UNDO_WINDOW_MS,
       action: {
         label: 'Undo',
         onClick: () => void save({ suggestPhotos: true }),
