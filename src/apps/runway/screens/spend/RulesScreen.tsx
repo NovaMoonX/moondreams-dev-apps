@@ -212,6 +212,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const [isPicking, setIsPicking] = useState(false);
   const [isWriting, setIsWriting] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [isUndoTried, setIsUndoTried] = useState(false);
   useEffect(() => setRulesLanding(null), []);
   const opened = rules.find((rule) => rule.id === openId) ?? null;
   const needle = query.trim().toLowerCase();
@@ -272,6 +273,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     setIsUndoing(true);
     const isUndone = await from.undo();
     setIsUndoing(false);
+    setIsUndoTried(true);
     if (isUndone) selection.exit();
   };
 
@@ -555,17 +557,19 @@ function RulesScreen({ onClose }: RulesScreenProps) {
                 title={RULE_WORDS.landingTitle(landing.name)}
               >
                 <p>{RULE_WORDS.landing(landingCount)}</p>
-                <Button
-                  type='button'
-                  variant='link'
-                  size='stripped'
-                  className='mt-1'
-                  loading={isUndoing}
-                  disabled={isUndoing}
-                  onClick={() => void undoConvert(landing)}
-                >
-                  {RULE_WORDS.landingUndo}
-                </Button>
+                {!isUndoTried && (
+                  <Button
+                    type='button'
+                    variant='link'
+                    size='stripped'
+                    className='mt-1'
+                    loading={isUndoing}
+                    disabled={isUndoing}
+                    onClick={() => void undoConvert(landing)}
+                  >
+                    {RULE_WORDS.landingUndo}
+                  </Button>
+                )}
               </InlineNotice>
             )}
             {selection.isActive && (

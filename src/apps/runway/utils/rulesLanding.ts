@@ -6,7 +6,8 @@ export interface RulesLanding {
   undo: () => Promise<boolean>;
 }
 
-const FRESH_MS = 5_000;
+// Long enough for a slow first load of Rules, since the landing is the only place the convert's Undo is offered.
+const FRESH_MS = 60_000;
 
 // Kept out of the URL for the same reason as an open item request; one Rules did not open for goes stale rather than greeting a later visit.
 let landing: (RulesLanding & { at: number }) | null = null;
