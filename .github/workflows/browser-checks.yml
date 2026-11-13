@@ -47,7 +47,8 @@ jobs:
         run: |
           npm ci
           npm install --no-save playwright@1.63.0
-          npx playwright install --with-deps chromium
+          # The runner image ships Chrome's libraries, so an apt mirror that can't be reached falls back to the browser alone.
+          npx playwright install --with-deps chromium || npx playwright install chromium
       - run: npm run check:back-history
         if: steps.pick.outputs.history == 'true'
       - run: npm run check:stale-chunk

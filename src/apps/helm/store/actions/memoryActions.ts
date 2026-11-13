@@ -12,6 +12,10 @@ import { db } from '@lib/firebase/config';
 import { sealJson } from '@apps/helm/security';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import type { Fact, FactKind, FactSealed } from '@apps/helm/types';
+import {
+  planPhotoRelease,
+  type ReleasablePhoto,
+} from '@apps/helm/utils/mediaRelease';
 
 /** A change that went through, with the way to take it back; `undo` says false when the fact changed since and was left alone. */
 export type FactChange =
@@ -98,6 +102,12 @@ export const correctFact = (
       const data = (await transaction.get(oldRef)).data() as
         Partial<Fact> | undefined;
       if (!data || data.status === 'superseded') return null;
+      const partnerId = data.disputedWithId ?? null;
+      const partnerRef = partnerId ? doc(facts, partnerId) : null;
+      const partner = partnerRef
+        ? ((await transaction.get(partnerRef)).data() as
+            Partial<Fact> | undefined)
+        : undefined;
       const next: Omit<Fact, 'sealed'> = {
         status: 'confirmed',
         stated: 'personCorrected',
@@ -126,11 +136,16 @@ export const correctFact = (
         status: 'superseded',
         supersededById: newRef.id,
         supersededAt: now,
+        disputedWithId: null,
         lastEditedAt: now,
       });
+      const frees = partnerRef && partner?.disputedWithId === factId;
+      if (frees) transaction.update(partnerRef, { disputedWithId: null });
       return {
         status: data.status ?? 'inferred',
         lastEditedAt: data.lastEditedAt ?? null,
+        disputedWithId: partnerId,
+        isPartnerFreed: Boolean(frees),
       };
     });
     if (!before) return { kind: 'changed' };
@@ -138,9 +153,13 @@ export const correctFact = (
       kind: 'done',
       undo: () =>
         runTransaction(db, async (transaction) => {
-          const [added, old] = await Promise.all([
+          const partnerRef = before.disputedWithId
+            ? doc(facts, before.disputedWithId)
+            : null;
+          const [added, old, partner] = await Promise.all([
             transaction.get(newRef),
             transaction.get(oldRef),
+            partnerRef ? transaction.get(partnerRef) : null,
           ]);
           const addedData = added.data() as Partial<Fact> | undefined;
           const oldData = old.data() as Partial<Fact> | undefined;
@@ -156,8 +175,17 @@ export const correctFact = (
               status: before.status,
               supersededById: null,
               supersededAt: null,
+              disputedWithId: before.disputedWithId,
               lastEditedAt: before.lastEditedAt,
             });
+          }
+          if (
+            partnerRef &&
+            before.isPartnerFreed &&
+            partner?.exists() &&
+            partner.data().disputedWithId === null
+          ) {
+            transaction.update(partnerRef, { disputedWithId: factId });
           }
           return true;
         }),
@@ -166,10 +194,17 @@ export const correctFact = (
 
 const MAX_CHAIN = 20;
 
-/** Deletes a fact and the earlier facts it replaced; Undo writes them back under the same ids, unless one is there again. */
-export const forgetFact = (uid: string, factId: string) =>
+/** Deletes a fact and the earlier facts it replaced, and lets go of the photos kept only on them for 24 hours; Undo writes them back under the same ids, unless one is there again, and keeps the photos again. */
+export const forgetFact = (
+  uid: string,
+  factId: string,
+  photos: ReleasablePhoto[],
+) =>
   guard(async (): Promise<FactChange> => {
     const ref = doc(factsOf(uid), factId);
+    const mediaRef = (id: string) =>
+      doc(db, 'apps', 'helm', 'users', uid, 'media', id);
+    const now = Date.now();
     const taken = await runTransaction(db, async (transaction) => {
       const readChain = async (
         id: string | null,
@@ -187,18 +222,61 @@ export const forgetFact = (uid: string, factId: string) =>
         ];
       };
       const chain = await readChain(factId, []);
+      const partnerId =
+        typeof chain[0]?.data.disputedWithId === 'string'
+          ? chain[0].data.disputedWithId
+          : null;
+      const partnerRef = partnerId ? doc(factsOf(uid), partnerId) : null;
+      const partner = partnerRef
+        ? ((await transaction.get(partnerRef)).data() as
+            DocumentData | undefined)
+        : undefined;
       chain.forEach((entry) => transaction.delete(doc(factsOf(uid), entry.id)));
-      return chain;
+      const released = planPhotoRelease(
+        photos,
+        chain.map((entry) => ({ kind: 'fact', id: entry.id })),
+        now,
+      );
+      released.forEach((entry) =>
+        transaction.update(mediaRef(entry.id), entry.forward),
+      );
+      const frees = partnerRef && partner?.disputedWithId === factId;
+      if (frees) transaction.update(partnerRef, { disputedWithId: null });
+      return { chain, released, partnerId: frees ? partnerId : null };
     });
-    if (taken.length === 0) return { kind: 'changed' };
+    if (taken.chain.length === 0) return { kind: 'changed' };
     return {
       kind: 'done',
       undo: () =>
         runTransaction(db, async (transaction) => {
-          if ((await transaction.get(ref)).exists()) return false;
-          taken.forEach((entry) =>
+          const partnerRef = taken.partnerId
+            ? doc(factsOf(uid), taken.partnerId)
+            : null;
+          const [current, partner, photoDocs] = await Promise.all([
+            transaction.get(ref),
+            partnerRef ? transaction.get(partnerRef) : null,
+            Promise.all(
+              taken.released.map((entry) =>
+                transaction.get(mediaRef(entry.id)),
+              ),
+            ),
+          ]);
+          if (current.exists()) return false;
+          taken.chain.forEach((entry) =>
             transaction.set(doc(factsOf(uid), entry.id), entry.data),
           );
+          taken.released.forEach((entry, index) => {
+            if (photoDocs[index].exists()) {
+              transaction.update(mediaRef(entry.id), entry.back);
+            }
+          });
+          if (
+            partnerRef &&
+            partner?.exists() &&
+            partner.data().disputedWithId === null
+          ) {
+            transaction.update(partnerRef, { disputedWithId: factId });
+          }
           return true;
         }),
     };

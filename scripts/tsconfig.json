@@ -5,6 +5,7 @@
   },
   "include": [
     "./lan.ts",
+    "./localServices.ts",
     "./fbDeploySmart.ts",
     "./fbInvoker.ts",
     "./checkFirestoreIndexes.ts",

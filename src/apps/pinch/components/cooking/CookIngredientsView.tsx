@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { RotateCcw } from 'lucide-react';
 
@@ -52,12 +52,11 @@ const CookIngredientRow = memo(function CookIngredientRow({
         )}
       >
         <span className='mt-0.5 inline-flex shrink-0'>
-          <Checkbox
+          <AppCheckbox
             aria-label={`Got out ${name}`}
-            data-tick='mark'
+            isMark
             checked={isOut}
             onCheckedChange={(checked) => onToggle(id, checked === true)}
-            className="relative after:absolute after:-inset-2.5 after:content-['']"
           />
         </span>
         <span className='min-w-0 flex-1'>

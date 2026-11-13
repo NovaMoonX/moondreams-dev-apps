@@ -1,4 +1,4 @@
-import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import { getDateTimeFormat, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { DAY_MS } from '@apps/helm/constants';
 import type { PlanDay, PlanSlot } from '@apps/helm/types';
 import { getDueDay } from '@apps/helm/utils/captureReading';
@@ -33,11 +33,9 @@ export const getDayNoon = (key: string, timeZone: string) =>
   zonedDateTimeToEpoch(key, '12:00', timeZone);
 
 export const formatClock = (at: number, timeZone: string) =>
-  new Date(at).toLocaleTimeString('en-US', {
-    timeZone,
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  getDateTimeFormat({ timeZone, hour: 'numeric', minute: '2-digit' }).format(
+    new Date(at),
+  );
 
 /** "1:15 to 1:35 PM", the meridiem said once when both ends share it. */
 export function formatSlotRange(
@@ -62,10 +60,9 @@ export const formatLength = (minutes: number) =>
       : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 
 const dayLabel = (key: string, options: Intl.DateTimeFormatOptions) =>
-  new Date(Date.parse(key)).toLocaleDateString('en-US', {
-    timeZone: 'UTC',
-    ...options,
-  });
+  getDateTimeFormat({ timeZone: 'UTC', ...options }).format(
+    new Date(Date.parse(key)),
+  );
 
 /** "Tue 10" for a strip pill. */
 export const formatStripDay = (key: string) =>

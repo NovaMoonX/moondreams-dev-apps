@@ -26,6 +26,8 @@ const dana = {
   tierSetBy: 'person' as const,
   mentionDayKeys: [],
   taskLinkCount: 0,
+  yearlyDateCount: 0,
+  momentCount: 0,
   hasRole: false,
 };
 const mention = {
@@ -48,6 +50,7 @@ const fact = (extra: Partial<NoteFactCommand>): NoteFactCommand => ({
   value: null,
   isSensitive: false,
   isAboutMe: true,
+  contradicts: null,
   ...extra,
 });
 
@@ -73,6 +76,7 @@ const plan = (
       known: [dana],
       knownPlaces: [],
       assistantName: 'Nomos',
+      assistantNames: ['Nomos'],
       dayKey: '2026-11-10',
       capturedAt: NOW,
     },
@@ -85,6 +89,9 @@ const plan = (
       subjectIds: [SELF],
       kind: entry.kind,
       topic: entry.topic,
+      stated: 'personSaid' as const,
+      createdAt: NOW - 1000,
+      disputedWithId: null,
     })),
     selfWhoId: options.selfWhoId === undefined ? SELF : options.selfWhoId,
   });

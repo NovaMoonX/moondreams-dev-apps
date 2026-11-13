@@ -5,6 +5,9 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import FactKindGroup from '@apps/helm/components/howNomosSeesYou/FactKindGroup';
+import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
+import MomentsPreview from '@apps/helm/components/who/MomentsPreview';
+import StyleNotes from '@apps/helm/components/howNomosSeesYou/StyleNotes';
 import SelfFactAddSheet from '@apps/helm/components/howNomosSeesYou/SelfFactAddSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import FactSheet from '@apps/helm/components/who/FactSheet';
@@ -15,6 +18,8 @@ import { selectSelfFacts } from '@apps/helm/store/selectors/factSelectors';
 import type { OpenFact } from '@apps/helm/types';
 
 interface HowNomosSeesYouProps {
+  /** Where Back lands when it is not Home. */
+  backLabel?: string;
   onBack: () => void;
   onHome: () => void;
 }
@@ -28,12 +33,19 @@ const topicsOf = (facts: OpenFact[], kind: OpenFact['kind']) => [
 ];
 
 /** What the assistant believes about the person: who they are, their preferences and favorites, each opening its fact to confirm, correct or forget. */
-function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
+function HowNomosSeesYou({
+  backLabel = 'Home',
+  onBack,
+  onHome,
+}: HowNomosSeesYouProps) {
   const assistant = useAssistantName();
   const now = useNow(60_000);
   const facts = useAppSelector(selectSelfFacts);
   const selfWhoId = useAppSelector((state) => state.helm.profile?.selfWhoId);
   const isLoaded = useAppSelector((state) => state.helm.facts.isLoaded);
+  const selfWho = useAppSelector((state) =>
+    state.helm.who.items.find((entry) => entry.isSelf && !entry.isUnreadable),
+  );
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const topicsByKind = useMemo(
@@ -55,10 +67,10 @@ function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
 
   return (
     <>
-      <HelmHeader backLabel='Home' onBack={onBack} onHome={onHome} />
+      <HelmHeader backLabel={backLabel} onBack={onBack} onHome={onHome} />
       <main className='space-y-4 pt-4'>
         <div className='flex items-start justify-between gap-3'>
-          <h1 className='helm-serif text-[28px] leading-[34px] text-pretty'>
+          <h1 className='helm-serif min-w-0 text-[28px] leading-[34px] text-balance'>
             {HELM_COPY.seesYouTitle(assistant)}
           </h1>
           {selfWhoId && (
@@ -89,6 +101,8 @@ function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
           now={now}
           onOpen={setOpenId}
         />
+        {selfWho && <KeyDatesList who={selfWho} />}
+        {selfWho && <MomentsPreview who={selfWho} />}
         <FactKindGroup
           label={HELM_COPY.seesYouPreferences}
           facts={ofKind('preference')}
@@ -105,6 +119,7 @@ function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
           now={now}
           onOpen={setOpenId}
         />
+        <StyleNotes />
       </main>
       <FactSheet
         key={openId ?? 'none'}

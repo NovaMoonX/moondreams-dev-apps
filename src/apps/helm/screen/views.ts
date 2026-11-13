@@ -35,6 +35,10 @@ const TILES = [
   { view: 'inbox', importance: 'major', grows: 'openQuestions' },
   { view: 'tasks', importance: 'minor', grows: null },
   { view: 'people', importance: 'minor', grows: null },
+  { view: 'projects', importance: 'minor', grows: null },
+  { view: 'knowledge', importance: 'minor', grows: null },
+  { view: 'procedures', importance: 'minor', grows: null },
+  { view: 'comingUp', importance: 'minor', grows: null },
   { view: 'howNomosSeesYou', importance: 'minor', grows: null },
 ] as const satisfies readonly BrowseTile[];
 
@@ -52,6 +56,7 @@ export const VIEW_PARENTS: Partial<Record<HelmView, HelmView>> = {
   today: 'home',
   inbox: 'home',
   tasks: 'today',
+  comingUp: 'today',
   settings: 'home',
   activity: 'settings',
   connectedApps: 'settings',
@@ -59,7 +64,15 @@ export const VIEW_PARENTS: Partial<Record<HelmView, HelmView>> = {
   people: 'home',
   who: 'people',
   place: 'home',
+  projects: 'home',
+  project: 'projects',
+  knowledge: 'home',
+  topic: 'knowledge',
+  procedures: 'home',
+  procedure: 'procedures',
+  run: 'procedures',
   howNomosSeesYou: 'home',
+  search: 'home',
 };
 
 export const VIEW_KINDS = {
@@ -67,6 +80,7 @@ export const VIEW_KINDS = {
   today: 'content',
   inbox: 'content',
   tasks: 'content',
+  comingUp: 'content',
   settings: 'utility',
   activity: 'utility',
   connectedApps: 'utility',
@@ -74,5 +88,13 @@ export const VIEW_KINDS = {
   people: 'content',
   who: 'content',
   place: 'content',
+  projects: 'content',
+  project: 'content',
+  knowledge: 'content',
+  topic: 'content',
+  procedures: 'content',
+  procedure: 'content',
+  run: 'content',
   howNomosSeesYou: 'content',
+  search: 'utility',
 } satisfies Record<HelmView, 'home' | 'content' | 'utility'>;
