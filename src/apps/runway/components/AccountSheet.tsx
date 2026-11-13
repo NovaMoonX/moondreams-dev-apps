@@ -195,7 +195,7 @@ function AccountSheet({
       ? null
       : ACCOUNT_WORDS.apyFact(formatApy(account.apyBps)),
     account.isPullAccount ? ACCOUNT_WORDS.pullsFrom : null,
-    linkedFact,
+    isBankBalance && bankUpdated !== null ? null : linkedFact,
   ].filter((fact): fact is string => fact !== null);
 
   const moveRows = routes

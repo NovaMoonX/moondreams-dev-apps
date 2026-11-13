@@ -1,4 +1,4 @@
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import { ACCOUNT_WORDS, FRESH_DOT_MS } from '@apps/runway/constants';
 import { getPendingCents } from '@apps/runway/engine/accounts';
 import type { OpenAccountBalance } from '@apps/runway/types';
@@ -28,7 +28,7 @@ export function describeBankUpdated(asOf: number, now: number) {
   return null;
 }
 
-/** "$150 pending · Updated 4 min ago" for a linked account with a bank figure: each part left out when it has nothing to say. */
+/** "Updated 4 min ago · $150 pending" for a linked account's row, money written short: each part left out when it has nothing to say. */
 export function describeBankFacts(
   bank: Pick<OpenAccountBalance, 'asOf' | 'cents' | 'availableCents'>,
   now: number,
@@ -36,10 +36,10 @@ export function describeBankFacts(
   const updated = describeBankUpdated(bank.asOf, now);
   const pendingCents = getPendingCents(bank) ?? 0;
   const parts = [
-    pendingCents > 0
-      ? ACCOUNT_WORDS.pendingAmount(formatCents(pendingCents))
-      : null,
     updated?.text ?? null,
+    pendingCents > 0
+      ? ACCOUNT_WORDS.pendingAmount(formatCentsShort(pendingCents))
+      : null,
   ].filter((part): part is string => part !== null);
   return { text: parts.join(' · '), isFresh: updated?.isFresh ?? false };
 }

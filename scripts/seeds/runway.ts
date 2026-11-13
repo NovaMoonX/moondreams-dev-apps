@@ -4246,7 +4246,7 @@ async function writeSeedPurchases(
       amountCents: 675,
       status: 'pending',
       accountId: null,
-      cardId: SEED_VENTURE_CARD,
+      cardId: SEED_CHASE_CARD,
       category: 'FOOD_AND_DRINK_COFFEE',
     },
     {

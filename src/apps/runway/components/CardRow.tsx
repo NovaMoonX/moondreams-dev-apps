@@ -1,5 +1,5 @@
 import { useAppSelector } from '@/store';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import BankBadge from '@apps/runway/components/BankBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { CARD_WORDS } from '@apps/runway/constants';
@@ -60,7 +60,7 @@ function CardRow({
       leading={<BankBadge name={card.issuer} linkId={card.linkId} />}
       detail={
         pendingCents > 0
-          ? `${detail} · ${CARD_WORDS.pendingAmount(formatCents(pendingCents))}`
+          ? `${detail} · ${CARD_WORDS.pendingAmount(formatCentsShort(pendingCents))}`
           : detail
       }
       figure={formatCents(Math.max(0, reserveCents - pendingCents))}
