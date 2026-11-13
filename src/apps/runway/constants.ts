@@ -5554,7 +5554,8 @@ export const RULE_WORDS = {
   bulkSend: 'Send to an envelope',
   bulkSendShort: 'Send to…',
   bulkAsk: 'Always ask',
-  holdToPick: 'Press and hold a rule to fix several at once.',
+  pick: 'Select',
+  pickGroup: (group: string) => `Select rules under ${group}`,
   bulkDelete: 'Remove',
   bulkPickTitle: 'Which envelope?',
   bulkPickSub: (count: number) =>

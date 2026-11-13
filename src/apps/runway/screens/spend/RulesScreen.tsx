@@ -12,7 +12,6 @@ import SectionHeader from '@/components/SectionHeader';
 import SelectionBar from '@/components/SelectionBar';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
-import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useLongPress } from '@/hooks/useLongPress';
 import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
@@ -50,9 +49,6 @@ interface RulesScreenProps {
 }
 
 const HOME_KEY = 'needs-a-new-home';
-const HAS_PICKED_KEY = 'runway:picked-several-rules';
-const parseHasPicked = (stored: unknown) =>
-  typeof stored === 'boolean' ? stored : null;
 
 function EnvelopePickSheet({
   count,
@@ -123,7 +119,7 @@ function EnvelopePickSheet({
   );
 }
 
-/** A group's heading: press and hold starts picking with the group ticked; while picking, it ticks or clears the whole group. */
+/** A group's heading: press and hold (or its Select, when given) starts picking with the group ticked; while picking, it ticks or clears the whole group. */
 function GroupHead({
   label,
   total,
@@ -131,6 +127,7 @@ function GroupHead({
   isSelecting,
   onToggle,
   onHold,
+  onPick,
 }: {
   label: string;
   total: number;
@@ -138,6 +135,7 @@ function GroupHead({
   isSelecting: boolean;
   onToggle: () => void;
   onHold: () => void;
+  onPick?: () => void;
 }) {
   const longPress = useLongPress(onHold);
   const isAll = total > 0 && ticked === total;
@@ -147,6 +145,20 @@ function GroupHead({
 
   return (
     <SectionDivider
+      trailing={
+        !isSelecting && onPick ? (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className="relative before:absolute before:inset-x-0 before:-inset-y-[6px] before:content-['']"
+            aria-label={RULE_WORDS.pickGroup(label)}
+            onClick={onPick}
+          >
+            {RULE_WORDS.pick}
+          </Button>
+        ) : undefined
+      }
       label={
         isSelecting ? (
           <span className='flex items-center gap-2'>
@@ -201,11 +213,6 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const { describe, describeHome, getCardLabel } = useRuleNames();
   const { openView } = useRunwayUrlState();
   const selection = useSelection();
-  const [hasPicked, setHasPicked] = useLocalStorageState(
-    HAS_PICKED_KEY,
-    false,
-    parseHasPicked,
-  );
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
@@ -266,7 +273,6 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     }
     selection.start();
     selection.toggle(ids);
-    if (!hasPicked) setHasPicked(true);
   };
 
   const renderRow = (rule: OpenRule, isCardLeftOut: boolean) => {
@@ -565,6 +571,11 @@ function RulesScreen({ onClose }: RulesScreenProps) {
                       selection.toggle(group.rows.map((rule) => rule.id))
                     }
                     onHold={() => begin(group.rows.map((rule) => rule.id))}
+                    onPick={
+                      group.key === HOME_KEY && group.rows.length > 1
+                        ? () => begin(group.rows.map((rule) => rule.id))
+                        : undefined
+                    }
                   />
                   <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                     {group.rows.map((rule) =>
@@ -574,14 +585,6 @@ function RulesScreen({ onClose }: RulesScreenProps) {
                       ),
                     )}
                   </ul>
-                  {group.key === HOME_KEY &&
-                    group.rows.length > 1 &&
-                    !hasPicked &&
-                    !selection.isActive && (
-                      <p className='text-muted-foreground px-1 text-sm'>
-                        {RULE_WORDS.holdToPick}
-                      </p>
-                    )}
                 </div>
               ))
             )}
