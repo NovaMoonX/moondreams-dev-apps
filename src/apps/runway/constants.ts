@@ -77,6 +77,11 @@ export const RUNWAY_VIEWS = [
   'checkAmount',
   'checkBalance',
   'cashPosition',
+  'heldBills',
+  'heldGoals',
+  'heldEnvelopes',
+  'heldHorizon',
+  'heldCards',
   'needsHome',
   'accountMoves',
   'rules',
@@ -320,6 +325,14 @@ const getPaysRoom = (roomCount: number, payCount: number) =>
       ? `None of your ${payCount} pays have room`
       : `Only ${roomCount} of your ${payCount} pays ${roomCount === 1 ? 'has' : 'have'} room`;
 
+/** Headings that section a pick or search list by the kind of thing, in the order the kinds are shown. */
+export const PICK_KIND_HEADINGS = {
+  income: 'Income',
+  bill: 'Bills',
+  envelope: 'Envelopes',
+  goal: 'Goals',
+} as const;
+
 export const HORIZON_WORDS = {
   title: 'Horizon',
   addLabel: 'Add to your horizon',
@@ -355,7 +368,36 @@ export const HORIZON_WORDS = {
   endBeforeStart: 'The end comes before the start.',
   costsTitle: 'What will it cost?',
   costs: 'Costs',
-  noCosts: 'Nothing listed yet.',
+  noCosts:
+    'Nothing listed yet. An event can also be only changes to your plan.',
+  noCostsSummary: 'No costs, only changes',
+  changesCaption: 'What changes',
+  planChange: 'Plan a change',
+  planChangeTitle: 'Which one changes?',
+  planChangeSearch: 'Search your plan',
+  planChangeNone: 'Nothing in your plan to change yet.',
+  happened: 'Happened',
+  pickPay: 'Pay',
+  pickBill: 'Bill',
+  pickEnvelope: 'Envelope',
+  pickGoal: 'Goal',
+  planChangeNoMatch: 'Nothing in your plan matches that.',
+  changeFrom: (from: string) => `From\u00A0${from}`,
+  changeHappened: (on: string) => `Happened\u00A0${on}`,
+  changeNoLonger: 'No longer planned',
+  linkEnds: 'Ends',
+  linkStarts: 'Starts',
+  changeLine: (item: string, what: string, when: string) =>
+    [item, what, when].filter(Boolean).join('\u00A0\u00b7 '),
+  unlinkTitle: 'Linked change',
+  unlinkRow: (event: string) => `Unlink from ${event}`,
+  unlinkNote:
+    'The change stays in your plan. It is only no longer listed under this event.',
+  unlinkFailed: 'This did not unlink. Nothing was changed.',
+  changesCount: (count: number) =>
+    `${count} planned ${count === 1 ? 'change' : 'changes'}`,
+  noChangesYet: 'No changes planned yet',
+  changesHappened: 'All its changes happened',
   addCost: 'Add a cost',
   changeCost: (name: string) => `Change ${name}`,
   payMoved: 'This pay has already moved.',
@@ -363,7 +405,6 @@ export const HORIZON_WORDS = {
   saveCost: 'Save cost',
   maxCosts: (count: number) => `An item holds up to ${count} costs.`,
   maxCostsTitle: 'That is the most costs',
-  needsCost: 'List at least one cost.',
   needsName: 'Name it.',
   priority: 'Priority',
   add: (name: string) => `Add ${name}`,
@@ -660,13 +701,77 @@ export const MAKE_BILL_WORDS = {
 const listNamesAndMore = (names: readonly string[], more: number) =>
   more > 0 ? `${names.join(', ')} and ${more} more` : names.join(' and ');
 
+/** Planning a goal or an envelope on the Horizon: which event, linking a goal, moving an envelope in, and the nudge. */
+export const HORIZON_PLAN_WORDS = {
+  door: 'Plan it on your Horizon',
+  goalDoorSub: 'Add what it is for as an event',
+  envelopeDoorSub: 'Move its money into an event',
+  title: 'Which event?',
+  newEvent: 'New event',
+  newEventSubGoal: (goal: string) => `Starts with ${goal}`,
+  newEventSubEnvelope: (envelope: string) =>
+    `Starts with the money in ${envelope}`,
+  search: 'Search',
+  noMatch: 'No event matches',
+  goalTaken: (goal: string, event: string) =>
+    `${goal} already saves for ${event}. A goal saves for one event.`,
+  eventHasGoal: (event: string, goal: string) =>
+    `${event} already draws from ${goal}. An event draws from one goal.`,
+  linkSummary: (goal: string, event: string, amount: string | null) =>
+    `${goal} now saves for ${event}.${amount === null ? '' : ` Added ${goal}, ${amount}, as its first cost.`}`,
+  unlinkSummary: (goal: string, event: string, isCostRemoved: boolean) =>
+    `${goal} no longer saves for ${event}. ${isCostRemoved ? `The ${goal} cost is removed from the event.` : 'Its cost stays on the event.'}`,
+  newFromGoalSummary: (event: string, goal: string) =>
+    `Added ${event}, saving for it from ${goal}.`,
+  linked: (goal: string, event: string) => `${goal} now saves for ${event}`,
+  unlinked: (goal: string, event: string) =>
+    `${goal} no longer saves for ${event}`,
+  savingForCaption: 'Saving for it',
+  savingForLine: (goal: string, saved: string, target: string) =>
+    `${goal}, ${saved} of ${target}`,
+  partOf: (event: string) => `Part of ${event}`,
+  partOfSub: 'Saving for it',
+  unlinkTitle: (goal: string, event: string) => `Unlink ${goal} from ${event}?`,
+  unlinkBody:
+    'The goal keeps saving at its own pace. What should happen to its cost on the event?',
+  unlinkBodyKept: (event: string) =>
+    `${event} keeps the goal's cost and pays it from its own money. The goal keeps saving at its own pace.`,
+  unlinkAction: 'Unlink the goal',
+  unlinkRemoveRow: (goal: string) => `Remove the ${goal} cost`,
+  unlinkRemoveSub: (event: string, amount: string) =>
+    `${event} stops planning for its ${amount}`,
+  unlinkKeepRow: (event: string) => `Keep it as a cost of ${event}`,
+  unlinkKeepSub: (event: string) => `${event} plans for it from its own money`,
+  envelopeConfirm: (envelope: string, amount: string, event: string) =>
+    `${envelope} closes and its ${amount} moves to ${event}`,
+  envelopeAction: (envelope: string) => `Close ${envelope}`,
+  envelopeMoved: (envelope: string, amount: string, event: string) =>
+    `${envelope} closed and its ${amount} moved to ${event}`,
+  envelopeMoveUndo: (envelope: string, amount: string, event: string) =>
+    `${envelope} reopened and its ${amount} came back from ${event}`,
+  envelopeArchiveSummary: (amount: string, event: string) =>
+    `Closed. Its ${amount} moved to ${event}.`,
+  envelopeNewSummary: (event: string, envelope: string) =>
+    `Added ${event}, with the money from ${envelope}.`,
+  envelopeUndoShort: (event: string) =>
+    `${event} has used some of it, so this can't be undone.`,
+  envelopeUndoChanged: 'It was changed since, so nothing was undone.',
+  envelopeAlreadyClosed: 'That envelope was already closed.',
+  offline: 'You are offline, so nothing was changed.',
+  failed: 'This did not save. Nothing was changed.',
+  nudgeTitle: "Know what it'll cost?",
+  nudgeSub: (goal: string, date: string) =>
+    `${goal} is on ${date}. Plan it on your Horizon.`,
+  nudgeDismiss: "Don't ask again",
+  nudgeDismissFailed: 'That did not save. Try again.',
+} as const;
+
 /** Issue 88: finishing an event, calling it off and bringing it back. */
 export const HORIZON_END_WORDS = {
   readyTitle: 'Everything is paid or a bill',
   readySub: 'Nothing is left to pay, so it is ready to finish.',
   finishLabel: (name: string) => `Finish ${name}`,
   finishTitle: (name: string) => `Finish ${name}?`,
-  finishNote: 'Everything is paid or a bill.',
   moneyQuestion: (amount: string) => `What happens to the ${amount} left?`,
   freeBody: 'From today.',
   placeRow: 'Move it to an envelope or goal',
@@ -684,13 +789,58 @@ export const HORIZON_END_WORDS = {
   callOffRowSub: "Unpaid costs stop. What's paid stays.",
   callOffLabel: (name: string) => `Call off ${name}`,
   callOffTitle: (name: string) => `Call off ${name}?`,
-  callOffNote:
-    "Unpaid costs stop asking for money. What's paid stays in its history.",
   whatStops: 'What stops',
   staysBill: (cost: string) => `Stays a bill \u00b7 ${cost}`,
   stopsRow: (cost: string, when: string, figure: string | null) =>
     [cost, when, figure].filter(Boolean).join('\u00a0\u00b7 '),
   callOffConfirm: 'Call off',
+  changesQuestion: (count: number) =>
+    count === 1
+      ? 'What happens to its planned change?'
+      : 'What happens to its planned changes?',
+  changesCancelTitle: (count: number) =>
+    count === 1
+      ? 'Cancel this change too'
+      : `Cancel these ${count} changes too`,
+  changesKeepTitle: (event: string, count: number) =>
+    `Keep ${count === 1 ? 'it' : 'them'}, not part of ${event}`,
+  changesKeepBody: (count: number) =>
+    count === 1
+      ? 'It stays planned, on its own.'
+      : 'They stay planned, on their own.',
+  changesCancelBody: (count: number) =>
+    count === 1
+      ? 'It goes back to what it was before.'
+      : 'Each goes back to what it was before.',
+  needsChangesChoice: 'Choose what happens to its planned changes.',
+  changesStayCancelled: 'Its changes stay cancelled.',
+  changesRowLabel: (count: number) =>
+    count === 1 ? 'Its planned change' : 'Its planned changes',
+  changesAnswer: (pick: 'cancel' | 'keep', count: number) => {
+    if (pick === 'cancel')
+      return count === 1 ? 'Cancelled too' : `All ${count} cancelled too`;
+    return count === 1
+      ? 'Stays planned, on its own'
+      : 'Stay planned, on their own';
+  },
+  moneyRowLabel: (amount: string) => `The ${amount} left`,
+  moneyToFree: 'Goes to Free to Spend',
+  moneyToPlace: (place: string) => `Moves to ${place}`,
+  moneyStaysHeld: (event: string) => `Stays held for ${event}`,
+  detailsTitle: 'What changes',
+  detailsStops: (stops: number, bills: number) =>
+    [
+      stops > 0 ? (stops === 1 ? '1 cost stops' : `${stops} costs stop`) : null,
+      bills > 0
+        ? bills === 1
+          ? '1 stays a bill'
+          : `${bills} stay bills`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' \u00b7 '),
+  detailsDays: 'See how your income days change',
+  detailsMoves: 'What moves',
   calledOff: (name: string) => `${name} is called off`,
   undo: 'Undo',
   needsChoice: 'Choose what happens to the money it holds.',
@@ -972,7 +1122,7 @@ export const DAY_RECORD_KINDS = [
   'confirmed',
   'correction',
 ] as const;
-/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment`, a `transfer` (money left in an envelope moved to another envelope, a goal or Free to Spend, and its undo, a `transfer` that names it) and a `costPaid` (a Horizon cost's payment marked paid, and its undo). */
+/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment`, a `transfer` (money in an envelope or goal moved to another envelope or goal, or Free to Spend, and its undo, a `transfer` that names it) and a `costPaid` (a Horizon cost's payment marked paid, and its undo). */
 export const MOVE_KINDS = [
   'billPaid',
   'start',
@@ -1005,9 +1155,6 @@ export const START_HOLDINGS = [
 ] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
 export const START_DAY_KEY = 'start';
-/** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
-export const TICK_HIT_CLASS =
-  "relative before:absolute before:-inset-[11px] before:content-['']";
 /** Rows of goals or bills the starting amounts list shows before "Show all". */
 export const START_ROWS_PREVIEW = 6;
 
@@ -1135,12 +1282,25 @@ export const CHANGE_WORDS = {
     'This changed somewhere else. What it does now is shown below. Check it, then save again.',
   fromHeading: 'When it starts',
   fromNow: 'From now on',
+  fromNowNote: 'Starts now. For a later date, use Plan a change.',
+  whenHeading: 'When should it start?',
+  whenOpenedFrom: (day: string) =>
+    `You opened this from your ${day} income day.`,
+  fromDayMeaning: (day: string) => `${day} and every income day after it`,
+  dayOnlyMeaning: (day: string) => `Only ${day}, then it goes back`,
+  fromNowMeaning: (day: string) =>
+    `Starting today, including any income days before ${day}`,
+  whenBlocker: 'Pick when it starts.',
   fromDate: 'From a later date',
   dateLabel: 'Starts on',
   dateBlocker: 'Pick a day after today, within ten years.',
   previewHeading: 'What this changes',
   putsInOf: (put: string, asked: string, hasRoom: boolean) =>
     `${hasRoom ? 'Puts' : 'No room: puts'}\u00A0in\u00A0${put}\u00A0of\u00A0${asked}`,
+  noLongerAsked: (was: string | null) =>
+    was === null
+      ? 'No longer asked for'
+      : `No longer asked for \u00b7 was ${was}`,
   previewNone:
     'No income day in the next year moves. Earlier days stay as they are.',
   previewWaiting: 'Finish the form to see what it changes.',
@@ -1158,11 +1318,12 @@ export const CHANGE_WORDS = {
   saveWithoutNote: 'Save without a reason',
   unchanged: 'Make a change to continue.',
   change: 'Change',
-  scheduled: 'From',
   fromDay: 'From this income day on',
   dayOnly: 'Just this income day',
   stretch: 'For a while, then back',
   dayPick: 'Which income day',
+  stretchStartHeading: 'Starts (leave it empty to start today)',
+  stretchStartLabel: 'Starts on',
   stretchHeading: 'How long',
   stretchCount: 'For a number of income days',
   stretchDate: 'Until a date',
@@ -1176,6 +1337,30 @@ export const CHANGE_WORDS = {
   dayOnlyFields:
     'For one income day only the amount, how often and how much it matters can change.',
   stretchNote: 'Then it goes back to what it was.',
+} as const;
+
+/** A change that belongs to an event on the Horizon, and the item's list of changes still ahead. */
+export const PART_OF_WORDS = {
+  label: 'Part of',
+  none: 'Not part of an event',
+  eventGone: 'That event is no longer open. Pick another, or save without one.',
+  eventChanged:
+    'That event changed on another device, so nothing was saved. Try again.',
+  linkedLine: (name: string, what: string, from: string, event: string) =>
+    `Linked ${name}: ${what}, from ${from}, to ${event}.`,
+  unlinkedLine: (name: string, event: string) =>
+    `Unlinked ${name} from ${event}.`,
+  comingBackTo: (figure: string, lastDay: string) =>
+    `Back to ${figure} after ${lastDay}`,
+  comingBack: (lastDay: string, difference: string) =>
+    `Back after ${lastDay} \u00b7 ${difference}`,
+  comingStarts: 'Starts',
+  starts: 'starts',
+  ends: 'ends',
+  stopsSaving: 'stops saving',
+  alreadyStarted: 'That has already started, so it cannot be cancelled.',
+  cancelledLine: (name: string, what: string, event: string) =>
+    `Cancelled ${name}: ${what}, part of ${event}.`,
 } as const;
 
 export const LIFECYCLE_WORDS = {
@@ -1197,11 +1382,14 @@ export const LIFECYCLE_WORDS = {
   endConfirm: 'End it',
   archiveConfirm: 'Archive',
   pauseConfirm: 'Stop saving',
+  endAfterConfirm: (date: string) => `End after ${date}`,
+  stopSavingFromConfirm: (date: string) => `Stop saving from ${date}`,
+  pauseFromHeading: 'From',
+  pauseFromLabel: 'Stop saving from',
+  pauseBlocker: 'Pick the day it stops, from today to ten years ahead.',
   resumeConfirm: 'Start saving',
   whyEnd: 'Why is it ending?',
   endsAfter: 'Ends after',
-  backAfter: 'then it goes back',
-  until: 'Until',
   alreadyEnded: 'This was already ended, so nothing changed.',
   alreadyArchived: 'This was already archived, so nothing changed.',
   chipsEnd: ['Paid off', 'No longer needed', 'Changed my mind', 'Job ended'],
@@ -1285,7 +1473,7 @@ export const DRAFT_CADENCE_WORDS: Record<
 };
 
 export const DRAFT_WORDS = {
-  fundedFrom: 'paid from',
+  fundedFrom: 'comes out of',
   outOfMoney: "This day's money ran out before it got to this item",
   restEmpty: "Nothing was left of this day's money for the rest",
   restAsk: 'The rest',
@@ -1436,6 +1624,8 @@ export const PAID_AMOUNT_WORDS = {
 } as const;
 
 export const BILL_WORDS = {
+  payOnLine: (payOn: string, dueOn: string) =>
+    `Pay\u00a0${payOn} · due\u00a0${dueOn}`,
   paid: 'Paid',
   paidAhead: 'Paid ahead',
   waiting: 'Waiting for the rest',
@@ -1467,6 +1657,7 @@ export const DUE_WORDS = {
   title: 'To pay today',
   titleLate: 'To pay now',
   today: 'Due today',
+  dueLater: (when: string) => `Your day to pay it · due\u00a0${when}`,
   upTo: (amount: string) => `up\u00A0to\u00A0${amount}`,
   wasDue: (when: string) => `Was due\u00a0${when}`,
   missed: (
@@ -1516,12 +1707,12 @@ export const DUE_WORDS = {
     `${name} is still marked paid. Open the bill to take it back`,
 } as const;
 
-/** A repeating bill's "Paid from": which of the plan's pays carries it. */
+/** A repeating bill's "Comes out of": which of the plan's pays carries it. */
 export const BILL_PAID_FROMS = ['spread', 'lastBefore', 'pay'] as const;
 
 export const PAID_FROM_WORDS = {
-  title: 'Which pay covers it?',
-  title2: 'Paid from',
+  title: 'Which pay does it come out of?',
+  title2: 'Comes out of',
   spreadRow: 'Spread across your pays',
   chosenRow: 'Days you chose',
   spreadMeaning: 'Every pay before it is due puts in a share.',
@@ -1533,8 +1724,8 @@ export const PAID_FROM_WORDS = {
       : dates.length <= 3
         ? `This replaces your changes for the ${dates.slice(0, -1).join(', ')} and ${dates[dates.length - 1]} pays.`
         : `This replaces your changes for the ${dates.slice(0, 3).join(', ')} and ${dates.length - 3} more pays.`,
-  summaryLabel: 'Paid from',
-  label: 'Paid from',
+  summaryLabel: 'Comes out of',
+  label: 'Comes out of',
   spread: 'Spread across my pays',
   lastBefore: "The pay right before it's due",
   lastBeforeLower: "the pay right before it's due",
@@ -1558,13 +1749,12 @@ export const PAID_FROM_WORDS = {
   keepSpread: 'Spread across my pays',
   pickAnother: 'Pick another pay',
   changed: (name: string) => `${name} is now spread across your pays`,
-  paidFromBack: (name: string, was: string) =>
-    `${name}: Paid from is back to ${was}.`,
+  paidFromBack: (name: string, was: string) => `${name}: back to ${was}.`,
   undoFailed: 'That could not be undone.',
   pinsLeft: (name: string) =>
     `${name} is now spread, but some per-pay changes are still on.`,
   undoPartial: (name: string) =>
-    `${name} is back to its old Paid from, but the per-pay changes could not be put back.`,
+    `${name} comes out of its old pays again, but the per-pay changes could not be put back.`,
   undo: 'Undo',
   saveFailed: 'This did not save. Nothing was changed.',
 } as const;
@@ -1614,7 +1804,7 @@ export const PAY_SHARE_WORDS = {
   eachTime: 'each time',
   actionSub: (name: string, total: string) =>
     `${name} stays ${total}; only this pay changes`,
-  leftOutDetail: (pay: string) => `Paid from ${pay}`,
+  leftOutDetail: (pay: string) => `Comes out of ${pay}`,
   restSetAside: (cents: string, due: string) =>
     `${cents} · already set aside · due\u00a0${due}`,
   completesIt: (cents: string, due: string) =>
@@ -1622,7 +1812,7 @@ export const PAY_SHARE_WORDS = {
   undoPins: 'Put them back',
   theDatePay: (date: string) => `the ${date} pay`,
   leftOutCarrier: (date: string) => `Comes out of the ${date} pay`,
-  leftOutHeading: 'Paid from another pay',
+  leftOutHeading: 'Comes out of another pay',
   summary: (name: string, cents: string, date: string) =>
     `${name}: this pay puts in ${cents}, for ${date} only.`,
   savedToast: (name: string) => `Changed what this pay puts toward ${name}`,
@@ -1633,9 +1823,9 @@ export const PAY_SHARE_WORDS = {
     `This pay has ${money} left for it, so ${over} would stay short.`,
   savedTitle: 'Saved for this pay',
   withheld: (name: string) =>
-    `Only this pay changed. To choose which pay covers ${name} every time, set its Paid from.`,
+    `Only this pay changed. To choose which pay covers ${name} every time, change Comes out of on its sheet.`,
   done: 'Done',
-  setPaidFrom: 'Set Paid from',
+  setPaidFrom: 'Choose the pay',
   pinsClearedToast: (name: string, count: number) =>
     count === 1
       ? `${name}: 1 per-pay change was cleared`
@@ -1645,14 +1835,14 @@ export const PAY_SHARE_WORDS = {
   pinsNotBack: (name: string, count: number) =>
     `${name}: ${count} per-pay ${count === 1 ? 'change was' : 'changes were'} changed again since, so ${count === 1 ? 'it was' : 'they were'} left as is`,
   oneTimePay: (pay: string, name: string) =>
-    `${pay} is one-time and ${name} isn't paid from it. Pick a repeating pay, or change Paid from.`,
+    `${pay} is one-time and ${name} doesn't come out of it. Pick a repeating pay, or choose different pays for it.`,
   whyNothing: 'Why this pay puts nothing in',
   leftOutTitle: (name: string, from: string) => `${name} comes from ${from}`,
   leftOutBody: 'This pay puts nothing toward it.',
   firstOnlyTitle: (name: string) => `${name} comes out of this pay first`,
   pairedSub: (name: string) => `What this pay puts toward ${name} first`,
   firstOnlyBody: (from: string) =>
-    `Its Paid from is ${from}, so what this pay puts in is set by Pay these first, not here.`,
+    `It comes out of ${from}, so what this pay puts in is set by Pay these first, not here.`,
   hiddenEffects: 'Other pays and items may move',
   whyOthers:
     'Other items move because this pay has less or more left for them.',
@@ -1668,12 +1858,11 @@ export const PAY_SHARE_WORDS = {
     `${name}: this pay puts in ${cents} again, for ${date} only.`,
   resetToast: (name: string) =>
     `${name} is back to the plan's amount for this pay`,
-  paidFromBack: (name: string, was: string) =>
-    `${name}: Paid from is back to ${was}.`,
+  paidFromBack: (name: string, was: string) => `${name}: back to ${was}.`,
   keepPartial: (name: string, pay: string) =>
     `${name} now comes from ${pay}, but some per-pay changes are still on. Tap Try again to clear them.`,
   undoPartial: (name: string) =>
-    `${name} is back to its old Paid from, but this pay's figure could not be restored.`,
+    `${name} comes out of its old pays again, but this pay's figure could not be restored.`,
 } as const;
 
 /** The levels; tracking is one switch for the whole plan, and Link is Track with a bank linked. */
@@ -1714,7 +1903,7 @@ export const TRACKING_WORDS = {
   envelopes: 'What each envelope holds',
   goals: 'What each goal holds',
   horizon: 'What each Horizon item holds',
-  bills: 'Already set aside for bills',
+  bills: 'Already put aside for bills',
   cards: 'What each card owes',
   start: 'Start tracking',
   stopTitle: 'Stop tracking',
@@ -1845,7 +2034,7 @@ export const START_AMOUNTS_WORDS = {
   goals: 'What each goal holds',
   horizon: 'What each Horizon item holds',
   envelopes: 'What each envelope holds',
-  bills: 'Already set aside for bills',
+  bills: 'Already put aside for bills',
   total: 'Total in your account',
   offline:
     'Saving where things stand needs a connection. Nothing was saved. Try again when you are back online.',
@@ -1862,6 +2051,7 @@ export const SPEND_WORDS = {
   newPurchase: 'Add a purchase',
   envelopeAdd: 'Add a purchase',
   sheetTitle: 'Purchase',
+  refundSheetTitle: 'Refund',
   empty:
     'Nothing spent yet. Add what you spend and each envelope shows what is left.',
   loading: 'Getting your purchases.',
@@ -1988,16 +2178,22 @@ export const SPEND_WORDS = {
   refundOf: 'Refund of',
   noOriginal: 'Not tied to a purchase',
   pickOriginal: 'Which purchase is it for?',
-  returnsTo: 'Returns to',
+  returnsTo: 'Goes to',
+  refundGoesTo: (where: string, purchase: string) =>
+    `${where} · refund of ${purchase}`,
   freeToSpend: 'Free to Spend',
   add: 'Add',
   needsAmount: 'Enter the amount.',
   needsEnvelope: 'Pick the envelope.',
+  needsReturnTo: 'Pick where the refund goes.',
   needsDay: 'Pick a day you were tracking, not one ahead.',
   needsShares: 'Say how much each envelope takes.',
   needsTwo: 'Pick at least two envelopes.',
   offline: 'This needs a connection. Nothing was saved.',
   detailTitle: 'Purchase',
+  refundTitle: 'Refund',
+  cashOrTyped: 'No card or account',
+  notCounted: 'Not counted',
   edit: 'Change this purchase',
   save: 'Save',
   removeLabel: 'Remove purchase',
@@ -2353,8 +2549,12 @@ export const NOTIFY_FIRST_HOUR = 8;
 export const NOTIFY_LAST_HOUR = 21;
 export const DEFAULT_NOTIFY_HOUR = 19;
 
-/** Back in the app after this long away, the banks are asked for what is new. */
-export const RETURN_PULL_AFTER_MS = 15 * 60_000;
+/** Opening or returning to the app asks the banks for their latest figures, unless this device asked this recently. */
+export const FRESH_ASK_GAP_MS = 2 * 60_000;
+/** While the app stays in front, the banks are asked again this often. */
+export const FRESH_ASK_EVERY_MS = 5 * 60_000;
+/** A bank figure this recent wears the "just updated" dot. */
+export const FRESH_DOT_MS = 5 * 60_000;
 
 export const NOTIFY_WORDS = {
   rowLabel: 'Notifications',
@@ -2404,11 +2604,12 @@ export const ITEM_SHEET_WORDS = {
   fundsNotice:
     'Everything in your plan is paid from your income. Items here come out of this pay first.',
   fundsBillNote:
-    'For a bill, this is what this pay puts in, whatever its Paid from says.',
+    'For a bill, this is what this pay puts in, whichever pays it comes out of.',
   history: 'History',
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',
   paidFromSetAside: 'It comes out of what is set aside',
+  paidFromCovered: 'Paid from what Free to Spend covers',
   paidFromFree: 'not set aside yet comes out of Free to Spend',
   stopHeading: 'Stop or pause',
   startHeading: 'Start or stop',
@@ -2421,6 +2622,46 @@ export const ITEM_SHEET_WORDS = {
   draftStatus: 'Expected. This is the plan until the money arrives.',
   dayMore: 'More about this day',
   notArrivedSub: 'Takes this day off your plan until you put it back',
+} as const;
+
+/** A pay's "Comes out of this pay" list: the bills, envelopes and goals tied to it, those paid first, and the way to add or release one. */
+export const PAY_ITEMS_WORDS = {
+  door: 'Comes out of this pay',
+  doorNothing: 'Nothing yet',
+  doorSub: (names: readonly string[]) =>
+    names.length <= 3
+      ? formatList([...names])
+      : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`,
+  title: (pay: string) => `What comes out of ${pay}`,
+  paidFirst: 'Paid first',
+  alsoPay: 'Also from this pay',
+  alsoSource: 'Also from this income',
+  onDay: (day: string) => `On ${day}`,
+  anyPay: 'Any of its pays',
+  empty: 'Nothing comes out of this pay yet.',
+  search: 'Search this pay',
+  paidFirstEach: (amount: string) => `${amount} each pay`,
+  payFirst: 'Pay it first',
+  payFirstSub: 'Out of this pay before anything else',
+  payFirstDaySub: (day: string) =>
+    `Out of every pay of this line before anything else, not only ${day}`,
+  stop: 'Stop taking it from this pay',
+  stopBillSub: 'It goes back to Spread across my pays',
+  stopOtherSub: 'It goes back to every pay',
+  add: 'Add to this pay',
+  addTitle: (pay: string) => `What should come out of ${pay}?`,
+  addNone: 'Every bill, envelope and goal that can is already here.',
+  addSearch: 'Search bills, envelopes and goals',
+  dayTitle: (name: string) => `Which pay should ${name} come out of?`,
+  dayBodyMonthly: 'Only out of the pay on that day',
+  dayBodyPay: 'Out of every pay it makes',
+  addDay: (name: string) => `Add ${name}`,
+  added: (name: string, pay: string) => `${name} now comes out of ${pay}`,
+  stoppedBill: (name: string) => `${name} goes back to Spread across my pays`,
+  stoppedOther: (name: string) => `${name} goes back to every pay`,
+  bill: 'Bill',
+  envelope: 'Envelope',
+  goal: 'Goal',
 } as const;
 
 export const PAID_HISTORY_WORDS = {
@@ -2454,16 +2695,17 @@ export const AUTO_PAY_DAYS = {
 
 /** Bills that pay themselves: the marks the app writes, the charges it matches to them, and the questions it asks when it cannot. */
 export const AUTO_PAY_WORDS = {
-  changeLabel: 'Pays itself',
-  formToggle: 'It pays itself',
-  formSummary: 'pays itself',
+  changeLabel: 'Autopay',
+  formToggle: "It's on autopay",
+  formSummary: 'autopay',
   formLine: 'Counted as paid on its due day',
   paysItselfFromCard: (card: string) =>
-    `Pays itself from ${card}`.replaceAll(' ', '\u00a0'),
-  paysItselfFromBank: 'Pays\u00a0itself\u00a0from\u00a0your\u00a0bank',
+    `Autopay · ${card}`.replaceAll(' ', '\u00a0'),
+  paysItselfFromBank: 'Autopay\u00a0·\u00a0your\u00a0bank',
   dueLinePayer: (due: string, payer: string) => `${due} · ${payer}`,
-  payerBank: 'from your bank',
-  paysItselfLine: 'Pays itself',
+  payerBank: 'autopay',
+  payerCard: (card: string) => `autopay on ${card}`,
+  paysItselfLine: 'Autopay',
   enterAmount: 'Enter what it charged',
   enterAmountSub: (due: string) =>
     `${due}\u2019s payment \u00b7 counted at the top of its range`,
@@ -2495,7 +2737,7 @@ export const AUTO_PAY_WORDS = {
   cardBillsMore: (count: number) => `Show ${count} more`,
   cardBillsFewer: 'Show fewer',
   autoSummary: (name: string, due: string, amount: string) =>
-    `${name} paid itself: ${amount} due\u00a0${due}.`,
+    `${name} was paid by autopay: ${amount} due\u00a0${due}.`,
   correctedSummary: (name: string, due: string, amount: string) =>
     `Changed ${name}'s ${due} payment to ${amount}.`,
   matchedSummary: (name: string, due: string, amount: string) =>
@@ -2542,6 +2784,12 @@ export const COST_PAID_WORDS = {
     `${cost}'s ${due} payment on ${item} goes back to unpaid${gives === null ? '' : `. ${gives}`}.`,
   givesBackItem: (item: string, amount: string) =>
     `${item} gets ${amount} back`,
+  givesBackGoal: (goal: string, amount: string) =>
+    `${goal} gets ${amount} back`,
+  goalSummary: (cost: string, event: string, amount: string) =>
+    `Paid ${cost} for ${event}: ${amount} came from this goal.`,
+  goalUndoSummary: (cost: string, event: string, amount: string) =>
+    `Took back ${cost} for ${event}: ${amount} went back to this goal.`,
   givesBackFree: (amount: string) => `${amount} goes back to Free to Spend`,
   purchaseRemoved: 'the purchase is removed from Spend',
   confirmMark: (
@@ -2550,10 +2798,14 @@ export const COST_PAID_WORDS = {
     item: string,
     heldCents: string | null,
     freeCents: string,
+    goal: string | null = null,
   ) =>
     heldCents === null
       ? `${cost} is ${totalCents}. ${item} has nothing left, so all ${freeCents} comes out of Free to Spend.`
-      : `${cost} is ${totalCents}. ${item} has ${heldCents} left; the other ${freeCents} comes out of Free to Spend.`,
+      : `${cost} is ${totalCents}. ${goal === null ? `${item} has` : item === '' ? `${goal} has` : `${goal} and ${item} have`} ${heldCents} left; the other ${freeCents} comes out of Free to Spend.`,
+  goalFallbackName: 'The goal',
+  goalClosedTakeBack: (goal: string, amount: string) =>
+    `${goal} is closed, so its ${amount} can't go back to it.`,
   confirmTitle: (cost: string) => `Mark ${cost} paid`,
   markRow: 'Mark paid',
   markOutsideRow: (cost: string) => `Mark ${cost} paid`,
@@ -2634,21 +2886,27 @@ export const PURCHASE_COST_WORDS = {
   forPayment: (due: string) => `For the ${due} payment`,
   paidFor: (due: string) => `for ${due}`,
   boughtIn: (name: string) => `${name}\u00A0· in Spend`,
-  paidWith: (name: string) => `Paid with ${name}`,
+  paidWith: (name: string) => `Charged to ${name}`,
   aPurchase: 'A purchase in Spend',
 } as const;
 
-/** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */
+/** Moving money out of an envelope or goal to another envelope or goal, or Free to Spend. */
 export const MOVE_WORDS = {
   open: "Move what's left",
+  openGoal: "Move what's saved",
   title: (name: string) => `Move money from ${name}`,
   amount: 'Amount to move',
   moveTo: 'Move it to',
-  places: 'Places',
   freeToSpend: 'Free to Spend',
+  envelopes: 'Envelopes',
+  goals: 'Goals',
+  search: 'Search places',
+  searchGoals: 'Search goals',
+  noMatch: (query: string) => `Nothing matches “${query}”.`,
   needsAmount: 'Enter how much to move.',
   needsPlace: 'Pick where it goes.',
   tooMuch: 'That is more than is left in it.',
+  tooMuchSaved: 'That is more than it holds.',
   action: (amount: string) => `Move ${amount}`,
   moved: (amount: string, to: string) => `Moved ${amount} to ${to}`,
   undone: (amount: string, from: string, to: string) =>
@@ -2674,6 +2932,8 @@ export const SET_HELD_WORDS = {
   title: (name: string) => `What ${name} holds now`,
   amount: 'Holds now',
   needsAmount: 'Enter what it holds.',
+  sourceIn: 'Where did it come from?',
+  sourceOut: 'Where did it go?',
   unchanged: 'That is what it holds already.',
   action: 'Set what it holds',
   moved: (name: string) => `Updated what ${name} holds`,
@@ -2721,6 +2981,41 @@ export const SET_HELD_WORDS = {
     `Put ${amount} back in ${name}`,
 } as const;
 
+/** A bill's "Already put aside": money added to what is set aside for its payments, never taken out. */
+export const BILL_SET_ASIDE_WORDS = {
+  open: 'Already put aside',
+  openSub: (held: string, total: string) => `${held} of ${total}`,
+  openSubNone: 'Nothing yet',
+  openSubFull: (total: string) => `All ${total} of the next payment`,
+  openSubCovered: (covered: string) =>
+    `Nothing put aside · ${covered} covered from Free to Spend`,
+  progressCovered: 'Covered from Free to Spend',
+  progressPartCovered: (held: string, covered: string) =>
+    `${held} put aside · ${covered} covered`,
+  coverNote: (covered: string, dueOn: string) =>
+    `${covered} is covered from Free to Spend until ${dueOn}, since your pays won't reach it in time. Put money aside yourself to hold it here instead.`,
+  openSubPartCovered: (held: string, covered: string) =>
+    `${held} put aside · ${covered} covered from Free to Spend`,
+  title: (name: string) => `Put money aside for ${name}`,
+  amount: 'Put aside',
+  needsAmount: 'Enter how much to put aside.',
+  action: 'Put it aside',
+  moved: (amount: string, name: string) => `Put ${amount} aside for ${name}`,
+  outsideIn: {
+    title: 'Already saved elsewhere',
+    body: 'In another account or in cash. Free to Spend stays the same.',
+  },
+  setAside: (name: string) => `${name}, put aside`,
+  sourceQuestion: 'Where does it come from?',
+  addTitle: 'Already put aside for it?',
+  addLabel: 'Already put aside',
+  addAmount: 'Amount',
+  addNone: 'None yet',
+  addHint: 'Saved for its next payment. Leave it empty if none.',
+  notRecorded: (name: string) =>
+    `${name} was added, but what is set aside for it did not record. Open the bill and choose Already put aside.`,
+} as const;
+
 export const PROBLEM_WORDS = {
   title: 'Things to fix',
   one: '1 thing to fix',
@@ -2730,6 +3025,26 @@ export const PROBLEM_WORDS = {
 
 /** Envelope tiles Home shows at Track, two to a row. */
 export const HOME_TILE_COUNT = 4;
+
+export const HOME_PIN_WORDS = {
+  pin: 'Pin to Home',
+  pinSub: 'It shows first on Home',
+  unpin: 'Unpin from Home',
+  unpinSub: 'It goes back to its usual place',
+  fullSub: `${HOME_TILE_COUNT} already pinned. Make room first`,
+  full: `Home already shows ${HOME_TILE_COUNT} pinned envelopes. Unpin one first.`,
+  title: 'Pinned on Home',
+  subtitle: 'They take the first tiles on Home, in this order.',
+  arrange: 'Arrange pinned',
+  pinned: 'Pinned',
+  pinThis: (name: string) => `Pin ${name}`,
+  moveUp: (name: string) => `Move ${name} up`,
+  moveDown: (name: string) => `Move ${name} down`,
+  unpinOne: (name: string) => `Unpin ${name}`,
+  pinnedToast: (name: string) => `${name} is pinned to Home`,
+  unpinnedToast: (name: string) => `${name} is no longer pinned`,
+  failed: "Your pins weren't saved. Check your connection and try again.",
+} as const;
 /** How many days ahead Home warns that a card with money waiting is due. */
 export const CARD_DUE_WARN_DAYS = 7;
 /** How many days ahead Home's warning row counts a Horizon shortfall. */
@@ -2781,15 +3096,25 @@ export const FORM_FLOW_WORDS = {
   expenseAmountTitle: 'How much will it be?',
   amount: 'Amount',
   dueTitle: 'When is it due?',
+  nextDueTitle: 'When is it next due?',
   due: 'Due',
   dueLater: "I'll add it later",
   dueLaterSummary: 'Later',
   repeatsTitle: 'Does it repeat?',
   repeats: 'Repeats',
+  payOnTitle: 'When do you pay it?',
+  payOn: 'You pay it',
+  payOnDue: 'On the due date',
+  payOnSetDay: 'On a set day',
+  payOnDayLabel: 'Day of the month you pay it',
+  payOnLastDay: 'On the last day of the month',
+  payOnDaySummary: (ordinal: string) => `On the ${ordinal}`,
+  payOnNote: (payOn: string, dueOn: string) =>
+    `Runway has it ready by ${payOn}, ahead of its ${dueOn} due date.`,
   endsTitle: 'Does it end?',
   ends: 'Ends',
   fundingTitle: 'Which income days pay for it?',
-  funding: 'Paid from',
+  funding: 'Comes out of',
   envelopeAmountTitle: 'How much does it get each time?',
   eachTime: 'Each time',
   balance: 'Balance',
@@ -2842,7 +3167,7 @@ export const FORM_FLOW_WORDS = {
   purchaseAmountTitle: 'How much was it?',
   refundAmountTitle: 'How much came back?',
   purchaseForTitle: 'What was it for?',
-  refundForTitle: 'Where does it go back?',
+  refundForTitle: 'Where should the refund go?',
   dayTitle: 'Which day?',
   more: 'More',
   moreTitle: 'Which envelope?',
@@ -2883,7 +3208,7 @@ export const FORM_FLOW_WORDS = {
   badRange: 'Make the top of the range higher than the low end.',
   badPercent: 'Enter a whole or half percent, up to 100.',
   finishEnding: 'Finish when it ends.',
-  pickDays: 'Paid from: pick at least one income day.',
+  pickDays: 'Pick at least one income day.',
   otherPayday: 'Pick two different days of the month.',
   discardNew: (noun: string) => `Discard this ${noun}?`,
   discardChange: 'Discard this change?',
@@ -2912,6 +3237,7 @@ export const ITEM_SHEET_R2_WORDS = {
   change: 'Change',
   changeBillSub: 'Amount, name, due date and more',
   changeAmountSub: 'Amount, name and more',
+  changeOftenSub: 'How often, amount, name and more',
   changeTargetSub: 'Target, name and more',
   firstDateNote: 'Nothing is set aside for it until it has a date.',
   pauseSub: 'Nothing new goes in',
@@ -2921,14 +3247,14 @@ export const ITEM_SHEET_R2_WORDS = {
   archiveSub: 'Off your lists. Its history stays',
   checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to Spend`,
-  stopsAt: (amount: string) => `Stops at ${amount}`,
+  stopsAt: (amount: string) => `Stops filling at ${amount}`,
   setDueDate: 'Set the due date',
   eachTime: 'Each time',
   balance: 'Balance',
   changeName: 'Change name',
   heldDetail: (amount: string) => `${amount} held · choose`,
   toppedUp: 'Topped up',
-  setAsideHeading: 'Set aside from this pay',
+  setAsideHeading: 'Comes out of this pay',
   holdsThroughUndated: 'not counting bills with no due date',
   everythingPaid: 'Mark all paid',
   markedPaid: (name: string) => `Marked ${name} paid`,
@@ -2997,15 +3323,26 @@ export const CALENDAR_PERIOD_UNITS: Record<
 
 /** The answers to "How often?": a calendar period, or a share of each pay. */
 export const HOW_OFTEN_PAYCHECK = 'paycheck';
-/** A goal that is not being added to. */
-export const HOW_OFTEN_NONE = 'none';
-
 export const HOW_OFTEN_WORDS = {
   title: 'How often does it get money?',
   goalTitle: 'How often does money go in?',
   caption: 'How often',
   paycheck: 'From a paycheck',
-  none: 'Not saving for it yet',
+  /** The folded "How often" row once it was skipped. */
+  skippedSummary: {
+    envelope: 'Not set yet',
+    goal: 'Not saving for it yet',
+  },
+  skippedNote: 'Pick one above when you are ready',
+  /** The line under "Skip for now". */
+  skipNote: {
+    envelope: 'Nothing goes in until you set it',
+    goal: 'Nothing goes in until you start saving for it',
+  },
+  /** An envelope nothing goes into, as its row and history say it. */
+  envelopeIdle: 'Nothing goes in for now',
+  /** The same state inside a change line ("Funding nothing for now to $150.00 a month"). */
+  idleInChange: 'nothing for now',
   perPeriodLabel: 'Amount',
   paycheckAmountTitle: 'How much from each pay?',
   fromWhich: 'Which pay',
@@ -3017,9 +3354,6 @@ export const HOW_OFTEN_WORDS = {
   restTitle: 'Whatever is left of each pay',
   restHelp:
     'What is left of that pay after your bills and the envelopes above this one in priority.',
-  noAddingSummary: 'Not saving for it yet',
-  noAddingHint:
-    'Nothing goes into it. Start saving for it from its sheet whenever you like.',
   needsIncome: 'Add an income source first, so there are pays to count.',
   badAmount: 'Enter an amount above $0, like 600.00.',
   currentTitle: 'How much is in it now?',
@@ -3028,6 +3362,18 @@ export const HOW_OFTEN_WORDS = {
   holdingNotRecorded: (name: string) =>
     `${name} was added, but what is in it now did not record. Add it under Where things stand.`,
   notBeingAdded: 'Not saving for it yet',
+} as const;
+
+/** The "Comes out of" question an envelope's or goal's funding asks when there is more than one pay. */
+export const FUNDING_PAY_WORDS = {
+  title: 'Which pay does it come out of?',
+  label: 'Comes out of',
+  everyPay: 'Every pay',
+  percentOfPay: (pay: string) => `of ${pay}`,
+  suffix: (pay: string) => `from ${pay}`,
+  /** The change log's phrase when no one pay is picked. */
+  logEveryPay: 'every pay',
+  gone: 'Its pay is no longer in the plan, so nothing goes in',
 } as const;
 
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
@@ -3082,6 +3428,7 @@ export const DAYS_CALENDAR_WORDS = {
     card: 'Card due',
     goal: 'Goal date',
     goalBehind: 'Goal behind',
+    planChange: 'Plan change',
   },
   monthTotals: (income: string, bills: string) =>
     `In ${income} · Bills ${bills}`,
@@ -3094,6 +3441,115 @@ export const DAYS_CALENDAR_WORDS = {
     count === 0
       ? date
       : `${date}, ${count} ${count === 1 ? 'thing' : 'things'}`,
+} as const;
+
+export const PLAN_CHANGE_WORDS = {
+  stops: (name: string) => `${name} stops`,
+  starts: (name: string) => `${name} starts`,
+  returns: (name: string) => `${name} returns`,
+  changes: (name: string) => `${name} changes`,
+  noticeLead: 'Different this time',
+  notice: (names: string) => `Different this time: ${names}`,
+  more: (count: number) => `and ${count} more`,
+  viewTitle: 'Different this time',
+  viewSub: 'Planned changes that start or end since the last pay.',
+} as const;
+
+/** The coming-changes row, a change's own sheet and the "What will change?" question. */
+export const COMING_WORDS = {
+  changesOn: (date: string, figures: string) => `${figures} from ${date}`,
+  changesOnPlain: (date: string) => `Changes ${date}`,
+  startsOn: (date: string) => `Starts ${date}`,
+  withEvent: (text: string, event: string) => `${text} \u00b7 ${event}`,
+  many: (count: number, first: string) =>
+    `${count} coming changes \u00b7 first on ${first}`,
+  backAfter: (lastDay: string) => `Back after ${lastDay}`,
+  goesTo: (name: string, figure: string) => `${name} goes to ${figure}`,
+  goesBackTo: (name: string, figure: string) =>
+    `${name} goes back to ${figure}`,
+  lineChanges: (name: string, figures: string, date: string) =>
+    `${name}: ${figures} from ${date}`,
+  lineChangesPlain: (name: string, date: string) =>
+    `${name} changes from ${date}`,
+  lineStopsSaving: (name: string, date: string) =>
+    `${name} stops saving from ${date}`,
+  lineEnds: (name: string, lastDay: string) => `${name} ends after ${lastDay}`,
+  lineStarts: (name: string, date: string) => `${name} starts ${date}`,
+  lineReturns: (name: string, figure: string, lastDay: string) =>
+    `${name} goes back to ${figure} after ${lastDay}`,
+  lineReturnsPlain: (name: string, lastDay: string) =>
+    `${name} goes back after ${lastDay}`,
+  untilOnly: (lastDay: string) => `Until ${lastDay}`,
+  listTitle: 'Coming changes',
+  thingsChange: (count: number) => `${count} things change`,
+  dayListTitle: (day: string) => `Changing ${day}`,
+  whatChanges: 'What changes',
+  whenCaption: 'When',
+  from: (date: string) => `From ${date}`,
+  until: (lastDay: string) => `Until ${lastDay}, then it goes back`,
+  stopsAfter: (lastDay: string) => `Stops after ${lastDay}`,
+  partOfCaption: 'Part of',
+  openEventSub: 'Open the event',
+  tie: 'Tie to an event',
+  tieSub: 'Group it with the rest of what is coming',
+  changeEvent: 'Change event',
+  untie: (event: string) => `Untie from ${event}`,
+  untieSub: 'The change stays. It just is not part of the event.',
+  tieTitle: 'Which event is it part of?',
+  tieNone: 'No open events to tie it to.',
+  tieOn: (event: string) => `Tied to ${event}`,
+  untied: (event: string) => `Untied from ${event}`,
+  tieFailed: 'This did not save. Nothing was changed.',
+  cancel: 'Cancel this change',
+  cancelSub: 'It never happens. What you have now stays.',
+  cancelConfirm: 'Cancel the change',
+  cancelKeep: 'Keep it',
+  cancelTitleChange: (name: string, figures: string, date: string) =>
+    `Cancel ${name} ${figures} from ${date}?`,
+  cancelTitlePlain: (name: string, date: string) =>
+    `Cancel the change to ${name} from ${date}?`,
+  cancelTitleStop: (name: string, lastDay: string) =>
+    `Cancel ${name} ending after ${lastDay}?`,
+  cancelTitleStart: (name: string, date: string) =>
+    `Cancel ${name} starting ${date}?`,
+  cancelBody: 'Nothing else changes. You can plan it again any time.',
+  cancelEntry: (name: string, what: string, date: string) =>
+    `Cancelled: ${name} ${what} from ${date}`,
+  cancelEntryStop: (name: string) => `${name} won't end after all`,
+  cancelled: (name: string) => `Cancelled the change to ${name}`,
+  cancelFailed: 'This did not cancel. Nothing was changed.',
+  gone: 'That change is no longer there.',
+  planChange: 'Plan a change',
+  planTitle: 'What will change?',
+  planAmount: 'A new amount from a date',
+  planAmountSub: 'It stays that way until you change it again',
+  planStretch: 'A different amount for a while',
+  planStretchSub: 'Then it goes back to what it is now',
+  planStop: 'It stops on a date',
+  planStopSub: 'Its history stays',
+  planStopGoalSub: 'The goal ends. Its history stays.',
+  planPause: 'Pause it',
+  planPauseSub: 'Stop it for a while, then it comes back',
+  planStopSaving: 'Stop saving from a date',
+  planStopSavingSub: 'The goal stays. No new money goes in.',
+  planNone: 'Nothing can be planned for this one.',
+  somethingNew: 'Something new',
+  somethingNewSub: 'A new pay, bill, envelope or goal that starts later',
+  newTitle: 'What is new?',
+  newPaySub: 'Money that starts coming in',
+  newBillSub: 'Something you will start paying',
+  newEnvelopeSub: 'Money you will start setting aside to spend',
+  newGoalSub: 'Something you will start saving for',
+  newStartsTitle: 'When does it start?',
+  newStartsLabel: 'Starts on',
+  newStartsBlocker: 'Pick a day after today, within ten years.',
+  newNext: 'Next',
+} as const;
+
+export const PAUSE_PAY_WORDS = {
+  label: 'Pause it',
+  subtitle: 'Stop it for a while, then it comes back',
+  zeroOnlyPause: 'Zero pay is only for a while. Pick when it comes back.',
 } as const;
 
 export const DAYS_WORDS = {
@@ -3157,6 +3613,48 @@ export const PLAN_OVERVIEW_WORDS = {
 /** Quick periods on Spend, as the URL keeps them; any other value is a month as `yyyy-mm`. */
 export const SPEND_PERIODS = ['month', 'lastMonth', '30', '90'] as const;
 export const DEFAULT_SPEND_PERIOD = 'month' as const;
+
+/** What Spend's Kind filter narrows to, as the URL keeps it; none shows every purchase and refund that counts. */
+export const SPEND_KINDS = [
+  'purchases',
+  'moneyIn',
+  'refunds',
+  'notCounted',
+] as const;
+
+export const SPEND_FILTER_WORDS = {
+  label: 'Filter purchases',
+  kind: 'Kind',
+  kinds: {
+    purchases: 'Purchases',
+    moneyIn: 'Money in',
+    refunds: 'Refunds',
+    notCounted: 'Not counted',
+  },
+  paidWith: 'Card or account',
+  amount: 'Amount',
+  amountLabel: 'Amount range',
+  amountChip: (from: string, to: string) => `${from} to ${to}`,
+  minLabel: 'Lowest amount',
+  maxLabel: 'Highest amount',
+  notCountedHelp: 'Left out of spending, or from before you linked.',
+  moneyInHelp:
+    'Deposits and refunds. Moves between your own accounts are left out.',
+  refundsHelp: 'Money a store or a card gave back.',
+  cameBack: 'Came back',
+  inFree: 'In Free to Spend',
+  toPay: 'Your pay',
+  cameIn: 'Came in',
+  onItsWay: 'On its way',
+  onItsWayIntro:
+    'The bank has not settled these yet, so they don’t count as money in until they clear.',
+  onItsWayPending: 'Not counted until it clears',
+  waitingFor: (account: string) => `Waiting for ${account} to clear`,
+  otherAccount: 'the other account',
+  show: (count: number) =>
+    `Show ${count} ${count === 1 ? 'purchase' : 'purchases'}`,
+  showShort: (count: number) => `Show ${count}`,
+} as const;
 
 export const SPEND_PERIOD_LABELS = {
   month: 'This month',
@@ -3491,6 +3989,17 @@ const countMembers = (bills: number, envelopes: number, goals: number) =>
 
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {
+  moneyIn: 'Money in this month',
+  moneyInSub: (straight: string | null, plan: string | null) =>
+    [
+      straight === null ? null : `${straight} to Free to Spend`,
+      plan === null ? null : `${plan} through pay and envelopes`,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  moneyInNone: 'Nothing has come in since the 1st',
+  onItsWay: 'On its way',
+  onItsWaySub: (total: string) => `${total} · not counted yet`,
   total: 'Everything you have',
   cards: 'Set aside for cards',
   bills: 'Held for bills',
@@ -3502,6 +4011,25 @@ export const FREE_SUM_WORDS = {
   result: 'Free to Spend',
   laterFix:
     'To fix a balance later, correct the income day or the bill payment it came from.',
+} as const;
+
+export const HELD_BREAKDOWN_WORDS = {
+  empty: {
+    bills: 'Nothing is held for bills right now.',
+    goals: 'Nothing is held for goals right now.',
+    envelopes: 'Nothing is held in envelopes right now.',
+    horizon: 'Nothing is held for Horizon right now.',
+    cards: 'Nothing is set aside for cards right now.',
+  },
+  coverRule: (days: number) =>
+    `Bills due in the next ${days} days, or before your next pay, are covered from Free to Spend when your pays won't reach them in time.`,
+  covered: 'Covered from Free to Spend',
+  putAsideAndCovered: (putAside: string, covered: string) =>
+    `${putAside} put aside · ${covered} covered from Free to Spend`,
+  due: (date: string) => `Due ${date}`,
+  short: (date: string) => `Short · due ${date}`,
+  shortSetStart: 'Set what you have to cover it',
+  notCovered: 'Not covered',
 } as const;
 
 export const CASH_POSITION_WORDS = {
@@ -3561,6 +4089,40 @@ export const MOVED_DAY_WORDS = {
     count === 1
       ? `What you changed for ${from} has no new income day near it, so it stops applying.`
       : `What you changed for ${count} income days has no new date near it, so it stops applying.`,
+} as const;
+
+/** "Pay these first" taking a share of the bill it pays. */
+export const PAIRING_BILL_WORDS = {
+  mode: 'Of the bill',
+  full: 'Full',
+  half: 'Half',
+  other: 'Other share',
+  shareLabel: 'Share of the bill',
+  shareWords: { full: 'All', half: 'Half' },
+  describe: (bps: number) =>
+    bps === 10_000
+      ? 'the full bill'
+      : bps === 5_000
+        ? 'half the bill'
+        : `${bps / 100}% of the bill`,
+  worked: (
+    share: string,
+    name: string,
+    bill: string | null,
+    cents: string,
+    isOneDay: boolean,
+  ) =>
+    `${share} of ${name}${bill === null ? '' : ` (${bill})`} · up to ${cents} from ${isOneDay ? 'this pay' : 'each pay'}`,
+  ranged:
+    'Uses the high end of its range. Follows the bill when it changes, and stops once its payment is covered.',
+  follows:
+    'Follows the bill when it changes, and stops once its payment is covered.',
+  undated: (name: string) =>
+    `${name} has no due date yet, so this sends nothing until it has one.`,
+  nothingAhead: (name: string) =>
+    `${name} has no payment coming, so this sends nothing.`,
+  typeShare: 'Type a percent to see what each pay puts in.',
+  badShare: 'Type a share above 0% and up to 100%.',
 } as const;
 
 /** What happens to "Pay these first" when the item it pays has stopped. */
@@ -3881,10 +4443,10 @@ export const INTEREST_ACCOUNT_KINDS: readonly (typeof ACCOUNT_KINDS)[number][] =
 
 /** A bill's one "how is it paid" question: a credit card, an account it comes out of, or neither yet. */
 export const BILL_PAY_WORDS = {
-  title: 'How do you pay it?',
-  label: 'Paid with',
+  title: 'What is it charged to?',
+  label: 'Charged to',
   cardDetail: 'Credit card',
-  fromBank: 'Straight from your bank',
+  fromBank: 'Your bank account',
 } as const;
 
 export const ACCOUNT_WORDS = {
@@ -3899,6 +4461,17 @@ export const ACCOUNT_WORDS = {
   leftOut: (names: string) => `Not counted: ${names}`,
   balanceOn: (day: string) => `As of ${day}`,
   bankBalanceOn: (day: string) => `From your bank, ${day}`,
+  updatedJustNow: 'Updated just now',
+  updatedMinutes: (minutes: number) => `Updated ${minutes}\u00a0min ago`,
+  updatedHours: (hours: number) => `Updated ${hours}\u00a0hr ago`,
+  rowJustNow: 'Just now',
+  rowMinutes: (minutes: number) => `${minutes}\u00a0min ago`,
+  rowHours: (hours: number) => `${hours}\u00a0hr ago`,
+  autoCheckChip: 'Checks every 5\u00a0min',
+  autoCheckTitle: 'Kept up to date',
+  autoCheck: (bank: string) =>
+    `While Runway is open, it asks ${bank} for this balance every 5 minutes, and again when you open it or pull down. Accounts without this chip update whenever their bank shares a new balance, usually a few times a day.`,
+  pendingAmount: (amount: string) => `${amount}\u00a0pending`,
   holdsTitle: 'What it holds',
   holdsEmpty: 'Nothing is held here yet.',
   notYetGivenAJob: 'Not yet given a job',
@@ -4081,6 +4654,11 @@ export const CARD_WORDS = {
     'Add the cards you spend on. What you charge waits here until you pay the card.',
   waiting: 'Waiting to be paid',
   nothingToPay: 'Nothing to pay',
+  pendingAmount: (amount: string) => `${amount}\u00a0pending`,
+  autoCheckChip: 'Checks every 5\u00a0min',
+  autoCheckTitle: 'Kept up to date',
+  autoCheck: (bank: string) =>
+    `While Runway is open, it asks ${bank} for this card's balance every 5 minutes, and again when you open it or pull down. Cards without this chip update whenever their bank shares a new balance, usually a few times a day.`,
   reserveLabel: 'Waiting to be paid',
   payOff: (name: string) => `Pay off ${name.replace(/ (\S+)$/, '\u00a0$1')}`,
   payOffShort: 'Pay off',
@@ -4181,7 +4759,7 @@ export const CARD_WORDS = {
   beforeTracking: (day: string) => `Pick ${day} or a later day.`,
   markedAllWith: (cards: string) => `Charged to ${cards}.`,
   markedPaidWith: (bill: string, card: string) =>
-    `Marked ${bill} paid with ${card}`,
+    `Marked ${bill} paid, charged to ${card}`,
   freeWaitingHelp:
     "Charged to your cards and not paid yet. It's set aside now, so paying a card doesn't change Free to Spend.",
   freeOnHandHelp:
@@ -4196,12 +4774,63 @@ export const CARD_WORDS = {
   dueInDays: (days: number) =>
     days === 1 ? 'Due tomorrow' : `Due in ${days} days`,
   dueToday: 'Due today',
+  dueFromBank: (bank: string) => `Due date from ${bank}`,
+  dueFromBankTitle: 'Due date',
+  dueFromBankSummary: (date: string, bank: string) => `${date}, from ${bank}`,
+  dueFromBankBody: (bank: string) =>
+    `${bank} sets this date, so Runway follows it. If you unlink the card, the day you typed comes back.`,
+  statementCaption: (bank: string) => `From your ${bank} statement`,
+  minimumDue: 'Minimum due',
+  statementBalance: 'Statement balance',
+  statementIssued: (date: string) => `Issued\u00a0${date}`,
+  minimumShort: (amount: string) => `${amount}\u00a0minimum`,
+  minimumQuick: (amount: string) => `Minimum ${amount}`,
+  everythingQuick: (amount: string) => `Everything waiting ${amount}`,
+  quickAmounts: 'Or pay',
+  minimumDueOn: (date: string) => `Due\u00a0${date}`,
+  minimumWasDue: (date: string) => `Was due\u00a0${date}`,
+  minimumPaid: 'Paid',
+  minimumPaidDetail: (amount: string, date: string) =>
+    `You paid ${amount} on\u00a0${date}`,
+  minimumNone: 'Nothing to pay on this statement',
+  minimumNotShared: (bank: string) =>
+    `${bank} doesn\u2019t share this card\u2019s minimum`,
+  offerBadge: 'New',
+  offerTitle: 'See your minimum payment',
+  offerBody: (bank: string) =>
+    `${bank} shares it once you agree. Not every card has one.`,
+  offerCovers: (names: string) => `Covers ${names} too`,
+  offerSeparate: (bank: string) =>
+    `This card is on its own ${bank} sign-in, so it asks separately`,
+  offerAction: (bank: string) => `Agree at ${bank}`,
+  offerLater: 'Not now',
+  offerRow: (bank: string) => `Get the minimum from ${bank}`,
+  offerRowHelp: 'Agree once and it shows here',
+  offerDone: (bank: string) =>
+    `Done. The minimum shows here as soon as ${bank} sends it`,
+  offerFailed: (bank: string) => `Couldn\u2019t reach ${bank}. Try again`,
   homeTitle: 'Cards',
   homeSeeAll: 'See all',
+  totalOwed: (amount: string) => `${amount} waiting to be paid on your cards`,
+  nothingOwed: 'Nothing waiting to be paid on your cards',
   dueWarning: (name: string, date: string, amount: string) =>
     `${name} is due\u00a0${date} · ${amount} waiting`,
   dueTodayWarning: (name: string, amount: string) =>
     `${name} is due today · ${amount} waiting`,
+  dueWarningMinimum: (
+    name: string,
+    date: string,
+    minimum: string,
+    amount: string,
+  ) => `${name} is due\u00a0${date} · ${minimum} minimum, ${amount} waiting`,
+  dueTodayWarningMinimum: (name: string, minimum: string, amount: string) =>
+    `${name} is due today · ${minimum} minimum, ${amount} waiting`,
+  dueWarningPastMinimum: (
+    name: string,
+    date: string,
+    minimum: string,
+    amount: string,
+  ) => `${name} was due\u00a0${date} · ${minimum} minimum, ${amount} waiting`,
   dueWarningOpen: 'Pay it off',
   dueWarningPast: (name: string, date: string, amount: string) =>
     `${name} was due\u00a0${date} · ${amount} waiting`,
@@ -4298,6 +4927,62 @@ export const RELEASED_WORDS = {
   manySub: 'They no longer count. History says where each one was.',
 };
 
+/** Words for a card's annual fee and the bill and group Runway keeps in step with it. */
+export const CARD_FEE_WORDS = {
+  groupName: 'Card annual fees',
+  billName: (card: string) => `${card} annual fee`,
+  feeTitle: 'Does it have an annual fee?',
+  feeLabel: 'Annual fee',
+  feeHint: 'It goes on Bills and is saved up for across your pays.',
+  noFee: 'No annual fee',
+  feeNone: 'None',
+  needsFee: 'Enter the fee, or pick No annual fee.',
+  dateTitle: 'When is the fee charged next?',
+  dateLabel: 'Next fee',
+  needsDate: 'Pick the day the fee is charged next.',
+  pastDate: 'Pick today or a later day.',
+  heldTitle: 'Money set aside for the fee',
+  heldCaption: (amount: string) => `${amount} is set aside for the fee`,
+  needsHeld: 'Choose where the money set aside for the fee goes.',
+  heldFreeBody: 'It goes back to Free to Spend from today.',
+  loading: 'Your plan is still loading. Try again in a moment.',
+  changeFee: (from: string, to: string) => `annual fee ${from} to ${to}`,
+  changeFeeDate: (from: string, to: string) => `next fee ${from} to ${to}`,
+  changeNoFee: 'none',
+  groupStarted: 'Started using Card annual fees.',
+  billAdded: (bill: string, amount: string, date: string) =>
+    `Added ${bill}, ${amount} yearly, next on ${date}.`,
+  billChanged: (bill: string, what: string, from: string) =>
+    `${bill}: ${what}, from ${from}.`,
+  billRenamed: (from: string, to: string) => `Renamed ${from} to ${to}.`,
+  billAmount: (from: string, to: string) => `${from} to ${to}`,
+  billDate: (from: string, to: string) => `next on ${to} (was ${from})`,
+  billEnded: (bill: string) => `${bill}: ended with its card's fee.`,
+  groupNote: "Kept in step with your cards' annual fees.",
+  groupNotePlan: 'Kept in step for you.',
+  billChangeSub: 'Priority, and from when',
+  billCardRow: 'Fee and date',
+  billCardRowSub: (card: string) => `Change it on ${card}`,
+  archiveTitle: (card: string) => `Archive ${card}?`,
+  archiveDo: 'Archive the card',
+} as const;
+
+export const SORTING_WORDS = {
+  caption: 'Needs a home',
+  label: "I'm not sorting yet",
+  helpOn:
+    "New charges stay in Free to Spend and in Spend, and don't wait here. Money in and moves between accounts still ask",
+  helpOff: 'Charges from the bank wait here for a home',
+  saveFailed: 'That did not save. Nothing was changed.',
+} as const;
+
+const getBulkCount = (written: number, total: number) => {
+  const noun = (count: number) => (count === 1 ? 'purchase' : 'purchases');
+  return written === total
+    ? `${written} ${noun(written)}`
+    : `${written} of ${total} ${noun(total)}`;
+};
+
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank',
@@ -4311,19 +4996,33 @@ export const NEEDS_HOME_WORDS = {
   fromBank: 'from your bank',
   untitled: 'Purchase',
   moneyIn: 'Money in',
+  refundLabel: 'Refund',
   moneyInHelp:
-    'Deposits from your bank. Runway links one to your pay when it is clearly that day’s; the rest wait for you to say which pay they are.',
+    'Deposits that may be a pay or a move between your accounts. Runway links one to your pay when it is clearly that day’s. Any other money in is already in Free to Spend, under Spend’s Money in.',
   maybeTwice: 'Might be in twice',
   inEnvelope: (name: string) => `In ${name}`,
   maybeTwiceHelp:
     'You put these in an envelope, so they count there. Each looks like one you added yourself before linking your bank, so it may be in twice. Nothing is removed unless you say so: open one to say if it’s the same.',
-  leaveOut: 'Leave it out of spending',
-  leaveOutSub: 'Free to Spend gets it back',
-  leaveOutMoneyInSub: 'It will not count as income or spending',
-  leftOut: 'Left out of spending',
+  notPay: 'Not a pay',
+  notPaySub: 'It’s already in Free to Spend',
+  savedIn: 'Saved as money in',
+  unseenOut: 'To an account Runway doesn’t see',
+  unseenOutSub: 'Not spending. Your balance already shows it',
+  unseenIn: 'From an account Runway doesn’t see',
+  savedMove: 'Saved as a move to another account',
+  thisWasPay: 'This was a pay',
+  unlistedPay: 'A pay that isn’t listed',
+  thisWasPaySub: 'Plan it as a one-time pay so it can fill envelopes',
+  alreadyIn: 'It’s already in Free to Spend through your balance.',
+  onItsWaySheet:
+    'If it’s a move between your accounts, it pairs once it clears. If not, it counts then.',
+  linkedTo: (day: string) => `Linked to your pay on ${day}.`,
   keepFree: 'Keep in Free to Spend',
   keepFreeSub: 'Still counts, with no envelope',
   keptFree: 'Kept in Free to Spend',
+  keepRefundFree: 'Leave it in Free to Spend',
+  keepRefundFreeSub: 'It’s already counted there. No envelope gets it back',
+  keptRefundFree: 'Left in Free to Spend',
   historyOne: 'A purchase from before you linked is history now',
   historyMany: (count: number) =>
     `${count} purchases from before you linked are history now`,
@@ -4351,12 +5050,59 @@ export const NEEDS_HOME_WORDS = {
   matchedOneSub: 'Counted once, at the bank’s amount.',
   matchedManySub: 'Each is counted once, at the bank’s amount.',
   matchUndone: 'Match undone',
+  movesHeading: 'Moves and card payments',
+  movesHelp:
+    'Money that left one of your accounts and arrived in another account or on a card. Open one to say if that is what it was.',
+  chargesHeading: 'Charges',
+  moveKind: 'Move',
+  cardPaymentKind: 'Card payment',
+  refundRow: 'This is a refund',
+  refundRowSub: 'It goes back where the purchase came from',
+  refundOfRow: (name: string, day: string) => `Refund of ${name}, ${day}`,
+  refundOfRowSub: (where: string) => `Goes to ${where}`,
+  refundOtherRow: 'A refund of something else',
+  refundOtherRowSub: 'Pick the purchase, or where it goes',
+  refundAlreadyIn: 'A refund, already counted in Free to Spend.',
+  putBackRow: 'Put it back in an envelope',
+  putBackRowSub: 'Only if it came out of one',
+  notRefundRow: 'It wasn’t a refund',
+  notRefundRowSub: 'A payment from an account Runway doesn’t see',
+  unseenRow: 'A payment from an account Runway doesn’t see',
+  unseenRowSub: 'It will not count as income',
+  select: 'Select',
+  selectRow: (name: string) => `Select ${name}`,
+  selectedCount: (count: number) => `${count} selected`,
+  selectAll: 'Select all',
+  clearAll: 'Clear all',
+  cancelSelect: 'Cancel',
+  nothingTicked: 'Tick the charges you want to sort together.',
+  bulkKeepFree: 'Keep in Free to Spend',
+  bulkKeepFreeShort: 'Keep',
+  bulkPut: 'Put in an envelope',
+  bulkPutShort: 'Envelope',
+  bulkPickTitle: 'Which envelope?',
+  bulkPickSub: (count: number) =>
+    count === 1
+      ? 'For the 1 charge you ticked'
+      : `For the ${count} charges you ticked`,
+  bulkSearch: 'Search your envelopes',
+  bulkNoMatch: 'Nothing matches that.',
+  bulkNoEnvelopes: 'You have no envelopes yet.',
+  bulkKept: (written: number, total: number) =>
+    `Kept ${getBulkCount(written, total)} in Free to Spend`,
+  bulkPlaced: (written: number, total: number, envelope: string) =>
+    `Put ${getBulkCount(written, total)} in ${envelope}`,
+  bulkPartlyFailed: 'The rest did not save. Nothing else was changed.',
+  bulkUndone: (count: number) =>
+    count === 1
+      ? '1 purchase is back in Needs a home'
+      : `${count} purchases are back in Needs a home`,
+  bulkUndoPartly: (count: number, total: number) =>
+    `${count} of ${total} purchases were put back. The rest changed elsewhere and were left alone.`,
 } as const;
 
 export const DEPOSIT_WORDS = {
   whichTitle: 'Which pay is this?',
-  noneNear:
-    'No pay day is close to this one. You can leave it out of spending for now.',
   dayRow: (differs: string | null) =>
     differs === null ? 'Same as expected' : differs,
   linkedOne: (amount: string, day: string) =>
@@ -4383,18 +5129,21 @@ export const DEPOSIT_WORDS = {
   notWaiting: 'This deposit is not waiting in Needs a home anymore.',
   notLinked: 'This deposit is not linked to a pay anymore.',
   dayNotArrived: 'That pay was marked as not arrived. Pick another one.',
-  lost: 'This was linked to a pay Runway no longer lists, or to one that already has its deposit. Pick the pay it is, or leave it out.',
+  lost: 'This was linked to a pay Runway no longer lists, or to one that already has its deposit. Pick the pay it is, or say it is not a pay.',
 } as const;
 
 export const PAIR_WORDS = {
   whichTitle: 'Is this a move between your accounts?',
+  cardWhichTitle: (card: string | null, from: string | null) =>
+    `Did you pay ${card ?? 'a card'} from ${from ?? 'one of your accounts'}?`,
+  notCardPayment: 'Not a card payment',
   pairVerb: 'Pair them',
-  pickEnvelope: 'Then choose where it goes',
-  pickPay: 'Pick the pay it is',
+  leftOn: (day: string) => `Left ${day}`,
+  arrivedOn: (day: string) => `Arrived ${day}`,
   cardPaymentTo: (card: string) => `Card payment to ${card}`,
   cardPaymentFrom: (account: string) => `Payment from ${account}`,
   transferred: (amount: string, from: string, to: string) =>
-    `Paired ${amount} from ${from} to ${to} as a move between your accounts`,
+    `Moved ${amount} from ${from} to ${to}`,
   paidCard: (amount: string, card: string, from: string) =>
     `Recorded a ${amount} payment to ${card} from ${from}`,
   pairedMany: (count: number) => `Paired ${count} moves between your accounts`,
@@ -4412,8 +5161,8 @@ export const PAIR_WORDS = {
   notWaiting: 'These are not both waiting in Needs a home anymore.',
   notPaired: 'These are not paired with each other anymore.',
   tooManyPayments: 'Too many payments were saved to this card that day.',
-  lost: 'Its other side changed or is gone, so it is waiting again. Pair it, file it or leave it out.',
-  doorTitle: 'Moves between your accounts',
+  lost: 'Its other side changed or is gone, so it is waiting again. Pair it again or say what it is.',
+  doorTitle: 'Moves and card payments',
   screenTitle: 'Account moves',
   doorShort: 'Account moves',
   doorNarrow: 'Moves',
@@ -4430,6 +5179,32 @@ export const PAIR_WORDS = {
     `You moved this from ${from} to ${to}.`,
   sheetCardPayment: (from: string, card: string) =>
     `You paid ${card} from ${from}.`,
+  waitingTitle: 'Waiting to pair',
+  pairedTitle: 'Paired',
+  waitingCardPayment: 'Your bank calls this a card payment',
+  waitingTransfer: 'Your bank calls this a move between accounts',
+  waitingIntro: 'Your bank calls these card payments or moves.',
+  isSpending: 'This is spending',
+  isSpendingSub: 'Back on Purchases, from Free to Spend',
+} as const;
+
+export const MEMORY_WORDS = {
+  movesRow: 'Remembered moves',
+  movesRowSub: 'Moves you paired by hand',
+  payersRow: 'Remembered payers',
+  payersRowSub: 'Deposits you linked to this pay by hand',
+  movesTitle: 'Remembered moves',
+  payersTitle: 'Remembered payers',
+  rowDetail: 'Tap to forget it',
+  moveTo: (account: string) => `To ${account}`,
+  paymentTo: (card: string) => `Payment to ${card}`,
+  payerRow: (name: string) => `Deposits from ${name}`,
+  forgetTitle: 'Forget this?',
+  forgetMessage:
+    'Runway will ask you each time instead. Anything already paired or linked stays as it is.',
+  forgetConfirm: 'Forget it',
+  forgotten: 'Forgotten',
+  failed: 'That was not forgotten.',
 } as const;
 
 export const LINK_WORDS = {
@@ -4530,6 +5305,7 @@ export const LINK_WORDS = {
   rowLabel: 'Link to your bank',
   rowHelp: 'Bring its balance in from your bank',
   rowLinked: (when: string) => `Linked \u00b7 updated ${when}`,
+  fallbackBank: 'Your bank',
   methodCardTitle: 'How do you want to add the card?',
   methodAccountTitle: 'How do you want to add the account?',
   refresh: 'Refresh from your bank',
@@ -4724,4 +5500,111 @@ export const RULE_WORDS = {
   changeMade: (sentence: string) => `Rule made: ${sentence}.`,
   changeChanged: (sentence: string) => `Rule changed: ${sentence}.`,
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
+} as const;
+
+const listNames = (names: readonly string[]) =>
+  names.length <= 3
+    ? names.join(', ').replace(/, ([^,]*)$/, ' and $1')
+    : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
+
+/** Picking several bills, envelopes or goals in one Plan view and changing them together. */
+export const PLAN_SELECT_WORDS = {
+  noun: {
+    bills: ['bill', 'bills'],
+    envelopes: ['envelope', 'envelopes'],
+    goals: ['goal', 'goals'],
+  } as const,
+  tick: (name: string) => `Select ${name}`,
+  count: (count: number, noun: readonly [string, string]) =>
+    `${count} ${count === 1 ? noun[0] : noun[1]} selected`,
+  nothing: (noun: readonly [string, string]) => `Tap the ${noun[1]} to change`,
+  selectedMonthly: (
+    count: number,
+    noun: readonly [string, string],
+    figure: string,
+    notCounted: number,
+  ) =>
+    `${count} ${count === 1 ? noun[0] : noun[1]} · ${figure} a month${notCounted > 0 ? ` · ${notCounted} not in the total` : ''}`,
+  selectAll: 'Select all',
+  clearAll: 'Clear',
+  done: 'Done',
+  groupTicked: (ticked: number, total: number) =>
+    `${ticked} of ${total} selected`,
+  groupTick: (name: string) => `Select everything in ${name}`,
+  groupUntick: (name: string) => `Clear everything in ${name}`,
+  leaveTitle: 'Leave selecting?',
+  leaveBody: (count: number, noun: readonly [string, string]) =>
+    `The ${count} ${count === 1 ? noun[0] : noun[1]} you selected will be cleared.`,
+  leave: 'Leave',
+  change: 'Change',
+  changeTitle: (count: number, noun: readonly [string, string]) =>
+    `Change ${count} ${count === 1 ? noun[0] : noun[1]}`,
+  archive: 'Archive',
+  payOn: 'Pay on',
+  payOnSub: 'The day of the month you pay them',
+  paidFrom: 'Comes out of',
+  paidFromSub: 'Which pay they come out of',
+  paidWith: 'Charged to',
+  paidWithSub: "Card or account, and whether they're on autopay",
+  priority: 'Priority',
+  prioritySub: 'Must, Should or Want',
+  group: 'Move to a group',
+  groupSub: 'Or take them out of their group',
+  payOnTitle: 'When do you pay them?',
+  payOnSkipped: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'keeps its' : 'keep their'} own pay day.`,
+  feeSkipped: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'stays with its card' : 'stay with their cards'}, so ${names.length === 1 ? "it isn't" : "they aren't"} changed.`,
+  feeOnly: 'Annual fee bills are archived with their card.',
+  paidFromTitle: 'Which pay covers them?',
+  paidFromSkipped: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'is paid once and keeps its' : 'are paid once and keep their'} own days.`,
+  paidFromPinsNote: (count: number) =>
+    count === 1
+      ? 'This replaces 1 change you made for one pay.'
+      : `This replaces ${count} changes you made for single pays.`,
+  paidWithTitle: 'What are they charged to?',
+  leaveEach: 'Leave each as it is',
+  paysItselfOn: "They're on autopay",
+  paysItselfOff: 'I mark them paid',
+  priorityTitle: 'How much do they matter?',
+  priorityFolds: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'has' : 'have'} an extra at another level. ${names.length === 1 ? 'It becomes' : 'Each becomes'} one amount at this level.`,
+  groupTitle: 'Which group?',
+  noGroup: 'No group',
+  save: 'Save',
+  nothingChanges: 'They already read that way.',
+  summary: (name: string, change: string, from: string) =>
+    `${name}: ${change}, from ${from}.`,
+  summaryMoneyless: (name: string, change: string) => `${name}: ${change}.`,
+  updated: (count: number, noun: readonly [string, string]) =>
+    `Updated ${count} ${count === 1 ? noun[0] : noun[1]}`,
+  updatedPartly: (done: number, total: number, failed: readonly string[]) =>
+    `Updated ${done} of ${total}. ${listNames(failed)} did not save and ${failed.length === 1 ? 'is' : 'are'} still selected.`,
+  pinsKept: (names: readonly string[]) =>
+    `${listNames(names)} still ${names.length === 1 ? 'has' : 'have'} amounts set per pay. Open ${names.length === 1 ? 'it' : 'each'} to clear them.`,
+  pickToContinue: 'Pick one to continue.',
+  failed: 'That did not save. Nothing was changed.',
+  undo: 'Undo',
+  undone: 'Put back as they were',
+  undoPartly: (done: number, total: number, skipped: readonly string[]) =>
+    `Put back ${done} of ${total}. ${listNames(skipped)} changed again since or did not save, so ${skipped.length === 1 ? 'it was' : 'they were'} left as ${skipped.length === 1 ? 'it is' : 'they are'}.`,
+  undoFailed: 'That could not be put back.',
+  archiveTitle: (count: number, noun: readonly [string, string]) =>
+    `Archive ${count} ${count === 1 ? noun[0] : noun[1]}?`,
+  archiveBody: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'leaves' : 'leave'} your plan from today. ${names.length === 1 ? 'Its' : 'Their'} history stays.`,
+  archiveHeld: (amount: string, holding: readonly string[], total: number) =>
+    total === 1
+      ? `It holds ${amount}`
+      : holding.length === 1
+        ? `${holding[0]} holds ${amount}`
+        : `${listNames(holding)} hold ${amount} together`,
+  archiveConfirm: (count: number, noun: readonly [string, string]) =>
+    `Archive ${count} ${count === 1 ? noun[0] : noun[1]}`,
+  archived: (count: number, noun: readonly [string, string]) =>
+    `Archived ${count} ${count === 1 ? noun[0] : noun[1]}`,
+  archivedPartly: (done: number, total: number, failed: readonly string[]) =>
+    `Archived ${done} of ${total}. ${listNames(failed)} did not archive and ${failed.length === 1 ? 'is' : 'are'} still selected.`,
+  hint: 'Press and hold to select several',
 } as const;

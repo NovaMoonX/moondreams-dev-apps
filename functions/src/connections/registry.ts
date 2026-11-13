@@ -12,9 +12,11 @@ import { createAListAdapter } from '../apps/a-list/share/adapter.js';
 import { createGoingOnceAdapter } from '../apps/going-once/share/adapter.js';
 import { createNineLivesAdapter } from '../apps/nine-lives/share/adapter.js';
 import { createPinchAdapter } from '../apps/pinch/share/adapter.js';
+import { createRunwayAdapter } from '../apps/runway/share/adapter.js';
 import { createWaypointAdapter } from '../apps/waypoint/share/adapter.js';
 import { createWorthTheWaitAdapter } from '../apps/worth-the-wait/share/adapter.js';
 import { createGoogleCalendarAdapter } from './google/calendar.js';
+import { createGoogleContactsAdapter } from './google/contacts.js';
 import { createGoogleDriveAdapter } from './google/drive.js';
 import { createGoogleMailAdapter } from './google/gmail.js';
 import type { ReaderSink } from './sink.js';
@@ -43,6 +45,21 @@ export interface SyncPageResult {
   resumeState: string | null;
 }
 
+export interface LiveQueryRequest {
+  category: string;
+  args: unknown;
+}
+
+export interface LiveQueryResult {
+  records: SharedRecord[];
+  matchedCount: number;
+  totalCents: number | null;
+  currency: string | null;
+  isPartial: boolean;
+  from: string | null;
+  to: string | null;
+}
+
 export type SourceStatus = 'ok' | 'noAccess' | 'needsReconnect';
 
 export interface SourceAdapter {
@@ -51,6 +68,7 @@ export interface SourceAdapter {
   secrets?: SecretParam[];
   status(ctx: SourceCtx): Promise<SourceStatus>;
   syncPage(ctx: SourceCtx, req: SyncPageRequest): Promise<SyncPageResult>;
+  query?(ctx: SourceCtx, req: LiveQueryRequest): Promise<LiveQueryResult>;
   /** A site path under the source's own route, or null. */
   deepLink(ref: string, ctx: SourceCtx): string | null;
   /** The choices the account offers (calendars), read live. */
@@ -66,11 +84,13 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   'app:a-list': createAListAdapter(),
   'app:going-once': createGoingOnceAdapter(),
   'app:nine-lives': createNineLivesAdapter(),
+  'app:runway': createRunwayAdapter(),
   'app:waypoint': createWaypointAdapter(),
   'app:worth-the-wait': createWorthTheWaitAdapter(),
   'google:calendar': createGoogleCalendarAdapter(),
   'google:gmail': createGoogleMailAdapter(),
   'google:drive': createGoogleDriveAdapter(),
+  'google:contacts': createGoogleContactsAdapter(),
 };
 
 export const SOURCE_SECRETS: SecretParam[] = Array.from(

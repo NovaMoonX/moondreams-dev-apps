@@ -16,6 +16,18 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { openJson, sealJson } from '@apps/helm/security';
+import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import {
+  deleteWhoDatesIn,
+  readWhoDateIds,
+  readWhoDatesIn,
+  restoreWhoDates,
+} from '@apps/helm/store/actions/keyDateActions';
+import {
+  getPhotoIdsOf,
+  removeMediaOf,
+  type PhotoOwner,
+} from '@apps/helm/store/actions/mediaActions';
 import type {
   HelmEncryption,
   HelmProfile,
@@ -119,6 +131,8 @@ export interface ForgetCounts {
   tasks: number;
   captures: number;
   who: number;
+  /** Facts that were only about the forgotten record and went with it. */
+  facts: number;
 }
 
 /** The links already taken could not all be put back after a failure, so some may be gone. */
@@ -128,13 +142,18 @@ export class ForgetPartialError extends Error {
   }
 }
 
-export type RestoreOutcome = 'restored' | 'exists';
+export type RestoreOutcome =
+  'restored' | 'exists' | 'withoutPhotos' | 'withoutDates';
 
 export interface Forgotten {
   counts: ForgetCounts;
   /** Puts the record back and its id on the records it was taken from that still exist. */
   restore: () => Promise<RestoreOutcome>;
 }
+
+type FactTaken =
+  | { kind: 'deleted'; id: string; data: DocumentData }
+  | { kind: 'trimmed'; id: string };
 
 const toChunks = (ids: string[]) =>
   Array.from({ length: Math.ceil(ids.length / CHUNK) }, (_, index) =>
@@ -158,6 +177,20 @@ export async function countLinkedTasks(
     query(collection(userOf(uid), 'tasks'), where(field, 'array-contains', id)),
   );
   return snapshot.data().count;
+}
+
+/** How many facts are only about this who or place, so forgetting it forgets them too; needs a connection. */
+export async function countOnlyFacts(uid: string, id: string) {
+  const snapshot = await getDocs(
+    query(
+      collection(userOf(uid), 'facts'),
+      where('subjectIds', 'array-contains', id),
+    ),
+  );
+  return snapshot.docs.filter((entry) => {
+    const data = entry.data() as DocumentData;
+    return data.subjectIds?.length === 1 && data.status !== 'superseded';
+  }).length;
 }
 
 /** Takes a who or place off every record linking it, then deletes it. Each chunk re-reads its records in a transaction, so one edited meanwhile keeps its other changes; a connection is needed. The person's own who is refused. */
@@ -215,7 +248,7 @@ export async function forgetLinked(
       ? [{ source, field, ids: outcome.value }]
       : [];
   });
-  const putBack = () =>
+  const putBackLinks = () =>
     inSequence(taken, ({ source, field, ids }) =>
       inSequence(toChunks(ids), (chunk) =>
         runTransaction(db, async (transaction) => {
@@ -232,9 +265,68 @@ export async function forgetLinked(
         }),
       ),
     );
-  const failedOutcome = outcomes.find(
-    (outcome) => outcome.status === 'rejected',
+  const factField = target === 'who' ? 'whoIds' : 'placeIds';
+  const factIds = (
+    await getDocs(
+      query(
+        collection(userOf(uid), 'facts'),
+        where('subjectIds', 'array-contains', id),
+      ),
+    )
+  ).docs.map((entry) => entry.id);
+  const factOutcomes = await Promise.allSettled(
+    toChunks(factIds).map((chunk) =>
+      runTransaction(db, async (transaction) => {
+        const snapshots = await Promise.all(
+          chunk.map((entryId) =>
+            transaction.get(doc(collection(userOf(uid), 'facts'), entryId)),
+          ),
+        );
+        return snapshots.flatMap((snapshot): FactTaken[] => {
+          const data = snapshot.data() as DocumentData | undefined;
+          const subjects: unknown = data?.subjectIds;
+          if (!data || !Array.isArray(subjects) || !subjects.includes(id)) {
+            return [];
+          }
+          if (subjects.length === 1) {
+            transaction.delete(snapshot.ref);
+            return [{ kind: 'deleted', id: snapshot.id, data }];
+          }
+          transaction.update(snapshot.ref, {
+            [factField]: arrayRemove(id),
+            subjectIds: arrayRemove(id),
+          });
+          return [{ kind: 'trimmed', id: snapshot.id }];
+        });
+      }),
+    ),
   );
+  const factsTaken = factOutcomes.flatMap((outcome) =>
+    outcome.status === 'fulfilled' ? outcome.value : [],
+  );
+  const putBackFacts = () =>
+    inSequence(factsTaken, (entry) =>
+      runTransaction(db, async (transaction) => {
+        const factRef = doc(collection(userOf(uid), 'facts'), entry.id);
+        const current = await transaction.get(factRef);
+        if (entry.kind === 'deleted') {
+          if (!current.exists()) transaction.set(factRef, entry.data);
+        } else if (current.exists()) {
+          transaction.update(factRef, {
+            [factField]: arrayUnion(id),
+            subjectIds: arrayUnion(id),
+          });
+        }
+      }),
+    );
+  const putBack = () =>
+    Promise.allSettled([putBackLinks(), putBackFacts()]).then((settled) => {
+      const failed = settled.find((entry) => entry.status === 'rejected');
+      if (failed) throw failed.reason;
+    });
+  const failedOutcome = (
+    [...outcomes, ...factOutcomes] as PromiseSettledResult<unknown>[]
+  ).find((outcome) => outcome.status === 'rejected');
   const abandon = async (reason: unknown): Promise<never> => {
     await putBack().catch((error: unknown) => {
       console.error('Helm links were not put back', error);
@@ -243,15 +335,26 @@ export async function forgetLinked(
     throw reason;
   };
   if (failedOutcome) await abandon(failedOutcome.reason);
-  const raw = await runTransaction(db, async (transaction) => {
+  const encryption =
+    target === 'who' ? await getHelmEncryption(uid).catch(abandon) : null;
+  const dateIds =
+    encryption !== null ? await readWhoDateIds(uid, id).catch(abandon) : [];
+  const removed = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const data = snapshot.data() as DocumentData | undefined;
     if (!data) return null;
     if (data.isSelf === true) throw new Error('This is you.');
+    const dates = encryption
+      ? await readWhoDatesIn(transaction, uid, encryption, id, dateIds)
+      : null;
     transaction.delete(ref);
-    return data;
+    if (encryption && dates) {
+      await deleteWhoDatesIn(transaction, uid, encryption, id, dates);
+    }
+    return { data, dates };
   }).catch(abandon);
-  if (!raw) throw new Error('This is already gone.');
+  if (!removed) throw new Error('This is already gone.');
+  const raw = removed.data;
   const countOf = (source: LinkSource) =>
     taken
       .filter((entry) => entry.source === source)
@@ -286,21 +389,73 @@ export async function forgetLinked(
       return true;
     });
     if (!isBack) return 'exists';
+    const areDatesBack =
+      encryption && removed.dates
+        ? await restoreWhoDates(uid, encryption, id, removed.dates).then(
+            () => true,
+            (error: unknown) => {
+              console.error('Helm dates were not put back', error);
+              return false;
+            },
+          )
+        : true;
     await putBack();
-    return 'restored';
+    return areDatesBack ? 'restored' : 'withoutDates';
   };
   return {
     counts: {
       tasks: countOf('tasks'),
       captures: countOf('captures'),
       who: countOf('who'),
+      facts: factsTaken.filter(
+        (entry) =>
+          entry.kind === 'deleted' && entry.data.status !== 'superseded',
+      ).length,
     },
     restore,
   };
 }
 
+/** Forgets a who or place and deletes its photos with it; Undo puts the photos and then the record back. A photo that cannot be deleted puts the record back and fails. */
+export async function forgetWithPhotos(
+  uid: string,
+  target: 'who' | 'places',
+  id: string,
+): Promise<Forgotten> {
+  const owner: PhotoOwner = { kind: target === 'who' ? 'who' : 'place', id };
+  const listedIds = await getPhotoIdsOf(uid, owner);
+  const forgotten = await forgetLinked(uid, target, id);
+  // A photo added from another device during the forget is only found after it.
+  const photos = await getPhotoIdsOf(uid, owner)
+    .then((later) => {
+      const photoIds = Array.from(new Set([...listedIds, ...later]));
+      return photoIds.length > 0 ? removeMediaOf(uid, photoIds) : null;
+    })
+    .catch(async (error: unknown) => {
+      await forgotten.restore().catch((restoreError: unknown) => {
+        console.error('Helm forgotten record was not put back', restoreError);
+      });
+      throw error;
+    });
+  if (!photos) return forgotten;
+  return {
+    ...forgotten,
+    restore: async () => {
+      const arePhotosBack = await photos.restore().then(
+        () => true,
+        (error: unknown) => {
+          console.error('Helm photos were not put back', error);
+          return false;
+        },
+      );
+      const outcome = await forgotten.restore();
+      return arePhotosBack ? outcome : 'withoutPhotos';
+    },
+  };
+}
+
 export const forgetWho = (uid: string, whoId: string) =>
-  forgetLinked(uid, 'who', whoId);
+  forgetWithPhotos(uid, 'who', whoId);
 
 /** Makes the person's own who once; the transaction keeps two tabs from making two. */
 export async function ensureSelfWho(

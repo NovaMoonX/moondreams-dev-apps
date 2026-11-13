@@ -103,6 +103,8 @@ import {
 import {
   describeEnvelopes,
   describePurchaseRemoval,
+  describePurchaseWhere,
+  getPaidWithName,
   getPurchaseFacts,
   getPurchaseTitle,
   isRefund,
@@ -136,6 +138,8 @@ interface PurchaseScreenProps {
   hasGroupLink?: boolean;
   /** Needs a home keeps the sheet open on a purchase just sent for the third time in a row, to offer a rule; it hands over the purchase as sent. */
   onSuggestRule?: (placed: OpenPurchase) => void;
+  /** The caption over the amount when the opener knows more than "Purchase" (a move, a card payment). */
+  kindLabel?: string;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
@@ -146,6 +150,7 @@ function PurchaseScreen({
   fallback = null,
   hasGroupLink = true,
   onSuggestRule,
+  kindLabel,
 }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -260,11 +265,10 @@ function PurchaseScreen({
         : [...acc, { line, spills: [] }],
     [],
   );
-  const sourceName = purchase
-    ? (cards.find((card) => card.id === purchase.paidByCardId)?.name ??
-      accounts.find((account) => account.id === purchase.accountId)?.name ??
-      NEEDS_HOME_WORDS.fromBank)
-    : '';
+  const paidWithName = purchase
+    ? getPaidWithName(purchase, cards, accounts)
+    : null;
+  const sourceName = paidWithName ?? NEEDS_HOME_WORDS.fromBank;
 
   if (purchase === null) {
     return (
@@ -352,9 +356,12 @@ function PurchaseScreen({
         ]
       : isWaiting
         ? [sourceName]
-        : facts.length > 0
-          ? facts
-          : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
+        : [
+            ...(paidWithName === null ? [] : [paidWithName]),
+            ...(facts.length > 0
+              ? facts
+              : [describePurchaseWhere(purchase, envelopes, isHidden)]),
+          ]),
   ].join(' · ');
   const note = purchase.note?.trim() || null;
   const bankName =
@@ -641,6 +648,7 @@ function PurchaseScreen({
         key={editTarget.key}
         isOpen
         editing={editTarget.purchase}
+        isCountedAlready={isWaiting}
         heldReceiptCount={receipts.length}
         onClose={() => setEditTarget(null)}
         onCancel={() => setEditTarget(null)}
@@ -670,7 +678,12 @@ function PurchaseScreen({
       >
         <div ref={sheetBody} className='space-y-4 pb-4'>
           <SheetHead
-            label={SPEND_WORDS.detailTitle}
+            label={
+              kindLabel ??
+              (refund && !isHidden
+                ? SPEND_WORDS.refundTitle
+                : SPEND_WORDS.detailTitle)
+            }
             figure={refund ? `+${amount}` : amount}
             fact={fact}
             secondFact={
@@ -837,7 +850,6 @@ function PurchaseScreen({
             <PairOffer
               purchase={purchase}
               onDone={onClose}
-              elseSubtitle={PAIR_WORDS.pickEnvelope}
             >
               <NeedsHomeAssign
                 purchase={purchase}
@@ -909,7 +921,6 @@ function PurchaseScreen({
             {isWaiting && purchase.amountCents > 0 && (
               <LeaveOutRow isKeepFree purchase={purchase} onDone={onClose} />
             )}
-            {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
             {placedRule !== null && (
               <ActionRow
                 isGrouped

@@ -1,26 +1,41 @@
 import { useMemo, useState } from 'react';
 
-import { DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  DropdownMenuFactories,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronRight } from 'lucide-react';
 
+import LockedButton from '@/components/LockedButton';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import FactsSection from '@apps/helm/components/who/FactsSection';
+import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
+import MomentsPreview from '@apps/helm/components/who/MomentsPreview';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import WhoEditSheet from '@apps/helm/components/who/WhoEditSheet';
-import WhoMark from '@apps/helm/components/who/WhoMark';
+import PhotosSection from '@apps/helm/components/media/PhotosSection';
+import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
 import { HELM_COPY, MENTIONS_SHOWN } from '@apps/helm/constants';
-import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { useContactsReport } from '@apps/helm/hooks/useContactsReport';
+import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
   countLinkedTasks,
+  countOnlyFacts,
   ForgetPartialError,
   forgetWho,
 } from '@apps/helm/store/actions/whoActions';
+import { useImportContacts } from '@apps/helm/queries/contactsQueries';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
 
@@ -28,23 +43,55 @@ const { option } = DropdownMenuFactories;
 
 interface WhoDetailProps {
   whoId: string | null;
+  backLabel: string;
   onBack: () => void;
   onHome: () => void;
 }
 
 /** One person, pet or organization: what it is, the facts kept about it, its open tasks and the turns that named it. */
-function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
-  const assistant = useAssistantName();
+function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
+  const { begin } = useGoogleConnect();
+  const isOffline = useNetworkStatus() === 'offline';
+  const { reportDone, toFailureLine } = useContactsReport();
   const { items, isLoaded } = useAppSelector((state) => state.helm.who);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
   const captures = useAppSelector(selectAllCaptures);
+  const activeProjects = useAppSelector(selectActiveProjects);
+  const { showView } = useHelmUrlState();
   const [isAllMentions, setIsAllMentions] = useState(false);
   const [sheet, setSheet] = useState<'edit' | 'tier' | null>(null);
   const who = items.find((entry) => entry.id === whoId) ?? null;
   const name = who && !who.isUnreadable ? who.name : '';
+  const importedAccountId = who?.importedFrom?.accountId ?? null;
+  const importContacts = useImportContacts({
+    onSuccess: (result) => reportDone(result, HELM_COPY.contactsUpToDate),
+    onError: (error) => {
+      console.error('Helm contact was not updated', error);
+      const failure = toFailureLine(error, HELM_COPY.contactsUpdateFailed);
+      if (failure === null && importedAccountId !== null)
+        begin({ accountId: importedAccountId, connectorId: 'google:contacts' });
+      else
+        addToast({
+          title: failure ?? HELM_COPY.contactsUpdateFailed,
+          type: 'error',
+        });
+    },
+  });
+
+  const projectLines = activeProjects.flatMap((project) => {
+    const role = whoId === null ? undefined : project.whoRoles[whoId];
+    return role === 'key' || role === 'involved'
+      ? [
+          {
+            id: project.id,
+            text: HELM_COPY.whoProjectLine(project.emoji, project.name, role),
+          },
+        ]
+      : [];
+  });
 
   const tasks = useMemo(
     () =>
@@ -87,13 +134,26 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
         return null;
       },
     );
-    if (linkedCount === null) {
+    const factCount = await countOnlyFacts(user.uid, who.id).catch(
+      (error: unknown) => {
+        console.error('Helm facts were not counted', error);
+        return null;
+      },
+    );
+    if (linkedCount === null || factCount === null) {
       addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
       return;
     }
     const isConfirmed = await confirm({
       title: HELM_COPY.whoForgetMenu(who.name),
-      message: HELM_COPY.forgetConfirmWho(who.name, linkedCount),
+      message: HELM_COPY.forgetConfirmWho(
+        who.name,
+        linkedCount,
+        who.mediaIds.length,
+        factCount,
+        who.yearlyDateCount,
+        who.momentCount,
+      ),
       confirmText: HELM_COPY.forgetAction,
       destructive: true,
     });
@@ -108,9 +168,14 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
           label: HELM_COPY.undo,
           onClick: () =>
             void restore().then(
-              () =>
+              (outcome) =>
                 addToast({
-                  title: HELM_COPY.forgotUndone(who.name),
+                  title:
+                    outcome === 'withoutPhotos'
+                      ? HELM_COPY.forgotUndoneWithoutPhotos(who.name)
+                      : outcome === 'withoutDates'
+                        ? HELM_COPY.forgotUndoneWithoutDates(who.name)
+                        : HELM_COPY.forgotUndone(who.name),
                   type: 'info',
                 }),
               (error: unknown) => {
@@ -130,6 +195,11 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
         type: 'error',
       });
     }
+  };
+
+  const updateFromGoogle = () => {
+    if (!who?.importedFrom) return;
+    importContacts.mutate({ whoId: who.id });
   };
 
   const menu =
@@ -165,7 +235,7 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
   return (
     <>
       <HelmHeader
-        backLabel={HELM_COPY.peopleTitle}
+        backLabel={backLabel}
         onBack={onBack}
         onHome={onHome}
         menu={menu}
@@ -184,7 +254,12 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
         {who && !who.isUnreadable && (
           <>
             <div className='flex items-start gap-4'>
-              <WhoMark kind={who.kind} name={who.name} isLarge />
+              <WhoPhoto
+                kind={who.kind}
+                name={who.name}
+                mediaId={who.photoMediaId}
+                isLarge
+              />
               <div className='min-w-0'>
                 <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
                   {who.name}
@@ -196,12 +271,68 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
                 )}
               </div>
             </div>
-            <section className='space-y-3'>
-              <SectionDivider label={HELM_COPY.whoFactsTitle} />
-              <p className='text-muted-foreground text-[15px] text-pretty'>
-                {HELM_COPY.whoFactsEmpty(assistant)}
-              </p>
-            </section>
+            {projectLines.length > 0 && (
+              <ul className='space-y-1'>
+                {projectLines.map((line) => (
+                  <li key={line.id}>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      className="bg-muted text-foreground relative h-auto min-h-7 max-w-full justify-between gap-2 rounded-full border-0 px-3 py-1 text-[15px] font-normal after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+                      onClick={() => void showView('project', line.id)}
+                    >
+                      <span className='min-w-0 text-left break-words'>
+                        {line.text}
+                      </span>
+                      <ChevronRight
+                        className='text-muted-foreground size-4 shrink-0'
+                        aria-hidden='true'
+                      />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {who.importedFrom && (
+              <section className='helm-card space-y-2 p-4'>
+                <p className='text-[15px]'>{HELM_COPY.contactsFromGoogle}</p>
+                <p className='text-muted-foreground text-[13px] text-pretty'>
+                  {HELM_COPY.contactsUpdateHint}
+                </p>
+                {isOffline ? (
+                  <LockedButton
+                    label={HELM_COPY.contactsUpdate}
+                    title={HELM_COPY.connectionsNeedConnection}
+                    size='sm'
+                  >
+                    <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
+                  </LockedButton>
+                ) : (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    loading={importContacts.isPending}
+                    onClick={updateFromGoogle}
+                  >
+                    {HELM_COPY.contactsUpdate}
+                  </Button>
+                )}
+              </section>
+            )}
+            <PhotosSection
+              owner={{ kind: 'who', id: who.id }}
+              name={who.name}
+              photoIds={who.mediaIds}
+              mainId={who.photoMediaId}
+            />
+            <KeyDatesList who={who} />
+            <MomentsPreview who={who} />
+            <FactsSection
+              subject={{ kind: 'who', id: who.id }}
+              name={who.name}
+            />
             <section className='space-y-3'>
               <SectionDivider label={HELM_COPY.whoTasksTitle} />
               <LinkedTasks
@@ -211,13 +342,9 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
                 ownerId={who.id}
               />
             </section>
-            <section className='space-y-3'>
-              <SectionDivider label={HELM_COPY.whoMentionsTitle} />
-              {mentions.length === 0 ? (
-                <p className='text-muted-foreground text-[15px] text-pretty'>
-                  {HELM_COPY.whoMentionsEmpty}
-                </p>
-              ) : (
+            {mentions.length > 0 && (
+              <section className='space-y-3'>
+                <SectionDivider label={HELM_COPY.whoMentionsTitle} />
                 <ul className='helm-card divide-border divide-y overflow-hidden'>
                   {shownMentions.map((capture) => (
                     <li key={capture.id} className='px-4 py-3'>
@@ -233,18 +360,18 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
                     </li>
                   ))}
                 </ul>
-              )}
-              {mentions.length > MENTIONS_SHOWN && (
-                <ShowMoreButton
-                  isOpen={isAllMentions}
-                  onClick={() => setIsAllMentions((isOpen) => !isOpen)}
-                >
-                  {isAllMentions
-                    ? HELM_COPY.showFewerMentions
-                    : HELM_COPY.showAllMentions(mentions.length)}
-                </ShowMoreButton>
-              )}
-            </section>
+                {mentions.length > MENTIONS_SHOWN && (
+                  <ShowMoreButton
+                    isOpen={isAllMentions}
+                    onClick={() => setIsAllMentions((isOpen) => !isOpen)}
+                  >
+                    {isAllMentions
+                      ? HELM_COPY.showFewerMentions
+                      : HELM_COPY.showAllMentions(mentions.length)}
+                  </ShowMoreButton>
+                )}
+              </section>
+            )}
           </>
         )}
       </main>

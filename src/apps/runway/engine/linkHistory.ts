@@ -10,6 +10,7 @@ import type {
   OpenCard,
   OpenLink,
   OpenPurchase,
+  RouteMemorySealed,
 } from '@apps/runway/types';
 
 /**
@@ -96,19 +97,22 @@ export function findHistoryDuplicates(
   };
 }
 
-/** The ids of both sides of each clear pair between the person's own accounts dated from `since`, which the pairing pass settles instead. */
+/** The ids of both sides of each clear pair (remembered routes included, as the pairing pass reads them) between the person's own accounts dated from `since`, which the pairing pass settles instead. */
 export function getPairSideIds(
   waiting: readonly OpenPurchase[],
   since: number,
+  routes: readonly RouteMemorySealed[] = [],
 ): Set<string> {
   const byId = new Map(waiting.map((purchase) => [purchase.id, purchase]));
   return new Set(
-    [...findAccountPairs(waiting).clear].flatMap(([outId, { inId }]) => {
-      const out = byId.get(outId);
-      const into = byId.get(inId);
-      return out && into && out.date >= since && into.date >= since
-        ? [outId, inId]
-        : [];
-    }),
+    [...findAccountPairs(waiting, false, routes).clear].flatMap(
+      ([outId, { inId }]) => {
+        const out = byId.get(outId);
+        const into = byId.get(inId);
+        return out && into && out.date >= since && into.date >= since
+          ? [outId, inId]
+          : [];
+      },
+    ),
   );
 }
