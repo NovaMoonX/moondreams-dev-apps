@@ -1,0 +1,63 @@
+On-device speech recognition files
+==================================
+
+Everything in this folder is downloaded by a browser only when the person
+turns on offline listening, kept in that browser's Cache Storage after a
+SHA-256 check, and run there in a Web Worker. No audio is sent anywhere.
+
+Files and where they came from
+------------------------------
+
+sherpa-onnx-asr.wasm, sherpa-onnx-asr.mjs
+  sherpa-onnx 2.0.1 (https://github.com/k2-fsa/sherpa-onnx, commit 29b735c8),
+  speech recognition only (SHERPA_ONNX_ENABLE_TTS=OFF), built for WebAssembly
+  with SIMD by Emscripten 4.0.23 from wasm/asr with the patch in
+  licenses/sherpa-onnx-asr-build.patch (no preloaded model, loads in a module
+  worker, model files written to its in-memory file system at start).
+  The .mjs is Emscripten's generated loader followed by sherpa-onnx's own
+  wasm/asr/sherpa-onnx-asr.js and one ES module export line.
+  License: Apache-2.0 (licenses/Apache-2.0.txt).
+
+  Linked into the .wasm:
+  - ONNX Runtime 1.28.2, WebAssembly static library
+    (https://github.com/microsoft/onnxruntime, prebuilt by
+    https://github.com/csukuangfj/onnxruntime-libs). MIT
+    (licenses/onnxruntime-MIT.txt).
+  - kaldi-native-fbank 1.23.1, kaldi-native-io 1.22.1, kaldi-decoder 0.4.0,
+    kaldi-hmm-gmm 1.2.1, kaldifst 1.9.0 (https://github.com/csukuangfj).
+    Apache-2.0.
+  - OpenFst 1.8.5 (as packaged by csukuangfj/openfst). Apache-2.0.
+  - simple-sentencepiece 0.7 (https://github.com/pkufool/simple-sentencepiece).
+    Apache-2.0.
+  - KISS FFT (https://github.com/mborgerding/kissfft). BSD-3-Clause
+    (licenses/kissfft-BSD-3-Clause.txt).
+  - utf8proc 2.12.0 (https://github.com/JuliaStrings/utf8proc). MIT
+    (licenses/utf8proc-MIT.txt).
+  - nlohmann/json 3.12.0, header only (https://github.com/nlohmann/json). MIT
+    (licenses/nlohmann-json-MIT.txt).
+  - Eigen 5.0.1, header only (https://gitlab.com/libeigen/eigen). MPL-2.0
+    (licenses/Eigen-MPL-2.0.txt). Its source is available unmodified at
+    that address.
+  - hclust-cpp / fastcluster, header and source
+    (https://github.com/cdalitz/hclust-cpp). BSD-2-Clause style
+    (licenses/hclust-cpp.txt).
+
+encoder.int8.onnx, decoder.int8.onnx, joiner.int8.onnx, tokens.txt
+  "sherpa-onnx-streaming-zipformer-en-20M-2023-02-17" (int8), from the
+  sherpa-onnx asr-models release
+  (https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models), the same
+  files as https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-20M-2023-02-17.
+  Exported from the icefall recipe
+  https://huggingface.co/desh2608/icefall-asr-librispeech-pruned-transducer-stateless7-streaming-small
+  (icefall, https://github.com/k2-fsa/icefall, Apache-2.0), trained on
+  LibriSpeech (https://www.openslr.org/12, CC BY 4.0). Apache-2.0.
+  Renamed from encoder-epoch-99-avg-1.int8.onnx and so on; contents unchanged.
+
+What is not in here
+-------------------
+
+No eSpeak NG or any other GPL component. eSpeak NG is used only by
+sherpa-onnx's text-to-speech, which this build leaves out: none of the linked
+libraries has an object named for espeak, piper, a phonemizer or tts, and the
+strings "espeak", "phontab" and "SetVoiceByName" do not appear in the .wasm or
+the .mjs.

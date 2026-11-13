@@ -15,8 +15,10 @@ for arg in "$@"; do
   esac
 done
 
+source scripts/lib/firebaseLogin.sh
+
 CURRENT="starting"
-trap 'echo "✗ Stopped at: $CURRENT. Fix that and run npm run helm:setup again; finished steps are skipped." >&2' ERR
+trap 'status=$?; (( status == 0 )) || echo "✗ Stopped at: $CURRENT. Fix that and run npm run helm:setup again; finished steps are skipped." >&2' EXIT
 
 DONE_LIST=""
 SKIPPED_LIST=""
@@ -96,12 +98,29 @@ step() {
     if (( HAVE_GCLOUD )); then echo "→ would run: $title"; else echo "? would run (can't check without a signed-in gcloud): $title"; fi
     return 0
   fi
-  echo "→ $title…"
+  echo "→ ${title}…"
   "$run"
   add DONE_LIST "$title"
 }
 
 # ---- tools and sign-in
+
+# The keyring canary talks to Firestore with the application default credentials, which bill the quota project saved in that file, so a machine whose gcloud still points at another project fails there.
+align_gcloud_project() {
+  local current quota
+  current="$(gcloud config get-value project 2>/dev/null || true)"
+  quota="$(python3 -I -c "import json,os;print(json.load(open(os.path.expanduser('~/.config/gcloud/application_default_credentials.json'))).get('quota_project_id') or '')" 2>/dev/null || true)"
+  if [[ "$current" != "$PROJECT" ]]; then
+    if (( DRY )); then echo "• gcloud's default project is '${current:-none}', not $PROJECT."
+    elif ask "gcloud's default project is '${current:-none}'. Switch it to $PROJECT?" y; then gcloud config set project "$PROJECT" >/dev/null 2>&1
+    else echo "• Leaving gcloud on '${current:-none}'; every step here names $PROJECT itself."; fi
+  fi
+  if [[ -n "$quota" && "$quota" != "$PROJECT" ]]; then
+    if (( DRY )); then echo "• The application default credentials bill '$quota', not $PROJECT."
+    elif ask "The application default credentials bill '$quota'. Switch them to $PROJECT?" y; then gcloud auth application-default set-quota-project "$PROJECT" >/dev/null 2>&1
+    else echo "• Leaving the credentials on '$quota'; the keyring canary step may fail with an API-not-enabled error."; fi
+  fi
+}
 
 check_tools() {
   CURRENT="Checking the tools"
@@ -131,10 +150,8 @@ check_tools() {
       gcloud auth application-default login
     fi
   fi
-  if (( ! DRY )) && ! firebase login:list 2>/dev/null | grep -q '@'; then
-    ask "The firebase CLI isn't signed in. Run 'firebase login' now?" y || { echo "✗ Run: firebase login" >&2; exit 1; }
-    firebase login
-  fi
+  align_gcloud_project
+  (( DRY )) || require_firebase_login
   HAVE_GCLOUD=1
   echo "✓ Tools ready: gcloud signed in as $account, project $PROJECT"
 }
@@ -175,9 +192,7 @@ google_done() { secret_has GOOGLE_OAUTH_CLIENT && api_enabled calendar-json.goog
 google_run() {
   bash scripts/connections/googleSetup.sh
   if ! secret_has GOOGLE_OAUTH_CLIENT; then
-    echo
-    echo "  Then, on that same consent screen page, open Audience and click \"Publish app\", then \"Confirm\", so it is \"In production\" (sign-ins stop expiring after 7 days). Google shows a \"hasn't verified this app\" screen; click Advanced, then Continue."
-    add BROWSER_LIST "Google consent screen: test users, scopes, publishing status; and the Web OAuth client"
+    add BROWSER_LIST "Google consent screen: scopes and In production status; and the Web OAuth client"
     pause "Finish the clicks above, then press Enter to paste the client ID and secret: "
     bash scripts/connections/googleSecrets.sh
   fi
@@ -198,8 +213,8 @@ deepgram_run() {
     return 0
   fi
   bash scripts/voice/deepgramSecret.sh
-  add BROWSER_LIST "Deepgram spending guard (console.deepgram.com, Billing, Usage alerts)"
-  pause "Set the usage alert with the steps above, then press Enter: "
+  add BROWSER_LIST "Deepgram spend alert, if its console offers one (optional)"
+  pause "Set a spend alert if you see one (or skip it), then press Enter: "
 }
 
 tts_done() { api_enabled texttospeech.googleapis.com; }
@@ -303,7 +318,7 @@ optional_step() { # title, detect, run, default, question
     echo "→ would ask ($default): $question, then run: $title"; return 0
   fi
   if ask "$question" "$default"; then
-    echo "→ $title…"; "$run"; add DONE_LIST "$title"
+    echo "→ ${title}…"; "$run"; add DONE_LIST "$title"
   else
     echo "• Skipped: $title"; add SKIPPED_LIST "$title"
   fi
@@ -341,4 +356,4 @@ fi
 [[ -n "$SKIPPED_LIST" ]] && { echo "Skipped by choice:"; printf '%s' "$SKIPPED_LIST" | sed 's/^/  • /'; }
 [[ -n "$DEFERRED_LIST" ]] && { echo "Waiting for the deploy (run: npm run helm:setup -- --after-deploy):"; printf '%s' "$DEFERRED_LIST" | sed 's/^/  • /'; }
 [[ -n "$BROWSER_LIST" ]] && { echo "Browser steps this run showed you (a script can't check them):"; printf '%s' "$BROWSER_LIST" | sed 's/^/  • /'; }
-echo "Still yours, in the browser: for Gmail and Drive, add each tester's address on the consent screen's test users and on the \"Gmail and Drive\" switch at https://apps.moondreams.dev/admin?view=apps&app=helm&section=features."
+echo "Still yours, in the browser: to give someone Gmail and Drive, turn on their \"Gmail and Drive\" switch at https://apps.moondreams.dev/admin?view=apps&app=helm&section=features."
