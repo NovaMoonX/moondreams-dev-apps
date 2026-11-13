@@ -701,7 +701,7 @@ export interface OpenAccountBalance {
   availableCents: Cents | null;
   /** A card's credit limit; null for an account. */
   limitCents: Cents | null;
-  /** False when the bank only shares a saved balance a few times a day; null when unknown. */
+  /** True when the balance gets the five-minute check: the bank shares it instantly and this link's live reads are on; null when unknown. */
   hasInstantBalance: boolean | null;
 }
 

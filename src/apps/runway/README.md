@@ -58,7 +58,7 @@ Runway links banks through Plaid. Keep this list current whenever a change start
   - Transactions: imports charges, deposits and pending ones (`/transactions/sync`, the `SYNC_UPDATES_AVAILABLE` webhook).
   - Transactions Refresh: asks Plaid to check the bank now when the person opens Runway, pulls down or taps refresh, and every 5 minutes while Runway stays open (at most once every 2 minutes per bank; Plaid allows 120 an hour per login).
   - Balance: a live balance read on those same asks (`/accounts/balance/get`; Plaid allows 30 an hour per login and bills each call). Other syncs use the cached `/accounts/get`.
-- **Known gaps:** Capital One cards and Apple Card share only cached balances, so their sheets say so; Capital One checking and savings are live.
+- **Five-minute check:** a sheet whose balance gets it carries a "Checks every 5 min" chip. Capital One cards and Apple Card share only cached balances, and a bank whose live reads stopped after a sign-in request keeps only the refresh, so their sheets show just when they last updated. Capital One checking and savings get the check.
 - **Leaving Trial:** on the Production request form, ask for Transactions, Transactions Refresh and Balance. Plaid keeps only the products named there.
 
 ## Docs

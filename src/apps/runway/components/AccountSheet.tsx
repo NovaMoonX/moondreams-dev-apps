@@ -543,12 +543,14 @@ function AccountSheet({
           fact={facts.length === 0 ? null : facts.join(' · ')}
           isFactFresh={isBankBalance && (bankUpdated?.isFresh ?? false)}
         />
-        {isBankBalance && bank?.hasInstantBalance === false && (
+        {isBankBalance && bank?.hasInstantBalance === true && (
           <HelpTip
-            title={ACCOUNT_WORDS.slowBankTitle}
-            badgeLabel={ACCOUNT_WORDS.slowBankChip}
+            title={ACCOUNT_WORDS.autoCheckTitle}
+            badgeLabel={ACCOUNT_WORDS.autoCheckChip}
           >
-            <p>{ACCOUNT_WORDS.slowBank(bankName ?? LINK_WORDS.fallbackBank)}</p>
+            <p>
+              {ACCOUNT_WORDS.autoCheck(bankName ?? LINK_WORDS.fallbackBank)}
+            </p>
           </HelpTip>
         )}
         {interest !== null && interestLine !== null && (

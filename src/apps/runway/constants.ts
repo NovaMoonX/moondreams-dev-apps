@@ -4406,11 +4406,11 @@ export const ACCOUNT_WORDS = {
   rowJustNow: 'Just now',
   rowMinutes: (minutes: number) => `${minutes}\u00a0min ago`,
   rowHours: (hours: number) => `${hours}\u00a0hr ago`,
-  slowBankChip: 'Updates a few times a day',
-  slowBankTitle: 'How often this balance updates',
+  autoCheckChip: 'Checks every 5\u00a0min',
+  autoCheckTitle: 'Kept up to date',
+  autoCheck: (bank: string) =>
+    `While Runway is open, it asks ${bank} for this balance every 5 minutes, and again when you open it or pull down. Accounts without this chip update whenever their bank shares a new balance, usually a few times a day.`,
   pendingAmount: (amount: string) => `${amount}\u00a0pending`,
-  slowBank: (bank: string) =>
-    `${bank} shares this account's balance a few times a day, not instantly.`,
   holdsTitle: 'What it holds',
   holdsEmpty: 'Nothing is held here yet.',
   notYetGivenAJob: 'Not yet given a job',
@@ -4594,10 +4594,10 @@ export const CARD_WORDS = {
   waiting: 'Waiting to be paid',
   nothingToPay: 'Nothing to pay',
   pendingAmount: (amount: string) => `${amount}\u00a0pending`,
-  slowBank: (bank: string) =>
-    `${bank} shares this card's balance a few times a day. Runway keeps it current from your charges.`,
-  slowBankChip: 'Updates a few times a day',
-  slowBankTitle: 'How often this balance updates',
+  autoCheckChip: 'Checks every 5\u00a0min',
+  autoCheckTitle: 'Kept up to date',
+  autoCheck: (bank: string) =>
+    `While Runway is open, it asks ${bank} for this card's balance every 5 minutes, and again when you open it or pull down. Cards without this chip update whenever their bank shares a new balance, usually a few times a day.`,
   reserveLabel: 'Waiting to be paid',
   payOff: (name: string) => `Pay off ${name.replace(/ (\S+)$/, '\u00a0$1')}`,
   payOffShort: 'Pay off',

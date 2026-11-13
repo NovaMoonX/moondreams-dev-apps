@@ -430,9 +430,14 @@ async function readAccounts(
   grantRef: DocumentReference,
   isLive: boolean,
 ) {
-  if (!isLive) return provider.listAccounts(grant);
+  if (!isLive) {
+    return { accounts: await provider.listAccounts(grant), isTurnedOff: false };
+  }
   try {
-    return await provider.listAccounts(grant, { isLive: true });
+    return {
+      accounts: await provider.listAccounts(grant, { isLive: true }),
+      isTurnedOff: false,
+    };
   } catch (error) {
     if (!(error instanceof ProviderError) || error.code === 'NO_ACCOUNTS') {
       throw error;
@@ -449,7 +454,10 @@ async function readAccounts(
       code: error.code,
       isTurnedOff: error.kind === 'needsAttention',
     });
-    return provider.listAccounts(grant);
+    return {
+      accounts: await provider.listAccounts(grant),
+      isTurnedOff: error.kind === 'needsAttention',
+    };
   }
 }
 
@@ -461,15 +469,27 @@ async function writeBalances(
   grantRef: DocumentReference,
   planKey: PlanKey,
   targets: ReadonlyMap<string, Target>,
-  isLive: boolean,
+  isAskingNow: boolean,
+  wasLiveOff: boolean,
 ) {
-  const accounts = await readAccounts(linkId, grant, grantRef, isLive);
+  const { accounts, isTurnedOff } = await readAccounts(
+    linkId,
+    grant,
+    grantRef,
+    isAskingNow && !wasLiveOff,
+  );
+  const isLiveOff = wasLiveOff || isTurnedOff;
   const now = Date.now();
   const entries = accounts.flatMap((account) => {
     const target = targets.get(account.providerAccountId);
     const targetId = target?.accountId ?? target?.cardId ?? null;
-    const sealed = toBalanceSealed(account);
-    if (targetId === null || sealed === null) return [];
+    const read = toBalanceSealed(account);
+    if (targetId === null || read === null) return [];
+    // The app reads this as whether the balance gets the five-minute check, which stops for a link whose live reads are off.
+    const sealed = {
+      ...read,
+      hasInstantBalance: read.hasInstantBalance && !isLiveOff,
+    };
     // A saved balance with no date can't say how old it is, so it is left out rather than shown as new.
     if (account.balanceAsOf === null && !account.hasInstantBalance) return [];
     const asOf = Math.min(account.balanceAsOf ?? now, now);
@@ -708,7 +728,8 @@ export async function syncRunwayLink(
       grantRef,
       planKey,
       targets,
-      isAskingNow && grantDoc.isLiveBalanceOff !== true,
+      isAskingNow,
+      grantDoc.isLiveBalanceOff === true,
     ).catch((error: unknown) => {
       if (error instanceof ProviderError && error.code === 'NO_ACCOUNTS') {
         throw error;

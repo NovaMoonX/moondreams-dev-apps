@@ -356,12 +356,12 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               .join(' \u00b7 ')}
             isFactFresh={bankUpdated?.isFresh ?? false}
           />
-          {bank?.hasInstantBalance === false && (
+          {bank?.hasInstantBalance === true && (
             <HelpTip
-              title={CARD_WORDS.slowBankTitle}
-              badgeLabel={CARD_WORDS.slowBankChip}
+              title={CARD_WORDS.autoCheckTitle}
+              badgeLabel={CARD_WORDS.autoCheckChip}
             >
-              <p>{CARD_WORDS.slowBank(bankName ?? LINK_WORDS.fallbackBank)}</p>
+              <p>{CARD_WORDS.autoCheck(bankName ?? LINK_WORDS.fallbackBank)}</p>
             </HelpTip>
           )}
           <Button
