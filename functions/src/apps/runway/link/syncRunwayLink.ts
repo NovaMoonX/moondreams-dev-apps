@@ -30,7 +30,11 @@ import {
   type LinkSealed,
 } from './linkShared.js';
 import { toBalanceSealed } from './normalize.js';
-import { ProviderError, type ProviderGrant } from './provider.js';
+import {
+  ProviderError,
+  type NormalizedTransaction,
+  type ProviderGrant,
+} from './provider.js';
 import {
   applyTransactions,
   dedupeSubkey,
@@ -45,6 +49,7 @@ import {
   type Target,
 } from './syncPlan.js';
 
+const IMPORT_DAYS = 30;
 const MAX_BATCH_WRITES = 450;
 const MAX_ROUNDS = 20;
 const READ_CHUNK = 300;
@@ -359,11 +364,18 @@ async function syncPurchases(
       neededDocIds(keyOf, changed, page.removed),
       planKey,
     );
+    const floor = dayStart(Date.now()) - IMPORT_DAYS * 86_400_000;
+    // The bank may hold more history than the plan brings in; an older charge is kept only when it is already a purchase.
+    const isImported = (tx: NormalizedTransaction) =>
+      tx.date >= floor ||
+      existing.has(purchaseIdFor(keyOf(tx.providerTransactionId))) ||
+      (tx.pendingTransactionId !== null &&
+        existing.has(purchaseIdFor(keyOf(tx.pendingTransactionId))));
     const outcome = applyTransactions(
       keyOf,
       targets,
-      page.added,
-      page.modified,
+      page.added.filter(isImported),
+      page.modified.filter(isImported),
       page.removed,
       existing,
     );
@@ -562,6 +574,32 @@ const areStatementsDue = (
   );
 };
 
+const RECURRING_GAP_MS = 24 * 3_600_000;
+const RECURRING_UNSUPPORTED_GAP_MS = 7 * 86_400_000;
+const RECURRING_RETRY_MS = 3_600_000;
+
+/** A check time that makes the next repeating-charges read due in an hour, for an answer that was not ready or failed. */
+const retryRecurringSoon = (grantRef: DocumentReference) =>
+  grantRef.update({
+    recurringCheckedAt: Date.now() - RECURRING_GAP_MS + RECURRING_RETRY_MS,
+  });
+
+const areRecurringDue = (
+  grantDoc: ProviderGrantDoc,
+  isRecurringDue: boolean,
+  now: number,
+) => {
+  if (isRecurringDue) return true;
+  const checkedAt = grantDoc.recurringCheckedAt;
+  if (typeof checkedAt !== 'number') return true;
+  return (
+    now - checkedAt >=
+    (grantDoc.isRecurringUnsupported === true
+      ? RECURRING_UNSUPPORTED_GAP_MS
+      : RECURRING_GAP_MS)
+  );
+};
+
 /** Keeps the readable `needsCardConsent` flag in step with the provider's answer, writing only on a change. */
 async function setNeedsCardConsent(
   firestore: Firestore,
@@ -665,6 +703,50 @@ async function writeCardStatements(
     linkId,
     count: written.length,
     dropped: dropped.length,
+  });
+}
+
+/** Seals every live repeating charge of the link's bank accounts (bound or not) into one document; the person decides which to use. */
+async function writeRecurringCharges(
+  firestore: Firestore,
+  uid: string,
+  linkId: string,
+  grant: ProviderGrant,
+  grantRef: DocumentReference,
+  planKey: PlanKey,
+  providerAccountIds: ReadonlySet<string>,
+) {
+  const read = await provider.listRecurringOutflows(grant);
+  if (read.kind === 'notReady') {
+    await retryRecurringSoon(grantRef);
+    return;
+  }
+  const now = Date.now();
+  if (read.kind === 'unsupported') {
+    await grantRef.update({
+      recurringCheckedAt: now,
+      isRecurringUnsupported: true,
+    });
+    return;
+  }
+  const streams = read.streams.filter(
+    (stream) =>
+      providerAccountIds.has(stream.providerAccountId) &&
+      stream.isActive &&
+      stream.status !== 'tombstoned',
+  );
+  await firestore.doc(planDocPath(uid, 'recurringCharges', linkId)).set({
+    id: linkId,
+    asOf: now,
+    sealed: sealWithKey(planKey, { streams }, SEALED_SCHEMA_VERSION),
+  });
+  await grantRef.update({
+    recurringCheckedAt: now,
+    isRecurringUnsupported: false,
+  });
+  logger.info('runway.sync.recurringWritten', {
+    linkId,
+    count: streams.length,
   });
 }
 
@@ -799,7 +881,11 @@ export async function syncRunwayLink(
   keyring: Keyring,
   uid: string,
   linkId: string,
-  options: { isFresh: boolean; isStatementsDue?: boolean } = {
+  options: {
+    isFresh: boolean;
+    isStatementsDue?: boolean;
+    isRecurringDue?: boolean;
+  } = {
     isFresh: false,
   },
 ): Promise<LinkSyncResult> {
@@ -917,6 +1003,26 @@ export async function syncRunwayLink(
           code: error instanceof ProviderError ? error.code : null,
         });
         await retryStatementsSoon(grantRef).catch(() => undefined);
+      });
+    }
+    if (
+      areRecurringDue(grantDoc, options.isRecurringDue === true, Date.now())
+    ) {
+      await writeRecurringCharges(
+        firestore,
+        uid,
+        linkId,
+        grant,
+        grantRef,
+        planKey,
+        new Set(link.providerAccounts.map((entry) => entry.providerAccountId)),
+      ).catch(async (error: unknown) => {
+        logger.warn('runway.sync.recurringFailed', {
+          linkId,
+          kind: error instanceof ProviderError ? error.kind : 'internal',
+          code: error instanceof ProviderError ? error.code : null,
+        });
+        await retryRecurringSoon(grantRef).catch(() => undefined);
       });
     }
     const wereDetailsFilled =

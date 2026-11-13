@@ -6,6 +6,7 @@ import {
   normalizeCardStatement,
   normalizeTransaction,
   toBankName,
+  toDateOnly,
   toHttpsUrl,
   type RawAccount,
 } from './normalize.js';
@@ -14,6 +15,8 @@ import {
   ProviderError,
   type BankDataProvider,
   type CardStatementRead,
+  type ProviderRecurringStream,
+  type RecurringRead,
   type NormalizedTransaction,
   type ProviderGrant,
   type TransactionDetails,
@@ -30,7 +33,7 @@ const host = () =>
   isEmulator() ? 'https://sandbox.plaid.com' : 'https://production.plaid.com';
 
 /** How far back the first sync reaches. */
-const LINK_DAYS_REQUESTED = 30;
+const LINK_DAYS_REQUESTED = 180;
 const SYNC_PAGE_SIZE = 500;
 const MAX_PAGES_PER_CALL = 10;
 const MAX_LOGO_PAGES = 20;
@@ -248,9 +251,100 @@ interface PlaidCreditLiability {
   last_payment_date?: string | null;
 }
 
+interface PlaidRecurringStream {
+  account_id: string;
+  stream_id: string;
+  description?: string | null;
+  merchant_name?: string | null;
+  first_date: string;
+  last_date: string;
+  predicted_next_date?: string | null;
+  frequency?: string | null;
+  average_amount?: {
+    amount?: number | null;
+    iso_currency_code?: string | null;
+  };
+  last_amount?: { amount?: number | null; iso_currency_code?: string | null };
+  is_active?: boolean | null;
+  status?: string | null;
+  personal_finance_category?: {
+    primary?: string | null;
+    detailed?: string | null;
+  } | null;
+}
+
+const RECURRING_FREQUENCIES: Record<
+  string,
+  ProviderRecurringStream['frequency']
+> = {
+  WEEKLY: 'weekly',
+  BIWEEKLY: 'biweekly',
+  SEMI_MONTHLY: 'semiMonthly',
+  MONTHLY: 'monthly',
+  ANNUALLY: 'annually',
+};
+
+const RECURRING_STATUSES: Record<string, ProviderRecurringStream['status']> = {
+  MATURE: 'mature',
+  EARLY_DETECTION: 'early',
+  TOMBSTONED: 'tombstoned',
+};
+
+const isUsdOrUnstated = (code: string | null | undefined) =>
+  code === undefined || code === null || code === 'USD';
+
+const toRecurringStream = (
+  entry: PlaidRecurringStream,
+): ProviderRecurringStream[] => {
+  const average = entry.average_amount?.amount;
+  const last = entry.last_amount?.amount;
+  const firstOn = toDateOnly(entry.first_date);
+  const lastOn = toDateOnly(entry.last_date);
+  if (
+    typeof average !== 'number' ||
+    typeof last !== 'number' ||
+    !Number.isFinite(average) ||
+    !Number.isFinite(last) ||
+    firstOn === null ||
+    lastOn === null ||
+    !isUsdOrUnstated(entry.average_amount?.iso_currency_code) ||
+    !isUsdOrUnstated(entry.last_amount?.iso_currency_code)
+  ) {
+    return [];
+  }
+  const stream: ProviderRecurringStream = {
+    streamId: entry.stream_id,
+    providerAccountId: entry.account_id,
+    description: entry.description?.trim() ?? '',
+    merchantName: entry.merchant_name?.trim() || null,
+    frequency: RECURRING_FREQUENCIES[entry.frequency ?? ''] ?? 'unknown',
+    averageCents: Math.round(Math.abs(average) * 100),
+    lastCents: Math.round(Math.abs(last) * 100),
+    firstOn,
+    lastOn,
+    nextOn: entry.predicted_next_date
+      ? toDateOnly(entry.predicted_next_date)
+      : null,
+    status: RECURRING_STATUSES[entry.status ?? ''] ?? 'unknown',
+    isActive: entry.is_active === true,
+    category:
+      entry.personal_finance_category?.detailed ??
+      entry.personal_finance_category?.primary ??
+      null,
+  };
+  return [stream];
+};
+
 const NEEDS_CONSENT_CODES = new Set([
   'ADDITIONAL_CONSENT_REQUIRED',
   'ACCESS_NOT_GRANTED',
+]);
+const RECURRING_UNSUPPORTED_CODES = new Set([
+  'PRODUCTS_NOT_SUPPORTED',
+  'PRODUCT_NOT_ENABLED',
+  'INVALID_PRODUCT',
+  'ADDITIONAL_CONSENT_REQUIRED',
+  'NO_ACCOUNTS',
 ]);
 const UNSUPPORTED_CODES = new Set([
   'PRODUCTS_NOT_SUPPORTED',
@@ -414,6 +508,34 @@ export const plaidProvider: BankDataProvider = {
           lastPaymentDate: entry.last_payment_date ?? null,
         }),
       ),
+    };
+    return answer;
+  },
+
+  async listRecurringOutflows(grant) {
+    const read = await call<{
+      outflow_streams?: PlaidRecurringStream[] | null;
+    }>('/transactions/recurring/get', { access_token: grant.credential }).then(
+      (response) => response,
+      (error: unknown) => {
+        if (!(error instanceof ProviderError) || error.code === null) {
+          throw error;
+        }
+        const answer: RecurringRead | null = RECURRING_UNSUPPORTED_CODES.has(
+          error.code,
+        )
+          ? { kind: 'unsupported' }
+          : error.code === 'PRODUCT_NOT_READY'
+            ? { kind: 'notReady' }
+            : null;
+        if (answer === null) throw error;
+        return answer;
+      },
+    );
+    if ('kind' in read) return read;
+    const answer: RecurringRead = {
+      kind: 'ok',
+      streams: (read.outflow_streams ?? []).flatMap(toRecurringStream),
     };
     return answer;
   },
