@@ -1,4 +1,5 @@
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
@@ -11,7 +12,6 @@ import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import {
   GROUP_WORDS,
   PLAN_SELECT_WORDS,
-  TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import type { GroupFigures } from '@apps/runway/hooks/useGroupFigures';
 import {
@@ -95,8 +95,7 @@ function GroupHeading({
           </span>
         </Button>
         <span className='flex min-h-11 shrink-0 items-center pt-1 pr-3'>
-          <Checkbox
-            className={TICK_HIT_CLASS}
+          <AppCheckbox
             checked={isAll}
             indeterminate={select.ticked > 0 && !isAll}
             onCheckedChange={select.onToggle}
