@@ -918,6 +918,7 @@ test('a grouping question is answered by voice as the option it names, by tap sh
   assert.equal(
     toQuestionChoice(GROUP_QUESTION, {
       shape: 'pickSeveral',
+      otherText: null,
       optionIds: ['yes'],
     }),
     null,

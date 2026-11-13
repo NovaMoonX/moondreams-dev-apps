@@ -1,88 +1,79 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Pencil } from 'lucide-react';
 
 import { ANSWER_TEXT_MAX, HELM_COPY } from '@apps/helm/constants';
 import AnswerField from '@apps/helm/components/home/AnswerField';
 import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps';
-import ChoiceButton, {
-  QUIET_CLASS,
+import {
+  ChoiceGroup,
+  ChoiceRow,
 } from '@apps/helm/components/home/ChoiceButton';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
-/** The options as tall choices, then new and none quieter, and "Something else" opening a short field when the options may not cover it. */
+const ICON_CLASS = 'text-muted-foreground size-5 shrink-0';
+
+/** The options as radio rows in one group, "new" and "none" quieter after them, and "Something else" last, opening a short field when the options may not cover it. A tap on an option fills its radio and sends. */
 function PickOneAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
   const name = useAssistantName();
   const [isElseOpen, setIsElseOpen] = useState(false);
   const [elseText, setElseText] = useState('');
-  const choices = question.options.filter(
-    (option) => option.id !== 'new' && option.id !== 'none',
-  );
-  const others = question.options.filter(
-    (option) => option.id === 'new' || option.id === 'none',
-  );
-  const pick = (optionId: string) =>
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const isQuietId = (id: string) => id === 'new' || id === 'none';
+  const options = [
+    ...question.options.filter((option) => !isQuietId(option.id)),
+    ...question.options.filter((option) => isQuietId(option.id)),
+  ];
+  const pick = (optionId: string) => {
+    setChosenId(optionId);
     onAnswer({ shape: 'pickOne', optionId, otherText: null });
+  };
 
   return (
-    <>
-      {choices.map((option) => (
-        <ChoiceButton
+    <ChoiceGroup label={question.prompt} kind='radio'>
+      {options.map((option) => (
+        <ChoiceRow
           key={option.id}
+          kind='radio'
           label={option.label}
           detail={option.detail}
+          isQuiet={isQuietId(option.id)}
+          isSelected={isBusy && chosenId === option.id}
           isDisabled={isBusy}
           onClick={() => pick(option.id)}
         />
       ))}
-      {isElseOpen && (
-        <AnswerField
-          label={HELM_COPY.questionSomethingElseField(name)}
-          placeholder={HELM_COPY.questionSomethingElseField(name)}
-          value={elseText}
-          onChange={setElseText}
-          maxLength={ANSWER_TEXT_MAX}
+      {question.allowsSomethingElse && (
+        <ChoiceRow
+          kind='radio'
+          label={HELM_COPY.questionSomethingElse}
+          icon={<Pencil className={ICON_CLASS} aria-hidden='true' />}
+          isSelected={isElseOpen}
           isDisabled={isBusy}
-          autoFocus
-          onSend={() =>
-            onAnswer({
-              shape: 'pickOne',
-              optionId: 'other',
-              otherText: elseText.trim(),
-            })
-          }
+          onClick={() => setIsElseOpen((isOpen) => !isOpen)}
         />
       )}
-      {(others.length > 0 || (question.allowsSomethingElse && !isElseOpen)) && (
-        <div className='flex flex-wrap items-center gap-x-3 gap-y-3'>
-          {others.map((option) => (
-            <Button
-              key={option.id}
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className={QUIET_CLASS}
-              disabled={isBusy}
-              onClick={() => pick(option.id)}
-            >
-              {option.label}
-            </Button>
-          ))}
-          {question.allowsSomethingElse && !isElseOpen && (
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className={QUIET_CLASS}
-              disabled={isBusy}
-              onClick={() => setIsElseOpen(true)}
-            >
-              {HELM_COPY.questionSomethingElse}
-            </Button>
-          )}
+      {isElseOpen && (
+        <div className='p-3.5'>
+          <AnswerField
+            label={HELM_COPY.questionSomethingElseField(name)}
+            placeholder={HELM_COPY.questionSomethingElseField(name)}
+            value={elseText}
+            onChange={setElseText}
+            maxLength={ANSWER_TEXT_MAX}
+            isDisabled={isBusy}
+            autoFocus
+            onSend={() =>
+              onAnswer({
+                shape: 'pickOne',
+                optionId: 'other',
+                otherText: elseText.trim(),
+              })
+            }
+          />
         </div>
       )}
-    </>
+    </ChoiceGroup>
   );
 }
 

@@ -68,6 +68,7 @@ const checkPickSeveral = (
   value: Record<string, unknown>,
 ): QuestionAnswerValue | null => {
   const ids = value.optionIds;
+  if (value.otherText !== null && value.otherText !== undefined) return null;
   if (!Array.isArray(ids) || ids.length === 0) return null;
   const unique = [...new Set(ids)];
   const known = new Set([...question.options.map((o) => o.id), 'none']);
