@@ -1812,14 +1812,14 @@ export const BILLS_NOTICED_WORDS = {
   amountHiddenAria: (name: string) =>
     `${name}. Its bank charges differ from your plan. Amount hidden. Open`,
   newLine: (amount: string, how: string, place: string) =>
-    `${amount} ${how} on ${place} · not a bill yet`,
+    `${amount} ${how} on ${place}`,
   newAria: (name: string, line: string) => `${name}. ${line}. Open`,
   newHiddenAria: (name: string) =>
     `${name}. A repeating charge that is not a bill yet. Amount hidden. Open`,
   placeName: (name: string, mask: string | null) =>
-    mask ? `${name} ••${mask}` : name,
+    mask ? `${name}\u00a0••${mask}` : name,
   placeLine: (count: number) =>
-    `${count === 1 ? '1 repeating charge' : `${count} repeating charges`} · not in your plan`,
+    count === 1 ? '1 repeating charge' : `${count} repeating charges`,
   placeAria: (name: string, line: string) => `${name}. ${line}. Open`,
   frequency: {
     weekly: 'weekly',

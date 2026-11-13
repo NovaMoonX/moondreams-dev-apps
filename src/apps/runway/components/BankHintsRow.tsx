@@ -7,7 +7,6 @@ import DetailSheet from '@/components/DetailSheet';
 import HelpTip from '@/components/HelpTip';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
-import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -114,7 +113,6 @@ const useBankHintGroups = (
   const cards = useAppSelector(selectAllCards);
   const accounts = useAppSelector(selectAllAccounts);
   const recurringHints = useRecurringHints(today);
-  const { isHidden } = useValuesHidden();
   const emojiOf = useLiveEmojiResolver();
   const nameOf = getPlaceNamer(cards, accounts);
   const payloadOf = (billId: string) =>
@@ -150,7 +148,7 @@ const useBankHintGroups = (
   });
 
   const amounts = recurringHints.flatMap((hint) => {
-    if (hint.kind !== 'amount' || isHidden) return [];
+    if (hint.kind !== 'amount') return [];
     const payload = payloadOf(hint.billId);
     return payload ? [{ hint, payload }] : [];
   });
