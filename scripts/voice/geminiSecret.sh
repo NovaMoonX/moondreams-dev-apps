@@ -13,6 +13,7 @@ need() {
 need curl "It ships with macOS and most Linux systems."
 need firebase "Install it with: npm install -g firebase-tools"
 source "$(dirname "$0")/../lib/firebaseLogin.sh"; require_firebase_login
+source "$(dirname "$0")/../lib/functionsSecret.sh"; exit_if_secret_saved GEMINI_API_KEY "$PROJECT"
 [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste the key." >&2; exit 1; }
 
 echo "1. Open $KEYS_PAGE and click \"Create API key\":"
