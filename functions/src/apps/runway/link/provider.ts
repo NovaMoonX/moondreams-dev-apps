@@ -12,6 +12,12 @@ export interface NormalizedAccount {
   balanceCents: number | null;
   /** When the bank last refreshed the balance; null when the provider does not say. */
   balanceAsOf: number | null;
+  /** A bank account's current balance less its pending holds; null for a card or when the bank does not say. */
+  availableCents: number | null;
+  /** A card's credit limit; null for a bank account or when the bank does not say. */
+  limitCents: number | null;
+  /** False when the bank shares only a saved balance a few times a day, so a live read cannot make it newer. */
+  hasInstantBalance: boolean;
 }
 
 /** A bank transaction in the shape the app uses; money out is positive, money in negative. */
@@ -32,6 +38,27 @@ export interface NormalizedTransaction {
   category: string | null;
   isPending: boolean;
 }
+
+/** A card's latest statement as the bank reports it; every figure is null when the bank does not say. */
+export interface NormalizedCardStatement {
+  providerAccountId: string;
+  minimumCents: number | null;
+  statementCents: number | null;
+  /** Date-only: UTC midnight. */
+  statementOn: number | null;
+  /** Date-only: UTC midnight. */
+  dueOn: number | null;
+  lastPaymentCents: number | null;
+  /** Date-only: UTC midnight. */
+  lastPaymentOn: number | null;
+}
+
+/** `needsConsent`: the person must agree to share card details; `unsupported`: this bank or provider account cannot; `notReady`: the provider has not prepared them yet. */
+export type CardStatementRead =
+  | { kind: 'ok'; statements: NormalizedCardStatement[] }
+  | { kind: 'needsConsent' }
+  | { kind: 'unsupported' }
+  | { kind: 'notReady' };
 
 export interface TransactionSync {
   added: NormalizedTransaction[];
@@ -86,13 +113,24 @@ export interface BankDataProvider {
   /** With `update`, a token that reopens an existing connection (and lets the person pick accounts again) instead of making a new one. */
   createLinkSession(
     uid: string,
-    update?: { accessToken: string; accountSelection: boolean },
+    update?: {
+      accessToken: string;
+      accountSelection: boolean;
+      askCardConsent: boolean;
+    },
   ): Promise<{ linkToken: string }>;
   exchange(publicToken: string): Promise<ProviderGrant>;
   /** The institution's name and logo (a PNG data URL), or null when the provider cannot say. */
   getInstitution(grant: ProviderGrant): Promise<ProviderInstitution | null>;
-  /** Every account under the grant, with the provider's latest balances; throws `needsAttention` when it shares none. */
-  listAccounts(grant: ProviderGrant): Promise<NormalizedAccount[]>;
+  /** Every account under the grant, with the provider's latest balances (asked of the bank right now with `isLive`); throws `needsAttention` when it shares none. */
+  listAccounts(
+    grant: ProviderGrant,
+    options?: { isLive: boolean },
+  ): Promise<NormalizedAccount[]>;
+  /** The statement details of every credit account under the grant; call only for a grant with a card linked. */
+  listCardStatements(grant: ProviderGrant): Promise<CardStatementRead>;
+  /** Asks the provider to check the bank for new transactions now; what it finds arrives later through the webhook. */
+  refreshTransactions(grant: ProviderGrant): Promise<void>;
   revoke(grant: ProviderGrant): Promise<void>;
   /** Each transaction's merchant logo and bank name between two `YYYY-MM-DD` days, for purchases brought in before they were kept. */
   listTransactionDetails(

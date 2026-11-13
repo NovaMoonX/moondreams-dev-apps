@@ -1,10 +1,8 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import LockedButton from '@/components/LockedButton';
-import { useAuth } from '@/hooks/useAuth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
-import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import type { SearchedSource } from '@apps/helm/types';
@@ -21,14 +19,12 @@ interface SearchedLineProps {
 /** Where an answer looked, in one line, or the account it couldn't look in with the way back. */
 function SearchedLine({ searched, canReconnect }: SearchedLineProps) {
   const now = useNow(60_000);
-  const { user } = useAuth();
-  const { accounts } = useConnectionAccounts(user?.uid ?? null);
   const { begin } = useGoogleConnect();
   const isOffline = useNetworkStatus() === 'offline';
 
   if (searched.failed === null) {
     return (
-      <p className='text-muted-foreground py-2.5 text-[13px] text-pretty'>
+      <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.searchedLine(
           searched.label,
           now - searched.at < JUST_NOW_MS
@@ -38,14 +34,11 @@ function SearchedLine({ searched, canReconnect }: SearchedLineProps) {
       </p>
     );
   }
-  const email =
-    accounts.find((entry) => entry.id === searched.accountId)?.email ??
-    searched.label;
   const canAsk = canReconnect && searched.failed === HELM_COPY.searchedStopped;
   return (
-    <div className='flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5'>
+    <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
       <p className='text-muted-foreground min-w-0 flex-1 text-[13px] text-pretty'>
-        {HELM_COPY.searchedFailed(email, searched.failed)}
+        {HELM_COPY.searchedFailed(searched.label, searched.failed)}
       </p>
       {canAsk &&
         (isOffline ? (
@@ -65,7 +58,10 @@ function SearchedLine({ searched, canReconnect }: SearchedLineProps) {
             onClick={() =>
               begin({
                 accountId: searched.accountId,
-                connectorId: 'google:gmail',
+                connectorId:
+                  searched.connectorId === 'google:drive'
+                    ? 'google:drive'
+                    : 'google:gmail',
               })
             }
           >

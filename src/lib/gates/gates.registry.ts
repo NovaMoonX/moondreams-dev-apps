@@ -75,7 +75,7 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     appId: 'helm',
     label: 'Gmail and Drive',
     description:
-      'Someone kept out sees no Gmail tick when they connect Google, and a connect link they already hold is refused. Someone with it can let the assistant look in their Gmail when a question needs it.',
+      'Someone kept out sees no Gmail or Drive switch on their Google account, and a connect link they already hold is refused. Someone with it can let the assistant look in their Gmail and Drive when a question needs it.',
     defaultRollout: 'testing',
     isServerEnforced: false,
     warning:

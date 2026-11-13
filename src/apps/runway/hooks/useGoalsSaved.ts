@@ -4,7 +4,7 @@ import {
   isCountedAt,
   usePriorityDial,
 } from '@apps/runway/hooks/usePriorityDial';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectGoals } from '@apps/runway/store/selectors/runwaySelectors';
 
 /** What every goal counted at the dial holds against what it aims for (money held is saved whether or not more goes in), and how many get nothing put in: the one figure the Goals header and the overview's Goals tile share. */

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarCheck, CalendarDays, Tag } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
@@ -8,7 +9,7 @@ import AppToggle from '@/components/AppToggle';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
 import SectionHeader from '@/components/SectionHeader';
-import SettingsGroup from '@/components/SettingsGroup';
+import SettingsSection from '@apps/helm/components/settings/SettingsSection';
 import SettingsRow from '@/components/SettingsRow';
 import {
   grantConnection,
@@ -19,6 +20,8 @@ import {
   isOutsideAccount,
   readConnectorAppId,
 } from '@/lib/connections/contract';
+import { GOOGLE_CONTACTS_MANIFEST } from '@/lib/connections/google/contactsManifest';
+import { GOOGLE_DRIVE_MANIFEST } from '@/lib/connections/google/driveManifest';
 import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
 import { getConnectorManifest } from '@/lib/connections/sources';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
@@ -38,6 +41,7 @@ import {
   formatUpdatedAt,
   getGrantCopyCount,
   getNewestOkAt,
+  isLiveCategory,
   isStale,
 } from '@apps/helm/utils/synced';
 
@@ -50,6 +54,11 @@ interface ConnectionPageProps {
 const GMAIL_SCOPE =
   GOOGLE_GMAIL_MANIFEST.connect.kind === 'oauth'
     ? (GOOGLE_GMAIL_MANIFEST.connect.scopesByCategory.mail?.[0] ?? '')
+    : '';
+
+const DRIVE_SCOPE =
+  GOOGLE_DRIVE_MANIFEST.connect.kind === 'oauth'
+    ? (GOOGLE_DRIVE_MANIFEST.connect.scopesByCategory.documents?.[0] ?? '')
     : '';
 
 const without = <T,>(record: Record<string, T>, key: string) =>
@@ -90,6 +99,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
   const [isLabelOpen, setIsLabelOpen] = useState(false);
   const [isGmailDisconnectOpen, setIsGmailDisconnectOpen] = useState(false);
+  const [isDriveDisconnectOpen, setIsDriveDisconnectOpen] = useState(false);
+  const [isContactsDisconnectOpen, setIsContactsDisconnectOpen] =
+    useState(false);
+  const [isDriveWorking, setIsDriveWorking] = useState(false);
+  const [driveFailure, setDriveFailure] = useState<string | null>(null);
   const [isGmailWorking, setIsGmailWorking] = useState(false);
   const [gmailFailure, setGmailFailure] = useState<string | null>(null);
   const isGmailOpen = useIsGateOpen('helm', 'google-mail-and-drive');
@@ -119,10 +133,30 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         entry.accountId === grant.accountId,
     ) ?? null;
   const gmailCategory = GOOGLE_GMAIL_MANIFEST.categories[0];
+  const isDriveGrant = grant.connectorId === 'google:drive';
+  const driveGrant =
+    grants.find(
+      (entry) =>
+        entry.connectorId === 'google:drive' &&
+        entry.accountId === grant.accountId,
+    ) ?? null;
+  const driveCategory = GOOGLE_DRIVE_MANIFEST.categories[0];
+  const isContactsGrant = grant.connectorId === 'google:contacts';
+  const contactsGrant =
+    grants.find(
+      (entry) =>
+        entry.connectorId === 'google:contacts' &&
+        entry.accountId === grant.accountId,
+    ) ?? null;
+  const contactsCategory = GOOGLE_CONTACTS_MANIFEST.categories[0];
   const appName = isGoogle
     ? isGmailGrant
       ? HELM_COPY.googleGmailName
-      : HELM_COPY.googleCalendarName
+      : isDriveGrant
+        ? HELM_COPY.googleDriveName
+        : isContactsGrant
+          ? HELM_COPY.googleContactsName
+          : HELM_COPY.googleCalendarName
     : (apps.find((app) => app.id === appId)?.name ?? appId);
   const manifest = getConnectorManifest(grant.connectorId);
   const kinds = new Set(
@@ -137,8 +171,16 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const showsGmailRow =
     isGoogle &&
     !isGmailGrant &&
+    !isContactsGrant &&
     !hasStopped &&
     (gmailGrant !== null || isGmailOpen);
+  const showsDriveRow =
+    isGoogle &&
+    !isDriveGrant &&
+    !isContactsGrant &&
+    !hasStopped &&
+    (driveGrant !== null || isGmailOpen);
+  const showsContactsRow = isGoogle && !isContactsGrant && !hasStopped;
 
   const change = async (categoryId: string, isOn: boolean) => {
     setPending((current) => ({
@@ -193,6 +235,28 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     setIsGmailWorking(false);
   };
 
+  const turnDriveOn = async () => {
+    setDriveFailure(null);
+    if (!account?.grantedScopes.includes(DRIVE_SCOPE)) {
+      begin({ accountId: grant.accountId, connectorId: 'google:drive' });
+      return;
+    }
+    setIsDriveWorking(true);
+    try {
+      await grantConnection({
+        readerAppId: 'helm',
+        connectorId: 'google:drive',
+        accountId: grant.accountId,
+        categoryIds: ['documents'],
+        options: null,
+      });
+    } catch (error) {
+      console.error('Helm Drive was not connected', error);
+      setDriveFailure(HELM_COPY.driveFailed);
+    }
+    setIsDriveWorking(false);
+  };
+
   const syncNow = async () => {
     setIsSyncing(true);
     setSyncFailure(null);
@@ -209,7 +273,14 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const hasError = Object.values(grant.categoryState).some(
     (state) => state.lastError !== null,
   );
-  const freshnessLine = (categoryId: string) => {
+  const onIds = Object.entries(grant.categories)
+    .filter(([, entry]) => entry.isOn)
+    .map(([id]) => id);
+  const isLiveOnly =
+    onIds.length > 0 &&
+    onIds.every((id) => isLiveCategory(grant.connectorId, id));
+  const freshnessLine = (categoryId: string, mode: 'sync' | 'live') => {
+    if (mode === 'live') return HELM_COPY.connectionLiveLine;
     const state = grant.categoryState[categoryId];
     if (state?.lastError) return HELM_COPY.syncedCouldNot;
     if (!state || state.lastOkAt === null) return HELM_COPY.syncedWaiting;
@@ -272,7 +343,18 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 variant='outline'
                 size='sm'
                 className='relative after:absolute after:inset-x-0 after:-inset-y-1.5'
-                onClick={() => begin({ accountId: grant.accountId })}
+                onClick={() =>
+                  begin({
+                    accountId: grant.accountId,
+                    connectorId: isGmailGrant
+                      ? 'google:gmail'
+                      : isDriveGrant
+                        ? 'google:drive'
+                        : isContactsGrant
+                          ? 'google:contacts'
+                          : 'google:calendar',
+                  })
+                }
               >
                 {HELM_COPY.googleReconnect}
               </Button>
@@ -290,12 +372,18 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           : HELM_COPY.connectionAccountValue}
       </p>
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {isGoogle
-          ? HELM_COPY.googleReadOnly(name)
-          : HELM_COPY.connectReadOnlyPromise(name, appName)}
+        {!isGoogle
+          ? HELM_COPY.connectReadOnlyPromise(name, appName)
+          : isGmailGrant
+            ? HELM_COPY.googleGmailReadOnly(name)
+            : isDriveGrant
+              ? HELM_COPY.googleDriveReadOnly(name)
+              : isContactsGrant
+                ? HELM_COPY.googleContactsReadOnly(name)
+                : HELM_COPY.googleReadOnly(name)}
       </p>
       {isGoogle && !isOffline && (
-        <SettingsGroup title={HELM_COPY.connectionAccountLabel}>
+        <SettingsSection title={HELM_COPY.connectionAccountLabel}>
           <SettingsRow
             icon={<Tag className='size-5' aria-hidden='true' />}
             title={HELM_COPY.googleLabelRow}
@@ -303,18 +391,21 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             onClick={() => setIsLabelOpen(true)}
             hasChevron
           />
-          {!hasStopped && !isGmailGrant && (
-            <SettingsRow
-              icon={<CalendarCheck className='size-5' aria-hidden='true' />}
-              title={HELM_COPY.googleWhichCalendars}
-              description={HELM_COPY.googleCalendarsCount(
-                grant.options?.calendarIds.length ?? 0,
-              )}
-              onClick={() => openCalendarPicker(grant.accountId)}
-              hasChevron
-            />
-          )}
-        </SettingsGroup>
+          {!hasStopped &&
+            !isGmailGrant &&
+            !isDriveGrant &&
+            !isContactsGrant && (
+              <SettingsRow
+                icon={<CalendarCheck className='size-5' aria-hidden='true' />}
+                title={HELM_COPY.googleWhichCalendars}
+                description={HELM_COPY.googleCalendarsCount(
+                  grant.options?.calendarIds.length ?? 0,
+                )}
+                onClick={() => openCalendarPicker(grant.accountId)}
+                hasChevron
+              />
+            )}
+        </SettingsSection>
       )}
       <section className='flex flex-col gap-3'>
         <SectionHeader title={HELM_COPY.connectionReads(name)} />
@@ -336,11 +427,20 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     <span className='text-muted-foreground block text-[13px] text-pretty'>
                       {category.detail}
                     </span>
-                    {isOn && freshnessLine(category.id) && (
-                      <span className='text-muted-foreground block text-[13px] text-pretty'>
-                        {freshnessLine(category.id)}
-                      </span>
-                    )}
+                    {isOn &&
+                      !isContactsGrant &&
+                      freshnessLine(category.id, category.mode) && (
+                        <span
+                          className={join(
+                            'text-muted-foreground block text-pretty',
+                            category.mode === 'live'
+                              ? 'mt-1 text-xs'
+                              : 'text-[13px]',
+                          )}
+                        >
+                          {freshnessLine(category.id, category.mode)}
+                        </span>
+                      )}
                   </span>
                   {isOffline ? (
                     locked
@@ -410,8 +510,69 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
               )}
             </li>
           )}
+          {showsDriveRow && (
+            <li className='flex flex-col gap-1 px-4 py-3'>
+              <label className='flex min-h-11 items-center gap-3'>
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground block text-[15px]'>
+                    {HELM_COPY.driveRowTitle}
+                  </span>
+                  <span className='text-muted-foreground block text-[13px] text-pretty'>
+                    {driveCategory?.detail}
+                  </span>
+                </span>
+                {isOffline ? (
+                  locked
+                ) : (
+                  <AppToggle
+                    aria-label={HELM_COPY.driveRowTitle}
+                    checked={driveGrant !== null}
+                    disabled={isDriveWorking}
+                    onCheckedChange={(next) =>
+                      next ? void turnDriveOn() : setIsDriveDisconnectOpen(true)
+                    }
+                  />
+                )}
+              </label>
+              {driveFailure && (
+                <p className='text-destructive text-[13px]' role='alert'>
+                  {driveFailure}
+                </p>
+              )}
+            </li>
+          )}
+          {showsContactsRow && (
+            <li className='flex flex-col gap-1 px-4 py-3'>
+              <label className='flex min-h-11 items-center gap-3'>
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground block text-[15px]'>
+                    {HELM_COPY.contactsRowTitle}
+                  </span>
+                  <span className='text-muted-foreground block text-[13px] text-pretty'>
+                    {contactsCategory?.detail}
+                  </span>
+                </span>
+                {isOffline ? (
+                  locked
+                ) : (
+                  <AppToggle
+                    aria-label={HELM_COPY.contactsRowTitle}
+                    checked={contactsGrant !== null}
+                    onCheckedChange={(next) =>
+                      next
+                        ? begin({
+                            accountId: grant.accountId,
+                            connectorId: 'google:contacts',
+                          })
+                        : setIsContactsDisconnectOpen(true)
+                    }
+                  />
+                )}
+              </label>
+            </li>
+          )}
         </ul>
-        {!hasStopped && (
+        {!hasStopped && !isContactsGrant && !isLiveOnly && (
           <div className='flex items-center justify-between gap-3'>
             <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
               {newestOkAt === null
@@ -484,7 +645,15 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
               }
             : null
         }
-        extraLine={isGmailGrant ? HELM_COPY.gmailDisconnectNote : null}
+        extraLine={
+          isGmailGrant
+            ? HELM_COPY.gmailDisconnectNote
+            : isDriveGrant
+              ? HELM_COPY.driveDisconnectNote
+              : isContactsGrant
+                ? HELM_COPY.contactsDisconnectNote
+                : null
+        }
         failureLine={(error) =>
           failureLine(error, appName, HELM_COPY.disconnectFailed)
         }
@@ -506,6 +675,46 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             failureLine(
               error,
               HELM_COPY.googleGmailName,
+              HELM_COPY.disconnectFailed,
+            )
+          }
+        />
+      )}
+      {driveGrant && (
+        <DisconnectSheet
+          isOpen={isDriveDisconnectOpen}
+          onClose={() => setIsDriveDisconnectOpen(false)}
+          grantId={driveGrant.id}
+          appName={HELM_COPY.googleDriveName}
+          count={0}
+          accountName={account?.email ?? null}
+          extraLine={HELM_COPY.driveDisconnectNote}
+          wording={{
+            title: HELM_COPY.driveStopTitle,
+            confirm: HELM_COPY.driveStopConfirm,
+          }}
+          failureLine={(error) =>
+            failureLine(
+              error,
+              HELM_COPY.googleDriveName,
+              HELM_COPY.disconnectFailed,
+            )
+          }
+        />
+      )}
+      {contactsGrant && showsContactsRow && (
+        <DisconnectSheet
+          isOpen={isContactsDisconnectOpen}
+          onClose={() => setIsContactsDisconnectOpen(false)}
+          grantId={contactsGrant.id}
+          appName={HELM_COPY.googleContactsName}
+          count={0}
+          accountName={account?.email ?? null}
+          extraLine={HELM_COPY.contactsDisconnectNote}
+          failureLine={(error) =>
+            failureLine(
+              error,
+              HELM_COPY.googleContactsName,
               HELM_COPY.disconnectFailed,
             )
           }

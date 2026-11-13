@@ -4,19 +4,36 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
 import { isGateOpenForUid } from '../gates/assertGateOpen.js';
-import { toGrantId, type ConnectorId } from '../vendor/connectionsContract.js';
-import { toMailLink, isLiveDeepLink } from './deepLinks.js';
+import {
+  SITE_ACCOUNT_ID,
+  readConnectorAppId,
+  toGrantId,
+  type ConnectorId,
+} from '../vendor/connectionsContract.js';
+import { toDocumentLink, toMailLink, isLiveDeepLink } from './deepLinks.js';
 import { GoogleHttpError } from './google/client.js';
+import {
+  findPassages,
+  isDocumentRef,
+  readDocument,
+  searchDocuments,
+  type DocumentKind,
+} from './google/drive.js';
+import { GOOGLE_DRIVE_MANIFEST } from './google/driveManifest.js';
 import { isMailRef, readMail, searchMail } from './google/gmail.js';
 import { GOOGLE_GMAIL_MANIFEST } from './google/gmailManifest.js';
 import { readGrant } from './grants.js';
-import { READER_APPS } from './registry.js';
+import {
+  READER_APPS,
+  SOURCE_ADAPTERS,
+  type LiveQueryResult,
+} from './registry.js';
 import { ReconnectNeeded, getGoogleAccessToken } from './tokens.js';
 
 export { isLiveDeepLink };
 
 export interface LiveGrant {
-  connectorId: 'google:gmail';
+  connectorId: 'google:gmail' | 'google:drive';
   accountId: string;
   email: string;
   label: string | null;
@@ -24,6 +41,7 @@ export interface LiveGrant {
 
 export interface LiveSearchItem {
   ref: string;
+  kind: 'mail' | DocumentKind;
   title: string;
   from: string;
   at: number;
@@ -33,29 +51,38 @@ export interface LiveSearchItem {
 
 export interface LiveReadItem {
   ref: string;
+  kind: 'mail' | 'doc' | 'pdf';
   title: string;
   from: string;
   at: number;
   text: string;
+  passages: string[];
   deepLink: string;
 }
 
 export type LiveFailure = {
   ok: false;
-  reason: 'reconnect' | 'notGranted' | 'failed';
+  reason: 'reconnect' | 'notGranted' | 'failed' | 'notReadable';
 };
 
-interface LiveInput {
+export interface LiveInput {
   uid: string;
   readerAppId: string;
   connectorId: string;
   accountId: string;
 }
 
-const LIVE_MANIFESTS = [GOOGLE_GMAIL_MANIFEST];
+const LIVE_MANIFESTS = [GOOGLE_GMAIL_MANIFEST, GOOGLE_DRIVE_MANIFEST];
 const CACHE_MS = 15 * 60_000;
 const MAX_CACHED = 200;
 const MAX_QUERY = 200;
+const MAX_FIND = 100;
+const MAX_READ_TEXT = 4000;
+const KIND_LABELS: Record<DocumentKind, string> = {
+  doc: 'Google Doc',
+  pdf: 'PDF',
+  other: 'Other file',
+};
 const NOT_GRANTED: LiveFailure = { ok: false, reason: 'notGranted' };
 
 const cache = new Map<string, { expiresAt: number; value: unknown }>();
@@ -84,7 +111,15 @@ const accountPath = (uid: string, accountId: string) =>
 
 const toCacheKey = (input: LiveInput, op: string, args: unknown[]) =>
   createHash('sha256')
-    .update(JSON.stringify([input.uid, input.accountId, op, ...args]))
+    .update(
+      JSON.stringify([
+        input.uid,
+        input.connectorId,
+        input.accountId,
+        op,
+        ...args,
+      ]),
+    )
     .digest('hex');
 
 const remember = (key: string, value: unknown, now: number) => {
@@ -131,7 +166,8 @@ export const listLiveGrants = async (
     const label = accounts[index].get('label');
     return typeof email === 'string' &&
       (status === 'live' || status === 'needsReconnect') &&
-      grant.connectorId === 'google:gmail'
+      (grant.connectorId === 'google:gmail' ||
+        grant.connectorId === 'google:drive')
       ? [
           {
             connectorId: grant.connectorId,
@@ -223,6 +259,26 @@ const run = async <T>(
   }
 };
 
+/** Checks the grant, gets the account's token and runs one read that is never cached, for a read whose result must not be kept anywhere. */
+export const withLiveAccess = async <T>(
+  firestore: Firestore,
+  input: LiveInput,
+  read: (token: string, email: string) => Promise<T>,
+): Promise<{ ok: true; value: T } | LiveFailure> => {
+  const checked = await checkGrant(firestore, input);
+  if (!checked.ok) return checked;
+  try {
+    const token = await getGoogleAccessToken(
+      firestore,
+      input.uid,
+      input.accountId,
+    );
+    return { ok: true, value: await read(token, checked.email) };
+  } catch (error) {
+    return toFailure(error, 'access');
+  }
+};
+
 export const searchLive = async (
   firestore: Firestore,
   input: LiveInput & { query: string },
@@ -234,40 +290,170 @@ export const searchLive = async (
     input,
     'search',
     [query],
-    async (token, email) =>
-      (await searchMail(token, email, query)).map((item) => ({
-        ref: item.ref,
-        title: item.title,
-        from: item.from,
-        at: item.at,
-        snippet: item.snippet,
-        deepLink: toMailLink(email, item.ref),
-      })),
+    async (token, email): Promise<LiveSearchItem[]> =>
+      input.connectorId === 'google:drive'
+        ? (await searchDocuments(token, email, query)).map((item) => ({
+            ref: item.ref,
+            kind: item.kind,
+            title: item.title,
+            from: KIND_LABELS[item.kind],
+            at: item.at,
+            snippet: '',
+            deepLink: toDocumentLink(email, item.ref, item.kind),
+          }))
+        : (await searchMail(token, email, query)).map((item) => ({
+            ref: item.ref,
+            kind: 'mail',
+            title: item.title,
+            from: item.from,
+            at: item.at,
+            snippet: item.snippet,
+            deepLink: toMailLink(email, item.ref),
+          })),
   );
   return result.ok ? { ok: true, items: result.value } : result;
 };
 
+type ReadValue = LiveReadItem | 'notReadable';
+
+/** Reads one message or document; `find` picks the passages of a document and is ignored for mail. */
 export const readLive = async (
   firestore: Firestore,
-  input: LiveInput & { ref: string },
+  input: LiveInput & { ref: string; find?: string },
 ): Promise<{ ok: true; item: LiveReadItem } | LiveFailure> => {
-  if (!isMailRef(input.ref)) return { ok: false, reason: 'failed' };
+  const isDrive = input.connectorId === 'google:drive';
+  if (!(isDrive ? isDocumentRef(input.ref) : isMailRef(input.ref))) {
+    return { ok: false, reason: 'failed' };
+  }
+  const find = isDrive ? (input.find ?? '').trim().slice(0, MAX_FIND) : '';
   const result = await run(
     firestore,
     input,
     'read',
-    [input.ref],
-    async (token, email): Promise<LiveReadItem> => {
+    [input.ref, find],
+    async (token, email): Promise<ReadValue> => {
+      if (isDrive) {
+        const item = await readDocument(token, email, input.ref);
+        if (item.kind === 'other' || item.text === null) return 'notReadable';
+        return {
+          ref: item.ref,
+          kind: item.kind,
+          title: item.title,
+          from: KIND_LABELS[item.kind],
+          at: item.at,
+          text: item.text.slice(0, MAX_READ_TEXT),
+          passages: findPassages(item.text, find),
+          deepLink: toDocumentLink(email, item.ref, item.kind),
+        };
+      }
       const item = await readMail(token, email, input.ref);
       return {
         ref: item.ref,
+        kind: 'mail',
         title: item.title,
         from: item.from,
         at: item.at,
         text: item.text,
+        passages: [],
         deepLink: toMailLink(email, item.ref),
       };
     },
   );
-  return result.ok ? { ok: true, item: result.value } : result;
+  if (!result.ok) return result;
+  return result.value === 'notReadable'
+    ? { ok: false, reason: 'notReadable' }
+    : { ok: true, item: result.value };
+};
+
+export interface SiteLiveGrant {
+  connectorId: string;
+  categories: { id: string; label: string }[];
+}
+
+const siteLiveCategories = (connectorId: string) =>
+  Object.hasOwn(SOURCE_ADAPTERS, connectorId) &&
+  readConnectorAppId(connectorId) !== null &&
+  SOURCE_ADAPTERS[connectorId].query
+    ? SOURCE_ADAPTERS[connectorId].manifest.categories.filter(
+        (category) => category.mode === 'live',
+      )
+    : [];
+
+const siteGrantPath = (uid: string, readerAppId: string, connectorId: string) =>
+  `connections/${uid}/grants/${toGrantId(
+    readerAppId,
+    connectorId as ConnectorId,
+    SITE_ACCOUNT_ID,
+  )}`;
+
+export const listSiteLiveGrants = async (
+  firestore: Firestore,
+  uid: string,
+  readerAppId: string,
+): Promise<SiteLiveGrant[]> => {
+  const connectorIds = Object.keys(SOURCE_ADAPTERS).filter(
+    (id) => siteLiveCategories(id).length > 0,
+  );
+  const snapshots = await Promise.all(
+    connectorIds.map((id) =>
+      firestore.doc(siteGrantPath(uid, readerAppId, id)).get(),
+    ),
+  );
+  return connectorIds.flatMap((connectorId, index): SiteLiveGrant[] => {
+    if (!snapshots[index].exists) return [];
+    const grant = readGrant(snapshots[index].data());
+    const categories = siteLiveCategories(connectorId).filter(
+      ({ id }) => grant.categories[id]?.isOn === true,
+    );
+    return grant.status === 'live' && categories.length > 0
+      ? [{ connectorId, categories }]
+      : [];
+  });
+};
+
+export const querySiteLive = async (
+  firestore: Firestore,
+  input: {
+    uid: string;
+    readerAppId: string;
+    connectorId: string;
+    category: string;
+    args: unknown;
+  },
+): Promise<{ ok: true; result: LiveQueryResult } | LiveFailure> => {
+  const adapter = Object.hasOwn(SOURCE_ADAPTERS, input.connectorId)
+    ? SOURCE_ADAPTERS[input.connectorId]
+    : null;
+  const isLiveCategory = siteLiveCategories(input.connectorId).some(
+    ({ id }) => id === input.category,
+  );
+  if (!adapter?.query || !isLiveCategory) return NOT_GRANTED;
+  try {
+    const snapshot = await firestore
+      .doc(siteGrantPath(input.uid, input.readerAppId, input.connectorId))
+      .get();
+    const grant = readGrant(snapshot.data());
+    if (
+      !snapshot.exists ||
+      grant.status !== 'live' ||
+      grant.categories[input.category]?.isOn !== true
+    ) {
+      return NOT_GRANTED;
+    }
+    const ctx = { uid: input.uid, accountId: SITE_ACCOUNT_ID, grant };
+    if ((await adapter.status(ctx)) !== 'ok') return NOT_GRANTED;
+    return {
+      ok: true,
+      result: await adapter.query(ctx, {
+        category: input.category,
+        args: input.args,
+      }),
+    };
+  } catch (error) {
+    logger.warn('connections.live.siteFailed', {
+      connector: input.connectorId,
+      code: error instanceof Error ? error.name : 'error',
+    });
+    return { ok: false, reason: 'failed' };
+  }
 };

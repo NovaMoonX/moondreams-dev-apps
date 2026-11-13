@@ -66,6 +66,13 @@ export function createSyncedBook(): SyncedBook {
   };
 }
 
+/** A record read from another app, split so the screen never has to parse a sentence: its name, a detail line and its amount as written. */
+export interface QuoteRecord {
+  name: string;
+  detail: string | null;
+  amount: string;
+}
+
 export interface QuoteEntry {
   alias: string;
   connectorId: string;
@@ -73,9 +80,10 @@ export interface QuoteEntry {
   ref: string;
   title: string;
   from: string;
-  at: number;
+  at: number | null;
   snippet: string;
   deepLink: string | null;
+  record?: QuoteRecord;
 }
 
 export interface QuoteBook {
@@ -83,13 +91,13 @@ export interface QuoteBook {
   get: (alias: string) => QuoteEntry | null;
 }
 
-/** Aliases for the results of a live search: q1, q2, … One alias per message, however often it is found. */
+/** Aliases for the results of a live search: q1, q2, … One alias per message or passage, however often it is found. */
 export function createQuoteBook(): QuoteBook {
   const byAlias = new Map<string, QuoteEntry>();
   const byKey = new Map<string, string>();
   return {
     add: (entry) => {
-      const key = `${entry.connectorId}|${entry.accountId}|${entry.ref}`;
+      const key = `${entry.connectorId}|${entry.accountId}|${entry.ref}|${entry.snippet}`;
       const known = byKey.get(key);
       if (known) return known;
       const alias = `q${byAlias.size + 1}`;

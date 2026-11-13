@@ -34,7 +34,7 @@ import {
   moveLeftover,
   newTransferMoveId,
 } from '@apps/runway/store/actions/transferActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectEnvelopes,
   selectGoals,

@@ -24,6 +24,7 @@ import {
   previewBillShare,
   type BillShareEffect,
 } from '@apps/runway/engine/billShare';
+import { getStretchesOf } from '@apps/runway/engine/billStretches';
 import { capEnding } from '@apps/runway/engine/endings';
 import {
   planBillPayments,
@@ -728,6 +729,8 @@ export function previewBillShareView(
     schedule: payload.timing.schedule,
     ending: capEnding(payload.ending, item.endedAt),
     fundedBy: payload.fundedBy,
+    payOnDay: payload.payOnDay ?? null,
+    stretches: getStretchesOf(versions, item),
     fixed,
     paired: getPairedByBill(versions, openDays, coming, stance).get(billId),
     oneTimePayLineIds: getOneTimePayLineIds(versions),
@@ -817,7 +820,16 @@ export function previewBillShareView(
     isRuleClean: (rule) => {
       const plan = (fundedBy: BillFundedBy) =>
         planBillPayments(
-          { ...billInput, fundedBy, fixed: undefined, paired: undefined },
+          {
+            ...billInput,
+            fundedBy,
+            stretches: billInput.stretches?.map((stretch) => ({
+              ...stretch,
+              fundedBy,
+            })),
+            fixed: undefined,
+            paired: undefined,
+          },
           coming,
           horizon,
           stance,

@@ -13,7 +13,8 @@ export type RememberRefusal =
   | 'remember-incomplete'
   | 'remember-same-as-calendar'
   | 'remember-not-in-quote'
-  | 'remember-already-noted';
+  | 'remember-already-noted'
+  | 'remember-quote-not-email';
 
 /** A fact already kept about the same copy, as far as a repeat check reads it. */
 export interface ExistingFact {
@@ -108,6 +109,9 @@ export function settleRemember(input: {
   if (!built) return refuse('remember-no-answer');
   const quoteId = first.quote ? built.quoteIds[first.quote.alias] : undefined;
   if (!first.quote || !quoteId) return refuse('remember-quote-unresolved');
+  if (first.quote.connectorId !== 'google:gmail') {
+    return refuse('remember-quote-not-email');
+  }
   if (built.answer.general !== null) return refuse('remember-general-kept');
   if (!first.about || first.about.kind !== 'event') {
     return refuse('remember-not-an-event');
@@ -165,6 +169,8 @@ export function buildFactWrite(input: {
     data: {
       status: 'inferred',
       stated: 'nomosInferred',
+      kind: 'world',
+      occurredOn: null,
       sourceCaptureId: input.captureId,
       sourceExecutionId: input.executionId,
       sourceConnection: {
