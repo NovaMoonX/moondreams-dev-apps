@@ -104,6 +104,7 @@ import {
   ENVELOPE_SPEND_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
+  PAY_ITEMS_WORDS,
   ITEM_KIND_NOUNS,
   ITEM_VIEW_WORDS,
   LIFECYCLE_WORDS,
@@ -143,6 +144,8 @@ import EnvelopeForm, {
 import GoalForm, { type GoalStepId } from '@apps/runway/forms/GoalForm';
 import IncomeForm, { type IncomeStepId } from '@apps/runway/forms/IncomeForm';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
+import PayItemsView from '@apps/runway/components/PayItemsView';
+import { usePayMembers } from '@apps/runway/hooks/usePayMembers';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import {
   useAutoChecks,
@@ -203,6 +206,7 @@ import type {
   ItemKind,
   OpenPurchase,
   OpenVersion,
+  Pairing,
   PayLineSealed,
 } from '@apps/runway/types';
 import {
@@ -244,6 +248,7 @@ type View =
   | 'planChoice'
   | 'comingList'
   | 'changeSheet'
+  | 'payItems'
   | 'pins';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
@@ -360,6 +365,7 @@ const VIEW_NOTES: Record<View, string> = {
   planChoice: '',
   comingList: '',
   changeSheet: '',
+  payItems: '',
   pins: '',
 };
 
@@ -428,6 +434,12 @@ function ItemSheet({
   );
   const [phase, setPhase] = useState<Phase>(
     startsAtStep === undefined ? 'sheet' : 'change',
+  );
+  const [pairingsSeed, setPairingsSeed] = useState<Pairing[] | null>(null);
+  const payMembers = usePayMembers(
+    itemId,
+    kind === 'source' ? 'source' : 'payLine',
+    today,
   );
   const [planAhead, setPlanAhead] = useState<'date' | 'stretch' | null>(null);
   const [fromPlan, setFromPlan] = useState(false);
@@ -656,6 +668,24 @@ function ItemSheet({
       ? (version.payload.pairings ?? [])
       : [];
 
+  const payItemNames = [
+    ...new Set([
+      ...pairings.map(
+        (pairing) =>
+          payMembers.members.find(
+            (member) => member.itemId === pairing.targetItemId,
+          )?.payload.name ??
+          [
+            ...payMembers.bills,
+            ...payMembers.envelopes,
+            ...payMembers.goals,
+          ].find(({ item }) => item.id === pairing.targetItemId)?.version
+            .payload.name ??
+          '',
+      ),
+      ...payMembers.members.map((member) => member.payload.name),
+    ]),
+  ].filter((entry) => entry !== '');
   const goTo = (nextView: View) => {
     setError(null);
     setReason('');
@@ -1147,10 +1177,13 @@ function ItemSheet({
         title={ITEM_SHEET_WORDS.fundsTitle(payload.name)}
         fromLabel={payload.name}
         locked={[]}
-        initial={pairings}
+        initial={pairingsSeed ?? pairings}
         change={{ itemId, kind: version.kind, current: version.payload }}
         onClose={onClose}
-        onCancel={backToSheet}
+        onCancel={() => {
+          setPairingsSeed(null);
+          backToSheet();
+        }}
       />
     );
   }
@@ -1602,9 +1635,13 @@ function ItemSheet({
             isGrouped
             hasChevron
             icon={<Link2 />}
-            label={ITEM_SHEET_WORDS.funds}
-            subtitle={ITEM_SHEET_WORDS.fundsSub}
-            onClick={() => setPhase('funds')}
+            label={PAY_ITEMS_WORDS.door}
+            subtitle={
+              payItemNames.length === 0
+                ? PAY_ITEMS_WORDS.doorNothing
+                : PAY_ITEMS_WORDS.doorSub(payItemNames)
+            }
+            onClick={() => goTo('payItems')}
           />
         )}
         {goal && (
@@ -1851,6 +1888,25 @@ function ItemSheet({
         />
       )}
     </div>
+  );
+
+  const payItemsView = (version.kind === 'source' ||
+    version.kind === 'payLine') && (
+    <PayItemsView
+      itemId={itemId}
+      kind={version.kind}
+      name={payload.name}
+      today={today}
+      pairings={pairings}
+      isRepeating={
+        version.kind === 'source' || version.payload.schedule.kind !== 'once'
+      }
+      onBack={() => goTo('menu')}
+      onEditPairings={(initial) => {
+        setPairingsSeed(initial);
+        setPhase('funds');
+      }}
+    />
   );
 
   const pinsView = (
@@ -2427,16 +2483,18 @@ function ItemSheet({
                                   ? changeSheetView
                                   : view === 'horizonLink' && horizonLinkView
                                     ? horizonLinkView
-                                    : view === 'pins'
-                                      ? pinsView
-                                      : view === 'dayAction' &&
-                                          dayAction?.renderView
-                                        ? dayAction.renderView({
-                                            onBack: () => goTo('menu'),
-                                            onClose,
-                                            openChange,
-                                          })
-                                        : action
+                                    : view === 'payItems' && payItemsView
+                                      ? payItemsView
+                                      : view === 'pins'
+                                        ? pinsView
+                                        : view === 'dayAction' &&
+                                            dayAction?.renderView
+                                          ? dayAction.renderView({
+                                              onBack: () => goTo('menu'),
+                                              onClose,
+                                              openChange,
+                                            })
+                                          : action
         }
       >
         {menu}

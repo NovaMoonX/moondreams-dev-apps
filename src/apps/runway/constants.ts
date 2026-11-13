@@ -2623,6 +2623,41 @@ export const ITEM_SHEET_WORDS = {
   notArrivedSub: 'Takes this day off your plan until you put it back',
 } as const;
 
+/** A pay's "Comes out of this pay" list: the bills, envelopes and goals tied to it, those paid first, and the way to add or release one. */
+export const PAY_ITEMS_WORDS = {
+  door: 'Comes out of this pay',
+  doorNothing: 'Nothing yet',
+  doorSub: (names: readonly string[]) =>
+    names.length <= 3
+      ? names.join(', ').replace(/, ([^,]*)$/, ' and $1')
+      : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`,
+  title: (pay: string) => `What comes out of ${pay}`,
+  paidFirst: 'Paid first',
+  alsoPay: 'Also from this pay',
+  alsoSource: 'Also from this income',
+  onDay: (day: string) => `On ${day}`,
+  anyPay: 'Any of its pays',
+  empty: 'Nothing comes out of this pay yet.',
+  search: 'Search this pay',
+  paidFirstEach: (amount: string) => `${amount} each pay`,
+  payFirst: 'Pay it first',
+  payFirstSub: 'Out of this pay before anything else',
+  stop: 'Stop taking it from this pay',
+  stopBillSub: 'It goes back to Spread across my pays',
+  stopOtherSub: 'It goes back to every pay',
+  add: 'Add to this pay',
+  addTitle: (pay: string) => `What should come out of ${pay}?`,
+  addNone: 'Every bill, envelope and goal that can is already here.',
+  addSearch: 'Search bills, envelopes and goals',
+  dayTitle: (name: string) => `Which pay should ${name} come out of?`,
+  dayBodyMonthly: 'Out of it every month',
+  dayBodyPay: 'Out of every pay it makes',
+  addDay: (name: string) => `Add ${name}`,
+  bill: 'Bill',
+  envelope: 'Envelope',
+  goal: 'Goal',
+} as const;
+
 export const PAID_HISTORY_WORDS = {
   summary: (name: string, due: string, amount: string) =>
     `Marked ${name} paid: ${amount} due\u00a0${due}.`,
