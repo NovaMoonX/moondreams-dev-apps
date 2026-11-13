@@ -1,11 +1,8 @@
 import { useAppSelector } from '@/store';
+import type { OpenRule } from '@apps/runway/types';
 import { RULE_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import {
-  needsNewHome,
-  RULE_VARIES,
-  type RuleTakeover,
-} from '@apps/runway/engine/rules';
+import { needsNewHome, RULE_VARIES } from '@apps/runway/engine/rules';
 import {
   selectAllCards,
   selectBecameKinds,
@@ -52,7 +49,7 @@ export function useRuleNames() {
         ? RULE_WORDS.goalNow(name)
         : RULE_WORDS.endedEnvelope(name);
     },
-    describeTakeover: ({ removed, by }: RuleTakeover) => {
+    describeAfter: (removed: OpenRule, by: OpenRule | null) => {
       const onYourCard = (cardId: string | null) => {
         const label = getCardLabel(cardId);
         if (label === null) return 'a card';
@@ -66,11 +63,13 @@ export function useRuleNames() {
       const scopeCardId =
         removed.merchantKey === null && removed.category === null
           ? null
-          : (removed.cardId ?? by.cardId);
+          : (removed.cardId ?? by?.cardId ?? null);
       const onCard =
         scopeCardId === null ? '' : ` on ${onYourCard(scopeCardId)}`;
       const what = `${subject}${onCard}`;
-      return RULE_WORDS.takeover(what, getEnvelopeName(by.target));
+      return by === null
+        ? RULE_WORDS.takeoverWait(what)
+        : RULE_WORDS.takeover(what, getEnvelopeName(by.target));
     },
     getEnvelopeName,
     getCardLabel,

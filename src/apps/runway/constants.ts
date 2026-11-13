@@ -5545,16 +5545,18 @@ export const RULE_WORDS = {
   pickEnvelope: 'Pick an envelope',
   remove: 'Remove the rule',
   removeConfirmTitle: 'Remove this rule?',
-  removeConfirm: (sentence: string) =>
-    `“${sentence}” will stop sending purchases on its own. Purchases it already placed stay where they are.`,
+  removeConfirm: (sentence: string, isAsk: boolean) =>
+    isAsk
+      ? `“${sentence}” will stop asking. Purchases already placed stay where they are.`
+      : `“${sentence}” will stop sending purchases on its own. Purchases it already placed stay where they are.`,
   removeConfirmButton: 'Remove the rule',
   takeover: (what: string, envelope: string) =>
     `After this, ${envelope} will catch ${what}.`,
-  takeoverAsk: (what: string) =>
-    `After this, you'll be asked which envelope for ${what} each time.`,
   takeoverWait: (what: string) => `After this, Needs a home will hold ${what}.`,
   takeoverMore: (count: number) =>
     `${ruleCount(count)} more will be caught by a broader rule.`,
+  waitAll: 'After this, what they caught will wait in Needs a home.',
+  waitRest: 'What the others caught will wait in Needs a home.',
   removed: 'Rule removed',
   removeFailed: 'That did not remove. Nothing was changed.',
   saved: 'Rule saved',
@@ -5628,7 +5630,7 @@ export const RULE_WORDS = {
   askNone:
     "A rule for a card or kind of place can't ask each time. Pick a rule for one place.",
   deleteConfirmTitle: (count: number) => `Remove ${ruleCount(count)}?`,
-  deleteConfirmBody: (sentences: readonly string[]) => {
+  deleteConfirmBody: (sentences: readonly string[], isAllAsk: boolean) => {
     const named = sentences.slice(0, 3).map((sentence) => `“${sentence}”`);
     const rest = sentences.length - named.length;
     const list =
@@ -5637,6 +5639,8 @@ export const RULE_WORDS = {
         : named.length > 1
           ? `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`
           : named[0];
+    if (isAllAsk)
+      return `${list} will stop asking. Purchases already placed stay where they are.`;
     return sentences.length === 1
       ? `${list} will stop sending purchases on its own. Purchases it already placed stay where they are.`
       : `${list} will stop sending purchases on their own. Purchases they already placed stay where they are.`;

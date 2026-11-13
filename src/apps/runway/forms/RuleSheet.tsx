@@ -113,7 +113,7 @@ function RuleSheet({
   const { addToast } = useToast();
   const {
     describe,
-    describeTakeover,
+    describeAfter,
     getCardLabel,
     getEnvelopeName,
     describeHome,
@@ -358,10 +358,14 @@ function RuleSheet({
     const isConfirmed = await confirm({
       title: RULE_WORDS.removeConfirmTitle,
       message: [
-        RULE_WORDS.removeConfirm(entry),
-        ...findTakeovers([rule], rules, liveIds).map(describeTakeover),
+        RULE_WORDS.removeConfirm(entry, rule.target === RULE_VARIES),
+        describeAfter(
+          rule,
+          findTakeovers([rule], rules, liveIds)[0]?.by ?? null,
+        ),
       ].join(' '),
       confirmText: RULE_WORDS.removeConfirmButton,
+      destructive: true,
     });
     if (!isConfirmed) return;
     setIsBusy(true);
