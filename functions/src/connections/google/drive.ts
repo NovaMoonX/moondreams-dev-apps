@@ -1,7 +1,6 @@
 import { getFirestore } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions';
-import { extractText, getDocumentProxy } from 'unpdf';
 
+import { readPdf } from '../../files/pdfText.js';
 import { GOOGLE_DRIVE_MANIFEST } from './driveManifest.js';
 import { googleGet, googleGetBytes } from './client.js';
 import type { SourceAdapter } from '../registry.js';
@@ -77,18 +76,8 @@ const fixtureFor = (email: string) => ({ email });
 
 /** The text of a PDF, or null when it cannot be read. */
 export const readPdfText = async (bytes: Uint8Array) => {
-  try {
-    const pdf = await getDocumentProxy(new Uint8Array(bytes), {
-      verbosity: 0,
-    });
-    const { text } = await extractText(pdf, { mergePages: true });
-    return squash(text);
-  } catch (error) {
-    logger.warn('connections.live.pdfUnreadable', {
-      error: error instanceof Error ? error.name : 'unknown',
-    });
-    return null;
-  }
+  const reading = await readPdf(bytes, { maxPages: Number.MAX_SAFE_INTEGER });
+  return reading.status === 'ok' ? reading.text : null;
 };
 
 /** Finds up to ten files by name or full text; only names, kinds and times are read. */

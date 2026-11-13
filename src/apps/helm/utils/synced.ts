@@ -1,7 +1,10 @@
 import type { ConnectionGrant } from '@/lib/connections/contract';
+import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
+import { getConnectorManifest } from '@/lib/connections/sources';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { DAY_MS, SYNC_REFRESH_MS, SYNC_STALE_MS } from '@apps/helm/constants';
 import { getDueDay } from '@apps/helm/utils/captureReading';
+import { mergeSameThings } from '@apps/helm/utils/sameThing';
 import type { SyncedRecord } from '@apps/helm/types';
 
 const getDay = (at: number, timeZone: string) =>
@@ -54,6 +57,17 @@ export const getNewestOkAt = (grant: ConnectionGrant) =>
     null,
   );
 
+/** A connector read only when the person picks from it is never listed as a source that updates by itself. */
+export const syncsInBackground = (
+  connectorId: ConnectionGrant['connectorId'],
+) => getConnectorManifest(connectorId)?.capabilities.backgroundSync !== false;
+
+/** A category read only when asked has no update time, so no freshness line or refresh ever applies to it. */
+export const isLiveCategory = (connectorId: string, categoryId: string) =>
+  getConnectorManifest(connectorId)?.categories.find(
+    (category) => category.id === categoryId,
+  )?.mode === 'live';
+
 export const isStale = (lastOkAt: number | null, now: number) =>
   lastOkAt === null || now - lastOkAt > SYNC_STALE_MS;
 
@@ -67,15 +81,78 @@ export const getGrantCopyCount = (grant: ConnectionGrant) =>
 /** Whether a live grant asks for an update: its newest read is over 15 minutes old, or a category that is on was never read. */
 export const isDueForRefresh = (grant: ConnectionGrant, now: number) => {
   const newest = getNewestOkAt(grant);
+  const isSynced = (id: string) =>
+    grant.categories[id].isOn && !isLiveCategory(grant.connectorId, id);
   const isOnAndUnread = (id: string) =>
-    grant.categories[id].isOn &&
+    isSynced(id) &&
     grant.categoryState[id]?.lastOkAt == null &&
     grant.categoryState[id]?.lastError == null;
   return (
     grant.status === 'live' &&
-    Object.values(grant.categories).some((category) => category.isOn) &&
+    syncsInBackground(grant.connectorId) &&
+    Object.keys(grant.categories).some(isSynced) &&
     (newest === null ||
       now - newest > SYNC_REFRESH_MS ||
       Object.keys(grant.categories).some(isOnAndUnread))
   );
 };
+
+export const isCalendarEvent = (record: SyncedRecord) =>
+  record.connectorId === 'google:calendar';
+
+/** The copies whose connection still shares them: live with their category on, or kept copies of an ended connection when `includeEnded`. */
+export const getLiveRecords = (
+  stored: SyncedRecord[],
+  grants: ConnectionGrantWithId[],
+  includeEnded: boolean,
+) =>
+  stored.filter((record) => {
+    const grant = grants.find((entry) => entry.id === record.grantId);
+    if (!grant) return false;
+    return grant.status === 'ended'
+      ? includeEnded && record.connectionEndedAt !== null
+      : grant.categories[record.category]?.isOn === true &&
+          record.connectionEndedAt === null;
+  });
+
+/** The copies Today shows: the shared ones and an ended connection's kept ones, leaving out a calendar Google stopped sharing until it is reconnected. */
+export const getTodayRecords = (
+  stored: SyncedRecord[],
+  grants: ConnectionGrantWithId[],
+) =>
+  getLiveRecords(stored, grants, true).filter(
+    (record) =>
+      grants.find((grant) => grant.id === record.grantId)?.status !==
+      'needsReconnect',
+  );
+
+/** The events of the day `at` falls on, all-day first then by start, each thing once (`mergeSameThings`): one event on two accounts, or on a calendar and in an app, shows the authority's copy. */
+export function getDayEvents(
+  records: SyncedRecord[],
+  at: number,
+  timeZone: string,
+) {
+  const merged = mergeSameThings(
+    records
+      .filter((record) => isEventToday(record, at, timeZone))
+      .sort(
+        (a, b) =>
+          Number(b.isAllDay) - Number(a.isAllDay) ||
+          (a.startAt ?? 0) - (b.startAt ?? 0),
+      ),
+  );
+  const shown = merged.map(({ record }) => record);
+  return {
+    events: shown,
+    merged,
+    calendarEvents: shown.filter(isCalendarEvent),
+    appEvents: shown.filter((record) => !isCalendarEvent(record)),
+  };
+}
+/** A trip's or event's first day: an all-day one is already a UTC day, a timed one is read in the person's zone. */
+export const toFirstDay = (record: SyncedRecord, timeZone: string) =>
+  record.startAt === null
+    ? null
+    : record.isAllDay
+      ? record.startAt
+      : getDueDay({ kind: 'moment', at: record.startAt }, timeZone);

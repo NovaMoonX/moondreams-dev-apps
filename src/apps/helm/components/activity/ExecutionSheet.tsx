@@ -17,8 +17,13 @@ import {
   selectAllCaptures,
   selectExecutionsById,
 } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectPlacesById,
+  selectWhoById,
+} from '@apps/helm/store/selectors/whoSelectors';
 import type { CaptureAnswer, OpenExecution } from '@apps/helm/types';
 import { getActivityLine } from '@apps/helm/utils/activity';
+import { describeYourAnswer } from '@apps/helm/utils/questionAnswers';
 import { getJoinedOf } from '@apps/helm/utils/sessions';
 
 interface ExecutionSheetProps {
@@ -66,8 +71,34 @@ function useCaptureTexts(captureId: string | null) {
   return { texts: words ? [words.text] : [], answer: words?.answer ?? null };
 }
 
+/** The question an execution's effect came from and the answer kept with it; null when the turn that asked it is not loaded or the question was not answered. */
+function useAskedQuestion(execution: OpenExecution) {
+  const captures = useAppSelector(selectAllCaptures);
+  const who = useAppSelector(selectWhoById);
+  const places = useAppSelector(selectPlacesById);
+  const ref = execution.questionRef;
+  const question = ref
+    ? captures.find((capture) => capture.id === ref.captureId)?.questions[
+        ref.questionId
+      ]
+    : undefined;
+  if (!question?.answer) return null;
+  const { answer } = question;
+  const recordName =
+    answer.shape === 'pickRecord' && answer.ref
+      ? ((answer.ref.collection === 'who'
+          ? who.get(answer.ref.id)?.name
+          : places.get(answer.ref.id)?.name) ?? null)
+      : null;
+  return {
+    prompt: question.prompt,
+    words: describeYourAnswer(question, answer, recordName),
+  };
+}
+
 function SheetBody({ execution }: { execution: OpenExecution }) {
   const lines = useResultLines(execution);
+  const asked = useAskedQuestion(execution);
   const { undo } = useUndoOf(execution);
   const { texts, answer } = useCaptureTexts(execution.captureId);
 
@@ -90,6 +121,12 @@ function SheetBody({ execution }: { execution: OpenExecution }) {
           {text}
         </blockquote>
       ))}
+      {asked && (
+        <p className='text-[13px] leading-[19px] text-pretty break-words'>
+          {HELM_COPY.questionAsked(asked.prompt)}
+          <span className='text-muted-foreground'>{` · ${asked.words}`}</span>
+        </p>
+      )}
       {execution.category === 'answer' && answer && (
         <AnswerCard answer={answer} />
       )}

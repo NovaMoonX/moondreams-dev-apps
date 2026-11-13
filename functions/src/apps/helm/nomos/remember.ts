@@ -169,6 +169,8 @@ export function buildFactWrite(input: {
     data: {
       status: 'inferred',
       stated: 'nomosInferred',
+      kind: 'world',
+      occurredOn: null,
       sourceCaptureId: input.captureId,
       sourceExecutionId: input.executionId,
       sourceConnection: {

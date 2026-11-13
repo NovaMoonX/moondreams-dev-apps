@@ -170,10 +170,10 @@ export function getMoneyProjection(input: MoneyProjectionInput): MoneyPoint[] {
       (payment) =>
         payment.paid === null &&
         payment.dueOn >= input.billsSince &&
-        payment.dueOn <= until,
+        payment.payOn <= until,
     )
     .map((payment) => ({
-      on: Math.max(payment.dueOn, tomorrow),
+      on: Math.max(payment.payOn, tomorrow),
       free: 0,
       all: -payment.totalCents,
     }));
