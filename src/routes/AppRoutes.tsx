@@ -90,6 +90,20 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'helm',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: Helm } = await import('@apps/helm/Helm');
+          return {
+            Component: () => (
+              <ProtectedRoute appId='helm'>
+                <Helm />
+              </ProtectedRoute>
+            ),
+          };
+        },
+      },
+      {
         path: 'going-once',
         HydrateFallback: Loading,
         lazy: async () => {

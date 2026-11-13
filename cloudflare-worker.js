@@ -106,6 +106,15 @@ const APP_REGISTRY = [
     image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-runway.png',
   },
   {
+    id: 'helm',
+    name: 'Helm',
+    title: 'Helm - Moondreams Dev Apps',
+    path: '/helm',
+    description:
+      'A private companion for your whole life that you mostly talk to: tell its assistant what is on your mind and it keeps your tasks, people, places and notes in order, shows where each thing came from, and never changes anything without an Undo.',
+    image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-helm.png',
+  },
+  {
     id: 'going-once',
     name: 'Going Once',
     title: 'Going Once - Moondreams Dev Apps',

@@ -13,6 +13,7 @@ export {
   type EncryptedFieldPayload,
   type EncryptionAlgorithm,
 } from './encryption';
+export { createSealedReader, type SealedReader } from './sealedReader';
 export {
   canKeepDeviceSecrets,
   forgetDeviceSecret,

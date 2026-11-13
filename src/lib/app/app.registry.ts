@@ -79,6 +79,15 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     createdAt: '2026-11-02',
     resumeParams: ['sale', 'tab'],
   },
+  {
+    id: 'helm',
+    name: 'Helm',
+    path: '/helm',
+    description:
+      'A private companion for your whole life that you mostly talk to: tell its assistant what is on your mind and it keeps your tasks, people, places and notes in order, shows where each thing came from, and never changes anything without an Undo.',
+    createdAt: '2026-11-09',
+    resumeParams: ['view'],
+  },
 ];
 
 export const APP_REGISTRY_ID_MAP = Object.fromEntries(

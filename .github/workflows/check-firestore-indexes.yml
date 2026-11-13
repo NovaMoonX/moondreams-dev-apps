@@ -27,6 +27,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:indexes
+      - run: npm run check:server-copies
+      - run: npm run check:connection-boundaries
       - run: npm run check:rules-size
       - run: npm run check:gates
       - run: npm run check:pipeline-map
@@ -73,5 +75,26 @@ jobs:
       - run: npm run check:option-match
       - run: npm run check:runway-notify-text
       - run: npm run check:waypoint-pushes
+      - run: npm run check:waypoint-balances
       - run: npm run check:a-list
       - run: npm run check:receipts
+      - run: npm run check:helm-copy
+      - run: npm run check:natural-dates
+      - run: npm run check:helm-undo
+      - run: npm run check:helm-activation
+      - run: npm run check:helm-task-edits
+      - run: npm ci --prefix functions
+      - run: npm run check:helm-sort
+      - run: npm run check:helm-screen
+      - run: npm run check:helm-topic-tree
+      - run: npm run check:helm-notes
+      - run: npm run check:helm-note-search
+      - run: npm run check:helm-topic-write
+      - run: npm run check:helm-procedures
+      - run: npm run check:helm-procedure-steps
+      - run: npm run check:helm-runs
+      - run: npm run check:helm-style
+      - run: npm run check:helm-assistant
+      - run: npm run check:helm-search
+      - run: npm run check:helm-drop-box
+      - run: npm run check:helm-trust

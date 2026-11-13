@@ -89,6 +89,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       sorting: null,
       keyId: encryption.keyId,
       sealed,
+      shareSummary: null,
     };
     transaction.set(planRef, plan);
   });

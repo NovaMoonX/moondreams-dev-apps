@@ -80,6 +80,7 @@ import type {
   RuleSealed,
   ExpenseSealed,
   ChangeDoc,
+  ShareSummary,
   ChangeSealed,
   ClosingDoc,
   BillPaidSealed,
@@ -120,14 +121,14 @@ const SEED_LOGO_PURPLE =
 
 const SECRET_FILE = new URL('../../functions/.secret.local', import.meta.url);
 
-/** The emulator's keyring: `RUNWAY_MASTER_KEYS` in functions/.secret.local, else the built-in development one. */
-export function readEmulatorKeyring() {
+/** The emulator's keyring: the named secret (an app's `<APP>_MASTER_KEYS`) in functions/.secret.local, else the built-in development one. */
+export function readEmulatorKeyring(secretName = 'RUNWAY_MASTER_KEYS') {
   try {
     const line = readFileSync(SECRET_FILE, 'utf8')
       .split('\n')
-      .find((entry) => entry.startsWith('RUNWAY_MASTER_KEYS='));
+      .find((entry) => entry.startsWith(`${secretName}=`));
     const raw = line
-      ?.slice('RUNWAY_MASTER_KEYS='.length)
+      ?.slice(`${secretName}=`.length)
       .trim()
       .replace(/^(['"])(.*)\1$/, '$2');
     return raw ? readKeyring(raw) : DEV_KEYRING;
@@ -184,6 +185,40 @@ export const change = (
   sealed,
 });
 
+/** Sample figures for a seeded shared summary; the device replaces them with the plan's own on first open. */
+export function buildSampleShareSummary(now: number): ShareSummary {
+  const today = startOfUtcDay(now);
+  const day = (at: number) => new Date(at).toISOString().slice(0, 10);
+  const nextIncome = today + 3 * DAY_MS;
+  const firstOfNextMonth = Date.UTC(
+    new Date(today).getUTCFullYear(),
+    new Date(today).getUTCMonth() + 1,
+    1,
+  );
+  const rent = {
+    name: 'Rent',
+    amountCents: 125_000,
+    dueOn: day(firstOfNextMonth),
+  };
+  const isRentSoon = firstOfNextMonth - today <= 30 * DAY_MS;
+  return {
+    computedAt: now - 10 * 60_000,
+    currency: DEFAULT_CURRENCY_CODE,
+    freeToSpendCents: 84_250,
+    nextIncomeOn: day(nextIncome),
+    dueBeforeIncomeCents: firstOfNextMonth < nextIncome ? rent.amountCents : 0,
+    bills: isRentSoon ? [rent] : [],
+    horizon: [
+      {
+        name: 'Moving',
+        targetCents: 90_000,
+        setAsideCents: 80_000,
+        targetOn: day(nextCalendarDay(today, 0, 15)),
+      },
+    ],
+  };
+}
+
 /** Alex has a plan that opens like a real one; every other account has none, so its first open creates one. */
 export async function seedRunway(context: SeedContext): Promise<SeedResult> {
   const keyring = readEmulatorKeyring();
@@ -219,6 +254,10 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     sorting: null,
     keyId: data.keyId,
     sealed,
+    shareSummary: await sealJson(
+      buildSampleShareSummary(context.now),
+      encryption,
+    ),
   });
   const incomeDocuments = await writeSeedIncome(context, owner.uid, encryption);
   const envelopeDocuments = await writeSeedEnvelopes(

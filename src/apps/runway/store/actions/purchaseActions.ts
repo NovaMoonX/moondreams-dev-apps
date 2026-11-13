@@ -25,7 +25,8 @@ import {
   isInTrackingPeriods,
   sumLines,
 } from '@apps/runway/engine/purchases';
-import { createSealedReader, sealJson } from '@apps/runway/security';
+import { createSealedReader } from '@lib/security';
+import { openJson, sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
 import { setLinesDone } from '@apps/runway/store/actions/moveActions';
 import { getMoveLineId } from '@apps/runway/store/selectors/moveSelectors';
@@ -137,7 +138,7 @@ async function readLiveCostMark(
 ): Promise<WrittenCostPaid | null> {
   const ref = previous.costRef ?? null;
   if (ref === null) return null;
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   const lookup = async (index: number): Promise<WrittenCostPaid | null> => {
     if (index >= MAX_MARK_LOOKUPS) return null;
     const moveId = getCostPaidMoveId(ref.itemId, ref.costId, ref.dueOn, index);
@@ -576,7 +577,7 @@ export async function readPurchaseNow(
   return snapshot.exists()
     ? openPurchase(
         { ...(snapshot.data() as PurchaseDoc), id: snapshot.id },
-        createSealedReader(encryption),
+        createSealedReader(encryption, openJson),
       )
     : null;
 }
@@ -907,7 +908,7 @@ async function readPairExit(
   if (reversal.exists()) return () => undefined;
   const taken = await openMove(
     { ...(payment.data() as MoveDoc), id: payment.id },
-    createSealedReader(encryption),
+    createSealedReader(encryption, openJson),
   );
   if (taken.kind !== 'cardPayment') return () => undefined;
   const sealed = await sealJson(
@@ -1647,7 +1648,7 @@ export async function removePurchaseOfCost(
   }
   const previous = await openPurchase(
     { ...(snapshot.data() as PurchaseDoc), id: snapshot.id },
-    createSealedReader(encryption),
+    createSealedReader(encryption, openJson),
   );
   await deletePurchase(
     uid,

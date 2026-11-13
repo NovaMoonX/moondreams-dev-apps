@@ -99,6 +99,28 @@ export interface PlanDoc {
   sorting: SortingState | null;
   keyId: string | null;
   sealed: Sealed | null;
+  /** The sealed totals-and-names summary a connected app reads; null when Free to Spend is unknown, and absent on a plan made before it existed. */
+  shareSummary: Sealed | null;
+}
+
+/** What a plan shares through a connection: totals and names only, never an account, balance per account, card, income source, note, receipt, link or purchase. */
+export interface ShareSummary {
+  computedAt: number;
+  currency: string;
+  /** Signed: negative means over. */
+  freeToSpendCents: Cents;
+  /** 'YYYY-MM-DD' of the next income day; null when none is coming. */
+  nextIncomeOn: string | null;
+  /** Every bill due before that day at the Want dial, overdue ones included. */
+  dueBeforeIncomeCents: Cents;
+  /** Upcoming only: due today or later. */
+  bills: { name: string; amountCents: Cents; dueOn: string }[];
+  horizon: {
+    name: string;
+    targetCents: Cents;
+    setAsideCents: Cents;
+    targetOn: string | null;
+  }[];
 }
 
 export interface OpenPlan extends PlanSealedFields {

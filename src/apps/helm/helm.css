@@ -1,0 +1,250 @@
+/* The theme class sits on <html>, so drawers and modals drawn outside the page pick it up too. The default palette is on the class; the others override it by data-helm-theme. */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/source-serif-4/source-serif-4-latin-600-normal.woff2')
+    format('woff2');
+}
+
+html.helm-theme {
+  --color-background: #f7f3ee;
+  --color-foreground: #2e241d;
+  --color-card: #fffdfa;
+  --color-card-foreground: #2e241d;
+  --color-popover: #fffdfa;
+  --color-popover-foreground: #2e241d;
+  --color-muted: #efe8df;
+  --color-muted-foreground: #6b5d51;
+  --color-border: #e5dccf;
+  --color-primary: #7a5434;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f1e7dc;
+  --color-secondary-foreground: #6a4629;
+  --color-accent: #eee1d2;
+  --color-accent-foreground: #5e3e24;
+  --color-tooltip: #2e241d;
+  --color-tooltip-foreground: #ffffff;
+  --color-destructive: #b42318;
+  --color-destructive-foreground: #ffffff;
+  --helm-verdigris: #436646;
+  --helm-overdue: #a8420c;
+  --subview-backdrop: #ddd2c4;
+
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+
+  --helm-serif: 'Source Serif 4', 'Iowan Old Style', Charter, Georgia, serif;
+
+  --subview-radius: var(--radius-lg);
+
+  font-variant-numeric: tabular-nums;
+}
+
+html.helm-theme.dark {
+  --color-background: #15110e;
+  --color-foreground: #f1e9e1;
+  --color-card: #1e1915;
+  --color-card-foreground: #f1e9e1;
+  --color-popover: #1e1915;
+  --color-popover-foreground: #f1e9e1;
+  --color-muted: #261f1a;
+  --color-muted-foreground: #ad9d8e;
+  --color-border: #382e26;
+  --color-primary: #e0bf9c;
+  --color-primary-foreground: #17110c;
+  --color-secondary: #2d241d;
+  --color-secondary-foreground: #ecd9c4;
+  --color-accent: #33281f;
+  --color-accent-foreground: #ecd9c4;
+  --color-tooltip: #f1e9e1;
+  --color-tooltip-foreground: #15110e;
+  --color-destructive: #f97066;
+  --color-destructive-foreground: #0c111b;
+  --helm-verdigris: #97c29a;
+  --helm-overdue: #f5a26b;
+  --subview-backdrop-dark: #0b0907;
+}
+
+html.helm-theme[data-helm-theme='teal'] {
+  --color-background: #f3f6f6;
+  --color-foreground: #172a2e;
+  --color-card: #ffffff;
+  --color-card-foreground: #172a2e;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #172a2e;
+  --color-muted: #e8eeef;
+  --color-muted-foreground: #52666a;
+  --color-border: #dae3e4;
+  --color-primary: #14555e;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #e3eef0;
+  --color-secondary-foreground: #14555e;
+  --color-accent: #ddefec;
+  --color-accent-foreground: #1b4a44;
+  --color-tooltip: #172a2e;
+  --color-tooltip-foreground: #ffffff;
+  --helm-verdigris: #33695f;
+  --helm-overdue: #9a4b0b;
+  --subview-backdrop: #d6dfe0;
+}
+
+html.helm-theme[data-helm-theme='plum'] {
+  --color-background: #f7f5f7;
+  --color-foreground: #2a2130;
+  --color-card: #ffffff;
+  --color-card-foreground: #2a2130;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #2a2130;
+  --color-muted: #efebf0;
+  --color-muted-foreground: #655b6b;
+  --color-border: #e4dfe6;
+  --color-primary: #53375f;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #efe9f2;
+  --color-secondary-foreground: #53375f;
+  --color-accent: #ece3f0;
+  --color-accent-foreground: #4a2f55;
+  --color-tooltip: #2a2130;
+  --color-tooltip-foreground: #ffffff;
+  --helm-verdigris: #4a6a55;
+  --helm-overdue: #9a4b0b;
+  --subview-backdrop: #e0d9e3;
+}
+
+html.helm-theme[data-helm-theme='indigo'] {
+  --color-background: #f8f8fb;
+  --color-foreground: #1b1e33;
+  --color-card: #ffffff;
+  --color-card-foreground: #1b1e33;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1b1e33;
+  --color-muted: #eeeef5;
+  --color-muted-foreground: #5a5e78;
+  --color-border: #e1e2ec;
+  --color-primary: #3a3f8c;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #ebecf7;
+  --color-secondary-foreground: #2e3275;
+  --color-accent: #e7e8fa;
+  --color-accent-foreground: #2e3275;
+  --color-tooltip: #1b1e33;
+  --color-tooltip-foreground: #ffffff;
+  --helm-verdigris: #456b4e;
+  --helm-overdue: #9a4b0b;
+  --subview-backdrop: #dcdde9;
+}
+
+html.helm-theme.dark[data-helm-theme='teal'] {
+  --color-background: #0d1517;
+  --color-foreground: #e6eef0;
+  --color-card: #152023;
+  --color-card-foreground: #e6eef0;
+  --color-popover: #152023;
+  --color-popover-foreground: #e6eef0;
+  --color-muted: #1a272a;
+  --color-muted-foreground: #97aaae;
+  --color-border: #273639;
+  --color-primary: #86ccd6;
+  --color-primary-foreground: #081316;
+  --color-secondary: #1c2e32;
+  --color-secondary-foreground: #cfe5e9;
+  --color-accent: #1b3532;
+  --color-accent-foreground: #bfe6de;
+  --color-tooltip: #e6eef0;
+  --color-tooltip-foreground: #0d1517;
+  --helm-verdigris: #71b5ab;
+  --helm-overdue: #f2b26b;
+  --subview-backdrop-dark: #070c0d;
+}
+
+html.helm-theme.dark[data-helm-theme='plum'] {
+  --color-background: #151018;
+  --color-foreground: #efe9f2;
+  --color-card: #1e1822;
+  --color-card-foreground: #efe9f2;
+  --color-popover: #1e1822;
+  --color-popover-foreground: #efe9f2;
+  --color-muted: #251e2a;
+  --color-muted-foreground: #a99eae;
+  --color-border: #352c3b;
+  --color-primary: #d3b8e0;
+  --color-primary-foreground: #150f18;
+  --color-secondary: #2c2233;
+  --color-secondary-foreground: #e6d6ee;
+  --color-accent: #33263b;
+  --color-accent-foreground: #e6d6ee;
+  --color-tooltip: #efe9f2;
+  --color-tooltip-foreground: #151018;
+  --helm-verdigris: #9fc4ab;
+  --helm-overdue: #f2b26b;
+  --subview-backdrop-dark: #0a070c;
+}
+
+html.helm-theme.dark[data-helm-theme='indigo'] {
+  --color-background: #0e0f1a;
+  --color-foreground: #e8e9f5;
+  --color-card: #161828;
+  --color-card-foreground: #e8e9f5;
+  --color-popover: #161828;
+  --color-popover-foreground: #e8e9f5;
+  --color-muted: #1c1e31;
+  --color-muted-foreground: #9fa3c0;
+  --color-border: #2a2d45;
+  --color-primary: #b1b6f6;
+  --color-primary-foreground: #0e0f1a;
+  --color-secondary: #23264a;
+  --color-secondary-foreground: #d0d3fa;
+  --color-accent: #23264a;
+  --color-accent-foreground: #d0d3fa;
+  --color-tooltip: #e8e9f5;
+  --color-tooltip-foreground: #0e0f1a;
+  --helm-verdigris: #9cc3a2;
+  --helm-overdue: #f2b26b;
+  --subview-backdrop-dark: #07080f;
+}
+
+/* The conversation over a page sits above the sheet it was asked from, which stays open beneath it (drawers are z-100). */
+html.helm-theme .subview-backdrop:has(.helm-ask-overlay) {
+  z-index: 110;
+}
+
+/* A title: the serif at 600, tight like stationery. Everything else stays the site's sans. */
+html.helm-theme .helm-serif,
+html.helm-theme [role='dialog'] :is(h1, h2) {
+  font-family: var(--helm-serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* A field sits on the page as a white card; the library's textarea draws no fill of its own. */
+html.helm-theme .helm-field {
+  background-color: var(--color-card);
+}
+
+/* A waiting field carries its reason as the placeholder, so it stays legible: a flatter fill, not the library's half opacity. */
+html.helm-theme .helm-field:disabled {
+  opacity: 1;
+  background-color: var(--color-muted);
+}
+html.helm-theme .helm-field:disabled::placeholder {
+  color: var(--color-muted-foreground);
+  opacity: 1;
+}
+
+/* Hairlines, no shadows on cards. */
+html.helm-theme .helm-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+html.helm-theme .helm-composer {
+  background-color: var(--color-card);
+  box-shadow: 0 6px 24px rgb(20 27 45 / 0.1);
+}
+
+html.helm-theme.dark .helm-composer {
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.4);
+}

@@ -10,7 +10,8 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { MOVE_KINDS } from '@apps/runway/constants';
-import { createSealedReader } from '@apps/runway/security';
+import { createSealedReader } from '@lib/security';
+import { openJson } from '@apps/runway/security';
 import { openMove } from '@apps/runway/store/listeners/openLedger';
 import type { MoveDoc, OpenMove, RunwayEncryption } from '@apps/runway/types';
 
@@ -32,7 +33,7 @@ export function startMovesListener(
   onError: (error: Error) => void,
 ): Unsubscribe {
   const run = { isStopped: false };
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   const parts: { recent: OpenMove[] | null; start: OpenMove[] | null } = {
     recent: null,
     start: null,

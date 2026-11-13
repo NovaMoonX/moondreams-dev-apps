@@ -2,7 +2,8 @@ import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import { createSealedReader } from '@apps/runway/security';
+import { createSealedReader } from '@lib/security';
+import { openJson } from '@apps/runway/security';
 import type {
   AccountBalanceDoc,
   CardDetailsAnswer,
@@ -77,7 +78,7 @@ export function startLinksListener(
   onChange: (links: OpenLink[]) => void,
   onError: (error: Error) => void,
 ) {
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   return startOpenedListener<LinkDoc, OpenLink>(
     uid,
     'links',
@@ -118,7 +119,7 @@ export function startAccountBalancesListener(
   onChange: (balances: OpenAccountBalance[]) => void,
   onError: (error: Error) => void,
 ) {
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   return startOpenedListener<AccountBalanceDoc, OpenAccountBalance>(
     uid,
     'accountBalances',
@@ -150,7 +151,7 @@ export function startCardStatementsListener(
   onChange: (statements: OpenCardStatement[]) => void,
   onError: (error: Error) => void,
 ) {
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   return startOpenedListener<CardStatementDoc, OpenCardStatement>(
     uid,
     'cardStatements',
@@ -179,7 +180,7 @@ export function startReleasedChargesListener(
   onChange: (charges: OpenReleasedCharge[]) => void,
   onError: (error: Error) => void,
 ) {
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   return startOpenedListener<ReleasedChargeDoc, OpenReleasedCharge>(
     uid,
     'releasedCharges',

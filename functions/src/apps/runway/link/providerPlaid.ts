@@ -1,6 +1,7 @@
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
 
+import { isForcedFixture } from '../../../emulator.js';
 import {
   normalizeAccount,
   normalizeCardStatement,
@@ -39,6 +40,7 @@ const webhookUrl = () =>
   `https://us-central1-${process.env.GCLOUD_PROJECT ?? 'moondreams-dev-apps'}.cloudfunctions.net/runwayPlaidWebhook`;
 
 const readSecret = (secret: { value(): string }) => {
+  if (isForcedFixture('plaid')) return '';
   try {
     return secret.value();
   } catch {

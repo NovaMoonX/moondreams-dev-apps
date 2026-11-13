@@ -37,6 +37,7 @@ import {
   selectIsAListLoaded,
   selectMembership,
   selectAListLoadError,
+  selectViewingById,
 } from '@apps/a-list/store/selectors';
 import type { AListOverlay, AListTab } from '@apps/a-list/types';
 import { getDayKey } from '@apps/a-list/utils/dayKeys';
@@ -51,7 +52,13 @@ function AList() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [overlay, setOverlay] = useState<AListOverlay | null>(null);
+  const [openedOverlay, setOverlay] = useState<AListOverlay | null>(null);
+  const linkedViewingId = searchParams.get('viewing');
+  const isLinkedViewingKnown = useAppSelector(
+    (state) =>
+      linkedViewingId !== null &&
+      selectViewingById(state, linkedViewingId) !== null,
+  );
   // Ephemeral: a reload simply lands on the empty calendar, whose nudge offers the same thing.
   const [isPastOfferOpen, setIsPastOfferOpen] = useState(false);
   const [isSetupDismissed, setIsSetupDismissed] = useState(false);
@@ -134,6 +141,21 @@ function AList() {
     );
   }
 
+  // A link to a showing deleted since it was shared opens nothing rather than an empty sheet.
+  const overlay: AListOverlay | null =
+    openedOverlay ??
+    (linkedViewingId !== null && isLinkedViewingKnown
+      ? { kind: 'viewing', id: linkedViewingId }
+      : null);
+
+  const closeOverlay = () => {
+    setOverlay(null);
+    if (!searchParams.has('viewing')) return;
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('viewing');
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
   const getScreen = () => {
     if (activeTab === 'dashboard')
       return <DashboardScreen membership={membership} />;
@@ -144,7 +166,7 @@ function AList() {
   const overlayContext = {
     overlay,
     openOverlay: setOverlay,
-    closeOverlay: () => setOverlay(null),
+    closeOverlay,
   };
 
   const isSubviewOpen =
@@ -158,30 +180,22 @@ function AList() {
   return (
     <AListOverlayContext.Provider value={overlayContext}>
       {overlay?.kind === 'add' && (
-        <AddSubview overlay={overlay} onClose={() => setOverlay(null)} />
+        <AddSubview overlay={overlay} onClose={closeOverlay} />
       )}
       {overlay?.kind === 'tickets' && (
-        <TicketsList
-          initialView={overlay.view}
-          onClose={() => setOverlay(null)}
-        />
+        <TicketsList initialView={overlay.view} onClose={closeOverlay} />
       )}
-      {overlay?.kind === 'share' && (
-        <ShareSubview onClose={() => setOverlay(null)} />
-      )}
+      {overlay?.kind === 'share' && <ShareSubview onClose={closeOverlay} />}
       {overlay?.kind === 'theaters' && (
-        <TheatersSubview onClose={() => setOverlay(null)} />
+        <TheatersSubview onClose={closeOverlay} />
       )}
       {overlay?.kind === 'projection' && (
-        <ProjectionSubview
-          membership={membership}
-          onClose={() => setOverlay(null)}
-        />
+        <ProjectionSubview membership={membership} onClose={closeOverlay} />
       )}
       {overlay?.kind === 'membership' && (
         <MembershipSettingsSubview
           membership={membership}
-          onClose={() => setOverlay(null)}
+          onClose={closeOverlay}
         />
       )}
       {/* A subview takes over the app; the screens stay mounted underneath so filters and the selected day survive. */}
@@ -195,21 +209,21 @@ function AList() {
         <DayDrawer
           key={overlay.dayKey}
           dayKey={overlay.dayKey}
-          onClose={() => setOverlay(null)}
+          onClose={closeOverlay}
         />
       )}
       {overlay?.kind === 'viewing' && (
         <ViewingDrawer
           key={overlay.id}
           viewingId={overlay.id}
-          onClose={() => setOverlay(null)}
+          onClose={closeOverlay}
         />
       )}
       {overlay?.kind === 'watchlistItem' && (
         <WatchlistItemDrawer
           key={overlay.movieKey}
           movieKey={overlay.movieKey}
-          onClose={() => setOverlay(null)}
+          onClose={closeOverlay}
         />
       )}
       {isPastOfferOpen && overlay === null && (

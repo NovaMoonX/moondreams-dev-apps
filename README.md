@@ -14,6 +14,7 @@ A collection of beta apps built to fit whatever felt useful, fun, or simply inte
 - 🧂 **Pinch** — Bring in recipes from a chat, a photo or a link, plan your week and get a shopping list, with what it costs.
 - 🛫 **Runway** — An income-first budget planner for money that does not arrive or leave on a tidy schedule: draft where each income day should go, look ahead to see how far the plan holds, and change it when life changes.
 - 🔨 **Going Once** — Sell a lot of your things without answering every buyer yourself: add each thing once with photos and a price, bring in a co-seller you trust, and share one link that shows only what is still for sale.
+- 🧭 **Helm** — A private companion for your whole life that you mostly talk to: tell its assistant what is on your mind and it keeps your tasks, people, places and notes in order, shows where each thing came from, and never changes anything without an Undo.
 
 On a phone, Home shows your apps like a home screen; press and hold one to read about it or star it, and starred apps come first on Home and in the menu. Apps you don't have yet but can ask for are listed under "Ask for access". Your avatar opens an account card, like Google's: switch to another account you've used on this device in one tap (no Google sign-in unless you signed out of it), add one or sign out (switching and signing out both take you back to Home, in every open tab); "Manage your account" opens your account page (name, photo, the accounts on this device, and resetting this device's saved data). The header's menu (the hamburger, top left) slides in every app you can open, and apps that keep their place in the URL (A-List's tabs, Waypoint's trips) reopen where you last left them. Swipe right on the header to open it and left to close.
 
@@ -129,7 +130,7 @@ gcloud projects add-iam-policy-binding moondreams-dev-apps \
 
 Without it the step fails on a PERMISSION_DENIED from `gcloud` and names the function; the merge workflow signs `gcloud` in as that account first. A re-run of the workflow won't fix the function after that, because it now exists and the deploy skips it without a message, so once the role is granted run `npm run fb:invoker -- --all` yourself.
 
-**What it means:** every callable is reachable by anyone who has its address, exactly as with an `allUsers` grant, so each one checks the caller itself (`request.auth`) except the readers that exist for signed-out visitors (see [functions/README.md](functions/README.md)). The setting doesn't appear in the project's IAM policy, so a scan for `allUsers` won't find it, and the organization constraint `constraints/run.requireInvokerIam`, if it is ever turned on, would block it. It is kept to `onCall` functions and the HTTPS webhooks named in `PUBLIC_WEBHOOKS` (today Runway's Plaid webhook, which trusts only a request Plaid signed): a scheduled or trigger function keeps its IAM check, and the script refuses it (it also stops if it can't read `functions/src/index.ts`, rather than guess). Only `fb:deploy:smart`, which the merge workflow runs, does this: `npm run fb:functions` and `npm run fb:deploy` call the CLI directly, so follow them with `npm run fb:invoker -- --all`.
+**What it means:** every callable is reachable by anyone who has its address, exactly as with an `allUsers` grant, so each one checks the caller itself (`request.auth`) except the readers that exist for signed-out visitors (see [functions/README.md](functions/README.md)). The setting doesn't appear in the project's IAM policy, so a scan for `allUsers` won't find it, and the organization constraint `constraints/run.requireInvokerIam`, if it is ever turned on, would block it. It is kept to `onCall` functions and the HTTPS webhooks named in `PUBLIC_WEBHOOKS` (today Runway's Plaid webhook, which trusts only a request Plaid signed, and the voice stream, which trusts only a signed-in token with App Check): a scheduled or trigger function keeps its IAM check, and the script refuses it (it also stops if it can't read `functions/src/index.ts`, rather than guess). Only `fb:deploy:smart`, which the merge workflow runs, does this: `npm run fb:functions` and `npm run fb:deploy` call the CLI directly, so follow them with `npm run fb:invoker -- --all`.
 
 **By hand** (a function that skipped the above, or a browser CORS error whose Cloud Run request log shows a `403` on the `OPTIONS` preflight with "The request was not authenticated"). Names are any case; the script lowercases them for Cloud Run, which rejects mixed-case names:
 
@@ -165,6 +166,14 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 ## Troubleshooting
 
 Problems we've hit before, so we don't hit them again.
+
+### `gcloud` says your project is another one, or the keyring canary fails with "API has not been used in project …"
+
+Every script here passes `--project=moondreams-dev-apps` to `gcloud` itself, so a different default (`gcloud config get project`) changes nothing for them. The part that follows the machine is the application default credentials: Firestore calls from the canary bill the quota project saved in `~/.config/gcloud/application_default_credentials.json`, and a login run for another repo leaves that file on the other project. `npm run helm:setup` now offers to switch both; by hand: `gcloud config set project moondreams-dev-apps` and `gcloud auth application-default set-quota-project moondreams-dev-apps`.
+
+### Google says "Access blocked: … hasn't completed the Google verification process", or a Google connection asks to reconnect every week
+
+The project's consent screen (Google Cloud console, Google Auth Platform, Audience) is in **Testing**. It is one screen for the whole project, so it blocks every app's Google sign-in for anyone not listed as a test user and expires refresh tokens after 7 days. Click "Publish app", then "Confirm", so it says "In production". An "unverified app" screen with Advanced then Continue is expected until Google verifies the scopes; the rules and the verification plan are in `docs/conventions/connections.md` ("Google's consent screen is one for the whole project").
 
 ### No offline strip on a plane's Wi-Fi, and Runway won't open there
 
