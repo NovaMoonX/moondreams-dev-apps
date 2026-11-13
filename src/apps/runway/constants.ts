@@ -2054,6 +2054,7 @@ export const SPEND_WORDS = {
   newPurchase: 'Add a purchase',
   envelopeAdd: 'Add a purchase',
   sheetTitle: 'Purchase',
+  refundSheetTitle: 'Refund',
   empty:
     'Nothing spent yet. Add what you spend and each envelope shows what is left.',
   loading: 'Getting your purchases.',

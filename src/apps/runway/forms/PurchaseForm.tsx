@@ -778,6 +778,7 @@ function PurchaseFormBody({
     if (isRefund) {
       const keepsStored =
         editing !== undefined &&
+        editingLines.length > 0 &&
         amount === -editing.amountCents &&
         originalId === editing.refundOfId &&
         (returnsToOriginal ||
@@ -831,7 +832,11 @@ function PurchaseFormBody({
     if (envelopeId === null || !liveIds.has(envelopeId)) return null;
     return resolve(toChosenLines([{ envelopeId, cents: amount }]));
   };
-  const lines = getLines();
+  const getChosenLines = () => {
+    const chosen = getLines();
+    return chosen !== null && chosen.length > 0 ? chosen : null;
+  };
+  const lines = getChosenLines();
 
   const getPayChoices = () => {
     const horizon = horizons.find(({ item }) => item.id === envelopeId);
@@ -2180,7 +2185,11 @@ function PurchaseFormBody({
       isOpen={isOpen}
       onClose={requestClose}
       title={
-        preset !== null ? PURCHASE_COST_WORDS.addRow : SPEND_WORDS.sheetTitle
+        preset !== null
+          ? PURCHASE_COST_WORDS.addRow
+          : isRefund
+            ? SPEND_WORDS.refundSheetTitle
+            : SPEND_WORDS.sheetTitle
       }
       actions={<ValuesEyeButton />}
     >
