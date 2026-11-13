@@ -11,7 +11,7 @@ import IconBadge from '@/components/IconBadge';
 import { useNow } from '@/hooks/useNow';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getDayLabel } from '@/utils/dateRangeUtils';
+import { getDayLabel, getLocalDayIndex } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -25,6 +25,7 @@ import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import { markStaySeen } from '@apps/waypoint/store/actions/stayActions';
 import {
   getEventLastActivityAt,
+  getEventStatus,
   getStayLastActivityAt,
   selectLiveAnnouncements,
   selectUnseenActivityEvents,
@@ -125,6 +126,18 @@ function getUpdateItemLastActivityAt(item: UpdateItem, trip: TripSpace): number 
   return item.kind === 'event' ? getEventLastActivityAt(item.data, trip) : getStayLastActivityAt(item.data, trip);
 }
 
+// Once an event or stay is over, a change to it stops being news. One with no time
+// counts as over once its day is behind us.
+function isUpdateItemOver(item: UpdateItem, trip: TripSpace, now: number): boolean {
+  const today = getLocalDayIndex(trip.startDate, now);
+  if (item.kind === 'event') {
+    const { dayIndex } = getEventTime(trip, item.data);
+    return getEventStatus(trip, item.data, now) === 'COMPLETED' || (dayIndex !== null && dayIndex < today);
+  }
+  const { checkOut, checkOutMs } = getStayTime(trip, item.data);
+  return checkOutMs === null ? checkOut.dayIndex !== null && checkOut.dayIndex < today : checkOutMs <= now;
+}
+
 function getUpdateItemKey(item: UpdateItem): string {
   return `${item.kind}-${item.data.id}`;
 }
@@ -209,7 +222,7 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
     ...unseenStays.map((stay): UpdateItem => ({ kind: 'stay', data: stay })),
   ]
     // You already know about your own activity — it's not "new" to you.
-    .filter((item) => getUpdateItemActivity(item, trip).uid !== currentUserId)
+    .filter((item) => getUpdateItemActivity(item, trip).uid !== currentUserId && !isUpdateItemOver(item, trip, now))
     .sort((a, b) => getUpdateItemLastActivityAt(b, trip) - getUpdateItemLastActivityAt(a, trip));
   const totalCount = announcements.length + updateItems.length;
   const actorUids = Array.from(

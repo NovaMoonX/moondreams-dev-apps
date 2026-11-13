@@ -56,6 +56,13 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/runway/share/manifest.ts',
+    dest: 'functions/src/apps/runway/share/manifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
+    },
+  },
+  {
     src: 'src/apps/worth-the-wait/share/manifest.ts',
     dest: 'functions/src/apps/worth-the-wait/share/manifest.ts',
     importRewrites: {
@@ -84,6 +91,13 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/lib/connections/google/contactsManifest.ts',
+    dest: 'functions/src/connections/google/contactsManifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../vendor/connectionsContract.js',
+    },
+  },
+  {
     src: 'src/utils/stringUtils.ts',
     dest: 'functions/src/vendor/stringUtils.ts',
     importRewrites: {},
@@ -96,6 +110,36 @@ const COPIES: Copy[] = [
   {
     src: 'src/apps/helm/engine/whoTier.ts',
     dest: 'functions/src/apps/helm/nomos/whoTier.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/utils/keyDateIndex.ts',
+    dest: 'functions/src/apps/helm/keyDateIndex.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/utils/topicTree.ts',
+    dest: 'functions/src/apps/helm/topicTree.ts',
+    importRewrites: { '@apps/helm/constants': './topicLimits.js' },
+  },
+  {
+    src: 'src/apps/helm/utils/stepGroups.ts',
+    dest: 'functions/src/apps/helm/stepGroups.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/utils/assistantName.ts',
+    dest: 'functions/src/apps/helm/assistantName.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/utils/mediaCaps.ts',
+    dest: 'functions/src/apps/helm/media/mediaCaps.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/utils/yearlyDateUtils.ts',
+    dest: 'functions/src/vendor/yearlyDateUtils.ts',
     importRewrites: {},
   },
 ];

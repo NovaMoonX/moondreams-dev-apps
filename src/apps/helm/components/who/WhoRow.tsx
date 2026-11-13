@@ -1,7 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
-import WhoMark from '@apps/helm/components/who/WhoMark';
+import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenWho } from '@apps/helm/types';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
@@ -27,7 +27,7 @@ function WhoRow({ who, onOpen }: WhoRowProps) {
       className='flex h-auto w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
       onClick={() => onOpen(who.id)}
     >
-      <WhoMark kind={who.kind} name={name} />
+      <WhoPhoto kind={who.kind} name={name} mediaId={who.photoMediaId} />
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {name}

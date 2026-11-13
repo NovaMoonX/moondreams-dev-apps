@@ -1,6 +1,7 @@
 import { memo } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { ChevronRight } from 'lucide-react';
 
 import { formatDateShort } from '@/utils/formatUtils';
@@ -112,7 +113,7 @@ function ContainerRow({
     return (
       <label className='flex min-h-14 w-full cursor-pointer items-start gap-3 py-2 select-none'>
         <span className='mt-0.5 inline-flex shrink-0'>
-          <Checkbox
+          <AppCheckbox
             aria-label={`${title}, ${getBatchServingsText(boxes)}`}
             checked={isSelected}
             onCheckedChange={() => onToggle?.(boxes)}

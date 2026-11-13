@@ -20,6 +20,7 @@ import {
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import type {
   HelmProfile,
+  OpenPlace,
   OpenTask,
   PlanDay,
   SyncedRecord,
@@ -33,6 +34,7 @@ interface SourceParts {
   synced: SyncedRecord[];
   planDays: Record<string, PlanDay>;
   tasks: OpenTask[];
+  places: OpenPlace[];
   now: number;
 }
 
@@ -53,6 +55,7 @@ const readPlanSources = (grants: ConnectionGrantWithId[]) => {
     synced: state.helm.synced.items,
     planDays: state.helm.planDays.byId,
     tasks: selectActiveTasks(state, Math.floor(now / MINUTE_MS) * MINUTE_MS),
+    places: state.helm.places.items,
     now,
   });
 };
@@ -64,10 +67,19 @@ export function usePlanSources(nowMinute: number) {
   const synced = useAppSelector((state) => state.helm.synced.items);
   const planDays = useAppSelector((state) => state.helm.planDays.byId);
   const tasks = useAppSelector((state) => selectActiveTasks(state, nowMinute));
+  const places = useAppSelector((state) => state.helm.places.items);
   return useMemo(
     () =>
-      toSources({ grants, profile, synced, planDays, tasks, now: nowMinute }),
-    [grants, profile, synced, planDays, tasks, nowMinute],
+      toSources({
+        grants,
+        profile,
+        synced,
+        planDays,
+        tasks,
+        places,
+        now: nowMinute,
+      }),
+    [grants, profile, synced, planDays, tasks, places, nowMinute],
   );
 }
 
