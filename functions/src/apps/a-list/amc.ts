@@ -1,9 +1,12 @@
 import { defineSecret } from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
 
+import { isForcedFixture } from '../../emulator.js';
 import type { AmcFormat, ShowtimeOption, TheatreResult, TicketPriceKind, TicketPrices } from './types.js';
 
 export const AMC_API_KEY = defineSecret('AMC_API_KEY');
+
+export const readAmcKey = () => (isForcedFixture('amc') ? '' : AMC_API_KEY.value());
 
 const FETCH_TIMEOUT_MS = 6000;
 const MAX_THEATRES = 10;

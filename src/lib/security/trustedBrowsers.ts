@@ -12,7 +12,9 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 
-import { auth, db } from '@lib/firebase/config';
+import { httpsCallable } from 'firebase/functions';
+
+import { auth, db, functions } from '@lib/firebase/config';
 import { generateToken } from '@/utils/idUtils';
 
 const BROWSER_ID_KEY = 'trusted-browser-id';
@@ -170,4 +172,14 @@ export async function forgetThisBrowserFor(uid: string) {
     query(browsersOf(uid), where('browserId', '==', getBrowserId())),
   );
   await Promise.all(snapshot.docs.map((entry) => deleteDoc(entry.ref)));
+}
+
+const signOutEverywhereCallable = httpsCallable<void, { ok: true }>(
+  functions,
+  'signOutEverywhere',
+);
+
+/** Ends every trusted browser and every session of the signed-in account, on every app. Needs a connection. */
+export async function signOutEverywhere() {
+  await signOutEverywhereCallable();
 }

@@ -56,6 +56,13 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/runway/share/manifest.ts',
+    dest: 'functions/src/apps/runway/share/manifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
+    },
+  },
+  {
     src: 'src/apps/worth-the-wait/share/manifest.ts',
     dest: 'functions/src/apps/worth-the-wait/share/manifest.ts',
     importRewrites: {
@@ -118,6 +125,11 @@ const COPIES: Copy[] = [
   {
     src: 'src/apps/helm/utils/stepGroups.ts',
     dest: 'functions/src/apps/helm/stepGroups.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/utils/assistantName.ts',
+    dest: 'functions/src/apps/helm/assistantName.ts',
     importRewrites: {},
   },
   {

@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { ACTIVITY_PAGE } from '@apps/helm/constants';
 import { resetAllState } from '@/store/actions/globalActions';
+import type { OpenStyle } from '@apps/helm/store/listeners/styleListener';
 import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexListener';
 import type {
   HelmProfile,
@@ -55,6 +56,7 @@ export interface HelmState {
   /** Raised by Try again; asking for the key again follows it. */
   keyAttempt: number;
   isKeyRetrying: boolean;
+  /** Set while the app is open on this browser's kept key: when the server last confirmed it (0 when unknown), for the "As of" line. */
   /** Refusals in a row, so a Try again that fails again can say so. */
   keyRefusals: number;
   /** The profile, and whether the first snapshot has arrived, so a missing profile is never mistaken for one still loading. */
@@ -94,6 +96,8 @@ export interface HelmState {
   openRuns: LoadedSet<OpenRun>;
   /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
   media: LoadedSet<OpenMedia>;
+  /** The person's writing-style profiles, opened. */
+  style: LoadedSet<OpenStyle>;
   /** Copies of other apps' records, opened. */
   synced: LoadedSet<SyncedRecord>;
   /** What the assistant did for the turns in the eager window. */
@@ -155,6 +159,7 @@ const initialState: HelmState = {
   procedures: emptyLoadedSet,
   openRuns: emptyLoadedSet,
   media: emptyLoadedSet,
+  style: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
@@ -261,6 +266,12 @@ const helmSlice = createSlice({
     },
     setFactsFailed: (state) => {
       state.facts.isFailed = true;
+    },
+    setStyle: (state, action: PayloadAction<OpenStyle[]>) => {
+      state.style = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setStyleFailed: (state) => {
+      state.style.isFailed = true;
     },
     setWho: (state, action: PayloadAction<OpenWho[]>) => {
       state.who = { items: action.payload, isLoaded: true, isFailed: false };
@@ -478,6 +489,8 @@ export const {
   startLoadingEarlier,
   addEarlierCaptures,
   setEarlierFailed,
+  setStyle,
+  setStyleFailed,
   clearHelm,
   setKeyStatus,
   retryKey,

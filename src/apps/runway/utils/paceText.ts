@@ -29,10 +29,10 @@ export function describePace(goal: GoalSealed, pace: Pace): PaceWords {
   if (goal.funding.amount.kind === 'rest') {
     return { stateLabel: null, line: PACE_WORDS.rest };
   }
-  if (goal.targetDate === null || pace.state === null) {
+  if (pace.targetDate === null || pace.state === null) {
     return { stateLabel: null, line: reached };
   }
-  const by = formatDateOrdinalUTC(goal.targetDate);
+  const by = formatDateOrdinalUTC(pace.targetDate);
   if (pace.neededPerDayCents === null) {
     return {
       stateLabel: PACE_STATE_LABELS.behind,

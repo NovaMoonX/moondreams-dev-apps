@@ -28,6 +28,14 @@
       "collectionGroup": "captures",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "inputMode", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "captures",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]

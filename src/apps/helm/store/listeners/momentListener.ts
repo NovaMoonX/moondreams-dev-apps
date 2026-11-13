@@ -22,7 +22,7 @@ const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your moments did not open.');
 
 /** A moment that won't open is left out: with no words there is nothing to show. */
-async function openMoment(
+export async function openMoment(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<WhoMoment[]> {

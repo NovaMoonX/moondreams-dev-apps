@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import FormSheet from '@/components/FormSheet';
@@ -208,7 +210,7 @@ function PickerForm({
           {options.map((option) => (
             <li key={option.id} className='py-1'>
               <label className='flex min-h-12 items-center gap-3 py-2'>
-                <Checkbox
+                <AppCheckbox
                   aria-label={option.name}
                   checked={isTicked(option)}
                   onCheckedChange={(isOn) =>
@@ -237,7 +239,7 @@ function PickerForm({
               </label>
               {isTicked(option) && (
                 <label className='flex min-h-10 items-center gap-3 pl-14'>
-                  <Checkbox
+                  <AppCheckbox
                     aria-label={`${HELM_COPY.calendarPickerShifts}: ${option.name}`}
                     checked={isShift(option)}
                     onCheckedChange={(isOn) =>

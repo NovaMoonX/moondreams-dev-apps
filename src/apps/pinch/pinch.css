@@ -178,47 +178,17 @@ html.pinch-theme.dark [class*='bg-muted/50']:not([class*='border-border']) {
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
-/* A tick is a circle, like the app's other round shapes: a quiet ring until ticked, then filled with the ink. The
-   component sets its fill inline, so the ticked fill needs `!important`; the after-element keeps a 40px target. */
-html.pinch-theme button[role='checkbox'] {
-  position: relative;
-  border-radius: 9999px;
-  border-width: 1.5px;
-  border-color: var(--color-muted-foreground);
+/* A tick is a circle, like the app's other round shapes: a quiet ring until ticked, then filled with the ink. A tick
+   that tracks progress down a list (cooking mode) is a drizzle check with no box, so the row's text stays as it was. */
+html.pinch-theme {
+  --checkbox-radius: 9999px;
+  --checkbox-border-width: 1.5px;
+  --checkbox-mark-width: 3;
+  --checkbox-filled: 1;
 }
 
-html.pinch-theme button[role='checkbox']::after {
-  content: '';
-  position: absolute;
-  inset: -11.5px;
-}
-
-html.pinch-theme
-  button[role='checkbox']:is([aria-checked='true'], [aria-checked='mixed']) {
-  border-color: var(--color-primary);
-  background-color: var(--color-primary) !important;
-  color: var(--color-primary-foreground);
-}
-
-html.pinch-theme button[role='checkbox']:focus-visible {
-  outline-color: var(--color-primary);
-}
-
-/* A tick that tracks progress down a list swaps its ring for a coloured check, so the row's own text stays as it was. */
-html.pinch-theme
-  button[role='checkbox'][data-tick='mark']:is([aria-checked='true']) {
-  border-color: transparent;
-  background-color: transparent !important;
-  color: var(--pinch-drizzle);
-}
-
-html.pinch-theme button[role='checkbox'][data-tick='mark'] svg {
-  transform: scale(1.4);
-}
-
-html.pinch-theme button[role='checkbox'][data-tick='mark'] svg path {
-  stroke: currentColor;
-  stroke-width: 1.1;
+html.pinch-theme .app-checkbox[data-variant='mark'] {
+  --checkbox-accent: var(--pinch-drizzle);
 }
 
 /* The search field's native clear icon is drawn in the browser's blue; it is a control, not a link. */

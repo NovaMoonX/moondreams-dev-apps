@@ -2,7 +2,7 @@
 """Helm rules matrix (beta tier).
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
-visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
+visitor, and records each HTTP status. The beta tier checks access, and one value's shape (a profile's theme is absent, null or a palette Helm ships): only the owner may read, create and
 update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client. A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
@@ -145,6 +145,14 @@ def main():
         check(f'profile read [{a}]', get(path, tok), a == 'o')
         check(f'profile update [{a}]', commit(tok, [put(path, dict(profile, planFillPercent=60))]), a == 'o')
         check(f'profile delete [{a}]', commit(tok, [rm(path)]), False)
+    admin([put(path, profile)])
+    for theme, allowed in [('plum', True), (None, True), ('neon', False), (3, False)]:
+        check(f'profile theme {theme!r} update [o]', commit(o_tok, [put(path, dict(profile, theme=theme))]), allowed)
+    check("profile theme 'plum' update [x]", commit(x_tok, [put(path, dict(profile, theme='plum'))]), False)
+    check("profile theme 'plum' update [a]", commit(None, [put(path, dict(profile, theme='plum'))]), False)
+    admin([rm(path)])
+    check("profile theme 'neon' create [o]", commit(o_tok, [put_new(path, dict(profile, theme='neon'))]), False)
+    check("profile theme 'teal' create [o]", commit(o_tok, [put_new(path, dict(profile, theme='teal'))]), True)
     check('profile create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}', profile)]), False)
 
     # A turn is the owner's alone: read, list, create, update and delete.
@@ -360,6 +368,24 @@ def main():
     check('media create a markdown file as plain text [o]', commit(o_tok, [put_new(mk + '-md-txt', dict(files['markdown'], mimeType='text/plain'))]), True)
     admin([rm(mk + '-md-txt')])
     check('media create with a missing field [o]', commit(o_tok, [put_new(mk + '-bare', {k: v for k, v in photo.items() if k != 'hasThumb'})]), False)
+
+    # A style profile is the owner's alone and has a readable shape around its sealed traits.
+    style = dict(scope='general', audienceWhoId=None, learnedFrom=['helmText'], sampleCount=34, personEditedAt=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    sk = f'{path}/style/general'
+    for a, tok in actors.items():
+        admin([put(sk, style)])
+        check(f'style read [{a}]', get(sk, tok), a == 'o')
+        check(f'style list [{a}]', get(f'{path}/style', tok), a == 'o')
+        check(f'style create [{a}]', commit(tok, [put_new(sk + '-new-' + a, style)]), a == 'o')
+        check(f'style update [{a}]', commit(tok, [put(sk, dict(style, sampleCount=35))]), a == 'o')
+        check(f'style delete [{a}]', commit(tok, [rm(sk)]), a == 'o')
+        admin([rm(sk + '-new-' + a)])
+    check('style create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/style/general', style)]), False)
+    check('style create with another scope [o]', commit(o_tok, [put_new(sk + '-scope', dict(style, scope='everyone'))]), False)
+    check('style create with a negative count [o]', commit(o_tok, [put_new(sk + '-neg', dict(style, sampleCount=-1))]), False)
+    check('style create with an extra key [o]', commit(o_tok, [put_new(sk + '-extra', dict(style, samples=['hello']))]), False)
+    check('style create without sealed [o]', commit(o_tok, [put_new(sk + '-bare', {k: v for k, v in style.items() if k != 'sealed'})]), False)
+    check('style create with a text timestamp [o]', commit(o_tok, [put_new(sk + '-time', dict(style, createdAt='now'))]), False)
 
     # An execution is the owner's to read, create and update; nobody deletes one.
     run = dict(captureId='capture-1', actor='nomos', state='succeeded', undoneByExecutionId=None, createdAt=NOW, sealed=SEAL)

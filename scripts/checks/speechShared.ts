@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 import {
   createListeningState,
@@ -60,7 +61,14 @@ import type { TtsAdapter } from '../../src/lib/speech/voice/types.ts';
 import {
   pickListener,
   pickSpeaker,
+  pickWakeListener,
 } from '../../src/lib/speech/voice/voiceRouter.ts';
+import {
+  isOnDeviceLang,
+  ON_DEVICE_FILES,
+  ON_DEVICE_SIZE_MB,
+} from '../../src/lib/speech/onDevice/config.ts';
+import { toHeardText } from '../../src/lib/speech/onDevice/onDeviceStt.ts';
 import { getVoiceQuality, pickVoice } from '../../src/utils/speechUtils.ts';
 
 const sharedFiles = [
@@ -72,6 +80,7 @@ const sharedFiles = [
     .map((name) => new URL(`../../src/lib/speech/${name}`, import.meta.url)),
   new URL('../../src/hooks/useSpeechCommands.ts', import.meta.url),
   new URL('../../src/hooks/useNaturalVoice.ts', import.meta.url),
+  new URL('../../src/hooks/useOnDeviceRecognition.ts', import.meta.url),
   new URL('../../src/hooks/useVoiceConversation.ts', import.meta.url),
   new URL('../../src/components/NaturalVoiceOption.tsx', import.meta.url),
   ...['../../functions/src/voice/', '../../scripts/voice/'].flatMap((folder) =>
@@ -667,8 +676,14 @@ const CLOUD_ON = {
   isCloudAllowed: true,
   isCloudHeld: false,
   hasCloud: true,
+  isOnDeviceReady: false,
 };
 assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
+assert.equal(
+  pickListener({ ...CLOUD_ON, isOnDeviceReady: true }),
+  'cloud',
+  'the cloud still listens when allowed, with the model downloaded',
+);
 (
   [
     { isOnline: false },
@@ -682,7 +697,41 @@ assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
     'browser',
     `${Object.keys(off)[0]} off listens with the browser`,
   );
+  assert.equal(
+    pickListener({ ...CLOUD_ON, ...off, isOnDeviceReady: true }),
+    'onDevice',
+    `${Object.keys(off)[0]} off listens on the device once the model is downloaded`,
+  );
 });
+assert.equal(pickWakeListener({ isOnDeviceReady: true }), 'onDevice');
+assert.equal(pickWakeListener({ isOnDeviceReady: false }), 'browser');
+assert.ok(isOnDeviceLang('en-GB') && !isOnDeviceLang('fr-FR'));
+assert.equal(
+  toHeardText(['WHAT DO I HAVE TODAY', '']),
+  'What do I have today',
+  'the model words read as a sentence',
+);
+assert.equal(toHeardText(['  ', '']), '', 'silence reads as nothing');
+ON_DEVICE_FILES.forEach((file) => {
+  const served = readFileSync(
+    new URL(`../../public${file.url}`, import.meta.url),
+  );
+  assert.equal(served.length, file.bytes, `${file.url} has the listed size`);
+  assert.equal(
+    createHash('sha256').update(served).digest('hex'),
+    file.sha256,
+    `${file.url} has the listed hash`,
+  );
+});
+assert.ok(
+  readFileSync(
+    new URL('../../public/speech/asr/NOTICE', import.meta.url),
+    'utf8',
+  ).length > 0,
+  'the recognizer files keep their licences beside them',
+);
+assert.equal(ON_DEVICE_SIZE_MB, 57, 'the size the row states is the real one');
+console.log('speechShared: on-device recognition checks passed');
 {
   const requests: MintVoiceTokenRequest[] = [];
   const state = { isFailing: false, isKeyless: false };

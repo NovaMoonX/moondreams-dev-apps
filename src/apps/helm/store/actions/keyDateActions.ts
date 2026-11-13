@@ -15,6 +15,7 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { HELM_CAPS, WHO_LIMIT } from '@apps/helm/constants';
+import { markMomentsStale } from '@apps/helm/queries/momentQueries';
 import {
   readIndexIn,
   readIndexOnce,
@@ -162,6 +163,7 @@ async function applyStep(
       ...(step.tier && { tier: step.tier }),
     });
   }
+  if (step.isMoment) markMomentsStale(uid);
   if (step.isMoment || !index) return;
   const change: IndexChange =
     write.type === 'delete'

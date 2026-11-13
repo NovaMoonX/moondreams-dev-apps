@@ -149,6 +149,7 @@ export async function sendCapture(
     interruptedCaptureId: turn.voice?.interruptedCaptureId ?? null,
     answersQuestion: turn.answersQuestion,
     ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: turn.sessionId,
     turnIndex: turn.turnIndex,

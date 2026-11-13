@@ -168,6 +168,8 @@ export interface ContextInput {
   runs?: ContextRun[];
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
   topicDocument?: 'whole' | 'outline' | null;
+  /** The person's style notes, descriptions only; left out when there are none. */
+  style?: { traits: string[]; avoid: string[] } | null;
 }
 
 export interface ContextFocusedTopic {
@@ -267,7 +269,7 @@ export function buildContext(input: ContextInput): {
   const synced = createSyncedBook();
   const syncedRecords = (input.synced ?? []).map((copy) => ({
     alias: synced.add(copy),
-    ...toSyncedView(copy, toKnownZone(input.timeZone)),
+    ...toSyncedView(copy, toKnownZone(input.timeZone), input.createdAt),
   }));
   const tasks = input.tasks.slice(0, MAX_CONTEXT_TASKS).map((task) => ({
     alias: aliases.add(task.id),
@@ -513,6 +515,9 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(input.files?.length
       ? [`<files>${toDataJson(input.files)}</files>`]
+      : []),
+    ...(input.style
+      ? [`<your_style>${toDataJson(input.style)}</your_style>`]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
