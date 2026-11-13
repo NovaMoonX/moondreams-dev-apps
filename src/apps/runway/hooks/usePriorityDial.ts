@@ -3,7 +3,8 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { getCostPriority, getLiveCosts } from '@apps/runway/engine/horizon';
 import { PRIORITIES } from '@apps/runway/constants';
-import type { HorizonSealed, Priority } from '@apps/runway/types';
+import { fundingAtLevel, getExtras } from '@apps/runway/engine/parts';
+import type { GoalSealed, HorizonSealed, Priority } from '@apps/runway/types';
 
 const ALL: Priority = 'want';
 const dials = new Map<string, Priority>();
@@ -18,6 +19,29 @@ const subscribe = (listener: () => void) => {
 
 export const isCountedAt = (priority: Priority, dial: Priority) =>
   PRIORITIES.indexOf(priority) <= PRIORITIES.indexOf(dial);
+
+/** The dial a goal's finish date is counted at: only a counted goal with an extra the dial leaves out moves. */
+export const getGoalPaceDial = (
+  goal: GoalSealed,
+  dial: Priority,
+): Priority | null => {
+  if (dial === 'want' || !isCountedAt(goal.priority, dial)) return null;
+  const isTrimmed = getExtras(goal).some(
+    (extra) => !isCountedAt(extra.tier, dial),
+  );
+  return isTrimmed ? dial : null;
+};
+
+/** What the dial changes in a goal's rule when its finish date is read: the funding without the extras it leaves out. */
+export const getGoalPaceFunding = (goal: GoalSealed, dial: Priority) => {
+  const paceDial = getGoalPaceDial(goal, dial);
+  return paceDial === null
+    ? {}
+    : {
+        funding: fundingAtLevel(goal, paceDial) ?? goal.funding,
+        extras: null,
+      };
+};
 
 /** A Horizon item counts at `dial` when any of its live costs does, each at its own priority; one with none counts at its own. */
 export const isHorizonCountedAt = (

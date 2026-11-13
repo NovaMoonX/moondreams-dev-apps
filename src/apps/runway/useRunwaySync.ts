@@ -32,10 +32,12 @@ import {
 import { startAccountsListener } from '@apps/runway/store/listeners/accountListeners';
 import {
   startAccountBalancesListener,
+  startCardStatementsListener,
   startLinksListener,
 } from '@apps/runway/store/listeners/linkListeners';
 import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
 import { startExpensesListener } from '@apps/runway/store/listeners/expenseListeners';
+import { startMemoriesListener } from '@apps/runway/store/listeners/memoryListeners';
 import { startRulesListener } from '@apps/runway/store/listeners/ruleListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
@@ -72,9 +74,11 @@ import {
   setLinks,
   setNeedsHome,
   setAccountBalances,
+  setCardStatements,
   setAccounts,
   setExpenses,
   setRules,
+  setMemories,
   setClosing,
   setDays,
   setItems,
@@ -199,6 +203,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           (balances) => dispatch(setAccountBalances(balances)),
           fail,
         ),
+        startCardStatementsListener(
+          uid,
+          encryption,
+          (statements) => dispatch(setCardStatements(statements)),
+          fail,
+        ),
         startExpensesListener(
           uid,
           encryption,
@@ -209,6 +219,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (rules) => dispatch(setRules(rules)),
+          fail,
+        ),
+        startMemoriesListener(
+          uid,
+          encryption,
+          (memories) => dispatch(setMemories(memories)),
           fail,
         ),
         startNeedsHomeListener(

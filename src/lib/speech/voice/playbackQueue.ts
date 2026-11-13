@@ -47,10 +47,11 @@ export const createPlaybackQueue = ({
     playing: Playing,
     status: SpeakResult['status'],
     isResuming: boolean,
+    playedBy?: string | void,
   ) => {
     if (state.playing !== playing) return;
     state.playing = null;
-    playing.line.resolve({ status, adapterId: playing.adapter.id });
+    playing.line.resolve({ status, adapterId: playedBy ?? playing.adapter.id });
     if (isResuming) play();
   };
 
@@ -84,7 +85,7 @@ export const createPlaybackQueue = ({
         onEnd: () => undefined,
       })
       .then(
-        () => finish(playing, 'spoken', true),
+        (playedBy) => finish(playing, 'spoken', true, playedBy),
         () => finish(playing, 'failed', true),
       );
   }
@@ -129,5 +130,8 @@ export const createPlaybackQueue = ({
       play();
     },
     isActive: () => state.playing !== null || state.waiting.length > 0,
+    /** True while the line playing goes through the page's audio, so the microphone's echo cancellation can tell it from the person. */
+    isPlayingThroughWebAudio: () =>
+      state.playing?.adapter.isPlayingThroughWebAudio ?? false,
   };
 };

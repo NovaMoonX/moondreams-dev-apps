@@ -15,7 +15,7 @@ export interface SpokenAckInput {
 }
 
 /** The calendar day an instant falls on in `timeZone`, as UTC midnight so two days subtract cleanly. */
-const getDayIn = (at: number, timeZone: string) => {
+export const getDayIn = (at: number, timeZone: string) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
@@ -25,7 +25,7 @@ const getDayIn = (at: number, timeZone: string) => {
   return Date.parse(`${parts}T00:00:00Z`);
 };
 
-const toKnownZone = (timeZone: string) => {
+export const toKnownZone = (timeZone: string) => {
   try {
     return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions()
       .timeZone;

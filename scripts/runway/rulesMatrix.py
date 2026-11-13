@@ -35,6 +35,7 @@ COLLECTIONS = {
     'accounts': {'update'},
     'expenses': {'update', 'delete'},
     'rules': {'update', 'delete'},
+    'memories': {'delete'},
 }
 
 
