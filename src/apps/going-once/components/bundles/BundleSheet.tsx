@@ -26,6 +26,7 @@ import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
 import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
 import {
   changeBundleStatus,
+  editBundle,
   keepBundle,
   unbundle,
   type BundleResult,
@@ -114,6 +115,8 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
   const separately = formatCentsShort(parts.separateCents);
   const saving = formatSaveShort(bundle.priceCents, parts.separateCents);
   const history = [...bundle.history].reverse();
+  const isOverSeparate =
+    bundle.status === 'ACTIVE' && bundle.priceCents > parts.separateCents;
   const holdFacts = getStatusFacts(
     { status: 'PENDING', pending: deal[0]?.pending ?? null, sale: null },
     false,
@@ -194,6 +197,18 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
     const result = await apply(() => unbundle(bundle.saleId, bundle.id, uid));
     if (result?.ok) onClose();
   };
+
+  const lowerToSeparate = () =>
+    apply(() =>
+      editBundle(bundle.saleId, bundle.id, uid, {
+        name: bundle.name,
+        priceCents: parts.separateCents,
+        itemIds: bundle.itemIds,
+        bundleOnlyIds: bundle.itemIds.filter(
+          (id) => itemsById[id]?.isBundleOnly === true,
+        ),
+      }),
+    );
 
   const keepIt = () => {
     setError(null);
@@ -468,6 +483,26 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
             </p>
           </div>
         )}
+        {isOverSeparate && (
+          <InlineNotice tone='info'>
+            <div className='space-y-3'>
+              <p className='text-pretty'>
+                A price changed, so the bundle costs more than its things do
+                separately. Buyers see {separately} until you change it.
+              </p>
+              <Button
+                type='button'
+                size='sm'
+                rounded='full'
+                className='h-10 px-4'
+                disabled={isWorking}
+                onClick={() => void lowerToSeparate()}
+              >
+                Make it {separately}
+              </Button>
+            </div>
+          </InlineNotice>
+        )}
         {isSuggesting && (
           <InlineNotice tone='info'>
             <div className='space-y-3'>
@@ -502,7 +537,7 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
         </ul>
         {gone.length > 0 && (
           <>
-            <SectionDivider label={`Gone on their own · ${gone.length}`} />
+            <SectionDivider label={`No longer in the deal · ${gone.length}`} />
             <ul className='space-y-2'>
               {gone.map((item) => renderGoneThing(item.id))}
             </ul>

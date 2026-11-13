@@ -158,7 +158,7 @@ function BuyerThingDrawer({
             onClick={() => onOpenBundle(bundle.id)}
           >
             {thing.isBundleOnly
-              ? `Only sold with the ${bundle.name} bundle`
+              ? `Only sold with the ${bundle.name} bundle · ${formatCentsShort(bundle.priceCents)} for all ${bundle.thingIds.length}`
               : `Part of ${bundle.name}${savedCents > 0 ? ` · save ${formatCentsShort(savedCents)} together` : ''}`}
           </Button>
         )}

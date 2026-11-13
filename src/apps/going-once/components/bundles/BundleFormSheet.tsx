@@ -122,6 +122,7 @@ function BundleFormSheet({
   };
   const note = getNote();
 
+  const isAllOnly = itemIds.every((id) => onlyIds.includes(id));
   const toggleOnly = (id: string, isOnly: boolean) =>
     setOnlyIds((current) =>
       isOnly ? [...current, id] : current.filter((other) => other !== id),
@@ -206,7 +207,20 @@ function BundleFormSheet({
             </p>
           )}
         </div>
-        <SectionDivider label={`Things · ${itemIds.length}`} />
+        <SectionDivider
+          label={`Things · ${itemIds.length}`}
+          trailing={
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="text-primary relative h-7 px-2 text-sm after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+              onClick={() => setOnlyIds(isAllOnly ? [] : itemIds)}
+            >
+              {isAllOnly ? 'None bundle-only' : 'All bundle-only'}
+            </Button>
+          }
+        />
         <ul className='space-y-2'>
           {things.map((item) => (
             <li

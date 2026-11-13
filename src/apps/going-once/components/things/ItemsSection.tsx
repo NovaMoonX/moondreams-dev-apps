@@ -79,6 +79,7 @@ const matchesBundleSearch = (
 
 const ROW_HEIGHT = 72;
 const EAGER_ROWS = 10;
+const BUNDLES_FIRST = 3;
 
 const EMPTY_VIEW_TEXT: Record<StatusView, string> = {
   AVAILABLE: 'Nothing is available right now.',
@@ -137,6 +138,7 @@ function ItemsSection({
   );
   const selection = useSelection();
   const [isMakingBundle, setIsMakingBundle] = useState(false);
+  const [isAllBundles, setIsAllBundles] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
@@ -188,6 +190,13 @@ function ItemsSection({
         (!hasTools || matchesBundleSearch(bundle, query, itemsById)),
     )
     .sort((first, second) => second.createdAt - first.createdAt);
+  const isBundlesCapped =
+    !isAllBundles &&
+    query.trim() === '' &&
+    bundlesInView.length > BUNDLES_FIRST;
+  const bundlesShown = isBundlesCapped
+    ? bundlesInView.slice(0, BUNDLES_FIRST)
+    : bundlesInView;
   const isPickable = (item: Item) =>
     item.status === 'AVAILABLE' && isListable(item) && item.bundleId === null;
   const pickedIds = items
@@ -400,7 +409,7 @@ function ItemsSection({
         <>
           <SectionDivider label={`Bundles · ${bundlesInView.length}`} />
           <ul className='space-y-2'>
-            {bundlesInView.map((bundle, index) => (
+            {bundlesShown.map((bundle, index) => (
               <li key={bundle.id}>
                 <LazyMount
                   estimatedHeight={ROW_HEIGHT}
@@ -415,6 +424,16 @@ function ItemsSection({
               </li>
             ))}
           </ul>
+          {isBundlesCapped && (
+            <Button
+              type='button'
+              variant='tertiary'
+              className='text-primary h-11 w-full rounded-full text-sm'
+              onClick={() => setIsAllBundles(true)}
+            >
+              Show all {bundlesInView.length} bundles
+            </Button>
+          )}
           {shown.length > 0 && <SectionDivider label='Things' />}
         </>
       )}
