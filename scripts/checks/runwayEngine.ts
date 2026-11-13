@@ -118,8 +118,11 @@ import {
   type ClosingState,
 } from '../../src/apps/runway/engine/closings.ts';
 import {
+  getCalendarCents,
   getPeriodIndex,
   getPeriodStart,
+  isOnFundingPay,
+  scopeToSource,
   spreadCalendarAmount,
 } from '../../src/apps/runway/engine/calendar.ts';
 import {
@@ -16299,6 +16302,60 @@ const version = (
   );
 }
 
+{
+  const day = (line: string, y: number, m: number, d: number) => ({
+    dayKey: `${line}_${String(y)}${String(m + 1).padStart(2, '0')}${String(d).padStart(2, '0')}`,
+    on: Date.UTC(y, m, d),
+    sourceId: 'work',
+  });
+  const payDays = [
+    day('semi', 2026, 10, 15),
+    day('semi', 2026, 10, 30),
+    day('semi', 2026, 11, 15),
+    day('semi', 2026, 11, 31),
+    day('side', 2026, 10, 20),
+  ];
+  assert.deepEqual(
+    scopeToSource({ pay: { payLineId: 'semi', monthDay: 30 } }, payDays).map(
+      (entry) => entry.on,
+    ),
+    [Date.UTC(2026, 10, 30)],
+    'a rule from the pay on the 30th counts only that pay, not the 31st of a longer month',
+  );
+  assert.equal(
+    isOnFundingPay(day('semi', 2027, 1, 28), {
+      payLineId: 'semi',
+      monthDay: 30,
+    }),
+    true,
+    'the pay on the 30th lands on February 28th',
+  );
+  assert.deepEqual(
+    scopeToSource({ pay: { payLineId: 'semi', monthDay: null } }, payDays)
+      .length,
+    4,
+    'a pay line with no day named counts every one of its pays',
+  );
+  assert.deepEqual(
+    scopeToSource({ sourceId: null, pay: null }, payDays).length,
+    5,
+    'a rule with no pay counts every pay',
+  );
+  const monthly = getCalendarCents(
+    {
+      amount: { kind: 'exact', cents: 30_000 },
+      cadence: { kind: 'calendar', period: 'monthly', startsOn: null },
+      pay: { payLineId: 'semi', monthDay: 15 },
+    },
+    payDays,
+  );
+  assert.deepEqual(
+    payDays.map((entry) => monthly?.get(entry.dayKey) ?? 0),
+    [30_000, 0, 30_000, 0, 0],
+    'a monthly envelope from the pay on the 15th takes the whole month from that pay',
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to Spend, then what gets less.
@@ -20988,6 +21045,60 @@ checkHorizonMoves();
     ).contributions.length,
     0,
     'a goal that is not being saved for puts nothing in ahead, so only its balance now covers',
+  );
+}
+
+{
+  const day = (line: string, y: number, m: number, d: number) => ({
+    dayKey: `${line}_${String(y)}${String(m + 1).padStart(2, '0')}${String(d).padStart(2, '0')}`,
+    on: Date.UTC(y, m, d),
+    sourceId: 'work',
+  });
+  const payDays = [
+    day('semi', 2026, 10, 15),
+    day('semi', 2026, 10, 30),
+    day('semi', 2026, 11, 15),
+    day('semi', 2026, 11, 31),
+    day('side', 2026, 10, 20),
+  ];
+  assert.deepEqual(
+    scopeToSource({ pay: { payLineId: 'semi', monthDay: 30 } }, payDays).map(
+      (entry) => entry.on,
+    ),
+    [Date.UTC(2026, 10, 30)],
+    'a rule from the pay on the 30th counts only that pay, not the 31st of a longer month',
+  );
+  assert.equal(
+    isOnFundingPay(day('semi', 2027, 1, 28), {
+      payLineId: 'semi',
+      monthDay: 30,
+    }),
+    true,
+    'the pay on the 30th lands on February 28th',
+  );
+  assert.deepEqual(
+    scopeToSource({ pay: { payLineId: 'semi', monthDay: null } }, payDays)
+      .length,
+    4,
+    'a pay line with no day named counts every one of its pays',
+  );
+  assert.deepEqual(
+    scopeToSource({ sourceId: null, pay: null }, payDays).length,
+    5,
+    'a rule with no pay counts every pay',
+  );
+  const monthly = getCalendarCents(
+    {
+      amount: { kind: 'exact', cents: 30_000 },
+      cadence: { kind: 'calendar', period: 'monthly', startsOn: null },
+      pay: { payLineId: 'semi', monthDay: 15 },
+    },
+    payDays,
+  );
+  assert.deepEqual(
+    payDays.map((entry) => monthly?.get(entry.dayKey) ?? 0),
+    [30_000, 0, 30_000, 0, 0],
+    'a monthly envelope from the pay on the 15th takes the whole month from that pay',
   );
 }
 
