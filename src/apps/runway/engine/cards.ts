@@ -3,6 +3,7 @@ import type {
   Cents,
   DateOnly,
   OpenCard,
+  OpenCardStatement,
   OpenMove,
   OpenPurchase,
 } from '@apps/runway/types';
@@ -45,6 +46,33 @@ export function getPrevDueOn(
       ? thisMonth
       : dueInMonth(dueDay, month === 0 ? year - 1 : year, (month + 11) % 12);
   return result;
+}
+
+/** The minimum the bank asks for by `forDueOn`, or null when it asks for none: no statement, a statement for another due day, no minimum above zero, or a payment the bank already shows since the statement that covers it. */
+export function getMinimumDue(
+  statement: OpenCardStatement | null | undefined,
+  forDueOn: DateOnly | null,
+): Cents | null {
+  if (!statement || forDueOn === null) return null;
+  const { minimumCents, dueOn, statementOn, lastPaymentCents, lastPaymentOn } =
+    statement;
+  if (minimumCents === null || minimumCents <= 0 || dueOn !== forDueOn)
+    return null;
+  const isPaid =
+    statementOn !== null &&
+    lastPaymentOn !== null &&
+    lastPaymentCents !== null &&
+    lastPaymentOn >= statementOn &&
+    lastPaymentCents >= minimumCents;
+  return isPaid ? null : minimumCents;
+}
+
+/** The day of the month the bank's due date falls on, or null when it names none. */
+export function getBankDueDay(
+  statement: OpenCardStatement | null | undefined,
+): number | null {
+  const dueOn = statement?.dueOn ?? null;
+  return dueOn === null ? null : new Date(dueOn).getUTCDate();
 }
 
 export interface DueCard {

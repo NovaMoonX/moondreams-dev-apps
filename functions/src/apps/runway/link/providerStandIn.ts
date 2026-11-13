@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   BankDataProvider,
   NormalizedAccount,
+  NormalizedCardStatement,
   NormalizedTransaction,
   TransactionSync,
 } from './provider.js';
@@ -135,6 +136,16 @@ const POSTED_COFFEE = transaction(
   },
 );
 
+const statementFor = (providerAccountId: string): NormalizedCardStatement => ({
+  providerAccountId,
+  minimumCents: 3_500,
+  statementCents: 41_200,
+  statementOn: daysAgo(20),
+  dueOn: daysAgo(-9),
+  lastPaymentCents: 30_000,
+  lastPaymentOn: daysAgo(30),
+});
+
 /** A bank that answers without a network, for the Functions emulator when no provider keys are set. Emulators only. */
 export const standInProvider: BankDataProvider = {
   createLinkSession: async () => ({ linkToken: STAND_IN_LINK_TOKEN }),
@@ -144,6 +155,12 @@ export const standInProvider: BankDataProvider = {
   }),
   getInstitution: async () => ({ name: 'Chase', logo: null }),
   listAccounts: async () => ACCOUNTS,
+  listCardStatements: async () => ({
+    kind: 'ok',
+    statements: ACCOUNTS.filter((account) => account.kind === 'credit').map(
+      (account) => statementFor(account.providerAccountId),
+    ),
+  }),
   refreshTransactions: async () => undefined,
   listTransactionDetails: async () => [],
   revoke: async () => undefined,

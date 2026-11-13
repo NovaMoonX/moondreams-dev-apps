@@ -65,6 +65,8 @@ import {
 } from '../../src/apps/runway/engine/cardFees.ts';
 import type {
   AccountBalanceDoc,
+  CardStatementDoc,
+  CardStatementSealed,
   AccountDoc,
   AccountSealed,
   LinkDoc,
@@ -1651,6 +1653,7 @@ async function writeSeedCards(
     status: 'active',
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
+    needsCardConsent: null,
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
@@ -1706,6 +1709,25 @@ async function writeSeedCards(
         encryption,
       ),
     } satisfies AccountBalanceDoc,
+  );
+  const statementOn = today - 20 * DAY_MS;
+  batch.set(
+    context.firestore.doc(`${plan}/cardStatements/${SEED_VENTURE_CARD}`),
+    {
+      id: SEED_VENTURE_CARD,
+      asOf: context.now - 2 * 60_000,
+      sealed: await sealJson(
+        {
+          minimumCents: 3_500,
+          statementCents: 41_200,
+          statementOn,
+          dueOn: today + 9 * DAY_MS,
+          lastPaymentCents: 30_000,
+          lastPaymentOn: statementOn - 10 * DAY_MS,
+        } satisfies CardStatementSealed,
+        encryption,
+      ),
+    } satisfies CardStatementDoc,
   );
   const discoverStartId = `start_${SEED_DISCOVER_CARD}_${createdAt + 120_000}`;
   batch.set(context.firestore.doc(`${plan}/moves/${discoverStartId}`), {
@@ -1778,7 +1800,7 @@ async function writeSeedCards(
       encryption,
     ),
   } satisfies MoveDoc);
-  return cards.length + 5 + 2;
+  return cards.length + 5 + 3;
 }
 
 const SEED_WEALTHFRONT_GOALS = [
@@ -1883,6 +1905,7 @@ async function writeSeedAccounts(
     status: 'active',
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
+    needsCardConsent: null,
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
@@ -3982,6 +4005,7 @@ async function seedUnlinkedPlan(
   batch.set(context.firestore.doc(`${plan}/links/${linkId}`), {
     id: linkId,
     status: 'revoked',
+    needsCardConsent: null,
     lastSyncAt: unlinkedAt,
     createdAt: linkedAt,
     sealed: await sealJson(

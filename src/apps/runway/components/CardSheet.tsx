@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import { Archive, History, Pencil } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import {
+  Archive,
+  CalendarClock,
+  History,
+  Landmark,
+  Pencil,
+  Receipt,
+} from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -31,6 +38,13 @@ import {
 } from '@apps/runway/utils/cardFeePlan';
 import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
+import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
+import { getBankDueDay, getMinimumDue } from '@apps/runway/engine/cards';
+import {
+  getLinkedStatement,
+  selectCardsWithBankDue,
+} from '@apps/runway/store/selectors/cardStatementSelectors';
 import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
 import { describeBankUpdated } from '@apps/runway/utils/bankFreshness';
 import SheetHead from '@apps/runway/components/SheetHead';
@@ -65,7 +79,9 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import {
   describeCardDue,
+  describeStatementIssued,
   getCardDueNow,
+  getMinimumDueOn,
   getCardName,
 } from '@apps/runway/utils/cardText';
 
@@ -142,13 +158,33 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
   );
 }
 
+function StatementIcon({ icon }: { icon: ReactNode }) {
+  return (
+    <span
+      className='bg-accent text-muted-foreground grid size-9 shrink-0 place-items-center rounded-full [&>svg]:size-4'
+      aria-hidden='true'
+    >
+      {icon}
+    </span>
+  );
+}
+
 /** What a card row opens: what it waits for as the figure, then paying it off, changing it, archiving it and its history. */
-function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
+function CardSheet({
+  card: typedCard,
+  onClose,
+  onPay,
+  onChange,
+}: CardSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const mask = useMaskedText();
   const cards = useAppSelector(selectAllCards);
+  const card =
+    useAppSelector(selectCardsWithBankDue).find(
+      (entry) => entry.id === typedCard.id,
+    ) ?? typedCard;
   const balances = useAppSelector(selectBalances);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
@@ -198,6 +234,21 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       : (state.runway.links.find((link) => link.id === card.linkId)
           ?.institutionName ?? null),
   );
+  const link = useAppSelector((state) =>
+    card.linkId === null
+      ? null
+      : (state.runway.links.find((entry) => entry.id === card.linkId) ?? null),
+  );
+  const statement = useAppSelector((state) =>
+    getLinkedStatement(state.runway, card),
+  );
+  const minimumCents = getMinimumDue(
+    statement,
+    getMinimumDueOn(card, due, today),
+  );
+  const isDueFromBank = getBankDueDay(statement) !== null;
+  const { reconnect, busyId } = useReconnectLink();
+  const canLink = useCanLinkBank();
   const bankUpdated =
     bank === null ? null : describeBankUpdated(bank.asOf, now);
 
@@ -355,6 +406,11 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               .filter(Boolean)
               .join(' \u00b7 ')}
             isFactFresh={bankUpdated?.isFresh ?? false}
+            secondFact={
+              isDueFromBank
+                ? CARD_WORDS.dueFromBank(bankName || LINK_WORDS.fallbackBank)
+                : null
+            }
           />
           {bank?.hasInstantBalance === true && (
             <HelpTip
@@ -377,6 +433,27 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               linkId={card.linkId}
               onOpen={() => setIsLinking(true)}
             />
+            {canLink &&
+              link?.needsCardConsent === true &&
+              link.status === 'active' && (
+                <ActionRow
+                  isGrouped
+                  icon={<Landmark />}
+                  label={
+                    busyId === link.id
+                      ? LINK_WORDS.refreshing
+                      : CARD_WORDS.consentRow
+                  }
+                  subtitle={CARD_WORDS.consentRowHelp}
+                  isDisabled={busyId !== null}
+                  onClick={() =>
+                    void reconnect(
+                      link.id,
+                      link.institutionName || LINK_WORDS.yourBank,
+                    )
+                  }
+                />
+              )}
             <ActionRow
               isGrouped
               hasChevron
@@ -401,6 +478,29 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               onClick={() => setView('history')}
             />
           </ActionGroup>
+          {statement !== null && minimumCents !== null && (
+            <ActionSection
+              caption={CARD_WORDS.statementCaption(
+                bankName || LINK_WORDS.fallbackBank,
+              )}
+            >
+              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                <ItemRow
+                  name={CARD_WORDS.minimumDue}
+                  leading={<StatementIcon icon={<CalendarClock />} />}
+                  figure={formatCents(minimumCents)}
+                />
+                {statement.statementCents !== null && (
+                  <ItemRow
+                    name={CARD_WORDS.statementBalance}
+                    leading={<StatementIcon icon={<Receipt />} />}
+                    detail={describeStatementIssued(statement.statementOn)}
+                    figure={formatCents(statement.statementCents)}
+                  />
+                )}
+              </ul>
+            </ActionSection>
+          )}
           <CardBills cardId={card.id} today={today} onClose={onClose} />
         </div>
       )}
