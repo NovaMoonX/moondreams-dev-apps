@@ -169,6 +169,7 @@ import type {
   Ending,
   HorizonCost,
   HorizonSealed,
+  MoneyRange,
   Priority,
   Schedule,
 } from '@apps/runway/types';
@@ -337,6 +338,8 @@ interface BillFormProps {
   fromCost?: BillFromCost;
   /** Starts a new bill filled from a charge the bank found; every answer starts folded, and once the bill is written `onCreated` hears its id. */
   fromCharge?: { initial: BillSealed; onCreated: (billId: string) => void };
+  /** An amount typed into a change form when it opens, in place of the bill's own. */
+  presetAmount?: MoneyRange;
 }
 
 export type BillStepId =
@@ -679,6 +682,7 @@ function BillFormBody({
   presetGroupId,
   fromCost,
   fromCharge,
+  presetAmount,
 }: BillFormProps & StartOverProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -752,6 +756,17 @@ function BillFormBody({
             ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
             : {}),
           ...(nextDue === null ? {} : { startDate: toDateInputValue(nextDue) }),
+          ...(fromCharge && fromCharge.initial.timing.schedule.anchor === null
+            ? { frequency: null, isLater: false, startDate: '', everyCount: '' }
+            : {}),
+          ...(presetAmount
+            ? {
+                amount: toAmountDraft(
+                  presetAmount,
+                  (editing?.payload ?? EMPTY_BILL).stanceOverride,
+                ),
+              }
+            : {}),
         }
       : {
           name: '',
@@ -2098,7 +2113,7 @@ function BillFormBody({
     <FormSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={editing ? formData.name.trim() || title : title}
+      title={editing || fromCharge ? formData.name.trim() || title : title}
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps

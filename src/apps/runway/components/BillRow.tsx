@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CreditCard } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import CardForm from '@apps/runway/forms/CardForm';
 import { isCardFeeBill } from '@apps/runway/engine/cardFees';
 import { isTrackingLevel } from '@apps/runway/engine/level';
@@ -33,7 +34,12 @@ import {
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
-import type { BillSealed, Schedule, Stance } from '@apps/runway/types';
+import type {
+  BillSealed,
+  MoneyRange,
+  Schedule,
+  Stance,
+} from '@apps/runway/types';
 import {
   describeBillMonthly,
   describeBillRepeat,
@@ -44,6 +50,9 @@ import {
 } from '@apps/runway/utils/billText';
 import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import { useBillCardName } from '@apps/runway/hooks/paidAmountPayment';
+import { useChargedToHint } from '@apps/runway/hooks/useChargedTo';
+import { useBillAmountHint } from '@apps/runway/hooks/useRecurring';
+import { usePaidFromMessage } from '@apps/runway/hooks/usePaidFromMessage';
 import { useIsSelfPaying } from '@apps/runway/hooks/useSelfPaying';
 import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { usePaidWithAction } from '@apps/runway/hooks/usePaidWithAction';
@@ -236,6 +245,10 @@ export function BillSheet({
   onClose,
 }: BillSheetProps) {
   const [pickedStep, setPickedStep] = useState<string | null>(null);
+  const [preset, setPreset] = useState<{
+    amount: MoneyRange;
+    round: number;
+  } | null>(null);
   const [isCardOpen, setIsCardOpen] = useState(false);
   const isFeeBill = isCardFeeBill(bill);
   const level = useAppSelector(selectLevel);
@@ -249,6 +262,10 @@ export function BillSheet({
   const coveredCents = payment
     ? getCoveredCents(billCover, billId, payment.dueOn)
     : 0;
+  const { isHidden } = useValuesHidden();
+  const paidFromMessage = usePaidFromMessage(billId, bill, payment, today);
+  const chargedHint = useChargedToHint(billId, today);
+  const amountHint = useBillAmountHint(billId, today);
   const paidFromAction = usePaidFromAction(billId, today);
   const paidWithAction = usePaidWithAction(billId, today);
   const horizonItems = useAppSelector((state) =>
@@ -354,9 +371,10 @@ export function BillSheet({
           : undefined
       }
       dayAction={dayAction}
-      key={pickedStep ?? 'sheet'}
+      key={`${pickedStep ?? 'sheet'}:${preset?.round ?? 0}`}
       startsAtStep={pickedStep ?? startsAtStep}
       presetEventId={presetEventId}
+      presetAmount={preset?.amount}
       extra={
         <>
           {madeFrom && (
@@ -364,18 +382,30 @@ export function BillSheet({
               {MAKE_BILL_WORDS.madeFrom(madeFrom.item, madeFrom.cost)}
             </p>
           )}
-          <BillPaidFromNotice
-            billId={billId}
-            bill={bill}
-            payment={payment}
-            today={today}
-            onPickAnother={() => setPickedStep('funding')}
-          />
-          {!isFeeBill && (
-            <>
-              <BillChargedToNotice billId={billId} bill={bill} today={today} />
-              <BillAmountNotice billId={billId} bill={bill} today={today} />
-            </>
+          {paidFromMessage !== null ? (
+            <BillPaidFromNotice
+              billId={billId}
+              bill={bill}
+              message={paidFromMessage}
+              today={today}
+              onPickAnother={() => setPickedStep('funding')}
+            />
+          ) : isFeeBill ? null : chargedHint ? (
+            <BillChargedToNotice billId={billId} bill={bill} today={today} />
+          ) : (
+            !isHidden &&
+            amountHint?.kind === 'amount' && (
+              <BillAmountNotice
+                billId={billId}
+                bill={bill}
+                hint={amountHint}
+                today={today}
+                onReview={(amount) => {
+                  setPreset({ amount, round: (preset?.round ?? 0) + 1 });
+                  setPickedStep('amount');
+                }}
+              />
+            )
           )}
         </>
       }

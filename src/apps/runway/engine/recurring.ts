@@ -26,6 +26,8 @@ export interface RecurringProviderAccount {
   mask: string | null;
   /** Bound to one of the person's accounts or cards, an archived one included. */
   isPlaced: boolean;
+  /** The link is working; an account on one that needs a sign-in can't be added to the plan. */
+  isLinkActive: boolean;
 }
 
 export interface RecurringStreamInput {
@@ -81,13 +83,17 @@ export const getStreamKeys = (stream: RecurringStream): string[] => {
   return key === '' ? [] : [key];
 };
 
-const getSuggestedAmount = (stream: RecurringStream): MoneyRange => {
-  const { averageCents: average, lastCents: last } = stream;
-  const margin = Math.max(
-    Math.round((last * SAME_AMOUNT_PERCENT) / 100),
+/** Whether the bank's average and its last charge are close enough to be one amount: within 1%, at least 50 cents. */
+export const isSameStreamAmount = (stream: RecurringStream): boolean =>
+  Math.abs(stream.averageCents - stream.lastCents) <=
+  Math.max(
+    Math.round((stream.lastCents * SAME_AMOUNT_PERCENT) / 100),
     SAME_AMOUNT_MIN_CENTS,
   );
-  return Math.abs(average - last) <= margin
+
+const getSuggestedAmount = (stream: RecurringStream): MoneyRange => {
+  const { averageCents: average, lastCents: last } = stream;
+  return isSameStreamAmount(stream)
     ? { lowCents: last, highCents: last }
     : {
         lowCents: Math.min(average, last),
@@ -185,7 +191,10 @@ export function findRecurringHints(input: {
 
   const placeHints = [
     ...usable
-      .filter(({ providerAccount }) => !providerAccount.isPlaced)
+      .filter(
+        ({ providerAccount }) =>
+          !providerAccount.isPlaced && providerAccount.isLinkActive,
+      )
       .reduce((byAccount, { stream, providerAccount }) => {
         const key = `place:${providerAccount.linkId}:${providerAccount.providerAccountId}`;
         const found = byAccount.get(key);

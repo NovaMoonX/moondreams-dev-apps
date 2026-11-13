@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import DetailSheet from '@/components/DetailSheet';
 import SensitiveValue from '@/components/SensitiveValue';
@@ -14,7 +15,10 @@ import {
 import type { RecurringHint } from '@apps/runway/engine/recurring';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import { cleanBankName } from '@apps/runway/utils/accountText';
-import { dismissRecurring } from '@apps/runway/utils/recurringDismissed';
+import {
+  dismissRecurring,
+  undismissRecurring,
+} from '@apps/runway/utils/recurringDismissed';
 import {
   describeStreamHow,
   getStreamName,
@@ -33,6 +37,7 @@ function RecurringPlaceSheet({
   onClose,
 }: RecurringPlaceSheetProps) {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [added, setAdded] = useState<typeof hint>(null);
   const current = added ?? hint;
   const providerAccount = current?.providerAccount ?? null;
@@ -50,14 +55,22 @@ function RecurringPlaceSheet({
   );
 
   if (added && link) {
-    return <LinkBankScreen addTo={link} onClose={onClose} />;
+    return (
+      <LinkBankScreen
+        addTo={link}
+        onClose={() => {
+          setAdded(null);
+          onFormChange(false);
+        }}
+      />
+    );
   }
 
   return (
     <DetailSheet
       isOpen
       onClose={onClose}
-      title={RECURRING_SHEET_WORDS.accountTitle(name)}
+      title={name}
       actions={<ValuesEyeButton />}
       footer={
         <div className='space-y-2 p-4'>
@@ -78,7 +91,18 @@ function RecurringPlaceSheet({
             variant='tertiary'
             className='w-full'
             onClick={() => {
-              if (user) dismissRecurring(user.uid, current.key);
+              if (user) {
+                const { uid } = user;
+                dismissRecurring(uid, current.key);
+                addToast({
+                  title: RECURRING_SHEET_WORDS.wontSuggest(name),
+                  type: 'success',
+                  action: {
+                    label: RECURRING_SHEET_WORDS.undo,
+                    onClick: () => undismissRecurring(uid, current.key),
+                  },
+                });
+              }
               onClose();
             }}
           >

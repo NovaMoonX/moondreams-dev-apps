@@ -14,6 +14,7 @@ const placed: RecurringProviderAccount = {
   name: 'Checking',
   mask: '1234',
   isPlaced: true,
+  isLinkActive: true,
 };
 const unplaced: RecurringProviderAccount = {
   ...placed,
@@ -163,6 +164,20 @@ assert.equal(
   ).length,
   0,
   'a dismissed key is hidden',
+);
+
+assert.equal(
+  find(
+    [],
+    [
+      input(
+        { streamId: 'x1', merchantName: 'Gym' },
+        { ...unplaced, isLinkActive: false },
+      ),
+    ],
+  ).length,
+  0,
+  'no place hint for an account on a link that needs attention',
 );
 
 console.log('runway recurring: ok');

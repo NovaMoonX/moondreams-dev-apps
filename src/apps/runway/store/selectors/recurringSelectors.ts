@@ -79,6 +79,7 @@ const selectRecurringStreams = createSelector(
               name: provider.name,
               mask: provider.mask,
               isPlaced,
+              isLinkActive: link.status === 'active',
             },
           },
         ];

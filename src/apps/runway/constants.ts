@@ -1787,8 +1787,10 @@ export const BILLS_NOTICED_WORDS = {
   chargedLine: (place: string) => `Last charged on ${place}`,
   chargedAria: (name: string, place: string) =>
     `${name}. Last charged on ${place}. Open`,
-  amountLine: (range: string, plan: string) =>
-    `Charged ${range} lately, plan says ${plan}`,
+  amountLine: (last: string, plan: string) =>
+    `Last charged ${last} · plan says ${plan}`,
+  amountRangeLine: (low: string, high: string, plan: string) =>
+    `Charged ${low} to ${high} lately · plan says ${plan}`,
   amountAria: (name: string) =>
     `${name}. Its bank charges differ from your plan. Open`,
   amountHiddenAria: (name: string) =>
@@ -1815,13 +1817,18 @@ export const BILLS_NOTICED_WORDS = {
 
 /** What a bill's sheet says when the bank's charges differ from its amount. */
 export const BILL_AMOUNT_HINT_WORDS = {
-  single: (charged: string, plan: string) =>
-    `Its last bank charge was ${charged}; your plan says ${plan}.`,
-  range: (charged: string, plan: string) =>
-    `Its bank charges ran ${charged} lately; your plan says ${plan}.`,
-  fromToday: 'Applies from today, for every payment after.',
+  single: (last: string, plan: string) =>
+    `Last charged ${last} · plan says ${plan}`,
+  range: (low: string, high: string, plan: string) =>
+    `Charged ${low} to ${high} lately · plan says ${plan}`,
+  more: (difference: string) => `The bank’s is ${difference} more`,
+  less: (difference: string) => `The bank’s is ${difference} less`,
+  covers: (extra: string, on: string) =>
+    `Free to Spend covers the extra ${extra} for ${on}`,
+  reviewIt: (amount: string) => `Review the change to ${amount}`,
   changeIt: (amount: string) => `Change it to ${amount}`,
   notThisOne: 'Not this one',
+  wontSuggest: (name: string) => `We won’t suggest ${name} again`,
   done: (name: string, amount: string) => `${name} is now ${amount} from today`,
   alreadyHolds: (name: string) => `${name} already has that amount from today.`,
   undo: 'Undo',
@@ -1841,11 +1848,12 @@ export const RECURRING_SHEET_WORDS = {
   addBill: 'Add it as a bill',
   addBillSub: 'You will check the details before it is added.',
   notABill: 'Not a bill',
-  accountTitle: (name: string) => `${name} isn’t in your plan`,
   accountIntro:
-    'These charges repeat on it. Add it to your plan and we can read them against your bills.',
+    'This account isn’t in your plan. It has repeating charges Runway can read once it’s in your plan.',
   addAccount: 'Add it to my plan',
   keepOut: 'Keep it out',
+  wontSuggest: (name: string) => `We won’t suggest ${name} again`,
+  undo: 'Undo',
 } as const;
 
 /** A bill's share of one paycheck: changing what this pay puts toward it, and keeping that for every pay. */

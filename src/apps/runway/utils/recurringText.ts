@@ -3,9 +3,6 @@ import { BILLS_NOTICED_WORDS } from '@apps/runway/constants';
 import type { BillSealed, RecurringStream, Schedule } from '@apps/runway/types';
 import type { ChargedPlace } from '@apps/runway/engine/chargedTo';
 
-const SAME_PERCENT = 1;
-const SAME_MIN_CENTS = 50;
-
 /** The merchant as a bill would be named. */
 export const getStreamName = (stream: RecurringStream) =>
   toDisplayCase(stream.merchantName ?? stream.description, {
@@ -16,11 +13,6 @@ export const getStreamName = (stream: RecurringStream) =>
 
 export const describeStreamHow = (stream: RecurringStream) =>
   BILLS_NOTICED_WORDS.frequency[stream.frequency];
-
-/** Whether the bank's average and its last charge are close enough to be one amount. */
-export const isStreamAmountSteady = (stream: RecurringStream) =>
-  Math.abs(stream.averageCents - stream.lastCents) <=
-  Math.max(Math.round((stream.lastCents * SAME_PERCENT) / 100), SAME_MIN_CENTS);
 
 /** The schedule a repeating charge suggests from its next expected day; undated when the bank gave no next day or the repeat has no kind the bill form offers (twice a month), so the person sets it. */
 export function getStreamSchedule(stream: RecurringStream): Schedule {

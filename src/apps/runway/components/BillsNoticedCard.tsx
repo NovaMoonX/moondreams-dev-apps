@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import HelpTip from '@/components/HelpTip';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import { BILLS_NOTICED_WORDS } from '@apps/runway/constants';
@@ -51,6 +52,7 @@ function BillsNoticedCard({ today, onOpenBill }: BillsNoticedCardProps) {
   const cards = useAppSelector(selectAllCards);
   const accounts = useAppSelector(selectAllAccounts);
   const emojiOf = useLiveEmojiResolver();
+  const { isHidden } = useValuesHidden();
   const [isUnfolded, setIsUnfolded] = useState(false);
   const [open, setOpen] = useState<{
     key: string;
@@ -91,16 +93,23 @@ function BillsNoticedCard({ today, onOpenBill }: BillsNoticedCardProps) {
   const recurringRows = recurringHints.flatMap((hint): NoticedRow[] => {
     if (hint.kind === 'amount') {
       const payload = payloadOf(hint.billId);
-      if (!payload) return [];
+      if (!payload || isHidden) return [];
       return [
         {
           key: hint.key,
           name: payload.name,
           emoji: emojiOf(payload.emoji, payload.groupId),
-          detail: BILLS_NOTICED_WORDS.amountLine(
-            formatRange(hint.suggested),
-            formatRange(hint.current),
-          ),
+          detail:
+            hint.suggested.lowCents === hint.suggested.highCents
+              ? BILLS_NOTICED_WORDS.amountLine(
+                  formatCents(hint.suggested.lowCents),
+                  formatRange(hint.current),
+                )
+              : BILLS_NOTICED_WORDS.amountRangeLine(
+                  formatCents(hint.suggested.lowCents),
+                  formatCents(hint.suggested.highCents),
+                  formatRange(hint.current),
+                ),
           ariaLabel: BILLS_NOTICED_WORDS.amountAria(payload.name),
           hiddenAriaLabel: BILLS_NOTICED_WORDS.amountHiddenAria(payload.name),
           isPrivate: true,

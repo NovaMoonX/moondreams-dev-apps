@@ -20,6 +20,7 @@ import {
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { useAutoChecks } from '@apps/runway/hooks/useAutoPay';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import BillsNoticedCard from '@apps/runway/components/BillsNoticedCard';
 import DueBillsCard from '@apps/runway/components/DueBillsCard';
 import { useChargedToHints } from '@apps/runway/hooks/useChargedTo';
@@ -74,8 +75,13 @@ function BillsScreen() {
   const lookahead = useDeferredLookahead(today, isLoaded);
   const dueCosts = useDueCostRows(lookahead, today);
   const { checks } = useAutoChecks();
+  const { isHidden: isValuesHidden } = useValuesHidden();
   const hasNoticed =
-    useChargedToHints(today).length + useRecurringHints(today).length > 0;
+    useChargedToHints(today).length +
+      useRecurringHints(today).filter(
+        (hint) => !isValuesHidden || hint.kind !== 'amount',
+      ).length >
+    0;
   const hasDue =
     (lookahead?.due.length ?? 0) + dueCosts.length + checks.length > 0;
   const groups = useAppSelector((state) => selectGroups(state, today));
