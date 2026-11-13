@@ -5555,7 +5555,6 @@ export const RULE_WORDS = {
   bulkSendShort: 'Send to…',
   bulkAsk: 'Always ask',
   pick: 'Select',
-  pickGroup: (group: string) => `Select rules under ${group}`,
   bulkDelete: 'Remove',
   bulkPickTitle: 'Which envelope?',
   bulkPickSub: (count: number) =>

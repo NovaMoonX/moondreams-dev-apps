@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { MessageCircleQuestion, Repeat, Send, Trash2 } from 'lucide-react';
+import {
+  ListChecks,
+  MessageCircleQuestion,
+  Repeat,
+  Send,
+  Trash2,
+} from 'lucide-react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -119,7 +125,7 @@ function EnvelopePickSheet({
   );
 }
 
-/** A group's heading: press and hold (or its Select, when given) starts picking with the group ticked; while picking, it ticks or clears the whole group. */
+/** A group's heading: press and hold starts picking with the group ticked; while picking, it ticks or clears the whole group. */
 function GroupHead({
   label,
   total,
@@ -127,7 +133,6 @@ function GroupHead({
   isSelecting,
   onToggle,
   onHold,
-  onPick,
 }: {
   label: string;
   total: number;
@@ -135,7 +140,6 @@ function GroupHead({
   isSelecting: boolean;
   onToggle: () => void;
   onHold: () => void;
-  onPick?: () => void;
 }) {
   const longPress = useLongPress(onHold);
   const isAll = total > 0 && ticked === total;
@@ -145,20 +149,6 @@ function GroupHead({
 
   return (
     <SectionDivider
-      trailing={
-        !isSelecting && onPick ? (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className="relative before:absolute before:inset-x-0 before:-inset-y-[6px] before:content-['']"
-            aria-label={RULE_WORDS.pickGroup(label)}
-            onClick={onPick}
-          >
-            {RULE_WORDS.pick}
-          </Button>
-        ) : undefined
-      }
       label={
         isSelecting ? (
           <span className='flex items-center gap-2'>
@@ -504,6 +494,20 @@ function RulesScreen({ onClose }: RulesScreenProps) {
       title={RULE_WORDS.title}
       onClose={onClose}
       onBack={selection.isActive ? selection.exit : undefined}
+      headerAction={
+        isLoaded && rules.length > 1 && !selection.isActive ? (
+          <Button
+            type='button'
+            variant='base'
+            size='sm'
+            className="bg-muted text-foreground! border-border hover:bg-accent relative h-7 min-h-0 gap-1 rounded-full border px-3 py-0 text-sm font-medium whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-[7px] after:content-['']"
+            onClick={selection.start}
+          >
+            <ListChecks className='h-3.5 w-3.5' aria-hidden='true' />
+            {RULE_WORDS.pick}
+          </Button>
+        ) : undefined
+      }
     >
       <div className='space-y-4'>
         {!isLoaded ? (
@@ -571,11 +575,6 @@ function RulesScreen({ onClose }: RulesScreenProps) {
                       selection.toggle(group.rows.map((rule) => rule.id))
                     }
                     onHold={() => begin(group.rows.map((rule) => rule.id))}
-                    onPick={
-                      group.key === HOME_KEY && group.rows.length > 1
-                        ? () => begin(group.rows.map((rule) => rule.id))
-                        : undefined
-                    }
                   />
                   <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                     {group.rows.map((rule) =>
