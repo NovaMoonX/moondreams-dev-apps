@@ -48,7 +48,10 @@ function LinkedTasks({ tasks, emptyLine, view, ownerId }: LinkedTasksProps) {
       .filter((task) => !tasks.some((entry) => entry.id === task.id)),
   ];
   const openTask = openId
-    ? (held.get(openId)?.task ?? tasksById.get(openId) ?? null)
+    ? (held.get(openId)?.task ??
+      tasksById.get(openId) ??
+      tasks.find((task) => task.id === openId) ??
+      null)
     : null;
 
   const handleDeleted = (

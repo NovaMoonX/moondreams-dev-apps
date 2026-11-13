@@ -143,7 +143,7 @@ const findMatch = (
       aliases: who.aliases,
       lastMentionedAt: who.lastMentionedAt,
     })),
-    assistantName: null,
+    assistantNames: [],
   })[0];
   return (
     people.find(isSameContact) ??
@@ -498,6 +498,8 @@ export function buildImportWrites(input: {
             createdAt: now,
             decidedAt: now,
             deleteAfter: null,
+            sourceCaptureId: null,
+            executionId: null,
             sealed: seal({
               bytesNonce: kept.sealed.bytesNonce,
               thumbNonce: kept.sealed.thumbNonce,
@@ -763,6 +765,7 @@ export const buildImportExecution = (input: {
     effects: input.writes.effects,
     undoReport: null,
     goneIds: null,
+    lines: null,
     spoken: null,
   }),
 });

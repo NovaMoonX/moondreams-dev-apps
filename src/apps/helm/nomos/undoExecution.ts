@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -25,7 +26,10 @@ import {
   type IndexChange,
   type IndexEntry,
 } from '@apps/helm/utils/keyDateIndex';
-import { getMediaObjectPath } from '@apps/helm/utils/mediaPath';
+import { getMediaObjectPaths } from '@apps/helm/utils/mediaPath';
+import { buildProcedureVersionDoc } from '@apps/helm/store/actions/procedureActions';
+import { buildVersionDoc } from '@apps/helm/store/actions/topicActions';
+import { HELM_COPY } from '@apps/helm/constants';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
 import {
   planReopen,
@@ -39,8 +43,18 @@ import type {
   ExecutionSealed,
   HelmEncryption,
   KeyDateSealed,
+  MediaKind,
+  NoteSealed,
+  ProcedureSealed,
+  ProcedureVersion,
+  ProcedureVersionSealed,
+  RunSealed,
+  ProjectSealed,
   Sealed,
   TaskSealed,
+  TopicSealed,
+  TopicVersion,
+  TopicVersionSealed,
   WhoSealed,
 } from '@apps/helm/types';
 
@@ -78,6 +92,9 @@ async function readUsedIds(
       ref.op === 'create' &&
       (ref.collection === 'who' || ref.collection === 'places'),
   );
+  const madeTopics = refs.filter(
+    (ref) => ref.op === 'create' && ref.collection === 'topics',
+  );
   const checks = await Promise.all(
     made.flatMap((ref) => {
       const field = ref.collection === 'who' ? 'whoIds' : 'placeIds';
@@ -95,88 +112,133 @@ async function readUsedIds(
       });
     }),
   );
-  return new Set(checks.flat());
+  const underTopics = await Promise.all(
+    madeTopics.map(async (ref) => {
+      const found = await getDocs(
+        query(
+          collection(userOf(uid), 'topics'),
+          where('parentId', '==', ref.docId),
+          limit(own.size + 1),
+        ),
+      );
+      return found.docs.some((entry) => !own.has(entry.id)) ? [ref.docId] : [];
+    }),
+  );
+  return new Set([...checks.flat(), ...underTopics.flat()]);
 }
 
 type WritePlan = Extract<UndoPlan, { kind: 'write' }>;
 
 const toKeyEntry = (id: string, sealed: KeyDateSealed): IndexEntry => [
   id,
-  sealed.kind,
+  sealed.kind === 'anniversary' || sealed.kind === 'custom'
+    ? sealed.kind
+    : 'birthday',
   sealed.month ?? 1,
   sealed.day,
   sealed.year,
   sealed.kind === 'custom' ? sealed.label : null,
 ];
 
-/** What an undo does to dates, as the index's changes and each person's counter. */
+interface DateStep {
+  whoId: string;
+  isMoment: boolean;
+  /** A moment is never in the index. */
+  change: IndexChange | null;
+  delta: number;
+}
+
+/** What an undo does to dates: the index's changes (yearly dates only) and each person's counters, `yearlyDateCount` and `momentCount` apart. */
 const toDateChanges = (
   plan: WritePlan,
   targets: Map<string, UndoTarget>,
-): { changes: IndexChange[]; deltas: Map<string, number> } => {
+): {
+  changes: IndexChange[];
+  deltas: Map<string, number>;
+  momentDeltas: Map<string, number>;
+} => {
   const whoOf = (docId: string) => {
     const whoId = targets.get(docId)?.data?.whoId;
     return typeof whoId === 'string' ? whoId : null;
   };
-  const removed = plan.deletes.flatMap(({ docId, collection: from }) => {
-    const whoId = from === 'keyDates' ? whoOf(docId) : null;
-    return whoId
-      ? [
-          {
-            whoId,
-            change: { op: 'remove', whoId, keyDateId: docId } as IndexChange,
-            delta: -1,
-          },
-        ]
-      : [];
-  });
-  const restored = plan.updates.flatMap((update) => {
+  const isMomentDoc = (docId: string) =>
+    targets.get(docId)?.data?.shape === 'moment';
+  const removed = plan.deletes.flatMap(
+    ({ docId, collection: from }): DateStep[] => {
+      const whoId = from === 'keyDates' ? whoOf(docId) : null;
+      const isMoment = isMomentDoc(docId);
+      return whoId
+        ? [
+            {
+              whoId,
+              isMoment,
+              change: isMoment
+                ? null
+                : { op: 'remove', whoId, keyDateId: docId },
+              delta: -1,
+            },
+          ]
+        : [];
+    },
+  );
+  const restored = plan.updates.flatMap((update): DateStep[] => {
     const whoId = update.collection === 'keyDates' ? whoOf(update.docId) : null;
     const sealed = update.reseal as KeyDateSealed | null;
-    return whoId && sealed
+    return whoId && sealed && !isMomentDoc(update.docId)
       ? [
           {
             whoId,
+            isMoment: false,
             change: {
               op: 'upsert',
               whoId,
               entry: toKeyEntry(update.docId, sealed),
-            } as IndexChange,
+            },
             delta: 0,
           },
         ]
       : [];
   });
-  const recreated = plan.creates.flatMap((entry) => {
+  const recreated = plan.creates.flatMap((entry): DateStep[] => {
     const whoId = entry.fields.whoId;
+    const isMoment = entry.fields.shape === 'moment';
     return typeof whoId === 'string'
       ? [
           {
             whoId,
-            change: {
-              op: 'upsert',
-              whoId,
-              entry: toKeyEntry(entry.docId, entry.seal),
-            } as IndexChange,
+            isMoment,
+            change: isMoment
+              ? null
+              : {
+                  op: 'upsert',
+                  whoId,
+                  entry: toKeyEntry(entry.docId, entry.seal),
+                },
             delta: 1,
           },
         ]
       : [];
   });
   const all = [...removed, ...restored, ...recreated];
+  const sumOf = (isMoment: boolean) =>
+    all
+      .filter((step) => step.isMoment === isMoment)
+      .reduce(
+        (sums, { whoId, delta }) =>
+          sums.set(whoId, (sums.get(whoId) ?? 0) + delta),
+        new Map<string, number>(),
+      );
   return {
-    changes: all.map(({ change }) => change),
-    deltas: all.reduce(
-      (sums, { whoId, delta }) =>
-        sums.set(whoId, (sums.get(whoId) ?? 0) + delta),
-      new Map<string, number>(),
-    ),
+    changes: all.flatMap(({ change }) => (change ? [change] : [])),
+    deltas: sumOf(false),
+    momentDeltas: sumOf(true),
   };
 };
 
 interface DatesRead {
   changes: IndexChange[];
   deltas: Map<string, number>;
+  momentDeltas: Map<string, number>;
   index: Awaited<ReturnType<typeof readIndexIn>> | null;
   whoHere: Set<string>;
 }
@@ -189,25 +251,35 @@ async function readDatesIn(
   plan: UndoPlan,
   targets: Map<string, UndoTarget>,
 ): Promise<DatesRead> {
-  if (plan.kind !== 'write') {
-    return { changes: [], deltas: new Map(), index: null, whoHere: new Set() };
-  }
-  const { changes, deltas } = toDateChanges(plan, targets);
-  if (changes.length === 0) {
-    return { changes, deltas, index: null, whoHere: new Set() };
-  }
-  const index = await readIndexIn(transaction, uid, encryption);
+  const none = {
+    changes: [],
+    deltas: new Map<string, number>(),
+    momentDeltas: new Map<string, number>(),
+    index: null,
+    whoHere: new Set<string>(),
+  };
+  if (plan.kind !== 'write') return none;
+  const { changes, deltas, momentDeltas } = toDateChanges(plan, targets);
+  const moving = [
+    ...new Set(
+      [...deltas.entries(), ...momentDeltas.entries()]
+        .filter(([, delta]) => delta !== 0)
+        .map(([whoId]) => whoId),
+    ),
+  ];
+  if (changes.length === 0 && moving.length === 0) return none;
+  const index =
+    changes.length > 0 ? await readIndexIn(transaction, uid, encryption) : null;
   const owners = await Promise.all(
-    [...deltas.entries()]
-      .filter(([, delta]) => delta !== 0)
-      .map(async ([whoId]) => ({
-        whoId,
-        snapshot: await transaction.get(doc(userOf(uid), 'who', whoId)),
-      })),
+    moving.map(async (whoId) => ({
+      whoId,
+      snapshot: await transaction.get(doc(userOf(uid), 'who', whoId)),
+    })),
   );
   return {
     changes,
     deltas,
+    momentDeltas,
     index,
     whoHere: new Set(
       owners.flatMap(({ whoId, snapshot }) =>
@@ -225,7 +297,7 @@ async function writeDatesIn(
   plan: UndoPlan,
   dates: DatesRead,
 ) {
-  if (plan.kind !== 'write' || !dates.index) return;
+  if (plan.kind !== 'write') return;
   const deletedWho = new Set(
     plan.deletes
       .filter(({ collection: from }) => from === 'who')
@@ -239,16 +311,23 @@ async function writeDatesIn(
       }),
     ),
   );
-  [...dates.deltas.entries()]
-    .filter(
-      ([whoId, delta]) =>
-        delta !== 0 && dates.whoHere.has(whoId) && !deletedWho.has(whoId),
-    )
-    .forEach(([whoId, delta]) =>
-      transaction.update(doc(userOf(uid), 'who', whoId), {
-        yearlyDateCount: increment(delta),
-      }),
-    );
+  const counters = [
+    ...new Set([...dates.deltas.keys(), ...dates.momentDeltas.keys()]),
+  ]
+    .filter((whoId) => dates.whoHere.has(whoId) && !deletedWho.has(whoId))
+    .map((whoId) => ({
+      whoId,
+      yearly: dates.deltas.get(whoId) ?? 0,
+      moments: dates.momentDeltas.get(whoId) ?? 0,
+    }))
+    .filter(({ yearly, moments }) => yearly !== 0 || moments !== 0);
+  counters.forEach(({ whoId, yearly, moments }) =>
+    transaction.update(doc(userOf(uid), 'who', whoId), {
+      ...(yearly !== 0 && { yearlyDateCount: increment(yearly) }),
+      ...(moments !== 0 && { momentCount: increment(moments) }),
+    }),
+  );
+  if (!dates.index) return;
   const next = applyChanges(dates.index.byWho, dates.changes);
   await writeIndexIn(transaction, uid, encryption, {
     byWho: next.byWho,
@@ -262,6 +341,11 @@ const isUnavailable = (error: unknown) =>
   typeof error === 'object' &&
   error !== null &&
   (error as { code?: unknown }).code === 'unavailable';
+
+const toMediaKind = (value: unknown): MediaKind =>
+  value === 'pdf' || value === 'voiceNote' || value === 'markdown'
+    ? value
+    : 'photo';
 
 /** Takes an execution back in one transaction that re-reads it and every record it touched, so it only restores what is still as the assistant left it. */
 export async function undoExecution(
@@ -309,7 +393,11 @@ export async function undoExecution(
               const isOpened =
                 ref.collection === 'tasks' ||
                 ref.collection === 'who' ||
-                ref.collection === 'keyDates';
+                ref.collection === 'projects' ||
+                ref.collection === 'keyDates' ||
+                ref.collection === 'notes' ||
+                ref.collection === 'procedures' ||
+                ref.collection === 'procedureRuns';
               const entry = await transaction.get(docOf(ref));
               if (ref.collection === 'keyDates' && ref.op === 'delete') {
                 const whoId =
@@ -334,13 +422,49 @@ export async function undoExecution(
               const data = entry.exists()
                 ? (entry.data() as Record<string, unknown>)
                 : null;
+              if (ref.collection === 'topics') {
+                const parentId = original.effectRefs
+                  .flatMap((other, index) =>
+                    other.docId === docId
+                      ? [original.effects[index]?.previous?.parentId]
+                      : [],
+                  )
+                  .find((value) => typeof value === 'string');
+                const parent =
+                  typeof parentId === 'string'
+                    ? await transaction.get(
+                        doc(userOf(uid), 'topics', parentId),
+                      )
+                    : null;
+                return [
+                  docId,
+                  {
+                    docId,
+                    data,
+                    opened: await (
+                      data?.sealed
+                        ? openJson<TopicSealed>(
+                            data.sealed as Sealed,
+                            encryption,
+                          )
+                        : Promise.reject(new Error('No sealed words.'))
+                    ).catch(() => null),
+                    isOwnerHere: parent ? parent.exists() : true,
+                  },
+                ];
+              }
               if (!isOpened) return [docId, { docId, data, opened: null }];
               const opened = await (
                 data?.sealed
-                  ? openJson<TaskSealed | WhoSealed | KeyDateSealed>(
-                      data.sealed as Sealed,
-                      encryption,
-                    )
+                  ? openJson<
+                      | TaskSealed
+                      | WhoSealed
+                      | KeyDateSealed
+                      | ProjectSealed
+                      | NoteSealed
+                      | ProcedureSealed
+                      | RunSealed
+                    >(data.sealed as Sealed, encryption)
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);
               return [docId, { docId, data, opened }];
@@ -364,6 +488,48 @@ export async function undoExecution(
           plan,
           targets,
         );
+        const restoredSections = await Promise.all(
+          plan.versionRestores.map(async ({ docId, collection: from, to }) => {
+            const earlier = await transaction.get(
+              doc(docOf({ collection: from, docId }), 'versions', String(to)),
+            );
+            if (!earlier.exists()) return null;
+            if (from === 'procedures') {
+              const data = earlier.data() as ProcedureVersion;
+              const body = await openJson<ProcedureVersionSealed>(
+                data.sealed,
+                encryption,
+              ).catch(() => null);
+              return body
+                ? {
+                    sections: [],
+                    procedure: {
+                      stepState: data.stepState,
+                      groupOrder: data.groupOrder,
+                      body: {
+                        title: body.title,
+                        steps: body.steps,
+                        groups: body.groups,
+                      },
+                    },
+                  }
+                : null;
+            }
+            const body = await openJson<TopicVersionSealed>(
+              (earlier.data() as TopicVersion).sealed,
+              encryption,
+            ).catch(() => null);
+            return body ? { sections: body.sections, procedure: null } : null;
+          }),
+        );
+        const isRestorable = plan.versionRestores.every(
+          ({ docId }, index) =>
+            restoredSections[index] !== null &&
+            targets.get(docId)?.opened != null,
+        );
+        if (!isRestorable) {
+          return { kind: 'refused', reason: 'unreadable', report: null };
+        }
         const questionCaptureId = original.questionRef?.captureId ?? null;
         const captureRef = questionCaptureId
           ? doc(userOf(uid), 'captures', questionCaptureId)
@@ -388,7 +554,7 @@ export async function undoExecution(
             update.reseal
               ? {
                   sealed: await sealJson<
-                    TaskSealed | WhoSealed | KeyDateSealed
+                    TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed
                   >(update.reseal, encryption),
                 }
               : {},
@@ -398,13 +564,96 @@ export async function undoExecution(
           plan.undoSealed,
           encryption,
         );
-        plan.deletes.forEach(({ docId, collection: from }) =>
-          transaction.delete(docOf({ docId, collection: from })),
-        );
+        plan.deletes.forEach(({ docId, collection: from }) => {
+          transaction.delete(docOf({ docId, collection: from }));
+          // A topic made from a file is deleted at the version the import wrote, and a procedure at its first, so their version records go with them.
+          const written = Number(targets.get(docId)?.data?.version);
+          Array.from(
+            {
+              length:
+                (from === 'topics' || from === 'procedures') && written > 0
+                  ? written
+                  : 0,
+            },
+            (_, index) => index + 1,
+          ).forEach((version) =>
+            transaction.delete(
+              doc(
+                docOf({ docId, collection: from }),
+                'versions',
+                String(version),
+              ),
+            ),
+          );
+        });
         plan.updates.forEach((update, index) =>
           transaction.update(docOf(update), {
-            ...update.fields,
+            ...Object.fromEntries(
+              Object.entries(update.fields).map(([path, value]) => [
+                path,
+                path.startsWith('milestoneState.') && value === null
+                  ? deleteField()
+                  : value,
+              ]),
+            ),
             ...resealed[index],
+          }),
+        );
+        await Promise.all(
+          plan.versionRestores.map(async ({ docId, from, to }, index) => {
+            const restored = restoredSections[index];
+            const kind = plan.versionRestores[index].collection;
+            if (kind === 'procedures' && restored?.procedure) {
+              const procedureRef = docOf({ collection: 'procedures', docId });
+              const at = Date.now();
+              transaction.update(procedureRef, {
+                stepState: restored.procedure.stepState,
+                groupOrder: restored.procedure.groupOrder,
+                sealed: await sealJson<ProcedureSealed>(
+                  restored.procedure.body,
+                  encryption,
+                ),
+                version: from + 1,
+                lastEditedAt: at,
+              });
+              transaction.set(
+                doc(procedureRef, 'versions', String(from + 1)),
+                await buildProcedureVersionDoc(encryption, {
+                  version: from + 1,
+                  parts: restored.procedure,
+                  reason: 'restored',
+                  restoredFromVersion: to,
+                  changeSummary: HELM_COPY.procedureSummaryRestored(to),
+                  executionId: undoRef.id,
+                  now: at,
+                }),
+              );
+              return;
+            }
+            const topicRef = docOf({ collection: 'topics', docId });
+            const sections = restored?.sections ?? [];
+            const opened = targets.get(docId)?.opened as TopicSealed;
+            const at = Date.now();
+            transaction.update(topicRef, {
+              sealed: await sealJson<TopicSealed>(
+                { ...opened, sections },
+                encryption,
+              ),
+              version: from + 1,
+              lastEditedAt: at,
+            });
+            transaction.set(
+              doc(topicRef, 'versions', String(from + 1)),
+              await buildVersionDoc(encryption, {
+                version: from + 1,
+                sections,
+                reason: 'restored',
+                restoredFromVersion: to,
+                changeSummary: HELM_COPY.historySummaryRestored(to),
+                executionId: undoRef.id,
+                now: at,
+              }),
+            );
           }),
         );
         await writeDatesIn(transaction, uid, encryption, plan, dates);
@@ -417,12 +666,12 @@ export async function undoExecution(
           report: plan.report,
           objectPaths: plan.deletes.flatMap(({ docId, collection: from }) =>
             from === 'media'
-              ? [
-                  getMediaObjectPath(uid, docId, false),
-                  ...(targets.get(docId)?.data?.hasThumb === true
-                    ? [getMediaObjectPath(uid, docId, true)]
-                    : []),
-                ]
+              ? getMediaObjectPaths(
+                  uid,
+                  docId,
+                  toMediaKind(targets.get(docId)?.data?.kind),
+                  targets.get(docId)?.data?.hasThumb === true,
+                )
               : [],
           ),
         };

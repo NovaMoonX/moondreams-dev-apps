@@ -13,9 +13,12 @@ import {
 } from '../../functions/src/apps/helm/keyDateIndex.ts';
 import type { SetKeyDateCommand } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
+  namedMomentWhoIds,
   planKeyDates,
   type KeyDateRecord,
 } from '../../functions/src/apps/helm/nomos/planKeyDates.ts';
+import { planResolve } from '../../functions/src/apps/helm/nomos/resolveQuestion.ts';
+import { describeKeyDates } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import { openJson, sealJson } from '../../src/apps/helm/security.ts';
 import type { OpenWho, HelmEncryption } from '../../src/apps/helm/types.ts';
@@ -25,12 +28,19 @@ import {
   orderForToday,
 } from '../../src/apps/helm/utils/keyDateUpcoming.ts';
 import { toDayKey } from '../../src/apps/helm/utils/planDays.ts';
+import { formatMoment } from '../../src/utils/yearlyDateUtils.ts';
+import {
+  groupMoments,
+  sortMoments,
+  type WhoMoment,
+} from '../../src/apps/helm/utils/moments.ts';
 import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
 
 const KEY = { keyId: 'helm-key-test', keyVersion: 1, key: Buffer.alloc(32, 7) };
 const seal = (fields: Record<string, unknown>) => sealForHelm(KEY, fields);
 const TODAY = '2026-11-10';
 const THIS_YEAR = 2026;
+const NOW = Date.UTC(2026, 10, 10);
 
 const tests: [string, () => void | Promise<void>][] = [];
 const test = (name: string, run: () => void | Promise<void>) =>
@@ -54,6 +64,7 @@ const say = (
   keyKind: 'birthday',
   label: null,
   comesBack: null,
+  precision: null,
   quote: null,
   ...overrides,
 });
@@ -64,6 +75,11 @@ const plan = (
     index?: ByWho;
     existing?: Map<string, KeyDateRecord>;
     counts?: Map<string, number>;
+    momentCounts?: Map<string, number>;
+    kept?: Map<string, { id: string; record: KeyDateRecord }>;
+    moments?: Map<string, { id: string; record: KeyDateRecord }[]>;
+    openClashIds?: Set<string>;
+    questionRoom?: number;
   } = {},
 ) => {
   const index = state.index ?? {};
@@ -73,6 +89,12 @@ const plan = (
     selfWhoId: 'self',
     nameOf: new Map([['who-1', 'Mum']]),
     whoCounts: state.counts ?? new Map(),
+    momentCounts: state.momentCounts ?? new Map(),
+    kept: state.kept ?? new Map(),
+    moments: state.moments,
+    openClashIds: state.openClashIds,
+    timeZone: 'UTC',
+    questionRoom: state.questionRoom ?? 3,
     existing: state.existing ?? new Map(),
     index,
     entryCount: Object.values(index).flat().length,
@@ -146,7 +168,7 @@ test('the 21st yearly date for a who is refused', () => {
   assert.equal(result.notKept.length, 1);
 });
 
-test('the same birthday with a year fills the year in, and a different one is refused', () => {
+test('the same birthday with a year fills the year in, and a different one asks which is true', () => {
   const index: ByWho = {
     'who-1': [['d0', 'birthday', 6, 3, null, null]],
   };
@@ -164,6 +186,7 @@ test('the same birthday with a year fills the year in, and a different one is re
           month: 6,
           day: 3,
           year: null,
+          precision: null,
           captureId: null,
         },
       },
@@ -184,7 +207,8 @@ test('the same birthday with a year fills the year in, and a different one is re
   });
   assert.equal(clash.creates.length, 0);
   assert.equal(clash.updates.length, 0);
-  assert.equal(clash.notKept.length, 1);
+  assert.equal(clash.notKept.length, 0);
+  assert.equal(clash.questions.length, 1);
 });
 
 test('a removal drops the entry and the count, and keeps what is needed to put it back', () => {
@@ -203,6 +227,7 @@ test('a removal drops the entry and the count, and keeps what is needed to put i
           month: 6,
           day: 3,
           year: 1960,
+          precision: null,
           captureId: null,
         },
       },
@@ -458,6 +483,657 @@ test('nothing readable on a key date or its index holds a day, month, year or ki
   assert.ok(!JSON.stringify(indexFields.sealed).includes('Gotcha'));
 });
 
+const momentSay = (
+  precision: 'day' | 'month' | 'year' | 'decade',
+  date: { month: number | null; day: number | null; year: number | null },
+  overrides: Partial<SetKeyDateCommand> = {},
+) =>
+  say({
+    keyKind: 'met',
+    precision,
+    date: date as SetKeyDateCommand['date'],
+    ...overrides,
+  });
+
+const sealedOf = (result: ReturnType<typeof plan>) =>
+  openForHelm(KEY, result.creates[0].data.sealed as SealedPayload);
+
+test('a moment is made for each precision, with its counter, effect and no index entry', () => {
+  const cases = [
+    ['day', { month: 8, day: 3, year: 2024 }, 'Aug 3, 2024'],
+    ['month', { month: 3, day: null, year: 2015 }, 'Mar 2015'],
+    ['year', { month: null, day: null, year: 1998 }, '1998'],
+    ['decade', { month: null, day: null, year: 1980 }, 'the 1980s'],
+  ] as const;
+  cases.forEach(([precision, date, shown]) => {
+    const result = plan([momentSay(precision, date)]);
+    assert.equal(result.creates.length, 1, precision);
+    assert.equal(result.creates[0].data.shape, 'moment');
+    assert.equal(result.momentDeltas.get('who-1'), 1);
+    assert.equal(
+      result.deltas.get('who-1') ?? 0,
+      0,
+      'a moment adds no yearly date, so it never promotes the tier',
+    );
+    assert.deepEqual(result.byWho, {});
+    assert.equal(result.entryCount, 0);
+    assert.equal(result.changes.length, 0);
+    assert.equal(result.effects[0].ref.op, 'create');
+    assert.equal(sealedOf(result).precision, precision);
+    assert.equal(sealedOf(result).year, date.year);
+    assert.equal(formatMoment({ ...date, precision }), shown);
+  });
+});
+
+test('a moment needs its precision parts and a year in range; custom with comesBack false is a moment', () => {
+  const refused = (command: SetKeyDateCommand) => {
+    const result = plan([command]);
+    assert.equal(result.creates.length, 0);
+    assert.equal(result.notKept.length, 1);
+  };
+  refused(momentSay('month', { month: null, day: null, year: 2015 }));
+  refused(momentSay('day', { month: 3, day: null, year: 2015 }));
+  refused(momentSay('year', { month: null, day: null, year: 1800 }));
+  refused(momentSay('year', { month: null, day: null, year: THIS_YEAR + 1 }));
+  refused(momentSay('decade', { month: null, day: null, year: 1985 }));
+  const custom = plan([
+    momentSay(
+      'decade',
+      { month: null, day: null, year: 1980 },
+      { keyKind: 'custom', comesBack: false, label: 'Lived in Lisbon' },
+    ),
+  ]);
+  assert.equal(custom.creates[0].data.shape, 'moment');
+  assert.equal(sealedOf(custom).label, 'Lived in Lisbon');
+});
+
+test('a who keeps at most 500 moments', () => {
+  const full = plan(
+    [momentSay('year', { month: null, day: null, year: 2001 })],
+    { momentCounts: new Map([['who-1', 500]]) },
+  );
+  assert.equal(full.creates.length, 0);
+  assert.equal(full.notKept.length, 1);
+  const room = plan(
+    [momentSay('year', { month: null, day: null, year: 2001 })],
+    { momentCounts: new Map([['who-1', 499]]) },
+  );
+  assert.equal(room.creates.length, 1);
+});
+
+const keptRecord = (
+  id: string,
+  kind: 'birthday' | 'passedAway',
+  parts: { month: number | null; day: number | null; year: number | null },
+  precision: 'day' | null,
+) => ({
+  id,
+  record: {
+    whoId: 'who-1',
+    shape: kind === 'birthday' ? ('yearly' as const) : ('moment' as const),
+    source: 'person' as const,
+    createdAt: 1,
+    sealed: {
+      kind,
+      label: null,
+      ...parts,
+      precision,
+      captureId: null,
+    },
+  },
+});
+
+test('a different birthday writes nothing and asks which is true, holding the new date', () => {
+  const kept = keptRecord(
+    'd0',
+    'birthday',
+    { month: 6, day: 3, year: null },
+    null,
+  );
+  const result = plan([say({ date: { month: 6, day: 4, year: null } })], {
+    index: { 'who-1': [['d0', 'birthday', 6, 3, null, null]] },
+    existing: new Map([['d0', kept.record]]),
+    kept: new Map([['who-1:birthday', kept]]),
+  });
+  assert.equal(result.creates.length, 0);
+  assert.equal(result.updates.length, 0);
+  assert.equal(result.effects.length, 0);
+  assert.equal(result.notKept.length, 0);
+  assert.equal(result.questions.length, 1);
+  const question = result.questions[0].sealed as {
+    kind: string;
+    shape: string;
+    prompt: string;
+    options: { id: string; label: string }[];
+    heldCommands: { kind: string; keyDateId: string; parts: unknown }[];
+  };
+  assert.equal(question.kind, 'whichIsTrue');
+  assert.equal(question.shape, 'pickOne');
+  assert.equal(question.prompt, 'Which is true now?');
+  assert.deepEqual(
+    question.options.map((option) => option.id),
+    ['d0', 'incoming', 'none'],
+  );
+  assert.equal(question.options[0].label, "Mum's birthday · June 3");
+  assert.equal(question.options[1].label, "Mum's birthday · June 4");
+  assert.equal(question.heldCommands[0].kind, 'settleKeyDate');
+  assert.equal(question.heldCommands[0].keyDateId, 'd0');
+  assert.deepEqual(question.heldCommands[0].parts, {
+    ...(question.heldCommands[0].parts as object),
+    month: 6,
+    day: 4,
+    year: null,
+    precision: null,
+  });
+});
+
+test('the same birthday with a year fills it in and asks nothing', () => {
+  const kept = keptRecord(
+    'd0',
+    'birthday',
+    { month: 6, day: 3, year: null },
+    null,
+  );
+  const result = plan([say({ date: { month: 6, day: 3, year: 1958 } })], {
+    index: { 'who-1': [['d0', 'birthday', 6, 3, null, null]] },
+    existing: new Map([['d0', kept.record]]),
+    kept: new Map([['who-1:birthday', kept]]),
+  });
+  assert.equal(result.questions.length, 0);
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.byWho['who-1'][0][4], 1958);
+});
+
+test('a passed-away clash asks, and the same day with more detail fills in', () => {
+  const kept = keptRecord(
+    'm0',
+    'passedAway',
+    { month: null, day: null, year: 2020 },
+    null,
+  );
+  const yearOnly = {
+    ...kept,
+    record: {
+      ...kept.record,
+      sealed: { ...kept.record.sealed, precision: 'year' as never },
+    },
+  };
+  const state = {
+    existing: new Map([['m0', yearOnly.record]]),
+    kept: new Map([['who-1:passedAway', yearOnly]]),
+  };
+  const clash = plan(
+    [
+      momentSay(
+        'year',
+        { month: null, day: null, year: 2021 },
+        { keyKind: 'passedAway' },
+      ),
+    ],
+    state,
+  );
+  assert.equal(clash.creates.length, 0);
+  assert.equal(clash.questions.length, 1);
+  const fills = plan(
+    [
+      momentSay(
+        'month',
+        { month: 4, day: null, year: 2020 },
+        { keyKind: 'passedAway' },
+      ),
+    ],
+    state,
+  );
+  assert.equal(fills.questions.length, 0);
+  assert.equal(fills.updates.length, 1);
+  assert.equal(fills.creates.length, 0);
+});
+
+test('a clash past the question room is reported as skipped, not asked', () => {
+  const kept = keptRecord(
+    'd0',
+    'birthday',
+    { month: 6, day: 3, year: null },
+    null,
+  );
+  const result = plan([say({ date: { month: 6, day: 4, year: null } })], {
+    index: { 'who-1': [['d0', 'birthday', 6, 3, null, null]] },
+    existing: new Map([['d0', kept.record]]),
+    kept: new Map([['who-1:birthday', kept]]),
+    questionRoom: 0,
+  });
+  assert.equal(result.questions.length, 0);
+  assert.equal(result.notKept.length, 1);
+});
+
+const settleInput = (
+  optionId: string,
+  record: ReturnType<typeof keptRecord>['record'] | null,
+  parts: Record<string, unknown>,
+  keptParts?: Record<string, unknown>,
+) => {
+  const questions = plan([say({ date: { month: 6, day: 4, year: null } })], {
+    index: { 'who-1': [['d0', 'birthday', 6, 3, null, null]] },
+    existing: new Map([
+      [
+        'd0',
+        keptRecord('d0', 'birthday', { month: 6, day: 3, year: null }, null)
+          .record,
+      ],
+    ]),
+    kept: new Map([
+      [
+        'who-1:birthday',
+        keptRecord('d0', 'birthday', { month: 6, day: 3, year: null }, null),
+      ],
+    ]),
+  }).questions;
+  const question = {
+    ...(questions[0].sealed as Record<string, unknown>),
+    heldCommands: [
+      {
+        kind: 'settleKeyDate',
+        keyDateId: 'd0',
+        whoId: 'who-1',
+        parts,
+        ...(keptParts ? { keptParts } : {}),
+      },
+    ],
+  };
+  return {
+    captureId: 'cap-1',
+    questionId: 'q1',
+    optionId,
+    by: 'tap' as const,
+    now: NOW,
+    timeZone: 'UTC',
+    executionId: 'exec-2',
+    capture: {
+      status: 'needsYou',
+      createdAt: 1,
+      whoIds: ['who-1'],
+      placeIds: [],
+      executionIds: [],
+      questionState: {
+        q1: {
+          kind: 'whichIsTrue',
+          shape: 'pickOne',
+          askedAt: 4000,
+          answeredAt: null,
+          skippedAt: null,
+        },
+      },
+    },
+    opened: { text: 'x', questions: { q1: question } },
+    tasks: new Map(),
+    facts: new Map(),
+    keyDate: record
+      ? { id: 'd0', record: { ...record, lastEditedAt: null } }
+      : null,
+    text: null,
+    chosen: null,
+    newId: counter(),
+    seal,
+  };
+};
+
+const birthdayRecord = keptRecord(
+  'd0',
+  'birthday',
+  { month: 6, day: 3, year: null },
+  null,
+).record;
+const NEW_PARTS = { month: 6, day: 4, year: null, precision: null };
+
+test('picking the new date rewrites the parts and the index entry, with an effect Undo reverses', () => {
+  const result = planResolve(
+    settleInput('incoming', birthdayRecord, NEW_PARTS),
+  );
+  assert.equal(result.refused, null);
+  if (result.refused !== null) return;
+  const { keyDateUpdate, execution } = result.plan;
+  assert.equal(keyDateUpdate?.id, 'd0');
+  const words = openForHelm(KEY, keyDateUpdate?.data.sealed as SealedPayload);
+  assert.equal(words.day, 4);
+  assert.equal(keyDateUpdate?.indexChange?.op, 'upsert');
+  assert.equal(keyDateUpdate?.data.lastEditedAt, NOW);
+  const effect = (execution as { sealed: SealedPayload }).sealed;
+  const opened = openForHelm(KEY, effect) as {
+    effects: { previous: Record<string, unknown> }[];
+  };
+  assert.equal(opened.effects[0].previous['sealed.day'], 3);
+});
+
+test('picking the kept date, or Neither, writes nothing but answers the question', () => {
+  ['d0', 'none'].forEach((optionId) => {
+    const result = planResolve(
+      settleInput(optionId, birthdayRecord, NEW_PARTS),
+    );
+    assert.equal(result.refused, null);
+    if (result.refused !== null) return;
+    assert.equal(result.plan.keyDateUpdate, null);
+    assert.equal(result.plan.execution, null);
+    const state = result.plan.capture.questionState as Record<
+      string,
+      { answeredAt: number | null }
+    >;
+    assert.equal(state.q1.answeredAt, NOW);
+  });
+});
+
+test('a date removed since the question was asked is refused as gone', () => {
+  assert.equal(
+    planResolve(settleInput('incoming', null, NEW_PARTS)).refused,
+    'gone',
+  );
+});
+
+test('a kept date that changed since the question was asked is refused, and a held question without its parts is not compared', () => {
+  const asked = { month: 6, day: 3, year: null, precision: null };
+  assert.equal(
+    planResolve(settleInput('incoming', birthdayRecord, NEW_PARTS, asked))
+      .refused,
+    null,
+  );
+  assert.equal(
+    planResolve(
+      settleInput('incoming', birthdayRecord, NEW_PARTS, { ...asked, day: 2 }),
+    ).refused,
+    'changed',
+  );
+  assert.equal(
+    planResolve(
+      settleInput('incoming', birthdayRecord, NEW_PARTS, {
+        ...asked,
+        year: 1960,
+      }),
+    ).refused,
+    'changed',
+  );
+  assert.equal(
+    planResolve(settleInput('incoming', birthdayRecord, NEW_PARTS)).refused,
+    null,
+  );
+});
+
+test('the question holds the kept date as it was asked', () => {
+  const kept = keptRecord(
+    'd0',
+    'birthday',
+    { month: 6, day: 3, year: null },
+    null,
+  );
+  const result = plan([say({ date: { month: 6, day: 4, year: null } })], {
+    index: { 'who-1': [['d0', 'birthday', 6, 3, null, null]] },
+    existing: new Map([['d0', kept.record]]),
+  });
+  const held = (
+    result.questions[0].sealed as { heldCommands: { keptParts: unknown }[] }
+  ).heldCommands[0];
+  assert.deepEqual(held.keptParts, {
+    month: 6,
+    day: 3,
+    year: null,
+    precision: null,
+  });
+});
+
+test('the same clash said twice in a turn asks once, and a key date with an open question asks nothing new', () => {
+  const kept = keptRecord(
+    'd0',
+    'birthday',
+    { month: 6, day: 3, year: null },
+    null,
+  );
+  const state = {
+    index: { 'who-1': [['d0', 'birthday', 6, 3, null, null]] } as ByWho,
+    existing: new Map([['d0', kept.record]]),
+  };
+  const twice = plan(
+    [
+      say({ date: { month: 6, day: 4, year: null } }),
+      say({ date: { month: 6, day: 5, year: null } }),
+    ],
+    state,
+  );
+  assert.equal(twice.questions.length, 1);
+  assert.equal(twice.notKept.length, 0);
+  const open = plan([say({ date: { month: 6, day: 4, year: null } })], {
+    ...state,
+    openClashIds: new Set(['d0']),
+  });
+  assert.equal(open.questions.length, 0);
+  assert.equal(open.notKept.length, 0);
+  assert.equal(open.creates.length + open.updates.length, 0);
+});
+
+test('a moment said again in a later turn is not written twice', () => {
+  const stored = keptRecord(
+    'm0',
+    'passedAway',
+    { month: null, day: null, year: 2016 },
+    null,
+  );
+  const met = {
+    id: 'm1',
+    record: {
+      ...stored.record,
+      sealed: {
+        ...stored.record.sealed,
+        kind: 'met' as const,
+        month: 3,
+        year: 2015,
+        precision: 'month' as never,
+      },
+    },
+  };
+  const moments = new Map([['who-1', [met]]]);
+  const again = plan(
+    [momentSay('month', { month: 3, day: null, year: 2015 })],
+    {
+      moments,
+    },
+  );
+  assert.equal(again.creates.length, 0);
+  assert.equal(again.updates.length, 0);
+  assert.equal(again.momentDeltas.size, 0);
+  assert.equal(again.notKept.length, 0);
+  const other = plan(
+    [momentSay('month', { month: 4, day: null, year: 2015 })],
+    {
+      moments,
+    },
+  );
+  assert.equal(other.creates.length, 1);
+});
+
+test('the moments read are those of the people the turn names', () => {
+  const whoIdOf = new Map([
+    ['w1', 'who-1'],
+    ['w2', 'who-2'],
+  ]);
+  assert.deepEqual(
+    namedMomentWhoIds({
+      commands: [
+        momentSay('year', { month: null, day: null, year: 2001 }),
+        momentSay(
+          'year',
+          { month: null, day: null, year: 2002 },
+          { whoRefs: ['w2'], keyKind: 'passedAway' },
+        ),
+        momentSay(
+          'year',
+          { month: null, day: null, year: 2003 },
+          { whoRefs: [], isAboutMe: true },
+        ),
+        say({ date: { month: 6, day: 3, year: null } }),
+      ],
+      whoIdOf,
+      selfWhoId: 'self',
+    }),
+    ['who-1', 'who-2', 'self'],
+  );
+  assert.deepEqual(
+    namedMomentWhoIds({
+      commands: [say({ date: { month: 6, day: 3, year: null } })],
+      whoIdOf,
+      selfWhoId: 'self',
+    }),
+    [],
+  );
+});
+
+test('a moment settled to a new date keeps its shape and leaves the index alone', () => {
+  const record = keptRecord(
+    'd0',
+    'passedAway',
+    { month: null, day: null, year: 2020 },
+    null,
+  ).record;
+  const moment = {
+    ...record,
+    sealed: { ...record.sealed, precision: 'year' as never },
+  };
+  const result = planResolve(
+    settleInput('incoming', moment, {
+      month: null,
+      day: null,
+      year: 2021,
+      precision: 'year',
+    }),
+  );
+  assert.equal(result.refused, null);
+  if (result.refused !== null) return;
+  assert.equal(result.plan.keyDateUpdate?.indexChange, null);
+  const words = openForHelm(
+    KEY,
+    result.plan.keyDateUpdate?.data.sealed as SealedPayload,
+  );
+  assert.equal(words.year, 2021);
+  assert.equal(words.precision, 'year');
+});
+
+const momentFixture = (
+  id: number,
+  precision: WhoMoment['precision'],
+  year: number,
+  month: number | null,
+  day: number | null,
+): WhoMoment => ({
+  id: `m${id}`,
+  whoId: 'who-1',
+  kind: 'met',
+  label: null,
+  precision,
+  month,
+  day,
+  year,
+  source: 'person',
+  createdAt: id,
+  captureId: null,
+});
+
+test('moments sort newest first and group by decade and year, decade-only rows last under their decade', () => {
+  const sorted = sortMoments([
+    momentFixture(1, 'decade', 1980, null, null),
+    momentFixture(2, 'year', 1985, null, null),
+    momentFixture(3, 'month', 1985, 4, null),
+    momentFixture(4, 'day', 1985, 4, 20),
+    momentFixture(5, 'year', 2012, null, null),
+    momentFixture(6, 'day', 1989, 12, 1),
+  ]);
+  assert.deepEqual(
+    sorted.map((moment) => moment.id),
+    ['m5', 'm6', 'm4', 'm3', 'm2', 'm1'],
+  );
+  const groups = groupMoments(sorted);
+  assert.deepEqual(
+    groups.map((group) => group.decade),
+    [2010, 1980],
+  );
+  assert.deepEqual(
+    groups[1].years.map((year) => year.year),
+    [1989, 1985],
+  );
+  assert.deepEqual(
+    groups[1].sometime.map((moment) => moment.id),
+    ['m1'],
+  );
+});
+
+test('opening and sorting 500 moments', async () => {
+  const ENCRYPTION = {
+    key: Buffer.alloc(32, 7).toString('hex'),
+    keyId: 'helm-key-test',
+    keyVersion: 1,
+  } as unknown as HelmEncryption;
+  const sealedDocs = await Promise.all(
+    Array.from({ length: 500 }, async (_, index) => ({
+      precision: (['day', 'month', 'year', 'decade'] as const)[index % 4],
+      sealed: await sealJson(
+        {
+          kind: 'met',
+          label: null,
+          month: 1 + (index % 12),
+          day: 1 + (index % 28),
+          year: 1900 + (index % 120),
+          precision: 'day',
+          captureId: null,
+        },
+        ENCRYPTION,
+      ),
+    })),
+  );
+  const started = performance.now();
+  const opened = await Promise.all(
+    sealedDocs.map((doc) =>
+      openJson<Record<string, number>>(doc.sealed, ENCRYPTION),
+    ),
+  );
+  const openedAt = performance.now();
+  const sorted = sortMoments(
+    opened.map((words, index) =>
+      momentFixture(index, 'day', words.year, words.month, words.day),
+    ),
+  );
+  const done = performance.now();
+  console.log(
+    `     500 moments: open ${(openedAt - started).toFixed(1)} ms, sort and group ${(done - openedAt).toFixed(1)} ms`,
+  );
+  assert.equal(sorted.length, 500);
+  assert.equal(groupMoments(sorted).length > 0, true);
+});
+
+test('nothing readable on a moment holds a year, a date, a kind or a precision', () => {
+  const result = plan([
+    momentSay(
+      'day',
+      { month: 8, day: 3, year: 2024 },
+      { keyKind: 'custom', comesBack: false, label: 'Lived in Lisbon' },
+    ),
+  ]);
+  const readable = JSON.stringify(
+    Object.fromEntries(
+      Object.entries(result.creates[0].data).filter(
+        ([key]) => key !== 'sealed',
+      ),
+    ),
+  );
+  ['Lisbon', '2024', 'custom', 'precision'].forEach((word) =>
+    assert.ok(!readable.includes(word), word),
+  );
+  assert.deepEqual(Object.keys(result.creates[0].data).sort(), [
+    'createdAt',
+    'createdBy',
+    'executionId',
+    'lastEditedAt',
+    'sealed',
+    'shape',
+    'source',
+    'whoId',
+  ]);
+});
+
 test('a named person wins over isAboutMe, an own date has no one named', () => {
   const result = plan([
     say({ isAboutMe: true, date: { month: 6, day: 3, year: null } }),
@@ -471,6 +1147,25 @@ test('a named person wins over isAboutMe, an own date has no one named', () => {
     }),
   ]);
   assert.equal(own.creates[0].data.whoId, 'self');
+});
+
+test('the summary names one date or moment, or counts several', () => {
+  assert.equal(
+    describeKeyDates(['Moment · Dana · Met · Mar 2015']),
+    'Noted a moment for Dana: Met · Mar 2015',
+  );
+  assert.equal(
+    describeKeyDates(['Moment · You · Moved to Lisbon · 2019']),
+    'Noted a moment for you: Moved to Lisbon · 2019',
+  );
+  assert.equal(
+    describeKeyDates([
+      'Moment · Dana · Met · Mar 2015',
+      'Moment · Sam · Met · 2010',
+    ]),
+    'Noted 2 dates',
+  );
+  assert.equal(describeKeyDates([]), null);
 });
 
 const failures: string[] = [];

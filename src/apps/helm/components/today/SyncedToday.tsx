@@ -13,6 +13,7 @@ import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import type { SyncedRecord } from '@apps/helm/types';
 import {
   getLiveRecords,
+  isLiveCategory,
   isStale,
   isTaskForToday,
   syncsInBackground,
@@ -68,6 +69,7 @@ function SyncedToday({ now }: SyncedTodayProps) {
         .filter(
           ([category, entry]) =>
             entry.isOn &&
+            !isLiveCategory(grant.connectorId, category) &&
             grant.status === 'live' &&
             isStale(grant.categoryState[category]?.lastOkAt ?? null, now),
         )

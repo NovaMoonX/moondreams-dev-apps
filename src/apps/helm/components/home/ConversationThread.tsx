@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronDown } from 'lucide-react';
 
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
@@ -25,6 +26,8 @@ interface ConversationThreadProps {
   scroll: 'window' | 'container';
   /** Brings in the next page of earlier sessions as the top is scrolled near. */
   loadsEarlier: boolean;
+  /** Sessions that started before this moment fold behind one "Earlier" row, except the open one and the newest. */
+  foldsBefore?: number | null;
 }
 
 /** Mounts when scrolled near and brings in the next page of earlier sessions. */
@@ -72,8 +75,10 @@ function ConversationThread({
   openSessionId,
   scroll,
   loadsEarlier,
+  foldsBefore = null,
 }: ConversationThreadProps) {
   const { user } = useAuth();
+  const [isUnfolded, setIsUnfolded] = useState(false);
   const earlier = useAppSelector((state) => state.helm.earlier);
   const root = useRef<HTMLDivElement>(null);
   const latestId = sessions.at(-1)?.turns.at(-1)?.id ?? null;
@@ -115,14 +120,46 @@ function ConversationThread({
 
   if (sessions.length === 0) return null;
 
+  const lastSessionId = sessions.at(-1)?.sessionId;
+  const isFolded = (session: Session) =>
+    foldsBefore !== null &&
+    session.startedAt < foldsBefore &&
+    session.sessionId !== openSessionId &&
+    session.sessionId !== lastSessionId;
+  const foldedSessions = sessions.filter(isFolded);
+  const foldedCount = foldedSessions.reduce(
+    (sum, session) => sum + groupTurns(session.turns).length,
+    0,
+  );
+  const hasFold = foldedSessions.length > 0 && !isUnfolded;
+  const shownSessions = hasFold
+    ? sessions.filter((session) => !isFolded(session))
+    : sessions;
+
   return (
     <div ref={root} className='flex flex-1 flex-col justify-end gap-4'>
-      {loadsEarlier && user && !earlier.isExhausted && !earlier.isFailed && (
-        <LazyMount key={earlier.captures.length} estimatedHeight={32}>
-          <EarlierLoader uid={user.uid} />
-        </LazyMount>
+      {hasFold && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          className="relative min-h-0 self-center rounded-full before:absolute before:-inset-x-2 before:-inset-y-2 before:content-['']"
+          onClick={() => setIsUnfolded(true)}
+        >
+          {HELM_COPY.earlierFold(foldedCount)}
+          <ChevronDown className='size-4' aria-hidden='true' />
+        </Button>
       )}
-      {loadsEarlier && user && earlier.isFailed && (
+      {loadsEarlier &&
+        user &&
+        !hasFold &&
+        !earlier.isExhausted &&
+        !earlier.isFailed && (
+          <LazyMount key={earlier.captures.length} estimatedHeight={32}>
+            <EarlierLoader uid={user.uid} />
+          </LazyMount>
+        )}
+      {loadsEarlier && user && !hasFold && earlier.isFailed && (
         <Button
           type='button'
           variant='tertiary'
@@ -133,7 +170,7 @@ function ConversationThread({
           {HELM_COPY.earlierFailed}
         </Button>
       )}
-      {groupSessionsByDay(sessions).map((day) => (
+      {groupSessionsByDay(shownSessions).map((day) => (
         <section key={day.dayStart} className='flex flex-col gap-4'>
           <SectionDivider label={formatDate(day.dayStart)} />
           {day.sessions.map((session) =>

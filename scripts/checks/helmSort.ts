@@ -65,7 +65,7 @@ const FRIDAY = Date.UTC(2026, 10, 13);
 const TOMORROW = Date.UTC(2026, 10, 10);
 const span = (id: string, text: string) => {
   const start = TEXT.indexOf(text);
-  return { id, text, start, end: start + text.length };
+  return { id, text, start, end: start + text.length, precision: null };
 };
 const READING: CaptureReading = {
   people: [span('people:5', 'Dana')],
@@ -218,6 +218,7 @@ test('a sound reply resolves its alias and its day', () => {
     isUrgent: false,
     whoRefs: ['$w1'],
     placeRefs: [],
+    projectRef: null,
   });
   assert.deepEqual(commands[1], { kind: 'completeTask', taskId: TASK_IDS[0] });
 });
@@ -739,6 +740,7 @@ test("a noted fact is confirmed only when stated with the person's own words, an
     mentionDayKeys: [],
     taskLinkCount: 0,
     yearlyDateCount: 0,
+    momentCount: 0,
     hasRole: false,
   };
   const mention = {
@@ -787,6 +789,7 @@ test("a noted fact is confirmed only when stated with the person's own words, an
         known,
         knownPlaces: [],
         assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
         dayKey: '2026-11-10',
         capturedAt: NOW,
       },
@@ -945,6 +948,7 @@ test('a date that comes back raises a passing who to regular, and the summary sa
     mentionDayKeys: [],
     taskLinkCount: 0,
     yearlyDateCount: 0,
+    momentCount: 0,
     hasRole: false,
   };
   const plan = (known = [maya]) =>
@@ -961,6 +965,7 @@ test('a date that comes back raises a passing who to regular, and the summary sa
           comesBack: null,
           quote: null,
           date: { month: 3, day: 3, year: null },
+          precision: null,
         },
       ],
       existing: new Map(),
@@ -984,6 +989,7 @@ test('a date that comes back raises a passing who to regular, and the summary sa
         known,
         knownPlaces: [],
         assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
         dayKey: '2026-11-10',
         capturedAt: NOW,
       },
@@ -1022,6 +1028,7 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
     mentionDayKeys: [],
     taskLinkCount: 0,
     yearlyDateCount: 0,
+    momentCount: 0,
     hasRole: false,
   };
   const older: ExistingFact = {
@@ -1078,6 +1085,7 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
         known: [dana],
         knownPlaces: [],
         assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
         dayKey: '2026-11-10',
         capturedAt: NOW,
       },

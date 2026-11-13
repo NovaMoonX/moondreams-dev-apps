@@ -1,5 +1,7 @@
+import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
+import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
 
 export type { SharedKind };
 
@@ -16,8 +18,16 @@ export type HelmView =
   | 'people'
   | 'who'
   | 'place'
+  | 'projects'
+  | 'project'
+  | 'knowledge'
+  | 'topic'
+  | 'procedures'
+  | 'procedure'
+  | 'run'
   | 'howNomosSeesYou'
-  | 'comingUp';
+  | 'comingUp'
+  | 'search';
 
 export type Sealed = EncryptedFieldPayload;
 
@@ -25,7 +35,17 @@ export type HelmEncryption = AppEncryption<'helm'>;
 
 export type VoiceMode = 'cloudWhenOnline' | 'deviceOnly';
 
+export type AssistantTone = 'composed' | 'warm' | 'brief' | 'formal';
+
+export type HelmTheme = 'chestnut' | 'plum' | 'teal' | 'indigo';
+
 export interface HelmProfile {
+  /** The person's own name for the assistant; null reads as the default. Always read through readAssistantName. */
+  assistantName: string | null;
+  /** How the assistant's answers sound; null reads as composed. */
+  assistantTone: AssistantTone | null;
+  /** The colour theme; null reads as chestnut. */
+  theme: HelmTheme | null;
   /** IANA zone, set from the device on first open. */
   timeZone: string;
   /** Floating "HH:mm": the earliest a slot may start. */
@@ -53,8 +73,42 @@ export interface HelmProfile {
   selfWhoId: string | null;
   /** Where the person said they are, holding for a few hours from when they said it; never the device's location. */
   currentPlace: { placeId: string; saidAt: number } | null;
+  /** The createdAt of the newest typed capture the style learner has read; null until it has run, and on a profile from before it. */
+  styleLearnedThroughAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+export type StyleScope = 'general' | 'occasion' | 'audience';
+
+export interface StyleTrait {
+  /** A description of how the person writes, at most 120 characters; a quoted sign-off at most 30. */
+  text: string;
+  isPersonSet: boolean;
+  /** How many pieces of writing showed it; 0 when the person wrote it. */
+  exampleCount: number;
+}
+
+export interface StyleSealed {
+  label: string;
+  /** At most 12, by id. */
+  traits: Record<string, StyleTrait>;
+  /** At most 6, each at most 80 characters. */
+  avoid: string[];
+  /** Notes the person removed, each as `text.trim().replace(/\s+/g, ' ').toLowerCase()`; the last 30, so learning never brings one back. */
+  removed: string[];
+}
+
+/** One writing-style note set at `apps/helm/users/{uid}/style/{styleId}`; no run of more than 30 characters of what the person typed is stored. */
+export interface StyleProfile {
+  scope: StyleScope;
+  audienceWhoId: string | null;
+  learnedFrom: ('helmText' | 'sentMail')[];
+  sampleCount: number;
+  personEditedAt: number | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
 }
 
 export type CaptureStatus =
@@ -69,6 +123,8 @@ export type QuestionKind =
   | 'whichPerson'
   | 'whichPlace'
   | 'whichIsTrue'
+  | 'whichTopic'
+  | 'groupTopics'
   | 'asked'
   | (string & {});
 
@@ -98,6 +154,8 @@ export interface QuestionOption {
   ref:
     | { collection: 'who' | 'places'; id: string }
     | { collection: 'facts'; id: string }
+    | { collection: 'keyDates'; id: string }
+    | { collection: 'topics' | 'notes'; id: string }
     | null;
 }
 
@@ -131,7 +189,13 @@ export interface QuestionNumber {
 
 /** An opened sealed question, built by code (which person or place) or written by the assistant; a code-built one's link is held until it is answered. */
 export interface HelmQuestion {
-  kind: 'whichPerson' | 'whichPlace' | 'whichIsTrue' | 'asked';
+  kind:
+    | 'whichPerson'
+    | 'whichPlace'
+    | 'whichIsTrue'
+    | 'whichTopic'
+    | 'groupTopics'
+    | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
   prompt: string;
@@ -161,6 +225,8 @@ export interface Token {
 
 export interface DateSpan extends Token {
   due: TaskDue;
+  /** How much of the date the words give when it is a month, a year or a decade ("March 2015", "in 1998", "in the 80s"); null for a day or a time. A coarse span's `due` is the first day of it. */
+  precision: 'month' | 'year' | 'decade' | null;
 }
 
 /** What Helm read in a turn for certain. A reader of an older turn defaults every field, so none is optional. */
@@ -185,6 +251,12 @@ export interface ScreenContext {
   view: HelmView;
   focus: RecordRef | null;
   visible: RecordRef[];
+  /** The open topic's id on the topic view; null on every other. */
+  topicId: string | null;
+  /** The open procedure's id on the procedure view; null on every other. */
+  procedureId: string | null;
+  /** The open run's id on the run view; null on every other. */
+  runId: string | null;
   v: 1;
 }
 
@@ -199,6 +271,8 @@ export interface Capture {
   answersQuestion: { captureId: string; questionId: string } | null;
   /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
   ttsProvider: string | null;
+  /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
+  arrivedVia: 'direct' | 'dropBox';
   medium: 'web';
   sessionId: string;
   turnIndex: number;
@@ -215,9 +289,13 @@ export interface Capture {
   turnLeadId: string | null;
   /** On a lead, the messages that joined it in order, at most 9. */
   joinedCaptureIds: string[];
+  /** The photos sent with the turn, in pick order, at most 5; empty on a turn with none and on one made before photos. */
+  attachmentIds: string[];
   seenAt: number | null;
   /** `"{connectorId}|{accountId}"` of each connection an answer quoted; empty on a turn that quoted none and on one made before quotes. */
   quotedSourceKeys: string[];
+  /** The note made from this turn's general answer by Save to my knowledge; null until then. */
+  answerSavedNoteId: string | null;
   /** The who and places this turn named, once the assistant has read it. */
   whoIds: string[];
   placeIds: string[];
@@ -234,7 +312,6 @@ export type SourceRef =
   | {
       kind:
         | 'fact'
-        | 'note'
         | 'task'
         | 'project'
         | 'who'
@@ -243,6 +320,13 @@ export type SourceRef =
         | 'media'
         | 'topic';
       id: string;
+    }
+  | {
+      kind: 'note';
+      id: string;
+      title: string;
+      topicPath: string | null;
+      topicEmoji: string | null;
     }
   | { kind: 'event'; eventRef: string; title: string; startAt: number }
   | {
@@ -260,6 +344,13 @@ export type SourceRef =
       label: string | null;
     };
 
+/** A record read from another app, as the answer kept it. */
+export interface AnswerRecord {
+  name: string;
+  detail: string | null;
+  amount: string;
+}
+
 export interface AnswerQuote {
   id: string;
   connectorId: string;
@@ -268,6 +359,8 @@ export interface AnswerQuote {
   /** When the quoted message was sent; null on quotes kept before it was recorded. */
   at: number | null;
   text: string | null;
+  /** Null on a mail or document quote and on app records kept before it was stored; those are read from `sourceLabel` and `text`. */
+  record: AnswerRecord | null;
   deepLink: string | null;
   deletedAt: number | null;
 }
@@ -291,7 +384,7 @@ export interface CaptureAnswer {
   sources: SourceRef[];
   general: string | null;
   isHealth: boolean;
-  generalDiffersFrom: { noteId: string; says: string } | null;
+  generalDiffersFrom: { noteId: string; title: string; says: string } | null;
   suggestedTopicId: string | null;
   quotes: AnswerQuote[];
   searched: SearchedSource[];
@@ -353,6 +446,8 @@ export interface Task {
   createdAt: number;
   lastEditedAt: number | null;
   completedAt: number | null;
+  /** Set when the person clears the done tasks of a project: hidden from its done fold, still found by search. */
+  clearedAt: number | null;
   sealed: Sealed;
 }
 
@@ -408,10 +503,22 @@ export interface OpenWho extends Omit<Who, 'sealed'>, WhoSealed {
   isUnreadable: boolean;
 }
 
-export type KeyDateKind = 'birthday' | 'anniversary' | 'custom';
+/** `birthday`, `anniversary` and `custom` (when it comes back) are yearly; every other kind, and a custom one that does not come back, is a moment. */
+export type KeyDateKind =
+  | 'birthday'
+  | 'anniversary'
+  | 'custom'
+  | 'passedAway'
+  | 'met'
+  | 'adopted'
+  | 'startedJob'
+  | 'leftJob'
+  | 'moved'
+  | 'graduated';
 
-/** `moment` is kept in the type for a later issue; nothing writes it yet. */
 export type KeyDateShape = 'yearly' | 'moment';
+
+export type { MomentPrecision } from '@/utils/yearlyDateUtils';
 
 /** `apps/helm/users/{uid}/keyDates/{id}`: only `whoId` and `shape` are readable; the date itself is sealed. */
 export interface KeyDate {
@@ -431,8 +538,10 @@ export interface KeyDateSealed {
   label: string | null;
   month: number | null;
   day: number | null;
-  /** The first year; null when unknown. */
+  /** The first year; null when unknown. A moment always has one. */
   year: number | null;
+  /** Moments only; a date that comes back reads null. */
+  precision: MomentPrecision | null;
   captureId: string | null;
 }
 
@@ -443,7 +552,7 @@ export interface OpenKeyDate extends Omit<KeyDate, 'sealed'>, KeyDateSealed {
 /** `[keyDateId, kind, month, day, year, label]`: a tuple keeps the document small; label for custom only. */
 export type KeyDateIndexEntry = [
   keyDateId: string,
-  kind: KeyDateKind,
+  kind: 'birthday' | 'anniversary' | 'custom',
   month: number,
   day: number | null,
   year: number | null,
@@ -486,37 +595,305 @@ export interface OpenPlace extends Omit<Place, 'sealed'>, PlaceSealed {
   isUnreadable: boolean;
 }
 
+export type ProjectRole = 'key' | 'involved' | 'mentioned';
+
+/** `apps/helm/users/{uid}/projects/{projectId}`: something with several steps. Its words are sealed; the roles are ids and an enum only. */
+export interface Project {
+  /** Date-only, UTC midnight. */
+  targetDate: number | null;
+  status: 'active' | 'finished';
+  milestoneState: Record<
+    string,
+    { date: number | null; order: number; doneAt: number | null }
+  >;
+  whoRoles: Record<string, ProjectRole>;
+  mediaIds: string[];
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  finishedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface ProjectSealed {
+  name: string;
+  emoji: string | null;
+  objective: string | null;
+  milestones: Record<string, { title: string }>;
+  /** whoId to a short note ("florist"). */
+  roleNotes: Record<string, string>;
+}
+
+export interface OpenProject extends Omit<Project, 'sealed'>, ProjectSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+export type NoteSource =
+  'typed' | 'capture' | 'savedAnswer' | 'importedFile' | 'assistantDraft';
+
+/** `apps/helm/users/{uid}/notes/{id}`: one piece of knowledge, in any number of topics or none. */
+export interface Note {
+  topicIds: string[];
+  source: NoteSource;
+  isFromGeneralAnswer: boolean;
+  checkedAt: number | null;
+  hasHealthCaution: boolean;
+  sourceCaptureId: string | null;
+  sourceMediaId: string | null;
+  projectIds: string[];
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface NoteSealed {
+  title: string;
+  body: string;
+}
+
+export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+export type TopicDepth = 1 | 2 | 3;
+
+export type TopicSource =
+  | { kind: 'note'; noteId: string }
+  | {
+      kind: 'message';
+      captureId: string;
+      at: number;
+      noteId: string | null;
+    }
+  | { kind: 'file'; mediaId: string; noteId: string | null }
+  | { kind: 'general'; noteId: string }
+  | { kind: 'person'; at: number };
+
+export interface TopicSection {
+  id: string;
+  heading: string | null;
+  level: 1 | 2 | 3;
+  markdown: string;
+  writtenBy: 'nomos' | 'person';
+  sources: TopicSource[];
+}
+
+/** `apps/helm/users/{uid}/topics/{id}`: a place notes are filed under. */
+export interface Topic {
+  parentId: string | null;
+  depth: TopicDepth;
+  projectIds: string[];
+  version: number;
+  docState: 'empty' | 'current' | 'behind' | 'writing' | 'failed';
+  pendingNoteIds: string[];
+  writeClaim: { claimId: string; at: number } | null;
+  overviewOf: Record<string, number>;
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  lastWrittenAt: number | null;
+  sealed: Sealed;
+}
+
+export interface TopicSealed {
+  name: string;
+  emoji: string | null;
+  overview: string | null;
+  sections: TopicSection[];
+}
+
+export interface OpenTopic extends Omit<Topic, 'sealed'>, TopicSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+export type TopicVersionReason =
+  | 'firstWritten'
+  | 'addedFromSource'
+  | 'personEdit'
+  | 'revisedOnRequest'
+  | 'moved'
+  | 'grouped'
+  | 'rearranged'
+  | 'imported'
+  | 'sourceRemoved'
+  | 'restored';
+
+/** `topics/{id}/versions/{n}`: one change to a topic's document; never rewritten. */
+export interface TopicVersion {
+  version: number;
+  restoredFromVersion: number | null;
+  createdBy: 'person' | 'nomos';
+  reason: TopicVersionReason;
+  noteIds: string[];
+  sourceCaptureId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface TopicVersionSealed {
+  sections: TopicSection[];
+  changeSummary: string;
+  requestQuote: string | null;
+  parentName: string | null;
+}
+
+export interface OpenTopicVersion
+  extends Omit<TopicVersion, 'sealed'>, TopicVersionSealed {
+  id: string;
+}
+
+export interface ProcedureSealed {
+  title: string;
+  steps: Record<string, StepBody>;
+  groups: Record<string, { name: string }>;
+}
+
+/** `apps/helm/users/{uid}/procedures/{id}`: a routine kept once, its steps in named groups. */
+export interface Procedure {
+  stepState: Record<string, StepPlace>;
+  groupOrder: string[];
+  version: number;
+  createdBy: 'person' | 'nomos';
+  sourceCaptureId: string | null;
+  sourceTaskId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface OpenProcedure
+  extends Omit<Procedure, 'sealed'>, ProcedureSealed {
+  id: string;
+}
+
+export type ProcedureVersionReason =
+  'created' | 'personEdit' | 'revisedOnRequest' | 'restored' | 'fromRun';
+
+/** `procedures/{id}/versions/{n}`: one change to a procedure; never rewritten. */
+export interface ProcedureVersion {
+  version: number;
+  restoredFromVersion: number | null;
+  createdBy: 'person' | 'nomos';
+  reason: ProcedureVersionReason;
+  stepState: Record<string, StepPlace>;
+  groupOrder: string[];
+  sourceCaptureId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface ProcedureVersionSealed extends ProcedureSealed {
+  changeSummary: string;
+  requestQuote: string | null;
+}
+
+export interface OpenProcedureVersion
+  extends Omit<ProcedureVersion, 'sealed'>, ProcedureVersionSealed {
+  id: string;
+}
+
+/** What a run is for: a project, or a trip or event copied from another app; null for a run that is for nothing. */
+export type RunAttachment = { kind: 'project' | 'synced'; id: string } | null;
+
+export interface RunStepPlace extends StepPlace {
+  doneAt: number | null;
+  /** A step added for this run alone. */
+  isExtra: boolean;
+}
+
+export interface RunSealed {
+  title: string;
+  steps: Record<string, StepBody>;
+  groups: Record<string, { name: string }>;
+  /** What the run is for, kept so it still reads after the trip or event leaves the calendar. */
+  attachedLabel: string | null;
+}
+
+/** `apps/helm/users/{uid}/procedureRuns/{id}`: one go at a procedure, holding the steps it started with. */
+export interface ProcedureRun {
+  procedureId: string;
+  procedureVersion: number;
+  attachedTo: RunAttachment;
+  /** The trip's or event's first day, a date-only UTC midnight; null for a run that is for nothing. */
+  dueOn: number | null;
+  stepState: Record<string, RunStepPlace>;
+  groupOrder: string[];
+  startedAt: number;
+  finishedAt: number | null;
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface OpenRun extends Omit<ProcedureRun, 'sealed'>, RunSealed {
+  id: string;
+}
+
 export type MediaStatus = 'uploading' | 'received' | 'kept' | 'discarded';
 
 /** A record a medium shows on, by id. */
 export interface MediaAttachment {
+  kind: 'who' | 'place' | 'task' | 'fact' | 'note';
+  id: string;
+}
+
+/** The who or place a photo shows on. */
+export interface PhotoOwner {
   kind: 'who' | 'place';
   id: string;
 }
 
-/** `apps/helm/users/{uid}/media/{mediaId}`: a photo whose sealed bytes are in Storage. Only the fields photos use so far; the rest of the shape arrives with the media a turn attaches. */
+export type MediaKind = 'photo' | 'pdf' | 'voiceNote' | 'markdown';
+
+/** A person's photo, PDF, voice note or Markdown file. Its sealed bytes are in Storage, except a Markdown file, whose text is sealed in this document. */
 export interface Media {
-  kind: 'photo';
+  kind: MediaKind;
   /** A who's or place's picture, as opposed to a file a turn brought in. */
   role: 'attachment' | 'photo';
   status: MediaStatus;
   /** Of the original, before sealing. */
   mimeType: string;
   hasThumb: boolean;
+  /** A voice note's recorded length; null on any other kind. */
+  durationMs: number | null;
+  /** A PDF's pages as the device counted them; null on any other kind. */
+  pageCount: number | null;
   attachedTo: MediaAttachment[];
   decidedBy: 'nomos' | 'person' | null;
   createdAt: number;
   decidedAt: number | null;
   /** A discarded medium is deleted after this; an upload that never finished too. */
   deleteAfter: number | null;
+  /** The turn that sent it; null on a who's or place's photo and on one made before photos in turns. */
+  sourceCaptureId: string | null;
+  /** The execution that kept it, so Undo can find it; null until one did. */
+  executionId: string | null;
   sealed: Sealed;
 }
 
 export interface MediaSealed {
-  bytesNonce: string;
+  /** Null for a Markdown file, which has no Storage object. */
+  bytesNonce: string | null;
   thumbNonce: string | null;
+  /** The assistant's one line about a photo it kept, up to 200 characters; null on any other. */
+  caption: string | null;
   /** The data key that sealed the bytes. */
   keyId: string;
+  /** A PDF's or Markdown file's name, up to 120 characters. */
+  fileName: string | null;
+  /** A Markdown file's text (up to 20,000 characters) or a voice note's transcript (up to 5,000). */
+  text: string | null;
 }
 
 /** A medium after its nonces are opened; one that would not open keeps `isUnreadable` and cannot be shown. */
@@ -565,7 +942,18 @@ export interface EffectRef {
   /** `delete` appears only in the executions an undo writes. */
   op: 'create' | 'update' | 'delete';
   collection:
-    'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile' | 'keyDates';
+    | 'tasks'
+    | 'facts'
+    | 'who'
+    | 'places'
+    | 'media'
+    | 'profile'
+    | 'keyDates'
+    | 'projects'
+    | 'notes'
+    | 'topics'
+    | 'procedures'
+    | 'procedureRuns';
   docId: string;
 }
 
@@ -594,6 +982,11 @@ export interface Execution {
   sealed: Sealed;
 }
 
+export interface ResultNoteLine {
+  text: string;
+  ref: { collection: 'notes' | 'topics'; id: string };
+}
+
 export interface ExecutionSealed {
   summary: string;
   commands: unknown[];
@@ -603,6 +996,8 @@ export interface ExecutionSealed {
   spoken: string | null;
   /** The records an undo found deleted, by id; null on every other execution. */
   goneIds: string[] | null;
+  /** Result rows that touch no record (a note already kept); null on executions that said none. */
+  lines: ResultNoteLine[] | null;
 }
 
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */
@@ -613,6 +1008,7 @@ export interface OpenExecution extends Omit<Execution, 'sealed'> {
   undoReport: string | null;
   spoken: string | null;
   goneIds: string[] | null;
+  lines: ResultNoteLine[];
   isUnreadable: boolean;
 }
 

@@ -13,7 +13,11 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import { formatYearlyDate } from '@/utils/yearlyDateUtils';
-import { HELM_COPY, KEY_DATE_LABEL_MAX } from '@apps/helm/constants';
+import {
+  HELM_COPY,
+  KEY_DATE_LABEL_MAX,
+  MOMENT_KINDS,
+} from '@apps/helm/constants';
 import { useKeyDates, type WhoKeyDate } from '@apps/helm/hooks/useKeyDates';
 import {
   addKeyDate,
@@ -25,25 +29,86 @@ import {
 } from '@apps/helm/store/actions/keyDateActions';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
-import type { KeyDateKind, OpenWho } from '@apps/helm/types';
-import { checkKeyDateParts } from '@apps/helm/utils/keyDateParts';
-import { describeKeyDate } from '@apps/helm/utils/keyDateText';
+import type { KeyDateKind, MomentPrecision, OpenWho } from '@apps/helm/types';
+import {
+  checkKeyDateParts,
+  checkMomentParts,
+} from '@apps/helm/utils/keyDateParts';
+import {
+  describeKeyDate,
+  describeMoment,
+  describeMomentWhen,
+} from '@apps/helm/utils/keyDateText';
+import { getDecade, type WhoMoment } from '@apps/helm/utils/moments';
 
 interface KeyDateSheetProps {
   who: OpenWho;
   /** The date to read, from the index by id. */
   openId: string | null;
   isAdding: boolean;
+  /** The kind the add form starts on. */
+  startKind?: KeyDateKind;
+  /** Open on the form for the date at `openId`. */
+  startsEditing?: boolean;
+  /** The who's moments, when the page has them open. */
+  moments?: WhoMoment[];
+  /** Called once a save went through, before the sheet closes. */
+  onSaved?: () => void;
   onClose: () => void;
+}
+
+/** A date or a moment as the sheet reads it; a null precision is a yearly date. */
+interface SheetDate {
+  id: string;
+  kind: KeyDateKind;
+  label: string | null;
+  precision: MomentPrecision | null;
+  month: number | null;
+  day: number | null;
+  year: number | null;
 }
 
 interface Draft {
   kind: KeyDateKind;
   label: string;
+  comesBack: boolean;
+  precision: MomentPrecision;
   month: string;
   day: string;
   year: string;
 }
+
+const isYearly = (draft: Draft) =>
+  draft.kind === 'birthday' ||
+  draft.kind === 'anniversary' ||
+  (draft.kind === 'custom' && draft.comesBack);
+
+const THIS_YEAR = new Date().getFullYear();
+
+const DECADES = Array.from(
+  { length: (getDecade(THIS_YEAR) - 1900) / 10 + 1 },
+  (_, index) => {
+    const decade = getDecade(THIS_YEAR) - index * 10;
+    return { value: String(decade), text: `${decade}s` };
+  },
+);
+
+const PRECISION_OPTIONS: PillOption<MomentPrecision>[] = [
+  { value: 'day', label: HELM_COPY.momentPrecisionDay },
+  { value: 'month', label: HELM_COPY.momentPrecisionMonth },
+  { value: 'year', label: HELM_COPY.momentPrecisionYear },
+  { value: 'decade', label: HELM_COPY.momentPrecisionDecade },
+];
+
+const MOMENT_WORDS: Record<(typeof MOMENT_KINDS)[number], string> = {
+  met: HELM_COPY.momentKindMet,
+  moved: HELM_COPY.momentKindMoved,
+  startedJob: HELM_COPY.momentKindStartedJob,
+  leftJob: HELM_COPY.momentKindLeftJob,
+  graduated: HELM_COPY.momentKindGraduated,
+  adopted: HELM_COPY.momentKindAdopted,
+  passedAway: HELM_COPY.momentKindPassedAway,
+};
 
 const MONTHS = Array.from({ length: 12 }, (_, index) => ({
   value: String(index + 1),
@@ -53,30 +118,103 @@ const MONTHS = Array.from({ length: 12 }, (_, index) => ({
   }),
 }));
 
-const KIND_OPTIONS: PillOption<KeyDateKind>[] = [
+const MOMENT_KIND_OPTIONS: PillOption<KeyDateKind>[] = [
+  ...MOMENT_KINDS.map((value) => ({ value, label: MOMENT_WORDS[value] })),
+  { value: 'custom', label: HELM_COPY.keyDateKindCustom },
+];
+
+const DATE_KIND_OPTIONS: PillOption<KeyDateKind>[] = [
   { value: 'birthday', label: HELM_COPY.keyDateKindBirthday },
   { value: 'anniversary', label: HELM_COPY.keyDateKindAnniversary },
   { value: 'custom', label: HELM_COPY.keyDateKindCustom },
 ];
 
+const PRECISION_HELP: Record<MomentPrecision, string> = {
+  day: HELM_COPY.momentPrecisionHelpDay,
+  month: HELM_COPY.momentPrecisionHelpMonth,
+  year: HELM_COPY.momentPrecisionHelpYear,
+  decade: HELM_COPY.momentPrecisionHelpDecade,
+};
+
+const isMomentStart = (kind: KeyDateKind | null) =>
+  kind !== null && kind !== 'birthday' && kind !== 'anniversary';
+
+const toDecadeYear = (year: string) => {
+  const value = Number(year.trim());
+  return year.trim() !== '' && value >= 1900 ? String(getDecade(value)) : '';
+};
+
 const toNumber = (text: string) =>
   text.trim() === '' ? null : Number(text.trim());
 
-const toDraft = (date: WhoKeyDate | null, canBirthday: boolean): Draft => ({
-  kind: date?.kind ?? (canBirthday ? 'birthday' : 'anniversary'),
+const toDraft = (
+  date: SheetDate | null,
+  canBirthday: boolean,
+  startKind: KeyDateKind | null,
+): Draft => ({
+  kind: date?.kind ?? startKind ?? (canBirthday ? 'birthday' : 'anniversary'),
   label: date?.label ?? '',
-  month: date ? String(date.month) : '',
+  comesBack: date ? date.precision === null : !isMomentStart(startKind),
+  precision: date?.precision ?? 'day',
+  month: date?.month != null ? String(date.month) : '',
   day: date?.day != null ? String(date.day) : '',
   year: date?.year != null ? String(date.year) : '',
 });
 
-const toInput = (draft: Draft): KeyDateInput => ({
-  kind: draft.kind,
-  label: draft.kind === 'custom' ? draft.label.trim() : null,
-  month: Number(draft.month),
-  day: toNumber(draft.day),
-  year: toNumber(draft.year),
+const toInput = (draft: Draft): KeyDateInput => {
+  const label = draft.kind === 'custom' ? draft.label.trim() : null;
+  if (isYearly(draft)) {
+    return {
+      kind: draft.kind,
+      label,
+      month: Number(draft.month),
+      day: toNumber(draft.day),
+      year: toNumber(draft.year),
+      precision: null,
+    };
+  }
+  const hasMonth = draft.precision === 'day' || draft.precision === 'month';
+  return {
+    kind: draft.kind,
+    label,
+    month: hasMonth ? toNumber(draft.month) : null,
+    day: draft.precision === 'day' ? toNumber(draft.day) : null,
+    year: toNumber(draft.year),
+    precision: draft.precision,
+  };
+};
+
+const toSheetDate = (date: WhoKeyDate | WhoMoment): SheetDate => ({
+  id: date.id,
+  kind: date.kind,
+  label: date.label,
+  precision: 'precision' in date ? date.precision : null,
+  month: date.month,
+  day: date.day,
+  year: date.year,
 });
+
+const titleOf = (
+  date: Pick<SheetDate, 'kind' | 'label' | 'precision'>,
+  who: OpenWho,
+) =>
+  date.precision === null
+    ? describeKeyDate({
+        kind: date.kind,
+        label: date.label,
+        whoName: who.name,
+        whoKind: who.kind,
+        isSelf: who.isSelf,
+      })
+    : describeMoment({
+        kind: date.kind,
+        label: date.label,
+        whoName: who.name,
+        isSelf: who.isSelf,
+      });
+
+const refusalText = (refusal: keyof typeof REFUSALS | null) =>
+  refusal ? REFUSALS[refusal] : null;
 
 const REFUSALS = {
   monthAlone: HELM_COPY.keyDateMonthAlone,
@@ -85,10 +223,49 @@ const REFUSALS = {
   needsName: HELM_COPY.keyDateNeedsName,
 } as const;
 
+const toRefusal = (draft: Draft, input: KeyDateInput) => {
+  if (isYearly(draft)) {
+    return draft.month === ''
+      ? REFUSALS.monthAlone
+      : refusalText(
+          checkKeyDateParts(
+            { ...input, month: Number(draft.month) },
+            THIS_YEAR,
+          ),
+        );
+  }
+  if (input.precision === null) return null;
+  if (input.year === null) return HELM_COPY.momentYearNeeded;
+  if (
+    (input.precision === 'day' || input.precision === 'month') &&
+    input.month === null
+  ) {
+    return HELM_COPY.momentMonthNeeded;
+  }
+  if (input.precision === 'day' && input.day === null) return REFUSALS.badDay;
+  return refusalText(
+    checkMomentParts(
+      { ...input, precision: input.precision, year: input.year },
+      THIS_YEAR,
+    ),
+  );
+};
+
+type ReadState = { id: string } & (
+  | {
+      status: 'found';
+      data: NonNullable<Awaited<ReturnType<typeof readKeyDate>>>;
+    }
+  | { status: 'missing' }
+  | { status: 'failed' }
+);
+
 interface FormProps {
   who: OpenWho;
-  date: WhoKeyDate | null;
+  date: SheetDate | null;
   hasBirthday: boolean;
+  startKind: KeyDateKind | null;
+  onSaved?: () => void;
   onDirtyChange: (isDirty: boolean) => void;
   onClose: () => void;
   onCancel: () => void;
@@ -98,6 +275,8 @@ function KeyDateForm({
   who,
   date,
   hasBirthday,
+  startKind,
+  onSaved,
   onDirtyChange,
   onClose,
   onCancel,
@@ -107,7 +286,7 @@ function KeyDateForm({
   const fieldId = useId();
   const isOffline = useNetworkStatus() === 'offline';
   const canBirthday = !hasBirthday && who.kind !== 'organization';
-  const [initial] = useState(() => toDraft(date, canBirthday));
+  const [initial] = useState(() => toDraft(date, canBirthday, startKind));
   const [draft, setDraft] = useState(initial);
   const [note, setNote] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -120,9 +299,14 @@ function KeyDateForm({
     onDirtyChange(JSON.stringify(next) !== JSON.stringify(initial));
   };
 
-  const kinds = KIND_OPTIONS.filter(
-    (option) => option.value !== 'birthday' || canBirthday,
-  );
+  const kinds = (
+    isMomentStart(startKind) ? MOMENT_KIND_OPTIONS : DATE_KIND_OPTIONS
+  ).filter((option) => option.value !== 'birthday' || canBirthday);
+  const isYearlyDraft = isYearly(draft);
+  const hasMonthField =
+    isYearlyDraft || draft.precision === 'day' || draft.precision === 'month';
+  const hasDayField = isYearlyDraft || draft.precision === 'day';
+  const hasYearField = isYearlyDraft || draft.precision !== 'decade';
 
   const report = (result: KeyDateChange, title: string) => {
     if (result.kind === 'offline') {
@@ -137,7 +321,9 @@ function KeyDateForm({
       setNote(
         result.reason === 'who'
           ? HELM_COPY.keyDateFull(who.name)
-          : HELM_COPY.keyDateTooMany,
+          : result.reason === 'moments'
+            ? HELM_COPY.momentFull(who.name)
+            : HELM_COPY.keyDateTooMany,
       );
       return false;
     }
@@ -168,12 +354,9 @@ function KeyDateForm({
   const save = async () => {
     if (!user || isSaving) return;
     const input = toInput(draft);
-    const refusal =
-      draft.month === ''
-        ? 'monthAlone'
-        : checkKeyDateParts(input, new Date().getFullYear());
+    const refusal = toRefusal(draft, input);
     if (refusal) {
-      setNote(REFUSALS[refusal]);
+      setNote(refusal);
       return;
     }
     if (isOffline) {
@@ -183,23 +366,22 @@ function KeyDateForm({
     setIsSaving(true);
     try {
       const encryption = await getHelmEncryption(user.uid);
-      const title = describeKeyDate({
-        kind: input.kind,
-        label: input.label,
-        whoName: who.name,
-        whoKind: who.kind,
-        isSelf: who.isSelf,
-      });
+      const title = titleOf(input, who);
       const result = date
         ? await editKeyDate(user.uid, encryption, date.id, input)
         : await addKeyDate(user.uid, encryption, who.id, input);
       if (
         report(
           result,
-          date ? HELM_COPY.keyDateSaved : HELM_COPY.keyDateAdded(title),
+          date
+            ? HELM_COPY.keyDateSaved
+            : input.precision === null
+              ? HELM_COPY.keyDateAdded(title)
+              : HELM_COPY.momentAdded(title),
         )
       ) {
         onDirtyChange(false);
+        onSaved?.();
         onClose();
         return;
       }
@@ -246,59 +428,116 @@ function KeyDateForm({
           )}
         </div>
       )}
-      <div className='space-y-1.5'>
-        <span className='text-sm font-medium'>
-          {HELM_COPY.keyDateMonthLabel}
-        </span>
-        <Select
-          options={MONTHS}
-          value={draft.month}
-          onChange={(month) => change({ month })}
-        />
-      </div>
-      <div className='grid grid-cols-2 gap-3'>
+      {!isYearlyDraft && (
         <div className='space-y-1.5'>
-          <label htmlFor={`${fieldId}-day`} className='text-sm font-medium'>
-            {HELM_COPY.keyDateDayLabel}{' '}
-            <span className='text-muted-foreground font-normal'>
-              {HELM_COPY.keyDateOptional}
-            </span>
-          </label>
-          <Input
-            id={`${fieldId}-day`}
-            inputMode='numeric'
-            maxLength={2}
-            className='h-10 min-h-10'
-            placeholder={HELM_COPY.keyDateDayPlaceholder}
-            value={draft.day}
-            onChange={(event) =>
-              change({ day: event.target.value.replace(/\D/g, '') })
+          <span className='text-sm font-medium'>
+            {HELM_COPY.momentPrecisionLabel}
+          </span>
+          <PillGroup
+            label={HELM_COPY.momentPrecisionLabel}
+            options={PRECISION_OPTIONS}
+            value={draft.precision}
+            onChange={(precision) =>
+              change({
+                precision,
+                ...(precision === 'decade'
+                  ? { year: toDecadeYear(draft.year) }
+                  : {}),
+              })
             }
           />
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {PRECISION_HELP[draft.precision]}
+          </p>
         </div>
+      )}
+      {draft.precision === 'decade' && !isYearlyDraft && (
         <div className='space-y-1.5'>
-          <label htmlFor={`${fieldId}-year`} className='text-sm font-medium'>
-            {HELM_COPY.keyDateYearLabel}{' '}
-            <span className='text-muted-foreground font-normal'>
-              {HELM_COPY.keyDateOptional}
-            </span>
-          </label>
-          <Input
-            id={`${fieldId}-year`}
-            inputMode='numeric'
-            maxLength={4}
-            className='h-10 min-h-10'
-            placeholder={HELM_COPY.keyDateYearPlaceholder}
+          <span className='text-sm font-medium'>
+            {HELM_COPY.momentDecadeLabel}
+          </span>
+          <Select
+            options={DECADES}
             value={draft.year}
-            onChange={(event) =>
-              change({ year: event.target.value.replace(/\D/g, '') })
-            }
+            placeholder={HELM_COPY.momentDecadeLabel}
+            onChange={(year) => change({ year })}
           />
         </div>
-      </div>
-      {draft.day === '' && (
+      )}
+      {hasMonthField && (
+        <div className='space-y-1.5'>
+          <span className='text-sm font-medium'>
+            {HELM_COPY.keyDateMonthLabel}
+          </span>
+          <Select
+            className='h-10 min-h-10'
+            options={MONTHS}
+            value={draft.month}
+            onChange={(month) => change({ month })}
+          />
+        </div>
+      )}
+      {(hasDayField || hasYearField) && (
+        <div className='grid grid-cols-2 gap-3'>
+          {hasDayField && (
+            <div className='space-y-1.5'>
+              <label htmlFor={`${fieldId}-day`} className='text-sm font-medium'>
+                {HELM_COPY.keyDateDayLabel}{' '}
+                {isYearlyDraft && (
+                  <span className='text-muted-foreground font-normal'>
+                    {HELM_COPY.keyDateOptional}
+                  </span>
+                )}
+              </label>
+              <Input
+                id={`${fieldId}-day`}
+                inputMode='numeric'
+                maxLength={2}
+                className='h-10 min-h-10'
+                placeholder={HELM_COPY.keyDateDayPlaceholder}
+                value={draft.day}
+                onChange={(event) =>
+                  change({ day: event.target.value.replace(/\D/g, '') })
+                }
+              />
+            </div>
+          )}
+          {hasYearField && (
+            <div className='space-y-1.5'>
+              <label
+                htmlFor={`${fieldId}-year`}
+                className='text-sm font-medium'
+              >
+                {HELM_COPY.keyDateYearLabel}{' '}
+                {isYearlyDraft && (
+                  <span className='text-muted-foreground font-normal'>
+                    {HELM_COPY.keyDateOptional}
+                  </span>
+                )}
+              </label>
+              <Input
+                id={`${fieldId}-year`}
+                inputMode='numeric'
+                maxLength={4}
+                className='h-10 min-h-10'
+                placeholder={HELM_COPY.keyDateYearPlaceholder}
+                value={draft.year}
+                onChange={(event) =>
+                  change({ year: event.target.value.replace(/\D/g, '') })
+                }
+              />
+            </div>
+          )}
+        </div>
+      )}
+      {isYearlyDraft && draft.day === '' && (
         <p className='text-muted-foreground -mt-2 text-[13px] text-pretty'>
           {HELM_COPY.keyDateNoDayHint}
+        </p>
+      )}
+      {isNew && !isYearlyDraft && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.momentOnce}
         </p>
       )}
       <ModalFooterActions
@@ -315,7 +554,11 @@ function KeyDateForm({
         }
         rightActions={
           <Button type='button' loading={isSaving} onClick={() => void save()}>
-            {isNew ? HELM_COPY.keyDateAddSave : HELM_COPY.keyDateSave}
+            {!isNew
+              ? HELM_COPY.keyDateSave
+              : isYearlyDraft
+                ? HELM_COPY.keyDateAddSave
+                : HELM_COPY.momentAddSave}
           </Button>
         }
       />
@@ -324,24 +567,44 @@ function KeyDateForm({
 }
 
 /** One date that comes back: its words, where it came from, Edit and Remove with an Undo; or the form that adds one. Saving needs a connection and says so. */
-function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
+function KeyDateSheet({
+  who,
+  openId,
+  isAdding,
+  startKind,
+  startsEditing = false,
+  moments = [],
+  onSaved,
+  onClose,
+}: KeyDateSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { dates } = useKeyDates(who.id);
   const captures = useAppSelector(selectAllCaptures);
-  const date = dates.find((entry) => entry.id === openId) ?? null;
-  const [editing, setEditing] = useState<{ title: string } | null>(null);
+  const listed =
+    dates.find((entry) => entry.id === openId) ??
+    moments.find((entry) => entry.id === openId) ??
+    null;
+  const [isEditing, setIsEditing] = useState(startsEditing);
   const [isDirty, setIsDirty] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
-  const [source, setSource] = useState<{
-    id: string;
-    source: 'person' | 'nomos' | 'google:contacts';
-    createdAt: number;
-    captureId: string | null;
-  } | null>(null);
+  const [source, setSource] = useState<ReadState | null>(null);
+  const sourceNow = source?.id === openId ? source : null;
+  const read = sourceNow?.status === 'found' ? sourceNow.data : null;
+  const readStatus = sourceNow?.status ?? 'loading';
+  const date: SheetDate | null = listed
+    ? toSheetDate(listed)
+    : openId && read?.parts
+      ? { id: openId, ...read.parts }
+      : null;
   const hasBirthday = dates.some((entry) => entry.kind === 'birthday');
-  const isEditing = editing !== null;
-  const isGone = isEditing && !isAdding && date === null;
+  const gate = !(isEditing && !isAdding && date === null)
+    ? null
+    : readStatus === 'missing'
+      ? 'gone'
+      : readStatus === 'failed'
+        ? 'failed'
+        : 'loading';
   const isOpen = isAdding || date !== null || isEditing;
   const isForm = isAdding || isEditing;
 
@@ -350,19 +613,25 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
     let isCurrent = true;
     getHelmEncryption(user.uid)
       .then((encryption) => readKeyDate(user.uid, encryption, openId))
-      .then((read) => {
-        if (isCurrent && read) setSource({ id: openId, ...read });
+      .then((result) => {
+        if (!isCurrent) return;
+        setSource(
+          result
+            ? { id: openId, status: 'found', data: result }
+            : { id: openId, status: 'missing' },
+        );
       })
-      .catch((error: unknown) =>
-        console.error('Helm date source was not read', error),
-      );
+      .catch((error: unknown) => {
+        console.error('Helm date source was not read', error);
+        if (isCurrent) setSource({ id: openId, status: 'failed' });
+      });
     return () => {
       isCurrent = false;
     };
   }, [user, openId]);
 
   const close = () => {
-    setEditing(null);
+    setIsEditing(false);
     setIsDirty(false);
     onClose();
   };
@@ -370,7 +639,7 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
   const requestBack = useDiscardGuard({
     isDirty,
     onClose: () => {
-      setEditing(null);
+      setIsEditing(false);
       setIsDirty(false);
     },
   });
@@ -384,16 +653,13 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
       if (result.kind === 'offline') {
         addToast({ title: HELM_COPY.keyDateNeedsConnection, type: 'info' });
       } else if (result.kind === 'done') {
-        const title = describeKeyDate({
-          kind: date.kind,
-          label: date.label,
-          whoName: who.name,
-          whoKind: who.kind,
-          isSelf: who.isSelf,
-        });
+        const title = titleOf(date, who);
         close();
         addToast({
-          title: HELM_COPY.keyDateRemoved(title),
+          title:
+            date.precision === null
+              ? HELM_COPY.keyDateRemoved(title)
+              : HELM_COPY.momentRemoved(title),
           type: 'success',
           action: {
             label: HELM_COPY.undo,
@@ -424,21 +690,22 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
     setIsRemoving(false);
   };
 
-  const title = date
-    ? describeKeyDate({
-        kind: date.kind,
-        label: date.label,
-        whoName: who.name,
-        whoKind: who.kind,
-        isSelf: who.isSelf,
-      })
-    : HELM_COPY.keyDateNewTitle;
-  const sheetTitle = editing
-    ? HELM_COPY.keyDateEditTitle(date ? title : editing.title)
+  const addTitle =
+    startKind && startKind !== 'birthday' && startKind !== 'anniversary'
+      ? HELM_COPY.momentNewTitle
+      : HELM_COPY.keyDateNewTitle;
+  const title = date ? titleOf(date, who) : addTitle;
+  const editTitle = (named: string) =>
+    date?.precision != null
+      ? HELM_COPY.momentEditTitle
+      : HELM_COPY.keyDateEditTitle(named);
+  const sheetTitle = isEditing
+    ? date
+      ? editTitle(title)
+      : HELM_COPY.keyDateEditUnknown
     : isAdding
-      ? HELM_COPY.keyDateNewTitle
+      ? addTitle
       : title;
-  const read = source?.id === openId ? source : null;
   const quote =
     read?.captureId != null
       ? (captures.find((capture) => capture.id === read.captureId)?.text ??
@@ -451,35 +718,42 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
       : read.source === 'google:contacts'
         ? HELM_COPY.keyDateSourceGoogle(formatDateShort(read.createdAt))
         : HELM_COPY.keyDateSourceAdded;
-  const when = date
-    ? [
-        HELM_COPY.keyDateComesBack,
-        formatYearlyDate({
+  const when = !date
+    ? ''
+    : date.precision !== null && date.year !== null
+      ? describeMomentWhen({
           ...date,
-          year: date.day === null ? date.year : null,
-        }),
-        date.day === null
-          ? HELM_COPY.keyDateDayUnknown
-          : date.year === null
-            ? HELM_COPY.keyDateYearUnknown
-            : String(date.year),
-      ].join(' · ')
-    : '';
+          precision: date.precision,
+          year: date.year,
+        })
+      : [
+          HELM_COPY.keyDateComesBack,
+          formatYearlyDate({
+            month: date.month ?? 1,
+            day: date.day,
+            year: date.day === null ? date.year : null,
+          }),
+          date.day === null
+            ? HELM_COPY.keyDateDayUnknown
+            : date.year === null
+              ? HELM_COPY.keyDateYearUnknown
+              : String(date.year),
+        ].join(' · ');
 
   return (
     <DetailSheet
       isOpen={isOpen}
       onClose={requestClose}
       title={sheetTitle}
-      viewKey={isGone ? 'gone' : isForm ? 'form' : 'read'}
+      viewKey={gate ?? (isForm ? 'form' : 'read')}
       footer={
-        isGone ? (
+        gate === 'gone' || gate === 'failed' ? (
           <div className='flex justify-end'>
             <Button type='button' variant='secondary' onClick={close}>
               {HELM_COPY.keyDateClose}
             </Button>
           </div>
-        ) : isForm || !date ? undefined : (
+        ) : gate === 'loading' || isForm || !date ? undefined : (
           <div className='flex items-center justify-end gap-2'>
             <Button
               type='button'
@@ -493,7 +767,7 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
               type='button'
               variant='secondary'
               disabled={isRemoving}
-              onClick={() => setEditing({ title })}
+              onClick={() => setIsEditing(true)}
             >
               {HELM_COPY.keyDateSheetEdit}
             </Button>
@@ -501,17 +775,28 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
         )
       }
     >
-      {isGone ? (
+      {gate === 'gone' ? (
         <p className='text-[15px] text-pretty'>
           {HELM_COPY.keyDateGoneMeanwhile}
         </p>
+      ) : gate === 'failed' ? (
+        <p className='text-[15px] text-pretty'>{HELM_COPY.keyDateReadFailed}</p>
+      ) : gate === 'loading' ? (
+        <div className='min-h-24' aria-busy='true' />
       ) : isForm ? (
-        <div className='space-y-2'>
+        <div className='space-y-3'>
+          {startsEditing && !isAdding && (
+            <p className='text-[15px] text-pretty'>
+              {HELM_COPY.keyDateWhichIsRight}
+            </p>
+          )}
           <KeyDateForm
             key={`${openId ?? 'new'}:${isAdding}`}
             who={who}
             date={isAdding ? null : date}
             hasBirthday={hasBirthday}
+            startKind={startKind ?? null}
+            onSaved={onSaved}
             onDirtyChange={setIsDirty}
             onClose={close}
             onCancel={isAdding ? requestClose : requestBack}
@@ -521,6 +806,11 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
         date && (
           <div className='flex flex-col gap-3'>
             <p className='text-[15px] text-pretty'>{when}</p>
+            {date.precision !== null && (
+              <p className='text-muted-foreground text-[13px] text-pretty'>
+                {HELM_COPY.momentOnce}
+              </p>
+            )}
             {sourceLine && (
               <p className='text-muted-foreground text-[13px] text-pretty'>
                 {sourceLine}

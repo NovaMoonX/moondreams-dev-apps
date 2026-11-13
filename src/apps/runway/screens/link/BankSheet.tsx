@@ -17,6 +17,7 @@ import { recordUnlink } from '@apps/runway/store/actions/planActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { OpenLink } from '@apps/runway/types';
 import { isLiveLink, isUnlinkedLink } from '@apps/runway/utils/linkText';
+import { cleanBankName } from '@apps/runway/utils/accountText';
 
 interface BankSheetProps {
   linkId: string;
@@ -27,7 +28,7 @@ interface BankSheetProps {
 }
 
 const toRowLabel = (row: { name: string; mask: string | null }) =>
-  `${row.name}${row.mask ? ` ••${row.mask}` : ''}`;
+  `${cleanBankName(row.name)}${row.mask ? ` ••${row.mask}` : ''}`;
 
 /** One linked bank: what it brought in and, while it is linked, Unlink. Unlinking the last bank moves the plan from Link to Track. */
 function BankSheet({

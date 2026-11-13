@@ -6,14 +6,21 @@ import {
   getTakenBackIds,
   planReopen,
   planUndo,
+  procedureEffectKind,
+  topicEffectKind,
   type UndoPlan,
   type UndoTarget,
 } from '../../src/apps/helm/nomos/planUndo.ts';
+import { planPhotoRelease } from '../../src/apps/helm/utils/mediaRelease.ts';
+import { buildResultLines } from '../../src/apps/helm/utils/resultLines.ts';
 import type {
   EffectRef,
   ExecutionEffect,
   OpenExecution,
+  ProcedureSealed,
+  RunSealed,
   TaskSealed,
+  TopicSealed,
 } from '../../src/apps/helm/types.ts';
 
 const NOW = Date.UTC(2026, 10, 9, 17, 0);
@@ -83,6 +90,7 @@ const execution = (
   undoReport: null,
   spoken: null,
   goneIds: null,
+  lines: [],
   isUnreadable: false,
   ...overrides,
 });
@@ -744,6 +752,14 @@ test('taking back a settle reopens its question and the turn; no other answer do
     planReopen({ questionRef: ref }, capture('whichIsTrue', NOW, 'needsYou')),
     { 'questionState.q1.answeredAt': null },
   );
+  assert.deepEqual(
+    planReopen({ questionRef: ref }, capture('groupTopics', NOW, 'needsYou')),
+    { 'questionState.q1.answeredAt': null },
+  );
+  assert.equal(
+    planReopen({ questionRef: ref }, capture('groupTopics', null, 'needsYou')),
+    null,
+  );
   assert.equal(
     planReopen({ questionRef: ref }, capture('asked', NOW, 'sorted')),
     null,
@@ -761,6 +777,7 @@ const dateWords = {
   month: 6,
   day: 3,
   year: null,
+  precision: null,
   captureId: 'turn-1',
 };
 
@@ -876,6 +893,1172 @@ test('a removed date is written back under its id, with its words', () => {
 test('a removed date is not brought back for a person who is gone', () => {
   const result = plan(removal, [dateTarget('k1', null, false)]);
   assert.equal(result.kind === 'write' ? result.creates.length : 0, 0);
+});
+
+const momentWords = {
+  kind: 'met' as const,
+  label: null,
+  month: 3,
+  day: null,
+  year: 2015,
+  precision: 'month' as const,
+  captureId: 'turn-1',
+};
+
+test("a moment the turn made is deleted by its undo and says dates; the target's shape tells the device to move the moment count", () => {
+  const result = asWrite(
+    plan(
+      execution([
+        {
+          ref: dateRef('create', 'k1'),
+          effect: {
+            written: { 'sealed.title': 'Moment · Dana · Met · Mar 2015' },
+            previous: null,
+          },
+        },
+      ]),
+      [
+        [
+          'k1',
+          {
+            docId: 'k1',
+            data: { lastEditedAt: null, shape: 'moment' },
+            opened: momentWords,
+            isOwnerHere: true,
+          },
+        ],
+      ],
+    ),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => [entry.docId, entry.collection]),
+    [['k1', 'keyDates']],
+  );
+});
+
+test('a settled date goes back to the kept parts, and stays when the person edited it since', () => {
+  const settle = execution([
+    {
+      ref: dateRef('update', 'k1'),
+      effect: {
+        written: { 'sealed.title': 'Kept', 'sealed.day': 4 },
+        previous: { 'sealed.title': 'Kept', 'sealed.day': 3 },
+      },
+    },
+  ]);
+  const restored = asWrite(
+    plan(settle, [
+      [
+        'k1',
+        {
+          docId: 'k1',
+          data: { lastEditedAt: null },
+          opened: { ...dateWords, day: 4 },
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual({ ...restored.updates[0].reseal }, { ...dateWords, day: 3 });
+  const kept = plan(settle, [
+    [
+      'k1',
+      {
+        docId: 'k1',
+        data: { lastEditedAt: null },
+        opened: { ...dateWords, day: 9 },
+      },
+    ],
+  ]);
+  assert.equal(kept.kind === 'write' ? kept.updates.length : 0, 0);
+});
+
+test('a removed moment is written back as a moment with its precision', () => {
+  const removed = execution([
+    {
+      ref: dateRef('delete', 'k1'),
+      effect: {
+        written: { 'sealed.title': 'Removed' },
+        previous: {
+          'sealed.title': 'Removed',
+          whoId: 'w1',
+          shape: 'moment',
+          source: 'person',
+          createdAt: 7,
+          'sealed.kind': 'met',
+          'sealed.label': null,
+          'sealed.month': 3,
+          'sealed.day': null,
+          'sealed.year': 2015,
+          'sealed.precision': 'month',
+          'sealed.captureId': null,
+        },
+      },
+    },
+  ]);
+  const result = asWrite(plan(removed, [dateTarget('k1', null)]));
+  assert.equal(result.creates[0].fields.shape, 'moment');
+  assert.equal(result.creates[0].seal.precision, 'month');
+  assert.equal(result.creates[0].seal.year, 2015);
+});
+
+const projectSealed = (
+  roleNotes: Record<string, string> = {},
+  milestones: Record<string, { title: string }> = {},
+) => ({
+  name: 'Wedding',
+  emoji: '💍',
+  objective: null,
+  milestones,
+  roleNotes,
+});
+
+test('a project the turn made is deleted by its undo, and says projects', () => {
+  const made: { ref: EffectRef; effect: ExecutionEffect } = {
+    ref: { op: 'create', collection: 'projects', docId: 'p1' },
+    effect: {
+      written: {
+        'sealed.name': 'Wedding',
+        'sealed.emoji': '💍',
+        status: 'active',
+        whoRoles: {},
+        'sealed.roleNotes': {},
+      },
+      previous: null,
+    },
+  };
+  const result = asWrite(
+    plan(execution([made]), [
+      [
+        'p1',
+        {
+          docId: 'p1',
+          data: { status: 'active', whoRoles: {}, lastEditedAt: null },
+          opened: projectSealed(),
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => `${entry.collection}:${entry.docId}`),
+    ['projects:p1'],
+  );
+  assert.equal(result.report, 'Took back 1 project.');
+});
+
+test('a role the turn gave is stepped back with the earlier roles and notes, and a role changed since is kept', () => {
+  const label = 'Dana is key for 💍 Wedding';
+  const given: { ref: EffectRef; effect: ExecutionEffect } = {
+    ref: { op: 'update', collection: 'projects', docId: 'p1' },
+    effect: {
+      written: {
+        whoRoles: { w1: 'key' },
+        'sealed.roleNotes': { w1: 'florist' },
+        'sealed.title': label,
+      },
+      previous: {
+        whoRoles: { w1: 'involved' },
+        'sealed.roleNotes': {},
+        'sealed.title': label,
+      },
+    },
+  };
+  const result = asWrite(
+    plan(execution([given]), [
+      [
+        'p1',
+        {
+          docId: 'p1',
+          data: { whoRoles: { w1: 'key' }, lastEditedAt: NOW },
+          opened: projectSealed({ w1: 'florist' }),
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual(result.updates[0].fields.whoRoles, { w1: 'involved' });
+  assert.deepEqual(
+    (result.updates[0].reseal as { roleNotes: unknown }).roleNotes,
+    {},
+  );
+  const kept = plan(execution([given]), [
+    [
+      'p1',
+      {
+        docId: 'p1',
+        data: { whoRoles: { w1: 'key', w2: 'involved' }, lastEditedAt: NOW },
+        opened: projectSealed({ w1: 'florist' }),
+      },
+    ],
+  ]);
+  assert.equal(kept.kind, 'refused');
+});
+
+const milestoneEffect = (
+  id: string,
+  title: string,
+  date: number | null,
+): { ref: EffectRef; effect: ExecutionEffect } => {
+  const line = `Milestone · ${title} · 💍 Wedding`;
+  return {
+    ref: { op: 'update', collection: 'projects', docId: 'p1' },
+    effect: {
+      written: {
+        [`milestoneState.${id}`]: { date, order: 0, doneAt: null },
+        [`sealed.milestones.${id}`]: { title },
+        'sealed.title': line,
+      },
+      previous: {
+        [`milestoneState.${id}`]: null,
+        [`sealed.milestones.${id}`]: null,
+        'sealed.title': line,
+      },
+    },
+  };
+};
+
+test('a milestone the turn added is taken away from both maps by its undo', () => {
+  const result = asWrite(
+    plan(execution([milestoneEffect('m1', 'Venue booked', 9)]), [
+      [
+        'p1',
+        {
+          docId: 'p1',
+          data: {
+            milestoneState: {
+              m1: { date: 9, order: 0, doneAt: null },
+              m0: { date: null, order: 1, doneAt: null },
+            },
+            lastEditedAt: NOW,
+          },
+          opened: projectSealed(
+            {},
+            { m1: { title: 'Venue booked' }, m0: { title: 'Pick the menu' } },
+          ),
+        },
+      ],
+    ]),
+  );
+  assert.equal(result.updates[0].fields['milestoneState.m1'], null);
+  assert.deepEqual(
+    (result.updates[0].reseal as { milestones: unknown }).milestones,
+    { m0: { title: 'Pick the menu' } },
+  );
+});
+
+test('a milestone ticked or retitled since is kept, and the other one the turn added still goes', () => {
+  const both = execution([
+    milestoneEffect('m1', 'Venue booked', 9),
+    milestoneEffect('m2', 'Final guest list', null),
+  ]);
+  const live = (doneAt: number | null, title: string) => [
+    [
+      'p1',
+      {
+        docId: 'p1',
+        data: {
+          milestoneState: {
+            m1: { date: 9, order: 0, doneAt },
+            m2: { date: null, order: 0, doneAt: null },
+          },
+          lastEditedAt: NOW,
+        },
+        opened: projectSealed(
+          {},
+          { m1: { title }, m2: { title: 'Final guest list' } },
+        ),
+      },
+    ] as [string, UndoTarget],
+  ];
+  const ticked = asWrite(plan(both, live(5, 'Venue booked')));
+  assert.equal(ticked.updates[0].fields['milestoneState.m2'], null);
+  assert.equal('milestoneState.m1' in ticked.updates[0].fields, false);
+  const retitled = asWrite(plan(both, live(null, 'Venue is booked')));
+  assert.equal('milestoneState.m1' in retitled.updates[0].fields, false);
+  const alone = plan(
+    execution([milestoneEffect('m1', 'Venue booked', 9)]),
+    live(5, 'Venue booked'),
+  );
+  assert.equal(alone.kind, 'refused');
+  assert.deepEqual(alone.kept, ['Wedding']);
+});
+
+test('a project the turn made stays when the person ticked one of its milestones since', () => {
+  const made: { ref: EffectRef; effect: ExecutionEffect } = {
+    ref: { op: 'create', collection: 'projects', docId: 'p1' },
+    effect: {
+      written: {
+        'sealed.name': 'Wedding',
+        'sealed.emoji': '💍',
+        status: 'active',
+        whoRoles: {},
+        'sealed.roleNotes': {},
+      },
+      previous: null,
+    },
+  };
+  const result = plan(
+    execution([milestoneEffect('m1', 'Venue booked', 9), made]),
+    [
+      [
+        'p1',
+        {
+          docId: 'p1',
+          data: {
+            status: 'active',
+            whoRoles: {},
+            milestoneState: { m1: { date: 9, order: 0, doneAt: 5 } },
+            lastEditedAt: null,
+          },
+          opened: projectSealed({}, { m1: { title: 'Venue booked' } }),
+        },
+      ],
+    ],
+  );
+  assert.equal(result.kind, 'refused');
+  assert.deepEqual(result.kept, ['Wedding']);
+});
+
+const topicSealed = (name: string): TopicSealed => ({
+  name,
+  emoji: null,
+  overview: null,
+  sections: [],
+});
+
+const topicTarget = (
+  docId: string,
+  data: Record<string, unknown> | null,
+  name = 'Car care',
+): [string, UndoTarget] => [
+  docId,
+  { docId, data, opened: data ? topicSealed(name) : null },
+];
+
+const topicEntry = (
+  op: EffectRef['op'],
+  docId: string,
+  written: Record<string, unknown>,
+  previous: Record<string, unknown> | null,
+) => ({
+  ref: { op, collection: 'topics', docId } as EffectRef,
+  effect: { written, previous },
+});
+
+const ADDED = 'Added to Car care: Winter tyre size';
+const versionEffect = (change: string, title = ADDED, from = 4) =>
+  topicEntry(
+    'update',
+    'car',
+    { version: from + 1, change, 'sealed.title': title },
+    { version: from, 'sealed.title': title },
+  );
+const noteMade = {
+  ref: { op: 'create', collection: 'notes', docId: 'n1' } as EffectRef,
+  effect: {
+    written: { 'sealed.title': 'Winter tyre size', topicIds: ['car'] },
+    previous: null,
+  },
+};
+const noteTarget = (): [string, UndoTarget] => [
+  'n1',
+  {
+    docId: 'n1',
+    data: { lastEditedAt: null, topicIds: ['car'] },
+    opened: null,
+  },
+];
+
+test('topicEffectKind tells the four topic effect shapes apart', () => {
+  assert.equal(
+    topicEffectKind({
+      written: { docState: 'behind', pendingNoteIds: ['n'] },
+      previous: { docState: 'current', pendingNoteIds: [] },
+    }),
+    'filing',
+  );
+  assert.equal(topicEffectKind(versionEffect('added').effect), 'version');
+  assert.equal(
+    topicEffectKind({
+      written: { parentId: 'x', depth: 2, 'sealed.title': 't' },
+      previous: { parentId: null, depth: 1, 'sealed.title': 't' },
+    }),
+    'placement',
+  );
+  assert.equal(
+    topicEffectKind({
+      written: { depth: 3, 'sealed.title': 't' },
+      previous: { depth: 2, 'sealed.title': 't' },
+    }),
+    'placement',
+  );
+  assert.equal(
+    topicEffectKind({
+      written: {
+        'sealed.title': 'g',
+        'sealed.name': 'Car care',
+        parentId: null,
+      },
+      previous: null,
+    }),
+    'made',
+  );
+});
+
+test('a turn that made a note and added to a topic takes back both, the topic as a new version', () => {
+  const result = asWrite(
+    plan(execution([noteMade, versionEffect('added')]), [
+      noteTarget(),
+      topicTarget('car', { version: 5, writeClaim: null }),
+    ]),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['n1'],
+  );
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'car', collection: 'topics', from: 5, to: 4 },
+  ]);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 note and 1 change to Car care',
+  );
+  assert.equal(result.report, 'Took back 1 note. 1 change to Car care too.');
+  assert.deepEqual(
+    result.undoExecution.effectRefs.map((ref) => [ref.op, ref.collection]),
+    [
+      ['delete', 'notes'],
+      ['update', 'topics'],
+    ],
+  );
+});
+
+test('a version change alone is taken back, and says the topic', () => {
+  const result = asWrite(
+    plan(
+      execution([versionEffect('revised', 'Changed Car care: shorter intro')]),
+      [topicTarget('car', { version: 5, writeClaim: null })],
+    ),
+  );
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'car', collection: 'topics', from: 5, to: 4 },
+  ]);
+  assert.equal(result.undoSealed.summary, 'Took back 1 change to Car care');
+  assert.equal(result.report, 'Took back 1 change to Car care.');
+  assert.equal(result.deletes.length, 0);
+});
+
+test('a version is kept after a later version, and while the topic is being written', () => {
+  const later = asRefused(
+    plan(execution([versionEffect('added')]), [
+      topicTarget('car', { version: 6, writeClaim: null }),
+    ]),
+  );
+  assert.equal(later.reason, 'nothingToTakeBack');
+  assert.deepEqual(later.kept, ['Car care']);
+  const claimed = asRefused(
+    plan(execution([versionEffect('added')]), [
+      topicTarget('car', {
+        version: 5,
+        writeClaim: { claimId: 'c', at: NOW - 1000 },
+      }),
+    ]),
+  );
+  assert.deepEqual(claimed.kept, ['Car care']);
+  const stale = asWrite(
+    plan(execution([versionEffect('added')]), [
+      topicTarget('car', {
+        version: 5,
+        writeClaim: { claimId: 'c', at: NOW - 200_000 },
+      }),
+    ]),
+  );
+  assert.equal(stale.versionRestores.length, 1);
+});
+
+const MOVED = 'Moved Washing under Car care';
+const placement = () => [
+  topicEntry(
+    'update',
+    'washing',
+    { parentId: 'car', depth: 2, 'sealed.title': MOVED },
+    { parentId: null, depth: 1, 'sealed.title': MOVED },
+  ),
+  topicEntry(
+    'update',
+    'rinse',
+    { depth: 3, 'sealed.title': MOVED },
+    { depth: 2, 'sealed.title': MOVED },
+  ),
+];
+
+test('a move goes back together with its subtree', () => {
+  const result = asWrite(
+    plan(execution(placement()), [
+      topicTarget('washing', { parentId: 'car', depth: 2 }, 'Washing'),
+      topicTarget('rinse', { parentId: 'washing', depth: 3 }, 'Rinse'),
+      topicTarget('car', { parentId: null, depth: 1 }),
+    ]),
+  );
+  assert.deepEqual(
+    result.updates.map((entry) => [
+      entry.docId,
+      entry.fields.parentId,
+      entry.fields.depth,
+    ]),
+    [
+      ['washing', null, 1],
+      ['rinse', undefined, 2],
+    ],
+  );
+  assert.equal(result.undoSealed.summary, 'Took back 1 change to Washing');
+});
+
+test('a move is kept whole when any topic in it changed, or the old parent is gone', () => {
+  const moved = refusedKept(
+    plan(execution(placement()), [
+      topicTarget('washing', { parentId: 'car', depth: 2 }, 'Washing'),
+      topicTarget('rinse', { parentId: 'washing', depth: 2 }, 'Rinse'),
+    ]),
+  );
+  assert.deepEqual(moved, ['Washing']);
+  const parentGone = refusedKept(
+    plan(execution(placement()), [
+      [
+        'washing',
+        {
+          docId: 'washing',
+          data: { parentId: 'car', depth: 2 },
+          opened: topicSealed('Washing'),
+          isOwnerHere: false,
+        },
+      ],
+      topicTarget('rinse', { parentId: 'washing', depth: 3 }, 'Rinse'),
+    ]),
+  );
+  assert.deepEqual(parentGone, ['Washing']);
+});
+
+test('two moves of one topic in a turn go back to where it started', () => {
+  const twice = [
+    topicEntry(
+      'update',
+      'washing',
+      { parentId: 'car', depth: 2, 'sealed.title': MOVED },
+      { parentId: null, depth: 1, 'sealed.title': MOVED },
+    ),
+    topicEntry(
+      'update',
+      'washing',
+      { parentId: 'kitchen', depth: 2, 'sealed.title': MOVED },
+      { parentId: 'car', depth: 2, 'sealed.title': MOVED },
+    ),
+  ];
+  const result = asWrite(
+    plan(execution(twice), [
+      topicTarget('washing', { parentId: 'kitchen', depth: 2 }, 'Washing'),
+      topicTarget('kitchen', { parentId: null, depth: 1 }),
+    ]),
+  );
+  assert.deepEqual(
+    result.updates.map((entry) => [
+      entry.docId,
+      entry.fields.parentId,
+      entry.fields.depth,
+    ]),
+    [['washing', null, 1]],
+  );
+  const stopped = refusedKept(
+    plan(execution(twice), [
+      topicTarget('washing', { parentId: 'car', depth: 2 }, 'Washing'),
+    ]),
+  );
+  assert.deepEqual(stopped, ['Washing']);
+});
+
+const refusedKept = (result: UndoPlan) => asRefused(result).kept;
+
+const GROUPED = 'Grouped Washing and Fragrance under Car care';
+const grouping = () => [
+  topicEntry(
+    'create',
+    'parent',
+    { 'sealed.title': GROUPED, 'sealed.name': 'Car care', parentId: null },
+    null,
+  ),
+  topicEntry(
+    'update',
+    'washing',
+    { parentId: 'parent', depth: 2, 'sealed.title': GROUPED },
+    { parentId: null, depth: 1, 'sealed.title': GROUPED },
+  ),
+  topicEntry(
+    'update',
+    'washing',
+    { version: 3, change: 'grouped', 'sealed.title': GROUPED },
+    { version: 2, 'sealed.title': GROUPED },
+  ),
+];
+const groupTargets = (parent: Record<string, unknown>, washingDepth = 2) => [
+  topicTarget('parent', parent, 'Car care'),
+  topicTarget(
+    'washing',
+    { parentId: 'parent', depth: washingDepth, version: 3, writeClaim: null },
+    'Washing',
+  ),
+];
+const FRESH_PARENT = {
+  parentId: null,
+  depth: 1,
+  version: 0,
+  pendingNoteIds: [],
+};
+
+test('a grouping goes back as one change: the child moves out, its version is restored, the made parent goes', () => {
+  const result = asWrite(
+    plan(execution(grouping()), groupTargets(FRESH_PARENT)),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['parent'],
+  );
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'washing', collection: 'topics', from: 3, to: 2 },
+  ]);
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.undoSealed.summary, 'Took back grouping under Car care');
+});
+
+test('a made parent stays when it was written, used, or a child stayed under it', () => {
+  const written = asWrite(
+    plan(execution(grouping()), groupTargets({ ...FRESH_PARENT, version: 1 })),
+  );
+  assert.equal(written.deletes.length, 0);
+  assert.deepEqual(written.kept, [GROUPED]);
+  const used = asWrite(
+    plan(
+      execution(grouping()),
+      groupTargets(FRESH_PARENT),
+      new Set(['parent']),
+    ),
+  );
+  assert.equal(used.deletes.length, 0);
+  const stayed = asWrite(
+    plan(execution(grouping()), groupTargets(FRESH_PARENT, 3)),
+  );
+  assert.equal(stayed.deletes.length, 0);
+  assert.equal(stayed.updates.length, 0);
+});
+
+test('a topic made from a file goes at the version the import wrote, and stays once it is edited', () => {
+  const imported = [
+    topicEntry(
+      'create',
+      'pack',
+      { 'sealed.title': 'Made Packing list', importedVersion: 1 },
+      null,
+    ),
+  ];
+  const target = (version: number) => [
+    topicTarget('pack', { ...FRESH_PARENT, version }, 'Packing list'),
+  ];
+  const fresh = asWrite(plan(execution(imported), target(1)));
+  assert.deepEqual(
+    fresh.deletes.map((entry) => entry.docId),
+    ['pack'],
+  );
+  const edited = plan(execution(imported), target(2));
+  assert.equal(edited.kind, 'refused');
+});
+
+test('an old filing effect still takes the note back out and ignores the new shapes', () => {
+  const filing = topicEntry(
+    'update',
+    'car',
+    { docState: 'behind', pendingNoteIds: ['n1'], 'sealed.title': 'Car care' },
+    { docState: 'current', pendingNoteIds: [], 'sealed.title': 'Car care' },
+  );
+  const result = asWrite(
+    plan(execution([noteMade, filing]), [
+      noteTarget(),
+      topicTarget('car', {
+        docState: 'behind',
+        pendingNoteIds: ['n1'],
+        version: 5,
+      }),
+    ]),
+  );
+  assert.equal(result.versionRestores.length, 0);
+  assert.deepEqual(
+    result.updates.map((entry) => entry.fields),
+    [{ pendingNoteIds: [], docState: 'current' }],
+  );
+});
+
+test('topic effects give one line each, a grouping gives one line, and filing gives none', () => {
+  const linesOf = (entries: { ref: EffectRef; effect: ExecutionEffect }[]) =>
+    buildResultLines(execution(entries), new Map(), 'UTC', NOW).map((line) => [
+      line.title,
+      line.ref?.collection,
+      line.ref?.id,
+    ]);
+  assert.deepEqual(linesOf([noteMade, versionEffect('added')]), [
+    ['Winter tyre size', 'notes', 'n1'],
+    [ADDED, 'topics', 'car'],
+  ]);
+  assert.deepEqual(linesOf(grouping()), [[GROUPED, 'topics', 'parent']]);
+  assert.deepEqual(linesOf(placement()), [[MOVED, 'topics', 'washing']]);
+  assert.deepEqual(
+    linesOf([
+      topicEntry(
+        'update',
+        'car',
+        {
+          docState: 'behind',
+          pendingNoteIds: ['n1'],
+          'sealed.title': 'Car care',
+        },
+        { docState: 'current', pendingNoteIds: [], 'sealed.title': 'Car care' },
+      ),
+    ]),
+    [],
+  );
+});
+
+const keptPhoto = (
+  data: Record<string, unknown> | null,
+): [string, UndoTarget] => ['m1', { docId: 'm1', data, opened: null }];
+
+const KEEP_PHOTO = {
+  ref: { op: 'update', collection: 'media', docId: 'm1' } as EffectRef,
+  effect: {
+    written: {
+      status: 'kept',
+      attachedTo: [{ kind: 'task', id: 't1' }],
+      'sealed.title': 'Confirm the venue quote',
+    },
+    previous: {
+      status: 'received',
+      attachedTo: [],
+      'sealed.title': 'Confirm the venue quote',
+    },
+  } as ExecutionEffect,
+};
+
+test('undo of a keep lets the photo go for a fresh 24 hours', () => {
+  const result = asWrite(
+    plan(execution([KEEP_PHOTO]), [
+      keptPhoto({
+        status: 'kept',
+        role: 'attachment',
+        executionId: 'exec-1',
+        attachedTo: [{ kind: 'task', id: 't1' }],
+        deleteAfter: null,
+      }),
+    ]),
+  );
+  assert.equal(result.deletes.length, 0);
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].collection, 'media');
+  assert.deepEqual(result.updates[0].fields, {
+    status: 'discarded',
+    attachedTo: [],
+    decidedAt: NOW,
+    deleteAfter: NOW + 24 * 60 * 60 * 1000,
+    executionId: null,
+  });
+  assert.equal(result.undoSealed.summary, 'Took back a kept photo');
+  assert.deepEqual(
+    result.undoExecution.effectRefs.map((ref) => ref.op),
+    ['update'],
+  );
+});
+
+test('undo of a keep skips a photo the person already removed', () => {
+  const result = asRefused(
+    plan(execution([KEEP_PHOTO]), [
+      keptPhoto({
+        status: 'discarded',
+        role: 'attachment',
+        executionId: null,
+        attachedTo: [],
+      }),
+    ]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+});
+
+test('a kept photo is not listed as a result line', () => {
+  assert.deepEqual(
+    buildResultLines(execution([KEEP_PHOTO]), new Map(), 'UTC', NOW),
+    [],
+  );
+});
+
+const HELD_PHOTO = {
+  id: 'm1',
+  status: 'kept' as const,
+  attachedTo: [{ kind: 'task' as const, id: 't1' }],
+  decidedAt: EARLIER,
+  deleteAfter: null,
+};
+
+test('deleting a task lets its kept photo go for 24 hours and Undo keeps it again', () => {
+  const [released] = planPhotoRelease(
+    [HELD_PHOTO],
+    [{ kind: 'task', id: 't1' }],
+    NOW,
+  );
+  assert.deepEqual(released.forward, {
+    status: 'discarded',
+    attachedTo: [],
+    decidedAt: NOW,
+    deleteAfter: NOW + 24 * 60 * 60 * 1000,
+  });
+  assert.deepEqual(released.back, {
+    attachedTo: [{ kind: 'task', id: 't1' }],
+    status: 'kept',
+    decidedAt: EARLIER,
+    deleteAfter: null,
+  });
+});
+
+test('deleting a task only takes itself off a photo kept elsewhere too', () => {
+  const [released] = planPhotoRelease(
+    [
+      {
+        ...HELD_PHOTO,
+        attachedTo: [
+          { kind: 'task', id: 't1' },
+          { kind: 'fact', id: 'f1' },
+        ],
+      },
+    ],
+    [{ kind: 'task', id: 't1' }],
+    NOW,
+  );
+  assert.deepEqual(released.forward, {
+    attachedTo: [{ kind: 'fact', id: 'f1' }],
+  });
+  assert.equal(released.back.status, 'kept');
+});
+
+test('deleting a task leaves other photos and discarded ones alone', () => {
+  assert.deepEqual(
+    planPhotoRelease(
+      [
+        { ...HELD_PHOTO, id: 'm2', attachedTo: [{ kind: 'task', id: 't2' }] },
+        { ...HELD_PHOTO, id: 'm3', status: 'discarded', attachedTo: [] },
+      ],
+      [{ kind: 'task', id: 't1' }],
+      NOW,
+    ),
+    [],
+  );
+});
+
+const procedureSealed = (title: string): ProcedureSealed => ({
+  title,
+  steps: { a: { text: 'Laptop', detail: null } },
+  groups: {},
+});
+
+const procedureTarget = (
+  data: Record<string, unknown> | null,
+  title = 'Packing for a work trip',
+): [string, UndoTarget] => [
+  'pack',
+  { docId: 'pack', data, opened: data ? procedureSealed(title) : null },
+];
+
+const PROCEDURE_MADE_LINE = 'New procedure: Packing for a work trip · 12 steps';
+const PROCEDURE_CHANGED_LINE =
+  'Changed Packing for a work trip: added the laptop charger';
+
+const procedureMade = {
+  ref: { op: 'create', collection: 'procedures', docId: 'pack' } as EffectRef,
+  effect: {
+    written: {
+      'sealed.title': PROCEDURE_MADE_LINE,
+      'sealed.name': 'Packing for a work trip',
+      version: 1,
+    },
+    previous: null,
+  } as ExecutionEffect,
+};
+
+const procedureRevised = {
+  ref: { op: 'update', collection: 'procedures', docId: 'pack' } as EffectRef,
+  effect: {
+    written: {
+      version: 3,
+      change: 'revised',
+      'sealed.title': PROCEDURE_CHANGED_LINE,
+      'sealed.name': 'Packing for a work trip',
+    },
+    previous: {
+      version: 2,
+      'sealed.title': PROCEDURE_CHANGED_LINE,
+      'sealed.name': 'Packing for a work trip',
+    },
+  } as ExecutionEffect,
+};
+
+test('procedureEffectKind tells a made procedure from a new version', () => {
+  assert.equal(procedureEffectKind(procedureMade.effect), 'made');
+  assert.equal(procedureEffectKind(procedureRevised.effect), 'version');
+});
+
+test('a procedure the turn made is deleted while it is at version 1', () => {
+  const result = asWrite(
+    plan(execution([procedureMade]), [procedureTarget({ version: 1 })]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'pack', collection: 'procedures' },
+  ]);
+  assert.equal(result.versionRestores.length, 0);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 change to Packing for a work trip',
+  );
+  assert.equal(result.report, 'Took back 1 change to Packing for a work trip.');
+});
+
+test('a procedure the person changed since is kept, not deleted', () => {
+  const result = asRefused(
+    plan(execution([procedureMade]), [procedureTarget({ version: 2 })]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a revised procedure goes back as a new version holding the earlier one', () => {
+  const result = asWrite(
+    plan(execution([procedureRevised]), [procedureTarget({ version: 3 })]),
+  );
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'pack', collection: 'procedures', from: 3, to: 2 },
+  ]);
+  assert.equal(result.deletes.length, 0);
+  assert.deepEqual(result.undoSealed.effects[0].written, {
+    version: 4,
+    change: 'restored',
+    'sealed.title': PROCEDURE_CHANGED_LINE,
+  });
+});
+
+test('a revised procedure edited since is kept', () => {
+  const result = asRefused(
+    plan(execution([procedureRevised]), [procedureTarget({ version: 4 })]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a made procedure that is already gone is counted as gone', () => {
+  const result = asRefused(
+    plan(execution([procedureMade]), [procedureTarget(null)]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+});
+
+test('a turn that made a procedure and a note takes back both and says so', () => {
+  const result = asWrite(
+    plan(execution([noteMade, procedureMade]), [
+      noteTarget(),
+      procedureTarget({ version: 1 }),
+    ]),
+  );
+  assert.deepEqual(result.deletes.map((entry) => entry.docId).sort(), [
+    'n1',
+    'pack',
+  ]);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 note and 1 change to Packing for a work trip',
+  );
+  assert.equal(
+    result.report,
+    'Took back 1 note. 1 change to Packing for a work trip too.',
+  );
+});
+
+test('a procedure result line names the procedure and opens it', () => {
+  const lines = buildResultLines(
+    execution([procedureMade, procedureRevised]),
+    new Map(),
+    'America/Los_Angeles',
+    NOW,
+  );
+  assert.deepEqual(
+    lines.map((line) => [line.title, line.ref]),
+    [
+      [PROCEDURE_MADE_LINE, { collection: 'procedures', id: 'pack' }],
+      [PROCEDURE_CHANGED_LINE, { collection: 'procedures', id: 'pack' }],
+    ],
+  );
+});
+
+test('procedure undo copy counts one change by name and several by number', () => {
+  assert.equal(
+    HELM_COPY.undoProcedureChanges(1, 'Cabin'),
+    'Took back 1 change to Cabin',
+  );
+  assert.equal(
+    HELM_COPY.undoProcedureChanges(2, null),
+    'Took back 2 changes to procedures',
+  );
+  assert.equal(
+    HELM_COPY.undoReportProceduresToo(1, null),
+    '1 change to a procedure too.',
+  );
+});
+
+const runSealed = (): RunSealed => ({
+  title: 'Packing for a work trip',
+  steps: { a: { text: 'Laptop', detail: null } },
+  groups: {},
+  attachedLabel: 'Portland weekend',
+});
+
+const runTarget = (
+  data: Record<string, unknown> | null,
+): [string, UndoTarget] => [
+  'run1',
+  { docId: 'run1', data, opened: data ? runSealed() : null },
+];
+
+const RUN_STARTED_LINE = 'Started Packing for a work trip for Portland weekend';
+const RUN_TICKED_LINE = 'Ticked Laptop on Packing for a work trip';
+
+const runStarted = {
+  ref: {
+    op: 'create',
+    collection: 'procedureRuns',
+    docId: 'run1',
+  } as EffectRef,
+  effect: {
+    written: {
+      'sealed.title': RUN_STARTED_LINE,
+      'sealed.name': 'Packing for a work trip',
+    },
+    previous: null,
+  } as ExecutionEffect,
+};
+
+const runTicked = {
+  ref: {
+    op: 'update',
+    collection: 'procedureRuns',
+    docId: 'run1',
+  } as EffectRef,
+  effect: {
+    written: { 'stepState.a.doneAt': EARLIER, 'sealed.title': RUN_TICKED_LINE },
+    previous: { 'stepState.a.doneAt': null, 'sealed.title': RUN_TICKED_LINE },
+  } as ExecutionEffect,
+};
+
+const ticked = (doneAt: number | null, editedAt = EARLIER) => ({
+  lastEditedAt: editedAt,
+  stepState: { a: { order: 0, groupId: null, doneAt, isExtra: false } },
+});
+
+test('a run the turn started is deleted while nothing was ticked on it', () => {
+  const result = asWrite(
+    plan(execution([runStarted]), [runTarget({ lastEditedAt: null })]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'run1', collection: 'procedureRuns' },
+  ]);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back the run of Packing for a work trip',
+  );
+  assert.equal(result.report, 'Took back the run of Packing for a work trip.');
+});
+
+test('a started run the person ticked since is kept', () => {
+  const result = asRefused(
+    plan(execution([runStarted]), [runTarget(ticked(NOW, NOW))]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a started run is deleted once a later tick on it was undone', () => {
+  const result = asWrite(
+    plan(execution([runStarted]), [runTarget(ticked(null, EARLIER))]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'run1', collection: 'procedureRuns' },
+  ]);
+});
+
+test('a started run with a step ticked by hand is kept whatever its edit stamp', () => {
+  const result = asRefused(
+    plan(execution([runStarted]), [runTarget(ticked(NOW, EARLIER))]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a tick by voice is unticked while it is still the way it was left', () => {
+  const result = asWrite(
+    plan(execution([runTicked]), [runTarget(ticked(EARLIER))]),
+  );
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].collection, 'procedureRuns');
+  assert.equal(result.updates[0].fields['stepState.a.doneAt'], null);
+  assert.equal(result.undoSealed.summary, 'Unticked 1 step');
+  assert.equal(result.report, 'Unticked 1 step.');
+});
+
+test('a tick the person undid by hand is kept', () => {
+  const result = asRefused(
+    plan(execution([runTicked]), [runTarget(ticked(null))]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a run result line names what was done and opens the run', () => {
+  const lines = buildResultLines(
+    execution([runStarted, runTicked]),
+    new Map(),
+    'America/Los_Angeles',
+    NOW,
+  );
+  assert.deepEqual(
+    lines.map((line) => [line.title, line.ref]),
+    [
+      [RUN_STARTED_LINE, { collection: 'procedureRuns', id: 'run1' }],
+      [RUN_TICKED_LINE, { collection: 'procedureRuns', id: 'run1' }],
+    ],
+  );
+});
+
+test('run undo copy counts ticks and joins them with a taken-back run', () => {
+  assert.equal(HELM_COPY.undoRunChanges([], 3), 'Unticked 3 steps');
+  assert.equal(
+    HELM_COPY.undoRunChanges(['Cabin'], 2),
+    'Took back the run of Cabin and unticked 2 steps',
+  );
+  assert.equal(
+    HELM_COPY.undoReportRunsToo(['Cabin', 'Trip'], 0),
+    'Took back 2 runs.',
+  );
+});
+
+test('a turn that made a note and a run takes back both and says so', () => {
+  const result = asWrite(
+    plan(execution([noteMade, runStarted]), [
+      noteTarget(),
+      runTarget({ lastEditedAt: null }),
+    ]),
+  );
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 note and took back the run of Packing for a work trip',
+  );
+  assert.equal(
+    result.report,
+    'Took back 1 note. Took back the run of Packing for a work trip.',
+  );
 });
 
 const failures = tests.flatMap(([name, run]) => {

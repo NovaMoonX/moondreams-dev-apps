@@ -20,7 +20,7 @@ import {
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { checkAmount } from '@apps/runway/engine/checkAmount';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectEnvelopes,
   selectIsMovesLoaded,
