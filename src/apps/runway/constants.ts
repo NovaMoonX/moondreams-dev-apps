@@ -3323,6 +3323,17 @@ export const HOW_OFTEN_WORDS = {
   notBeingAdded: 'Not saving for it yet',
 } as const;
 
+/** The "Comes out of" question an envelope's or goal's funding asks when there is more than one pay. */
+export const FUNDING_PAY_WORDS = {
+  title: 'Which pay does it come out of?',
+  label: 'Comes out of',
+  everyPay: 'Every pay',
+  percentOfPay: (pay: string) => `of ${pay}`,
+  suffix: (pay: string) => `from ${pay}`,
+  /** The change log's phrase when no one pay is picked. */
+  logEveryPay: 'every pay',
+} as const;
+
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
 export const FIX_WORDS = {
   noIncome: (name: string) => `${name} has no income before it is due`,

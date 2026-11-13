@@ -25,7 +25,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { store, useAppSelector } from '@/store';
 import { getEventLink } from '@apps/runway/utils/eventLink';
-import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectAllHorizonItems,
+  selectResolvedPlan,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   centsToInputValue,
@@ -55,6 +58,7 @@ import {
   isText,
   readDraftFields,
   readKeptWithChange,
+  withDraftDefaults,
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import {
@@ -116,15 +120,18 @@ interface EnvelopeFormData extends FundingFormData, ExtrasFormData {
 }
 
 const parseEnvelopeDraftFields = (stored: unknown) =>
-  readDraftFields<EnvelopeFormData>(withExtrasDefault(stored), {
-    ...fundingFieldChecks,
-    name: isText,
-    priority: isNullableOneOf(PRIORITIES),
-    emoji: isNullableText,
-    group: isPickOrCreate,
-    max: isText,
-    extras: isExtrasAnswer,
-  });
+  readDraftFields<EnvelopeFormData>(
+    withDraftDefaults(withExtrasDefault(stored), { pay: null }),
+    {
+      ...fundingFieldChecks,
+      name: isText,
+      priority: isNullableOneOf(PRIORITIES),
+      emoji: isNullableText,
+      group: isPickOrCreate,
+      max: isText,
+      extras: isExtrasAnswer,
+    },
+  );
 
 const parseEnvelopeDraft = (stored: unknown) =>
   readKeptWithChange(stored, parseEnvelopeDraftFields);
@@ -234,6 +241,9 @@ function EnvelopeFormBody({
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const resolvedPlan = useAppSelector((state) =>
+    selectResolvedPlan(state, today),
+  );
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
@@ -308,6 +318,7 @@ function EnvelopeFormBody({
     skippable: !editing || startData.often === 'none' ? 'envelope' : null,
     isDraft: !!draft,
     draftSources: draft?.sources,
+    plan: resolvedPlan,
     getAmountTitle: (unit) => `How much does it get ${unit}?`,
   });
   const maxCents = parseMoneyToCents(formData.max);

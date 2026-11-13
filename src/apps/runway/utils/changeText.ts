@@ -9,6 +9,7 @@ import {
   FORM_FLOW_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
+  FUNDING_PAY_WORDS,
   HOW_OFTEN_WORDS,
   MAKE_BILL_WORDS,
   BILL_PAY_WORDS,
@@ -383,9 +384,24 @@ const getParts = (
         (value) => PRIORITY_LABELS[value],
       ),
       diff(
+        FUNDING_PAY_WORDS.label,
+        goalBefore.funding.pay ?? null,
+        goalAfter.funding.pay ?? null,
+        (value) =>
+          value === null
+            ? FUNDING_PAY_WORDS.logEveryPay
+            : describeFundedByChange({ kind: 'pay', ...value }, payNameOf),
+      ),
+      diff(
         'Funding',
-        { funding: goalBefore.funding, extras: getExtras(goalBefore) },
-        { funding: goalAfter.funding, extras: getExtras(goalAfter) },
+        {
+          funding: { ...goalBefore.funding, pay: null },
+          extras: getExtras(goalBefore),
+        },
+        {
+          funding: { ...goalAfter.funding, pay: null },
+          extras: getExtras(goalAfter),
+        },
         (value) =>
           value.funding.cadence.kind === 'none'
             ? HOW_OFTEN_WORDS.idleInChange

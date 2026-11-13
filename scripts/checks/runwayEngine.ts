@@ -21102,4 +21102,66 @@ checkHorizonMoves();
   );
 }
 
+// A funding rule that names one pay says so in its row and in its history.
+{
+  const pay = { payLineId: 'work', monthDay: 30 };
+  const rule = {
+    amount: { kind: 'exact', cents: 5_000 },
+    cadence: { kind: 'everyIncomeDay' },
+  } as const;
+  assert.equal(
+    describeFunding({ ...rule, pay }, [], 'envelope', []),
+    '$50.00 every income day from the pay on the 30th',
+  );
+  assert.equal(
+    describeFunding(
+      { ...rule, pay: { payLineId: 'gone', monthDay: null } },
+      [],
+      'envelope',
+      [],
+    ),
+    '$50.00 every income day from a pay that is no longer in the plan',
+  );
+  assert.equal(
+    describeFunding({ ...rule, pay }),
+    '$50.00 every income day',
+    'without the plan the row stays as it was',
+  );
+  const envelope = (funding: object) =>
+    ({
+      name: 'Groceries',
+      emoji: null,
+      priority: 'must',
+      orderIndex: 1,
+      funding,
+      groupId: null,
+    }) as never;
+  const namer = () => 'the pay on the 30th';
+  assert.equal(
+    describeChange(
+      envelope(rule),
+      envelope({ ...rule, pay }),
+      () => '',
+      undefined,
+      namer,
+    ),
+    'Comes out of every pay to the pay on the 30th',
+  );
+  assert.equal(
+    describeChange(
+      envelope({ ...rule, pay }),
+      envelope({ ...rule, pay: null }),
+      () => '',
+      undefined,
+      namer,
+    ),
+    'Comes out of the pay on the 30th to every pay',
+  );
+  assert.equal(
+    describeChange(envelope(rule), envelope({ ...rule, pay: null }), () => ''),
+    '',
+    'an unset pay and none are the same',
+  );
+}
+
 console.log('runway engine: ok');

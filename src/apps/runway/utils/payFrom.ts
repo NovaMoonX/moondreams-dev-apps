@@ -67,8 +67,9 @@ export function describePayChoice(
   isLower = false,
 ) {
   const label = getPayChoiceLabel(fundedBy, plan);
-  return isLower && label.startsWith('The pay on ')
-    ? `t${label.slice(1)}`
+  return isLower &&
+    (label.startsWith('The pay on ') || label === PAID_FROM_WORDS.gone)
+    ? `${label.charAt(0).toLowerCase()}${label.slice(1)}`
     : label;
 }
 
