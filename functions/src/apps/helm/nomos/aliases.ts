@@ -66,6 +66,13 @@ export function createSyncedBook(): SyncedBook {
   };
 }
 
+/** A record read from another app, split so the screen never has to parse a sentence: its name, a detail line and its amount as written. */
+export interface QuoteRecord {
+  name: string;
+  detail: string | null;
+  amount: string;
+}
+
 export interface QuoteEntry {
   alias: string;
   connectorId: string;
@@ -76,6 +83,7 @@ export interface QuoteEntry {
   at: number | null;
   snippet: string;
   deepLink: string | null;
+  record?: QuoteRecord;
 }
 
 export interface QuoteBook {

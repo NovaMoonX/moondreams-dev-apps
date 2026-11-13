@@ -1709,6 +1709,7 @@ const tests: [string, () => void | Promise<void>][] = [
         at: Date.UTC(2026, 9, 1),
         snippet: '$88.00 \u00b7 Groceries',
         deepLink: '/runway',
+        record: { name: 'Costco', detail: 'Groceries', amount: '$88.00' },
       });
       const [line] = searched.entries();
       assert.equal(line.label, 'your Runway transactions');

@@ -1,6 +1,6 @@
 import { readConnectorAppId } from '../../../vendor/connectionsContract.js';
 import { connectorLabel } from '../syncedCopies.js';
-import type { QuoteEntry, SearchedEntry } from './aliases.js';
+import type { QuoteEntry, QuoteRecord, SearchedEntry } from './aliases.js';
 import {
   QUOTE_CAP,
   type AnswerCommand,
@@ -23,6 +23,8 @@ export interface AnswerQuote {
   sourceLabel: string;
   at: number | null;
   text: string | null;
+  /** Set on a record read from an app; null on a mail or document quote and on quotes kept before it existed. */
+  record: QuoteRecord | null;
   deepLink: string | null;
   deletedAt: number | null;
 }
@@ -192,6 +194,7 @@ export function buildAnswer(
     sourceLabel: toSourceLabel(quote),
     at: quote.at,
     text: toQuoteText(quote.snippet),
+    record: quote.record ?? null,
     deepLink: quote.deepLink,
     deletedAt: null,
   }));

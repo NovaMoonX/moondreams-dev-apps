@@ -340,6 +340,13 @@ export type SourceRef =
       label: string | null;
     };
 
+/** A record read from another app, as the answer kept it. */
+export interface AnswerRecord {
+  name: string;
+  detail: string | null;
+  amount: string;
+}
+
 export interface AnswerQuote {
   id: string;
   connectorId: string;
@@ -348,6 +355,8 @@ export interface AnswerQuote {
   /** When the quoted message was sent; null on quotes kept before it was recorded. */
   at: number | null;
   text: string | null;
+  /** Null on a mail or document quote and on app records kept before it was stored; those are read from `sourceLabel` and `text`. */
+  record: AnswerRecord | null;
   deepLink: string | null;
   deletedAt: number | null;
 }

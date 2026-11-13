@@ -756,7 +756,7 @@ Runway's connection page offers "Transactions: the date, who you paid, the amoun
 2. The live router serves a site adapter's live category with no token; `search_app_records` is offered only while the category is on.
 ### CRUD & Entry-Point Requirements
 - [ ] **Update:** switch Transactions on or off on Runway's page.
-- [ ] **Read:** answers quoting transaction rows, with Open in Runway.
+- [ ] **Read:** answers listing transaction rows, with one Open in Runway.
 ### Success Criteria
 - [ ] The person can ask what they spent at a place and get the rows and a total, with Helm keeping none of them.
 - [ ] `check:adapters`: a row has only date, payee, amount, currency and category; no note, receipt, link, card, account, bank description or deposit leaves the adapter; another uid gets nothing.
