@@ -6,23 +6,25 @@ The lead publishes these as the **Helm UX** Design artifact. Boards are 390 x 84
 
 ## Look and tokens
 
-"The household's private secretary": ink navy, pewter and silver, white paper, one restrained cool accent (verdigris), serif titles over the site's sans. No nautical words. All text pairs below measure at least 4.5:1 (checked; lowest is muted text on the page at 5.75:1 light); the dashed edge is at least 4.4:1 against the page and card.
+"The household's private secretary": cool mist paper, deep blue-teal ink, one restrained cool accent (verdigris), serif titles over the site's sans. Its own palette, set apart from every other app (Going Once is cream and forest green, Runway and Waypoint blue). No nautical words. All text pairs below measure at least 4.5:1 (checked; lowest is muted text on the page at 5.6:1 light).
+
+**Themes.** The default is **Chestnut & Sand** (warm paper, brown ink, primary #7A5434 light / #E0BF9C dark); the person can pick Plum & Pewter, Mist & Deep Teal or Porcelain & Indigo in Settings > Colours. The table below is the Mist & Deep Teal palette (the original); every theme's tokens are in `helm.css`.
 
 | Token | Light | Dark | Used for |
 |---|---|---|---|
-| background (pewter page) | #F3F4F7 | #0C111B | page |
-| card / popover | #FFFFFF | #151C29 | cards, sheets, menus |
-| foreground (ink) / popover-foreground | #141B2D | #E7EAF0 | text (17.2:1 / 14.2:1 on card) |
-| muted / muted-foreground | #E9EBF0 / #566074 | #1B2331 / #9BA4B5 | quiet fills / meta text (6.3:1 / 6.8:1 on card) |
-| border | #D8DCE4 | #2B3547 | hairlines |
-| primary (ink navy) / fg | #1D2B4C / #FFFFFF | #C3CEE4 / #0C111B | the one filled button, Talk (and Stop), the wave (14.0:1 / 11.9:1) |
-| secondary (pewter tint) / fg | #E7EBF3 / #1D2B4C | #222F47 / #D8DFEC | assistant lines, the reply card, the context chip, selected pills, the listening ring, the mark's disc (11.7:1 / 10.0:1) |
-| accent (verdigris tint) / fg | #DDEEEA / #1E4D48 | #173834 / #BFE4DD | "Suggested" tag fill, Needs you row tint (7.9:1 / 9.3:1) |
-| verdigris (edge) | #3D7C75 | #71B5AB | dashed suggestion edge (1.5px, 6/4 dash), "Suggested" text, Needs you dot (4.8:1 / 7.2:1 on card) |
-| tooltip / fg | #141B2D / #FFFFFF | #E7EAF0 / #0C111B | tooltips |
+| background (mist page) | #F3F6F6 | #0D1517 | page |
+| card / popover | #FFFFFF | #152023 | cards, sheets, menus, the composer |
+| foreground (ink) / popover-foreground | #172A2E | #E6EEF0 | text (14.9:1 / 14.1:1 on card) |
+| muted / muted-foreground | #E8EEEF / #52666A | #1A272A / #97AAAE | quiet fills / meta text (6.1:1 / 6.9:1 on card) |
+| border | #DAE3E4 | #273639 | hairlines |
+| primary (deep teal) / fg | #14555E / #FFFFFF | #86CCD6 / #081316 | the one filled button, Talk (and Stop), Send, the wave (8.4:1 / 10.4:1) |
+| secondary (teal tint) / fg | #E3EEF0 / #14555E | #1C2E32 / #CFE5E9 | assistant lines, the reply card, the context chip, selected pills, the listening ring, the mark's disc (7.1:1 / 10.8:1) |
+| accent (verdigris tint) / fg | #DDEFEC / #1B4A44 | #1B3532 / #BFE6DE | "Suggested" tag fill, Needs you row tint (8.4:1 / 9.7:1) |
+| verdigris (edge) | #3D7C75 | #71B5AB | dashed suggestion edge (1.5px, 6/4 dash), "Suggested" text, Needs you dot (4.5:1 on the page / 7.0:1 on card) |
+| tooltip / fg | #172A2E / #FFFFFF | #E6EEF0 / #0D1517 | tooltips |
 | warning text | #9A4B0B | #F2B26B | "overdue" only (6.2:1 / 9.2:1) |
 | destructive | #B42318 | #F97066 | Forget, delete (6.6:1 / 6.1:1) |
-| subview backdrop | #D5D8DF | #080C14 | behind a subview card |
+| subview backdrop | #D6DFE0 | #070C0D | behind a subview card |
 | rings | foreground | foreground | filled = said or confirmed, hollow 1.5px = inferred (10px) |
 
 **Type.** Titles in a serif: **Source Serif 4** 600 (OFL, self-hosted, Latin subset; fallback `"Iowan Old Style", Charter, Georgia, serif`). Page title 28/34 serif 600, letter-spacing -0.01em; sheet title and identity name 22/28 serif 600; section 15/600 sans; row title 15/500; body 15/400; meta 13/400 muted. Figures tabular. Sentence case; no eyebrows.
@@ -92,7 +94,7 @@ The lead publishes these as the **Helm UX** Design artifact. Boards are 390 x 84
 
 ## Row G: "First run: nothing to set up, the first thing told"
 
-**G1 Opening your things.** Pewter page, centred Helm logo 56px (14 radius), under it after 600 ms "Opening your things…" (13 muted). Board note: after 10 s the line becomes "Helm can't reach its server. Your things are safe." with "Try again" (outline).
+**G1 Opening your things.** Mist page, centred Helm logo 56px (14 radius), under it after 600 ms "Opening your things…" (13 muted). Board note: after 10 s the line becomes "Helm can't reach its server. Your things are safe." with "Try again" (outline).
 
 **G2 First open (round 6).** Drawn as Board 1's First run state: home, the `EmptyCard` ("Tap Talk and tell {Name} the first thing on your mind…"), the dock with Talk and Type, no Browse.
 
@@ -151,7 +153,7 @@ Footer note 13 muted: "The other is kept as what it was until today."
 
 **B11 Questions in every shape (QuestionShapes, Shape Tweak, new in round 6b).** Home with the dock, the hint above the dock. Every shape: what you said · time; the reply card (secondary) with the mark and the question 15; its control indented 32 under it; Skip (small outline) at the foot left, the shape's own action right.
 - Pick one: "The caterer needs our menu choice by Friday" · 9:50 AM → "Which menu did you and Maya pick?"; tall choices "Garden menu" · "From the caterer's PDF, Oct 30", "Harvest menu", "Not decided yet"; then a text button with `PenLine` "Something else". Hint "Say "the garden menu", "the first one" or "skip"."
-- Pick several: "We need to count the vegetarian meals for the caterer" · 9:52 AM → "Which of these need a vegetarian meal?"; a card of 52px `Checkbox` rows (square, 5 radius; ticked = primary fill with a check): Sam Lee ✓ "Cousin · {Name} inferred vegetarian", Jordan Hayes ✓ "Cousin", Priya Shah "Your manager", Dana Ruiz "Florist", "None of these"; right: "Done · 2" (small primary). Hint "Say "the first two", "all of them" or "none of these"."
+- Pick several: "We need to count the vegetarian meals for the caterer" · 9:52 AM → "Which of these need a vegetarian meal?"; a card of 52px `AppCheckbox` rows (round like every Helm tick, `--checkbox-radius: 9999px` once `helm.css` exists; ticked = primary fill with a check): Sam Lee ✓ "Cousin · {Name} inferred vegetarian", Jordan Hayes ✓ "Cousin", Priya Shah "Your manager", Dana Ruiz "Florist", "None of these"; right: "Done · 2" (small primary). Hint "Say "the first two", "all of them" or "none of these"."
 - Yes or no: "Grandpa can't do Friday, he's free Saturday" · 9:55 AM → "Move Call Grandpa about the wedding questions to Saturday?"; two equal outlined 48px buttons No · Yes. Hint "Say yes or no."
 - A few words: "Make a task to ask the bakery about a lemon tier" · 9:57 AM → "Anything else to ask them at the tasting?"; a 44px field "Type it, or tap the mic" with a 40px mic disc inside; right: Send. Hint "Say it after the question; no need to tap."
 - A date or time: "Remind me to call the caterer" · 10:01 AM → "When should I remind you?"; chips "Tomorrow, 9:00 AM", "Fri, Nov 13", "Mon, Nov 16"; a `DateInput` "Pick a day and time" with a calendar icon. Hint "Say "Friday at 10" or "next Monday"."
@@ -190,7 +192,7 @@ Footer note 13 muted: "The other is kept as what it was until today."
 
 **D1 Projects.** As Board 1.
 
-**D2 Wedding · Tasks (Subview).** BackLink "Projects" and ⋯ on the title line. Identity: 💍 in a 40px pewter disc, "Wedding" (28 serif), line "Married at Ridgeline Barn, with both families there", meta "Sat, Jul 10, 2027". Evidence line: "**2 overdue** · Final guest list in 9 days · 14 open". Pill tabs: **Tasks** · Milestones · Checklists · Facts. List:
+**D2 Wedding · Tasks (Subview).** BackLink "Projects" and ⋯ on the title line. Identity: 💍 in a 40px tinted disc, "Wedding" (28 serif), line "Married at Ridgeline Barn, with both families there", meta "Sat, Jul 10, 2027". Evidence line: "**2 overdue** · Final guest list in 9 days · 14 open". Pill tabs: **Tasks** · Milestones · Checklists · Facts. List:
 - "Send Dana the color palette" · "Was due Thursday" (warning)
 - "Book hair trial" · "Was due Friday" (warning)
 - "Pay venue deposit" · "Planned today 10:00 AM"
@@ -226,6 +228,8 @@ D10 Checklist and D13 Suggested checklist are retired with the board file `Check
 **D16 Task done.** Tick filled ink; under the title (13): "Done today 11:02 AM" · "Undo" (outline small) on the same line. Rows read only; footer trash only.
 
 **D17 Waiting task "Book the florist delivery".** First row muted with `Hourglass`: "Waits on Dana Ruiz" · "Mark as answered" (outline small). Rows: When · "Due Fri, Dec 4"; Project · "💍 Wedding". Footer: trash, "Plan it" hidden. Board note: a "Not until Mon, Nov 30" task shows "Start it now" in the same place.
+
+**As shipped (issue 8).** D14 has no Who, Project or source rows and no Plan it (footer: the trash only); D15's Importance starts at "Not set"; D16's Undo is a small quiet button; D17 reads "Waits on someone" for a person. New screens, not drawn on a board: **Tasks** (Back "Today" and Home, ⋯ "New task"; serif 28/34 title; `SectionDivider` Due, Any time and "Not yet · N" folded behind Show; each row a round tick, the words and a 13 muted line, overdue in the warning colour; Today ends its list with a thin card row "All tasks · 6 open" ›) and **New task** (`FormSheet` "Task": What to do, When, "Add task").
 
 **D18 Steps offer (round 6).** D14 for "Pay venue deposit" with a dashed row under the summary rows: mark "{Name} can draft steps for this" · "Draft them" (outline small) · "Not now" (tertiary small).
 
@@ -366,7 +370,7 @@ Canvas row 10 (title at y 11200, boards at y 11440, 470 apart). Static, light th
 
 **L9 Two times (board TwoTimes).** Drawer over Today: serif "Cake tasting", 13 muted "Today · 3:00 to 4:00 PM · Wedding calendar"; a card "Two times for this" (15/600): `Calendar` "3:00 PM" (600) "Your Wedding calendar · Helm plans by this"; `Mail` "2:00 PM" "Email from Sweet Layer Bakery · Thu, Nov 5" with an `ExternalLink` icon button "Open in Gmail"; 13 muted "Helm can't change your calendar. If 2:00 PM is right, change it there and Today follows."; small outline "The calendar is right" and "Remind me to ask the bakery". `SectionHeader` "What Helm knows": hollow ring "Sweet Layer Bakery's email says 2:00 PM" "{Name} inferred · from an email, Nov 5"; filled ring "The cake tasting is at Sweet Layer Bakery" "You said · Oct 28".
 
-**L10 An answer that looked in Gmail (board AnswerGmail).** Capture sheet: records card with quote "What time is the cake tasting?", mark + "Your calendar has it at 3:00 to 4:00 PM today. An email from Sweet Layer Bakery on Thu, Nov 5 says 2:00 PM, so it's worth checking with them."; sources `Calendar` "Cake tasting · Wedding calendar · Helm plans by this", `Mail` "Email from Sweet Layer Bakery · Thu, Nov 5" + `ExternalLink` 13; "Looked in Gmail (you@gmail.com) just now. Only what this answer quotes is kept."; ⚠ "Couldn't look in you@company.com: Google stopped sharing it." with small outline "Reconnect"; a hairline, then mark + "Noted the 2:00 PM on Cake tasting" + "Undo". Field "Anything else?", Send off.
+**L10 An answer that looked in Gmail (board AnswerGmail).** Capture sheet: records card with quote "What time is the cake tasting?", mark + "Your calendar has it at 3:00 to 4:00 PM today. An email from Sweet Layer Bakery on Thu, Nov 5 says 2:00 PM, so it's worth checking with them."; sources `Calendar` "Cake tasting · Wedding calendar · Helm plans by this", `Mail` "Email from Sweet Layer Bakery · Thu, Nov 5" + `ExternalLink` 13; "Looked in Gmail (you@gmail.com) just now."; ⚠ "Couldn't look in you@company.com: Google stopped sharing it." with small outline "Reconnect"; a hairline, then mark + "Noted the 2:00 PM on Cake tasting" + "Undo". Field "Anything else?", Send off.
 
 **L11 An answer that looked in Drive (board AnswerDrive).** Capture sheet: quote "What did we budget for flowers?", mark + "$2,400 for flowers, in your Wedding budget sheet. Maya last edited it on Oct 30."; `FileText` "Wedding budget · Google Sheets · edited Oct 30" + `ExternalLink`; "Looked in Drive (you@gmail.com) just now. The file isn't kept." No Undo.
 

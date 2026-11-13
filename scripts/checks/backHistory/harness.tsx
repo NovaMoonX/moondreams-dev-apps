@@ -1,12 +1,17 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import Subview from '@/components/Subview';
 import {
   afterBackLayersClose,
+  isHistoryStep,
   keepEntryFor,
+  markHistoryStep,
   usePageHistory,
   useSheetHistory,
 } from '@/hooks/useBackHistory';
+
+Object.assign(window, { isHistoryStep, markHistoryStep });
 
 // A stand-in app on the real history hook: a sheet (`sheet`), a page opened from it (`day`) and a door out of it (`target`).
 const listeners = new Set<() => void>();
@@ -18,8 +23,13 @@ const subscribe = (listener: () => void) => {
     listeners.delete(listener);
   };
 };
+// Whether the open page has published what it shows (an ask conversation opens only once it has).
+const published = { isOn: false };
 const useAddress = () =>
-  useSyncExternalStore(subscribe, () => window.location.href);
+  useSyncExternalStore(
+    subscribe,
+    () => `${window.location.href}#${published.isOn}`,
+  );
 
 // Like the URL-state library: a write keeps whatever the entry's state already holds.
 const writeParams = (change: Record<string, string | null>, isPush = false) => {
@@ -98,20 +108,112 @@ const openAdd = () => {
   writeParams({ add: '1' });
 };
 
+function AskOverlay() {
+  const close = () => writeParams({ ask: null });
+  return (
+    <Subview overlay title='Ask' onClose={close}>
+      <p>Ask open</p>
+      <button type='button' onClick={close}>
+        Close ask
+      </button>
+      <button
+        type='button'
+        onClick={() =>
+          afterBackLayersClose(() =>
+            writeParams({ ask: null, view: 'record' }, true),
+          )
+        }
+      >
+        Follow link
+      </button>
+    </Subview>
+  );
+}
+
+function TaskSheet({ onClose }: { onClose: () => void }) {
+  const { dialogId, onDialogClose } = useSheetHistory(true, onClose);
+  // Closes on Escape from the document, as a library drawer does, after any layer above has had it.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onDialogClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onDialogClose]);
+  return (
+    <div role='dialog' id={dialogId}>
+      <p>Sheet of one record</p>
+      <button type='button' onClick={onDialogClose}>
+        Close task
+      </button>
+      <button type='button' onClick={() => writeParams({ ask: 'page' })}>
+        Ask this one
+      </button>
+    </div>
+  );
+}
+
+// Like an app's content page: it publishes on mount, the ask overlay opens over it, and a task sheet is local state.
+function AskPage() {
+  const [isTaskOpen, setIsTaskOpen] = useState(false);
+  useEffect(() => {
+    published.isOn = true;
+    notify();
+    return () => {
+      published.isOn = false;
+    };
+  }, []);
+  return (
+    <main style={{ height: 4000 }}>
+      <p>Today page</p>
+      <div style={{ position: 'fixed', top: 0, right: 0 }}>
+        <button type='button' onClick={() => writeParams({ ask: 'page' })}>
+          Ask page
+        </button>
+        <button type='button' onClick={() => setIsTaskOpen(true)}>
+          Open record sheet
+        </button>
+      </div>
+      {isTaskOpen && <TaskSheet onClose={() => setIsTaskOpen(false)} />}
+    </main>
+  );
+}
+
 function Harness() {
   const address = new URL(useAddress());
   const params = address.searchParams;
+  if (address.pathname === '/helm') {
+    return params.get('view') === 'record' ? (
+      <p>Record page</p>
+    ) : (
+      <>
+        <AskPage />
+        {params.has('ask') && published.isOn && <AskOverlay />}
+      </>
+    );
+  }
   if (address.pathname !== '/app') {
     return (
-      <button
-        type='button'
-        onClick={() => {
-          window.history.pushState({ idx: 1 }, '', '/app');
-          notify();
-        }}
-      >
-        Enter app
-      </button>
+      <>
+        <button
+          type='button'
+          onClick={() => {
+            window.history.pushState({ idx: 1 }, '', '/app');
+            notify();
+          }}
+        >
+          Enter app
+        </button>
+        <button
+          type='button'
+          onClick={() => {
+            window.history.pushState({ idx: 1 }, '', '/helm');
+            notify();
+          }}
+        >
+          Enter ask page
+        </button>
+      </>
     );
   }
   return (

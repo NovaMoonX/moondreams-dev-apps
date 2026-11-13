@@ -10,9 +10,9 @@ const encode = (value: unknown) =>
   JSON.stringify(value).replace(/</g, '\\u003c');
 
 /** Keeps a tool result whole JSON under the cap by returning fewer list items and saying so, never by cutting the text. */
-const fitResult = (result: unknown): string => {
+const fitResult = (result: unknown, cap: number): string => {
   const whole = encode(result);
-  if (whole.length <= RESULT_CHAR_CAP) return whole;
+  if (whole.length <= cap) return whole;
   const record = (result ?? {}) as Record<string, unknown>;
   const key = Object.keys(record).find((name) => Array.isArray(record[name]));
   if (!key) return encode({ truncated: true });
@@ -23,9 +23,7 @@ const fitResult = (result: unknown): string => {
       [key]: list.slice(0, count),
       truncated: true,
     });
-    return text.length <= RESULT_CHAR_CAP || count === 0
-      ? text
-      : fit(count - 1);
+    return text.length <= cap || count === 0 ? text : fit(count - 1);
   };
   return fit(list.length - 1);
 };
@@ -37,13 +35,13 @@ export async function createHelmMcpServer(scope: HelmToolScope) {
     server.registerTool(
       tool.name,
       { description: tool.description, inputSchema: tool.shape },
-      async (input) => {
+      async (input: Record<string, unknown>) => {
         const result = await tool.run(input as never);
         return {
           content: [
             {
               type: 'text' as const,
-              text: fitResult(result),
+              text: fitResult(result, tool.maxChars ?? RESULT_CHAR_CAP),
             },
           ],
         };

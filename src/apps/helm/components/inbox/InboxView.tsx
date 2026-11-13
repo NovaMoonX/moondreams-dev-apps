@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import HeldCaptureCard from '@apps/helm/components/inbox/HeldCaptureCard';
+import QuestionSheet from '@apps/helm/components/home/QuestionSheet';
 import HeldRow from '@apps/helm/components/inbox/HeldRow';
 import TurnCard from '@apps/helm/components/home/TurnCard';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -19,11 +20,13 @@ import {
   markCaptureSeen,
 } from '@apps/helm/store/actions/captureActions';
 import {
+  selectAllCaptures,
   selectHeldItems,
   selectNewSinceLooked,
 } from '@apps/helm/store/selectors/captureSelectors';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import type { OpenCapture } from '@apps/helm/types';
+import { getJoinedOf } from '@apps/helm/utils/sessions';
 
 interface InboxViewProps {
   onBack: () => void;
@@ -37,6 +40,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
   const name = useAssistantName();
   const unseen = useAppSelector(selectNewSinceLooked);
   const held = useAppSelector(selectHeldItems);
+  const allCaptures = useAppSelector(selectAllCaptures);
   const { isLoaded, isFailed } = useAppSelector(
     (state) => state.helm.unseenCaptures,
   );
@@ -87,6 +91,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
               <li key={item.capture.id}>
                 <HeldRow
                   item={item}
+                  joined={getJoinedOf(item.capture, allCaptures)}
                   onOpen={(entry) => setHeldId(entry.capture.id)}
                 />
               </li>
@@ -101,6 +106,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
                 <li key={item.capture.id}>
                   <HeldRow
                     item={item}
+                    joined={getJoinedOf(item.capture, allCaptures)}
                     onOpen={(entry) => setHeldId(entry.capture.id)}
                   />
                 </li>
@@ -147,6 +153,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
                   className='flex h-auto w-full items-center justify-between gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
                   onClick={() => open(capture)}
                 >
+                  <span className='size-4 shrink-0' aria-hidden='true' />
                   <span className='min-w-0 flex-1'>
                     <span className='text-foreground line-clamp-2 text-[15px] leading-[21px] break-words'>
                       {capture.isUnreadable
@@ -168,7 +175,14 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
           </ul>
         )}
       </main>
-      <HeldCaptureCard item={openHeld} onClose={() => setHeldId(null)} />
+      <HeldCaptureCard
+        item={openHeld?.kind === 'question' ? null : openHeld}
+        onClose={() => setHeldId(null)}
+      />
+      <QuestionSheet
+        item={openHeld?.kind === 'question' ? openHeld : null}
+        onClose={() => setHeldId(null)}
+      />
       <DetailSheet
         isOpen={opened !== null}
         onClose={() => setOpened(null)}
@@ -181,6 +195,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
             isOnHome={false}
             showsNotice={false}
             capture={opened}
+            joined={getJoinedOf(opened, allCaptures)}
           />
         )}
       </DetailSheet>
