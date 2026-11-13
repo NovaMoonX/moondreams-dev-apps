@@ -23,7 +23,8 @@ import type {
   PlanDaySealed,
   PlanSlot,
 } from '@apps/helm/types';
-import { isDecided } from '@apps/helm/utils/planDays';
+import { formatClock, isDecided } from '@apps/helm/utils/planDays';
+import { getCurrentPlaceEndsAt } from '@apps/helm/engine/currentPlace';
 import type { buildPlanInput } from '@apps/helm/utils/planInput';
 
 const planDaysOf = (uid: string) =>
@@ -124,6 +125,8 @@ export async function generatePlan(
       autonomyLevel: 1,
       state: 'proposed',
       effectRefs: [],
+      linkedWhoIds: [],
+      linkedPlaceIds: [],
       undoesExecutionId: null,
       undoneByExecutionId: null,
       questionRef: null,
@@ -139,6 +142,7 @@ export async function generatePlan(
           undoReport: null,
           spoken: null,
           goneIds: null,
+          lines: null,
         },
         encryption,
       ),
@@ -260,3 +264,63 @@ export const bringToToday = (uid: string, todayKey: string, taskId: string) =>
     endAt: null,
     source: 'person',
   });
+
+/** "I'm home" (or, with `isThere` false, "No longer home"): the profile's `currentPlace` and one succeeded execution holding the previous value, so Undo can put it back, in one batch. Handed back unawaited so it queues offline. */
+export async function setCurrentPlace(
+  uid: string,
+  encryption: HelmEncryption,
+  place: { id: string; name: string },
+  timeZone: string,
+  isThere = true,
+) {
+  const now = Date.now();
+  const currentPlace = isThere ? { placeId: place.id, saidAt: now } : null;
+  const previous = store.getState().helm.profile?.currentPlace ?? null;
+  const executionRef = doc(executionsOf(uid));
+  const title = { 'sealed.title': place.name };
+  const execution: Execution = {
+    captureId: null,
+    actor: 'person',
+    category: 'organize',
+    autonomyLevel: 1,
+    state: 'succeeded',
+    effectRefs: [{ op: 'update', collection: 'profile', docId: uid }],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: now,
+    decidedAt: now,
+    finishedAt: now,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: isThere
+          ? HELM_COPY.homeUntil(
+              formatClock(getCurrentPlaceEndsAt(now), timeZone),
+            )
+          : HELM_COPY.notHomeToast,
+        commands: [],
+        effects: [
+          {
+            written: { currentPlace, ...title },
+            previous: { currentPlace: previous, ...title },
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+        lines: null,
+      },
+      encryption,
+    ),
+  };
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'apps', 'helm', 'users', uid), {
+    currentPlace,
+    lastEditedAt: now,
+  });
+  batch.set(executionRef, execution);
+  return { executionId: executionRef.id, committed: batch.commit() };
+}

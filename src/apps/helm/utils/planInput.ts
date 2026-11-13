@@ -1,5 +1,6 @@
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import { readCurrentPlace } from '@apps/helm/engine/currentPlace';
 import { readRestDay } from '@apps/helm/engine/restDay';
 import {
   findOpenings,
@@ -9,6 +10,7 @@ import {
 } from '@apps/helm/engine/planner';
 import type {
   HelmProfile,
+  OpenPlace,
   OpenTask,
   PlanCalendarEntry,
   PlanDay,
@@ -35,6 +37,7 @@ export interface PlanSources {
   grants: ConnectionGrantWithId[];
   /** Open tasks that are awake. */
   tasks: OpenTask[];
+  places: OpenPlace[];
   planDays: Record<string, PlanDay>;
 }
 
@@ -71,6 +74,7 @@ export const toPlannerTask = (task: OpenTask): PlannerTask => ({
   isUrgent: task.isUrgent,
   durationMinutes: task.durationMinutes,
   energy: task.energy,
+  placeIds: task.placeIds,
 });
 
 // A stay or rental runs for days and says where the person is, not time it takes.
@@ -84,25 +88,36 @@ const getLiveGrantRecords = (sources: PlanSources) => {
   );
 };
 
-/** A day's events that block time: calendar events not marked free and apps' events of half a day or less, an all-day one only when the person said it keeps them busy. */
+/** A day's events that block time: calendar events not marked free and apps' events of half a day or less, an all-day one only when the person said it keeps them busy. One event's copies block time when any copy does, across the busy copies' times. */
 export function getBusyEvents(
   sources: PlanSources,
   dayKey: string,
 ): SyncedRecord[] {
   const { profile, timeZone } = sources;
-  const live = getLiveGrantRecords(sources);
-  const { calendarEvents, appEvents } = getDayEvents(
-    live,
+  const isBusyCopy = (record: SyncedRecord) =>
+    (isCalendarEvent(record)
+      ? record.isBusy !== false
+      : (record.endAt ?? 0) - (record.startAt ?? 0) <= SPAN_MS) &&
+    (!record.isAllDay || profile.busyAllDayEventRefs.includes(record.id));
+  const { merged } = getDayEvents(
+    getLiveGrantRecords(sources),
     getDayNoon(dayKey, timeZone),
     timeZone,
   );
-  return [...calendarEvents, ...appEvents].filter(
-    (record) =>
-      (isCalendarEvent(record)
-        ? record.isBusy !== false
-        : (record.endAt ?? 0) - (record.startAt ?? 0) <= SPAN_MS) &&
-      (!record.isAllDay || profile.busyAllDayEventRefs.includes(record.id)),
-  );
+  return merged.flatMap(({ record, alsoIn }) => {
+    const busy = [record, ...alsoIn].filter(isBusyCopy);
+    if (busy.length === 0) return [];
+    const starts = busy.map((copy) => copy.startAt ?? 0);
+    const ends = busy.map((copy) => copy.endAt ?? copy.startAt ?? 0);
+    return [
+      {
+        ...record,
+        isBusy: true,
+        startAt: Math.min(...starts),
+        endAt: Math.max(...ends),
+      },
+    ];
+  });
 }
 
 /** Whether the day follows a night out or a shift, read from the live calendar copies of the days around it; null once the person asked for a plan anyway. */
@@ -130,7 +145,8 @@ export function buildPlanInput(
   dayKey: string,
   slots: Record<string, PlanSlot> = sources.planDays[dayKey]?.slots ?? {},
 ) {
-  const { profile, timeZone, now, todayKey, grants, tasks, planDays } = sources;
+  const { profile, timeZone, now, todayKey, grants, tasks, planDays, places } =
+    sources;
   const windowStart = zonedDateTimeToEpoch(
     dayKey,
     profile.dayStartTime,
@@ -180,6 +196,10 @@ export function buildPlanInput(
     fillPercent: profile.planFillPercent,
     hasCalendar: calendars.length > 0,
     restDay: calendars.length > 0 ? getRestDay(sources, dayKey) : null,
+    currentPlaceId:
+      dayKey === todayKey
+        ? (readCurrentPlace(profile, places, now)?.id ?? null)
+        : null,
     busy,
     slots,
     tasks: tasks

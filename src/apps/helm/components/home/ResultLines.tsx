@@ -16,7 +16,9 @@ import {
 import { useResultLines } from '@apps/helm/hooks/useResultLines';
 import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
+import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenExecution } from '@apps/helm/types';
+import { readMadeEntities } from '@apps/helm/utils/resultLines';
 
 interface ResultLinesProps {
   captureId: string;
@@ -57,6 +59,29 @@ function AiNotice() {
   );
 }
 
+function PeopleRow({ execution }: Pick<ResultLinesProps, 'execution'>) {
+  const made = readMadeEntities(execution);
+  const madeIds = new Set(made.map((entry) => entry.id));
+  const others = useLinkedNames({
+    whoIds: execution.linkedWhoIds.filter((id) => !madeIds.has(id)),
+    placeIds: execution.linkedPlaceIds.filter((id) => !madeIds.has(id)),
+  });
+  const parts = [
+    made.length > 0
+      ? HELM_COPY.resultAdded(made.map((entry) => entry.name))
+      : null,
+    others.length > 0
+      ? HELM_COPY.resultLinked(others.map((entry) => entry.name))
+      : null,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <p className='border-border text-muted-foreground border-t px-3.5 py-2 text-[13px] break-words'>
+      {parts.join(' · ')}
+    </p>
+  );
+}
+
 /** What the assistant said about a turn and the compact card of what it did, one row per change. */
 function ResultLines({
   captureId,
@@ -81,19 +106,23 @@ function ResultLines({
   });
 
   return (
-    <div ref={card} className='flex w-full flex-col items-start gap-2'>
+    <div
+      ref={card}
+      className='flex w-full flex-col items-start gap-2 empty:hidden'
+    >
       {execution.isUnreadable ? (
         <p className='text-muted-foreground pl-[30px] text-[13px]'>
           {HELM_COPY.unreadable}
         </p>
       ) : (
         <>
-          {execution.summary && (
+          {execution.summary && execution.category !== 'answer' && (
             <AssistantLine>{toSentence(execution.summary)}</AssistantLine>
           )}
           {lines.length > 0 && (
             <div className='helm-card ml-[30px] w-[calc(100%-30px)] overflow-hidden'>
               <ResultRows execution={execution} lines={lines} undo={undo} />
+              {!isUndone && <PeopleRow execution={execution} />}
               {hasFoot && (
                 <div className='border-border flex items-baseline justify-between gap-3 border-t px-3.5 py-2'>
                   {isUndone ? (

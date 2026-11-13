@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { House } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
+import { useAuth } from '@/hooks/useAuth';
+import { readConnectorAppId } from '@/lib/connections/contract';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import CalendarFailedLine from '@apps/helm/components/today/CalendarFailedLine';
+import FeedGroup from '@apps/helm/components/today/FeedGroup';
 import PlannedCard from '@apps/helm/components/today/PlannedCard';
 import RestDayLine from '@apps/helm/components/today/RestDayLine';
 import SuggestedCard from '@apps/helm/components/today/SuggestedCard';
@@ -14,11 +19,20 @@ import SyncedCard from '@apps/helm/components/today/SyncedCard';
 import SyncedSheet from '@apps/helm/components/today/SyncedSheet';
 import type { SuggestionTarget } from '@apps/helm/components/today/SuggestionSheet';
 import { HELM_COPY } from '@apps/helm/constants';
+import {
+  getCurrentPlaceEndsAt,
+  readCurrentPlace,
+} from '@apps/helm/engine/currentPlace';
 import { findFreeGaps } from '@apps/helm/engine/planner';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { usePlanDay } from '@apps/helm/hooks/usePlanDays';
+import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { setCurrentPlace } from '@apps/helm/store/actions/planActions';
+import { takeBack } from '@apps/helm/store/actions/undoActions';
 import type { OpenTask, PlanSlot, SyncedRecord } from '@apps/helm/types';
 import {
+  formatClock,
   formatDayName,
   formatLength,
   formatSlotRange,
@@ -35,11 +49,12 @@ import {
   isLiveCalendar,
   type PlanSources,
 } from '@apps/helm/utils/planInput';
-import { getDayEvents, getLiveRecords } from '@apps/helm/utils/synced';
+import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
 const FREE_GAP_MINUTES = 45;
 const FULL_GAP_MINUTES = 30;
 const MINUTE_MS = 60_000;
+const FEED_MIN_ROWS = 2;
 
 interface DayPlanProps {
   dayKey: string;
@@ -89,6 +104,10 @@ function DayPlan({
   onSelectDay,
 }: DayPlanProps) {
   const assistantName = useAssistantName();
+  const { nameOf, categoryLabelOf } = useSourceAppName();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const { confirm } = useActionModal();
   const { plan, isReady } = usePlanDay();
   const [isPlanning, setIsPlanning] = useState(false);
   const [openRecordId, setOpenRecordId] = useState<string | null>(null);
@@ -101,20 +120,35 @@ function DayPlan({
   const day = sources.planDays[dayKey];
   const isToday = dayKey === todayKey;
 
-  // A calendar Google stopped sharing is left out until it is reconnected.
   const records = useMemo(
-    () =>
-      getLiveRecords(stored, grants, true).filter(
-        (record) =>
-          grants.find((grant) => grant.id === record.grantId)?.status !==
-          'needsReconnect',
-      ),
+    () => getTodayRecords(stored, grants),
     [stored, grants],
   );
-  const events = useMemo(
-    () => getDayEvents(records, getDayNoon(dayKey, timeZone), timeZone).events,
+  const merged = useMemo(
+    () => getDayEvents(records, getDayNoon(dayKey, timeZone), timeZone).merged,
     [records, dayKey, timeZone],
   );
+  const allEvents = merged.map(({ record }) => record);
+  const feedGroups = [
+    ...allEvents
+      .filter(
+        (record) =>
+          record.isAllDay && readConnectorAppId(record.connectorId) !== null,
+      )
+      .reduce(
+        (groups, record) =>
+          groups.set(`${record.connectorId}|${record.category}`, [
+            ...(groups.get(`${record.connectorId}|${record.category}`) ?? []),
+            record,
+          ]),
+        new Map<string, SyncedRecord[]>(),
+      )
+      .values(),
+  ].filter((group) => group.length >= FEED_MIN_ROWS);
+  const folded = new Set(feedGroups.flat().map((record) => record.id));
+  const events = allEvents.filter((record) => !folded.has(record.id));
+  const alsoInOf = (id: string | null) =>
+    merged.find(({ record }) => record.id === id)?.alsoIn ?? [];
   const failingGrants = grants.filter(isFailingCalendar);
   const isFailing = failingGrants.length > 0;
   const isStopped =
@@ -173,6 +207,21 @@ function DayPlan({
     ({ slot }) => slot.startAt === null,
   );
   const reasonOf = (id: string) => day?.reasons[id] ?? null;
+  const homePlace = sources.places.find((place) => place.isHome) ?? null;
+  const homeTasks =
+    isToday && homePlace
+      ? sources.tasks.filter(
+          (task) =>
+            !task.isUnreadable &&
+            task.placeIds.includes(homePlace.id) &&
+            !slots.some(({ slot }) => slot.taskId === task.id) &&
+            !Object.values(day?.slots ?? {}).some(
+              (slot) => slot.taskId === task.id && slot.status === 'notToday',
+            ),
+        )
+      : [];
+  const home = readCurrentPlace(profile, sources.places, now);
+  const isHome = home?.isHome === true;
   const openRecord =
     records.find((record) => record.id === openRecordId) ?? null;
 
@@ -224,6 +273,115 @@ function DayPlan({
             ? 'nothing'
             : null;
 
+  const sayHome = (isThere: boolean) => {
+    if (!user || !homePlace) return;
+    const uid = user.uid;
+    void getHelmEncryption(uid)
+      .then((encryption) =>
+        setCurrentPlace(
+          uid,
+          encryption,
+          { id: homePlace.id, name: homePlace.name },
+          timeZone,
+          isThere,
+        ),
+      )
+      .then(({ executionId, committed }) => {
+        addToast({
+          title: isThere ? HELM_COPY.homeToast : HELM_COPY.notHomeToast,
+          type: 'success',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () =>
+              void takeBack(uid, executionId).then((result) => {
+                if (result.kind === 'offline') {
+                  addToast({
+                    title: HELM_COPY.undoNeedsConnectionTitle,
+                    description: HELM_COPY.undoNeedsConnectionBody,
+                    type: 'error',
+                  });
+                }
+              }),
+          },
+        });
+        return committed;
+      })
+      .catch((error: unknown) => {
+        console.error('Helm home was not saved', error);
+        addToast({ title: HELM_COPY.homeNotSaved, type: 'error' });
+      });
+  };
+
+  const askLeft = async (time: string) => {
+    const isConfirmed = await confirm({
+      title: HELM_COPY.homeTillTitle(time),
+      message: HELM_COPY.homeTillBody,
+      confirmText: HELM_COPY.homeLeft,
+    });
+    if (isConfirmed) sayHome(false);
+  };
+
+  const homeSection = homeTasks.length > 0 && (
+    <section className='space-y-3'>
+      <SectionDivider
+        label={
+          <span className='whitespace-nowrap'>{HELM_COPY.planWhenHome}</span>
+        }
+        trailing={
+          isHome && profile.currentPlace ? (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className="relative gap-1.5 whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+              onClick={() => {
+                if (!profile.currentPlace) return;
+                void askLeft(
+                  formatClock(
+                    getCurrentPlaceEndsAt(profile.currentPlace.saidAt),
+                    timeZone,
+                  ),
+                );
+              }}
+            >
+              <House className='h-3.5 w-3.5 fill-current' aria-hidden />
+              {HELM_COPY.planHomeTill(
+                formatClock(
+                  getCurrentPlaceEndsAt(profile.currentPlace.saidAt),
+                  timeZone,
+                ),
+              )}
+            </Button>
+          ) : (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className="relative gap-1.5 whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+              onClick={() => sayHome(true)}
+            >
+              <House className='h-3.5 w-3.5' aria-hidden />
+              {HELM_COPY.planImHome}
+            </Button>
+          )
+        }
+      />
+      {homeTasks.map((task) => (
+        <PlannedCard
+          key={task.id}
+          task={task}
+          timeLine={null}
+          isDone={heldIds.has(task.id)}
+          overlapTitle={null}
+          onAnotherTime={() => undefined}
+          onOpen={(opened) => onOpenTask(opened.id)}
+          onTick={onTick}
+          onUndoTick={onUndoTick}
+        />
+      ))}
+    </section>
+  );
+
   const planThisDay = (isRestOverridden: boolean) => {
     setIsPlanning(true);
     void plan(dayKey, isRestOverridden).finally(() => setIsPlanning(false));
@@ -251,6 +409,7 @@ function DayPlan({
           onPlanAnyway={isReady ? () => planThisDay(true) : null}
         />
       )}
+      {isHome && homeSection}
       {timeline.length > 0 && (
         <div className='space-y-3'>
           {timeline.map((entry) => {
@@ -259,6 +418,8 @@ function DayPlan({
                 <SyncedCard
                   key={entry.record.id}
                   record={entry.record}
+                  alsoIn={alsoInOf(entry.record.id)}
+                  timeZone={timeZone}
                   onOpen={(opened) => setOpenRecordId(opened.id)}
                 />
               );
@@ -281,6 +442,15 @@ function DayPlan({
           })}
         </div>
       )}
+      {feedGroups.map((group) => (
+        <FeedGroup
+          key={`${group[0].connectorId}|${group[0].category}`}
+          label={categoryLabelOf(group[0].connectorId, group[0].category)}
+          appName={nameOf(group[0].connectorId)}
+          records={group}
+          onOpen={(opened) => setOpenRecordId(opened.id)}
+        />
+      ))}
       {untimedKept.length > 0 && (
         <section className='space-y-3'>
           <SectionDivider label={HELM_COPY.planAnyTime} />
@@ -295,6 +465,7 @@ function DayPlan({
           )}
         </section>
       )}
+      {!isHome && homeSection}
       {outcome !== null && (
         <div className='flex items-center gap-3'>
           <p className='text-muted-foreground min-w-0 flex-1 text-[15px] text-pretty'>
@@ -333,6 +504,7 @@ function DayPlan({
       )}
       <SyncedSheet
         record={openRecord}
+        alsoIn={alsoInOf(openRecordId)}
         now={now}
         onClose={() => setOpenRecordId(null)}
       />

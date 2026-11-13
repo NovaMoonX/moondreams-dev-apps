@@ -71,7 +71,8 @@ export function getProtectedLineIds(
       .filter(
         (line) =>
           line.bill !== null &&
-          (nextDayOn === null || line.bill.dueOn < nextDayOn),
+          (nextDayOn === null ||
+            (line.bill.payOn ?? line.bill.dueOn) < nextDayOn),
       )
       .map((line) => line.lineId),
   );
