@@ -27,6 +27,7 @@ import { generateUuid } from '@/utils/idUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   FORM_FLOW_WORDS,
+  HORIZON_PLAN_WORDS,
   HORIZON_REST_OPTIONS,
   HORIZON_WORDS,
   LOOKAHEAD_MONTHS,
@@ -42,8 +43,10 @@ import CostRow from '@apps/runway/components/CostRow';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getGoalCost } from '@apps/runway/engine/horizonGoal';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
 import CostForm from '@apps/runway/forms/CostForm';
+import { useEnvelopeIntoHorizonToast } from '@apps/runway/hooks/useEnvelopeIntoHorizon';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { addHorizon } from '@apps/runway/store/actions/horizonActions';
@@ -53,7 +56,7 @@ import type {
   ItemShortsReading,
   PreviewChange,
 } from '@apps/runway/store/selectors/previewSelectors';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectBills,
   selectComingDays,
@@ -127,14 +130,67 @@ const priorityOptions = PRIORITIES.map((value) => ({
   label: PRIORITY_LABELS[value],
 }));
 
+/** What a new event starts from when it is planned out of a goal or an envelope. */
+export type HorizonSeed =
+  | {
+      kind: 'goal';
+      goalId: string;
+      name: string;
+      emoji: string | null;
+      targetDate: number | null;
+      targetCents: number;
+    }
+  | {
+      kind: 'envelope';
+      envelopeId: string;
+      name: string;
+      emoji: string | null;
+      heldCents: number;
+    };
+
+const getSeededData = (
+  seed: HorizonSeed | null,
+  today: number,
+  lastDate: number,
+): HorizonFormData => {
+  if (seed === null) return INITIAL_DATA;
+  const base = { ...INITIAL_DATA, name: seed.name, emoji: seed.emoji };
+  if (seed.kind === 'envelope') return base;
+  return {
+    ...base,
+    date:
+      seed.targetDate !== null &&
+      seed.targetDate >= today &&
+      seed.targetDate <= lastDate
+        ? toDateInputValue(seed.targetDate)
+        : '',
+    costs: [
+      getGoalCost(
+        { name: seed.name, targetCents: seed.targetCents },
+        seed.goalId,
+        null,
+      ),
+    ],
+  };
+};
+
 interface HorizonFormProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  seed?: HorizonSeed | null;
+  /** Called after the event is saved, so a sheet that opened the form can close too. */
+  onSaved?: () => void;
 }
 
 /** Add to your horizon: an event, when it happens and what it will cost. */
-function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
+function HorizonForm({
+  isOpen,
+  onClose,
+  title,
+  seed = null,
+  onSaved,
+}: HorizonFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const lastDate = addUtcMonths(today, LOOKAHEAD_MONTHS);
@@ -148,7 +204,10 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const { isHidden } = useValuesHidden();
   const [moveId] = useState(newTransferMoveId);
   const [horizonId] = useState(generateUuid);
-  const [formData, setFormData] = useState<HorizonFormData>(INITIAL_DATA);
+  const [initialData] = useState(() => getSeededData(seed, today, lastDate));
+  const [formData, setFormData] = useState<HorizonFormData>(initialData);
+  const showMovedToast = useEnvelopeIntoHorizonToast();
+  const envelopeSeed = seed?.kind === 'envelope' ? seed : null;
   const [costDraft, setCostDraft] = useState<HorizonCost | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -171,6 +230,11 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     return null;
   };
   const dateBlocker = getDateBlocker();
+  const costs = formData.costs.map((cost) =>
+    cost.schedule.anchor === null && date !== undefined && isDateValid
+      ? { ...cost, schedule: { ...cost.schedule, anchor: date } }
+      : cost,
+  );
   const places = [
     ...envelopes.map(({ item, version }) => ({
       id: item.id,
@@ -200,7 +264,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
         ? Math.max(0, balances.freeToSpendCents)
         : Infinity;
   const getPutBlocker = () => {
-    if (formData.isNotNow) return null;
+    if (formData.isNotNow || envelopeSeed !== null) return null;
     if (putCents === null) return HORIZON_WORDS.needsPutAmount;
     if (formData.putFrom === null) return HORIZON_WORDS.needsPutFrom;
     if (putFromName === undefined) return HORIZON_WORDS.needsPutPlace;
@@ -208,7 +272,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     return null;
   };
   const putBlocker = getPutBlocker();
-  const lastCostOn = formData.costs.reduce(
+  const lastCostOn = costs.reduce(
     (latest, { schedule }) => Math.max(latest, schedule.anchor ?? 0),
     0,
   );
@@ -219,7 +283,9 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const pickedDay = comingDays.find(
     (day) => day.dayKey === formData.restDayKey,
   );
+  const hasCosts = costs.length > 0;
   const getRest = (): HorizonRest | null => {
+    if (!hasCosts) return { kind: 'later' };
     if (formData.rest === 'onePay')
       return pickedDay ? { kind: 'onePay', dayKey: pickedDay.dayKey } : null;
     return formData.rest === null ? null : { kind: formData.rest };
@@ -240,25 +306,25 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     ),
     rest: restValue,
     note: null,
-    costs: formData.costs,
+    costs,
     state: 'open',
     stateOn: null,
     stateMoney: null,
+    links: [],
+    goalId: seed?.kind === 'goal' ? seed.goalId : null,
   });
   const blocker =
     name === ''
       ? HORIZON_WORDS.needsName
       : !isDateValid || !isEndValid
         ? (dateBlocker ?? FORM_FLOW_WORDS.pastDay)
-        : formData.costs.length === 0
-          ? HORIZON_WORDS.needsCost
-          : putBlocker !== null
-            ? putBlocker
-            : formData.rest === null
-              ? HORIZON_WORDS.needsRest
-              : formData.rest === 'onePay' && pickedDay === undefined
-                ? HORIZON_WORDS.needsPay
-                : null;
+        : hasCosts && putBlocker !== null
+          ? putBlocker
+          : hasCosts && formData.rest === null
+            ? HORIZON_WORDS.needsRest
+            : hasCosts && formData.rest === 'onePay' && pickedDay === undefined
+              ? HORIZON_WORDS.needsPay
+              : null;
 
   const isPaysAsked = rest?.kind === 'pays' || rest?.kind === 'onePay';
   const previewJson =
@@ -282,7 +348,11 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
             changeId: 'what-if',
             payload: getHorizon(date, rest),
           },
-          heldCents: formData.isNotNow ? 0 : (putCents ?? 0),
+          heldCents: envelopeSeed
+            ? envelopeSeed.heldCents
+            : formData.isNotNow
+              ? 0
+              : (putCents ?? 0),
         } satisfies PreviewChange)
       : null;
 
@@ -307,7 +377,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
           ),
   };
 
-  const steps: QuestionStep[] = [
+  const allSteps: QuestionStep[] = [
     {
       id: 'name',
       title: HORIZON_WORDS.nameTitle,
@@ -421,21 +491,21 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       title: HORIZON_WORDS.costsTitle,
       summaryLabel: HORIZON_WORDS.costs,
       summaryValue:
-        formData.costs.length === 0
-          ? ''
-          : formData.costs.length === 1
-            ? formData.costs[0].name
-            : HORIZON_WORDS.costCount(formData.costs.length),
-      isAnswered: formData.costs.length > 0,
+        costs.length === 0
+          ? HORIZON_WORDS.noCostsSummary
+          : costs.length === 1
+            ? costs[0].name
+            : HORIZON_WORDS.costCount(costs.length),
+      isAnswered: true,
       render: () => (
         <div className='space-y-3'>
-          {formData.costs.length === 0 ? (
+          {costs.length === 0 ? (
             <p className='text-muted-foreground text-sm'>
               {HORIZON_WORDS.noCosts}
             </p>
           ) : (
             <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {formData.costs.map((cost) => (
+              {costs.map((cost) => (
                 <CostRow
                   key={cost.id}
                   cost={cost}
@@ -448,13 +518,13 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
             ref={addCostRef}
             type='button'
             variant='secondary'
-            disabled={formData.costs.length >= MAX_HORIZON_COSTS}
+            disabled={costs.length >= MAX_HORIZON_COSTS}
             onClick={() => setCostDraft('new')}
           >
             <Plus className='h-4 w-4' aria-hidden='true' />
             {HORIZON_WORDS.addCost}
           </Button>
-          {formData.costs.length >= MAX_HORIZON_COSTS && (
+          {costs.length >= MAX_HORIZON_COSTS && (
             <p className='text-muted-foreground text-sm'>
               {HORIZON_WORDS.maxCosts(MAX_HORIZON_COSTS)}
             </p>
@@ -631,10 +701,15 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       ),
     },
   ];
+  const steps = allSteps.filter(
+    ({ id }) =>
+      (hasCosts || (id !== 'put' && id !== 'rest')) &&
+      (envelopeSeed === null || id !== 'put'),
+  );
   const questions = useQuestionFlow({ steps: maskSummaries(steps, isHidden) });
 
   const requestClose = useDiscardGuard({
-    isDirty: JSON.stringify(formData) !== JSON.stringify(INITIAL_DATA),
+    isDirty: JSON.stringify(formData) !== JSON.stringify(initialData),
     onClose,
     isBusy: isSaving,
     title: FORM_FLOW_WORDS.discardNew(HORIZON_WORDS.discardNoun),
@@ -645,25 +720,49 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       return;
     }
     const horizon = getHorizon(date, rest);
-    const toward =
-      formData.isNotNow || putCents === null || putFromName === undefined
-        ? null
-        : {
+    const towardEnvelope =
+      envelopeSeed !== null && envelopeSeed.heldCents > 0
+        ? {
             moveId,
-            fromId: formData.putFrom === 'place' ? (place?.id ?? null) : null,
-            cents: putCents,
-            leftCents: putLeftCents === Infinity ? 0 : putLeftCents,
-            summary: HORIZON_WORDS.putAdded(
-              formatCents(putCents),
-              putFromName,
+            fromId: envelopeSeed.envelopeId,
+            cents: envelopeSeed.heldCents,
+            leftCents: envelopeSeed.heldCents,
+            summary: `${HORIZON_PLAN_WORDS.envelopeMoved(
+              envelopeSeed.name,
+              formatCents(envelopeSeed.heldCents),
+              name,
+            )}.`,
+            undoText: HORIZON_PLAN_WORDS.envelopeMoveUndo(
+              envelopeSeed.name,
+              formatCents(envelopeSeed.heldCents),
               name,
             ),
-            undoText: HORIZON_WORDS.putUndone(
-              formatCents(putCents),
-              name,
-              putFromName,
-            ),
-          };
+          }
+        : null;
+    const toward =
+      envelopeSeed !== null
+        ? towardEnvelope
+        : !hasCosts ||
+            formData.isNotNow ||
+            putCents === null ||
+            putFromName === undefined
+          ? null
+          : {
+              moveId,
+              fromId: formData.putFrom === 'place' ? (place?.id ?? null) : null,
+              cents: putCents,
+              leftCents: putLeftCents === Infinity ? 0 : putLeftCents,
+              summary: HORIZON_WORDS.putAdded(
+                formatCents(putCents),
+                putFromName,
+                name,
+              ),
+              undoText: HORIZON_WORDS.putUndone(
+                formatCents(putCents),
+                name,
+                putFromName,
+              ),
+            };
     if (toward !== null && !navigator.onLine) {
       setError(MOVE_WORDS.offline);
       return;
@@ -677,8 +776,45 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
         horizon,
         startDate: today,
         toward,
+        summary:
+          seed?.kind === 'goal'
+            ? HORIZON_PLAN_WORDS.newFromGoalSummary(name, seed.name)
+            : envelopeSeed !== null
+              ? HORIZON_PLAN_WORDS.envelopeNewSummary(name, envelopeSeed.name)
+              : undefined,
+        alsoItemIds: seed?.kind === 'goal' ? [seed.goalId] : [],
+        archive:
+          envelopeSeed !== null && toward !== null
+            ? {
+                summary: HORIZON_PLAN_WORDS.envelopeArchiveSummary(
+                  formatCents(toward.cents),
+                  name,
+                ),
+              }
+            : null,
       });
+      if (envelopeSeed !== null && toward !== null) {
+        showMovedToast(
+          {
+            archivedAt: today,
+            move: {
+              moveId,
+              bill: null,
+              cost: null,
+              date: today,
+              fromId: envelopeSeed.envelopeId,
+              toId: horizonId,
+              cents: toward.cents,
+              note: null,
+              isOutside: false,
+              undoText: toward.undoText,
+            },
+          },
+          { envelope: envelopeSeed.name, event: name },
+        );
+      }
       onClose();
+      onSaved?.();
     } catch (saveError) {
       setError(
         toward !== null && isOfflineFailure(saveError)

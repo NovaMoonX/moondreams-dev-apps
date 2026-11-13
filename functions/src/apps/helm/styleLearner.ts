@@ -264,6 +264,119 @@ export const mergeStyle = (
   };
 };
 
+export const MAX_MAIL_BATCHES = 6;
+export const MAIL_BATCH_SIZE = 50;
+const MIN_MAIL_GROUP = 5;
+const MAX_MAIL_AUDIENCES = 5;
+const PERSONAL_MAIL_DOMAINS = [
+  'gmail.com',
+  'outlook.com',
+  'hotmail.com',
+  'yahoo.com',
+  'icloud.com',
+  'me.com',
+  'proton.me',
+  'protonmail.com',
+];
+
+export interface MailGroup {
+  id: string;
+  scope: 'occasion' | 'audience';
+  audienceWhoId: string | null;
+  texts: string[];
+}
+
+/** Personal when every address is on a common personal provider; work otherwise. */
+export const toMailOccasion = (to: string[]): 'work' | 'personal' =>
+  to.length > 0 &&
+  to.every((address) =>
+    PERSONAL_MAIL_DOMAINS.includes(address.slice(address.lastIndexOf('@') + 1)),
+  )
+    ? 'personal'
+    : 'work';
+
+/** Sent messages (newest first) split into work and personal, plus up to five people already known by address who got at least five, most written to first; at most six groups, one per batch. */
+export const toMailGroups = (
+  mails: { to: string[]; text: string }[],
+  whoIdByAddress: Map<string, string>,
+): MailGroup[] => {
+  const occasion = (kind: 'work' | 'personal'): MailGroup => ({
+    id: `mail-${kind}`,
+    scope: 'occasion',
+    audienceWhoId: null,
+    texts: mails
+      .filter((mail) => toMailOccasion(mail.to) === kind)
+      .map((mail) => mail.text),
+  });
+  const byWho = mails.reduce((groups, mail) => {
+    new Set(
+      mail.to.flatMap((address) => whoIdByAddress.get(address) ?? []),
+    ).forEach((whoId) =>
+      groups.set(whoId, [...(groups.get(whoId) ?? []), mail.text]),
+    );
+    return groups;
+  }, new Map<string, string[]>());
+  const audiences = [...byWho]
+    .filter(([, texts]) => texts.length >= MIN_MAIL_GROUP)
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, MAX_MAIL_AUDIENCES)
+    .map(([whoId, texts]): MailGroup => ({
+      id: `mail-who-${whoId}`,
+      scope: 'audience',
+      audienceWhoId: whoId,
+      texts,
+    }));
+  return [occasion('work'), occasion('personal'), ...audiences]
+    .filter((group) => group.texts.length >= MIN_MAIL_GROUP)
+    .slice(0, MAX_MAIL_BATCHES);
+};
+
+const chunkTexts = (texts: string[]) =>
+  Array.from(
+    { length: Math.ceil(texts.length / MAIL_BATCH_SIZE) },
+    (_, index) =>
+      texts.slice(index * MAIL_BATCH_SIZE, (index + 1) * MAIL_BATCH_SIZE),
+  );
+
+/** Each group's texts in batches of 50, at most six batches in all: every group gets one and the spare ones go to the earlier groups. */
+export const toMailBatches = (groups: MailGroup[]): string[][][] => {
+  const kept = groups.slice(0, MAX_MAIL_BATCHES);
+  return kept.reduce<{ spare: number; out: string[][][] }>(
+    (state, group) => {
+      const wanted = Math.ceil(group.texts.length / MAIL_BATCH_SIZE);
+      const count = Math.min(wanted, 1 + state.spare);
+      return {
+        spare: state.spare - (count - 1),
+        out: [
+          ...state.out,
+          chunkTexts(group.texts.slice(0, count * MAIL_BATCH_SIZE)),
+        ],
+      };
+    },
+    { spare: MAX_MAIL_BATCHES - kept.length, out: [] },
+  ).out;
+};
+
+/** Batches' notes as one set: a note's counts are summed under its normalised text. */
+export const mergeLearned = (batches: LearnedStyle[]): LearnedStyle => {
+  const sum = (lines: LearnedLine[]) => [
+    ...lines
+      .reduce((all, line) => {
+        const key = toNoteKey(line.text);
+        const seen = all.get(key);
+        return all.set(key, {
+          text: seen?.text ?? line.text,
+          exampleCount: (seen?.exampleCount ?? 0) + line.exampleCount,
+        });
+      }, new Map<string, LearnedLine>())
+      .values(),
+  ];
+  return {
+    traits: sum(batches.flatMap((batch) => batch.traits)),
+    avoid: sum(batches.flatMap((batch) => batch.avoid)),
+  };
+};
+
 /** What a free-writing turn is told about the person's style: the descriptions only. */
 export const toStyleNotes = (words: StyleWords | null) => {
   const traits = Object.values(words?.traits ?? {})

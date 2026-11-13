@@ -16,6 +16,7 @@ import GoogleConnectProvider from '@apps/helm/components/connections/GoogleConne
 import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedAppsScreen';
 import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
+import SearchScreen from '@apps/helm/components/search/SearchScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
 import ProcedureScreen from '@apps/helm/components/procedures/ProcedureScreen';
 import RunScreen from '@apps/helm/components/procedures/RunScreen';
@@ -46,6 +47,7 @@ const ORIGIN_LABELS: Partial<Record<HelmView, string>> = {
   people: HELM_COPY.peopleTitle,
   projects: HELM_COPY.projectsTitle,
   procedures: HELM_COPY.proceduresTitle,
+  search: HELM_COPY.searchTitle,
 };
 
 function HelmApp() {
@@ -56,6 +58,8 @@ function HelmApp() {
     view,
     grant,
     item,
+    query,
+    setQuery,
     isBrowseOpen,
     isAskRequested,
     closeAsk,
@@ -98,6 +102,7 @@ function HelmApp() {
     origin === null
       ? fallback
       : (ORIGIN_LABELS[origin] ?? HELM_COPY.backGeneric);
+  const isFromSearch = origin === 'search';
   const focusComposer = () => composerRef.current?.focus();
   // Without the key nothing opens, so every view gives way to home and its state card, with no dock until typing can be kept.
   const isHome = isLocked || VIEW_KINDS[view] === 'home';
@@ -124,6 +129,7 @@ function HelmApp() {
             composerRef={composerRef}
             onComposerFocusChange={setIsComposing}
             onOpenSettings={() => showView('settings')}
+            onOpenSearch={() => showView('search')}
           />
         )}
         {!isLocked && view === 'today' && (
@@ -155,6 +161,14 @@ function HelmApp() {
             onOpenActivity={() => showView('activity')}
             onOpenConnectedApps={() => showView('connectedApps')}
             onOpenSeesYou={() => showView('howNomosSeesYou')}
+          />
+        )}
+        {!isLocked && view === 'search' && (
+          <SearchScreen
+            query={query}
+            onQueryChange={(text) => void setQuery(text)}
+            onBack={goBack}
+            onOpenView={(next, id) => void showView(next, id)}
           />
         )}
         {!isLocked && view === 'activity' && <ActivityScreen onBack={goBack} />}
@@ -210,6 +224,7 @@ function HelmApp() {
           <TopicScreen
             key={item}
             topicId={item}
+            backLabel={isFromSearch ? HELM_COPY.searchTitle : undefined}
             onBack={goBackToOrigin}
             onHome={goHome}
             onOpenTopic={(topicId) => showView('topic', topicId)}
@@ -250,10 +265,19 @@ function HelmApp() {
           />
         )}
         {!isLocked && view === 'howNomosSeesYou' && (
-          <HowNomosSeesYou onBack={goBack} onHome={goHome} />
+          <HowNomosSeesYou
+            backLabel={isFromSearch ? HELM_COPY.searchTitle : undefined}
+            onBack={isFromSearch ? goBackToOrigin : goBack}
+            onHome={goHome}
+          />
         )}
         {!isLocked && view === 'place' && (
-          <PlaceDetail placeId={item} onBack={goBack} onHome={goHome} />
+          <PlaceDetail
+            placeId={item}
+            backLabel={isFromSearch ? HELM_COPY.searchTitle : undefined}
+            onBack={isFromSearch ? goBackToOrigin : goBack}
+            onHome={goHome}
+          />
         )}
         {isAskRequested && !isLocked && screen && (
           <AskConversation entry={screen} onClose={() => void closeAsk()} />

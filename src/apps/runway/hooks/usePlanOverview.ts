@@ -17,7 +17,7 @@ import {
   isHorizonCountedAt,
   usePriorityDial,
 } from '@apps/runway/hooks/usePriorityDial';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectBillsDueBeforePay,
   selectHorizonMonthCents,

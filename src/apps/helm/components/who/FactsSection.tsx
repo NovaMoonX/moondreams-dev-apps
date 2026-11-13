@@ -5,6 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import SectionDivider from '@/components/SectionDivider';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import AddRow from '@apps/helm/components/who/AddRow';
 import FactAddSheet from '@apps/helm/components/who/FactAddSheet';
 import FactRow from '@apps/helm/components/who/FactRow';
 import FactSheet from '@apps/helm/components/who/FactSheet';
@@ -38,25 +39,25 @@ function FactsSection({ subject, name }: FactsSectionProps) {
 
   return (
     <section className='space-y-3'>
-      <SectionDivider
-        label={HELM_COPY.whoFactsTitle}
-        trailing={
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
-            onClick={() => setIsAdding(true)}
-          >
-            {HELM_COPY.factsAdd}
-          </Button>
-        }
-      />
       {facts.length === 0 ? (
-        <p className='text-muted-foreground text-[15px] text-pretty'>
-          {HELM_COPY.whoFactsEmpty(assistant)}
-        </p>
+        <AddRow label={HELM_COPY.factsAdd} onClick={() => setIsAdding(true)} />
       ) : (
+        <SectionDivider
+          label={HELM_COPY.whoFactsTitle}
+          trailing={
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+              onClick={() => setIsAdding(true)}
+            >
+              {HELM_COPY.factsAdd}
+            </Button>
+          }
+        />
+      )}
+      {facts.length === 0 ? null : (
         <ul className='helm-card divide-border divide-y overflow-hidden'>
           {facts.map((fact) => (
             <li key={fact.id}>

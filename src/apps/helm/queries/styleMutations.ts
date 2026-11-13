@@ -1,4 +1,10 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocs,
+  runTransaction,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils';
@@ -13,7 +19,7 @@ import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { openJson, sealJson } from '@apps/helm/security';
 import type { StyleProfile, StyleSealed } from '@apps/helm/types';
 
-/** The one profile the person edits by hand; occasion and audience profiles come only from sent mail. */
+/** The profile the person adds notes to by hand; occasion and audience profiles come from sent mail, and their notes can be edited or removed. */
 export const GENERAL_STYLE_ID = 'general';
 
 type Trait = StyleSealed['traits'][string];
@@ -54,13 +60,14 @@ const rememberRemoved = (removed: string[], text: string) =>
 /** Re-reads the profile inside a transaction and writes only `sealed` and the edit stamps (the whole document when it is the first note). `change` returns the new notes, or null when what it meant to change is no longer there. */
 async function changeStyle(
   uid: string,
+  styleId: string,
   change: (
     sealed: StyleSealed,
   ) => StyleSealed | 'full' | 'fullAvoid' | typeof UNCHANGED | null,
 ): Promise<Outcome> {
   if (!navigator.onLine) return 'offline';
   const encryption = await getHelmEncryption(uid);
-  const ref = doc(db, 'apps', 'helm', 'users', uid, 'style', GENERAL_STYLE_ID);
+  const ref = doc(db, 'apps', 'helm', 'users', uid, 'style', styleId);
   try {
     return await runTransaction(db, async (transaction) => {
       const current = await transaction.get(ref);
@@ -118,10 +125,11 @@ const toResult = (
 export async function addStyleTrait(
   uid: string,
   text: string,
+  styleId = GENERAL_STYLE_ID,
 ): Promise<StyleResult> {
   const key = `you-${generateUuid()}`;
   const found = { isRepeat: false };
-  const outcome = await changeStyle(uid, (sealed) => {
+  const outcome = await changeStyle(uid, styleId, (sealed) => {
     found.isRepeat = Object.values(sealed.traits).some(
       (entry) => normalizeNote(entry.text) === normalizeNote(text),
     );
@@ -144,7 +152,7 @@ export async function addStyleTrait(
   });
   return toResult(
     outcome,
-    found.isRepeat ? null : () => removeStyleTrait(uid, key),
+    found.isRepeat ? null : () => removeStyleTrait(uid, key, styleId),
   );
 }
 
@@ -153,8 +161,9 @@ export async function editStyleTrait(
   uid: string,
   key: string,
   text: string,
+  styleId = GENERAL_STYLE_ID,
 ): Promise<StyleResult> {
-  const outcome = await changeStyle(uid, (sealed) => {
+  const outcome = await changeStyle(uid, styleId, (sealed) => {
     const trait = sealed.traits[key];
     if (!trait) return null;
     return {
@@ -177,9 +186,10 @@ export async function editStyleTrait(
 export async function removeStyleTrait(
   uid: string,
   key: string,
+  styleId = GENERAL_STYLE_ID,
 ): Promise<StyleResult> {
   const previous: { trait: Trait | null } = { trait: null };
-  const outcome = await changeStyle(uid, (sealed) => {
+  const outcome = await changeStyle(uid, styleId, (sealed) => {
     const { [key]: removed, ...rest } = sealed.traits;
     if (!removed) return null;
     previous.trait = removed;
@@ -189,16 +199,19 @@ export async function removeStyleTrait(
       removed: rememberRemoved(sealed.removed, removed.text),
     };
   });
-  return toResult(outcome, () => putTraitBack(uid, key, previous.trait));
+  return toResult(outcome, () =>
+    putTraitBack(uid, key, previous.trait, styleId),
+  );
 }
 
 async function putTraitBack(
   uid: string,
   key: string,
   trait: Trait | null,
+  styleId: string,
 ): Promise<StyleResult> {
   if (!trait) return { kind: 'gone' };
-  const outcome = await changeStyle(uid, (sealed) =>
+  const outcome = await changeStyle(uid, styleId, (sealed) =>
     Object.values(sealed.traits).some(
       (entry) => normalizeNote(entry.text) === normalizeNote(trait.text),
     )
@@ -221,9 +234,10 @@ export async function editStyleAvoid(
   uid: string,
   line: string,
   text: string,
+  styleId = GENERAL_STYLE_ID,
 ): Promise<StyleResult> {
   const next = text.trim().slice(0, STYLE_AVOID_MAX);
-  const outcome = await changeStyle(uid, (sealed) => {
+  const outcome = await changeStyle(uid, styleId, (sealed) => {
     if (!sealed.avoid.includes(line)) return null;
     const isRepeat = sealed.avoid.some(
       (entry) => entry !== line && normalizeNote(entry) === normalizeNote(next),
@@ -243,9 +257,10 @@ export async function editStyleAvoid(
 export async function removeStyleAvoid(
   uid: string,
   line: string,
+  styleId = GENERAL_STYLE_ID,
 ): Promise<StyleResult> {
   const previous: { index: number } = { index: -1 };
-  const outcome = await changeStyle(uid, (sealed) => {
+  const outcome = await changeStyle(uid, styleId, (sealed) => {
     previous.index = sealed.avoid.indexOf(line);
     return previous.index < 0
       ? null
@@ -256,7 +271,7 @@ export async function removeStyleAvoid(
         };
   });
   const undo = async (): Promise<StyleResult> => {
-    const undone = await changeStyle(uid, (sealed) =>
+    const undone = await changeStyle(uid, styleId, (sealed) =>
       sealed.avoid.some((entry) => normalizeNote(entry) === normalizeNote(line))
         ? UNCHANGED
         : sealed.avoid.length >= STYLE_AVOID_LIMIT
@@ -274,4 +289,30 @@ export async function removeStyleAvoid(
     return toResult(undone, null);
   };
   return toResult(outcome, undo);
+}
+
+/** Deletes every profile learned from sent mail in one batch, keeping the documents as they were. Undo writes them back; `null` when there was nothing to remove. */
+export async function removeMailStyles(
+  uid: string,
+): Promise<{ undo: () => Promise<void> } | null> {
+  const styles = collection(db, 'apps', 'helm', 'users', uid, 'style');
+  const snapshot = await getDocs(styles);
+  const kept = snapshot.docs
+    .map((entry) => ({ id: entry.id, data: entry.data() }))
+    .filter(({ data }) =>
+      Array.isArray(data.learnedFrom)
+        ? data.learnedFrom.includes('sentMail')
+        : false,
+    );
+  if (kept.length === 0) return null;
+  const batch = writeBatch(db);
+  kept.forEach(({ id }) => batch.delete(doc(styles, id)));
+  await batch.commit();
+  return {
+    undo: async () => {
+      const restore = writeBatch(db);
+      kept.forEach(({ id, data }) => restore.set(doc(styles, id), data));
+      await restore.commit();
+    },
+  };
 }

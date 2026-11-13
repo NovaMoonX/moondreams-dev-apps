@@ -5,7 +5,7 @@ import { ChevronRight } from 'lucide-react';
 
 interface SummaryRowProps {
   /** A small caption above the value. */
-  label: string;
+  label: ReactNode;
   /** What the field holds. */
   children: ReactNode;
   /** A muted line under the value. */

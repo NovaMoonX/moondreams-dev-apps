@@ -58,7 +58,10 @@ function VoiceStatus({
   const isLoud = voice.state === 'listening' || voice.state === 'speaking';
   const text =
     voice.state === 'listening'
-      ? voice.heard || HELM_COPY.talkListeningHint
+      ? voice.heard ||
+        (voice.isPreparing
+          ? HELM_COPY.talkGettingReady
+          : HELM_COPY.talkListeningHint)
       : voice.state === 'speaking'
         ? voice.saying
         : voice.state === 'idle'

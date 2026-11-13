@@ -6,11 +6,19 @@ import {
   MAX_STYLE_TRAITS,
   MAX_TRAIT_CHARS,
   createStyleFixtureProvider,
+  mergeLearned,
   mergeStyle,
+  toMailBatches,
+  toMailGroups,
+  toMailOccasion,
   readStyleReply,
   toStyleNotes,
   type StyleWords,
 } from '../../functions/src/apps/helm/styleLearner.ts';
+import {
+  readAddresses,
+  toWrittenText,
+} from '../../functions/src/connections/google/mailText.ts';
 import { buildContext } from '../../functions/src/apps/helm/nomos/buildContext.ts';
 import type { CaptureReading } from '../../functions/src/apps/helm/nomos/commands.ts';
 
@@ -263,5 +271,116 @@ assert.ok(
     `<your_style>${JSON.stringify(notes)}</your_style>`,
   ),
 );
+
+// Sent mail: quoted replies and signatures are never kept, and each text is cut to 1,500.
+assert.equal(
+  toWrittenText(
+    'Hi Sam,\n\nSee you Friday.\n\nThanks,\nAlex\n\nOn Tue, Mar 4, 2025 at 9:12 AM Sam <s@example.com> wrote:\n> older words\n> more',
+  ),
+  'Hi Sam,\n\nSee you Friday.\n\nThanks,\nAlex',
+);
+assert.equal(
+  toWrittenText('Sounds good.\n\n-- \nAlex Morgan\nHarbor Events'),
+  'Sounds good.',
+);
+assert.equal(toWrittenText('Sounds good.\n--\nAlex'), 'Sounds good.');
+assert.equal(
+  toWrittenText(
+    'On Tue, Mar 4, 2025 at 9:12 AM Sam Rivera\n<s@example.com> wrote:\n> hi\nreply',
+  ),
+  '',
+  'a wrapped "wrote:" line still starts the quote',
+);
+assert.equal(toWrittenText('Yes\n> quoted line\nand no'), 'Yes\nand no');
+assert.equal(toWrittenText('a'.repeat(2000)).length, 1500);
+assert.deepEqual(
+  readAddresses('Sam Rivera <Sam.Rivera@Example.com>, "Jo, B" <jo@gmail.com>'),
+  ['sam.rivera@example.com', 'jo@gmail.com'],
+);
+
+// Sent mail: personal only when every recipient is on a personal provider.
+assert.equal(toMailOccasion(['mom@gmail.com']), 'personal');
+assert.equal(toMailOccasion(['mom@gmail.com', 'sam@acme.example']), 'work');
+assert.equal(toMailOccasion(['a@acme.example']), 'work');
+assert.equal(toMailOccasion([]), 'work');
+
+const mail = (to: string[], text: string) => ({ to, text });
+const sent = [
+  ...Array.from({ length: 6 }, (_, i) => mail(['sam@acme.example'], `w${i}`)),
+  ...Array.from({ length: 5 }, (_, i) => mail(['mom@gmail.com'], `p${i}`)),
+  mail(['dana@acme.example'], 'x'),
+];
+const grouped = toMailGroups(
+  sent,
+  new Map([
+    ['sam@acme.example', 'who-sam'],
+    ['mom@gmail.com', 'who-mom'],
+    ['dana@acme.example', 'who-dana'],
+  ]),
+);
+assert.deepEqual(
+  grouped.map((group) => [group.id, group.texts.length]),
+  [
+    ['mail-work', 7],
+    ['mail-personal', 5],
+    ['mail-who-who-sam', 6],
+    ['mail-who-who-mom', 5],
+  ],
+  'a person with under 5 messages gets no audience; most written first',
+);
+assert.equal(grouped[2].audienceWhoId, 'who-sam');
+const sevenWays = [
+  ...Array.from({ length: 5 }, (_, i) => mail(['ops@acme.example'], `w${i}`)),
+  ...Array.from({ length: 5 }, (_, i) => mail(['pal@gmail.com'], `p${i}`)),
+  ...['a', 'b', 'c', 'd', 'e'].flatMap((who) =>
+    Array.from({ length: 5 }, (_, i) =>
+      mail([`${who}@acme.example`], `${who}${i}`),
+    ),
+  ),
+];
+const sevenGroups = toMailGroups(
+  sevenWays,
+  new Map(
+    ['a', 'b', 'c', 'd', 'e'].map((who) => [
+      `${who}@acme.example`,
+      `who-${who}`,
+    ]),
+  ),
+);
+assert.equal(sevenGroups.length, 6, 'never more groups than batches');
+assert.equal(toMailBatches(sevenGroups).length, sevenGroups.length);
+assert.equal(grouped[0].scope, 'occasion');
+
+// Sent mail: one batch per group when groups are many, never more than six in all, 50 a batch.
+const many = (id: string, count: number) => ({
+  id,
+  scope: 'occasion' as const,
+  audienceWhoId: null,
+  texts: Array.from({ length: count }, (_, i) => `t${i}`),
+});
+const planned = toMailBatches([many('a', 120), many('b', 60), many('c', 8)]);
+assert.deepEqual(
+  planned.map((batches) => batches.map((batch) => batch.length)),
+  [[50, 50, 20], [50, 10], [8]],
+);
+assert.equal(
+  toMailBatches(Array.from({ length: 8 }, (_, i) => many(`g${i}`, 200))).flat()
+    .length,
+  6,
+);
+
+// Sent mail: batches' notes merge by summing counts per normalised text.
+const mergedBatches = mergeLearned([
+  { traits: [line('Short sentences', 4)], avoid: [line('No emoji', 3)] },
+  {
+    traits: [line('  short   Sentences ', 5), line('Signs off Thanks', 3)],
+    avoid: [],
+  },
+]);
+assert.deepEqual(mergedBatches.traits, [
+  line('Short sentences', 9),
+  line('Signs off Thanks', 3),
+]);
+assert.deepEqual(mergedBatches.avoid, [line('No emoji', 3)]);
 
 console.log('helm style: ok');
