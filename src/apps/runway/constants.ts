@@ -1775,14 +1775,76 @@ export const CHARGED_TO_HINT_WORDS = {
   undoFailed: 'That could not be undone.',
   saveFailed: 'This did not save. Nothing was changed.',
   offline: 'You are offline, so nothing was changed.',
-  heading: 'Charged somewhere else?',
+} as const;
+
+/** The "Bills we noticed" card and the sheets its rows open: charged-to hints and the bank's repeating charges. */
+export const BILLS_NOTICED_WORDS = {
+  heading: 'Bills we noticed',
   headingHelp:
-    'We compare the bank charges from the last 75 days with the card or account each bill names. Nothing changes until you say yes on the bill.',
-  rowLine: (place: string) => `Last charged on ${place}`,
+    'We compare the bank charges from the last 75 days and the bank’s own list of repeating charges with your bills. Nothing changes until you say yes.',
   more: (count: number) => `Show ${count} more`,
   fewer: 'Show fewer',
-  openAria: (name: string, place: string) =>
+  chargedLine: (place: string) => `Last charged on ${place}`,
+  chargedAria: (name: string, place: string) =>
     `${name}. Last charged on ${place}. Open`,
+  amountLine: (range: string, plan: string) =>
+    `Charged ${range} lately, plan says ${plan}`,
+  amountAria: (name: string) =>
+    `${name}. Its bank charges differ from your plan. Open`,
+  amountHiddenAria: (name: string) =>
+    `${name}. Its bank charges differ from your plan. Amount hidden. Open`,
+  newLine: (amount: string, how: string, place: string) =>
+    `${amount} ${how} on ${place} · not a bill yet`,
+  newAria: (name: string, line: string) => `${name}. ${line}. Open`,
+  newHiddenAria: (name: string) =>
+    `${name}. A repeating charge that is not a bill yet. Amount hidden. Open`,
+  placeName: (name: string, mask: string | null) =>
+    mask ? `${name} ••${mask}` : name,
+  placeLine: (count: number) =>
+    `${count === 1 ? '1 repeating charge' : `${count} repeating charges`} · not in your plan`,
+  placeAria: (name: string, line: string) => `${name}. ${line}. Open`,
+  frequency: {
+    weekly: 'weekly',
+    biweekly: 'every 2 weeks',
+    semiMonthly: 'twice a month',
+    monthly: 'monthly',
+    annually: 'yearly',
+    unknown: 'repeating',
+  },
+} as const;
+
+/** What a bill's sheet says when the bank's charges differ from its amount. */
+export const BILL_AMOUNT_HINT_WORDS = {
+  single: (charged: string, plan: string) =>
+    `Its last bank charge was ${charged}; your plan says ${plan}.`,
+  range: (charged: string, plan: string) =>
+    `Its bank charges ran ${charged} lately; your plan says ${plan}.`,
+  fromToday: 'Applies from today, for every payment after.',
+  changeIt: (amount: string) => `Change it to ${amount}`,
+  notThisOne: 'Not this one',
+  done: (name: string, amount: string) => `${name} is now ${amount} from today`,
+  undo: 'Undo',
+  undoFailed: 'That could not be undone.',
+  saveFailed: 'This did not save. Nothing was changed.',
+  offline: 'You are offline, so nothing was changed.',
+} as const;
+
+/** The sheet a repeating charge the bank found opens, and the one for an account that is not in the plan. */
+export const RECURRING_SHEET_WORDS = {
+  amount: 'Amount',
+  howOften: 'How often',
+  lastCharged: 'Last charged',
+  nextExpected: 'Next expected',
+  chargedTo: 'Charged to',
+  about: (amount: string) => `About ${amount}`,
+  addBill: 'Add it as a bill',
+  addBillSub: 'You will check the details before it is added.',
+  notABill: 'Not a bill',
+  accountTitle: (name: string) => `${name} isn’t in your plan`,
+  accountIntro:
+    'These charges repeat on it. Add it to your plan and we can read them against your bills.',
+  addAccount: 'Add it to my plan',
+  keepOut: 'Keep it out',
 } as const;
 
 /** A bill's share of one paycheck: changing what this pay puts toward it, and keeping that for every pay. */

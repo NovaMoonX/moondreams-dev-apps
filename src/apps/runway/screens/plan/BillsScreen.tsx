@@ -23,6 +23,7 @@ import { useAutoChecks } from '@apps/runway/hooks/useAutoPay';
 import BillsNoticedCard from '@apps/runway/components/BillsNoticedCard';
 import DueBillsCard from '@apps/runway/components/DueBillsCard';
 import { useChargedToHints } from '@apps/runway/hooks/useChargedTo';
+import { useRecurringHints } from '@apps/runway/hooks/useRecurring';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
 import PlanBulkActions, {
@@ -73,7 +74,8 @@ function BillsScreen() {
   const lookahead = useDeferredLookahead(today, isLoaded);
   const dueCosts = useDueCostRows(lookahead, today);
   const { checks } = useAutoChecks();
-  const hasNoticed = useChargedToHints(today).length > 0;
+  const hasNoticed =
+    useChargedToHints(today).length + useRecurringHints(today).length > 0;
   const hasDue =
     (lookahead?.due.length ?? 0) + dueCosts.length + checks.length > 0;
   const groups = useAppSelector((state) => selectGroups(state, today));

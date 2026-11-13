@@ -17,6 +17,7 @@ import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemSheet, {
   type ItemSheetProps,
 } from '@apps/runway/components/ItemSheet';
+import BillAmountNotice from '@apps/runway/components/BillAmountNotice';
 import BillChargedToNotice from '@apps/runway/components/BillChargedToNotice';
 import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
@@ -371,7 +372,10 @@ export function BillSheet({
             onPickAnother={() => setPickedStep('funding')}
           />
           {!isFeeBill && (
-            <BillChargedToNotice billId={billId} bill={bill} today={today} />
+            <>
+              <BillChargedToNotice billId={billId} bill={bill} today={today} />
+              <BillAmountNotice billId={billId} bill={bill} today={today} />
+            </>
           )}
         </>
       }

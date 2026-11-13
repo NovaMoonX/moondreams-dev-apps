@@ -101,6 +101,9 @@ import type {
   PurchaseLine,
   PurchaseSealed,
   CostRef,
+  RecurringChargesDoc,
+  RecurringChargesSealed,
+  RecurringStream,
   SourceSealed,
   StartHolding,
   StartSealed,
@@ -1630,11 +1633,78 @@ async function writeSeedCards(
             cardId: null,
             isSkipped: true,
           },
+          {
+            providerAccountId: 'seed-provider-joint-checking',
+            name: 'Joint Checking',
+            kind: 'depository',
+            mask: '7720',
+            balanceCents: 96_000,
+            accountId: null,
+            cardId: null,
+            isSkipped: true,
+          },
         ],
       } satisfies LinkSealed,
       encryption,
     ),
   } satisfies LinkDoc);
+  const stream = (
+    over: Pick<
+      RecurringStream,
+      'streamId' | 'providerAccountId' | 'description' | 'merchantName'
+    > &
+      Partial<RecurringStream>,
+  ): RecurringStream => ({
+    frequency: 'monthly',
+    averageCents: 0,
+    lastCents: 0,
+    firstOn: today - 150 * DAY_MS,
+    lastOn: today - 9 * DAY_MS,
+    nextOn: today + 21 * DAY_MS,
+    status: 'mature',
+    isActive: true,
+    category: 'ENTERTAINMENT_TV_AND_MOVIES',
+    ...over,
+  });
+  batch.set(context.firestore.doc(`${plan}/recurringCharges/${SEED_LINK}`), {
+    id: SEED_LINK,
+    asOf: context.now - 2 * 60_000,
+    sealed: await sealJson(
+      {
+        streams: [
+          stream({
+            streamId: 'seed-stream-cloud',
+            providerAccountId: 'seed-provider-venture',
+            description: 'CLOUD STORAGE PLAN',
+            merchantName: 'Cloud storage',
+            averageCents: 1_299,
+            lastCents: 1_299,
+            category: 'GENERAL_SERVICES_OTHER_GENERAL_SERVICES',
+          }),
+          stream({
+            streamId: 'seed-stream-netflix',
+            providerAccountId: 'seed-provider-venture',
+            description: 'NETFLIX.COM',
+            merchantName: 'Netflix',
+            averageCents: 1_549,
+            lastCents: 1_549,
+            lastOn: today - 5 * DAY_MS,
+            nextOn: today + 25 * DAY_MS,
+          }),
+          stream({
+            streamId: 'seed-stream-gym',
+            providerAccountId: 'seed-provider-joint-checking',
+            description: 'CITY GYM MEMBERSHIP',
+            merchantName: 'City Gym',
+            averageCents: 4_500,
+            lastCents: 4_500,
+            category: 'PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS',
+          }),
+        ],
+      } satisfies RecurringChargesSealed,
+      encryption,
+    ),
+  } satisfies RecurringChargesDoc);
   batch.set(
     context.firestore.doc(`${plan}/accountBalances/${SEED_VENTURE_CARD}`),
     {

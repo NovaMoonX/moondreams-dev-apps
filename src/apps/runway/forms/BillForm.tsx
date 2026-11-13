@@ -335,6 +335,8 @@ interface BillFormProps {
   presetGroupId?: string;
   /** Makes the bill from a repeating cost, writing it with the cost's item in one save. */
   fromCost?: BillFromCost;
+  /** Starts a new bill filled from a charge the bank found; every answer starts folded, and once the bill is written `onCreated` hears its id. */
+  fromCharge?: { initial: BillSealed; onCreated: (billId: string) => void };
 }
 
 export type BillStepId =
@@ -676,6 +678,7 @@ function BillFormBody({
   draft,
   presetGroupId,
   fromCost,
+  fromCharge,
 }: BillFormProps & StartOverProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -716,11 +719,12 @@ function BillFormBody({
     editing ? getEditingData(editing.payload, false) : null,
   );
   const [startData] = useState<BillFormData>(() =>
-    editing || draft?.initial || fromCost
+    editing || draft?.initial || fromCost || fromCharge
       ? {
           ...getEditingData(
             (editing?.payload ??
               draft?.initial ??
+              fromCharge?.initial ??
               (fromCost
                 ? {
                     ...EMPTY_BILL,
@@ -739,7 +743,8 @@ function BillFormBody({
             editing === undefined,
           ),
           accountId: keepPullAccountId(
-            (editing?.payload ?? draft?.initial)?.accountId,
+            (editing?.payload ?? draft?.initial ?? fromCharge?.initial)
+              ?.accountId,
             openAccounts,
             isAccountsLoaded,
           ),
@@ -774,9 +779,12 @@ function BillFormBody({
         },
   );
   const startsChosen =
-    editing !== undefined || draft !== undefined || fromCost !== undefined;
+    editing !== undefined ||
+    draft !== undefined ||
+    fromCost !== undefined ||
+    fromCharge !== undefined;
   const draftKey =
-    draft || fromCost
+    draft || fromCost || fromCharge
       ? null
       : `${FORM_DRAFT_PREFIX}${noun}:${editing?.itemId ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
@@ -1664,7 +1672,8 @@ function BillFormBody({
       fromCost ? steps.filter(({ id }) => id !== 'due') : steps,
       isHidden,
     ),
-    startFolded: editing !== undefined || !!draft?.initial,
+    startFolded:
+      editing !== undefined || !!draft?.initial || fromCharge !== undefined,
     foldAnswered: kept.restored !== null || fromCost !== undefined,
     initialOpenId: draft?.openStep ?? null,
   });
@@ -2024,6 +2033,7 @@ function BillFormBody({
           },
         ),
       });
+      fromCharge?.onCreated(billId);
       if (planStart !== null && startingCents > 0) {
         const isRecorded = await recordHolding(
           user.uid,

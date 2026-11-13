@@ -76,7 +76,7 @@ const isUsable = (stream: RecurringStream) =>
   stream.frequency !== 'unknown' &&
   !isIgnoredCategory(stream.category);
 
-const getStreamKeys = (stream: RecurringStream): string[] => {
+export const getStreamKeys = (stream: RecurringStream): string[] => {
   const key = toComparable(stream.merchantName ?? stream.description);
   return key === '' ? [] : [key];
 };
