@@ -23,7 +23,12 @@ import {
 } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
+import { getEventLink } from '@apps/runway/utils/eventLink';
+import {
+  selectAllHorizonItems,
+  selectResolvedPlan,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   centsToInputValue,
@@ -39,6 +44,7 @@ import {
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
+  PART_OF_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
@@ -52,6 +58,7 @@ import {
   isText,
   readDraftFields,
   readKeptWithChange,
+  withDraftDefaults,
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import {
@@ -75,7 +82,6 @@ import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
-import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
   NEW_GROUP_ID,
   getGroupChoices,
@@ -97,7 +103,7 @@ import {
   selectEnvelopes,
   selectGroups,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { EnvelopeSealed, Priority } from '@apps/runway/types';
+import type { DateOnly, EnvelopeSealed, Priority } from '@apps/runway/types';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -114,15 +120,18 @@ interface EnvelopeFormData extends FundingFormData, ExtrasFormData {
 }
 
 const parseEnvelopeDraftFields = (stored: unknown) =>
-  readDraftFields<EnvelopeFormData>(withExtrasDefault(stored), {
-    ...fundingFieldChecks,
-    name: isText,
-    priority: isNullableOneOf(PRIORITIES),
-    emoji: isNullableText,
-    group: isPickOrCreate,
-    max: isText,
-    extras: isExtrasAnswer,
-  });
+  readDraftFields<EnvelopeFormData>(
+    withDraftDefaults(withExtrasDefault(stored), { pay: null }),
+    {
+      ...fundingFieldChecks,
+      name: isText,
+      priority: isNullableOneOf(PRIORITIES),
+      emoji: isNullableText,
+      group: isPickOrCreate,
+      max: isText,
+      extras: isExtrasAnswer,
+    },
+  );
 
 const parseEnvelopeDraft = (stored: unknown) =>
   readKeptWithChange(stored, parseEnvelopeDraftFields);
@@ -137,6 +146,14 @@ interface EnvelopeFormProps {
   editing?: { itemId: string; payload: EnvelopeSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** The open event a change from here is part of when the form opens. */
+  presetEventId?: string;
+  /** The change is for a later day: its "When it starts" opens on that question. */
+  planAhead?: 'date' | 'stretch';
+  /** A later day a new envelope starts taking money; it is listed from today and gets its amount from this day. */
+  startsOn?: DateOnly;
+  /** The open event a new envelope (or its later start) is part of. */
+  eventId?: string;
   /** A question to open first when changing an envelope ("amount"); every answer starts folded otherwise. */
   openStep?: EnvelopeStepId | null;
   /** Hands the built envelope over instead of writing it, for a person who has no plan yet. */
@@ -213,6 +230,10 @@ function EnvelopeFormBody({
   title,
   editing,
   presetDayKey,
+  presetEventId,
+  planAhead,
+  startsOn,
+  eventId,
   openStep = null,
   draft,
   presetGroupId,
@@ -220,6 +241,9 @@ function EnvelopeFormBody({
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const resolvedPlan = useAppSelector((state) =>
+    selectResolvedPlan(state, today),
+  );
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
@@ -291,9 +315,10 @@ function EnvelopeFormBody({
     data: formData,
     set,
     comingDays,
-    allowNone: false,
+    skippable: !editing || startData.often === 'none' ? 'envelope' : null,
     isDraft: !!draft,
     draftSources: draft?.sources,
+    plan: resolvedPlan,
     getAmountTitle: (unit) => `How much does it get ${unit}?`,
   });
   const maxCents = parseMoneyToCents(formData.max);
@@ -499,6 +524,8 @@ function EnvelopeFormBody({
     current: editing?.payload ?? EMPTY_ENVELOPE,
     candidate,
     presetDayKey,
+    presetEventId,
+    planAhead,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     initialNote: kept.restored?.note,
@@ -507,7 +534,7 @@ function EnvelopeFormBody({
   const editBlocker = flow.getBlocker(blocker);
   const isChangeDirty =
     flow.note.trim() !== '' ||
-    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+    JSON.stringify(flow.from) !== JSON.stringify(flow.initialFrom);
   const isDirty =
     JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
   const keptValue = useMemo(
@@ -557,8 +584,19 @@ function EnvelopeFormBody({
       const encryption = await getRunwayEncryption(user.uid);
       await createEnvelope(user.uid, encryption, {
         startDate: today,
+        startsOn: startsOn ?? null,
         envelope,
         newGroup: resolveGroup(formData).newGroup,
+        link: getEventLink(
+          selectAllHorizonItems(store.getState(), today),
+          eventId ?? null,
+          {
+            today,
+            itemName: envelope.name,
+            what: PART_OF_WORDS.starts,
+            from: startsOn ?? today,
+          },
+        ),
       });
       onClose();
     } catch (saveError) {
@@ -588,7 +626,7 @@ function EnvelopeFormBody({
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps
-        isReason={flow.step === 'reason'}
+        isReason={flow.step !== 'form'}
         reason={<ChangeReason flow={flow} onClose={requestClose} />}
       >
         <ChangeFlowContext value={flowValue}>
@@ -605,6 +643,7 @@ function EnvelopeFormBody({
                 flow={questions}
                 rowIds={['name', 'often', 'max']}
                 after={changeSection}
+                isAfterFirst={flow.isPlanning}
                 isAll={isAll}
                 onAll={() => setIsAll(true)}
                 onBack={() => setIsAll(false)}

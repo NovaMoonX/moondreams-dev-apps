@@ -1,4 +1,4 @@
-import type { NomosCommand } from './commands.js';
+import type { NomosCommand, TopicCommand } from './commands.js';
 
 /** Acts only on the person's own records and can be undone. */
 export const AUTOMATIC_LEVEL = 2;
@@ -14,3 +14,11 @@ export const decide = (command: NomosCommand): Decision => {
       return 'automatic';
   }
 };
+
+export type TopicDecision = 'automatic' | 'propose';
+
+/** Adding a note's words to a topic, changing a topic's document on request and moving a topic are undoable, so they run; a new parent topic runs only when the words asked for it, and is otherwise proposed. */
+export const decideTopic = (command: TopicCommand): TopicDecision =>
+  command.kind === 'createParentTopic' && !command.isAsked
+    ? 'propose'
+    : 'automatic';

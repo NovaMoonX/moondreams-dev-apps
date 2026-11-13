@@ -1,3 +1,5 @@
+import { getDateTimeFormat } from '@/utils/timezoneUtils';
+
 import { DAY_MS } from '@apps/helm/constants';
 import { getDueDay } from '@apps/helm/utils/captureReading';
 import type { TaskDue } from '@apps/helm/types';
@@ -28,13 +30,13 @@ export const formatWeekdayDayUTC = (
   day: number,
   year = new Date().getUTCFullYear(),
 ) =>
-  new Date(day).toLocaleDateString('en-US', {
+  getDateTimeFormat({
     timeZone: 'UTC',
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     ...(new Date(day).getUTCFullYear() === year ? {} : { year: 'numeric' }),
-  });
+  }).format(new Date(day));
 
 /** "Fri, Nov 13", or "Tomorrow, 9:00 AM" for a moment. A day-only due reads in UTC and a moment in `timeZone`. */
 export function formatTaskDue(due: TaskDue, timeZone: string, now: number) {
@@ -44,11 +46,11 @@ export function formatTaskDue(due: TaskDue, timeZone: string, now: number) {
     getRelativeWord(Math.round((day - today) / DAY_MS)) ??
     formatWeekdayDayUTC(day, new Date(today).getUTCFullYear());
   if (due.kind === 'day') return dayLabel;
-  const time = new Date(due.at).toLocaleTimeString('en-US', {
+  const time = getDateTimeFormat({
     timeZone,
     hour: 'numeric',
     minute: '2-digit',
-  });
+  }).format(new Date(due.at));
   return `${dayLabel}, ${time}`;
 }
 

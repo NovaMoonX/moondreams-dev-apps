@@ -2,6 +2,7 @@ import {
   collection,
   limit,
   onSnapshot,
+  orderBy,
   query,
   where,
   type QueryDocumentSnapshot,
@@ -32,6 +33,8 @@ async function openFact(
         id: entry.id,
         status: data.status ?? 'inferred',
         stated: data.stated ?? 'nomosInferred',
+        kind: data.kind ?? 'world',
+        occurredOn: data.occurredOn ?? null,
         sourceCaptureId: data.sourceCaptureId ?? null,
         sourceExecutionId: data.sourceExecutionId ?? null,
         sourceConnection: data.sourceConnection ?? null,
@@ -45,12 +48,13 @@ async function openFact(
         supersedesId: data.supersedesId ?? null,
         supersededById: data.supersededById ?? null,
         supersededAt: data.supersededAt ?? null,
-        disputedWithId: null,
+        disputedWithId: data.disputedWithId ?? null,
         createdAt: data.createdAt ?? 0,
         confirmedAt: data.confirmedAt ?? null,
         lastEditedAt: data.lastEditedAt ?? null,
         statement: payload.statement,
         quote: typeof payload.quote === 'string' ? payload.quote : null,
+        topic: typeof payload.topic === 'string' ? payload.topic : null,
         value: typeof payload.value === 'string' ? payload.value : null,
       },
     ];
@@ -59,7 +63,7 @@ async function openFact(
   }
 }
 
-/** The confirmed and inferred facts, newest first (sorted here, so the query needs no composite index). A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+/** The confirmed, inferred and superseded facts (a superseded one only for "Was … until …"), newest first, so the cap drops the oldest. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startFactsListener(
   uid: string,
   read: SealedReader,
@@ -72,7 +76,8 @@ export function startFactsListener(
   const stop = onSnapshot(
     query(
       collection(db, 'apps', 'helm', 'users', uid, 'facts'),
-      where('status', 'in', ['confirmed', 'inferred']),
+      where('status', 'in', ['confirmed', 'inferred', 'superseded']),
+      orderBy('createdAt', 'desc'),
       limit(FACTS_LIMIT),
     ),
     async (snapshot) => {

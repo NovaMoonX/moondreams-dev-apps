@@ -24,6 +24,10 @@ import type {
   TaskWordsChange,
 } from '@apps/helm/types';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
+import {
+  planPhotoRelease,
+  type ReleasablePhoto,
+} from '@apps/helm/utils/mediaRelease';
 import { applyWordsChange, nextStepOrder } from '@apps/helm/utils/taskEdits';
 
 export type WordsResult = 'saved' | 'offline' | 'missing' | 'unreadable';
@@ -68,6 +72,7 @@ export async function createTask(
     createdAt: Date.now(),
     lastEditedAt: null,
     completedAt: null,
+    clearedAt: null,
     sealed: await sealJson<TaskSealed>(
       { title, notes: null, steps: {} },
       encryption,
@@ -164,8 +169,27 @@ export const reopenTask = (uid: string, taskId: string) =>
   updateDoc(doc(tasksOf(uid), taskId), {
     status: 'open',
     completedAt: null,
+    clearedAt: null,
     lastEditedAt: Date.now(),
   });
+
+/** Puts a reopened task back as done on the day it was done, only while it is still open; answers whether it did. */
+export async function markDoneAgain(
+  uid: string,
+  taskId: string,
+  completedAt: number | null,
+) {
+  const ref = doc(tasksOf(uid), taskId);
+  const stored = (await getDoc(ref)).data();
+  if (stored?.status !== 'open') return false;
+  await updateDoc(ref, {
+    status: 'done',
+    completedAt: completedAt ?? Date.now(),
+    clearedAt: null,
+    lastEditedAt: Date.now(),
+  });
+  return true;
+}
 
 /** Marks a task done in one write handed back unawaited. `undo` reopens it only while it is still done from this tap; it answers whether it did. */
 export function completeTask(uid: string, taskId: string) {
@@ -174,6 +198,7 @@ export function completeTask(uid: string, taskId: string) {
   const write = updateDoc(ref, {
     status: 'done',
     completedAt,
+    clearedAt: null,
     lastEditedAt: completedAt,
   });
   const undo = async () => {
@@ -187,15 +212,32 @@ export function completeTask(uid: string, taskId: string) {
   return { completedAt, write, undo };
 }
 
-/** Deletes a task, keeping a copy as it was so `restore` can put it back, only while nothing has taken its id. Writes are handed back or left unawaited, so both work offline. */
-export async function deleteTask(uid: string, taskId: string) {
+/** Deletes a task, keeping a copy as it was so `restore` can put it back, only while nothing has taken its id. The photos kept only on it are let go for 24 hours, each in its own write so a photo already gone never holds back the task, and `restore` keeps them again. Writes are handed back or left unawaited, so both work offline. */
+export async function deleteTask(
+  uid: string,
+  taskId: string,
+  photos: ReleasablePhoto[],
+) {
   const ref = doc(tasksOf(uid), taskId);
   const raw = (await getDocFromCache(ref).catch(() => getDoc(ref))).data();
   if (!raw) throw new Error('This task is already gone.');
+  const released = planPhotoRelease(
+    photos,
+    [{ kind: 'task', id: taskId }],
+    Date.now(),
+  );
+  const mediaRef = (id: string) =>
+    doc(db, 'apps', 'helm', 'users', uid, 'media', id);
   const write = deleteDoc(ref);
+  released.forEach((entry) =>
+    updateDoc(mediaRef(entry.id), entry.forward).catch(() => undefined),
+  );
   const restore = async (): Promise<RestoreResult> => {
     if ((await getDoc(ref)).exists()) return 'exists';
     setDoc(ref, { ...raw, lastEditedAt: Date.now() }).catch(() => undefined);
+    released.forEach((entry) =>
+      updateDoc(mediaRef(entry.id), entry.back).catch(() => undefined),
+    );
     return 'restored';
   };
   return { write, restore };

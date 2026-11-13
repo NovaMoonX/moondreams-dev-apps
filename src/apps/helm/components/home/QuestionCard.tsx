@@ -1,23 +1,28 @@
 import { useState, type ComponentType } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps';
 import { QUIET_CLASS } from '@apps/helm/components/home/ChoiceButton';
 import DateTimeAnswer from '@apps/helm/components/home/DateTimeAnswer';
 import FreeTextAnswer from '@apps/helm/components/home/FreeTextAnswer';
+import NeitherAnswer from '@apps/helm/components/home/NeitherAnswer';
 import NumberAnswer from '@apps/helm/components/home/NumberAnswer';
 import PickOneAnswer from '@apps/helm/components/home/PickOneAnswer';
 import PickRecordAnswer from '@apps/helm/components/home/PickRecordAnswer';
 import PickSeveralAnswer from '@apps/helm/components/home/PickSeveralAnswer';
 import YesNoAnswer from '@apps/helm/components/home/YesNoAnswer';
+import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
+import { takeBack } from '@apps/helm/store/actions/undoActions';
 import { skipQuestion } from '@apps/helm/store/actions/captureActions';
 import {
   isAnswerInFlight,
@@ -33,6 +38,8 @@ interface QuestionCardProps {
   isInSheet: boolean;
   /** The sheet that holds the question already shows its prompt as its title. */
   isPromptHidden?: boolean;
+  /** The words typed under "Neither", held by a sheet that must guard them when it closes; a card on its own keeps them itself. */
+  neitherDraft?: { text: string; onChange: (text: string) => void };
 }
 
 const PARTS: Record<QuestionShape, ComponentType<AnswerPartProps>> = {
@@ -54,14 +61,34 @@ function QuestionCard({
   item,
   isInSheet,
   isPromptHidden = false,
+  neitherDraft,
 }: QuestionCardProps) {
   const { user } = useAuth();
+  const { addToast } = useToast();
+  const [ownText, setOwnText] = useState('');
+  const neitherText = neitherDraft?.text ?? ownText;
+  const setNeitherText = neitherDraft?.onChange ?? setOwnText;
   const name = useAssistantName();
   const isOffline = useNetworkStatus() === 'offline';
   const [isWorking, setIsWorking] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [isNeitherOpen, setIsNeitherOpen] = useState(false);
+  const [isDateOpen, setIsDateOpen] = useState(false);
   const { id, question, skippedAt } = item;
+  const dateId =
+    question.kind === 'whichIsTrue'
+      ? (question.options.find(
+          (option) => option.ref?.collection === 'keyDates',
+        )?.ref?.id ?? null)
+      : null;
+  const dateWho = useAppSelector((state) =>
+    dateId === null
+      ? null
+      : (state.helm.who.items.find(
+          (entry) => entry.id === question.aboutRef?.id && !entry.isUnreadable,
+        ) ?? null),
+  );
   const isSkipped = skippedAt !== null;
   const isModelWritten = question.builtBy === 'model';
   const Part = PARTS[question.shape];
@@ -103,17 +130,65 @@ function QuestionCard({
     }
   };
 
-  const answerOnServer = async (value: QuestionAnswerValue) => {
-    if (value.shape !== 'pickOne' || isOffline) return;
+  const answerOnServer = async (value: QuestionAnswerValue, text?: string) => {
+    if (
+      (value.shape !== 'pickOne' &&
+        value.shape !== 'pickSeveral' &&
+        value.shape !== 'yesNo') ||
+      isOffline
+    )
+      return;
     setIsWorking(true);
-    const result = await resolveQuestion(captureId, id, {
-      by: 'tap',
-      optionId: value.optionId,
-    });
+    const result = await resolveQuestion(
+      captureId,
+      id,
+      value.shape === 'pickSeveral'
+        ? { by: 'tap', optionIds: value.optionIds }
+        : {
+            by: 'tap',
+            optionId: value.optionId,
+            ...(text !== undefined && { text }),
+          },
+    );
     setIsWorking(false);
-    if (result.kind === 'offline') setNote(HELM_COPY.questionNeedsConnection);
-    if (result.kind === 'gone') setNote(HELM_COPY.questionGone(question.kind));
-    if (result.kind === 'failed') setNote(HELM_COPY.heldActionFailed);
+    if (result.kind === 'done' && result.executionId && isInSheet && user) {
+      const { uid } = user;
+      const { executionId } = result;
+      const optionId = value.shape === 'pickSeveral' ? null : value.optionId;
+      const kept = question.options.find((option) => option.id === optionId);
+      const title =
+        question.kind !== 'whichIsTrue'
+          ? HELM_COPY.questionAnswered
+          : optionId === 'none' || !kept
+            ? HELM_COPY.factKeptNeither
+            : HELM_COPY.factKept(kept.label);
+      addToast({
+        title,
+        type: 'success',
+        action: {
+          label: HELM_COPY.undo,
+          onClick: () =>
+            void takeBack(uid, executionId).then((undone) => {
+              if (undone.kind === 'offline') {
+                addToast({
+                  title: HELM_COPY.undoNeedsConnectionTitle,
+                  description: HELM_COPY.undoNeedsConnectionBody,
+                  type: 'error',
+                });
+              }
+            }),
+        },
+      });
+    }
+    const failure =
+      result.kind === 'offline'
+        ? HELM_COPY.questionNeedsConnection
+        : result.kind === 'gone' || result.kind === 'stale'
+          ? HELM_COPY.questionGone(question.kind)
+          : result.kind === 'failed'
+            ? HELM_COPY.heldActionFailed
+            : null;
+    setNote(failure);
   };
 
   const answer = (
@@ -122,6 +197,15 @@ function QuestionCard({
   ) => {
     if (isWorking || isSent || isAnswerInFlight(captureId, id)) return;
     setNote(null);
+    if (
+      question.kind === 'whichIsTrue' &&
+      value.shape === 'pickOne' &&
+      value.optionId === 'none'
+    ) {
+      if (dateId !== null && dateWho) setIsDateOpen(true);
+      else setIsNeitherOpen(true);
+      return;
+    }
     void (isModelWritten
       ? answerAsTurn(value, recordName)
       : answerOnServer(value));
@@ -174,6 +258,23 @@ function QuestionCard({
               ? HELM_COPY.questionSavedOffline
               : HELM_COPY.questionSent}
           </p>
+        ) : isNeitherOpen ? (
+          <NeitherAnswer
+            isBusy={isWorking}
+            text={neitherText}
+            onTextChange={setNeitherText}
+            onSave={(text) =>
+              void answerOnServer(
+                { shape: 'pickOne', optionId: 'none', otherText: null },
+                text,
+              )
+            }
+            onBack={() => {
+              setNeitherText('');
+              setNote(null);
+              setIsNeitherOpen(false);
+            }}
+          />
         ) : (
           <>
             <Part
@@ -188,6 +289,22 @@ function QuestionCard({
               </div>
             )}
           </>
+        )}
+        {isDateOpen && dateId !== null && dateWho && !dateWho.isUnreadable && (
+          <KeyDateSheet
+            who={dateWho}
+            openId={dateId}
+            isAdding={false}
+            startsEditing
+            onSaved={() =>
+              void answerOnServer({
+                shape: 'pickOne',
+                optionId: 'none',
+                otherText: null,
+              })
+            }
+            onClose={() => setIsDateOpen(false)}
+          />
         )}
         {message && (
           <p

@@ -127,6 +127,7 @@ export const selectAutoBills = createSelector(
         merchantKeys: matchKeys[item.id] ?? [],
         payments: (payments[item.id] ?? []).map((payment) => ({
           dueOn: payment.dueOn,
+          payOn: payment.payOn,
           lowCents: payment.ranged
             ? payment.ranged.range.lowCents
             : payment.totalCents,

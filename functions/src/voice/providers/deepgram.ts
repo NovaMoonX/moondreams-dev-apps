@@ -39,3 +39,46 @@ export async function grantDeepgramToken({
   }
   return { token: data.access_token, expiresInSeconds: data.expires_in };
 }
+
+/** A recording written out: the words and the length the provider measured. Never logs or reports the key or the audio. */
+export async function transcribeDeepgram({
+  apiKey,
+  bytes,
+  mimeType,
+  model,
+  signal,
+  fetchImpl = fetch,
+}: {
+  apiKey: string;
+  bytes: Uint8Array;
+  mimeType: string;
+  model: string;
+  signal?: AbortSignal;
+  fetchImpl?: typeof fetch;
+}): Promise<{ text: string; durationMs: number }> {
+  const res = await fetchImpl(
+    `https://api.deepgram.com/v1/listen?model=${encodeURIComponent(model)}&smart_format=true&mip_opt_out=true`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Token ${apiKey}`, 'Content-Type': mimeType },
+      body: new Uint8Array(bytes),
+      signal,
+    },
+  );
+  if (!res.ok) {
+    await res.body?.cancel();
+    throw new Error(`deepgram answered ${res.status}`);
+  }
+  const data = (await res.json()) as {
+    metadata?: { duration?: unknown };
+    results?: {
+      channels?: { alternatives?: { transcript?: unknown }[] }[];
+    };
+  };
+  const transcript = data.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+  const seconds = data.metadata?.duration;
+  if (typeof transcript !== 'string' || !isPositive(seconds)) {
+    throw new Error('deepgram answered an unexpected body');
+  }
+  return { text: transcript.trim(), durationMs: Math.round(seconds * 1000) };
+}
