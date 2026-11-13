@@ -34,7 +34,9 @@ import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
 import MarkOutsideCostRow from '@apps/runway/components/MarkOutsideCostRow';
-import CoversLine from '@apps/runway/components/CoversLine';
+import CoversLine, {
+  type CoversRest,
+} from '@apps/runway/components/CoversLine';
 import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
 import HorizonEndView from '@apps/runway/components/HorizonEndView';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
@@ -225,6 +227,7 @@ function HorizonSheet({
   const isDone = horizon.state !== 'open';
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const events = useAppSelector((state) => selectAllHorizonItems(state, today));
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
   const getShortBody = () => {
     if (!shortfall) return '';
@@ -253,15 +256,29 @@ function HorizonSheet({
       isRange ? RANGE_END_WORDS[getRangeEnd(stance, 'expense')] : null,
     );
   };
-  const getRestFromPaysNote = () => {
+  const getRestFromPays = (): CoversRest => {
     const { rest } = horizon;
     const picked =
       rest.kind === 'onePay'
         ? comingDays.find(({ dayKey }) => dayKey === rest.dayKey)
         : undefined;
-    return picked
-      ? HORIZON_WORDS.restOnePayNote(formatDateOrdinalUTC(picked.on))
-      : HORIZON_WORDS.restPaysNote;
+    if (picked) {
+      return {
+        short: null,
+        note: HORIZON_WORDS.restOnePayNote(formatDateOrdinalUTC(picked.on)),
+      };
+    }
+    const from =
+      rest.kind === 'pays' && rest.startsOn !== null && rest.startsOn > today
+        ? formatDateOrdinalUTC(rest.startsOn)
+        : null;
+    return from === null
+      ? { short: null, note: HORIZON_WORDS.restPaysNote }
+      : {
+          short: HORIZON_WORDS.savingStarts(from),
+          note: HORIZON_WORDS.startHelpNote,
+          title: HORIZON_WORDS.startHelpTitle,
+        };
   };
   const when =
     horizon.happensUntil === null
@@ -369,8 +386,9 @@ function HorizonSheet({
   const sent = horizon.stateMoney;
   const sentPlace =
     sent?.kind === 'place'
-      ? ([...envelopes, ...goals].find(({ item }) => item.id === sent.toId)
-          ?.version.payload.name ?? HORIZON_END_WORDS.anotherPlace)
+      ? ([...envelopes, ...goals, ...events].find(
+          ({ item }) => item.id === sent.toId,
+        )?.version.payload.name ?? HORIZON_END_WORDS.anotherPlace)
       : null;
   const getSentLine = () => {
     if (sent === null || sent.kind === 'held') return null;
@@ -967,8 +985,8 @@ function HorizonSheet({
             </InlineNotice>
           )}
           {stage === 'readyToFinish' && (
-            <InlineNotice tone='success' title={HORIZON_END_WORDS.readyTitle}>
-              <p>{HORIZON_END_WORDS.readySub}</p>
+            <InlineNotice tone='success'>
+              <p className='font-semibold'>{HORIZON_END_WORDS.readyTitle}</p>
             </InlineNotice>
           )}
           {isChangesOnly ? (
@@ -1004,11 +1022,11 @@ function HorizonSheet({
               heldCents={figures.leftCents}
               stance={stance}
               isSetAsideUsed={figures.setAsideCents > 0}
-              after={
+              rest={
                 (horizon.rest.kind === 'pays' ||
                   horizon.rest.kind === 'onePay') &&
                 plan.coveredUntil !== null
-                  ? getRestFromPaysNote()
+                  ? getRestFromPays()
                   : null
               }
             />
@@ -1076,20 +1094,12 @@ function HorizonSheet({
             </p>
           )}
           <div className='text-muted-foreground space-y-0.5 text-sm'>
-            <p>
+            <p className='text-balance'>
               <MaskedText>{fact}</MaskedText>
             </p>
             {outsideLine && (
               <p>
                 <MaskedText>{outsideLine}</MaskedText>
-              </p>
-            )}
-            {stage === 'open' && waitingOn.length > 0 && (
-              <p className='pt-2'>
-                {HORIZON_END_WORDS.finishWaits(
-                  waitingOn.slice(0, 2).map(({ name }) => name),
-                  Math.max(0, waitingOn.length - 2),
-                )}
               </p>
             )}
           </div>
@@ -1098,6 +1108,9 @@ function HorizonSheet({
               <>
                 <p className='text-muted-foreground text-sm font-medium'>
                   {HORIZON_WORDS.costsCaption}
+                  {stage === 'open' &&
+                    waitingOn.length > 0 &&
+                    HORIZON_END_WORDS.finishWaits(waitingOn.length)}
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {costs.map((cost) => (

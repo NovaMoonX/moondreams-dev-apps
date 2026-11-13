@@ -19,6 +19,7 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import { HORIZON_END_WORDS } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
+  findNextYearOf,
   getBringableCents,
   listCostPayments,
   listOpenCosts,
@@ -73,6 +74,7 @@ function HorizonBringBackView({
   const paid = useAppSelector(selectCostPaid)[itemId];
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const events = useAppSelector((state) => selectAllHorizonItems(state, today));
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
@@ -82,8 +84,9 @@ function HorizonBringBackView({
   const isSentAway = sent !== null && sent.kind !== 'held' && sent.cents > 0;
   const placeName =
     sent?.kind === 'place'
-      ? ([...envelopes, ...goals].find(({ item }) => item.id === sent.toId)
-          ?.version.payload.name ?? null)
+      ? ([...envelopes, ...goals, ...events].find(
+          ({ item }) => item.id === sent.toId,
+        )?.version.payload.name ?? null)
       : null;
   const getAvailable = (live: typeof balances) => {
     return sent?.kind === 'place'
@@ -220,6 +223,26 @@ function HorizonBringBackView({
       setError(HORIZON_END_WORDS.alreadyDone);
       return;
     }
+    const { items, versions, moves } = store.getState().runway;
+    const nextYear = findNextYearOf(
+      itemId,
+      live.stateMoney?.moveId ?? null,
+      items,
+      versions,
+      moves,
+    );
+    if (nextYear && !nextYear.isUntouched) {
+      setError(HORIZON_END_WORDS.nextYearUnderway(live.name));
+      return;
+    }
+    if (
+      nextYear &&
+      (selectBalances(store.getState()).assignedByItem[nextYear.itemId] ?? 0) >
+        bringCents
+    ) {
+      setError(HORIZON_END_WORDS.nextYearHolds(live.name));
+      return;
+    }
     isSavingRef.current = true;
     setError(null);
     setIsSaving(true);
@@ -235,6 +258,18 @@ function HorizonBringBackView({
           0,
           getAvailable(selectBalances(store.getState())),
         ),
+        archives: nextYear
+          ? {
+              itemId: nextYear.itemId,
+              versionId: nextYear.versionId,
+              summary: HORIZON_END_WORDS.undoLinedUpSummary(
+                live.name,
+                new Date(nextYear.happensOn).getUTCFullYear(),
+              ),
+              changedMessage: HORIZON_END_WORDS.nextYearUnderway(live.name),
+              alsoItemIds: live.goalId === null ? [] : [live.goalId],
+            }
+          : null,
       });
       if (written === null) {
         setError(HORIZON_END_WORDS.alreadyDone);

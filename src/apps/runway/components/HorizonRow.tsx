@@ -99,11 +99,25 @@ function HorizonRow({
               : null,
           );
     }
+    if (
+      horizon.rest.kind === 'pays' &&
+      horizon.rest.startsOn !== null &&
+      horizon.rest.startsOn > today &&
+      figures.leftCents === 0
+    ) {
+      return HORIZON_WORDS.savingStarts(
+        formatDateOrdinalUTC(horizon.rest.startsOn),
+      );
+    }
     return next
       ? HORIZON_WORDS.due(next.name, formatDateOrdinalUTC(next.dueOn))
       : HORIZON_WORDS.nothingDue;
   };
-  const detail = getDetail();
+  const baseDetail = getDetail();
+  const detail =
+    horizon.isYearly && !isDone
+      ? `${baseDetail} · ${HORIZON_WORDS.everyYear}`
+      : baseDetail;
   const left = formatCentsShort(
     isDone ? figures.spentCents : figures.leftCents,
   );

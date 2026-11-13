@@ -6,6 +6,14 @@ import type { HorizonPlan } from '@apps/runway/engine/horizon';
 import type { Cents, HorizonCost, Stance } from '@apps/runway/types';
 import { readCovers } from '@apps/runway/utils/coversText';
 
+/** Where the rest comes from: a short phrase drawn on the line (or none) and the full sentence behind its info icon. */
+export interface CoversRest {
+  short: string | null;
+  note: string;
+  /** The tip's title when it is about the short phrase rather than where the rest comes from. */
+  title?: string;
+}
+
 interface CoversLineProps {
   plan: HorizonPlan;
   costs: readonly HorizonCost[];
@@ -14,18 +22,17 @@ interface CoversLineProps {
   stance: Stance;
   /** Money was set aside and none of it is left. */
   isSetAsideUsed?: boolean;
-  /** A sentence that follows in the same paragraph, such as where the rest comes from. */
-  after?: string | null;
+  rest?: CoversRest | null;
 }
 
-/** What the money set aside pays for, in due order ("Covers Movers on Jan 15th at the high end."), with the other end of a range behind a help icon. */
+/** What the money set aside pays for, in due order ("Covers Movers on Jan 15th at the high end."), with the other end of a range and where the rest comes from behind a help icon. */
 function CoversLine({
   plan,
   costs,
   heldCents,
   stance,
   isSetAsideUsed = false,
-  after = null,
+  rest = null,
 }: CoversLineProps) {
   const words = HORIZON_WORDS.covers;
   const { text, ranged, endWords } = readCovers(
@@ -35,38 +42,41 @@ function CoversLine({
     stance,
     isSetAsideUsed,
   );
-  if (text === null)
-    return after === null ? null : (
-      <p className='text-sm text-pretty'>{after}</p>
-    );
+  const rangeNotes = ranged.map(({ cost }) =>
+    words.helpRange(
+      cost.name,
+      formatCents(cost.amount.lowCents),
+      formatCents(cost.amount.highCents),
+      endWords,
+    ),
+  );
+  const notes = [...rangeNotes, ...(rest ? [rest.note] : [])];
+  const getTitle = () => {
+    if (rangeNotes.length === 0)
+      return rest?.title ?? HORIZON_WORDS.restHelpTitle;
+    return rest ? words.helpBothTitle : words.helpTitle;
+  };
+  const lead = rest?.short && text === words.nothingSet ? null : text;
+  const line = [lead, rest?.short ? `${rest.short}.` : null]
+    .filter(Boolean)
+    .join(' ');
+  if (line === '') return null;
 
-  const cut = text.lastIndexOf(' ') + 1;
+  const cut = line.lastIndexOf(' ') + 1;
 
   return (
     <p className='text-sm text-pretty'>
-      <MaskedText>{text.slice(0, cut)}</MaskedText>
+      <MaskedText>{line.slice(0, cut)}</MaskedText>
       <span className='whitespace-nowrap'>
-        <MaskedText>{text.slice(cut)}</MaskedText>
-        {ranged.length > 0 && (
+        <MaskedText>{line.slice(cut)}</MaskedText>
+        {notes.length > 0 && (
           <span className='ml-1 inline-block align-middle'>
-            <HelpTip title={words.helpTitle}>
-              <MaskedText>
-                {ranged
-                  .map(({ cost }) =>
-                    words.helpRange(
-                      cost.name,
-                      formatCents(cost.amount.lowCents),
-                      formatCents(cost.amount.highCents),
-                      endWords,
-                    ),
-                  )
-                  .join(' ')}
-              </MaskedText>
+            <HelpTip title={getTitle()}>
+              <MaskedText>{notes.join(' ')}</MaskedText>
             </HelpTip>
           </span>
         )}
       </span>
-      {after !== null && ` ${after}`}
     </p>
   );
 }

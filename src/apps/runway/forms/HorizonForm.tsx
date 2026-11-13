@@ -1,5 +1,13 @@
 import { useRef, useState } from 'react';
-import { CalendarRange, Clock, Pin, Plus, Wallet } from 'lucide-react';
+import {
+  CalendarCheck,
+  CalendarRange,
+  Clock,
+  Pin,
+  Plus,
+  Repeat,
+  Wallet,
+} from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -39,6 +47,7 @@ import {
   PRIORITIES,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import PaysStartRow from '@apps/runway/components/PaysStartRow';
 import CostRow from '@apps/runway/components/CostRow';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -70,7 +79,10 @@ import type {
   HorizonSealed,
   Priority,
 } from '@apps/runway/types';
-import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
+import {
+  formatDateRangeOrdinalUTC,
+  getPaysStartBlocker,
+} from '@apps/runway/utils/horizonText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 
 interface HorizonFormData {
@@ -87,8 +99,12 @@ interface HorizonFormData {
   putPlaceId: string | null;
   /** "Not now" was chosen: the question is answered with no money. */
   isNotNow: boolean;
+  /** Null until the person answers "Does it happen every year?". */
+  isYearly: boolean | null;
   /** Null until the person picks one. */
   rest: HorizonRest['kind'] | null;
+  /** The day "My pays before each cost is due" starts saving; null starts today. */
+  startsOn: number | null;
   /** The pay "One pay I pick" names; null until picked. */
   restDayKey: string | null;
   priority: Priority;
@@ -105,7 +121,9 @@ const INITIAL_DATA: HorizonFormData = {
   putFrom: null,
   putPlaceId: null,
   isNotNow: false,
+  isYearly: null,
   rest: null,
+  startsOn: null,
   restDayKey: null,
   priority: 'should',
 };
@@ -288,6 +306,8 @@ function HorizonForm({
     if (!hasCosts) return { kind: 'later' };
     if (formData.rest === 'onePay')
       return pickedDay ? { kind: 'onePay', dayKey: pickedDay.dayKey } : null;
+    if (formData.rest === 'pays')
+      return { kind: 'pays', startsOn: formData.startsOn };
     return formData.rest === null ? null : { kind: formData.rest };
   };
   const rest = getRest();
@@ -312,7 +332,13 @@ function HorizonForm({
     stateMoney: null,
     links: [],
     goalId: seed?.kind === 'goal' ? seed.goalId : null,
+    isYearly: formData.isYearly === true,
+    fromId: null,
   });
+  const startBlocker =
+    hasCosts && formData.rest === 'pays'
+      ? getPaysStartBlocker(costs, formData.startsOn)
+      : null;
   const blocker =
     name === ''
       ? HORIZON_WORDS.needsName
@@ -324,7 +350,7 @@ function HorizonForm({
             ? HORIZON_WORDS.needsRest
             : hasCosts && formData.rest === 'onePay' && pickedDay === undefined
               ? HORIZON_WORDS.needsPay
-              : null;
+              : startBlocker;
 
   const isPaysAsked = rest?.kind === 'pays' || rest?.kind === 'onePay';
   const previewJson =
@@ -487,6 +513,55 @@ function HorizonForm({
       ),
     },
     {
+      id: 'yearly',
+      title: HORIZON_WORDS.yearlyTitle,
+      summaryLabel: HORIZON_WORDS.yearly,
+      summaryValue:
+        formData.isYearly === null
+          ? ''
+          : formData.isYearly
+            ? HORIZON_WORDS.yearlyEvery
+            : HORIZON_WORDS.yearlyOnce,
+      isAnswered: formData.isYearly !== null,
+      render: ({ moveOn }) => (
+        <ActionGroup isRoomy>
+          {[
+            {
+              value: false,
+              label: HORIZON_WORDS.yearlyOnce,
+              meaning: undefined,
+            },
+            {
+              value: true,
+              label: HORIZON_WORDS.yearlyEvery,
+              meaning: HORIZON_WORDS.yearlySwitchMeaning,
+            },
+          ].map(({ value, label, meaning }) => (
+            <div
+              key={label}
+              className={join(
+                formData.isYearly === value &&
+                  'bg-primary/10 shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+              )}
+              aria-current={formData.isYearly === value ? 'true' : undefined}
+            >
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={value ? <Repeat /> : <CalendarCheck />}
+                label={label}
+                subtitle={meaning}
+                onClick={() => {
+                  set({ isYearly: value });
+                  moveOn();
+                }}
+              />
+            </div>
+          ))}
+        </ActionGroup>
+      ),
+    },
+    {
       id: 'costs',
       title: HORIZON_WORDS.costsTitle,
       summaryLabel: HORIZON_WORDS.costs,
@@ -601,16 +676,21 @@ function HorizonForm({
       title: HORIZON_WORDS.restTitle,
       summaryLabel: HORIZON_WORDS.rest,
       summaryValue:
-        formData.rest === 'onePay'
-          ? pickedDay
-            ? HORIZON_WORDS.restOnePaySummary(
-                formatDateOrdinalUTC(pickedDay.on),
-              )
-            : ''
-          : (HORIZON_REST_OPTIONS.find(({ value }) => value === formData.rest)
-              ?.label ?? ''),
-      isAnswered: rest !== null,
-      blocker: formData.rest === 'onePay' ? HORIZON_WORDS.needsPay : null,
+        formData.rest === 'pays' && formData.startsOn !== null
+          ? HORIZON_WORDS.restPaysFromSummary(
+              formatDateOrdinalUTC(formData.startsOn),
+            )
+          : formData.rest === 'onePay'
+            ? pickedDay
+              ? HORIZON_WORDS.restOnePaySummary(
+                  formatDateOrdinalUTC(pickedDay.on),
+                )
+              : ''
+            : (HORIZON_REST_OPTIONS.find(({ value }) => value === formData.rest)
+                ?.label ?? ''),
+      isAnswered: rest !== null && startBlocker === null,
+      blocker:
+        formData.rest === 'onePay' ? HORIZON_WORDS.needsPay : startBlocker,
       render: ({ moveOn }) => (
         <div className='space-y-4'>
           <ActionGroup isRoomy>
@@ -631,7 +711,7 @@ function HorizonForm({
                   subtitle={meaning}
                   onClick={() => {
                     set({ rest: value, restDayKey: null });
-                    if (value !== 'onePay') {
+                    if (value !== 'onePay' && value !== 'pays') {
                       moveOn();
                       return;
                     }
@@ -643,6 +723,16 @@ function HorizonForm({
                     );
                   }}
                 />
+                {value === 'pays' && formData.rest === 'pays' && (
+                  <div className='px-4 pb-4'>
+                    <PaysStartRow
+                      value={formData.startsOn}
+                      onChange={(startsOn) => set({ startsOn })}
+                      today={today}
+                      lastDate={lastDate}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </ActionGroup>

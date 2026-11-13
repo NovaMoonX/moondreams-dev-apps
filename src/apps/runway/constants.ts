@@ -471,6 +471,23 @@ export const HORIZON_WORDS = {
     `Put ${amount} toward ${name} from ${from}.`,
   putUndone: (amount: string, name: string, from: string) =>
     `Took ${amount} back out of ${name} to ${from}`,
+  yearlyTitle: 'Does it happen every year?',
+  yearly: 'How often',
+  yearlyOnce: 'Once',
+  yearlyEvery: 'Every year',
+  yearlySwitch: 'Comes back every year',
+  yearlySwitchMeaning: "Finishing it lines up next year's.",
+  everyYear: 'every year',
+  restPaysFromSummary: (date: string) => `My pays from ${date}`,
+  startingLabel: 'Saving starts',
+  startingTitle: 'When do your pays start saving for it?',
+  startingToday: 'Today',
+  startingPick: 'Pick a day',
+  startingFromToday: 'Start today',
+  startingBlocker: 'Pick a day within the next ten years.',
+  startingBeforeCost: (cost: string, date: string) =>
+    `${cost} is due ${date}, before saving starts.`,
+  savingStarts: (date: string) => `Saving starts ${date}`,
   restTitle: 'Where does the rest come from?',
   rest: 'The rest',
   needsRest: 'Pick where the rest comes from.',
@@ -557,6 +574,10 @@ export const HORIZON_WORDS = {
   needsPutOrNotNow: 'Pick where it comes from, or Not now.',
   restOutsideNote: 'The rest is on you, outside the plan.',
   restPaysNote: 'The rest comes from your pays before each cost is due.',
+  restHelpTitle: 'Where the rest comes from',
+  startHelpTitle: 'When saving starts',
+  startHelpNote:
+    'From then on, each pay puts a share toward the next cost before it is due. Pays before then give nothing.',
   restOnePayNote: (date: string) => `The rest comes from the ${date} pay.`,
   putMore: 'Put more toward it',
   putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',
@@ -634,7 +655,7 @@ export const HORIZON_WORDS = {
   changeItemTitle: 'Change it',
   covers: {
     allPaidOrBill: 'Everything is paid or a bill',
-    nothingSet: 'Nothing is set aside yet, so nothing is covered.',
+    nothingSet: 'Nothing set aside yet.',
     setAsideUsed: 'What was set aside is spent.',
     none: "What's set aside doesn't cover a whole cost yet.",
     all: 'Covers every cost.',
@@ -644,6 +665,7 @@ export const HORIZON_WORDS = {
     on: (name: string, date: string) => `${name} on ${date}`,
     more: (count: number) => `${count} more`,
     helpTitle: 'About the range',
+    helpBothTitle: 'How this is paid',
     helpRange: (name: string, low: string, high: string, end: string) =>
       `${name} could be ${low} to ${high}. Runway plans it at ${end}.`,
   },
@@ -697,9 +719,6 @@ export const MAKE_BILL_WORDS = {
   summaryFree: (money: string, item: string) =>
     `Gave ${item}'s ${money} to Free to Spend.`,
 } as const;
-
-const listNamesAndMore = (names: readonly string[], more: number) =>
-  more > 0 ? `${names.join(', ')} and ${more} more` : names.join(' and ');
 
 /** Planning a goal or an envelope on the Horizon: which event, linking a goal, moving an envelope in, and the nudge. */
 export const HORIZON_PLAN_WORDS = {
@@ -769,7 +788,6 @@ export const HORIZON_PLAN_WORDS = {
 /** Issue 88: finishing an event, calling it off and bringing it back. */
 export const HORIZON_END_WORDS = {
   readyTitle: 'Everything is paid or a bill',
-  readySub: 'Nothing is left to pay, so it is ready to finish.',
   finishLabel: (name: string) => `Finish ${name}`,
   finishTitle: (name: string) => `Finish ${name}?`,
   moneyQuestion: (amount: string) => `What happens to the ${amount} left?`,
@@ -779,8 +797,7 @@ export const HORIZON_END_WORDS = {
   placeSearch: 'Search',
   placeNoMatch: 'No envelope or goal matches',
   finishConfirm: 'Finish',
-  finishWaits: (names: readonly string[], more: number) =>
-    `Finish once the ${listNamesAndMore(names, more)} ${names.length + more === 1 ? 'is' : 'are'} paid or made a bill.`,
+  finishWaits: (count: number) => ` · ${count} to pay`,
   placeCaption: 'Move it to',
   placePicked: (place: string) => `It moves to ${place}`,
   placeNone: 'There is no envelope or goal to move it to yet.',
@@ -907,6 +924,37 @@ export const HORIZON_END_WORDS = {
     'What it holds changed just now. Look again, then try once more.',
   endless: (cost: string) =>
     `${cost} repeats with no end. End it or make it a bill to finish.`,
+  nextYearTitle: (name: string) => `Next year's ${name}`,
+  nextYearBody: 'It starts with what is left.',
+  nextYearLine: (name: string, around: string) =>
+    `Next year's ${name}: around ${around}.`,
+  nextYearSaving: (startsOn: string | null) =>
+    startsOn === null
+      ? 'Your pays start saving for it right away.'
+      : `Your pays start saving for it on ${startsOn}.`,
+  moneyToNext: (name: string) => `Moves to next year's ${name}`,
+  nextYearLinedUp: (name: string) => `Next year's ${name} is lined up.`,
+  nextYearLinedUpWith: (name: string, money: string) =>
+    `Next year's ${name} is lined up and starts with the ${money}.`,
+  nextYearQuestion: 'Skip just this one, or stop it for good?',
+  justThisYearTitle: 'Skip this one',
+  justThisYearBody: "Next year's is lined up.",
+  everyYearTitle: 'Stop for good',
+  everyYearBody: 'No more after this one.',
+  needsYearChoice: 'Choose skip this one or stop for good.',
+  yearRowLabel: 'Which years',
+  yearAnswer: (isEveryYear: boolean) =>
+    isEveryYear ? 'Stop for good' : 'Skip this one',
+  linedUpSummary: (name: string, year: number) =>
+    `Lined up ${name} for ${year}.`,
+  undoLinedUpSummary: (name: string, year: number) =>
+    `Took back lining up ${name} for ${year}.`,
+  nextYearUnderway: (name: string) =>
+    `Next year's ${name} is already under way, so this one stays done.`,
+  nextYearHolds: (name: string) =>
+    `Next year's ${name} holds the money. Bring it back to reopen this one.`,
+  nextYearChanged: (name: string) =>
+    `Next year's ${name} has changed, so it stays.`,
   freeUp: (amount: string) => `Free to Spend goes up by ${amount}.`,
   freeDown: (amount: string) => `Free to Spend goes down by ${amount}.`,
   nothingPaid: 'Nothing paid',

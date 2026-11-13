@@ -1,12 +1,17 @@
 import { formatDateOrdinalUTC, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
-import { HORIZON_WORDS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+import {
+  DEFAULT_STANCE,
+  HORIZON_WORDS,
+  LOOKAHEAD_MONTHS,
+} from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
   getHorizonFigures,
   getHorizonStage,
   getNextUnpaidPayment,
   type CostPaidEntry,
+  listCostPayments,
   listHorizonPayments,
   planHorizon,
 } from '@apps/runway/engine/horizon';
@@ -199,4 +204,31 @@ export function formatDateRangeOrdinalUTC(from: number, to: number) {
   const isSameMonth = start.getUTCMonth() === end.getUTCMonth();
   const lastDay = isSameMonth ? toDayOrdinal(end.getUTCDate()) : endDay;
   return `${startDay} to ${lastDay}${endYear.map((year) => `,${year}`).join('')}`;
+}
+
+/** The sentence that refuses a start day after a cost's next unpaid payment, naming the earliest such cost; costs outside the plan, made bills or removed are not asked. Null when every cost's next payment is due on or after it. */
+export function getPaysStartBlocker(
+  costs: readonly HorizonCost[],
+  startsOn: number | null,
+  paid: readonly CostPaidEntry[] = [],
+) {
+  if (startsOn === null) return null;
+  const late = costs
+    .filter(
+      ({ isOutside, becameBillId, endsAfter }) =>
+        !isOutside && becameBillId === null && endsAfter === null,
+    )
+    .flatMap((cost) => {
+      const next = listCostPayments(cost, startsOn, DEFAULT_STANCE, paid).find(
+        (payment) => payment.paid === null,
+      );
+      return next && next.dueOn < startsOn ? [{ cost, dueOn: next.dueOn }] : [];
+    })
+    .sort((a, b) => a.dueOn - b.dueOn)[0];
+  return late
+    ? HORIZON_WORDS.startingBeforeCost(
+        late.cost.name,
+        formatDateOrdinalUTC(late.dueOn),
+      )
+    : null;
 }
