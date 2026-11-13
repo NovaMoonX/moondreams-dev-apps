@@ -9,14 +9,12 @@ import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
+import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
-import {
-  RULE_WORDS,
-  SPEND_WORDS,
-} from '@apps/runway/constants';
+import { RULE_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   isBroadMerchant,
@@ -422,6 +420,11 @@ function RuleSheet({
     >
       <div className='space-y-4 pb-4'>
         {onBack && <BackLink onBack={onBack} />}
+        {rule && isEnded(rule) && (
+          <InlineNotice tone='warning'>
+            <p>{describeHome(rule)}.</p>
+          </InlineNotice>
+        )}
         {stayName !== null && (
           <p className='text-muted-foreground text-sm'>
             {RULE_WORDS.changesFuture(stayName)}
@@ -458,11 +461,6 @@ function RuleSheet({
           </ul>
         </div>
         <div className='space-y-2'>
-          {rule && isEnded(rule) && (
-            <p className='text-muted-foreground text-sm'>
-              {describeHome(rule)}.
-            </p>
-          )}
           <p className='text-sm font-medium'>{RULE_WORDS.envelope}</p>
           <PillGroup
             label={RULE_WORDS.envelope}

@@ -184,6 +184,9 @@ function ConvertItemView({
             : CONVERT_WORDS.targetAndDate,
         ];
   const lines = [
+    ...(heldRules.length === 0
+      ? []
+      : [CONVERT_WORDS.rulesPause(heldRules.map((rule) => describe(rule)))]),
     ...(carriedParts.length === 0
       ? []
       : [CONVERT_WORDS.wontCarry(formatList(carriedParts))]),
@@ -204,9 +207,6 @@ function ConvertItemView({
     isHidden || heldCents > 0
       ? CONVERT_WORDS.moneyStays(formatCents(Math.max(heldCents, 0)))
       : CONVERT_WORDS.historyStays,
-    ...(heldRules.length === 0
-      ? []
-      : [CONVERT_WORDS.rulesPause(heldRules.map((rule) => describe(rule)))]),
   ];
 
   const convert = async () => {

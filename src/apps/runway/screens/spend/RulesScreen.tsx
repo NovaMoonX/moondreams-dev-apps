@@ -9,6 +9,7 @@ import {
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import AppCheckbox from '@/components/AppCheckbox';
 import FormSheet from '@/components/FormSheet';
@@ -21,6 +22,7 @@ import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useLongPress } from '@/hooks/useLongPress';
 import InlineNotice from '@/components/InlineNotice';
+import { NOTICE_QUIET_CLASSES } from '@/components/noticeActionClasses';
 import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -493,13 +495,14 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     const isConfirmed = await confirm({
       title: RULE_WORDS.deleteConfirmTitle(targets.length),
       message: [
-        RULE_WORDS.deleteConfirmBody(targets.length),
+        RULE_WORDS.deleteConfirmBody(targets.map((rule) => describe(rule))),
         ...takeovers.slice(0, 2).map(describeTakeover),
         ...(takeovers.length > 2
           ? [RULE_WORDS.takeoverMore(takeovers.length - 2)]
           : []),
       ].join(' '),
       confirmText: RULE_WORDS.deleteConfirmButton(targets.length),
+      destructive: true,
     });
     if (!isConfirmed) return;
     const outcome = await withWrite((uid, encryption) =>
@@ -554,15 +557,15 @@ function RulesScreen({ onClose }: RulesScreenProps) {
             {landingCount > 0 && landing !== null && (
               <InlineNotice
                 tone='info'
-                title={RULE_WORDS.landingTitle(landing.name)}
+                title={RULE_WORDS.landingTitle(landingCount)}
               >
-                <p>{RULE_WORDS.landing(landingCount)}</p>
+                <p>{RULE_WORDS.landing(landing.name, landingCount)}</p>
                 {!isUndoTried && (
                   <Button
                     type='button'
-                    variant='link'
-                    size='stripped'
-                    className='mt-1'
+                    variant='tertiary'
+                    size='sm'
+                    className={join('mt-1', NOTICE_QUIET_CLASSES.info)}
                     loading={isUndoing}
                     disabled={isUndoing}
                     onClick={() => void undoConvert(landing)}

@@ -5562,12 +5562,15 @@ export const RULE_WORDS = {
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
   homeHeading: 'Needs a new home',
   goalNow: (name: string) => `${name} is a goal now, so this rule is paused`,
-  landingTitle: (name: string) => `${name} is a goal now`,
-  landing: (count: number) =>
+  landingTitle: (count: number) =>
     count === 1
-      ? 'So this rule is paused. Send it to another envelope below.'
-      : `So these ${count} rules are paused. Send them to another envelope below.`,
-  landingUndo: 'Undo',
+      ? 'This rule needs a new envelope'
+      : `These ${count} rules need a new envelope`,
+  landing: (name: string, count: number) =>
+    count === 1
+      ? `${name} became a goal, and a goal can't be spent from, so it's paused. Pick where it should send purchases.`
+      : `${name} became a goal, and a goal can't be spent from, so they're paused. Pick where they should send purchases.`,
+  landingUndo: 'Undo making it a goal',
   groupTick: (label: string) => `Pick every rule in ${label}`,
   groupUntick: (label: string) => `Unpick every rule in ${label}`,
   groupPicked: (picked: number, total: number) =>
@@ -5579,11 +5582,13 @@ export const RULE_WORDS = {
   clearAll: 'Clear',
   done: 'Done',
   bulkSend: 'Send to another envelope',
-  bulkAsk: 'Ask which envelope',
+  bulkAsk: 'Ask me which envelope',
   pick: 'Select',
   bulkDelete: 'Remove',
   bulkPickTitle: (count: number) =>
-    `Send ${ruleCount(count)} to which envelope?`,
+    count === 1
+      ? 'Where should this rule send purchases?'
+      : `Where should these ${count} rules send purchases?`,
   bulkPickSub: (count: number) =>
     count === 1
       ? 'Its purchases will go there from now on.'
@@ -5597,12 +5602,21 @@ export const RULE_WORDS = {
     `Have ${ruleCount(count)} ask which envelope each time?`,
   askConfirmButton: 'Ask each time',
   askNone:
-    'Only a rule for one place can ask which envelope each time, not one for a card or kind of place.',
+    "A rule for a card or kind of place can't ask each time. Pick a rule for one place.",
   deleteConfirmTitle: (count: number) => `Remove ${ruleCount(count)}?`,
-  deleteConfirmBody: (count: number) =>
-    count === 1
-      ? 'It will stop sending purchases on its own. Purchases it already placed stay where they are.'
-      : 'They will stop sending purchases on their own. Purchases they already placed stay where they are.',
+  deleteConfirmBody: (sentences: readonly string[]) => {
+    const named = sentences.slice(0, 3).map((sentence) => `“${sentence}”`);
+    const rest = sentences.length - named.length;
+    const list =
+      rest > 0
+        ? `${named.join(', ')} and ${rest} more`
+        : named.length > 1
+          ? `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`
+          : named[0];
+    return sentences.length === 1
+      ? `${list} will stop sending purchases on its own. Purchases it already placed stay where they are.`
+      : `${list} will stop sending purchases on their own. Purchases they already placed stay where they are.`;
+  },
   deleteConfirmButton: (count: number) => `Remove ${ruleCount(count)}`,
   movedMany: (count: number, envelope: string) =>
     `Moved ${ruleCount(count)} to ${envelope}`,
