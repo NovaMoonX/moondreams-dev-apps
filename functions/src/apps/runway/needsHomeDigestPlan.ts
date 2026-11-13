@@ -50,13 +50,12 @@ export function readSorting(value: unknown): SortingState | null {
 
 const PAIR_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
-/** Counts what the screen lists. Pending money in is on its way and never counts. A pending purchase never pairs, so it is never the other side of a possible move: a posted money in that only a pending charge matches is not counted, as the screen holds it (on a card too). Money in counts when it is on a card, or when a charge of its amount waits within three days (a possible move). A deposit offered a pay day is skipped, since pay days are sealed and worked out in the app. A charge counts unless "I'm not sorting yet" quiets it (no switch means every charge counts), and a quiet charge still counts when money in of its amount waits within three days. Accounts and status are not compared, so either side may count one the screen hides. Lost pairs, lost deposits and history that may be in twice are not in the query. A move the bank flagged (it waits under Account moves) is counted, since its category is sealed. */
+/** Counts what the screen lists. Pending money in is on its way and never counts. A pending purchase never pairs, so it is never the other side of a possible move: a posted money in that only a pending charge matches is not counted, as the screen holds it (on a card too). Money in counts when a charge of its amount waits within three days (a possible move). A refund of a purchase that went to an envelope is skipped, since that purchase is not in the query and merchants and lines are worked out in the app; a card refund of anything else is simply counted in Free to Spend and never waits. A deposit offered a pay day is skipped, since pay days are sealed and worked out in the app. A charge counts unless "I'm not sorting yet" quiets it (no switch means every charge counts), and a quiet charge still counts when money in of its amount waits within three days. Accounts and status are not compared, so either side may count one the screen hides. Lost pairs, lost deposits and history that may be in twice are not in the query. A move the bank flagged (it waits under Account moves) is counted, since its category is sealed. */
 export function countWaiting(
   purchases: {
     createdAt: number;
     date: number;
     amountCents: number;
-    isOnCard: boolean;
     isPending: boolean;
   }[],
   sorting: SortingState | null,
@@ -74,15 +73,12 @@ export function countWaiting(
         Math.abs(entry.amountCents) === Math.abs(amountCents) &&
         Math.abs(entry.date - date) <= PAIR_WINDOW_MS,
     );
-  return purchases.filter(
-    ({ createdAt, date, amountCents, isOnCard, isPending }) =>
-      amountCents < 0
-        ? !isPending &&
-          (near(amountCents, date, 1) ||
-            (isOnCard && !near(amountCents, date, 1, true)))
-        : amountCents === 0 ||
-          sorting === null ||
-          (!sorting.isPaused && createdAt >= sorting.from) ||
-          near(amountCents, date, -1),
+  return purchases.filter(({ createdAt, date, amountCents, isPending }) =>
+    amountCents < 0
+      ? !isPending && near(amountCents, date, 1)
+      : amountCents === 0 ||
+        sorting === null ||
+        (!sorting.isPaused && createdAt >= sorting.from) ||
+        near(amountCents, date, -1),
   ).length;
 }
