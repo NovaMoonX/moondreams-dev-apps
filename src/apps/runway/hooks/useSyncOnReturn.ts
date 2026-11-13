@@ -4,14 +4,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useAppSelector } from '@/store';
 import {
+  FRESH_ASK_EVERY_MS,
+  FRESH_ASK_GAP_MS,
   LINK_BANKS_GATE_ID,
-  RETURN_PULL_AFTER_MS,
 } from '@apps/runway/constants';
 import { syncLinks } from '@apps/runway/store/actions/linkActions';
 
-const pull = { uid: '', startedAt: 0, isRunning: false };
+const ask = { uid: '', startedAt: 0, isRunning: false };
 
-/** Asks the banks for what is new when the app opens or comes back to the front for the links 15 minutes or more behind (a bank waiting on a sign-in included, so one that is back clears), quietly: nothing is shown on success or failure. */
+/** Asks the banks for their latest figures when the app opens, whenever it comes back to the front and every few minutes while it stays there (a bank waiting on a sign-in included, so one that is back clears), quietly: nothing is shown on success or failure. */
 export function useSyncOnReturn() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
@@ -21,40 +22,33 @@ export function useSyncOnReturn() {
       (link) => link.status === 'active' || link.status === 'needsAttention',
     ),
   );
-  const oldestSyncAt = useAppSelector((state) =>
-    state.runway.links
-      .filter(
-        (link) => link.status === 'active' || link.status === 'needsAttention',
-      )
-      .reduce(
-        (oldest, link) => Math.min(oldest, link.lastSyncAt ?? 0),
-        Number.POSITIVE_INFINITY,
-      ),
-  );
   const isEnabled = uid !== null && isGateOpen && hasSyncableLink;
 
   useEffect(() => {
     if (!isEnabled) return;
 
-    const pullIfStale = () => {
-      if (document.visibilityState !== 'visible' || pull.isRunning) return;
-      const lastStart = pull.uid === uid ? pull.startedAt : 0;
-      if (Date.now() - Math.max(lastStart, oldestSyncAt) < RETURN_PULL_AFTER_MS)
-        return;
-      pull.uid = uid;
-      pull.startedAt = Date.now();
-      pull.isRunning = true;
-      syncLinks({ staleOnly: true })
+    const askFresh = () => {
+      if (document.visibilityState !== 'visible' || ask.isRunning) return;
+      const lastStart = ask.uid === uid ? ask.startedAt : 0;
+      if (Date.now() - lastStart < FRESH_ASK_GAP_MS) return;
+      ask.uid = uid;
+      ask.startedAt = Date.now();
+      ask.isRunning = true;
+      syncLinks({ fresh: true })
         .catch((error: unknown) =>
-          console.error('The return refresh did not run', error),
+          console.error('The fresh balance ask did not run', error),
         )
         .finally(() => {
-          pull.isRunning = false;
+          ask.isRunning = false;
         });
     };
 
-    pullIfStale();
-    document.addEventListener('visibilitychange', pullIfStale);
-    return () => document.removeEventListener('visibilitychange', pullIfStale);
-  }, [isEnabled, uid, oldestSyncAt]);
+    askFresh();
+    document.addEventListener('visibilitychange', askFresh);
+    const intervalId = window.setInterval(askFresh, FRESH_ASK_EVERY_MS);
+    return () => {
+      document.removeEventListener('visibilitychange', askFresh);
+      window.clearInterval(intervalId);
+    };
+  }, [isEnabled, uid]);
 }

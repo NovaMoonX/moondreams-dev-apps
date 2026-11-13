@@ -54,6 +54,10 @@ export interface DraftInput {
     horizon: number;
     /** Line ids (`dayKey:itemId`) whose stretch just ran out: a funded one says it returns. */
     returns?: readonly string[];
+    /** The income days before the drafted ones are already counted in what the items hold, so no room under a limit or target is taken for them again. */
+    carriesEarlier?: boolean;
+    /** The unconfirmed income days before the drafted ones: their pairings fill an item before these do, and are not drafted. Ignored when `carriesEarlier`. */
+    earlierDays?: readonly DraftDayInput[];
     /** Every coming income day, which cadences count over. */
     incomeDays: readonly {
       dayKey: string;
@@ -269,6 +273,8 @@ function fundPairings(
   resolutions: Record<string, HoldChoice>,
   /** What a target still needs before this day's pairings, or null for no ceiling (an envelope). */
   needOf: (itemId: string) => Cents | null,
+  /** The high end of a bill's payment this day saves toward, which a share of the bill is taken from; null when there is none. */
+  billBaseOf: (itemId: string) => Cents | null,
 ): { outcomes: PairingOutcome[]; leftCents: Cents } {
   const seen = new Set<string>();
   const asDemand = (pairing: Pairing): Demand => {
@@ -288,7 +294,7 @@ function fundPairings(
       ask:
         pairing.amount.kind === 'percent'
           ? { kind: 'percent', bps: pairing.amount.bps, of: pairing.amount.of }
-          : { kind: pairing.amount.kind },
+          : { kind: pairing.amount.kind === 'rest' ? 'rest' : 'exact' },
       capCents: null,
     };
   };
@@ -309,15 +315,17 @@ function fundPairings(
   const result = ordered.reduce<{ outcomes: PairingOutcome[]; left: Cents }>(
     (acc, { pairing, demand }) => {
       const { amount } = pairing;
-      const asked =
-        amount.kind === 'exact'
-          ? amount.cents
-          : amount.kind === 'rest'
-            ? acc.left
-            : percentOf(
-                amount.of === 'remaining' ? acc.left : moneyCents,
-                amount.bps,
-              );
+      const getAsked = () => {
+        if (amount.kind === 'exact') return amount.cents;
+        if (amount.kind === 'rest') return acc.left;
+        if (amount.kind === 'billShare')
+          return percentOf(billBaseOf(demand.itemId) ?? 0, amount.bps);
+        return percentOf(
+          amount.of === 'remaining' ? acc.left : moneyCents,
+          amount.bps,
+        );
+      };
+      const asked = getAsked();
       const need = needOf(demand.itemId);
       const wanted = need === null ? asked : Math.min(asked, need);
       if (wanted <= 0 && amount.kind !== 'rest') return acc;
@@ -390,20 +398,21 @@ export function buildDraft(input: DraftInput): Draft {
     list.filter(
       (pairing) => !pinnedKeys.has(`${dayKey}:${pairing.targetItemId}`),
     );
-  const days = input.days
-    .map((day) =>
-      day.pairings && pinnedKeys.size > 0
-        ? {
-            ...day,
-            pairings: {
-              day: day.pairings.day && unpinned(day.pairings.day, day.dayKey),
-              payLine: unpinned(day.pairings.payLine, day.dayKey),
-              source: unpinned(day.pairings.source, day.dayKey),
-            },
-          }
-        : day,
-    )
-    .sort(compareDays);
+  const withoutPinned = (day: DraftDayInput): DraftDayInput =>
+    day.pairings && pinnedKeys.size > 0
+      ? {
+          ...day,
+          pairings: {
+            day: day.pairings.day && unpinned(day.pairings.day, day.dayKey),
+            payLine: unpinned(day.pairings.payLine, day.dayKey),
+            source: unpinned(day.pairings.source, day.dayKey),
+          },
+        }
+      : day;
+  const days = input.days.map(withoutPinned).sort(compareDays);
+  const earlierDays = input.plan.carriesEarlier
+    ? []
+    : (input.plan.earlierDays ?? []).map(withoutPinned).sort(compareDays);
   const dayMoney = days.map((day) => ({
     day,
     moneyCents: getDayMoney(day, input.overrides, input.stance),
@@ -436,6 +445,7 @@ export function buildDraft(input: DraftInput): Draft {
     input.stance,
     input.plan.priorIncomeDays ?? [],
     input.plan.horizonItems ?? [],
+    input.plan.carriesEarlier,
   );
 
   const targets = new Map<string, Target>(
@@ -474,7 +484,7 @@ export function buildDraft(input: DraftInput): Draft {
     ]),
   ]);
   const pairedIds = new Set(
-    days.flatMap((day) =>
+    [...earlierDays, ...days].flatMap((day) =>
       pickPairings(day).map((pairing) => pairing.targetItemId),
     ),
   );
@@ -509,7 +519,7 @@ export function buildDraft(input: DraftInput): Draft {
       return { key: itemId, cents: goalNeeds.get(itemId) as Cents };
     const payments = billPayments.get(itemId);
     if (!payments) return null;
-    const payment = payments.find((entry) => entry.dueOn >= on);
+    const payment = payments.find((entry) => entry.payOn >= on);
     if (!payment || payment.paid) return { key: itemId, cents: 0 };
     return {
       key: `${itemId}:${payment.dueOn}`,
@@ -519,6 +529,43 @@ export function buildDraft(input: DraftInput): Draft {
       ),
     };
   };
+  const fundDay = (
+    used: Map<string, Cents>,
+    day: DraftDayInput,
+    moneyCents: Cents,
+  ) => {
+    const funded = fundPairings(
+      day,
+      moneyCents,
+      targets,
+      replaced,
+      resolutions,
+      (itemId) => {
+        const need = getNeed(itemId, day.on);
+        return need === null
+          ? null
+          : Math.max(0, need.cents - (used.get(need.key) ?? 0));
+      },
+      (itemId) => {
+        const payment = billPayments
+          .get(itemId)
+          ?.find((entry) => entry.dueOn >= day.on);
+        if (!payment) return null;
+        return payment.ranged
+          ? Math.max(payment.totalCents, payment.ranged.range.highCents)
+          : payment.totalCents;
+      },
+    );
+    funded.outcomes.forEach(({ line }) => {
+      const key = getNeed(line.itemId, day.on)?.key ?? line.itemId;
+      used.set(key, (used.get(key) ?? 0) + line.cents);
+    });
+    return funded;
+  };
+  const earlierUsed = new Map<string, Cents>();
+  earlierDays.forEach((day) =>
+    fundDay(earlierUsed, day, getDayMoney(day, input.overrides, input.stance)),
+  );
   const pairRun = dayMoney.reduce<{
     used: Map<string, Cents>;
     list: {
@@ -528,26 +575,10 @@ export function buildDraft(input: DraftInput): Draft {
     }[];
   }>(
     (acc, { day, moneyCents }) => {
-      const funded = fundPairings(
-        day,
-        moneyCents,
-        targets,
-        replaced,
-        resolutions,
-        (itemId) => {
-          const need = getNeed(itemId, day.on);
-          return need === null
-            ? null
-            : Math.max(0, need.cents - (acc.used.get(need.key) ?? 0));
-        },
-      );
-      funded.outcomes.forEach(({ line }) => {
-        const key = getNeed(line.itemId, day.on)?.key ?? line.itemId;
-        acc.used.set(key, (acc.used.get(key) ?? 0) + line.cents);
-      });
+      const funded = fundDay(acc.used, day, moneyCents);
       return { used: acc.used, list: [...acc.list, { day, ...funded }] };
     },
-    { used: new Map(), list: [] },
+    { used: earlierUsed, list: [] },
   );
   const paired = pairRun.list;
   const pairedKeys = new Set(

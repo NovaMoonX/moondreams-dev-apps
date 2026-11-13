@@ -25,12 +25,19 @@ const { option } = DropdownMenuFactories;
 
 interface PlaceDetailProps {
   placeId: string | null;
+  /** Where Back lands when it is not Home. */
+  backLabel?: string;
   onBack: () => void;
   onHome: () => void;
 }
 
 /** One place the person named: its name, its address when there is one and the open tasks linked to it. */
-function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
+function PlaceDetail({
+  placeId,
+  backLabel = 'Home',
+  onBack,
+  onHome,
+}: PlaceDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -152,7 +159,7 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
   return (
     <>
       <HelmHeader
-        backLabel='Home'
+        backLabel={backLabel}
         onBack={onBack}
         onHome={onHome}
         menu={menu}

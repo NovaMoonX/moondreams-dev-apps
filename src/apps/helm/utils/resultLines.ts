@@ -1,4 +1,5 @@
 import { HELM_COPY } from '@apps/helm/constants';
+import { topicEffectKind } from '@apps/helm/nomos/planUndo';
 import type { OpenExecution, OpenTask } from '@apps/helm/types';
 import { formatTaskDue, toTaskDue } from '@apps/helm/utils/taskDue';
 
@@ -8,7 +9,10 @@ export interface ResultLine {
   title: string;
   detail: string | null;
   /** The record a tap on the row opens. */
-  ref?: { collection: 'notes'; id: string };
+  ref?: {
+    collection: 'notes' | 'topics' | 'procedures' | 'procedureRuns';
+    id: string;
+  };
   /** A line the turn said without writing anything, so an Undo has nothing to take back on it. */
   isNoEffect?: boolean;
 }
@@ -25,14 +29,59 @@ export function buildResultLines(
 ): ResultLine[] {
   const effectLines = execution.effectRefs.flatMap(
     (ref, index): ResultLine[] => {
-      if (
-        ref.collection === 'who' ||
-        ref.collection === 'places' ||
-        ref.collection === 'media' ||
-        ref.collection === 'topics'
-      )
-        return [];
+      if (ref.collection === 'who' || ref.collection === 'places') return [];
       const effect = execution.effects[index];
+      // A kept photo is said once, by the turn's photo line.
+      if (ref.collection === 'media') return [];
+      if (ref.collection === 'topics') {
+        const title = toText(effect?.written['sealed.title']);
+        const kind = effect ? topicEffectKind(effect) : 'filing';
+        const hasLine =
+          kind === 'made' ||
+          (kind === 'version' &&
+            effect?.written.change !== 'moved' &&
+            effect?.written.change !== 'grouped') ||
+          (kind === 'placement' && 'parentId' in (effect?.written ?? {}));
+        return title && hasLine
+          ? [
+              {
+                key: `${ref.docId}:${index}`,
+                docId: ref.docId,
+                title,
+                detail: null,
+                ref: { collection: 'topics', id: ref.docId },
+              },
+            ]
+          : [];
+      }
+      if (ref.collection === 'procedures') {
+        const title = toText(effect?.written['sealed.title']);
+        return title
+          ? [
+              {
+                key: `${ref.docId}:${index}`,
+                docId: ref.docId,
+                title,
+                detail: null,
+                ref: { collection: 'procedures', id: ref.docId },
+              },
+            ]
+          : [];
+      }
+      if (ref.collection === 'procedureRuns') {
+        const title = toText(effect?.written['sealed.title']);
+        return title
+          ? [
+              {
+                key: `${ref.docId}:${index}`,
+                docId: ref.docId,
+                title,
+                detail: null,
+                ref: { collection: 'procedureRuns', id: ref.docId },
+              },
+            ]
+          : [];
+      }
       if (ref.collection === 'notes') {
         return [
           {
@@ -129,15 +178,37 @@ export function buildResultLines(
       ];
     },
   );
-  const noteLines = (execution.lines ?? []).map((line, index): ResultLine => ({
-    key: `line:${index}`,
-    docId: line.ref.id,
-    title: line.text,
-    detail: null,
-    ref: line.ref,
-    isNoEffect: true,
-  }));
-  return [...effectLines, ...noteLines];
+  const lines = effectLines.filter((line, index) =>
+    line.ref?.collection === 'notes'
+      ? !effectLines.some(
+          (other) =>
+            other.ref?.collection === 'topics' && other.title === line.title,
+        )
+      : line.ref?.collection !== 'topics' ||
+        effectLines.findIndex(
+          (other) =>
+            other.ref?.collection === 'topics' && other.title === line.title,
+        ) === index,
+  );
+  const noteLines = (execution.lines ?? [])
+    .filter(
+      (line) =>
+        !lines.some(
+          (row) =>
+            row.ref?.collection === line.ref.collection &&
+            row.ref.id === line.ref.id &&
+            row.title === line.text,
+        ),
+    )
+    .map((line, index): ResultLine => ({
+      key: `line:${index}`,
+      docId: line.ref.id,
+      title: line.text,
+      detail: null,
+      ref: line.ref,
+      isNoEffect: true,
+    }));
+  return [...lines, ...noteLines];
 }
 
 /** The names of the people, pets, organizations and places an execution made, from what it sealed. */

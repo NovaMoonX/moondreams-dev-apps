@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Keyboard, LayoutGrid, X } from 'lucide-react';
 
@@ -20,8 +22,30 @@ const SIDE_BUTTON =
 function VoiceDock({ onBrowse, onTalkBlocked, onType }: VoiceDockProps) {
   const voice = useHelmVoiceContext();
   const isListening = voice.state === 'listening';
+  const nav = useRef<HTMLElement>(null);
+
+  // The composer floats this far above the foot of the screen; with the dock gone it drops to the edge.
+  useLayoutEffect(() => {
+    const element = nav.current;
+    if (!element) return;
+    const root = document.documentElement;
+    const publish = () =>
+      root.style.setProperty(
+        '--helm-dock-top',
+        `${element.offsetHeight - parseFloat(getComputedStyle(element).paddingTop)}px`,
+      );
+    const observer = new ResizeObserver(publish);
+    observer.observe(element);
+    publish();
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--helm-dock-top');
+    };
+  }, []);
+
   return (
     <nav
+      ref={nav}
       aria-label='Talk, type or browse'
       className='from-background via-background/95 pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t to-transparent px-4 pt-10 pb-[max(1rem,env(safe-area-inset-bottom))]'
     >

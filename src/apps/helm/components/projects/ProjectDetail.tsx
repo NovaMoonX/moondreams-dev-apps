@@ -20,6 +20,7 @@ import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
 import MilestonesTab from '@apps/helm/components/projects/MilestonesTab';
 import ProjectEditSheet from '@apps/helm/components/projects/ProjectEditSheet';
 import ProjectPeople from '@apps/helm/components/projects/ProjectPeople';
+import { RunsSection } from '@apps/helm/components/procedures/RunRows';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import { DAY_MS, HELM_COPY, PROJECT_TASKS_SHOWN } from '@apps/helm/constants';
@@ -44,6 +45,7 @@ interface ProjectDetailProps {
   onBack: () => void;
   onHome: () => void;
   onOpenWho: (whoId: string) => void;
+  onOpenRun: (runId: string) => void;
 }
 
 /** One project: what it is, what its tasks show, and tabs for its tasks and its people. A finished project reads only, with a way to reopen it. */
@@ -53,6 +55,7 @@ function ProjectDetail({
   onBack,
   onHome,
   onOpenWho,
+  onOpenRun,
 }: ProjectDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -304,6 +307,18 @@ function ProjectDetail({
                 onFinish={() => changeStatus('finished')}
               />
             )}
+            <RunsSection
+              field='attachedTo.id'
+              id={project.id}
+              variant='thing'
+              onOpen={onOpenRun}
+              start={{
+                attachment: { kind: 'project', id: project.id },
+                label: project.name,
+                dueOn: null,
+                alsoIds: [],
+              }}
+            />
             <Tabs
               value={tab}
               onValueChange={(value) => setTab(value as ProjectTab)}

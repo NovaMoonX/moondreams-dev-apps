@@ -6,12 +6,15 @@ import {
   BookOpen,
   CalendarDays,
   ChevronRight,
+  FolderOpen,
   Stethoscope,
 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import AppLogo from '@/components/AppLogo';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useAuth } from '@/hooks/useAuth';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { readConnectorAppId } from '@/lib/connections/contract';
@@ -32,6 +35,7 @@ import { selectOpenTasksById } from '@apps/helm/store/selectors/captureSelectors
 import {
   selectAllTopics,
   selectNoteById,
+  selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { SourceRef, SyncedRecord } from '@apps/helm/types';
@@ -315,6 +319,44 @@ function NoteSourceRow({ source, canOpen }: RowProps & { source: NoteSource }) {
   );
 }
 
+function TopicSourceRow({ topicId, canOpen }: RowProps & { topicId: string }) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const topic = useAppSelector(selectTopicById).get(topicId) ?? null;
+  const isLoaded = useAppSelector((state) => state.helm.topics.isLoaded);
+  if (!topic) {
+    return isLoaded ? (
+      <p className='text-muted-foreground py-2.5 text-[13px]'>
+        {HELM_COPY.answerTopicGone}
+      </p>
+    ) : null;
+  }
+  const title = `${topic.emoji ? `${topic.emoji} ` : ''}${topic.name}`;
+  const mark = (
+    <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
+      <FolderOpen className='size-5' aria-hidden='true' />
+    </span>
+  );
+  if (!canOpen) return <PlainRow mark={mark} title={title} detail={null} />;
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      className={ROW}
+      aria-label={HELM_COPY.answerOpenSource(title)}
+      onClick={() =>
+        afterBackLayersClose(() =>
+          navigate(
+            `${pathname}?view=topic&item=${encodeURIComponent(topic.id)}`,
+          ),
+        )
+      }
+    >
+      <RowBody mark={mark} title={title} detail={null} hasDoor />
+    </Button>
+  );
+}
+
 function ConnectionSourceRow({ source }: { source: ConnectionSource }) {
   return (
     <PlainRow
@@ -348,6 +390,15 @@ function AnswerSources({ sources, canOpen }: AnswerSourcesProps) {
         <NoteSourceRow
           key={`note:${source.id}`}
           source={source}
+          canOpen={canOpen}
+        />,
+      ];
+    }
+    if (source.kind === 'topic') {
+      return [
+        <TopicSourceRow
+          key={`topic:${source.id}`}
+          topicId={source.id}
           canOpen={canOpen}
         />,
       ];
