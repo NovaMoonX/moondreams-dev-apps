@@ -5544,17 +5544,17 @@ export const RULE_WORDS = {
   pickOne: 'Tick at least one thing for the rule to catch.',
   pickEnvelope: 'Pick an envelope',
   remove: 'Remove the rule',
-  removeConfirmTitle: 'Remove this rule?',
-  removeConfirmButton: 'Remove the rule',
   takeover: (what: string, envelope: string) =>
     `${envelope} will catch ${what}.`,
-  takeoverWait: (what: string) => `Needs a home will hold ${what}.`,
+  takeoverWait: (what: string) => `${what} will wait in Needs a home.`,
+  placedStay: 'Purchases already placed stay where they are.',
+  everythingElseOn: (card: string) => `everything else on ${card}`,
   afterThis: (line: string) => `After this, ${line}`,
   takeoverMore: (count: number) =>
-    `What ${ruleCount(count)} more caught goes to other envelopes.`,
+    `${count} more ${count === 1 ? 'envelope catches' : 'envelopes catch'} the rest.`,
+  nothingMoves:
+    'Where purchases go next stays the same: a closer rule already catches them.',
   onOtherCards: 'on your other cards',
-  whatTheyCaught: 'what they caught',
-  whatTheRestCaught: 'what the rest caught',
   removed: 'Rule removed',
   removeFailed: 'That did not remove. Nothing was changed.',
   saved: 'Rule saved',
@@ -5643,7 +5643,6 @@ export const RULE_WORDS = {
       kinds.ask.length > 0 && `${quote(kinds.ask)} will stop asking.`,
       kinds.paused.length > 0 &&
         `${quote(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused already.`,
-      'Purchases already placed stay where they are.',
     ]
       .filter(Boolean)
       .join(' ');

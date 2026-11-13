@@ -102,39 +102,47 @@ export function findRule(
   return best ? { rule: best, isAsk: best.target === RULE_VARIES } : null;
 }
 
-export interface RuleTakeover {
+export interface NextHome {
   removed: OpenRule;
-  /** The rule that places what the removed one caught, or some of it (only on its card). */
-  by: OpenRule;
+  /** The card these purchases are on; null for every card no rule names. */
+  cardId: string | null;
+  /** The live rule that places them once the removed one is gone; null when they wait (no rule fits, or the one that wins asks or is paused). */
+  by: OpenRule | null;
 }
 
-/** For each rule about to be removed, the remaining rule that would then place purchases it caught, ranked as `findRule` ranks them; nothing when the rule that wins next asks or is paused itself (those purchases wait), or when none fits. */
-export function findTakeovers(
+/** Where the purchases each removed rule wins today go once it is gone, card by card, by `findRule`'s own ranking; a card where the rule wins nothing (a more specific rule outranks it) has no entry. A card-wide rule is read for purchases with no kind of place. */
+export function findNextHomes(
   removing: readonly OpenRule[],
   rules: readonly OpenRule[],
   liveEnvelopeIds: ReadonlySet<string>,
-): RuleTakeover[] {
+): NextHome[] {
   const goingIds = new Set(removing.map((rule) => rule.id));
   const left = rules.filter((rule) => !goingIds.has(rule.id));
-  return removing.flatMap((removed) => {
-    const isBroad = isBroadMerchant(removed.merchantKey, left);
-    const [by] = left
-      .filter(
-        (rule) =>
-          compareRules(removed, rule) < 0 &&
-          (rule.merchantKey === null ||
-            rule.merchantKey === removed.merchantKey) &&
-          (rule.category === null || rule.category === removed.category) &&
-          (rule.cardId === null ||
-            removed.cardId === null ||
-            rule.cardId === removed.cardId) &&
-          !(isBroad && rule.category !== null && rule.merchantKey === null),
-      )
-      .sort(compareRules);
-    return by && by.target !== RULE_VARIES && liveEnvelopeIds.has(by.target)
-      ? [{ removed, by }]
-      : [];
-  });
+  const namedCards = [
+    ...new Set(
+      rules.flatMap((rule) => (rule.cardId === null ? [] : [rule.cardId])),
+    ),
+  ];
+  return removing.flatMap((removed) =>
+    (removed.cardId === null ? [...namedCards, null] : [removed.cardId])
+      .map((cardId) => ({
+        cardId,
+        facts: {
+          merchant: removed.merchantKey,
+          category: removed.category,
+          cardId,
+        },
+      }))
+      .filter(({ facts }) => findRule(facts, rules)?.rule.id === removed.id)
+      .map(({ cardId, facts }) => {
+        const after = findRule(facts, left);
+        const isPlaced =
+          after !== null &&
+          !after.isAsk &&
+          !needsNewHome(after.rule, liveEnvelopeIds);
+        return { removed, cardId, by: isPlaced ? after.rule : null };
+      }),
+  );
 }
 
 export interface RulePlacement {

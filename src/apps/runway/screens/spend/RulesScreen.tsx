@@ -499,9 +499,15 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const removeSelected = async () => {
     const targets = selected;
     if (targets.length === 0) return;
+    const removal = describeRemoval(targets, rules);
     const isConfirmed = await confirm({
       title: RULE_WORDS.deleteConfirmTitle(targets.length),
-      message: describeRemoval(targets, rules),
+      message: (
+        <div className='space-y-2'>
+          <p>{removal.stops}</p>
+          <p>{removal.next}</p>
+        </div>
+      ),
       confirmText: RULE_WORDS.deleteConfirmButton(targets.length),
       destructive: true,
     });

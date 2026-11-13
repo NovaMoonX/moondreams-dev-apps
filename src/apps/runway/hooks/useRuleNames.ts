@@ -3,7 +3,7 @@ import type { OpenRule } from '@apps/runway/types';
 import { joinNames, RULE_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
-  findTakeovers,
+  findNextHomes,
   needsNewHome,
   RULE_VARIES,
 } from '@apps/runway/engine/rules';
@@ -16,8 +16,6 @@ import {
 import { getCardName } from '@apps/runway/utils/cardText';
 import type { RuleSealed } from '@apps/runway/types';
 import { describeRule, getCategoryLabel } from '@apps/runway/utils/ruleText';
-
-const OTHER_CARDS = '\u0000other-cards';
 
 /** A rule as a sentence, and whether its envelope has ended (then it is not applied). */
 export function useRuleNames() {
@@ -64,95 +62,109 @@ export function useRuleNames() {
         if (label === null) return 'a card';
         return /\bcard$/i.test(label) ? `your ${label}` : `your ${label} card`;
       };
-      const subjectOf = (removed: OpenRule) =>
-        removed.merchantName ??
-        (removed.category !== null
-          ? getCategoryLabel(removed.category)
-          : `everything on ${onYourCard(removed.cardId)}`);
+      const nextHomes = findNextHomes(targets, rules, liveIds);
       const goingIds = new Set(targets.map((rule) => rule.id));
-      const left = rules.filter((rule) => !goingIds.has(rule.id));
-      const takers = new Map(
-        findTakeovers(targets, rules, liveIds).map(({ removed, by }) => [
-          removed.id,
-          by,
-        ]),
-      );
       const homes = targets.flatMap((removed) => {
-        const by = takers.get(removed.id) ?? null;
-        const subject = subjectOf(removed);
-        const isNarrowed =
-          removed.cardId === null && by !== null && by.cardId !== null;
-        if (!isNarrowed) {
-          const isOnCard =
-            removed.cardId !== null &&
-            (removed.merchantKey !== null || removed.category !== null);
-          return [
-            {
+        if (removed.merchantKey === null && removed.category === null)
+          return nextHomes
+            .filter((home) => home.removed.id === removed.id)
+            .map(({ by }) => ({
               target: by?.target ?? null,
-              subject,
-              scope: isOnCard ? `on ${onYourCard(removed.cardId)}` : '',
-            },
-          ];
-        }
-        const otherCards = { ...removed, cardId: OTHER_CARDS };
-        const [rest] = findTakeovers([otherCards], left, liveIds);
+              subject: rules.some(
+                (rule) =>
+                  !goingIds.has(rule.id) &&
+                  (rule.merchantKey !== null || rule.category !== null) &&
+                  (rule.cardId === null || rule.cardId === removed.cardId),
+              )
+                ? RULE_WORDS.everythingElseOn(onYourCard(removed.cardId))
+                : `everything on ${onYourCard(removed.cardId)}`,
+              scope: '',
+            }));
+        const subject =
+          removed.merchantName ?? getCategoryLabel(removed.category ?? '');
+        const own = nextHomes.filter((home) => home.removed.id === removed.id);
+        const rest = own.find(({ cardId }) => cardId === null);
+        const named = own.filter(
+          ({ cardId, by }) =>
+            cardId !== null && (rest === undefined || by?.id !== rest.by?.id),
+        );
         return [
-          { target: by.target, subject, scope: `on ${onYourCard(by.cardId)}` },
-          {
-            target: rest?.by.target ?? null,
+          ...named.map(({ cardId, by }) => ({
+            target: by?.target ?? null,
             subject,
-            scope: RULE_WORDS.onOtherCards,
-          },
+            scope: `on ${onYourCard(cardId)}`,
+          })),
+          ...(rest === undefined
+            ? []
+            : [
+                {
+                  target: rest.by?.target ?? null,
+                  subject,
+                  scope: named.length > 0 ? RULE_WORDS.onOtherCards : '',
+                },
+              ]),
         ];
       });
-      const groupBy = <T, K>(items: readonly T[], keyOf: (item: T) => K) =>
-        items.reduce<Map<K, T[]>>(
-          (groups, item) =>
-            groups.set(keyOf(item), [...(groups.get(keyOf(item)) ?? []), item]),
+      const byTarget = [
+        ...homes.reduce<Map<string | null, typeof homes>>(
+          (groups, home) =>
+            groups.set(home.target, [...(groups.get(home.target) ?? []), home]),
+          new Map(),
+        ),
+      ].sort(([a], [b]) => Number(a === null) - Number(b === null));
+      const describeWhat = (entries: typeof homes) => {
+        if (entries.length > 3) {
+          const subjects = [...new Set(entries.map((entry) => entry.subject))];
+          return subjects.length > 6
+            ? joinNames(subjects)
+            : `${subjects.slice(0, -1).join(', ')} and ${subjects.at(-1)}`;
+        }
+        const scopes = entries.reduce<Map<string, string[]>>(
+          (groups, { scope, subject }) =>
+            groups.set(scope, [...(groups.get(scope) ?? []), subject]),
           new Map(),
         );
-      const byTarget = [...groupBy(homes, (home) => home.target)];
-      const lines = byTarget.map(([target, entries]) => {
-        const what =
-          entries.length > 3
-            ? byTarget.length === 1
-              ? RULE_WORDS.whatTheyCaught
-              : RULE_WORDS.whatTheRestCaught
-            : joinNames(
-                [...groupBy(entries, (entry) => entry.scope)].map(
-                  ([scope, scoped]) =>
-                    [joinNames(scoped.map((entry) => entry.subject)), scope]
-                      .filter(Boolean)
-                      .join(' '),
-                ),
-              );
-        return target === null
-          ? RULE_WORDS.takeoverWait(what)
-          : RULE_WORDS.takeover(what, getEnvelopeName(target));
-      });
-      const kindOf = (rule: OpenRule) => {
-        if (isEnded(rule)) return 'paused';
-        return rule.target === RULE_VARIES ? 'ask' : 'live';
-      };
-      const sentencesOf = (kind: string) =>
-        targets
-          .filter((rule) => kindOf(rule) === kind)
-          .map((rule) => describeOne(rule));
-      return [
-        RULE_WORDS.deleteConfirmBody({
-          live: sentencesOf('live'),
-          ask: sentencesOf('ask'),
-          paused: sentencesOf('paused'),
-        }),
-        ...lines
-          .slice(0, 3)
-          .map((line, index) =>
-            index === 0 ? RULE_WORDS.afterThis(line) : line,
+        return joinNames(
+          [...scopes].map(([scope, subjects]) =>
+            [joinNames(subjects), scope].filter(Boolean).join(' '),
           ),
-        ...(lines.length > 3
-          ? [RULE_WORDS.takeoverMore(lines.length - 3)]
-          : []),
-      ].join(' ');
+        );
+      };
+      const lines = byTarget.map(([target, entries]) =>
+        target === null
+          ? RULE_WORDS.takeoverWait(describeWhat(entries))
+          : RULE_WORDS.takeover(describeWhat(entries), getEnvelopeName(target)),
+      );
+      const waitLine = byTarget.some(([target]) => target === null)
+        ? lines.slice(-1)
+        : [];
+      const envelopeLines = lines.slice(0, lines.length - waitLine.length);
+      const shown = [
+        ...envelopeLines.slice(0, 3 - waitLine.length),
+        ...waitLine,
+      ];
+      const hidden = lines.length - shown.length;
+      const isAsk = (rule: OpenRule) => rule.target === RULE_VARIES;
+      const sentences = (keep: (rule: OpenRule) => boolean) =>
+        targets.filter(keep).map((rule) => describeOne(rule));
+      const capitalise = (line: string) =>
+        `${line.charAt(0).toUpperCase()}${line.slice(1)}`;
+      return {
+        stops: RULE_WORDS.deleteConfirmBody({
+          live: sentences((rule) => !isEnded(rule) && !isAsk(rule)),
+          ask: sentences(isAsk),
+          paused: sentences(isEnded),
+        }),
+        next: [
+          ...(shown.length === 0
+            ? [RULE_WORDS.nothingMoves]
+            : shown.map((line, index) =>
+                index === 0 ? RULE_WORDS.afterThis(line) : capitalise(line),
+              )),
+          ...(hidden > 0 ? [RULE_WORDS.takeoverMore(hidden)] : []),
+          RULE_WORDS.placedStay,
+        ].join(' '),
+      };
     },
     getEnvelopeName,
     getCardLabel,

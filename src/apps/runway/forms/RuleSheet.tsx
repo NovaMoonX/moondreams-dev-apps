@@ -353,10 +353,16 @@ function RuleSheet({
   const remove = async () => {
     if (!user || !rule || isBusy) return;
     const entry = describe(rule);
+    const removal = describeRemoval([rule], rules);
     const isConfirmed = await confirm({
-      title: RULE_WORDS.removeConfirmTitle,
-      message: describeRemoval([rule], rules),
-      confirmText: RULE_WORDS.removeConfirmButton,
+      title: RULE_WORDS.deleteConfirmTitle(1),
+      message: (
+        <div className='space-y-2'>
+          <p>{removal.stops}</p>
+          <p>{removal.next}</p>
+        </div>
+      ),
+      confirmText: RULE_WORDS.deleteConfirmButton(1),
       destructive: true,
     });
     if (!isConfirmed) return;
