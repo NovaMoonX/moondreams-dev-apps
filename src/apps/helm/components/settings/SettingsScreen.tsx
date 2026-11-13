@@ -17,6 +17,7 @@ import {
   SIGNED_OUT_EVERYWHERE_NOTE,
 } from '@/lib/auth/signOutNote';
 import { signOutEverywhere } from '@/lib/security/trustedBrowsers';
+import ColoursSection from '@apps/helm/components/settings/ColoursSection';
 import SettingsSection from '@apps/helm/components/settings/SettingsSection';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
 import SettingsRow from '@/components/SettingsRow';
@@ -105,6 +106,7 @@ function SettingsScreen({
             hasChevron
           />
         </SettingsSection>
+        <ColoursSection />
         <SettingsSection title={HELM_COPY.settingsPlanning}>
           <SettingsRow
             icon={<Sun className='size-5' aria-hidden='true' />}

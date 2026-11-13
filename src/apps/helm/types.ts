@@ -37,11 +37,15 @@ export type VoiceMode = 'cloudWhenOnline' | 'deviceOnly';
 
 export type AssistantTone = 'composed' | 'warm' | 'brief' | 'formal';
 
+export type HelmTheme = 'chestnut' | 'plum' | 'teal' | 'indigo';
+
 export interface HelmProfile {
   /** The person's own name for the assistant; null reads as the default. Always read through readAssistantName. */
   assistantName: string | null;
   /** How the assistant's answers sound; null reads as composed. */
   assistantTone: AssistantTone | null;
+  /** The colour theme; null reads as chestnut. */
+  theme: HelmTheme | null;
   /** IANA zone, set from the device on first open. */
   timeZone: string;
   /** Floating "HH:mm": the earliest a slot may start. */

@@ -8,6 +8,8 @@ The lead publishes these as the **Helm UX** Design artifact. Boards are 390 x 84
 
 "The household's private secretary": cool mist paper, deep blue-teal ink, one restrained cool accent (verdigris), serif titles over the site's sans. Its own palette, set apart from every other app (Going Once is cream and forest green, Runway and Waypoint blue). No nautical words. All text pairs below measure at least 4.5:1 (checked; lowest is muted text on the page at 5.6:1 light).
 
+**Themes.** The default is **Chestnut & Sand** (warm paper, brown ink, primary #7A5434 light / #E0BF9C dark); the person can pick Plum & Pewter, Mist & Deep Teal or Porcelain & Indigo in Settings > Colours. The table below is the Mist & Deep Teal palette (the original); every theme's tokens are in `helm.css`.
+
 | Token | Light | Dark | Used for |
 |---|---|---|---|
 | background (mist page) | #F3F6F6 | #0D1517 | page |
