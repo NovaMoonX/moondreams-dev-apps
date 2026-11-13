@@ -17,7 +17,7 @@ source "$(dirname "$0")/../lib/firebaseLogin.sh"; require_firebase_login
 [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste the key." >&2; exit 1; }
 
 echo "1. Open $KEYS_PAGE (Anthropic Console → Settings → API keys), click \"Create Key\", and fill it in:"
-echo "     - Name: moondreams-helm"
+echo "     - Name: moondreams-apps"
 echo "     - Workspace: Default (leave it)"
 echo "     - Expiry, if the dialog asks for one: none, or the furthest date it allows (Helm stops answering the day the key expires)"
 echo "   Click \"Add\", then copy the key now: Anthropic shows it only once."
