@@ -124,9 +124,7 @@ function useAmountEffect(
   suggested: MoneyRange,
   today: number,
 ) {
-  const items = useAppSelector((state) => state.runway.items);
-  const versions = useAppSelector((state) => state.runway.versions);
-  const days = useAppSelector((state) => state.runway.days);
+  const runway = useAppSelector((state) => state.runway);
   const isReady = useAppSelector(
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
@@ -135,7 +133,7 @@ function useAmountEffect(
     if (!isReady) return null;
     try {
       return readAmountEffect(
-        versions,
+        runway.versions,
         billId,
         bill,
         lowCents,
@@ -146,19 +144,7 @@ function useAmountEffect(
       // A preview that can't be worked out sends the person to the Change form, which shows its own.
       return { createsProblem: true, covered: null };
     }
-    // Items and days feed the previews through the store snapshot they read.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    isReady,
-    items,
-    versions,
-    days,
-    billId,
-    bill,
-    lowCents,
-    highCents,
-    today,
-  ]);
+  }, [isReady, runway, billId, bill, lowCents, highCents, today]);
 }
 
 const formatDash = (range: MoneyRange) =>
