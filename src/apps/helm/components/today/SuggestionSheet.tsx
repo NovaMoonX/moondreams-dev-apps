@@ -28,6 +28,8 @@ import {
 export interface SuggestionTarget {
   dayKey: string;
   slotId: string;
+  /** A kept slot being moved: the sheet opens on its other times and leaves from them. */
+  isMove: boolean;
 }
 
 interface SuggestionSheetProps {
@@ -49,7 +51,8 @@ function SuggestionSheet({
   const uid = user?.uid ?? null;
   const { addToast } = useToast();
   const assistantName = useAssistantName();
-  const [mode, setMode] = usePlacementMode();
+  const [pickedMode, setMode] = usePlacementMode();
+  const mode = target?.isMove && pickedMode === 'main' ? 'times' : pickedMode;
   const tasksById = useAppSelector(selectOpenTasksById);
   const day = target ? sources?.planDays[target.dayKey] : undefined;
   const slot = target ? day?.slots[target.slotId] : undefined;
@@ -141,7 +144,11 @@ function SuggestionSheet({
         chip={chip}
         assistantName={assistantName}
         onModeChange={setMode}
-        onBack={() => setMode(mode === 'days' ? 'times' : 'main')}
+        onBack={() => {
+          if (mode === 'days') setMode('times');
+          else if (target.isMove) close();
+          else setMode('main');
+        }}
         onPlace={place}
       />
     </DetailSheet>

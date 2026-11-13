@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import ActionRow from '@/components/ActionRow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -14,6 +13,7 @@ import { usePairAccountsWithUndo } from '@apps/runway/hooks/useBankMatch';
 import {
   selectAllCards,
   selectLostPairs,
+  selectRouteMemories,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase, PurchasePairKind } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
@@ -22,10 +22,8 @@ import { getPairSideName } from '@apps/runway/utils/purchaseText';
 interface PairOfferProps {
   purchase: OpenPurchase;
   onDone: () => void;
-  /** What to ask instead (the envelope or the pay), shown at once when nothing is offered and otherwise behind "Not a move between my accounts". */
+  /** What to ask instead (the envelope or the pay), shown at once when nothing is offered and otherwise behind the button that says it is not a move or card payment. */
   children: ReactNode;
-  /** The row's subtitle: what the other question picks. */
-  elseSubtitle: string;
 }
 
 /** The purchases a waiting one may be the other side of as a move between the person's own accounts: tapping one pairs them, and neither counts as spending or income. While any are offered it is the only question; the usual one waits behind a quiet row. */
@@ -33,11 +31,11 @@ function PairOffer({
   purchase,
   onDone,
   children,
-  elseSubtitle,
 }: PairOfferProps) {
   const { user } = useAuth();
   const waitingList = useAppSelector((state) => state.runway.needsHome);
   const lost = useAppSelector(selectLostPairs);
+  const routes = useAppSelector(selectRouteMemories);
   const accounts = useAppSelector((state) => state.runway.accounts);
   const cards = useAppSelector(selectAllCards);
   const pairAccounts = usePairAccountsWithUndo();
@@ -59,8 +57,11 @@ function PairOffer({
   const self = waiting.find((entry) => entry.id === purchase.id);
   const cardNameOf = getCardNamer(cards);
   const isOut = purchase.amountCents > 0;
+  const selfSideName = self
+    ? getPairSideName(self, accounts, cardNameOf)
+    : '';
   const offered = (
-    findAccountPairs(waiting, true).offers.get(purchase.id) ?? []
+    findAccountPairs(waiting, true, routes).offers.get(purchase.id) ?? []
   )
     .flatMap(({ otherId, kind }) => {
       const other = waiting.find((entry) => entry.id === otherId);
@@ -70,7 +71,9 @@ function PairOffer({
       const otherName = getPairSideName(other, accounts, cardNameOf);
       const name =
         kind !== 'cardPayment'
-          ? otherName
+          ? isOut
+            ? PAIR_WORDS.rowName(selfSideName, otherName)
+            : PAIR_WORDS.rowName(otherName, selfSideName)
           : isOut
             ? PAIR_WORDS.cardPaymentTo(otherName)
             : PAIR_WORDS.cardPaymentFrom(otherName);
@@ -100,12 +103,24 @@ function PairOffer({
   };
 
   if (!self || offered.length === 0 || isElse) return <>{children}</>;
+  const isCardOffer = offered.every(({ kind }) => kind === 'cardPayment');
+  const otherNames = Array.from(
+    new Set(
+      offered.map(({ other }) => getPairSideName(other, accounts, cardNameOf)),
+    ),
+  );
+  const otherName = otherNames.length === 1 ? otherNames[0] : null;
+  const title = !isCardOffer
+    ? PAIR_WORDS.whichTitle
+    : isOut
+      ? PAIR_WORDS.cardWhichTitle(otherName, selfSideName)
+      : PAIR_WORDS.cardWhichTitle(selfSideName, otherName);
   return (
     <div className='space-y-2'>
-      <p className='text-sm font-medium'>{PAIR_WORDS.whichTitle}</p>
+      <p className='text-sm font-medium'>{title}</p>
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {offered.map(({ other, kind, name }) => {
-          const detail = `${PAIR_WORDS.pairVerb} · ${formatDateOrdinalUTC(other.date)}`;
+          const detail = `${(isOut ? PAIR_WORDS.arrivedOn : PAIR_WORDS.leftOn)(formatDateOrdinalUTC(other.date))} · ${PAIR_WORDS.pairVerb}`;
           return (
             <ItemRow
               key={other.id}
@@ -124,12 +139,14 @@ function PairOffer({
           {error}
         </p>
       )}
-      <ActionRow
-        icon={<X />}
-        label={PAIR_WORDS.unpair}
-        subtitle={elseSubtitle}
+      <Button
+        type='button'
+        variant='secondary'
+        className='w-full'
         onClick={() => setIsElse(true)}
-      />
+      >
+        {isCardOffer ? PAIR_WORDS.notCardPayment : PAIR_WORDS.unpair}
+      </Button>
     </div>
   );
 }

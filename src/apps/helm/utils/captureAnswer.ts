@@ -1,5 +1,7 @@
+import { readConnectorAppId } from '@/lib/connections/contract';
 import type {
   AnswerQuote,
+  AnswerRecord,
   AnswerScope,
   CaptureAnswer,
   SearchedSource,
@@ -9,7 +11,6 @@ import type {
 const SCOPES: AnswerScope[] = ['yourThings', 'theWorld', 'both'];
 const PLAIN_KINDS = [
   'fact',
-  'note',
   'task',
   'project',
   'who',
@@ -33,6 +34,21 @@ const toSource = (value: unknown): SourceRef[] => {
   if (PLAIN_KINDS.includes(value.kind)) {
     const id = toText(value.id);
     return id ? [{ kind: value.kind as 'task', id }] : [];
+  }
+  if (value.kind === 'note') {
+    const id = toText(value.id);
+    const title = toText(value.title) ?? '';
+    return id
+      ? [
+          {
+            kind: 'note',
+            id,
+            title,
+            topicPath: toText(value.topicPath),
+            topicEmoji: toText(value.topicEmoji),
+          },
+        ]
+      : [];
   }
   if (value.kind === 'event') {
     const eventRef = toText(value.eventRef);
@@ -76,12 +92,32 @@ const toSource = (value: unknown): SourceRef[] => {
   return [];
 };
 
+const toRecord = (value: unknown): AnswerRecord | null => {
+  if (!isRecord(value)) return null;
+  const name = toText(value.name);
+  const amount = toText(value.amount);
+  return name && amount ? { name, detail: toText(value.detail), amount } : null;
+};
+
+/** Records kept before they were stored apart were written `App · Name` and `$88.00 · Category`. */
+const toLegacyRecord = (
+  sourceLabel: string,
+  text: string | null,
+): AnswerRecord | null => {
+  const name = sourceLabel.split(' \u00b7 ').slice(1).join(' \u00b7 ');
+  const [amount, ...rest] = (text ?? '').split(' \u00b7 ');
+  return name && amount
+    ? { name, detail: rest.join(' \u00b7 ') || null, amount }
+    : null;
+};
+
 const toQuote = (value: unknown): AnswerQuote[] => {
   if (!isRecord(value)) return [];
   const id = toText(value.id);
   const connectorId = toText(value.connectorId);
   const accountId = toText(value.accountId);
   const sourceLabel = toText(value.sourceLabel);
+  const text = toText(value.text);
   return id && connectorId && accountId && sourceLabel
     ? [
         {
@@ -90,7 +126,12 @@ const toQuote = (value: unknown): AnswerQuote[] => {
           accountId,
           sourceLabel,
           at: toNumber(value.at),
-          text: toText(value.text),
+          text,
+          record:
+            toRecord(value.record) ??
+            (readConnectorAppId(connectorId) === null
+              ? null
+              : toLegacyRecord(sourceLabel, text)),
           deepLink: toText(value.deepLink),
           deletedAt: toNumber(value.deletedAt),
         },
@@ -126,6 +167,7 @@ export function normalizeAnswer(value: unknown): CaptureAnswer | null {
   const differs = value.generalDiffersFrom;
   const differsNoteId = isRecord(differs) ? toText(differs.noteId) : null;
   const differsSays = isRecord(differs) ? toText(differs.says) : null;
+  const differsTitle = isRecord(differs) ? toText(differs.title) : null;
   return {
     question,
     scope: value.scope as AnswerScope,
@@ -137,7 +179,11 @@ export function normalizeAnswer(value: unknown): CaptureAnswer | null {
     isHealth: value.isHealth === true,
     generalDiffersFrom:
       differsNoteId && differsSays
-        ? { noteId: differsNoteId, says: differsSays }
+        ? {
+            noteId: differsNoteId,
+            title: differsTitle ?? '',
+            says: differsSays,
+          }
         : null,
     suggestedTopicId: toText(value.suggestedTopicId),
     quotes: Array.isArray(value.quotes) ? value.quotes.flatMap(toQuote) : [],

@@ -21,6 +21,7 @@ import { EARLIER_SESSIONS_PAGE } from '@apps/helm/constants';
 import type {
   Capture,
   CaptureSealed,
+  HelmQuestion,
   OpenCapture,
   ScreenContext,
 } from '@apps/helm/types';
@@ -64,6 +65,81 @@ const toScreen = (value: unknown): ScreenContext | null => {
   return screen as ScreenContext;
 };
 
+const isOption = (value: unknown) => {
+  const option = value as Partial<HelmQuestion['options'][number]> | null;
+  return (
+    typeof option === 'object' &&
+    option !== null &&
+    typeof option.id === 'string' &&
+    typeof option.label === 'string'
+  );
+};
+
+const SHAPES = [
+  'pickOne',
+  'pickSeveral',
+  'yesNo',
+  'freeText',
+  'dateTime',
+  'pickRecord',
+  'number',
+];
+
+const toRecordKinds = (value: unknown): HelmQuestion['recordKinds'] =>
+  Array.isArray(value)
+    ? value.filter(
+        (kind): kind is 'who' | 'place' => kind === 'who' || kind === 'place',
+      )
+    : [];
+
+/** Opens the questions a turn asked, in the shape the cards draw, filling what an older one lacks; one that is not shaped like the contract is left out. */
+const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
+  Object.fromEntries(
+    Object.entries(
+      typeof value === 'object' && value !== null ? value : {},
+    ).flatMap(([id, entry]) => {
+      const question = entry as Partial<HelmQuestion> | null;
+      const isKnown =
+        question?.kind === 'whichPerson' ||
+        question?.kind === 'whichPlace' ||
+        question?.kind === 'whichIsTrue' ||
+        question?.kind === 'whichTopic' ||
+        question?.kind === 'groupTopics' ||
+        question?.kind === 'asked';
+      return typeof question === 'object' &&
+        question !== null &&
+        isKnown &&
+        typeof question.prompt === 'string' &&
+        Array.isArray(question.options) &&
+        question.options.every(isOption)
+        ? [
+            [
+              id,
+              {
+                ...question,
+                builtBy: question.kind === 'asked' ? 'model' : 'code',
+                shape: SHAPES.includes(question.shape ?? '')
+                  ? question.shape
+                  : 'pickOne',
+                options: question.options.map((option) => ({
+                  ...option,
+                  detail: option.detail ?? null,
+                  ref: option.ref ?? null,
+                })),
+                allowsSomethingElse: question.allowsSomethingElse ?? false,
+                noneOption: question.noneOption ?? false,
+                recordKinds: toRecordKinds(question.recordKinds),
+                dateMode: question.dateMode ?? null,
+                number: question.number ?? null,
+                aboutRef: question.aboutRef ?? null,
+                answer: question.answer ?? null,
+              } as HelmQuestion,
+            ],
+          ]
+        : [];
+    }),
+  );
+
 const toLeadId = (value: unknown) => (typeof value === 'string' ? value : null);
 
 const toIds = (value: unknown) =>
@@ -83,7 +159,9 @@ async function openCapture(
     inputMode: data.inputMode ?? 'typed',
     sttProvider: data.sttProvider ?? null,
     interruptedCaptureId: data.interruptedCaptureId ?? null,
+    answersQuestion: data.answersQuestion ?? null,
     ttsProvider: data.ttsProvider ?? null,
+    arrivedVia: data.arrivedVia === 'dropBox' ? 'dropBox' : 'direct',
     medium: data.medium ?? 'web',
     sessionId: data.sessionId ?? entry.id,
     turnIndex: data.turnIndex ?? 0,
@@ -99,8 +177,15 @@ async function openCapture(
     executionIds: data.executionIds ?? [],
     turnLeadId: toLeadId(data.turnLeadId),
     joinedCaptureIds: toIds(data.joinedCaptureIds),
+    attachmentIds: toIds(data.attachmentIds),
     seenAt: data.seenAt ?? null,
     quotedSourceKeys: toIds(data.quotedSourceKeys),
+    answerSavedNoteId:
+      typeof data.answerSavedNoteId === 'string'
+        ? data.answerSavedNoteId
+        : null,
+    whoIds: toIds(data.whoIds),
+    placeIds: toIds(data.placeIds),
     planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,
     createdAt: data.createdAt ?? 0,
     sortedAt: data.sortedAt ?? null,
@@ -114,6 +199,9 @@ async function openCapture(
       text: payload.text ?? '',
       reading: normalizeReading(payload.reading),
       answer: normalizeAnswer(payload.answer),
+      questions: toQuestions(payload.questions),
+      line:
+        typeof payload.spoken?.text === 'string' ? payload.spoken.text : null,
       isUnreadable: false,
     };
   } catch {
@@ -122,6 +210,8 @@ async function openCapture(
       text: '',
       reading: EMPTY_READING,
       answer: null,
+      questions: {},
+      line: null,
       isUnreadable: true,
     };
   }

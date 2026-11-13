@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Hourglass } from 'lucide-react';
+import { CalendarCheck, Hourglass } from 'lucide-react';
 
 import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -10,11 +10,12 @@ import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SummaryRow from '@/components/SummaryRow';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
@@ -23,6 +24,7 @@ import {
   PlacementFooter,
 } from '@apps/helm/components/today/Placement';
 import AskAboutThisControl from '@apps/helm/components/shell/AskAboutThisControl';
+import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import TaskDetails, {
   WhenRow,
   WordsEditor,
@@ -37,6 +39,11 @@ import {
   TASK_TITLE_CAP,
 } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import {
+  useLinkedNames,
+  type LinkedName,
+} from '@apps/helm/hooks/useLinkedNames';
 import { usePlacementMode } from '@apps/helm/hooks/usePlacementMode';
 import { usePlanSources } from '@apps/helm/hooks/usePlanDays';
 import {
@@ -51,6 +58,7 @@ import {
   updateTaskWords,
   type RestoreResult,
 } from '@apps/helm/store/actions/taskActions';
+import { selectProjectById } from '@apps/helm/store/selectors/projectSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type {
   OpenTask,
@@ -108,6 +116,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FOOT = 'px-6 pt-2 pb-3';
 const SMALL_ACTION =
   "text-foreground! relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']";
+
+const getLinkedLabel = (kind: LinkedName['kind']) =>
+  kind === 'person'
+    ? HELM_COPY.linkedPerson
+    : kind === 'pet'
+      ? HELM_COPY.linkedPet
+      : kind === 'organization'
+        ? HELM_COPY.linkedOrganization
+        : HELM_COPY.linkedPlace;
 
 const readHeld = <T,>(held: Held<T> | null, taskId: string, current: T) =>
   held && held.taskId === taskId && held.from === current ? held.text : current;
@@ -197,6 +214,11 @@ function TaskSheet({
   const [isWordsDirty, setIsWordsDirty] = useState(false);
   const isDeleting = useRef(false);
   const assistantName = useAssistantName();
+  const { showView } = useHelmUrlState();
+  const linked = useLinkedNames(task ?? { whoIds: [], placeIds: [] });
+  const taskProject = useAppSelector(selectProjectById).get(
+    task?.projectId ?? '',
+  );
   const [planMode, setPlanMode] = usePlacementMode();
   const sources = usePlanSources(nowMinute);
   const plannedKey = useAppSelector((state) => {
@@ -308,7 +330,11 @@ function TaskSheet({
         destructive: true,
       });
       if (!isConfirmed) return;
-      const { write, restore } = await deleteTask(uid, task.id);
+      const { write, restore } = await deleteTask(
+        uid,
+        task.id,
+        store.getState().helm.media.items,
+      );
       run(write);
       close();
       onDeleted(task.id, titleOf, restore);
@@ -499,7 +525,11 @@ function TaskSheet({
             }
             rightActions={
               plannedKey !== null && doneAt === null && sources ? (
-                <p className='text-muted-foreground text-sm'>
+                <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
+                  <CalendarCheck
+                    className='size-4 shrink-0'
+                    aria-hidden='true'
+                  />
                   {HELM_COPY.planPlannedOn(
                     formatDayWord(plannedKey, sources.todayKey),
                   )}
@@ -593,6 +623,9 @@ function TaskSheet({
           editing={editing}
           onEdit={(id) => go(`step:${id}`)}
           onBack={() => go('main')}
+          onOpenProcedure={(procedureId) =>
+            afterBackLayersClose(() => void showView('procedure', procedureId))
+          }
         />
       );
     }
@@ -633,6 +666,10 @@ function TaskSheet({
           </div>
         )}
         {getCondition()}
+        <KeptMediaSection
+          record={{ kind: 'task', id: task.id }}
+          part='photos'
+        />
         <div className='space-y-2'>
           {!task.isUnreadable && (
             <SummaryRow
@@ -643,6 +680,37 @@ function TaskSheet({
             </SummaryRow>
           )}
           <WhenRow editing={editing} now={nowMinute} />
+          {linked.map((entry) => (
+            <SummaryRow
+              key={`${entry.kind}:${entry.id}`}
+              label={getLinkedLabel(entry.kind)}
+              onClick={() =>
+                afterBackLayersClose(
+                  () =>
+                    void showView(
+                      entry.kind === 'place' ? 'place' : 'who',
+                      entry.id,
+                    ),
+                )
+              }
+            >
+              {entry.name}
+            </SummaryRow>
+          ))}
+          {taskProject && !taskProject.isUnreadable && (
+            <SummaryRow
+              label={HELM_COPY.taskProjectRow}
+              onClick={() =>
+                afterBackLayersClose(
+                  () => void showView('project', taskProject.id),
+                )
+              }
+            >
+              {taskProject.emoji
+                ? `${taskProject.emoji} ${taskProject.name}`
+                : taskProject.name}
+            </SummaryRow>
+          )}
           {!task.isUnreadable && (
             <SummaryRow
               label={HELM_COPY.stepsLabel}
@@ -657,6 +725,7 @@ function TaskSheet({
             </SummaryRow>
           )}
         </div>
+        <KeptMediaSection record={{ kind: 'task', id: task.id }} part='files' />
         <ShowMoreButton
           isOpen={isDetailsOpen}
           onClick={() => setDetailsFor(isDetailsOpen ? null : task.id)}

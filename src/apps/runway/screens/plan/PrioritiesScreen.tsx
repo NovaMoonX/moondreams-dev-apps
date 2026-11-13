@@ -51,7 +51,12 @@ import {
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getPace } from '@apps/runway/engine/pace';
+import { getGoalPaceStretches } from '@apps/runway/engine/goalTimeline';
+import {
+  getGoalPaceFunding,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
+import { getTimelinePace } from '@apps/runway/engine/pace';
 import {
   applyMove,
   buildMoves,
@@ -69,7 +74,7 @@ import {
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { reorderItems } from '@apps/runway/store/actions/itemActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   type PreviewChange,
   type PreviewDay,
@@ -220,6 +225,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const heldByItem = useAppSelector(selectHeldByItem);
   const stance = useAppSelector(selectStance);
   const planItems = useAppSelector((state) => state.runway.items);
+  const { dial } = usePriorityDial();
   const versions = useAppSelector((state) => state.runway.versions);
   const lookahead = useDeferredLookahead(today, isLoaded);
   const [query, setQuery] = useState('');
@@ -237,18 +243,26 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const hasScrolledRef = useRef(false);
 
   const paces = useMemo(() => {
+    const paceStretchesByGoal = goals.map(({ item }) =>
+      getGoalPaceStretches(versions, item, today, (goal) =>
+        getGoalPaceFunding(goal, dial),
+      ),
+    );
     const priorDays = getPriorDays(
       planItems,
       versions,
       today,
       comingDays,
-      goals.map(({ version }) => version.payload.funding),
+      paceStretchesByGoal.flatMap((stretches) =>
+        stretches.map(({ goal }) => goal.funding),
+      ),
     );
     return Object.fromEntries(
-      goals.map(({ item, version }) => [
+      goals.map(({ item, version }, index) => [
         item.id,
-        getPace(
-          { ...version.payload, heldCents: heldByItem[item.id] ?? 0 },
+        getTimelinePace(
+          paceStretchesByGoal[index],
+          heldByItem[item.id] ?? 0,
           comingDays.map((day) => ({
             ...day,
             moneyCents: pick(
@@ -258,10 +272,11 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             ),
           })),
           priorDays,
+          version.payload,
         ),
       ]),
     );
-  }, [goals, heldByItem, comingDays, stance, planItems, versions, today]);
+  }, [goals, heldByItem, comingDays, stance, planItems, versions, today, dial]);
 
   const shortDay = lookahead?.firstShortDay ?? null;
   const shortNextOn =

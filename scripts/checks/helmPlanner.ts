@@ -30,6 +30,7 @@ const task = (id: string, extra: Partial<PlannerTask> = {}): PlannerTask => ({
   isUrgent: false,
   durationMinutes: 30,
   energy: null,
+  placeIds: [],
   ...extra,
 });
 
@@ -56,6 +57,8 @@ const base = (extra: Partial<PlannerInput> = {}): PlannerInput => ({
   dayEndTime: '21:00',
   fillPercent: 100,
   hasCalendar: true,
+  restDay: null,
+  currentPlaceId: null,
   busy: [],
   slots: {},
   tasks: [],
@@ -375,6 +378,77 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
   };
   const [gap] = findFreeGaps(input, 30);
   assert.equal((gap.endAt - gap.startAt) / MIN, 120);
+}
+
+{
+  const input = base({
+    restDay: 'shift',
+    tasks: [task('a'), task('b')],
+    slots: {
+      s1: slot('k', 'kept', '09:00'),
+      s2: slot('n', 'notToday', '10:00'),
+      s3: slot('x', 'suggested', '11:00'),
+    },
+  });
+  const result = run(input);
+  assert.equal(result.outcome, 'rest');
+  assert.deepEqual(Object.keys(result.slots).sort(), ['s1', 's2']);
+  assert.equal(
+    run({ ...input, restDay: null, slots: {}, tasks: [task('a')] }).outcome,
+    'planned',
+    'once the person asks for a plan anyway the day is planned as usual',
+  );
+  assert.equal(run({ ...input, hasCalendar: false }).outcome, 'rest');
+}
+
+{
+  const tasks = [
+    task('plain', { importance: 'must' }),
+    task('home', { importance: 'could', placeIds: ['home'] }),
+    task('due', { due: { kind: 'day', date: dayMs(DAY) } }),
+  ];
+  const noCalendar = (currentPlaceId: string | null) =>
+    run(base({ hasCalendar: false, currentPlaceId, tasks }));
+  const order = (result: ReturnType<typeof planDay>) =>
+    Object.values(result.slots).map((entry) => entry.taskId);
+  assert.deepEqual(order(noCalendar(null)), ['due', 'plain', 'home']);
+  assert.deepEqual(
+    order(noCalendar('home')),
+    ['due', 'home', 'plain'],
+    'while home, a task linked to home leads the rest but not one due today',
+  );
+  const homeResult = noCalendar('home');
+  const reasonOf = (taskId: string) =>
+    homeResult.reasons[
+      Object.entries(homeResult.slots).find(
+        ([, entry]) => entry.taskId === taskId,
+      )?.[0] ?? ''
+    ];
+  assert.equal(reasonOf('home'), "You're home");
+  assert.equal(reasonOf('due'), 'Due today');
+  assert.notEqual(reasonOf('plain'), "You're home");
+  assert.deepEqual(
+    order(noCalendar('elsewhere')),
+    ['due', 'plain', 'home'],
+    'a place nothing links to changes nothing',
+  );
+  const soon = [
+    task('soon', { due: { kind: 'day', date: dayMs(DAY) + 2 * 86_400_000 } }),
+    task('home', { importance: 'could', placeIds: ['home'] }),
+  ];
+  assert.deepEqual(
+    order(
+      run(base({ hasCalendar: false, currentPlaceId: 'home', tasks: soon })),
+    ),
+    ['home', 'soon'],
+    'while home, a task linked to home leads one due in a few days',
+  );
+  const timed = run(base({ currentPlaceId: 'home', tasks }));
+  assert.equal(
+    Object.values(timed.slots).find((entry) => entry.taskId === 'home')
+      ?.startAt,
+    at('08:30'),
+  );
 }
 
 console.log('check:helm-planner: planner rules hold.');

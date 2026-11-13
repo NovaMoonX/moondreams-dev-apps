@@ -1,5 +1,7 @@
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import { readCurrentPlace } from '@apps/helm/engine/currentPlace';
+import { readRestDay } from '@apps/helm/engine/restDay';
 import {
   findOpenings,
   type BusyBlock,
@@ -8,12 +10,14 @@ import {
 } from '@apps/helm/engine/planner';
 import type {
   HelmProfile,
+  OpenPlace,
   OpenTask,
   PlanCalendarEntry,
   PlanDay,
   PlanSlot,
   SyncedRecord,
 } from '@apps/helm/types';
+import { DAY_MS } from '@apps/helm/constants';
 import { getDayNoon } from '@apps/helm/utils/planDays';
 import {
   getDayEvents,
@@ -33,6 +37,7 @@ export interface PlanSources {
   grants: ConnectionGrantWithId[];
   /** Open tasks that are awake. */
   tasks: OpenTask[];
+  places: OpenPlace[];
   planDays: Record<string, PlanDay>;
 }
 
@@ -40,6 +45,26 @@ export const isLiveCalendar = (grant: ConnectionGrantWithId) =>
   grant.connectorId === 'google:calendar' &&
   grant.status === 'live' &&
   Object.values(grant.categories).some((category) => category.isOn);
+
+/** A live calendar whose latest read failed: an error newer than its last good read, or an error with no good read. */
+export const isFailingCalendar = (grant: ConnectionGrantWithId) =>
+  isLiveCalendar(grant) &&
+  Object.entries(grant.categories).some(([id, category]) => {
+    const state = grant.categoryState[id];
+    return (
+      category.isOn &&
+      !!state?.lastError &&
+      (state.lastOkAt === null || state.lastError.at > state.lastOkAt)
+    );
+  });
+
+/** A calendar Google stopped sharing, until it is reconnected. */
+export const isStoppedCalendar = (grant: ConnectionGrantWithId) =>
+  grant.connectorId === 'google:calendar' && grant.status === 'needsReconnect';
+
+/** Whether planning waits: a calendar that can't be read would be planned around as if it were empty. */
+export const isCalendarHeld = (grants: ConnectionGrantWithId[]) =>
+  grants.some((grant) => isFailingCalendar(grant) || isStoppedCalendar(grant));
 
 export const toPlannerTask = (task: OpenTask): PlannerTask => ({
   id: task.id,
@@ -49,33 +74,69 @@ export const toPlannerTask = (task: OpenTask): PlannerTask => ({
   isUrgent: task.isUrgent,
   durationMinutes: task.durationMinutes,
   energy: task.energy,
+  placeIds: task.placeIds,
 });
 
 // A stay or rental runs for days and says where the person is, not time it takes.
 const SPAN_MS = 12 * 60 * 60 * 1000;
 
-/** A day's events that block time: calendar events not marked free and apps' events of half a day or less, an all-day one only when the person said it keeps them busy. */
+const getLiveGrantRecords = (sources: PlanSources) => {
+  const { synced, grants } = sources;
+  return getLiveRecords(synced, grants, false).filter(
+    (record) =>
+      grants.find((grant) => grant.id === record.grantId)?.status === 'live',
+  );
+};
+
+/** A day's events that block time: calendar events not marked free and apps' events of half a day or less, an all-day one only when the person said it keeps them busy. One event's copies block time when any copy does, across the busy copies' times. */
 export function getBusyEvents(
   sources: PlanSources,
   dayKey: string,
 ): SyncedRecord[] {
-  const { synced, grants, profile, timeZone } = sources;
-  const live = getLiveRecords(synced, grants, false).filter(
-    (record) =>
-      grants.find((grant) => grant.id === record.grantId)?.status === 'live',
-  );
-  const { calendarEvents, appEvents } = getDayEvents(
-    live,
+  const { profile, timeZone } = sources;
+  const isBusyCopy = (record: SyncedRecord) =>
+    (isCalendarEvent(record)
+      ? record.isBusy !== false
+      : (record.endAt ?? 0) - (record.startAt ?? 0) <= SPAN_MS) &&
+    (!record.isAllDay || profile.busyAllDayEventRefs.includes(record.id));
+  const { merged } = getDayEvents(
+    getLiveGrantRecords(sources),
     getDayNoon(dayKey, timeZone),
     timeZone,
   );
-  return [...calendarEvents, ...appEvents].filter(
-    (record) =>
-      (isCalendarEvent(record)
-        ? record.isBusy !== false
-        : (record.endAt ?? 0) - (record.startAt ?? 0) <= SPAN_MS) &&
-      (!record.isAllDay || profile.busyAllDayEventRefs.includes(record.id)),
-  );
+  return merged.flatMap(({ record, alsoIn }) => {
+    const busy = [record, ...alsoIn].filter(isBusyCopy);
+    if (busy.length === 0) return [];
+    const starts = busy.map((copy) => copy.startAt ?? 0);
+    const ends = busy.map((copy) => copy.endAt ?? copy.startAt ?? 0);
+    return [
+      {
+        ...record,
+        isBusy: true,
+        startAt: Math.min(...starts),
+        endAt: Math.max(...ends),
+      },
+    ];
+  });
+}
+
+/** Whether the day follows a night out or a shift, read from the live calendar copies of the days around it; null once the person asked for a plan anyway. */
+function getRestDay(sources: PlanSources, dayKey: string) {
+  const { profile, timeZone, planDays } = sources;
+  if ((planDays[dayKey]?.restDayOverriddenAt ?? null) !== null) return null;
+  const noon = getDayNoon(dayKey, timeZone);
+  return readRestDay({
+    dayKey,
+    timeZone,
+    shiftCalendarIds: profile.shiftCalendarIds,
+    events: getLiveGrantRecords(sources).filter(
+      (record) =>
+        isCalendarEvent(record) &&
+        record.kind === 'event' &&
+        record.startAt !== null &&
+        Math.abs(record.startAt - noon) <= 2 * DAY_MS,
+    ),
+  });
 }
 
 /** Everything the planner needs for one day, and what the day's plan seals beside its slots. */
@@ -84,7 +145,8 @@ export function buildPlanInput(
   dayKey: string,
   slots: Record<string, PlanSlot> = sources.planDays[dayKey]?.slots ?? {},
 ) {
-  const { profile, timeZone, now, todayKey, grants, tasks, planDays } = sources;
+  const { profile, timeZone, now, todayKey, grants, tasks, planDays, places } =
+    sources;
   const windowStart = zonedDateTimeToEpoch(
     dayKey,
     profile.dayStartTime,
@@ -133,6 +195,11 @@ export function buildPlanInput(
     dayEndTime: profile.dayEndTime,
     fillPercent: profile.planFillPercent,
     hasCalendar: calendars.length > 0,
+    restDay: calendars.length > 0 ? getRestDay(sources, dayKey) : null,
+    currentPlaceId:
+      dayKey === todayKey
+        ? (readCurrentPlace(profile, places, now)?.id ?? null)
+        : null,
     busy,
     slots,
     tasks: tasks
@@ -160,6 +227,23 @@ export function findClashes(sources: PlanSources, dayKey: string): string[] {
       input.busy.some((block) => block.startAt < endAt && block.endAt > startAt)
         ? [`${id}:${startAt}`]
         : [],
+  );
+}
+
+/** A day's kept slots that sit on a busy block, as slot id to the block's title. */
+export function findOverlaps(
+  input: Pick<PlannerInput, 'slots' | 'busy'>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(input.slots).flatMap(([id, { status, startAt, endAt }]) => {
+      const block =
+        status === 'kept' && startAt !== null && endAt !== null
+          ? input.busy.find(
+              (entry) => entry.startAt < endAt && entry.endAt > startAt,
+            )
+          : undefined;
+      return block ? [[id, block.title]] : [];
+    }),
   );
 }
 

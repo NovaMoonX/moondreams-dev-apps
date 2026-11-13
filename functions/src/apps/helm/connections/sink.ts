@@ -78,9 +78,9 @@ const toEnd = (data: DocumentData) => {
   const startAt = typeof data.startAt === 'number' ? data.startAt : null;
   const endAt = typeof data.endAt === 'number' ? data.endAt : null;
   const dueAt = typeof data.dueAt === 'number' ? data.dueAt : null;
-  const startEnd =
-    startAt === null ? null : startAt + (data.isAllDay === true ? DAY_MS : 0);
-  return endAt ?? dueAt ?? startEnd;
+  // An all-day end is its last day, so it ends a day later.
+  const last = endAt ?? dueAt ?? startAt;
+  return last === null ? null : last + (data.isAllDay === true ? DAY_MS : 0);
 };
 
 const hasEndedBefore = (data: DocumentData, cutoff: number) => {
@@ -358,6 +358,7 @@ class HelmSinkSession implements SinkSession {
             ? {
                 ...(quote as Record<string, unknown>),
                 text: null,
+                record: null,
                 deepLink: null,
                 deletedAt: (quote as Record<string, unknown>).deletedAt ?? now,
               }

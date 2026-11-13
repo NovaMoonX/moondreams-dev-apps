@@ -72,7 +72,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectCostPaid,
