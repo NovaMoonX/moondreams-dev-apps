@@ -21,7 +21,7 @@ import type { ModelProvider, ToolLoopContent } from '../../ai/modelProvider.js';
 import { getUsageCost } from '../../ai/models.js';
 import type { Keyring } from '../../appKeys/keyring.js';
 import type { SealedPayload } from '../../appKeys/seal.js';
-import { isRunningInEmulator } from '../../emulator.js';
+import { isForcedFixture, isRunningInEmulator } from '../../emulator.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from './getHelmKey.js';
 import {
   openForHelm,
@@ -363,6 +363,7 @@ const readEarlyAnswer = (
 };
 
 const readApiKey = () => {
+  if (isForcedFixture('anthropic')) return '';
   try {
     return ANTHROPIC_API_KEY.value();
   } catch {
