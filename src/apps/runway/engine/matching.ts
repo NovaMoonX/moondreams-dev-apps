@@ -1,10 +1,14 @@
+import { toComparable } from '@/utils/optionMatchUtils';
 import { DAY_MS } from '@apps/runway/engine/dates';
+import { getRefundableCents } from '@apps/runway/engine/purchases';
 import type {
   Cents,
   DateOnly,
   MoneyRange,
   OpenPurchase,
+  PayerMemorySealed,
   PurchasePairKind,
+  RouteMemorySealed,
 } from '@apps/runway/types';
 
 const MATCH_DAYS = 3;
@@ -130,6 +134,7 @@ export interface DepositDay {
   expectedOn: DateOnly;
   arrivedOn: DateOnly | null;
   amount: MoneyRange;
+  payLineId: string;
 }
 
 export interface DepositMatches {
@@ -174,11 +179,12 @@ const compareRanks = (a: readonly number[], b: readonly number[]): number =>
 
 const compareKeys = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Pairs posted deposits waiting in Needs a home with the income day each clearly is: a day within three days, its amount inside the range (or within 15% of an exact one), the nearest day then the closest amount then the earliest expected day. A tie, no candidate, or a day another deposit also picks leaves the deposit asking, with the pay days within two weeks offered (those the amount fits first, none more than half its pay away). A day with a deposit linked to it, a pending deposit and a deposit the person already sent back are never matched on their own. The result does not depend on the order of the input. */
+/** Pairs posted deposits waiting in Needs a home with the income day each clearly is: a day within three days, its amount inside the range (or within 15% of an exact one), the nearest day then the closest amount then the earliest expected day. A tie, no candidate, or a day another deposit also picks leaves the deposit asking, with the pay days within two weeks offered (those the amount fits first, none more than half its pay away). A day with a deposit linked to it, a pending deposit and a deposit the person already sent back are never matched on their own. A payer the person linked by hand before settles what the amount or a tie leaves open: when no day is clear, the one free day of that payer's pay line within the same three days and half its pay of the amount is the pick (a raise or a short check is accepted). The result does not depend on the order of the input. */
 export function findDepositDays(
   waiting: readonly OpenPurchase[],
   days: readonly DepositDay[],
   purchases: readonly OpenPurchase[],
+  payers: readonly Pick<PayerMemorySealed, 'merchantKey' | 'payLineId'>[] = [],
 ): DepositMatches {
   const linked = new Set(
     purchases.flatMap((purchase) =>
@@ -217,7 +223,19 @@ export function findDepositDays(
         getRank(cents, deposit, best),
         getRank(cents, deposit, next),
       ) === 0;
-    return best !== undefined && !isTied ? [[deposit.id, best.dayKey]] : [];
+    if (best !== undefined && !isTied) return [[deposit.id, best.dayKey]];
+    const merchantKey = toComparable(deposit.merchant ?? '');
+    const lineIds = payers.flatMap((payer) =>
+      merchantKey !== '' && payer.merchantKey === merchantKey
+        ? [payer.payLineId]
+        : [],
+    );
+    const remembered = nearest(deposit, DEPOSIT_DAYS).filter(
+      (day) =>
+        lineIds.includes(day.payLineId) &&
+        getAmountGap(cents, day.amount) <= day.amount.highCents * OFFER_SHARE,
+    );
+    return remembered.length === 1 ? [[deposit.id, remembered[0].dayKey]] : [];
   });
   const claims = picks.reduce(
     (counts, [, dayKey]) => counts.set(dayKey, (counts.get(dayKey) ?? 0) + 1),
@@ -248,6 +266,104 @@ export function findDepositDays(
   return { clear, offers };
 }
 
+// The bank's detailed kinds for money that only moves between a person's own accounts or pays their card; a payment to a person or a cash withdrawal is not one.
+const OWN_MOVE_CATEGORIES = new Set([
+  'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+  'TRANSFER_IN_ACCOUNT_TRANSFER',
+  'TRANSFER_OUT_ACCOUNT_TRANSFER',
+  'TRANSFER_IN_SAVINGS',
+  'TRANSFER_OUT_SAVINGS',
+  'TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS',
+  'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS',
+]);
+
+/** A synced purchase the bank calls a card payment or a move between the person's own accounts, still waiting and unpaired: not spending until the person says it is. */
+export const isBankMove = (purchase: OpenPurchase) =>
+  purchase.source === 'link' &&
+  // Once the person has answered (unpaired it, undone a choice), their answer wins over the bank's.
+  purchase.assignedBy !== 'person' &&
+  purchase.needsHome &&
+  purchase.pairedWithId === null &&
+  purchase.incomeDayId === null &&
+  (purchase.billRef ?? null) === null &&
+  OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
+
+/** Money in that is a refund: one tied to a purchase, one typed by hand, or a credit on a card the bank doesn't call a payment or a move. Money paired as a move or linked to a pay is never one. */
+export const isRefundLike = (purchase: OpenPurchase) =>
+  purchase.amountCents < 0 &&
+  purchase.pairedWithId === null &&
+  purchase.incomeDayId === null &&
+  !OWN_MOVE_CATEGORIES.has(purchase.category ?? '') &&
+  (purchase.refundOfId !== null ||
+    purchase.source !== 'link' ||
+    (purchase.paidByCardId ?? null) !== null);
+
+/** How far back a bank refund looks for the purchase it returns. */
+export const REFUND_LOOKBACK_DAYS = 120;
+
+const getMerchantWords = (name: string | null) =>
+  toComparable(name?.trim() || '')
+    .split(' ')
+    .filter((word) => word !== '' && !/^\d+$/.test(word));
+
+const getNameOf = (purchase: Pick<OpenPurchase, 'merchant' | 'label'>) =>
+  purchase.merchant?.trim() || purchase.label?.trim() || null;
+
+// A bank adds store numbers and short codes ("KOHLS #1234", "TARGET T-0456"); a longer word ("Venmo cash out", "Applebees") is another merchant.
+const isSameMerchant = (a: readonly string[], b: readonly string[]) => {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (Math.min(a.join('').length, b.join('').length) < 3) return false;
+  if (a.join('') === b.join('')) return true;
+  return (
+    short.length > 0 &&
+    short.every((word, index) => long[index] === word) &&
+    long
+      .slice(short.length)
+      .every((word) => word.length <= 2 || /\d/.test(word))
+  );
+};
+
+/** Whether two merchant names (or labels) name the same store, store numbers, spacing and punctuation aside. */
+export const isSameStore = (a: string | null, b: string | null) =>
+  isSameMerchant(getMerchantWords(a), getMerchantWords(b));
+
+const isIncomeOrMoveIn = (category: string | null) =>
+  /^(INCOME_|TRANSFER_IN_)/.test(category ?? '');
+
+/** A purchase a refund could return: posted money out that is not a move between the person's own accounts. */
+export const isRefundCandidate = (purchase: OpenPurchase) =>
+  purchase.amountCents > 0 &&
+  purchase.status !== 'pending' &&
+  purchase.pairedWithId === null &&
+  !OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
+
+/** The one purchase a waiting bank refund most likely returns, when that purchase went to an envelope or goal: same merchant (store numbers and short codes aside), posted and not a move, on or before the refund's day within `REFUND_LOOKBACK_DAYS` of the purchases passed in (the loaded window), and never for money the bank calls income or a move in, with at least the refund left to return; the newest wins. Null when none does, since a refund of a Free to Spend purchase already counts where it belongs. */
+export function findRefundOriginal(
+  refund: OpenPurchase,
+  purchases: readonly OpenPurchase[],
+): OpenPurchase | null {
+  const words = getMerchantWords(getNameOf(refund));
+  if (refund.amountCents >= 0 || isIncomeOrMoveIn(refund.category ?? null)) {
+    return null;
+  }
+  const result =
+    purchases
+      .filter(
+        (purchase) =>
+          purchase.id !== refund.id &&
+          isRefundCandidate(purchase) &&
+          purchase.date <= refund.date &&
+          purchase.date >= refund.date - REFUND_LOOKBACK_DAYS * DAY_MS &&
+          purchase.lines.some(
+            (line) => line.cents > 0 && line.envelopeId !== null,
+          ) &&
+          isSameMerchant(getMerchantWords(getNameOf(purchase)), words) &&
+          getRefundableCents(purchase, purchases) >= -refund.amountCents,
+      )
+      .sort((a, b) => b.date - a.date || b.createdAt - a.createdAt)[0] ?? null;
+  return result;
+}
+
 /** The two sides of a move between the person's own accounts are paired only this close in date. */
 export const PAIR_DAYS = 3;
 
@@ -262,6 +378,8 @@ export interface AccountPairMatches {
   /** Purchase id (either side) → the purchases it may be paired with, nearest day first, for each purchase not in a clear pair (every purchase when `isOffer`). */
   offers: Map<string, { otherId: string; kind: PurchasePairKind }[]>;
 }
+
+const CARD_PAYMENT_CATEGORY = 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT';
 
 const isPairCandidate = (purchase: OpenPurchase, isOffer: boolean) =>
   purchase.source === 'link' &&
@@ -292,10 +410,11 @@ const getPairKind = (
     : null;
 };
 
-/** Pairs posted money out of a linked account waiting in Needs a home with the same amount in to another linked account or a linked card within three days. A pair is clear only when the money out has that one money in and the money in has that one money out; otherwise both sides are offered each other, nearest day first (as offers, a clear pair is offered too). Pending purchases and ones already paired or linked to a pay day never pair, and neither do ones the person already answered, except as offers (`isOffer`): a send-back stops only the automatic pass, never the person pairing them again. The result does not depend on the order of the input. */
+/** Pairs posted money out of a linked account waiting in Needs a home with the same amount in to another linked account or a linked card within three days. A pair is clear only when a route the person paired by hand before settles it (each side has several but exactly one of its own is on the route, so one remembered of two settles it, both or neither leaves it asking), or when it is a card payment both sides of which the bank flags as one and each has no other such card candidate, or when the money out has that one money in and the money in has that one money out; routes win over the card, the card over plain uniqueness, and no purchase is in two clear pairs; otherwise both sides are offered each other, nearest day first (as offers, a clear pair is offered too). Pending purchases and ones already paired or linked to a pay day never pair, and neither do ones the person already answered, except as offers (`isOffer`): a send-back stops only the automatic pass, never the person pairing them again. The result does not depend on the order of the input. */
 export function findAccountPairs(
   waiting: readonly OpenPurchase[],
   isOffer = false,
+  routes: readonly RouteMemorySealed[] = [],
 ): AccountPairMatches {
   const candidates = waiting
     .filter((purchase) => isPairCandidate(purchase, isOffer))
@@ -308,13 +427,52 @@ export function findAccountPairs(
       return kind === null ? [] : [{ out, into, kind }];
     }),
   );
-  const clear = new Map(
-    links.flatMap(({ out, into, kind }): [string, AccountPair][] =>
+  const isRouted = ({ out, into }: (typeof links)[number]) =>
+    routes.some(
+      (route) =>
+        route.fromAccountId === out.accountId &&
+        ((into.paidByCardId ?? null) !== null
+          ? route.toCardId === into.paidByCardId
+          : route.toAccountId === into.accountId),
+    );
+  const routed = links.filter(isRouted);
+  const byLinks = links.flatMap(
+    ({ out, into, kind }): [string, AccountPair][] =>
       links.filter((link) => link.out.id === out.id).length === 1 &&
       links.filter((link) => link.into.id === into.id).length === 1
         ? [[out.id, { inId: into.id, kind }]]
         : [],
-    ),
+  );
+  const byRoutes = routed.flatMap(
+    ({ out, into, kind }): [string, AccountPair][] =>
+      routed.filter((link) => link.out.id === out.id).length === 1 &&
+      routed.filter((link) => link.into.id === into.id).length === 1
+        ? [[out.id, { inId: into.id, kind }]]
+        : [],
+  );
+  const isCardLink = ({ out, into, kind }: (typeof links)[number]) =>
+    kind === 'cardPayment' &&
+    out.category === CARD_PAYMENT_CATEGORY &&
+    into.category === CARD_PAYMENT_CATEGORY;
+  const cardLinks = links.filter(isCardLink);
+  const byCard = cardLinks.flatMap(
+    ({ out, into, kind }): [string, AccountPair][] =>
+      cardLinks.filter((link) => link.out.id === out.id).length === 1 &&
+      cardLinks.filter((link) => link.into.id === into.id).length === 1
+        ? [[out.id, { inId: into.id, kind }]]
+        : [],
+  );
+  const addFree = (
+    picked: Map<string, AccountPair>,
+    [outId, pair]: [string, AccountPair],
+  ) =>
+    picked.has(outId) ||
+    [...picked.values()].some(({ inId }) => inId === pair.inId)
+      ? picked
+      : picked.set(outId, pair);
+  const clear = [byRoutes, byCard, byLinks].reduce(
+    (picked, picks) => picks.reduce(addFree, picked),
+    new Map<string, AccountPair>(),
   );
   const taken = new Set([
     ...clear.keys(),
@@ -365,4 +523,42 @@ export function findLostPairs(
       ? purchase.date - PAIR_DAYS * DAY_MS >= readFrom
       : !isPairIntact(purchase, other);
   });
+}
+
+/** Posted money in that may be the other side of a pending money out (same amount, another account or a card, within three days), by the money in's id. Both wait: a pending purchase gets a new id when it posts, so it is never paired itself. */
+export function findPendingMoveHolds(
+  purchases: readonly OpenPurchase[],
+): Map<string, string> {
+  const sorted = [...purchases].sort((a, b) => compareKeys(a.id, b.id));
+  const pendingOuts = sorted.filter(
+    (purchase) =>
+      purchase.source === 'link' &&
+      purchase.status === 'pending' &&
+      purchase.amountCents > 0 &&
+      purchase.accountId !== null &&
+      (purchase.paidByCardId ?? null) === null,
+  );
+  return new Map(
+    sorted
+      .filter(
+        (into) =>
+          into.source === 'link' &&
+          into.status === 'posted' &&
+          into.amountCents < 0 &&
+          into.pairedWithId === null &&
+          into.needsHome &&
+          into.incomeDayId === null &&
+          ((into.paidByCardId ?? null) !== null || into.accountId !== null),
+      )
+      .flatMap((into): [string, string][] => {
+        const out = pendingOuts.find(
+          (candidate) =>
+            candidate.amountCents === -into.amountCents &&
+            (candidate.accountId !== into.accountId ||
+              (into.paidByCardId ?? null) !== null) &&
+            Math.abs(candidate.date - into.date) <= PAIR_DAYS * DAY_MS,
+        );
+        return out === undefined ? [] : [[into.id, out.id]];
+      }),
+  );
 }

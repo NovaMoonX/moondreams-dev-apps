@@ -14,6 +14,14 @@ export interface ProviderGrantDoc {
   wrapped: string;
   nonce: string;
   createdAt: number;
+  /** When the person last had the bank asked right now; asks closer together are not repeated. */
+  lastFreshAt: number | null;
+  /** Set once a live balance read made the bank ask for a new sign-in, so this link reads Plaid's saved balances only. */
+  isLiveBalanceOff: boolean | null;
+  /** When the card statements were last asked of the provider; null until the first ask, and missing on a grant written before they were kept. */
+  statementsCheckedAt: number | null;
+  /** Set when the provider's last answer was that it cannot give this link's card details, so asks back off. */
+  isStatementsUnsupported: boolean | null;
 }
 
 export const grantsPath = (uid: string) => `apps/runway/server/${uid}/grants`;
@@ -62,6 +70,10 @@ export function sealGrant(
     linkId,
     providerItemId: grant.providerItemId,
     cursor: null,
+    lastFreshAt: null,
+    isLiveBalanceOff: null,
+    statementsCheckedAt: null,
+    isStatementsUnsupported: null,
     masterKeyId: keyring.current,
     wrapped: ciphertext,
     nonce,
