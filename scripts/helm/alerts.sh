@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates the three alert policies that watch Helm's master keyring (a failed check, a missing heartbeat, a changed secret).
+# Creates the three alert policies that watch Helm's master keyring (a failed check, a missing heartbeat, a changed secret), and two for voice (the site's cap, and cloud listening that can't start).
 #   npm run helm:alerts -- you@example.com
 # Run it after the merge that deploys verifyHelmKeys. It is safe to run again: what already exists is left alone.
 set -euo pipefail
@@ -96,6 +96,32 @@ cat > "$WORK/audit.json" <<JSON
 }
 JSON
 create_policy "Helm: master keyring changed" "$WORK/audit.json"
+cat > "$WORK/voice.json" <<JSON
+{
+  "displayName": "Voice: daily cap reached",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "voice.budgetReached logged",
+    "conditionMatchedLog": { "filter": "jsonPayload.event=\"voice.budgetReached\"" }
+  }],
+  "alertStrategy": { "notificationRateLimit": { "period": "86400s" }, "autoClose": "86400s" },
+  "notificationChannels": ["$CHANNEL"]
+}
+JSON
+create_policy "Voice: daily cap reached" "$WORK/voice.json"
+cat > "$WORK/voice-off.json" <<JSON
+{
+  "displayName": "Voice: cloud listening unavailable",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "voice.keyMissing or voice.grantFailed logged",
+    "conditionMatchedLog": { "filter": "jsonPayload.event=(\"voice.keyMissing\" OR \"voice.grantFailed\")" }
+  }],
+  "alertStrategy": { "notificationRateLimit": { "period": "86400s" }, "autoClose": "86400s" },
+  "notificationChannels": ["$CHANNEL"]
+}
+JSON
+create_policy "Voice: cloud listening unavailable" "$WORK/voice-off.json"
 
 echo
 echo "To see the failure alert reach you, write a test entry (not key material):"

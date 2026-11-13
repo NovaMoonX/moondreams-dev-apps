@@ -147,7 +147,12 @@ function readWallClock(epoch: number, timeZone: string) {
 }
 
 /** A Los Angeles wall time on the LA calendar day `daysFromNow` days from LA's today, DST included. */
-function getShowtime(now: number, daysFromNow: number, hour = 19, minute = 0) {
+export function getShowtime(
+  now: number,
+  daysFromNow: number,
+  hour = 19,
+  minute = 0,
+) {
   const today = readWallClock(now, SEED_TIMEZONE);
   const target = new Date(
     Date.UTC(
@@ -414,7 +419,9 @@ const SEED_SHARE_OPEN_ID = `seedshare${'2'.repeat(17)}`;
 const SEED_SHARE_PIN_ID = `seedsharepass${'3'.repeat(13)}`;
 const SEED_SHARE_PIN = 'K7M2';
 
-function toSharedViewing(viewing: ReturnType<typeof getViewingFixtures>[number]) {
+function toSharedViewing(
+  viewing: ReturnType<typeof getViewingFixtures>[number],
+) {
   return {
     title: viewing.movie.title,
     posterUrl: viewing.movie.posterUrl,

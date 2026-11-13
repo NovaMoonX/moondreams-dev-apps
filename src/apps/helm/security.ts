@@ -1,5 +1,8 @@
+import { declareSealedFormDrafts } from '@lib/app/formDrafts';
 import {
+  decryptBytes,
   decryptValue,
+  encryptBytes,
   encryptValue,
   normalizeAppEncryption,
 } from '@lib/security';
@@ -48,4 +51,35 @@ export async function openJson<T extends object>(
     throw new UnsupportedSealedVersion();
   }
   return fields as T;
+}
+
+/** Seals a file's bytes for Storage; the nonce goes in the file's sealed payload. */
+export const sealBytes = (bytes: Uint8Array, encryption: HelmEncryption) =>
+  encryptBytes(bytes, encryption.key);
+
+/** Opens bytes sealed by `sealBytes`; throws when they do not open. */
+export const openBytes = (
+  bytes: Uint8Array,
+  nonce: string,
+  encryption: HelmEncryption,
+) => decryptBytes(bytes, encryption.key, nonce);
+
+/** Every form draft's key starts with it; declared sealed here, so nothing typed is ever kept readable. */
+export const HELM_DRAFT_PREFIX = 'helm:';
+declareSealedFormDrafts(HELM_DRAFT_PREFIX);
+
+/** Seals and opens a draft kept on this device, with the person's data key. */
+export function createDraftSealer(encryption: HelmEncryption) {
+  return {
+    seal: (text: string) => sealJson({ draft: text }, encryption),
+    open: async (sealed: object) => {
+      const { draft } = await openJson<{ draft?: unknown }>(
+        sealed as Sealed,
+        encryption,
+      );
+      if (typeof draft !== 'string')
+        throw new Error('A sealed draft did not open.');
+      return draft;
+    },
+  };
 }

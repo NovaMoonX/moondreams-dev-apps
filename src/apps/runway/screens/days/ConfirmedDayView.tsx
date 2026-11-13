@@ -10,6 +10,7 @@ import {
 } from '@apps/runway/components/DepositFound';
 import EmptyCard from '@/components/EmptyCard';
 import InlineNotice from '@/components/InlineNotice';
+import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -19,7 +20,6 @@ import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
-import { NOTICE_MAIN_BUTTON } from '@apps/runway/components/noticeButtonClasses';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import RecordLineRow from '@apps/runway/components/RecordLineRow';
@@ -202,9 +202,8 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
           <InlineNotice tone='info'>
             <p>{DAYS_WORDS.readOnlyNote(describeBoundary(recentFrom))}</p>
             <Button
-              variant='outline'
               size='sm'
-              className={join('mt-2 gap-1', NOTICE_MAIN_BUTTON.info)}
+              className={join('mt-2 gap-1', NOTICE_ACTION_CLASSES.info)}
               onClick={() => {
                 onClose();
                 showDaysMonth(null);

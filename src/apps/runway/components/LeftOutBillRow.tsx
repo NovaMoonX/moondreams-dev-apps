@@ -42,8 +42,8 @@ function LeftOutBillRow({
   const payment =
     payments?.find(
       (entry, index) =>
-        entry.dueOn >= dayOn &&
-        (index === 0 || payments[index - 1].dueOn < dayOn),
+        entry.payOn >= dayOn &&
+        (index === 0 || payments[index - 1].payOn < dayOn),
     ) ?? null;
   const bill = useAppSelector((state) =>
     resolveCurrentOrNext(
