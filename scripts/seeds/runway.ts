@@ -3184,7 +3184,7 @@ interface SelfPayingBill {
  * Bills that pay themselves (Track and up). Taylor (Track): a card for Streaming, which marked itself paid, and Electric ($60 to $90),
  * marked at the top of its range and waiting for what it really charged, beside Phone, due today and paid by hand. Jamie (Link): Phone on
  * the Venture X, left unmarked since Link waits for its charge, beside three card charges near its due day, so it asks which charge
- * it was, and Cloud storage, which their last payday set aside in full.
+ * it was, Cloud storage, which their last payday set aside in full, and Spotify, which names no card but was last charged to the Discover.
  */
 async function writeSeedSelfPaying(
   context: SeedContext,
@@ -3298,6 +3298,22 @@ async function writeSeedSelfPaying(
               timing: monthlyOn(today + 11 * DAY_MS),
               groupId: 'seed-group-subscriptions',
               paidByCardId: SEED_VENTURE_CARD,
+            },
+            mark: null,
+          },
+          {
+            id: 'seed-bill-jamie-spotify',
+            payload: {
+              ...base,
+              name: 'Spotify',
+              emoji: null,
+              priority: 'want',
+              orderIndex: 4,
+              amount: { lowCents: 1_199, highCents: 1_199 },
+              timing: monthlyOn(today + 3 * DAY_MS),
+              groupId: 'seed-group-subscriptions',
+              paidByCardId: null,
+              paysItself: null,
             },
             mark: null,
           },
@@ -3441,6 +3457,13 @@ async function writeSeedSelfPaying(
             merchant: "Trader Joe's",
             cents: 4_782,
           },
+          {
+            id: 'seed-link-purchase-spotify',
+            offset: 3,
+            merchant: 'Spotify USA',
+            cents: 1_199,
+            cardId: SEED_DISCOVER_CARD,
+          },
         ]
       : [];
   await Promise.all(
@@ -3466,7 +3489,8 @@ async function writeSeedSelfPaying(
             note: null,
             lines: [{ envelopeId: null, cents: entry.cents, via: 'free' }],
             refundOfId: null,
-            paidByCardId: SEED_VENTURE_CARD,
+            paidByCardId:
+              'cardId' in entry ? entry.cardId : SEED_VENTURE_CARD,
             link: null,
             receiptText: null,
             costRef: null,
