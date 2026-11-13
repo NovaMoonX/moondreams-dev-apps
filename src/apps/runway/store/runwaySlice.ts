@@ -8,6 +8,7 @@ import type {
   OpenAccount,
   OpenAccountBalance,
   OpenCardStatement,
+  OpenRecurringCharges,
   OpenLink,
   OpenCard,
   OpenExpense,
@@ -58,6 +59,8 @@ export interface RunwayState {
   isAccountBalancesLoaded: boolean;
   /** What the bank's latest statement says about each linked card. */
   cardStatements: OpenCardStatement[];
+  recurringCharges: OpenRecurringCharges[];
+  isRecurringChargesLoaded: boolean;
   /** Every expense group. */
   expenses: OpenExpense[];
   /** Every always-do-this rule, and whether they have been read once, so no pass runs on a rule list that is still arriving. */
@@ -127,6 +130,8 @@ const initialState: RunwayState = {
   accountBalances: [],
   isAccountBalancesLoaded: false,
   cardStatements: [],
+  recurringCharges: [],
+  isRecurringChargesLoaded: false,
   expenses: [],
   rules: [],
   isRulesLoaded: false,
@@ -241,6 +246,13 @@ export const runwaySlice = createSlice({
     setCardStatements: (state, action: PayloadAction<OpenCardStatement[]>) => {
       state.cardStatements = action.payload;
     },
+    setRecurringCharges: (
+      state,
+      action: PayloadAction<OpenRecurringCharges[]>,
+    ) => {
+      state.recurringCharges = action.payload;
+      state.isRecurringChargesLoaded = true;
+    },
     setMoves: (
       state,
       action: PayloadAction<{ from: DateOnly; moves: OpenMove[] }>,
@@ -340,6 +352,7 @@ export const {
   setLinks,
   setAccountBalances,
   setCardStatements,
+  setRecurringCharges,
   setExpenses,
   setRules,
   setMemories,

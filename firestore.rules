@@ -325,7 +325,7 @@ service cloud.firestore {
     // (apps/runway/server, apps/runway/keyChecks) have no match, so only Functions reach them.
     // Versions, changes, moves and a day's records are append-only: their ids come from their own
     // fields, so writing the same record twice is refused rather than overwriting it.
-    // `links`, `accountBalances` and `cardStatements` are written only by Functions (bank data), and a card's or account's `linkId`
+    // `links`, `accountBalances`, `cardStatements` and `recurringCharges` are written only by Functions (bank data), and a card's or account's `linkId`
     // is set only by `attachRunwayAccounts`: a client creates them unlinked and never changes it. A purchase brought
     // in from a bank (`source` 'link', a `dedupeKey`) is made only by Functions: a client creates purchases with
     // neither and never changes either. `releasedCharges` notes (a pending charge the bank dropped) are made only by
@@ -333,7 +333,7 @@ service cloud.firestore {
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
-        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'releasedCharges'])
+        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'recurringCharges', 'releasedCharges'])
         && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null)
         && (document[0] != 'purchases' || (request.resource.data.get('dedupeKey', null) == null && request.resource.data.get('source', null) != 'link'));
     }

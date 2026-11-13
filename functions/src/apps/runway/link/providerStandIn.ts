@@ -4,6 +4,7 @@ import type {
   BankDataProvider,
   NormalizedAccount,
   NormalizedCardStatement,
+  ProviderRecurringStream,
   NormalizedTransaction,
   TransactionSync,
 } from './provider.js';
@@ -146,6 +147,49 @@ const statementFor = (providerAccountId: string): NormalizedCardStatement => ({
   lastPaymentOn: daysAgo(30),
 });
 
+const recurring = (
+  streamId: string,
+  providerAccountId: string,
+  description: string,
+  frequency: ProviderRecurringStream['frequency'],
+  cents: number,
+  nextInDays: number,
+): ProviderRecurringStream => ({
+  streamId,
+  providerAccountId,
+  description,
+  merchantName: description,
+  frequency,
+  averageCents: cents,
+  lastCents: cents,
+  firstOn: daysAgo((frequency === 'annually' ? 730 : 120) - nextInDays),
+  lastOn: daysAgo((frequency === 'annually' ? 365 : 30) - nextInDays),
+  nextOn: daysAgo(-nextInDays),
+  status: 'mature',
+  isActive: true,
+  category: 'ENTERTAINMENT_TV_AND_MOVIES',
+});
+
+const RECURRING_STREAMS = [
+  recurring('stand-in-r1', 'stand-in-sapphire', 'Netflix', 'monthly', 1_549, 9),
+  recurring(
+    'stand-in-r2',
+    'stand-in-checking',
+    'Spotify USA',
+    'monthly',
+    1_199,
+    14,
+  ),
+  recurring(
+    'stand-in-r3',
+    'stand-in-checking',
+    'Amazon Prime',
+    'annually',
+    13_900,
+    30,
+  ),
+];
+
 /** A bank that answers without a network, for the Functions emulator when no provider keys are set. Emulators only. */
 export const standInProvider: BankDataProvider = {
   createLinkSession: async () => ({ linkToken: STAND_IN_LINK_TOKEN }),
@@ -160,6 +204,10 @@ export const standInProvider: BankDataProvider = {
     statements: ACCOUNTS.filter((account) => account.kind === 'credit').map(
       (account) => statementFor(account.providerAccountId),
     ),
+  }),
+  listRecurringOutflows: async () => ({
+    kind: 'ok',
+    streams: RECURRING_STREAMS,
   }),
   refreshTransactions: async () => undefined,
   listTransactionDetails: async () => [],

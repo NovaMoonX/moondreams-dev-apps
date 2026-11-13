@@ -746,6 +746,61 @@ export interface OpenCardStatement extends CardStatementSealed {
   asOf: number;
 }
 
+export const RECURRING_FREQUENCIES = [
+  'weekly',
+  'biweekly',
+  'semiMonthly',
+  'monthly',
+  'annually',
+  'unknown',
+] as const;
+
+export type RecurringFrequency = (typeof RECURRING_FREQUENCIES)[number];
+
+export const RECURRING_STATUSES = [
+  'mature',
+  'early',
+  'tombstoned',
+  'unknown',
+] as const;
+
+export type RecurringStatus = (typeof RECURRING_STATUSES)[number];
+
+/** One repeating outflow the bank spotted on a linked account. */
+export interface RecurringStream {
+  streamId: string;
+  providerAccountId: string;
+  description: string;
+  merchantName: string | null;
+  frequency: RecurringFrequency;
+  /** Positive outflow cents. */
+  averageCents: Cents;
+  lastCents: Cents;
+  firstOn: DateOnly;
+  lastOn: DateOnly;
+  nextOn: DateOnly | null;
+  status: RecurringStatus;
+  isActive: boolean;
+  /** The bank's category, detailed when it sends one, else the primary. */
+  category: string | null;
+}
+
+/** The repeating charges the bank found on one link, keyed by the link id; written by Functions. */
+export interface RecurringChargesDoc {
+  id: string;
+  asOf: number;
+  sealed: Sealed;
+}
+
+export interface RecurringChargesSealed {
+  streams: RecurringStream[];
+}
+
+export interface OpenRecurringCharges extends RecurringChargesSealed {
+  id: string;
+  asOf: number;
+}
+
 /** An account as the bank describes it, before the person says which of theirs it is. */
 export interface NormalizedAccount {
   providerAccountId: string;

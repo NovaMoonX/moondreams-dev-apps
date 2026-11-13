@@ -169,6 +169,7 @@ import type {
   Ending,
   HorizonCost,
   HorizonSealed,
+  MoneyRange,
   Priority,
   Schedule,
 } from '@apps/runway/types';
@@ -335,6 +336,10 @@ interface BillFormProps {
   presetGroupId?: string;
   /** Makes the bill from a repeating cost, writing it with the cost's item in one save. */
   fromCost?: BillFromCost;
+  /** Starts a new bill filled from a charge the bank found; every answer starts folded, and once the bill is written `onCreated` hears its id. */
+  fromCharge?: { initial: BillSealed; onCreated: (billId: string) => void };
+  /** An amount typed into a change form when it opens, in place of the bill's own. */
+  presetAmount?: MoneyRange;
 }
 
 export type BillStepId =
@@ -676,6 +681,8 @@ function BillFormBody({
   draft,
   presetGroupId,
   fromCost,
+  fromCharge,
+  presetAmount,
 }: BillFormProps & StartOverProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -716,11 +723,12 @@ function BillFormBody({
     editing ? getEditingData(editing.payload, false) : null,
   );
   const [startData] = useState<BillFormData>(() =>
-    editing || draft?.initial || fromCost
+    editing || draft?.initial || fromCost || fromCharge
       ? {
           ...getEditingData(
             (editing?.payload ??
               draft?.initial ??
+              fromCharge?.initial ??
               (fromCost
                 ? {
                     ...EMPTY_BILL,
@@ -739,7 +747,8 @@ function BillFormBody({
             editing === undefined,
           ),
           accountId: keepPullAccountId(
-            (editing?.payload ?? draft?.initial)?.accountId,
+            (editing?.payload ?? draft?.initial ?? fromCharge?.initial)
+              ?.accountId,
             openAccounts,
             isAccountsLoaded,
           ),
@@ -747,6 +756,17 @@ function BillFormBody({
             ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
             : {}),
           ...(nextDue === null ? {} : { startDate: toDateInputValue(nextDue) }),
+          ...(fromCharge && fromCharge.initial.timing.schedule.anchor === null
+            ? { frequency: null, isLater: false, startDate: '', everyCount: '' }
+            : {}),
+          ...(presetAmount
+            ? {
+                amount: toAmountDraft(
+                  presetAmount,
+                  (editing?.payload ?? EMPTY_BILL).stanceOverride,
+                ),
+              }
+            : {}),
         }
       : {
           name: '',
@@ -774,9 +794,12 @@ function BillFormBody({
         },
   );
   const startsChosen =
-    editing !== undefined || draft !== undefined || fromCost !== undefined;
+    editing !== undefined ||
+    draft !== undefined ||
+    fromCost !== undefined ||
+    fromCharge !== undefined;
   const draftKey =
-    draft || fromCost
+    draft || fromCost || fromCharge
       ? null
       : `${FORM_DRAFT_PREFIX}${noun}:${editing?.itemId ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
@@ -1664,7 +1687,8 @@ function BillFormBody({
       fromCost ? steps.filter(({ id }) => id !== 'due') : steps,
       isHidden,
     ),
-    startFolded: editing !== undefined || !!draft?.initial,
+    startFolded:
+      editing !== undefined || !!draft?.initial || fromCharge !== undefined,
     foldAnswered: kept.restored !== null || fromCost !== undefined,
     initialOpenId: draft?.openStep ?? null,
   });
@@ -2024,6 +2048,7 @@ function BillFormBody({
           },
         ),
       });
+      fromCharge?.onCreated(billId);
       if (planStart !== null && startingCents > 0) {
         const isRecorded = await recordHolding(
           user.uid,
@@ -2088,7 +2113,7 @@ function BillFormBody({
     <FormSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={editing ? formData.name.trim() || title : title}
+      title={editing || fromCharge ? formData.name.trim() || title : title}
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps

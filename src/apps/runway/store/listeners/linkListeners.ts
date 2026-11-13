@@ -12,12 +12,17 @@ import type {
   LinkSealed,
   OpenAccountBalance,
   OpenCardStatement,
+  OpenRecurringCharges,
+  RecurringChargesDoc,
+  RecurringChargesSealed,
+  RecurringStream,
   OpenLink,
   OpenReleasedCharge,
   ReleasedChargeDoc,
   ReleasedChargeSealed,
   RunwayEncryption,
 } from '@apps/runway/types';
+import { RECURRING_FREQUENCIES, RECURRING_STATUSES } from '@apps/runway/types';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -165,6 +170,77 @@ export function startCardStatementsListener(
         dueOn: payload.dueOn ?? null,
         lastPaymentCents: payload.lastPaymentCents ?? null,
         lastPaymentOn: payload.lastPaymentOn ?? null,
+      };
+    },
+    onChange,
+    onError,
+  );
+}
+
+const isText = (value: unknown): value is string =>
+  typeof value === 'string' && value !== '';
+
+const isCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const toStream = (raw: unknown): RecurringStream[] => {
+  if (typeof raw !== 'object' || raw === null) return [];
+  const value = raw as Record<string, unknown>;
+  const frequency = RECURRING_FREQUENCIES.find(
+    (one) => one === value.frequency,
+  );
+  const status = RECURRING_STATUSES.find((one) => one === value.status);
+  if (
+    !isText(value.streamId) ||
+    !isText(value.providerAccountId) ||
+    !frequency ||
+    !status ||
+    !isCount(value.averageCents) ||
+    !isCount(value.lastCents) ||
+    !isCount(value.firstOn) ||
+    !isCount(value.lastOn)
+  ) {
+    return [];
+  }
+  return [
+    {
+      streamId: value.streamId,
+      providerAccountId: value.providerAccountId,
+      description:
+        typeof value.description === 'string' ? value.description : '',
+      merchantName: isText(value.merchantName) ? value.merchantName : null,
+      frequency,
+      averageCents: value.averageCents,
+      lastCents: value.lastCents,
+      firstOn: value.firstOn,
+      lastOn: value.lastOn,
+      nextOn: isCount(value.nextOn) ? value.nextOn : null,
+      status,
+      isActive: value.isActive === true,
+      category: isText(value.category) ? value.category : null,
+    },
+  ];
+};
+
+/** The repeating charges the bank found on each linked account, keyed by the link id. */
+export function startRecurringChargesListener(
+  uid: string,
+  encryption: RunwayEncryption,
+  onChange: (charges: OpenRecurringCharges[]) => void,
+  onError: (error: Error) => void,
+) {
+  const read = createSealedReader(encryption);
+  return startOpenedListener<RecurringChargesDoc, OpenRecurringCharges>(
+    uid,
+    'recurringCharges',
+    async (data) => {
+      const payload = await read<Partial<RecurringChargesSealed>>(data.sealed);
+      return {
+        id: data.id,
+        asOf: data.asOf,
+        streams: Array.isArray(payload.streams)
+          ? payload.streams.flatMap(toStream)
+          : [],
       };
     },
     onChange,

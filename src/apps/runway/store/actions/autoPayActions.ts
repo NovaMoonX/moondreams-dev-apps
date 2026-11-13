@@ -508,3 +508,24 @@ export async function forgetBillMatch(
 ): Promise<void> {
   await updateDoc(itemRef(uid, billId), { matchSealed: null });
 }
+
+/** Teaches a bill the merchant names its bank charges go by, so a charge or repeating charge named so is read as this bill. */
+export async function learnBillMerchant(
+  uid: string,
+  encryption: RunwayEncryption,
+  billId: string,
+  keys: readonly string[],
+): Promise<void> {
+  await runTransaction(db, async (transaction) => {
+    const header = await transaction.get(itemRef(uid, billId));
+    const before = await readKeys(
+      header.data() as Partial<PlanItemDoc> | undefined,
+      encryption,
+    );
+    const learned = mergeKeys(keys, before);
+    if (learned.join('|') === before.join('|')) return;
+    transaction.update(itemRef(uid, billId), {
+      matchSealed: await sealJson(toMatchSealed(learned), encryption),
+    });
+  });
+}

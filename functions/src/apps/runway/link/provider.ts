@@ -60,6 +60,34 @@ export type CardStatementRead =
   | { kind: 'unsupported' }
   | { kind: 'notReady' };
 
+/** A repeating charge the provider found in an account's history; amounts are positive cents for money out. */
+export interface ProviderRecurringStream {
+  streamId: string;
+  providerAccountId: string;
+  description: string;
+  merchantName: string | null;
+  frequency:
+    'weekly' | 'biweekly' | 'semiMonthly' | 'monthly' | 'annually' | 'unknown';
+  averageCents: number;
+  lastCents: number;
+  /** Date-only: UTC midnight. */
+  firstOn: number;
+  /** Date-only: UTC midnight. */
+  lastOn: number;
+  /** Date-only: UTC midnight; null when the provider does not predict one. */
+  nextOn: number | null;
+  status: 'mature' | 'early' | 'tombstoned' | 'unknown';
+  isActive: boolean;
+  /** The provider's detailed kind of place, else its general one; null when it gives none. */
+  category: string | null;
+}
+
+/** `unsupported`: this bank or provider account cannot be read for repeating charges (`code` is the provider's error code); `notReady`: the provider has not worked them out yet. */
+export type RecurringRead =
+  | { kind: 'ok'; streams: ProviderRecurringStream[] }
+  | { kind: 'notReady' }
+  | { kind: 'unsupported'; code: string | null };
+
 export interface TransactionSync {
   added: NormalizedTransaction[];
   modified: NormalizedTransaction[];
@@ -129,6 +157,8 @@ export interface BankDataProvider {
   ): Promise<NormalizedAccount[]>;
   /** The statement details of every credit account under the grant; call only for a grant with a card linked. */
   listCardStatements(grant: ProviderGrant): Promise<CardStatementRead>;
+  /** The repeating charges (money out only) the provider found under the grant. */
+  listRecurringOutflows(grant: ProviderGrant): Promise<RecurringRead>;
   /** Asks the provider to check the bank for new transactions now; what it finds arrives later through the webhook. */
   refreshTransactions(grant: ProviderGrant): Promise<void>;
   revoke(grant: ProviderGrant): Promise<void>;
