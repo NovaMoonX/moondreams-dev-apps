@@ -2,11 +2,19 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { CalendarDays, ChevronRight } from 'lucide-react';
+import {
+  BookOpen,
+  CalendarDays,
+  ChevronRight,
+  FolderOpen,
+  Stethoscope,
+} from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import AppLogo from '@/components/AppLogo';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useAuth } from '@/hooks/useAuth';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { readConnectorAppId } from '@/lib/connections/contract';
@@ -17,18 +25,26 @@ import {
   formatTime,
 } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
 import SyncedSheet from '@apps/helm/components/today/SyncedSheet';
 import { DAY_MS, HELM_COPY } from '@apps/helm/constants';
 import { useTaskTicks } from '@apps/helm/hooks/useTaskTicks';
 import type { RestoreResult } from '@apps/helm/store/actions/taskActions';
 import { selectOpenTasksById } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectAllTopics,
+  selectNoteById,
+  selectTopicById,
+} from '@apps/helm/store/selectors/knowledgeSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { SourceRef, SyncedRecord } from '@apps/helm/types';
 import { formatTaskDue } from '@apps/helm/utils/taskDue';
+import { pathOf } from '@apps/helm/utils/topicTree';
 
 type SyncedSource = Extract<SourceRef, { kind: 'synced' }>;
 type ConnectionSource = Extract<SourceRef, { kind: 'connection' }>;
+type NoteSource = Extract<SourceRef, { kind: 'note' }>;
 
 const ROW =
   'flex h-auto min-h-12 w-full items-center justify-start gap-3 rounded-none border-0 px-0! py-2.5! text-left';
@@ -36,7 +52,7 @@ const ROW =
 interface RowBodyProps {
   mark: React.ReactNode;
   title: string;
-  detail: string | null;
+  detail: string | string[] | null;
   hasDoor: boolean;
 }
 
@@ -48,10 +64,17 @@ function RowBody({ mark, title, detail, hasDoor }: RowBodyProps) {
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {title}
         </span>
-        {detail && (
-          <span className='text-muted-foreground block text-[13px] break-words'>
-            {detail}
-          </span>
+        {(Array.isArray(detail) ? detail : [detail]).flatMap((line) =>
+          line ? (
+            <span
+              key={line}
+              className='text-muted-foreground block text-[13px] break-words'
+            >
+              {line}
+            </span>
+          ) : (
+            []
+          ),
         )}
       </span>
       {hasDoor && (
@@ -216,6 +239,124 @@ function SyncedSourceRow({
   );
 }
 
+function NoteSourceRow({ source, canOpen }: RowProps & { source: NoteSource }) {
+  const note = useAppSelector(selectNoteById).get(source.id) ?? null;
+  const topics = useAppSelector(selectAllTopics);
+  const isLoaded = useAppSelector((state) => state.helm.notes.isLoaded);
+  const [isOpen, setIsOpen] = useState(false);
+  const liveTopic = note
+    ? topics.find((topic) => note.topicIds.includes(topic.id))
+    : undefined;
+  const place = liveTopic
+    ? `${liveTopic.emoji ? `${liveTopic.emoji} ` : ''}${pathOf(liveTopic.id, topics).join(' › ')}`
+    : null;
+  if (!note && isLoaded) {
+    return (
+      <p className='text-muted-foreground py-2.5 text-[13px]'>
+        {HELM_COPY.answerNoteGone}
+      </p>
+    );
+  }
+  if (!note) {
+    return (
+      <PlainRow
+        mark={
+          <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
+            <BookOpen className='size-5' aria-hidden='true' />
+          </span>
+        }
+        title={source.title || HELM_COPY.noteUntitled}
+        detail={[
+          HELM_COPY.answerNoteMark(
+            source.topicPath
+              ? `${source.topicEmoji ? `${source.topicEmoji} ` : ''}${source.topicPath}`
+              : null,
+          ),
+        ]}
+      />
+    );
+  }
+  const title = note.isUnreadable
+    ? HELM_COPY.unreadable
+    : note.title || HELM_COPY.noteUntitled;
+  const detail = [
+    HELM_COPY.answerNoteMark(place),
+    ...(note.isFromGeneralAnswer
+      ? [
+          note.checkedAt === null
+            ? HELM_COPY.answerNoteNotChecked
+            : HELM_COPY.answerNoteChecked,
+        ]
+      : []),
+    ...(note.hasHealthCaution ? [HELM_COPY.answerHealthCaution] : []),
+  ];
+  const mark = (
+    <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
+      {note.hasHealthCaution ? (
+        <Stethoscope className='size-5' aria-hidden='true' />
+      ) : (
+        <BookOpen className='size-5' aria-hidden='true' />
+      )}
+    </span>
+  );
+  if (!canOpen) return <PlainRow mark={mark} title={title} detail={detail} />;
+  return (
+    <>
+      <Button
+        type='button'
+        variant='tertiary'
+        className={ROW}
+        aria-label={HELM_COPY.answerOpenSource(title)}
+        onClick={() => setIsOpen(true)}
+      >
+        <RowBody mark={mark} title={title} detail={detail} hasDoor />
+      </Button>
+      <NoteSheet
+        noteId={isOpen ? note.id : null}
+        onClose={() => setIsOpen(false)}
+      />
+    </>
+  );
+}
+
+function TopicSourceRow({ topicId, canOpen }: RowProps & { topicId: string }) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const topic = useAppSelector(selectTopicById).get(topicId) ?? null;
+  const isLoaded = useAppSelector((state) => state.helm.topics.isLoaded);
+  if (!topic) {
+    return isLoaded ? (
+      <p className='text-muted-foreground py-2.5 text-[13px]'>
+        {HELM_COPY.answerTopicGone}
+      </p>
+    ) : null;
+  }
+  const title = `${topic.emoji ? `${topic.emoji} ` : ''}${topic.name}`;
+  const mark = (
+    <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
+      <FolderOpen className='size-5' aria-hidden='true' />
+    </span>
+  );
+  if (!canOpen) return <PlainRow mark={mark} title={title} detail={null} />;
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      className={ROW}
+      aria-label={HELM_COPY.answerOpenSource(title)}
+      onClick={() =>
+        afterBackLayersClose(() =>
+          navigate(
+            `${pathname}?view=topic&item=${encodeURIComponent(topic.id)}`,
+          ),
+        )
+      }
+    >
+      <RowBody mark={mark} title={title} detail={null} hasDoor />
+    </Button>
+  );
+}
+
 function ConnectionSourceRow({ source }: { source: ConnectionSource }) {
   return (
     <PlainRow
@@ -240,6 +381,24 @@ function AnswerSources({ sources, canOpen }: AnswerSourcesProps) {
         <TaskSourceRow
           key={`task:${source.id}`}
           taskId={source.id}
+          canOpen={canOpen}
+        />,
+      ];
+    }
+    if (source.kind === 'note') {
+      return [
+        <NoteSourceRow
+          key={`note:${source.id}`}
+          source={source}
+          canOpen={canOpen}
+        />,
+      ];
+    }
+    if (source.kind === 'topic') {
+      return [
+        <TopicSourceRow
+          key={`topic:${source.id}`}
+          topicId={source.id}
           canOpen={canOpen}
         />,
       ];

@@ -1,4 +1,5 @@
 import { DAY_MS } from '@apps/runway/engine/dates';
+import { toDayWord } from '@apps/runway/utils/payFrom';
 import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -6,14 +7,21 @@ import {
   ACCOUNT_WORDS,
   AUTO_PAY_WORDS,
   COST_PAID_WORDS,
+  FORM_FLOW_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
+  FUNDING_PAY_WORDS,
+  HOW_OFTEN_WORDS,
   MAKE_BILL_WORDS,
+  BILL_PAY_WORDS,
   PAID_FROM_WORDS,
   PRIORITY_LABELS,
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
-import { describeBillTiming } from '@apps/runway/utils/billText';
+import {
+  describeBillTiming,
+  describePayOnDay,
+} from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
 import { isSavingFor } from '@apps/runway/engine/pace';
 import { describeFunding } from '@apps/runway/utils/fundingText';
@@ -50,7 +58,7 @@ const describeFundedByChange = (
     if (payNameOf) return payNameOf(value);
     return value.monthDay === null
       ? 'one pay you picked'
-      : `the pay on ${value.monthDay === 31 ? 'the last day' : `day ${value.monthDay}`}`;
+      : `the pay on ${toDayWord(value.monthDay)}`;
   }
   return PAID_FROM_WORDS.logSpread;
 };
@@ -82,6 +90,15 @@ const diff = <T>(
   after: T,
   show: (value: T) => string,
 ): Part => (same(before, after) ? null : [label, show(before), show(after)]);
+
+const describeMaxMove = (before: number | null, after: number | null): Part =>
+  before === after
+    ? null
+    : after === null
+      ? 'No longer stops filling'
+      : before === null
+        ? `Stops filling at ${formatCents(after)}`
+        : ['Stops filling at', formatCents(before), formatCents(after)];
 
 const pairingCount = (list: readonly unknown[]) =>
   list.length === 1 ? '1 funded' : `${list.length} funded`;
@@ -299,6 +316,12 @@ const getParts = (
         billAfter.timing.schedule,
         describeBillTiming,
       ),
+      diff(
+        FORM_FLOW_WORDS.payOn,
+        billBefore.payOnDay ?? null,
+        billAfter.payOnDay ?? null,
+        (value) => describePayOnDay(value).toLowerCase(),
+      ),
       diff('Ends', billBefore.ending, billAfter.ending, (value) =>
         value.onDate !== null
           ? formatDateOrdinalUTC(value.onDate)
@@ -312,11 +335,14 @@ const getParts = (
         billAfter.stanceOverride ?? null,
         (value) => value ?? 'follows the plan',
       ),
-      diff('Paid from', billBefore.fundedBy, billAfter.fundedBy, (value) =>
-        describeFundedByChange(value, payNameOf),
+      diff(
+        PAID_FROM_WORDS.label,
+        billBefore.fundedBy,
+        billAfter.fundedBy,
+        (value) => describeFundedByChange(value, payNameOf),
       ),
       diff(
-        'Paid by',
+        BILL_PAY_WORDS.label,
         billBefore.paidByCardId ?? null,
         billAfter.paidByCardId ?? null,
         cardNameOf,
@@ -359,10 +385,28 @@ const getParts = (
         (value) => PRIORITY_LABELS[value],
       ),
       diff(
+        FUNDING_PAY_WORDS.label,
+        goalBefore.funding.pay ?? null,
+        goalAfter.funding.pay ?? null,
+        (value) =>
+          value === null
+            ? FUNDING_PAY_WORDS.logEveryPay
+            : describeFundedByChange({ kind: 'pay', ...value }, payNameOf),
+      ),
+      diff(
         'Funding',
-        { funding: goalBefore.funding, extras: getExtras(goalBefore) },
-        { funding: goalAfter.funding, extras: getExtras(goalAfter) },
-        (value) => describeFunding(value.funding, value.extras),
+        {
+          funding: { ...goalBefore.funding, pay: null },
+          extras: getExtras(goalBefore),
+        },
+        {
+          funding: { ...goalAfter.funding, pay: null },
+          extras: getExtras(goalAfter),
+        },
+        (value) =>
+          value.funding.cadence.kind === 'none'
+            ? HOW_OFTEN_WORDS.idleInChange
+            : describeFunding(value.funding, value.extras),
       ),
       diff(
         GROUP_WORDS.changeLabel,
@@ -372,11 +416,9 @@ const getParts = (
       ),
       ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
         ? [
-            diff(
-              'Stops at',
+            describeMaxMove(
               (goalBefore as EnvelopeSealed).maxCents ?? null,
               (goalAfter as EnvelopeSealed).maxCents ?? null,
-              (value) => (value === null ? 'no limit' : formatCents(value)),
             ),
           ]
         : []),
@@ -414,9 +456,12 @@ const MONEYLESS_KEYS = [
   'spillTo',
 ];
 
-/** A goal nothing goes into: paused or not being saved for yet. */
-export const isIdleGoal = (payload: ItemPayload | null | undefined) =>
-  !!payload && 'targetCents' in payload && !isSavingFor(payload);
+/** A goal or envelope nothing goes into: paused, not being saved for yet, or with nothing set to go in. */
+export const isIdleItem = (payload: ItemPayload | null | undefined) => {
+  if (!payload || !('funding' in payload)) return false;
+  if ('targetCents' in payload) return !isSavingFor(payload);
+  return payload.funding.cadence.kind === 'none';
+};
 
 /** A change to only a name, emoji, group, card or account: it moves no money on any income day. */
 export const isMoneylessChange = (before: ItemPayload, after: ItemPayload) => {
@@ -461,12 +506,15 @@ export function describeReplaced(
     effectiveUntil: number | null;
     before: ItemPayload;
     after: ItemPayload;
+    isReturn?: boolean;
   }[],
   cardNameOf: (cardId: string | null) => string,
 ) {
   const [first] = replaced;
   if (!first) return null;
   const more = replaced.length - 1;
+  if (first.isReturn)
+    return `This replaces going back to what it was on ${formatDateOrdinalUTC(first.effectiveFrom)}${more > 0 ? ` and ${more} more change${more === 1 ? '' : 's'}` : ''}.`;
   const result = `This replaces your change from ${formatDateOrdinalUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateOrdinalUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }
@@ -519,10 +567,15 @@ export const describeCostGivesBack = (
   amountCents: number,
   fromFreeCents: number,
   mark: CostPaidMark,
+  fromGoal: { name: string; cents: number } | null = null,
 ) => {
-  const fromItem = mark === 'outside' ? 0 : amountCents - fromFreeCents;
+  const goal = mark === 'outside' || fromGoal === null ? 0 : fromGoal.cents;
+  const fromItem = mark === 'outside' ? 0 : amountCents - fromFreeCents - goal;
   const free = mark === 'outside' ? 0 : fromFreeCents;
   const parts = [
+    goal > 0 &&
+      fromGoal !== null &&
+      COST_PAID_WORDS.givesBackGoal(fromGoal.name, formatCents(goal)),
     fromItem > 0 && COST_PAID_WORDS.givesBackItem(item, formatCents(fromItem)),
     free > 0 && COST_PAID_WORDS.givesBackFree(formatCents(free)),
     mark === 'purchase' && COST_PAID_WORDS.purchaseRemoved,
@@ -541,10 +594,11 @@ export const describeCostTakenBack = (
   amountCents: number,
   fromFreeCents: number,
   mark: CostPaidMark,
+  fromGoal: { name: string; cents: number } | null = null,
 ) =>
   COST_PAID_WORDS.undoText(
     cost,
     item,
     formatDateOrdinalUTC(dueOn),
-    describeCostGivesBack(item, amountCents, fromFreeCents, mark),
+    describeCostGivesBack(item, amountCents, fromFreeCents, mark, fromGoal),
   );

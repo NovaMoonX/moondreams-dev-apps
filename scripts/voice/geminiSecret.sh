@@ -12,10 +12,13 @@ need() {
 
 need curl "It ships with macOS and most Linux systems."
 need firebase "Install it with: npm install -g firebase-tools"
-firebase login:list 2>/dev/null | grep -q '@' || { echo "✗ The firebase CLI isn't signed in. Run: firebase login" >&2; exit 1; }
+source "$(dirname "$0")/../lib/firebaseLogin.sh"; require_firebase_login
+source "$(dirname "$0")/../lib/functionsSecret.sh"; exit_if_secret_saved GEMINI_API_KEY "$PROJECT"
 [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste the key." >&2; exit 1; }
 
-echo "1. Open $KEYS_PAGE and create a key."
+echo "1. Open $KEYS_PAGE and click \"Create API key\":"
+echo "     - Key name: moondreams-voice-benchmark"
+echo "     - Project: moondreams-dev-apps if it is listed (import it first if not)"
 echo "   Please pick a project that has billing turned on: on Google's free tier, what is sent may be used to improve its products."
 printf '2. Paste the key here (it stays hidden) and press Enter: '
 read -rs key || true

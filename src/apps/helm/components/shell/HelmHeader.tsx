@@ -33,7 +33,7 @@ function HelmHeader({
         variant='secondary'
         size='sm'
         rounded='full'
-        className="text-foreground! relative h-7! min-h-0! w-fit max-w-full shrink-0 gap-1 py-0! pr-3! pl-1.5! align-top before:absolute before:-inset-x-1.5 before:-inset-y-[7px] before:content-['']"
+        className="text-foreground! relative h-7! min-h-0! w-fit max-w-full min-w-0 shrink gap-1 py-0! pr-3! pl-1.5! align-top before:absolute before:-inset-x-1.5 before:-inset-y-[7px] before:content-['']"
         onClick={onBack}
       >
         <ChevronLeft className='h-4 w-4 shrink-0' aria-hidden='true' />

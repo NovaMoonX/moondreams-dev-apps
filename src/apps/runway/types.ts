@@ -49,6 +49,10 @@ export interface PlanSealedFields {
   holdsPrompt: HoldsPromptChoice | null;
   /** Epoch ms the person read why Free to Spend now comes from their account balances; null until then. A plan sealed before it existed lacks the key. */
   bankBackedSeenAt: number | null;
+  /** Goal id to the target date the Horizon nudge was dismissed at; a changed date asks again. Null until a nudge is dismissed; a plan sealed before it existed lacks the key. */
+  horizonNudgeDismissed: Record<string, number> | null;
+  /** Envelope ids pinned to Home's first tiles, in the person's order. Null until one is pinned; a plan sealed before it existed lacks the key. */
+  homePins: string[] | null;
 }
 
 export interface HoldsPromptChoice {
@@ -71,6 +75,13 @@ export interface TrackingPeriod {
   linkedFrom: DateOnly | null;
 }
 
+/** Whether bank charges wait in Needs a home. Readable on purpose (the push Function reads it) and holds no amount. */
+export interface SortingState {
+  isPaused: boolean;
+  /** Epoch ms: a charge created before it never waits. */
+  from: number;
+}
+
 export interface PlanDoc {
   uid: string;
   createdAt: number;
@@ -84,8 +95,32 @@ export interface PlanDoc {
   dirtyFrom: string | null;
   /** Null on a plan made before pushes existed. */
   notify: PlanNotify | null;
+  /** Null (or missing on an older plan) means every charge waits. */
+  sorting: SortingState | null;
   keyId: string | null;
   sealed: Sealed | null;
+  /** The sealed totals-and-names summary a connected app reads; null when Free to Spend is unknown, and absent on a plan made before it existed. */
+  shareSummary: Sealed | null;
+}
+
+/** What a plan shares through a connection: totals and names only, never an account, balance per account, card, income source, note, receipt, link or purchase. */
+export interface ShareSummary {
+  computedAt: number;
+  currency: string;
+  /** Signed: negative means over. */
+  freeToSpendCents: Cents;
+  /** 'YYYY-MM-DD' of the next income day; null when none is coming. */
+  nextIncomeOn: string | null;
+  /** Every bill due before that day at the Want dial, overdue ones included. */
+  dueBeforeIncomeCents: Cents;
+  /** Upcoming only: due today or later. */
+  bills: { name: string; amountCents: Cents; dueOn: string }[];
+  horizon: {
+    name: string;
+    targetCents: Cents;
+    setAsideCents: Cents;
+    targetOn: string | null;
+  }[];
 }
 
 export interface OpenPlan extends PlanSealedFields {
@@ -97,6 +132,7 @@ export interface OpenPlan extends PlanSealedFields {
   trackingPeriods: TrackingPeriod[];
   dirtyFrom: string | null;
   notify: PlanNotify | null;
+  sorting: SortingState | null;
   keyId: string | null;
 }
 
@@ -156,10 +192,13 @@ export type FundingAmount =
   | { kind: 'percent'; bps: number; of: 'dayMoney' | 'remaining' }
   | { kind: 'rest' };
 
+/** A pay-first amount: a funding amount, or basis points of the target bill's payment at its high end. */
+export type PairingAmount = FundingAmount | { kind: 'billShare'; bps: number };
+
 /** Sends part of one income day's money to a named bill, envelope or goal. */
 export interface Pairing {
   targetItemId: string;
-  amount: FundingAmount;
+  amount: PairingAmount;
   topUpFromAnySource: boolean;
 }
 
@@ -322,6 +361,14 @@ export interface FundingRule {
     | { kind: 'none' };
   /** The income source whose pay the rule counts; a rule written before it existed counts every source. */
   sourceId?: string | null;
+  /** The one pay it comes out of (a pay line, and for a monthly or twice-a-month line one day of the month); null or missing on a rule written before it means every pay its source allows. */
+  pay?: FundingPay | null;
+}
+
+/** A pay a funding rule comes out of: the shape a bill's "A pay I pick" uses. */
+export interface FundingPay {
+  payLineId: string;
+  monthDay: number | null;
 }
 
 /** Money an envelope or goal asks for at a lower priority than its own, on the same days as its amount. */
@@ -379,6 +426,12 @@ export interface BillSealed {
   accountId?: string | null;
   /** The bill is charged or pulled on its own: it never asks to be marked paid. Missing or null reads as false; offered from Track up. */
   paysItself?: boolean | null;
+  /** What was set aside for it when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
+  startingCents?: Cents | null;
+  /** The day of the month the person pays it, the last one on or before each due date; null (or missing) pays on the due date. */
+  payOnDay?: number | null;
+  /** The card whose annual fee this bill is: its name, amount, date, group and card follow the card and are changed only there. Missing or null on any other bill. */
+  cardFeeOf?: string | null;
 }
 
 /** A named collection of bills, envelopes and goals; its members carry its id, so archiving it rewrites none of them. */
@@ -433,7 +486,13 @@ export interface HorizonMoneyLeft {
   moveId: string | null;
 }
 
-/** One event's costs. */
+/** A planned change to an item that belongs to an event: the change's id (shared by every version it wrote) and the item it changed. */
+export interface HorizonLink {
+  changeId: string;
+  itemId: string;
+}
+
+/** One event's costs and the planned changes linked to it. */
 export interface HorizonSealed {
   name: string;
   emoji: string | null;
@@ -454,13 +513,19 @@ export interface HorizonSealed {
   stateOn: DateOnly | null;
   /** Where its money went when `state` changed; null while open or when it held none. */
   stateMoney: HorizonMoneyLeft | null;
+  /** The planned changes to other items that belong to this event, in the order they were linked; a version sealed before links existed has none. */
+  links: HorizonLink[];
+  /** The goal this event draws its costs from while it keeps saving; null for none, and for a version sealed before goals could be linked. */
+  goalId: string | null;
 }
 
 /** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside`, `ending`, `pricedOn` or `endsAfter` existed lacks them. */
 export type HorizonStored = Omit<
   HorizonSealed,
-  'rest' | 'costs' | 'state' | 'stateOn' | 'stateMoney'
+  'rest' | 'costs' | 'state' | 'stateOn' | 'stateMoney' | 'links' | 'goalId'
 > & {
+  links?: HorizonLink[];
+  goalId?: string | null;
   rest?: HorizonRest | null;
   state?: HorizonState;
   stateOn?: DateOnly | null;
@@ -549,6 +614,16 @@ export interface CardSealed {
   lastFour?: string | null;
   /** The account that pays this card; null (or missing) means the plan's one pull account when there is exactly one. */
   payFromAccountId?: string | null;
+  /** The card's annual fee and the bill that plans for it; missing or null when it has none. */
+  annualFee?: CardAnnualFee | null;
+}
+
+export interface CardAnnualFee {
+  cents: Cents;
+  /** The fee's first date in the plan, repeating yearly on that day. */
+  firstDueOn: DateOnly;
+  /** The bill that plans for it, which carries `cardFeeOf` naming this card. */
+  billId: string;
 }
 
 /** Where money is really held: a checking or savings account, a cash account, a brokerage. Archived when it is no longer used. */
@@ -609,8 +684,14 @@ export interface LinkDoc {
   status: LinkStatus;
   lastSyncAt: number | null;
   createdAt: number;
+  /** @deprecated Superseded by `cardDetails`; read only on a link not synced since, written null. */
+  needsCardConsent: boolean | null;
+  /** The bank's last answer about card details: shared, waiting for the person's agreement, or not offered for this sign-in; null until first asked, and missing on a link written before it was kept. */
+  cardDetails: CardDetailsAnswer | null;
   sealed: Sealed;
 }
+
+export type CardDetailsAnswer = 'shared' | 'needsConsent' | 'unsupported';
 
 export type ProviderAccountKind = 'depository' | 'credit' | 'other';
 
@@ -639,6 +720,8 @@ export interface OpenLink extends LinkSealed {
   status: LinkStatus;
   lastSyncAt: number | null;
   createdAt: number;
+  needsCardConsent: boolean;
+  cardDetails: CardDetailsAnswer | null;
 }
 
 /** What the bank last said an account or card holds; written by Functions. */
@@ -652,6 +735,37 @@ export interface OpenAccountBalance {
   id: string;
   asOf: number;
   cents: Cents;
+  /** A bank account's balance less pending holds; null when the bank does not send it, always null for a card. */
+  availableCents: Cents | null;
+  /** A card's credit limit; null for an account. */
+  limitCents: Cents | null;
+  /** True when the balance gets the five-minute check: the bank shares it instantly and this link's live reads are on; null when unknown. */
+  hasInstantBalance: boolean | null;
+}
+
+/** What the bank's latest statement says about a linked card, keyed by the card id; written by Functions. */
+export interface CardStatementDoc {
+  id: string;
+  /** When Runway last read it from the bank. */
+  asOf: number;
+  sealed: Sealed;
+}
+
+export interface CardStatementSealed {
+  /** The minimum the bank asks for by `dueOn`; null when the bank does not say. */
+  minimumCents: Cents | null;
+  /** What the card owed when the last statement was issued. */
+  statementCents: Cents | null;
+  statementOn: DateOnly | null;
+  /** The bank's next due date; null when no payment is expected. */
+  dueOn: DateOnly | null;
+  lastPaymentCents: Cents | null;
+  lastPaymentOn: DateOnly | null;
+}
+
+export interface OpenCardStatement extends CardStatementSealed {
+  id: string;
+  asOf: number;
 }
 
 /** An account as the bank describes it, before the person says which of theirs it is. */
@@ -711,6 +825,39 @@ export interface OpenRule extends RuleSealed {
   createdAt: number;
   updatedAt: number;
 }
+
+/** Something the person confirmed by hand that Runway uses to settle a later match, under `memories`. */
+export interface MemoryDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+/** A move the person paired by hand: money out of one account into another account or a card (exactly one of the two is set). */
+export interface RouteMemorySealed {
+  kind: 'route';
+  fromAccountId: string;
+  toAccountId: string | null;
+  toCardId: string | null;
+}
+
+/** A payer the person linked a deposit from to a pay line by hand. */
+export interface PayerMemorySealed {
+  kind: 'payer';
+  /** The merchant in the one comparable form (`toMerchantKey`). */
+  merchantKey: string;
+  merchantName: string;
+  payLineId: string;
+}
+
+export type MemorySealed = RouteMemorySealed | PayerMemorySealed;
+
+export type OpenMemory = MemorySealed & {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+};
 
 /** A receipt photo on a purchase, under `purchases/{purchaseId}/receiptImages`. The picture itself is sealed bytes in Storage; `bytes` is their size. */
 export interface ReceiptImageDoc {
@@ -786,6 +933,10 @@ export interface ChangeMove {
     fromFreeCents: Cents;
     mark: CostPaidMark;
     purchaseId: string | null;
+    /** What the event's linked goal paid, and which goal; missing on an entry written before goals could be linked. */
+    fromGoalCents?: Cents;
+    goalId?: string | null;
+    goalName?: string | null;
   } | null;
 }
 
@@ -896,6 +1047,10 @@ export interface CostPaidSealed {
   mark: CostPaidMark;
   /** The purchase that moved the money when `mark` is `purchase`; null otherwise. */
   purchaseId: string | null;
+  /** The part that came out of the event's linked goal, paid before the event's own money; zero or missing on a mark written before goals could be linked. */
+  fromGoalCents?: Cents;
+  /** The goal `fromGoalCents` came out of; null or missing when none did. */
+  goalId?: string | null;
 }
 
 /** A card paid off: `refId` is the card, `date` the day it was paid. */
@@ -1099,7 +1254,7 @@ export interface ClosingSealed {
   cardPaid: Record<string, [number, Cents, string][]>;
   /** `[day, fromId, toId, cents, moveId, isOutside]` for each transfer not undone; a null `toId` is Free to Spend. */
   transfers: [number, string | null, string | null, Cents, string, boolean][];
-  /** `[costId, dueDay, amountCents, paidDay, fromFreeCents, mark, purchaseId, moveId]` for each paid cost not undone, by item id; missing on a closing written before Horizon costs could be paid. */
+  /** `[costId, dueDay, amountCents, paidDay, fromFreeCents, mark, purchaseId, moveId, fromGoalCents, goalId]` for each paid cost not undone, by item id; missing on a closing written before Horizon costs could be paid. */
   costPaid?: Record<
     string,
     [
@@ -1111,6 +1266,8 @@ export interface ClosingSealed {
       CostPaidMark,
       string | null,
       string,
+      Cents?,
+      (string | null)?,
     ][]
   >;
   /** `[costId, day]` for each confirmed day that gave back a fronted payment, by item id; missing on a closing written before it. */

@@ -11,7 +11,7 @@ import type { SourceAdapter } from '../registry.js';
 import { GOOGLE_SECRETS, getGoogleAccessToken } from '../tokens.js';
 
 const PEOPLE_API = 'https://people.googleapis.com/v1';
-const PERSON_FIELDS = 'names,emailAddresses,phoneNumbers,photos';
+const PERSON_FIELDS = 'names,emailAddresses,phoneNumbers,photos,birthdays';
 const PAGE_SIZE = 1000;
 export const MAX_CONTACTS = 2000;
 export const MAX_BATCH = 50;
@@ -22,16 +22,19 @@ const MAX_ENTRIES = 5;
 const RESOURCE_PATTERN = /^people\/[A-Za-z0-9_-]{1,64}$/;
 const PHOTO_HOST_PATTERN = /^lh\d{1,2}\.googleusercontent\.com$/;
 
-/** What a contact is read as: only these four things, each cut to a sane length. */
+/** What a contact is read as: only these things, each cut to a sane length. */
 export interface Contact {
   resourceName: string;
   name: string;
   emails: string[];
   phones: string[];
   photoUrl: string | null;
+  /** Google's birthday; the year is null when it gives none. */
+  birthday: { month: number; day: number; year: number | null } | null;
 }
 
 interface Entry {
+  date?: Record<string, unknown>;
   value?: unknown;
   url?: unknown;
   displayName?: unknown;
@@ -45,6 +48,7 @@ interface Person {
   emailAddresses?: Entry[];
   phoneNumbers?: Entry[];
   photos?: Entry[];
+  birthdays?: Entry[];
 }
 
 export const isContactRef = (ref: string) => RESOURCE_PATTERN.test(ref);
@@ -92,6 +96,27 @@ const toPhotoUrl = (entries: Entry[] | undefined) => {
   return typeof url === 'string' ? url.replace(SIZED_PHOTO, '=s512') : null;
 };
 
+const toBirthday = (entries: Person['birthdays']): Contact['birthday'] => {
+  const found = primaryFirst(entries)
+    .map((entry) => entry.date)
+    .find(
+      (date) =>
+        Number.isInteger(date?.month) &&
+        Number.isInteger(date?.day) &&
+        Number(date?.month) >= 1 &&
+        Number(date?.month) <= 12 &&
+        Number(date?.day) >= 1 &&
+        Number(date?.day) <= 31,
+    );
+  if (!found) return null;
+  const year = Number(found.year);
+  return {
+    month: Number(found.month),
+    day: Number(found.day),
+    year: Number.isInteger(year) && year >= 1900 ? year : null,
+  };
+};
+
 /** A contact without a name is left out: a nameless card has nothing to bring in. */
 export const toContact = (person: Person): Contact | null => {
   const { resourceName } = person;
@@ -111,6 +136,7 @@ export const toContact = (person: Person): Contact | null => {
     emails: texts(person.emailAddresses, 'value', MAX_EMAIL),
     phones: texts(person.phoneNumbers, 'value', MAX_PHONE),
     photoUrl: toPhotoUrl(person.photos),
+    birthday: toBirthday(person.birthdays),
   };
 };
 

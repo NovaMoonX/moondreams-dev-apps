@@ -38,7 +38,7 @@ function ChoiceButton({
       )}
       onClick={onClick}
     >
-      <span className='flex min-w-0 flex-col items-start'>
+      <span className='flex min-w-0 flex-1 flex-col items-start'>
         <span className='text-[15px] leading-[21px] break-words'>{label}</span>
         {detail && (
           <span className='text-muted-foreground text-[13px] break-words'>
