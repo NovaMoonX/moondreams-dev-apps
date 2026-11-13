@@ -1094,7 +1094,7 @@ function HorizonSheet({
             </p>
           )}
           <div className='text-muted-foreground space-y-0.5 text-sm'>
-            <p>
+            <p className='text-balance'>
               <MaskedText>{fact}</MaskedText>
             </p>
             {outsideLine && (

@@ -56,7 +56,8 @@ function CoversLine({
       return rest?.title ?? HORIZON_WORDS.restHelpTitle;
     return rest ? words.helpBothTitle : words.helpTitle;
   };
-  const line = [text, rest?.short ? `${rest.short}.` : null]
+  const lead = rest?.short && text === words.nothingSet ? null : text;
+  const line = [lead, rest?.short ? `${rest.short}.` : null]
     .filter(Boolean)
     .join(' ');
   if (line === '') return null;
