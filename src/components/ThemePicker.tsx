@@ -81,7 +81,7 @@ function Preview({ swatch, caption }: PreviewProps) {
           />
         </span>
       </span>
-      <span className='text-muted-foreground text-center text-[11px] leading-3'>
+      <span className='text-muted-foreground text-center text-xs leading-4'>
         {caption}
       </span>
     </span>
@@ -116,7 +116,7 @@ function ThemePicker<T extends string>({
     <div
       role='radiogroup'
       aria-label={label}
-      className='grid grid-cols-2 gap-2 sm:grid-cols-4'
+      className='grid grid-cols-2 gap-2 lg:grid-cols-4'
       onKeyDown={handleKeyDown}
     >
       {options.map((option, index) => {

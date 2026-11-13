@@ -108,7 +108,7 @@ html.helm-theme[data-helm-theme='plum'] {
   --color-accent-foreground: #4a2f55;
   --color-tooltip: #2a2130;
   --color-tooltip-foreground: #ffffff;
-  --helm-verdigris: #33695f;
+  --helm-verdigris: #4a6a55;
   --helm-overdue: #9a4b0b;
   --subview-backdrop: #e0d9e3;
 }
@@ -131,7 +131,7 @@ html.helm-theme[data-helm-theme='indigo'] {
   --color-accent-foreground: #2e3275;
   --color-tooltip: #1b1e33;
   --color-tooltip-foreground: #ffffff;
-  --helm-verdigris: #33695f;
+  --helm-verdigris: #456b4e;
   --helm-overdue: #9a4b0b;
   --subview-backdrop: #dcdde9;
 }
@@ -177,7 +177,7 @@ html.helm-theme.dark[data-helm-theme='plum'] {
   --color-accent-foreground: #e6d6ee;
   --color-tooltip: #efe9f2;
   --color-tooltip-foreground: #151018;
-  --helm-verdigris: #71b5ab;
+  --helm-verdigris: #9fc4ab;
   --helm-overdue: #f2b26b;
   --subview-backdrop-dark: #0a070c;
 }
@@ -200,7 +200,7 @@ html.helm-theme.dark[data-helm-theme='indigo'] {
   --color-accent-foreground: #d0d3fa;
   --color-tooltip: #e8e9f5;
   --color-tooltip-foreground: #0e0f1a;
-  --helm-verdigris: #71b5ab;
+  --helm-verdigris: #9cc3a2;
   --helm-overdue: #f2b26b;
   --subview-backdrop-dark: #07080f;
 }
