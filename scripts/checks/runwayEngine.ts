@@ -34,7 +34,11 @@ import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
 import {
   findAccountPairs,
   findLostPairs,
+  findRefundOriginal,
+  isRefundCandidate,
+  isSameStore,
   isBankMove,
+  isRefundLike,
   findDepositDays,
   findPendingMoveHolds,
   findPurchaseMatches,
@@ -64,6 +68,7 @@ import {
   getAccountHoldings,
   getPullAccounts,
   keepPullAccountId,
+  getPendingCents,
   hasBankBalance,
   resolvePayFromAccountId,
   withBankBalances,
@@ -75,7 +80,10 @@ import {
   isBroadMerchant,
   RULE_VARIES,
 } from '../../src/apps/runway/engine/rules.ts';
-import type { OpenRule } from '../../src/apps/runway/types.ts';
+import type {
+  OpenCardStatement,
+  OpenRule,
+} from '../../src/apps/runway/types.ts';
 import {
   estimateMonthlyInterest,
   getInterestDay,
@@ -88,7 +96,9 @@ import { getAccountMoves } from '../../src/apps/runway/engine/moves.ts';
 import {
   collectCardHistory,
   getCardDueState,
+  getBankDueDay,
   getDueCards,
+  getMinimumDue,
   getNextDueOn,
   getPrevDueOn,
   getUsualCardId,
@@ -10434,6 +10444,60 @@ const version = (
     'due within 7 days with money waiting, soonest first; 8 days out, no due day and nothing waiting are left out',
   );
 
+  // The bank's statement decides the minimum and the due day.
+  const statement = (
+    patch: Partial<OpenCardStatement> = {},
+  ): OpenCardStatement => ({
+    id: 'v',
+    asOf: 1,
+    minimumCents: 3_500,
+    statementCents: 41_200,
+    statementOn: d(2026, 10, 24),
+    dueOn: d(2026, 11, 14),
+    lastPaymentCents: null,
+    lastPaymentOn: null,
+    ...patch,
+  });
+  const NOV_14 = d(2026, 11, 14);
+  assert.equal(getMinimumDue(statement(), NOV_14), 3_500);
+  assert.equal(getMinimumDue(null, NOV_14), null, 'no statement, no minimum');
+  assert.equal(getMinimumDue(statement({ minimumCents: null }), NOV_14), null);
+  assert.equal(getMinimumDue(statement({ minimumCents: 0 }), NOV_14), null);
+  assert.equal(getMinimumDue(statement({ dueOn: null }), NOV_14), null);
+  assert.equal(
+    getMinimumDue(
+      statement({ lastPaymentCents: 3_500, lastPaymentOn: d(2026, 10, 24) }),
+      NOV_14,
+    ),
+    null,
+    'a payment of the minimum on the statement day is already paid',
+  );
+  assert.equal(
+    getMinimumDue(
+      statement({ lastPaymentCents: 3_499, lastPaymentOn: d(2026, 11, 1) }),
+      NOV_14,
+    ),
+    3_500,
+    'a payment under the minimum leaves it due',
+  );
+  assert.equal(
+    getMinimumDue(
+      statement({ lastPaymentCents: 90_000, lastPaymentOn: d(2026, 10, 23) }),
+      NOV_14,
+    ),
+    3_500,
+    'a payment before the statement was issued is for the one before',
+  );
+  assert.equal(
+    getMinimumDue(statement(), d(2026, 12, 14)),
+    null,
+    'a statement for last due day says nothing about the next one',
+  );
+  assert.equal(getMinimumDue(statement(), null), null, 'no due day shown');
+  assert.equal(getBankDueDay(statement()), 14);
+  assert.equal(getBankDueDay(statement({ dueOn: null })), null);
+  assert.equal(getBankDueDay(null), null);
+
   // Past due sticks until a full or minimum payment, or until the next due day is within 7 days.
   const venture = card('v', 14);
   const state = (
@@ -11301,6 +11365,121 @@ const version = (
     false,
     'a cash withdrawal still counts as spending',
   );
+
+  const checkRefunds = () => {
+    const kohls = (
+      id: string,
+      cents: number,
+      dayOffset: number,
+      extra: Partial<OpenPurchase> = {},
+    ) =>
+      side(id, cents, dayOffset, { merchant: "Kohl's", ...onCard, ...extra });
+    const clothes = {
+      envelopeId: 'clothes',
+      cents: 6_000,
+      via: 'chosen' as const,
+    };
+    const cardRefund = kohls('back', -4_894, 9);
+    assert.equal(
+      isRefundLike(cardRefund),
+      true,
+      'a credit on a card the bank does not call a payment is a refund',
+    );
+    assert.equal(
+      isRefundLike(cardPay),
+      false,
+      'a card payment is never a refund',
+    );
+    assert.equal(
+      isRefundLike(side('pay', -200_000, 0)),
+      false,
+      'a bank deposit with no purchase is not a refund',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [cardRefund, kohls('buy', 6_000, 0)]),
+      null,
+      'a refund of a Free to Spend purchase asks nothing',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        cardRefund,
+        kohls('buy', 6_000, 0, { needsHome: false, lines: [clothes] }),
+      ])?.id,
+      'buy',
+      'a refund of a purchase that went to an envelope finds it',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        cardRefund,
+        kohls('buy', 6_000, 0, { lines: [clothes] }),
+        kohls('was', -2_000, 2, { refundOfId: 'buy' }),
+      ]),
+      null,
+      'a purchase already refunded below the amount is not it',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        cardRefund,
+        kohls('buy', 6_000, 0, { lines: [clothes], merchant: 'Target' }),
+        kohls('late', 6_000, 10, { lines: [clothes] }),
+        kohls('old', 6_000, -200, { lines: [clothes] }),
+      ]),
+      null,
+      'another merchant, a later purchase or one past the lookback is not it',
+    );
+    assert.equal(
+      findRefundOriginal(
+        kohls('back', -4_894, 9, { merchant: 'KOHLS #1234' }),
+        [kohls('buy', 6_000, 0, { lines: [clothes] })],
+      )?.id,
+      'buy',
+      'a store number or an apostrophe does not hide the same store',
+    );
+    assert.equal(
+      isSameStore('TARGET T-0456', 'Target'),
+      true,
+      'a bank suffix is the same store',
+    );
+    assert.equal(
+      isSameStore('Applebees', 'Apple') ||
+        isSameStore('Venmo cash out', 'Venmo'),
+      false,
+      'a longer word names another merchant',
+    );
+    assert.equal(
+      findRefundOriginal(
+        kohls('back', -4_894, 9, { category: 'TRANSFER_IN_ACCOUNT_TRANSFER' }),
+        [kohls('buy', 6_000, 0, { lines: [clothes] })],
+      ),
+      null,
+      'money the bank calls a move in is never asked as a refund',
+    );
+    assert.equal(
+      findRefundOriginal(cardRefund, [
+        kohls('buy', 6_000, 0, { lines: [clothes], status: 'pending' }),
+      ]),
+      null,
+      'a pending charge is never the one-tap original',
+    );
+    assert.equal(
+      isSameStore('Ta', 'Target'),
+      false,
+      'two letters name no store',
+    );
+    assert.equal(
+      isRefundCandidate(kohls('pend', 6_000, 0, { status: 'pending' })),
+      false,
+      'a pending charge is never what a refund returns',
+    );
+    assert.equal(
+      isRefundCandidate(
+        side('move', 25_000, 0, { category: 'TRANSFER_OUT_ACCOUNT_TRANSFER' }),
+      ),
+      false,
+      'a move between accounts is never what a refund returns',
+    );
+  };
+  checkRefunds();
 
   const transfer = findAccountPairs([
     side('out', 25_000, 0),
@@ -18599,8 +18778,22 @@ console.log('runway engine: ok');
     const unlinked = account('typed', { balanceCents: 500 });
     const waiting = account('waiting', { linkId: 'l1', balanceCents: 300 });
     const banks = [
-      { id: 'linked', asOf, cents: 9_999 },
-      { id: 'typed', asOf, cents: 1 },
+      {
+        id: 'linked',
+        asOf,
+        cents: 9_999,
+        availableCents: 9_000,
+        limitCents: null,
+        hasInstantBalance: true,
+      },
+      {
+        id: 'typed',
+        asOf,
+        cents: 1,
+        availableCents: null,
+        limitCents: null,
+        hasInstantBalance: null,
+      },
     ];
     const [fromBank, keptTyped, notSentYet] = withBankBalances(
       [linked, unlinked, waiting],
@@ -18629,6 +18822,27 @@ console.log('runway engine: ok');
     assert.equal(hasBankBalance(linked, banks), true);
     assert.equal(hasBankBalance(unlinked, banks), false);
     assert.equal(hasBankBalance(waiting, banks), false);
+    assert.equal(
+      fromBank.balanceCents,
+      9_999,
+      'the posted balance stands, not the available one',
+    );
+    assert.equal(
+      getPendingCents(banks[0]),
+      999,
+      'pending is posted less available',
+    );
+    assert.equal(
+      getPendingCents(banks[1]),
+      0,
+      'no available figure is no pending',
+    );
+    assert.equal(getPendingCents(undefined), null, 'no bank figure is unknown');
+    assert.equal(
+      getPendingCents({ cents: 100, availableCents: 150 }),
+      0,
+      'available above posted (money in on hold) is never negative pending',
+    );
   }
   assert.deepEqual(
     getPullAccounts([a, b, oldPull]).map((entry) => entry.id),

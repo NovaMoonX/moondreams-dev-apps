@@ -65,6 +65,8 @@ import {
 } from '../../src/apps/runway/engine/cardFees.ts';
 import type {
   AccountBalanceDoc,
+  CardStatementDoc,
+  CardStatementSealed,
   AccountDoc,
   AccountSealed,
   LinkDoc,
@@ -1592,6 +1594,8 @@ async function writeSeedCards(
     status: 'active',
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
+    needsCardConsent: null,
+    cardDetails: 'shared',
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
@@ -1637,8 +1641,35 @@ async function writeSeedCards(
     {
       id: SEED_VENTURE_CARD,
       asOf: context.now - 2 * 60_000,
-      sealed: await sealJson({ cents: 0 }, encryption),
+      sealed: await sealJson(
+        {
+          cents: 0,
+          availableCents: null,
+          limitCents: 1_000_000,
+          hasInstantBalance: false,
+        },
+        encryption,
+      ),
     } satisfies AccountBalanceDoc,
+  );
+  const statementOn = today - 20 * DAY_MS;
+  batch.set(
+    context.firestore.doc(`${plan}/cardStatements/${SEED_VENTURE_CARD}`),
+    {
+      id: SEED_VENTURE_CARD,
+      asOf: context.now - 2 * 60_000,
+      sealed: await sealJson(
+        {
+          minimumCents: 3_500,
+          statementCents: 41_200,
+          statementOn,
+          dueOn: today + 9 * DAY_MS,
+          lastPaymentCents: 30_000,
+          lastPaymentOn: statementOn - 10 * DAY_MS,
+        } satisfies CardStatementSealed,
+        encryption,
+      ),
+    } satisfies CardStatementDoc,
   );
   const discoverStartId = `start_${SEED_DISCOVER_CARD}_${createdAt + 120_000}`;
   batch.set(context.firestore.doc(`${plan}/moves/${discoverStartId}`), {
@@ -1711,7 +1742,7 @@ async function writeSeedCards(
       encryption,
     ),
   } satisfies MoveDoc);
-  return cards.length + 5 + 2;
+  return cards.length + 5 + 3;
 }
 
 const SEED_WEALTHFRONT_GOALS = [
@@ -1800,7 +1831,15 @@ async function writeSeedAccounts(
     {
       id: 'seed-account-checking-a',
       asOf: context.now - 2 * 60_000,
-      sealed: await sealJson({ cents: 221_450 }, encryption),
+      sealed: await sealJson(
+        {
+          cents: 221_450,
+          availableCents: 21_450,
+          limitCents: null,
+          hasInstantBalance: true,
+        },
+        encryption,
+      ),
     } satisfies AccountBalanceDoc,
   );
   batch.set(context.firestore.doc(`${plan}/links/${SEED_WEALTHFRONT_LINK}`), {
@@ -1808,6 +1847,8 @@ async function writeSeedAccounts(
     status: 'active',
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
+    needsCardConsent: null,
+    cardDetails: null,
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
@@ -1832,8 +1873,16 @@ async function writeSeedAccounts(
     context.firestore.doc(`${plan}/accountBalances/seed-account-wealthfront`),
     {
       id: 'seed-account-wealthfront',
-      asOf: context.now - 2 * 60_000,
-      sealed: await sealJson({ cents: 82_400 }, encryption),
+      asOf: context.now - 3 * 60 * 60_000,
+      sealed: await sealJson(
+        {
+          cents: 82_400,
+          availableCents: 82_400,
+          limitCents: null,
+          hasInstantBalance: true,
+        },
+        encryption,
+      ),
     } satisfies AccountBalanceDoc,
   );
   return accounts.length + 3;
@@ -3899,6 +3948,8 @@ async function seedUnlinkedPlan(
   batch.set(context.firestore.doc(`${plan}/links/${linkId}`), {
     id: linkId,
     status: 'revoked',
+    needsCardConsent: null,
+    cardDetails: null,
     lastSyncAt: unlinkedAt,
     createdAt: linkedAt,
     sealed: await sealJson(
@@ -4015,7 +4066,7 @@ async function seedUnlinkedPlan(
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
 /**
- * Jamie's spending (twelve rows, one group, an overspent dinner, a split and its refund) plus what waits in Needs a home from the bank link: a pending coffee, debits, deposits, two account moves and an unclear pair. One purchase a rule already placed.
+ * Jamie's spending (twelve rows, one group, an overspent dinner, a split and its refund) plus what waits in Needs a home from the bank link: a pending coffee, debits, deposits, a card refund, two account moves and an unclear pair. One purchase a rule already placed.
  * The Sweetgreen lunch fits the restaurants rule and waits only because its merge offer (the typed one lacks the tip) is unanswered.
  */
 async function writeSeedPurchases(
@@ -4153,6 +4204,14 @@ async function writeSeedPurchases(
       ],
     },
     {
+      id: 'seed-purchase-target',
+      daysAgo: 6,
+      merchant: 'Target',
+      note: null,
+      lines: [line('seed-envelope-everyday', 4_500)],
+      paidByCardId: SEED_VENTURE_CARD,
+    },
+    {
       id: 'seed-purchase-market',
       daysAgo: 24,
       merchant: 'Farmers market',
@@ -4222,7 +4281,7 @@ async function writeSeedPurchases(
       amountCents: 675,
       status: 'pending',
       accountId: null,
-      cardId: SEED_VENTURE_CARD,
+      cardId: SEED_CHASE_CARD,
       category: 'FOOD_AND_DRINK_COFFEE',
     },
     {
@@ -4262,6 +4321,24 @@ async function writeSeedPurchases(
       accountId: null,
       cardId: SEED_DISCOVER_CARD,
       category: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES',
+    },
+    {
+      id: 'seed-link-card-refund',
+      daysAgo: 1,
+      merchant: "Kohl's",
+      amountCents: -4_894,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+    },
+    {
+      id: 'seed-link-card-refund-target',
+      daysAgo: 1,
+      merchant: 'Target',
+      amountCents: -2_000,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
     },
     {
       id: 'seed-link-deposit-refund',

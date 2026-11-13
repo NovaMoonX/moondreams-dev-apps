@@ -37,17 +37,14 @@ const BATCH_SIZE = 20;
 const isSealed = (value: unknown): value is SealedPayload =>
   typeof value === 'object' && value !== null && 'value' in value;
 
-/** A purchase's amount and whether it is on a card; 0 cents when it can't be opened, so a bad document counts as waiting instead of sinking the plan's digest. */
+/** A purchase's amount; 0 cents when it can't be opened, so a bad document counts as waiting instead of sinking the plan's digest. */
 const readPurchase = (key: Buffer, payload: unknown) => {
-  if (!isSealed(payload)) return { amountCents: 0, isOnCard: false };
+  if (!isSealed(payload)) return { amountCents: 0 };
   try {
-    const { amountCents, paidByCardId } = openWithKey(key, payload);
-    return {
-      amountCents: typeof amountCents === 'number' ? amountCents : 0,
-      isOnCard: typeof paidByCardId === 'string' && paidByCardId !== '',
-    };
+    const { amountCents } = openWithKey(key, payload);
+    return { amountCents: typeof amountCents === 'number' ? amountCents : 0 };
   } catch {
-    return { amountCents: 0, isOnCard: false };
+    return { amountCents: 0 };
   }
 };
 

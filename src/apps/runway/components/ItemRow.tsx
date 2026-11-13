@@ -7,7 +7,8 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import SensitiveValue from '@/components/SensitiveValue';
@@ -18,7 +19,6 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import {
   PRIORITIES_WORDS,
   PRIORITY_DIAL_WORDS,
-  TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 
 /** A row in the priorities list while it is being reordered: tapped to lift, nudged up or down, or fixed in place. */
@@ -54,6 +54,8 @@ interface ItemRowProps {
   isDetailWarning?: boolean;
   /** With `isDetailWarning`, the detail's words read in warning ink too, not only its icon. */
   isDetailInked?: boolean;
+  /** A small dot before the detail: the bank updated this figure a moment ago. */
+  isDetailFresh?: boolean;
   figure?: string | null;
   /** A figure is masked while amounts are hidden; a row that shows what the person is typing turns it off. */
   isPrivate?: boolean;
@@ -97,6 +99,7 @@ function ItemRow({
   isDetailStrong = false,
   isDetailWarning = false,
   isDetailInked = false,
+  isDetailFresh = false,
   warningLine,
   figure,
   isPrivate = true,
@@ -170,6 +173,12 @@ function ItemRow({
             />
           )}
           <span className='line-clamp-2 text-pretty max-[359px]:line-clamp-3'>
+            {isDetailFresh && (
+              <span
+                className='bg-success mr-1.5 inline-block size-1.5 rounded-full align-middle'
+                aria-hidden='true'
+              />
+            )}
             {detailLead && (
               <>
                 <span
@@ -333,8 +342,7 @@ function ItemRow({
       <li data-item-id={itemId} className='flex items-start'>
         <span className='flex h-16 shrink-0 items-center pl-3'>
           {tick ? (
-            <Checkbox
-              className={TICK_HIT_CLASS}
+            <AppCheckbox
               checked={tick.checked}
               onCheckedChange={(next) => tick.onChange(Boolean(next))}
               aria-label={tick.label ?? `${name} done`}

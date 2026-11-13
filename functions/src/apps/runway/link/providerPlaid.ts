@@ -1,7 +1,9 @@
+import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
 
 import {
   normalizeAccount,
+  normalizeCardStatement,
   normalizeTransaction,
   toBankName,
   toHttpsUrl,
@@ -11,6 +13,7 @@ import {
   asProviderCode,
   ProviderError,
   type BankDataProvider,
+  type CardStatementRead,
   type NormalizedTransaction,
   type ProviderGrant,
   type TransactionDetails,
@@ -120,7 +123,11 @@ function toProviderError(code: string): ProviderError {
   );
 }
 
-export async function call<T>(path: string, body: Record<string, unknown>) {
+export async function call<T>(
+  path: string,
+  body: Record<string, unknown>,
+  timeoutMs: number | null = null,
+) {
   const clientId = readSecret(PLAID_CLIENT_ID);
   const secret = readSecret(PLAID_SECRET);
   if (!clientId || !secret) {
@@ -130,6 +137,7 @@ export async function call<T>(path: string, body: Record<string, unknown>) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ client_id: clientId, secret, ...body }),
+    ...(timeoutMs === null ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
   }).catch(() => {
     throw new ProviderError(
       'unavailable',
@@ -147,12 +155,30 @@ interface PlaidAccount {
   mask: string | null;
   type: string;
   subtype: string | null;
-  balances: { current: number | null; last_updated_datetime?: string | null };
+  balances: {
+    current: number | null;
+    available?: number | null;
+    limit?: number | null;
+    last_updated_datetime?: string | null;
+  };
 }
+
+const CAPITAL_ONE = 'ins_128026';
+const APPLE_CARD = 'ins_136439';
+/** A live read can take 30 seconds at some banks; past this the saved balance stands in, so one slow bank never holds up the rest. */
+const LIVE_READ_TIMEOUT_MS = 20_000;
+/** How old a saved balance a live read may fall back to where the bank shares no live one. */
+const SAVED_BALANCE_MAX_AGE_MS = 30 * 86_400_000;
+
+/** Plaid documents these as sharing only a saved balance: Capital One for everything but checking and savings, Apple Card for all. */
+const hasInstantBalance = (institutionId: string | null, type: string) =>
+  institutionId !== APPLE_CARD &&
+  !(institutionId === CAPITAL_ONE && type !== 'depository');
 
 const toRaw = (
   account: PlaidAccount,
   refreshedAt: string | null,
+  institutionId: string | null,
 ): RawAccount => ({
   id: account.account_id,
   name: account.name,
@@ -160,6 +186,9 @@ const toRaw = (
   subtype: account.subtype,
   mask: account.mask,
   currentBalance: account.balances.current,
+  availableBalance: account.balances.available ?? null,
+  limit: account.balances.limit ?? null,
+  hasInstantBalance: hasInstantBalance(institutionId, account.type),
   balanceUpdatedAt: account.balances.last_updated_datetime ?? refreshedAt,
 });
 
@@ -209,27 +238,68 @@ const toLogoUrl = (logo: string | null | undefined) =>
     ? `data:image/png;base64,${logo}`
     : null;
 
+interface PlaidCreditLiability {
+  account_id: string;
+  minimum_payment_amount?: number | null;
+  last_statement_balance?: number | null;
+  last_statement_issue_date?: string | null;
+  next_payment_due_date?: string | null;
+  last_payment_amount?: number | null;
+  last_payment_date?: string | null;
+}
+
+const NEEDS_CONSENT_CODES = new Set([
+  'ADDITIONAL_CONSENT_REQUIRED',
+  'ACCESS_NOT_GRANTED',
+]);
+const UNSUPPORTED_CODES = new Set([
+  'PRODUCTS_NOT_SUPPORTED',
+  'PRODUCT_NOT_ENABLED',
+  'NO_LIABILITY_ACCOUNTS',
+  'INVALID_PRODUCT',
+]);
+
+const createLinkToken = (body: Record<string, unknown>) =>
+  call<{ link_token: string }>('/link/token/create', body);
+
 export const plaidProvider: BankDataProvider = {
   async createLinkSession(uid, update) {
-    const { link_token } = await call<{ link_token: string }>(
-      '/link/token/create',
-      {
-        user: { client_user_id: uid },
-        client_name: 'Runway',
-        country_codes: ['US'],
-        language: 'en',
-        ...(update
-          ? {
-              access_token: update.accessToken,
-              update: { account_selection_enabled: update.accountSelection },
-            }
-          : {
-              products: ['transactions'],
-              transactions: { days_requested: LINK_DAYS_REQUESTED },
-            }),
-        ...(isEmulator() ? {} : { webhook: webhookUrl() }),
-      },
-    );
+    const base = {
+      user: { client_user_id: uid },
+      client_name: 'Runway',
+      country_codes: ['US'],
+      language: 'en',
+      ...(isEmulator() ? {} : { webhook: webhookUrl() }),
+    };
+    if (update) {
+      const { link_token } = await createLinkToken({
+        ...base,
+        access_token: update.accessToken,
+        update: { account_selection_enabled: update.accountSelection },
+        ...(update.askCardConsent
+          ? { additional_consented_products: ['liabilities'] }
+          : {}),
+      });
+      return { linkToken: link_token };
+    }
+    const fresh = {
+      ...base,
+      products: ['transactions'],
+      transactions: { days_requested: LINK_DAYS_REQUESTED },
+    };
+    const { link_token } = await createLinkToken({
+      ...fresh,
+      additional_consented_products: ['liabilities'],
+    }).catch((error: unknown) => {
+      if (
+        !(error instanceof ProviderError) ||
+        error.code !== 'INVALID_PRODUCT'
+      ) {
+        throw error;
+      }
+      logger.warn('runway.link.cardDetailsUnavailable');
+      return createLinkToken(fresh);
+    });
     return { linkToken: link_token };
   },
 
@@ -265,21 +335,91 @@ export const plaidProvider: BankDataProvider = {
     return result;
   },
 
-  async listAccounts(grant) {
-    // A live balance read makes the bank sign in again on every call, and banks that ask for a code each time then fail it and lock the link until the person reconnects; Plaid's own refreshes keep these balances current, so one without its own time is dated by the Item's last refresh.
+  async listAccounts(grant, options) {
+    const isLive = options?.isLive === true;
+    const readAt = new Date().toISOString();
+    const item = await call<{
+      item?: { institution_id?: string | null };
+      status?: { transactions?: { last_successful_update?: string | null } };
+    }>('/item/get', { access_token: grant.credential }).catch(() => null);
+    const institutionId = item?.item?.institution_id ?? null;
+    const savedAt = item?.status?.transactions?.last_successful_update ?? null;
+    // A saved read is Plaid's copy from its last refresh of the Item; a live one signs in to the bank now, so it is asked only when the person is looking.
     const { accounts } = await call<{ accounts: PlaidAccount[] }>(
-      '/accounts/get',
-      { access_token: grant.credential },
+      isLive ? '/accounts/balance/get' : '/accounts/get',
+      {
+        access_token: grant.credential,
+        ...(isLive
+          ? {
+              options: {
+                min_last_updated_datetime: new Date(
+                  Date.now() - SAVED_BALANCE_MAX_AGE_MS,
+                )
+                  .toISOString()
+                  .replace(/\.\d{3}Z$/, 'Z'),
+              },
+            }
+          : {}),
+      },
+      isLive ? LIVE_READ_TIMEOUT_MS : null,
     );
     if (accounts.length === 0) throw toProviderError('NO_ACCOUNTS');
-    const refreshedAt = await call<{
-      status?: { transactions?: { last_successful_update?: string | null } };
-    }>('/item/get', { access_token: grant.credential })
-      .then((item) => item.status?.transactions?.last_successful_update ?? null)
-      .catch(() => null);
-    return accounts.map((account) =>
-      normalizeAccount(toRaw(account, refreshedAt)),
+    return accounts.map((account) => {
+      // Without the institution, a saved balance can't be told from a live one, so none is called live.
+      const raw = {
+        ...toRaw(account, savedAt, institutionId),
+        ...(institutionId === null ? { hasInstantBalance: false } : {}),
+      };
+      return normalizeAccount(
+        isLive && raw.hasInstantBalance
+          ? { ...raw, balanceUpdatedAt: readAt }
+          : raw,
+      );
+    });
+  },
+
+  async listCardStatements(grant) {
+    const read = await call<{
+      liabilities?: { credit?: PlaidCreditLiability[] | null };
+    }>('/liabilities/get', { access_token: grant.credential }).then(
+      (response) => response,
+      (error: unknown) => {
+        if (!(error instanceof ProviderError) || error.code === null) {
+          throw error;
+        }
+        const answer: CardStatementRead | null = NEEDS_CONSENT_CODES.has(
+          error.code,
+        )
+          ? { kind: 'needsConsent' }
+          : UNSUPPORTED_CODES.has(error.code)
+            ? { kind: 'unsupported' }
+            : error.code === 'PRODUCT_NOT_READY'
+              ? { kind: 'notReady' }
+              : null;
+        if (answer === null) throw error;
+        return answer;
+      },
     );
+    if ('kind' in read) return read;
+    const answer: CardStatementRead = {
+      kind: 'ok',
+      statements: (read.liabilities?.credit ?? []).map((entry) =>
+        normalizeCardStatement({
+          accountId: entry.account_id,
+          minimumPayment: entry.minimum_payment_amount ?? null,
+          lastStatementBalance: entry.last_statement_balance ?? null,
+          lastStatementIssueDate: entry.last_statement_issue_date ?? null,
+          nextPaymentDueDate: entry.next_payment_due_date ?? null,
+          lastPaymentAmount: entry.last_payment_amount ?? null,
+          lastPaymentDate: entry.last_payment_date ?? null,
+        }),
+      ),
+    };
+    return answer;
+  },
+
+  async refreshTransactions(grant) {
+    await call('/transactions/refresh', { access_token: grant.credential });
   },
 
   async revoke(grant) {

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowLeftRight, CalendarPlus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ArrowLeftRight, CalendarPlus, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -18,9 +18,11 @@ import {
   PAIR_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { findRefundOriginal, isRefundLike } from '@apps/runway/engine/matching';
 import IncomeForm from '@apps/runway/forms/IncomeForm';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import {
+  selectItemLooks,
   selectListedDays,
   selectLostDeposits,
   selectLostPairs,
@@ -28,17 +30,27 @@ import {
   selectOnItsWay,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
+import {
+  describeEnvelopes,
+  getPurchaseTitle,
+} from '@apps/runway/utils/purchaseText';
 
 interface MoneyInSheetProps {
   purchase: OpenPurchase;
   onClose: () => void;
 }
 
-/** One deposit or refund from the bank: what Runway can still ask about it (a card payment, a refund, a move, a pay day), or that it is already in Free to Spend, with a way to plan it as a one-time pay. */
+/** One deposit or refund from the bank: what Runway can still ask about it (a card payment, a refund of a purchase that went to an envelope, a move, a pay day), or that it is already in Free to Spend, with a way to plan it as a one-time pay or put a refund back in an envelope. */
 function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
   const today = todayAsUtcDate();
   const cards = useAppSelector((state) => state.runway.cards);
   const accounts = useAppSelector((state) => state.runway.accounts);
+  const looks = useAppSelector(selectItemLooks);
+  const purchases = useAppSelector((state) => state.runway.purchases);
+  const refundOriginal = useMemo(
+    () => findRefundOriginal(purchase, purchases),
+    [purchase, purchases],
+  );
   const isAsked = useAppSelector((state) =>
     selectMoneyInAsks(state, today).has(purchase.id),
   );
@@ -60,13 +72,18 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
       ) ?? null
     );
   });
-  const [form, setForm] = useState<'refund' | 'pay' | null>(null);
+  const [form, setForm] = useState<'refund' | 'refundOf' | 'pay' | null>(null);
+  const isWaiting = purchase.needsHome || isLostDeposit || isLostPair;
 
-  if (form === 'refund') {
+  if (form === 'refund' || form === 'refundOf') {
     return (
       <PurchaseForm
         isOpen
         editing={purchase}
+        presetOriginalId={
+          form === 'refundOf' ? (refundOriginal?.id ?? null) : null
+        }
+        isCountedAlready={isWaiting}
         onClose={onClose}
         onCancel={() => setForm(null)}
       />
@@ -94,8 +111,65 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
     accounts.find((account) => account.id === purchase.accountId)?.name ??
     NEEDS_HOME_WORDS.fromBank;
   const isOnCard = (purchase.paidByCardId ?? null) !== null;
-  const isWaiting = purchase.needsHome || isLostDeposit || isLostPair;
   const isPosted = purchase.status === 'posted';
+  const nameOf = (id: string) => looks.get(id)?.name ?? 'An envelope';
+  const isRefundAsk = isWaiting && isAsked && refundOriginal !== null;
+  const isQuietRefund =
+    isRefundLike(purchase) &&
+    purchase.lines.every((line) => line.envelopeId === null);
+
+  const refundChoices = refundOriginal !== null && (
+    <ActionGroup isRoomy>
+      <ActionRow
+        isGrouped
+        isRoomy
+        hasChevron
+        icon={<Undo2 />}
+        label={NEEDS_HOME_WORDS.refundOfRow(
+          getPurchaseTitle(refundOriginal, nameOf),
+          formatDateOrdinalUTC(refundOriginal.date),
+        )}
+        subtitle={NEEDS_HOME_WORDS.refundOfRowSub(
+          describeEnvelopes(
+            refundOriginal.lines.filter((line) => line.cents > 0),
+            nameOf,
+          ),
+        )}
+        onClick={() => setForm('refundOf')}
+      />
+      <ActionRow
+        isGrouped
+        isRoomy
+        hasChevron
+        icon={<ArrowLeftRight />}
+        label={NEEDS_HOME_WORDS.refundOtherRow}
+        subtitle={NEEDS_HOME_WORDS.refundOtherRowSub}
+        onClick={() => setForm('refund')}
+      />
+      <LeaveOutRow purchase={purchase} onDone={onClose} isKeepFree />
+    </ActionGroup>
+  );
+  const putBackChoices = (
+    <ActionGroup isRoomy>
+      <ActionRow
+        isGrouped
+        isRoomy
+        hasChevron
+        icon={<ArrowLeftRight />}
+        label={NEEDS_HOME_WORDS.putBackRow}
+        subtitle={NEEDS_HOME_WORDS.putBackRowSub}
+        onClick={() => setForm('refund')}
+      />
+      {isOnCard && (
+        <LeaveOutRow
+          purchase={purchase}
+          onDone={onClose}
+          label={NEEDS_HOME_WORDS.notRefundRow}
+          subtitle={NEEDS_HOME_WORDS.notRefundRowSub}
+        />
+      )}
+    </ActionGroup>
+  );
 
   const cardChoices = (
     <ActionGroup isRoomy>
@@ -107,6 +181,7 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
         subtitle={NEEDS_HOME_WORDS.refundRowSub}
         onClick={() => setForm('refund')}
       />
+      <LeaveOutRow purchase={purchase} onDone={onClose} isKeepFree />
       <LeaveOutRow
         purchase={purchase}
         onDone={onClose}
@@ -154,7 +229,16 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
         </p>
       );
     }
-    if (isWaiting && isOnCard) {
+    if (isRefundAsk) {
+      return isPosted ? (
+        <PairOffer purchase={purchase} onDone={onClose}>
+          {refundChoices}
+        </PairOffer>
+      ) : (
+        refundChoices
+      );
+    }
+    if (isWaiting && isOnCard && isAsked) {
       return isPosted ? (
         <PairOffer purchase={purchase} onDone={onClose}>
           {cardChoices}
@@ -179,6 +263,16 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
         </p>
       );
     }
+    if (isQuietRefund) {
+      return (
+        <>
+          <p className='text-muted-foreground text-sm'>
+            {NEEDS_HOME_WORDS.refundAlreadyIn}
+          </p>
+          {isWaiting && putBackChoices}
+        </>
+      );
+    }
     return (
       <>
         <p className='text-muted-foreground text-sm'>
@@ -199,7 +293,11 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
     >
       <div className='space-y-4 pb-4'>
         <SheetHead
-          label={NEEDS_HOME_WORDS.moneyIn}
+          label={
+            isRefundLike(purchase) || refundOriginal !== null
+              ? NEEDS_HOME_WORDS.refundLabel
+              : NEEDS_HOME_WORDS.moneyIn
+          }
           figure={`+${formatCents(-purchase.amountCents)}`}
           fact={`${formatDateOrdinalUTC(purchase.date)} · ${sourceName}`}
         />

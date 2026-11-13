@@ -58,6 +58,7 @@ export const toPayLines = (plan: ReturnType<typeof selectResolvedPlan>) =>
   plan.flatMap(({ item: source, payLines: lines }) =>
     lines.map(({ item, version }) => ({
       sourceId: source.id,
+      payLineId: item.id,
       schedule: version.payload.schedule,
       amount: version.payload.amount,
       startsOn: version.effectiveFrom,

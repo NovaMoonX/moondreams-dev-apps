@@ -37,6 +37,7 @@ import { Dot } from '@apps/runway/screens/days/CalendarDot';
 import { getDotKind } from '@apps/runway/utils/calendarDots';
 import DaysCalendarCell from '@apps/runway/screens/days/DaysCalendarCell';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import { selectCardsWithBankDue } from '@apps/runway/store/selectors/cardStatementSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectBillPayments,
@@ -94,6 +95,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
   const bills = useAppSelector((state) => selectBills(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const cards = useAppSelector(selectCards);
+  const bankDueCards = useAppSelector(selectCardsWithBankDue);
   const isTracking = isTrackingLevel(useAppSelector(selectLevel));
   const reserveByCard = useAppSelector(selectBalances).reserveByCard;
   const stance = useAppSelector(selectStance);
@@ -145,7 +147,9 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
       cards: isTracking
         ? cards.map((card) => ({
             cardId: card.id,
-            dueDay: card.dueDay,
+            dueDay:
+              bankDueCards.find((entry) => entry.id === card.id)?.dueDay ??
+              card.dueDay,
             since: Math.max(startDate ?? 0, todayAsUtcDate(card.createdAt)),
           }))
         : [],
@@ -173,6 +177,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
       days,
       payments,
       cards,
+      bankDueCards,
       isTracking,
       paces,
       today,

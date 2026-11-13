@@ -8,18 +8,27 @@ import type { QuestionStep } from '@/hooks/useQuestionFlow';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
+  CALENDAR_PERIODS,
   CALENDAR_PERIOD_LABELS,
   CALENDAR_PERIOD_UNITS,
-  CALENDAR_PERIODS,
   FORM_FLOW_WORDS,
   FUNDING_CADENCE_LABELS,
+  FUNDING_PAY_WORDS,
   HOW_OFTEN_WORDS,
   MAX_CHOSEN_DAYS,
+  PAID_FROM_WORDS,
 } from '@apps/runway/constants';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
-import type { FundingAmount, FundingRule } from '@apps/runway/types';
+import { scopeToSource } from '@apps/runway/engine/calendar';
+import type { ResolvedSource } from '@apps/runway/store/selectors/runwaySelectors';
+import type {
+  FundingAmount,
+  FundingPay,
+  FundingRule,
+} from '@apps/runway/types';
 import { toFundingInput, type HowOften } from '@apps/runway/utils/fundingInput';
 import { describeAmount } from '@apps/runway/utils/fundingText';
+import { describePayChoice, listPayOptions } from '@apps/runway/utils/payFrom';
 
 type PaycheckCadence = ReturnType<typeof toFundingInput>['cadence'];
 
@@ -33,6 +42,8 @@ export interface FundingFormData {
   dayKeys: string[];
   /** The income source a paycheck rule counts; null counts every source. */
   sourceId: string | null;
+  /** The one pay it comes out of; null takes from every pay. */
+  pay: FundingPay | null;
 }
 
 export const INITIAL_FUNDING_FORM: FundingFormData = {
@@ -42,12 +53,21 @@ export const INITIAL_FUNDING_FORM: FundingFormData = {
   cadence: 'everyIncomeDay',
   dayKeys: [],
   sourceId: null,
+  pay: null,
 };
 
 export const toFundingForm = (funding: FundingRule): FundingFormData => {
   const { amount, mode, often, cadence, dayKeys, sourceId } =
     toFundingInput(funding);
-  return { often, amount, mode, cadence, dayKeys, sourceId };
+  return {
+    often,
+    amount,
+    mode,
+    cadence,
+    dayKeys,
+    sourceId,
+    pay: funding.pay ?? null,
+  };
 };
 
 const PAYCHECK_MODES = [
@@ -85,6 +105,11 @@ export const getFundingAmount = (
 };
 
 /** The rule the answers make. A calendar rule keeps the day it started on while its period and amount are unchanged. */
+const GONE_PAY = 'gone';
+
+const isSamePay = (a: FundingPay | null, b: FundingPay | null) =>
+  a?.payLineId === b?.payLineId && a?.monthDay === b?.monthDay;
+
 export function buildFundingRule(
   data: FundingFormData,
   context: {
@@ -99,6 +124,7 @@ export function buildFundingRule(
   if (data.often === 'none') {
     return { amount, cadence: { kind: 'none' } };
   }
+  const picked = data.pay === null ? {} : { pay: data.pay };
   if (isCalendar(data.often)) {
     const isSame =
       saved?.cadence.kind === 'calendar' &&
@@ -116,6 +142,7 @@ export function buildFundingRule(
             ? saved.cadence.startsOn
             : today,
       },
+      ...picked,
     };
   }
   const source = data.sourceId === null ? {} : { sourceId: data.sourceId };
@@ -128,11 +155,18 @@ export function buildFundingRule(
         kind: 'everyNth',
         n,
         anchorDayKey:
-          savedCadence?.kind === 'everyNth' && savedCadence.n === n
+          savedCadence?.kind === 'everyNth' &&
+          savedCadence.n === n &&
+          (saved?.sourceId ?? null) === data.sourceId &&
+          isSamePay(saved?.pay ?? null, data.pay)
             ? savedCadence.anchorDayKey
-            : (comingDays[0]?.dayKey ?? ''),
+            : (scopeToSource(
+                { sourceId: data.sourceId, pay: data.pay },
+                comingDays,
+              )[0]?.dayKey ?? ''),
       },
       ...source,
+      ...picked,
     };
   }
   if (data.cadence === 'chosen') {
@@ -154,9 +188,10 @@ export function buildFundingRule(
               .map((day) => day.dayKey),
       },
       ...source,
+      ...picked,
     };
   }
-  return { amount, cadence: { kind: 'everyIncomeDay' }, ...source };
+  return { amount, cadence: { kind: 'everyIncomeDay' }, ...source, ...picked };
 }
 
 /** What stops the answers from being saved, in the footer's words; null when they can be. */
@@ -245,6 +280,8 @@ interface FundingStepsArgs {
   isDraft?: boolean;
   /** The drafted income sources, when nothing is saved yet. */
   draftSources?: readonly { id: string; name: string }[];
+  /** The resolved plan, whose pays the "Comes out of" question offers. */
+  plan?: readonly ResolvedSource[];
 }
 
 /** The "How often?", "Which pays?" and amount questions an envelope's and a goal's forms share. */
@@ -257,6 +294,7 @@ export function buildFundingSteps({
   getAmountHint,
   isDraft = false,
   draftSources,
+  plan = [],
 }: FundingStepsArgs): QuestionStep[] {
   const hasDays = comingDays.length > 0 || isDraft;
   const amount = getFundingAmount(data);
@@ -331,7 +369,10 @@ export function buildFundingSteps({
               options={sourceOptions}
               value={data.sourceId ?? ALL_SOURCES}
               onChange={(value) =>
-                set({ sourceId: value === ALL_SOURCES ? null : value })
+                set({
+                  sourceId: value === ALL_SOURCES ? null : value,
+                  pay: null,
+                })
               }
             />
           </div>
@@ -389,10 +430,71 @@ export function buildFundingSteps({
     ),
   };
 
+  const payOptions = listPayOptions(plan);
+  const pickedPayValue =
+    data.pay === null
+      ? ALL_SOURCES
+      : (payOptions.find(
+          (option) =>
+            option.fundedBy.payLineId === data.pay?.payLineId &&
+            option.fundedBy.monthDay === data.pay.monthDay,
+        )?.value ?? GONE_PAY);
+  const isPayGone = pickedPayValue === GONE_PAY;
+  const selectedPay =
+    data.pay === null
+      ? undefined
+      : describePayChoice({ kind: 'pay', ...data.pay }, plan, true);
+  const payStep: QuestionStep = {
+    id: 'pay',
+    title: FUNDING_PAY_WORDS.title,
+    summaryLabel: FUNDING_PAY_WORDS.label,
+    summaryValue:
+      data.pay === null
+        ? FUNDING_PAY_WORDS.everyPay
+        : isPayGone
+          ? PAID_FROM_WORDS.gone
+          : describePayChoice({ kind: 'pay', ...data.pay }, plan),
+    isAnswered: true,
+    isPreAnswered: true,
+    render: ({ moveOn }) => (
+      <PillGroup
+        label={FUNDING_PAY_WORDS.label}
+        options={[
+          { value: ALL_SOURCES, label: FUNDING_PAY_WORDS.everyPay },
+          ...payOptions.map((option) => ({
+            value: option.value,
+            label: option.label,
+          })),
+          ...(isPayGone
+            ? [{ value: GONE_PAY, label: PAID_FROM_WORDS.gone }]
+            : []),
+        ]}
+        value={pickedPayValue}
+        onChange={(value) => {
+          if (value === GONE_PAY) return moveOn();
+          const found = payOptions.find((option) => option.value === value);
+          set({
+            pay:
+              found === undefined
+                ? null
+                : {
+                    payLineId: found.fundedBy.payLineId,
+                    monthDay: found.fundedBy.monthDay,
+                  },
+            sourceId: found === undefined ? data.sourceId : null,
+          });
+          moveOn();
+        }}
+      />
+    ),
+  };
+
   const sourcePay =
-    selectedSource === undefined
-      ? HOW_OFTEN_WORDS.percentOf
-      : HOW_OFTEN_WORDS.percentOfSource(selectedSource.name);
+    selectedPay !== undefined
+      ? FUNDING_PAY_WORDS.percentOfPay(selectedPay)
+      : selectedSource === undefined
+        ? HOW_OFTEN_WORDS.percentOf
+        : HOW_OFTEN_WORDS.percentOfSource(selectedSource.name);
   const amountStep: QuestionStep = {
     id: 'amount',
     title: isCalendar(data.often)
@@ -429,6 +531,8 @@ export function buildFundingSteps({
                 {HOW_OFTEN_WORDS.restHelp}
               </HelpTip>
             </span>
+          ) : isPaycheck && selectedPay !== undefined ? (
+            FUNDING_PAY_WORDS.suffix(selectedPay)
           ) : isPaycheck ? (
             describeSource(comingDays, data.sourceId)
           ) : undefined
@@ -440,6 +544,11 @@ export function buildFundingSteps({
   const result = [
     often,
     ...(isPaycheck ? [pays] : []),
+    ...((payOptions.length > 0 || isPayGone) &&
+    !isDraft &&
+    data.often !== 'none'
+      ? [payStep]
+      : []),
     ...(data.often === 'none' ? [] : [amountStep]),
   ];
   return result;

@@ -10,12 +10,17 @@ import CardSheets, {
 import { CARD_WORDS, HOME_TILE_COUNT } from '@apps/runway/constants';
 import { getNextDueOn } from '@apps/runway/engine/cards';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import { selectCardsWithBankDue } from '@apps/runway/store/selectors/cardStatementSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly } from '@apps/runway/types';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { describeCardsOwed, getListedCards } from '@apps/runway/utils/cardText';
+import {
+  selectPendingByCard,
+  toPostedByCard,
+} from '@apps/runway/store/selectors/cardPendingSelectors';
 
 interface HomeCardsProps {
   today: DateOnly;
@@ -29,8 +34,14 @@ function HomeCards({ today }: HomeCardsProps) {
   const [open, setOpen] = useState<OpenedCard | null>(null);
   const cards = getListedCards(allCards, reserveByCard);
   const waiting = (id: string) => reserveByCard[id] ?? 0;
+  const bankDueCards = useAppSelector(selectCardsWithBankDue);
   const dueOf = (card: (typeof cards)[number]) =>
-    waiting(card.id) > 0 ? getNextDueOn(card.dueDay, today) : null;
+    waiting(card.id) > 0
+      ? getNextDueOn(
+          (bankDueCards.find((entry) => entry.id === card.id) ?? card).dueDay,
+          today,
+        )
+      : null;
   const ranked = [...cards].sort((a, b) => {
     const dueA = dueOf(a);
     const dueB = dueOf(b);
@@ -40,6 +51,7 @@ function HomeCards({ today }: HomeCardsProps) {
     return waiting(b.id) - waiting(a.id);
   });
   const shown = ranked.slice(0, HOME_TILE_COUNT);
+  const pendingByCard = useAppSelector(selectPendingByCard);
   const mask = useMaskedText();
   const { isHidden } = useValuesHidden();
 
@@ -48,7 +60,13 @@ function HomeCards({ today }: HomeCardsProps) {
     <div className='space-y-2'>
       <SectionHeader
         title={CARD_WORDS.homeTitle}
-        subtitle={mask(describeCardsOwed(cards, reserveByCard, isHidden))}
+        subtitle={mask(
+          describeCardsOwed(
+            cards,
+            toPostedByCard(reserveByCard, pendingByCard),
+            isHidden,
+          ),
+        )}
         action={
           cards.length > shown.length && (
             <ShowMoreButton
