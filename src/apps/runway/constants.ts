@@ -2960,7 +2960,7 @@ export const CONVERT_WORDS = {
   lockedGoalLinked: (event: string) => `Linked to ${event}. Unlink it first.`,
   lockedPartOf: (event: string) => `Part of ${event}. Take it out there first.`,
   lockedOver: (name: string, amount: string) =>
-    `${name} is ${amount} over.`,
+    `${name} is ${amount} over. Set what it holds first.`,
   showToSet: 'Show amounts to set the target',
   fromLimitBefore: 'From its ',
   fromLimitAfter: ' limit',
