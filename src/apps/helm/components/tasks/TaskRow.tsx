@@ -3,7 +3,9 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 import TickMark from '@/components/TickMark';
+import { formatDateShort } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenTask } from '@apps/helm/types';
 import { formatTaskDue, isOverdue } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
@@ -14,8 +16,12 @@ interface TaskRowProps {
   now: number;
   /** Set while the row is the one just ticked, kept in view with its Undo. */
   isDone: boolean;
+  /** False for a task done some time ago: its tick reopens it and the row still opens its sheet, with no Undo. */
+  hasUndo?: boolean;
   /** Why the task is not awake yet ("Not until Fri, Nov 13"), shown in place of its day. */
   condition?: string | null;
+  /** The who or place whose page lists the row, left out of its names. */
+  omitLinkedId?: string | null;
   onOpen: (task: OpenTask) => void;
   onTick: (task: OpenTask) => void;
   onUndoTick: (taskId: string) => void;
@@ -27,13 +33,19 @@ function TaskRow({
   timeZone,
   now,
   isDone,
+  hasUndo = true,
   condition = null,
+  omitLinkedId = null,
   onOpen,
   onTick,
   onUndoTick,
 }: TaskRowProps) {
   const title = task.isUnreadable ? HELM_COPY.unreadable : task.title;
   const steps = getOrderedSteps(task);
+  const linkedLine = useLinkedNames(task)
+    .filter((entry) => entry.id !== omitLinkedId)
+    .map((entry) => entry.name)
+    .join(', ');
   const dueLine = task.due && formatTaskDue(task.due, timeZone, now);
   const isLate =
     !isDone &&
@@ -41,12 +53,15 @@ function TaskRow({
     task.due !== null &&
     isOverdue(task.due, timeZone, now);
   const dayPart = isDone
-    ? HELM_COPY.rowDone
+    ? hasUndo || task.completedAt === null
+      ? HELM_COPY.rowDone
+      : HELM_COPY.rowDoneOn(formatDateShort(task.completedAt))
     : (condition ??
       (isLate && dueLine ? HELM_COPY.overdueDue(dueLine) : dueLine));
   const otherParts = isDone
     ? []
     : [
+        ...(linkedLine ? [linkedLine] : []),
         ...(steps.length > 0
           ? [
               HELM_COPY.stepsCount(
@@ -108,14 +123,14 @@ function TaskRow({
             </span>
           )}
         </span>
-        {!isDone && (
+        {(!isDone || !hasUndo) && (
           <ChevronRight
             className='text-muted-foreground size-4 shrink-0'
             aria-hidden='true'
           />
         )}
       </Button>
-      {isDone && (
+      {isDone && hasUndo && (
         <Button
           type='button'
           variant='tertiary'

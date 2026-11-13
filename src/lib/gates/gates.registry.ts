@@ -70,6 +70,17 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     warning:
       "Runway is on Plaid's Trial plan: 10 bank sign-ins in total for everyone, and one removed never frees its slot. Give this to its one tester only, until full production access is set up.",
   },
+  {
+    id: 'google-mail-and-drive',
+    appId: 'helm',
+    label: 'Gmail and Drive',
+    description:
+      'Someone kept out sees no Gmail or Drive switch on their Google account, and a connect link they already hold is refused. Someone with it can let the assistant look in their Gmail and Drive when a question needs it.',
+    defaultRollout: 'testing',
+    isServerEnforced: false,
+    warning:
+      'Google lets only the people on its test-user list connect these until the app passes its review.',
+  },
 ];
 
 export function getAppFeatureGates(appId: string) {

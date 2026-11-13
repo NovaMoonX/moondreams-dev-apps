@@ -132,6 +132,8 @@ export function collectCostPaid(
     (acc[move.refId] ??= []).push({
       moveId: move.id,
       ...move.payload,
+      fromGoalCents: move.payload.fromGoalCents ?? 0,
+      goalId: move.payload.goalId ?? null,
     });
     return acc;
   }, {});

@@ -74,6 +74,7 @@ export interface SharedRecord {
   subtitle: string | null;
   detail: string | null;
   startAt: number | null;
+  /** An all-day record's last day (UTC midnight), never the day after it. */
   endAt: number | null;
   isAllDay: boolean;
   dueAt: number | null;
@@ -247,11 +248,15 @@ export interface ReadConnectorOptionsRequest {
   accountId: string;
 }
 
-/** One calendar (or other choice) a connector offers, read live from the provider. */
+/** One choice (a calendar, a contact) a connector offers, read live from the provider. */
 export interface ConnectorOption {
   id: string;
   name: string;
   colour: string | null;
+  /** One line that tells two choices of the same name apart (an email or a phone). */
+  detail: string | null;
+  /** An https picture from a provider host the server allows, or null. */
+  photoUrl: string | null;
   isPrimary: boolean;
   /** Holidays, subscriptions and calendars only shared to read start off. */
   isOnByDefault: boolean;
