@@ -116,7 +116,7 @@ function ThemePicker<T extends string>({
     <div
       role='radiogroup'
       aria-label={label}
-      className='grid grid-cols-2 gap-2 lg:grid-cols-4'
+      className='grid grid-cols-2 gap-2'
       onKeyDown={handleKeyDown}
     >
       {options.map((option, index) => {
