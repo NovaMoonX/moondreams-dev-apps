@@ -51,7 +51,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
     {
       id: SECOND_HOUSEHOLD_ID,
       name: 'Alex’s household',
-      members: [coCaretaker.uid],
+      members: [coCaretaker.uid, FIXTURE_USERS.partnerOne.uid],
       inviteCode: 'NOVA9P',
       createdBy: coCaretaker.uid,
       createdAt,
@@ -1855,7 +1855,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
   const secondPreventiveDose = {
     id: 'seed-preventive-other-household-dose-1',
     administeredAt: context.now - 2_592_000_000,
-    expiresAt: context.now + 2_592_000_000,
+    expiresAt: Math.floor((context.now + 2_592_000_000) / 86_400_000) * 86_400_000,
     dosage: '0.4 mL',
     clinicId: null,
     doctorId: null,

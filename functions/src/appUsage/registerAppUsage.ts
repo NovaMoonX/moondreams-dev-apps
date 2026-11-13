@@ -2,6 +2,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { canOpenApp } from '../appAccess.js';
 import { findFirstActivityAt as findAListStart } from '../apps/a-list/findFirstActivityAt.js';
 import { findFirstActivityAt as findGoingOnceStart } from '../apps/going-once/findFirstActivityAt.js';
 import { findFirstActivityAt as findHelmStart } from '../apps/helm/findFirstActivityAt.js';
@@ -15,9 +16,10 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
-const ADMIN_EMAIL = 'nova@moondreams.dev';
-
-const FIRST_ACTIVITY_FINDERS: Record<string, (firestore: Firestore, uid: string) => Promise<number | null>> = {
+const FIRST_ACTIVITY_FINDERS: Record<
+  string,
+  (firestore: Firestore, uid: string) => Promise<number | null>
+> = {
   'a-list': findAListStart,
   'going-once': findGoingOnceStart,
   helm: findHelmStart,
@@ -27,22 +29,6 @@ const FIRST_ACTIVITY_FINDERS: Record<string, (firestore: Firestore, uid: string)
   waypoint: findWaypointStart,
   'worth-the-wait': findWorthTheWaitStart,
 };
-
-// Matches the app catalog's client-side filter, which trims and lowercases the allowed list.
-function canUseApp(
-  app: FirebaseFirestore.DocumentData | undefined,
-  uid: string,
-  email: string | null,
-) {
-  if (!app || app.status !== 'public') return false;
-  if (!app.isRestricted) return true;
-
-  const allowedUsers = Array.isArray(app.allowedUsers)
-    ? app.allowedUsers.map((value) => String(value).trim().toLowerCase())
-    : [];
-  const result = allowedUsers.includes(uid.toLowerCase()) || (email !== null && allowedUsers.includes(email));
-  return result;
-}
 
 // The oldest-data scan can be slow, so it only runs while the member has no record.
 export const registerAppUsage = onCall(
@@ -60,7 +46,8 @@ export const registerAppUsage = onCall(
       throw new HttpsError('unauthenticated', 'You must be signed in.');
     }
 
-    const appId = typeof request.data?.appId === 'string' ? request.data.appId.trim() : '';
+    const appId =
+      typeof request.data?.appId === 'string' ? request.data.appId.trim() : '';
     const findFirstActivityAt = Object.hasOwn(FIRST_ACTIVITY_FINDERS, appId)
       ? FIRST_ACTIVITY_FINDERS[appId]
       : undefined;
@@ -75,19 +62,25 @@ export const registerAppUsage = onCall(
       return existing.data();
     }
 
-    const email = request.auth?.token.email?.trim().toLowerCase() ?? null;
-    const isPrivileged =
-      email === ADMIN_EMAIL || request.auth?.token.admin === true || request.auth?.token.dev === true;
-    if (!isPrivileged) {
-      const appSnapshot = await firestore.doc(`apps/${appId}`).get();
-      if (!canUseApp(appSnapshot.data(), uid, email)) {
-        throw new HttpsError('permission-denied', 'You do not have access to this app.');
-      }
+    if (
+      !(await canOpenApp(firestore, appId, {
+        uid,
+        token: request.auth?.token ?? {},
+      }))
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'You do not have access to this app.',
+      );
     }
 
     const now = Date.now();
     const firstActivityAt = await findFirstActivityAt(firestore, uid);
-    const usage = { uid, startedAt: Math.min(firstActivityAt ?? now, now), lastActiveAt: now };
+    const usage = {
+      uid,
+      startedAt: Math.min(firstActivityAt ?? now, now),
+      lastActiveAt: now,
+    };
 
     try {
       await usageRef.create(usage);

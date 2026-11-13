@@ -65,7 +65,7 @@ function DashboardQuickActions({ householdId }: DashboardQuickActionsProps) {
       </div>
 
       {!isFlatRowVisible && (
-        <div className='fixed right-4 bottom-4 z-40 flex flex-col items-end gap-2'>
+        <div className='fixed right-4 bottom-4 z-30 flex flex-col items-end gap-2'>
           <VoiceQuickEntryTrigger
             variant='floating'
             isListening={voiceQuickEntry.isListening}

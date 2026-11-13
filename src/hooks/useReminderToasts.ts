@@ -13,12 +13,16 @@ import { useAppSelector } from '@/store';
 const REMINDER_TOAST_DURATION_MS = 7000;
 const FORCE_TOAST_ENABLED =
   import.meta.env.DEV && import.meta.env.VITE_FORCE_REMINDER_TOAST === 'true';
+// A computer that slept with the page open never reports it hidden, so a long-overdue flip is old news.
+const STALE_AFTER_MS = 5 * 60_000;
 
-/** Bridges the global `reminders` slice into in-app toasts: a reminder this page
- * has seen as not yet sent that flips to `sent` pops a toast. One that first
- * appears already `sent` (the first snapshot after a reload, another device's
- * history) never does, so reloading doesn't replay old ones. One marked
- * `inAppToast: false` never does either. */
+function readVisibleSince() {
+  return document.visibilityState === 'visible' ? Date.now() : Infinity;
+}
+
+/** Toasts a reminder that flips to `sent` while the page is in front; one sent in the
+ * background or first seen already sent (a reload) reached the person as a push and
+ * never toasts, nor does `inAppToast: false`. */
 export function useReminderToasts() {
   const reminders = useAppSelector((state) => state.reminders.items);
   const { addToast } = useToast();
@@ -28,6 +32,22 @@ export function useReminderToasts() {
     null,
   );
   const shownIdsRef = useRef(new Set<string>());
+  const visibleSinceRef = useRef(readVisibleSince());
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      visibleSinceRef.current = readVisibleSince();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
+  const wasInFrontWhenSent = useCallback(
+    (sentAt: number) =>
+      visibleSinceRef.current <= sentAt &&
+      Date.now() - sentAt <= STALE_AFTER_MS,
+    [],
+  );
 
   const showReminderToast = useCallback(
     (reminder: Reminder, duration = REMINDER_TOAST_DURATION_MS) => {
@@ -90,6 +110,7 @@ export function useReminderToasts() {
         link: '/waypoint',
         recurrence: 'none',
         inAppToast: null,
+        lastSentAt: null,
         createdBy: '',
         createdAt: Date.now(),
       },
@@ -107,13 +128,17 @@ export function useReminderToasts() {
       .filter((reminder) => reminder.status === 'pending')
       .map((reminder) =>
         setTimeout(
-          () => showReminderToast(reminder),
+          () => {
+            if (wasInFrontWhenSent(reminder.scheduledFor)) {
+              showReminderToast(reminder);
+            }
+          },
           Math.max(0, reminder.scheduledFor - Date.now()),
         ),
       );
 
     return () => timers.forEach(clearTimeout);
-  }, [reminders, showReminderToast]);
+  }, [reminders, showReminderToast, wasInFrontWhenSent]);
 
   useEffect(() => {
     const previousStatusById = previousStatusByIdRef.current;
@@ -131,9 +156,10 @@ export function useReminderToasts() {
         return (
           reminder.status === 'sent' &&
           previousStatus !== undefined &&
-          previousStatus !== 'sent'
+          previousStatus !== 'sent' &&
+          wasInFrontWhenSent(reminder.lastSentAt ?? reminder.scheduledFor)
         );
       })
       .forEach((reminder) => showReminderToast(reminder));
-  }, [reminders, showReminderToast]);
+  }, [reminders, showReminderToast, wasInFrontWhenSent]);
 }
