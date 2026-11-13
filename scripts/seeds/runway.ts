@@ -3489,8 +3489,7 @@ async function writeSeedSelfPaying(
             note: null,
             lines: [{ envelopeId: null, cents: entry.cents, via: 'free' }],
             refundOfId: null,
-            paidByCardId:
-              'cardId' in entry ? entry.cardId : SEED_VENTURE_CARD,
+            paidByCardId: 'cardId' in entry ? entry.cardId : SEED_VENTURE_CARD,
             link: null,
             receiptText: null,
             costRef: null,
