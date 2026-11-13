@@ -61,12 +61,14 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
     );
   });
   const [form, setForm] = useState<'refund' | 'pay' | null>(null);
+  const isWaiting = purchase.needsHome || isLostDeposit || isLostPair;
 
   if (form === 'refund') {
     return (
       <PurchaseForm
         isOpen
         editing={purchase}
+        isCountedAlready={isWaiting}
         onClose={onClose}
         onCancel={() => setForm(null)}
       />
@@ -94,7 +96,6 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
     accounts.find((account) => account.id === purchase.accountId)?.name ??
     NEEDS_HOME_WORDS.fromBank;
   const isOnCard = (purchase.paidByCardId ?? null) !== null;
-  const isWaiting = purchase.needsHome || isLostDeposit || isLostPair;
   const isPosted = purchase.status === 'posted';
 
   const cardChoices = (
@@ -107,6 +108,7 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
         subtitle={NEEDS_HOME_WORDS.refundRowSub}
         onClick={() => setForm('refund')}
       />
+      <LeaveOutRow purchase={purchase} onDone={onClose} isKeepFree />
       <LeaveOutRow
         purchase={purchase}
         onDone={onClose}
