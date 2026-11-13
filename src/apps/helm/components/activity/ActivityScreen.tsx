@@ -29,6 +29,7 @@ import {
   getActivitySubject,
   getTakenBackMark,
   groupByDay,
+  isShownInActivity,
 } from '@apps/helm/utils/activity';
 import { createSealedReader } from '@lib/security';
 
@@ -147,7 +148,10 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
   );
   const byId = useAppSelector(selectExecutionsById);
   const [open, setOpen] = useState<OpenExecution | null>(null);
-  const days = useMemo(() => groupByDay(items), [items]);
+  const days = useMemo(
+    () => groupByDay(items.filter(isShownInActivity)),
+    [items],
+  );
   useActivityFeed(user?.uid ?? null, limit);
 
   return (
@@ -172,7 +176,7 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
             {HELM_COPY.activityLoading}
           </p>
         )}
-        {isLoaded && items.length === 0 && (
+        {isLoaded && days.length === 0 && (
           <p className='helm-card p-4 text-[15px] text-pretty'>
             {HELM_COPY.activityEmpty(name)}
           </p>

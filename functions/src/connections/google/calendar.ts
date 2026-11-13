@@ -14,7 +14,7 @@ import type {
   SyncPageResult,
 } from '../registry.js';
 import { GOOGLE_SECRETS, getGoogleAccessToken } from '../tokens.js';
-import { googleGet, SyncTokenGone } from './client.js';
+import { googleGet, SyncTokenGone, toReconnectOnRefusal } from './client.js';
 import { GOOGLE_CALENDAR_MANIFEST } from './calendarManifest.js';
 import { toEventLink } from './deepLinks.js';
 
@@ -196,11 +196,11 @@ const toInstants = (event: CalendarEvent) => {
   const { start, end } = event;
   if (start?.date) {
     const startAt = Date.parse(`${start.date}T00:00:00Z`);
-    return {
-      startAt,
-      endAt: end?.date ? Date.parse(`${end.date}T00:00:00Z`) : startAt + DAY_MS,
-      isAllDay: true,
-    };
+    // Google's all-day end is the day after the last; copies keep the last day.
+    const endAt = end?.date
+      ? Date.parse(`${end.date}T00:00:00Z`) - DAY_MS
+      : startAt;
+    return { startAt, endAt: Math.max(startAt, endAt), isAllDay: true };
   }
   return {
     startAt: start?.dateTime ? Date.parse(start.dateTime) : null,
@@ -438,6 +438,8 @@ const toOption = (entry: CalendarListEntry): ConnectorOption => ({
   id: entry.id,
   name: entry.summaryOverride ?? entry.summary ?? entry.id,
   colour: entry.backgroundColor ?? null,
+  detail: null,
+  photoUrl: null,
   isPrimary: entry.primary === true,
   isOnByDefault: isOnByDefault(entry),
 });
@@ -501,7 +503,7 @@ export function createGoogleCalendarAdapter(): SourceAdapter {
         token,
         `${API}/users/me/calendarList?${params}`,
         { email: typeof email === 'string' ? email : null },
-      );
+      ).catch(toReconnectOnRefusal);
       return (list.items ?? []).slice(0, OPTION_LIMIT).map(toOption);
     },
   };

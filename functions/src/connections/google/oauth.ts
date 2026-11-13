@@ -7,6 +7,7 @@ import {
   HttpsError,
   onCall,
   type CallableOptions,
+  type CallableRequest,
 } from 'firebase-functions/v2/https';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -20,6 +21,7 @@ import {
   type FinishGoogleConnectionResult,
   type StartGoogleConnectionResult,
 } from '../../vendor/connectionsContract.js';
+import { assertGateOpen } from '../../gates/assertGateOpen.js';
 import { requestedScopes } from '../grants.js';
 import { READER_APPS, SOURCE_ADAPTERS } from '../registry.js';
 import {
@@ -125,7 +127,11 @@ const readStartRequest = (data: unknown) => {
   };
 };
 
-const requireOutsideConnector = (readerAppId: string, connectorId: string) => {
+const requireOutsideConnector = async (
+  request: CallableRequest,
+  readerAppId: string,
+  connectorId: string,
+) => {
   if (!Object.hasOwn(READER_APPS, readerAppId)) {
     throw new HttpsError(
       'invalid-argument',
@@ -140,7 +146,21 @@ const requireOutsideConnector = (readerAppId: string, connectorId: string) => {
     throw new HttpsError('invalid-argument', "That source isn't available.");
   }
   if (manifest.connect.isRestricted) {
-    throw new HttpsError('failed-precondition', "That source isn't open yet.");
+    const { restrictedGates } = READER_APPS[readerAppId];
+    if (!Object.hasOwn(restrictedGates, connectorId)) {
+      throw new HttpsError(
+        'failed-precondition',
+        "That source isn't open yet.",
+      );
+    }
+    const { gateId, defaultRollout } = restrictedGates[connectorId];
+    await assertGateOpen(
+      request,
+      readerAppId,
+      gateId,
+      defaultRollout,
+      "That source isn't open to you yet.",
+    );
   }
   return manifest;
 };
@@ -164,7 +184,11 @@ export const startGoogleConnection = onCall(OPTIONS, async (request) => {
   const auth = request.auth;
   if (!auth) throw new HttpsError('unauthenticated', 'Sign in to connect.');
   const req = readStartRequest(request.data);
-  const manifest = requireOutsideConnector(req.readerAppId, req.connectorId);
+  const manifest = await requireOutsideConnector(
+    request,
+    req.readerAppId,
+    req.connectorId,
+  );
 
   const firestore = getFirestore();
   if (!(await canOpenApp(firestore, req.readerAppId, auth))) {
@@ -389,7 +413,8 @@ export const finishGoogleConnection = onCall(OPTIONS, async (request) => {
       'That sign-in expired. Start again.',
     );
   }
-  const manifest = requireOutsideConnector(
+  const manifest = await requireOutsideConnector(
+    request,
     state.readerAppId,
     state.connectorId,
   );
@@ -424,9 +449,19 @@ export const finishGoogleConnection = onCall(OPTIONS, async (request) => {
       ),
     );
   }
-  const knownEmail = (
-    await accountRef(firestore, auth.uid, accountId).get()
-  ).get('email');
+  const known = await accountRef(firestore, auth.uid, accountId).get();
+  const knownEmail = known.get('email');
+  const knownScopes: unknown = known.get('grantedScopes');
+  const grantedScopes = Array.from(
+    new Set([
+      ...(Array.isArray(knownScopes)
+        ? knownScopes.filter(
+            (scope): scope is string => typeof scope === 'string',
+          )
+        : []),
+      ...identity.grantedScopes,
+    ]),
+  );
   const email =
     identity.email ?? (typeof knownEmail === 'string' ? knownEmail : null);
   if (email === null) {
@@ -441,13 +476,13 @@ export const finishGoogleConnection = onCall(OPTIONS, async (request) => {
   const now = Date.now();
   if (isFixture) {
     await storeFixtureToken(firestore, auth.uid, accountId, {
-      grantedScopes: identity.grantedScopes,
+      grantedScopes,
       now,
     });
   } else {
     await storeRefreshToken(firestore, auth.uid, accountId, {
       refreshToken: identity.refreshToken,
-      grantedScopes: identity.grantedScopes,
+      grantedScopes,
       now,
     }).catch(() => {
       logger.error('connections.oauth.storeFailed');
@@ -465,7 +500,7 @@ export const finishGoogleConnection = onCall(OPTIONS, async (request) => {
       provider: 'google',
       email,
       label: typeof existing?.label === 'string' ? existing.label : null,
-      grantedScopes: identity.grantedScopes,
+      grantedScopes,
       status: 'live',
       connectedAt:
         typeof existing?.connectedAt === 'number' ? existing.connectedAt : now,

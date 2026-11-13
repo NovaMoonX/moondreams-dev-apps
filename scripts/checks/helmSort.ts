@@ -37,6 +37,7 @@ import {
   hasOpenMoreToSort,
   planWrites,
   settleCapture,
+  type ExistingFact,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtureProvider.ts';
 import {
@@ -44,6 +45,11 @@ import {
   NomosReplyError,
 } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { summarize } from '../../functions/src/apps/helm/nomos/summaries.ts';
+import {
+  HOME_TOO_LATE_LINE,
+  NO_HOME_LINE,
+  planSetCurrentPlace,
+} from '../../functions/src/apps/helm/nomos/currentPlace.ts';
 
 const UID = 'uid-Zk3p9QwXr7LmNb2VcT5yHd8AeFg1';
 const CAPTURE_ID = 'capture-Qm4Xr8Zk2LpVb7NcTy3HdA5eFg9';
@@ -59,7 +65,7 @@ const FRIDAY = Date.UTC(2026, 10, 13);
 const TOMORROW = Date.UTC(2026, 10, 10);
 const span = (id: string, text: string) => {
   const start = TEXT.indexOf(text);
-  return { id, text, start, end: start + text.length };
+  return { id, text, start, end: start + text.length, precision: null };
 };
 const READING: CaptureReading = {
   people: [span('people:5', 'Dana')],
@@ -155,16 +161,13 @@ test('every tool answers with aliases only, through the in-process server', asyn
     firestore: fakeFirestore as never,
   });
   const listed = await server.client.listTools();
-  assert.deepEqual(
-    listed.tools.map((tool) => tool.name).sort(),
-    [
-      'connection_status',
-      'get_calendar',
-      'list_connections',
-      'search_synced',
-      'search_tasks',
-    ],
-  );
+  assert.deepEqual(listed.tools.map((tool) => tool.name).sort(), [
+    'connection_status',
+    'get_calendar',
+    'list_connections',
+    'search_synced',
+    'search_tasks',
+  ]);
   const reply = await server.client.callTool({
     name: 'search_tasks',
     arguments: { query: 'rings', includeDone: true },
@@ -213,6 +216,9 @@ test('a sound reply resolves its alias and its day', () => {
     title: 'Call Dana',
     due: { kind: 'day', date: FRIDAY },
     isUrgent: false,
+    whoRefs: ['$w1'],
+    placeRefs: [],
+    projectRef: null,
   });
   assert.deepEqual(commands[1], { kind: 'completeTask', taskId: TASK_IDS[0] });
 });
@@ -557,6 +563,8 @@ test('the fixture reading goes through the same checks and the same plan', async
           due: null,
           isUrgent: false,
           title: 'Order the rings',
+          whoIds: [],
+          placeIds: [],
           sealed: { title: 'Order the rings', notes: null, steps: {} },
         },
       ],
@@ -585,6 +593,764 @@ test('the fixture reading goes through the same checks and the same plan', async
   assert.equal(opened.summary, 'Made 3 tasks and marked 1 done');
   assert.equal((opened.effects as unknown[]).length, 4);
   assert.deepEqual(plan.updates[0].data.status, 'done');
+});
+
+test('"I\'m home" files the home place on the profile with its previous value, and says so', async () => {
+  const reading = { ...READING, people: [], dates: [] };
+  const ask = async (words: string) => {
+    const run = await createFixtureProvider(words, reading).runToolLoop({
+      role: 'quick',
+      system: '',
+      messages: [{ role: 'user', content: '' }],
+      mcpClient: {} as never,
+      terminalTool: FILE_RESULTS_TOOL,
+      limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 1000 },
+    });
+    return normalizeNomosReply(run.terminalInput, {
+      reading,
+      aliases: newContext().aliases,
+    });
+  };
+  const said = await ask("I'm home");
+  assert.deepEqual(said.setCurrentPlace, {
+    kind: 'setCurrentPlace',
+    place: 'home',
+  });
+  assert.equal(said.commands.length, 0);
+  assert.ok((await ask('Just got home')).setCurrentPlace);
+  assert.equal((await ask('Home by six, buy milk')).setCurrentPlace, null);
+
+  const NOW = Date.UTC(2026, 10, 10, 22, 0);
+  const previous = { placeId: 'place-old', saidAt: NOW - 5 * 3_600_000 };
+  const home = planSetCurrentPlace({
+    profileId: UID,
+    home: { id: 'place-home', name: 'Home' },
+    previous,
+    saidAt: NOW - 3_600_000,
+    now: NOW,
+    timeZone: 'America/Los_Angeles',
+  });
+  assert.ok(typeof home !== 'string');
+  assert.deepEqual(home.data.currentPlace, {
+    placeId: 'place-home',
+    saidAt: NOW - 3_600_000,
+  });
+  assert.deepEqual(home.ref, {
+    op: 'update',
+    collection: 'profile',
+    docId: UID,
+  });
+  assert.deepEqual(home.effect.previous?.currentPlace, previous);
+  assert.equal(home.line, "You're home until 4:00 PM");
+  assert.equal(
+    planSetCurrentPlace({
+      profileId: UID,
+      home: null,
+      previous: null,
+      saidAt: NOW,
+      now: NOW,
+      timeZone: 'America/Los_Angeles',
+    }),
+    NO_HOME_LINE,
+  );
+  assert.equal(
+    planSetCurrentPlace({
+      profileId: UID,
+      home: { id: 'place-home', name: 'Home' },
+      previous: null,
+      saidAt: NOW - 4 * 3_600_000,
+      now: NOW,
+      timeZone: 'America/Los_Angeles',
+    }),
+    HOME_TOO_LATE_LINE,
+  );
+  assert.equal(NO_HOME_LINE, 'No place is set as home yet.');
+
+  const plan = planWrites({
+    commands: [],
+    existing: new Map(),
+    captureId: CAPTURE_ID,
+    executionId: 'exec-home',
+    now: NOW,
+    seal,
+    newId: createIdCounter(),
+  });
+  const execution = buildExecution(
+    {
+      ...plan,
+      effectRefs: [home.ref],
+      effects: [home.effect],
+    },
+    {
+      commands: [],
+      captureId: CAPTURE_ID,
+      now: NOW,
+      seal,
+      homeLine: home.line,
+      inputMode: 'voice',
+    },
+  );
+  const opened = openForHelm(KEY, execution.sealed as SealedPayload);
+  assert.equal(opened.summary, "You're home until 4:00 PM");
+  assert.equal(opened.spoken, "You're home until 4:00 PM.");
+  assert.deepEqual(execution.effectRefs, [home.ref]);
+});
+
+test('buildContext lists the facts about who the turn names, said or inferred, with no id', () => {
+  const { message } = buildContext({
+    text: TEXT,
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 9, 22, 0),
+    timeZone: 'America/Los_Angeles',
+    tasks: [],
+    facts: [
+      {
+        id: 'fact-a',
+        subject: 'Dana',
+        statement: 'Dana is the florist',
+        by: 'said',
+      },
+      {
+        id: 'fact-b',
+        subject: 'Dana',
+        statement: 'Dana does the flowers',
+        by: 'inferred',
+      },
+    ],
+  });
+  assert.ok(message.includes('<known_facts>'));
+  assert.ok(
+    message.includes('"by":"inferred"') && message.includes('"by":"said"'),
+  );
+  assert.ok(!containsId(message));
+  assert.ok(!newContext().message.includes('<known_facts>'));
+});
+
+test("a noted fact is confirmed only when stated with the person's own words, and is dropped without a sure subject", async () => {
+  const NOW = Date.UTC(2026, 10, 10, 18, 0);
+  const text = 'Dana is the  florist, and she does the wedding flowers';
+  const dana = {
+    id: 'who-dana',
+    kind: 'person' as const,
+    name: 'Dana',
+    aliases: [],
+    lastMentionedAt: null,
+    tier: 'regular' as const,
+    tierSetBy: 'person' as const,
+    mentionDayKeys: [],
+    taskLinkCount: 0,
+    yearlyDateCount: 0,
+    momentCount: 0,
+    hasRole: false,
+  };
+  const mention = {
+    ref: '$w1',
+    name: 'Dana',
+    kind: 'person' as const,
+    relation: null,
+    species: null,
+    organizationKind: null,
+  };
+  const fact = (extra: Record<string, unknown> = {}) => ({
+    statement: 'Dana is the florist',
+    quote: 'dana is the florist',
+    isStated: true,
+    whoRefs: ['$w1'],
+    placeRefs: [],
+    kind: 'world' as const,
+    topic: null,
+    value: null,
+    isSensitive: false,
+    isAboutMe: false,
+    contradicts: null,
+    ...extra,
+  });
+  const plan = (
+    noteFacts: ReturnType<typeof fact>[],
+    known = [dana],
+    existingFacts: {
+      id: string;
+      status: 'confirmed' | 'inferred';
+      statement: string;
+      subjectIds: string[];
+    }[] = [],
+  ) =>
+    planWrites({
+      commands: [],
+      existing: new Map(),
+      captureId: CAPTURE_ID,
+      executionId: 'exec-fact',
+      now: NOW + 1000,
+      seal,
+      newId: createIdCounter(),
+      people: {
+        mentions: [mention],
+        places: [],
+        known,
+        knownPlaces: [],
+        assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
+        dayKey: '2026-11-10',
+        capturedAt: NOW,
+      },
+      noteFacts,
+      captureText: text,
+      existingFacts: existingFacts.map((entry) => ({
+        kind: 'world' as const,
+        topic: null,
+        stated: 'personSaid' as const,
+        createdAt: NOW - 1000,
+        disputedWithId: null,
+        ...entry,
+      })),
+    });
+  const words = (made: ReturnType<typeof plan>) =>
+    openForHelm(KEY, made.factCreates[0].data.sealed as SealedPayload);
+
+  const said = plan([fact()]);
+  assert.equal(said.factCreates.length, 1);
+  const saidData = said.factCreates[0].data;
+  assert.equal(saidData.status, 'confirmed');
+  assert.equal(saidData.stated, 'personSaid');
+  assert.equal(saidData.confirmedAt, NOW);
+  assert.equal(saidData.createdAt, NOW);
+  assert.equal(saidData.kind, 'world');
+  assert.equal(saidData.sourceCaptureId, CAPTURE_ID);
+  assert.equal(saidData.sourceExecutionId, 'exec-fact');
+  assert.deepEqual(saidData.subjectIds, ['who-dana']);
+  assert.equal(words(said).quote, 'dana is the florist');
+  assert.equal(said.effectRefs[0].collection, 'facts');
+  assert.equal(said.effectRefs[0].op, 'create');
+  assert.equal(
+    said.effects[0].written['sealed.title'],
+    'Fact · Dana · You said',
+  );
+  const execution = buildExecution(said, {
+    commands: [],
+    captureId: CAPTURE_ID,
+    now: NOW,
+    seal,
+  });
+  assert.equal(execution.category, 'remember');
+  assert.equal(
+    openForHelm(KEY, execution.sealed as SealedPayload).summary,
+    'Noted a fact',
+  );
+
+  const wrongQuote = plan([fact({ quote: 'Dana is the caterer' })]);
+  assert.equal(wrongQuote.factCreates[0].data.status, 'inferred');
+  assert.equal(wrongQuote.factCreates[0].data.stated, 'nomosInferred');
+  assert.equal(wrongQuote.factCreates[0].data.confirmedAt, null);
+  assert.equal(words(wrongQuote).quote, null);
+  assert.equal(
+    wrongQuote.effects[0].written['sealed.title'],
+    'Fact · Dana · Nomos inferred',
+  );
+
+  const guessed = plan([
+    fact({ isStated: false, quote: 'she does the wedding flowers' }),
+  ]);
+  assert.equal(guessed.factCreates[0].data.status, 'inferred');
+  assert.equal(words(guessed).quote, 'she does the wedding flowers');
+
+  assert.equal(plan([fact({ whoRefs: [] })]).factCreates.length, 0);
+  assert.equal(plan([fact({ whoRefs: [] })]).effects.length, 0);
+  const twins = plan([fact()], [dana, { ...dana, id: 'who-dana-2' }]);
+  assert.equal(twins.factCreates.length, 0);
+  assert.equal(twins.questions.length, 0);
+
+  const repeat = plan(
+    [fact()],
+    [dana],
+    [
+      {
+        id: 'fact-1',
+        status: 'confirmed',
+        statement: ' dana is the  Florist ',
+        subjectIds: ['who-dana'],
+      },
+    ],
+  );
+  assert.equal(repeat.factCreates.length, 0);
+  assert.equal(repeat.factConfirms.length, 0);
+  const guess = {
+    id: 'fact-1',
+    status: 'inferred' as const,
+    statement: 'Dana is the florist',
+    subjectIds: ['who-dana'],
+  };
+  const saidOverGuess = plan([fact()], [dana], [guess]);
+  assert.equal(saidOverGuess.factCreates.length, 0);
+  assert.equal(saidOverGuess.factConfirms.length, 1);
+  assert.equal(saidOverGuess.factConfirms[0].id, 'fact-1');
+  assert.equal(saidOverGuess.factConfirms[0].data.status, 'confirmed');
+  assert.equal(saidOverGuess.effectRefs[0].op, 'update');
+  assert.equal(saidOverGuess.effects[0].previous?.status, 'inferred');
+  const guessAgain = plan([fact({ isStated: false })], [dana], [guess]);
+  assert.equal(
+    guessAgain.factCreates.length + guessAgain.factConfirms.length,
+    0,
+  );
+  assert.equal(
+    plan([fact({ quote: 'is Dana the florist?' })]).factCreates.length,
+    0,
+  );
+  assert.equal(
+    plan([fact({ quote: 'florist' })]).factCreates[0].data.status,
+    'inferred',
+  );
+  assert.equal(plan([fact(), fact()]).factCreates.length, 1);
+  assert.equal(
+    plan(
+      [fact()],
+      [dana],
+      [
+        {
+          id: 'fact-2',
+          status: 'confirmed',
+          statement: 'Dana is the florist',
+          subjectIds: ['who-other'],
+        },
+      ],
+    ).factCreates.length,
+    1,
+  );
+
+  const fresh = plan([fact()], []);
+  assert.equal(fresh.whoCreates.length, 1);
+  assert.deepEqual(fresh.factCreates[0].data.whoIds, [fresh.whoCreates[0].id]);
+
+  const settled = settleCapture({
+    mode: 'full',
+    filed: 0,
+    hasFacts: true,
+    hasMore: false,
+    executionId: 'exec-fact',
+    now: NOW,
+    newId: createIdCounter(),
+    opened: {},
+    questionState: {},
+    executionIds: [],
+  });
+  assert.equal(settled.status, 'sorted');
+});
+
+test('a date that comes back raises a passing who to regular, and the summary says what was noted', () => {
+  const NOW = Date.UTC(2026, 10, 10, 18, 0);
+  const maya = {
+    id: 'who-maya',
+    kind: 'person' as const,
+    name: 'Maya',
+    aliases: [],
+    lastMentionedAt: null,
+    tier: 'passing' as const,
+    tierSetBy: 'nomos' as 'nomos' | 'person',
+    mentionDayKeys: [],
+    taskLinkCount: 0,
+    yearlyDateCount: 0,
+    momentCount: 0,
+    hasRole: false,
+  };
+  const plan = (known = [maya]) =>
+    planWrites({
+      commands: [],
+      keyDates: [
+        {
+          kind: 'setKeyDate',
+          whoRefs: ['$w1'],
+          isAboutMe: false,
+          keyDateId: null,
+          keyKind: 'birthday',
+          label: null,
+          comesBack: null,
+          quote: null,
+          date: { month: 3, day: 3, year: null },
+          precision: null,
+        },
+      ],
+      existing: new Map(),
+      captureId: CAPTURE_ID,
+      executionId: 'exec-date',
+      now: NOW + 1000,
+      seal,
+      newId: createIdCounter(),
+      people: {
+        mentions: [
+          {
+            ref: '$w1',
+            name: 'Maya',
+            kind: 'person' as const,
+            relation: null,
+            species: null,
+            organizationKind: null,
+          },
+        ],
+        places: [],
+        known,
+        knownPlaces: [],
+        assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
+        dayKey: '2026-11-10',
+        capturedAt: NOW,
+      },
+    });
+  const made = plan();
+  assert.equal(made.whoUpdates[0]?.data.tier, 'regular');
+  assert.equal(made.whoUpdates[0]?.data.yearlyDateCount, 1);
+  assert.equal(
+    plan([{ ...maya, tierSetBy: 'person' }]).whoUpdates[0]?.data.tier,
+    undefined,
+    'a tier the person set stays',
+  );
+  const execution = buildExecution(made, {
+    commands: [],
+    captureId: CAPTURE_ID,
+    now: NOW,
+    seal,
+  });
+  assert.equal(
+    openForHelm(KEY, execution.sealed as SealedPayload).summary,
+    "Noted Maya's birthday: March 3",
+  );
+});
+
+test('a fact that contradicts a kept one keeps both, marks both and asks which is true', async () => {
+  const NOW = Date.UTC(2026, 10, 10, 18, 0);
+  const text = 'Dana says centerpieces are $2,100 now';
+  const dana = {
+    id: 'who-dana',
+    kind: 'person' as const,
+    name: 'Dana',
+    aliases: [],
+    lastMentionedAt: null,
+    tier: 'regular' as const,
+    tierSetBy: 'person' as const,
+    mentionDayKeys: [],
+    taskLinkCount: 0,
+    yearlyDateCount: 0,
+    momentCount: 0,
+    hasRole: false,
+  };
+  const older: ExistingFact = {
+    id: 'fact-old',
+    status: 'confirmed',
+    statement: 'Centerpieces are $1,800',
+    subjectIds: ['who-dana'],
+    kind: 'world',
+    topic: null,
+    stated: 'personSaid',
+    createdAt: Date.UTC(2026, 10, 3, 17, 0),
+    disputedWithId: null,
+  };
+  const fact = (extra: Record<string, unknown> = {}) => ({
+    statement: 'Centerpieces are $2,100',
+    quote: text,
+    isStated: true,
+    whoRefs: ['$w1'],
+    placeRefs: [],
+    kind: 'world' as const,
+    topic: null,
+    value: null,
+    isSensitive: false,
+    isAboutMe: false,
+    contradicts: 'fact-old' as string | null,
+    ...extra,
+  });
+  const plan = (
+    noteFacts: ReturnType<typeof fact>[],
+    existingFacts = [older],
+    selfWhoId: string | null = null,
+    commands: Parameters<typeof planWrites>[0]['commands'] = [],
+  ) =>
+    planWrites({
+      commands,
+      existing: new Map(),
+      captureId: CAPTURE_ID,
+      executionId: 'exec-fact',
+      now: NOW + 1000,
+      seal,
+      newId: createIdCounter(),
+      people: {
+        mentions: [
+          {
+            ref: '$w1',
+            name: 'Dana',
+            kind: 'person' as const,
+            relation: null,
+            species: null,
+            organizationKind: null,
+          },
+        ],
+        places: [],
+        known: [dana],
+        knownPlaces: [],
+        assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
+        dayKey: '2026-11-10',
+        capturedAt: NOW,
+      },
+      noteFacts,
+      captureText: text,
+      existingFacts,
+      selfWhoId,
+      timeZone: 'UTC',
+    });
+
+  const crowded = Array.from({ length: 39 }, (_, index) => ({
+    ...create(`Task ${index}`),
+    ref: `$t${index}`,
+    whoRefs: [],
+    placeRefs: [],
+  })) as unknown as Parameters<typeof planWrites>[0]['commands'];
+  const squeezed = plan([fact()], [older], null, crowded);
+  assert.equal(squeezed.factCreates.length, 1);
+  assert.equal(squeezed.questions.length, 0);
+  assert.equal(squeezed.factCreates[0].data.disputedWithId, null);
+
+  const made = plan([fact()]);
+  assert.equal(made.factCreates.length, 1);
+  const [created] = made.factCreates;
+  assert.equal(created.data.disputedWithId, 'fact-old');
+  assert.equal(created.data.status, 'confirmed');
+  assert.equal(created.data.supersedesId, null);
+  assert.deepEqual(made.factDisputes, [
+    { id: 'fact-old', data: { disputedWithId: created.id } },
+  ]);
+  assert.equal(made.factConfirms.length, 0);
+  assert.deepEqual(
+    made.effectRefs.map((ref) => [ref.op, ref.collection, ref.docId]),
+    [
+      ['create', 'facts', created.id],
+      ['update', 'facts', 'fact-old'],
+    ],
+  );
+  assert.equal(
+    made.effects[0].written['sealed.title'],
+    'Fact · Dana · You said · Two answers',
+  );
+  assert.equal(made.effects[1].written.disputedWithId, created.id);
+  assert.equal(made.effects[1].previous?.disputedWithId, null);
+  assert.equal(
+    made.effects[1].written['sealed.statement'],
+    older.statement,
+    'the kept fact keeps its words',
+  );
+  assert.equal(made.effects[1].written.status, undefined);
+
+  assert.equal(made.questions.length, 1);
+  const [question] = made.questions;
+  assert.equal(question.state.kind, 'whichIsTrue');
+  assert.equal(question.state.shape, 'pickOne');
+  assert.equal(question.state.answeredAt, null);
+  const sealed = question.sealed as {
+    prompt: string;
+    builtBy: string;
+    options: {
+      id: string;
+      label: string;
+      detail: string | null;
+      ref: unknown;
+    }[];
+    heldCommands: unknown[];
+  };
+  assert.equal(sealed.prompt, 'Which is true now?');
+  assert.equal(sealed.builtBy, 'code');
+  assert.deepEqual(
+    sealed.options.map((option) => [option.id, option.label, option.detail]),
+    [
+      ['fact-old', 'Centerpieces are $1,800', 'You said · Nov 3'],
+      [created.id, 'Centerpieces are $2,100', 'You said · Nov 10 · Newest'],
+      ['none', 'Neither', null],
+    ],
+  );
+  assert.deepEqual(sealed.options[0].ref, {
+    collection: 'facts',
+    id: 'fact-old',
+  });
+  assert.equal(sealed.options[2].ref, null);
+  assert.deepEqual(sealed.heldCommands, [
+    { kind: 'settleFact', factIds: ['fact-old', created.id] },
+  ]);
+  assert.equal(
+    question.spoken,
+    'Which is true now: Centerpieces are $1,800 or Centerpieces are $2,100?',
+  );
+  assert.equal(
+    openForHelm(
+      KEY,
+      buildExecution(made, {
+        commands: [],
+        captureId: CAPTURE_ID,
+        now: NOW,
+        seal,
+      }).sealed as SealedPayload,
+    ).summary,
+    'Noted a fact',
+  );
+
+  const olderDetail = (existing: ExistingFact) =>
+    (
+      plan([fact({ isStated: false })], [existing]).questions[0].sealed as {
+        options: { detail: string }[];
+      }
+    ).options[0].detail;
+  const inferred: ExistingFact = {
+    ...older,
+    status: 'inferred',
+    stated: 'nomosInferred',
+  };
+  assert.equal(olderDetail(inferred), 'Nomos inferred · Nov 3');
+  assert.equal(
+    olderDetail({ ...inferred, status: 'confirmed' }),
+    'You confirmed · Nov 3',
+  );
+  assert.equal(
+    olderDetail({ ...older, stated: 'personCorrected' }),
+    'You said · Nov 3',
+  );
+
+  const preferred = (value: string, topic: string | null = 'gas station') =>
+    fact({
+      statement: `Goes to ${value} for gas`,
+      kind: 'preference' as const,
+      topic,
+      whoRefs: [],
+      isAboutMe: true,
+      contradicts: null,
+    });
+  const shell = {
+    ...older,
+    id: 'fact-shell',
+    statement: 'Goes to Shell for gas',
+    subjectIds: ['who-self'],
+    kind: 'preference' as const,
+    topic: 'gas station',
+  } satisfies ExistingFact;
+  const flipped = plan([preferred('Chevron')], [shell], 'who-self');
+  assert.equal(flipped.factCreates[0].data.disputedWithId, 'fact-shell');
+  assert.equal(flipped.questions[0].state.kind, 'whichIsTrue');
+  assert.equal(
+    plan([preferred('Chevron', 'groceries')], [shell], 'who-self').questions
+      .length,
+    0,
+    'another topic adds to it',
+  );
+
+  const plain = (made: ReturnType<typeof plan>) => {
+    assert.equal(made.factCreates.length, 1);
+    assert.equal(made.factCreates[0].data.disputedWithId, null);
+    assert.equal(made.factDisputes.length, 0);
+    assert.equal(made.questions.length, 0);
+  };
+  plain(plan([fact({ contradicts: null })]));
+  plain(plan([fact()], [{ ...older, disputedWithId: 'fact-other' }]));
+  plain(plan([fact()], [{ ...older, subjectIds: ['who-other'] }]));
+
+  const repeat = plan(
+    [fact({ statement: 'centerpieces are $1,800' })],
+    [older],
+  );
+  assert.equal(repeat.factCreates.length, 0);
+  assert.equal(repeat.factDisputes.length, 0);
+  assert.equal(repeat.questions.length, 0);
+
+  const book = createAliasBook('f');
+  assert.equal(book.add('fact-old'), 'f1');
+  const read = (alias: string | null) =>
+    normalizeNomosReply(
+      {
+        commands: [
+          {
+            kind: 'noteFact',
+            statement: 'Centerpieces are $2,100',
+            quote: text,
+            isStated: true,
+            whoRefs: ['$w1'],
+            placeRefs: [],
+            factKind: 'world',
+            topic: null,
+            value: null,
+            isSensitive: false,
+            isAboutMe: false,
+            contradicts: alias,
+          },
+        ],
+        mentions: [
+          {
+            ref: '$w1',
+            name: 'Dana',
+            kind: 'person',
+            relation: null,
+            species: null,
+            organizationKind: null,
+          },
+        ],
+        places: [],
+      },
+      { reading: READING, aliases: createAliasBook('t'), facts: book },
+    ).noteFacts[0].contradicts;
+  assert.equal(read('f1'), 'fact-old');
+  assert.equal(read('f9'), null);
+  assert.equal(read(null), null);
+
+  const reading = { ...READING, people: [], dates: [] };
+  const run = await createFixtureProvider(text, reading).runToolLoop({
+    role: 'quick',
+    system: '',
+    messages: [
+      {
+        role: 'user',
+        content: `<known_facts>${JSON.stringify([
+          {
+            alias: 'f1',
+            subject: 'Dana',
+            statement: 'Centerpieces are $1,800',
+            by: 'said',
+          },
+        ])}</known_facts>`,
+      },
+    ],
+    mcpClient: {} as never,
+    terminalTool: FILE_RESULTS_TOOL,
+    limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 1000 },
+  });
+  const [fixtureFact] = normalizeNomosReply(run.terminalInput, {
+    reading,
+    aliases: createAliasBook('t'),
+    facts: book,
+  }).noteFacts;
+  assert.equal(fixtureFact.statement, 'Centerpieces are $2,100');
+  assert.equal(fixtureFact.contradicts, 'fact-old');
+  assert.equal(fixtureFact.quote, text);
+});
+
+test('"Dana is the florist" reads as one stated fact about Dana', async () => {
+  const reading = { ...READING, people: [], dates: [] };
+  const ask = async (words: string) => {
+    const run = await createFixtureProvider(words, reading).runToolLoop({
+      role: 'quick',
+      system: '',
+      messages: [{ role: 'user', content: '' }],
+      mcpClient: {} as never,
+      terminalTool: FILE_RESULTS_TOOL,
+      limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 1000 },
+    });
+    return normalizeNomosReply(run.terminalInput, {
+      reading,
+      aliases: newContext().aliases,
+    });
+  };
+  const said = await ask('Dana is the florist.');
+  assert.equal(said.commands.length, 0);
+  assert.equal(said.noteFacts.length, 1);
+  assert.equal(said.noteFacts[0].statement, 'Dana is the florist');
+  assert.equal(said.noteFacts[0].quote, 'Dana is the florist');
+  assert.equal(said.noteFacts[0].isStated, true);
+  assert.equal(said.mentions.length, 1);
+  assert.deepEqual(said.noteFacts[0].whoRefs, [said.mentions[0].ref]);
+  assert.equal((await ask('Marcus is a plumber')).noteFacts.length, 1);
+  assert.equal((await ask('Is Dana the florist?')).noteFacts.length, 0);
+  assert.equal((await ask('This is the plan')).noteFacts.length, 0);
 });
 
 test('a loop that hits its limit ends as a failed reading, after one ask', async () => {
@@ -782,6 +1548,8 @@ test('every task effect carries the title, so a card can name the task', () => {
         due: null,
         isUrgent: false,
         title: 'Order the rings',
+        whoIds: [],
+        placeIds: [],
         sealed: {
           title: 'Order the rings',
           notes: 'gold',
@@ -801,6 +1569,8 @@ test('every task effect carries the title, so a card can name the task', () => {
         hasDue: true,
         due: { kind: 'day', date: FRIDAY },
         isUrgent: null,
+        whoRefs: [],
+        placeRefs: [],
       },
     ],
     existing,
@@ -824,6 +1594,8 @@ test('every task effect carries the title, so a card can name the task', () => {
         hasDue: false,
         due: null,
         isUrgent: null,
+        whoRefs: [],
+        placeRefs: [],
       },
     ],
     existing,
