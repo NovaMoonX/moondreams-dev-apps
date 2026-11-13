@@ -9,13 +9,21 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
+import SelectionBar from '@/components/SelectionBar';
 import SortControl from '@/components/SortControl';
+import { useBackStep } from '@/hooks/useBackHistory';
+import { useSelection } from '@/hooks/useSelection';
 import { useAppDispatch, useAppSelector } from '@/store';
+import BundleFormSheet from '@apps/going-once/components/bundles/BundleFormSheet';
+import BundleRow from '@apps/going-once/components/bundles/BundleRow';
+import BundleSheet from '@apps/going-once/components/bundles/BundleSheet';
 import SaveAllPhotosSheet from '@apps/going-once/components/relist/SaveAllPhotosSheet';
 import NewThingFlow from '@apps/going-once/components/things/NewThingFlow';
 import OpenThing from '@apps/going-once/components/things/OpenThing';
 import ThingRow from '@apps/going-once/components/things/ThingRow';
 import {
+  MAX_BUNDLE_THINGS,
+  MIN_BUNDLE_THINGS,
   ITEM_SORT_OPTIONS,
   DID_NOT_SELL_LABEL,
   SEARCH_FROM_ITEMS,
@@ -24,13 +32,15 @@ import {
 } from '@apps/going-once/constants';
 import { retryLoading } from '@apps/going-once/store';
 import {
+  selectBundles,
+  selectItemsById,
   selectItems,
   selectIsSaleFinished,
   selectItemsStatus,
   selectPhotoUploads,
   selectSaleById,
 } from '@apps/going-once/store/selectors';
-import type { Item } from '@apps/going-once/types';
+import type { Bundle, BundleStatus, Item } from '@apps/going-once/types';
 import { isSaleSeller } from '@apps/going-once/utils/roles';
 import {
   isListable,
@@ -43,6 +53,28 @@ import {
   formatStatusTotal,
   getStatusSummary,
 } from '@apps/going-once/utils/statusSummary';
+
+const BUNDLE_STATUS_BY_VIEW: Record<StatusView, BundleStatus> = {
+  AVAILABLE: 'ACTIVE',
+  PENDING: 'PENDING',
+  SOLD: 'SOLD',
+};
+
+const matchesBundleSearch = (
+  bundle: Bundle,
+  query: string,
+  itemsById: Record<string, Item>,
+) => {
+  const needle = query.trim().toLowerCase();
+  return (
+    needle === '' ||
+    bundle.name.toLowerCase().includes(needle) ||
+    bundle.itemIds.some((id) => {
+      const item = itemsById[id];
+      return item !== undefined && matchesSearch(item, needle);
+    })
+  );
+};
 
 const ROW_HEIGHT = 72;
 const EAGER_ROWS = 10;
@@ -61,6 +93,10 @@ interface ItemsSectionProps {
   openId: string | null;
   onOpenThing: (id: string) => void;
   onCloseThing: () => void;
+  /** The bundle whose sheet is open, kept in the address. */
+  openBundleId: string | null;
+  onOpenBundle: (id: string) => void;
+  onCloseBundle: () => void;
   /** The status the list is switched to, kept in the address so the Sale tab's tiles can open it. */
   statusView: StatusView;
   onStatusViewChange: (view: StatusView) => void;
@@ -76,6 +112,9 @@ function ItemsSection({
   openId,
   onOpenThing,
   onCloseThing,
+  openBundleId,
+  onOpenBundle,
+  onCloseBundle,
   statusView,
   onStatusViewChange,
   resumeId,
@@ -90,11 +129,19 @@ function ItemsSection({
     const resume = items.find((item) => item.id === resumeId);
     return resume === undefined ? null : { resume };
   });
+  const bundles = useAppSelector((state) => selectBundles(state, saleId));
+  const itemsById = useAppSelector((state) => selectItemsById(state, saleId));
+  const selection = useSelection();
+  const [isMakingBundle, setIsMakingBundle] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
   const [isSavingPhotos, setIsSavingPhotos] = useState(false);
   const openItem = items.find((item) => item.id === openId) ?? null;
+  const openBundle =
+    bundles.find((bundle) => bundle.id === openBundleId) ?? null;
+  const getBundleName = (item: Item) =>
+    bundles.find((bundle) => bundle.id === item.bundleId)?.name ?? null;
   const isSeller = isSaleSeller(sale, uid);
   const isFinished = useAppSelector((state) =>
     selectIsSaleFinished(state, saleId),
@@ -130,6 +177,22 @@ function ItemsSection({
   );
   const allTakenOff = searched.filter((item) => item.status === 'WITHDRAWN');
   const takenOff = statusView === 'SOLD' ? sortItems(allTakenOff, order) : [];
+  const bundlesInView = bundles
+    .filter(
+      (bundle) =>
+        bundle.status === BUNDLE_STATUS_BY_VIEW[statusView] &&
+        (!hasTools || matchesBundleSearch(bundle, query, itemsById)),
+    )
+    .sort((first, second) => second.createdAt - first.createdAt);
+  const isPickable = (item: Item) =>
+    item.status === 'AVAILABLE' && isListable(item) && item.bundleId === null;
+  const pickedIds = shown
+    .filter((item) => isPickable(item) && selection.ids.has(item.id))
+    .map((item) => item.id);
+  const isPicking = selection.isActive && statusView === 'AVAILABLE';
+  const canGroup =
+    pickedIds.length >= MIN_BUNDLE_THINGS &&
+    pickedIds.length <= MAX_BUNDLE_THINGS;
   const takenOffRef = useRef<HTMLDivElement | null>(null);
 
   const showTakenOff = () => {
@@ -138,6 +201,24 @@ function ItemsSection({
       takenOffRef.current?.scrollIntoView({ block: 'start' }),
     );
   };
+
+  useBackStep(selection.isActive, selection.exit);
+
+  const changeView = (view: StatusView) => {
+    selection.exit();
+    onStatusViewChange(view);
+  };
+
+  // A link to a bundle that is gone (unbundled, or from another sale) opens nothing, so the address drops it.
+  useEffect(() => {
+    if (
+      openBundleId !== null &&
+      openBundle === null &&
+      status === 'ready' &&
+      items.length > 0
+    )
+      onCloseBundle();
+  }, [openBundleId, openBundle, status, items.length, onCloseBundle]);
 
   // A link to a thing that is gone (deleted, or from another sale) opens nothing, so the address drops it.
   useEffect(() => {
@@ -157,6 +238,24 @@ function ItemsSection({
           item={item}
           uploadingCount={uploads[item.id] ?? 0}
           onOpen={() => onOpenThing(item.id)}
+          bundleName={getBundleName(item)}
+          onLongPress={
+            !isFinished && !isPicking && isPickable(item)
+              ? () => {
+                  selection.start();
+                  selection.toggle([item.id]);
+                }
+              : undefined
+          }
+          pick={
+            isPicking
+              ? {
+                  isPickable: isPickable(item),
+                  isChecked: selection.ids.has(item.id),
+                  onToggle: () => selection.toggle([item.id]),
+                }
+              : undefined
+          }
         />
       </LazyMount>
     </li>
@@ -257,7 +356,7 @@ function ItemsSection({
             detail: String(summary[value].count),
           }))}
           value={statusView}
-          onChange={onStatusViewChange}
+          onChange={changeView}
         />
       )}
       {unlistedCount > 0 &&
@@ -289,12 +388,36 @@ function ItemsSection({
           Nothing matches that. Try another word.
         </p>
       )}
-      {searched.length > 0 && shown.length === 0 && (
-        <p className='text-muted-foreground text-center text-sm'>
-          {isSearching
-            ? `No matches in ${getStatusLabel(statusView)}`
-            : getEmptyText(statusView)}
-        </p>
+      {searched.length > 0 &&
+        shown.length === 0 &&
+        bundlesInView.length === 0 && (
+          <p className='text-muted-foreground text-center text-sm'>
+            {isSearching
+              ? `No matches in ${getStatusLabel(statusView)}`
+              : getEmptyText(statusView)}
+          </p>
+        )}
+      {bundlesInView.length > 0 && !isPicking && (
+        <>
+          <SectionDivider label={`Bundles · ${bundlesInView.length}`} />
+          <ul className='space-y-2'>
+            {bundlesInView.map((bundle, index) => (
+              <li key={bundle.id}>
+                <LazyMount
+                  estimatedHeight={ROW_HEIGHT}
+                  eager={index < EAGER_ROWS}
+                >
+                  <BundleRow
+                    bundle={bundle}
+                    itemsById={itemsById}
+                    onOpen={() => onOpenBundle(bundle.id)}
+                  />
+                </LazyMount>
+              </li>
+            ))}
+          </ul>
+          {shown.length > 0 && <SectionDivider label='Things' />}
+        </>
       )}
       {shown.length > 0 && (
         <ul className='space-y-2'>
@@ -338,9 +461,57 @@ function ItemsSection({
           isSeller={isSeller}
           sold={totals.SOLD}
           onClose={onCloseThing}
+          onOpenBundle={(id) => {
+            onCloseThing();
+            onOpenBundle(id);
+          }}
           onFinish={() => {
             setAdding({ resume: openItem });
             onCloseThing();
+          }}
+        />
+      )}
+      {openBundle && (
+        <BundleSheet
+          key={openBundle.id}
+          bundle={openBundle}
+          uid={uid}
+          onClose={onCloseBundle}
+          onOpenThing={(id) => {
+            onCloseBundle();
+            onOpenThing(id);
+          }}
+        />
+      )}
+      {isPicking && (
+        <SelectionBar
+          note={
+            pickedIds.length === 0
+              ? `Pick ${MIN_BUNDLE_THINGS} or more things`
+              : `${pickedIds.length} picked`
+          }
+          actions={[
+            { key: 'cancel', label: 'Cancel', onClick: selection.exit },
+          ]}
+          primary={{
+            key: 'group',
+            label: 'Group into a bundle',
+            shortLabel: 'Group into a bundle',
+            isDisabled: !canGroup,
+            onClick: () => setIsMakingBundle(true),
+          }}
+        />
+      )}
+      {isMakingBundle && (
+        <BundleFormSheet
+          saleId={saleId}
+          uid={uid}
+          bundle={null}
+          startItemIds={pickedIds}
+          onClose={() => setIsMakingBundle(false)}
+          onSaved={() => {
+            setIsMakingBundle(false);
+            selection.exit();
           }}
         />
       )}

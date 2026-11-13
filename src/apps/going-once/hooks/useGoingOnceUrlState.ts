@@ -23,7 +23,7 @@ const VIEW_PARAMS = Object.keys(STATUS_VIEW_PARAMS) as [
   ...(keyof typeof STATUS_VIEW_PARAMS)[],
 ];
 
-/** The open sale, its tab and the open thing, kept in the URL so a reload, a link and a return from another app land on the same screen. */
+/** The open sale, its tab and the open thing and bundle, kept in the URL so a reload, a link and a return from another app land on the same screen. */
 export function useGoingOnceUrlState() {
   const navigate = useNavigate();
   const [saleId, setSaleId] = useQueryState('sale', parseAsString);
@@ -33,6 +33,7 @@ export function useGoingOnceUrlState() {
   );
 
   const [thingId, setThingId] = useQueryState('thing', parseAsString);
+  const [bundleId, setBundleId] = useQueryState('bundle', parseAsString);
   const [requestedView, setRequestedView] = useQueryState(
     'status',
     parseAsStringLiteral(VIEW_PARAMS),
@@ -65,8 +66,11 @@ export function useGoingOnceUrlState() {
   };
   const openThing = (id: string) => setThingId(id, { history: 'replace' });
   const closeThing = () => setThingId(null, { history: 'replace' });
+  const openBundle = (id: string) => setBundleId(id, { history: 'replace' });
+  const closeBundle = () => setBundleId(null, { history: 'replace' });
   const closeSale = () => {
     void closeThing();
+    void closeBundle();
     clearInbox();
     if (isHistoryStep('goingOnceSaleStep')) {
       navigate(-1);
@@ -80,11 +84,13 @@ export function useGoingOnceUrlState() {
     setRequestedView(PARAM_BY_VIEW[view], { history: 'replace' });
   const showThingsOn = (view: StatusView) => {
     void closeThing();
+    void closeBundle();
     void setRequestedTab(null, { history: 'replace' });
     return showStatusView(view);
   };
   const showTab = (tab: GoingOnceTab) => {
     void closeThing();
+    void closeBundle();
     if (tab !== 'inbox') clearInbox();
     if (tab !== 'things') void setRequestedView(null, { history: 'replace' });
     return setRequestedTab(tab === DEFAULT_GOING_ONCE_TAB ? null : tab, {
@@ -117,6 +123,7 @@ export function useGoingOnceUrlState() {
     openInquiry,
     closeInquiry,
     thingId,
+    bundleId,
     activeTab,
     statusView,
     showStatusView,
@@ -126,5 +133,7 @@ export function useGoingOnceUrlState() {
     showTab,
     openThing,
     closeThing,
+    openBundle,
+    closeBundle,
   };
 }

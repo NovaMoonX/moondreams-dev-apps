@@ -156,6 +156,9 @@ function GoingOnce() {
     showTab,
     openThing,
     closeThing,
+    bundleId,
+    openBundle,
+    closeBundle,
   } = useGoingOnceUrlState();
   const sales = useAppSelector(selectSales);
   const salesStatus = useAppSelector(selectSalesStatus);
@@ -291,6 +294,9 @@ function GoingOnce() {
                 openId={thingId}
                 onOpenThing={openThing}
                 onCloseThing={closeThing}
+                openBundleId={bundleId}
+                onOpenBundle={openBundle}
+                onCloseBundle={closeBundle}
                 statusView={statusView}
                 onStatusViewChange={showStatusView}
                 resumeId={resumeId}
@@ -326,6 +332,9 @@ function GoingOnce() {
                 openThingId={thingId}
                 onOpenThing={openThing}
                 onCloseThing={closeThing}
+                onOpenBundle={(id) => {
+                  void showTab('things').then(() => openBundle(id));
+                }}
                 onFinishThing={(id) => {
                   setResumeId(id);
                   void showTab('things');

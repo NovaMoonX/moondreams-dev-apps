@@ -56,8 +56,15 @@ export const toPrefilledMessage = (title: string, isPending = false) => {
     : `Hi! Is the ${name} still available?`;
 };
 
+/** The bundle's name from the label an inquiry kept ("Cat stuff (4 things)"). */
+const toBundleName = (label: string) => label.replace(/ \(\d+ things?\)$/, '');
+
 /** Whether the message is just one the form starts with, so a row has nothing of the buyer's own to show. */
 export const isPrefilledMessage = (inquiry: Inquiry) =>
+  inquiry.message ===
+    (inquiry.bundleLabelAtSend === null
+      ? undefined
+      : `Hi! Is the ${toBundleName(inquiry.bundleLabelAtSend)} bundle still available?`) ||
   [false, true].some(
     (isPending) =>
       inquiry.message ===
