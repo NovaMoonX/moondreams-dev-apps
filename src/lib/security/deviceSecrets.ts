@@ -76,16 +76,20 @@ export async function keepDeviceSecret(
   await withStore('readwrite', (store) => store.put(record));
 }
 
-/** The secret kept for this account on this device, or `null` when none is kept, it no longer opens, or it went unchecked too long (then it is removed). */
+/** The secret kept for this account on this device, or `null` when none is kept, it no longer opens, or it went unchecked too long (then it is removed); with `throwsOnStoreError` a store that can't be read throws instead of reading as none. */
 export async function readDeviceSecret(
   uid: string,
   name: string,
   maxUncheckedMs = Infinity,
+  options: { throwsOnStoreError?: boolean } = {},
 ): Promise<string | null> {
   if (!canKeepDeviceSecrets()) return null;
   const record = await withStore<KeptSecret | undefined>('readonly', (store) =>
     store.get(toId(uid, name)),
-  ).catch(() => undefined);
+  ).catch((error: unknown) => {
+    if (options.throwsOnStoreError) throw error;
+    return undefined;
+  });
   if (!record) return null;
   if (!(Date.now() - record.checkedAt <= maxUncheckedMs)) {
     await forgetDeviceSecret(uid, name).catch(() => undefined);

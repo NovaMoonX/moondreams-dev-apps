@@ -4,6 +4,7 @@ import { Check, Plus } from 'lucide-react';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
+import { getPendingDeviceWorkCount } from '@/lib/auth/signOutChecks';
 import {
   getRememberedPhoto,
   type RememberedAccount,
@@ -30,10 +31,14 @@ function DeviceAccountList({
   const { confirm } = useActionModal();
 
   const handleForget = async (account: RememberedAccount) => {
+    const unsent = getPendingDeviceWorkCount(account.uid);
     const isConfirmed = await confirm({
       title: `Remove ${account.email ?? getName(account)}?`,
-      message:
-        'It leaves this list, along with the drafts and view choices this device kept for it. The account itself is untouched, and you can add it back any time.',
+      message: `It leaves this list, along with the drafts and view choices this device kept for it.${
+        unsent > 0
+          ? ` ${unsent === 1 ? '1 unsent thing' : `${unsent} unsent things`} kept only on this device for it will be deleted too.`
+          : ''
+      } The account itself is untouched, and you can add it back any time.`,
       confirmText: 'Remove from this device',
       destructive: true,
     });
