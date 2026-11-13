@@ -27,7 +27,7 @@ const holds = (payload: BillSealed, amount: MoneyRange) =>
   payload.amount.lowCents === amount.lowCents &&
   payload.amount.highCents === amount.highCents;
 
-/** Sets a bill's amount from today on, in each stretch that holds today's current amount, so a later planned change to a different amount and its end are kept. Returns each stretch's amount before, or null when no stretch needed writing. */
+/** Only stretches holding today's amount are written, so a later planned change survives. */
 export async function writeBillAmount(
   uid: string,
   encryption: RunwayEncryption,
@@ -71,7 +71,6 @@ export async function writeBillAmount(
   }));
 }
 
-/** Takes back an amount this action wrote, restoring exactly the stretches it wrote; refuses when any of them was changed again since. */
 export async function revertBillAmount(
   uid: string,
   encryption: RunwayEncryption,

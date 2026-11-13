@@ -101,7 +101,7 @@ const selectAllHints = createSelector(
       : NO_HINTS,
 );
 
-/** What the bank's repeating charges suggest, minus what the person dismissed on this device. Takes today, the dismissals' version (they live on the device) and the signed-in uid as its arguments. */
+/** What the bank's repeating charges suggest, minus what the person dismissed on this device. Dismissals live on the device, so their version is passed in. */
 export const selectRecurringHints = createSelector(
   [
     (state: RootState, today: number) => selectAllHints(state, today),

@@ -40,7 +40,7 @@ import {
 interface BillPaidFromNoticeProps {
   billId: string;
   bill: BillSealed;
-  /** From `usePaidFromMessage`; null when the pay carries the payment. */
+  /** Null when the pay carries the payment. */
   message: string | null;
   today: number;
   /** Opens the bill's form at its Paid from question. */

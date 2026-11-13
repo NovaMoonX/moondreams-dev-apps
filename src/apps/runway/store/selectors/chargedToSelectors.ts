@@ -104,7 +104,7 @@ const selectAllHints = createSelector(
       : NO_HINTS,
 );
 
-/** What the bills' recent bank charges suggest they are charged to, minus what the person declined on this device. Takes today, the declines' version (they live on the device) and the signed-in uid as its arguments. */
+/** What the bills' recent bank charges suggest they are charged to, minus what the person declined on this device. Declines live on the device, so their version is passed in. */
 export const selectChargedToHints = createSelector(
   [
     (state: RootState, today: number) => selectAllHints(state, today),
