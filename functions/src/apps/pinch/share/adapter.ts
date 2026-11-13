@@ -174,11 +174,16 @@ const readItems = (value: unknown): MealItemRow[] =>
       )
     : [];
 
+interface CategoryRead {
+  records: SharedRecord[];
+  isFull: boolean;
+}
+
 async function syncPlannedMeals(
   firestore: Firestore,
   uid: string,
   windowStart: number,
-): Promise<SharedRecord[]> {
+): Promise<CategoryRead> {
   const snapshot = await firestore
     .collection(kitchenPath(uid, 'plannedMeals'))
     .where('date', '>=', windowStart)
@@ -213,7 +218,7 @@ async function syncPlannedMeals(
     ),
   ]);
 
-  return meals.flatMap((meal) => {
+  const records = meals.flatMap((meal) => {
     const title =
       meal.name ??
       meal.items
@@ -240,6 +245,7 @@ async function syncPlannedMeals(
       }),
     ];
   });
+  return { records, isFull: snapshot.size < MEAL_LIMIT };
 }
 
 const formatAmount = (amount: unknown, unit: unknown) => {
@@ -255,7 +261,7 @@ const formatAmount = (amount: unknown, unit: unknown) => {
 async function syncShoppingList(
   firestore: Firestore,
   uid: string,
-): Promise<SharedRecord[]> {
+): Promise<CategoryRead> {
   const snapshot = await firestore
     .collection(kitchenPath(uid, 'shoppingItems'))
     .where('isChecked', '==', false)
@@ -269,7 +275,7 @@ async function syncShoppingList(
       return id === null ? [] : [id];
     }),
   );
-  return snapshot.docs.flatMap((doc) => {
+  const records = snapshot.docs.flatMap((doc) => {
     const ingredientId = readText(doc.get('ingredientId'));
     const title =
       ingredientId === null ? null : (names.get(ingredientId) ?? null);
@@ -284,13 +290,14 @@ async function syncShoppingList(
       }),
     ];
   });
+  return { records, isFull: snapshot.size < LINE_LIMIT };
 }
 
 async function syncUseSoon(
   firestore: Firestore,
   uid: string,
   now: number,
-): Promise<SharedRecord[]> {
+): Promise<CategoryRead> {
   const settings = await firestore.doc(`apps/pinch/settings/${uid}`).get();
   const { leadDays, timeZone } = readReminders(settings.data() ?? {});
   const today = dayToUtcMidnight(getLocalMoment(now, timeZone ?? 'UTC').day);
@@ -338,19 +345,22 @@ async function syncUseSoon(
       }),
     ];
   };
-  return [
-    ...containers.docs.flatMap((doc) =>
-      toUseSoon('containers', doc, doc.get('title'), doc.get('eatBy')),
-    ),
-    ...packages.docs.flatMap((doc) =>
-      toUseSoon(
-        'packages',
-        doc,
-        doc.get('ingredientName'),
-        doc.get('expiresAt'),
+  return {
+    records: [
+      ...containers.docs.flatMap((doc) =>
+        toUseSoon('containers', doc, doc.get('title'), doc.get('eatBy')),
       ),
-    ),
-  ];
+      ...packages.docs.flatMap((doc) =>
+        toUseSoon(
+          'packages',
+          doc,
+          doc.get('ingredientName'),
+          doc.get('expiresAt'),
+        ),
+      ),
+    ],
+    isFull: containers.size < STOCK_LIMIT && packages.size < STOCK_LIMIT,
+  };
 }
 
 const DEEP_LINKS: Record<string, string> = {
@@ -404,11 +414,11 @@ export function createPinchAdapter(
     status: async (ctx: SourceCtx) =>
       (await deps.canOpen(ctx.uid)) ? 'ok' : 'noAccess',
     syncPage: async (ctx, req): Promise<SyncPageResult> => ({
-      records: await readCategory(ctx.uid, req),
+      ...(await readCategory(ctx.uid, req)),
       deletedRefs: [],
       cursor: null,
-      isFull: true,
       isDone: true,
+      resumeState: null,
     }),
     deepLink: (ref) => {
       const [collection] = ref.split('/');

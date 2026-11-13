@@ -10,22 +10,32 @@ import type { HelmProfile } from '@apps/helm/types';
 
 /** A profile written before a field existed reads that field as its default, never as missing. */
 const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
+  assistantName: data.assistantName ?? null,
+  assistantTone: data.assistantTone ?? null,
+  theme: data.theme ?? null,
   timeZone: data.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
   dayStartTime: data.dayStartTime ?? DEFAULT_DAY_START_TIME,
   dayEndTime: data.dayEndTime ?? DEFAULT_DAY_END_TIME,
   planFillPercent: data.planFillPercent ?? DEFAULT_PLAN_FILL_PERCENT,
+  shiftCalendarIds: data.shiftCalendarIds ?? [],
+  busyAllDayEventRefs: data.busyAllDayEventRefs ?? [],
+  calendarOfferFoldedAt: data.calendarOfferFoldedAt ?? null,
   hasSeenAiNotice: data.hasSeenAiNotice ?? false,
   voiceMode: data.voiceMode ?? 'cloudWhenOnline',
   isWakeWordOn: data.isWakeWordOn ?? false,
   isHandsFreeOn: data.isHandsFreeOn ?? true,
   hasSeenVoiceNotice: data.hasSeenVoiceNotice ?? false,
+  selfWhoId: data.selfWhoId ?? null,
+  currentPlace: data.currentPlace ?? null,
+  styleLearnedThroughAt: data.styleLearnedThroughAt ?? null,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,
 });
 
 export function startProfileListener(
   uid: string,
-  onChange: (profile: HelmProfile | null) => void,
+  /** `isFromServer` is false for a snapshot the device answered from its own copy. */
+  onChange: (profile: HelmProfile | null, isFromServer: boolean) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   return onSnapshot(
@@ -36,6 +46,7 @@ export function startProfileListener(
         snapshot.exists()
           ? toProfile(snapshot.data() as Partial<HelmProfile>)
           : null,
+        !snapshot.metadata.fromCache,
       ),
     onError,
   );

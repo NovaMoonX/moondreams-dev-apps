@@ -85,20 +85,22 @@ function OfflineBanner() {
     <div
       aria-live='polite'
       className={join(
-        'pointer-events-none fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-center gap-2 text-sm font-medium transition-transform duration-300 ease-out',
+        'pointer-events-none fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-center gap-2 px-2 text-sm font-medium transition-transform duration-300 ease-out',
         status ? 'translate-y-0' : '-translate-y-full',
         variant.className,
       )}
     >
-      <Icon className={join('size-4', variant.spin && 'animate-spin')} />
-      <span>
+      <Icon
+        className={join('size-4 shrink-0', variant.spin && 'animate-spin')}
+      />
+      <span className='min-w-0 truncate'>
         {shownVariant === 'notice' ? shownNotice?.label : variant.label}
       </span>
       {shownVariant === 'update' && (
         <Button
           size='sm'
           variant='base'
-          className='bg-primary-foreground! text-primary! hover:bg-primary-foreground/85! focus-visible:outline-primary-foreground! pointer-events-auto relative h-7 px-3 after:absolute after:-inset-1.5 focus-visible:outline-2 focus-visible:outline-offset-2'
+          className='bg-primary-foreground! text-primary! hover:bg-primary-foreground/85! focus-visible:outline-primary-foreground! pointer-events-auto relative h-7 shrink-0 px-3 whitespace-nowrap after:absolute after:-inset-1.5 focus-visible:outline-2 focus-visible:outline-offset-2'
           onClick={restart}
         >
           Restart
@@ -108,7 +110,7 @@ function OfflineBanner() {
         <Button
           size='sm'
           variant='base'
-          className='bg-primary-foreground! text-primary! hover:bg-primary-foreground/85! focus-visible:outline-primary-foreground! pointer-events-auto relative h-7 px-3 after:absolute after:-inset-1.5 focus-visible:outline-2 focus-visible:outline-offset-2'
+          className='bg-primary-foreground! text-primary! hover:bg-primary-foreground/85! focus-visible:outline-primary-foreground! pointer-events-auto relative h-7 shrink-0 px-3 whitespace-nowrap after:absolute after:-inset-1.5 focus-visible:outline-2 focus-visible:outline-offset-2'
           onClick={shownNotice.onAction}
         >
           {shownNotice.actionLabel}

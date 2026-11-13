@@ -41,6 +41,8 @@ export async function openExecution(
     autonomyLevel: data.autonomyLevel ?? 2,
     state: data.state ?? 'succeeded',
     effectRefs: data.effectRefs ?? [],
+    linkedWhoIds: data.linkedWhoIds ?? [],
+    linkedPlaceIds: data.linkedPlaceIds ?? [],
     undoesExecutionId: data.undoesExecutionId ?? null,
     undoneByExecutionId: data.undoneByExecutionId ?? null,
     questionRef: data.questionRef ?? null,
@@ -59,6 +61,7 @@ export async function openExecution(
       undoReport: payload.undoReport ?? null,
       spoken: payload.spoken ?? null,
       goneIds: payload.goneIds ?? null,
+      lines: payload.lines ?? [],
       isUnreadable: false,
     };
   } catch {
@@ -69,6 +72,7 @@ export async function openExecution(
       undoReport: null,
       spoken: null,
       goneIds: null,
+      lines: [],
       isUnreadable: true,
     };
   }
