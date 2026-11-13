@@ -16,7 +16,8 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import { CHANGE_WORDS, HORIZON_WORDS } from '@apps/runway/constants';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectGoalCovers } from '@apps/runway/store/selectors/overviewSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectCostPaid,
   selectStance,
@@ -72,6 +73,9 @@ function HorizonChangeView({
   const balances = useAppSelector(selectBalances);
   const assignedCents = balances.assignedByItem[itemId] ?? 0;
   const paid = useAppSelector(selectCostPaid)[itemId];
+  const goalCover =
+    useAppSelector((state) => selectGoalCovers(state, flow.today))[itemId] ??
+    null;
   const shownBlocker = flow.getBlocker(blocker);
   const readSide = (payload: HorizonSealed) => {
     const { plan, figures } = getHorizonStatus(
@@ -82,6 +86,7 @@ function HorizonChangeView({
       paid,
       balances.costPaidByItem[itemId] ?? 0,
       balances.costFromFreeByItem[itemId] ?? 0,
+      goalCover,
     );
     const { shortfall } = plan;
     const text = shortfall
@@ -148,7 +153,7 @@ function HorizonChangeView({
 
   return (
     <ChangeSteps
-      isReason={flow.step === 'reason'}
+      isReason={flow.step !== 'form'}
       reason={
         <ChangeReason
           flow={flow}

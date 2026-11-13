@@ -42,6 +42,7 @@ import HeldInPromptScreen from '@apps/runway/screens/link/HeldInPromptScreen';
 import LinkMatchView from '@apps/runway/screens/link/LinkMatchView';
 import type { NormalizedAccount, OpenLink } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
+import { cleanBankName } from '@apps/runway/utils/accountText';
 
 interface LinkBankScreenProps {
   onClose: () => void;
@@ -99,7 +100,7 @@ const presetChoices = (
 };
 
 const toRowLabel = (row: LinkSession['accounts'][number]) =>
-  `${row.name}${row.mask ? ` \u2022\u2022${row.mask}` : ''}`;
+  `${cleanBankName(row.name)}${row.mask ? ` \u2022\u2022${row.mask}` : ''}`;
 
 /** The name of the item a link was started from, or null when it started from Settings or the add picker. */
 const getStartedName = (startedFrom: LinkBankScreenProps['startedFrom']) => {

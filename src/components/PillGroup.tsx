@@ -170,6 +170,8 @@ interface PillOptionsProps<T extends string> {
   wrapsNarrow?: boolean;
   /** A short list keeps every option visible in its given order: no two-row collapse, no "Show all", no floating the chosen one. Past the search threshold it collapses like any other. */
   showAll?: boolean;
+  /** False when the caller searches several groups at once with its own box. */
+  isSearchable?: boolean;
 }
 
 /** The pills of a pick-one or pick-several row that can grow: a search once there are many, and on a phone two rows until "Show all", but only when more than three pills would be hidden. */
@@ -184,6 +186,7 @@ export function PillOptions<T extends string>({
   isSingle = false,
   wrapsNarrow = false,
   showAll: wantsAll = false,
+  isSearchable = true,
 }: PillOptionsProps<T>) {
   const showAll = wantsAll && options.length <= SEARCH_THRESHOLD;
   const isScrolling = isThin && options.some((option) => option.detail);
@@ -193,7 +196,7 @@ export function PillOptions<T extends string>({
   const [trim, setTrim] = useState<Trim | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<() => void>(() => undefined);
-  const hasSearch = options.length > SEARCH_THRESHOLD;
+  const hasSearch = isSearchable && options.length > SEARCH_THRESHOLD;
   const trimmedQuery = hasSearch ? query.trim().toLowerCase() : '';
   const filtered =
     trimmedQuery === ''
@@ -428,6 +431,7 @@ interface PillGroupProps<T extends string> {
   leading?: ReactNode;
   isThin?: boolean;
   wrapsNarrow?: boolean;
+  isSearchable?: boolean;
 }
 
 /** Pick exactly one of a few options. */
@@ -439,6 +443,7 @@ export function PillGroup<T extends string>({
   leading,
   isThin,
   wrapsNarrow,
+  isSearchable,
 }: PillGroupProps<T>) {
   return (
     <PillOptions
@@ -447,6 +452,7 @@ export function PillGroup<T extends string>({
       leading={leading}
       isThin={isThin}
       wrapsNarrow={wrapsNarrow}
+      isSearchable={isSearchable}
       isSingle
       isSelected={(optionValue) => value === optionValue}
       onToggle={onChange}

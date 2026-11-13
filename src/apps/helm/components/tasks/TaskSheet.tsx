@@ -2,20 +2,29 @@ import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Hourglass } from 'lucide-react';
+import { CalendarCheck, Hourglass } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SummaryRow from '@/components/SummaryRow';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import {
+  PlacementBody,
+  PlacementFooter,
+} from '@apps/helm/components/today/Placement';
+import AskAboutThisControl from '@apps/helm/components/shell/AskAboutThisControl';
+import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import TaskDetails, {
   WhenRow,
   WordsEditor,
@@ -29,21 +38,48 @@ import {
   NOTES_MAX_CHARS,
   TASK_TITLE_CAP,
 } from '@apps/helm/constants';
+import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import {
+  useLinkedNames,
+  type LinkedName,
+} from '@apps/helm/hooks/useLinkedNames';
+import { usePlacementMode } from '@apps/helm/hooks/usePlacementMode';
+import { usePlanSources } from '@apps/helm/hooks/usePlanDays';
+import {
+  useScreenContext,
+  type ContentView,
+} from '@apps/helm/hooks/useScreenContext';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { addKeptSlot } from '@apps/helm/store/actions/planActions';
 import {
   deleteTask,
   updateTaskFields,
   updateTaskWords,
   type RestoreResult,
 } from '@apps/helm/store/actions/taskActions';
+import { selectProjectById } from '@apps/helm/store/selectors/projectSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type {
   OpenTask,
   TaskActivity,
   TaskPlainFields,
+  RecordRef,
   TaskWordsChange,
 } from '@apps/helm/types';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
+import {
+  formatDayWord,
+  formatLength,
+  formatSlotRange,
+  shiftDayKey,
+  toDayKey,
+} from '@apps/helm/utils/planDays';
+import {
+  getOpenings,
+  toPlannerTask,
+  type Opening,
+} from '@apps/helm/utils/planInput';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
 
@@ -53,6 +89,8 @@ interface TaskSheetProps {
   /** When it was marked done, while held. */
   doneAt: number | null;
   activity: TaskActivity | null;
+  /** The list the sheet is open over, which stays what "these" means beside the one task. */
+  screen: { view: ContentView; visible: RecordRef[] };
   onClose: () => void;
   onTick: (task: OpenTask) => void;
   onUndoTick: (taskId: string) => void;
@@ -63,7 +101,8 @@ interface TaskSheetProps {
   ) => void;
 }
 
-type View = 'main' | 'steps' | 'waits' | 'title' | 'notes' | `step:${string}`;
+type View =
+  'main' | 'steps' | 'waits' | 'title' | 'notes' | 'plan' | `step:${string}`;
 
 /** Words just saved, shown until the store carries them. */
 interface Held<T> {
@@ -74,9 +113,18 @@ interface Held<T> {
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const FOOT = 'px-6 pt-2 pb-6';
+const FOOT = 'px-6 pt-2 pb-3';
 const SMALL_ACTION =
   "text-foreground! relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']";
+
+const getLinkedLabel = (kind: LinkedName['kind']) =>
+  kind === 'person'
+    ? HELM_COPY.linkedPerson
+    : kind === 'pet'
+      ? HELM_COPY.linkedPet
+      : kind === 'organization'
+        ? HELM_COPY.linkedOrganization
+        : HELM_COPY.linkedPlace;
 
 const readHeld = <T,>(held: Held<T> | null, taskId: string, current: T) =>
   held && held.taskId === taskId && held.from === current ? held.text : current;
@@ -116,11 +164,35 @@ function ConditionLine({ text, actionLabel, onAction }: ConditionLineProps) {
   );
 }
 
+function PublishTaskScreen({
+  taskId,
+  title,
+  screen,
+}: {
+  taskId: string;
+  title: string;
+  screen: TaskSheetProps['screen'];
+}) {
+  useScreenContext(
+    screen.view,
+    { collection: 'tasks', id: taskId },
+    screen.visible,
+    {
+      ask: HELM_COPY.askTask,
+      chip: HELM_COPY.chipAbout(title),
+      back: HELM_COPY.backToTask,
+    },
+    'sheet',
+  );
+  return null;
+}
+
 /** One task: its words, day and steps, and the fields most tasks leave empty. Plain fields save as they change; words save on their own Done and need a connection. */
 function TaskSheet({
   task,
   doneAt,
   activity,
+  screen,
   onClose,
   onTick,
   onUndoTick,
@@ -141,12 +213,38 @@ function TaskSheet({
   const [heldNotes, setHeldNotes] = useState<Held<string | null> | null>(null);
   const [isWordsDirty, setIsWordsDirty] = useState(false);
   const isDeleting = useRef(false);
+  const assistantName = useAssistantName();
+  const { showView } = useHelmUrlState();
+  const linked = useLinkedNames(task ?? { whoIds: [], placeIds: [] });
+  const taskProject = useAppSelector(selectProjectById).get(
+    task?.projectId ?? '',
+  );
+  const [planMode, setPlanMode] = usePlacementMode();
+  const sources = usePlanSources(nowMinute);
+  const plannedKey = useAppSelector((state) => {
+    const zone = state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
+    const todayKey = toDayKey(Date.now(), zone);
+    return (
+      Object.entries(state.helm.planDays.byId)
+        .filter(
+          ([key, day]) =>
+            key >= todayKey &&
+            Object.values(day.slots).some(
+              (slot) => slot.taskId === task?.id && slot.status !== 'notToday',
+            ),
+        )
+        .map(([key]) => key)
+        .sort()
+        .at(0) ?? null
+    );
+  });
 
   const close = () => {
     setNav(null);
     setHeldTitle(null);
     setHeldNotes(null);
     setIsWordsDirty(false);
+    setPlanMode('main');
     onClose();
   };
   const requestClose = useDiscardGuard({
@@ -232,7 +330,11 @@ function TaskSheet({
         destructive: true,
       });
       if (!isConfirmed) return;
-      const { write, restore } = await deleteTask(uid, task.id);
+      const { write, restore } = await deleteTask(
+        uid,
+        task.id,
+        store.getState().helm.media.items,
+      );
       run(write);
       close();
       onDeleted(task.id, titleOf, restore);
@@ -289,7 +391,171 @@ function TaskSheet({
         ? waitedTasks[0].title
         : HELM_COPY.waitsOnTasks(waitedTasks.length);
 
+  const canPlan =
+    sources !== null &&
+    doneAt === null &&
+    !task.isUnreadable &&
+    activity?.kind === 'active' &&
+    plannedKey === null;
+  const getFound = () => {
+    if (!sources || shownView !== 'plan') return null;
+    const { todayKey } = sources;
+    const plannerTask = toPlannerTask(task);
+    return (
+      [todayKey, shiftDayKey(todayKey, 1)]
+        .flatMap((dayKey) =>
+          getOpenings(sources, dayKey, plannerTask, null, 1).map((opening) => ({
+            dayKey,
+            opening,
+          })),
+        )
+        .at(0) ?? null
+    );
+  };
+  const found = getFound();
+  const place = (
+    dayKey: string,
+    opening: Opening | null,
+    source: 'nomos' | 'person',
+  ) => {
+    run(
+      addKeptSlot(uid, dayKey, {
+        taskId: task.id,
+        startAt: opening?.startAt ?? null,
+        endAt: opening?.endAt ?? null,
+        source,
+      }),
+    );
+    setPlanMode('main');
+    go('main');
+  };
+
+  const getPlanBody = () => {
+    if (!sources) return null;
+    const plannerTask = toPlannerTask(task);
+    const { todayKey, timeZone: zone } = sources;
+    const body = (mode: typeof planMode, headline: string | null) => (
+      <PlacementBody
+        mode={mode}
+        sources={sources}
+        task={plannerTask}
+        slotId={null}
+        currentStartAt={null}
+        headline={headline}
+        chip={
+          mode === 'main'
+            ? task.durationMinutes
+              ? formatLength(task.durationMinutes)
+              : HELM_COPY.planEstimate
+            : null
+        }
+        assistantName={assistantName}
+        onModeChange={setPlanMode}
+        onBack={
+          mode === 'main'
+            ? null
+            : () => setPlanMode(mode === 'days' ? 'times' : 'main')
+        }
+        onPlace={(dayKey, opening) => place(dayKey, opening, 'person')}
+      />
+    );
+    if (!found) {
+      return (
+        <div className='space-y-3'>
+          <BackLink onBack={() => go('main')} />
+          <p className='text-[15px] text-pretty'>{HELM_COPY.planNoRoom}</p>
+          <PlacementBody
+            mode='days'
+            sources={sources}
+            task={plannerTask}
+            slotId={null}
+            currentStartAt={null}
+            headline={null}
+            chip={null}
+            assistantName={assistantName}
+            onModeChange={setPlanMode}
+            onBack={null}
+            onPlace={(dayKey, opening) => place(dayKey, opening, 'person')}
+          />
+        </div>
+      );
+    }
+    const dayWord = formatDayWord(found.dayKey, todayKey);
+    return (
+      <div className='space-y-3'>
+        {planMode === 'main' && <BackLink onBack={() => go('main')} />}
+        {body(
+          planMode,
+          found.opening
+            ? HELM_COPY.planFoundSlot(
+                dayWord,
+                formatSlotRange(
+                  found.opening.startAt,
+                  found.opening.endAt,
+                  zone,
+                ),
+              )
+            : HELM_COPY.planFoundNoTime(dayWord),
+        )}
+      </div>
+    );
+  };
+
+  const getFooter = () => {
+    if (shownView === 'plan') {
+      return found ? (
+        <PlacementFooter
+          mode={planMode}
+          leftAction={null}
+          onModeChange={setPlanMode}
+          onKeep={() => place(found.dayKey, found.opening, 'nomos')}
+        />
+      ) : null;
+    }
+    if (shownView !== 'main') return null;
+    return (
+      <>
+        <div className={FOOT}>
+          <ModalFooterActions
+            leftActions={
+              <DeleteIconButton
+                label={HELM_COPY.deleteConfirm}
+                onClick={() => void remove()}
+              />
+            }
+            rightActions={
+              plannedKey !== null && doneAt === null && sources ? (
+                <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
+                  <CalendarCheck
+                    className='size-4 shrink-0'
+                    aria-hidden='true'
+                  />
+                  {HELM_COPY.planPlannedOn(
+                    formatDayWord(plannedKey, sources.todayKey),
+                  )}
+                </p>
+              ) : canPlan ? (
+                <Button
+                  type='button'
+                  variant='primary'
+                  onClick={() => {
+                    setPlanMode('main');
+                    go('plan');
+                  }}
+                >
+                  {HELM_COPY.planPlanIt}
+                </Button>
+              ) : null
+            }
+          />
+        </div>
+        <AskAboutThisControl placement='sheet' />
+      </>
+    );
+  };
+
   const getBody = () => {
+    if (shownView === 'plan') return getPlanBody();
     if (shownView === 'title') {
       return (
         <WordsEditor
@@ -357,6 +623,9 @@ function TaskSheet({
           editing={editing}
           onEdit={(id) => go(`step:${id}`)}
           onBack={() => go('main')}
+          onOpenProcedure={(procedureId) =>
+            afterBackLayersClose(() => void showView('procedure', procedureId))
+          }
         />
       );
     }
@@ -397,6 +666,10 @@ function TaskSheet({
           </div>
         )}
         {getCondition()}
+        <KeptMediaSection
+          record={{ kind: 'task', id: task.id }}
+          part='photos'
+        />
         <div className='space-y-2'>
           {!task.isUnreadable && (
             <SummaryRow
@@ -407,6 +680,37 @@ function TaskSheet({
             </SummaryRow>
           )}
           <WhenRow editing={editing} now={nowMinute} />
+          {linked.map((entry) => (
+            <SummaryRow
+              key={`${entry.kind}:${entry.id}`}
+              label={getLinkedLabel(entry.kind)}
+              onClick={() =>
+                afterBackLayersClose(
+                  () =>
+                    void showView(
+                      entry.kind === 'place' ? 'place' : 'who',
+                      entry.id,
+                    ),
+                )
+              }
+            >
+              {entry.name}
+            </SummaryRow>
+          ))}
+          {taskProject && !taskProject.isUnreadable && (
+            <SummaryRow
+              label={HELM_COPY.taskProjectRow}
+              onClick={() =>
+                afterBackLayersClose(
+                  () => void showView('project', taskProject.id),
+                )
+              }
+            >
+              {taskProject.emoji
+                ? `${taskProject.emoji} ${taskProject.name}`
+                : taskProject.name}
+            </SummaryRow>
+          )}
           {!task.isUnreadable && (
             <SummaryRow
               label={HELM_COPY.stepsLabel}
@@ -421,6 +725,7 @@ function TaskSheet({
             </SummaryRow>
           )}
         </div>
+        <KeptMediaSection record={{ kind: 'task', id: task.id }} part='files' />
         <ShowMoreButton
           isOpen={isDetailsOpen}
           onClick={() => setDetailsFor(isDetailsOpen ? null : task.id)}
@@ -441,35 +746,31 @@ function TaskSheet({
   };
 
   return (
-    <DetailSheet
-      isOpen
-      onClose={requestClose}
-      title={shownTitle}
-      viewKey={shownView}
-      actions={
-        <TickButton
-          isDone={doneAt !== null}
-          label={
-            doneAt !== null
-              ? HELM_COPY.markNotDone(titleOf)
-              : HELM_COPY.markDone(titleOf)
-          }
-          onClick={() => (doneAt !== null ? onUndoTick(task.id) : onTick(task))}
-        />
-      }
-      footer={
-        shownView === 'main' && (
-          <div className={FOOT}>
-            <DeleteIconButton
-              label={HELM_COPY.deleteConfirm}
-              onClick={() => void remove()}
-            />
-          </div>
-        )
-      }
-    >
-      <div key={task.id}>{getBody()}</div>
-    </DetailSheet>
+    <>
+      <PublishTaskScreen taskId={task.id} title={titleOf} screen={screen} />
+      <DetailSheet
+        isOpen
+        onClose={requestClose}
+        title={shownTitle}
+        viewKey={shownView}
+        actions={
+          <TickButton
+            isDone={doneAt !== null}
+            label={
+              doneAt !== null
+                ? HELM_COPY.markNotDone(titleOf)
+                : HELM_COPY.markDone(titleOf)
+            }
+            onClick={() =>
+              doneAt !== null ? onUndoTick(task.id) : onTick(task)
+            }
+          />
+        }
+        footer={getFooter()}
+      >
+        <div key={task.id}>{getBody()}</div>
+      </DetailSheet>
+    </>
   );
 }
 

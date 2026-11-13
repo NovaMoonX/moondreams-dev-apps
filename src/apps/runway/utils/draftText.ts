@@ -31,7 +31,7 @@ export function describeLineAsk(
   return result;
 }
 
-/** Words a line's structured reason: "Every income day, paid from Northwind Studio". */
+/** Words a line's structured reason: "Every income day, comes out of Northwind Studio". */
 export function describeLineReason(
   line: DraftLine,
   sourceNames: Record<string, string>,
