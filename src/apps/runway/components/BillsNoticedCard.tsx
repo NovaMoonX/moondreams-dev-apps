@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import HelpTip from '@/components/HelpTip';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import { CHARGED_TO_HINT_WORDS } from '@apps/runway/constants';
@@ -52,6 +53,9 @@ function BillsNoticedCard({ today, onOpenBill }: BillsNoticedCardProps) {
               {rows.length}
             </span>
           </h3>
+          <HelpTip title={CHARGED_TO_HINT_WORDS.heading}>
+            <p>{CHARGED_TO_HINT_WORDS.headingHelp}</p>
+          </HelpTip>
         </div>
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
           {shown.map(({ hint, payload }) => (

@@ -30,6 +30,8 @@ export interface ChargedToBill {
 export interface ChargedToHint {
   billId: string;
   place: ChargedPlace;
+  /** The card or account the bill names now; null when it names none. */
+  named: ChargedPlace | null;
   /** Recent charges of the bill that were on that place. */
   chargeCount: number;
   lastChargedOn: DateOnly;
@@ -69,11 +71,7 @@ interface Charge {
   keys: readonly string[];
 }
 
-const isLikePayment = (
-  bill: ChargedToBill,
-  billName: string,
-  charge: Charge,
-) =>
+const isLikePayment = (bill: ChargedToBill, billName: string, charge: Charge) =>
   bill.payments.some(
     (payment) =>
       [payment.dueOn, payment.payOn ?? payment.dueOn].some(
@@ -135,6 +133,7 @@ export function findChargedToHints(input: {
       {
         billId: bill.id,
         place: newest.place,
+        named: bill.isExplicit ? bill.place : null,
         chargeCount: evidence.filter(({ place }) =>
           isSamePlace(place, newest.place),
         ).length,

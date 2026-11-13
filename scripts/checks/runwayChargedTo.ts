@@ -66,6 +66,7 @@ const [one] = find([bill()], [charge('a', at(-3))]);
 assert.deepEqual(one, {
   billId: 'netflix',
   place: discover,
+  named: null,
   chargeCount: 1,
   lastChargedOn: at(-3),
 });

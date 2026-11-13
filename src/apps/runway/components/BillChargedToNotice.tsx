@@ -139,9 +139,14 @@ function BillChargedToNotice({
   return (
     <InlineNotice tone='info'>
       <p>
-        {hint.chargeCount === 1
-          ? CHARGED_TO_HINT_WORDS.lastCharge(place)
-          : CHARGED_TO_HINT_WORDS.lastCharges(hint.chargeCount, place)}
+        {CHARGED_TO_HINT_WORDS.summary(
+          hint.chargeCount,
+          place,
+          hint.named ? nameOf(hint.named) : null,
+        )}
+      </p>
+      <p className='mt-1 text-xs opacity-80'>
+        {CHARGED_TO_HINT_WORDS.fromToday}
       </p>
       <div className='mt-2 flex flex-wrap gap-2'>
         <Button
