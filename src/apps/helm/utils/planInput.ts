@@ -1,5 +1,6 @@
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import { readCurrentPlace } from '@apps/helm/engine/currentPlace';
 import { readRestDay } from '@apps/helm/engine/restDay';
 import {
   findOpenings,
@@ -9,6 +10,7 @@ import {
 } from '@apps/helm/engine/planner';
 import type {
   HelmProfile,
+  OpenPlace,
   OpenTask,
   PlanCalendarEntry,
   PlanDay,
@@ -35,6 +37,7 @@ export interface PlanSources {
   grants: ConnectionGrantWithId[];
   /** Open tasks that are awake. */
   tasks: OpenTask[];
+  places: OpenPlace[];
   planDays: Record<string, PlanDay>;
 }
 
@@ -71,6 +74,7 @@ export const toPlannerTask = (task: OpenTask): PlannerTask => ({
   isUrgent: task.isUrgent,
   durationMinutes: task.durationMinutes,
   energy: task.energy,
+  placeIds: task.placeIds,
 });
 
 // A stay or rental runs for days and says where the person is, not time it takes.
@@ -141,7 +145,8 @@ export function buildPlanInput(
   dayKey: string,
   slots: Record<string, PlanSlot> = sources.planDays[dayKey]?.slots ?? {},
 ) {
-  const { profile, timeZone, now, todayKey, grants, tasks, planDays } = sources;
+  const { profile, timeZone, now, todayKey, grants, tasks, planDays, places } =
+    sources;
   const windowStart = zonedDateTimeToEpoch(
     dayKey,
     profile.dayStartTime,
@@ -191,6 +196,10 @@ export function buildPlanInput(
     fillPercent: profile.planFillPercent,
     hasCalendar: calendars.length > 0,
     restDay: calendars.length > 0 ? getRestDay(sources, dayKey) : null,
+    currentPlaceId:
+      dayKey === todayKey
+        ? (readCurrentPlace(profile, places, now)?.id ?? null)
+        : null,
     busy,
     slots,
     tasks: tasks

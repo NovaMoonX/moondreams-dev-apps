@@ -361,6 +361,80 @@ html[data-installed-app] *::-webkit-scrollbar {
   --tw-ring-offset-shadow: 0 0 #0000 !important;
 }
 
+/* The site's checkbox (`AppCheckbox`). An app sets its look on its theme class with these tokens, never per call
+   site: shape (radius), weight (border and mark width), filled or outline once ticked, and the accent. The derived
+   values are declared on the box itself, so a tone set on one box reaches its fill and mark. */
+:root {
+  --checkbox-size: 1.25rem;
+  --checkbox-radius: 0.375rem;
+  --checkbox-border-width: 1.5px;
+  --checkbox-mark-width: 3;
+  --checkbox-filled: 1;
+}
+
+@layer components {
+  .app-checkbox {
+    --_accent: var(--checkbox-accent, var(--color-primary));
+    --_accent-foreground: var(--checkbox-accent-foreground, var(--color-primary-foreground));
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--checkbox-size);
+    height: var(--checkbox-size);
+    border: var(--checkbox-border-width) solid var(--checkbox-ring, var(--color-muted-foreground));
+    border-radius: var(--checkbox-radius);
+    background-color: transparent;
+    color: transparent;
+    cursor: pointer;
+    transition: none;
+  }
+
+  .app-checkbox::after {
+    content: '';
+    position: absolute;
+    inset: calc((var(--checkbox-size) - 2 * var(--checkbox-border-width) - 2.5rem) / 2);
+  }
+
+  .app-checkbox svg {
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
+    stroke-width: var(--checkbox-mark-width);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .app-checkbox:is([aria-checked='true'], [aria-checked='mixed']) {
+    border-color: var(--_accent);
+    background-color: var(--_accent);
+    color: var(--_accent-foreground);
+    background-color: color-mix(in oklab, var(--_accent) calc(var(--checkbox-filled) * 100%), transparent);
+    color: color-mix(in oklab, var(--_accent-foreground) calc(var(--checkbox-filled) * 100%), var(--_accent));
+  }
+
+  .app-checkbox[data-variant='mark']:is([aria-checked='true'], [aria-checked='mixed']) {
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--_accent);
+  }
+
+  .app-checkbox[data-variant='mark'] svg {
+    transform: scale(1.35);
+  }
+
+  .app-checkbox:focus-visible {
+    outline: 2px solid var(--_accent);
+    outline-offset: 2px;
+  }
+
+  .app-checkbox:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
 /* On phones text fields keep only their border change, and a pressed control shows no ring. */
 @media (max-width: 639px) {
   * {
