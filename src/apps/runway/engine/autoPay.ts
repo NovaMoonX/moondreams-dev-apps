@@ -239,7 +239,11 @@ export const getMerchantKeys = (purchase: OpenPurchase): string[] => [
 
 const MIN_NAME_LENGTH = 3;
 
-const isNamedLike = (bill: AutoBill, purchase: OpenPurchase) => {
+/** Whether a charge carries a name the bill has learned, or else one that contains or is contained by the bill's own name. */
+export const isNamedLike = (
+  bill: Pick<AutoBill, 'name' | 'merchantKeys'>,
+  purchase: OpenPurchase,
+) => {
   const keys = getPurchaseKeys(purchase);
   if (bill.merchantKeys.length > 0) {
     return keys.some((key) => bill.merchantKeys.includes(key));

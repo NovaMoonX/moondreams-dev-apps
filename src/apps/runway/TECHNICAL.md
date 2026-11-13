@@ -1688,6 +1688,7 @@ interface MoneyLink {                       // contract v1
 - **Device pass:** `useAutoPay`, mounted in `RunwayPage` after the bank matcher, writes marks and matches once each per session (a tried set); a failure is logged and never blocks the others.
 - **Actions (`autoPayActions.ts`):** `correctPaidAmount`, `matchChargeToBill`, `undoChargeMatch`, `unmatchBillCharge` (restores the estimate mark only at Track), `forgetBillMatch`, each one transaction that replaces the mark through a takeback plus a new mark and one History entry.
 - **Checks:** `scripts/checks/runwayAutoPay.ts` in `check:runway-engine`.
+- **Charged to hints:** `engine/chargedTo.ts` (`findChargedToHints`, pure) reads a bill's recent link charges (not pending, paired, a pay, a cost, link history, or older than 75 days) that are matched to the bill or named like it (`isNamedLike`, shared with the charge matcher) near a payment's day and amount, and compares their card or account with the bill's. `selectChargedToHints` waits for `selectIsAutoPayReady`, works only at Link and drops what the person declined (`utils/chargedToDeclined.ts`, device-local, no expiry, read with `useSyncExternalStore` like the charge snoozes). `writeChargedTo` and `revertChargedTo` (`billChargedToActions.ts`) write every stretch from today through `changeItem` and refuse an Undo when a stretch no longer holds what was written. Cases are in `scripts/checks/runwayChargedTo.ts`, part of `check:runway-engine`.
 
 ## Changing several at once
 

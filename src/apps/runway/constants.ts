@@ -1762,6 +1762,26 @@ export const PAID_FROM_WORDS = {
   saveFailed: 'This did not save. Nothing was changed.',
 } as const;
 
+/** What Runway says when a bill's recent bank charges were on a card or account other than the one the bill names. */
+export const CHARGED_TO_HINT_WORDS = {
+  lastCharge: (place: string) => `Its last charge was on ${place}.`,
+  lastCharges: (count: number, place: string) =>
+    `Its last ${count} charges were on ${place}.`,
+  chargeIt: (place: string) => `Charge it to ${place}`,
+  notThisOne: 'Not this one',
+  done: (name: string, place: string) => `${name} is now charged to ${place}`,
+  undo: 'Undo',
+  undoFailed: 'That could not be undone.',
+  saveFailed: 'This did not save. Nothing was changed.',
+  offline: 'You are offline, so nothing was changed.',
+  heading: 'Bills we noticed',
+  rowLine: (place: string) => `Charged to ${place} lately`,
+  more: (count: number) => `Show ${count} more`,
+  fewer: 'Show fewer',
+  openAria: (name: string, place: string) =>
+    `${name}. Charged to ${place} lately. Open`,
+} as const;
+
 /** A bill's share of one paycheck: changing what this pay puts toward it, and keeping that for every pay. */
 export const PAY_SHARE_WORDS = {
   action: 'Change what this pay puts in',
