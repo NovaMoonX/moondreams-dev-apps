@@ -205,4 +205,17 @@ assert.deepEqual(
   'a paused rule holds its purchases today, so removing it hands them on',
 );
 
+const groceriesKind = rule({ category: 'FOOD_AND_DRINK_GROCERIES' });
+const [safewayNext] = findNextHomes([safeway], [safeway, groceriesKind], live);
+assert.deepEqual(
+  [safewayNext?.by, safewayNext?.byKind.map(({ id }) => id)],
+  [null, [groceriesKind.id]],
+  'a place left to wait still names the kind-of-place rule that would catch its purchases first',
+);
+assert.deepEqual(
+  findNextHomes([amazon], [amazon, shopping], live)[0]?.byKind,
+  [],
+  'a store that sells everything is never caught by a kind-of-place rule',
+);
+
 console.log('runwayRuleTakeover: all checks passed');

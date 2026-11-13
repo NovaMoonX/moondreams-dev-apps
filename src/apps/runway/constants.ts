@@ -5548,6 +5548,9 @@ export const RULE_WORDS = {
     `${envelope} will catch ${what}.`,
   takeoverWait: (what: string) => `${what} will wait in Needs a home.`,
   placedStay: 'Purchases already placed stay where they are.',
+  kindFirst: (kind: string, envelope: string) =>
+    `If the bank labels one as ${kind}, it still goes to ${envelope}.`,
+  noAskAnymore: (names: string) => `${names} won't ask first anymore.`,
   everythingElseOn: (card: string) => `everything else on ${card}`,
   afterThis: (line: string) => `After this, ${line}`,
   takeoverMore: (count: number) =>
@@ -5634,19 +5637,24 @@ export const RULE_WORDS = {
     ask: readonly string[];
     paused: readonly string[];
   }) => {
-    const quote = (sentences: readonly string[]) =>
-      joinNames(sentences.map((sentence) => `“${sentence}”`));
+    const isCounted =
+      kinds.live.length + kinds.ask.length + kinds.paused.length > 3;
+    const name = (sentences: readonly string[]) =>
+      isCounted
+        ? ruleCount(sentences.length)
+        : joinNames(sentences.map((sentence) => `“${sentence}”`));
     const isOne = (sentences: readonly string[]) => sentences.length === 1;
     return [
       kinds.live.length > 0 &&
-        `${quote(kinds.live)} will stop sending purchases on ${isOne(kinds.live) ? 'its' : 'their'} own.`,
-      kinds.ask.length > 0 && `${quote(kinds.ask)} will stop asking.`,
+        `${name(kinds.live)} will stop sending purchases on ${isOne(kinds.live) ? 'its' : 'their'} own.`,
+      kinds.ask.length > 0 && `${name(kinds.ask)} will stop asking.`,
       kinds.paused.length > 0 &&
-        `${quote(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused already.`,
+        `${name(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused already, so ${isOne(kinds.paused) ? 'its' : 'their'} purchases wait in Needs a home for now.`,
     ]
       .filter(Boolean)
       .join(' ');
   },
+
   deleteConfirmButton: (count: number) =>
     count === 1 ? 'Remove the rule' : `Remove ${ruleCount(count)}`,
   movedMany: (count: number, envelope: string) =>

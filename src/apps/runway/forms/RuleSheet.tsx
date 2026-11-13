@@ -357,7 +357,7 @@ function RuleSheet({
     const isConfirmed = await confirm({
       title: RULE_WORDS.deleteConfirmTitle(1),
       message: (
-        <div className='space-y-2'>
+        <div className='max-h-[45dvh] space-y-2 overflow-y-auto'>
           <p>{removal.stops}</p>
           <p>{removal.next}</p>
         </div>

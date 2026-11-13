@@ -108,6 +108,8 @@ export interface NextHome {
   cardId: string | null;
   /** The live rule that places them once the removed one is gone; null when they wait (no rule fits, or the one that wins asks or is paused). */
   by: OpenRule | null;
+  /** Live kind-of-place rules left that would catch some of a place's purchases first, when the bank files them under that kind of place. */
+  byKind: OpenRule[];
 }
 
 /** Where the purchases each removed rule wins today go once it is gone, card by card, by `findRule`'s own ranking; a card where the rule wins nothing (a more specific rule outranks it) has no entry. A card-wide rule is read for purchases with no kind of place. */
@@ -140,7 +142,20 @@ export function findNextHomes(
           after !== null &&
           !after.isAsk &&
           !needsNewHome(after.rule, liveEnvelopeIds);
-        return { removed, cardId, by: isPlaced ? after.rule : null };
+        const byKind =
+          removed.merchantKey === null ||
+          removed.category !== null ||
+          isBroadMerchant(removed.merchantKey, left)
+            ? []
+            : left.filter(
+                (rule) =>
+                  rule.merchantKey === null &&
+                  rule.category !== null &&
+                  (rule.cardId === null || rule.cardId === cardId) &&
+                  rule.target !== RULE_VARIES &&
+                  !needsNewHome(rule, liveEnvelopeIds),
+              );
+        return { removed, cardId, by: isPlaced ? after.rule : null, byKind };
       }),
   );
 }

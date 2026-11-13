@@ -112,23 +112,20 @@ export function useRuleNames() {
           new Map(),
         ),
       ].sort(([a], [b]) => Number(a === null) - Number(b === null));
+      const listAll = (names: readonly string[]) =>
+        names.length > 1 && names.length <= 6
+          ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+          : joinNames(names);
       const describeWhat = (entries: typeof homes) => {
-        if (entries.length > 3) {
-          const subjects = [...new Set(entries.map((entry) => entry.subject))];
-          return subjects.length > 6
-            ? joinNames(subjects)
-            : `${subjects.slice(0, -1).join(', ')} and ${subjects.at(-1)}`;
-        }
         const scopes = entries.reduce<Map<string, string[]>>(
           (groups, { scope, subject }) =>
             groups.set(scope, [...(groups.get(scope) ?? []), subject]),
           new Map(),
         );
-        return joinNames(
-          [...scopes].map(([scope, subjects]) =>
-            [joinNames(subjects), scope].filter(Boolean).join(' '),
-          ),
-        );
+        const scoped = [...scopes]
+          .filter(([scope]) => scope !== '')
+          .map(([scope, subjects]) => `${listAll(subjects)} ${scope}`);
+        return listAll([...scoped, ...(scopes.get('') ?? [])]);
       };
       const lines = byTarget.map(([target, entries]) =>
         target === null
@@ -147,6 +144,32 @@ export function useRuleNames() {
       const isAsk = (rule: OpenRule) => rule.target === RULE_VARIES;
       const sentences = (keep: (rule: OpenRule) => boolean) =>
         targets.filter(keep).map((rule) => describeOne(rule));
+      const kindLines = [
+        ...new Map(
+          nextHomes
+            .flatMap(({ byKind }) => byKind)
+            .map((rule) => [rule.id, rule] as const),
+        ).values(),
+      ]
+        .slice(0, 2)
+        .map((rule) =>
+          RULE_WORDS.kindFirst(
+            [
+              getCategoryLabel(rule.category ?? ''),
+              rule.cardId === null ? '' : `on ${onYourCard(rule.cardId)}`,
+            ]
+              .filter(Boolean)
+              .join(' '),
+            getEnvelopeName(rule.target),
+          ),
+        );
+      const noLongerAsking = [
+        ...new Set(
+          nextHomes
+            .filter(({ removed, by }) => removed.target === RULE_VARIES && by)
+            .map(({ removed }) => removed.merchantName ?? describeOne(removed)),
+        ),
+      ];
       const capitalise = (line: string) =>
         `${line.charAt(0).toUpperCase()}${line.slice(1)}`;
       return {
@@ -162,6 +185,10 @@ export function useRuleNames() {
                 index === 0 ? RULE_WORDS.afterThis(line) : capitalise(line),
               )),
           ...(hidden > 0 ? [RULE_WORDS.takeoverMore(hidden)] : []),
+          ...(noLongerAsking.length > 0
+            ? [RULE_WORDS.noAskAnymore(joinNames(noLongerAsking))]
+            : []),
+          ...kindLines,
           RULE_WORDS.placedStay,
         ].join(' '),
       };
