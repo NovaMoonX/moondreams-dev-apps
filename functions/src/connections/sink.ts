@@ -49,6 +49,8 @@ export interface SinkSession {
   deleteCategory(grantId: string, category: string): Promise<number>;
   deleteGrant(grantId: string): Promise<number>;
   deleteKept(grantId: string): Promise<number>;
+  /** Blanks the words the reader app kept from the connection's source and links back to them, once the connection has ended. */
+  blankQuoted?(grantId: string, now: number): Promise<void>;
   /** How many copies of the connection are kept after it ended, whichever category they sit in. */
   countKept(grantId: string): Promise<number>;
   keepGrant(

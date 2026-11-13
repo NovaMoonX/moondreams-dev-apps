@@ -3,9 +3,11 @@ import { readFileSync } from 'node:fs';
 
 import {
   claimPath,
+  countWaiting,
   DEFAULT_NOTIFY_HOUR,
   getDigestDay,
   readDigestSettings,
+  readSorting,
 } from '../../functions/src/apps/runway/needsHomeDigestPlan.ts';
 import { needsHomeBody } from '../../functions/src/apps/runway/notificationText.ts';
 
@@ -64,5 +66,55 @@ assert.equal(
   claimPath('u1', '2026-03-10'),
   'apps/runway/server/u1/notified/needsHome_2026-03-10',
 );
+
+// Sorting switch: a charge counts only after the switch's moment and while it is off; no switch counts every charge.
+const row = (createdAt: number, date: number, amountCents: number) => ({
+  createdAt,
+  date,
+  amountCents,
+  isPending: false,
+});
+const rows = [row(100, 0, 500), row(300, 0, 700)];
+const DAY = 24 * 60 * 60 * 1000;
+assert.equal(readSorting(undefined), null);
+assert.equal(readSorting({ isPaused: 'yes', from: 1 }), null);
+assert.equal(countWaiting(rows, { isPaused: true, from: 200 }), 0);
+assert.equal(countWaiting(rows, { isPaused: false, from: 200 }), 1);
+assert.equal(countWaiting(rows, null), 2);
+const paused = { isPaused: true, from: 200 };
+// Money in with nothing to pair, a card refund included, is counted already and never waits.
+assert.equal(countWaiting([row(100, 0, -900)], null), 0);
+// A quiet charge and money in of its amount within three days are a possible move: both count, as the screen keeps them.
+assert.equal(
+  countWaiting([row(100, 0, -900), row(100, 2 * DAY, 900)], paused),
+  2,
+);
+// The same amount weeks apart is no move: the charge stays quiet and the money in doesn't wait.
+assert.equal(
+  countWaiting([row(100, 0, -900), row(100, 40 * DAY, 900)], paused),
+  0,
+);
+// Pending money in is on its way: it never counts, and a pending charge is never the other side of a move.
+assert.equal(
+  countWaiting([{ ...row(100, 0, -900), isPending: true }], null),
+  0,
+);
+assert.equal(
+  countWaiting(
+    [row(100, 0, -900), { ...row(100, 2 * DAY, 900), isPending: true }],
+    paused,
+  ),
+  1,
+);
+// Money in that only a pending charge of its amount may be the other side of waits with it and doesn't count.
+assert.equal(
+  countWaiting(
+    [row(100, 0, -900), { ...row(100, DAY, 900), isPending: true }],
+    null,
+  ),
+  1,
+);
+// An unreadable document reads as 0 cents and counts.
+assert.equal(countWaiting([row(100, 0, 0)], paused), 1);
 
 console.log('runwayNotifyText: ok');

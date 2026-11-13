@@ -5,26 +5,74 @@ import {
   SWEEP_LEASE_MS,
   TASK_TITLE_CAP,
 } from '@apps/helm/constants';
-import type { OpenCapture } from '@apps/helm/types';
+import type { HelmQuestion, OpenCapture } from '@apps/helm/types';
 
 /** What a turn needs from the person (`needsYou`) or only time (`waiting`). */
-export type HeldKind = 'couldNotRead' | 'moreToSort' | 'failed' | 'waiting';
+export type HeldKind =
+  'couldNotRead' | 'moreToSort' | 'question' | 'failed' | 'waiting';
 
 export interface HeldItem {
   kind: HeldKind;
   capture: OpenCapture;
 }
 
-const hasOpenQuestion = (capture: OpenCapture, kind: string) =>
+const hasOpenQuestion = (capture: OpenCapture, kinds: string[]) =>
   Object.values(capture.questionState).some(
-    (question) => question.kind === kind && question.answeredAt === null,
+    (question) => kinds.includes(question.kind) && question.answeredAt === null,
   );
+
+/** Whether the turn still waits on a question the person answers by choosing or writing (which person or place, which fact is true, or one the assistant asked), read from what is readable so a turn whose words won't open still shows. */
+export const hasOpenChoice = (capture: OpenCapture) =>
+  hasOpenQuestion(capture, [
+    'whichPerson',
+    'whichPlace',
+    'whichIsTrue',
+    'whichTopic',
+    'groupTopics',
+    'asked',
+  ]);
+
+export interface OpenQuestion {
+  id: string;
+  question: HelmQuestion;
+  skippedAt: number | null;
+}
+
+/** Every question a turn still asks that can be shown, oldest first; a turn's card shows the first few and the rest wait in Needs you. */
+export const getOpenQuestions = (capture: OpenCapture): OpenQuestion[] =>
+  Object.entries(capture.questionState)
+    .filter(([, state]) => state.answeredAt === null)
+    .sort(([, a], [, b]) => a.askedAt - b.askedAt)
+    .flatMap(([id, state]) =>
+      capture.questions[id]
+        ? [
+            {
+              id,
+              question: capture.questions[id],
+              skippedAt: state.skippedAt,
+            },
+          ]
+        : [],
+    );
+
+/** The questions the assistant asked that were answered, oldest first, each with the answer it kept. */
+export const getAnsweredQuestions = (capture: OpenCapture) =>
+  Object.entries(capture.questionState)
+    .filter(([, state]) => state.answeredAt !== null && state.kind === 'asked')
+    .sort(([, a], [, b]) => a.askedAt - b.askedAt)
+    .flatMap(([id]) => {
+      const question = capture.questions[id];
+      return question?.answer
+        ? [{ id, question, answer: question.answer }]
+        : [];
+    });
 
 export const toHeldKind = (capture: OpenCapture): HeldKind | null => {
   if (capture.status === 'failed') return 'failed';
   if (capture.status === 'needsYou') {
-    if (hasOpenQuestion(capture, 'couldNotRead')) return 'couldNotRead';
-    return hasOpenQuestion(capture, 'moreToSort') ? 'moreToSort' : null;
+    if (hasOpenQuestion(capture, ['couldNotRead'])) return 'couldNotRead';
+    if (hasOpenQuestion(capture, ['moreToSort'])) return 'moreToSort';
+    return hasOpenChoice(capture) ? 'question' : null;
   }
   return capture.status === 'received' ? 'waiting' : null;
 };
@@ -143,7 +191,7 @@ export function toTaskTitle(text: string) {
 /** The line under a held turn on home, short enough to stay one quiet line; null when the turn is not held. */
 export function getHomeHeldLine(capture: OpenCapture, isNewest: boolean) {
   const kind = toHeldKind(capture);
-  if (kind === null) return null;
+  if (kind === null || kind === 'question') return null;
   if (kind !== 'waiting') return HELM_COPY.waitingInNeedsYou;
   if (capture.heldReason === 'dailyLimit') {
     return HELM_COPY.savedHeldDaily(getLimitResetTime());

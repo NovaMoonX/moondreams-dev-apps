@@ -1,5 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarDays, ChevronRight } from 'lucide-react';
+import { CalendarDays, CalendarX, ChevronRight } from 'lucide-react';
 
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
@@ -44,7 +44,7 @@ function CalendarRow({ title, reason, onOpen }: CalendarRowProps) {
   );
 }
 
-/** Today's one quiet way to a calendar: an offer until the person folds it, and a Reconnect row for each account Google stopped sharing. Never shown before the connections and profile have loaded. */
+/** Today's one quiet way to a calendar: an offer until the person folds it, and a row with Reconnect for each account Google stopped sharing. Never shown before the connections and profile have loaded. */
 function ConnectCalendarRow() {
   const name = useAssistantName();
   const { user } = useAuth();
@@ -69,16 +69,36 @@ function ConnectCalendarRow() {
             (entry) => entry.id === grant.accountId,
           );
           return (
-            <div key={grant.id} className='helm-card overflow-hidden'>
-              <CalendarRow
-                title={HELM_COPY.calendarReconnectTitle(
-                  account
-                    ? (account.label ?? account.email)
-                    : HELM_COPY.googleCalendarName,
-                )}
-                reason={HELM_COPY.calendarReconnectReason}
-                onOpen={() => begin({ accountId: grant.accountId })}
+            <div
+              key={grant.id}
+              className='helm-card bg-primary/5 flex items-center gap-3 px-4 py-3 max-[359px]:flex-wrap'
+            >
+              <CalendarX
+                className='text-muted-foreground size-5 shrink-0'
+                aria-hidden='true'
               />
+              <div className='min-w-0 flex-1 max-[359px]:basis-[calc(100%-2rem)]'>
+                <p className='text-foreground text-[15px] leading-[21px] text-pretty'>
+                  {HELM_COPY.calendarStoppedTitle}
+                </p>
+                <p className='text-muted-foreground truncate text-[13px]'>
+                  {account
+                    ? (account.label ?? account.email)
+                    : HELM_COPY.googleCalendarName}
+                </p>
+                <p className='text-muted-foreground text-[13px] text-pretty'>
+                  {HELM_COPY.calendarStoppedReason}
+                </p>
+              </div>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className="relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-[''] max-[359px]:ml-8"
+                onClick={() => begin({ accountId: grant.accountId })}
+              >
+                {HELM_COPY.googleReconnect}
+              </Button>
             </div>
           );
         })}

@@ -34,6 +34,7 @@ const span = (id: string, text: string, start: number): DateSpan => ({
   start,
   end: start + text.length,
   due: { kind: 'day', date: Date.UTC(2026, 10, 14) },
+  precision: null,
 });
 const context = {
   createdAt: Date.UTC(2026, 10, 9, 17),
