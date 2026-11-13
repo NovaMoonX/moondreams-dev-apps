@@ -10,6 +10,7 @@ import {
   listHorizonPayments,
   planHorizon,
 } from '@apps/runway/engine/horizon';
+import type { GoalCover } from '@apps/runway/engine/horizonGoal';
 import { getIntervalMonths } from '@apps/runway/engine/schedule';
 import type {
   Ending,
@@ -20,6 +21,9 @@ import type {
 } from '@apps/runway/types';
 import { describeBillRepeat } from '@apps/runway/utils/billText';
 
+const sumGoalPaid = (paid: readonly CostPaidEntry[]) =>
+  paid.reduce((sum, entry) => sum + entry.fromGoalCents, 0);
+
 /** Everything the event's row and its sheet say about it, worked out once so the two never disagree. */
 export function getHorizonStatus(
   horizon: HorizonSealed,
@@ -29,6 +33,7 @@ export function getHorizonStatus(
   paid: readonly CostPaidEntry[] = [],
   spentCents = 0,
   fromFreeCents = 0,
+  goal: GoalCover | null = null,
 ) {
   const through = addUtcMonths(today, LOOKAHEAD_MONTHS);
   const payments = listHorizonPayments(
@@ -46,8 +51,9 @@ export function getHorizonStatus(
     Math.max(0, assignedCents),
     spentCents,
     fromFreeCents,
+    sumGoalPaid(paid),
   );
-  const plan = planHorizon(horizon, figures.leftCents, payments);
+  const plan = planHorizon(horizon, figures.leftCents, payments, goal);
   const next =
     horizon.state === 'open'
       ? getNextUnpaidPayment(horizon.costs, today, stance, paid)

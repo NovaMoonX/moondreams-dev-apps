@@ -64,6 +64,6 @@ grant_read DEEPGRAM_API_KEY
 
 echo
 echo "Optional, a spend alert on Deepgram's side:"
-echo "  Helm already stops its own cloud listening at 60 minutes a day for each person and \$5 a day for the whole site, so this is only a second guard."
+echo "  Each app that listens through Deepgram already caps its own daily use, so this is only a second guard."
 echo "  Open $KEYS_PAGE and look under Billing (or Settings) for a usage, spend or balance alert; if there is one, set it to a few dollars with your email."
 echo "  Deepgram's menus change and these names are unconfirmed, so if you don't see one, skip it: nothing else depends on it."

@@ -16,7 +16,7 @@ import {
 } from '@apps/runway/queries/runwayKeyQueries';
 import { openJson, sealJson } from '@apps/runway/security';
 import { selectIsAutoPayReady } from '@apps/runway/store/selectors/autoPaySelectors';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectBillsDueBeforePay } from '@apps/runway/store/selectors/overviewSelectors';
 import {
   selectBillPayments,

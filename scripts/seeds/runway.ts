@@ -11,6 +11,7 @@ import {
 import { formatDateOrdinalUTC } from '../../src/utils/formatUtils.ts';
 import {
   AUTO_PAY_WORDS,
+  CARD_FEE_WORDS,
   DEFAULT_CURRENCY_CODE,
   PAID_HISTORY_WORDS,
   HORIZON_END_WORDS,
@@ -58,8 +59,14 @@ import {
 import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
+import {
+  CARD_FEE_GROUP_ID,
+  buildFeeBill,
+} from '../../src/apps/runway/engine/cardFees.ts';
 import type {
   AccountBalanceDoc,
+  CardStatementDoc,
+  CardStatementSealed,
   AccountDoc,
   AccountSealed,
   LinkDoc,
@@ -244,6 +251,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     trackingPeriods: [],
     dirtyFrom: null,
     notify: { needsHome: false },
+    sorting: null,
     keyId: data.keyId,
     sealed,
     shareSummary: await sealJson(
@@ -407,9 +415,16 @@ async function writeSeedHorizon(
         orderIndex: 20,
         rest: { kind: 'outside' },
         note: null,
+        goalId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [
+          {
+            changeId: 'seed-change-eating-out-stretch',
+            itemId: 'seed-envelope-eating-out',
+          },
+        ],
         costs: [
           cost(
             'seed-cost-truck',
@@ -455,9 +470,11 @@ async function writeSeedHorizon(
         orderIndex: 21,
         rest: { kind: 'pays' },
         note: null,
+        goalId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
           cost('seed-cost-surgery', 'Surgery', 140_000, 180_000, dec18),
           cost(
@@ -490,10 +507,19 @@ async function writeSeedHorizon(
         orderIndex: 22,
         rest: { kind: 'later' },
         note: null,
+        goalId: 'seed-goal-wedding',
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
+          cost(
+            'goal-seed-goal-wedding',
+            'Wedding gift',
+            40_000,
+            40_000,
+            dec19 + 42 * DAY_MS,
+          ),
           cost('seed-cost-venue', 'Venue', 143_000, 143_000, dec19),
           cost(
             'seed-cost-photographer',
@@ -516,9 +542,11 @@ async function writeSeedHorizon(
         orderIndex: 23,
         rest: { kind: 'later' },
         note: null,
+        goalId: null,
         state: 'finished' as const,
         stateOn: today - 3 * DAY_MS,
         stateMoney: null,
+        links: [],
         costs: [
           cost('seed-cost-couch', 'Couch', 90_000, 90_000, today - 5 * DAY_MS),
         ],
@@ -535,6 +563,7 @@ async function writeSeedHorizon(
         orderIndex: 24,
         rest: { kind: 'later' },
         note: null,
+        goalId: null,
         state: 'calledOff' as const,
         stateOn: today - 2 * DAY_MS,
         stateMoney: {
@@ -543,6 +572,7 @@ async function writeSeedHorizon(
           cents: 40_000,
           moveId: 'transfer_seed-calloff-seed-horizon-ski',
         },
+        links: [],
         costs: [
           cost(
             'seed-cost-lift',
@@ -573,9 +603,11 @@ async function writeSeedHorizon(
         orderIndex: 25,
         rest: { kind: 'later' },
         note: null,
+        goalId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
           cost(
             'seed-cost-tuneup',
@@ -598,6 +630,7 @@ async function writeSeedHorizon(
         orderIndex: 26,
         rest: { kind: 'later' },
         note: null,
+        goalId: null,
         state: 'finished' as const,
         stateOn: today - DAY_MS,
         stateMoney: {
@@ -606,6 +639,7 @@ async function writeSeedHorizon(
           cents: 25_000,
           moveId: null,
         },
+        links: [],
         costs: [
           cost('seed-cost-shed', 'Shed', 22_500, 22_500, today - 8 * DAY_MS),
         ],
@@ -1198,6 +1232,7 @@ async function writeSeedLifecycle(
     groupId: null,
   };
 
+  const stretchStart = firstPayday + DAY_MS;
   const stretchEnd = firstPayday + 17 * DAY_MS + DAY_MS;
   const items = [
     {
@@ -1262,7 +1297,7 @@ async function writeSeedLifecycle(
     sealJson(stretchPayload, encryption),
     sealJson(
       {
-        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${formatDateOrdinalUTC(today)} through ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, then it goes back.`,
+        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${formatDateOrdinalUTC(stretchStart)} through ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, then it goes back.`,
         note: 'Covering the car registration',
       } satisfies ChangeSealed,
       encryption,
@@ -1333,7 +1368,7 @@ async function writeSeedLifecycle(
         'seed-envelope-eating-out',
         'envelope',
         stretchAt,
-        today,
+        stretchStart,
         'seed-change-eating-out-stretch',
         stretchSealed,
       ),
@@ -1345,7 +1380,7 @@ async function writeSeedLifecycle(
     change(
       'seed-change-eating-out-stretch',
       stretchAt,
-      today,
+      stretchStart,
       ['seed-envelope-eating-out'],
       stretchChange,
     ),
@@ -1455,6 +1490,7 @@ async function writeSeedHistory(
   return all.length;
 }
 
+const SEED_FEE_BILL = 'seed-bill-venture-fee';
 const SEED_VENTURE_CARD = 'seed-card-venture';
 const SEED_LINK = 'seed-link-capital-one';
 const SEED_WEALTHFRONT_LINK = 'seed-link-wealthfront';
@@ -1475,7 +1511,16 @@ async function writeSeedCards(
   const cards: { id: string; sealed: CardSealed; createdAt: number }[] = [
     {
       id: SEED_VENTURE_CARD,
-      sealed: { issuer: 'Capital One', name: 'Venture X', dueDay: 14 },
+      sealed: {
+        issuer: 'Capital One',
+        name: 'Venture X - Credit Holder XXXXXXX3153',
+        dueDay: 14,
+        annualFee: {
+          cents: 39_500,
+          firstDueOn: today + 120 * DAY_MS,
+          billId: SEED_FEE_BILL,
+        },
+      },
       createdAt,
     },
     {
@@ -1510,11 +1555,86 @@ async function writeSeedCards(
       } satisfies CardDoc);
     }),
   );
+  const feeBill = buildFeeBill({
+    cardId: SEED_VENTURE_CARD,
+    name: CARD_FEE_WORDS.billName('Capital One Venture X'),
+    cents: 39_500,
+    firstDueOn: today + 120 * DAY_MS,
+    priority: 'should',
+    orderIndex: 6,
+  });
+  const feeGroup: GroupSealed = {
+    name: CARD_FEE_WORDS.groupName,
+    startingPriority: null,
+    envelopePriority: null,
+    goalPriority: null,
+    emoji: null,
+  };
+  const feeEntries = [
+    {
+      id: CARD_FEE_GROUP_ID,
+      kind: 'group' as const,
+      payload: feeGroup,
+      summary: CARD_FEE_WORDS.groupStarted,
+    },
+    {
+      id: SEED_FEE_BILL,
+      kind: 'bill' as const,
+      payload: feeBill,
+      summary: CARD_FEE_WORDS.billAdded(
+        feeBill.name,
+        formatCents(39_500),
+        formatDateOrdinalUTC(today + 120 * DAY_MS),
+      ),
+    },
+  ];
+  await Promise.all(
+    feeEntries.map(async (entry) => {
+      batch.set(context.firestore.doc(`${plan}/items/${entry.id}`), {
+        id: entry.id,
+        kind: entry.kind,
+        parentId: null,
+        createdAt,
+        endedAt: null,
+        archivedAt: null,
+        heldReleasedOn: null,
+      });
+      batch.set(
+        context.firestore.doc(`${plan}/versions/seed-version-${entry.id}`),
+        {
+          id: `seed-version-${entry.id}`,
+          itemId: entry.id,
+          kind: entry.kind,
+          createdAt,
+          effectiveFrom: startDate,
+          effectiveUntil: null,
+          changeId: `seed-change-${entry.id}`,
+          sealed: await sealJson(entry.payload, encryption),
+        },
+      );
+      batch.set(
+        context.firestore.doc(`${plan}/changes/seed-change-${entry.id}`),
+        {
+          id: `seed-change-${entry.id}`,
+          kind: 'planChange',
+          createdAt,
+          effectiveFrom: null,
+          itemIds: [entry.id],
+          sealed: await sealJson(
+            { summary: entry.summary, note: null } satisfies ChangeSealed,
+            encryption,
+          ),
+        } satisfies ChangeDoc,
+      );
+    }),
+  );
   batch.set(context.firestore.doc(`${plan}/links/${SEED_LINK}`), {
     id: SEED_LINK,
     status: 'active',
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
+    needsCardConsent: null,
+    cardDetails: 'shared',
     sealed: await sealJson(
       {
         institutionName: 'Capital One',
@@ -1560,8 +1680,35 @@ async function writeSeedCards(
     {
       id: SEED_VENTURE_CARD,
       asOf: context.now - 2 * 60_000,
-      sealed: await sealJson({ cents: 0 }, encryption),
+      sealed: await sealJson(
+        {
+          cents: 0,
+          availableCents: null,
+          limitCents: 1_000_000,
+          hasInstantBalance: false,
+        },
+        encryption,
+      ),
     } satisfies AccountBalanceDoc,
+  );
+  const statementOn = today - 20 * DAY_MS;
+  batch.set(
+    context.firestore.doc(`${plan}/cardStatements/${SEED_VENTURE_CARD}`),
+    {
+      id: SEED_VENTURE_CARD,
+      asOf: context.now - 2 * 60_000,
+      sealed: await sealJson(
+        {
+          minimumCents: 3_500,
+          statementCents: 41_200,
+          statementOn,
+          dueOn: today + 9 * DAY_MS,
+          lastPaymentCents: 30_000,
+          lastPaymentOn: statementOn - 10 * DAY_MS,
+        } satisfies CardStatementSealed,
+        encryption,
+      ),
+    } satisfies CardStatementDoc,
   );
   const discoverStartId = `start_${SEED_DISCOVER_CARD}_${createdAt + 120_000}`;
   batch.set(context.firestore.doc(`${plan}/moves/${discoverStartId}`), {
@@ -1634,7 +1781,7 @@ async function writeSeedCards(
       encryption,
     ),
   } satisfies MoveDoc);
-  return cards.length + 5 + 2;
+  return cards.length + 5 + 3;
 }
 
 const SEED_WEALTHFRONT_GOALS = [
@@ -1723,7 +1870,15 @@ async function writeSeedAccounts(
     {
       id: 'seed-account-checking-a',
       asOf: context.now - 2 * 60_000,
-      sealed: await sealJson({ cents: 221_450 }, encryption),
+      sealed: await sealJson(
+        {
+          cents: 221_450,
+          availableCents: 21_450,
+          limitCents: null,
+          hasInstantBalance: true,
+        },
+        encryption,
+      ),
     } satisfies AccountBalanceDoc,
   );
   batch.set(context.firestore.doc(`${plan}/links/${SEED_WEALTHFRONT_LINK}`), {
@@ -1731,6 +1886,8 @@ async function writeSeedAccounts(
     status: 'active',
     lastSyncAt: context.now - 2 * 60_000,
     createdAt,
+    needsCardConsent: null,
+    cardDetails: null,
     sealed: await sealJson(
       {
         institutionName: 'Wealthfront',
@@ -1755,8 +1912,16 @@ async function writeSeedAccounts(
     context.firestore.doc(`${plan}/accountBalances/seed-account-wealthfront`),
     {
       id: 'seed-account-wealthfront',
-      asOf: context.now - 2 * 60_000,
-      sealed: await sealJson({ cents: 82_400 }, encryption),
+      asOf: context.now - 3 * 60 * 60_000,
+      sealed: await sealJson(
+        {
+          cents: 82_400,
+          availableCents: 82_400,
+          limitCents: null,
+          hasInstantBalance: true,
+        },
+        encryption,
+      ),
     } satisfies AccountBalanceDoc,
   );
   return accounts.length + 3;
@@ -3475,6 +3640,20 @@ async function writeSeedGoals(
         funding: { amount: exact(10_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
+    {
+      id: 'seed-goal-wedding',
+      payload: {
+        name: 'Wedding gift',
+        emoji: '🎁',
+        priority: 'want',
+        orderIndex: 4,
+        targetCents: 40_000,
+        targetDate: nextCalendarDay(today, 11, 19) + 42 * DAY_MS,
+        state: 'active',
+        groupId: null,
+        funding: { amount: exact(5_000), cadence: { kind: 'everyIncomeDay' } },
+      },
+    },
   ];
 
   const sealedChanges = await Promise.all(
@@ -3551,6 +3730,7 @@ async function seedTrackingPlan(
     ],
     dirtyFrom: null,
     notify: { needsHome: false },
+    sorting: null,
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
   });
@@ -3709,6 +3889,7 @@ async function seedUnlinkedPlan(
     startDate,
     trackingPeriods: [{ from: startDate, to: null, linkedFrom: null }],
     notify: { needsHome: false },
+    sorting: null,
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
   });
@@ -3806,6 +3987,8 @@ async function seedUnlinkedPlan(
   batch.set(context.firestore.doc(`${plan}/links/${linkId}`), {
     id: linkId,
     status: 'revoked',
+    needsCardConsent: null,
+    cardDetails: null,
     lastSyncAt: unlinkedAt,
     createdAt: linkedAt,
     sealed: await sealJson(
@@ -3922,7 +4105,7 @@ async function seedUnlinkedPlan(
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
 /**
- * Jamie's spending (twelve rows, one group, an overspent dinner, a split and its refund) plus what waits in Needs a home from the bank link: a pending coffee, debits, deposits, two account moves and an unclear pair. One purchase a rule already placed.
+ * Jamie's spending (twelve rows, one group, an overspent dinner, a split and its refund) plus what waits in Needs a home from the bank link: a pending coffee, debits, deposits, a card refund, two account moves and an unclear pair. One purchase a rule already placed.
  * The Sweetgreen lunch fits the restaurants rule and waits only because its merge offer (the typed one lacks the tip) is unanswered.
  */
 async function writeSeedPurchases(
@@ -4060,6 +4243,14 @@ async function writeSeedPurchases(
       ],
     },
     {
+      id: 'seed-purchase-target',
+      daysAgo: 6,
+      merchant: 'Target',
+      note: null,
+      lines: [line('seed-envelope-everyday', 4_500)],
+      paidByCardId: SEED_VENTURE_CARD,
+    },
+    {
       id: 'seed-purchase-market',
       daysAgo: 24,
       merchant: 'Farmers market',
@@ -4129,7 +4320,7 @@ async function writeSeedPurchases(
       amountCents: 675,
       status: 'pending',
       accountId: null,
-      cardId: SEED_VENTURE_CARD,
+      cardId: SEED_CHASE_CARD,
       category: 'FOOD_AND_DRINK_COFFEE',
     },
     {
@@ -4171,6 +4362,24 @@ async function writeSeedPurchases(
       category: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES',
     },
     {
+      id: 'seed-link-card-refund',
+      daysAgo: 1,
+      merchant: "Kohl's",
+      amountCents: -4_894,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+    },
+    {
+      id: 'seed-link-card-refund-target',
+      daysAgo: 1,
+      merchant: 'Target',
+      amountCents: -2_000,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+    },
+    {
       id: 'seed-link-deposit-refund',
       daysAgo: 3,
       merchant: 'Venmo cash out',
@@ -4178,6 +4387,26 @@ async function writeSeedPurchases(
       status: 'posted',
       accountId: 'seed-account-checking-a',
       cardId: null,
+    },
+    {
+      id: 'seed-link-card-payment-waiting',
+      daysAgo: 3,
+      merchant: 'CAPITAL ONE MOBILE PYMT',
+      amountCents: 45_000,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+      category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+    },
+    {
+      id: 'seed-link-savings-waiting',
+      daysAgo: 5,
+      merchant: 'Withdrawal to Wealthfront Cash',
+      amountCents: 20_000,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+      category: 'TRANSFER_OUT_SAVINGS',
     },
     {
       id: 'seed-link-transfer-out',
@@ -4241,6 +4470,62 @@ async function writeSeedPurchases(
       status: 'posted',
       accountId: null,
       cardId: SEED_VENTURE_CARD,
+    },
+    {
+      id: 'seed-link-held-out',
+      daysAgo: 0,
+      merchant: 'Transfer to Checking B',
+      amountCents: 200_000,
+      status: 'pending',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+    },
+    {
+      id: 'seed-link-held-in',
+      daysAgo: 0,
+      merchant: 'Deposit from Checking A',
+      amountCents: -200_000,
+      status: 'posted',
+      accountId: 'seed-account-checking-b',
+      cardId: null,
+    },
+    {
+      id: 'seed-link-pending-in',
+      daysAgo: 0,
+      merchant: 'Fidelity withdrawal',
+      amountCents: -190_000,
+      status: 'pending',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+    },
+    {
+      id: 'seed-link-card-flagged-out',
+      daysAgo: 3,
+      merchant: 'Withdrawal to Venture X',
+      amountCents: 10_025,
+      status: 'posted',
+      accountId: 'seed-account-checking-b',
+      cardId: null,
+      category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+    },
+    {
+      id: 'seed-link-card-flagged-in',
+      daysAgo: 3,
+      merchant: 'CAPITAL ONE MOBILE PYMT',
+      amountCents: -10_025,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+      category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+    },
+    {
+      id: 'seed-link-card-decoy-in',
+      daysAgo: 3,
+      merchant: 'Deposit',
+      amountCents: -10_025,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
     },
     {
       id: 'seed-link-deposit-pay',

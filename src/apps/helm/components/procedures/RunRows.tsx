@@ -1,12 +1,13 @@
 import { useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, ListPlus, Plus } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import { TICK_HIT_CLASS } from '@/components/ChecklistGroup';
 import Drawer from '@/components/Drawer';
 import RevealChip from '@/components/RevealChip';
 import SectionHeader from '@/components/SectionHeader';
@@ -127,8 +128,7 @@ export function RunStepRow({
             />
           )
         ) : (
-          <Checkbox
-            className={TICK_HIT_CLASS}
+          <AppCheckbox
             checked={isDone}
             onCheckedChange={(next) => onTick(Boolean(next))}
             aria-label={

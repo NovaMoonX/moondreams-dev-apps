@@ -11,6 +11,7 @@ import {
   PAIR_WORDS,
 } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { toMerchantKey } from '@apps/runway/engine/rules';
 import {
   findAccountPairs,
   findDepositDays,
@@ -18,6 +19,11 @@ import {
 } from '@apps/runway/engine/matching';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import {
+  rememberPayer,
+  forgetMemory,
+  rememberRoute,
+} from '@apps/runway/store/actions/memoryActions';
 import { setLinesDone } from '@apps/runway/store/actions/moveActions';
 import {
   linkDepositToDay,
@@ -30,7 +36,7 @@ import {
   type MergedPurchase,
   type PairedPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectMoveTick } from '@apps/runway/store/selectors/moveSelectors';
 import {
@@ -40,6 +46,9 @@ import {
   selectHistoryPurchases,
   selectLinkHistoryRanges,
   selectIsAccountsLoaded,
+  selectIsMemoriesLoaded,
+  selectPayerMemories,
+  selectRouteMemories,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
   selectIsNeedsHomeLoaded,
@@ -273,6 +282,8 @@ interface DepositPair {
   deposit: OpenPurchase;
   dayKey: string;
   dayOn: number;
+  /** The day's pay line, given when the person links by hand, so its payer is remembered. */
+  payLineId?: string;
 }
 
 /** Links deposits to their income days, one after another, and says so in one toast with an Undo that sends them all back to Needs a home. Resolves with how many linked; a deposit another device changed first is skipped, or throws when `shouldThrow`. */
@@ -282,6 +293,7 @@ export function useLinkDepositsWithUndo() {
   const undo = async (
     uid: string,
     linked: readonly (DepositPair & { linked: OpenPurchase })[],
+    memoryId: string | null,
   ) => {
     try {
       const encryption = await getRunwayEncryption(uid);
@@ -294,6 +306,11 @@ export function useLinkDepositsWithUndo() {
           describeDepositLinked(entry.deposit, entry.dayOn, true),
         );
       }, Promise.resolve());
+      if (memoryId !== null) {
+        await forgetMemory(uid, memoryId).catch((error: unknown) =>
+          console.error('A payer was not forgotten', error),
+        );
+      }
       addToast({ title: DEPOSIT_WORDS.undone, type: 'success' });
     } catch (undoError) {
       addToast({
@@ -346,6 +363,11 @@ export function useLinkDepositsWithUndo() {
       Promise.resolve([] as (DepositPair & { linked: OpenPurchase })[]),
     );
     if (done.length === 0) return 0;
+    const handPayLine = done.length === 1 ? (done[0].payLineId ?? null) : null;
+    const memoryId =
+      assignedBy === 'person' && handPayLine !== null
+        ? await rememberHandDeposit(uid, done[0].deposit, handPayLine)
+        : null;
     addToast({
       title:
         done.length === 1
@@ -361,7 +383,7 @@ export function useLinkDepositsWithUndo() {
       type: 'success',
       action: {
         label: NEEDS_HOME_WORDS.undo,
-        onClick: () => void undo(uid, done),
+        onClick: () => void undo(uid, done, memoryId),
       },
     });
     return done.length;
@@ -375,8 +397,10 @@ export function useMatchDeposits(uid: string | null) {
   const days = useAppSelector((state) =>
     selectDepositDays(state, todayAsUtcDate()),
   );
+  const payers = useAppSelector(selectPayerMemories);
   const isReady = useAppSelector(
     (state) =>
+      selectIsMemoriesLoaded(state) &&
       selectIsNeedsHomeLoaded(state) &&
       state.runway.purchasesFrom !== null &&
       selectIsPlanItemsLoaded(state) &&
@@ -402,17 +426,17 @@ export function useMatchDeposits(uid: string | null) {
     }
     const since = todayAsUtcDate() - AUTO_MATCH_DAYS * DAY_MS;
     const byId = new Map(waiting.map((purchase) => [purchase.id, purchase]));
-    const pairs = [...findDepositDays(waiting, days, purchases).clear].flatMap(
-      ([depositId, dayKey]) => {
-        const deposit = byId.get(depositId);
-        const day = days.find((entry) => entry.dayKey === dayKey);
-        if (!deposit || !day || deposit.date < since) return [];
-        const key = `${deposit.id}:${deposit.updatedAt}:${dayKey}`;
-        return tried.current.has(key)
-          ? []
-          : [{ deposit, dayKey, dayOn: day.expectedOn, key }];
-      },
-    );
+    const pairs = [
+      ...findDepositDays(waiting, days, purchases, payers).clear,
+    ].flatMap(([depositId, dayKey]) => {
+      const deposit = byId.get(depositId);
+      const day = days.find((entry) => entry.dayKey === dayKey);
+      if (!deposit || !day || deposit.date < since) return [];
+      const key = `${deposit.id}:${deposit.updatedAt}:${dayKey}`;
+      return tried.current.has(key)
+        ? []
+        : [{ deposit, dayKey, dayOn: day.expectedOn, key }];
+    });
     if (pairs.length === 0) return;
     pairs.forEach(({ key }) => tried.current.add(key));
     isRunning.current = true;
@@ -432,7 +456,7 @@ export function useMatchDeposits(uid: string | null) {
       }
     };
     void run();
-  }, [uid, waiting, purchases, days, isReady, runs]);
+  }, [uid, waiting, purchases, days, payers, isReady, runs]);
 }
 
 export interface AccountPairInput {
@@ -500,7 +524,11 @@ export function usePairAccountsWithUndo() {
   const cards = useAppSelector(selectAllCards);
   const cardNameOf = getCardNamer(cards);
 
-  const undo = async (uid: string, done: readonly DonePair[]) => {
+  const undo = async (
+    uid: string,
+    done: readonly DonePair[],
+    memoryId: string | null,
+  ) => {
     try {
       const encryption = await getRunwayEncryption(uid);
       await done.reduce(async (previous, entry) => {
@@ -519,6 +547,11 @@ export function usePairAccountsWithUndo() {
           ),
         );
       }, Promise.resolve());
+      if (memoryId !== null) {
+        await forgetMemory(uid, memoryId).catch((error: unknown) =>
+          console.error('A move was not forgotten', error),
+        );
+      }
       addToast({ title: PAIR_WORDS.undone, type: 'success' });
     } catch (undoError) {
       addToast({
@@ -580,6 +613,10 @@ export function usePairAccountsWithUndo() {
       Promise.resolve([] as DonePair[]),
     );
     if (done.length === 0) return 0;
+    const memoryId =
+      assignedBy === 'person' && done.length === 1
+        ? await rememberHandPair(uid, done[0].out, done[0].into)
+        : null;
     addToast({
       title: mask(
         done.length === 1
@@ -595,7 +632,7 @@ export function usePairAccountsWithUndo() {
       type: 'success',
       action: {
         label: NEEDS_HOME_WORDS.undo,
-        onClick: () => void undo(uid, done),
+        onClick: () => void undo(uid, done, memoryId),
       },
     });
     return done.length;
@@ -647,8 +684,10 @@ export function useUnpairAccounts() {
 /** Once Needs a home, the accounts, the cards and the days are read, pairs each recent posted money out with the one money in it clearly is the other side of. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
 export function useMatchAccountPairs(uid: string | null) {
   const waiting = useAppSelector((state) => state.runway.needsHome);
+  const routes = useAppSelector(selectRouteMemories);
   const isReady = useAppSelector(
     (state) =>
+      selectIsMemoriesLoaded(state) &&
       selectIsNeedsHomeLoaded(state) &&
       state.runway.purchasesFrom !== null &&
       state.runway.isCardsLoaded &&
@@ -677,7 +716,7 @@ export function useMatchAccountPairs(uid: string | null) {
     }
     const since = todayAsUtcDate() - AUTO_MATCH_DAYS * DAY_MS;
     const byId = new Map(waiting.map((purchase) => [purchase.id, purchase]));
-    const pairs = [...findAccountPairs(waiting).clear].flatMap(
+    const pairs = [...findAccountPairs(waiting, false, routes).clear].flatMap(
       ([outId, { inId, kind }]) => {
         const out = byId.get(outId);
         const into = byId.get(inId);
@@ -705,5 +744,56 @@ export function useMatchAccountPairs(uid: string | null) {
       }
     };
     void run();
-  }, [uid, waiting, isReady, runs]);
+  }, [uid, waiting, routes, isReady, runs]);
+}
+
+/** Remembers the route of a move the person paired by hand, so the same move later pairs on its own when two could fit. Resolves with the new memory's id (for the Undo to forget) or null; never fails the pairing. */
+export async function rememberHandPair(
+  uid: string,
+  out: OpenPurchase,
+  into: OpenPurchase,
+): Promise<string | null> {
+  try {
+    const cardId = into.paidByCardId ?? null;
+    if (
+      out.accountId === null ||
+      (cardId === null && into.accountId === null)
+    ) {
+      return null;
+    }
+    return await rememberRoute(
+      uid,
+      await getRunwayEncryption(uid),
+      store.getState().runway.memories,
+      {
+        fromAccountId: out.accountId,
+        toAccountId: cardId === null ? into.accountId : null,
+        toCardId: cardId,
+      },
+    );
+  } catch (error) {
+    console.error('A move was not remembered', error);
+    return null;
+  }
+}
+
+/** Remembers the payer of a deposit the person linked to a pay line by hand. Resolves with the new memory's id (for the Undo to forget) or null; never fails the link. */
+export async function rememberHandDeposit(
+  uid: string,
+  deposit: OpenPurchase,
+  payLineId: string,
+): Promise<string | null> {
+  const merchantKey = toMerchantKey(deposit.merchant);
+  if (merchantKey === null) return null;
+  try {
+    return await rememberPayer(
+      uid,
+      await getRunwayEncryption(uid),
+      store.getState().runway.memories,
+      { merchantKey, merchantName: deposit.merchant ?? merchantKey, payLineId },
+    );
+  } catch (error) {
+    console.error('A payer was not remembered', error);
+    return null;
+  }
 }
