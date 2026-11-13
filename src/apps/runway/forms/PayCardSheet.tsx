@@ -11,6 +11,7 @@ import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
+import SuggestionChips from '@/components/SuggestionChips';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
@@ -40,6 +41,11 @@ import {
   undoCardPayment,
 } from '@apps/runway/store/actions/cardActions';
 import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
+import { getMinimumDue } from '@apps/runway/engine/cards';
+import {
+  getLinkedStatement,
+  selectCardsWithBankDue,
+} from '@apps/runway/store/selectors/cardStatementSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { CardPaymentCovers, OpenCard } from '@apps/runway/types';
 import {
@@ -50,7 +56,9 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   describeCardPaid,
   describeCardTakenBack,
+  getCardDueNow,
   getCardName,
+  getMinimumDueOn,
 } from '@apps/runway/utils/cardText';
 import { UNDO_WINDOW_MS } from '@/lib/undo';
 
@@ -90,6 +98,28 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const balances = useAppSelector(selectBalances);
   const reserveCents = Math.max(0, balances.reserveByCard[card.id] ?? 0);
   const name = getCardName(card, cards);
+  const bankDueCard =
+    useAppSelector(selectCardsWithBankDue).find(
+      (entry) => entry.id === card.id,
+    ) ?? card;
+  const moves = useAppSelector((state) => state.runway.moves);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? 0,
+  );
+  const minimumCents = getMinimumDue(
+    useAppSelector((state) => getLinkedStatement(state.runway, card)),
+    getMinimumDueOn(
+      bankDueCard,
+      getCardDueNow(
+        bankDueCard,
+        { [card.id]: reserveCents },
+        moves,
+        today,
+        startDate,
+      ),
+      today,
+    ),
+  );
   const [initial] = useState(() => ({
     amount: reserveCents > 0 ? centsToInputValue(reserveCents) : '',
     day: toDateInputValue(today),
@@ -120,6 +150,8 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const isBelowFull = paidCents !== null && paidCents < reserveCents;
   const getCovers = (): CardPaymentCovers => {
     if (!isBelowFull) return 'full';
+    if (minimumCents !== null)
+      return paidCents >= minimumCents ? 'minimum' : 'part';
     return isMinimum ? 'minimum' : 'part';
   };
   const covers = getCovers();
@@ -138,6 +170,19 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
       ),
     ),
   );
+  const quickAmounts =
+    minimumCents !== null && minimumCents < reserveCents
+      ? [
+          {
+            text: mask(CARD_WORDS.minimumQuick(formatCents(minimumCents))),
+            cents: minimumCents,
+          },
+          {
+            text: mask(CARD_WORDS.everythingQuick(formatCents(reserveCents))),
+            cents: reserveCents,
+          },
+        ]
+      : [];
   const extraCents =
     paidCents !== null && paidCents > reserveCents
       ? paidCents - reserveCents
@@ -284,7 +329,20 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
             onChange={handleAmountChange}
             disabled={isSaving}
           />
-          {isBelowFull && (
+          {quickAmounts.length > 0 && (
+            <SuggestionChips
+              label={CARD_WORDS.quickAmounts}
+              suggestions={quickAmounts.map((option) => option.text)}
+              isDisabled={isSaving}
+              onPick={(text) => {
+                const picked = quickAmounts.find(
+                  (option) => option.text === text,
+                );
+                if (picked) handleAmountChange(centsToInputValue(picked.cents));
+              }}
+            />
+          )}
+          {isBelowFull && minimumCents === null && (
             <div className='flex justify-center'>
               <RevealChip
                 icon={isMinimum ? <X className='h-4 w-4' /> : undefined}

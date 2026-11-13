@@ -5,9 +5,13 @@ import { db } from '@lib/firebase/config';
 import { createSealedReader } from '@apps/runway/security';
 import type {
   AccountBalanceDoc,
+  CardDetailsAnswer,
+  CardStatementDoc,
+  CardStatementSealed,
   LinkDoc,
   LinkSealed,
   OpenAccountBalance,
+  OpenCardStatement,
   OpenLink,
   OpenReleasedCharge,
   ReleasedChargeDoc,
@@ -58,6 +62,15 @@ function startOpenedListener<TDoc extends { id: string }, TOpen>(
 }
 
 /** Every link the bank sign-ins made; Functions write them, this only reads. */
+const toCardDetails = (
+  data: Pick<LinkDoc, 'cardDetails' | 'needsCardConsent'>,
+): CardDetailsAnswer | null => {
+  const value: unknown = data.cardDetails;
+  if (value === 'shared' || value === 'needsConsent' || value === 'unsupported')
+    return value;
+  return data.needsCardConsent === true ? 'needsConsent' : null;
+};
+
 export function startLinksListener(
   uid: string,
   encryption: RunwayEncryption,
@@ -74,6 +87,8 @@ export function startLinksListener(
         id: data.id,
         status: data.status,
         lastSyncAt: data.lastSyncAt ?? null,
+        needsCardConsent: data.needsCardConsent === true,
+        cardDetails: toCardDetails(data),
         createdAt: data.createdAt,
         institutionName: payload.institutionName ?? '',
         institutionLogo: payload.institutionLogo?.startsWith(
@@ -121,6 +136,35 @@ export function startAccountBalancesListener(
         availableCents: payload.availableCents ?? null,
         limitCents: payload.limitCents ?? null,
         hasInstantBalance: payload.hasInstantBalance ?? null,
+      };
+    },
+    onChange,
+    onError,
+  );
+}
+
+/** What the bank's latest statement says about each linked card (minimum, balance, due date), keyed by the card id. */
+export function startCardStatementsListener(
+  uid: string,
+  encryption: RunwayEncryption,
+  onChange: (statements: OpenCardStatement[]) => void,
+  onError: (error: Error) => void,
+) {
+  const read = createSealedReader(encryption);
+  return startOpenedListener<CardStatementDoc, OpenCardStatement>(
+    uid,
+    'cardStatements',
+    async (data) => {
+      const payload = await read<Partial<CardStatementSealed>>(data.sealed);
+      return {
+        id: data.id,
+        asOf: data.asOf,
+        minimumCents: payload.minimumCents ?? null,
+        statementCents: payload.statementCents ?? null,
+        statementOn: payload.statementOn ?? null,
+        dueOn: payload.dueOn ?? null,
+        lastPaymentCents: payload.lastPaymentCents ?? null,
+        lastPaymentOn: payload.lastPaymentOn ?? null,
       };
     },
     onChange,

@@ -8,7 +8,8 @@ import {
   Wallet,
 } from 'lucide-react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -50,7 +51,6 @@ import {
   MAX_PURCHASE_CENTS,
   MEMORY_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
-  TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { getPendingCents, hasBankBalance } from '@apps/runway/engine/accounts';
 import { describeBankUpdated } from '@apps/runway/utils/bankFreshness';
@@ -472,8 +472,7 @@ function AccountSheet({
                     {group.rows.map((row) => (
                       <li key={row.id}>
                         <label className='flex min-h-14 items-center gap-3 px-3 py-2'>
-                          <Checkbox
-                            className={TICK_HIT_CLASS}
+                          <AppCheckbox
                             checked={picked.has(row.id)}
                             onCheckedChange={(next) =>
                               toggle(row.id, Boolean(next))

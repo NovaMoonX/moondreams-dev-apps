@@ -1155,9 +1155,6 @@ export const START_HOLDINGS = [
 ] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
 export const START_DAY_KEY = 'start';
-/** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
-export const TICK_HIT_CLASS =
-  "relative before:absolute before:-inset-[11px] before:content-['']";
 /** Rows of goals or bills the starting amounts list shows before "Show all". */
 export const START_ROWS_PREVIEW = 6;
 
@@ -2054,6 +2051,7 @@ export const SPEND_WORDS = {
   newPurchase: 'Add a purchase',
   envelopeAdd: 'Add a purchase',
   sheetTitle: 'Purchase',
+  refundSheetTitle: 'Refund',
   empty:
     'Nothing spent yet. Add what you spend and each envelope shows what is left.',
   loading: 'Getting your purchases.',
@@ -2185,6 +2183,7 @@ export const SPEND_WORDS = {
   add: 'Add',
   needsAmount: 'Enter the amount.',
   needsEnvelope: 'Pick the envelope.',
+  needsReturnTo: 'Pick where it goes back to.',
   needsDay: 'Pick a day you were tracking, not one ahead.',
   needsShares: 'Say how much each envelope takes.',
   needsTwo: 'Pick at least two envelopes.',
@@ -2621,6 +2620,46 @@ export const ITEM_SHEET_WORDS = {
   draftStatus: 'Expected. This is the plan until the money arrives.',
   dayMore: 'More about this day',
   notArrivedSub: 'Takes this day off your plan until you put it back',
+} as const;
+
+/** A pay's "Comes out of this pay" list: the bills, envelopes and goals tied to it, those paid first, and the way to add or release one. */
+export const PAY_ITEMS_WORDS = {
+  door: 'Comes out of this pay',
+  doorNothing: 'Nothing yet',
+  doorSub: (names: readonly string[]) =>
+    names.length <= 3
+      ? formatList([...names])
+      : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`,
+  title: (pay: string) => `What comes out of ${pay}`,
+  paidFirst: 'Paid first',
+  alsoPay: 'Also from this pay',
+  alsoSource: 'Also from this income',
+  onDay: (day: string) => `On ${day}`,
+  anyPay: 'Any of its pays',
+  empty: 'Nothing comes out of this pay yet.',
+  search: 'Search this pay',
+  paidFirstEach: (amount: string) => `${amount} each pay`,
+  payFirst: 'Pay it first',
+  payFirstSub: 'Out of this pay before anything else',
+  payFirstDaySub: (day: string) =>
+    `Out of every pay of this line before anything else, not only ${day}`,
+  stop: 'Stop taking it from this pay',
+  stopBillSub: 'It goes back to Spread across my pays',
+  stopOtherSub: 'It goes back to every pay',
+  add: 'Add to this pay',
+  addTitle: (pay: string) => `What should come out of ${pay}?`,
+  addNone: 'Every bill, envelope and goal that can is already here.',
+  addSearch: 'Search bills, envelopes and goals',
+  dayTitle: (name: string) => `Which pay should ${name} come out of?`,
+  dayBodyMonthly: 'Only out of the pay on that day',
+  dayBodyPay: 'Out of every pay it makes',
+  addDay: (name: string) => `Add ${name}`,
+  added: (name: string, pay: string) => `${name} now comes out of ${pay}`,
+  stoppedBill: (name: string) => `${name} goes back to Spread across my pays`,
+  stoppedOther: (name: string) => `${name} goes back to every pay`,
+  bill: 'Bill',
+  envelope: 'Envelope',
+  goal: 'Goal',
 } as const;
 
 export const PAID_HISTORY_WORDS = {
@@ -3321,6 +3360,18 @@ export const HOW_OFTEN_WORDS = {
   holdingNotRecorded: (name: string) =>
     `${name} was added, but what is in it now did not record. Add it under Where things stand.`,
   notBeingAdded: 'Not saving for it yet',
+} as const;
+
+/** The "Comes out of" question an envelope's or goal's funding asks when there is more than one pay. */
+export const FUNDING_PAY_WORDS = {
+  title: 'Which pay does it come out of?',
+  label: 'Comes out of',
+  everyPay: 'Every pay',
+  percentOfPay: (pay: string) => `of ${pay}`,
+  suffix: (pay: string) => `from ${pay}`,
+  /** The change log's phrase when no one pay is picked. */
+  logEveryPay: 'every pay',
+  gone: 'Its pay is no longer in the plan, so nothing goes in',
 } as const;
 
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
@@ -4713,6 +4764,41 @@ export const CARD_WORDS = {
   dueInDays: (days: number) =>
     days === 1 ? 'Due tomorrow' : `Due in ${days} days`,
   dueToday: 'Due today',
+  dueFromBank: (bank: string) => `Due date from ${bank}`,
+  dueFromBankTitle: 'Due date',
+  dueFromBankSummary: (date: string, bank: string) => `${date}, from ${bank}`,
+  dueFromBankBody: (bank: string) =>
+    `${bank} sets this date, so Runway follows it. If you unlink the card, the day you typed comes back.`,
+  statementCaption: (bank: string) => `From your ${bank} statement`,
+  minimumDue: 'Minimum due',
+  statementBalance: 'Statement balance',
+  statementIssued: (date: string) => `Issued\u00a0${date}`,
+  minimumShort: (amount: string) => `${amount}\u00a0minimum`,
+  minimumQuick: (amount: string) => `Minimum ${amount}`,
+  everythingQuick: (amount: string) => `Everything waiting ${amount}`,
+  quickAmounts: 'Or pay',
+  minimumDueOn: (date: string) => `Due\u00a0${date}`,
+  minimumWasDue: (date: string) => `Was due\u00a0${date}`,
+  minimumPaid: 'Paid',
+  minimumPaidDetail: (amount: string, date: string) =>
+    `You paid ${amount} on\u00a0${date}`,
+  minimumNone: 'Nothing to pay on this statement',
+  minimumNotShared: (bank: string) =>
+    `${bank} doesn\u2019t share this card\u2019s minimum`,
+  offerBadge: 'New',
+  offerTitle: 'See your minimum payment',
+  offerBody: (bank: string) =>
+    `${bank} shares it once you agree. Not every card has one.`,
+  offerCovers: (names: string) => `Covers ${names} too`,
+  offerSeparate: (bank: string) =>
+    `This card is on its own ${bank} sign-in, so it asks separately`,
+  offerAction: (bank: string) => `Agree at ${bank}`,
+  offerLater: 'Not now',
+  offerRow: (bank: string) => `Get the minimum from ${bank}`,
+  offerRowHelp: 'Agree once and it shows here',
+  offerDone: (bank: string) =>
+    `Done. The minimum shows here as soon as ${bank} sends it`,
+  offerFailed: (bank: string) => `Couldn\u2019t reach ${bank}. Try again`,
   homeTitle: 'Cards',
   homeSeeAll: 'See all',
   totalOwed: (amount: string) => `${amount} waiting to be paid on your cards`,
@@ -4721,6 +4807,20 @@ export const CARD_WORDS = {
     `${name} is due\u00a0${date} · ${amount} waiting`,
   dueTodayWarning: (name: string, amount: string) =>
     `${name} is due today · ${amount} waiting`,
+  dueWarningMinimum: (
+    name: string,
+    date: string,
+    minimum: string,
+    amount: string,
+  ) => `${name} is due\u00a0${date} · ${minimum} minimum, ${amount} waiting`,
+  dueTodayWarningMinimum: (name: string, minimum: string, amount: string) =>
+    `${name} is due today · ${minimum} minimum, ${amount} waiting`,
+  dueWarningPastMinimum: (
+    name: string,
+    date: string,
+    minimum: string,
+    amount: string,
+  ) => `${name} was due\u00a0${date} · ${minimum} minimum, ${amount} waiting`,
   dueWarningOpen: 'Pay it off',
   dueWarningPast: (name: string, date: string, amount: string) =>
     `${name} was due\u00a0${date} · ${amount} waiting`,
@@ -4909,6 +5009,9 @@ export const NEEDS_HOME_WORDS = {
   keepFree: 'Keep in Free to Spend',
   keepFreeSub: 'Still counts, with no envelope',
   keptFree: 'Kept in Free to Spend',
+  keepRefundFree: 'Leave it in Free to Spend',
+  keepRefundFreeSub: 'It’s already counted there. No envelope gets it back',
+  keptRefundFree: 'Left in Free to Spend',
   historyOne: 'A purchase from before you linked is history now',
   historyMany: (count: number) =>
     `${count} purchases from before you linked are history now`,

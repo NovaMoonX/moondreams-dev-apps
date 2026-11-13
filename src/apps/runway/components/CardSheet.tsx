@@ -31,6 +31,12 @@ import {
 } from '@apps/runway/utils/cardFeePlan';
 import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
+import CardStatementSection from '@apps/runway/components/CardStatementSection';
+import { getBankDueDay } from '@apps/runway/engine/cards';
+import {
+  getLinkedStatement,
+  selectCardsWithBankDue,
+} from '@apps/runway/store/selectors/cardStatementSelectors';
 import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
 import { describeBankUpdated } from '@apps/runway/utils/bankFreshness';
 import SheetHead from '@apps/runway/components/SheetHead';
@@ -143,12 +149,21 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
 }
 
 /** What a card row opens: what it waits for as the figure, then paying it off, changing it, archiving it and its history. */
-function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
+function CardSheet({
+  card: typedCard,
+  onClose,
+  onPay,
+  onChange,
+}: CardSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const mask = useMaskedText();
   const cards = useAppSelector(selectAllCards);
+  const card =
+    useAppSelector(selectCardsWithBankDue).find(
+      (entry) => entry.id === typedCard.id,
+    ) ?? typedCard;
   const balances = useAppSelector(selectBalances);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
@@ -198,6 +213,15 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       : (state.runway.links.find((link) => link.id === card.linkId)
           ?.institutionName ?? null),
   );
+  const link = useAppSelector((state) =>
+    card.linkId === null
+      ? null
+      : (state.runway.links.find((entry) => entry.id === card.linkId) ?? null),
+  );
+  const statement = useAppSelector((state) =>
+    getLinkedStatement(state.runway, card),
+  );
+  const isDueFromBank = getBankDueDay(statement) !== null;
   const bankUpdated =
     bank === null ? null : describeBankUpdated(bank.asOf, now);
 
@@ -355,6 +379,11 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               .filter(Boolean)
               .join(' \u00b7 ')}
             isFactFresh={bankUpdated?.isFresh ?? false}
+            secondFact={
+              isDueFromBank
+                ? CARD_WORDS.dueFromBank(bankName || LINK_WORDS.fallbackBank)
+                : null
+            }
           />
           {bank?.hasInstantBalance === true && (
             <HelpTip
@@ -401,6 +430,12 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               onClick={() => setView('history')}
             />
           </ActionGroup>
+          <CardStatementSection
+            card={card}
+            link={link}
+            statement={statement}
+            today={today}
+          />
           <CardBills cardId={card.id} today={today} onClose={onClose} />
         </div>
       )}

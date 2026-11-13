@@ -27,7 +27,9 @@ import type {
   GoalSealed,
   OpenVersion,
 } from '@apps/runway/types';
+import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardNamer } from '@apps/runway/utils/cardText';
+import { describePayChoice } from '@apps/runway/utils/payFrom';
 import {
   describeChange,
   isMoneylessChange,
@@ -122,7 +124,12 @@ export function usePlanBulk(view: SelectView) {
         after,
         getCardNamer(state.runway.cards),
         groupName,
-        undefined,
+        (fundedBy) =>
+          describePayChoice(
+            fundedBy,
+            selectResolvedPlan(state, todayAsUtcDate()),
+            true,
+          ),
         accountName,
       ) || 'Updated';
     return isMoneylessChange(before, after)
@@ -219,7 +226,7 @@ export function usePlanBulk(view: SelectView) {
   /** Saves every plan; a bill whose Paid from changes also loses its per-pay figures from today, put back by the Undo. Returns the ids that did not save, or null when nothing ran (a save already running). */
   const run = async (
     plans: readonly BulkPlan[],
-    options: { clearsPins?: boolean } = {},
+    options: { clearsPins?: boolean; title?: string } = {},
   ): Promise<string[] | null> => {
     if (!user || writingRef.current || plans.length === 0) return null;
     writingRef.current = true;
@@ -281,7 +288,7 @@ export function usePlanBulk(view: SelectView) {
     addToast({
       title:
         failed.length === 0
-          ? PLAN_SELECT_WORDS.updated(written.length, noun)
+          ? (options.title ?? PLAN_SELECT_WORDS.updated(written.length, noun))
           : PLAN_SELECT_WORDS.updatedPartly(
               written.length,
               plans.length,

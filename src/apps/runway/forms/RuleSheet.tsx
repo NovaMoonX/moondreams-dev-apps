@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import BackLink from '@/components/BackLink';
@@ -15,7 +16,6 @@ import { store, useAppSelector } from '@/store';
 import {
   RULE_WORDS,
   SPEND_WORDS,
-  TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
@@ -430,8 +430,7 @@ function RuleSheet({
             {tickRows.map(({ name, label, sub }) => (
               <li key={name}>
                 <label className='flex min-h-14 items-center gap-3 px-3 py-2'>
-                  <Checkbox
-                    className={TICK_HIT_CLASS}
+                  <AppCheckbox
                     checked={ticks[name]}
                     onCheckedChange={(next) => setTick(name, Boolean(next))}
                   />

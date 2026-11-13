@@ -21,6 +21,13 @@ import {
 import { UNDO_WINDOW_MS } from '@/lib/undo';
 
 const getWords = (purchase: OpenPurchase, isKeepFree: boolean) => {
+  if (isKeepFree && purchase.amountCents < 0) {
+    return {
+      label: NEEDS_HOME_WORDS.keepRefundFree,
+      subtitle: NEEDS_HOME_WORDS.keepRefundFreeSub,
+      done: NEEDS_HOME_WORDS.keptRefundFree,
+    };
+  }
   if (isKeepFree) {
     return {
       label: NEEDS_HOME_WORDS.keepFree,
@@ -44,7 +51,7 @@ const getWords = (purchase: OpenPurchase, isKeepFree: boolean) => {
 interface LeaveOutRowProps {
   purchase: OpenPurchase;
   onDone: () => void;
-  /** Keeps a charge counted in Free to Spend with no envelope, instead of marking it as no spending or income. */
+  /** Keeps a charge or refund counted in Free to Spend with no envelope, instead of marking it as no spending or income. */
   isKeepFree?: boolean;
   /** The row's own words where the usual ones would not fit the question asked. */
   label?: string;
