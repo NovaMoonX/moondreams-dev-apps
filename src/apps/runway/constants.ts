@@ -474,10 +474,7 @@ export const HORIZON_WORDS = {
   yearlyTitle: 'Does it happen every year?',
   yearly: 'How often',
   yearlyOnce: 'Once',
-  yearlyOnceMeaning: 'A one-time event.',
   yearlyEvery: 'Every year',
-  yearlyEveryMeaning: 'It comes around again each year.',
-  yearlyEverySummary: "Every year · next year's is lined up when you finish",
   yearlySwitch: 'Comes back every year',
   yearlySwitchMeaning: "Finishing it lines up next year's.",
   everyYear: 'every year',
@@ -723,9 +720,6 @@ export const MAKE_BILL_WORDS = {
     `Gave ${item}'s ${money} to Free to Spend.`,
 } as const;
 
-const listNamesAndMore = (names: readonly string[], more: number) =>
-  more > 0 ? `${names.join(', ')} and ${more} more` : names.join(' and ');
-
 /** Planning a goal or an envelope on the Horizon: which event, linking a goal, moving an envelope in, and the nudge. */
 export const HORIZON_PLAN_WORDS = {
   door: 'Plan it on your Horizon',
@@ -794,7 +788,6 @@ export const HORIZON_PLAN_WORDS = {
 /** Issue 88: finishing an event, calling it off and bringing it back. */
 export const HORIZON_END_WORDS = {
   readyTitle: 'Everything is paid or a bill',
-  readySub: 'Nothing is left to pay, so it is ready to finish.',
   finishLabel: (name: string) => `Finish ${name}`,
   finishTitle: (name: string) => `Finish ${name}?`,
   moneyQuestion: (amount: string) => `What happens to the ${amount} left?`,
@@ -804,8 +797,8 @@ export const HORIZON_END_WORDS = {
   placeSearch: 'Search',
   placeNoMatch: 'No envelope or goal matches',
   finishConfirm: 'Finish',
-  finishWaits: (names: readonly string[], more: number) =>
-    `Finish once the ${listNamesAndMore(names, more)} ${names.length + more === 1 ? 'is' : 'are'} paid or made a bill.`,
+  finishWaits: (count: number) =>
+    `${count} ${count === 1 ? 'cost' : 'costs'} to pay before you can finish`,
   placeCaption: 'Move it to',
   placePicked: (place: string) => `It moves to ${place}`,
   placeNone: 'There is no envelope or goal to move it to yet.',

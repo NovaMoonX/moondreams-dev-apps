@@ -520,7 +520,7 @@ function HorizonForm({
         formData.isYearly === null
           ? ''
           : formData.isYearly
-            ? HORIZON_WORDS.yearlyEverySummary
+            ? HORIZON_WORDS.yearlyEvery
             : HORIZON_WORDS.yearlyOnce,
       isAnswered: formData.isYearly !== null,
       render: ({ moveOn }) => (
@@ -529,12 +529,12 @@ function HorizonForm({
             {
               value: false,
               label: HORIZON_WORDS.yearlyOnce,
-              meaning: HORIZON_WORDS.yearlyOnceMeaning,
+              meaning: undefined,
             },
             {
               value: true,
               label: HORIZON_WORDS.yearlyEvery,
-              meaning: HORIZON_WORDS.yearlyEveryMeaning,
+              meaning: HORIZON_WORDS.yearlySwitchMeaning,
             },
           ].map(({ value, label, meaning }) => (
             <div

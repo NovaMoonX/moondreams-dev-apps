@@ -361,7 +361,7 @@ function HorizonChangeForm({
       title: HORIZON_WORDS.yearly,
       summaryLabel: HORIZON_WORDS.yearly,
       summaryValue: isYearly
-        ? HORIZON_WORDS.yearlyEverySummary
+        ? HORIZON_WORDS.yearlyEvery
         : HORIZON_WORDS.yearlyOnce,
       isAnswered: true,
       render: () => (

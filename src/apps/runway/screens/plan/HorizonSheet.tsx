@@ -983,8 +983,8 @@ function HorizonSheet({
             </InlineNotice>
           )}
           {stage === 'readyToFinish' && (
-            <InlineNotice tone='success' title={HORIZON_END_WORDS.readyTitle}>
-              <p>{HORIZON_END_WORDS.readySub}</p>
+            <InlineNotice tone='success'>
+              <p className='font-semibold'>{HORIZON_END_WORDS.readyTitle}</p>
             </InlineNotice>
           )}
           {isChangesOnly ? (
@@ -1102,10 +1102,7 @@ function HorizonSheet({
             )}
             {stage === 'open' && waitingOn.length > 0 && (
               <p className='pt-2'>
-                {HORIZON_END_WORDS.finishWaits(
-                  waitingOn.slice(0, 2).map(({ name }) => name),
-                  Math.max(0, waitingOn.length - 2),
-                )}
+                {HORIZON_END_WORDS.finishWaits(waitingOn.length)}
               </p>
             )}
           </div>
