@@ -31,7 +31,13 @@ const getEnvelopeIncomeDays = (
   payLines: Parameters<typeof getIncomeDaysPerMonth>[0],
   today: number,
   funding: FundingRule,
-) => getIncomeDaysPerMonth(payLines, today, funding.sourceId ?? null);
+) =>
+  getIncomeDaysPerMonth(
+    payLines,
+    today,
+    funding.sourceId ?? null,
+    funding.pay ?? null,
+  );
 
 const toEnvelopeMember = (
   { item, version: envelope }: ResolvedEnvelope | ResolvedGoal,
