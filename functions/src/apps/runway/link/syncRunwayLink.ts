@@ -1,4 +1,5 @@
 import {
+  type DocumentData,
   type DocumentReference,
   type Firestore,
   type Timestamp,
@@ -508,22 +509,39 @@ async function writeBalances(
     const stored = await transaction.getAll(
       ...entries.map((entry) => entry.ref),
     );
-    const storedAsOf = new Map(
-      stored.map((snapshot) => [snapshot.id, snapshot.data()?.asOf as unknown]),
+    const storedById = new Map(
+      stored.map((snapshot) => [snapshot.id, snapshot.data()]),
     );
-    entries
-      .filter((entry) => {
-        const previous = storedAsOf.get(entry.targetId);
-        return typeof previous !== 'number' || previous <= entry.asOf;
-      })
-      .forEach((entry) => {
+    entries.forEach((entry) => {
+      const previous = storedById.get(entry.targetId);
+      if (typeof previous?.asOf !== 'number' || previous.asOf <= entry.asOf) {
         transaction.set(entry.ref, {
           id: entry.targetId,
           asOf: entry.asOf,
           sealed: sealWithKey(planKey, entry.sealed, SEALED_SCHEMA_VERSION),
         });
+        return;
+      }
+      // A newer live balance stays, but once live reads are off it must stop claiming the five-minute check.
+      const kept = isLiveOff ? openStoredBalance(planKey, previous) : null;
+      if (kept?.hasInstantBalance !== true) return;
+      transaction.update(entry.ref, {
+        sealed: sealWithKey(
+          planKey,
+          { ...kept, hasInstantBalance: false },
+          SEALED_SCHEMA_VERSION,
+        ),
       });
+    });
   });
+}
+
+function openStoredBalance(planKey: PlanKey, data: DocumentData) {
+  try {
+    return openWithKey(planKey.key, data.sealed as SealedPayload);
+  } catch {
+    return null;
+  }
 }
 
 /* An unlink can land while a sync runs, so every write that marks the link live re-reads it in the
