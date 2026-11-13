@@ -580,6 +580,7 @@ export const HORIZON_WORDS = {
     from === null
       ? 'The rest comes from your pays before each cost is due.'
       : `The rest comes from your pays from ${from}, before each cost is due. Pays before then give nothing.`,
+  restHelpTitle: 'Where the rest comes from',
   restOnePayNote: (date: string) => `The rest comes from the ${date} pay.`,
   putMore: 'Put more toward it',
   putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',
@@ -657,7 +658,7 @@ export const HORIZON_WORDS = {
   changeItemTitle: 'Change it',
   covers: {
     allPaidOrBill: 'Everything is paid or a bill',
-    nothingSet: 'Nothing is set aside yet, so nothing is covered.',
+    nothingSet: 'Nothing set aside yet.',
     setAsideUsed: 'What was set aside is spent.',
     none: "What's set aside doesn't cover a whole cost yet.",
     all: 'Covers every cost.',
@@ -667,6 +668,7 @@ export const HORIZON_WORDS = {
     on: (name: string, date: string) => `${name} on ${date}`,
     more: (count: number) => `${count} more`,
     helpTitle: 'About the range',
+    helpBothTitle: 'How this is paid',
     helpRange: (name: string, low: string, high: string, end: string) =>
       `${name} could be ${low} to ${high}. Runway plans it at ${end}.`,
   },

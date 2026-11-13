@@ -34,7 +34,9 @@ import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
 import MarkOutsideCostRow from '@apps/runway/components/MarkOutsideCostRow';
-import CoversLine from '@apps/runway/components/CoversLine';
+import CoversLine, {
+  type CoversRest,
+} from '@apps/runway/components/CoversLine';
 import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
 import HorizonEndView from '@apps/runway/components/HorizonEndView';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
@@ -254,21 +256,26 @@ function HorizonSheet({
       isRange ? RANGE_END_WORDS[getRangeEnd(stance, 'expense')] : null,
     );
   };
-  const getRestFromPaysNote = () => {
+  const getRestFromPays = (): CoversRest => {
     const { rest } = horizon;
     const picked =
       rest.kind === 'onePay'
         ? comingDays.find(({ dayKey }) => dayKey === rest.dayKey)
         : undefined;
-    return picked
-      ? HORIZON_WORDS.restOnePayNote(formatDateOrdinalUTC(picked.on))
-      : HORIZON_WORDS.restPaysNote(
-          rest.kind === 'pays' &&
-            rest.startsOn !== null &&
-            rest.startsOn > today
-            ? formatDateOrdinalUTC(rest.startsOn)
-            : null,
-        );
+    if (picked) {
+      return {
+        short: null,
+        note: HORIZON_WORDS.restOnePayNote(formatDateOrdinalUTC(picked.on)),
+      };
+    }
+    const from =
+      rest.kind === 'pays' && rest.startsOn !== null && rest.startsOn > today
+        ? formatDateOrdinalUTC(rest.startsOn)
+        : null;
+    return {
+      short: from === null ? null : HORIZON_WORDS.savingStarts(from),
+      note: HORIZON_WORDS.restPaysNote(from),
+    };
   };
   const when =
     horizon.happensUntil === null
@@ -1013,11 +1020,11 @@ function HorizonSheet({
               heldCents={figures.leftCents}
               stance={stance}
               isSetAsideUsed={figures.setAsideCents > 0}
-              after={
+              rest={
                 (horizon.rest.kind === 'pays' ||
                   horizon.rest.kind === 'onePay') &&
                 plan.coveredUntil !== null
-                  ? getRestFromPaysNote()
+                  ? getRestFromPays()
                   : null
               }
             />
