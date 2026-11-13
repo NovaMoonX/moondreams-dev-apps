@@ -19,6 +19,7 @@ import {
   GROUP_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
+import HorizonNudge from '@apps/runway/components/HorizonNudge';
 import GoalRow from '@apps/runway/components/GoalRow';
 import GroupHeading from '@apps/runway/components/GroupHeading';
 import GroupSheet from '@apps/runway/forms/GroupSheet';
@@ -36,7 +37,11 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import PlanBulkActions, {
+  PlanSelectHeader,
+} from '@apps/runway/components/PlanBulkActions';
 import PlanTotal from '@apps/runway/components/PlanTotal';
+import { usePlanSelection } from '@apps/runway/hooks/usePlanSelection';
 import {
   isCountedAt,
   usePriorityDial,
@@ -67,14 +72,25 @@ function GoalsScreen() {
     dial,
     hasTargets,
   );
-  const { addRequest, clearAdd, openItem, openItemAt, closeOpenItem } =
-    useRunwayUrlState();
+  const {
+    addRequest,
+    clearAdd,
+    openItem,
+    openItemAt,
+    closeOpenItem,
+    showPlanSection,
+  } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
   const isRequested = addRequest === 'goal';
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const figuresByGroup = useGroupFigures(today, dial);
 
+  const selection = usePlanSelection(
+    'goals',
+    goals.map(({ item }) => item.id),
+  );
+  const isSelecting = selection.isActive;
   const hasRangedIncome = comingDays.some(
     (day) => day.amount.lowCents !== day.amount.highCents,
   );
@@ -110,9 +126,22 @@ function GoalsScreen() {
           paceDial={paceDial}
           heldCents={heldByItem[item.id] ?? 0}
           request={openItem?.itemId === item.id ? openItem : null}
-          onRequestDone={closeOpenItem}
+          onRequestDone={() => {
+            const returnTo = openItem?.returnTo ?? null;
+            closeOpenItem();
+            if (returnTo !== null) void showPlanSection(returnTo);
+          }}
           today={today}
           isFaded={!isCountedAt(payload.priority, dial)}
+          select={
+            isSelecting
+              ? {
+                  checked: selection.ids.has(item.id),
+                  onChange: () => selection.toggle([item.id]),
+                }
+              : undefined
+          }
+          onHold={() => selection.begin([item.id])}
         />
       ))}
     </ul>
@@ -135,12 +164,13 @@ function GoalsScreen() {
     }
     return (
       <div className='space-y-3'>
-        {notSavingCount > 0 && (
+        {notSavingCount > 0 && !isSelecting && (
           <p className='text-muted-foreground text-sm'>
             {GROUP_WORDS.notSavingFor(notSavingCount)}
           </p>
         )}
         {trackedGoals.length > 0 &&
+          !isSelecting &&
           (behindGoals.length === 0 ? (
             <div className='flex min-h-10 items-center gap-1'>
               <CircleCheck
@@ -203,6 +233,21 @@ function GoalsScreen() {
                     { savedCents: 0, targetCents: 0 },
                   )}
                   onOpen={() => setOpenGroupId(figures.id)}
+                  select={
+                    isSelecting
+                      ? {
+                          ticked: rows.filter(({ item }) =>
+                            selection.ids.has(item.id),
+                          ).length,
+                          total: rows.length,
+                          onToggle: () =>
+                            selection.toggle(rows.map(({ item }) => item.id)),
+                        }
+                      : undefined
+                  }
+                  onHold={() =>
+                    selection.begin(rows.map(({ item }) => item.id))
+                  }
                 />
                 {getList(rows)}
               </div>
@@ -223,37 +268,66 @@ function GoalsScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title='Goals'
-        action={
-          isLoaded && totalFigure ? (
-            <PlanTotal
-              figure={totalFigure}
-              dial={dial}
-              helpTitle={GROUP_WORDS.goalsHelpTitle}
-              help={
-                <div className='space-y-2'>
-                  <p>
-                    <MaskedText>
-                      {GROUP_WORDS.savingToward(formatCents(targetCents))}
-                    </MaskedText>
-                  </p>
-                  {hasRangedIncome && (
-                    <RangeBasisNote stance={stance} side='income' />
-                  )}
-                </div>
-              }
-            />
-          ) : undefined
-        }
-      />
+      {isSelecting ? (
+        <PlanSelectHeader
+          view='goals'
+          tickedIds={selection.ticked}
+          allIds={visible.map(({ item }) => item.id)}
+          onToggle={selection.toggle}
+          onDone={selection.exit}
+        />
+      ) : (
+        <SectionHeader
+          title='Goals'
+          action={
+            isLoaded && totalFigure ? (
+              <PlanTotal
+                figure={totalFigure}
+                dial={dial}
+                helpTitle={GROUP_WORDS.goalsHelpTitle}
+                help={
+                  <div className='space-y-2'>
+                    <p>
+                      <MaskedText>
+                        {GROUP_WORDS.savingToward(formatCents(targetCents))}
+                      </MaskedText>
+                    </p>
+                    {hasRangedIncome && (
+                      <RangeBasisNote stance={stance} side='income' />
+                    )}
+                  </div>
+                }
+              />
+            ) : undefined
+          }
+        />
+      )}
+      {isLoaded && behindGoals.length === 0 && !isSelecting && <HorizonNudge />}
       {getBody()}
-      {isLoaded && <StoppedHoldingList kind='goal' today={today} />}
-      <FloatingAction
-        label='Add a goal'
-        icon={<Target className='h-5 w-5' aria-hidden='true' />}
-        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-      />
+      {isLoaded && !isSelecting && (
+        <StoppedHoldingList kind='goal' today={today} />
+      )}
+      {isSelecting ? (
+        <PlanBulkActions
+          view='goals'
+          ticked={goals
+            .filter(({ item }) => selection.ids.has(item.id))
+            .map(({ item, version }) => ({
+              itemId: item.id,
+              name: version.payload.name,
+              payload: version.payload,
+            }))}
+          onSaved={(saved, failed) =>
+            failed.length === 0 ? selection.exit() : selection.toggle(saved)
+          }
+        />
+      ) : (
+        <FloatingAction
+          label='Add a goal'
+          icon={<Target className='h-5 w-5' aria-hidden='true' />}
+          onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+        />
+      )}
       {openGroupId !== null && (
         <GroupSheet
           groupId={openGroupId}

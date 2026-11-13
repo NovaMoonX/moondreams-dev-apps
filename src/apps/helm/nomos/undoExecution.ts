@@ -26,7 +26,10 @@ import {
   type IndexChange,
   type IndexEntry,
 } from '@apps/helm/utils/keyDateIndex';
-import { getMediaObjectPath } from '@apps/helm/utils/mediaPath';
+import { getMediaObjectPaths } from '@apps/helm/utils/mediaPath';
+import { buildProcedureVersionDoc } from '@apps/helm/store/actions/procedureActions';
+import { buildVersionDoc } from '@apps/helm/store/actions/topicActions';
+import { HELM_COPY } from '@apps/helm/constants';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
 import {
   planReopen,
@@ -40,9 +43,18 @@ import type {
   ExecutionSealed,
   HelmEncryption,
   KeyDateSealed,
+  MediaKind,
+  NoteSealed,
+  ProcedureSealed,
+  ProcedureVersion,
+  ProcedureVersionSealed,
+  RunSealed,
   ProjectSealed,
   Sealed,
   TaskSealed,
+  TopicSealed,
+  TopicVersion,
+  TopicVersionSealed,
   WhoSealed,
 } from '@apps/helm/types';
 
@@ -80,6 +92,9 @@ async function readUsedIds(
       ref.op === 'create' &&
       (ref.collection === 'who' || ref.collection === 'places'),
   );
+  const madeTopics = refs.filter(
+    (ref) => ref.op === 'create' && ref.collection === 'topics',
+  );
   const checks = await Promise.all(
     made.flatMap((ref) => {
       const field = ref.collection === 'who' ? 'whoIds' : 'placeIds';
@@ -97,7 +112,19 @@ async function readUsedIds(
       });
     }),
   );
-  return new Set(checks.flat());
+  const underTopics = await Promise.all(
+    madeTopics.map(async (ref) => {
+      const found = await getDocs(
+        query(
+          collection(userOf(uid), 'topics'),
+          where('parentId', '==', ref.docId),
+          limit(own.size + 1),
+        ),
+      );
+      return found.docs.some((entry) => !own.has(entry.id)) ? [ref.docId] : [];
+    }),
+  );
+  return new Set([...checks.flat(), ...underTopics.flat()]);
 }
 
 type WritePlan = Extract<UndoPlan, { kind: 'write' }>;
@@ -315,6 +342,11 @@ const isUnavailable = (error: unknown) =>
   error !== null &&
   (error as { code?: unknown }).code === 'unavailable';
 
+const toMediaKind = (value: unknown): MediaKind =>
+  value === 'pdf' || value === 'voiceNote' || value === 'markdown'
+    ? value
+    : 'photo';
+
 /** Takes an execution back in one transaction that re-reads it and every record it touched, so it only restores what is still as the assistant left it. */
 export async function undoExecution(
   uid: string,
@@ -362,7 +394,10 @@ export async function undoExecution(
                 ref.collection === 'tasks' ||
                 ref.collection === 'who' ||
                 ref.collection === 'projects' ||
-                ref.collection === 'keyDates';
+                ref.collection === 'keyDates' ||
+                ref.collection === 'notes' ||
+                ref.collection === 'procedures' ||
+                ref.collection === 'procedureRuns';
               const entry = await transaction.get(docOf(ref));
               if (ref.collection === 'keyDates' && ref.op === 'delete') {
                 const whoId =
@@ -387,11 +422,48 @@ export async function undoExecution(
               const data = entry.exists()
                 ? (entry.data() as Record<string, unknown>)
                 : null;
+              if (ref.collection === 'topics') {
+                const parentId = original.effectRefs
+                  .flatMap((other, index) =>
+                    other.docId === docId
+                      ? [original.effects[index]?.previous?.parentId]
+                      : [],
+                  )
+                  .find((value) => typeof value === 'string');
+                const parent =
+                  typeof parentId === 'string'
+                    ? await transaction.get(
+                        doc(userOf(uid), 'topics', parentId),
+                      )
+                    : null;
+                return [
+                  docId,
+                  {
+                    docId,
+                    data,
+                    opened: await (
+                      data?.sealed
+                        ? openJson<TopicSealed>(
+                            data.sealed as Sealed,
+                            encryption,
+                          )
+                        : Promise.reject(new Error('No sealed words.'))
+                    ).catch(() => null),
+                    isOwnerHere: parent ? parent.exists() : true,
+                  },
+                ];
+              }
               if (!isOpened) return [docId, { docId, data, opened: null }];
               const opened = await (
                 data?.sealed
                   ? openJson<
-                      TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed
+                      | TaskSealed
+                      | WhoSealed
+                      | KeyDateSealed
+                      | ProjectSealed
+                      | NoteSealed
+                      | ProcedureSealed
+                      | RunSealed
                     >(data.sealed as Sealed, encryption)
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);
@@ -416,6 +488,48 @@ export async function undoExecution(
           plan,
           targets,
         );
+        const restoredSections = await Promise.all(
+          plan.versionRestores.map(async ({ docId, collection: from, to }) => {
+            const earlier = await transaction.get(
+              doc(docOf({ collection: from, docId }), 'versions', String(to)),
+            );
+            if (!earlier.exists()) return null;
+            if (from === 'procedures') {
+              const data = earlier.data() as ProcedureVersion;
+              const body = await openJson<ProcedureVersionSealed>(
+                data.sealed,
+                encryption,
+              ).catch(() => null);
+              return body
+                ? {
+                    sections: [],
+                    procedure: {
+                      stepState: data.stepState,
+                      groupOrder: data.groupOrder,
+                      body: {
+                        title: body.title,
+                        steps: body.steps,
+                        groups: body.groups,
+                      },
+                    },
+                  }
+                : null;
+            }
+            const body = await openJson<TopicVersionSealed>(
+              (earlier.data() as TopicVersion).sealed,
+              encryption,
+            ).catch(() => null);
+            return body ? { sections: body.sections, procedure: null } : null;
+          }),
+        );
+        const isRestorable = plan.versionRestores.every(
+          ({ docId }, index) =>
+            restoredSections[index] !== null &&
+            targets.get(docId)?.opened != null,
+        );
+        if (!isRestorable) {
+          return { kind: 'refused', reason: 'unreadable', report: null };
+        }
         const questionCaptureId = original.questionRef?.captureId ?? null;
         const captureRef = questionCaptureId
           ? doc(userOf(uid), 'captures', questionCaptureId)
@@ -450,9 +564,28 @@ export async function undoExecution(
           plan.undoSealed,
           encryption,
         );
-        plan.deletes.forEach(({ docId, collection: from }) =>
-          transaction.delete(docOf({ docId, collection: from })),
-        );
+        plan.deletes.forEach(({ docId, collection: from }) => {
+          transaction.delete(docOf({ docId, collection: from }));
+          // A topic made from a file is deleted at the version the import wrote, and a procedure at its first, so their version records go with them.
+          const written = Number(targets.get(docId)?.data?.version);
+          Array.from(
+            {
+              length:
+                (from === 'topics' || from === 'procedures') && written > 0
+                  ? written
+                  : 0,
+            },
+            (_, index) => index + 1,
+          ).forEach((version) =>
+            transaction.delete(
+              doc(
+                docOf({ docId, collection: from }),
+                'versions',
+                String(version),
+              ),
+            ),
+          );
+        });
         plan.updates.forEach((update, index) =>
           transaction.update(docOf(update), {
             ...Object.fromEntries(
@@ -466,6 +599,63 @@ export async function undoExecution(
             ...resealed[index],
           }),
         );
+        await Promise.all(
+          plan.versionRestores.map(async ({ docId, from, to }, index) => {
+            const restored = restoredSections[index];
+            const kind = plan.versionRestores[index].collection;
+            if (kind === 'procedures' && restored?.procedure) {
+              const procedureRef = docOf({ collection: 'procedures', docId });
+              const at = Date.now();
+              transaction.update(procedureRef, {
+                stepState: restored.procedure.stepState,
+                groupOrder: restored.procedure.groupOrder,
+                sealed: await sealJson<ProcedureSealed>(
+                  restored.procedure.body,
+                  encryption,
+                ),
+                version: from + 1,
+                lastEditedAt: at,
+              });
+              transaction.set(
+                doc(procedureRef, 'versions', String(from + 1)),
+                await buildProcedureVersionDoc(encryption, {
+                  version: from + 1,
+                  parts: restored.procedure,
+                  reason: 'restored',
+                  restoredFromVersion: to,
+                  changeSummary: HELM_COPY.procedureSummaryRestored(to),
+                  executionId: undoRef.id,
+                  now: at,
+                }),
+              );
+              return;
+            }
+            const topicRef = docOf({ collection: 'topics', docId });
+            const sections = restored?.sections ?? [];
+            const opened = targets.get(docId)?.opened as TopicSealed;
+            const at = Date.now();
+            transaction.update(topicRef, {
+              sealed: await sealJson<TopicSealed>(
+                { ...opened, sections },
+                encryption,
+              ),
+              version: from + 1,
+              lastEditedAt: at,
+            });
+            transaction.set(
+              doc(topicRef, 'versions', String(from + 1)),
+              await buildVersionDoc(encryption, {
+                version: from + 1,
+                sections,
+                reason: 'restored',
+                restoredFromVersion: to,
+                changeSummary: HELM_COPY.historySummaryRestored(to),
+                executionId: undoRef.id,
+                now: at,
+              }),
+            );
+          }),
+        );
         await writeDatesIn(transaction, uid, encryption, plan, dates);
         if (captureRef && reopen) transaction.update(captureRef, reopen);
         transaction.set(undoRef, { ...plan.undoExecution, sealed });
@@ -476,12 +666,12 @@ export async function undoExecution(
           report: plan.report,
           objectPaths: plan.deletes.flatMap(({ docId, collection: from }) =>
             from === 'media'
-              ? [
-                  getMediaObjectPath(uid, docId, false),
-                  ...(targets.get(docId)?.data?.hasThumb === true
-                    ? [getMediaObjectPath(uid, docId, true)]
-                    : []),
-                ]
+              ? getMediaObjectPaths(
+                  uid,
+                  docId,
+                  toMediaKind(targets.get(docId)?.data?.kind),
+                  targets.get(docId)?.data?.hasThumb === true,
+                )
               : [],
           ),
         };

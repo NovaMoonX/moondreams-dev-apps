@@ -1,9 +1,11 @@
-import type {
-  ModelProvider,
-  ToolLoopRequest,
+import {
+  messageText,
+  type ModelProvider,
+  type ToolLoopRequest,
 } from '../../../ai/modelProvider.js';
 import { EMPTY_USAGE } from '../../../ai/models.js';
 import { toSenderName } from './answerGuards.js';
+import { getLocalDay, toKnownZone } from '../syncedCopies.js';
 import type { CaptureReading } from './commands.js';
 
 const SPLIT_RE = /\n|,(?!\d)|\band\b/gi;
@@ -229,6 +231,9 @@ const toAnswer = (fields: Partial<Record<string, unknown>>) => ({
   quoteAliases: [],
   generalText: null,
   generalSpoken: null,
+  differsFromNoteAlias: null,
+  differsSays: null,
+  suggestedTopicAlias: null,
   statement: null,
   quoteAlias: null,
   aboutAlias: null,
@@ -391,6 +396,96 @@ async function readMailAnswer(
   ];
 }
 
+const SPEND_QUESTION_RE =
+  /\b(?:spend|spent|paid|pay)\b.*?\bat\s+(?:the\s+)?([\p{L}][\p{L}&'.-]*(?:\s+(?!(?:last|this|recently|in|on|over|during)\b)[\p{L}][\p{L}&'.-]*)?)/iu;
+
+const SPEND_ASK_RE = /\b(?:spend|spent)\b/i;
+
+const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
+
+const SPEND_DAY = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+const toSpendDay = (day: string) =>
+  SPEND_DAY.format(Date.parse(`${day}T00:00:00Z`));
+
+const toSpendRange = (question: string, now: number, timeZone: string) => {
+  const today = getLocalDay(now, toKnownZone(timeZone));
+  const [year, month] = [
+    new Date(today).getUTCFullYear(),
+    new Date(today).getUTCMonth(),
+  ];
+  if (/last month/i.test(question)) {
+    return {
+      from: toDayText(Date.UTC(year, month - 1, 1)),
+      to: toDayText(Date.UTC(year, month, 0)),
+    };
+  }
+  return /this month/i.test(question)
+    ? { from: toDayText(Date.UTC(year, month, 1)), to: toDayText(today) }
+    : { from: toDayText(today - 30 * 86_400_000), to: toDayText(today) };
+};
+
+interface SpendResult {
+  records?: { alias?: string; payee: string; amount: string }[];
+  matchedCount?: number;
+  total?: string;
+  from?: string | null;
+  to?: string | null;
+}
+
+async function readSpendAnswer(
+  text: string,
+  client: ToolLoopRequest['mcpClient'] | undefined,
+  toolCalls: string[],
+  timeZone: string,
+) {
+  const question = text.trim();
+  const named = SPEND_QUESTION_RE.exec(question)?.[1];
+  const isAnyPayee =
+    named === undefined &&
+    question.endsWith('?') &&
+    SPEND_ASK_RE.test(question);
+  if (!client || (named === undefined && !isAnyPayee)) return null;
+  const offered = (await client.listTools().catch(() => ({ tools: [] }))).tools;
+  if (!offered.some((tool) => tool.name === 'search_app_records')) return null;
+  const found = await callJson<SpendResult>(
+    client,
+    toolCalls,
+    'search_app_records',
+    {
+      app: 'app:runway',
+      category: 'transactions',
+      ...(named !== undefined && { payee: named }),
+      ...toSpendRange(question, Date.now(), timeZone),
+    },
+  );
+  if (!found || typeof found.matchedCount !== 'number') return null;
+  const range =
+    found.from && found.to
+      ? ` between ${toSpendDay(found.from)} and ${toSpendDay(found.to)}`
+      : '';
+  const at = named === undefined ? '' : ` at ${named}`;
+  const aliases = (found.records ?? []).flatMap((record) =>
+    record.alias ? [record.alias] : [],
+  );
+  const count = `${found.matchedCount} ${found.matchedCount === 1 ? 'purchase' : 'purchases'}`;
+  return [
+    toAnswer({
+      scope: 'yourThings',
+      question,
+      fromRecordsText:
+        found.matchedCount === 0
+          ? `No purchases${at}${range}.`
+          : `You spent ${found.total}${at}${range} across ${count}.`,
+      quoteAliases: aliases.slice(0, 3),
+    }),
+  ];
+}
+
 interface DocumentAsk {
   question: RegExp;
   query: string;
@@ -508,6 +603,91 @@ function readSelfAnswer(question: string, words: string[], message: string) {
   });
 }
 
+interface ListedNote {
+  alias: string;
+  title: string;
+  body?: string;
+}
+
+const DIFFERING_GENERAL = {
+  text: 'Published guides often give a shorter time than that, so check a reliable source for the specifics. This is a stand-in answer from the emulator.',
+  spoken: 'Published guides often give a shorter time than that.',
+};
+
+/** A question a kept note answers: cited as a record, and with "guide", "official", "really" or "recommend" in it a general part that says the note differs. Null when no note's words cover half the question's. */
+function readNoteAnswer(question: string, words: string[], message: string) {
+  const found = (readBlock<ListedNote[]>(message, 'related_notes') ?? []).find(
+    (note) =>
+      note.body !== undefined &&
+      words.filter((word) =>
+        `${note.title} ${note.body}`.toLowerCase().includes(word),
+      ).length >= Math.max(1, words.length / 2),
+  );
+  if (!found?.body) return null;
+  const says = found.body.replace(/\s+/g, ' ').trim();
+  const records = {
+    fromRecordsText: says.slice(0, 1_100),
+    sourceAliases: [found.alias],
+  };
+  return /\b(guide|guides|official|really|recommend)\b/i.test(question)
+    ? toAnswer({
+        scope: 'both',
+        question,
+        ...records,
+        generalText: DIFFERING_GENERAL.text,
+        generalSpoken: DIFFERING_GENERAL.spoken,
+        differsFromNoteAlias: found.alias,
+        differsSays: says.split(/(?<=[.!?])\s/)[0].slice(0, 80),
+      })
+    : toAnswer({ scope: 'yourThings', question, ...records });
+}
+
+interface ListedPart {
+  heading: string | null;
+  markdown: string;
+  sourceAliases: string[];
+}
+
+function readPartAnswer(question: string, words: string[], message: string) {
+  const document = readBlock<{ sections: ListedPart[] }>(
+    message,
+    'topic_document',
+  );
+  const found = document?.sections.find(
+    (part) =>
+      part.sourceAliases.length > 0 &&
+      words.some((word) =>
+        `${part.heading ?? ''} ${part.markdown}`.toLowerCase().includes(word),
+      ),
+  );
+  if (!found) return null;
+  return toAnswer({
+    scope: 'yourThings',
+    question,
+    fromRecordsText: found.markdown
+      .replace(/[*_`#>]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1_100),
+    sourceAliases: [found.sourceAliases[0]],
+  });
+}
+
+/** The alias of the first topic whose name shares its first four letters with a word of the question; null when none does. */
+const readSuggestedTopic = (words: string[], message: string) =>
+  (readBlock<{ alias: string; name: string }[]>(message, 'your_topics') ?? [])
+    .filter((topic) =>
+      (topic.name.toLowerCase().match(/\p{L}+/gu) ?? []).some((nameWord) =>
+        words.some(
+          (word) =>
+            word.length >= 4 &&
+            nameWord.length >= 4 &&
+            word.slice(0, 4) === nameWord.slice(0, 4),
+        ),
+      ),
+    )
+    .map((topic) => topic.alias)[0] ?? null;
+
 /** The emulator's stand-in answer to a question, from the records in the context; null when the text is not a question it knows. */
 function readQuestion(text: string, message: string) {
   const question = text.trim();
@@ -522,8 +702,12 @@ function readQuestion(text: string, message: string) {
   const words = lower
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 2 && !QUESTION_WORDS.has(word));
+  const fromPart = readPartAnswer(question, words, message);
+  if (fromPart) return fromPart;
   const own = readSelfAnswer(question, words, message);
   if (own) return own;
+  const fromNote = readNoteAnswer(question, words, message);
+  if (fromNote) return fromNote;
   const scored = records.map((record) => ({
     record,
     score: words.filter((word) => record.title.toLowerCase().includes(word))
@@ -545,6 +729,7 @@ function readQuestion(text: string, message: string) {
   const general = {
     generalText: GENERAL_STAND_IN.text,
     generalSpoken: GENERAL_STAND_IN.spoken,
+    suggestedTopicAlias: readSuggestedTopic(words, message),
   };
   if (/\b(ibuprofen|medicine|dose|doctor)\b/.test(lower)) {
     return toAnswer({
@@ -578,8 +763,12 @@ const readAtHome = (text: string) =>
     ? [toAnswer({ kind: 'setCurrentPlace', place: 'home', isHealth: null })]
     : null;
 
+const LEAD_RE = /^\s*(?:please\s+)?(?:remember\s+that|note\s*(?:that|:))\s+/i;
+
+const withoutLead = (text: string) => text.replace(LEAD_RE, '');
+
 const FACT_RE =
-  /^\s*(@?[A-Z][\p{L}'’.-]*(?: [A-Z][\p{L}'’.-]*)*)\s+is\s+(?:the|a|an)\s+[^?]+?\s*[.!]?\s*$/u;
+  /^\s*(@?[A-Z][\p{L}'’.-]*(?: [A-Z][\p{L}'’.-]*)*)\s+is\s+(?:(?:the|a|an)|allergic\s+to)\s+[^?]+?\s*[.!]?\s*$/u;
 
 const NOT_NAMES = new Set([
   'It',
@@ -600,8 +789,9 @@ const NOT_NAMES = new Set([
   'Tomorrow',
 ]);
 
-/** The emulator's stand-in for "Dana is the florist" or "Dana is a florist": one noteFact, stated, quoting the words, about the name that starts them. Null for any other words. */
-const readFact = (text: string) => {
+/** The emulator's stand-in for "Dana is the florist" or "Dana is a florist": one noteFact, stated, quoting the words, about the name that starts them ("Dana is allergic to nuts" too). Null for any other words. */
+const readFact = (said: string) => {
+  const text = withoutLead(said);
   const match = FACT_RE.exec(text);
   const handle = match?.[1];
   const name = handle?.replace(/^@/, '');
@@ -728,7 +918,8 @@ const readContradiction = (text: string, message: string) => {
 };
 
 /** The emulator's stand-in for the facts a person says about themself ("I always go to Shell for gas", "my favorite movie is Arrival", "I'm vegan", "I have diabetes") and the private detail said about a named person ("Dana has diabetes"): one noteFact, stated, quoting the words. Null for any other words. */
-const readSelfFact = (text: string) => {
+const readSelfFact = (said: string) => {
+  const text = withoutLead(said);
   const quote = text.trim().replace(/[.!]$/, '');
   const preference = PREFERENCE_RE.exec(text);
   if (preference) {
@@ -1031,7 +1222,7 @@ const readKeyDate = (
   reading: CaptureReading,
   message: string,
 ) => {
-  const removal = REMOVE_KEY_DATE_RE.exec(text);
+  const removal = REMOVE_KEY_DATE_RE.exec(withoutLead(text));
   if (removal) {
     const name = removal[1].replace(/^@/, '');
     const word = removal[2].toLowerCase();
@@ -1055,7 +1246,7 @@ const readKeyDate = (
         }
       : null;
   }
-  const match = KEY_DATE_RE.exec(text);
+  const match = KEY_DATE_RE.exec(withoutLead(text));
   if (!match) return readMoment(text, reading);
   const [, handle, owner, word, said] = match;
   const name = handle?.replace(/^@/, '');
@@ -1095,6 +1286,362 @@ const readKeyDate = (
   };
 };
 
+/** Topic words a body word stands for in the emulator, beside the words that share their first four letters. */
+const NOTE_TOPIC_WORDS: Record<string, string> = {
+  bread: 'baking',
+  dough: 'baking',
+  sourdough: 'baking',
+  cake: 'baking',
+  cookie: 'baking',
+  sauce: 'kitchen',
+  soup: 'kitchen',
+};
+
+interface ListedTopic {
+  alias: string;
+  name: string;
+}
+
+const stemOf = (word: string) => word.toLowerCase().slice(0, 4);
+
+interface TopicDocBlock {
+  topic: string;
+  sections: { section: string; writtenBy: 'nomos' | 'person' }[];
+}
+
+const toTopicCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    topicAlias: null,
+    parentAlias: null,
+    childAliases: [],
+    noteRef: null,
+    afterSectionAlias: null,
+    heading: null,
+    markdown: null,
+    changeSummary: null,
+    requestQuote: null,
+    topicChanges: [],
+    ...fields,
+  });
+
+const topicNamed = (topics: ListedTopic[], words: string) =>
+  topics.find((topic) =>
+    words.toLowerCase().includes(topic.name.toLowerCase()),
+  );
+
+/** The emulator's stand-in for the four ways a topic grows: a fact said about a topic, "make the intro shorter" on an open topic, "put Washing under Car care", and "Running and Stretching could go under Fitness". Null for any other words. */
+const readTopicWork = (text: string, message: string) => {
+  const topics = readBlock<ListedTopic[]>(message, 'your_topics') ?? [];
+  const document = readBlock<TopicDocBlock>(message, 'topic_document');
+  const body = text.trim().replace(/[.!]+$/, '');
+  const tyres = topicNamed(topics, 'car care');
+  if (/\bwinter tyres? are\b/i.test(text) && tyres) {
+    return {
+      commands: [
+        toAnswer({
+          kind: 'createNote',
+          title: upperFirst(body),
+          bodyQuote: body,
+          topicAliases: [tyres.alias],
+          isHealth: null,
+        }),
+        toTopicCommand({
+          kind: 'addToTopic',
+          topicAlias: tyres.alias,
+          noteRef: '$note1',
+          heading: 'Winter tyre size',
+          markdown: `${upperFirst(body)}.`,
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const first = document?.sections.find(
+    (entry, index) => index === 0 && entry.writtenBy === 'nomos',
+  );
+  if (/\bmake the intro shorter\b/i.test(text) && document) {
+    return {
+      commands: !first
+        ? []
+        : [
+            toTopicCommand({
+              kind: 'reviseTopic',
+              topicAlias: document.topic,
+              requestQuote: 'make the intro shorter',
+              changeSummary: 'Shortened the intro',
+              topicChanges: [
+                {
+                  kind: 'replace',
+                  sectionAlias: first.section,
+                  sectionAliases: [],
+                  afterSectionAlias: null,
+                  heading: null,
+                  level: 2,
+                  markdown: 'A shorter intro.',
+                },
+              ],
+            }),
+          ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const move = /\bput (.+?) under (.+?)[.!]*$/i.exec(text);
+  const moved = move ? topicNamed(topics, move[1]) : undefined;
+  const under = move ? topicNamed(topics, move[2]) : undefined;
+  if (moved && under) {
+    return {
+      commands: [
+        toTopicCommand({
+          kind: 'moveTopic',
+          topicAlias: moved.alias,
+          parentAlias: under.alias,
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const group = /^(.+?) and (.+?) could go under (.+?)[.!]*$/i.exec(text);
+  const children = group
+    ? [topicNamed(topics, group[1]), topicNamed(topics, group[2])]
+    : [];
+  if (group && children.every((child) => child)) {
+    return {
+      commands: [
+        toTopicCommand({
+          kind: 'createParentTopic',
+          title: upperFirst(group[3].trim()),
+          childAliases: children.map((child) => child?.alias),
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  return null;
+};
+
+const PACKING_STEPS: [string, string | null][] = [
+  ['Check the weather at the destination', null],
+  ['Confirm the hotel booking', null],
+  ['Two work shirts', 'Clothes'],
+  ['Trousers', 'Clothes'],
+  ['Shoes for the meeting', 'Clothes'],
+  ['Sleepwear', 'Clothes'],
+  ['Toiletry bag', 'Clothes'],
+  ['Laptop', 'Electronics'],
+  ['Phone charger', 'Electronics'],
+  ['Headphones', 'Electronics'],
+  ['ID or passport', 'Documents'],
+  ['Printed agenda', 'Documents'],
+];
+
+interface ProcedureOpenBlock {
+  procedure: string;
+  steps: {
+    step: string;
+    text: string;
+    detail: string | null;
+    group: string | null;
+  }[];
+}
+
+const toProcedureCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    procedureAlias: null,
+    procedureSteps: [],
+    fromTaskAlias: null,
+    changeSummary: null,
+    requestQuote: null,
+    ...fields,
+  });
+
+const toRunCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    procedureAlias: null,
+    projectRef: null,
+    runStepAliases: null,
+    requestQuote: null,
+    ...fields,
+  });
+
+/** The emulator's stand-in for starting and ticking a run: "Start packing for the Pacific Northwest weekend" starts the procedure whose title says packing, for the trip in the synced records when there is one, and "done with the charger" ticks every undone step of an open run that names a charger. Null for any other words, or when the procedure or the steps are not in the context. */
+const readRunWork = (text: string, message: string) => {
+  const quote = text.trim().replace(/[.!]+$/, '');
+  if (/\bstart packing for the pacific northwest weekend\b/i.test(text)) {
+    const procedure = (
+      readBlock<{ procedure: string; title: string }[]>(
+        message,
+        'your_procedures',
+      ) ?? []
+    ).find((entry) => /packing/i.test(entry.title));
+    const trip = (
+      readBlock<{ alias: string; title: string; kind: string }[]>(
+        message,
+        'synced_records',
+      ) ?? []
+    ).find(
+      (entry) =>
+        entry.kind === 'trip' && /pacific northwest/i.test(entry.title),
+    );
+    return procedure
+      ? {
+          commands: [
+            toRunCommand({
+              kind: 'startRun',
+              procedureAlias: procedure.procedure,
+              aboutAlias: trip?.alias ?? null,
+              requestQuote: quote,
+            }),
+          ],
+          mentions: [],
+          places: [],
+        }
+      : null;
+  }
+  if (/\bdone with the charger\b/i.test(text)) {
+    const aliases = (
+      readBlock<{ undone: { step: string; text: string }[] }[]>(
+        message,
+        'open_runs',
+      ) ?? []
+    )
+      .map((run) =>
+        run.undone
+          .filter((step) => /charger/i.test(step.text))
+          .map((step) => step.step),
+      )
+      .find((found) => found.length > 0);
+    return aliases
+      ? {
+          commands: [
+            toRunCommand({
+              kind: 'tickRun',
+              runStepAliases: aliases,
+              requestQuote: quote,
+            }),
+          ],
+          mentions: [],
+          places: [],
+        }
+      : null;
+  }
+  return null;
+};
+
+/** The emulator's stand-in for the ways a procedure is made and changed: "Make me a packing routine for work trips", "make this a routine" on an open task, and "Add a step for the laptop charger" with a procedure open (with none open it names no procedure, which code drops). Null for any other words. */
+const readProcedureWork = (text: string, message: string) => {
+  const open = readBlock<ProcedureOpenBlock>(message, 'procedure_open');
+  if (/\bpacking routine for work trips?\b/i.test(text)) {
+    return {
+      commands: [
+        toProcedureCommand({
+          kind: 'createProcedure',
+          title: 'Packing for a work trip',
+          requestQuote: 'make me a packing routine',
+          procedureSteps: PACKING_STEPS.map(([stepText, group]) => ({
+            stepAlias: null,
+            text: stepText,
+            detail: null,
+            group,
+          })),
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  if (
+    /\bmake (this|these|it|them|the steps)\b.*\b(routine|procedure)\b/i.test(
+      text,
+    )
+  ) {
+    return {
+      commands: [
+        toProcedureCommand({
+          kind: 'createProcedure',
+          title: 'Routine',
+          requestQuote: text.trim().replace(/[.!]+$/, ''),
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  if (/\badd a step for the laptop charger\b/i.test(text)) {
+    const kept = (open?.steps ?? []).map((step) => ({
+      stepAlias: step.step,
+      text: step.text,
+      detail: step.detail,
+      group: step.group,
+    }));
+    const at = kept.findIndex((step) => step.text === 'Laptop') + 1;
+    const added = {
+      stepAlias: null,
+      text: 'Laptop charger',
+      detail: null,
+      group: 'Electronics',
+    };
+    return {
+      commands: [
+        toProcedureCommand({
+          kind: 'reviseProcedure',
+          procedureAlias: open?.procedure ?? null,
+          procedureSteps: [
+            ...kept.slice(0, at === 0 ? kept.length : at),
+            added,
+            ...(at === 0 ? [] : kept.slice(at)),
+          ],
+          changeSummary: 'added the laptop charger',
+          requestQuote: 'add a step for the laptop charger',
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  return null;
+};
+
+/** The emulator's stand-in for "remember that cakes keep 3 days in the fridge" or "note: the wifi at the cabin is …": one createNote of the words after the lead, filed under every topic whose name shares its first four letters with a word of them (or that a few kitchen words stand for). Null for any other words. */
+const readNote = (text: string, message: string) => {
+  const match = LEAD_RE.exec(text);
+  const body = match ? text.slice(match[0].length).trim() : '';
+  if (!match || !body) return null;
+  const words = body.toLowerCase().match(/\p{L}+/gu) ?? [];
+  const topics = readBlock<ListedTopic[]>(message, 'your_topics') ?? [];
+  const matched = topics.filter((topic) =>
+    (topic.name.toLowerCase().match(/\p{L}+/gu) ?? []).some((nameWord) =>
+      words.some(
+        (word) =>
+          word.length >= 4 &&
+          nameWord.length >= 4 &&
+          (stemOf(word) === stemOf(nameWord) ||
+            NOTE_TOPIC_WORDS[word.replace(/s$/, '')] === nameWord),
+      ),
+    ),
+  );
+  const title = upperFirst(body.replace(/[.!]+$/, ''));
+  return {
+    commands: [
+      toAnswer({
+        kind: 'createNote',
+        title: title.length > 80 ? title.slice(0, 80).trim() : title,
+        bodyQuote: body,
+        topicAliases: matched.map((topic) => topic.alias),
+        isHealth: null,
+      }),
+    ],
+    mentions: [],
+    places: [],
+  };
+};
+
 /** The emulator's stand-in for "plan my day" or "plan tomorrow": one planDay on the day span the reading found, or today when it found none. Null for any other words. */
 const readPlanDay = (text: string, reading: CaptureReading) =>
   PLAN_DAY_RE.test(text)
@@ -1108,7 +1655,7 @@ const readPlanDay = (text: string, reading: CaptureReading) =>
     : null;
 
 /** Emulator stand-in with no key: one createTask per comma (not one inside a number), "and" or line, each carrying the date span that lies inside it; a piece of only filler words or no letters makes none. */
-export function createFixtureProvider(
+function createTextFixtureProvider(
   text: string,
   reading: CaptureReading,
 ): ModelProvider {
@@ -1126,7 +1673,7 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const packed = readPackingAnswer(messages[0]?.content ?? '');
+      const packed = readPackingAnswer(messageText(messages[0]?.content ?? ''));
       const packingAsks = packed ? null : readPackingAsks(text);
       if (packed !== null || packingAsks) {
         return {
@@ -1138,10 +1685,28 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const followUp = readFollowUp(text, reading, messages[0]?.content ?? '');
+      const followUp = readFollowUp(
+        text,
+        reading,
+        messageText(messages[0]?.content ?? ''),
+      );
       if (followUp) {
         return {
           terminalInput: { commands: followUp },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const grown =
+        readRunWork(text, messageText(messages[0]?.content ?? '')) ??
+        readProcedureWork(text, messageText(messages[0]?.content ?? '')) ??
+        readTopicWork(text, messageText(messages[0]?.content ?? ''));
+      if (grown) {
+        return {
+          terminalInput: grown,
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,
@@ -1171,7 +1736,11 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const keyDate = readKeyDate(text, reading, messages[0]?.content ?? '');
+      const keyDate = readKeyDate(
+        text,
+        reading,
+        messageText(messages[0]?.content ?? ''),
+      );
       if (keyDate) {
         return {
           terminalInput: keyDate,
@@ -1183,12 +1752,23 @@ export function createFixtureProvider(
         };
       }
       const fact =
-        readContradiction(text, messages[0]?.content ?? '') ??
+        readContradiction(text, messageText(messages[0]?.content ?? '')) ??
         readSelfFact(text) ??
         readFact(text);
       if (fact) {
         return {
           terminalInput: fact,
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const noted = readNote(text, messageText(messages[0]?.content ?? ''));
+      if (noted) {
+        return {
+          terminalInput: noted,
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,
@@ -1219,6 +1799,25 @@ export function createFixtureProvider(
           toolCalls,
         };
       }
+      const spend = await readSpendAnswer(
+        text,
+        mcpClient,
+        toolCalls,
+        readBlock<{ timeZone?: string }>(
+          messageText(messages[0]?.content ?? ''),
+          'context',
+        )?.timeZone ?? 'UTC',
+      );
+      if (spend) {
+        return {
+          terminalInput: { commands: spend },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls,
+        };
+      }
       const document = mail
         ? null
         : await readDocumentAnswer(text, mcpClient, toolCalls);
@@ -1232,7 +1831,10 @@ export function createFixtureProvider(
           toolCalls,
         };
       }
-      const answer = readQuestion(text, messages[0]?.content ?? '');
+      const answer = readQuestion(
+        text,
+        messageText(messages[0]?.content ?? ''),
+      );
       if (answer) {
         return {
           terminalInput: { commands: [answer] },
@@ -1257,8 +1859,12 @@ export function createFixtureProvider(
         ]),
       ];
       const entities = readEntities(text, reading);
-      const openProjects =
-        readBlock<string[]>(messages[0]?.content ?? '', 'open_projects') ?? [];
+      const openProjects = (
+        readBlock<{ name: string }[]>(
+          messageText(messages[0]?.content ?? ''),
+          'open_projects',
+        ) ?? []
+      ).map((project) => project.name);
       const commands = bounds.flatMap(([start, end], index) => {
         const spans = reading.dates.filter(
           (span) => span.start >= start && span.end <= end,
@@ -1313,6 +1919,160 @@ export function createFixtureProvider(
         errorCode: null,
         usage: EMPTY_USAGE,
         toolCalls: [],
+      };
+    },
+  };
+}
+
+const KEEP_PHOTO_RE = /\b(quote|receipt|letter|form|invoice|keep)\b/i;
+const NOT_KEEP_PHOTO_RE = /\b(?:don'?t|do not) keep\b/i;
+
+const wordsOf = (value: string) =>
+  new Set(
+    (
+      value
+        .toLowerCase()
+        .replace(/'s\b/g, '')
+        .match(/[a-z]{3,}/g) ?? []
+    ).filter((word) => !FILLER.has(word) && !KEEP_PHOTO_RE.test(word)),
+  );
+
+const VET_FILE_RE = /\b(vet|visit|booster|appointment|invoice|contract)\b/i;
+const TOPIC_FILE_NAME_RE = /packing|checklist|list/i;
+const TOPIC_WORD_RE = /\btopic\b/i;
+const NOTE_WORD_RE = /\b(note|keep)\b/i;
+const PDF_TASK_REF = '$new9';
+const PDF_TITLE_CHARS = 50;
+
+interface ListedFile {
+  alias: string;
+  kind: string;
+  name: string;
+  text: string | null;
+}
+
+const createTaskCommand = (ref: string, title: string) => ({
+  kind: 'createTask',
+  ref,
+  taskAlias: null,
+  title: title.charAt(0).toUpperCase() + title.slice(1),
+  dueSpanId: null,
+  isUrgent: null,
+  whoRefs: [],
+  placeRefs: [],
+  projectRef: null,
+});
+
+/** Emulator stand-in for photos and files. Photos: words that call the photo a quote, receipt, letter, form or invoice (or say keep) keep each one on the first open task sharing a word with them, else on a task made from the words; any other photo is read and let go. A PDF that speaks of a vet, visit, booster, appointment, invoice or contract is kept on the first open task sharing a word with it, else on a new task named from its first line; any other PDF is let go. A Markdown file is judged by the person's words and the file's name only, never by what it says: "topic", or a name with packing, checklist or list, makes a topic; "note" or "keep" a note; anything else is let go. The usual splitter files the words. */
+export function createFixtureProvider(
+  text: string,
+  reading: CaptureReading,
+): ModelProvider {
+  const base = createTextFixtureProvider(text, reading);
+  return {
+    runToolLoop: async (request) => {
+      const result = await base.runToolLoop(request);
+      const message = messageText(request.messages[0]?.content ?? '');
+      const attachments =
+        readBlock<{ alias: string; kind: string }[]>(message, 'attachments') ??
+        [];
+      if (
+        attachments.length === 0 ||
+        result.endedBy !== 'terminal' ||
+        result.terminalName !== 'file_results'
+      ) {
+        return result;
+      }
+      const files = readBlock<ListedFile[]>(message, 'files') ?? [];
+      const openTasks =
+        readBlock<{ alias: string; title: string }[]>(message, 'open_tasks') ??
+        [];
+      const isKeep = KEEP_PHOTO_RE.test(text) && !NOT_KEEP_PHOTO_RE.test(text);
+      const mine = wordsOf(text);
+      const photoTask = isKeep
+        ? openTasks.find((entry) =>
+            [...wordsOf(entry.title)].some((word) => mine.has(word)),
+          )
+        : undefined;
+      const title = text.trim().replace(/[.!]+$/, '');
+      const hasPhotos = attachments.some(({ kind }) => kind === 'photo');
+      const photoMade = isKeep && !photoTask && hasMeaning(title);
+      const toPhoto = ({ alias }: { alias: string }) => ({
+        alias,
+        decision: isKeep && (photoTask || photoMade) ? 'keep' : 'discard',
+        caption: isKeep ? 'A photo you sent' : 'A screenshot',
+        attachTo:
+          isKeep && (photoTask || photoMade)
+            ? [photoTask?.alias ?? '$new1']
+            : [],
+        asNote: false,
+        asTopic: false,
+        topicAliases: [],
+      });
+      const pdfs = attachments.flatMap(({ alias, kind }) => {
+        const file = files.find((entry) => entry.alias === alias);
+        const said = `${file?.name ?? ''} ${file?.text ?? ''}`;
+        return kind === 'pdf' && file && VET_FILE_RE.test(said)
+          ? [
+              {
+                alias,
+                said,
+                firstLine: (file.text ?? file.name).split('\n')[0],
+              },
+            ]
+          : [];
+      });
+      const pdfWords = (said: string) => wordsOf(said);
+      const pdfTask = (said: string) =>
+        openTasks.find((entry) =>
+          [...wordsOf(entry.title)].some((word) => pdfWords(said).has(word)),
+        );
+      const pdfNeedsNew = pdfs.some(({ said }) => !pdfTask(said));
+      const pdfTitle = `Vet visit: ${(pdfs.find(({ said }) => !pdfTask(said))?.firstLine ?? '').slice(0, PDF_TITLE_CHARS).trim()}`;
+      const toFile = ({ alias, kind }: { alias: string; kind: string }) => {
+        const file = files.find((entry) => entry.alias === alias);
+        const pdf = pdfs.find((entry) => entry.alias === alias);
+        const isNotKept = NOT_KEEP_PHOTO_RE.test(text);
+        const asTopic =
+          kind === 'markdown' &&
+          !isNotKept &&
+          (TOPIC_WORD_RE.test(text) ||
+            TOPIC_FILE_NAME_RE.test(file?.name ?? ''));
+        const asNote =
+          kind === 'markdown' &&
+          !isNotKept &&
+          (asTopic || NOTE_WORD_RE.test(text));
+        const isKept = asNote || pdf !== undefined;
+        return {
+          alias,
+          decision: isKept ? 'keep' : 'discard',
+          caption: isKept ? `Sent as ${file?.name ?? 'a file'}` : null,
+          attachTo: pdf ? [pdfTask(pdf.said)?.alias ?? PDF_TASK_REF] : [],
+          asNote,
+          asTopic,
+          topicAliases: [],
+        };
+      };
+      const media = attachments.map((entry) =>
+        entry.kind === 'photo' ? toPhoto(entry) : toFile(entry),
+      );
+      const usesPhotoPath = hasPhotos && isKeep;
+      const first = usesPhotoPath
+        ? {
+            commands: photoMade ? [createTaskCommand('$new1', title)] : [],
+            ...readEntities(text, reading),
+          }
+        : (result.terminalInput as { commands?: unknown[] });
+      return {
+        ...result,
+        terminalInput: {
+          ...first,
+          commands: [
+            ...(first.commands ?? []),
+            ...(pdfNeedsNew ? [createTaskCommand(PDF_TASK_REF, pdfTitle)] : []),
+          ],
+          media,
+        },
       };
     },
   };

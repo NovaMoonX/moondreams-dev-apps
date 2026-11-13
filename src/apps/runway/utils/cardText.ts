@@ -1,12 +1,14 @@
 import { toOrdinal } from '@apps/runway/utils/monthDays';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import {
   CARD_DUE_WARN_DAYS,
+  CARD_FEE_WORDS,
   CARD_ISSUERS,
   CARD_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getNextFeeOn } from '@apps/runway/engine/cardFees';
 import {
   collectCardHistory,
   getCardDueState,
@@ -14,6 +16,7 @@ import {
   type DueCard,
 } from '@apps/runway/engine/cards';
 import type {
+  CardAnnualFee,
   CardPaymentCovers,
   CardSealed,
   Cents,
@@ -159,7 +162,7 @@ export const getCardDueNow = (
   );
 
 /** The one due fact a card shows: "Due Nov 14", "Due in 3 days" / "Due today" inside the warning window when money waits, "Past due since Oct 14", or "Due Nov 3 · not paid by Oct 14"; null with no due day. `due` is what `getCardDueNow` found. */
-const dayOf = (date: DateOnly) =>
+export const dayOf = (date: DateOnly) =>
   formatDateOrdinalUTC(date).replace(/ /g, '\u00a0');
 
 export function describeCardDue(
@@ -192,15 +195,58 @@ export const getListedCards = (
     (card) => card.archivedAt === null || (reserveByCard[card.id] ?? 0) > 0,
   );
 
-/** A card coming due as one sentence: "Chase is due Nov 3 · $120.00 waiting", "is due today", or "was due Oct 14" when past due. */
-export const describeDueCard = (name: string, due: DueCard) => {
+/** What the listed cards owe together, as Home and Plan's Cards header say it; a card paid ahead counts as nothing, as its row shows. While amounts are hidden it always names a figure, so "nothing owed" never gives the total away. */
+export const describeCardsOwed = (
+  cards: readonly OpenCard[],
+  reserveByCard: Readonly<Record<string, Cents>>,
+  isHidden: boolean,
+) => {
+  const owed = cards.reduce(
+    (sum, card) => sum + Math.max(0, reserveByCard[card.id] ?? 0),
+    0,
+  );
+  return owed > 0 || isHidden
+    ? CARD_WORDS.totalOwed(formatCents(owed))
+    : CARD_WORDS.nothingOwed;
+};
+
+/** The due day a card's minimum belongs to: the one `getCardDueNow` found, else the next one. The bank's own last payment decides whether that minimum is paid, never this app's record. */
+export const getMinimumDueOn = (
+  card: OpenCard,
+  due: DueCard | null,
+  today: DateOnly,
+): DateOnly | null => due?.dueOn ?? getNextDueOn(card.dueDay, today);
+
+/** A card coming due as one sentence: "Chase is due Nov 3 · $120.00 waiting", "is due today", or "was due Oct 14" when past due; a known minimum comes before what waits: "· $35 minimum, $120.00 waiting". */
+export const describeDueCard = (
+  name: string,
+  due: DueCard,
+  minimumCents: Cents | null = null,
+) => {
   const amount = formatCents(due.waitingCents);
   const date = dayOf(due.dueOn);
+  if (minimumCents !== null) {
+    const minimum = formatCents(minimumCents);
+    if (due.isPastDue) {
+      return CARD_WORDS.dueWarningPastMinimum(name, date, minimum, amount);
+    }
+    return due.inDays === 0
+      ? CARD_WORDS.dueTodayWarningMinimum(name, minimum, amount)
+      : CARD_WORDS.dueWarningMinimum(name, date, minimum, amount);
+  }
   if (due.isPastDue) return CARD_WORDS.dueWarningPast(name, date, amount);
   return due.inDays === 0
     ? CARD_WORDS.dueTodayWarning(name, amount)
     : CARD_WORDS.dueWarning(name, date, amount);
 };
+
+/** "Issued Oct 24th" for the day a statement was made. */
+export const describeStatementIssued = (statementOn: DateOnly | null) =>
+  statementOn === null ? null : CARD_WORDS.statementIssued(dayOf(statementOn));
+
+/** "$35 minimum", short enough for a row's one line. */
+export const describeMinimumShort = (minimumCents: Cents) =>
+  CARD_WORDS.minimumShort(formatCentsShort(minimumCents));
 
 /** "Not paid by Oct 14" for a warning that has moved on to the next due day, else null. */
 export const describeDueNote = (due: DueCard) =>
@@ -210,12 +256,16 @@ export const describeDueNote = (due: DueCard) =>
 export const describeCardAdded = (name: string, owedCents: Cents) =>
   CARD_WORDS.changeAdded(name, owedCents > 0 ? formatCents(owedCents) : null);
 
+const describeFee = (fee: CardAnnualFee | null) =>
+  fee === null ? CARD_FEE_WORDS.changeNoFee : formatCents(fee.cents);
+
 /** The change-log sentence for a card edited: only what differs, from and to; null when nothing does. */
 export function describeCardChanged(
   name: string,
   before: CardSealed,
   after: CardSealed,
   accountNameOf: (accountId: string | null) => string,
+  today: DateOnly,
 ): string | null {
   const parts = [
     before.issuer === after.issuer
@@ -250,6 +300,22 @@ export function describeCardChanged(
       : CARD_WORDS.changePayFrom(
           accountNameOf(before.payFromAccountId ?? null),
           accountNameOf(after.payFromAccountId ?? null),
+        ),
+    (before.annualFee?.cents ?? null) === (after.annualFee?.cents ?? null)
+      ? null
+      : CARD_FEE_WORDS.changeFee(
+          describeFee(before.annualFee ?? null),
+          describeFee(after.annualFee ?? null),
+        ),
+    !before.annualFee ||
+    !after.annualFee ||
+    before.annualFee.firstDueOn === after.annualFee.firstDueOn
+      ? null
+      : CARD_FEE_WORDS.changeFeeDate(
+          formatDateOrdinalUTC(
+            getNextFeeOn(before.annualFee.firstDueOn, today),
+          ),
+          formatDateOrdinalUTC(after.annualFee.firstDueOn),
         ),
   ].filter((part) => part !== null);
   return parts.length === 0

@@ -103,6 +103,8 @@ const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
         question?.kind === 'whichPerson' ||
         question?.kind === 'whichPlace' ||
         question?.kind === 'whichIsTrue' ||
+        question?.kind === 'whichTopic' ||
+        question?.kind === 'groupTopics' ||
         question?.kind === 'asked';
       return typeof question === 'object' &&
         question !== null &&
@@ -159,6 +161,7 @@ async function openCapture(
     interruptedCaptureId: data.interruptedCaptureId ?? null,
     answersQuestion: data.answersQuestion ?? null,
     ttsProvider: data.ttsProvider ?? null,
+    arrivedVia: data.arrivedVia === 'dropBox' ? 'dropBox' : 'direct',
     medium: data.medium ?? 'web',
     sessionId: data.sessionId ?? entry.id,
     turnIndex: data.turnIndex ?? 0,
@@ -174,8 +177,13 @@ async function openCapture(
     executionIds: data.executionIds ?? [],
     turnLeadId: toLeadId(data.turnLeadId),
     joinedCaptureIds: toIds(data.joinedCaptureIds),
+    attachmentIds: toIds(data.attachmentIds),
     seenAt: data.seenAt ?? null,
     quotedSourceKeys: toIds(data.quotedSourceKeys),
+    answerSavedNoteId:
+      typeof data.answerSavedNoteId === 'string'
+        ? data.answerSavedNoteId
+        : null,
     whoIds: toIds(data.whoIds),
     placeIds: toIds(data.placeIds),
     planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,

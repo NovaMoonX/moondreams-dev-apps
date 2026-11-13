@@ -37,6 +37,7 @@ import {
   NOTIFY_WORDS,
   DEFAULT_NOTIFY_HOUR,
   SETTINGS_GROUP_WORDS,
+  SORTING_WORDS,
   STANCE_HELP,
   STANCE_LABELS,
   STANCES,
@@ -44,6 +45,7 @@ import {
   TRUSTED_BROWSER_WORDS,
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
+import SortingPausedRow from '@apps/runway/components/SortingPausedRow';
 import { getOpenPeriod } from '@apps/runway/engine/level';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
@@ -280,6 +282,11 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                 onOpen={() => setLinking({ resume: null, addTo: null })}
               />
             </div>
+          </ActionSection>
+        )}
+        {canLink && (
+          <ActionSection caption={SORTING_WORDS.caption}>
+            <SortingPausedRow />
           </ActionSection>
         )}
         {canLink && (
