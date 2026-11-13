@@ -167,6 +167,10 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 
 Problems we've hit before, so we don't hit them again.
 
+### `gcloud` says your project is another one, or the keyring canary fails with "API has not been used in project …"
+
+Every script here passes `--project=moondreams-dev-apps` to `gcloud` itself, so a different default (`gcloud config get project`) changes nothing for them. The part that follows the machine is the application default credentials: Firestore calls from the canary bill the quota project saved in `~/.config/gcloud/application_default_credentials.json`, and a login run for another repo leaves that file on the other project. `npm run helm:setup` now offers to switch both; by hand: `gcloud config set project moondreams-dev-apps` and `gcloud auth application-default set-quota-project moondreams-dev-apps`.
+
 ### No offline strip on a plane's Wi-Fi, and Runway won't open there
 
 - **Symptom:** on in-flight Wi-Fi with no internet behind it, the site showed no "You're offline" strip, and opening Runway showed "Your plan cannot be opened right now".
