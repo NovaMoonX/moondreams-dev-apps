@@ -26,7 +26,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { store, useAppSelector } from '@/store';
 import { getEventLink } from '@apps/runway/utils/eventLink';
-import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectAllHorizonItems,
+  selectResolvedPlan,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
@@ -60,6 +63,7 @@ import {
   isText,
   readDraftFields,
   readKeptWithChange,
+  withDraftDefaults,
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import {
@@ -128,17 +132,20 @@ interface GoalFormData extends FundingFormData, ExtrasFormData {
 }
 
 const parseGoalDraftFields = (stored: unknown) =>
-  readDraftFields<GoalFormData>(withExtrasDefault(stored), {
-    ...fundingFieldChecks,
-    name: isText,
-    priority: isNullableOneOf(PRIORITIES),
-    target: isText,
-    date: isNullableText,
-    current: isText,
-    emoji: isNullableText,
-    group: isPickOrCreate,
-    extras: isExtrasAnswer,
-  });
+  readDraftFields<GoalFormData>(
+    withDraftDefaults(withExtrasDefault(stored), { pay: null }),
+    {
+      ...fundingFieldChecks,
+      name: isText,
+      priority: isNullableOneOf(PRIORITIES),
+      target: isText,
+      date: isNullableText,
+      current: isText,
+      emoji: isNullableText,
+      group: isPickOrCreate,
+      extras: isExtrasAnswer,
+    },
+  );
 
 const parseGoalDraft = (stored: unknown) =>
   readKeptWithChange(stored, parseGoalDraftFields);
@@ -271,6 +278,9 @@ function GoalFormBody({
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const resolvedPlan = useAppSelector((state) =>
+    selectResolvedPlan(state, today),
+  );
   const goals = useAppSelector((state) => selectGoals(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
@@ -390,6 +400,7 @@ function GoalFormBody({
     skippable: !editing || startData.often === 'none' ? 'goal' : null,
     isDraft: !!draft,
     draftSources: draft?.sources,
+    plan: resolvedPlan,
     getAmountTitle: (unit) => `How much goes in ${unit}?`,
     getAmountHint,
   });

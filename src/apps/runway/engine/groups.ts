@@ -1,4 +1,5 @@
 import type {
+  FundingPay,
   Cents,
   Ending,
   FundingRule,
@@ -69,21 +70,26 @@ const CALENDAR_FACTORS: Record<string, [number, number]> = {
   yearly: [1, 12],
 };
 
-/** How many income days a usual month holds: each live pay line at its monthly beat, a one-off or irregular line at none; only one source's lines when `sourceId` is given. */
+/** How many income days a usual month holds: each live pay line at its monthly beat, a one-off or irregular line at none; only one source's lines when `sourceId` is given, and only one pay when `pay` is (one a month when it names a day of the month). */
 export function getIncomeDaysPerMonth(
   lines: readonly (Pick<GroupMember, 'schedule' | 'startsOn' | 'ending'> & {
     sourceId: string;
+    payLineId?: string;
   })[],
   on: number,
   sourceId: string | null = null,
+  pay: FundingPay | null = null,
 ): number {
   const day = new Date(on);
   const monthStart = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), 1);
   const nextMonth = Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 1);
   return lines
     .filter((line) => sourceId === null || line.sourceId === sourceId)
+    .filter((line) => pay === null || line.payLineId === pay.payLineId)
     .reduce((total, { schedule, startsOn, ending }) => {
-      const factor = getMonthlyFactor(schedule);
+      const beat = getMonthlyFactor(schedule);
+      const factor =
+        beat && pay?.monthDay != null ? ([1, beat[1]] as const) : beat;
       const isLive =
         startsOn < nextMonth &&
         (ending.onDate === null || ending.onDate >= monthStart);
