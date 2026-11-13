@@ -12,6 +12,7 @@ import SectionHeader from '@/components/SectionHeader';
 import SelectionBar from '@/components/SelectionBar';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useLongPress } from '@/hooks/useLongPress';
 import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
@@ -49,6 +50,9 @@ interface RulesScreenProps {
 }
 
 const HOME_KEY = 'needs-a-new-home';
+const HAS_PICKED_KEY = 'runway:picked-several-rules';
+const parseHasPicked = (stored: unknown) =>
+  typeof stored === 'boolean' ? stored : null;
 
 function EnvelopePickSheet({
   count,
@@ -197,6 +201,11 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const { describe, describeHome, getCardLabel } = useRuleNames();
   const { openView } = useRunwayUrlState();
   const selection = useSelection();
+  const [hasPicked, setHasPicked] = useLocalStorageState(
+    HAS_PICKED_KEY,
+    false,
+    parseHasPicked,
+  );
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
@@ -257,6 +266,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
     }
     selection.start();
     selection.toggle(ids);
+    if (!hasPicked) setHasPicked(true);
   };
 
   const renderRow = (rule: OpenRule, isCardLeftOut: boolean) => {
@@ -566,6 +576,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
                   </ul>
                   {group.key === HOME_KEY &&
                     group.rows.length > 1 &&
+                    !hasPicked &&
                     !selection.isActive && (
                       <p className='text-muted-foreground px-1 text-sm'>
                         {RULE_WORDS.holdToPick}

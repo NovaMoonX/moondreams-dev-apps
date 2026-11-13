@@ -2962,8 +2962,6 @@ export const CONVERT_WORDS = {
   lockedOver: (name: string, amount: string) =>
     `${name} is ${amount} over. Set what it holds first.`,
   showToSet: 'Show amounts to set the target',
-  fromLimitBefore: 'From its ',
-  fromLimitAfter: ' limit',
   blockedOver: 'It is over. Set what it holds first.',
   showToConvert: 'Show amounts to see what moves across first',
   payWontCarry: (names: string) =>

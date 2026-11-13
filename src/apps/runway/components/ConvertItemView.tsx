@@ -10,7 +10,6 @@ import DateInput from '@/components/DateInput';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
-import SensitiveValue from '@/components/SensitiveValue';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
@@ -298,13 +297,6 @@ function ConvertItemView({
               disabled={isSaving}
             />
           )}
-          {amount === null && maxCents ? (
-            <p className='text-muted-foreground text-center text-sm'>
-              {CONVERT_WORDS.fromLimitBefore}
-              <SensitiveValue>{formatCents(maxCents)}</SensitiveValue>
-              {CONVERT_WORDS.fromLimitAfter}
-            </p>
-          ) : null}
           {isReached && (
             <InlineNotice tone='info'>
               {CONVERT_WORDS.reachedAtOnce(name)}
