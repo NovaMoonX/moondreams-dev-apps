@@ -5,7 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import ActionRow from '@/components/ActionRow';
 
 interface FeatureOfferProps {
-  /** What the person gets, as an outcome ("See your minimum payment"). */
+  /** What the person gets, as an outcome, not the setting's name. */
   title: string;
   /** One line: what turning it on takes, and that it may not apply. */
   body: string;
