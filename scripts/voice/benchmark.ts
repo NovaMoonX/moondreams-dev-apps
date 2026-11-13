@@ -422,8 +422,8 @@ const saveSample = (
 };
 
 const isAuthFailure = (message: string) => /answered (401|403)$/.test(message);
-// Reached only once every retry wait is spent: the quota is gone for today,
-// so the provider's other voices would each wait out the same retries.
+// Reached only once every retry wait is spent (a quota gone for the day, or an
+// outage), so the provider's other voices would each wait out the same retries.
 const isSpentQuota = (message: string) => {
   const status = statusOf(message);
   return status !== null && RETRY_STATUSES.has(status);
@@ -721,6 +721,7 @@ const carryPrevious = (id: TtsProviderId): ProviderResult | null => {
     ...voice,
     samples: voice.samples.filter((sample) => sameWords.has(sample.replyId)),
   }));
+  if (voices.every((voice) => voice.samples.length === 0)) return null;
   const dropped =
     found.voices.flatMap((voice) => voice.samples).length -
     voices.flatMap((voice) => voice.samples).length;
@@ -792,12 +793,22 @@ const swapIn = () => {
 };
 
 const main = async () => {
-  if (argValue('--only') !== null && onlyIds.length !== askedIds.length) {
+  const isMissingValue = (flag: string) =>
+    process.argv.includes(flag) && argValue(flag) === null;
+  if (
+    isMissingValue('--only') ||
+    (argValue('--only') !== null && onlyIds.length !== askedIds.length)
+  ) {
     console.log(`--only takes one or more of: ${PROVIDER_IDS.join(', ')}.`);
     process.exitCode = 1;
     return;
   }
-  if (!Number.isInteger(RUNS) || RUNS < 1 || RUNS > 20) {
+  if (
+    isMissingValue('--runs') ||
+    !Number.isInteger(RUNS) ||
+    RUNS < 1 ||
+    RUNS > 20
+  ) {
     console.log('--runs takes a whole number from 1 to 20.');
     process.exitCode = 1;
     return;
