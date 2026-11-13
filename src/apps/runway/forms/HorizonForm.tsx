@@ -405,55 +405,6 @@ function HorizonForm({
 
   const allSteps: QuestionStep[] = [
     {
-      id: 'yearly',
-      title: HORIZON_WORDS.yearlyTitle,
-      summaryLabel: HORIZON_WORDS.yearly,
-      summaryValue:
-        formData.isYearly === null
-          ? ''
-          : formData.isYearly
-            ? HORIZON_WORDS.yearlyEverySummary
-            : HORIZON_WORDS.yearlyOnce,
-      isAnswered: formData.isYearly !== null,
-      render: ({ moveOn }) => (
-        <ActionGroup isRoomy>
-          {[
-            {
-              value: false,
-              label: HORIZON_WORDS.yearlyOnce,
-              meaning: HORIZON_WORDS.yearlyOnceMeaning,
-            },
-            {
-              value: true,
-              label: HORIZON_WORDS.yearlyEvery,
-              meaning: HORIZON_WORDS.yearlyEveryMeaning,
-            },
-          ].map(({ value, label, meaning }) => (
-            <div
-              key={label}
-              className={join(
-                formData.isYearly === value &&
-                  'bg-primary/10 shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
-              )}
-              aria-current={formData.isYearly === value ? 'true' : undefined}
-            >
-              <ActionRow
-                isGrouped
-                isRoomy
-                icon={value ? <Repeat /> : <CalendarCheck />}
-                label={label}
-                subtitle={meaning}
-                onClick={() => {
-                  set({ isYearly: value });
-                  moveOn();
-                }}
-              />
-            </div>
-          ))}
-        </ActionGroup>
-      ),
-    },
-    {
       id: 'name',
       title: HORIZON_WORDS.nameTitle,
       summaryLabel: HORIZON_WORDS.name,
@@ -559,6 +510,55 @@ function HorizonForm({
             </div>
           )}
         </div>
+      ),
+    },
+    {
+      id: 'yearly',
+      title: HORIZON_WORDS.yearlyTitle,
+      summaryLabel: HORIZON_WORDS.yearly,
+      summaryValue:
+        formData.isYearly === null
+          ? ''
+          : formData.isYearly
+            ? HORIZON_WORDS.yearlyEverySummary
+            : HORIZON_WORDS.yearlyOnce,
+      isAnswered: formData.isYearly !== null,
+      render: ({ moveOn }) => (
+        <ActionGroup isRoomy>
+          {[
+            {
+              value: false,
+              label: HORIZON_WORDS.yearlyOnce,
+              meaning: HORIZON_WORDS.yearlyOnceMeaning,
+            },
+            {
+              value: true,
+              label: HORIZON_WORDS.yearlyEvery,
+              meaning: HORIZON_WORDS.yearlyEveryMeaning,
+            },
+          ].map(({ value, label, meaning }) => (
+            <div
+              key={label}
+              className={join(
+                formData.isYearly === value &&
+                  'bg-primary/10 shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+              )}
+              aria-current={formData.isYearly === value ? 'true' : undefined}
+            >
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={value ? <Repeat /> : <CalendarCheck />}
+                label={label}
+                subtitle={meaning}
+                onClick={() => {
+                  set({ isYearly: value });
+                  moveOn();
+                }}
+              />
+            </div>
+          ))}
+        </ActionGroup>
       ),
     },
     {
@@ -723,17 +723,19 @@ function HorizonForm({
                     );
                   }}
                 />
+                {value === 'pays' && formData.rest === 'pays' && (
+                  <div className='px-4 pb-4'>
+                    <PaysStartRow
+                      value={formData.startsOn}
+                      onChange={(startsOn) => set({ startsOn })}
+                      today={today}
+                      lastDate={lastDate}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </ActionGroup>
-          {formData.rest === 'pays' && (
-            <PaysStartRow
-              value={formData.startsOn}
-              onChange={(startsOn) => set({ startsOn })}
-              today={today}
-              lastDate={lastDate}
-            />
-          )}
           {formData.rest === 'onePay' &&
             (payChoices.length === 0 ? (
               <p className='text-muted-foreground text-sm'>

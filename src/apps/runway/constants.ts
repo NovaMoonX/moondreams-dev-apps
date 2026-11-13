@@ -942,15 +942,15 @@ export const HORIZON_END_WORDS = {
   nextYearLinedUp: (name: string) => `Next year's ${name} is lined up.`,
   nextYearLinedUpWith: (name: string, money: string) =>
     `Next year's ${name} is lined up and starts with the ${money}.`,
-  nextYearQuestion: 'Skip just this year, or stop it for good?',
-  justThisYearTitle: 'Skip this year',
+  nextYearQuestion: 'Skip just this one, or stop it for good?',
+  justThisYearTitle: 'Skip this one',
   justThisYearBody: "Next year's is lined up.",
   everyYearTitle: 'Stop for good',
   everyYearBody: 'No more after this one.',
-  needsYearChoice: 'Choose skip this year or stop for good.',
+  needsYearChoice: 'Choose skip this one or stop for good.',
   yearRowLabel: 'Which years',
   yearAnswer: (isEveryYear: boolean) =>
-    isEveryYear ? 'Stop for good' : 'Skip this year',
+    isEveryYear ? 'Stop for good' : 'Skip this one',
   linedUpSummary: (name: string, year: number) =>
     `Lined up ${name} for ${year}.`,
   undoLinedUpSummary: (name: string, year: number) =>

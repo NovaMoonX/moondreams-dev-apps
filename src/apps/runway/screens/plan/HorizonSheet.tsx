@@ -290,6 +290,7 @@ function HorizonSheet({
           hasRepeats,
         ),
     when,
+    horizon.isYearly && HORIZON_WORDS.everyYear,
   ]
     .filter(Boolean)
     .join('\u00A0· ');

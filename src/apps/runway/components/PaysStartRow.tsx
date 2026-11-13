@@ -19,16 +19,17 @@ interface PaysStartRowProps {
 /** "Saving starts · Today": the one folded row under "My pays before each cost is due", whose editor picks a later day for the pays to start saving. */
 function PaysStartRow({ value, onChange, today, lastDate }: PaysStartRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
-  // Below four choice cards it can sit under the fold on a short screen; the sheet must finish opening first.
+  // On a short screen it can sit under the fold; the sheet must finish opening first.
+  // The bottom margin keeps it clear of the pinned footer the scroll area runs behind.
   useEffect(() => {
     const timer = window.setTimeout(
-      () => rowRef.current?.scrollIntoView({ block: 'center' }),
+      () => rowRef.current?.scrollIntoView({ block: 'nearest' }),
       400,
     );
     return () => window.clearTimeout(timer);
   }, []);
   return (
-    <div ref={rowRef}>
+    <div ref={rowRef} className='scroll-mb-24'>
       <SummaryEditor
         label={HORIZON_WORDS.startingLabel}
         summary={

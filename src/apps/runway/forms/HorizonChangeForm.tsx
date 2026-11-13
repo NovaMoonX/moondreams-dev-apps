@@ -318,17 +318,19 @@ function HorizonChangeForm({
                     if (value !== 'onePay' && value !== 'pays') moveOn();
                   }}
                 />
+                {value === 'pays' && rest === 'pays' && (
+                  <div className='px-4 pb-4'>
+                    <PaysStartRow
+                      value={startsOn}
+                      onChange={setStartsOn}
+                      today={today}
+                      lastDate={lastDate}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </ActionGroup>
-          {rest === 'pays' && (
-            <PaysStartRow
-              value={startsOn}
-              onChange={setStartsOn}
-              today={today}
-              lastDate={lastDate}
-            />
-          )}
           {rest === 'onePay' &&
             (payChoices.length === 0 ? (
               <p className='text-muted-foreground text-sm'>
