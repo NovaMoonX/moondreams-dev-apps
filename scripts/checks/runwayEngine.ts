@@ -11423,6 +11423,13 @@ const version = (
     null,
     'another merchant, a later purchase or one past the lookback is not it',
   );
+  assert.equal(
+    findRefundOriginal(kohls('back', -4_894, 9, { merchant: 'KOHLS #1234' }), [
+      kohls('buy', 6_000, 0, { lines: [clothes] }),
+    ])?.id,
+    'buy',
+    'a store number or an apostrophe does not hide the same store',
+  );
 
   const transfer = findAccountPairs([
     side('out', 25_000, 0),

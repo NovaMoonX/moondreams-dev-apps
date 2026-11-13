@@ -302,15 +302,22 @@ export const isRefundLike = (purchase: OpenPurchase) =>
 export const REFUND_LOOKBACK_DAYS = 120;
 
 const getMerchantKey = (purchase: OpenPurchase) =>
-  toComparable(purchase.merchant?.trim() || purchase.label?.trim() || '');
+  toComparable(purchase.merchant?.trim() || purchase.label?.trim() || '')
+    .split(' ')
+    .filter((word) => !/^\d+$/.test(word))
+    .join('');
 
-/** The one purchase a waiting bank refund most likely returns, when that purchase went to an envelope or goal: same merchant, on or before the refund's day within `REFUND_LOOKBACK_DAYS`, with at least the refund left to return; the newest wins. Null when none does, since a refund of a Free to Spend purchase already counts where it belongs. */
+// A bank adds store numbers and suffixes ("KOHLS #1234", "TARGET T-0456"), so one name starting with the other is the same store.
+const isSameMerchant = (a: string, b: string) =>
+  Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a));
+
+/** The one purchase a waiting bank refund most likely returns, when that purchase went to an envelope or goal: same merchant (store numbers and suffixes aside), on or before the refund's day within `REFUND_LOOKBACK_DAYS`, with at least the refund left to return; the newest wins. Null when none does, since a refund of a Free to Spend purchase already counts where it belongs. */
 export function findRefundOriginal(
   refund: OpenPurchase,
   purchases: readonly OpenPurchase[],
 ): OpenPurchase | null {
   const key = getMerchantKey(refund);
-  if (refund.amountCents >= 0 || key === '') return null;
+  if (refund.amountCents >= 0 || key.length < 3) return null;
   const result =
     purchases
       .filter(
@@ -322,7 +329,7 @@ export function findRefundOriginal(
           purchase.lines.some(
             (line) => line.cents > 0 && line.envelopeId !== null,
           ) &&
-          getMerchantKey(purchase) === key &&
+          isSameMerchant(getMerchantKey(purchase), key) &&
           getRefundableCents(purchase, purchases) >= -refund.amountCents,
       )
       .sort((a, b) => b.date - a.date || b.createdAt - a.createdAt)[0] ?? null;
