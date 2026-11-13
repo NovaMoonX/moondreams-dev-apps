@@ -1155,9 +1155,6 @@ export const START_HOLDINGS = [
 ] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
 export const START_DAY_KEY = 'start';
-/** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
-export const TICK_HIT_CLASS =
-  "relative before:absolute before:-inset-[11px] before:content-['']";
 /** Rows of goals or bills the starting amounts list shows before "Show all". */
 export const START_ROWS_PREVIEW = 6;
 
@@ -1640,7 +1637,6 @@ export const BILL_WORDS = {
   nothingSaved: 'Nothing saved yet',
   saved: (cents: string, total: string) => `${cents} of ${total} saved`,
   needsDueDate: 'Needs a due date',
-  allBills: 'All bills',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
   undatedOnlyHint: 'Tap one to set its date',
@@ -1685,8 +1681,10 @@ export const DUE_WORDS = {
       ? `${count} ${things}, oldest first`
       : `${count} ${things}`;
   },
-  more: (count: number) => `Show ${count} more`,
-  fewer: 'Show fewer',
+  rowCount: (count: number, isAnyLate: boolean, hasCosts: boolean) =>
+    `${count} ${hasCosts ? (count === 1 ? 'payment' : 'payments') : count === 1 ? 'bill' : 'bills'} to pay ${isAnyLate ? 'now' : 'today'}`,
+  rowFirst: (name: string, more: number, isAnyLate: boolean) =>
+    `${name} to pay ${isAnyLate ? 'now' : 'today'}${more > 0 ? ` · ${more} more` : ''}`,
   seeAll: 'See all',
   markPaid: 'Mark paid',
   alreadyPaid: (name: string) => `${name} was already marked paid`,
@@ -1762,6 +1760,25 @@ export const PAID_FROM_WORDS = {
   saveFailed: 'This did not save. Nothing was changed.',
 } as const;
 
+/** The Bills screen's one quiet row for what the bank suggested, and the sheet it opens. */
+export const BANK_HINTS_WORDS = {
+  title: 'Heads-up',
+  line: (firstName: string, phrase: string, more: number) =>
+    `Heads-up: ${firstName} ${phrase}${more > 0 ? ` · ${more}\u00a0more` : ''}`,
+  toCheckPhrase: 'to check',
+  chargedElsewherePhrase: 'charged elsewhere',
+  toCheckHeading: 'To check',
+  chargedElsewhereHeading: 'Charged elsewhere',
+  chargedElsewhereHelpTitle: 'Charged somewhere else?',
+  notInPlanHeading: 'Not in your plan',
+  notInPlanPhrase: 'to add',
+  notInPlanHelpTitle: 'How we found these',
+  notInPlanHelp:
+    'We compare the bank’s own list of repeating charges with your bills. Nothing changes until you say yes.',
+  showMore: (count: number) => `Show ${count} more`,
+  showFewer: 'Show fewer',
+} as const;
+
 /** What Runway says when a bill's recent bank charges were on a card or account other than the one the bill names. */
 export const CHARGED_TO_HINT_WORDS = {
   summary: (count: number, place: string, named: string | null) =>
@@ -1777,18 +1794,15 @@ export const CHARGED_TO_HINT_WORDS = {
   undoFailed: 'That could not be undone.',
   saveFailed: 'This did not save. Nothing was changed.',
   offline: 'You are offline, so nothing was changed.',
+  headingHelp:
+    'We compare the bank charges from the last 75 days with the card or account each bill names. Nothing changes until you say yes on the bill.',
+  rowLine: (place: string) => `Last charged on ${place}`,
+  openAria: (name: string, place: string) =>
+    `${name}. Last charged on ${place}. Open`,
 } as const;
 
-/** The "Bills we noticed" card and the sheets its rows open: charged-to hints and the bank's repeating charges. */
+/** The words of the bank's repeating charges in the Heads-up sheet and the sheets its rows open. */
 export const BILLS_NOTICED_WORDS = {
-  heading: 'Bills we noticed',
-  headingHelp:
-    'We compare the bank charges from the last 75 days and the bank’s own list of repeating charges with your bills. Nothing changes until you say yes.',
-  more: (count: number) => `Show ${count} more`,
-  fewer: 'Show fewer',
-  chargedLine: (place: string) => `Last charged on ${place}`,
-  chargedAria: (name: string, place: string) =>
-    `${name}. Last charged on ${place}. Open`,
   amountLine: (last: string, plan: string) =>
     `Last charged ${last} · plan says ${plan}`,
   amountRangeLine: (low: string, high: string, plan: string) =>

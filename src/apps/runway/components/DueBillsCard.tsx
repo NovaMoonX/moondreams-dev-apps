@@ -4,7 +4,6 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SensitiveValue from '@/components/SensitiveValue';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -16,9 +15,6 @@ import {
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import AutoAmountSheet from '@apps/runway/components/AutoAmountSheet';
-import { ChargePickerSheet } from '@apps/runway/components/ChargePickerView';
-import ItemRow from '@apps/runway/components/ItemRow';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import {
   toBillAmountPayment,
@@ -38,8 +34,6 @@ import type { BillPayment } from '@apps/runway/engine/demands';
 import type { Cents } from '@apps/runway/types';
 import type { CostPayment } from '@apps/runway/engine/horizon';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
-import type { AutoCheck } from '@apps/runway/engine/autoPay';
-import { useAutoChecks } from '@apps/runway/hooks/useAutoPay';
 import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
 import { useDueCostRows } from '@apps/runway/hooks/useDueCostRows';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
@@ -367,55 +361,6 @@ function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
   );
 }
 
-interface AutoCheckRowProps {
-  check: AutoCheck;
-  emoji: string | null;
-}
-
-/** A payment the app marked or could not place by itself: it opens the question it needs answered. */
-function AutoCheckRow({ check, emoji }: AutoCheckRowProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const name =
-    check.billName === '' ? AUTO_PAY_WORDS.fallbackBillName : check.billName;
-
-  return (
-    <>
-      <ItemRow
-        name={name}
-        emoji={emoji}
-        detail={
-          check.kind === 'amount'
-            ? AUTO_PAY_WORDS.chargedOn(formatDateOrdinalUTC(check.dueOn))
-            : AUTO_PAY_WORDS.whichChargeSub(formatDateOrdinalUTC(check.dueOn))
-        }
-        ariaLabel={`${name}. ${
-          check.kind === 'amount'
-            ? AUTO_PAY_WORDS.enterAmount
-            : AUTO_PAY_WORDS.whichCharge
-        }`}
-        onOpen={() => setIsOpen(true)}
-      />
-      {isOpen &&
-        (check.kind === 'amount' ? (
-          <AutoAmountSheet
-            billId={check.billId}
-            billName={name}
-            dueOn={check.dueOn}
-            onClose={() => setIsOpen(false)}
-          />
-        ) : (
-          <ChargePickerSheet
-            billId={check.billId}
-            billName={name}
-            dueOn={check.dueOn}
-            onClose={() => setIsOpen(false)}
-          />
-        ))}
-    </>
-  );
-}
-
-/** Rows a crowded card shows before it folds the rest away. */
 const SHOWN_DUE = 3;
 
 interface DueBillsCardProps {
@@ -424,8 +369,7 @@ interface DueBillsCardProps {
   today: number;
   /** Opens the bill where the screen can; the default goes to the Bills section. */
   onOpenBill?: (billId: string) => void;
-  /** Past the first few rows: `door` ends the card with "See all" on a section header that opens Bills; `unfold` is the card inside Bills, under a caption-sized heading, and shows the rest in place. */
-  overflow: 'door' | 'unfold';
+  overflow: 'door' | 'all';
 }
 
 /** The bills due today or already past due and not marked paid: a to-do with Mark paid on each, never a gap in the plan. */
@@ -435,19 +379,12 @@ function DueBillsCard({
   onOpenBill,
   overflow,
 }: DueBillsCardProps) {
-  const {
-    showPlanSection,
-    showTab,
-    showOnPlan,
-    openAllDue,
-    closeAllDue,
-    isAllDueOpen,
-  } = useRunwayUrlState();
+  const { showPlanSection, showTab, showOnPlan, openAllDue } =
+    useRunwayUrlState();
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const emojiOf = useLiveEmojiResolver();
   const costRows = useDueCostRows(lookahead, today);
-  const { checks } = useAutoChecks();
   const due: DueRow[] = [
     ...(lookahead?.due ?? []).map((entry) => ({
       kind: 'bill' as const,
@@ -455,63 +392,30 @@ function DueBillsCard({
     })),
     ...costRows.map((row) => ({ kind: 'cost' as const, ...row })),
   ].sort((a, b) => (costRows.length === 0 ? 0 : a.entry.dueOn - b.entry.dueOn));
-  if (due.length + checks.length === 0) return null;
+  if (due.length === 0) return null;
 
-  const openBills = () => {
+  const seeAll = () => {
     showPlanSection('bills');
     showTab('plan');
-  };
-  const seeAll = () => {
-    openBills();
     openAllDue();
   };
   const paymentOf = (entry: DueBill) =>
     (payments[entry.billId] ?? []).find(
       (payment) => payment.dueOn === entry.dueOn,
     ) ?? null;
-  const rows: (DueRow | { kind: 'check'; check: AutoCheck })[] = [
-    ...due,
-    ...checks.map((check) => ({ kind: 'check' as const, check })),
-  ];
-  const hidden = rows.slice(SHOWN_DUE);
-  const isUnfolded = overflow === 'unfold' && isAllDueOpen;
-  const isFolded =
-    overflow === 'door'
-      ? hidden.length > 0
-      : hidden.length > SHOWN_DUE && !isUnfolded;
-  const hasFold = overflow === 'unfold' && hidden.length > SHOWN_DUE;
-  const shown = isFolded ? rows.slice(0, SHOWN_DUE) : rows;
+  const isFolded = overflow === 'door' && due.length > SHOWN_DUE;
+  const shown = isFolded ? due.slice(0, SHOWN_DUE) : due;
   const isAnyLate = due.some(({ entry }) => entry.isOverdue);
-  const getTitle = () => {
-    if (due.length === 0) return AUTO_PAY_WORDS.checksHeading;
-    return isAnyLate ? DUE_WORDS.titleLate : DUE_WORDS.title;
-  };
-  const title = getTitle();
+  const title = isAnyLate ? DUE_WORDS.titleLate : DUE_WORDS.title;
   const count =
     due.length > 1
       ? DUE_WORDS.count(due.length, isAnyLate, costRows.length > 0)
       : null;
-  const firstCheckAt =
-    due.length > 0 ? shown.findIndex((row) => row.kind === 'check') : -1;
-  const toggleUnfolded = () => (isUnfolded ? closeAllDue() : openAllDue());
-  const getRowKey = (row: (typeof rows)[number]) => {
-    if (row.kind === 'check')
-      return `${row.check.kind}-${row.check.billId}-${row.check.dueOn}`;
-    if (row.kind === 'cost') return `${row.entry.itemId}-${row.entry.costId}`;
-    return row.entry.billId;
-  };
-  const renderRow = (row: (typeof rows)[number]) => {
-    if (row.kind === 'check') {
-      const payload =
-        bills.find(({ item }) => item.id === row.check.billId)?.version
-          .payload ?? null;
-      return (
-        <AutoCheckRow
-          check={row.check}
-          emoji={payload ? emojiOf(payload.emoji, payload.groupId) : null}
-        />
-      );
-    }
+  const getRowKey = (row: DueRow) =>
+    row.kind === 'cost'
+      ? `${row.entry.itemId}-${row.entry.costId}`
+      : row.entry.billId;
+  const renderRow = (row: DueRow) => {
     if (row.kind === 'cost') {
       return (
         <DueCostRow
@@ -544,7 +448,7 @@ function DueBillsCard({
 
   return (
     <section className='space-y-2'>
-      {overflow === 'door' ? (
+      {overflow === 'door' && (
         <SectionHeader
           title={title}
           action={
@@ -556,36 +460,12 @@ function DueBillsCard({
           }
           subtitle={count ?? undefined}
         />
-      ) : (
-        <div className='flex min-h-7 items-center justify-between gap-3'>
-          <h3 className='min-w-0 text-sm font-semibold'>
-            {title}
-            {count && (
-              <span className='text-muted-foreground font-normal'>
-                {' · '}
-                {count}
-              </span>
-            )}
-          </h3>
-        </div>
       )}
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-        {shown.map((row, index) => (
-          <Fragment key={getRowKey(row)}>
-            {index === firstCheckAt && (
-              <li className='px-3 py-2'>
-                <SectionDivider label={AUTO_PAY_WORDS.checksHeading} />
-              </li>
-            )}
-            {renderRow(row)}
-          </Fragment>
+        {shown.map((row) => (
+          <Fragment key={getRowKey(row)}>{renderRow(row)}</Fragment>
         ))}
       </ul>
-      {hasFold && (
-        <ShowMoreButton isOpen={isUnfolded} onClick={toggleUnfolded}>
-          {isUnfolded ? DUE_WORDS.fewer : DUE_WORDS.more(hidden.length)}
-        </ShowMoreButton>
-      )}
     </section>
   );
 }

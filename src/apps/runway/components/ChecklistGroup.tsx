@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
 
-import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 
 import SectionDivider from '@/components/SectionDivider';
-import { TICK_HIT_CLASS } from '@apps/runway/constants';
 
 interface ChecklistGroupProps {
   label: string;
@@ -27,8 +26,7 @@ function ChecklistGroup({
       <SectionDivider label={label} />
       {onToggleAll && (
         <div className='flex min-h-10 items-center gap-3 px-1'>
-          <Checkbox
-            className={TICK_HIT_CLASS}
+          <AppCheckbox
             checked={total > 0 && doneCount === total}
             indeterminate={doneCount > 0 && doneCount < total}
             onCheckedChange={(next) => onToggleAll(Boolean(next))}
