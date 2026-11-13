@@ -827,18 +827,20 @@ function ThingDrawer({
                 bundle.status,
                 isSoloOnly,
                 isWithBundle,
-              )}{' '}
-              ·
+              )}
+              {!isBundleBound && ' ·'}
             </span>
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className="text-foreground! relative h-auto p-0 text-sm font-medium after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']"
-              onClick={() => onOpenBundle(bundle.id)}
-            >
-              Open bundle
-            </Button>
+            {!isBundleBound && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className="text-foreground! relative h-auto p-0 text-sm font-medium after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']"
+                onClick={() => onOpenBundle(bundle.id)}
+              >
+                Open bundle
+              </Button>
+            )}
           </div>
         )}
         {isLastOfBundle && bundle !== null && (

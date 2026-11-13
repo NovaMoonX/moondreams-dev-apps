@@ -12,6 +12,21 @@ const preventDefault = (event: Event) => event.preventDefault();
 
 let releaseGuard: (() => void) | null = null;
 
+// What a hold opens can move the page, so the click that ends it may land on a neighbour; it is swallowed wherever it lands.
+function swallowReleaseClick() {
+  const swallow = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    stop();
+  };
+  const stop = () => {
+    document.removeEventListener('click', swallow, true);
+    window.clearTimeout(timer);
+  };
+  document.addEventListener('click', swallow, true);
+  const timer = window.setTimeout(stop, 400);
+}
+
 // What a hold opens slides in under the finger, where the phone's own long press would select text.
 // A new hold replaces the last guard, so a lost pointerup can never leave the page unselectable.
 function guardPageUntilRelease(pointerId: number, didHold: () => boolean) {
@@ -27,7 +42,10 @@ function guardPageUntilRelease(pointerId: number, didHold: () => boolean) {
     document.removeEventListener('contextmenu', preventDefault, true);
     window.removeEventListener('pointerup', onPointerEnd, true);
     window.removeEventListener('pointercancel', onPointerEnd, true);
-    if (didHold()) window.getSelection()?.removeAllRanges();
+    if (didHold()) {
+      window.getSelection()?.removeAllRanges();
+      swallowReleaseClick();
+    }
     releaseGuard = null;
   };
   const onPointerEnd = (event: globalThis.PointerEvent) => {
