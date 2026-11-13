@@ -339,6 +339,14 @@ export interface FundingRule {
     | { kind: 'none' };
   /** The income source whose pay the rule counts; a rule written before it existed counts every source. */
   sourceId?: string | null;
+  /** The one pay it comes out of (a pay line, and for a monthly or twice-a-month line one day of the month); null or missing on a rule written before it means every pay its source allows. */
+  pay?: FundingPay | null;
+}
+
+/** A pay a funding rule comes out of: the shape a bill's "A pay I pick" uses. */
+export interface FundingPay {
+  payLineId: string;
+  monthDay: number | null;
 }
 
 /** Money an envelope or goal asks for at a lower priority than its own, on the same days as its amount. */

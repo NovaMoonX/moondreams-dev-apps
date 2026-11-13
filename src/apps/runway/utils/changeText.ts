@@ -1,4 +1,5 @@
 import { DAY_MS } from '@apps/runway/engine/dates';
+import { toDayWord } from '@apps/runway/utils/payFrom';
 import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -9,6 +10,7 @@ import {
   FORM_FLOW_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
+  FUNDING_PAY_WORDS,
   HOW_OFTEN_WORDS,
   MAKE_BILL_WORDS,
   BILL_PAY_WORDS,
@@ -56,7 +58,7 @@ const describeFundedByChange = (
     if (payNameOf) return payNameOf(value);
     return value.monthDay === null
       ? 'one pay you picked'
-      : `the pay on ${value.monthDay === 31 ? 'the last day' : `day ${value.monthDay}`}`;
+      : `the pay on ${toDayWord(value.monthDay)}`;
   }
   return PAID_FROM_WORDS.logSpread;
 };
@@ -385,9 +387,24 @@ const getParts = (
         (value) => PRIORITY_LABELS[value],
       ),
       diff(
+        FUNDING_PAY_WORDS.label,
+        goalBefore.funding.pay ?? null,
+        goalAfter.funding.pay ?? null,
+        (value) =>
+          value === null
+            ? FUNDING_PAY_WORDS.logEveryPay
+            : describeFundedByChange({ kind: 'pay', ...value }, payNameOf),
+      ),
+      diff(
         'Funding',
-        { funding: goalBefore.funding, extras: getExtras(goalBefore) },
-        { funding: goalAfter.funding, extras: getExtras(goalAfter) },
+        {
+          funding: { ...goalBefore.funding, pay: null },
+          extras: getExtras(goalBefore),
+        },
+        {
+          funding: { ...goalAfter.funding, pay: null },
+          extras: getExtras(goalAfter),
+        },
         (value) =>
           value.funding.cadence.kind === 'none'
             ? HOW_OFTEN_WORDS.idleInChange
