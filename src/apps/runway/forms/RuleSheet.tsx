@@ -359,7 +359,11 @@ function RuleSheet({
       message: (
         <div className='scroll-cue max-h-[45dvh] space-y-2 overflow-y-auto'>
           {removal.stops !== '' && <p>{removal.stops}</p>}
-          <p>{removal.next}</p>
+          <div className='space-y-1'>
+            {removal.next.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
         </div>
       ),
       confirmText: RULE_WORDS.deleteConfirmButton(1),

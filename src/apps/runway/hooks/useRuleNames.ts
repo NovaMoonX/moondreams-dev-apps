@@ -77,6 +77,10 @@ export function useRuleNames() {
       const isAsk = (rule: OpenRule) => rule.target === RULE_VARIES;
       const toKey = ({ by, isAsk }: NextPlace) =>
         by?.target ?? (isAsk ? ASKS : WAITS);
+      const nameOf = (rule: OpenRule) =>
+        rule.merchantName ??
+        rule.merchantKey ??
+        (rule.category === null ? null : kindLabel(rule.category));
       const placesOf = (removed: OpenRule) => {
         const own = nextHomes.filter((home) => home.removed.id === removed.id);
         if (removed.merchantKey === null && removed.category === null)
@@ -92,11 +96,7 @@ export function useRuleNames() {
               : `everything on ${onYourCard(removed.cardId)}`,
             scope: '',
           }));
-        const subject =
-          removed.merchantName ??
-          (removed.category === null
-            ? (removed.merchantKey ?? '')
-            : kindLabel(removed.category));
+        const subject = nameOf(removed) ?? '';
         const rest = own.find(({ cardId }) => cardId === null);
         const named = own.filter(
           (home) =>
@@ -200,9 +200,9 @@ export function useRuleNames() {
         ]
           .map(({ removed, kind, cards, count }) => ({
             kind,
-            store: removed.merchantName ?? removed.merchantKey ?? '',
+            store: nameOf(removed) ?? '',
             scope:
-              cards.length === count
+              removed.cardId === null && cards.length === count
                 ? null
                 : joinNames([
                     ...cards.flatMap((cardId) =>
@@ -249,24 +249,18 @@ export function useRuleNames() {
       ];
       const hidden = total - shown.length;
       const shortNames = (keep: (rule: OpenRule) => boolean) =>
-        targets
-          .filter(keep)
-          .map(
-            (rule) =>
-              rule.merchantName ??
-              (rule.category === null
-                ? `everything on ${onYourCard(rule.cardId)}`
-                : [
-                    kindLabel(rule.category),
-                    rule.cardId === null ? '' : `on ${onYourCard(rule.cardId)}`,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')),
-          );
+        targets.filter(keep).map((rule) => {
+          const name = nameOf(rule);
+          if (name === null) return `everything on ${onYourCard(rule.cardId)}`;
+          return rule.merchantKey === null && rule.cardId !== null
+            ? `${name} on ${onYourCard(rule.cardId)}`
+            : name;
+        });
       const capitalise = (line: string) =>
         `${line.charAt(0).toUpperCase()}${line.slice(1)}`;
       return {
         stops: RULE_WORDS.deleteConfirmBody({
+          all: targets.length > 1 ? shortNames(() => true) : [],
           ask: shortNames(isAsk),
           paused: shortNames(isEnded),
         }),
@@ -282,7 +276,7 @@ export function useRuleNames() {
               )),
           ...(hidden > 0 ? [RULE_WORDS.takeoverMore(hidden)] : []),
           RULE_WORDS.placedStay,
-        ].join(' '),
+        ],
       };
     },
     getEnvelopeName,

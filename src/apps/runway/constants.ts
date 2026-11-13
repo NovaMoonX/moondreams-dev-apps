@@ -5549,9 +5549,9 @@ export const RULE_WORDS = {
   takeoverWait: (what: string) => `${what} will wait in Needs a home.`,
   takeoverAsk: (what: string) => `${what} will ask which envelope each time.`,
   kindOf: (store: string, kind: string, cards: string | null) =>
-    `${store} purchases${cards === null ? '' : ` on ${cards}`} the bank calls ${kind}`,
+    `${store} purchases the bank labels “${kind}”${cards === null ? '' : ` on ${cards}`}`,
   everythingElseOn: (card: string) =>
-    `everything on ${card} that your other rules don't send`,
+    `purchases on ${card} that no other rule covers`,
   afterThis: (line: string) => `After this, ${line}`,
   takeoverMore: (count: number) =>
     `${count} more ${count === 1 ? 'change' : 'changes'} like these.`,
@@ -5636,6 +5636,7 @@ export const RULE_WORDS = {
   deleteConfirmTitle: (count: number) =>
     count === 1 ? 'Remove this rule?' : `Remove ${ruleCount(count)}?`,
   deleteConfirmBody: (kinds: {
+    all: readonly string[];
     ask: readonly string[];
     paused: readonly string[];
   }) => {
@@ -5643,7 +5644,10 @@ export const RULE_WORDS = {
       `Your ${names.length === 1 ? 'rule' : 'rules'} for ${joinNames(names)}`;
     const isOne = (names: readonly string[]) => names.length === 1;
     return [
-      kinds.ask.length > 0 && `${name(kinds.ask)} will stop asking.`,
+      kinds.all.length > 0 &&
+        `This removes your rules for ${joinNames(kinds.all)}.`,
+      kinds.ask.length > 0 &&
+        `${name(kinds.ask)} will stop asking which envelope each time.`,
       kinds.paused.length > 0 &&
         `${name(kinds.paused)} ${isOne(kinds.paused) ? 'is' : 'are'} paused, so right now ${isOne(kinds.paused) ? 'its' : 'their'} purchases wait in Needs a home.`,
     ]
