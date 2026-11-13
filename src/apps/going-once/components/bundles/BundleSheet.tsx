@@ -141,7 +141,9 @@ function BundleSheet({ bundle, uid, onClose, onOpenThing }: BundleSheetProps) {
   );
 
   const draftNow = view === 'markPending' ? hold : soldDraft;
-  const isDirty = view !== null && isDraftChanged(draftNow, initialDraft);
+  const isDirty =
+    (view === 'markPending' || view === 'markSold' || view === 'changePaid') &&
+    isDraftChanged(draftNow, initialDraft);
   const askBefore = {
     isDirty,
     title: 'Discard your changes?',
