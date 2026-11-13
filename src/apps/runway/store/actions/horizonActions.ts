@@ -128,6 +128,7 @@ export async function addHorizon(
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   };
   const version: PlanVersionDoc = {
     id: generateUuid(),
@@ -710,6 +711,7 @@ export async function makeCostABill(
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   } satisfies PlanItemDoc;
   const change = {
     id: changeId,

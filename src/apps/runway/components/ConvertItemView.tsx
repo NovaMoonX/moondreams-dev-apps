@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Eye } from 'lucide-react';
 
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
@@ -8,6 +9,7 @@ import DateInput from '@/components/DateInput';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
+import SensitiveValue from '@/components/SensitiveValue';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
@@ -45,6 +47,8 @@ import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
+  selectEnvelopes,
+  selectResolvedPlan,
   selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, EnvelopeSealed, GoalSealed } from '@apps/runway/types';
@@ -81,7 +85,7 @@ function ConvertItemView({
   onClose,
 }: ConvertItemViewProps) {
   const { user } = useAuth();
-  const { isHidden } = useValuesHidden();
+  const { isHidden, toggle: showAmounts } = useValuesHidden();
   const mask = useMaskedText();
   const toastConverted = useConvertItemToast();
   const { openView } = useRunwayUrlState();
@@ -91,11 +95,7 @@ function ConvertItemView({
   const { describe } = useRuleNames();
   const [moveId] = useState(newTransferMoveId);
   const [newItemId] = useState(generateUuid);
-  const [amount, setAmount] = useState(() =>
-    source.kind === 'envelope' && source.payload.maxCents !== null && !isHidden
-      ? centsToInputValue(source.payload.maxCents)
-      : '',
-  );
+  const [amount, setAmount] = useState<string | null>(null);
   const [date, setDate] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
@@ -104,7 +104,9 @@ function ConvertItemView({
   const name = source.payload.name;
   const isToGoal = source.kind === 'envelope';
   const lastDate = addUtcMonths(today, LOOKAHEAD_MONTHS);
-  const parsedTarget = parseMoneyToCents(amount);
+  const maxCents = source.kind === 'envelope' ? source.payload.maxCents : null;
+  const amountValue = amount ?? (maxCents ? centsToInputValue(maxCents) : '');
+  const parsedTarget = parseMoneyToCents(amountValue);
   const targetCents =
     parsedTarget !== null &&
     parsedTarget > 0 &&
@@ -113,13 +115,39 @@ function ConvertItemView({
       : null;
   const targetDate = date === '' ? null : (fromDateInputValue(date) ?? null);
   const isDateBad = date !== '' && targetDate === null;
+  const payLines = useAppSelector((state) => selectResolvedPlan(state, today));
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const openDays = useAppSelector((state) => state.runway.days);
+  const pairingNames = payLines.flatMap(({ payLines: lines }) =>
+    lines
+      .filter(({ version }) =>
+        version.payload.pairings.some((pair) => pair.targetItemId === itemId),
+      )
+      .map(({ version }) => version.payload.name),
+  );
+  const spillNames = isToGoal
+    ? envelopes
+        .filter(({ version }) => version.payload.spillTo.includes(itemId))
+        .map(({ version }) => version.payload.name)
+    : [];
+  const dayOverrideCount = openDays.filter(
+    ({ expectedOn, confirmedAt, override }) =>
+      expectedOn >= today &&
+      confirmedAt === null &&
+      (override.pairings?.some((pair) => pair.targetItemId === itemId) ===
+        true ||
+        itemId in override.holdResolutions ||
+        itemId in override.payloads ||
+        itemId in override.billCents),
+  ).length;
   const heldRules =
     isToGoal && level === 'link'
       ? rules.filter((rule) => rule.target === itemId)
       : [];
 
   const getBlocker = () => {
-    if (heldCents < 0) return CONVERT_WORDS.failed;
+    if (isHidden) return CONVERT_WORDS.showToConvert;
+    if (heldCents < 0) return CONVERT_WORDS.blockedOver;
     if (!isToGoal) return null;
     if (targetCents === null) return FORM_FLOW_WORDS.badAmount;
     if (isDateBad) return FORM_FLOW_WORDS.pastDay;
@@ -163,6 +191,15 @@ function ConvertItemView({
       ? [CONVERT_WORDS.paused]
       : []),
     ...(plannedCount > 0 ? [CONVERT_WORDS.plannedAhead(plannedCount)] : []),
+    ...(pairingNames.length === 0
+      ? []
+      : [CONVERT_WORDS.payWontCarry(formatList(pairingNames))]),
+    ...(dayOverrideCount > 0
+      ? [CONVERT_WORDS.daysWontCarry(dayOverrideCount)]
+      : []),
+    ...(spillNames.length === 0
+      ? []
+      : [CONVERT_WORDS.spillWontCarry(spillNames)]),
   ];
 
   const convert = async () => {
@@ -229,12 +266,34 @@ function ConvertItemView({
       </ActionTitle>
       {isToGoal && (
         <>
-          <AmountHero
-            label={CONVERT_WORDS.target}
-            value={amount}
-            onChange={setAmount}
-            disabled={isSaving}
-          />
+          {isHidden ? (
+            <Button
+              type='button'
+              variant='secondary'
+              className='text-foreground! relative h-auto min-h-11 w-full justify-between rounded-2xl px-3! py-2 font-normal'
+              onClick={showAmounts}
+            >
+              <span>{CONVERT_WORDS.showToSet}</span>
+              <Eye
+                className='text-muted-foreground h-5 w-5'
+                aria-hidden='true'
+              />
+            </Button>
+          ) : (
+            <AmountHero
+              label={CONVERT_WORDS.target}
+              value={amountValue}
+              onChange={setAmount}
+              disabled={isSaving}
+            />
+          )}
+          {amount === null && maxCents ? (
+            <p className='text-muted-foreground text-center text-sm'>
+              {CONVERT_WORDS.fromLimitBefore}
+              <SensitiveValue>{formatCents(maxCents)}</SensitiveValue>
+              {CONVERT_WORDS.fromLimitAfter}
+            </p>
+          ) : null}
           {isReached && (
             <InlineNotice tone='info'>
               {CONVERT_WORDS.reachedAtOnce(name)}

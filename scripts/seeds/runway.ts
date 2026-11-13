@@ -150,6 +150,7 @@ export const header = (
   endedAt: null,
   archivedAt: null,
   heldReleasedOn: null,
+  becameItemId: null,
 });
 export const version = (
   id: string,
@@ -1559,6 +1560,7 @@ async function writeSeedCards(
         endedAt: null,
         archivedAt: null,
         heldReleasedOn: null,
+        becameItemId: null,
       });
       batch.set(
         context.firestore.doc(`${plan}/versions/seed-version-${entry.id}`),

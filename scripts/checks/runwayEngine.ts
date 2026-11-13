@@ -760,6 +760,7 @@ const item = (
   endedAt: null,
   archivedAt: null,
   heldReleasedOn: null,
+  becameItemId: null,
   ...over,
 });
 const version = (
@@ -905,6 +906,7 @@ const version = (
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   });
   const payVersion = (
     id: string,
@@ -1087,6 +1089,7 @@ const version = (
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   });
   // Two pay lines, each every other week, a week apart: A on Oct 2nd, 16, 30 ...; B on Oct 9th, 23, Nov 6th ...
   const days = buildComingDays(
@@ -3739,6 +3742,7 @@ const version = (
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   };
   const payVersion: OpenVersion = {
     id: 'pay-v1',
@@ -8986,6 +8990,7 @@ const version = (
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   });
   const version = (
     id: string,
@@ -15490,6 +15495,7 @@ const version = (
       endedAt: null,
       archivedAt: null,
       heldReleasedOn: null,
+      becameItemId: null,
       ...over,
     }) as never;
   const bill = (cents: number, name = 'Rent') => ({
@@ -16310,6 +16316,7 @@ const version = (
       endedAt: null,
       archivedAt: null,
       heldReleasedOn: null,
+      becameItemId: null,
       ...over,
     }) as never;
   const bill = (id: string) =>

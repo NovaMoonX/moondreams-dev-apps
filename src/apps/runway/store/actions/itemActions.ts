@@ -177,6 +177,7 @@ export function buildNewItemDocs(input: {
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   };
   const version: PlanVersionDoc = {
     id: generateUuid(),
@@ -277,6 +278,7 @@ export async function createIncome(
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   });
   const firstVersion = (
     itemId: string,
@@ -459,6 +461,7 @@ export async function buildGroupDocs(
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   };
   const version: PlanVersionDoc = {
     id: generateUuid(),
@@ -527,6 +530,7 @@ export async function createBill(
     endedAt: null,
     archivedAt: null,
     heldReleasedOn: null,
+    becameItemId: null,
   };
   const version: PlanVersionDoc = {
     id: generateUuid(),

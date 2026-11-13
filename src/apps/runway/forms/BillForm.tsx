@@ -1784,6 +1784,7 @@ function BillFormBody({
             endedAt: null,
             archivedAt: null,
             heldReleasedOn: null,
+            becameItemId: null,
           },
           versions: [
             {

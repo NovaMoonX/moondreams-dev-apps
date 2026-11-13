@@ -39,7 +39,6 @@ import BackLink from '@/components/BackLink';
 import HomePinsList from '@apps/runway/components/HomePinsList';
 import { useHomePins } from '@apps/runway/hooks/useHomePins';
 import FoldedDateField from '@/components/FoldedDateField';
-import LockedButton from '@/components/LockedButton';
 import PartOfPicker from '@apps/runway/components/PartOfPicker';
 import ChangeSheetView from '@apps/runway/components/ChangeSheetView';
 import ComingChangesList from '@apps/runway/components/ComingChangesList';
@@ -80,6 +79,7 @@ import GoalBalanceView, {
   GoalBalanceDoor,
 } from '@apps/runway/components/GoalBalanceView';
 import ConvertItemView from '@apps/runway/components/ConvertItemView';
+import ConvertLockRow from '@apps/runway/components/ConvertLockRow';
 import MoveLeftoverView from '@apps/runway/components/MoveLeftoverView';
 import SetHeldView from '@apps/runway/components/SetHeldView';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
@@ -1193,15 +1193,24 @@ function ItemSheet({
     hasStarted;
   const getConvertLock = () => {
     if (linkedEvent !== null) {
-      return CONVERT_WORDS.lockedGoalLinked(linkedEvent.version.payload.name);
+      return {
+        reason: CONVERT_WORDS.lockedGoalLinked(
+          linkedEvent.version.payload.name,
+        ),
+        canMoveIn: false,
+      };
     }
     if (partOfEvent !== null) {
-      return CONVERT_WORDS.lockedPartOf(partOfEvent.version.payload.name);
+      return {
+        reason: CONVERT_WORDS.lockedPartOf(partOfEvent.version.payload.name),
+        canMoveIn: false,
+      };
     }
-    if (itemKind === 'envelope' && heldCents < 0) {
-      return isHidden
-        ? CONVERT_WORDS.lockedOverHidden(payload.name)
-        : mask(CONVERT_WORDS.lockedOver(payload.name, formatCents(-heldCents)));
+    if (heldCents < 0 && !isHidden) {
+      return {
+        reason: CONVERT_WORDS.lockedOver(payload.name, formatCents(-heldCents)),
+        canMoveIn: true,
+      };
     }
     return null;
   };
@@ -1593,17 +1602,22 @@ function ItemSheet({
               onClick={() => goTo('convert')}
             />
           ) : (
-            <LockedButton
-              className='w-full'
+            <ConvertLockRow
               label={
                 itemKind === 'goal'
                   ? CONVERT_WORDS.toEnvelope
                   : CONVERT_WORDS.toGoal
               }
-              title={CONVERT_WORDS.lockedTitle}
-            >
-              <p>{convertLock}</p>
-            </LockedButton>
+              reason={convertLock.reason}
+              door={
+                convertLock.canMoveIn
+                  ? {
+                      label: CONVERT_WORDS.moveMoneyIn,
+                      onOpen: () => goTo('setHeld'),
+                    }
+                  : undefined
+              }
+            />
           ))}
         {canChange &&
           (itemKind === 'envelope' || itemKind === 'goal') &&

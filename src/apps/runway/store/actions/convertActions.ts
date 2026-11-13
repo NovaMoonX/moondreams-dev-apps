@@ -1,4 +1,5 @@
 import { doc, runTransaction } from 'firebase/firestore';
+import type { DocumentSnapshot } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
@@ -82,6 +83,23 @@ export interface ConvertWritten {
   wasPinned: boolean;
 }
 
+const readHeldBy = async (
+  snapshots: DocumentSnapshot[],
+  heldId: string,
+  encryption: RunwayEncryption,
+) => {
+  const ids = await Promise.all(
+    snapshots.map(async (snapshot) => {
+      if (!snapshot.exists()) return null;
+      const data = snapshot.data() as AccountDoc;
+      if (data.archivedAt !== null) return null;
+      const sealed = await openJson<AccountSealed>(data.sealed, encryption);
+      return sealed.holds.includes(heldId) ? data.id : null;
+    }),
+  );
+  return ids.filter((id): id is string => id !== null);
+};
+
 const getOther = (kind: ConvertKind): ConvertKind =>
   kind === 'envelope' ? 'goal' : 'envelope';
 
@@ -161,10 +179,17 @@ export async function convertItem(
           transaction.get(subRef(uid, 'accounts', id)),
         ),
       ]);
-    if (existingNew.exists() || existingMove.exists()) {
-      return { ...written, heldBy: [], wasPinned: false };
-    }
     const planData = plan.data() as Partial<PlanDoc> | undefined;
+    if (existingNew.exists() || existingMove.exists()) {
+      const earlier = planData
+        ? await openPlanFields(planData as PlanDoc, encryption)
+        : null;
+      return {
+        ...written,
+        heldBy: await readHeldBy(accountSnapshots, newItemId, encryption),
+        wasPinned: earlier?.homePins?.includes(newItemId) ?? false,
+      };
+    }
     const item = header.data() as Partial<PlanItemDoc> | undefined;
     if (cents > 0) assertPlanStarted(planData, date);
     assertSourceLive(item);
@@ -258,8 +283,8 @@ export interface UndoConvertInput extends ConvertWritten {
  * room, and one change entry naming both. Items cannot be deleted, so the new one is archived. The old
  * header's `archivedAt` is the second write-once field this clears (the other is
  * `undoEnvelopeIntoHorizon`), and only while it still holds the day this conversion wrote. Refuses with
- * a sentence when the new item holds less than moved or has history of its own. Resolves false when it
- * was already undone.
+ * a sentence when the new item holds less or more than moved, was archived otherwise or has history of its own.
+ * Resolves false only when the reversing transfer already exists.
  */
 export async function undoConvertItem(
   uid: string,
@@ -271,6 +296,7 @@ export async function undoConvertItem(
   if (input.newHeldCents < cents) {
     throw new Error(CONVERT_WORDS.undoShort(name));
   }
+  if (input.newHeldCents > cents) throw new Error(CONVERT_WORDS.undoChanged);
   const reverseId = getUndoTransferMoveId(input.moveId);
   const now = Date.now();
   const nextVersionId = getNextVersionId(input.versionId);
@@ -311,7 +337,9 @@ export async function undoConvertItem(
     if (reversed.exists()) return false;
     const newItem = newHeader.data() as Partial<PlanItemDoc> | undefined;
     if (!newItem) throw new Error(CONVERT_WORDS.undoChanged);
-    if ((newItem.archivedAt ?? null) !== null) return false;
+    if ((newItem.archivedAt ?? null) !== null) {
+      throw new Error(CONVERT_WORDS.undoChanged);
+    }
     const oldItem = oldHeader.data() as Partial<PlanItemDoc> | undefined;
     if (!oldItem || (oldItem.archivedAt ?? null) !== date) {
       throw new Error(CONVERT_WORDS.undoChanged);

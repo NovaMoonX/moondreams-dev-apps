@@ -2923,8 +2923,20 @@ export const CONVERT_WORDS = {
   lockedPartOf: (event: string) => `Part of ${event}. Take it out there first.`,
   lockedOver: (name: string, amount: string) =>
     `${name} is ${amount} over. Cover it first.`,
-  lockedOverHidden: (name: string) =>
-    `${name} can't change yet. Show amounts to see why.`,
+  moveMoneyIn: 'Move money in',
+  showToSet: 'Show amounts to set the target',
+  fromLimitBefore: 'From its ',
+  fromLimitAfter: ' limit',
+  blockedOver: 'It is over. Move money in to cover it first.',
+  showToConvert: 'Show amounts to see what moves across first',
+  payWontCarry: (names: string) =>
+    `${names} won't put money into it first anymore.`,
+  daysWontCarry: (count: number) =>
+    `${count} income ${count === 1 ? 'day' : 'days'} ahead with changes for it won't carry over.`,
+  spillWontCarry: (names: string[]) =>
+    names.length === 1
+      ? `${names[0]}'s extra won't spill into it anymore.`
+      : `The extra from ${formatList(names)} won't spill into it anymore.`,
   toGoalSummary: (name: string, amount: string | null) =>
     `Made ${name} a goal${amount === null ? '' : `, ${amount} moved across`}.`,
   toEnvelopeSummary: (name: string, amount: string | null) =>

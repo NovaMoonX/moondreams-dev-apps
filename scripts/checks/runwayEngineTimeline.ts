@@ -56,6 +56,7 @@ const item = (
   endedAt: null,
   archivedAt: null,
   heldReleasedOn: null,
+  becameItemId: null,
   ...over,
 });
 

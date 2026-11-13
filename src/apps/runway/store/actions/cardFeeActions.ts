@@ -160,6 +160,7 @@ export function applyFeePlan(
         endedAt: null,
         archivedAt: null,
         heldReleasedOn: null,
+        becameItemId: null,
       } satisfies PlanItemDoc);
       const groupVersion: PlanVersionDoc = {
         id: generateUuid(),
@@ -190,6 +191,7 @@ export function applyFeePlan(
       endedAt: null,
       archivedAt: null,
       heldReleasedOn: null,
+      becameItemId: null,
     } satisfies PlanItemDoc);
     const version: PlanVersionDoc = {
       id: generateUuid(),
