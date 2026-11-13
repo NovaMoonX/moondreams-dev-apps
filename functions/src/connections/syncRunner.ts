@@ -7,6 +7,7 @@ import {
   type ConnectionGrant,
 } from '../vendor/connectionsContract.js';
 import { readGrant } from './grants.js';
+import { ReconnectNeeded } from './tokens.js';
 import type { SourceCtx } from './registry.js';
 import type { ReaderSink, SinkSession } from './sink.js';
 import type { SourceClient } from './sourceClient.js';
@@ -17,6 +18,28 @@ export const SYNC_LEASE_MS = 300_000;
 const DAY_MS = 86_400_000;
 const MAX_PAGES = 50;
 const READ_FAILED = 'readFailed';
+const NEEDS_RECONNECT = 'needsReconnect';
+
+const cursorsPath = (uid: string) => `connectionsServer/${uid}/cursors`;
+const cursorId = (grantId: string, category: string) =>
+  `${grantId}__${category}`;
+
+/** Forgets what the next read would resume from, so it reads in full: one category, or all of the grant's when `category` is null. */
+export async function clearSyncCursors(
+  firestore: Firestore,
+  uid: string,
+  grantId: string,
+  category: string | null,
+) {
+  const refs = (
+    await firestore.collection(cursorsPath(uid)).listDocuments()
+  ).filter((ref) =>
+    category === null
+      ? ref.id.startsWith(`${grantId}__`)
+      : ref.id === cursorId(grantId, category),
+  );
+  await Promise.all(refs.map((ref) => ref.delete()));
+}
 
 export interface SyncDeps {
   firestore: Firestore;
@@ -31,6 +54,7 @@ interface CategoryResult {
   category: string;
   ok: { state: CategoryState } | null;
   failedAt: number | null;
+  errorCode: string;
 }
 
 const grantRef = (firestore: Firestore, uid: string, grantId: string) =>
@@ -64,14 +88,18 @@ async function syncCategory(
   const { grant } = ctx;
   const now = deps.now();
   try {
+    const cursorRef = deps.firestore.doc(
+      `${cursorsPath(ctx.uid)}/${cursorId(grantId, category)}`,
+    );
+    const saved = (await cursorRef.get()).get('state');
     const run = async (
       cursor: string | null,
       pages: number,
-      isFull: boolean,
-    ) => {
+    ): Promise<{ isFull: boolean; resumeState: string | null }> => {
       const page = await deps.source.syncPage(grant.connectorId, ctx, {
         category,
         cursor,
+        resumeState: pages === 0 && typeof saved === 'string' ? saved : null,
         windowStart,
       });
       await session.writePage({
@@ -85,12 +113,19 @@ async function syncCategory(
         now,
         deepLink: (ref) => deps.source.deepLink(grant.connectorId, ref, ctx),
       });
-      const isStillFull = isFull && page.isFull;
-      if (page.isDone || page.cursor === null || pages + 1 >= MAX_PAGES)
-        return isStillFull && page.isDone;
-      return run(page.cursor, pages + 1, isStillFull);
+      if (page.deletedRefs.length > 0)
+        await session.deleteRefs(grantId, category, page.deletedRefs);
+      // A gone token restarts the read from its first page, so the last page
+      // alone says whether the read was complete.
+      if (page.isDone || page.cursor === null)
+        return {
+          isFull: page.isFull && page.isDone,
+          resumeState: page.isDone ? page.resumeState : null,
+        };
+      if (pages + 1 >= MAX_PAGES) return { isFull: false, resumeState: null };
+      return run(page.cursor, pages + 1);
     };
-    const isFull = await run(null, 0, true);
+    const { isFull, resumeState } = await run(null, 0);
     const totals = await session.finishCategory({
       grantId,
       category,
@@ -98,22 +133,28 @@ async function syncCategory(
       windowStart,
       now,
     });
+    await (resumeState === null
+      ? cursorRef.delete()
+      : cursorRef.set({ state: resumeState, updatedAt: now }));
     return {
       category,
       ok: {
         state: { lastOkAt: now, lastError: null, count: totals.count },
       },
       failedAt: null,
+      errorCode: READ_FAILED,
     };
   } catch (error) {
+    const errorCode =
+      error instanceof ReconnectNeeded ? NEEDS_RECONNECT : READ_FAILED;
     logger.warn('connections.sync.categoryFailed', {
       connectorId: grant.connectorId,
       grantId,
       category,
-      code: READ_FAILED,
+      code: errorCode,
       cause: errorCause(error),
     });
-    return { category, ok: null, failedAt: now };
+    return { category, ok: null, failedAt: now, errorCode };
   }
 }
 
@@ -126,11 +167,13 @@ export const errorCause = (error: unknown) => ({
       : null,
 });
 
-const sequence = <T>(items: (() => Promise<T>)[]) =>
-  items.reduce<Promise<T[]>>(
-    async (done, next) => [...(await done), await next()],
-    Promise.resolve([]),
-  );
+const sequence = (items: (() => Promise<CategoryResult>)[]) =>
+  items.reduce<Promise<CategoryResult[]>>(async (done, next) => {
+    const results = await done;
+    return results.some((result) => result.errorCode === NEEDS_RECONNECT)
+      ? results
+      : [...results, await next()];
+  }, Promise.resolve([]));
 
 /** One grant's sync: a short lease, each switched-on category read and handed to the reader's sink, then the grant's state written once. */
 export async function syncGrant(
@@ -197,7 +240,10 @@ async function runLeased(
   const windowStart = startedAt - SYNC_WINDOW_DAYS * DAY_MS;
   const results = await sequence(
     Object.entries(grant.categories)
-      .filter(([, category]) => category.isOn)
+      .filter(
+        ([category, state]) =>
+          state.isOn && !deps.source.isLive?.(grant.connectorId, category),
+      )
       .map(
         ([category]) =>
           () =>
@@ -249,7 +295,7 @@ async function settle(
           : [
               {
                 category: result.category,
-                code: READ_FAILED,
+                code: result.errorCode,
                 at: result.failedAt,
               },
             ],
@@ -267,7 +313,7 @@ async function settle(
           result.ok?.state ?? {
             lastOkAt: current.categoryState[result.category]?.lastOkAt ?? null,
             count: current.categoryState[result.category]?.count ?? 0,
-            lastError: { code: READ_FAILED, at: result.failedAt ?? now },
+            lastError: { code: result.errorCode, at: result.failedAt ?? now },
           },
         ]),
       ),
@@ -301,6 +347,11 @@ async function settle(
   await Promise.all(
     categoryIds
       .filter((id) => fresh.categories[id]?.isOn !== true)
-      .map((id) => session.deleteCategory(grantId, id)),
+      .map((id) =>
+        Promise.all([
+          session.deleteCategory(grantId, id),
+          clearSyncCursors(deps.firestore, uid, grantId, id),
+        ]),
+      ),
   );
 }

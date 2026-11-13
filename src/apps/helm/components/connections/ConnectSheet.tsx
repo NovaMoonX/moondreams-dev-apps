@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 
 import AppLogo from '@/components/AppLogo';
 import FormSheet from '@/components/FormSheet';
@@ -74,6 +76,7 @@ function ConnectForm({
         connectorId: toAppConnectorId(app.id),
         accountId: SITE_ACCOUNT_ID,
         categoryIds: [...ticked],
+        options: null,
       });
       syncConnections({ grantId }).catch((error: unknown) =>
         console.error('Helm first sync did not run', error),
@@ -106,7 +109,7 @@ function ConnectForm({
         {categories.map((category) => (
           <li key={category.id}>
             <label className='flex min-h-12 items-start gap-3 py-2'>
-              <Checkbox
+              <AppCheckbox
                 className='mt-0.5'
                 aria-label={category.label}
                 checked={ticked.has(category.id)}

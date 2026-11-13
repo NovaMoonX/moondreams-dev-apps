@@ -2,15 +2,16 @@
 """Helm rules matrix (beta tier).
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
-visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, and tasks follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client.
+visitor, and records each HTTP status. The beta tier checks access, and one value's shape (a profile's theme is absent, null or a palette Helm ships): only the owner may read, create and
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client. A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
 """
-import argparse, json, os, sys, time, urllib.request, urllib.error
+import argparse, json, os, sys, time, urllib.parse, urllib.request, urllib.error
 
 FS_HOST = os.environ['FIRESTORE_EMULATOR_HOST']
+STORAGE_HOST = os.environ.get('FIREBASE_STORAGE_EMULATOR_HOST') or os.environ.get('STORAGE_EMULATOR_HOST')
 AUTH_HOST = os.environ['FIREBASE_AUTH_EMULATOR_HOST']
 PROJECT = os.environ.get('GCLOUD_PROJECT', 'demo-rules-matrix')
 ROOT = f'projects/{PROJECT}/databases/(default)/documents/'
@@ -87,6 +88,48 @@ def check(label, code, allowed):
         mismatches.append(f'{label}: got {code}, expected {"allow" if allowed else "deny"}')
 
 
+BUCKET = f'{PROJECT}.appspot.com'
+LIMIT = 10 * 1024 * 1024 + 1024
+
+
+def object_url(name, query=''):
+    return f'http://{STORAGE_HOST}/v0/b/{BUCKET}/o/' + urllib.parse.quote(name, safe='') + query
+
+
+def send(method, url, tok, body=None, content_type=None):
+    h = {}
+    if tok == 'owner': h['Authorization'] = 'Bearer owner'
+    elif tok: h['Authorization'] = 'Firebase ' + tok
+    if content_type: h['Content-Type'] = content_type
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, data=body, headers=h, method=method)); return 200
+    except urllib.error.HTTPError as e: return e.code
+
+
+def upload(name, tok, size=64, content_type='application/octet-stream'):
+    url = f'http://{STORAGE_HOST}/v0/b/{BUCKET}/o?name=' + urllib.parse.quote(name, safe='')
+    return send('POST', url, tok, b'\0' * size, content_type)
+
+
+def storage_cases(o_tok, x_tok, uid, x_uid, actors):
+    for suffix in ('', '.thumb'):
+        name = f'apps/helm/media/{uid}/media-1{suffix}'
+        tag = 'thumb' if suffix else 'bytes'
+        for a, tok in actors.items():
+            send('DELETE', object_url(name), 'owner')
+            check(f'storage {tag} create [{a}]', upload(name, tok), a == 'o')
+            send('DELETE', object_url(name), 'owner'); upload(name, 'owner')
+            check(f'storage {tag} read [{a}]', send('GET', object_url(name, '?alt=media'), tok), a == 'o')
+            check(f'storage {tag} overwrite [{a}]', upload(name, tok), False)
+            check(f'storage {tag} delete [{a}]', send('DELETE', object_url(name), tok), a == 'o')
+    name = f'apps/helm/media/{uid}/media-2'
+    check('storage create at another uid [o]', upload(f'apps/helm/media/{x_uid}/media-2', o_tok), False)
+    check('storage create with another content type [o]', upload(name, o_tok, content_type='image/png'), False)
+    check('storage create at the size limit [o]', upload(name, o_tok, size=LIMIT), False)
+    check('storage create just under the size limit [o]', upload(name, o_tok, size=LIMIT - 1), True)
+    send('DELETE', object_url(name), 'owner')
+
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--out'); args = ap.parse_args()
     o_tok, uid = signup('owner')
@@ -102,6 +145,14 @@ def main():
         check(f'profile read [{a}]', get(path, tok), a == 'o')
         check(f'profile update [{a}]', commit(tok, [put(path, dict(profile, planFillPercent=60))]), a == 'o')
         check(f'profile delete [{a}]', commit(tok, [rm(path)]), False)
+    admin([put(path, profile)])
+    for theme, allowed in [('plum', True), (None, True), ('neon', False), (3, False)]:
+        check(f'profile theme {theme!r} update [o]', commit(o_tok, [put(path, dict(profile, theme=theme))]), allowed)
+    check("profile theme 'plum' update [x]", commit(x_tok, [put(path, dict(profile, theme='plum'))]), False)
+    check("profile theme 'plum' update [a]", commit(None, [put(path, dict(profile, theme='plum'))]), False)
+    admin([rm(path)])
+    check("profile theme 'neon' create [o]", commit(o_tok, [put_new(path, dict(profile, theme='neon'))]), False)
+    check("profile theme 'teal' create [o]", commit(o_tok, [put_new(path, dict(profile, theme='teal'))]), True)
     check('profile create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}', profile)]), False)
 
     # A turn is the owner's alone: read, list, create, update and delete.
@@ -133,6 +184,209 @@ def main():
         admin([rm(tk + '-new-' + a)])
     check('tasks create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/tasks/t', task)]), False)
 
+    # A noted fact is the owner's alone, like a task.
+    fact = dict(status='inferred', stated='nomosInferred', syncedIds=['s1'], subjectIds=['s1'], createdAt=NOW, sealed=SEAL)
+    fk = f'{path}/facts/fact-1'
+    for a, tok in actors.items():
+        admin([put(fk, fact)])
+        check(f'facts read [{a}]', get(fk, tok), a == 'o')
+        check(f'facts list [{a}]', get(f'{path}/facts', tok), a == 'o')
+        check(f'facts create [{a}]', commit(tok, [put_new(fk + '-new-' + a, fact)]), a == 'o')
+        check(f'facts update [{a}]', commit(tok, [put(fk, dict(fact, status='superseded'))]), a == 'o')
+        check(f'facts delete [{a}]', commit(tok, [rm(fk)]), a == 'o')
+        admin([rm(fk + '-new-' + a)])
+    check('facts create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/facts/f', fact)]), False)
+
+    # A day's plan is the owner's alone, like a task.
+    plan = dict(date=1893456000000, slots={}, isRestDay=False, restDayOverriddenAt=None, generatedAt=NOW, calendarReadAt=None, sealed=SEAL)
+    pk = f'{path}/planDays/2030-01-01'
+    for a, tok in actors.items():
+        admin([put(pk, plan)])
+        check(f'planDays read [{a}]', get(pk, tok), a == 'o')
+        check(f'planDays list [{a}]', get(f'{path}/planDays', tok), a == 'o')
+        check(f'planDays create [{a}]', commit(tok, [put_new(f'{path}/planDays/new-' + a, plan)]), a == 'o')
+        check(f'planDays update [{a}]', commit(tok, [put(pk, dict(plan, isRestDay=True))]), a == 'o')
+        check(f'planDays delete [{a}]', commit(tok, [rm(pk)]), a == 'o')
+        admin([rm(f'{path}/planDays/new-' + a)])
+    check('planDays create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/planDays/d', plan)]), False)
+
+    # A who, a place, a project, a note and a topic are the owner's alone, like a task.
+    whoDoc = dict(kind='person', tier='passing', tierSetBy='nomos', isSelf=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
+    placeDoc = dict(isHome=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
+    projectDoc = dict(status='active', targetDate=None, whoRoles={}, createdBy='person', createdAt=NOW, sealed=SEAL)
+    noteDoc = dict(topicIds=[], source='typed', projectIds=[], createdBy='person', createdAt=NOW, sealed=SEAL)
+    topicDoc = dict(parentId=None, depth=1, docState='empty', projectIds=[], createdBy='person', createdAt=NOW, sealed=SEAL)
+    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2)):
+        dk = f'{path}/{name}/{name}-1'
+        for a, tok in actors.items():
+            admin([put(dk, doc)])
+            check(f'{name} read [{a}]', get(dk, tok), a == 'o')
+            check(f'{name} list [{a}]', get(f'{path}/{name}', tok), a == 'o')
+            check(f'{name} create [{a}]', commit(tok, [put_new(dk + '-new-' + a, doc)]), a == 'o')
+            check(f'{name} update [{a}]', commit(tok, [put(dk, dict(doc, **{field: changed}))]), a == 'o')
+            check(f'{name} delete [{a}]', commit(tok, [rm(dk)]), a == 'o')
+            admin([rm(dk + '-new-' + a)])
+        check(f'{name} create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/{name}/x', doc)]), False)
+
+    # A topic's versions are the owner's to read, list, create and delete; nobody updates one.
+    vr = dict(version=1, restoredFromVersion=None, createdBy='nomos', reason='firstWritten', noteIds=['note-1'], sourceCaptureId=None, executionId=None, createdAt=NOW, sealed=SEAL)
+    vk = f'{path}/topics/topic-1/versions/1'
+    for a, tok in actors.items():
+        admin([put(vk, vr)])
+        check(f'versions read [{a}]', get(vk, tok), a == 'o')
+        check(f'versions list [{a}]', get(f'{path}/topics/topic-1/versions', tok), a == 'o')
+        check(f'versions create [{a}]', commit(tok, [put_new(vk + '-new-' + a, vr)]), a == 'o')
+        check(f'versions update [{a}]', commit(tok, [put(vk, dict(vr, reason='personEdit'))]), False)
+        check(f'versions delete [{a}]', commit(tok, [rm(vk)]), a == 'o')
+        admin([rm(vk + '-new-' + a)])
+    check('versions create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/topics/t/versions/1', vr)]), False)
+
+    # A procedure is the owner's alone, and its shape caps the steps and groups the rules can count.
+    def procedure_doc(steps=3, groups=1, version=1):
+        return dict(stepState={f's{i}': dict(order=i, groupId=None) for i in range(steps)}, groupOrder=[f'g{i}' for i in range(groups)], version=version, createdBy='person', sourceCaptureId=None, sourceTaskId=None, executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+
+    pdoc = procedure_doc()
+    pk = f'{path}/procedures/procedure-1'
+    for a, tok in actors.items():
+        admin([put(pk, pdoc)])
+        check(f'procedures read [{a}]', get(pk, tok), a == 'o')
+        check(f'procedures list [{a}]', get(f'{path}/procedures', tok), a == 'o')
+        check(f'procedures create [{a}]', commit(tok, [put_new(pk + '-new-' + a, pdoc)]), a == 'o')
+        check(f'procedures update [{a}]', commit(tok, [put(pk, dict(pdoc, version=2))]), a == 'o')
+        check(f'procedures delete [{a}]', commit(tok, [rm(pk)]), a == 'o')
+        admin([rm(pk + '-new-' + a)])
+    check('procedures create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/procedures/p', pdoc)]), False)
+    for label, doc, allowed in (
+        ('with 60 steps', procedure_doc(steps=60), True),
+        ('with 61 steps', procedure_doc(steps=61), False),
+        ('with 12 groups', procedure_doc(groups=12), True),
+        ('with 13 groups', procedure_doc(groups=13), False),
+        ('with version 0', procedure_doc(version=0), False),
+        ('with a string version', dict(pdoc, version='1'), False),
+        ('with createdBy system', dict(pdoc, createdBy='system'), False),
+        ('without sealed', {k: v for k, v in pdoc.items() if k != 'sealed'}, False),
+    ):
+        check(f'procedures create {label} [o]', commit(o_tok, [put_new(pk + '-shape', doc)]), allowed)
+        admin([rm(pk + '-shape')])
+    admin([put(pk, pdoc)])
+    check('procedures update to 61 steps [o]', commit(o_tok, [put(pk, procedure_doc(steps=61))]), False)
+    check('procedures update to 60 steps [o]', commit(o_tok, [put(pk, procedure_doc(steps=60))]), True)
+    admin([rm(pk)])
+
+    # A procedure's versions are the owner's to read, list, create and delete; nobody updates one.
+    pvr = dict(version=1, restoredFromVersion=None, createdBy='person', reason='created', stepState={}, groupOrder=[], sourceCaptureId=None, executionId=None, createdAt=NOW, sealed=SEAL)
+    pvk = f'{path}/procedures/procedure-1/versions/1'
+    for a, tok in actors.items():
+        admin([put(pvk, pvr)])
+        check(f'procedure versions read [{a}]', get(pvk, tok), a == 'o')
+        check(f'procedure versions list [{a}]', get(f'{path}/procedures/procedure-1/versions', tok), a == 'o')
+        check(f'procedure versions create [{a}]', commit(tok, [put_new(pvk + '-new-' + a, pvr)]), a == 'o')
+        check(f'procedure versions update [{a}]', commit(tok, [put(pvk, dict(pvr, reason='personEdit'))]), False)
+        check(f'procedure versions delete [{a}]', commit(tok, [rm(pvk)]), a == 'o')
+        admin([rm(pvk + '-new-' + a)])
+    check('procedure versions create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/procedures/p/versions/1', pvr)]), False)
+
+    # A run is the owner's alone; its shape caps the steps and groups, names what it attaches to and keeps every key.
+    def run_doc(steps=3, groups=1, version=1, attached=None):
+        return dict(procedureId='procedure-1', procedureVersion=version, attachedTo=attached, dueOn=None, stepState={f's{i}': dict(order=i, groupId=None, doneAt=None, isExtra=False) for i in range(steps)}, groupOrder=[f'g{i}' for i in range(groups)], startedAt=NOW, finishedAt=None, createdBy='person', executionId=None, lastEditedAt=None, sealed=SEAL)
+
+    rdoc = run_doc()
+    rk = f'{path}/procedureRuns/run-1'
+    for a, tok in actors.items():
+        admin([put(rk, rdoc)])
+        check(f'procedureRuns read [{a}]', get(rk, tok), a == 'o')
+        check(f'procedureRuns list [{a}]', get(f'{path}/procedureRuns', tok), a == 'o')
+        check(f'procedureRuns create [{a}]', commit(tok, [put_new(rk + '-new-' + a, rdoc)]), a == 'o')
+        check(f'procedureRuns update [{a}]', commit(tok, [put(rk, dict(rdoc, finishedAt=NOW))]), a == 'o')
+        check(f'procedureRuns delete [{a}]', commit(tok, [rm(rk)]), a == 'o')
+        admin([rm(rk + '-new-' + a)])
+    check('procedureRuns create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/procedureRuns/r', rdoc)]), False)
+    for label, doc, allowed in (
+        ('with 80 steps', run_doc(steps=80), True),
+        ('with 81 steps', run_doc(steps=81), False),
+        ('with 12 groups', run_doc(groups=12), True),
+        ('with 13 groups', run_doc(groups=13), False),
+        ('with version 0', run_doc(version=0), False),
+        ('attached to a project', run_doc(attached=dict(kind='project', id='project-1')), True),
+        ('attached to a synced copy', run_doc(attached=dict(kind='synced', id='copy-1')), True),
+        ('attached to a task', run_doc(attached=dict(kind='task', id='task-1')), False),
+        ('attached with an extra key', run_doc(attached=dict(kind='project', id='project-1', label='x')), False),
+        ('attached to an id of 129 characters', run_doc(attached=dict(kind='project', id='x' * 129)), False),
+        ('with a string dueOn', dict(rdoc, dueOn='today'), False),
+        ('with createdBy system', dict(rdoc, createdBy='system'), False),
+        ('without finishedAt', {k: v for k, v in rdoc.items() if k != 'finishedAt'}, False),
+        ('without sealed', {k: v for k, v in rdoc.items() if k != 'sealed'}, False),
+    ):
+        check(f'procedureRuns create {label} [o]', commit(o_tok, [put_new(rk + '-shape', doc)]), allowed)
+        admin([rm(rk + '-shape')])
+    admin([put(rk, rdoc)])
+    check('procedureRuns update to 81 steps [o]', commit(o_tok, [put(rk, run_doc(steps=81))]), False)
+    check('procedureRuns update to 80 steps [o]', commit(o_tok, [put(rk, run_doc(steps=80))]), True)
+    admin([rm(rk)])
+
+    # A key date and the sealed index of them are the owner's alone, like a task; the index is written in the same transaction as the date.
+    kd = dict(whoId='who-1', shape='yearly', source='person', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    ix = dict(entryCount=1, rebuiltAt=None, lastEditedAt=NOW, sealed=SEAL)
+    for name, doc, field, changed, docId in (('keyDates', kd, 'lastEditedAt', NOW + 1, 'date-1'), ('meta', ix, 'entryCount', 2, 'keyDateIndex')):
+        dk = f'{path}/{name}/{docId}'
+        for a, tok in actors.items():
+            admin([put(dk, doc)])
+            check(f'{name} read [{a}]', get(dk, tok), a == 'o')
+            check(f'{name} list [{a}]', get(f'{path}/{name}', tok), a == 'o')
+            check(f'{name} create [{a}]', commit(tok, [put_new(dk + '-new-' + a, doc)]), a == 'o')
+            check(f'{name} update [{a}]', commit(tok, [put(dk, dict(doc, **{field: changed}))]), a == 'o')
+            check(f'{name} delete [{a}]', commit(tok, [rm(dk)]), a == 'o')
+            admin([rm(dk + '-new-' + a)])
+        check(f'{name} create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/{name}/x', doc)]), False)
+
+    # A medium's document is the owner's alone, and each kind carries its own content type.
+    photo = dict(kind='photo', role='photo', status='kept', mimeType='image/webp', hasThumb=True, attachedTo=[dict(kind='who', id='who-1')], decidedBy='person', createdAt=NOW, decidedAt=NOW, deleteAfter=None, sealed=SEAL)
+    mk = f'{path}/media/media-1'
+    for a, tok in actors.items():
+        admin([put(mk, photo)])
+        check(f'media read [{a}]', get(mk, tok), a == 'o')
+        check(f'media list [{a}]', get(f'{path}/media', tok), a == 'o')
+        check(f'media create [{a}]', commit(tok, [put_new(mk + '-new-' + a, photo)]), a == 'o')
+        check(f'media update [{a}]', commit(tok, [put(mk, dict(photo, status='discarded'))]), a == 'o')
+        check(f'media delete [{a}]', commit(tok, [rm(mk)]), a == 'o')
+        admin([rm(mk + '-new-' + a)])
+    check('media create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/media/m', photo)]), False)
+    check('media create with another kind [o]', commit(o_tok, [put_new(mk + '-video', dict(photo, kind='video'))]), False)
+    check('media create with a non-image type [o]', commit(o_tok, [put_new(mk + '-pdf', dict(photo, mimeType='application/pdf'))]), False)
+    files = {
+        'pdf': dict(photo, kind='pdf', role='attachment', mimeType='application/pdf', hasThumb=False),
+        'voiceNote': dict(photo, kind='voiceNote', role='attachment', mimeType='audio/webm;codecs=opus', hasThumb=False),
+        'markdown': dict(photo, kind='markdown', role='attachment', mimeType='text/markdown', hasThumb=False),
+    }
+    for kind, doc in files.items():
+        for a, tok in actors.items():
+            check(f'media create a {kind} [{a}]', commit(tok, [put_new(f'{mk}-{kind}-{a}', doc)]), a == 'o')
+            admin([rm(f'{mk}-{kind}-{a}')])
+    check('media create a pdf with an image type [o]', commit(o_tok, [put_new(mk + '-pdf-img', dict(files['pdf'], mimeType='image/png'))]), False)
+    check('media create a voiceNote with a pdf type [o]', commit(o_tok, [put_new(mk + '-vn-pdf', dict(files['voiceNote'], mimeType='application/pdf'))]), False)
+    check('media create a markdown file as html [o]', commit(o_tok, [put_new(mk + '-md-html', dict(files['markdown'], mimeType='text/html'))]), False)
+    check('media create a markdown file as plain text [o]', commit(o_tok, [put_new(mk + '-md-txt', dict(files['markdown'], mimeType='text/plain'))]), True)
+    admin([rm(mk + '-md-txt')])
+    check('media create with a missing field [o]', commit(o_tok, [put_new(mk + '-bare', {k: v for k, v in photo.items() if k != 'hasThumb'})]), False)
+
+    # A style profile is the owner's alone and has a readable shape around its sealed traits.
+    style = dict(scope='general', audienceWhoId=None, learnedFrom=['helmText'], sampleCount=34, personEditedAt=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    sk = f'{path}/style/general'
+    for a, tok in actors.items():
+        admin([put(sk, style)])
+        check(f'style read [{a}]', get(sk, tok), a == 'o')
+        check(f'style list [{a}]', get(f'{path}/style', tok), a == 'o')
+        check(f'style create [{a}]', commit(tok, [put_new(sk + '-new-' + a, style)]), a == 'o')
+        check(f'style update [{a}]', commit(tok, [put(sk, dict(style, sampleCount=35))]), a == 'o')
+        check(f'style delete [{a}]', commit(tok, [rm(sk)]), a == 'o')
+        admin([rm(sk + '-new-' + a)])
+    check('style create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/style/general', style)]), False)
+    check('style create with another scope [o]', commit(o_tok, [put_new(sk + '-scope', dict(style, scope='everyone'))]), False)
+    check('style create with a negative count [o]', commit(o_tok, [put_new(sk + '-neg', dict(style, sampleCount=-1))]), False)
+    check('style create with an extra key [o]', commit(o_tok, [put_new(sk + '-extra', dict(style, samples=['hello']))]), False)
+    check('style create without sealed [o]', commit(o_tok, [put_new(sk + '-bare', {k: v for k, v in style.items() if k != 'sealed'})]), False)
+    check('style create with a text timestamp [o]', commit(o_tok, [put_new(sk + '-time', dict(style, createdAt='now'))]), False)
+
     # An execution is the owner's to read, create and update; nobody deletes one.
     run = dict(captureId='capture-1', actor='nomos', state='succeeded', undoneByExecutionId=None, createdAt=NOW, sealed=SEAL)
     ex = f'{path}/executions/exec-1'
@@ -162,13 +416,16 @@ def main():
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/meta/keyDateIndex', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09'):
+    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09'):
         admin([put(p, {'x': 1})])
         label = p.split("/")[0] if p.startswith('voice') else p.split("/")[-2]
         for a, tok in actors.items():
             check(f'{label} read [{a}]', get(p, tok), False)
             check(f'{label} create [{a}]', commit(tok, [put_new(p + '-new', {'x': 2})]), False)
             check(f'{label} write [{a}]', commit(tok, [put(p, {'x': 2})]), False)
+
+    if STORAGE_HOST:
+        storage_cases(o_tok, x_tok, uid, x_uid, actors)
 
     if args.out:
         with open(args.out, 'w') as f: json.dump(dict(sorted(results.items())), f, indent=1)

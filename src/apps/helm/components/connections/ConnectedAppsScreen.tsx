@@ -1,11 +1,22 @@
 import { useState } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { CalendarDays } from 'lucide-react';
+
 import AppLogo from '@/components/AppLogo';
 import ConnectedSourcesList from '@/components/ConnectedSourcesList';
 import SectionHeader from '@/components/SectionHeader';
-import { readConnectorAppId } from '@/lib/connections/contract';
-import { getSourceManifest } from '@/lib/connections/sources';
+import {
+  isOutsideAccount,
+  readConnectorAppId,
+} from '@/lib/connections/contract';
+import {
+  getConnectorManifest,
+  getSourceManifest,
+} from '@/lib/connections/sources';
+import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
 import { useNow } from '@/hooks/useNow';
 import KeptCopiesSheet from '@apps/helm/components/connections/KeptCopiesSheet';
@@ -13,7 +24,13 @@ import ConnectSheet from '@apps/helm/components/connections/ConnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
+import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
+import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
+import {
+  formatUpdatedAt,
+  getNewestOkAt,
+  isStale,
+} from '@apps/helm/utils/synced';
 import { formatDateShort } from '@/utils/formatUtils';
 
 interface ConnectedAppsScreenProps {
@@ -22,6 +39,18 @@ interface ConnectedAppsScreenProps {
 }
 
 const LOGO = 'size-10 rounded-[10px]';
+const GOOGLE_ADD_ID = 'google-add';
+
+const googleLogo = (
+  <span
+    className={join(
+      LOGO,
+      'bg-muted text-muted-foreground flex shrink-0 items-center justify-center',
+    )}
+  >
+    <CalendarDays className='size-5' aria-hidden='true' />
+  </span>
+);
 
 /** A utility screen: the apps the assistant reads, and the ones it could. */
 function ConnectedAppsScreen({
@@ -31,6 +60,9 @@ function ConnectedAppsScreen({
   const name = useAssistantName();
   const { apps } = useAppCatalog();
   const now = useNow(60_000);
+  const { user } = useAuth();
+  const { accounts } = useConnectionAccounts(user?.uid ?? null);
+  const { begin } = useGoogleConnect();
   const {
     grants: everyGrant,
     isKnown,
@@ -40,13 +72,22 @@ function ConnectedAppsScreen({
     includeEnded: true,
   });
   const grants = everyGrant.filter((grant) => grant.status !== 'ended');
+  const { nameOf: sourceNameOf } = useSourceAppName();
   const kept = everyGrant.flatMap((grant) => {
-    const appId = readConnectorAppId(grant.connectorId);
+    const account = accounts.find((entry) => entry.id === grant.accountId);
     return grant.status === 'ended' &&
-      appId &&
       grant.keptCopies &&
       grant.keptCopies.count > 0
-      ? [{ grantId: grant.id, appId, ...grant.keptCopies }]
+      ? [
+          {
+            grantId: grant.id,
+            connectorId: grant.connectorId,
+            appName: account
+              ? HELM_COPY.googleAccountTitle(account.email, account.label)
+              : sourceNameOf(grant.connectorId),
+            ...grant.keptCopies,
+          },
+        ]
       : [];
   });
   const [openKeptId, setOpenKeptId] = useState<string | null>(null);
@@ -75,13 +116,58 @@ function ConnectedAppsScreen({
         logo: <AppLogo appId={appId} className={LOGO} />,
         meta: isTrouble
           ? HELM_COPY.connectedStopped
-          : newestOkAt === null
+          : newestOkAt === null || !isStale(newestOkAt, now)
             ? readLine
-            : `${readLine} · ${HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}`,
+            : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`,
         isTrouble,
       };
     })
     .sort((a, b) => a.appName.localeCompare(b.appName));
+
+  const googleAccountIds = [
+    ...new Set(
+      grants
+        .filter((grant) => isOutsideAccount(grant.accountId))
+        .map((grant) => grant.accountId),
+    ),
+  ];
+  const googleConnected = googleAccountIds
+    .map((accountId) => {
+      const own = grants.filter((grant) => grant.accountId === accountId);
+      const lead =
+        own.find((grant) => grant.connectorId === 'google:calendar') ?? own[0];
+      const account = accounts.find((entry) => entry.id === accountId);
+      const isTrouble =
+        own.some((grant) => grant.status !== 'live') ||
+        account?.status === 'needsReconnect';
+      const newestOkAt = own.reduce<number | null>((newest, grant) => {
+        const at = getNewestOkAt(grant);
+        return at !== null && (newest === null || at > newest) ? at : newest;
+      }, null);
+      const readLine = own
+        .flatMap((grant) =>
+          (getConnectorManifest(grant.connectorId)?.categories ?? [])
+            .filter((category) => grant.categories[category.id]?.isOn)
+            .map((category) => category.label),
+        )
+        .join(', ');
+      return {
+        id: lead.id,
+        appName: account
+          ? HELM_COPY.googleAccountTitle(account.email, account.label)
+          : HELM_COPY.googleCalendarName,
+        logo: googleLogo,
+        meta: isTrouble
+          ? HELM_COPY.connectedStopped
+          : newestOkAt === null || readLine === '' || !isStale(newestOkAt, now)
+            ? readLine || HELM_COPY.connectedNothingOn
+            : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`,
+        isTrouble,
+      };
+    })
+    .sort((a, b) => a.appName.localeCompare(b.appName));
+  const connectedRows = [...googleConnected, ...connected];
+  const hasGoogleAccount = googleConnected.length > 0;
 
   const connectedIds = new Set(
     grants.flatMap((grant) => readConnectorAppId(grant.connectorId) ?? []),
@@ -93,8 +179,6 @@ function ConnectedAppsScreen({
         (getSourceManifest(app.id)?.categories.length ?? 0) > 0,
     )
     .sort((a, b) => a.name.localeCompare(b.name));
-
-  const isEmpty = isKnown && connected.length === 0 && available.length === 0;
 
   return (
     <>
@@ -123,17 +207,12 @@ function ConnectedAppsScreen({
             {HELM_COPY.connectedAppsLoading}
           </p>
         )}
-        {isEmpty && (
-          <p className='helm-card p-4 text-[15px] text-pretty'>
-            {HELM_COPY.connectedAppsEmpty(name)}
-          </p>
-        )}
-        {connected.length > 0 && (
+        {connectedRows.length > 0 && (
           <section className='flex flex-col gap-3'>
             <SectionHeader title={HELM_COPY.connectedSection} />
             <div className='helm-card overflow-hidden'>
               <ConnectedSourcesList
-                rows={connected.map((row) => ({
+                rows={connectedRows.map((row) => ({
                   id: row.id,
                   logo: row.logo,
                   title: row.appName,
@@ -152,8 +231,16 @@ function ConnectedAppsScreen({
               <ConnectedSourcesList
                 rows={kept.map((row) => ({
                   id: row.grantId,
-                  logo: <AppLogo appId={row.appId} className={LOGO} />,
-                  title: nameOf(row.appId),
+                  logo:
+                    readConnectorAppId(row.connectorId) === null ? (
+                      googleLogo
+                    ) : (
+                      <AppLogo
+                        appId={readConnectorAppId(row.connectorId) ?? ''}
+                        className={LOGO}
+                      />
+                    ),
+                  title: row.appName,
                   meta: HELM_COPY.keptFromRow(
                     row.count,
                     row.deleteAfter === null
@@ -167,20 +254,35 @@ function ConnectedAppsScreen({
             </div>
           </section>
         )}
-        {isKnown && available.length > 0 && (
+        {isKnown && (
           <section className='flex flex-col gap-3'>
             <SectionHeader title={HELM_COPY.notConnectedSection} />
             <div className='helm-card overflow-hidden'>
               <ConnectedSourcesList
-                rows={available.map((app) => ({
-                  id: app.id,
-                  logo: <AppLogo appId={app.id} className={LOGO} />,
-                  title: app.name,
-                  meta: '',
-                  isTrouble: false,
-                }))}
-                onOpen={(appId) =>
-                  setConnecting({ id: appId, name: nameOf(appId) })
+                rows={[
+                  {
+                    id: GOOGLE_ADD_ID,
+                    logo: googleLogo,
+                    title: hasGoogleAccount
+                      ? HELM_COPY.googleAddAnother
+                      : HELM_COPY.googleAddAccount,
+                    meta: hasGoogleAccount
+                      ? HELM_COPY.googleAddAnotherHint
+                      : HELM_COPY.googleAddAccountHint(name),
+                    isTrouble: false,
+                  },
+                  ...available.map((app) => ({
+                    id: app.id,
+                    logo: <AppLogo appId={app.id} className={LOGO} />,
+                    title: app.name,
+                    meta: '',
+                    isTrouble: false,
+                  })),
+                ]}
+                onOpen={(id) =>
+                  id === GOOGLE_ADD_ID
+                    ? begin({ isAnotherAccount: hasGoogleAccount })
+                    : setConnecting({ id, name: nameOf(id) })
                 }
               />
             </div>
@@ -188,11 +290,7 @@ function ConnectedAppsScreen({
         )}
       </main>
       <KeptCopiesSheet
-        kept={
-          kept
-            .filter((row) => row.grantId === openKeptId)
-            .map((row) => ({ ...row, appName: nameOf(row.appId) }))[0] ?? null
-        }
+        kept={kept.filter((row) => row.grantId === openKeptId)[0] ?? null}
         onClose={() => setOpenKeptId(null)}
       />
       <ConnectSheet app={connecting} onClose={() => setConnecting(null)} />

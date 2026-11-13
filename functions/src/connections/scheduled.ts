@@ -4,8 +4,8 @@ import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { syncDeps } from './callables.js';
-import { expireCopies } from './expire.js';
-import { READER_SINKS } from './registry.js';
+import { deleteExpiredOauthStates, expireCopies } from './expire.js';
+import { READER_SINKS, SOURCE_SECRETS } from './registry.js';
 import { readGrant } from './grants.js';
 import { errorCause, syncGrant } from './syncRunner.js';
 
@@ -22,7 +22,10 @@ export const syncConnectionsHourly = onSchedule(
   {
     schedule: 'every 60 minutes',
     timeoutSeconds: 540,
-    secrets: Object.values(READER_SINKS).flatMap((sink) => sink.secrets),
+    secrets: [
+      ...Object.values(READER_SINKS).flatMap((sink) => sink.secrets),
+      ...SOURCE_SECRETS,
+    ],
   },
   async () => {
     const deps = syncDeps();
@@ -69,10 +72,12 @@ export const syncConnectionsHourly = onSchedule(
   },
 );
 
-/** Deletes kept copies whose 90 days are up, once a day. */
+/** Deletes kept copies whose 90 days are up and sign-in states that were never finished, once a day. */
 export const expireKeptCopies = onSchedule(
   { schedule: '17 5 * * *', timeoutSeconds: 300 },
   async () => {
-    await expireCopies(getFirestore(), READER_SINKS, Date.now());
+    const firestore = getFirestore();
+    await expireCopies(firestore, READER_SINKS, Date.now());
+    await deleteExpiredOauthStates(firestore, Date.now());
   },
 );

@@ -1,8 +1,11 @@
 import { useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 
 import FormSheet from '@/components/FormSheet';
+import HelpTip from '@/components/HelpTip';
 import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { endConnection } from '@/lib/connections/connectionCalls';
@@ -25,6 +28,16 @@ interface DisconnectSheetProps {
   /** How many copies from this app Helm holds. */
   count: number;
   failureLine: (error: unknown) => string;
+  /** The account's own name when the connection is one of several of the same service; it names the sheet. */
+  accountName?: string | null;
+  /** What the copies are, from the kind of thing the connection reads; null reads as "things". */
+  countKind?: string | null;
+  /** A small explanation beside the sentence, when the connection has more to say. */
+  note?: { title: string; text: string } | null;
+  /** One more plain line under the sentence, for what this connection's end does to what was kept from it. */
+  extraLine?: string | null;
+  /** Replaces the sheet's title and its confirm button when ending is a narrower step than disconnecting. */
+  wording?: { title: string; confirm: string } | null;
 }
 
 function DisconnectForm({
@@ -33,6 +46,10 @@ function DisconnectForm({
   appName,
   count,
   failureLine,
+  countKind = null,
+  note = null,
+  extraLine = null,
+  wording = null,
 }: Omit<DisconnectSheetProps, 'isOpen'>) {
   const name = useAssistantName();
   const now = useNow(60_000);
@@ -52,6 +69,7 @@ function DisconnectForm({
         grantId,
         deleteCopies: deletesCopies,
       });
+      onClose();
     } catch (error) {
       console.error('Helm connection did not end', error);
       setFailure(failureLine(error));
@@ -63,18 +81,31 @@ function DisconnectForm({
     <div className='flex flex-col gap-4'>
       <p className='text-muted-foreground text-[15px] text-pretty'>
         {HELM_COPY.disconnectBody(name, appName)}
+        {note && (
+          <>
+            {' '}
+            <HelpTip title={note.title} placement='top'>
+              <p>{note.text}</p>
+            </HelpTip>
+          </>
+        )}
       </p>
+      {extraLine && (
+        <p className='text-muted-foreground text-[15px] text-pretty'>
+          {extraLine}
+        </p>
+      )}
       {count > 0 && (
         <div className='flex flex-col gap-1'>
           <label className='flex min-h-12 items-start gap-3 py-2'>
-            <Checkbox
+            <AppCheckbox
               className='mt-0.5'
               checked={deletesCopies}
               disabled={isEnding}
               onCheckedChange={setDeletesCopies}
             />
             <span className='text-foreground text-[15px] text-pretty'>
-              {HELM_COPY.disconnectDeleteBox(count, appName)}
+              {HELM_COPY.disconnectDeleteBox(count, appName, countKind)}
             </span>
           </label>
           <p className='text-muted-foreground text-[13px] text-pretty'>
@@ -105,7 +136,7 @@ function DisconnectForm({
         rightActions={
           isOffline ? (
             <LockedButton
-              label={HELM_COPY.disconnectConfirm}
+              label={wording?.confirm ?? HELM_COPY.disconnectConfirm}
               title={HELM_COPY.connectionsNeedConnection}
             >
               <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
@@ -117,7 +148,7 @@ function DisconnectForm({
               loading={isEnding}
               onClick={() => void disconnect()}
             >
-              {HELM_COPY.disconnectConfirm}
+              {wording?.confirm ?? HELM_COPY.disconnectConfirm}
             </Button>
           )
         }
@@ -132,7 +163,10 @@ function DisconnectSheet({ isOpen, ...form }: DisconnectSheetProps) {
     <FormSheet
       isOpen={isOpen}
       onClose={form.onClose}
-      title={HELM_COPY.connectionDisconnect(form.appName)}
+      title={
+        form.wording?.title ??
+        HELM_COPY.connectionDisconnect(form.accountName ?? form.appName)
+      }
     >
       {isOpen && <DisconnectForm {...form} />}
     </FormSheet>

@@ -213,6 +213,7 @@ test('the fixture follows this, it and the nth one from the context', async () =
     start: 13,
     end: 21,
     due: { kind: 'day' as const, date: Date.UTC(2026, 10, 14) },
+    precision: null,
   };
   const screen = {
     ...base,

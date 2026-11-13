@@ -95,6 +95,11 @@ def run_matrix(o_tok, uid, x_tok, x_uid):
     grant = f'connections/{uid}/grants/helm__app:pinch__site'
     account = f'connections/{uid}/accounts/x'
     token = f'connectionsServer/{uid}/tokens/x'
+    server_paths = {
+        'oauth state': f'connectionsServer/{uid}/oauthStates/s',
+        'cursor': f'connectionsServer/{uid}/cursors/c',
+        'key check': 'connectionsServer/keyChecks/ids/k',
+    }
 
     def check(label, code):
         assert label not in results, label
@@ -105,6 +110,7 @@ def run_matrix(o_tok, uid, x_tok, x_uid):
         check(f'grant read [{a}]', get(grant, tok))
         check(f'grants list [{a}]', get(f'connections/{uid}/grants', tok))
         check(f'account read [{a}]', get(account, tok))
+        check(f'accounts list [{a}]', get(f'connections/{uid}/accounts', tok))
         check(f'grant create [{a}]', commit(tok, [put_new(grant + '-new', GRANT)]))
         check(f'grant update [{a}]', commit(tok, [put(grant, dict(GRANT, status='ended'))]))
         check(f'grant delete [{a}]', commit(tok, [rm(grant)]))
@@ -115,6 +121,10 @@ def run_matrix(o_tok, uid, x_tok, x_uid):
         check(f'server token create [{a}]', commit(tok, [put_new(token + '-new', {'x': 2})]))
         check(f'server token update [{a}]', commit(tok, [put(token, {'x': 2})]))
         check(f'server token delete [{a}]', commit(tok, [rm(token)]))
+        for name, path in server_paths.items():
+            admin([put(path, {'x': 1})])
+            check(f'server {name} read [{a}]', get(path, tok))
+            check(f'server {name} write [{a}]', commit(tok, [put(path, {'x': 2})]))
         admin([rm(grant + '-new'), rm(account + '-new'), rm(token + '-new')])
     admin([put(f'connections/{x_uid}/grants/g', GRANT)])
     check('other uid grant read [owner]', get(f'connections/{x_uid}/grants/g', o_tok))
@@ -123,13 +133,13 @@ def run_matrix(o_tok, uid, x_tok, x_uid):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--base-ref', default='origin/claude/helm-16-barge-in'); args = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument('--base-ref', default='origin/main'); args = ap.parse_args()
     o_tok, uid = signup('owner')
     x_tok, x_uid = signup('other')
 
     current = run_matrix(o_tok, uid, x_tok, x_uid)
     mismatches = [f'{label}: got {got}' for label, got in current.items()
-                  if got != ('allow' if label.split(' [')[0] in ('grant read', 'grants list', 'account read') and label.endswith('[owner]') else 'deny')]
+                  if got != ('allow' if label.split(' [')[0] in ('grant read', 'grants list', 'account read', 'accounts list') and label.endswith('[owner]') else 'deny')]
     for label, got in current.items(): print(f'  {got:5} {label}')
     print(f'{len(current)} cases, {sum(1 for v in current.values() if v == "allow")} allowed')
 

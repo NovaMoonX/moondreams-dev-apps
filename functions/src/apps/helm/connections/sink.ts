@@ -6,25 +6,38 @@ import type {
   QueryDocumentSnapshot,
   WriteBatch,
 } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 
+import type { SealedPayload } from '../../../appKeys/seal.js';
 import type {
   ExpiredGrant,
   ReaderSink,
   SinkSession,
   WritePageArgs,
 } from '../../../connections/sink.js';
-import type { SharedRecord } from '../../../vendor/connectionsContract.js';
+import {
+  MAX_RECORDS_PER_CATEGORY,
+  type SharedRecord,
+} from '../../../vendor/connectionsContract.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from '../getHelmKey.js';
-import { sealForHelm, unwrapHelmKey, type HelmKey } from '../helmKey.js';
+import {
+  openForHelm,
+  sealForHelm,
+  unwrapHelmKey,
+  type HelmKey,
+} from '../helmKey.js';
 
 export const KEPT_COPY_DAYS = 90;
 export const TRANSFORM_VERSION = 1;
-export const MAX_COPIES_PER_CATEGORY = 1000;
+export const MAX_COPIES_PER_CATEGORY = MAX_RECORDS_PER_CATEGORY;
 const DAY_MS = 86_400_000;
 const BATCH_SIZE = 400;
 const READ_CHUNK = 300;
 const HASH_INFO = 'helm-sync-content';
 const DETAIL_LIMIT = 500;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const syncedPath = (uid: string) => `apps/helm/users/${uid}/synced`;
 
@@ -65,9 +78,9 @@ const toEnd = (data: DocumentData) => {
   const startAt = typeof data.startAt === 'number' ? data.startAt : null;
   const endAt = typeof data.endAt === 'number' ? data.endAt : null;
   const dueAt = typeof data.dueAt === 'number' ? data.dueAt : null;
-  const startEnd =
-    startAt === null ? null : startAt + (data.isAllDay === true ? DAY_MS : 0);
-  return endAt ?? dueAt ?? startEnd;
+  // An all-day end is its last day, so it ends a day later.
+  const last = endAt ?? dueAt ?? startAt;
+  return last === null ? null : last + (data.isAllDay === true ? DAY_MS : 0);
 };
 
 const hasEndedBefore = (data: DocumentData, cutoff: number) => {
@@ -77,6 +90,11 @@ const hasEndedBefore = (data: DocumentData, cutoff: number) => {
 
 const toAnchor = (record: SharedRecord) =>
   record.startAt ?? record.dueAt ?? record.sourceUpdatedAt ?? 0;
+
+const toCalendarKey = (accountId: string, record: SharedRecord) =>
+  typeof record.extra.calendarId === 'string'
+    ? `${accountId}/${record.extra.calendarId}`
+    : null;
 
 const chunk = <T>(items: T[], size: number): T[][] =>
   Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
@@ -145,10 +163,17 @@ class HelmSinkSession implements SinkSession {
     } = args;
     const seen = this.seenIds(grantId, category);
     const room = Math.max(0, MAX_COPIES_PER_CATEGORY - seen.size);
-    const kept = [...records]
-      .filter((record) => !hasEndedBefore(record, windowStart))
-      .sort((a, b) => toAnchor(b) - toAnchor(a))
-      .slice(0, room);
+    const inWindow = records.filter(
+      (record) => !hasEndedBefore(record, windowStart),
+    );
+    const kept = [
+      ...inWindow
+        .filter((record) => record.kind === 'event')
+        .sort((a, b) => toAnchor(a) - toAnchor(b)),
+      ...inWindow
+        .filter((record) => record.kind !== 'event')
+        .sort((a, b) => toAnchor(b) - toAnchor(a)),
+    ].slice(0, room);
     if (kept.length === 0) return;
 
     const key = await this.openKey();
@@ -197,8 +222,11 @@ class HelmSinkSession implements SinkSession {
           endAt: record.endAt,
           isAllDay: record.isAllDay,
           dueAt: record.dueAt,
-          calendarKey: null,
-          isBusy: null,
+          calendarKey: toCalendarKey(accountId, record),
+          isBusy:
+            typeof record.extra.calendarId === 'string'
+              ? record.extra.isFree !== true
+              : null,
           sourceUpdatedAt: record.sourceUpdatedAt,
           contentHash: hash,
           syncedAt: now,
@@ -262,6 +290,30 @@ class HelmSinkSession implements SinkSession {
     return docs.length;
   }
 
+  async deleteRefs(grantId: string, category: string, refs: string[]) {
+    const docs = (
+      await Promise.all(
+        chunk(
+          refs.map((ref) =>
+            this.firestore.doc(
+              `${syncedPath(this.uid)}/${toSyncedId(grantId, category, ref)}`,
+            ),
+          ),
+          READ_CHUNK,
+        ).map((group) => this.firestore.getAll(...group)),
+      )
+    )
+      .flat()
+      .filter((doc) => doc.exists);
+    await chunk(docs, BATCH_SIZE).reduce(async (done, group) => {
+      await done;
+      const batch = this.firestore.batch();
+      group.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }, Promise.resolve());
+    return docs.length;
+  }
+
   deleteCategory(grantId: string, category: string) {
     return this.deleteWhere(grantId, category, () => true);
   }
@@ -276,6 +328,64 @@ class HelmSinkSession implements SinkSession {
       null,
       (doc) => doc.get('deleteAfter') !== null,
     );
+  }
+
+  async blankQuoted(grantId: string, now: number) {
+    const [, connectorId, accountId] = grantId.split('__');
+    if (!connectorId || !accountId) return;
+    const snapshot = await this.firestore
+      .collection(`apps/helm/users/${this.uid}/captures`)
+      .where(
+        'quotedSourceKeys',
+        'array-contains',
+        `${connectorId}|${accountId}`,
+      )
+      .get();
+    if (snapshot.empty) return;
+    const key = await this.openKey();
+    const isQuoteOfIt = (quote: unknown) =>
+      isRecord(quote) &&
+      quote.connectorId === connectorId &&
+      quote.accountId === accountId;
+    const blanked = snapshot.docs.flatMap((doc) => {
+      try {
+        const opened = openForHelm(key, doc.get('sealed') as SealedPayload);
+        const answer = opened.answer;
+        if (!isRecord(answer) || !Array.isArray(answer.quotes)) return [];
+        if (!answer.quotes.some(isQuoteOfIt)) return [];
+        const quotes = answer.quotes.map((quote: unknown) =>
+          isQuoteOfIt(quote)
+            ? {
+                ...(quote as Record<string, unknown>),
+                text: null,
+                record: null,
+                deepLink: null,
+                deletedAt: (quote as Record<string, unknown>).deletedAt ?? now,
+              }
+            : quote,
+        );
+        return [
+          {
+            ref: doc.ref,
+            sealed: sealForHelm(key, {
+              ...opened,
+              answer: { ...answer, quotes },
+            }),
+          },
+        ];
+      } catch {
+        logger.warn('helm.connections.blankUnreadable');
+        return [];
+      }
+    });
+    await chunk(blanked, BATCH_SIZE).reduce(async (done, group) => {
+      await done;
+      const batch = this.firestore.batch();
+      group.forEach((entry) =>
+        batch.update(entry.ref, { sealed: entry.sealed }),
+      );
+      await batch.commit();
+    }, Promise.resolve());
   }
 
   async countKept(grantId: string) {

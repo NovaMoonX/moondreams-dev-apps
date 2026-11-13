@@ -74,6 +74,7 @@ export interface SharedRecord {
   subtitle: string | null;
   detail: string | null;
   startAt: number | null;
+  /** An all-day record's last day (UTC midnight), never the day after it. */
   endAt: number | null;
   isAllDay: boolean;
   dueAt: number | null;
@@ -108,7 +109,7 @@ export const SHARED_RECORD_KEYS: (keyof SharedRecord)[] = [
 export const EXTRA_KEYS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
-  event: [],
+  event: ['calendarId', 'isTentative', 'isFree', 'sameEventKey'],
   task: [],
   project: ['available', 'pending', 'sold'],
   knowledge: ['rating'],
@@ -155,6 +156,9 @@ export interface ConnectionGrant {
 
 export const MAX_GRANT_ERRORS = 10;
 
+/** The most records a source hands over, and a reader keeps, for one category. */
+export const MAX_RECORDS_PER_CATEGORY = 1000;
+
 export const toGrantId = (
   readerAppId: string,
   connectorId: ConnectorId,
@@ -167,16 +171,95 @@ export const toAppConnectorId = (appId: string): ConnectorId => `app:${appId}`;
 export const readConnectorAppId = (connectorId: string): string | null =>
   connectorId.startsWith('app:') ? connectorId.slice(4) : null;
 
+export interface GrantOptions {
+  calendarIds: string[];
+}
+
 export interface GrantConnectionRequest {
   readerAppId: string;
   connectorId: ConnectorId;
   accountId: string;
   categoryIds: string[];
+  options: GrantOptions | null;
 }
 
+/** Each part is left as it is when absent. */
 export interface UpdateConnectionRequest {
   grantId: string;
-  categories: Record<string, boolean>;
+  categories?: Record<string, boolean>;
+  options?: GrantOptions;
+  /** The account's short name ("work"); null clears it. */
+  accountLabel?: string | null;
+}
+
+/** Outside accounts are keyed by provider: `g_` and 16 hex of a hash of Google's account id. */
+export const GOOGLE_ACCOUNT_PREFIX = 'g_';
+
+export const isOutsideAccount = (accountId: string) =>
+  accountId.startsWith(GOOGLE_ACCOUNT_PREFIX);
+
+export type AccountStatus = 'live' | 'needsReconnect' | 'revoked';
+
+/** `connections/{uid}/accounts/{accountId}`: the owner reads, only callables write. Site apps have none. */
+export interface ConnectionAccount {
+  provider: 'google';
+  email: string;
+  label: string | null;
+  grantedScopes: string[];
+  status: AccountStatus;
+  connectedAt: number;
+  lastError: { code: string; at: number } | null;
+}
+
+export const MAX_ACCOUNT_LABEL_LENGTH = 24;
+
+export interface StartGoogleConnectionRequest {
+  readerAppId: string;
+  connectorId: ConnectorId;
+  /** Where Google sends the person back: this site's origin and the reader's own path. */
+  redirectUri: string;
+  /** Reconnecting a known account: its id, so Google preselects it. */
+  accountId: string | null;
+  /** Adding another account: Google asks which one. */
+  isAnotherAccount: boolean;
+}
+
+export interface StartGoogleConnectionResult {
+  authUrl: string;
+  state: string;
+}
+
+export interface FinishGoogleConnectionRequest {
+  code: string;
+  state: string;
+}
+
+export interface FinishGoogleConnectionResult {
+  accountId: string;
+  email: string;
+  readerAppId: string;
+  connectorId: ConnectorId;
+  /** True when this account already had a live grant for the connector (a reconnect). */
+  hasLiveGrant: boolean;
+}
+
+export interface ReadConnectorOptionsRequest {
+  connectorId: ConnectorId;
+  accountId: string;
+}
+
+/** One choice (a calendar, a contact) a connector offers, read live from the provider. */
+export interface ConnectorOption {
+  id: string;
+  name: string;
+  colour: string | null;
+  /** One line that tells two choices of the same name apart (an email or a phone). */
+  detail: string | null;
+  /** An https picture from a provider host the server allows, or null. */
+  photoUrl: string | null;
+  isPrimary: boolean;
+  /** Holidays, subscriptions and calendars only shared to read start off. */
+  isOnByDefault: boolean;
 }
 
 export interface EndConnectionRequest {

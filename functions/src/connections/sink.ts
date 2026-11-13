@@ -40,9 +40,17 @@ export interface SinkSession {
   writePage(args: WritePageArgs): Promise<void>;
   /** Drops what this run did not see (a full read only) and what ended more than the window ago. */
   finishCategory(args: FinishCategoryArgs): Promise<CategoryTotals>;
+  /** Deletes the copies of records the source says are gone, by their source refs. */
+  deleteRefs(
+    grantId: string,
+    category: string,
+    refs: string[],
+  ): Promise<number>;
   deleteCategory(grantId: string, category: string): Promise<number>;
   deleteGrant(grantId: string): Promise<number>;
   deleteKept(grantId: string): Promise<number>;
+  /** Blanks the words the reader app kept from the connection's source and links back to them, once the connection has ended. */
+  blankQuoted?(grantId: string, now: number): Promise<void>;
   /** How many copies of the connection are kept after it ended, whichever category they sit in. */
   countKept(grantId: string): Promise<number>;
   keepGrant(

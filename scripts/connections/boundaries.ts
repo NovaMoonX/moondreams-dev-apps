@@ -57,6 +57,18 @@ interface Allowed extends Hit {
 /** Hits that exist today and are intended or not yet fixed; a hit not listed fails, and an entry that no longer matches fails too. */
 const ALLOWED: Allowed[] = [
   {
+    file: 'functions/src/connections/google/fixtures.ts',
+    kind: 'word',
+    match: 'budget',
+    why: "A fixture file's name, as a person would name a spreadsheet in their Drive.",
+  },
+  {
+    file: 'functions/src/connections/google/fixtures.ts',
+    kind: 'word',
+    match: 'box',
+    why: "The PDF format's own page-size key, in the fixture's hand-built file.",
+  },
+  {
     file: 'src/lib/connections/contract.ts',
     kind: 'word',
     match: 'trip',
@@ -79,6 +91,78 @@ const ALLOWED: Allowed[] = [
     kind: 'word',
     match: 'pinch',
     why: "The source registry re-exports each app's manifest.",
+  },
+  {
+    file: 'src/lib/connections/sources.ts',
+    kind: 'word',
+    match: 'a list',
+    why: "The source registry re-exports each app's manifest.",
+  },
+  {
+    file: 'src/lib/connections/sources.ts',
+    kind: 'word',
+    match: 'going once',
+    why: "The source registry re-exports each app's manifest.",
+  },
+  {
+    file: 'src/lib/connections/sources.ts',
+    kind: 'word',
+    match: 'nine lives',
+    why: "The source registry re-exports each app's manifest.",
+  },
+  {
+    file: 'src/lib/connections/sources.ts',
+    kind: 'word',
+    match: 'runway',
+    why: "The source registry re-exports each app's manifest.",
+  },
+  {
+    file: 'src/lib/connections/sources.ts',
+    kind: 'word',
+    match: 'waypoint',
+    why: "The source registry re-exports each app's manifest.",
+  },
+  {
+    file: 'src/lib/connections/sources.ts',
+    kind: 'word',
+    match: 'worth the wait',
+    why: "The source registry re-exports each app's manifest.",
+  },
+  {
+    file: 'functions/src/connections/registry.ts',
+    kind: 'word',
+    match: 'a list',
+    why: 'The source table is keyed by connector id and imports the one adapter each app owns.',
+  },
+  {
+    file: 'functions/src/connections/registry.ts',
+    kind: 'word',
+    match: 'going once',
+    why: 'The source table is keyed by connector id and imports the one adapter each app owns.',
+  },
+  {
+    file: 'functions/src/connections/registry.ts',
+    kind: 'word',
+    match: 'nine lives',
+    why: 'The source table is keyed by connector id and imports the one adapter each app owns.',
+  },
+  {
+    file: 'functions/src/connections/registry.ts',
+    kind: 'word',
+    match: 'runway',
+    why: 'The source table is keyed by connector id and imports the one adapter each app owns.',
+  },
+  {
+    file: 'functions/src/connections/registry.ts',
+    kind: 'word',
+    match: 'waypoint',
+    why: 'The source table is keyed by connector id and imports the one adapter each app owns.',
+  },
+  {
+    file: 'functions/src/connections/registry.ts',
+    kind: 'word',
+    match: 'worth the wait',
+    why: 'The source table is keyed by connector id and imports the one adapter each app owns.',
   },
   {
     file: 'functions/src/connections/registry.ts',
