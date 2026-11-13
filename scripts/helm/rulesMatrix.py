@@ -2,7 +2,7 @@
 """Helm rules matrix (beta tier).
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
-visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
+visitor, and records each HTTP status. The beta tier checks access, and one value's shape (a profile's theme is absent, null or a palette Helm ships): only the owner may read, create and
 update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client. A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected

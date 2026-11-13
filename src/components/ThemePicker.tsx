@@ -129,6 +129,7 @@ function ThemePicker<T extends string>({
             size='stripped'
             role='radio'
             aria-checked={isSelected}
+            aria-label={option.name}
             tabIndex={index === tabbableIndex ? 0 : -1}
             className={join(
               'text-foreground! relative h-auto min-w-0 flex-col items-stretch justify-start gap-2 rounded-xl p-2 text-left font-normal whitespace-normal transition-none',

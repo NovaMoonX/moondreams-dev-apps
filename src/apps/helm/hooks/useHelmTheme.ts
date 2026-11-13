@@ -2,29 +2,31 @@ import { useEffect } from 'react';
 
 import '@apps/helm/helm.css';
 import { DEFAULT_HELM_THEME, HELM_THEMES } from '@apps/helm/constants';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import type { HelmTheme } from '@apps/helm/types';
 
 const THEME_CLASS = 'helm-theme';
 const THEME_ATTRIBUTE = 'data-helm-theme';
-const CACHE_KEY = 'helm-theme';
+const CACHE_PREFIX = 'helm-theme:';
 
 const isHelmTheme = (value: unknown): value is HelmTheme =>
   HELM_THEMES.some((option) => option.id === value);
 
 /** The last theme this device showed, so the first paint is not the default while the profile loads. */
-const readCachedTheme = (): HelmTheme | null => {
+const readCachedTheme = (uid: string | undefined): HelmTheme | null => {
+  if (!uid) return null;
   try {
-    const cached = localStorage.getItem(CACHE_KEY);
+    const cached = localStorage.getItem(CACHE_PREFIX + uid);
     return isHelmTheme(cached) ? cached : null;
   } catch {
     return null;
   }
 };
 
-const writeCachedTheme = (theme: HelmTheme) => {
+const writeCachedTheme = (uid: string, theme: HelmTheme) => {
   try {
-    localStorage.setItem(CACHE_KEY, theme);
+    localStorage.setItem(CACHE_PREFIX + uid, theme);
   } catch {
     // Storage can be blocked; the profile still decides next load.
   }
@@ -41,7 +43,9 @@ export function useHelmTheme() {
   const profileTheme = useAppSelector((state) =>
     readProfileTheme(state.helm.profile?.theme),
   );
-  const theme = profileTheme ?? readCachedTheme();
+  const { user } = useAuth();
+  const uid = user?.uid;
+  const theme = profileTheme ?? readCachedTheme(uid);
 
   useEffect(() => {
     document.documentElement.classList.add(THEME_CLASS);
@@ -55,7 +59,7 @@ export function useHelmTheme() {
     } else {
       root.setAttribute(THEME_ATTRIBUTE, theme);
     }
-    if (profileTheme) writeCachedTheme(profileTheme);
+    if (uid && profileTheme) writeCachedTheme(uid, profileTheme);
     return () => root.removeAttribute(THEME_ATTRIBUTE);
-  }, [theme, profileTheme]);
+  }, [theme, profileTheme, uid]);
 }
