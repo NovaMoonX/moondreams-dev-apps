@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { getNextYearHorizon } from '../../src/apps/runway/engine/horizon.ts';
+import { describeChange } from '../../src/apps/runway/utils/changeText.ts';
 import type {
   HorizonCost,
   HorizonSealed,
@@ -154,6 +155,16 @@ assert.equal(
   horizon.costs[0].id,
   'hotel',
   'the event it came from is untouched',
+);
+
+assert.equal(
+  describeChange(
+    { ...horizon, rest: { kind: 'pays', startsOn: null } },
+    { ...horizon, rest: { kind: 'pays', startsOn: day('2040-01-01') } },
+    () => '',
+  ),
+  'The rest my pays before each cost to my pays from Jan\u00A01st,\u00A02040',
+  'a change of only the saving start names the day it starts',
 );
 
 console.log('runway horizon next year: ok');
