@@ -3,10 +3,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import InlineNotice from '@/components/InlineNotice';
-import {
-  NOTICE_ACTION_CLASSES,
-  NOTICE_QUIET_CLASSES,
-} from '@/components/noticeActionClasses';
+import { NOTICE_QUIET_CLASSES } from '@/components/noticeActionClasses';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -151,8 +148,9 @@ function BillChargedToNotice({
       <div className='mt-2 flex flex-wrap gap-2'>
         <Button
           type='button'
+          variant='secondary'
           size='sm'
-          className={NOTICE_ACTION_CLASSES.info}
+          className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
           disabled={isBusy}
           onClick={() => void charge()}
         >
