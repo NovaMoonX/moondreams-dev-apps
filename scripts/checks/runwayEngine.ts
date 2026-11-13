@@ -64,6 +64,7 @@ import {
   getAccountHoldings,
   getPullAccounts,
   keepPullAccountId,
+  getPendingCents,
   hasBankBalance,
   resolvePayFromAccountId,
   withBankBalances,
@@ -18599,8 +18600,22 @@ console.log('runway engine: ok');
     const unlinked = account('typed', { balanceCents: 500 });
     const waiting = account('waiting', { linkId: 'l1', balanceCents: 300 });
     const banks = [
-      { id: 'linked', asOf, cents: 9_999 },
-      { id: 'typed', asOf, cents: 1 },
+      {
+        id: 'linked',
+        asOf,
+        cents: 9_999,
+        availableCents: 9_000,
+        limitCents: null,
+        hasInstantBalance: true,
+      },
+      {
+        id: 'typed',
+        asOf,
+        cents: 1,
+        availableCents: null,
+        limitCents: null,
+        hasInstantBalance: null,
+      },
     ];
     const [fromBank, keptTyped, notSentYet] = withBankBalances(
       [linked, unlinked, waiting],
@@ -18629,6 +18644,27 @@ console.log('runway engine: ok');
     assert.equal(hasBankBalance(linked, banks), true);
     assert.equal(hasBankBalance(unlinked, banks), false);
     assert.equal(hasBankBalance(waiting, banks), false);
+    assert.equal(
+      fromBank.balanceCents,
+      9_999,
+      'the posted balance stands, not the available one',
+    );
+    assert.equal(
+      getPendingCents(banks[0]),
+      999,
+      'pending is posted less available',
+    );
+    assert.equal(
+      getPendingCents(banks[1]),
+      0,
+      'no available figure is no pending',
+    );
+    assert.equal(getPendingCents(undefined), null, 'no bank figure is unknown');
+    assert.equal(
+      getPendingCents({ cents: 100, availableCents: 150 }),
+      0,
+      'available above posted (money in on hold) is never negative pending',
+    );
   }
   assert.deepEqual(
     getPullAccounts([a, b, oldPull]).map((entry) => entry.id),

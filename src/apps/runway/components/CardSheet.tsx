@@ -32,6 +32,7 @@ import {
 import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
 import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
+import { describeBankUpdated } from '@apps/runway/utils/bankFreshness';
 import SheetHead from '@apps/runway/components/SheetHead';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import {
@@ -39,7 +40,12 @@ import {
   CARD_FEE_WORDS,
   CARD_WORDS,
   HELD_WORDS,
+  LINK_WORDS,
 } from '@apps/runway/constants';
+import {
+  getCardPendingCents,
+  selectPendingByCard,
+} from '@apps/runway/store/selectors/cardPendingSelectors';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -52,6 +58,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { OpenCard } from '@apps/runway/types';
+import HelpTip from '@/components/HelpTip';
 import { useNow } from '@/hooks/useNow';
 import CardHistoryView from '@apps/runway/components/CardHistoryView';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -146,7 +153,8 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const [isArchiving, setIsArchiving] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const reserveCents = balances.reserveByCard[card.id] ?? 0;
-  const today = todayAsUtcDate(useNow(60_000));
+  const now = useNow(60_000);
+  const today = todayAsUtcDate(now);
   const [view, setView] = useState<'menu' | 'history' | 'purchase' | 'archive'>(
     'menu',
   );
@@ -173,6 +181,25 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   );
 
   const linkedFact = useLinkedFact(card.linkId);
+  const pendingCents = getCardPendingCents(
+    useAppSelector(selectPendingByCard),
+    card.id,
+    reserveCents,
+  );
+  const bank = useAppSelector((state) =>
+    card.linkId === null
+      ? null
+      : (state.runway.accountBalances.find((entry) => entry.id === card.id) ??
+        null),
+  );
+  const bankName = useAppSelector((state) =>
+    card.linkId === null
+      ? null
+      : (state.runway.links.find((link) => link.id === card.linkId)
+          ?.institutionName ?? null),
+  );
+  const bankUpdated =
+    bank === null ? null : describeBankUpdated(bank.asOf, now);
 
   const archive = async (choice: HeldChoice | null) => {
     if (!user || isArchiving) return;
@@ -315,16 +342,28 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
             label={
               reserveCents > 0 ? CARD_WORDS.reserveLabel : CARD_WORDS.allPaid
             }
-            figure={formatCents(Math.max(0, reserveCents))}
+            figure={formatCents(Math.max(0, reserveCents - pendingCents))}
             fact={[
               reserveCents < 0
                 ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
                 : describeCardDue(card, today, due),
-              linkedFact,
+              pendingCents > 0
+                ? CARD_WORDS.pendingAmount(formatCents(pendingCents))
+                : null,
+              bankUpdated?.text ?? linkedFact,
             ]
               .filter(Boolean)
               .join(' \u00b7 ')}
+            isFactFresh={bankUpdated?.isFresh ?? false}
           />
+          {bank?.hasInstantBalance === true && (
+            <HelpTip
+              title={CARD_WORDS.autoCheckTitle}
+              badgeLabel={CARD_WORDS.autoCheckChip}
+            >
+              <p>{CARD_WORDS.autoCheck(bankName ?? LINK_WORDS.fallbackBank)}</p>
+            </HelpTip>
+          )}
           <Button
             type='button'
             variant={reserveCents > 0 ? 'primary' : 'secondary'}
