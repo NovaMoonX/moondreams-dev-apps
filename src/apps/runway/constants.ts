@@ -471,6 +471,25 @@ export const HORIZON_WORDS = {
     `Put ${amount} toward ${name} from ${from}.`,
   putUndone: (amount: string, name: string, from: string) =>
     `Took ${amount} back out of ${name} to ${from}`,
+  yearlyTitle: 'Does it happen every year?',
+  yearly: 'How often',
+  yearlyOnce: 'Once',
+  yearlyOnceMeaning: 'A one-time event.',
+  yearlyEvery: 'Every year',
+  yearlyEveryMeaning: 'It comes around again each year.',
+  everyYear: 'every year',
+  restPaysFromSummary: (date: string) => `My pays from ${date}`,
+  startingLabel: 'Starting',
+  startingTitle: 'When do your pays start saving for it?',
+  startingToday: 'Today',
+  startingPick: 'Pick a day',
+  startingFromToday: 'Start today',
+  startingBlocker: 'Pick a day within the next ten years.',
+  startingBeforeCost: (cost: string, date: string) =>
+    `${cost} is due ${date}, before saving starts.`,
+  savingStarts: (date: string) => `Saving starts ${date}`,
+  savingStartsNote: (date: string) =>
+    `Saving starts ${date}. Pays before then give nothing.`,
   restTitle: 'Where does the rest come from?',
   rest: 'The rest',
   needsRest: 'Pick where the rest comes from.',
@@ -556,7 +575,10 @@ export const HORIZON_WORDS = {
   putHolds: (name: string, amount: string) => `${name} has ${amount}`,
   needsPutOrNotNow: 'Pick where it comes from, or Not now.',
   restOutsideNote: 'The rest is on you, outside the plan.',
-  restPaysNote: 'The rest comes from your pays before each cost is due.',
+  restPaysNote: (from: string | null) =>
+    from === null
+      ? 'The rest comes from your pays before each cost is due.'
+      : `The rest comes from your pays from ${from}, before each cost is due.`,
   restOnePayNote: (date: string) => `The rest comes from the ${date} pay.`,
   putMore: 'Put more toward it',
   putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',
@@ -907,6 +929,31 @@ export const HORIZON_END_WORDS = {
     'What it holds changed just now. Look again, then try once more.',
   endless: (cost: string) =>
     `${cost} repeats with no end. End it or make it a bill to finish.`,
+  nextYearTitle: (name: string) => `Next year's ${name}`,
+  nextYearBody: 'It starts with what is left.',
+  nextYearLine: (name: string, around: string, startsOn: string | null) =>
+    `Next year's ${name}: around ${around}${startsOn === null ? '' : `, saving from ${startsOn}`}`,
+  moneyToNext: (name: string) => `Moves to next year's ${name}`,
+  nextYearLinedUp: (name: string) => `Next year's ${name} is lined up.`,
+  nextYearQuestion: 'Just this year, or every year?',
+  justThisYearTitle: 'Just this year',
+  justThisYearBody: "Calls it off, and lines up next year's.",
+  everyYearTitle: 'Every year',
+  everyYearBody: "Calls it off, and doesn't line up another.",
+  needsYearChoice: 'Choose just this year or every year.',
+  yearRowLabel: 'Which years',
+  yearAnswer: (isEveryYear: boolean) =>
+    isEveryYear ? 'Every year' : 'Just this year',
+  linedUpSummary: (name: string, year: number) =>
+    `Lined up ${name} for ${year}.`,
+  undoLinedUpSummary: (name: string, year: number) =>
+    `Took back lining up ${name} for ${year}.`,
+  nextYearUnderway: (name: string) =>
+    `Next year's ${name} is already under way, so this one stays done.`,
+  nextYearHolds: (name: string) =>
+    `Next year's ${name} holds the money. Bring it back to reopen this one.`,
+  nextYearChanged: (name: string) =>
+    `Next year's ${name} has changed, so it stays.`,
   freeUp: (amount: string) => `Free to Spend goes up by ${amount}.`,
   freeDown: (amount: string) => `Free to Spend goes down by ${amount}.`,
   nothingPaid: 'Nothing paid',

@@ -5746,7 +5746,7 @@ const version = (
         happensUntil: null,
         priority,
         orderIndex: 1,
-        rest: { kind: 'pays' as const },
+        rest: { kind: 'pays' as const, startsOn: null },
         note: null,
         state: 'open' as const,
         stateOn: null,
@@ -5963,7 +5963,11 @@ const version = (
       run(weeks, {
         horizonItems: [
           { ...wedding, rest: { kind: 'outside' as const } },
-          { ...wedding, id: 'w2', rest: { kind: 'pays' as const } },
+          {
+            ...wedding,
+            id: 'w2',
+            rest: { kind: 'pays' as const, startsOn: null },
+          },
           {
             ...wedding,
             id: 'w3',
@@ -14367,7 +14371,7 @@ const version = (
     happensUntil: null,
     priority: 'should',
     orderIndex: 1,
-    rest: { kind: 'pays' },
+    rest: { kind: 'pays', startsOn: null },
     note: null,
     goalId: null,
     state: 'open',
@@ -19001,7 +19005,7 @@ console.log('runway engine: ok');
   const costLines = (draft: ReturnType<typeof draftOn>) =>
     draft.lines.filter((line) => line.costId);
 
-  const paysItem = item({ kind: 'pays' }, [storage]);
+  const paysItem = item({ kind: 'pays', startsOn: null }, [storage]);
   assert.deepEqual(
     [jan15, jan31].map((on) =>
       costLines(draftOn(on, paysItem)).map((line) => line.cents),
@@ -19025,7 +19029,7 @@ console.log('runway engine: ok');
     'every payment with pays before it has pays to carry it',
   );
 
-  const held = item({ kind: 'pays' }, [storage], 3_000);
+  const held = item({ kind: 'pays', startsOn: null }, [storage], 3_000);
   const heldPlan = planCostShares(
     held,
     days,
@@ -19039,7 +19043,26 @@ console.log('runway engine: ok');
   );
   assert.equal(heldPlan.coveredCents, 3_000);
 
-  const confirmedUp = item({ kind: 'pays' }, [storage], 8_000);
+  const startsJan31 = item({ kind: 'pays', startsOn: jan31 }, [storage]);
+  assert.deepEqual(
+    [jan15, jan31].map((on) =>
+      costLines(draftOn(on, startsJan31)).map((line) => line.cents),
+    ),
+    [[], [10_000]],
+    'pays before the start give nothing and the pays from it split the cost',
+  );
+  assert.deepEqual(
+    planCostShares(
+      startsJan31,
+      days,
+      utc(2027, 11, 31),
+      'conservative',
+    )[0].parts.map((part) => part.day.on),
+    [jan31],
+    'a payment is carried only by the pays on or after the start',
+  );
+
+  const confirmedUp = item({ kind: 'pays', startsOn: null }, [storage], 8_000);
   const laterShare = (horizonItem: ReturnType<typeof item>) =>
     costLines(draftOn(jan31, horizonItem))[0]?.cents ?? 0;
   assert.ok(
@@ -19312,7 +19335,7 @@ console.log('runway engine: ok');
     cost('deposit', 'Deposit', 25_000, utc(2027, 0, 10)),
     storage,
   ];
-  const seeded = item({ kind: 'pays' }, moving, 80_000);
+  const seeded = item({ kind: 'pays', startsOn: null }, moving, 80_000);
   const sheet = planHorizon(
     seeded,
     80_000,
@@ -19366,7 +19389,9 @@ console.log('runway engine: ok');
   const threePays = [early[0], days[0], days[1]];
   const pinned = (fixed: Record<string, number>) =>
     planCostShares(
-      item({ kind: 'pays' }, [surgery], 0, { fixed: { surgery: fixed } }),
+      item({ kind: 'pays', startsOn: null }, [surgery], 0, {
+        fixed: { surgery: fixed },
+      }),
       threePays,
       utc(2027, 11, 31),
       'conservative',
@@ -19413,7 +19438,7 @@ console.log('runway engine: ok');
   const twoCosts = costLines(
     draftOn(
       jan15,
-      item({ kind: 'pays' }, [
+      item({ kind: 'pays', startsOn: null }, [
         cost('a', 'Alpha', 4_000, jan31),
         cost('b', 'Beta', 6_000, jan31),
       ]),
@@ -19525,7 +19550,7 @@ console.log('runway engine: ok');
   // A cost can carry its own priority; null follows its item.
   const trip = cost('trip', 'Trip', 30_000, feb1);
   const mixed = item(
-    { kind: 'pays' },
+    { kind: 'pays', startsOn: null },
     [{ ...storage, priority: 'want' }, trip],
     0,
     { priority: 'must' },
@@ -19540,7 +19565,7 @@ console.log('runway engine: ok');
     'a Want cost inside a Must item is drafted at its own priority, and a cost with none follows its item',
   );
   const shouldInMust = item(
-    { kind: 'pays' },
+    { kind: 'pays', startsOn: null },
     [{ ...trip, priority: 'should' }],
     0,
     { priority: 'must' },

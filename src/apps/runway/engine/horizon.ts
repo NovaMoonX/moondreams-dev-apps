@@ -9,10 +9,14 @@ import type {
   HorizonState,
   HorizonStored,
   MoneyRange,
+  OpenMove,
+  PlanItemDoc,
   Priority,
   Schedule,
   Stance,
 } from '@apps/runway/types';
+
+import { generateUuid } from '@/utils/idUtils';
 
 import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 
@@ -170,13 +174,17 @@ export const getHorizonPaceCents = (
   covers: readonly HorizonCover[],
   countedIds: ReadonlySet<string>,
   today: DateOnly,
+  startsOn: DateOnly | null = null,
 ): Cents =>
   covers
     .filter(({ costId }) => countedIds.has(costId))
     .reduce<{ shortCents: Cents; paceCents: Cents }>(
       (walk, { dueOn, coveredCents, totalCents }) => {
         const shortCents = walk.shortCents + totalCents - coveredCents;
-        const months = Math.max(1, (dueOn - today) / MONTH_MS);
+        const months = Math.max(
+          1,
+          (dueOn - Math.max(today, startsOn ?? today)) / MONTH_MS,
+        );
         return {
           shortCents,
           paceCents: Math.max(walk.paceCents, Math.ceil(shortCents / months)),
@@ -672,3 +680,114 @@ export const getNextVersionId = (baseVersionId: string, stretch = 0) => {
   const generation = match ? Number(match[2]) + 1 : 1;
   return `${root}~${generation}${stretch === 0 ? '' : `_${stretch}`}`;
 };
+
+/** The open event lined up from `itemId`, and whether it is still as it was made: one version and no move but the one that carried money in. Null when none was lined up. */
+export function findNextYearOf(
+  itemId: string,
+  carryMoveId: string | null,
+  items: readonly Pick<PlanItemDoc, 'id' | 'archivedAt' | 'endedAt'>[],
+  versions: readonly {
+    itemId: string;
+    id: string;
+    kind: string;
+    payload: unknown;
+  }[],
+  moves: readonly OpenMove[],
+): {
+  itemId: string;
+  versionId: string;
+  happensOn: DateOnly;
+  isUntouched: boolean;
+} | null {
+  const made = versions.find(
+    (version) =>
+      version.kind === 'horizon' &&
+      (version.payload as HorizonSealed).fromId === itemId &&
+      items.some(
+        (item) =>
+          item.id === version.itemId &&
+          item.archivedAt === null &&
+          item.endedAt === null,
+      ),
+  );
+  if (!made) return null;
+  const own = versions.filter((version) => version.itemId === made.itemId);
+  const isMoved = moves.some(
+    (move) =>
+      move.id !== carryMoveId &&
+      (move.refId === made.itemId ||
+        (move.kind === 'transfer' &&
+          (move.payload.fromId === made.itemId ||
+            move.payload.toId === made.itemId))),
+  );
+  return {
+    itemId: made.itemId,
+    versionId: made.id,
+    happensOn: (made.payload as HorizonSealed).happensOn,
+    isUntouched: own.length === 1 && !isMoved,
+  };
+}
+
+const nextYear = (date: DateOnly) => addUtcMonths(date, 12);
+
+const getNextYearRest = (rest: HorizonRest): HorizonRest => {
+  if (rest.kind === 'onePay') return { kind: 'pays', startsOn: null };
+  return rest.kind === 'pays'
+    ? {
+        kind: 'pays',
+        startsOn: rest.startsOn === null ? null : nextYear(rest.startsOn),
+      }
+    : rest;
+};
+
+/** The same event a year on, open and empty of history: costs that became bills or were removed are left out, and a one-time cost that was paid plans exactly what it came to. */
+export function getNextYearHorizon(
+  horizon: HorizonSealed,
+  paid: readonly CostPaidEntry[],
+  thisId: string,
+): HorizonSealed {
+  return {
+    ...horizon,
+    happensOn: nextYear(horizon.happensOn),
+    happensUntil:
+      horizon.happensUntil === null ? null : nextYear(horizon.happensUntil),
+    rest: getNextYearRest(horizon.rest),
+    costs: horizon.costs
+      .filter((cost) => cost.becameBillId === null && cost.endsAfter === null)
+      .map((cost) => {
+        const cameTo = paid
+          .filter((entry) => entry.costId === cost.id)
+          .reduce((sum, entry) => sum + entry.amountCents, 0);
+        const isSettled = cost.schedule.kind === 'once' && cameTo > 0;
+        return {
+          ...cost,
+          id: generateUuid(),
+          amount: isSettled
+            ? { lowCents: cameTo, highCents: cameTo }
+            : cost.amount,
+          schedule: {
+            ...cost.schedule,
+            anchor:
+              cost.schedule.anchor === null
+                ? null
+                : nextYear(cost.schedule.anchor),
+          },
+          ending: {
+            ...cost.ending,
+            onDate:
+              cost.ending.onDate === null ? null : nextYear(cost.ending.onDate),
+          },
+          pricedOn: null,
+          endsAfter: null,
+          becameBillId: null,
+          becameBillOn: null,
+        };
+      }),
+    state: 'open',
+    stateOn: null,
+    stateMoney: null,
+    links: [],
+    isYearly: true,
+    fromId: thisId,
+  };
+}

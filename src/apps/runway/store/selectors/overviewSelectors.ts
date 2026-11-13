@@ -137,6 +137,9 @@ export const selectHorizonMonthCents = createSelector(
               .map(({ id }) => id),
           ),
           today,
+          version.payload.rest.kind === 'pays'
+            ? version.payload.rest.startsOn
+            : null,
         ),
       0,
     ),

@@ -18,6 +18,7 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   getNextVersionId,
+  getNextYearHorizon,
   setHorizonState,
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
@@ -805,6 +806,30 @@ export interface SetHorizonStateInput {
   alsoItemIds?: string[];
   /** Changes that have not started, cancelled in this same transaction; one already cancelled or started refuses the whole write. */
   cancels?: readonly CancelChangeInput[];
+  /** Next year's event, created in this same transaction so the money can move into it; a move to it is not read as an existing place. */
+  creates?: NextYearCreate | null;
+  /** Next year's event this write takes back (an Undo of one that lined it up): archived in this same transaction, refused when it has changed since. */
+  archives?: NextYearArchive | null;
+}
+
+/** Next year's event as it is written alongside the finish or call-off that lines it up. */
+export interface NextYearCreate {
+  itemId: string;
+  versionId: string;
+  horizon: HorizonSealed;
+  summary: string;
+  /** Other items the "Lined up" entry is listed on, such as the goal the event draws from. */
+  alsoItemIds: string[];
+}
+
+/** Next year's event an Undo archives, with the version it was created with. */
+export interface NextYearArchive {
+  itemId: string;
+  versionId: string;
+  summary: string;
+  /** The message when it has changed since. */
+  changedMessage: string;
+  alsoItemIds: string[];
 }
 
 /**
@@ -832,34 +857,54 @@ export async function setHorizonStateWith(
   if (move && !isUndo && move.cents > move.leftCents) {
     throw new Error(HORIZON_END_WORDS.notEnough);
   }
+  const { creates = null, archives = null } = input;
   const placeIds = [move?.fromId, move?.toId].filter(
     (id): id is string => typeof id === 'string' && id !== input.itemId,
   );
-  const [horizonSealed, changeSealed, moveSealed, cancels] = await Promise.all([
-    sealJson(input.horizon, encryption),
-    sealJson(
-      { summary: input.summary, note: input.note } satisfies ChangeSealed,
-      encryption,
-    ),
-    move
+  const readIds = placeIds.filter((id) => id !== creates?.itemId);
+  const [horizonSealed, changeSealed, moveSealed, cancels, createdSealed] =
+    await Promise.all([
+      sealJson(input.horizon, encryption),
+      sealJson(
+        { summary: input.summary, note: input.note } satisfies ChangeSealed,
+        encryption,
+      ),
+      move
+        ? sealJson(
+            {
+              fromId: move.fromId,
+              toId: move.toId,
+              cents: move.cents,
+              note: null,
+              isOutside: false,
+            } satisfies TransferSealed,
+            encryption,
+          )
+        : Promise.resolve(null),
+      Promise.all(
+        (input.cancels ?? []).map((cancel) =>
+          prepareCancel(encryption, cancel),
+        ),
+      ),
+      creates ? sealJson(creates.horizon, encryption) : Promise.resolve(null),
+    ]);
+  const [linkedSealed, takenBackSealed] = await Promise.all([
+    creates
       ? sealJson(
-          {
-            fromId: move.fromId,
-            toId: move.toId,
-            cents: move.cents,
-            note: null,
-            isOutside: false,
-          } satisfies TransferSealed,
+          { summary: creates.summary } satisfies ChangeSealed,
           encryption,
         )
       : Promise.resolve(null),
-    Promise.all(
-      (input.cancels ?? []).map((cancel) => prepareCancel(encryption, cancel)),
-    ),
+    archives
+      ? sealJson(
+          { summary: archives.summary } satisfies ChangeSealed,
+          encryption,
+        )
+      : Promise.resolve(null),
   ]);
 
   return runTransaction(db, async (transaction) => {
-    const [[plan, item, version, existing, ...places], writes] =
+    const [[plan, item, version, existing, next, nextEdit, ...places], writes] =
       await Promise.all([
         Promise.all([
           transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
@@ -868,9 +913,17 @@ export async function setHorizonStateWith(
           moveId === null
             ? Promise.resolve(null)
             : transaction.get(planDoc(uid, 'moves', moveId)),
+          archives
+            ? transaction.get(planDoc(uid, 'items', archives.itemId))
+            : Promise.resolve(null),
+          archives
+            ? transaction.get(
+                planDoc(uid, 'versions', getNextVersionId(archives.versionId)),
+              )
+            : Promise.resolve(null),
           ...(isUndo
             ? []
-            : placeIds.map((id) => transaction.get(planDoc(uid, 'items', id)))),
+            : readIds.map((id) => transaction.get(planDoc(uid, 'items', id)))),
         ]),
         Promise.all(
           cancels.map((cancel) => readCancel(transaction, uid, cancel)),
@@ -880,6 +933,17 @@ export async function setHorizonStateWith(
     if (!item.exists()) throw new Error(HORIZON_END_WORDS.gone);
     if (writes.includes(null))
       throw new Error(HORIZON_END_WORDS.changedJustNow);
+    if (archives) {
+      const nextData = next?.data() as Partial<PlanItemDoc> | undefined;
+      if (
+        !next?.exists() ||
+        nextEdit?.exists() ||
+        (nextData?.archivedAt ?? null) !== null ||
+        (nextData?.endedAt ?? null) !== null
+      ) {
+        throw new Error(archives.changedMessage);
+      }
+    }
     if (move) assertPlanStarted(plan.data(), move.date);
     places.forEach((place) => {
       assertSourceLive(place.data() as Partial<PlanItemDoc> | undefined);
@@ -903,6 +967,50 @@ export async function setHorizonStateWith(
       sealed: changeSealed,
     } satisfies ChangeDoc);
     writes.forEach((write) => write?.());
+    if (creates && createdSealed && linkedSealed) {
+      const linkedId = generateUuid();
+      transaction.set(planDoc(uid, 'items', creates.itemId), {
+        id: creates.itemId,
+        kind: 'horizon',
+        parentId: null,
+        createdAt: now,
+        endedAt: null,
+        archivedAt: null,
+        heldReleasedOn: null,
+      } satisfies PlanItemDoc);
+      transaction.set(planDoc(uid, 'versions', creates.versionId), {
+        id: creates.versionId,
+        itemId: creates.itemId,
+        kind: 'horizon',
+        createdAt: now,
+        effectiveFrom: input.on,
+        effectiveUntil: null,
+        changeId: linkedId,
+        sealed: createdSealed,
+      } satisfies PlanVersionDoc);
+      transaction.set(planDoc(uid, 'changes', linkedId), {
+        id: linkedId,
+        kind: 'planChange',
+        createdAt: now,
+        effectiveFrom: input.on,
+        itemIds: [creates.itemId, input.itemId, ...creates.alsoItemIds],
+        sealed: linkedSealed,
+      } satisfies ChangeDoc);
+    }
+    if (archives && takenBackSealed) {
+      const takenBackId = generateUuid();
+      transaction.update(planDoc(uid, 'items', archives.itemId), {
+        archivedAt: input.on,
+      });
+      transaction.set(planDoc(uid, 'changes', takenBackId), {
+        id: takenBackId,
+        kind: 'planChange',
+        createdAt: now,
+        effectiveFrom: input.on,
+        itemIds: [archives.itemId, input.itemId, ...archives.alsoItemIds],
+        sealed: takenBackSealed,
+      } satisfies ChangeDoc);
+    }
     if (move && moveId !== null && moveSealed !== null) {
       markLedgerWrite(transaction, uid, plan.data(), [
         ...new Set([input.on, move.date]),
@@ -925,6 +1033,7 @@ export async function setHorizonStateWith(
 export type HorizonWhere =
   | { kind: 'free' }
   | { kind: 'keep' }
+  | { kind: 'next' }
   | { kind: 'place'; toId: string; name: string };
 
 /** What a change of state wrote, which its Undo needs to write the opposite. */
@@ -936,6 +1045,13 @@ export interface HorizonStateWritten {
   /** The event as it stands now. */
   after: HorizonSealed;
   move: HorizonMoneyMove | null;
+  /** The event this write lined up for next year, which an Undo archives with it; null when it lined none up. */
+  next?: {
+    itemId: string;
+    versionId: string;
+    name: string;
+    year: number;
+  } | null;
 }
 
 interface EndHorizonInput {
@@ -953,6 +1069,8 @@ interface EndHorizonInput {
   unlinks?: readonly HorizonLink[];
   /** Changes cancelled in the same transaction; their links are in `unlinks`, and an Undo reopens the event only. */
   cancels?: readonly CancelChangeInput[];
+  /** Lines up next year's event in the same write: its new id, made once by the caller, and what was paid, which a one-time cost's amount comes from. */
+  nextYear?: { itemId: string; paid: readonly CostPaidEntry[] } | null;
 }
 
 async function endHorizon(
@@ -964,7 +1082,13 @@ async function endHorizon(
   const { horizon, today, where } = input;
   const left = Math.max(0, input.leftCents);
   const moveId = newTransferMoveId();
-  const toId = where.kind === 'place' ? where.toId : null;
+  const nextYear = input.nextYear ?? null;
+  const toId =
+    where.kind === 'place'
+      ? where.toId
+      : where.kind === 'next'
+        ? (nextYear?.itemId ?? null)
+        : null;
   const move: HorizonMoneyMove | null =
     left > 0 && where.kind !== 'keep'
       ? {
@@ -980,7 +1104,12 @@ async function endHorizon(
     left <= 0
       ? null
       : {
-          kind: where.kind === 'keep' ? 'held' : where.kind,
+          kind:
+            where.kind === 'keep'
+              ? 'held'
+              : where.kind === 'next'
+                ? 'place'
+                : where.kind,
           toId,
           cents: left,
           moveId: move === null ? null : moveId,
@@ -1002,9 +1131,24 @@ async function endHorizon(
       : {
           kind: money.kind,
           cents: formatCents(money.cents),
-          place: where.kind === 'place' ? where.name : null,
+          place:
+            where.kind === 'place'
+              ? where.name
+              : where.kind === 'next'
+                ? HORIZON_END_WORDS.nextYearTitle(horizon.name)
+                : null,
         },
   );
+  const next = nextYear
+    ? {
+        itemId: nextYear.itemId,
+        versionId: generateUuid(),
+        horizon: getNextYearHorizon(horizon, nextYear.paid, input.itemId),
+      }
+    : null;
+  const nextYearOf = next
+    ? new Date(next.horizon.happensOn).getUTCFullYear()
+    : 0;
   const isWritten = await setHorizonStateWith(uid, encryption, {
     versionId,
     itemId: input.itemId,
@@ -1014,9 +1158,32 @@ async function endHorizon(
     on: today,
     move,
     cancels: input.cancels,
+    creates: next
+      ? {
+          itemId: next.itemId,
+          versionId: next.versionId,
+          horizon: next.horizon,
+          summary: HORIZON_END_WORDS.linedUpSummary(horizon.name, nextYearOf),
+          alsoItemIds: horizon.goalId === null ? [] : [horizon.goalId],
+        }
+      : null,
   });
   return isWritten
-    ? { itemId: input.itemId, versionId, before, after, move }
+    ? {
+        itemId: input.itemId,
+        versionId,
+        before,
+        after,
+        move,
+        next: next
+          ? {
+              itemId: next.itemId,
+              versionId: next.versionId,
+              name: horizon.name,
+              year: nextYearOf,
+            }
+          : null,
+      }
     : null;
 }
 
@@ -1044,6 +1211,8 @@ export interface BringBackInput {
   bringCents: Cents;
   /** What the place it went to, or Free to Spend, has now. */
   availableCents: Cents;
+  /** Next year's event lined up from this one, archived in the same write so the two never stay open together; refused when it changed meanwhile. */
+  archives?: NextYearArchive | null;
 }
 
 /** Reopens a called-off event from today, bringing its money back from where it went when the person said so. */
@@ -1078,6 +1247,7 @@ export async function bringBackHorizon(
     note: null,
     on: today,
     move,
+    archives: input.archives ?? null,
   });
   return isWritten
     ? { itemId: input.itemId, versionId, before: horizon, after, move }
@@ -1152,5 +1322,18 @@ export async function undoHorizonState(
     on: today,
     move: written.move,
     isUndo: true,
+    archives: written.next
+      ? {
+          itemId: written.next.itemId,
+          versionId: written.next.versionId,
+          summary: HORIZON_END_WORDS.undoLinedUpSummary(
+            written.next.name,
+            written.next.year,
+          ),
+          changedMessage: HORIZON_END_WORDS.nextYearChanged(written.next.name),
+          alsoItemIds:
+            written.before.goalId === null ? [] : [written.before.goalId],
+        }
+      : null,
   });
 }

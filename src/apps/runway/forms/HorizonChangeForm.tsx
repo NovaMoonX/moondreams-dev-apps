@@ -16,6 +16,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import PaysStartRow from '@apps/runway/components/PaysStartRow';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
 import {
   CHANGE_REASON_CHIPS,
@@ -38,7 +39,10 @@ import {
   selectHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonRest, HorizonSealed, Priority } from '@apps/runway/types';
-import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
+import {
+  formatDateRangeOrdinalUTC,
+  getPaysStartBlocker,
+} from '@apps/runway/utils/horizonText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 
 const REST_ICONS = {
@@ -88,6 +92,9 @@ function HorizonChangeForm({
   const [restDayKey, setRestDayKey] = useState<string | null>(
     horizon.rest.kind === 'onePay' ? horizon.rest.dayKey : null,
   );
+  const [startsOn, setStartsOn] = useState<number | null>(
+    horizon.rest.kind === 'pays' ? horizon.rest.startsOn : null,
+  );
   const [priority, setPriority] = useState<Priority>(horizon.priority);
 
   const trimmed = name.trim();
@@ -114,6 +121,14 @@ function HorizonChangeForm({
   const keptPick =
     horizon.rest.kind === 'onePay' && horizon.rest.dayKey === restDayKey;
 
+  const startBlocker =
+    rest === 'pays'
+      ? getPaysStartBlocker(
+          horizon.costs,
+          startsOn !== null && startsOn > today ? startsOn : null,
+        )
+      : null;
+
   const getBlocker = () => {
     if (trimmed === '') return HORIZON_WORDS.needsName;
     if (!isDateValid) return FORM_FLOW_WORDS.pastDay;
@@ -121,7 +136,7 @@ function HorizonChangeForm({
     if (rest === 'onePay' && pickedDay === undefined && !keptPick) {
       return HORIZON_WORDS.needsPay;
     }
-    return null;
+    return startBlocker;
   };
   const blocker = getBlocker();
 
@@ -130,7 +145,9 @@ function HorizonChangeForm({
       ? { kind: 'onePay', dayKey: restDayKey }
       : rest === 'onePay'
         ? horizon.rest
-        : { kind: rest };
+        : rest === 'pays'
+          ? { kind: 'pays', startsOn }
+          : { kind: rest };
   const candidate: HorizonSealed | null =
     blocker !== null || happensOn === undefined
       ? null
@@ -255,19 +272,23 @@ function HorizonChangeForm({
       title: HORIZON_WORDS.restTitle,
       summaryLabel: HORIZON_WORDS.rest,
       summaryValue:
-        rest === 'onePay'
-          ? pickedDay
-            ? HORIZON_WORDS.restOnePaySummary(
-                formatDateOrdinalUTC(pickedDay.on),
-              )
-            : keptPick
-              ? (HORIZON_REST_OPTIONS.find(({ value }) => value === rest)
-                  ?.label ?? '')
-              : ''
-          : (HORIZON_REST_OPTIONS.find(({ value }) => value === rest)?.label ??
-            ''),
-      isAnswered: rest !== 'onePay' || pickedDay !== undefined || keptPick,
-      blocker: HORIZON_WORDS.needsPay,
+        rest === 'pays' && startsOn !== null && startsOn > today
+          ? HORIZON_WORDS.restPaysFromSummary(formatDateOrdinalUTC(startsOn))
+          : rest === 'onePay'
+            ? pickedDay
+              ? HORIZON_WORDS.restOnePaySummary(
+                  formatDateOrdinalUTC(pickedDay.on),
+                )
+              : keptPick
+                ? (HORIZON_REST_OPTIONS.find(({ value }) => value === rest)
+                    ?.label ?? '')
+                : ''
+            : (HORIZON_REST_OPTIONS.find(({ value }) => value === rest)
+                ?.label ?? ''),
+      isAnswered:
+        (rest !== 'onePay' || pickedDay !== undefined || keptPick) &&
+        startBlocker === null,
+      blocker: rest === 'pays' ? startBlocker : HORIZON_WORDS.needsPay,
       render: ({ moveOn }) => (
         <div className='space-y-3'>
           <ActionGroup isRoomy>
@@ -288,12 +309,20 @@ function HorizonChangeForm({
                   subtitle={meaning}
                   onClick={() => {
                     setRest(value);
-                    if (value !== 'onePay') moveOn();
+                    if (value !== 'onePay' && value !== 'pays') moveOn();
                   }}
                 />
               </div>
             ))}
           </ActionGroup>
+          {rest === 'pays' && (
+            <PaysStartRow
+              value={startsOn}
+              onChange={setStartsOn}
+              today={today}
+              lastDate={lastDate}
+            />
+          )}
           {rest === 'onePay' &&
             (payChoices.length === 0 ? (
               <p className='text-muted-foreground text-sm'>

@@ -225,6 +225,7 @@ function HorizonSheet({
   const isDone = horizon.state !== 'open';
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const events = useAppSelector((state) => selectAllHorizonItems(state, today));
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
   const getShortBody = () => {
     if (!shortfall) return '';
@@ -261,7 +262,13 @@ function HorizonSheet({
         : undefined;
     return picked
       ? HORIZON_WORDS.restOnePayNote(formatDateOrdinalUTC(picked.on))
-      : HORIZON_WORDS.restPaysNote;
+      : HORIZON_WORDS.restPaysNote(
+          rest.kind === 'pays' &&
+            rest.startsOn !== null &&
+            rest.startsOn > today
+            ? formatDateOrdinalUTC(rest.startsOn)
+            : null,
+        );
   };
   const when =
     horizon.happensUntil === null
@@ -369,8 +376,9 @@ function HorizonSheet({
   const sent = horizon.stateMoney;
   const sentPlace =
     sent?.kind === 'place'
-      ? ([...envelopes, ...goals].find(({ item }) => item.id === sent.toId)
-          ?.version.payload.name ?? HORIZON_END_WORDS.anotherPlace)
+      ? ([...envelopes, ...goals, ...events].find(
+          ({ item }) => item.id === sent.toId,
+        )?.version.payload.name ?? HORIZON_END_WORDS.anotherPlace)
       : null;
   const getSentLine = () => {
     if (sent === null || sent.kind === 'held') return null;
@@ -1070,6 +1078,15 @@ function HorizonSheet({
               </p>
             </InlineNotice>
           )}
+          {horizon.rest.kind === 'pays' &&
+            horizon.rest.startsOn !== null &&
+            horizon.rest.startsOn > today && (
+              <p className='text-muted-foreground text-sm'>
+                {HORIZON_WORDS.savingStartsNote(
+                  formatDateOrdinalUTC(horizon.rest.startsOn),
+                )}
+              </p>
+            )}
           {horizon.rest.kind === 'outside' && plan.coveredUntil !== null && (
             <p className='text-muted-foreground text-sm'>
               {HORIZON_WORDS.restOutsideNote}

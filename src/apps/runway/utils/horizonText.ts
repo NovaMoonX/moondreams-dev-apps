@@ -200,3 +200,22 @@ export function formatDateRangeOrdinalUTC(from: number, to: number) {
   const lastDay = isSameMonth ? toDayOrdinal(end.getUTCDate()) : endDay;
   return `${startDay} to ${lastDay}${endYear.map((year) => `,${year}`).join('')}`;
 }
+
+/** The sentence that refuses a start day after a cost's first due date, naming the earliest such cost; null when every cost is due on or after it. */
+export function getPaysStartBlocker(
+  costs: readonly Pick<HorizonCost, 'name' | 'schedule'>[],
+  startsOn: number | null,
+) {
+  if (startsOn === null) return null;
+  const late = costs
+    .filter(
+      ({ schedule }) => schedule.anchor !== null && schedule.anchor < startsOn,
+    )
+    .sort((a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0))[0];
+  return late
+    ? HORIZON_WORDS.startingBeforeCost(
+        late.name,
+        formatDateOrdinalUTC(late.schedule.anchor ?? 0),
+      )
+    : null;
+}
