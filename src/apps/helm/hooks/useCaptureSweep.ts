@@ -10,6 +10,7 @@ import {
   SWEEP_RUN_LIMIT,
 } from '@apps/helm/constants';
 import { sortCapture, isSorting } from '@apps/helm/queries/nomosMutations';
+import { rankStoredNotes } from '@apps/helm/store/actions/captureActions';
 import type { OpenCapture } from '@apps/helm/types';
 
 const isUtcDayOver = (heldAt: number, now: number) =>
@@ -71,7 +72,11 @@ function createSweep() {
       .sort((a, b) => a.createdAt - b.createdAt)[0];
     if (!next) return;
     tried.add(next.id);
-    const { kind } = await sortCapture(next.id);
+    const { kind } = await sortCapture(
+      next.id,
+      'full',
+      rankStoredNotes(next.text),
+    );
     if (kind === 'failed' || kind === 'notSorted') {
       state.heldAt.set(next.id, Date.now());
     }
@@ -116,6 +121,13 @@ export function useCaptureSweep(uid: string | null) {
     (state) =>
       state.helm.keyStatus === 'ready' && state.helm.waitingCaptures.isLoaded,
   );
+  // A turn that lands as received after open (one imported from the drop box) is a moment to sort again.
+  const receivedCount = useAppSelector(
+    (state) =>
+      state.helm.waitingCaptures.captures.filter(
+        (capture) => capture.status === 'received',
+      ).length,
+  );
   const sweep = useRef<ReturnType<typeof createSweep> | null>(null);
 
   useEffect(() => {
@@ -130,7 +142,7 @@ export function useCaptureSweep(uid: string | null) {
 
   useEffect(() => {
     if (uid && isReady) void sweep.current?.run();
-  }, [uid, isReady]);
+  }, [uid, isReady, receivedCount]);
 
   useEffect(() => {
     const handleOnline = () => void sweep.current?.run();

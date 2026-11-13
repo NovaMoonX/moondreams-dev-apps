@@ -7,7 +7,9 @@ import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
+import VoiceStatus from '@apps/helm/components/voice/VoiceStatus';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { useSession } from '@apps/helm/hooks/useSession';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
 import type { ScreenEntry } from '@apps/helm/store/screenSlice';
@@ -26,6 +28,9 @@ const withoutPage = (context: ScreenContext): ScreenContext => ({
   view: context.view,
   focus: null,
   visible: [],
+  topicId: null,
+  procedureId: null,
+  runId: null,
   v: 1,
 });
 
@@ -35,16 +40,20 @@ function AskConversation({ entry: liveEntry, onClose }: AskConversationProps) {
   const [entry] = useState(liveEntry);
   const { sessions, openSessionId } = useSession();
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
+  const voice = useHelmVoiceContext();
+  // Opened by the mic, the field stays unfocused so the keyboard doesn't cover the words being heard.
+  const [startsByVoice] = useState(() => voice.state === 'listening');
   const [isChipRemoved, setIsChipRemoved] = useState(false);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const chip = isChipRemoved ? HELM_COPY.chipAnything : entry.labels.chip;
+  const screen = isChipRemoved ? withoutPage(entry.context) : entry.context;
   const openSession = sessions.filter(
     (session) => session.sessionId === openSessionId,
   );
 
   useEffect(() => {
-    fieldRef.current?.focus();
-  }, []);
+    if (!startsByVoice) fieldRef.current?.focus();
+  }, [startsByVoice]);
 
   return (
     <Subview
@@ -61,33 +70,40 @@ function AskConversation({ entry: liveEntry, onClose }: AskConversationProps) {
           loadsEarlier={false}
         />
         <div className='form-footer flex flex-col gap-3'>
-          <div className='flex'>
-            <span className='bg-secondary text-secondary-foreground inline-flex h-8 max-w-full items-center gap-1 rounded-full pr-1 pl-3 text-[13px]'>
-              <span className='min-w-0 truncate'>{chip}</span>
-              {!isChipRemoved && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='icon'
-                  rounded='full'
-                  aria-label={HELM_COPY.chipRemove(chip)}
-                  className="relative size-6 min-h-0 min-w-6 shrink-0 p-0 before:absolute before:-inset-2 before:content-['']"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => setIsChipRemoved(true)}
-                >
-                  <X className='size-3.5' aria-hidden='true' />
-                </Button>
-              )}
-            </span>
-          </div>
-          <Composer
-            fieldRef={fieldRef}
-            onFocusChange={noop}
-            isReady={keyStatus === 'ready'}
-            waitingPlaceholder={null}
-            screen={isChipRemoved ? withoutPage(entry.context) : entry.context}
-            draftKey={ASK_DRAFT_KEY}
+          <VoiceStatus
+            hasControls
+            screen={screen}
+            onBlocked={() => fieldRef.current?.focus()}
           />
+          <div className={voice.state === 'idle' ? undefined : 'hidden'}>
+            <Composer
+              fieldRef={fieldRef}
+              onFocusChange={noop}
+              isReady={keyStatus === 'ready'}
+              waitingPlaceholder={null}
+              screen={screen}
+              draftKey={ASK_DRAFT_KEY}
+              topSlot={
+                <span className='bg-secondary text-secondary-foreground inline-flex h-8 max-w-full items-center gap-1 rounded-full pr-1 pl-3 text-[13px]'>
+                  <span className='min-w-0 truncate'>{chip}</span>
+                  {!isChipRemoved && (
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='icon'
+                      rounded='full'
+                      aria-label={HELM_COPY.chipRemove(chip)}
+                      className="relative size-6 min-h-0 min-w-6 shrink-0 p-0 before:absolute before:-inset-2 before:content-['']"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => setIsChipRemoved(true)}
+                    >
+                      <X className='size-3.5' aria-hidden='true' />
+                    </Button>
+                  )}
+                </span>
+              }
+            />
+          </div>
         </div>
       </div>
     </Subview>

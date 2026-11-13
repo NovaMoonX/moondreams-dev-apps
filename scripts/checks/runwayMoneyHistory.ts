@@ -104,7 +104,12 @@ const balances = {
 // Projection: pay adds less what envelopes get, bills leave on their day, through `until`.
 {
   const payment = (dueOn: number, totalCents: number, isPaid = false) =>
-    ({ dueOn, totalCents, paid: isPaid ? {} : null }) as unknown as BillPayment;
+    ({
+      dueOn,
+      payOn: dueOn,
+      totalCents,
+      paid: isPaid ? {} : null,
+    }) as unknown as BillPayment;
   const points = getMoneyProjection({
     today: d(10),
     now: { on: d(10), freeCents: 5_000, allCents: 50_000 },
