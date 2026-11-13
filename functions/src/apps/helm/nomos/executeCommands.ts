@@ -23,6 +23,7 @@ import {
   type PlaceRead,
   type ProjectCommand,
   type ProcedureCommand,
+  type RunCommand,
   type TaskDue,
   type TopicCommand,
 } from './commands.js';
@@ -49,7 +50,13 @@ import {
   type PlannedProcedureVersion,
   type ProcedureTask,
 } from './planProcedureCommands.js';
+import {
+  planRunCommands,
+  type PlannedRunCreate,
+  type PlannedRunTick,
+} from './planRunCommands.js';
 import type { LiveProcedure } from '../procedureStore.js';
+import type { LiveRun } from '../runStore.js';
 import { LET_GO_WINDOW_MS } from '../media/mediaCaps.js';
 import {
   fitsTopic,
@@ -76,6 +83,7 @@ import {
   buildTopicQuestion,
   describeNotes,
   describeProcedureChanges,
+  describeRunChanges,
   describeTopicChanges,
   NOTE_KEPT_SPOKEN,
   NOTES_FULL_LINE,
@@ -134,6 +142,8 @@ export interface PeopleInput {
   known: KnownWhoState[];
   knownPlaces: KnownPlace[];
   assistantName: string | null;
+  /** Every name the assistant answers to this turn (its own, the one the person said, the default), so none is filed as a person or place. */
+  assistantNames: string[];
   /** The day the capture was made, in the person's zone. */
   dayKey: string;
   capturedAt: number;
@@ -166,7 +176,8 @@ export interface EffectRef {
     | 'projects'
     | 'notes'
     | 'topics'
-    | 'procedures';
+    | 'procedures'
+    | 'procedureRuns';
   docId: string;
 }
 
@@ -589,6 +600,8 @@ export interface WritePlan {
   topicRetry: number;
   procedureCreates: PlannedProcedureCreate[];
   procedureVersions: PlannedProcedureVersion[];
+  runCreates: PlannedRunCreate[];
+  runTicks: PlannedRunTick[];
   /** Notes kept, and the line said aloud for them. */
   notesMade: number;
   spokenNote: string | null;
@@ -606,6 +619,8 @@ export interface WritePlan {
   topicLines: string[];
   /** The result line of each procedure the turn made or changed. */
   procedureLines: string[];
+  /** The result line of each run the turn started or ticked. */
+  runLines: string[];
   /** Every person, pet or organization and place the turn linked, matched or made. */
   linkedWhoIds: string[];
   linkedPlaceIds: string[];
@@ -678,6 +693,13 @@ interface PlanInput {
   liveProcedures?: Map<string, LiveProcedure | null>;
   /** The tasks whose steps a procedure is made from, opened. */
   procedureTasks?: Map<string, ProcedureTask | null>;
+  runCommands?: RunCommand[];
+  /** The runs the tick commands name, opened as the transaction read them; null when gone. */
+  liveRuns?: Map<string, LiveRun | null>;
+  /** The unfinished runs of the procedures the start commands name, as the transaction read them. */
+  openRuns?: LiveRun[];
+  /** The procedures the named runs were made from that no longer exist. */
+  goneProcedureIds?: ReadonlySet<string>;
   /** When the capture was said, which a note's mark in a document carries. */
   capturedAt?: number;
   media?: MediaInput;
@@ -790,12 +812,12 @@ function settleEntities(input: PlanInput) {
   const whoMatches = matchWho({
     mentions: people.mentions,
     known: people.known,
-    assistantName: people.assistantName,
+    assistantNames: people.assistantNames,
   });
   const placeMatches = matchPlaces({
     names: people.places.map((place) => place.name),
     known: people.knownPlaces,
-    assistantName: people.assistantName,
+    assistantNames: people.assistantNames,
   });
   const whoSettled = people.mentions.flatMap((mention, index) => {
     const match = whoMatches[index];
@@ -1629,6 +1651,34 @@ export function planWrites(input: PlanInput): WritePlan {
   procedurePlan.effects.forEach(({ ref, effect }) =>
     record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
   );
+  const runPlan = planRunCommands({
+    commands: input.runCommands ?? [],
+    liveProcedures: input.liveProcedures ?? new Map(),
+    liveRuns: input.liveRuns ?? new Map(),
+    openRuns: input.openRuns ?? [],
+    goneProcedureIds: input.goneProcedureIds ?? new Set(),
+    projects: (input.existingProjects ?? []).map(({ id, name }) => ({
+      id,
+      name,
+    })),
+    timeZone: input.timeZone ?? 'UTC',
+    captureId: input.captureId,
+    executionId: input.executionId,
+    now,
+    newId: input.newId,
+    seal,
+    room: Math.max(
+      0,
+      MAX_EFFECTS -
+        (effects.length +
+          drafts.size +
+          entities.newWho.length +
+          entities.newPlaces.length),
+    ),
+  });
+  runPlan.effects.forEach(({ ref, effect }) =>
+    record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
+  );
   const refiled = [...skipFiling]
     .filter((key) => !topicPlan.skipFiling.has(key))
     .reduce(
@@ -1669,6 +1719,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...noteSteps.notKept,
       ...topicPlan.notKept,
       ...procedurePlan.notKept,
+      ...runPlan.notKept,
     ]),
   ];
 
@@ -2139,6 +2190,8 @@ export function planWrites(input: PlanInput): WritePlan {
     topicRetry: topicPlan.retry.length,
     procedureCreates: procedurePlan.creates,
     procedureVersions: procedurePlan.versions,
+    runCreates: runPlan.creates,
+    runTicks: runPlan.ticks,
     notesMade: noteSteps.creates.length,
     spokenNote:
       noteSteps.creates.length === 0
@@ -2160,6 +2213,7 @@ export function planWrites(input: PlanInput): WritePlan {
     notKept: [...notKept, ...knowledge.notKept],
     topicLines: topicPlan.topicLines,
     procedureLines: procedurePlan.lines,
+    runLines: runPlan.lines,
     linkedWhoIds: isFiling
       ? union(
           [...entities.whoIdOf.values()],
@@ -2446,6 +2500,10 @@ export function buildExecution(
         describeProcedureChanges(
           plan.procedureCreates.length,
           plan.procedureVersions.length,
+        ),
+        describeRunChanges(
+          plan.runCreates.length,
+          plan.runTicks.reduce((total, tick) => total + tick.stepIds.length, 0),
         ),
         ...plan.notKept,
         homeLine,

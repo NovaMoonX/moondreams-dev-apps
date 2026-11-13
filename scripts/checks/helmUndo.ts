@@ -18,6 +18,7 @@ import type {
   ExecutionEffect,
   OpenExecution,
   ProcedureSealed,
+  RunSealed,
   TaskSealed,
   TopicSealed,
 } from '../../src/apps/helm/types.ts';
@@ -1907,6 +1908,156 @@ test('procedure undo copy counts one change by name and several by number', () =
   assert.equal(
     HELM_COPY.undoReportProceduresToo(1, null),
     '1 change to a procedure too.',
+  );
+});
+
+const runSealed = (): RunSealed => ({
+  title: 'Packing for a work trip',
+  steps: { a: { text: 'Laptop', detail: null } },
+  groups: {},
+  attachedLabel: 'Portland weekend',
+});
+
+const runTarget = (
+  data: Record<string, unknown> | null,
+): [string, UndoTarget] => [
+  'run1',
+  { docId: 'run1', data, opened: data ? runSealed() : null },
+];
+
+const RUN_STARTED_LINE = 'Started Packing for a work trip for Portland weekend';
+const RUN_TICKED_LINE = 'Ticked Laptop on Packing for a work trip';
+
+const runStarted = {
+  ref: {
+    op: 'create',
+    collection: 'procedureRuns',
+    docId: 'run1',
+  } as EffectRef,
+  effect: {
+    written: {
+      'sealed.title': RUN_STARTED_LINE,
+      'sealed.name': 'Packing for a work trip',
+    },
+    previous: null,
+  } as ExecutionEffect,
+};
+
+const runTicked = {
+  ref: {
+    op: 'update',
+    collection: 'procedureRuns',
+    docId: 'run1',
+  } as EffectRef,
+  effect: {
+    written: { 'stepState.a.doneAt': EARLIER, 'sealed.title': RUN_TICKED_LINE },
+    previous: { 'stepState.a.doneAt': null, 'sealed.title': RUN_TICKED_LINE },
+  } as ExecutionEffect,
+};
+
+const ticked = (doneAt: number | null, editedAt = EARLIER) => ({
+  lastEditedAt: editedAt,
+  stepState: { a: { order: 0, groupId: null, doneAt, isExtra: false } },
+});
+
+test('a run the turn started is deleted while nothing was ticked on it', () => {
+  const result = asWrite(
+    plan(execution([runStarted]), [runTarget({ lastEditedAt: null })]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'run1', collection: 'procedureRuns' },
+  ]);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back the run of Packing for a work trip',
+  );
+  assert.equal(result.report, 'Took back the run of Packing for a work trip.');
+});
+
+test('a started run the person ticked since is kept', () => {
+  const result = asRefused(
+    plan(execution([runStarted]), [runTarget(ticked(NOW, NOW))]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a started run is deleted once a later tick on it was undone', () => {
+  const result = asWrite(
+    plan(execution([runStarted]), [runTarget(ticked(null, EARLIER))]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'run1', collection: 'procedureRuns' },
+  ]);
+});
+
+test('a started run with a step ticked by hand is kept whatever its edit stamp', () => {
+  const result = asRefused(
+    plan(execution([runStarted]), [runTarget(ticked(NOW, EARLIER))]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a tick by voice is unticked while it is still the way it was left', () => {
+  const result = asWrite(
+    plan(execution([runTicked]), [runTarget(ticked(EARLIER))]),
+  );
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].collection, 'procedureRuns');
+  assert.equal(result.updates[0].fields['stepState.a.doneAt'], null);
+  assert.equal(result.undoSealed.summary, 'Unticked 1 step');
+  assert.equal(result.report, 'Unticked 1 step.');
+});
+
+test('a tick the person undid by hand is kept', () => {
+  const result = asRefused(
+    plan(execution([runTicked]), [runTarget(ticked(null))]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a run result line names what was done and opens the run', () => {
+  const lines = buildResultLines(
+    execution([runStarted, runTicked]),
+    new Map(),
+    'America/Los_Angeles',
+    NOW,
+  );
+  assert.deepEqual(
+    lines.map((line) => [line.title, line.ref]),
+    [
+      [RUN_STARTED_LINE, { collection: 'procedureRuns', id: 'run1' }],
+      [RUN_TICKED_LINE, { collection: 'procedureRuns', id: 'run1' }],
+    ],
+  );
+});
+
+test('run undo copy counts ticks and joins them with a taken-back run', () => {
+  assert.equal(HELM_COPY.undoRunChanges([], 3), 'Unticked 3 steps');
+  assert.equal(
+    HELM_COPY.undoRunChanges(['Cabin'], 2),
+    'Took back the run of Cabin and unticked 2 steps',
+  );
+  assert.equal(
+    HELM_COPY.undoReportRunsToo(['Cabin', 'Trip'], 0),
+    'Took back 2 runs.',
+  );
+});
+
+test('a turn that made a note and a run takes back both and says so', () => {
+  const result = asWrite(
+    plan(execution([noteMade, runStarted]), [
+      noteTarget(),
+      runTarget({ lastEditedAt: null }),
+    ]),
+  );
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 note and took back the run of Packing for a work trip',
+  );
+  assert.equal(
+    result.report,
+    'Took back 1 note. Took back the run of Packing for a work trip.',
   );
 });
 

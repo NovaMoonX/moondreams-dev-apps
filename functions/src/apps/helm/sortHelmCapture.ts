@@ -21,7 +21,7 @@ import type { ModelProvider, ToolLoopContent } from '../../ai/modelProvider.js';
 import { getUsageCost } from '../../ai/models.js';
 import type { Keyring } from '../../appKeys/keyring.js';
 import type { SealedPayload } from '../../appKeys/seal.js';
-import { isRunningInEmulator } from '../../emulator.js';
+import { isForcedFixture, isRunningInEmulator } from '../../emulator.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from './getHelmKey.js';
 import {
   openForHelm,
@@ -37,7 +37,7 @@ import {
   restFailureFields,
   settleAttempts,
 } from './sortAttempts.js';
-import type { LiveGrant } from '../../connections/liveRouter.js';
+import type { LiveGrant, SiteLiveGrant } from '../../connections/liveRouter.js';
 import {
   readContextKeyDates,
   readIndexIn,
@@ -67,6 +67,14 @@ import {
   writeProcedureVersionIn,
   type LiveProcedure,
 } from './procedureStore.js';
+import {
+  openLiveRun,
+  openRunDocs,
+  procedureOpenRunsQuery,
+  readLiveProcedureIds,
+  readOpenRuns,
+  toContextRun,
+} from './runStore.js';
 import { createHelmMcpServer } from './mcp/server.js';
 import {
   openMedia,
@@ -110,6 +118,7 @@ import {
   type NomosCommand,
   type TopicCommand,
   type ProcedureCommand,
+  type RunCommand,
   type PlaceRead,
   type PlanDayCommand,
   type RememberCommand,
@@ -153,7 +162,13 @@ import {
   type PeopleInput,
   type QuestionStateEntry,
 } from './nomos/executeCommands.js';
-import { readContextSynced, toKnownZone } from './syncedCopies.js';
+import {
+  getLocalDay,
+  MAX_CONTEXT_TRIPS,
+  readContextSynced,
+  readSyncedTrips,
+  toKnownZone,
+} from './syncedCopies.js';
 import { getDayIn } from './nomos/spoken.js';
 import { matchWho } from './nomos/matchEntities.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
@@ -187,14 +202,19 @@ import {
   runRouted,
   type Route,
 } from './nomos/route.js';
+import { readAssistantName } from './assistantName.js';
+import { toStyleNotes, toStyleWords } from './styleLearner.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   INTERRUPTED_PROMPT,
+  APP_RECORDS_PROMPT,
   MAIL_PROMPT,
   MAX_CONTEXT_TASKS,
   MEDIA_PROMPT,
   REST_PROMPT,
+  STYLE_PROMPT,
   SYSTEM_PROMPT,
+  toPersonaPrompt,
   TOPIC_PROMPT,
   PROCEDURE_PROMPT,
 } from './nomos/prompt.js';
@@ -343,6 +363,7 @@ const readEarlyAnswer = (
 };
 
 const readApiKey = () => {
+  if (isForcedFixture('anthropic')) return '';
   try {
     return ANTHROPIC_API_KEY.value();
   } catch {
@@ -355,6 +376,18 @@ const readLiveGrants = (firestore: Firestore, uid: string) =>
     .then(({ listLiveGrants }) => listLiveGrants(firestore, uid, 'helm'))
     .catch((error): LiveGrant[] => {
       logger.warn('helm.live.grantsFailed', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+      return [];
+    });
+
+const readSiteGrants = (firestore: Firestore, uid: string) =>
+  import('../../connections/liveRouter.js')
+    .then(({ listSiteLiveGrants }) =>
+      listSiteLiveGrants(firestore, uid, 'helm'),
+    )
+    .catch((error): SiteLiveGrant[] => {
+      logger.warn('helm.live.siteGrantsFailed', {
         cause: error instanceof Error ? error.name : 'error',
       });
       return [];
@@ -378,6 +411,22 @@ export function loadKeyringOrFail(): Keyring {
     );
   }
 }
+
+/** The general style's descriptions for a turn's free writing; nothing when it is missing or will not open. */
+const readStyleNotes = (firestore: Firestore, base: string, key: HelmKey) =>
+  firestore
+    .doc(`${base}/style/general`)
+    .get()
+    .then((snapshot) =>
+      snapshot.exists
+        ? toStyleNotes(
+            toStyleWords(
+              openForHelm(key, snapshot.get('sealed') as SealedPayload),
+            ),
+          )
+        : null,
+    )
+    .catch(() => null);
 
 const openTitle = (key: HelmKey, sealed: SealedPayload) => {
   try {
@@ -558,11 +607,17 @@ async function readPeople(
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
+    calledAs: string | null;
     timeZone: string;
     capturedAt: number;
   },
 ): Promise<PeopleInput | undefined> {
   const { firestore, base, key, captureRef, mentions, places } = input;
+  const assistantNames = [
+    input.assistantName,
+    input.calledAs,
+    DEFAULT_ASSISTANT_NAME,
+  ].filter((name) => name !== null);
   if (mentions.length === 0 && places.length === 0) return undefined;
   const [whoSnap, placeSnap] = await Promise.all(
     ['who', 'places'].map((name) =>
@@ -636,8 +691,8 @@ async function readPeople(
     logger.warn('helm.sort.peopleUnreadable', unreadable);
   }
   const matched = new Set(
-    matchWho({ mentions, known, assistantName: input.assistantName }).flatMap(
-      (match) => (match.kind === 'match' ? [match.id] : []),
+    matchWho({ mentions, known, assistantNames }).flatMap((match) =>
+      match.kind === 'match' ? [match.id] : [],
     ),
   );
   const zone = toKnownZone(input.timeZone);
@@ -678,6 +733,7 @@ async function readPeople(
     known: withHistory,
     knownPlaces,
     assistantName: input.assistantName,
+    assistantNames,
     dayKey: String(getDayIn(input.capturedAt, zone)),
     capturedAt: input.capturedAt,
   };
@@ -1381,6 +1437,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       notes: [],
       topicCommands: [],
       procedureCommands: [],
+      runCommands: [],
       topics: [],
       hinted: [],
       captureText: '',
@@ -1391,6 +1448,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       mentions: [],
       places: [],
       assistantName: null,
+      calledAs: null,
       searched: createSearchedLog(),
       hasMore: false,
       base,
@@ -1440,7 +1498,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         };
 
   const profileRead = firestore.doc(base).get();
-  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced] =
+  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced, style] =
     await Promise.all([
       profileRead,
       firestore
@@ -1467,6 +1525,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               ),
             ),
       ),
+      mode === 'rest' ? null : readStyleNotes(firestore, base, key),
     ]);
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
@@ -1479,6 +1538,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     ];
   });
   const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
+  const assistantName =
+    readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
 
   const readJoined = async (): Promise<
     JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean }
@@ -1575,9 +1636,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             });
             return [];
           });
-    const [topics, hintedNotes, focusedTopic, procedureRecords, focusedLive] =
+    const [
+      topics,
+      hintedNotes,
+      focusedTopic,
+      procedureRecords,
+      focusedLive,
+      openRunRecords,
+    ] =
       mode === 'rest'
-        ? [[], [], null, [], null]
+        ? [[], [], null, [], null, []]
         : await Promise.all([
             readContextTopics(firestore, base, key, MAX_CONTEXT_TOPICS),
             readHintedNotes(firestore, base, key, claimed.noteIds),
@@ -1594,7 +1662,35 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               key,
               sanitizeScreen(capture.screen)?.procedureId ?? null,
             ),
+            readOpenRuns(
+              firestore,
+              base,
+              key,
+              sanitizeScreen(capture.screen)?.runId ?? null,
+            ),
           ]);
+    const screenRunId = sanitizeScreen(capture.screen)?.runId ?? null;
+    const contextRuns = [...openRunRecords]
+      .sort(
+        (a, b) => Number(b.id === screenRunId) - Number(a.id === screenRunId),
+      )
+      .map((run) => toContextRun(run, run.id === screenRunId));
+    const trips =
+      mode !== 'rest' && procedureRecords.length > 0
+        ? await readSyncedTrips(firestore, uid, key, {
+            firstDay: getLocalDay(capture.createdAt, toKnownZone(timeZone)),
+            limit: MAX_CONTEXT_TRIPS,
+          }).catch((error): Awaited<ReturnType<typeof readSyncedTrips>> => {
+            logger.warn('helm.sort.tripsUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          })
+        : [];
+    const contextSynced = [
+      ...synced,
+      ...trips.filter((trip) => !synced.some((copy) => copy.id === trip.id)),
+    ];
     const contextProcedures: ContextProcedure[] = procedureRecords.map(
       (procedure) => ({
         id: procedure.id,
@@ -1623,7 +1719,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       createdAt: capture.createdAt,
       timeZone,
       tasks,
-      synced,
+      synced: contextSynced,
       alreadyMade,
       screen,
       earlierTurns,
@@ -1634,6 +1730,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       upcoming,
       projects,
       topics,
+      style,
       notes: toContextNotes(hinted, combined.text),
       focusedTopic: topicDocument ? focusedTopic : null,
       topicDocument,
@@ -1646,6 +1743,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             blocks: blocksOf(focusedLive),
           }
         : null,
+      runs: contextRuns,
       attachments: attached.media.map((item) => ({
         alias: item.alias,
         kind: item.kind,
@@ -1698,14 +1796,21 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       mode !== 'rest' && isQuestion(combined.text.trim())
         ? await readLiveGrants(firestore, uid)
         : [];
+    const siteGrants =
+      mode !== 'rest' && isQuestion(combined.text.trim())
+        ? await readSiteGrants(firestore, uid)
+        : [];
     const quotes = createQuoteBook();
     const searched = createSearchedLog();
     const system = [
       SYSTEM_PROMPT,
       liveGrants.length > 0 ? MAIL_PROMPT : null,
+      siteGrants.length > 0 ? APP_RECORDS_PROMPT : null,
       topics.length > 0 ? TOPIC_PROMPT : null,
+      style ? STYLE_PROMPT : null,
       mode !== 'rest' &&
       (procedureRecords.length > 0 ||
+        contextRuns.length > 0 ||
         focusedLive !== null ||
         hasProcedureCue(combined.text))
         ? PROCEDURE_PROMPT
@@ -1716,6 +1821,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       capture.interruptedCaptureId !== ''
         ? INTERRUPTED_PROMPT
         : null,
+      toPersonaPrompt(assistantName, profile.data()?.assistantTone),
     ]
       .filter((part) => part !== null)
       .join('\n\n');
@@ -1728,6 +1834,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         timeZone,
         firestore,
         liveGrants,
+        siteGrants,
         quotes,
         searched,
         topicRead: isOtherTopicNamed
@@ -1918,6 +2025,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     focusedProcedureId,
     focusedTaskId,
     procedureVersions,
+    runSteps: context.runSteps,
     captureText: combined.text,
     quotes,
     alreadyMade,
@@ -1940,6 +2048,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   reply.procedureDropped.forEach((code) =>
     logger.info('helm.procedure.dropped', { code }),
   );
+  reply.runDropped.forEach((code) => logger.info('helm.run.dropped', { code }));
   const answer = mode === 'full' ? reply.answer : null;
   const commands = reply.commands.filter(
     (command) => decide(command) === 'automatic',
@@ -1957,6 +2066,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     notes: mode === 'full' ? reply.notes : [],
     topicCommands: mode === 'full' ? reply.topicCommands : [],
     procedureCommands: mode === 'full' ? reply.procedureCommands : [],
+    runCommands: mode === 'full' ? reply.runCommands : [],
     topics,
     hinted,
     media: {
@@ -1981,7 +2091,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     answerTurn,
     mentions: reply.mentions,
     places: reply.places,
-    assistantName: combined.reading.addressedAs?.text ?? DEFAULT_ASSISTANT_NAME,
+    assistantName,
+    calledAs: combined.reading.addressedAs?.text ?? null,
     searched,
     hasMore: reply.hasMore,
     base,
@@ -2082,6 +2193,7 @@ async function writeResult(
     notes: CreateNoteCommand[];
     topicCommands: TopicCommand[];
     procedureCommands: ProcedureCommand[];
+    runCommands: RunCommand[];
     topics: OpenTopicRecord[];
     hinted: HintedNote[];
     captureText: string;
@@ -2092,6 +2204,7 @@ async function writeResult(
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
+    calledAs: string | null;
     searched: SearchedLog;
     hasMore: boolean;
     base: string;
@@ -2117,6 +2230,7 @@ async function writeResult(
     notes,
     topicCommands: requestedTopicCommands,
     procedureCommands,
+    runCommands,
     topics: contextTopics,
     hinted,
     captureText,
@@ -2127,6 +2241,7 @@ async function writeResult(
     mentions,
     places,
     assistantName,
+    calledAs,
     searched,
     hasMore,
     base,
@@ -2223,6 +2338,22 @@ async function writeResult(
       ),
     ),
   ];
+  const runProcedureIds = [
+    ...new Set(
+      runCommands.flatMap((command) =>
+        command.kind === 'startRun' ? [command.procedureId] : [],
+      ),
+    ),
+  ];
+  const tickRunIds = [
+    ...new Set(
+      runCommands.flatMap((command) =>
+        command.kind === 'tickRun'
+          ? command.steps.map((step) => step.runId)
+          : [],
+      ),
+    ),
+  ];
   const fromTaskIds = [
     ...new Set(
       procedureCommands.flatMap((command) =>
@@ -2251,6 +2382,8 @@ async function writeResult(
       treeSnap,
       procedureSnaps,
       procedureTaskSnaps,
+      runSnaps,
+      openRunsSnaps,
       ...targetSnaps
     ] = await Promise.all([
       transaction.get(captureRef),
@@ -2302,13 +2435,23 @@ async function writeResult(
           )
         : Promise.resolve(null),
       Promise.all(
-        reviseIds.map((id) =>
+        [...new Set([...reviseIds, ...runProcedureIds])].map((id) =>
           transaction.get(firestore.doc(`${base}/procedures/${id}`)),
         ),
       ),
       Promise.all(
         fromTaskIds.map((id) =>
           transaction.get(firestore.doc(`${tasksPath}/${id}`)),
+        ),
+      ),
+      Promise.all(
+        tickRunIds.map((id) =>
+          transaction.get(firestore.doc(`${base}/procedureRuns/${id}`)),
+        ),
+      ),
+      Promise.all(
+        runProcedureIds.map((id) =>
+          transaction.get(procedureOpenRunsQuery(firestore, base, id)),
         ),
       ),
       ...targetIds.map((id) =>
@@ -2373,12 +2516,16 @@ async function writeResult(
             mentions,
             places,
             assistantName,
+            calledAs,
             timeZone,
             capturedAt: capture.createdAt,
           })
         : undefined;
     const existingProjects =
       (projectCommands.length > 0 ||
+        runCommands.some(
+          (command) => command.kind === 'startRun' && command.projectRef,
+        ) ||
         commands.some(
           (command) => command.kind === 'createTask' && command.projectRef,
         )) &&
@@ -2403,7 +2550,7 @@ async function writeResult(
                   ? matchWho({
                       mentions: people.mentions,
                       known: people.known,
-                      assistantName: people.assistantName,
+                      assistantNames: people.assistantNames,
                     }).flatMap((match, index): [string, string][] =>
                       match.kind === 'match'
                         ? [[people.mentions[index].ref, match.id]]
@@ -2590,6 +2737,24 @@ async function writeResult(
         ];
       }),
     );
+    const liveRuns = new Map(
+      runSnaps.map((snapshot) => {
+        const data = snapshot.data();
+        return [snapshot.id, data ? openLiveRun(key, snapshot.id, data) : null];
+      }),
+    );
+    const tickedProcedureIds = [...liveRuns.values()].flatMap((run) =>
+      run ? [run.procedureId] : [],
+    );
+    const stillThere = await readLiveProcedureIds(
+      firestore,
+      base,
+      tickedProcedureIds,
+      (refs) => transaction.getAll(...refs),
+    );
+    const goneProcedureIds = new Set(
+      tickedProcedureIds.filter((id) => !stillThere.has(id)),
+    );
     const procedureTasks = new Map(
       procedureTaskSnaps.map((snapshot) => {
         const data = snapshot.data();
@@ -2606,6 +2771,13 @@ async function writeResult(
       procedureCommands: isStale ? [] : procedureCommands,
       liveProcedures,
       procedureTasks,
+      runCommands: isStale ? [] : runCommands,
+      liveRuns,
+      openRuns: openRunDocs(
+        key,
+        openRunsSnaps.flatMap((snapshot) => snapshot.docs),
+      ),
+      goneProcedureIds,
       liveTopics,
       topicTree,
       capturedAt: capture.createdAt,
@@ -2816,6 +2988,17 @@ async function writeResult(
           seal,
         }),
       );
+      plan.runCreates.forEach(({ id, doc }) =>
+        transaction.create(firestore.doc(`${base}/procedureRuns/${id}`), doc),
+      );
+      plan.runTicks.forEach(({ runId, stepIds }) =>
+        transaction.update(firestore.doc(`${base}/procedureRuns/${runId}`), {
+          ...Object.fromEntries(
+            stepIds.map((stepId) => [`stepState.${stepId}.doneAt`, now]),
+          ),
+          lastEditedAt: now,
+        }),
+      );
       plan.topicPlacements.forEach(({ id, parentId, depth }) =>
         transaction.update(firestore.doc(`${base}/topics/${id}`), {
           parentId,
@@ -2930,6 +3113,7 @@ async function writeResult(
           notes.length +
           topicCommands.length +
           procedureCommands.length +
+          runCommands.length +
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,

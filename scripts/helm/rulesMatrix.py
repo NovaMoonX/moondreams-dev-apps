@@ -2,7 +2,7 @@
 """Helm rules matrix (beta tier).
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
-visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
+visitor, and records each HTTP status. The beta tier checks access, and one value's shape (a profile's theme is absent, null or a palette Helm ships): only the owner may read, create and
 update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client. A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
@@ -145,6 +145,14 @@ def main():
         check(f'profile read [{a}]', get(path, tok), a == 'o')
         check(f'profile update [{a}]', commit(tok, [put(path, dict(profile, planFillPercent=60))]), a == 'o')
         check(f'profile delete [{a}]', commit(tok, [rm(path)]), False)
+    admin([put(path, profile)])
+    for theme, allowed in [('plum', True), (None, True), ('neon', False), (3, False)]:
+        check(f'profile theme {theme!r} update [o]', commit(o_tok, [put(path, dict(profile, theme=theme))]), allowed)
+    check("profile theme 'plum' update [x]", commit(x_tok, [put(path, dict(profile, theme='plum'))]), False)
+    check("profile theme 'plum' update [a]", commit(None, [put(path, dict(profile, theme='plum'))]), False)
+    admin([rm(path)])
+    check("profile theme 'neon' create [o]", commit(o_tok, [put_new(path, dict(profile, theme='neon'))]), False)
+    check("profile theme 'teal' create [o]", commit(o_tok, [put_new(path, dict(profile, theme='teal'))]), True)
     check('profile create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}', profile)]), False)
 
     # A turn is the owner's alone: read, list, create, update and delete.
@@ -278,6 +286,44 @@ def main():
         admin([rm(pvk + '-new-' + a)])
     check('procedure versions create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/procedures/p/versions/1', pvr)]), False)
 
+    # A run is the owner's alone; its shape caps the steps and groups, names what it attaches to and keeps every key.
+    def run_doc(steps=3, groups=1, version=1, attached=None):
+        return dict(procedureId='procedure-1', procedureVersion=version, attachedTo=attached, dueOn=None, stepState={f's{i}': dict(order=i, groupId=None, doneAt=None, isExtra=False) for i in range(steps)}, groupOrder=[f'g{i}' for i in range(groups)], startedAt=NOW, finishedAt=None, createdBy='person', executionId=None, lastEditedAt=None, sealed=SEAL)
+
+    rdoc = run_doc()
+    rk = f'{path}/procedureRuns/run-1'
+    for a, tok in actors.items():
+        admin([put(rk, rdoc)])
+        check(f'procedureRuns read [{a}]', get(rk, tok), a == 'o')
+        check(f'procedureRuns list [{a}]', get(f'{path}/procedureRuns', tok), a == 'o')
+        check(f'procedureRuns create [{a}]', commit(tok, [put_new(rk + '-new-' + a, rdoc)]), a == 'o')
+        check(f'procedureRuns update [{a}]', commit(tok, [put(rk, dict(rdoc, finishedAt=NOW))]), a == 'o')
+        check(f'procedureRuns delete [{a}]', commit(tok, [rm(rk)]), a == 'o')
+        admin([rm(rk + '-new-' + a)])
+    check('procedureRuns create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/procedureRuns/r', rdoc)]), False)
+    for label, doc, allowed in (
+        ('with 80 steps', run_doc(steps=80), True),
+        ('with 81 steps', run_doc(steps=81), False),
+        ('with 12 groups', run_doc(groups=12), True),
+        ('with 13 groups', run_doc(groups=13), False),
+        ('with version 0', run_doc(version=0), False),
+        ('attached to a project', run_doc(attached=dict(kind='project', id='project-1')), True),
+        ('attached to a synced copy', run_doc(attached=dict(kind='synced', id='copy-1')), True),
+        ('attached to a task', run_doc(attached=dict(kind='task', id='task-1')), False),
+        ('attached with an extra key', run_doc(attached=dict(kind='project', id='project-1', label='x')), False),
+        ('attached to an id of 129 characters', run_doc(attached=dict(kind='project', id='x' * 129)), False),
+        ('with a string dueOn', dict(rdoc, dueOn='today'), False),
+        ('with createdBy system', dict(rdoc, createdBy='system'), False),
+        ('without finishedAt', {k: v for k, v in rdoc.items() if k != 'finishedAt'}, False),
+        ('without sealed', {k: v for k, v in rdoc.items() if k != 'sealed'}, False),
+    ):
+        check(f'procedureRuns create {label} [o]', commit(o_tok, [put_new(rk + '-shape', doc)]), allowed)
+        admin([rm(rk + '-shape')])
+    admin([put(rk, rdoc)])
+    check('procedureRuns update to 81 steps [o]', commit(o_tok, [put(rk, run_doc(steps=81))]), False)
+    check('procedureRuns update to 80 steps [o]', commit(o_tok, [put(rk, run_doc(steps=80))]), True)
+    admin([rm(rk)])
+
     # A key date and the sealed index of them are the owner's alone, like a task; the index is written in the same transaction as the date.
     kd = dict(whoId='who-1', shape='yearly', source='person', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
     ix = dict(entryCount=1, rebuiltAt=None, lastEditedAt=NOW, sealed=SEAL)
@@ -322,6 +368,24 @@ def main():
     check('media create a markdown file as plain text [o]', commit(o_tok, [put_new(mk + '-md-txt', dict(files['markdown'], mimeType='text/plain'))]), True)
     admin([rm(mk + '-md-txt')])
     check('media create with a missing field [o]', commit(o_tok, [put_new(mk + '-bare', {k: v for k, v in photo.items() if k != 'hasThumb'})]), False)
+
+    # A style profile is the owner's alone and has a readable shape around its sealed traits.
+    style = dict(scope='general', audienceWhoId=None, learnedFrom=['helmText'], sampleCount=34, personEditedAt=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    sk = f'{path}/style/general'
+    for a, tok in actors.items():
+        admin([put(sk, style)])
+        check(f'style read [{a}]', get(sk, tok), a == 'o')
+        check(f'style list [{a}]', get(f'{path}/style', tok), a == 'o')
+        check(f'style create [{a}]', commit(tok, [put_new(sk + '-new-' + a, style)]), a == 'o')
+        check(f'style update [{a}]', commit(tok, [put(sk, dict(style, sampleCount=35))]), a == 'o')
+        check(f'style delete [{a}]', commit(tok, [rm(sk)]), a == 'o')
+        admin([rm(sk + '-new-' + a)])
+    check('style create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/style/general', style)]), False)
+    check('style create with another scope [o]', commit(o_tok, [put_new(sk + '-scope', dict(style, scope='everyone'))]), False)
+    check('style create with a negative count [o]', commit(o_tok, [put_new(sk + '-neg', dict(style, sampleCount=-1))]), False)
+    check('style create with an extra key [o]', commit(o_tok, [put_new(sk + '-extra', dict(style, samples=['hello']))]), False)
+    check('style create without sealed [o]', commit(o_tok, [put_new(sk + '-bare', {k: v for k, v in style.items() if k != 'sealed'})]), False)
+    check('style create with a text timestamp [o]', commit(o_tok, [put_new(sk + '-time', dict(style, createdAt='now'))]), False)
 
     # An execution is the owner's to read, create and update; nobody deletes one.
     run = dict(captureId='capture-1', actor='nomos', state='succeeded', undoneByExecutionId=None, createdAt=NOW, sealed=SEAL)

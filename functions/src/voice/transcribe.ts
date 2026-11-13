@@ -1,7 +1,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
-import { isRunningInEmulator } from '../emulator.js';
+import { isForcedFixture, isRunningInEmulator } from '../emulator.js';
 import { createOptionalSecretReader } from '../imageSearch/optionalSecret.js';
 import { transcribeDeepgram } from './providers/deepgram.js';
 import { reserveTranscribe, settleTranscribe } from './usage.js';
@@ -63,7 +63,9 @@ export async function transcribeAudio({
   ) {
     return held('tooLong');
   }
-  const apiKey = await secretReader(KEY_NAME, AbortSignal.timeout(4_000));
+  const apiKey = isForcedFixture('deepgram')
+    ? null
+    : await secretReader(KEY_NAME, AbortSignal.timeout(4_000));
   if (apiKey === null && !isRunningInEmulator()) {
     logger.error('voice.keyMissing', { event: 'voice.keyMissing' });
     return held('unavailable');

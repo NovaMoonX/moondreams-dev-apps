@@ -12,6 +12,7 @@ import { GOING_ONCE_SHARES } from '@apps/going-once/share/manifest';
 import { HELM_SHARES } from '@apps/helm/share/manifest';
 import { NINE_LIVES_SHARES } from '@apps/nine-lives/share/manifest';
 import { PINCH_SHARES } from '@apps/pinch/share/manifest';
+import { RUNWAY_SHARES } from '@apps/runway/share/manifest';
 import { WAYPOINT_SHARES } from '@apps/waypoint/share/manifest';
 import { WORTH_THE_WAIT_SHARES } from '@apps/worth-the-wait/share/manifest';
 
@@ -21,6 +22,7 @@ export const SOURCE_SHARES: SourceShares[] = [
   A_LIST_SHARES,
   GOING_ONCE_SHARES,
   NINE_LIVES_SHARES,
+  RUNWAY_SHARES,
   WAYPOINT_SHARES,
   WORTH_THE_WAIT_SHARES,
   HELM_SHARES,

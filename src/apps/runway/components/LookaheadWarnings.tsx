@@ -32,11 +32,12 @@ import {
 } from '@apps/runway/utils/cardText';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { AccountMove } from '@apps/runway/engine/moves';
-import type { DueCard } from '@apps/runway/engine/cards';
+import { getMinimumDue, type DueCard } from '@apps/runway/engine/cards';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import CardSheets, {
   type OpenedCard,
 } from '@apps/runway/components/CardSheets';
+import { getLinkedStatement } from '@apps/runway/store/selectors/cardStatementSelectors';
 import DueCardRow from '@apps/runway/components/DueCardRow';
 import MoveWarningRow from '@apps/runway/components/MoveWarningRow';
 import {
@@ -181,8 +182,17 @@ function LookaheadWarnings({
           many: ACCOUNT_MOVE_WORDS.warnMany,
         }
       : PROBLEM_WORDS;
+  const cardStatements = useAppSelector((state) => state.runway.cardStatements);
+  const links = useAppSelector((state) => state.runway.links);
   const describeDue = (due: DueCard) =>
-    describeDueCard(getCardName(due.card, allCards), due);
+    describeDueCard(
+      getCardName(due.card, allCards),
+      due,
+      getMinimumDue(
+        getLinkedStatement({ cardStatements, links }, due.card),
+        due.dueOn,
+      ),
+    );
   const openPay = (due: DueCard) => {
     closeFixes();
     setPaying({ cardId: due.card.id, view: 'pay' });

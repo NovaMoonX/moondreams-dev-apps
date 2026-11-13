@@ -69,6 +69,21 @@ export interface ContextFocusedProcedure {
 
 export const MAX_CONTEXT_PROCEDURES = 50;
 
+/** An open run as the model sees it: what it is for and the steps not yet done, in reading order. */
+export interface ContextRun {
+  id: string;
+  title: string;
+  forLabel: string | null;
+  /** The run the person has open on screen. */
+  isOpen: boolean;
+  doneCount: number;
+  total: number;
+  undone: { id: string; text: string; group: string | null }[];
+}
+
+export const MAX_CONTEXT_RUNS = 5;
+export const MAX_CONTEXT_RUN_STEPS = 100;
+
 /** A note the device ranked for what was typed. Its title always goes to the model; its body only on a question, and `isUnchecked` says it was saved from a general answer nobody has checked. */
 export interface ContextNote {
   id: string;
@@ -149,8 +164,12 @@ export interface ContextInput {
   /** The person's newest procedures, at most `MAX_CONTEXT_PROCEDURES`. */
   procedures?: ContextProcedure[];
   focusedProcedure?: ContextFocusedProcedure | null;
+  /** The runs not yet finished, the open one first, at most `MAX_CONTEXT_RUNS`; steps are aliased up to `MAX_CONTEXT_RUN_STEPS` in all. */
+  runs?: ContextRun[];
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
   topicDocument?: 'whole' | 'outline' | null;
+  /** The person's style notes, descriptions only; left out when there are none. */
+  style?: { traits: string[]; avoid: string[] } | null;
 }
 
 export interface ContextFocusedTopic {
@@ -226,6 +245,7 @@ export function buildContext(input: ContextInput): {
   sections: AliasBook;
   procedures: AliasBook;
   procedureSteps: AliasBook;
+  runSteps: AliasBook;
   focus: { id: string; version: number } | null;
 } {
   const aliases = createAliasBook('t');
@@ -234,6 +254,7 @@ export function buildContext(input: ContextInput): {
   const notes = createAliasBook('n');
   const procedures = createAliasBook('pr');
   const procedureSteps = createAliasBook('ps');
+  const runSteps = createAliasBook('rs');
   const partIds = new Map<string, string>();
   const parts: AliasBook = {
     add: (id) => {
@@ -248,7 +269,7 @@ export function buildContext(input: ContextInput): {
   const synced = createSyncedBook();
   const syncedRecords = (input.synced ?? []).map((copy) => ({
     alias: synced.add(copy),
-    ...toSyncedView(copy, toKnownZone(input.timeZone)),
+    ...toSyncedView(copy, toKnownZone(input.timeZone), input.createdAt),
   }));
   const tasks = input.tasks.slice(0, MAX_CONTEXT_TASKS).map((task) => ({
     alias: aliases.add(task.id),
@@ -301,6 +322,31 @@ export function buildContext(input: ContextInput): {
         ),
       }
     : null;
+  const openRuns = (input.runs ?? [])
+    .slice(0, MAX_CONTEXT_RUNS)
+    .reduce<{ left: number; runs: Record<string, unknown>[] }>(
+      (acc, run) => {
+        const listed = run.undone.slice(0, acc.left);
+        return {
+          left: acc.left - listed.length,
+          runs: [
+            ...acc.runs,
+            {
+              title: run.title,
+              ...(run.forLabel === null ? {} : { for: run.forLabel }),
+              ...(run.isOpen ? { isOpen: true } : {}),
+              done: `${run.doneCount} of ${run.total}`,
+              undone: listed.map((step) => ({
+                step: runSteps.add(`${run.id}:${step.id}`),
+                text: step.text,
+                group: step.group,
+              })),
+            },
+          ],
+        };
+      },
+      { left: MAX_CONTEXT_RUN_STEPS, runs: [] },
+    ).runs;
   const noteIds = new Set(keptNotes.map((note) => note.id));
   const focused = input.focusedTopic;
   const documentMode = input.topicDocument ?? 'whole';
@@ -452,6 +498,9 @@ export function buildContext(input: ContextInput): {
           )}</your_procedures>`,
         ]
       : []),
+    ...(openRuns.length > 0
+      ? [`<open_runs>${toDataJson(openRuns)}</open_runs>`]
+      : []),
     ...(input.notes?.length
       ? [`<related_notes>${toDataJson(noteRecords)}</related_notes>`]
       : []),
@@ -466,6 +515,9 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(input.files?.length
       ? [`<files>${toDataJson(input.files)}</files>`]
+      : []),
+    ...(input.style
+      ? [`<your_style>${toDataJson(input.style)}</your_style>`]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
@@ -488,6 +540,7 @@ export function buildContext(input: ContextInput): {
     sections: sectionBook,
     procedures,
     procedureSteps,
+    runSteps,
     focus: focused ? { id: focused.id, version: focused.version } : null,
   };
 }

@@ -6,10 +6,12 @@ import { House } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
+import { readConnectorAppId } from '@/lib/connections/contract';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import CalendarFailedLine from '@apps/helm/components/today/CalendarFailedLine';
+import FeedGroup from '@apps/helm/components/today/FeedGroup';
 import PlannedCard from '@apps/helm/components/today/PlannedCard';
 import RestDayLine from '@apps/helm/components/today/RestDayLine';
 import SuggestedCard from '@apps/helm/components/today/SuggestedCard';
@@ -23,6 +25,7 @@ import {
 } from '@apps/helm/engine/currentPlace';
 import { findFreeGaps } from '@apps/helm/engine/planner';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { usePlanDay } from '@apps/helm/hooks/usePlanDays';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { setCurrentPlace } from '@apps/helm/store/actions/planActions';
@@ -46,11 +49,12 @@ import {
   isLiveCalendar,
   type PlanSources,
 } from '@apps/helm/utils/planInput';
-import { getDayEvents, getLiveRecords } from '@apps/helm/utils/synced';
+import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
 const FREE_GAP_MINUTES = 45;
 const FULL_GAP_MINUTES = 30;
 const MINUTE_MS = 60_000;
+const FEED_MIN_ROWS = 2;
 
 interface DayPlanProps {
   dayKey: string;
@@ -100,6 +104,7 @@ function DayPlan({
   onSelectDay,
 }: DayPlanProps) {
   const assistantName = useAssistantName();
+  const { nameOf, categoryLabelOf } = useSourceAppName();
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -115,21 +120,33 @@ function DayPlan({
   const day = sources.planDays[dayKey];
   const isToday = dayKey === todayKey;
 
-  // A calendar Google stopped sharing is left out until it is reconnected.
   const records = useMemo(
-    () =>
-      getLiveRecords(stored, grants, true).filter(
-        (record) =>
-          grants.find((grant) => grant.id === record.grantId)?.status !==
-          'needsReconnect',
-      ),
+    () => getTodayRecords(stored, grants),
     [stored, grants],
   );
   const merged = useMemo(
     () => getDayEvents(records, getDayNoon(dayKey, timeZone), timeZone).merged,
     [records, dayKey, timeZone],
   );
-  const events = merged.map(({ record }) => record);
+  const allEvents = merged.map(({ record }) => record);
+  const feedGroups = [
+    ...allEvents
+      .filter(
+        (record) =>
+          record.isAllDay && readConnectorAppId(record.connectorId) !== null,
+      )
+      .reduce(
+        (groups, record) =>
+          groups.set(`${record.connectorId}|${record.category}`, [
+            ...(groups.get(`${record.connectorId}|${record.category}`) ?? []),
+            record,
+          ]),
+        new Map<string, SyncedRecord[]>(),
+      )
+      .values(),
+  ].filter((group) => group.length >= FEED_MIN_ROWS);
+  const folded = new Set(feedGroups.flat().map((record) => record.id));
+  const events = allEvents.filter((record) => !folded.has(record.id));
   const alsoInOf = (id: string | null) =>
     merged.find(({ record }) => record.id === id)?.alsoIn ?? [];
   const failingGrants = grants.filter(isFailingCalendar);
@@ -425,6 +442,15 @@ function DayPlan({
           })}
         </div>
       )}
+      {feedGroups.map((group) => (
+        <FeedGroup
+          key={`${group[0].connectorId}|${group[0].category}`}
+          label={categoryLabelOf(group[0].connectorId, group[0].category)}
+          appName={nameOf(group[0].connectorId)}
+          records={group}
+          onOpen={(opened) => setOpenRecordId(opened.id)}
+        />
+      ))}
       {untimedKept.length > 0 && (
         <section className='space-y-3'>
           <SectionDivider label={HELM_COPY.planAnyTime} />

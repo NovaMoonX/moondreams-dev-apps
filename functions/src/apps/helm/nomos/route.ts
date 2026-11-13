@@ -77,6 +77,59 @@ export const hasProcedureCue = (text: string) =>
 export const hasProcedureReviseCue = (text: string) =>
   hasWordIn(PROCEDURE_REVISE_CUES, text);
 
+const RUN_START_CUES = new Set([
+  'start',
+  'starting',
+  'begin',
+  'run',
+  'running',
+  'use',
+  'kick',
+]);
+
+/** Whether the words ask to begin something: one of the cue words, as a word of its own. */
+export const hasRunStartCue = (text: string) => hasWordIn(RUN_START_CUES, text);
+
+const TICK_CUES = new Set([
+  'done',
+  'did',
+  'finished',
+  'packed',
+  'tick',
+  'ticked',
+  'checked',
+  'got',
+  'grabbed',
+  'bought',
+  'sorted',
+  'handled',
+  'complete',
+  'completed',
+]);
+
+const TICK_REFUSALS = [
+  'not',
+  'havent',
+  'hasnt',
+  'didnt',
+  'dont',
+  'never',
+  'forgot',
+  'still need',
+  'yet to',
+  'need to',
+  'needs to',
+];
+
+/** Whether the words say something is done and do not negate it: a done-word and none of the refusals, as whole words. */
+export const hasTickCue = (text: string) => {
+  const padded = ` ${toComparable(text.replace(/['\u2019]/g, ''))} `;
+  return (
+    hasWordIn(TICK_CUES, text) &&
+    !TICK_REFUSALS.some((phrase) => padded.includes(` ${phrase} `))
+  );
+};
+
 /** Short plain turns go to the quick model; a turn with photos or files, a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
 export const pickRoute = ({
   text,

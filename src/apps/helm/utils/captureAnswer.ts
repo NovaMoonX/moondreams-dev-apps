@@ -1,5 +1,7 @@
+import { readConnectorAppId } from '@/lib/connections/contract';
 import type {
   AnswerQuote,
+  AnswerRecord,
   AnswerScope,
   CaptureAnswer,
   SearchedSource,
@@ -90,12 +92,32 @@ const toSource = (value: unknown): SourceRef[] => {
   return [];
 };
 
+const toRecord = (value: unknown): AnswerRecord | null => {
+  if (!isRecord(value)) return null;
+  const name = toText(value.name);
+  const amount = toText(value.amount);
+  return name && amount ? { name, detail: toText(value.detail), amount } : null;
+};
+
+/** Records kept before they were stored apart were written `App · Name` and `$88.00 · Category`. */
+const toLegacyRecord = (
+  sourceLabel: string,
+  text: string | null,
+): AnswerRecord | null => {
+  const name = sourceLabel.split(' \u00b7 ').slice(1).join(' \u00b7 ');
+  const [amount, ...rest] = (text ?? '').split(' \u00b7 ');
+  return name && amount
+    ? { name, detail: rest.join(' \u00b7 ') || null, amount }
+    : null;
+};
+
 const toQuote = (value: unknown): AnswerQuote[] => {
   if (!isRecord(value)) return [];
   const id = toText(value.id);
   const connectorId = toText(value.connectorId);
   const accountId = toText(value.accountId);
   const sourceLabel = toText(value.sourceLabel);
+  const text = toText(value.text);
   return id && connectorId && accountId && sourceLabel
     ? [
         {
@@ -104,7 +126,12 @@ const toQuote = (value: unknown): AnswerQuote[] => {
           accountId,
           sourceLabel,
           at: toNumber(value.at),
-          text: toText(value.text),
+          text,
+          record:
+            toRecord(value.record) ??
+            (readConnectorAppId(connectorId) === null
+              ? null
+              : toLegacyRecord(sourceLabel, text)),
           deepLink: toText(value.deepLink),
           deletedAt: toNumber(value.deletedAt),
         },

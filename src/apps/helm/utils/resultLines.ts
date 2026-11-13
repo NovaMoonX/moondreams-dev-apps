@@ -9,7 +9,10 @@ export interface ResultLine {
   title: string;
   detail: string | null;
   /** The record a tap on the row opens. */
-  ref?: { collection: 'notes' | 'topics' | 'procedures'; id: string };
+  ref?: {
+    collection: 'notes' | 'topics' | 'procedures' | 'procedureRuns';
+    id: string;
+  };
   /** A line the turn said without writing anything, so an Undo has nothing to take back on it. */
   isNoEffect?: boolean;
 }
@@ -61,6 +64,20 @@ export function buildResultLines(
                 title,
                 detail: null,
                 ref: { collection: 'procedures', id: ref.docId },
+              },
+            ]
+          : [];
+      }
+      if (ref.collection === 'procedureRuns') {
+        const title = toText(effect?.written['sealed.title']);
+        return title
+          ? [
+              {
+                key: `${ref.docId}:${index}`,
+                docId: ref.docId,
+                title,
+                detail: null,
+                ref: { collection: 'procedureRuns', id: ref.docId },
               },
             ]
           : [];

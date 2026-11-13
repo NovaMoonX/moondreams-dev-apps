@@ -296,6 +296,49 @@ export const buildProcedureGroupsLine = (name: string, max: number) =>
 
 export const buildProcedureGoneLine = () => 'That procedure is gone';
 
+/** "Started a run" or "Started 2 runs", then "Ticked a step" or "Ticked 2 steps". */
+export const describeRunChanges = (started: number, ticked: number) =>
+  [
+    started === 0
+      ? null
+      : plural(started, 'Started a run', `Started ${started} runs`),
+    ticked === 0
+      ? null
+      : plural(ticked, 'Ticked a step', `Ticked ${ticked} steps`),
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ') || null;
+
+/** "Started Packing for a work trip for Pacific Northwest Weekend", or "Started Packing for a work trip" for a run of its own. */
+export const buildRunStartedLine = (title: string, label: string | null) =>
+  label === null ? `Started ${title}` : `Started ${title} for ${label}`;
+
+/** "Ticked Phone charger on Packing for a work trip", "Ticked Phone charger and Passport on …", "Ticked Phone charger, Passport and 1 more on …". */
+export const buildRunTickedLine = (title: string, stepTexts: string[]) => {
+  const [first = '', second = ''] = stepTexts;
+  const named =
+    stepTexts.length <= 2
+      ? stepTexts.join(' and ')
+      : `${first}, ${second} and ${stepTexts.length - 2} more`;
+  return `Ticked ${named} on ${title}`;
+};
+
+/** "Packing for a work trip is already running for Pacific Northwest Weekend". */
+export const buildRunExistsLine = (title: string, label: string | null) =>
+  label === null
+    ? `${title} is already running`
+    : `${title} is already running for ${label}`;
+
+export const buildRunNoStepsLine = (title: string) =>
+  `${title} has no steps to run yet`;
+
+export const buildRunRoomLine = () =>
+  'Too much to save in one go · Ask again for the run';
+
+export const buildRunAlreadyTickedLine = () => 'Already ticked';
+
+export const buildRunGoneLine = () => 'That run is finished or gone';
+
 /** "Saved a note" or "Saved 2 notes", for the summary of a turn that kept some. */
 export const describeNotes = (count: number) =>
   count === 0 ? null : plural(count, 'Saved a note', `Saved ${count} notes`);

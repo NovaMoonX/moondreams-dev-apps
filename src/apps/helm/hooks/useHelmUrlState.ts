@@ -28,7 +28,9 @@ const URL_VIEWS = [
   'topic',
   'procedures',
   'procedure',
+  'run',
   'howNomosSeesYou',
+  'search',
 ] as const satisfies readonly HelmView[];
 
 const MARKER = 'helmStep';
@@ -59,19 +61,25 @@ const clearStep = () => {
 /** The open view, its Browse sheet and the conversation over a page, kept in the URL so a reload and Back land where the person was. */
 export function useHelmUrlState() {
   const navigate = useNavigate();
-  const [{ view: requestedView, browse, ask, grant, item }, setUrl] =
+  const [{ view: requestedView, browse, ask, grant, item, q, sheet }, setUrl] =
     useQueryStates({
       view: parseAsStringLiteral(URL_VIEWS),
       browse: parseAsBoolean,
       ask: parseAsStringLiteral(['page'] as const),
       grant: parseAsString,
       item: parseAsString,
+      q: parseAsString,
+      sheet: parseAsStringLiteral(['voice'] as const),
     });
 
   const view: HelmView = requestedView ?? 'home';
   const isBrowseOpen = browse === true && view === 'home';
 
   const isAskRequested = ask === 'page';
+
+  /** The typed words of Search, kept in the address in place so Back from a result lands on the same list. */
+  const setQuery = (text: string) =>
+    setUrl({ q: text === '' ? null : text }, { history: 'replace' });
 
   // The conversation's own layer pushes the entry, so the address only changes in place.
   const openAsk = () => setUrl({ ask: 'page' }, { history: 'replace' });
@@ -94,7 +102,7 @@ export function useHelmUrlState() {
   const showView = async (next: HelmView, id: string | null = null) => {
     if (next === 'home') {
       await setUrl(
-        { view: null, browse: null, grant: null, item: null },
+        { view: null, browse: null, grant: null, item: null, q: null },
         { history: 'replace' },
       );
       clearStep();
@@ -104,13 +112,16 @@ export function useHelmUrlState() {
       view: next,
       browse: null,
       ask: null,
+      q: null,
+      sheet: null,
       grant: next === 'connection' ? id : null,
       item:
         next === 'who' ||
         next === 'place' ||
         next === 'project' ||
         next === 'topic' ||
-        next === 'procedure'
+        next === 'procedure' ||
+        next === 'run'
           ? id
           : null,
     };
@@ -123,6 +134,25 @@ export function useHelmUrlState() {
     markStep(view, item);
   };
 
+  /** Settings with its Voice service sheet already open, for a line that sends the person to it. */
+  const openVoiceSettings = async () => {
+    await setUrl(
+      {
+        view: 'settings',
+        browse: null,
+        ask: null,
+        grant: null,
+        item: null,
+        q: null,
+        sheet: 'voice',
+      },
+      { history: isBrowseOpen ? 'replace' : 'push' },
+    );
+    markStep(isBrowseOpen ? 'home' : view, isBrowseOpen ? null : item);
+  };
+
+  const closeSheet = () => setUrl({ sheet: null }, { history: 'replace' });
+
   /** Back to a record's parent record (a subtopic's topic): pops when the entry beneath is that record, else replaces this entry with it and keeps what lies beneath. */
   const goUpTo = async (next: (typeof URL_VIEWS)[number], id: string) => {
     const state = (window.history.state ?? {}) as Record<string, unknown>;
@@ -134,7 +164,7 @@ export function useHelmUrlState() {
     const from = state[FROM] as HelmView | undefined;
     const fromItem = (state[FROM_ITEM] as string | null | undefined) ?? null;
     await setUrl(
-      { view: next, browse: null, ask: null, grant: null, item: id },
+      { view: next, browse: null, ask: null, grant: null, item: id, q: null },
       { history: 'replace' },
     );
     if (wasStep && from) markStep(from, fromItem);
@@ -146,7 +176,7 @@ export function useHelmUrlState() {
       return;
     }
     return setUrl(
-      { view: null, browse: null, grant: null, item: null },
+      { view: null, browse: null, grant: null, item: null, q: null },
       { history: 'replace' },
     );
   };
@@ -165,6 +195,7 @@ export function useHelmUrlState() {
         browse: null,
         grant: null,
         item: null,
+        q: null,
       },
       { history: 'replace' },
     );
@@ -190,6 +221,8 @@ export function useHelmUrlState() {
     origin,
     grant,
     item,
+    query: q ?? '',
+    setQuery,
     isBrowseOpen,
     isAskRequested,
     openAsk,
@@ -197,6 +230,9 @@ export function useHelmUrlState() {
     openBrowse,
     closeBrowse,
     showView,
+    openVoiceSettings,
+    isVoiceSheetRequested: sheet === 'voice',
+    closeSheet,
     goHome,
     goBack,
     goBackToOrigin,

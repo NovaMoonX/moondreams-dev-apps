@@ -5,6 +5,7 @@ import {
 } from '../../../ai/modelProvider.js';
 import { EMPTY_USAGE } from '../../../ai/models.js';
 import { toSenderName } from './answerGuards.js';
+import { getLocalDay, toKnownZone } from '../syncedCopies.js';
 import type { CaptureReading } from './commands.js';
 
 const SPLIT_RE = /\n|,(?!\d)|\band\b/gi;
@@ -392,6 +393,96 @@ async function readMailAnswer(
           }),
         ]
       : []),
+  ];
+}
+
+const SPEND_QUESTION_RE =
+  /\b(?:spend|spent|paid|pay)\b.*?\bat\s+(?:the\s+)?([\p{L}][\p{L}&'.-]*(?:\s+(?!(?:last|this|recently|in|on|over|during)\b)[\p{L}][\p{L}&'.-]*)?)/iu;
+
+const SPEND_ASK_RE = /\b(?:spend|spent)\b/i;
+
+const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
+
+const SPEND_DAY = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+const toSpendDay = (day: string) =>
+  SPEND_DAY.format(Date.parse(`${day}T00:00:00Z`));
+
+const toSpendRange = (question: string, now: number, timeZone: string) => {
+  const today = getLocalDay(now, toKnownZone(timeZone));
+  const [year, month] = [
+    new Date(today).getUTCFullYear(),
+    new Date(today).getUTCMonth(),
+  ];
+  if (/last month/i.test(question)) {
+    return {
+      from: toDayText(Date.UTC(year, month - 1, 1)),
+      to: toDayText(Date.UTC(year, month, 0)),
+    };
+  }
+  return /this month/i.test(question)
+    ? { from: toDayText(Date.UTC(year, month, 1)), to: toDayText(today) }
+    : { from: toDayText(today - 30 * 86_400_000), to: toDayText(today) };
+};
+
+interface SpendResult {
+  records?: { alias?: string; payee: string; amount: string }[];
+  matchedCount?: number;
+  total?: string;
+  from?: string | null;
+  to?: string | null;
+}
+
+async function readSpendAnswer(
+  text: string,
+  client: ToolLoopRequest['mcpClient'] | undefined,
+  toolCalls: string[],
+  timeZone: string,
+) {
+  const question = text.trim();
+  const named = SPEND_QUESTION_RE.exec(question)?.[1];
+  const isAnyPayee =
+    named === undefined &&
+    question.endsWith('?') &&
+    SPEND_ASK_RE.test(question);
+  if (!client || (named === undefined && !isAnyPayee)) return null;
+  const offered = (await client.listTools().catch(() => ({ tools: [] }))).tools;
+  if (!offered.some((tool) => tool.name === 'search_app_records')) return null;
+  const found = await callJson<SpendResult>(
+    client,
+    toolCalls,
+    'search_app_records',
+    {
+      app: 'app:runway',
+      category: 'transactions',
+      ...(named !== undefined && { payee: named }),
+      ...toSpendRange(question, Date.now(), timeZone),
+    },
+  );
+  if (!found || typeof found.matchedCount !== 'number') return null;
+  const range =
+    found.from && found.to
+      ? ` between ${toSpendDay(found.from)} and ${toSpendDay(found.to)}`
+      : '';
+  const at = named === undefined ? '' : ` at ${named}`;
+  const aliases = (found.records ?? []).flatMap((record) =>
+    record.alias ? [record.alias] : [],
+  );
+  const count = `${found.matchedCount} ${found.matchedCount === 1 ? 'purchase' : 'purchases'}`;
+  return [
+    toAnswer({
+      scope: 'yourThings',
+      question,
+      fromRecordsText:
+        found.matchedCount === 0
+          ? `No purchases${at}${range}.`
+          : `You spent ${found.total}${at}${range} across ${count}.`,
+      quoteAliases: aliases.slice(0, 3),
+    }),
   ];
 }
 
@@ -1369,6 +1460,80 @@ const toProcedureCommand = (fields: Record<string, unknown>) =>
     ...fields,
   });
 
+const toRunCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    procedureAlias: null,
+    projectRef: null,
+    runStepAliases: null,
+    requestQuote: null,
+    ...fields,
+  });
+
+/** The emulator's stand-in for starting and ticking a run: "Start packing for the Pacific Northwest weekend" starts the procedure whose title says packing, for the trip in the synced records when there is one, and "done with the charger" ticks every undone step of an open run that names a charger. Null for any other words, or when the procedure or the steps are not in the context. */
+const readRunWork = (text: string, message: string) => {
+  const quote = text.trim().replace(/[.!]+$/, '');
+  if (/\bstart packing for the pacific northwest weekend\b/i.test(text)) {
+    const procedure = (
+      readBlock<{ procedure: string; title: string }[]>(
+        message,
+        'your_procedures',
+      ) ?? []
+    ).find((entry) => /packing/i.test(entry.title));
+    const trip = (
+      readBlock<{ alias: string; title: string; kind: string }[]>(
+        message,
+        'synced_records',
+      ) ?? []
+    ).find(
+      (entry) =>
+        entry.kind === 'trip' && /pacific northwest/i.test(entry.title),
+    );
+    return procedure
+      ? {
+          commands: [
+            toRunCommand({
+              kind: 'startRun',
+              procedureAlias: procedure.procedure,
+              aboutAlias: trip?.alias ?? null,
+              requestQuote: quote,
+            }),
+          ],
+          mentions: [],
+          places: [],
+        }
+      : null;
+  }
+  if (/\bdone with the charger\b/i.test(text)) {
+    const aliases = (
+      readBlock<{ undone: { step: string; text: string }[] }[]>(
+        message,
+        'open_runs',
+      ) ?? []
+    )
+      .map((run) =>
+        run.undone
+          .filter((step) => /charger/i.test(step.text))
+          .map((step) => step.step),
+      )
+      .find((found) => found.length > 0);
+    return aliases
+      ? {
+          commands: [
+            toRunCommand({
+              kind: 'tickRun',
+              runStepAliases: aliases,
+              requestQuote: quote,
+            }),
+          ],
+          mentions: [],
+          places: [],
+        }
+      : null;
+  }
+  return null;
+};
+
 /** The emulator's stand-in for the ways a procedure is made and changed: "Make me a packing routine for work trips", "make this a routine" on an open task, and "Add a step for the laptop charger" with a procedure open (with none open it names no procedure, which code drops). Null for any other words. */
 const readProcedureWork = (text: string, message: string) => {
   const open = readBlock<ProcedureOpenBlock>(message, 'procedure_open');
@@ -1536,6 +1701,7 @@ function createTextFixtureProvider(
         };
       }
       const grown =
+        readRunWork(text, messageText(messages[0]?.content ?? '')) ??
         readProcedureWork(text, messageText(messages[0]?.content ?? '')) ??
         readTopicWork(text, messageText(messages[0]?.content ?? ''));
       if (grown) {
@@ -1626,6 +1792,25 @@ function createTextFixtureProvider(
       if (mail) {
         return {
           terminalInput: { commands: mail },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls,
+        };
+      }
+      const spend = await readSpendAnswer(
+        text,
+        mcpClient,
+        toolCalls,
+        readBlock<{ timeZone?: string }>(
+          messageText(messages[0]?.content ?? ''),
+          'context',
+        )?.timeZone ?? 'UTC',
+      );
+      if (spend) {
+        return {
+          terminalInput: { commands: spend },
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

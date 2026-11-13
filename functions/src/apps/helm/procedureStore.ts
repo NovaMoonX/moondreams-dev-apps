@@ -61,7 +61,7 @@ const toStepState = (value: unknown): Record<string, ProcedureStepState> =>
       )
     : {};
 
-const toSteps = (value: unknown): ProcedureWords['steps'] =>
+export const toSteps = (value: unknown): ProcedureWords['steps'] =>
   isRecord(value)
     ? Object.fromEntries(
         Object.entries(value).flatMap(([id, step]) =>
@@ -81,7 +81,7 @@ const toSteps = (value: unknown): ProcedureWords['steps'] =>
       )
     : {};
 
-const toGroups = (value: unknown): ProcedureWords['groups'] =>
+export const toGroups = (value: unknown): ProcedureWords['groups'] =>
   isRecord(value)
     ? Object.fromEntries(
         Object.entries(value).flatMap(([id, group]) =>

@@ -16,10 +16,12 @@ import type {
 
 import { isSelfPaying } from './autoPay';
 import type { ComingDay } from './comingDays';
+import { getCoveredCents, type BillCover } from './billCover';
 import type { BillPayment } from './demands';
 import type { Draft } from './draft';
 import { addUtcDays, DAY_MS } from './dates';
 import type { FundedDay } from './progress';
+import type { GoalCover } from './horizonGoal';
 import { listCostPayments, listHorizonPayments, planHorizon } from './horizon';
 import { getCostNameKey } from './parts';
 import { effectiveStance, pick } from './stance';
@@ -68,6 +70,8 @@ export interface LookaheadHorizonItem {
   rest: HorizonRest;
   costs: readonly HorizonCost[];
   heldCents: Cents;
+  /** The goal the item draws its costs from; null or missing when it has none. */
+  goalCover?: GoalCover | null;
   /** A finished or called-off item asks nothing and is never warned about; read as open when missing. */
   state?: HorizonState;
   /** Payments already marked paid; they ask nothing and are not warned about. */
@@ -124,6 +128,8 @@ export interface LookaheadInput {
   stance?: Stance;
   /** Free to Spend now; null or missing leaves a fronted payment unchecked. */
   freeToSpendCents?: Cents | null;
+  /** What Free to Spend covers of each bill payment its pays won't carry in time; none when missing. */
+  billCover?: Pick<BillCover, 'payments'> | null;
   /** The draft for one day given what the days before it left behind; null when the day has none. */
   draftOf: (day: ComingDay, carry: LookaheadCarry) => LookaheadDraft | null;
 }
@@ -149,6 +155,8 @@ export interface Lookahead {
     billId: string;
     name: string;
     dueOn: DateOnly;
+    /** The day the person pays it, on or before `dueOn`; it is late only once `dueOn` has passed. */
+    payOn: DateOnly;
     isOverdue: boolean;
     laterDueOn: DateOnly[];
   }[];
@@ -265,7 +273,8 @@ const findShorts = (
       (entry) =>
         entry.shortBy > 0 &&
         (entry.tier === 'must' ||
-          (entry.bill !== null && entry.bill.dueOn < nextOn) ||
+          (entry.bill !== null &&
+            (entry.bill.payOn ?? entry.bill.dueOn) < nextOn) ||
           (entry.cost != null && entry.cost.dueOn < nextOn)),
     )
     .map((line) => ({
@@ -287,7 +296,7 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
       const unpaid = (input.payments[bill.id] ?? []).filter(
         (payment) =>
           payment.paid === null &&
-          payment.dueOn <= input.today &&
+          payment.payOn <= input.today &&
           payment.dueOn >= bill.since &&
           !isSelfPaying(bill, payment.dueOn, input.today),
       );
@@ -298,13 +307,14 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
               billId: bill.id,
               name: bill.name,
               dueOn: first.dueOn,
+              payOn: first.payOn,
               isOverdue: first.dueOn < input.today,
               laterDueOn: unpaid.slice(1).map((payment) => payment.dueOn),
             },
           ]
         : [];
     })
-    .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name));
+    .sort((a, b) => a.payOn - b.payOn || a.name.localeCompare(b.name));
 
 /** The first payment of each cost inside the plan that is due today or past due and not marked paid. */
 const findDueCosts = (input: LookaheadInput): Lookahead['dueCosts'] =>
@@ -342,7 +352,7 @@ const findDueCosts = (input: LookaheadInput): Lookahead['dueCosts'] =>
     )
     .sort((a, b) => a.dueOn - b.dueOn || a.costName.localeCompare(b.costName));
 
-/** The first payment of each bill that the pays before it are not set to carry in full: none comes before it, the pay it names does not, or what is pinned leaves some of it. */
+/** The first payment of each bill that the pays before it, and what Free to Spend covers of it, are not set to carry in full: none comes before it, the pay it names does not, or what is pinned leaves some of it. */
 const findNoIncome = (
   input: LookaheadInput,
   walkedFunded: LookaheadCarry['funded'],
@@ -351,10 +361,11 @@ const findNoIncome = (
     const unfunded = (input.payments[bill.id] ?? []).find(
       (payment) =>
         payment.paid === null &&
-        payment.dueOn > input.today &&
-        payment.dueOn <= input.horizon &&
+        payment.payOn > input.today &&
+        payment.payOn <= input.horizon &&
         payment.fundedCents +
-          payment.parts.reduce((sum, part) => sum + part.cents, 0) <
+          payment.parts.reduce((sum, part) => sum + part.cents, 0) +
+          getCoveredCents(input.billCover ?? null, bill.id, payment.dueOn) <
           payment.totalCents,
     );
     if (!unfunded) return [];
@@ -364,7 +375,10 @@ const findNoIncome = (
       .reduce((sum, entry) => sum + entry.cents, 0);
     const shortBy = Math.max(
       0,
-      unfunded.totalCents - unfunded.fundedCents - walked,
+      unfunded.totalCents -
+        unfunded.fundedCents -
+        walked -
+        getCoveredCents(input.billCover ?? null, bill.id, unfunded.dueOn),
     );
     const reason =
       unfunded.parts.length > 0
@@ -375,7 +389,7 @@ const findNoIncome = (
     return [
       {
         kind: 'noIncome',
-        on: unfunded.dueOn,
+        on: unfunded.payOn,
         billId: bill.id,
         name: bill.name,
         reason,
@@ -405,7 +419,11 @@ const findHorizonShort = (
           (entry) => entry.costId === costId && entry.dueOn === dueOn,
         ),
     );
-    return { item, all, covers: planHorizon(item, item.heldCents, open) };
+    return {
+      item,
+      all,
+      covers: planHorizon(item, item.heldCents, open, item.goalCover ?? null),
+    };
   });
   const later = items.flatMap(({ item, covers }): HorizonShort[] => {
     const { shortfall } = covers;
@@ -619,8 +637,8 @@ export function getStanceCushion(
           (payment) =>
             payment.paid === null &&
             payment.ranged !== null &&
-            payment.dueOn >= today &&
-            payment.dueOn <= end,
+            payment.payOn >= today &&
+            payment.payOn <= end,
         )
         .map((payment) => ({
           key: billId,

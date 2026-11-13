@@ -14,6 +14,7 @@ const VIEWS = new Set([
   'topic',
   'procedures',
   'procedure',
+  'run',
   'howNomosSeesYou',
 ]);
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
@@ -24,6 +25,7 @@ export interface ScreenRefs {
   focusId: string | null;
   topicId?: string;
   procedureId?: string;
+  runId?: string;
   /** Each kept id with its 1-based place in the list the client sent, so "the second one" still points at the second row once others drop out. */
   visible: { id: string; position: number }[];
 }
@@ -65,6 +67,13 @@ const toProcedureId = (raw: Record<string, unknown>): string | null => {
     : null;
 };
 
+const toRunId = (raw: Record<string, unknown>): string | null => {
+  const { runId } = raw;
+  return raw.view === 'run' && typeof runId === 'string' && ID_RE.test(runId)
+    ? runId
+    : null;
+};
+
 /** What a client says its page shows, cut down to a known view name and task ids; nothing else it sent survives. */
 export function sanitizeScreen(raw: unknown): ScreenRefs | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -85,11 +94,14 @@ export function sanitizeScreen(raw: unknown): ScreenRefs | null {
   const topicRef = topicId ? { topicId } : {};
   const procedureId = toProcedureId(raw as Record<string, unknown>);
   const procedureRef = procedureId ? { procedureId } : {};
+  const runId = toRunId(raw as Record<string, unknown>);
+  const runRef = runId ? { runId } : {};
   return {
     view,
     focusId,
     ...topicRef,
     ...procedureRef,
+    ...runRef,
     visible: visibleRefs,
   };
 }

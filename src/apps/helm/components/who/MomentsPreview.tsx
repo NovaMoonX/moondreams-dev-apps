@@ -4,10 +4,10 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
+import AddRow from '@apps/helm/components/who/AddRow';
 import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import MomentsScreen from '@apps/helm/components/who/MomentsScreen';
 import { HELM_COPY, MOMENTS_PREVIEW } from '@apps/helm/constants';
-import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useMoments } from '@apps/helm/hooks/useKeyDates';
 import type { OpenWho } from '@apps/helm/types';
 import { formatMomentRow } from '@apps/helm/utils/keyDateText';
@@ -18,37 +18,36 @@ interface MomentsPreviewProps {
 
 /** A who's newest moments, "See all N" from the count the who already carries, and "Add a moment" in the header. The moments are read while this page is open. */
 function MomentsPreview({ who }: MomentsPreviewProps) {
-  const assistant = useAssistantName();
   const { moments, isLoaded, hasFailed } = useMoments(who.id);
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isAll, setIsAll] = useState(false);
   const newest = moments.slice(0, MOMENTS_PREVIEW);
 
+  const isEmpty =
+    newest.length === 0 && isLoaded && who.momentCount === 0 && !hasFailed;
+
   return (
     <section className='space-y-3'>
-      <SectionDivider
-        label={HELM_COPY.momentsHeading}
-        trailing={
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
-            onClick={() => setIsAdding(true)}
-          >
-            {HELM_COPY.momentAdd}
-          </Button>
-        }
-      />
-      {newest.length === 0 ? (
-        isLoaded &&
-        who.momentCount === 0 && (
-          <p className='text-muted-foreground text-[15px] text-pretty'>
-            {HELM_COPY.momentsEmpty(assistant)}
-          </p>
-        )
+      {isEmpty ? (
+        <AddRow label={HELM_COPY.momentAdd} onClick={() => setIsAdding(true)} />
       ) : (
+        <SectionDivider
+          label={HELM_COPY.momentsHeading}
+          trailing={
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+              onClick={() => setIsAdding(true)}
+            >
+              {HELM_COPY.momentAdd}
+            </Button>
+          }
+        />
+      )}
+      {newest.length === 0 ? null : (
         <ul className='helm-card divide-border divide-y overflow-hidden'>
           {newest.map((moment) => (
             <li key={moment.id}>

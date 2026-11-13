@@ -6,6 +6,8 @@ import type {
 } from '@apps/runway/types';
 
 import { getCalendarCents } from './calendar';
+import { percentOf } from './money';
+import { selectRuleDays } from './schedule';
 
 export const TIER_RANK: Record<Priority, number> = {
   must: 0,
@@ -178,4 +180,58 @@ export function getPartName(
         (other.part ?? null) !== null,
     );
   return isSplit && name !== '' ? `${name} · ${line.tier}` : name;
+}
+
+/** An envelope's or goal's funding from one date on. */
+export interface FundingRun {
+  /** First day it applies; `-Infinity` for the earliest. */
+  from: number;
+  priority: Priority;
+  funding: FundingRule;
+  extras: readonly PriorityExtra[] | null;
+}
+
+/** What each day asked of an item under the funding in force on its own date, not the drafted day's. */
+export function getRunAsker<
+  D extends { dayKey: string; on: number; moneyCents?: Cents },
+>(
+  runs: readonly FundingRun[] | undefined,
+  days: readonly D[],
+  priorDays: readonly { dayKey: string; on: number }[],
+): ((day: D) => Cents) | null {
+  if (!runs || runs.length < 2) return null;
+  const askers = runs.map((run) => {
+    const funded = selectRuleDays(run.funding, days);
+    const keys = new Set(funded.map((day) => day.dayKey));
+    const calendar = getCalendarCents(run.funding, funded, priorDays);
+    const partAsks = getPartAsks(
+      {
+        priority: run.priority,
+        orderIndex: 0,
+        funding: run.funding,
+        extras: run.extras,
+      },
+      funded,
+      priorDays,
+    );
+    const { amount } = run.funding;
+    const ask = (day: D): Cents => {
+      if (!keys.has(day.dayKey)) return 0;
+      if (partAsks) return partAsks(day.dayKey).reduce((a, b) => a + b, 0);
+      if (calendar) return calendar.get(day.dayKey) ?? 0;
+      if (amount.kind === 'exact') return amount.cents;
+      return amount.kind === 'percent'
+        ? percentOf(day.moneyCents ?? 0, amount.bps)
+        : 0;
+    };
+    return { from: run.from, ask };
+  });
+  const result = (day: D): Cents =>
+    (
+      askers.reduce<(typeof askers)[number] | null>(
+        (found, entry) => (entry.from <= day.on ? entry : found),
+        null,
+      ) ?? askers[0]
+    ).ask(day);
+  return result;
 }
