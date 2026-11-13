@@ -21,6 +21,14 @@ html.waypoint-theme {
   --radius-2xl: 1.5rem;
 }
 
+/* A tick has the theme's in-between corners: softer than a form's square, not yet a circle. */
+html.waypoint-theme {
+  --checkbox-radius: 0.375rem;
+  --checkbox-border-width: 1.5px;
+  --checkbox-mark-width: 3;
+  --checkbox-filled: 1;
+}
+
 /* A subview is a crisp card on a cool blue-grey backdrop. */
 html.waypoint-theme {
   --subview-backdrop: color-mix(in oklab, var(--color-primary) 12%, var(--color-background));

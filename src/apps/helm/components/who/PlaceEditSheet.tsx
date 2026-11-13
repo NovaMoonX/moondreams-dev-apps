@@ -1,6 +1,8 @@
 import { useId, useState } from 'react';
 
-import { Button, Checkbox, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import FormSheet from '@/components/FormSheet';
@@ -132,7 +134,7 @@ function PlaceEditForm({
         />
       </div>
       <label className='flex min-h-12 items-start gap-3 py-1'>
-        <Checkbox
+        <AppCheckbox
           checked={isHome}
           className='mt-0.5'
           onCheckedChange={(checked) => {

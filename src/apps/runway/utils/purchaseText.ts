@@ -4,17 +4,20 @@ import type {
   Cents,
   Level,
   OpenAccount,
+  OpenCard,
   OpenPurchase,
   OpenReleasedCharge,
   PurchaseLine,
   PurchasePairKind,
 } from '@apps/runway/types';
 import { SPILL_WORDS } from '@apps/runway/constants';
+import { getCardName } from '@apps/runway/utils/cardText';
 import { unspill } from '@apps/runway/engine/spill';
 import { getLevelWords } from '@apps/runway/utils/levelText';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const FREE_NAME = 'Free to Spend';
+const NOT_COUNTED = 'Not counted';
 
 /** An envelope's figure with its word: assigned at Plan, and at Track what is left (safe to spend at Link) or how far over. */
 export function describeEnvelopeFigure(level: Level, cents: number) {
@@ -53,22 +56,34 @@ export function getPurchaseTitle(
   const named = purchase.label?.trim() || purchase.merchant?.trim();
   if (named) return named;
   const where = describeEnvelopes(purchase.lines, nameOf);
-  return isRefund(purchase) && !isHidden
-    ? `Refund to ${where}`
-    : where || 'Purchase';
+  if (where === '')
+    return isRefund(purchase) && !isHidden ? 'Refund' : 'Purchase';
+  return isRefund(purchase) && !isHidden ? `Refund to ${where}` : where;
 }
 
-/** What the title left out, after the day: the merchant when a label names the row, then the envelopes when either does. */
+/** Where a purchase's money went, in a row's words: its envelopes, or `emptyWhere` ("Not counted" unless the caller knows better) when it has none. */
+export function describePurchaseWhere(
+  purchase: OpenPurchase,
+  envelopes: string,
+  isHidden = false,
+  emptyWhere = NOT_COUNTED,
+) {
+  if (purchase.lines.length === 0 || envelopes === '') return emptyWhere;
+  return isRefund(purchase) && !isHidden ? `refund to ${envelopes}` : envelopes;
+}
+
+/** What the title left out, after the day: the merchant when a label names the row, then the envelopes when either does, or "Not counted" when it counts nowhere. */
 export function getPurchaseFacts(
   purchase: OpenPurchase,
   envelopes: string,
   isHidden = false,
+  emptyWhere = NOT_COUNTED,
 ): string[] {
   const label = purchase.label?.trim() || null;
   const merchant = purchase.merchant?.trim() || null;
-  if (label === null && merchant === null) return [];
-  const where =
-    isRefund(purchase) && !isHidden ? `refund to ${envelopes}` : envelopes;
+  const where = describePurchaseWhere(purchase, envelopes, isHidden, emptyWhere);
+  if (label === null && merchant === null)
+    return purchase.lines.length === 0 ? [where] : [];
   return [label !== null ? merchant : null, where].filter(
     (fact): fact is string => Boolean(fact),
   );
@@ -260,6 +275,28 @@ export function describeDepositLinked(
   return isUnlinked
     ? `Money in put back in Needs a home: ${deposited}, no longer linked to ${describePayDay(dayOn)}.`
     : `Money in linked to pay: ${deposited} is ${describePayDay(dayOn)}.`;
+}
+
+/** The card or account a purchase was paid with, short enough for a row ("Venture X", "360 Checking"); null for cash or one typed with no card. */
+export function getPaidWithName(
+  purchase: OpenPurchase,
+  cards: readonly OpenCard[],
+  accounts: readonly OpenAccount[],
+): string | null {
+  const card = purchase.paidByCardId
+    ? cards.find((entry) => entry.id === purchase.paidByCardId)
+    : undefined;
+  if (card) {
+    const name = card.name?.trim() ?? '';
+    // A short product name ("it", "Gold") only reads with its issuer.
+    const isOwnName = name.length > 4 || name.includes(' ');
+    return isOwnName ? name : getCardName(card, cards);
+  }
+  const account = purchase.accountId
+    ? accounts.find((entry) => entry.id === purchase.accountId)
+    : undefined;
+  if (!account) return null;
+  return account.name.trim() || account.institution.trim() || null;
 }
 
 /** The account or card one side of a pair sits on, in the person's words. */

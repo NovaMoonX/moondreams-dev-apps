@@ -1,10 +1,16 @@
 import { useState } from 'react';
+import { CreditCard } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
-import {
-  formatDateOrdinalUTC,
-  formatRelativeDayUTC,
-} from '@/utils/formatUtils';
+import CardForm from '@apps/runway/forms/CardForm';
+import { isCardFeeBill } from '@apps/runway/engine/cardFees';
+import { isTrackingLevel } from '@apps/runway/engine/level';
+import { getCoveredCents } from '@apps/runway/engine/billCover';
+import { selectBillCover } from '@apps/runway/store/selectors/billCoverSelectors';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
+import { getCardName } from '@apps/runway/utils/cardText';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
@@ -14,18 +20,22 @@ import ItemSheet, {
 import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
   AUTO_PAY_WORDS,
+  BILL_SET_ASIDE_WORDS,
   BILL_WORDS,
+  CARD_FEE_WORDS,
   GROUP_WORDS,
   MAKE_BILL_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PLAN_SELECT_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
-import type { BillSealed, Stance } from '@apps/runway/types';
+import type { BillSealed, Schedule, Stance } from '@apps/runway/types';
 import {
   describeBillMonthly,
   describeBillRepeat,
+  describeDueDay,
   isSavingUpBill,
   isUndatedBill,
   joinPaymentAndState,
@@ -54,6 +64,10 @@ interface BillRowProps {
   isFaded?: boolean;
   itemId?: string;
   onOpen?: () => void;
+  /** While picking several: the row's tap ticks it and the chevron still opens the bill. */
+  select?: { checked: boolean; onChange: (checked: boolean) => void };
+  /** Press and hold (right-click on a computer): starts picking several with this bill ticked. */
+  onHold?: () => void;
 }
 
 interface BillSheetProps {
@@ -63,6 +77,7 @@ interface BillSheetProps {
   planStance: Stance;
   today: number;
   startsAtStep?: string;
+  presetEventId?: string;
   /** An action that opens first for a change that belongs to an income day. */
   dayAction?: ItemSheetProps['dayAction'];
   onClose: () => void;
@@ -70,25 +85,43 @@ interface BillSheetProps {
 
 const getDueLine = (
   payment: BillPayment | null,
+  schedule: Schedule,
   isUndated: boolean,
   today: number,
   isSavingUp: boolean,
 ) => {
   if (isUndated) return BILL_WORDS.needsDueDate;
   if (!payment) return 'No payment left';
-  const date = formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC);
-  if (payment.paid) return `Paid · due\u00a0${date}`;
+  const date = describeDueDay(schedule, payment.dueOn, today);
+  if (payment.paid)
+    return `Paid · due\u00a0${describeDueDay(null, payment.dueOn, today)}`;
+  if (payment.payOn !== payment.dueOn) {
+    const payDate = describeDueDay(null, payment.payOn, today);
+    return BILL_WORDS.payOnLine(payDate, date);
+  }
   return isSavingUp
     ? `${BILL_WORDS.savingUp} · due\u00a0${date}`
     : `Due\u00a0${date}`;
 };
 
 /** Where the next payment stands, short: "$1,075 of $1,250 set aside", or "saved" for a bill saved up for. */
-const getProgress = (payment: BillPayment | null, isSavingUp: boolean) => {
+const getProgress = (
+  payment: BillPayment | null,
+  isSavingUp: boolean,
+  coveredCents: number,
+) => {
   if (!payment) return null;
   const { paid, fundedCents, totalCents } = payment;
   if (paid) {
-    return `${paid.paidOn < payment.dueOn ? 'Paid ahead' : 'Paid'} ${formatDateOrdinalUTC(paid.paidOn)}`;
+    return `${paid.paidOn < payment.payOn ? 'Paid ahead' : 'Paid'} ${formatDateOrdinalUTC(paid.paidOn)}`;
+  }
+  if (coveredCents > 0) {
+    return fundedCents > 0
+      ? BILL_SET_ASIDE_WORDS.progressPartCovered(
+          formatCentsShort(fundedCents),
+          formatCentsShort(coveredCents),
+        )
+      : BILL_SET_ASIDE_WORDS.progressCovered;
   }
   if (fundedCents <= 0)
     return isSavingUp ? BILL_WORDS.nothingSaved : 'Nothing set aside yet';
@@ -114,22 +147,26 @@ function BillRow({
   isFaded = false,
   onOpen,
   itemId,
+  select,
+  onHold,
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const cents = pick(stance, bill.amount, 'expense');
+  const paymentCents = payment && !payment.paid ? payment.totalCents : cents;
   const monthly =
     figureKind === 'monthly'
       ? describeBillMonthly(
-          { lowCents: cents, highCents: cents },
+          { lowCents: paymentCents, highCents: paymentCents },
           bill.timing.schedule,
         )
       : null;
-  const amount = monthly?.figure ?? formatCents(cents);
+  const amount = monthly?.figure ?? formatCents(paymentCents);
   const isUndated = isUndatedBill(bill);
   const isSavingUp = isSavingUpBill(bill.timing.schedule, bill.fundedBy);
   const emoji = useItemEmoji(bill.emoji, bill.groupId);
   const stateLine = getDueLine(
     payment,
+    bill.timing.schedule,
     isUndated,
     today,
     isSavingUp && monthly === null,
@@ -140,11 +177,12 @@ function BillRow({
     today,
   );
   const payerCard = useBillCardName(itemId ?? '', payment?.dueOn ?? null);
-  const payer = !isSelfPaying
-    ? null
-    : payerCard === null
-      ? AUTO_PAY_WORDS.payerBank
-      : payerCard;
+  const payer =
+    !isSelfPaying || isCardFeeBill(bill)
+      ? null
+      : payerCard === null
+        ? AUTO_PAY_WORDS.payerBank
+        : AUTO_PAY_WORDS.payerCard(payerCard);
   const figureWord = monthly
     ? BILL_WORDS.aMonth
     : figureKind === 'monthly' && bill.timing.schedule.kind === 'once'
@@ -173,6 +211,12 @@ function BillRow({
       isHighlighted={isHighlighted}
       isFaded={isFaded}
       itemId={itemId}
+      tick={
+        select && !reorder
+          ? { ...select, label: PLAN_SELECT_WORDS.tick(bill.name) }
+          : undefined
+      }
+      onLongPress={reorder ? undefined : onHold}
     />
   );
 }
@@ -185,10 +229,24 @@ export function BillSheet({
   planStance,
   today,
   startsAtStep,
+  presetEventId,
   dayAction,
   onClose,
 }: BillSheetProps) {
   const [pickedStep, setPickedStep] = useState<string | null>(null);
+  const [isCardOpen, setIsCardOpen] = useState(false);
+  const isFeeBill = isCardFeeBill(bill);
+  const level = useAppSelector(selectLevel);
+  const cards = useAppSelector(selectAllCards);
+  const feeCard = isFeeBill
+    ? (cards.find(
+        (card) => card.id === bill.cardFeeOf && card.archivedAt === null,
+      ) ?? null)
+    : null;
+  const billCover = useAppSelector(selectBillCover);
+  const coveredCents = payment
+    ? getCoveredCents(billCover, billId, payment.dueOn)
+    : 0;
   const paidFromAction = usePaidFromAction(billId, today);
   const paidWithAction = usePaidWithAction(billId, today);
   const horizonItems = useAppSelector((state) =>
@@ -202,7 +260,11 @@ export function BillSheet({
   const isSelfPaying = useIsSelfPaying(billId, payment?.dueOn ?? null, today);
   const autoCardName = useBillCardName(billId, payment?.dueOn ?? today);
   const stance = effectiveStance(planStance, bill.stanceOverride);
-  const amount = formatCents(pick(stance, bill.amount, 'expense'));
+  const amount = formatCents(
+    payment && !payment.paid
+      ? payment.totalCents
+      : pick(stance, bill.amount, 'expense'),
+  );
   const { schedule } = bill.timing;
   const isUndated = schedule.anchor === null;
   const isSavingUp = isSavingUpBill(schedule, bill.fundedBy);
@@ -210,14 +272,14 @@ export function BillSheet({
   const getDueFact = () => {
     if (isUndated) return null;
     if (payment)
-      return `due\u00a0${formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC)}`;
+      return `due\u00a0${describeDueDay(schedule, payment.dueOn, today)}`;
     return 'No payment left';
   };
   const fact = [
     PRIORITY_LABELS[bill.priority],
     repeat,
     getDueFact(),
-    getProgress(payment, isSavingUp),
+    getProgress(payment, isSavingUp, coveredCents),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -232,6 +294,17 @@ export function BillSheet({
     'expense',
     Boolean(bill.stanceOverride),
   );
+
+  if (isCardOpen && feeCard !== null) {
+    return (
+      <CardForm
+        isOpen
+        editing={feeCard}
+        onClose={onClose}
+        onCancel={() => setIsCardOpen(false)}
+      />
+    );
+  }
 
   return (
     <ItemSheet
@@ -250,19 +323,38 @@ export function BillSheet({
       secondFact={payerFact}
       help={rangeText}
       quickChange={
-        isUndated
-          ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
-          : {
+        isFeeBill
+          ? {
               label: ITEM_SHEET_R2_WORDS.change,
-              subtitle: ITEM_SHEET_R2_WORDS.changeBillSub,
-              step: 'amount',
+              subtitle: CARD_FEE_WORDS.billChangeSub,
+              step: 'priority',
             }
+          : isUndated
+            ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
+            : {
+                label: ITEM_SHEET_R2_WORDS.change,
+                subtitle: ITEM_SHEET_R2_WORDS.changeBillSub,
+                step: 'amount',
+              }
       }
       maxAction={paidFromAction}
-      payAction={paidWithAction}
+      payAction={isFeeBill ? undefined : paidWithAction}
+      linkAction={
+        feeCard !== null && isTrackingLevel(level)
+          ? {
+              label: CARD_FEE_WORDS.billCardRow,
+              subtitle: CARD_FEE_WORDS.billCardRowSub(
+                getCardName(feeCard, cards),
+              ),
+              icon: <CreditCard />,
+              onOpen: () => setIsCardOpen(true),
+            }
+          : undefined
+      }
       dayAction={dayAction}
       key={pickedStep ?? 'sheet'}
       startsAtStep={pickedStep ?? startsAtStep}
+      presetEventId={presetEventId}
       extra={
         <>
           {madeFrom && (
