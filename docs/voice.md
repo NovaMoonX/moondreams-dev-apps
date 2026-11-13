@@ -1,122 +1,119 @@
 # How voice works
 
-How an app listens to a person and talks back, for every app on the site. The code is `src/lib/speech/` and the hooks in `src/hooks/`; none of it names an app's words (`check:pinch-voice` fails if it does). Each app supplies its own phrases, wake name and voice. The build log and numbers for the conversation shape are in Helm's `TECHNICAL.md` section 20.
+How any app on the site listens to a person and talks back. Listening and speaking are two separate jobs with their own options, so each has its own section. The code is `src/lib/speech/` and the hooks in `src/hooks/`; none of it names an app's words (`check:pinch-voice` fails if it does). The apps that use each option are listed at the very end, only as a reference.
 
-## One base, two shapes
+## Listening: three ways to turn speech into text
 
-Every app that uses voice stands on the same base:
+| Way | What it is | Needs | Costs | Where the audio goes |
+|---|---|---|---|---|
+| **Cloud** | Deepgram, streamed live | Online, a saved `DEEPGRAM_API_KEY`, under the allowance | Paid, capped | The browser streams to Deepgram with a one-minute token |
+| **On-device model** | sherpa-onnx, a small streaming English model run in a Web Worker | The person downloads it once (about 57 MB) | Free | Nowhere. It never leaves the phone. |
+| **Browser recognition** | The browser's own Web Speech API | A browser that has one | Free | Chrome sends it to Google. Firefox has none. |
 
-- **The browser's recognition**, wrapped once as `createSpeechListener` (`useSpeechCommands.ts`).
-- **The listening machine** `listeningMode.ts`: closed, waiting for a wake phrase, a command window, or kept open, and its clocks.
-- **The wake phrase reader** `readWakePhrase`: a wake phrase at the start of what was heard.
-- **Reading aloud** `readAloud`: the natural voice when it is downloaded, the system voice otherwise. Every text goes through `toSpokenText` first ("1/2 tsp" becomes "half a teaspoon").
-- **The opt-in natural voice** `useNaturalVoice` with `NaturalVoiceOption`.
+Waiting for a wake phrase ("Hey" plus the assistant's name) is never done by the cloud: the on-device model if it's downloaded, else the browser's. No audio goes to the cloud before the phrase or a tap.
 
-On top of that base there are two shapes. Which one an app uses depends on the job.
+### Which way listens (apps that offer all three)
 
-| | **Command voice** | **Conversation voice** |
-|---|---|---|
-| The job | Say one of a fixed set of phrases and the screen does it ("next step", "start a timer") | Say anything, in your own words, to an assistant that answers |
-| Hook | `useSpeechCommands` | `useVoiceConversation` |
-| Who listens | The browser's recognition | Picked for each turn by a router: cloud, on-device model or browser |
-| Who speaks | `readAloud` | A router and a playback queue: cloud voice or device voice |
-| Works offline | Only where the browser itself can | Yes, once the person downloads the on-device model |
-| Used by | Pinch's cooking mode | Helm |
+Picked fresh for every turn by `voiceRouter.ts`:
 
-**This is deliberate layering, not two copies.** Conversation voice's browser listener is the same `createSpeechListener` command voice uses, and both read aloud through the same `readAloud`. What conversation voice adds is a router, the cloud, the offline model and a playback queue.
+1. **Cloud**, if the person is online, their mode allows it, they are under today's allowance, and the cloud token arrives within 1.5 seconds.
+2. Otherwise the **on-device model**, if it is downloaded.
+3. Otherwise **browser recognition**.
 
-**What command voice does not have today:** the router, the cloud and the offline model. A kitchen with weak Wi-Fi therefore hears the cook only as well as the browser's own recognition can. Whether to give command voice the offline model is an open question for the owner, not something already decided.
+An app that doesn't use the router always uses browser recognition.
 
-## Conversation voice: three layers that never know about each other
+## Speaking: three ways to turn text into sound
 
-1. **Listening** turns sound into text.
-2. **Reasoning** is the assistant. It only ever sees text in and text out.
-3. **Speaking** turns text into sound.
+| Way | What it is | Needs | Costs |
+|---|---|---|---|
+| **Cloud voice** | A server-chosen provider (Google Chirp 3 HD by default), streamed through the site's `streamSpeech` | Online, under the allowance | Paid, capped |
+| **Natural voice** | Piper, a nicer voice that runs on the device | The person downloads it once (about 90 MB) | Free |
+| **System voice** | The browser's `speechSynthesis` | Nothing | Free |
 
-Because they are separate, a provider can change without touching the others.
+Every text goes through `toSpokenText` first ("1/2 tsp" becomes "half a teaspoon").
 
-## One conversation turn, start to finish
+### Which way speaks
 
-1. The person taps the mic, or says the app's wake phrase (the word "Hey" and the assistant's current name).
-2. The microphone opens, with echo cancellation and noise suppression on.
-3. Words appear on screen as they are heard.
-4. The turn ends on a tap, on an end phrase such as "that's all", or after 8 seconds of quiet.
-5. The text goes to the assistant like a typed message.
-6. A short confirmation ("Got it, moved to Friday") is spoken as soon as the work is filed.
-7. A longer answer is spoken after it.
-8. A follow-up window stays open for 8 seconds, so the person can answer without tapping again.
-
-Talking over a reply stops it and starts a new turn (barge-in). A fixed phrase such as "undo that" is matched on the device and never goes to the assistant. Mute lasts for the sitting only.
-
-## Who listens: picked fresh for every turn
-
-`voiceRouter.ts` decides, using plain facts about the moment:
-
-| Situation | Who listens |
-|---|---|
-| Online, the person's mode allows the cloud, under today's allowance, and the cloud token arrives within 1.5 seconds | **The cloud** (Deepgram) |
-| Otherwise, and the person downloaded the offline model | **The on-device model** |
-| Otherwise | **The browser's own recognition** (Chrome sends this audio to Google; Firefox has none) |
-| Waiting for the wake phrase | **Never the cloud.** The on-device model if downloaded, else the browser's. |
-
-## Who speaks
-
-| The line is | Spoken by |
-|---|---|
-| A **confirmation** (priority `ack`) | The device voice, always, so it starts at once and costs nothing. The natural voice if downloaded, else the system voice. |
-| A **reply** or a long **summary**, online, under the allowance | The cloud voice |
-| A reply otherwise, or if the cloud voice has no first byte in 2.5 seconds | The device voice, for that reply only |
+- **A confirmation** (priority `ack`, such as "Got it, moved to Friday"): the device, always, so it starts at once and costs nothing. The natural voice if downloaded, else the system voice.
+- **A reply or a long summary:** the cloud voice when online and under the allowance, otherwise the device.
+- **A slow cloud voice** (no first byte in 2.5 seconds) or a provider error: that reply is spoken on the device.
+- **Apps that don't use the router** read aloud with `readAloud`: the natural voice when it is ready, else the system voice.
 
 ## Every environment, side by side
 
 | Situation | Hears you | Speaks to you |
 |---|---|---|
 | Online, within limits | Cloud | Confirmations on the device, replies from the cloud |
-| Online, today's allowance spent | Device (on-device model, else browser), one quiet line says so | Device |
-| Online, no `DEEPGRAM_API_KEY` saved | Device. Nothing fails; the cloud is skipped. | Device |
-| Offline, offline model downloaded | On-device model | Device voice |
-| Offline, nothing downloaded | Nobody. The app says talking needs a connection and points to the offline model's switch. Typing still works. | Device voice |
-| This phone can't run the model | The row says why and offers no button; the browser's recognition is the fallback online | Device voice |
+| Online, today's allowance spent | On-device model if downloaded, else browser, with one quiet line | Device |
+| Online, no `DEEPGRAM_API_KEY` saved | On-device model if downloaded, else browser. Nothing fails. | Device |
+| Offline, on-device model downloaded | On-device model | Device |
+| Offline, no model downloaded | Only the browser, and only if it works offline. Otherwise the app says talking needs a connection and points to the download. Typing still works. | Device |
+| This phone can't run the model | The browser's recognition. The model's row says why and offers no button. | Device |
 
-**The person is never blocked by a limit.** The router answers "device" and one quiet line appears.
+**A limit never blocks the person.** The router answers "device" and one quiet line appears.
+
+## Two ways an app can use listening
+
+- **Command voice:** say one of a fixed set of phrases and the screen does it ("next step", "start a timer"). `useSpeechCommands` owns the recognizer, its wake window and its restarts; the app supplies the phrases.
+- **Conversation voice:** say anything to an assistant that answers. `useVoiceConversation` runs the router, the playback queue and the follow-up window; the app supplies its end phrases, identity and what an utterance becomes.
+
+Both stand on the same base: `createSpeechListener` (browser recognition), `listeningMode` (closed, waiting for a phrase, a command window, kept open, and their clocks), `readWakePhrase` and `readAloud`. Conversation voice adds the router, the cloud, the on-device model and the queue.
+
+### One conversation turn
+
+1. The person taps the mic or says the wake phrase.
+2. The microphone opens with echo cancellation and noise suppression.
+3. Words appear as they are heard.
+4. The turn ends on a tap, an end phrase such as "that's all", or 8 seconds of quiet.
+5. The text goes to the assistant like a typed message.
+6. A confirmation is spoken as soon as the work is filed, then the answer.
+7. An 8-second follow-up window lets the person reply without tapping again.
+
+Talking over a reply stops it and starts a new turn (barge-in). A fixed phrase such as "undo that" is matched on the device and never goes to the assistant. Mute lasts for the sitting only. A confirmation and a reply never overlap, and a newer turn cuts the older one's audio.
 
 ## The allowances
 
-- **Listening:** 60 minutes a day for each person, and 300 cloud tokens a day.
-- **Speaking:** 30,000 characters a day for each person.
+- **Cloud listening:** 60 minutes a day for each person, and 300 cloud tokens a day.
+- **Cloud speaking:** 30,000 characters a day for each person.
 - **The whole site:** a $5 a day cap across everyone.
 
-Past any of them, that turn goes to the device. The numbers live in `functions/src/voice/` and are checked on the server.
+Past any of them, that turn uses the device. The numbers live in `functions/src/voice/` and are checked on the server.
 
-## The person who chooses to download the model
+## Downloading a model
 
-The switch is in the app's voice settings (`useOnDeviceRecognition`, drawn by the app).
+Both downloads work the same way: an opt-in row in the app's voice settings that states the real size first, checks the phone can run it and says why if not, offers Cancel, and keeps the files in the browser's Cache Storage.
 
-1. The row says the real size before anything downloads: about 57 MB.
-2. It checks the phone can run it (WebAssembly SIMD, `AudioWorklet`, enough free storage, enough memory) and says why if not.
-3. A tap downloads six files from the site's own server, with progress and a Cancel.
-4. Each file is checked by size and SHA-256. Any mismatch, cancel or failure deletes everything, so nothing half-done is kept.
-5. The files are kept in the browser's own Cache Storage. The service worker never pre-downloads them, so nobody gets 57 MB without asking.
-6. Remove deletes them again, with an Undo.
-
-The model is sherpa-onnx with a small streaming English model. It runs in a Web Worker on the same audio the cloud would get. Whether it is downloaded is browser state, never saved on the person's profile.
+- **Where they live:** one shared cache per browser for each model (`on-device-asr-zipformer-en-20m-v1` for listening, `natural-voice-v1` for speaking), so a download is made once and any app that uses the model finds it.
+- **The choice is per app:** each app saves its own on/off in local storage, so a person enables each model in each app that offers it.
+- **Integrity:** each listening file is checked by size and SHA-256. A mismatch, cancel or failure deletes everything, so nothing half-done is kept.
+- **Not pre-downloaded:** the service worker leaves the files out, so nobody gets them without asking.
+- **Remove** deletes the shared cache, for every app on that browser, with an Undo.
+- **Per browser, not per account:** a second browser or phone downloads again, and clearing site data removes it.
 
 ## Keys and privacy
 
 - **No provider key ever reaches a browser.**
-- **Listening** goes straight from the browser to the cloud provider with a one-minute token that `mintVoiceToken` mints on the server after checking the allowance.
-- **Speaking** goes through the site (`streamSpeech`), which checks sign-in and the allowance, then pipes the provider's audio back.
-- **The wake phrase is only ever heard on the device.** No audio goes to the cloud before the phrase or a tap.
-- **Voice notes** are transcribed by the server from the sealed file, which is never stored unsealed.
+- **Cloud listening** goes straight from the browser to the provider with a one-minute token that `mintVoiceToken` mints on the server after checking the allowance.
+- **Cloud speaking** goes through the site (`streamSpeech`), which checks sign-in and the allowance, then pipes the provider's audio back.
+- **Voice notes** are transcribed on the server from the sealed file, which is never stored unsealed.
 
 ## When something fails
 
 - **No token in 1.5 seconds, a socket that fails, or a spent allowance:** that turn listens on the device.
-- **No first byte from the cloud voice in 2.5 seconds, or a provider error:** that reply is spoken on the device, and the turn records which voice spoke.
 - **A model that can't start on the phone:** its own sentence ("Couldn't start listening on this phone"), never a silent "nothing heard".
 - **A refused microphone:** stays blocked until the permission changes.
-- **One playback queue:** a confirmation and a reply never overlap, and a newer turn cuts the older one's audio.
 
 ## Not yet confirmed
 
-Provider prices and ids, how an open stream behaves when its token ends, speed and memory of the offline model on mid-range phones, and iOS Safari's microphone during playback are listed as unverified in Helm's `TECHNICAL.md` section 20. Check there before relying on them.
+Provider prices and ids, how an open stream behaves when its token ends, the offline model's speed and memory on mid-range phones, and iOS Safari's microphone during playback are listed as unverified in Helm's `TECHNICAL.md` section 20. Check there before relying on them.
+
+## Reference: which apps use what
+
+A snapshot of the code, written to find the source. It does not define the process: the sections above and the code do. If this table disagrees with the code, the code wins and this table is stale.
+
+| App | Listening | Speaking |
+|---|---|---|
+| Helm | Cloud, on-device model, browser (conversation voice) | Cloud voice, system voice (no natural-voice choice offered) |
+| Pinch (cooking mode) | Browser (command voice) | Natural voice if the person turned it on, else system voice |
+
+Where each is wired: Helm in `src/apps/helm/hooks/useHelmVoice.ts` and `components/voice/VoiceSettings.tsx`; Pinch in `src/apps/pinch/hooks/useCookVoice.ts`. Helm's build log is `src/apps/helm/TECHNICAL.md` section 20.
