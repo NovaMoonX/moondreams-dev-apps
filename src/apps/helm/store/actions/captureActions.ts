@@ -1,7 +1,8 @@
 import {
+  arrayUnion,
   collection,
-  deleteDoc,
   doc,
+  type DocumentReference,
   getDoc,
   setDoc,
   updateDoc,
@@ -13,6 +14,7 @@ import { createSealedReader } from '@lib/security';
 
 import { store } from '@/store';
 import { CAPTURE_MAX_CHARS } from '@apps/helm/constants';
+import { MAX_ATTACHMENTS_PER_TURN } from '@apps/helm/utils/mediaCaps';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   isSorting,
@@ -27,13 +29,21 @@ import {
   setEarlierFailed,
   startLoadingEarlier,
 } from '@apps/helm/store/helmSlice';
+import {
+  attachToTurn,
+  letGoTurnPhotos,
+} from '@apps/helm/store/actions/mediaActions';
 import { loadEarlierCaptures } from '@apps/helm/store/listeners/captureListener';
 import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
-import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectAllCaptures,
+  selectExecutionsById,
+} from '@apps/helm/store/selectors/captureSelectors';
 import {
   canMakeTaskAsWritten,
   toTaskTitle,
 } from '@apps/helm/utils/heldCaptures';
+import { rankNotes } from '@apps/helm/utils/noteSearch';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
@@ -41,6 +51,7 @@ import type {
   CaptureSealed,
   HelmEncryption,
   OpenCapture,
+  QuestionAnswerValue,
   ScreenContext,
   Task,
   TaskSealed,
@@ -52,7 +63,43 @@ const executionsInFlight = new Set<string>();
 const capturesOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'captures');
 
-/** Seals what the person typed and starts writing it as a received turn; the write is handed back unawaited. The words are never edited afterwards. */
+function writeJoined(
+  uid: string,
+  leadId: string,
+  reference: DocumentReference,
+  capture: Capture,
+) {
+  const batch = writeBatch(db);
+  batch.set(reference, capture);
+  batch.update(doc(capturesOf(uid), leadId), {
+    joinedCaptureIds: arrayUnion(reference.id),
+  });
+  return batch.commit();
+}
+
+/** The turn and its photos' ids in one batch, so a photo never loses its turn or the turn its photos. */
+function writeWithPhotos(
+  uid: string,
+  reference: DocumentReference,
+  capture: Capture,
+) {
+  const batch = writeBatch(db);
+  batch.set(reference, capture);
+  attachToTurn(batch, uid, capture.attachmentIds, reference.id);
+  return batch.commit();
+}
+
+/** The ids of the notes that best match words about to be sorted, from the notes the device has open. */
+export const rankStoredNotes = (text: string) => {
+  const { notes, topics } = store.getState().helm;
+  return rankNotes(
+    text,
+    notes.items.filter((note) => !note.isUnreadable),
+    topics.items,
+  );
+};
+
+/** Seals what the person typed or said and starts writing it as a received turn; the write is handed back unawaited. The words are never edited afterwards. */
 export async function sendCapture(
   uid: string,
   encryption: HelmEncryption,
@@ -61,22 +108,48 @@ export async function sendCapture(
     sessionId: string;
     turnIndex: number;
     createdAt: number;
+    leadId: string | null;
     reading: CaptureReading;
     screen: ScreenContext | null;
+    /** The question this turn answers and its structured answer (null when a spoken one could not be placed); both null on any other turn. */
+    answersQuestion: Capture['answersQuestion'];
+    questionAnswer: QuestionAnswerValue | null;
+    /** The notes the typed words matched, best first (at most 8); empty when none were ranked. */
+    noteIds?: string[];
+    /** The photos sent with the turn, uploaded already, in pick order; a turn with photos never joins a running one. */
+    attachmentIds?: string[];
+    /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
+    voice?: { sttProvider: string; interruptedCaptureId: string | null };
   },
 ) {
   const text = turn.text.trim();
-  if (!text || text.length > CAPTURE_MAX_CHARS) {
-    throw new Error('A turn is 1 to 4,000 characters.');
+  const attachmentIds = turn.attachmentIds ?? [];
+  if (
+    (!text && attachmentIds.length === 0) ||
+    text.length > CAPTURE_MAX_CHARS ||
+    attachmentIds.length > MAX_ATTACHMENTS_PER_TURN
+  ) {
+    throw new Error('A turn is 1 to 4,000 characters, or up to 5 photos.');
   }
+  const leadId = attachmentIds.length > 0 ? null : turn.leadId;
   const sealed = await sealJson<CaptureSealed>(
-    { text, reading: turn.reading },
+    {
+      text,
+      reading: turn.reading,
+      answer: null,
+      questionAnswer: turn.questionAnswer,
+    },
     encryption,
   );
   const { createdAt } = turn;
   // Typed on home, its card is seen as it is sent, so it never waits in New since you looked.
   const capture: Capture = {
-    inputMode: 'typed',
+    inputMode: turn.voice ? 'voice' : text ? 'typed' : 'attachment',
+    sttProvider: turn.voice?.sttProvider ?? null,
+    interruptedCaptureId: turn.voice?.interruptedCaptureId ?? null,
+    answersQuestion: turn.answersQuestion,
+    ttsProvider: null,
+    arrivedVia: 'direct',
     medium: 'web',
     sessionId: turn.sessionId,
     turnIndex: turn.turnIndex,
@@ -89,20 +162,33 @@ export async function sendCapture(
     lastErrorCode: null,
     questionState: {},
     executionIds: [],
+    turnLeadId: leadId,
+    joinedCaptureIds: [],
+    attachmentIds,
     seenAt: createdAt,
+    quotedSourceKeys: [],
+    answerSavedNoteId: null,
+    whoIds: [],
+    placeIds: [],
+    planDayKey: null,
     createdAt,
     sortedAt: null,
     screen: turn.screen,
     sealed,
   };
   const reference = doc(capturesOf(uid));
-  const write = setDoc(reference, capture);
+  // A message joining a turn is written with its lead's list in one batch, so neither lands without the other.
+  const write = leadId
+    ? writeJoined(uid, leadId, reference, capture)
+    : attachmentIds.length > 0
+      ? writeWithPhotos(uid, reference, capture)
+      : setDoc(reference, capture);
   // Once the write is acknowledged the server reads the turn; offline that happens when the device is back.
   void write.then(
-    () => sortCapture(reference.id),
+    () => sortCapture(reference.id, 'full', turn.noteIds ?? []),
     () => undefined,
   );
-  return { write };
+  return { write, id: reference.id };
 }
 
 /** Fetches the executions of sorted turns that aren't in the store, once each; one that can't be opened is recorded so its turn says so. Reads the store at the call and stops if another person's Helm is open. */
@@ -167,8 +253,42 @@ export async function loadEarlierSessions(uid: string) {
 export const markCaptureSeen = (uid: string, captureId: string) =>
   updateDoc(doc(capturesOf(uid), captureId), { seenAt: Date.now() });
 
+/** Records which voice said a spoken turn's line; touches only that field. */
+export const markCaptureSpoken = (
+  uid: string,
+  captureId: string,
+  ttsProvider: string,
+) => updateDoc(doc(capturesOf(uid), captureId), { ttsProvider });
+
+/** Sets a question aside so it waits in Needs you; touches only its own field and runs nothing. */
+export const skipQuestion = (
+  uid: string,
+  captureId: string,
+  questionId: string,
+) =>
+  updateDoc(doc(capturesOf(uid), captureId), {
+    [`questionState.${questionId}.skippedAt`]: Date.now(),
+  });
+
+/** Marks a question answered without running anything, because what it asked was settled another way; touches only its own fields, and the turn is sorted once none is left open. */
+export const closeQuestion = (
+  uid: string,
+  captureId: string,
+  questionId: string,
+  isLastOpen: boolean,
+) =>
+  updateDoc(doc(capturesOf(uid), captureId), {
+    [`questionState.${questionId}.answeredAt`]: Date.now(),
+    ...(isLastOpen && { status: 'sorted' }),
+  });
+
 export const markAiNoticeSeen = (uid: string) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), { hasSeenAiNotice: true });
+
+export const markVoiceNoticeSeen = (uid: string) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    hasSeenVoiceNotice: true,
+  });
 
 /** Marks every given turn seen, in batches under Firestore's write limit. */
 export async function markAllSeen(uid: string, captureIds: string[]) {
@@ -187,6 +307,9 @@ export async function markAllSeen(uid: string, captureIds: string[]) {
   );
 }
 
+const mediaOf = (uid: string) =>
+  collection(db, 'apps', 'helm', 'users', uid, 'media');
+
 const tasksOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'tasks');
 
@@ -202,24 +325,62 @@ export async function retryCapture(
       .filter(([, question]) => question.answeredAt === null)
       .map(([id]) => [`questionState.${id}.answeredAt`, now]),
   );
-  await updateDoc(doc(capturesOf(uid), capture.id), {
+  const joined = selectAllCaptures(store.getState()).filter(
+    (entry) =>
+      entry.turnLeadId === capture.id &&
+      capture.joinedCaptureIds.includes(entry.id) &&
+      entry.status !== 'received',
+  );
+  const batch = writeBatch(db);
+  batch.update(doc(capturesOf(uid), capture.id), {
     status: 'received',
     attempts: 0,
     lastErrorCode: null,
     heldReason: null,
     ...closedQuestions,
   });
-  return sortCapture(capture.id);
+  joined.forEach((entry) =>
+    batch.update(doc(capturesOf(uid), entry.id), {
+      status: 'received',
+      sortedAt: null,
+      claimId: null,
+      claimedAt: null,
+    }),
+  );
+  await batch.commit();
+  return sortCapture(capture.id, 'full', rankStoredNotes(capture.text));
 }
 
 /** Asks the server to file what a turn held back past its first 20 changes. */
 export const sortRestOfCapture = (captureId: string) =>
   sortCapture(captureId, 'rest');
 
-export const deleteCapture = (uid: string, captureId: string) =>
-  deleteDoc(doc(capturesOf(uid), captureId));
+/** The turn's photos still there to let go: a gone or kept one would refuse or undo the whole write. */
+const photosToLetGo = (ids: string[]) => {
+  const { media } = store.getState().helm;
+  if (!media.isLoaded) return ids;
+  return ids.filter((id) =>
+    media.items.some((item) => item.id === id && item.status !== 'kept'),
+  );
+};
 
-/** Makes one task from a held turn's words as written and marks the turn sorted, in one batch handed back unawaited so it works offline. `undo` deletes the task and puts the turn back as it was, only while the task is still open and unedited; it answers whether it did. Refuses a turn a reading may be holding. */
+/** Deletes a turn; the photos it carried are let go with it, due in 24 hours. */
+export function deleteCapture(uid: string, captureId: string) {
+  const capture = selectAllCaptures(store.getState()).find(
+    (entry) => entry.id === captureId,
+  );
+  const batch = writeBatch(db);
+  batch.delete(doc(capturesOf(uid), captureId));
+  letGoTurnPhotos(
+    batch,
+    uid,
+    photosToLetGo(capture?.attachmentIds ?? []),
+    Date.now(),
+  );
+  return batch.commit();
+}
+
+/** Makes one task from a held turn's words as written (the messages that joined it follow, one per line) and marks the turn and its waiting messages sorted, in one batch handed back unawaited so it works offline. `undo` deletes the task and puts the turn back as it was, only while the task is still open and unedited; it answers whether it did. Refuses a turn a reading may be holding. */
 export async function makeTaskAsWritten(
   uid: string,
   encryption: HelmEncryption,
@@ -233,7 +394,14 @@ export async function makeTaskAsWritten(
   if (!canMakeTaskAsWritten(current, isSorting(capture.id), Date.now())) {
     throw new Error('This turn is being read.');
   }
-  const title = toTaskTitle(current.text);
+  const joined = selectAllCaptures(store.getState()).filter(
+    (entry) =>
+      entry.turnLeadId === current.id &&
+      current.joinedCaptureIds.includes(entry.id),
+  );
+  const title = toTaskTitle(
+    [current, ...joined].map((entry) => entry.text).join('\n'),
+  );
   if (!title) throw new Error('A turn with no words can not become a task.');
   const now = Date.now();
   const task: Task = {
@@ -259,6 +427,7 @@ export async function makeTaskAsWritten(
     createdAt: now,
     lastEditedAt: null,
     completedAt: null,
+    clearedAt: null,
     sealed: await sealJson<TaskSealed>(
       { title, notes: null, steps: {} },
       encryption,
@@ -284,6 +453,16 @@ export async function makeTaskAsWritten(
     seenAt: now,
     ...questionFields(now),
   });
+  const waitingJoined = joined.filter((entry) => entry.status === 'received');
+  waitingJoined.forEach((entry) =>
+    batch.update(doc(capturesOf(uid), entry.id), {
+      status: 'sorted',
+      sortedAt: now,
+      claimId: null,
+      claimedAt: null,
+    }),
+  );
+  letGoTurnPhotos(batch, uid, photosToLetGo(current.attachmentIds), now);
   const write = batch.commit();
   const undo = async () => {
     const task = store
@@ -307,6 +486,27 @@ export async function makeTaskAsWritten(
       seenAt: current.seenAt,
       ...questionFields(null),
     });
+    waitingJoined.forEach((entry) =>
+      reverse.update(doc(capturesOf(uid), entry.id), {
+        status: 'received',
+        sortedAt: null,
+      }),
+    );
+    const letGo = await Promise.all(
+      current.attachmentIds.map(async (mediaId) => {
+        const mediaRef = doc(mediaOf(uid), mediaId);
+        const data = (await getDoc(mediaRef)).data();
+        return data?.status === 'discarded' ? [mediaRef] : [];
+      }),
+    );
+    letGo.flat().forEach((mediaRef) =>
+      reverse.update(mediaRef, {
+        status: 'received',
+        decidedBy: null,
+        decidedAt: null,
+        deleteAfter: null,
+      }),
+    );
     await reverse.commit();
     return true;
   };

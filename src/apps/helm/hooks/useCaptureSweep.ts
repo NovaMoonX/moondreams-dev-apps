@@ -10,6 +10,7 @@ import {
   SWEEP_RUN_LIMIT,
 } from '@apps/helm/constants';
 import { sortCapture, isSorting } from '@apps/helm/queries/nomosMutations';
+import { rankStoredNotes } from '@apps/helm/store/actions/captureActions';
 import type { OpenCapture } from '@apps/helm/types';
 
 const isUtcDayOver = (heldAt: number, now: number) =>
@@ -27,10 +28,20 @@ const isHoldOver = (
     : isUtcDayOver(heldAt, now);
 };
 
-const isDue = (capture: OpenCapture, now: number) =>
-  capture.status === 'received' ||
-  (capture.status === 'interpreting' &&
-    now - (capture.claimedAt ?? 0) > SWEEP_LEASE_MS);
+const isDue = (capture: OpenCapture, now: number, waiting: OpenCapture[]) => {
+  const lead = capture.turnLeadId
+    ? waiting.find((entry) => entry.id === capture.turnLeadId)
+    : undefined;
+  const isLeadWorking =
+    lead !== undefined &&
+    (lead.status === 'received' || lead.status === 'interpreting');
+  return (
+    !isLeadWorking &&
+    (capture.status === 'received' ||
+      (capture.status === 'interpreting' &&
+        now - (capture.claimedAt ?? 0) > SWEEP_LEASE_MS))
+  );
+};
 
 function createSweep() {
   const state = {
@@ -48,11 +59,11 @@ function createSweep() {
   const sweepNext = async (tried: Set<string>): Promise<void> => {
     if (!isActive()) return;
     const now = Date.now();
-    const next = store
-      .getState()
-      .helm.waitingCaptures.captures.filter(
+    const waiting = store.getState().helm.waitingCaptures.captures;
+    const next = waiting
+      .filter(
         (capture) =>
-          isDue(capture, now) &&
+          isDue(capture, now, waiting) &&
           !tried.has(capture.id) &&
           !capture.hasPendingWrites &&
           !isSorting(capture.id) &&
@@ -61,7 +72,11 @@ function createSweep() {
       .sort((a, b) => a.createdAt - b.createdAt)[0];
     if (!next) return;
     tried.add(next.id);
-    const { kind } = await sortCapture(next.id);
+    const { kind } = await sortCapture(
+      next.id,
+      'full',
+      rankStoredNotes(next.text),
+    );
     if (kind === 'failed' || kind === 'notSorted') {
       state.heldAt.set(next.id, Date.now());
     }
@@ -106,6 +121,13 @@ export function useCaptureSweep(uid: string | null) {
     (state) =>
       state.helm.keyStatus === 'ready' && state.helm.waitingCaptures.isLoaded,
   );
+  // A turn that lands as received after open (one imported from the drop box) is a moment to sort again.
+  const receivedCount = useAppSelector(
+    (state) =>
+      state.helm.waitingCaptures.captures.filter(
+        (capture) => capture.status === 'received',
+      ).length,
+  );
   const sweep = useRef<ReturnType<typeof createSweep> | null>(null);
 
   useEffect(() => {
@@ -120,7 +142,7 @@ export function useCaptureSweep(uid: string | null) {
 
   useEffect(() => {
     if (uid && isReady) void sweep.current?.run();
-  }, [uid, isReady]);
+  }, [uid, isReady, receivedCount]);
 
   useEffect(() => {
     const handleOnline = () => void sweep.current?.run();

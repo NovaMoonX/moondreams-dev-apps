@@ -186,7 +186,10 @@ test('buildContext keeps a typed closing tag inside its string', () => {
 });
 
 test('the prompt names both blocks as data and explains this and these', () => {
-  assert.match(SYSTEM_PROMPT, /<screen>, <earlier_turns> and <capture>/);
+  assert.match(
+    SYSTEM_PROMPT,
+    /<screen>, <earlier_turns>, <messages> and <capture>/,
+  );
   assert.match(SYSTEM_PROMPT, /"this", "it" and "that" mean its focus/);
   assert.match(SYSTEM_PROMPT, /Never file them again/);
 });
@@ -210,6 +213,7 @@ test('the fixture follows this, it and the nth one from the context', async () =
     start: 13,
     end: 21,
     due: { kind: 'day' as const, date: Date.UTC(2026, 10, 14) },
+    precision: null,
   };
   const screen = {
     ...base,

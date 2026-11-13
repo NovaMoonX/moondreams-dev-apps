@@ -1,5 +1,9 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import {
+  getFirestore,
+  type DocumentReference,
+  type Transaction,
+} from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -11,7 +15,13 @@ import {
   wrapDataKey,
   type WrappedKey,
 } from '../../appKeys/wrap.js';
-import { createDataKey, wrappedKeyPath } from './helmKey.js';
+import {
+  createDropBoxPair,
+  unwrapDropBoxKey,
+  wrapDropBoxKey,
+  type DropBoxKeyDoc,
+} from './dropBox.js';
+import { createDataKey, dropBoxKeyPath, wrappedKeyPath } from './helmKey.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -65,15 +75,67 @@ export const getHelmKey = onCall(
     const keyring = loadKeyringOrFail();
     const firestore = getFirestore();
     const ref = firestore.doc(wrappedKeyPath(uid));
+    const dropBoxRef = firestore.doc(dropBoxKeyPath(uid));
+    // Made outside the transaction, which may run again, and only when no key is stored yet.
+    const hasDropBox = (await dropBoxRef.get()).exists;
+    const freshPair = hasDropBox ? null : await createDropBoxPair();
+
+    // A drop-box key that won't open never fails the data key: the public half is still returned and nothing is replaced.
+    const settleDropBox = async (
+      transaction: Transaction,
+      reference: DocumentReference,
+      stored: DropBoxKeyDoc | null,
+    ) => {
+      const now = Date.now();
+      if (!stored) {
+        const pair = freshPair ?? (await createDropBoxPair());
+        transaction.create(reference, wrapDropBoxKey(keyring, uid, pair, now));
+        return pair.publicJwk;
+      }
+      if (stored.masterKeyId !== keyring.current) {
+        try {
+          const privateKey = unwrapDropBoxKey(keyring, uid, stored);
+          transaction.set(
+            reference,
+            wrapDropBoxKey(
+              keyring,
+              uid,
+              { publicJwk: stored.publicJwk, privateKey },
+              stored.createdAt,
+            ),
+          );
+        } catch {
+          logger.error('helm.keys.dropBoxUnwrapFailed', {
+            masterKeyId: stored.masterKeyId,
+          });
+        }
+      }
+      return stored.publicJwk;
+    };
 
     const opened = await firestore.runTransaction(async (transaction) => {
-      const snapshot = await transaction.get(ref);
+      const [snapshot, dropBoxSnapshot] = await Promise.all([
+        transaction.get(ref),
+        transaction.get(dropBoxRef),
+      ]);
       const now = Date.now();
+      const dropBoxKey = await settleDropBox(
+        transaction,
+        dropBoxRef,
+        dropBoxSnapshot.exists
+          ? (dropBoxSnapshot.data() as DropBoxKeyDoc)
+          : null,
+      );
 
       if (!snapshot.exists) {
         const data = createDataKey();
         transaction.create(ref, wrapDataKey(keyring, uid, data, now));
-        return { keyId: data.keyId, keyVersion: 1, key: data.key };
+        return {
+          keyId: data.keyId,
+          keyVersion: 1,
+          key: data.key,
+          dropBoxKey,
+        };
       }
 
       const wrapped = snapshot.data() as WrappedKey;
@@ -90,7 +152,12 @@ export const getHelmKey = onCall(
           ),
         );
       }
-      return { keyId: wrapped.keyId, keyVersion: wrapped.keyVersion, key };
+      return {
+        keyId: wrapped.keyId,
+        keyVersion: wrapped.keyVersion,
+        key,
+        dropBoxKey,
+      };
     });
 
     const result = {
@@ -98,7 +165,7 @@ export const getHelmKey = onCall(
       keyId: opened.keyId,
       keyVersion: opened.keyVersion,
       key: opened.key.toString('hex'),
-      dropBoxKey: null,
+      dropBoxKey: opened.dropBoxKey,
     };
     return result;
   },

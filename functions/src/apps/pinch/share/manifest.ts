@@ -1,0 +1,51 @@
+// Generated from src/apps/pinch/share/manifest.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
+import type { SourceShares } from '../../../vendor/connectionsContract.js';
+
+export const PINCH_SHARES: SourceShares = {
+  appId: 'pinch',
+  shares: [
+    {
+      id: 'app:pinch',
+      kind: 'firstPartyApp',
+      contractVersion: 1,
+      transformVersion: 1,
+      categories: [
+        {
+          id: 'plannedMeals',
+          kind: 'event',
+          label: 'Planned meals',
+          detail: 'The meal, day and slot',
+          mode: 'sync',
+          isOnAtConnect: true,
+          addedInVersion: 1,
+        },
+        {
+          id: 'shoppingList',
+          kind: 'task',
+          label: 'Shopping list',
+          detail: "What's still to buy",
+          mode: 'sync',
+          isOnAtConnect: true,
+          addedInVersion: 1,
+        },
+        {
+          id: 'useSoon',
+          kind: 'task',
+          label: 'Food to use soon',
+          detail: 'What in the fridge, freezer or pantry is near its date',
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 1,
+        },
+      ],
+      never: [
+        "Recipes' text",
+        'prices and costs',
+        'nutrition',
+        'cooking history',
+      ],
+      capabilities: { read: true, write: false, backgroundSync: true },
+      connect: { kind: 'siteGrant' },
+    },
+  ],
+};

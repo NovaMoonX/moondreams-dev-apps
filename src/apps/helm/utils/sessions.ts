@@ -32,6 +32,41 @@ export function groupSessions(captures: OpenCapture[]): Session[] {
     .sort((a, b) => a.startedAt - b.startedAt);
 }
 
+export interface TurnGroup {
+  lead: OpenCapture;
+  joined: OpenCapture[];
+}
+
+const isWaitingStatus = (status: OpenCapture['status']) =>
+  status === 'received' || status === 'interpreting';
+
+/** A session's turns as leads with the messages that joined them, in order; a joined message folds under its lead only while the lead is loaded and lists it, the message has no result of its own, and its status matches the lead's: received while the lead waits, sorted once the lead is sorted or asking. Any other stands as its own turn. */
+export function groupTurns(turns: OpenCapture[]): TurnGroup[] {
+  const byId = new Map(turns.map((turn) => [turn.id, turn]));
+  const leadOf = (turn: OpenCapture) => {
+    const lead =
+      turn.turnLeadId === null ? undefined : byId.get(turn.turnLeadId);
+    return lead &&
+      lead.joinedCaptureIds.includes(turn.id) &&
+      turn.executionIds.length === 0 &&
+      ((isWaitingStatus(lead.status) && turn.status === 'received') ||
+        ((lead.status === 'sorted' || lead.status === 'needsYou') &&
+          turn.status === 'sorted'))
+      ? lead
+      : undefined;
+  };
+  return turns
+    .filter((turn) => leadOf(turn) === undefined)
+    .map((lead) => ({
+      lead,
+      joined: turns.filter((turn) => leadOf(turn)?.id === lead.id),
+    }));
+}
+
+/** The messages groupTurns folds under this lead, in order. */
+export const getJoinedOf = (lead: OpenCapture, captures: OpenCapture[]) =>
+  groupTurns(captures).find((group) => group.lead.id === lead.id)?.joined ?? [];
+
 /** The session still open: the last turn's, while it is under the idle gap. */
 export function getOpenSessionId(sorted: OpenCapture[], now: number) {
   const last = sorted.at(-1);

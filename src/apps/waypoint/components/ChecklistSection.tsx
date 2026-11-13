@@ -2,9 +2,9 @@ import { useMemo, useState, type KeyboardEvent } from 'react';
 
 import {
   Button,
-  Checkbox,
   Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -405,7 +405,7 @@ export default function ChecklistSection({
                           {/* Checkbox doesn't forward children, so Tooltip's
                           child-cloning needs a plain wrapper to attach to. */}
                           <span className='mt-0.5 inline-flex'>
-                            <Checkbox
+                            <AppCheckbox
                               checked={item.isCompleted}
                               disabled={!mayToggle(item)}
                               onCheckedChange={(checked) =>
