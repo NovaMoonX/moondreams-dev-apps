@@ -12,6 +12,10 @@ import { db } from '@lib/firebase/config';
 import { sealJson } from '@apps/helm/security';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import type { Fact, FactKind, FactSealed } from '@apps/helm/types';
+import {
+  planPhotoRelease,
+  type ReleasablePhoto,
+} from '@apps/helm/utils/mediaRelease';
 
 /** A change that went through, with the way to take it back; `undo` says false when the fact changed since and was left alone. */
 export type FactChange =
@@ -190,10 +194,17 @@ export const correctFact = (
 
 const MAX_CHAIN = 20;
 
-/** Deletes a fact and the earlier facts it replaced; Undo writes them back under the same ids, unless one is there again. */
-export const forgetFact = (uid: string, factId: string) =>
+/** Deletes a fact and the earlier facts it replaced, and lets go of the photos kept only on them for 24 hours; Undo writes them back under the same ids, unless one is there again, and keeps the photos again. */
+export const forgetFact = (
+  uid: string,
+  factId: string,
+  photos: ReleasablePhoto[],
+) =>
   guard(async (): Promise<FactChange> => {
     const ref = doc(factsOf(uid), factId);
+    const mediaRef = (id: string) =>
+      doc(db, 'apps', 'helm', 'users', uid, 'media', id);
+    const now = Date.now();
     const taken = await runTransaction(db, async (transaction) => {
       const readChain = async (
         id: string | null,
@@ -221,9 +232,17 @@ export const forgetFact = (uid: string, factId: string) =>
             DocumentData | undefined)
         : undefined;
       chain.forEach((entry) => transaction.delete(doc(factsOf(uid), entry.id)));
+      const released = planPhotoRelease(
+        photos,
+        chain.map((entry) => ({ kind: 'fact', id: entry.id })),
+        now,
+      );
+      released.forEach((entry) =>
+        transaction.update(mediaRef(entry.id), entry.forward),
+      );
       const frees = partnerRef && partner?.disputedWithId === factId;
       if (frees) transaction.update(partnerRef, { disputedWithId: null });
-      return { chain, partnerId: frees ? partnerId : null };
+      return { chain, released, partnerId: frees ? partnerId : null };
     });
     if (taken.chain.length === 0) return { kind: 'changed' };
     return {
@@ -233,14 +252,24 @@ export const forgetFact = (uid: string, factId: string) =>
           const partnerRef = taken.partnerId
             ? doc(factsOf(uid), taken.partnerId)
             : null;
-          const [current, partner] = await Promise.all([
+          const [current, partner, photoDocs] = await Promise.all([
             transaction.get(ref),
             partnerRef ? transaction.get(partnerRef) : null,
+            Promise.all(
+              taken.released.map((entry) =>
+                transaction.get(mediaRef(entry.id)),
+              ),
+            ),
           ]);
           if (current.exists()) return false;
           taken.chain.forEach((entry) =>
             transaction.set(doc(factsOf(uid), entry.id), entry.data),
           );
+          taken.released.forEach((entry, index) => {
+            if (photoDocs[index].exists()) {
+              transaction.update(mediaRef(entry.id), entry.back);
+            }
+          });
           if (
             partnerRef &&
             partner?.exists() &&

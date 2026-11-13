@@ -48,7 +48,17 @@ import {
   toDocumentLink,
 } from '../../functions/src/connections/deepLinks.ts';
 import { SPOKEN_MAX_CHARS } from '../../functions/src/apps/helm/nomos/spoken.ts';
-import type { SyncedCopy } from '../../functions/src/apps/helm/syncedCopies.ts';
+import {
+  sealForHelm,
+  type HelmKey,
+} from '../../functions/src/apps/helm/helmKey.ts';
+import {
+  MAX_CONTEXT_SYNCED,
+  openSyncedCopy,
+  readContextSynced,
+  toSyncedView,
+  type SyncedCopy,
+} from '../../functions/src/apps/helm/syncedCopies.ts';
 
 const READING: CaptureReading = {
   people: [],
@@ -66,6 +76,7 @@ const COPY: SyncedCopy = {
   connectorId: 'app:pinch',
   accountId: 'site',
   kind: 'event',
+  category: null,
   title: 'Cake tasting',
   subtitle: null,
   startAt: Date.UTC(2026, 10, 13, 19),
@@ -73,6 +84,10 @@ const COPY: SyncedCopy = {
   dueAt: null,
   isAllDay: false,
   isEnded: false,
+  detail: null,
+  amountCents: null,
+  currency: null,
+  asOf: null,
 };
 
 const GRANT = {
@@ -299,6 +314,10 @@ const answer = (fields: Partial<AnswerCommand> = {}): AnswerCommand => ({
   syncedKeys: [],
   generalText: null,
   generalSpoken: null,
+  noteIds: [],
+  differsFromNoteId: null,
+  differsSays: null,
+  suggestedTopicId: null,
   ...fields,
 });
 
@@ -576,6 +595,117 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
+    'note and topic aliases resolve against the context, an unknown one is dropped, differsSays is cut at 80',
+    () => {
+      const notes = createAliasBook('n');
+      const topics = createAliasBook('tp');
+      const noteAlias = notes.add('note-1');
+      const topicAlias = topics.add('topic-1');
+      const read = (extra: Record<string, unknown>) =>
+        normalizeNomosReply(
+          {
+            commands: [
+              {
+                kind: 'answer',
+                scope: 'both',
+                question: 'How long do cakes keep?',
+                fromRecordsText: 'Your note says 3 days.',
+                sourceAliases: [noteAlias, 'n9'],
+                generalText: 'Guides say 2 days.',
+                differsFromNoteAlias: noteAlias,
+                differsSays: 'word '.repeat(40),
+                suggestedTopicAlias: topicAlias,
+                ...extra,
+              },
+            ],
+          },
+          { reading: READING, aliases: createAliasBook('t'), notes, topics },
+        ).answer;
+      const kept = read({});
+      assert.deepEqual(kept?.noteIds, ['note-1']);
+      assert.deepEqual(kept?.sources, []);
+      assert.equal(kept?.differsFromNoteId, 'note-1');
+      assert.ok((kept?.differsSays ?? '').length <= 80);
+      assert.equal(kept?.suggestedTopicId, 'topic-1');
+      const unknown = read({
+        differsFromNoteAlias: 'n9',
+        suggestedTopicAlias: 'tp9',
+        sourceAliases: ['n9'],
+      });
+      assert.deepEqual(unknown?.noteIds, []);
+      assert.equal(unknown?.differsFromNoteId, null);
+      assert.equal(unknown?.suggestedTopicId, null);
+    },
+  ],
+  [
+    'a cited note is copied into the answer, and differs and suggested topic are kept only with a note in the context and a general part',
+    () => {
+      const notes = new Map([
+        [
+          'note-1',
+          { title: 'Cake storage', topicPath: 'Kitchen', topicEmoji: '🍰' },
+        ],
+      ]);
+      const command = (fields: Partial<AnswerCommand>) =>
+        answer({
+          scope: 'both',
+          sources: [],
+          noteIds: ['note-1'],
+          fromRecordsText: 'Your note says 3 days.',
+          generalText: 'Guides say 2 days.',
+          differsFromNoteId: 'note-1',
+          differsSays: 'Cakes keep 3 days',
+          suggestedTopicId: 'topic-1',
+          ...fields,
+        });
+      const built = buildAnswer(command({}), undefined, [], undefined, notes);
+      assert.deepEqual(built.answer.sources, [
+        {
+          kind: 'note',
+          id: 'note-1',
+          title: 'Cake storage',
+          topicPath: 'Kitchen',
+          topicEmoji: '🍰',
+        },
+      ]);
+      assert.deepEqual(built.answer.generalDiffersFrom, {
+        noteId: 'note-1',
+        title: 'Cake storage',
+        says: 'Cakes keep 3 days',
+      });
+      assert.equal(built.answer.suggestedTopicId, 'topic-1');
+      const drops: string[] = [];
+      const foreign = buildAnswer(
+        command({ noteIds: ['note-9'], differsFromNoteId: 'note-9' }),
+        (code) => drops.push(code),
+        [],
+        undefined,
+        notes,
+      );
+      assert.equal(foreign.answer.fromRecords, null);
+      assert.deepEqual(drops, ['answer-unsourced']);
+      assert.equal(foreign.answer.generalDiffersFrom, null);
+      const noSays = buildAnswer(
+        command({ differsSays: null }),
+        undefined,
+        [],
+        undefined,
+        notes,
+      );
+      assert.equal(noSays.answer.generalDiffersFrom, null);
+      const refused = buildAnswer(
+        command({ scope: 'yourThings' }),
+        undefined,
+        [],
+        undefined,
+        notes,
+      );
+      assert.equal(refused.answer.general, null);
+      assert.equal(refused.answer.generalDiffersFrom, null);
+      assert.equal(refused.answer.suggestedTopicId, null);
+    },
+  ],
+  [
     'an answer with a bad scope or no question is not kept',
     () => {
       const context = { reading: READING, aliases: createAliasBook('t') };
@@ -610,6 +740,163 @@ const tests: [string, () => void | Promise<void>][] = [
       assert.ok(message.includes('"source":"Pinch"'));
       assert.ok(!message.includes('synced-1'));
       assert.equal(synced.get('e1')?.id, 'synced-1');
+    },
+  ],
+  [
+    'a money view carries a signed amount, its date and age, and nulls where the copy has none',
+    () => {
+      const now = Date.UTC(2026, 10, 10, 12);
+      const money: SyncedCopy = {
+        ...COPY,
+        kind: 'moneySummary',
+        title: 'Free to Spend',
+        startAt: null,
+        amountCents: -1_250,
+        currency: 'USD',
+        asOf: now - 2.5 * 86_400_000,
+      };
+      const view = toSyncedView(money, 'UTC', now);
+      assert.equal(view.amount, '-$12.50');
+      assert.equal(view.ageDays, 2);
+      const unknown = toSyncedView(
+        { ...money, currency: null, asOf: null },
+        'UTC',
+        now,
+      );
+      assert.equal(unknown.amount, null);
+      assert.equal(unknown.asOf, null);
+      assert.equal(unknown.ageDays, null);
+    },
+  ],
+  [
+    'a copy sealed before detail and amounts existed reads them as null',
+    () => {
+      const key: HelmKey = {
+        keyId: 'k',
+        keyVersion: 1,
+        key: Buffer.alloc(32, 7),
+      };
+      const copy = openSyncedCopy(key, 'old-1', {
+        connectorId: 'app:runway',
+        kind: 'moneySummary',
+        sealed: sealForHelm(key, { title: 'Free to Spend' }),
+      });
+      assert.equal(copy?.detail, null);
+      assert.equal(copy?.amountCents, null);
+      assert.equal(copy?.currency, null);
+    },
+  ],
+  [
+    'the context cap keeps a money summary and never passes the cap',
+    async () => {
+      const key: HelmKey = {
+        keyId: 'k',
+        keyVersion: 1,
+        key: Buffer.alloc(32, 7),
+      };
+      const doc = (id: string, kind: string, title: string, at: number) => ({
+        id,
+        data: () => ({
+          connectorId: 'app:runway',
+          kind,
+          startAt: kind === 'event' ? at : null,
+          dueAt: null,
+          isAllDay: false,
+          connectionEndedAt: null,
+          sealed: sealForHelm(key, {
+            title,
+            ...(kind === 'moneySummary'
+              ? { amountCents: 100, currency: 'USD' }
+              : {}),
+          }),
+        }),
+      });
+      const at = Date.UTC(2026, 10, 10, 12);
+      const byKind: Record<string, ReturnType<typeof doc>[]> = {
+        event: Array.from({ length: 40 }, (_, index) =>
+          doc(`e${index}`, 'event', `Event ${index}`, at + index * 60_000),
+        ),
+        task: [],
+        moneySummary: [doc('m1', 'moneySummary', 'Free to Spend', 0)],
+      };
+      const query = (kind: string | null): unknown => ({
+        where: (field: string, _op: string, value: unknown) =>
+          query(field === 'kind' ? String(value) : kind),
+        orderBy: () => query(kind),
+        limit: () => query(kind),
+        get: async () => ({ docs: byKind[kind ?? ''] ?? [] }),
+      });
+      const firestore = { collection: () => query(null) } as never;
+      const read = await readContextSynced(firestore, 'u1', key, at, 'UTC');
+      assert.equal(read.length, MAX_CONTEXT_SYNCED);
+      assert.equal(read[0]?.kind, 'moneySummary');
+    },
+  ],
+  [
+    'a part of a topic document is a citable source, and wins over a note that disagrees',
+    async () => {
+      const text = 'How much air do the tyres need?';
+      const context = buildContext({
+        text,
+        reading: READING,
+        createdAt: Date.UTC(2026, 10, 10, 12),
+        timeZone: 'UTC',
+        tasks: [],
+        notes: [{ id: 'note-1', title: 'Tyres', body: 'Tyres need 30 psi.' }],
+        focusedTopic: {
+          id: 'topic-1',
+          name: 'Car care',
+          version: 2,
+          sections: [
+            {
+              id: 'sec-oil',
+              writtenBy: 'nomos',
+              heading: 'Oil',
+              markdown: 'Every 10,000 km.',
+              noteIds: [],
+            },
+            {
+              id: 'sec-tyres',
+              writtenBy: 'nomos',
+              heading: 'Tyres',
+              markdown: 'Tyres need 32 psi.',
+              noteIds: ['note-1'],
+            },
+          ],
+        },
+      });
+      assert.equal(context.parts.idOf('d1'), 'topic-1');
+      assert.equal(context.parts.idOf('d2'), 'topic-1');
+      const loop = await createFixtureProvider(text, READING).runToolLoop({
+        role: 'interpret',
+        system: '',
+        messages: [{ role: 'user', content: context.message }],
+        terminalTool: {
+          name: 'file_results',
+          description: '',
+          inputSchema: {},
+        },
+        limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 5_000 },
+      } as never);
+      const reply = normalizeNomosReply(loop.terminalInput, {
+        reading: READING,
+        aliases: context.aliases,
+        synced: context.synced,
+        notes: context.notes,
+        parts: context.parts,
+      });
+      assert.ok(reply.answer);
+      assert.ok(reply.answer.fromRecordsText?.includes('32 psi'));
+      assert.deepEqual(reply.answer.sources, [
+        { kind: 'topic', id: 'topic-1' },
+      ]);
+      const drops: string[] = [];
+      const built = buildAnswer(reply.answer, (code) => drops.push(code));
+      assert.deepEqual(drops, []);
+      assert.deepEqual(built.answer.sources, [
+        { kind: 'topic', id: 'topic-1' },
+      ]);
+      assert.ok(built.answer.fromRecords?.includes('32 psi'));
     },
   ],
   [
@@ -1293,6 +1580,340 @@ const tests: [string, () => void | Promise<void>][] = [
           'https://docs.google.com/document/d/short/edit?authuser=a%40b.example',
         ),
       );
+    },
+  ],
+  [
+    'search_app_records is offered only while an app grant has a live category on, and logs, quotes and links as the app',
+    async () => {
+      const SITE = [
+        {
+          connectorId: 'app:runway',
+          categories: [{ id: 'transactions', label: 'Transactions' }],
+        },
+      ];
+      const calls: unknown[] = [];
+      const record = (day: number, cents: number, category: string) => ({
+        sourceRef: `purchases/${day}`,
+        kind: 'transaction' as const,
+        title: 'Costco',
+        subtitle: null,
+        detail: null,
+        startAt: Date.UTC(2026, 9, day),
+        endAt: null,
+        isAllDay: true,
+        dueAt: null,
+        timeZone: null,
+        placeLabel: null,
+        amountCents: cents,
+        currency: 'USD',
+        sourceUpdatedAt: null,
+        extra: { category },
+      });
+      const live: LiveReads = {
+        searchLive: async () => ({ ok: false, reason: 'failed' }),
+        readLive: async () => ({ ok: false, reason: 'failed' }),
+        querySiteLive: async (_firestore, input) => {
+          calls.push(input);
+          return {
+            ok: true,
+            result: {
+              records: [1, 2, 3, 4, 5, 6, 7].map((day) =>
+                record(day, day === 7 ? -500 : 8_800, 'Groceries'),
+              ),
+              matchedCount: 31,
+              totalCents: 264_000,
+              currency: 'USD',
+              isPartial: false,
+              from: '2026-10-01',
+              to: '2026-10-31',
+            },
+          };
+        },
+        isLiveDeepLink,
+      };
+      const quotes = createQuoteBook();
+      const searched = createSearchedLog();
+      const scope = {
+        uid: 'u1',
+        key: {} as never,
+        aliases: createAliasBook('t'),
+        synced: createSyncedBook(),
+        timeZone: 'UTC',
+        firestore: {} as never,
+        quotes,
+        searched,
+        live,
+      };
+      const names = (siteGrants: typeof SITE) =>
+        buildHelmTools({ ...scope, siteGrants }).map((tool) => tool.name);
+      assert.ok(!names([]).includes('search_app_records'));
+      assert.ok(
+        !names([{ ...SITE[0], categories: [] }]).includes('search_app_records'),
+      );
+      assert.ok(names(SITE).includes('search_app_records'));
+      const tool = buildHelmTools({ ...scope, siteGrants: SITE }).find(
+        (entry) => entry.name === 'search_app_records',
+      );
+      const bad = (await tool?.run({
+        app: 'app:pinch',
+        category: 'transactions',
+      } as never)) as {
+        error?: string;
+      };
+      assert.match(bad.error ?? '', /No such app/);
+      assert.equal(
+        calls.length,
+        0,
+        'an app that is not offered is never asked',
+      );
+      const result = (await tool?.run({
+        app: 'app:runway',
+        category: 'transactions',
+        payee: 'Costco',
+        from: '2026-10-01',
+        to: '2026-10-31',
+      } as never)) as {
+        records: { alias?: string; kind: string; amount: string }[];
+        matchedCount: number;
+        total: string;
+        from: string;
+        to: string;
+      };
+      assert.deepEqual(calls, [
+        {
+          uid: 'u1',
+          readerAppId: 'helm',
+          connectorId: 'app:runway',
+          category: 'transactions',
+          args: { payee: 'Costco', from: '2026-10-01', to: '2026-10-31' },
+        },
+      ]);
+      assert.equal(result.matchedCount, 31);
+      assert.deepEqual([result.from, result.to], ['2026-10-01', '2026-10-31']);
+      assert.equal(result.total, '$2,640.00');
+      assert.equal(result.records.length, 7);
+      assert.deepEqual(
+        result.records.map((row) => row.alias ?? null),
+        ['q1', 'q2', 'q3', 'q4', 'q5', null, null],
+        'at most five rows are kept as quotes',
+      );
+      assert.equal(result.records[6].kind, 'refund');
+      assert.equal(result.records[6].amount, '$5.00');
+      assert.deepEqual(quotes.get('q1'), {
+        alias: 'q1',
+        connectorId: 'app:runway',
+        accountId: 'site',
+        ref: 'purchases/1',
+        title: 'Costco',
+        from: 'Costco',
+        at: Date.UTC(2026, 9, 1),
+        snippet: '$88.00 \u00b7 Groceries',
+        deepLink: '/runway',
+        record: { name: 'Costco', detail: 'Groceries', amount: '$88.00' },
+      });
+      const [line] = searched.entries();
+      assert.equal(line.label, 'your Runway transactions');
+      assert.equal(line.found, 31);
+      assert.equal(line.failed, null);
+      const built = buildAnswer(
+        {
+          question: 'What did I spend at Costco?',
+          scope: 'yourThings',
+          isHealth: false,
+          fromRecordsText: 'You spent $2,640.00 at Costco.',
+          generalText: null,
+          generalSpoken: null,
+          differsFromNoteId: null,
+          differsSays: null,
+          suggestedTopicId: null,
+          noteIds: [],
+          sources: [],
+          syncedKeys: [],
+          quotes: [quotes.get('q1')!],
+        } as never,
+        undefined,
+        searched.entries(),
+      );
+      assert.equal(built.answer.quotes[0].sourceLabel, 'Runway \u00b7 Costco');
+      assert.equal(built.answer.quotes[0].deepLink, '/runway');
+      assert.deepEqual(built.quotedSourceKeys, ['app:runway|site']);
+      const east = buildHelmTools({
+        ...scope,
+        timeZone: 'Pacific/Kiritimati',
+        siteGrants: SITE,
+      }).find((entry) => entry.name === 'search_app_records');
+      calls.length = 0;
+      await east?.run({ app: 'app:runway', category: 'transactions' } as never);
+      assert.equal(
+        (calls[0] as { args: { to: string } }).args.to,
+        new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Pacific/Kiritimati',
+        }).format(Date.now()),
+        'a missing last day is the local today of the person',
+      );
+    },
+  ],
+  [
+    'a spend question names the range it read, says so when nothing matched, and never falls through to a task',
+    async () => {
+      const SITE = [
+        {
+          connectorId: 'app:runway',
+          categories: [{ id: 'transactions', label: 'Transactions' }],
+        },
+      ];
+      const calls: { args: Record<string, unknown> }[] = [];
+      const ask = async (text: string, matchedCount: number) => {
+        calls.length = 0;
+        const quotes = createQuoteBook();
+        const searched = createSearchedLog();
+        const live: LiveReads = {
+          searchLive: async () => ({ ok: false, reason: 'failed' }),
+          readLive: async () => ({ ok: false, reason: 'failed' }),
+          querySiteLive: async (_firestore, input) => {
+            calls.push(input as never);
+            return {
+              ok: true,
+              result: {
+                records: Array.from({ length: matchedCount }, (_, day) => ({
+                  sourceRef: `purchases/${day}`,
+                  kind: 'transaction' as const,
+                  title: 'Costco',
+                  subtitle: null,
+                  detail: null,
+                  startAt: null,
+                  endAt: null,
+                  isAllDay: true,
+                  dueAt: null,
+                  timeZone: null,
+                  placeLabel: null,
+                  amountCents: 8_800,
+                  currency: 'USD',
+                  sourceUpdatedAt: null,
+                  extra: { category: 'Groceries' },
+                })),
+                matchedCount,
+                totalCents: matchedCount * 8_800,
+                currency: 'USD',
+                isPartial: false,
+                from: '2026-10-01',
+                to: '2026-10-31',
+              },
+            };
+          },
+          isLiveDeepLink,
+        };
+        const { createHelmMcpServer } =
+          await import('../../functions/src/apps/helm/mcp/server.ts');
+        const server = await createHelmMcpServer({
+          uid: 'u1',
+          key: {} as never,
+          aliases: createAliasBook('t'),
+          synced: createSyncedBook(),
+          timeZone: 'UTC',
+          firestore: {} as never,
+          siteGrants: SITE,
+          quotes,
+          searched,
+          live,
+        });
+        const loop = await createFixtureProvider(text, READING).runToolLoop({
+          role: 'interpret',
+          system: '',
+          messages: [{ role: 'user', content: '' }],
+          mcpClient: server.client,
+          terminalTool: {
+            name: 'file_results',
+            description: '',
+            inputSchema: {},
+          },
+          limits: { maxTurns: 1, maxToolCalls: 4, maxMillis: 5_000 },
+        } as never);
+        await server.close();
+        const [command] = (
+          loop.terminalInput as {
+            commands: { kind: string; fromRecordsText: string }[];
+          }
+        ).commands;
+        return { loop, command, quotes, searched };
+      };
+      const hit = await ask('What did I spend at Costco last month?', 1);
+      assert.equal(hit.command.kind, 'answer');
+      assert.equal(
+        hit.command.fromRecordsText,
+        'You spent $88.00 at Costco between Oct 1 and Oct 31 across 1 purchase.',
+      );
+      assert.equal(
+        hit.quotes.get('q1')?.at,
+        null,
+        'a row with no day has none',
+      );
+      const none = await ask('What did I spend at Costco last month?', 0);
+      assert.equal(
+        none.command.fromRecordsText,
+        'No purchases at Costco between Oct 1 and Oct 31.',
+      );
+      const built = buildAnswer(
+        {
+          question: 'What did I spend at Costco last month?',
+          scope: 'yourThings',
+          isHealth: false,
+          fromRecordsText: none.command.fromRecordsText,
+          generalText: null,
+          generalSpoken: null,
+          differsFromNoteId: null,
+          differsSays: null,
+          suggestedTopicId: null,
+          noteIds: [],
+          sources: [],
+          syncedKeys: [],
+          quotes: [],
+        } as never,
+        (code) => assert.fail(`dropped as ${code}`),
+        none.searched.entries(),
+      );
+      assert.equal(built.answer.fromRecords, none.command.fromRecordsText);
+      const dropped: string[] = [];
+      const unsearched = buildAnswer(
+        {
+          question: 'q',
+          scope: 'yourThings',
+          isHealth: false,
+          fromRecordsText: 'No purchases.',
+          generalText: null,
+          generalSpoken: null,
+          differsFromNoteId: null,
+          differsSays: null,
+          suggestedTopicId: null,
+          noteIds: [],
+          sources: [],
+          syncedKeys: [],
+          quotes: [],
+        } as never,
+        (code) => dropped.push(code),
+        [],
+      );
+      assert.equal(unsearched.answer.fromRecords, null);
+      assert.deepEqual(dropped, ['answer-unsourced']);
+      const anyone = await ask('What did I spend recently?', 2);
+      assert.equal(anyone.command.kind, 'answer');
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].args.payee, null, 'no payee asks for every payee');
+      assert.equal(
+        anyone.command.fromRecordsText,
+        'You spent $176.00 between Oct 1 and Oct 31 across 2 purchases.',
+      );
+    },
+  ],
+  [
+    "an app link counts only as that app's own path",
+    () => {
+      assert.ok(isLiveDeepLink('app:runway', '/runway'));
+      assert.ok(!isLiveDeepLink('app:runway', '/pinch'));
+      assert.ok(!isLiveDeepLink('app:runway', '/runway/other'));
+      assert.ok(!isLiveDeepLink('app:runway', 'https://evil.example/runway'));
+      assert.ok(!isLiveDeepLink('app:runway', '//evil.example'));
+      assert.ok(!isLiveDeepLink('google:gmail', '/runway'));
     },
   ],
   [

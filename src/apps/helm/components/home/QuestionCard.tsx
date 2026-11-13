@@ -131,24 +131,35 @@ function QuestionCard({
   };
 
   const answerOnServer = async (value: QuestionAnswerValue, text?: string) => {
-    if (value.shape !== 'pickOne' || isOffline) return;
+    if (
+      (value.shape !== 'pickOne' &&
+        value.shape !== 'pickSeveral' &&
+        value.shape !== 'yesNo') ||
+      isOffline
+    )
+      return;
     setIsWorking(true);
-    const result = await resolveQuestion(captureId, id, {
-      by: 'tap',
-      optionId: value.optionId,
-      ...(text !== undefined && { text }),
-    });
+    const result = await resolveQuestion(
+      captureId,
+      id,
+      value.shape === 'pickSeveral'
+        ? { by: 'tap', optionIds: value.optionIds }
+        : {
+            by: 'tap',
+            optionId: value.optionId,
+            ...(text !== undefined && { text }),
+          },
+    );
     setIsWorking(false);
     if (result.kind === 'done' && result.executionId && isInSheet && user) {
       const { uid } = user;
       const { executionId } = result;
-      const kept = question.options.find(
-        (option) => option.id === value.optionId,
-      );
+      const optionId = value.shape === 'pickSeveral' ? null : value.optionId;
+      const kept = question.options.find((option) => option.id === optionId);
       const title =
         question.kind !== 'whichIsTrue'
           ? HELM_COPY.questionAnswered
-          : value.optionId === 'none' || !kept
+          : optionId === 'none' || !kept
             ? HELM_COPY.factKeptNeither
             : HELM_COPY.factKept(kept.label);
       addToast({

@@ -21,10 +21,13 @@ export const EMPTY_AMOUNT_DRAFT: AmountDraft = {
   stance: STANCE_FOLLOW_PLAN,
 };
 
-/** The range a draft holds, equal ends for an exact amount; null while it is not a positive amount or a range with a higher top. */
-export function parseAmountDraft(draft: AmountDraft): MoneyRange | null {
+/** The range a draft holds, equal ends for an exact amount; null while it is not a positive amount (zero too when `allowsZero`: a pause) or a range with a higher top. */
+export function parseAmountDraft(
+  draft: AmountDraft,
+  allowsZero = false,
+): MoneyRange | null {
   const low = parseMoneyToCents(draft.low);
-  if (low === null || low <= 0) return null;
+  if (low === null || low < 0 || (low === 0 && !allowsZero)) return null;
   if (draft.mode === 'exact') return { lowCents: low, highCents: low };
   const high = parseMoneyToCents(draft.high);
   if (high === null || high <= low) return null;
@@ -53,8 +56,11 @@ export function toAmountDraft(
 }
 
 /** "$150.00", or "$100.00 to $140.00" for a range; empty while it is not a whole amount. */
-export function describeAmountDraft(draft: AmountDraft): string {
-  const range = parseAmountDraft(draft);
+export function describeAmountDraft(
+  draft: AmountDraft,
+  allowsZero = false,
+): string {
+  const range = parseAmountDraft(draft, allowsZero);
   if (range === null) return '';
   const result =
     range.lowCents === range.highCents
@@ -68,11 +74,16 @@ export const isTooLong = (text: string) =>
   /^\d{8,}/.test(text.trim().replace(/[$,]/g, ''));
 
 /** Why a draft the person has started typing is not an amount yet; null while it is empty or fine. */
-export function getAmountDraftProblem(draft: AmountDraft): string | null {
-  if (draft.low.trim() === '' || parseAmountDraft(draft) !== null) return null;
+export function getAmountDraftProblem(
+  draft: AmountDraft,
+  allowsZero = false,
+): string | null {
+  if (draft.low.trim() === '' || parseAmountDraft(draft, allowsZero) !== null)
+    return null;
   const low = parseMoneyToCents(draft.low);
   if (low === null && isTooLong(draft.low)) return FORM_FLOW_WORDS.overLimit;
-  if (low === null || low <= 0) return FORM_FLOW_WORDS.badAmount;
+  if (low === null || low < 0 || (low === 0 && !allowsZero))
+    return FORM_FLOW_WORDS.badAmount;
   if (draft.mode === 'range' && draft.high.trim() !== '')
     return FORM_FLOW_WORDS.badRange;
   return null;

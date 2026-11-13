@@ -1,5 +1,6 @@
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { createOptionMatcher } from '@/utils/optionMatchUtils';
+import { isCardFeeGroup } from '@apps/runway/engine/cardFees';
 import type { GroupSealed } from '@apps/runway/types';
 
 /** Stands in for a group that is written with the bill, so a change to "a new group" reads as a change. */
@@ -61,20 +62,22 @@ export function resolveGroupRename(
 
 const toKey = (name: string) => name.trim().toLowerCase();
 
-/** The plan's groups, then the names a review uses that no group has yet, as the choices a drafted bill or envelope picks from. */
+/** The plan's groups a person can put things in, then the names a review uses that no group has yet, as the choices a drafted bill or envelope picks from. */
 export const getGroupChoices = (
-  groups: readonly { id: string; name: string }[],
+  allGroups: readonly { id: string; name: string }[],
   forName?: { names: string[] },
-): { id: string; name: string }[] =>
-  forName === undefined
-    ? [...groups]
+): { id: string; name: string }[] => {
+  const groups = allGroups.filter(({ id }) => !isCardFeeGroup(id));
+  return forName === undefined
+    ? groups
     : forName.names.reduce<{ id: string; name: string }[]>(
         (acc, name) =>
           acc.some((choice) => toKey(choice.name) === toKey(name))
             ? acc
             : [...acc, { id: `review:${toKey(name)}`, name }],
-        [...groups],
+        groups,
       );
+};
 
 /** A question's answer for a name already chosen: the matching choice, else the name typed in. */
 export const toGroupAnswer = (

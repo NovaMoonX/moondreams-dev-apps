@@ -145,6 +145,7 @@ const commands: NomosCommand[] = [
     isUrgent: false,
     whoRefs: [],
     placeRefs: [],
+    projectRef: null,
   },
 ];
 const sealedFor = (inputMode: string) => {

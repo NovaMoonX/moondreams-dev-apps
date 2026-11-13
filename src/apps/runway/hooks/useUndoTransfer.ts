@@ -14,7 +14,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { undoCostPayment } from '@apps/runway/hooks/useCostPaid';
 import { undoPaymentPaid } from '@apps/runway/hooks/useBillPaid';
 import { getPurchaseMarkFigures } from '@apps/runway/engine/horizon';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectSpendPurchases } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeCostTakenBack } from '@apps/runway/utils/changeText';
 import { undoTransfer } from '@apps/runway/store/actions/transferActions';
@@ -89,8 +89,13 @@ export function useUndoTransfer() {
         const isWritten = await undoCostPayment(
           user.uid,
           cost.itemId,
-          { item: cost.itemName, cost: cost.name },
-          { ...cost, moveId: moved.moveId },
+          { item: cost.itemName, cost: cost.name, goal: cost.goalName ?? null },
+          {
+            ...cost,
+            fromGoalCents: cost.fromGoalCents ?? 0,
+            goalId: cost.goalId ?? null,
+            moveId: moved.moveId,
+          },
         );
         if (!isWritten) {
           addToast({

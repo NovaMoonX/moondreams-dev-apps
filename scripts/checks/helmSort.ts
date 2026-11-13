@@ -218,6 +218,7 @@ test('a sound reply resolves its alias and its day', () => {
     isUrgent: false,
     whoRefs: ['$w1'],
     placeRefs: [],
+    projectRef: null,
   });
   assert.deepEqual(commands[1], { kind: 'completeTask', taskId: TASK_IDS[0] });
 });
@@ -788,6 +789,7 @@ test("a noted fact is confirmed only when stated with the person's own words, an
         known,
         knownPlaces: [],
         assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
         dayKey: '2026-11-10',
         capturedAt: NOW,
       },
@@ -987,6 +989,7 @@ test('a date that comes back raises a passing who to regular, and the summary sa
         known,
         knownPlaces: [],
         assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
         dayKey: '2026-11-10',
         capturedAt: NOW,
       },
@@ -1082,6 +1085,7 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
         known: [dana],
         knownPlaces: [],
         assistantName: 'Nomos',
+        assistantNames: ['Nomos'],
         dayKey: '2026-11-10',
         capturedAt: NOW,
       },

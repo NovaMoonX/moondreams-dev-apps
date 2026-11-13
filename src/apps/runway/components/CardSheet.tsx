@@ -11,25 +11,52 @@ import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   formatDateOrdinalUTC,
   formatRelativeDayUTC,
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { ActionSection } from '@apps/runway/components/ActionSection';
+import {
+  ActionSection,
+  ActionTitle,
+} from '@apps/runway/components/ActionSection';
+import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
+import type { HeldChoice } from '@apps/runway/engine/endings';
+import {
+  getFeeHeldCents,
+  getFeePlan,
+  isFeeBillLive,
+} from '@apps/runway/utils/cardFeePlan';
 import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
+import CardStatementSection from '@apps/runway/components/CardStatementSection';
+import { getBankDueDay } from '@apps/runway/engine/cards';
+import {
+  getLinkedStatement,
+  selectCardsWithBankDue,
+} from '@apps/runway/store/selectors/cardStatementSelectors';
 import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
+import { describeBankUpdated } from '@apps/runway/utils/bankFreshness';
 import SheetHead from '@apps/runway/components/SheetHead';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
-import { AUTO_PAY_WORDS, CARD_WORDS } from '@apps/runway/constants';
+import {
+  AUTO_PAY_WORDS,
+  CARD_FEE_WORDS,
+  CARD_WORDS,
+  HELD_WORDS,
+  LINK_WORDS,
+} from '@apps/runway/constants';
+import {
+  getCardPendingCents,
+  selectPendingByCard,
+} from '@apps/runway/store/selectors/cardPendingSelectors';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { archiveCard } from '@apps/runway/store/actions/cardActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import {
   selectAllCards,
   selectBillPayments,
@@ -37,6 +64,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { OpenCard } from '@apps/runway/types';
+import HelpTip from '@/components/HelpTip';
 import { useNow } from '@/hooks/useNow';
 import CardHistoryView from '@apps/runway/components/CardHistoryView';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -81,7 +109,7 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {shown.map(({ item, version }) => {
           const payment =
-            (payments[item.id] ?? []).find((entry) => entry.dueOn >= today) ??
+            (payments[item.id] ?? []).find((entry) => entry.payOn >= today) ??
             null;
           const due =
             payment === null
@@ -121,18 +149,38 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
 }
 
 /** What a card row opens: what it waits for as the figure, then paying it off, changing it, archiving it and its history. */
-function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
+function CardSheet({
+  card: typedCard,
+  onClose,
+  onPay,
+  onChange,
+}: CardSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const mask = useMaskedText();
   const cards = useAppSelector(selectAllCards);
+  const card =
+    useAppSelector(selectCardsWithBankDue).find(
+      (entry) => entry.id === typedCard.id,
+    ) ?? typedCard;
   const balances = useAppSelector(selectBalances);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const reserveCents = balances.reserveByCard[card.id] ?? 0;
-  const today = todayAsUtcDate(useNow(60_000));
-  const [view, setView] = useState<'menu' | 'history' | 'purchase'>('menu');
+  const now = useNow(60_000);
+  const today = todayAsUtcDate(now);
+  const [view, setView] = useState<'menu' | 'history' | 'purchase' | 'archive'>(
+    'menu',
+  );
+  const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
+  const fee = card.annualFee ?? null;
+  const isFeeOpen = useAppSelector((state) =>
+    fee === null ? false : isFeeBillLive(state, fee.billId),
+  );
+  const feeHeldCents = isFeeOpen
+    ? getFeeHeldCents(balances.assignedByItem, fee)
+    : 0;
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const name = getCardName(card, cards);
   const moves = useAppSelector((state) => state.runway.moves);
@@ -148,18 +196,49 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   );
 
   const linkedFact = useLinkedFact(card.linkId);
+  const pendingCents = getCardPendingCents(
+    useAppSelector(selectPendingByCard),
+    card.id,
+    reserveCents,
+  );
+  const bank = useAppSelector((state) =>
+    card.linkId === null
+      ? null
+      : (state.runway.accountBalances.find((entry) => entry.id === card.id) ??
+        null),
+  );
+  const bankName = useAppSelector((state) =>
+    card.linkId === null
+      ? null
+      : (state.runway.links.find((link) => link.id === card.linkId)
+          ?.institutionName ?? null),
+  );
+  const link = useAppSelector((state) =>
+    card.linkId === null
+      ? null
+      : (state.runway.links.find((entry) => entry.id === card.linkId) ?? null),
+  );
+  const statement = useAppSelector((state) =>
+    getLinkedStatement(state.runway, card),
+  );
+  const isDueFromBank = getBankDueDay(statement) !== null;
+  const bankUpdated =
+    bank === null ? null : describeBankUpdated(bank.asOf, now);
 
-  const handleArchive = async () => {
+  const archive = async (choice: HeldChoice | null) => {
     if (!user || isArchiving) return;
-    const isConfirmed = await confirm({
-      title: CARD_WORDS.archiveConfirmTitle(name),
-      message:
-        reserveCents > 0
-          ? mask(CARD_WORDS.archiveWaitingText(formatCents(reserveCents)))
-          : CARD_WORDS.archiveSub,
-      confirmText: CARD_WORDS.archiveConfirmText,
+    const feeResult = getFeePlan(store.getState(), {
+      cardId: card.id,
+      cardName: name,
+      before: fee,
+      after: null,
+      heldChoice: choice,
+      today,
     });
-    if (!isConfirmed) return;
+    if (feeResult.kind === 'loading') {
+      addToast({ title: CARD_FEE_WORDS.loading, type: 'error' });
+      return;
+    }
     setIsArchiving(true);
     try {
       await archiveCard(
@@ -167,6 +246,7 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
         await getRunwayEncryption(user.uid),
         card.id,
         CARD_WORDS.changeArchived(name),
+        feeResult.plan,
       );
       addToast({ title: CARD_WORDS.archived(name), type: 'success' });
       onClose();
@@ -178,6 +258,25 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       });
       setIsArchiving(false);
     }
+  };
+
+  const handleArchive = async () => {
+    if (!user || isArchiving) return;
+    if (feeHeldCents > 0) {
+      setHeldChoice(null);
+      setView('archive');
+      return;
+    }
+    const isConfirmed = await confirm({
+      title: CARD_WORDS.archiveConfirmTitle(name),
+      message:
+        reserveCents > 0
+          ? mask(CARD_WORDS.archiveWaitingText(formatCents(reserveCents)))
+          : CARD_WORDS.archiveSub,
+      confirmText: CARD_WORDS.archiveConfirmText,
+    });
+    if (!isConfirmed) return;
+    await archive(null);
   };
 
   if (isLinking) {
@@ -208,7 +307,43 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       title={name}
       actions={<ValuesEyeButton />}
     >
-      {view === 'history' ? (
+      {view === 'archive' ? (
+        <div className='space-y-4'>
+          <BackLink onBack={() => setView('menu')} />
+          <ActionTitle>{CARD_FEE_WORDS.archiveTitle(name)}</ActionTitle>
+          {reserveCents > 0 && (
+            <p className='text-muted-foreground text-sm'>
+              {mask(CARD_WORDS.archiveWaitingText(formatCents(reserveCents)))}
+            </p>
+          )}
+          <ActionSection
+            caption={mask(
+              CARD_FEE_WORDS.heldCaption(formatCents(feeHeldCents)),
+            )}
+          >
+            <HeldChoiceList
+              value={heldChoice}
+              onChange={setHeldChoice}
+              freeBody={CARD_FEE_WORDS.heldFreeBody}
+              keepBody={HELD_WORDS.keepBody}
+            />
+          </ActionSection>
+          <Button
+            type='button'
+            className='w-full'
+            loading={isArchiving}
+            disabled={heldChoice === null || isArchiving}
+            onClick={() => void archive(heldChoice)}
+          >
+            {CARD_FEE_WORDS.archiveDo}
+          </Button>
+          {heldChoice === null && (
+            <p className='text-muted-foreground text-center text-xs'>
+              {CARD_FEE_WORDS.needsHeld}
+            </p>
+          )}
+        </div>
+      ) : view === 'history' ? (
         <div className='space-y-4'>
           <div className='flex items-center gap-1'>
             <BackLink isChevronOnly onBack={() => setView('menu')} />
@@ -231,16 +366,33 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
             label={
               reserveCents > 0 ? CARD_WORDS.reserveLabel : CARD_WORDS.allPaid
             }
-            figure={formatCents(Math.max(0, reserveCents))}
+            figure={formatCents(Math.max(0, reserveCents - pendingCents))}
             fact={[
               reserveCents < 0
                 ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
                 : describeCardDue(card, today, due),
-              linkedFact,
+              pendingCents > 0
+                ? CARD_WORDS.pendingAmount(formatCents(pendingCents))
+                : null,
+              bankUpdated?.text ?? linkedFact,
             ]
               .filter(Boolean)
               .join(' \u00b7 ')}
+            isFactFresh={bankUpdated?.isFresh ?? false}
+            secondFact={
+              isDueFromBank
+                ? CARD_WORDS.dueFromBank(bankName || LINK_WORDS.fallbackBank)
+                : null
+            }
           />
+          {bank?.hasInstantBalance === true && (
+            <HelpTip
+              title={CARD_WORDS.autoCheckTitle}
+              badgeLabel={CARD_WORDS.autoCheckChip}
+            >
+              <p>{CARD_WORDS.autoCheck(bankName ?? LINK_WORDS.fallbackBank)}</p>
+            </HelpTip>
+          )}
           <Button
             type='button'
             variant={reserveCents > 0 ? 'primary' : 'secondary'}
@@ -278,6 +430,12 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               onClick={() => setView('history')}
             />
           </ActionGroup>
+          <CardStatementSection
+            card={card}
+            link={link}
+            statement={statement}
+            today={today}
+          />
           <CardBills cardId={card.id} today={today} onClose={onClose} />
         </div>
       )}

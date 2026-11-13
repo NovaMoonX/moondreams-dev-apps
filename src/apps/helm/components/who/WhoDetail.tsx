@@ -5,6 +5,7 @@ import {
   DropdownMenuFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronRight } from 'lucide-react';
 
 import LockedButton from '@/components/LockedButton';
 import SectionDivider from '@/components/SectionDivider';
@@ -23,6 +24,8 @@ import PhotosSection from '@apps/helm/components/media/PhotosSection';
 import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
 import { HELM_COPY, MENTIONS_SHOWN } from '@apps/helm/constants';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
 import { useContactsReport } from '@apps/helm/hooks/useContactsReport';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
@@ -56,6 +59,8 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
   const { items, isLoaded } = useAppSelector((state) => state.helm.who);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
   const captures = useAppSelector(selectAllCaptures);
+  const activeProjects = useAppSelector(selectActiveProjects);
+  const { showView } = useHelmUrlState();
   const [isAllMentions, setIsAllMentions] = useState(false);
   const [sheet, setSheet] = useState<'edit' | 'tier' | null>(null);
   const who = items.find((entry) => entry.id === whoId) ?? null;
@@ -74,6 +79,18 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
           type: 'error',
         });
     },
+  });
+
+  const projectLines = activeProjects.flatMap((project) => {
+    const role = whoId === null ? undefined : project.whoRoles[whoId];
+    return role === 'key' || role === 'involved'
+      ? [
+          {
+            id: project.id,
+            text: HELM_COPY.whoProjectLine(project.emoji, project.name, role),
+          },
+        ]
+      : [];
   });
 
   const tasks = useMemo(
@@ -254,6 +271,29 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
                 )}
               </div>
             </div>
+            {projectLines.length > 0 && (
+              <ul className='space-y-1'>
+                {projectLines.map((line) => (
+                  <li key={line.id}>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      className="bg-muted text-foreground relative h-auto min-h-7 max-w-full justify-between gap-2 rounded-full border-0 px-3 py-1 text-[15px] font-normal after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+                      onClick={() => void showView('project', line.id)}
+                    >
+                      <span className='min-w-0 text-left break-words'>
+                        {line.text}
+                      </span>
+                      <ChevronRight
+                        className='text-muted-foreground size-4 shrink-0'
+                        aria-hidden='true'
+                      />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {who.importedFrom && (
               <section className='helm-card space-y-2 p-4'>
                 <p className='text-[15px]'>{HELM_COPY.contactsFromGoogle}</p>
@@ -302,13 +342,9 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
                 ownerId={who.id}
               />
             </section>
-            <section className='space-y-3'>
-              <SectionDivider label={HELM_COPY.whoMentionsTitle} />
-              {mentions.length === 0 ? (
-                <p className='text-muted-foreground text-[15px] text-pretty'>
-                  {HELM_COPY.whoMentionsEmpty}
-                </p>
-              ) : (
+            {mentions.length > 0 && (
+              <section className='space-y-3'>
+                <SectionDivider label={HELM_COPY.whoMentionsTitle} />
                 <ul className='helm-card divide-border divide-y overflow-hidden'>
                   {shownMentions.map((capture) => (
                     <li key={capture.id} className='px-4 py-3'>
@@ -324,18 +360,18 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
                     </li>
                   ))}
                 </ul>
-              )}
-              {mentions.length > MENTIONS_SHOWN && (
-                <ShowMoreButton
-                  isOpen={isAllMentions}
-                  onClick={() => setIsAllMentions((isOpen) => !isOpen)}
-                >
-                  {isAllMentions
-                    ? HELM_COPY.showFewerMentions
-                    : HELM_COPY.showAllMentions(mentions.length)}
-                </ShowMoreButton>
-              )}
-            </section>
+                {mentions.length > MENTIONS_SHOWN && (
+                  <ShowMoreButton
+                    isOpen={isAllMentions}
+                    onClick={() => setIsAllMentions((isOpen) => !isOpen)}
+                  >
+                    {isAllMentions
+                      ? HELM_COPY.showFewerMentions
+                      : HELM_COPY.showAllMentions(mentions.length)}
+                  </ShowMoreButton>
+                )}
+              </section>
+            )}
           </>
         )}
       </main>

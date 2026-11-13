@@ -104,4 +104,10 @@ export const fundingFieldChecks: { [K in keyof FundingFormData]-?: Check } = {
   cadence: isOneOf(['everyIncomeDay', 'every2', 'every3', 'chosen']),
   dayKeys: isTextList,
   sourceId: isNullableText,
+  pay: (value) =>
+    value === null ||
+    readDraftFields<{ payLineId: string; monthDay: number | null }>(value, {
+      payLineId: isText,
+      monthDay: (day) => day === null || isWholeNumber(day),
+    }) !== null,
 };

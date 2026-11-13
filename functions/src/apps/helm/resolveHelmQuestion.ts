@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import type { SealedPayload } from '../../appKeys/seal.js';
@@ -8,6 +8,17 @@ import { openForHelm, sealForHelm, unwrapHelmKey } from './helmKey.js';
 import { loadKeyringOrFail } from './sortHelmCapture.js';
 import type { QuestionStateEntry } from './nomos/executeCommands.js';
 import { openKeyDate } from './sortHelmCapture.js';
+import { openTopicRecord } from './noteStore.js';
+import {
+  openLiveTopic,
+  readVersionNumbers,
+  writeTopicVersionIn,
+  type LiveTopic,
+} from './topicVersionStore.js';
+import type { PlacedTopic } from './nomos/planTopicCommands.js';
+import { MAX_CONTEXT_TOPICS } from './nomos/commands.js';
+import { NOTE_TOPICS_CAP } from './nomos/commands.js';
+import type { NoteTopicState } from './nomos/executeCommands.js';
 import { readIndexIn, writeIndexIn } from './keyDateStore.js';
 import { applyChanges } from './keyDateIndex.js';
 import { KEY_DATE_INCOMING_ID } from './nomos/summaries.js';
@@ -46,23 +57,43 @@ const toRefusal = (
 ) =>
   refusal === 'answered'
     ? new HttpsError('already-exists', 'This was already answered.')
-    : refusal === 'unknown'
-      ? new HttpsError('invalid-argument', 'That answer is not valid.')
-      : refusal === 'changed'
-        ? new HttpsError('failed-precondition', 'That date changed since.', {
+    : refusal === 'noteGone'
+      ? new HttpsError('failed-precondition', 'That note is gone.', {
+          reason: 'gone',
+        })
+      : refusal === 'topicGone'
+        ? new HttpsError('failed-precondition', 'Those topics were removed.', {
             reason: 'gone',
           })
-        : new HttpsError(
-            'failed-precondition',
-            subject === 'fact'
-              ? 'That fact changed since.'
-              : subject === 'date'
-                ? 'That date was removed.'
-                : subject === 'place'
-                  ? 'That place was removed.'
-                  : 'That person was removed.',
-            { reason: 'gone' },
-          );
+        : refusal === 'unknown'
+          ? new HttpsError('invalid-argument', 'That answer is not valid.')
+          : refusal === 'groupChanged'
+            ? new HttpsError(
+                'failed-precondition',
+                'Those topics changed since.',
+                {
+                  reason: 'gone',
+                },
+              )
+            : refusal === 'changed'
+              ? new HttpsError(
+                  'failed-precondition',
+                  'That date changed since.',
+                  {
+                    reason: 'gone',
+                  },
+                )
+              : new HttpsError(
+                  'failed-precondition',
+                  subject === 'fact'
+                    ? 'That fact changed since.'
+                    : subject === 'date'
+                      ? 'That date was removed.'
+                      : subject === 'place'
+                        ? 'That place was removed.'
+                        : 'That person was removed.',
+                  { reason: 'gone' },
+                );
 
 const isStringList = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -107,13 +138,43 @@ const openOrRefuse = (
   }
 };
 
+const toResolveNote = (
+  key: Parameters<typeof openForHelm>[0],
+  snap: { exists: boolean; get: (field: string) => unknown } | null,
+) => {
+  if (!snap?.exists) return null;
+  try {
+    const words = openForHelm(key, snap.get('sealed') as SealedPayload);
+    const topicIds = snap.get('topicIds');
+    return typeof words.title === 'string'
+      ? {
+          title: words.title,
+          topicIds: isStringList(topicIds) ? topicIds : [],
+        }
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 const readInput = (data: unknown) => {
   const raw = (data ?? {}) as Record<string, unknown>;
   const answer = (raw.answer ?? {}) as Record<string, unknown>;
   const { captureId, questionId } = raw;
-  const { by, optionId, text } = answer;
+  const { by, optionId, optionIds, text } = answer;
+  const isMany =
+    Array.isArray(optionIds) &&
+    optionIds.length >= 1 &&
+    optionIds.length <= NOTE_TOPICS_CAP &&
+    optionIds.every((id) => typeof id === 'string' && ID_RE.test(id));
   const note =
     typeof text === 'string' ? text.trim().replace(/\s+/g, ' ') : null;
+  if (
+    optionIds !== undefined &&
+    (!isMany || optionId !== undefined || text !== undefined)
+  ) {
+    throw new HttpsError('invalid-argument', 'That answer is not valid.');
+  }
   if (
     text !== undefined &&
     (optionId !== 'none' ||
@@ -129,8 +190,7 @@ const readInput = (data: unknown) => {
     typeof questionId !== 'string' ||
     !ID_RE.test(questionId) ||
     (by !== 'tap' && by !== 'voice') ||
-    typeof optionId !== 'string' ||
-    !ID_RE.test(optionId)
+    (!isMany && (typeof optionId !== 'string' || !ID_RE.test(optionId)))
   ) {
     throw new HttpsError('invalid-argument', 'That answer is not valid.');
   }
@@ -138,7 +198,8 @@ const readInput = (data: unknown) => {
     captureId,
     questionId,
     by: by as 'tap' | 'voice',
-    optionId,
+    optionId: isMany ? '' : (optionId as string),
+    optionIds: isMany ? (optionIds as string[]) : [],
     text: note,
   };
 };
@@ -161,7 +222,7 @@ export const resolveHelmQuestion = onCall(
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
     }
-    const { captureId, questionId, by, optionId, text } = readInput(
+    const { captureId, questionId, by, optionId, optionIds, text } = readInput(
       request.data,
     );
     const firestore = getFirestore();
@@ -192,6 +253,8 @@ export const resolveHelmQuestion = onCall(
             taskIds?: unknown[];
             factIds?: unknown[];
             keyDateId?: unknown;
+            noteId?: unknown;
+            childIds?: unknown;
             kind?: string;
           }[];
         }
@@ -200,6 +263,21 @@ export const resolveHelmQuestion = onCall(
       const taskIds = (held?.taskIds ?? []).filter(
         (id): id is string => typeof id === 'string' && ID_RE.test(id),
       );
+      const isFileNote = held?.kind === 'fileNote';
+      const noteId =
+        isFileNote &&
+        typeof held?.noteId === 'string' &&
+        ID_RE.test(held.noteId)
+          ? held.noteId
+          : null;
+      const groupIds =
+        held?.kind === 'groupTopics' && Array.isArray(held.childIds)
+          ? (held.childIds as unknown[])
+              .filter(
+                (id): id is string => typeof id === 'string' && ID_RE.test(id),
+              )
+              .slice(0, 20)
+          : [];
       const isPlace = held?.kind === 'linkPlace';
       const isSettle = held?.kind === 'settleFact';
       const isDateSettle = held?.kind === 'settleKeyDate';
@@ -213,7 +291,13 @@ export const resolveHelmQuestion = onCall(
         .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
         .slice(0, 2);
       const isPick =
-        !isSettle && !isDateSettle && optionId !== 'new' && optionId !== 'none';
+        groupIds.length === 0 &&
+        held?.kind !== 'groupTopics' &&
+        !isSettle &&
+        !isDateSettle &&
+        !isFileNote &&
+        optionId !== 'new' &&
+        optionId !== 'none';
       const keyDateSnap = keyDateId
         ? await transaction.get(firestore.doc(`${base}/keyDates/${keyDateId}`))
         : null;
@@ -224,6 +308,62 @@ export const resolveHelmQuestion = onCall(
       const dateIndex = isYearlySettle
         ? await readIndexIn(transaction, firestore, base, key)
         : null;
+      const [noteSnap, topicSnaps] = await Promise.all([
+        noteId
+          ? transaction.get(firestore.doc(`${base}/notes/${noteId}`))
+          : null,
+        Promise.all(
+          (noteId ? [...new Set(optionIds)] : []).map((id) =>
+            transaction.get(firestore.doc(`${base}/topics/${id}`)),
+          ),
+        ),
+      ]);
+      const noteWords = toResolveNote(key, noteSnap);
+      const isGroupYes = groupIds.length > 0 && optionId === 'yes';
+      const [groupSnaps, treeSnap] = await Promise.all([
+        Promise.all(
+          (isGroupYes ? groupIds : []).map((id) =>
+            transaction.get(firestore.doc(`${base}/topics/${id}`)),
+          ),
+        ),
+        isGroupYes
+          ? transaction.get(
+              firestore
+                .collection(`${base}/topics`)
+                .select('parentId', 'depth')
+                .limit(MAX_CONTEXT_TOPICS),
+            )
+          : null,
+      ]);
+      const groupTopics = new Map<string, LiveTopic>(
+        groupSnaps.flatMap((snap): [string, LiveTopic][] => {
+          const data = snap.data();
+          const topic = data ? openLiveTopic(key, snap.id, data) : null;
+          return topic ? [[snap.id, topic]] : [];
+        }),
+      );
+      const groupVersions = new Map<string, number[]>(
+        await Promise.all(
+          [...groupTopics.keys()].map(
+            async (id): Promise<[string, number[]]> => [
+              id,
+              await readVersionNumbers(
+                transaction,
+                firestore.doc(`${base}/topics/${id}`),
+              ),
+            ],
+          ),
+        ),
+      );
+      const groupTree: PlacedTopic[] = (treeSnap?.docs ?? []).map((doc) => ({
+        id: doc.id,
+        parentId:
+          typeof doc.get('parentId') === 'string'
+            ? (doc.get('parentId') as string)
+            : null,
+        depth: Number(doc.get('depth') ?? 1),
+        name: groupTopics.get(doc.id)?.name ?? '',
+      }));
       const [factSnaps, taskSnaps, chosenSnap] = await Promise.all([
         Promise.all(
           factIds.map((id) =>
@@ -290,6 +430,7 @@ export const resolveHelmQuestion = onCall(
         captureId,
         questionId,
         optionId,
+        optionIds,
         by,
         now: Date.now(),
         timeZone: (profileSnap.data()?.timeZone as string | undefined) ?? 'UTC',
@@ -317,6 +458,26 @@ export const resolveHelmQuestion = onCall(
             }
           : null,
         text,
+        note: noteWords,
+        topics: new Map<string, NoteTopicState>(
+          topicSnaps.flatMap((snap): [string, NoteTopicState][] => {
+            const data = snap.data();
+            const topic = data ? openTopicRecord(key, snap.id, data) : null;
+            return topic
+              ? [
+                  [
+                    snap.id,
+                    {
+                      name: topic.name,
+                      path: topic.name,
+                      docState: topic.docState,
+                      pendingNoteIds: topic.pendingNoteIds,
+                    },
+                  ],
+                ]
+              : [];
+          }),
+        ),
         chosen:
           chosenSnap?.exists === true
             ? {
@@ -329,9 +490,15 @@ export const resolveHelmQuestion = onCall(
                   : null,
               }
             : null,
+        group: isGroupYes
+          ? { topics: groupTopics, tree: groupTree }
+          : undefined,
         newId: () =>
-          firestore.collection(`${base}/${isPlace ? 'places' : 'who'}`).doc()
-            .id,
+          held?.kind === 'groupTopics'
+            ? firestore.collection(`${base}/topics`).doc().id
+            : firestore
+                .collection(`${base}/${isPlace ? 'places' : 'who'}`)
+                .doc().id,
         seal,
       });
       if (result.refused !== null) {
@@ -388,6 +555,61 @@ export const resolveHelmQuestion = onCall(
             seal,
           });
         }
+      }
+      if (plan.noteUpdate) {
+        transaction.update(
+          firestore.doc(`${base}/notes/${plan.noteUpdate.id}`),
+          plan.noteUpdate.data,
+        );
+      }
+      plan.topicUpdates.forEach(({ id, docState, addPendingIds }) =>
+        transaction.update(firestore.doc(`${base}/topics/${id}`), {
+          docState,
+          ...(addPendingIds.length > 0 && {
+            pendingNoteIds: FieldValue.arrayUnion(...addPendingIds),
+          }),
+        }),
+      );
+      if (plan.groupWrite) {
+        const now = Date.now();
+        plan.groupWrite.versions.forEach((version) => {
+          const live = groupTopics.get(version.topicId);
+          if (!live) return;
+          writeTopicVersionIn(transaction, {
+            topicRef: firestore.doc(`${base}/topics/${version.topicId}`),
+            currentVersion: version.currentVersion,
+            existingVersions: groupVersions.get(version.topicId) ?? [],
+            currentWords: live.words,
+            sections: version.sections,
+            reason: version.reason,
+            noteIds: version.noteIds,
+            sourceCaptureId: version.sourceCaptureId,
+            executionId: version.executionId,
+            changeSummary: version.changeSummary,
+            requestQuote: version.requestQuote,
+            parentName: version.parentName,
+            docState: version.docState,
+            pendingNoteIds: version.pendingNoteIds,
+            topicFields: version.topicFields,
+            now,
+            seal,
+          });
+        });
+        const versioned = new Set(
+          plan.groupWrite.versions.map((version) => version.topicId),
+        );
+        plan.groupWrite.placements
+          .filter(({ id }) => !versioned.has(id))
+          .forEach(({ id, parentId, depth }) =>
+            transaction.update(firestore.doc(`${base}/topics/${id}`), {
+              parentId,
+              depth,
+            }),
+          );
+        transaction.create(
+          firestore.doc(`${base}/topics/${plan.groupWrite.parentCreate.id}`),
+          plan.groupWrite.parentCreate.data,
+        );
       }
       if (plan.whoUpdate) {
         transaction.update(

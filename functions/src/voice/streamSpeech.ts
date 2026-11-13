@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { isRunningInEmulator } from '../emulator.js';
+import { isForcedFixture, isRunningInEmulator } from '../emulator.js';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -124,6 +124,9 @@ const getProvider = async (
             return token;
           },
         });
+  }
+  if (isForcedFixture(id === 'deepgramAura' ? 'deepgram' : 'gemini')) {
+    return null;
   }
   const apiKey = await secretReader(
     SECRET_NAMES[id],

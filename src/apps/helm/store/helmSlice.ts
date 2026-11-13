@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { ACTIVITY_PAGE } from '@apps/helm/constants';
 import { resetAllState } from '@/store/actions/globalActions';
+import type { OpenStyle } from '@apps/helm/store/listeners/styleListener';
 import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexListener';
 import type {
   HelmProfile,
@@ -9,8 +10,13 @@ import type {
   OpenExecution,
   OpenFact,
   OpenMedia,
+  OpenNote,
   OpenPlace,
+  OpenProject,
   OpenTask,
+  OpenProcedure,
+  OpenRun,
+  OpenTopic,
   OpenWho,
   PlanDay,
   SyncedRecord,
@@ -50,6 +56,7 @@ export interface HelmState {
   /** Raised by Try again; asking for the key again follows it. */
   keyAttempt: number;
   isKeyRetrying: boolean;
+  /** Set while the app is open on this browser's kept key: when the server last confirmed it (0 when unknown), for the "As of" line. */
   /** Refusals in a row, so a Try again that fails again can say so. */
   keyRefusals: number;
   /** The profile, and whether the first snapshot has arrived, so a missing profile is never mistaken for one still loading. */
@@ -65,6 +72,8 @@ export interface HelmState {
   waitingCaptures: CaptureSet;
   /** The person's open tasks, newest first. */
   openTasks: LoadedSet<OpenTask>;
+  /** Every task that belongs to a project, open or done. */
+  projectTasks: LoadedSet<OpenTask>;
   /** The plan days from yesterday to six days ahead. */
   planDays: PlanDaySet;
   /** The person's confirmed and inferred facts, and the superseded ones they replaced. */
@@ -75,8 +84,20 @@ export interface HelmState {
   keyDateIndex: KeyDateIndexSet;
   /** The places the person has named. */
   places: LoadedSet<OpenPlace>;
+  /** The projects the person has started, active and finished. */
+  projects: LoadedSet<OpenProject>;
+  /** The person's notes, newest first. */
+  notes: LoadedSet<OpenNote>;
+  /** The topics notes are filed under, every level. */
+  topics: LoadedSet<OpenTopic>;
+  /** The person's procedures, opened. */
+  procedures: LoadedSet<OpenProcedure>;
+  /** The runs still going. */
+  openRuns: LoadedSet<OpenRun>;
   /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
   media: LoadedSet<OpenMedia>;
+  /** The person's writing-style profiles, opened. */
+  style: LoadedSet<OpenStyle>;
   /** Copies of other apps' records, opened. */
   synced: LoadedSet<SyncedRecord>;
   /** What the assistant did for the turns in the eager window. */
@@ -126,12 +147,19 @@ const initialState: HelmState = {
   unseenCaptures: emptySet,
   waitingCaptures: emptySet,
   openTasks: emptyLoadedSet,
+  projectTasks: emptyLoadedSet,
   planDays: emptyPlanDays,
   facts: emptyLoadedSet,
   who: emptyLoadedSet,
   keyDateIndex: emptyKeyDateIndex,
   places: emptyLoadedSet,
+  projects: emptyLoadedSet,
+  notes: emptyLoadedSet,
+  topics: emptyLoadedSet,
+  procedures: emptyLoadedSet,
+  openRuns: emptyLoadedSet,
   media: emptyLoadedSet,
+  style: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
@@ -211,6 +239,16 @@ const helmSlice = createSlice({
     setOpenTasksFailed: (state) => {
       state.openTasks.isFailed = true;
     },
+    setProjectTasks: (state, action: PayloadAction<OpenTask[]>) => {
+      state.projectTasks = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setProjectTasksFailed: (state) => {
+      state.projectTasks.isFailed = true;
+    },
     setPlanDays: (state, action: PayloadAction<PlanDay[]>) => {
       state.planDays = {
         byId: Object.fromEntries(
@@ -228,6 +266,12 @@ const helmSlice = createSlice({
     },
     setFactsFailed: (state) => {
       state.facts.isFailed = true;
+    },
+    setStyle: (state, action: PayloadAction<OpenStyle[]>) => {
+      state.style = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setStyleFailed: (state) => {
+      state.style.isFailed = true;
     },
     setWho: (state, action: PayloadAction<OpenWho[]>) => {
       state.who = { items: action.payload, isLoaded: true, isFailed: false };
@@ -254,6 +298,52 @@ const helmSlice = createSlice({
     },
     setPlacesFailed: (state) => {
       state.places.isFailed = true;
+    },
+    setProjects: (state, action: PayloadAction<OpenProject[]>) => {
+      state.projects = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setProjectsFailed: (state) => {
+      state.projects.isFailed = true;
+    },
+    setNotes: (state, action: PayloadAction<OpenNote[]>) => {
+      state.notes = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setNotesFailed: (state) => {
+      state.notes.isFailed = true;
+    },
+    setTopics: (state, action: PayloadAction<OpenTopic[]>) => {
+      state.topics = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setTopicsFailed: (state) => {
+      state.topics.isFailed = true;
+    },
+    setProcedures: (state, action: PayloadAction<OpenProcedure[]>) => {
+      state.procedures = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setProceduresFailed: (state) => {
+      state.procedures.isFailed = true;
+    },
+    setOpenRuns: (state, action: PayloadAction<OpenRun[]>) => {
+      state.openRuns = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setOpenRunsFailed: (state) => {
+      state.openRuns.isFailed = true;
     },
     setMedia: (state, action: PayloadAction<OpenMedia[]>) => {
       state.media = { items: action.payload, isLoaded: true, isFailed: false };
@@ -361,6 +451,8 @@ export const {
   setWaitingCapturesFailed,
   setOpenTasks,
   setOpenTasksFailed,
+  setProjectTasks,
+  setProjectTasksFailed,
   setPlanDays,
   setPlanDaysFailed,
   setFacts,
@@ -371,6 +463,16 @@ export const {
   setKeyDateIndexFailed,
   setPlaces,
   setPlacesFailed,
+  setProjects,
+  setProjectsFailed,
+  setNotes,
+  setNotesFailed,
+  setTopics,
+  setTopicsFailed,
+  setProcedures,
+  setProceduresFailed,
+  setOpenRuns,
+  setOpenRunsFailed,
   setMedia,
   setMediaFailed,
   setSynced,
@@ -387,6 +489,8 @@ export const {
   startLoadingEarlier,
   addEarlierCaptures,
   setEarlierFailed,
+  setStyle,
+  setStyleFailed,
   clearHelm,
   setKeyStatus,
   retryKey,
