@@ -1769,6 +1769,8 @@ export const CHARGED_TO_HINT_WORDS = {
   fromToday: 'Applies from today, for every payment after.',
   chargeIt: (place: string) => `Charge it to ${place}`,
   notThisOne: 'Not this one',
+  declined: (name: string, place: string) =>
+    `We won’t suggest ${place} for ${name} again`,
   done: (name: string, place: string) =>
     `${name} is now charged to ${place} from today`,
   undo: 'Undo',

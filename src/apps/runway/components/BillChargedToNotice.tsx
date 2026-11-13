@@ -22,7 +22,10 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillSealed, BillVersion } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
-import { declineChargedTo } from '@apps/runway/utils/chargedToDeclined';
+import {
+  declineChargedTo,
+  undeclineChargedTo,
+} from '@apps/runway/utils/chargedToDeclined';
 import { getPlaceNamer } from '@apps/runway/utils/chargedToText';
 import { describeChange } from '@apps/runway/utils/changeText';
 
@@ -163,7 +166,18 @@ function BillChargedToNotice({
           className={NOTICE_QUIET_CLASSES.info}
           disabled={isBusy}
           onClick={() => {
-            if (user) declineChargedTo(user.uid, billId, hint.place);
+            if (!user) return;
+            const { uid } = user;
+            const declined = hint.place;
+            declineChargedTo(uid, billId, declined);
+            addToast({
+              title: CHARGED_TO_HINT_WORDS.declined(bill.name, place),
+              type: 'success',
+              action: {
+                label: CHARGED_TO_HINT_WORDS.undo,
+                onClick: () => undeclineChargedTo(uid, billId, declined),
+              },
+            });
           }}
         >
           {CHARGED_TO_HINT_WORDS.notThisOne}
