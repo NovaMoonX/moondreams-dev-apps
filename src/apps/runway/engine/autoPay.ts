@@ -15,6 +15,8 @@ import type { PaidPayment } from './progress';
 
 export interface AutoPayment {
   dueOn: DateOnly;
+  /** The day it is paid, on or before `dueOn`; missing reads as `dueOn`. */
+  payOn?: DateOnly;
   lowCents: Cents;
   highCents: Cents;
   paid: PaidPayment | null;
@@ -155,6 +157,8 @@ export interface AutoMark {
   billId: string;
   billName: string;
   dueOn: DateOnly;
+  /** The day the app records it paid: the bill's pay day. */
+  paidOn: DateOnly;
   /** The planned amount, or the top of a range. */
   amountCents: Cents;
   /** A ranged bill's top of range: the real amount is still to come. */
@@ -177,7 +181,7 @@ export function findAutoMarks(input: {
         .filter(
           (payment) =>
             payment.paid === null &&
-            payment.dueOn <= input.today &&
+            (payment.payOn ?? payment.dueOn) <= input.today &&
             payment.dueOn >= bill.since &&
             !bill.undoneDueOn.includes(payment.dueOn) &&
             !(
@@ -189,6 +193,7 @@ export function findAutoMarks(input: {
           billId: bill.id,
           billName: bill.name,
           dueOn: payment.dueOn,
+          paidOn: Math.max(payment.payOn ?? payment.dueOn, bill.since),
           amountCents: payment.highCents,
           isEstimate: payment.lowCents !== payment.highCents,
           cardId: bill.cardId,

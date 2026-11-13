@@ -1,7 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Search } from 'lucide-react';
 
-import Drawer from '@/components/Drawer';
+import FormSheet from '@/components/FormSheet';
 import { useAppSelector } from '@/store';
 import {
   selectHeldItems,
@@ -14,6 +14,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import type { HelmView } from '@apps/helm/types';
 
 import BrowseTile from '@apps/helm/components/shell/BrowseTile';
+import { useTodayTileLine } from '@apps/helm/components/shell/useTodayTileLine';
 
 interface BrowseSheetProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
   const needsYouCount = useAppSelector(selectHeldItems).needsYou.length;
   const hasKeyDates = useAppSelector(selectHasKeyDates);
   const hasProjects = useAppSelector(selectHasProjects);
+  const todayLine = useTodayTileLine();
   const tiles = BROWSE_TILES.filter(
     (tile) =>
       (tile.view !== 'comingUp' || hasKeyDates) &&
@@ -36,8 +38,8 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
   const lastSingleView = singles.length % 2 === 1 ? singles.at(-1)?.view : null;
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title='Browse' showCloseButton>
-      <div className='space-y-4 pb-4'>
+    <FormSheet isOpen={isOpen} onClose={onClose} title='Browse'>
+      <div className='space-y-4'>
         <Button
           type='button'
           variant='tertiary'
@@ -64,6 +66,7 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
               grows={tile.grows}
               openQuestions={needsYouCount}
               newSinceLooked={unseenCount}
+              stateLine={tile.view === 'today' ? todayLine : null}
               isWide={
                 tile.importance === 'lead' || tile.view === lastSingleView
               }
@@ -72,7 +75,7 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
           ))}
         </div>
         {BROWSE_FOOT.length > 0 && (
-          <div className='border-border flex flex-wrap gap-2 border-t pt-3'>
+          <div className='form-footer grid grid-cols-3 gap-2'>
             {BROWSE_FOOT.map((view) => (
               <BrowseTile
                 key={view}
@@ -82,13 +85,14 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
                 openQuestions={0}
                 newSinceLooked={0}
                 isWide={false}
+                isCompact
                 onOpen={onOpenView}
               />
             ))}
           </div>
         )}
       </div>
-    </Drawer>
+    </FormSheet>
   );
 }
 

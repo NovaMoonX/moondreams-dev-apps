@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   Button,
@@ -7,6 +7,7 @@ import {
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from 'lucide-react';
 
+import InlineNotice from '@/components/InlineNotice';
 import SectionDivider from '@/components/SectionDivider';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,6 +36,10 @@ import { useTaskTicks } from '@apps/helm/hooks/useTaskTicks';
 import type { RestoreResult } from '@apps/helm/store/actions/taskActions';
 import { selectOpenTasksById } from '@apps/helm/store/selectors/captureSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
+import {
+  clearDeletedNote,
+  readDeletedNote,
+} from '@apps/helm/utils/deletedNote';
 import { getStripKeys, toDayKey } from '@apps/helm/utils/planDays';
 import {
   DUE_SOON_DAYS,
@@ -83,6 +88,11 @@ function TodayView({
   const { pending, showUndo, undo } = useUndoRemoval();
   const [openId, setOpenId] = useState<string | null>(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
+  const [isDeletedNoteShown, setIsDeletedNoteShown] = useState(readDeletedNote);
+  const hasTasks = tasks.length > 0;
+  useEffect(() => {
+    if (hasTasks) clearDeletedNote();
+  }, [hasTasks]);
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<SuggestionTarget | null>(null);
   const sources = usePlanSources(nowMinute);
@@ -160,6 +170,17 @@ function TodayView({
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.tasksFailed}
           </p>
+        )}
+        {isDeletedNoteShown && tasks.length === 0 && (
+          <InlineNotice
+            tone='success'
+            onDismiss={() => {
+              clearDeletedNote();
+              setIsDeletedNoteShown(false);
+            }}
+          >
+            {HELM_COPY.deleteAllDone}
+          </InlineNotice>
         )}
         {isLoaded && tasks.length === 0 && held.size === 0 && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>

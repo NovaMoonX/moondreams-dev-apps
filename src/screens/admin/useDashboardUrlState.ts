@@ -1,6 +1,8 @@
 import { parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { useNavigate } from 'react-router-dom';
 
+import { isHistoryStep, markHistoryStep } from '@/hooks/useBackHistory';
+
 const VIEWS = ['apps', 'pipeline', 'members', 'firebase'] as const;
 const TABS = ['cost', 'how'] as const;
 const SECTIONS = ['usage', 'settings', 'features'] as const;
@@ -43,11 +45,7 @@ export function useDashboardUrlState() {
 
   // nuqs writes the URL without telling the router, so `history.state.idx` can't say whether Back has
   // an entry of ours to pop; the entries this hook pushes carry their own marker instead.
-  const markStep = () =>
-    window.history.replaceState(
-      { ...window.history.state, dashboardStep: true },
-      '',
-    );
+  const markStep = () => markHistoryStep('dashboardStep');
 
   const update = (next: DashboardUrlValues, options?: NavigateOptions) => {
     const result = setState(next, {
@@ -90,7 +88,7 @@ export function useDashboardUrlState() {
     setState({ member: uid }, { history: 'replace' });
 
   const goBack = () => {
-    if (window.history.state?.dashboardStep) {
+    if (isHistoryStep('dashboardStep')) {
       navigate(-1);
       return;
     }

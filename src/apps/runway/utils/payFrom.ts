@@ -27,13 +27,13 @@ const toValue = (payLineId: string, monthDay: number | null) =>
 export const toPayValue = (fundedBy: PayFundedBy) =>
   toValue(fundedBy.payLineId, fundedBy.monthDay);
 
-const toDayWord = (day: number) =>
+export const toDayWord = (day: number) =>
   day === 31 ? 'the last day' : `the ${toOrdinal(day)}`;
 
-/** The pays a repeating bill can come from: one per day of the month for a monthly or twice-a-month pay, one by name for any other. Empty unless there is more than one to pick from. */
-export function getPayOptions(plan: readonly ResolvedSource[]): PayOption[] {
+/** Every pay a repeating bill, envelope or goal can be tied to: one per day of the month for a monthly or twice-a-month pay, one by name for any other. */
+export function listPayOptions(plan: readonly ResolvedSource[]): PayOption[] {
   const isManySources = plan.length > 1;
-  const options = plan.flatMap(({ version, payLines }) =>
+  return plan.flatMap(({ version, payLines }) =>
     payLines.flatMap(({ item, version: line }): PayOption[] => {
       const { kind, monthDays } = line.payload.schedule;
       if (kind === 'once') return [];
@@ -57,6 +57,11 @@ export function getPayOptions(plan: readonly ResolvedSource[]): PayOption[] {
         }));
     }),
   );
+}
+
+/** The pays a repeating bill can come from. Empty unless there is more than one to pick from. */
+export function getPayOptions(plan: readonly ResolvedSource[]): PayOption[] {
+  const options = listPayOptions(plan);
   return options.length > 1 ? options : [];
 }
 
@@ -67,8 +72,9 @@ export function describePayChoice(
   isLower = false,
 ) {
   const label = getPayChoiceLabel(fundedBy, plan);
-  return isLower && label.startsWith('The pay on ')
-    ? `t${label.slice(1)}`
+  return isLower &&
+    (label.startsWith('The pay on ') || label === PAID_FROM_WORDS.gone)
+    ? `${label.charAt(0).toLowerCase()}${label.slice(1)}`
     : label;
 }
 

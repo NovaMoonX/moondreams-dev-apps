@@ -10,12 +10,21 @@ import {
   UserRound,
 } from 'lucide-react';
 
-import SettingsGroup from '@/components/SettingsGroup';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase/config';
+import {
+  keepSignOutNote,
+  SIGNED_OUT_EVERYWHERE_NOTE,
+} from '@/lib/auth/signOutNote';
+import { signOutEverywhere } from '@/lib/security/trustedBrowsers';
+import ColoursSection from '@apps/helm/components/settings/ColoursSection';
+import SettingsSection from '@apps/helm/components/settings/SettingsSection';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
 import SettingsRow from '@/components/SettingsRow';
 import AssistantNameToneSheet from '@apps/helm/components/settings/AssistantNameToneSheet';
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
+import DeleteHelmData from '@apps/helm/components/settings/DeleteHelmData';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -26,9 +35,14 @@ import { useConnections } from '@/lib/connections/useConnections';
 import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { formatClockTime } from '@/utils/formatUtils';
 import { helmAppName, helmTrustStore } from '@apps/helm/queries/helmKeyQueries';
-import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
+import {
+  formatUpdatedAt,
+  getNewestOkAt,
+  isStale,
+} from '@apps/helm/utils/synced';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -44,12 +58,13 @@ function SettingsScreen({
   onOpenConnectedApps,
   onOpenSeesYou,
 }: SettingsScreenProps) {
-  const { user } = useAuth();
+  const { user, logOut } = useAuth();
   const assistant = useAssistantName();
   const tone = useAssistantTone();
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isSeesOpen, setIsSeesOpen] = useState(false);
-  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const { isVoiceSheetRequested, closeSheet } = useHelmUrlState();
+  const [isVoiceOpen, setIsVoiceOpen] = useState(isVoiceSheetRequested);
   const [isDayOpen, setIsDayOpen] = useState(false);
   const { grants: allGrants, isKnown } = useConnections({
     readerAppId: 'helm',
@@ -80,7 +95,7 @@ function SettingsScreen({
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.settingsTitle}
         </h1>
-        <SettingsGroup title={HELM_COPY.settingsAssistant}>
+        <SettingsSection title={HELM_COPY.settingsAssistant}>
           <SettingsRow
             icon={<Sparkles className='size-5' aria-hidden='true' />}
             title={HELM_COPY.assistantRow}
@@ -92,8 +107,9 @@ function SettingsScreen({
             onClick={() => setIsAssistantOpen(true)}
             hasChevron
           />
-        </SettingsGroup>
-        <SettingsGroup title={HELM_COPY.settingsPlanning}>
+        </SettingsSection>
+        <ColoursSection />
+        <SettingsSection title={HELM_COPY.settingsPlanning}>
           <SettingsRow
             icon={<Sun className='size-5' aria-hidden='true' />}
             title={HELM_COPY.yourDayRow}
@@ -108,8 +124,8 @@ function SettingsScreen({
             onClick={() => setIsDayOpen(true)}
             hasChevron
           />
-        </SettingsGroup>
-        <SettingsGroup title={HELM_COPY.settingsConnections}>
+        </SettingsSection>
+        <SettingsSection title={HELM_COPY.settingsConnections}>
           <SettingsRow
             icon={<Link2 className='size-5' aria-hidden='true' />}
             title={HELM_COPY.connectedAppsRowTitle}
@@ -117,9 +133,9 @@ function SettingsScreen({
               !isKnown
                 ? undefined
                 : grants.length > 0
-                  ? newestOkAt === null
+                  ? newestOkAt === null || !isStale(newestOkAt, now)
                     ? HELM_COPY.connectedAppsCount(grants.length)
-                    : `${HELM_COPY.connectedAppsCount(grants.length)} · ${HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}`
+                    : `${HELM_COPY.connectedAppsCount(grants.length)} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`
                   : keptCount > 0
                     ? `${HELM_COPY.connectedAppsNone} · ${HELM_COPY.keptCountLine(keptCount)}`
                     : HELM_COPY.connectedAppsNone
@@ -128,8 +144,8 @@ function SettingsScreen({
             hasChevron
           />
           <ShiftCalendars onOpenConnectedApps={onOpenConnectedApps} />
-        </SettingsGroup>
-        <SettingsGroup title={HELM_COPY.settingsVoice}>
+        </SettingsSection>
+        <SettingsSection title={HELM_COPY.settingsVoice}>
           <SettingsRow
             icon={<Mic className='size-5' aria-hidden='true' />}
             title={HELM_COPY.settingsVoiceRowTitle}
@@ -141,20 +157,32 @@ function SettingsScreen({
             onClick={() => setIsVoiceOpen(true)}
             hasChevron
           />
-        </SettingsGroup>
+        </SettingsSection>
         {user && (
-          <section className='space-y-2'>
-            <h3 className='text-muted-foreground px-1 text-xs font-semibold tracking-wide uppercase'>
+          <section className='flex flex-col gap-2'>
+            <h2 className='text-muted-foreground text-[13px] font-medium'>
               {HELM_COPY.settingsTrustedBrowsers}
-            </h3>
+            </h2>
             <TrustBrowserRow
               store={helmTrustStore}
               uid={user.uid}
               appName={helmAppName}
+              onSignOutEverywhere={async () => {
+                await signOutEverywhere();
+                // The server has already ended every sign-in, so this browser leaves even if cleanup fails.
+                await logOut({
+                  hasAskedFirst: true,
+                  landingNote: SIGNED_OUT_EVERYWHERE_NOTE,
+                }).catch(async () => {
+                  await signOut(auth).catch(() => undefined);
+                  keepSignOutNote(SIGNED_OUT_EVERYWHERE_NOTE);
+                  window.location.href = '/';
+                });
+              }}
             />
           </section>
         )}
-        <SettingsGroup title={HELM_COPY.settingsYourData}>
+        <SettingsSection title={HELM_COPY.settingsYourData}>
           <SettingsRow
             icon={<History className='size-5' aria-hidden='true' />}
             title={HELM_COPY.activityTitle}
@@ -176,7 +204,8 @@ function SettingsScreen({
             onClick={() => setIsSeesOpen(true)}
             hasChevron
           />
-        </SettingsGroup>
+          <DeleteHelmData connectionCount={grants.length} />
+        </SettingsSection>
       </main>
       <AssistantNameToneSheet
         isOpen={isAssistantOpen}
@@ -185,7 +214,10 @@ function SettingsScreen({
       <YourDaySheet isOpen={isDayOpen} onClose={() => setIsDayOpen(false)} />
       <VoiceSettings
         isOpen={isVoiceOpen}
-        onClose={() => setIsVoiceOpen(false)}
+        onClose={() => {
+          setIsVoiceOpen(false);
+          if (isVoiceSheetRequested) void closeSheet();
+        }}
       />
       <WhatTheAiSees isOpen={isSeesOpen} onClose={() => setIsSeesOpen(false)} />
     </>

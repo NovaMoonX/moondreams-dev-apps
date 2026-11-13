@@ -6,7 +6,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import type { ModelProvider } from '../../ai/modelProvider.js';
 import type { SealedPayload } from '../../appKeys/seal.js';
 import { createAnthropicProvider } from '../../ai/providers/anthropic.js';
-import { isRunningInEmulator } from '../../emulator.js';
+import { isForcedFixture, isRunningInEmulator } from '../../emulator.js';
 import { reserveAiCall } from './aiLimits.js';
 import { HELM_MASTER_KEYS } from './getHelmKey.js';
 import { openForHelm, sealForHelm, unwrapHelmKey } from './helmKey.js';
@@ -40,6 +40,7 @@ export interface LearnStyleResult {
 }
 
 const readApiKey = () => {
+  if (isForcedFixture('anthropic')) return '';
   try {
     return ANTHROPIC_API_KEY.value();
   } catch {

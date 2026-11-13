@@ -61,7 +61,7 @@ const clearStep = () => {
 /** The open view, its Browse sheet and the conversation over a page, kept in the URL so a reload and Back land where the person was. */
 export function useHelmUrlState() {
   const navigate = useNavigate();
-  const [{ view: requestedView, browse, ask, grant, item, q }, setUrl] =
+  const [{ view: requestedView, browse, ask, grant, item, q, sheet }, setUrl] =
     useQueryStates({
       view: parseAsStringLiteral(URL_VIEWS),
       browse: parseAsBoolean,
@@ -69,6 +69,7 @@ export function useHelmUrlState() {
       grant: parseAsString,
       item: parseAsString,
       q: parseAsString,
+      sheet: parseAsStringLiteral(['voice'] as const),
     });
 
   const view: HelmView = requestedView ?? 'home';
@@ -112,6 +113,7 @@ export function useHelmUrlState() {
       browse: null,
       ask: null,
       q: null,
+      sheet: null,
       grant: next === 'connection' ? id : null,
       item:
         next === 'who' ||
@@ -131,6 +133,25 @@ export function useHelmUrlState() {
     await setUrl(target, { history: 'push' });
     markStep(view, item);
   };
+
+  /** Settings with its Voice service sheet already open, for a line that sends the person to it. */
+  const openVoiceSettings = async () => {
+    await setUrl(
+      {
+        view: 'settings',
+        browse: null,
+        ask: null,
+        grant: null,
+        item: null,
+        q: null,
+        sheet: 'voice',
+      },
+      { history: isBrowseOpen ? 'replace' : 'push' },
+    );
+    markStep(isBrowseOpen ? 'home' : view, isBrowseOpen ? null : item);
+  };
+
+  const closeSheet = () => setUrl({ sheet: null }, { history: 'replace' });
 
   /** Back to a record's parent record (a subtopic's topic): pops when the entry beneath is that record, else replaces this entry with it and keeps what lies beneath. */
   const goUpTo = async (next: (typeof URL_VIEWS)[number], id: string) => {
@@ -209,6 +230,9 @@ export function useHelmUrlState() {
     openBrowse,
     closeBrowse,
     showView,
+    openVoiceSettings,
+    isVoiceSheetRequested: sheet === 'voice',
+    closeSheet,
     goHome,
     goBack,
     goBackToOrigin,

@@ -269,7 +269,7 @@ export function buildContext(input: ContextInput): {
   const synced = createSyncedBook();
   const syncedRecords = (input.synced ?? []).map((copy) => ({
     alias: synced.add(copy),
-    ...toSyncedView(copy, toKnownZone(input.timeZone)),
+    ...toSyncedView(copy, toKnownZone(input.timeZone), input.createdAt),
   }));
   const tasks = input.tasks.slice(0, MAX_CONTEXT_TASKS).map((task) => ({
     alias: aliases.add(task.id),

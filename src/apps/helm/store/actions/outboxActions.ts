@@ -126,6 +126,16 @@ async function writeOutbox(uid: string, envelopes: DropBoxEnvelope[]) {
   setEntries(uid, envelopes);
 }
 
+/** Drops the saved list and the drop-box key from this device, and the list from view. */
+export const forgetOutboxSecrets = (uid: string) =>
+  serial(uid, async () => {
+    await Promise.all([
+      forgetDeviceSecret(uid, OUTBOX_SECRET),
+      forgetDeviceSecret(uid, DROP_BOX_KEY_SECRET),
+    ]);
+    setEntries(uid, []);
+  });
+
 /** Puts the saved things this device holds for the person into view. */
 export const loadOutbox = (uid: string) =>
   serial(uid, async () => {
