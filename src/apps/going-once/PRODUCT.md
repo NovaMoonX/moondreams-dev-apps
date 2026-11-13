@@ -52,7 +52,7 @@ It started with a home to clear out and a seller who hates selling. A friend was
 
 The real input is a person walking through a home with a phone: twenty to a hundred things, often over several sittings, three to six photos each, most from the camera, some already in the photo library. So adding a thing starts from its photos (several picked at once, or taken one after another, up to 12), the thing is saved from its first photo or its name, and the walk goes on to the next thing without a Save button. A thing goes on the public page only once it has a photo, a name and a price ("Free" counts as a price) and is saved; until then it is a draft that buyers never see.
 
-**No categories.** Things are found by status (Available, Pending, Sold) and search; nobody sorts them into kinds, so adding a thing stays four answers.
+**No categories.** Things are found by status (Available, Pending, Sold) and search; nobody sorts them into kinds, so adding a thing stays four answers. A bundle (below) is the one grouping, and it is about price, not kind: it is made afterwards, from things already added.
 
 | Field | Who sees it |
 |---|---|
@@ -85,6 +85,19 @@ One noun, three states. The same words are used on every screen, in the inbox, i
 - **Sold asks for what was paid**, filled with the asking price so the usual case is one tap, and optionally how they paid (Cash, Venmo, Zelle, Other) and the day (today by default). It records who marked it.
 - **Change it, or look it up.** A sold thing's price and day can be corrected (a typo), and the sheet says what the change does to the sale's total before it saves ("Collected goes from $225 to $215"). "Not sold after all" puts it back to Available and takes it out of the total, with a six-second Undo that restores the sale exactly, unless someone changed the thing in between. A thing sold for $0 offers "Take it off the list instead", for something given away. Each thing keeps a short history of its status changes (who and when), which is looked up, never edited.
 - **Two people at once.** If Theo marks a thing Sold while Maya has it open, her screen follows the live status; a status change made from a stale screen is refused in words ("Theo already marked this sold for $170").
+
+### Bundles, In Detail
+
+A bundle is a few things sold together for less ("Cat stuff: $75, or $85 separately"). It serves Maya, who wants the cat things gone together; Theo, who sells it in one tap like a thing; and Priya, who sees what each thing costs and what she saves taking them all.
+
+- **Made from the list.** Press and hold things on the Things tab, then **Group into a bundle**: a name, a bundle price (filled with the things' asking total, with "Separately $85 · buyers save $10" under it, and a 🔒 hint when it is under their floor prices added up) and, per thing, **Only sold with the bundle**. A thing is in at most one bundle; a draft, or a thing already Pending or Sold, can't be put in one.
+- **Each thing keeps its own price.** Buyers see every thing on its own with its asking price, and the bundle as one more card: its things, their total struck through, the bundle price and "Save $10". A thing marked Only sold with the bundle shows its price but says it comes only with the bundle, and asking about it asks about the bundle.
+- **When a thing goes on its own** (held, sold or taken off by itself), the bundle price drops by that thing's asking price, never below $0 and never above what is left bought separately; it comes back up if the thing comes back. The seller can set any price at any time after that. The bundle sheet says why the price is what it is ("Gray bed sold on its own, so the bundle is $35 now").
+- **Nothing is undone for the seller; the app suggests.** Unbundle is always there. Once half or more of the bundle's original asking total has gone, or one thing is left, or the price reached $0 with things left, the bundle sheet suggests **Unbundle what's left**, with **Keep the bundle**, which quiets it until another thing goes; the row says "Most of it went on its own". A thing marked Only sold with the bundle can sell on its own once it is the last one left, and its sheet says why.
+- **Gone things stay in view** while the bundle is active: faded at the bottom of the bundle for Maya and Theo, and as a count for buyers ("1 thing from this bundle is already gone"), never their names or photos, so sold things stay off the public page.
+- **Sold or held as a whole.** Mark pending and Mark sold work on the bundle like on a thing; what was paid is split across its things by their asking prices, to the cent, so Where the sale stands keeps adding up with no bundle figure of its own. Not sold after all puts the bundle back, with an Undo. While a bundle is held or sold, its things change only from the bundle.
+- **Its own history.** Who made it, price changes, things that went or came back, holds and sales, looked up on the bundle sheet and never edited.
+- **Asking about a bundle** is one inquiry, on its first thing, labelled "Bundle: Cat stuff (4 things)" in the inbox and the thing's list of who asked; the push names the bundle.
 
 ### Interest and the Inbox, In Detail
 
@@ -198,6 +211,8 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 - [x] **Buyer:** the "I'm interested" form, with no account, refused in words for a thing that just sold
 - [x] **Seller:** where the sale stands: collected against asked, pending, left
 - [x] **Seller:** Finish the sale, naming what didn't sell and what is pending; pickups still recordable; buyers' details cleared 30 days later; reopen until then
+
+- [x] **Seller:** bundles: group things to sell together for less, each thing still priced on its own, Only sold with the bundle per thing, a price that follows what goes on its own with an Unbundle suggestion, and holds and sales of the whole bundle
 
 ### Next Steps
 

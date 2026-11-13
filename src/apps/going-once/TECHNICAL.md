@@ -67,6 +67,8 @@ All app data under `apps/going-once/…`. Exceptions, deliberately not app-scope
 | `pending` | `ItemPendingRecord \| null` | never |
 | `sale` | `ItemSaleRecord \| null` | never |
 | `statusHistory` | `StatusChange[]` | never |
+| `bundleId` | `string \| null` | only as the id of a served bundle |
+| `isBundleOnly` | `boolean` | only while its bundle is Active with 2+ things on offer |
 | `listingCopiedAt`, `listingCopiedBy` | `number \| null`, `string \| null` | never; set by Copy listing text, read by Mark sold's "Take that listing down too" line |
 | `createdBy`, `createdAt`, `lastEditedAt`, `lastEditedBy` | | never |
 
@@ -79,6 +81,22 @@ All app data under `apps/going-once/…`. Exceptions, deliberately not app-scope
 - **Sold under your floor price** is derived at render.
 - Unions in `types.ts`; option lists and labels (`CONDITION_OPTIONS`, `STATUS_LABELS`, `PAYMENT_METHOD_OPTIONS`) in `constants.ts`. Every switch over `ItemStatus` has a default branch.
 
+### `apps/going-once/sales/{saleId}/bundles/{bundleId}` (a bundle)
+
+| Field | Type | Public? |
+|---|---|---|
+| `id`, `saleId`, `name` | `string` (name at most 60) | id and name |
+| `itemIds` | `string[]` (2..30 at creation), every thing ever in it while active, in order | only the served deal, as `thingIds` |
+| `priceCents` | `number` | yes, clamped to 0..what the deal costs separately |
+| `status` | `'ACTIVE' \| 'PENDING' \| 'SOLD'` | Active or Pending only |
+| `dealItemIds` | `string[] \| null`, the things a hold or sale of the whole covers; `null` while Active | no |
+| `sale` | `BundleSaleRecord \| null` (`priceCents`, `method`, date-only `soldOn`, `markedBy`, `markedAt`) | never |
+| `keptAtGoneCount` | `number \| null`, the gone count when someone chose Keep the bundle | never |
+| `history` | `BundleChange[]`, last 50, never a buyer's details | never |
+| `createdBy`, `createdAt`, `lastEditedAt`, `lastEditedBy` | | never |
+
+While Active the deal is the bundle's things that are Available; the rest have gone on their own (`getBundleParts` in `utils/bundles.ts`). Every bundle write is a transaction that reads the bundle and the things it touches: an individual status change on a bundled thing moves the price by that thing's asking price in the same transaction (`adjustBundlePrice`), refuses a solo Mark pending or Mark sold on a solo-locked thing, and refuses any change to a thing held or sold with its bundle. A whole-bundle sale writes each thing's `sale` with its share (`splitPaid`, largest remainder by asking price), so Totals read things only. Deleting a thing takes it out of `itemIds` (and drops the price when it was on offer); Unbundle deletes the bundle and clears `bundleId`/`isBundleOnly` on its things. Members read and write bundles; delete only while Active. The sale delete's recursive delete takes bundles with it, and finishing or clearing needs nothing of them, since a bundle never stores a buyer's name.
+
 ### `apps/going-once/sales/{saleId}/inquiries/{inquiryId}`
 
 | Field | Type |
@@ -86,6 +104,7 @@ All app data under `apps/going-once/…`. Exceptions, deliberately not app-scope
 | `id` | `string`: 26 chars of base32 SHA-256(`itemId`, a newline, the normalized contact) |
 | `saleId`, `itemId` | `string` |
 | `itemTitleAtSend` | `string` (still reads if the thing is renamed) |
+| `bundleId`, `bundleLabelAtSend` | `string \| null`, set when the buyer asked about the bundle (or about a thing sold only with it); the label reads "Cat stuff (4 things)" |
 | `name` | `string \| null` (≤ 80; `null` once cleared) |
 | `email` | `string \| null` (≤ 254) |
 | `phone` | `string \| null` (7–20 digits after stripping `( ) - .` and spaces, a leading `+` kept) |
@@ -297,6 +316,9 @@ Verified per `firestore-rules.md`: the matrix above as seller, co-seller, other 
 | `status` | `AVAILABLE \| PENDING` only | Sold and withdrawn things are never served |
 | Photo copies (`s`, `m` paths, first 12) | include | Smaller copies only, listed from the link's public folder, so a photo appears once both its sizes exist; never the listing-size path. Until then the thing's `photos` is shorter or empty and the page draws a placeholder |
 | `floorPriceCents`, `boughtFrom`, `boughtOn`, `boughtUrlPreview`, `boughtUrl` and `showBoughtUrl` (except as `storeUrl` above), `notes`, `pending`, `sale`, `statusHistory`, `createdBy`, `lastEditedBy`, timestamps | exclude | Private money, notes, people, history |
+| Bundle `id`, `name`, `priceCents`, served deal `thingIds`, `separateCents`, `goneCount`, `status` (`AVAILABLE \| PENDING`) | include, only for an Active or Pending bundle with 2+ served things in its deal | Buyers see the deal; gone things are a count, never their names, ids or photos |
+| Bundle `itemIds`, `dealItemIds`, `sale`, `history`, `keptAtGoneCount`, people, timestamps | exclude | Private history and money |
+| Thing `bundleId`, `isBundleOnly` | include, computed (above) | So a thing can point at its bundle and say it comes only with it |
 | Inquiries and their counts | exclude | Buyer contacts are members-only; a count says how wanted a thing is |
 | `isMember` | computed per caller | Maya or Theo signed in sees "This is your sale's public page", with no id that says whose |
 
