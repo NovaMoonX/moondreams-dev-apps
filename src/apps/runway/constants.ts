@@ -5501,12 +5501,6 @@ export const CATEGORY_PRIMARIES = [
   'OTHER',
 ] as const;
 
-/** A rule as its full sentence, and as the short name a long list uses. */
-export interface RuleNaming {
-  sentence: string;
-  short: string;
-}
-
 const ruleCount = (count: number) =>
   count === 1 ? '1 rule' : `${count} rules`;
 
@@ -5551,20 +5545,16 @@ export const RULE_WORDS = {
   pickEnvelope: 'Pick an envelope',
   remove: 'Remove the rule',
   takeover: (what: string, envelope: string) =>
-    `${envelope} will catch ${what}.`,
+    `${what} will go to ${envelope}.`,
   takeoverWait: (what: string) => `${what} will wait in Needs a home.`,
-  kindFirst: (kind: string, envelope: string) =>
-    `A purchase the bank files under ${kind} still goes to ${envelope}.`,
-  kindAsks: (kind: string) =>
-    `A purchase the bank files under ${kind} still asks which envelope.`,
-  kindWaits: (kind: string) =>
-    `A purchase the bank files under ${kind} still waits in Needs a home.`,
-  everythingElseOn: (card: string) => `everything else on ${card}`,
+  everythingElseOn: (card: string) =>
+    `everything on ${card} that your other rules don't send`,
   afterThis: (line: string) => `After this, ${line}`,
   takeoverMore: (count: number) =>
-    `${count} more ${count === 1 ? 'envelope catches' : 'envelopes catch'} the rest.`,
+    `${count} more ${count === 1 ? 'envelope takes' : 'envelopes take'} the rest.`,
   nothingMoves:
-    'Where purchases go next stays the same: a closer rule already catches them.',
+    'Where purchases go next stays the same: a closer rule already sends them.',
+  staysSame: 'Where purchases go next stays the same.',
   onOtherCards: 'on your other cards',
   removed: 'Rule removed',
   removeFailed: 'That did not remove. Nothing was changed.',
@@ -5641,17 +5631,13 @@ export const RULE_WORDS = {
   deleteConfirmTitle: (count: number) =>
     count === 1 ? 'Remove this rule?' : `Remove ${ruleCount(count)}?`,
   deleteConfirmBody: (kinds: {
-    live: readonly RuleNaming[];
-    ask: readonly RuleNaming[];
-    paused: readonly RuleNaming[];
+    live: readonly string[];
+    ask: readonly string[];
+    paused: readonly string[];
   }) => {
-    const isShort =
-      kinds.live.length + kinds.ask.length + kinds.paused.length > 3;
-    const name = (rules: readonly RuleNaming[]) =>
-      isShort
-        ? `Your ${rules.length === 1 ? 'rule' : 'rules'} for ${joinNames(rules.map(({ short }) => short))}`
-        : joinNames(rules.map(({ sentence }) => `“${sentence}”`));
-    const isOne = (rules: readonly RuleNaming[]) => rules.length === 1;
+    const name = (names: readonly string[]) =>
+      `Your ${names.length === 1 ? 'rule' : 'rules'} for ${joinNames(names)}`;
+    const isOne = (names: readonly string[]) => names.length === 1;
     return [
       kinds.live.length > 0 &&
         `${name(kinds.live)} will stop sending purchases on ${isOne(kinds.live) ? 'its' : 'their'} own.`,
@@ -5665,7 +5651,7 @@ export const RULE_WORDS = {
   },
 
   deleteConfirmButton: (count: number) =>
-    count === 1 ? 'Remove the rule' : `Remove ${ruleCount(count)}`,
+    count === 1 ? 'Remove this rule' : `Remove ${ruleCount(count)}`,
   movedMany: (count: number, envelope: string) =>
     `Moved ${ruleCount(count)} to ${envelope}`,
   askedMany: (count: number) =>

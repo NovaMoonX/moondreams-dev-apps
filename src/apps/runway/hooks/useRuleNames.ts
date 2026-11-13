@@ -64,7 +64,7 @@ export function useRuleNames() {
       };
       const nextHomes = findNextHomes(targets, rules, liveIds);
       const goingIds = new Set(targets.map((rule) => rule.id));
-      const homes = targets.flatMap((removed) => {
+      const placesOf = (removed: OpenRule) => {
         if (removed.merchantKey === null && removed.category === null)
           return nextHomes
             .filter((home) => home.removed.id === removed.id)
@@ -104,7 +104,12 @@ export function useRuleNames() {
                 },
               ]),
         ];
-      });
+      };
+      const homes = targets.flatMap((removed) =>
+        placesOf(removed).filter(
+          ({ target }) => target !== null || !isEnded(removed),
+        ),
+      );
       const byTarget = [
         ...homes.reduce<Map<string | null, typeof homes>>(
           (groups, home) =>
@@ -142,55 +147,42 @@ export function useRuleNames() {
       ];
       const hidden = lines.length - shown.length;
       const isAsk = (rule: OpenRule) => rule.target === RULE_VARIES;
-      const sentences = (keep: (rule: OpenRule) => boolean) =>
-        targets.filter(keep).map((rule) => ({
-          sentence: describeOne(rule),
-          short:
-            rule.merchantName ??
-            (rule.category === null
-              ? `everything on ${getCardLabel(rule.cardId) ?? 'a card'}`
-              : [
-                  getCategoryLabel(rule.category),
-                  rule.cardId === null ? '' : `on ${getCardLabel(rule.cardId)}`,
-                ]
-                  .filter(Boolean)
-                  .join(' ')),
-        }));
-      const kindLines = [
-        ...new Map(
-          nextHomes
-            .flatMap(({ byKind }) => byKind)
-            .map((rule) => [rule.id, rule] as const),
-        ).values(),
-      ]
-        .slice(0, 2)
-        .map((rule) => {
-          const kind = [
-            getCategoryLabel(rule.category ?? ''),
-            rule.cardId === null ? '' : `on ${onYourCard(rule.cardId)}`,
-          ]
-            .filter(Boolean)
-            .join(' ');
-          if (isAsk(rule)) return RULE_WORDS.kindAsks(kind);
-          if (isEnded(rule)) return RULE_WORDS.kindWaits(kind);
-          return RULE_WORDS.kindFirst(kind, getEnvelopeName(rule.target));
-        });
+      const shortNames = (keep: (rule: OpenRule) => boolean) =>
+        targets
+          .filter(keep)
+          .map(
+            (rule) =>
+              rule.merchantName ??
+              (rule.category === null
+                ? `everything on ${getCardLabel(rule.cardId) ?? 'a card'}`
+                : [
+                    getCategoryLabel(rule.category),
+                    rule.cardId === null
+                      ? ''
+                      : `on ${getCardLabel(rule.cardId)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')),
+          );
       const capitalise = (line: string) =>
         `${line.charAt(0).toUpperCase()}${line.slice(1)}`;
       return {
         stops: RULE_WORDS.deleteConfirmBody({
-          live: sentences((rule) => !isEnded(rule) && !isAsk(rule)),
-          ask: sentences(isAsk),
-          paused: sentences(isEnded),
+          live: shortNames((rule) => !isEnded(rule) && !isAsk(rule)),
+          ask: shortNames(isAsk),
+          paused: shortNames(isEnded),
         }),
         next: [
           ...(shown.length === 0
-            ? [RULE_WORDS.nothingMoves]
+            ? [
+                targets.some(isEnded)
+                  ? RULE_WORDS.staysSame
+                  : RULE_WORDS.nothingMoves,
+              ]
             : shown.map((line, index) =>
                 index === 0 ? RULE_WORDS.afterThis(line) : capitalise(line),
               )),
           ...(hidden > 0 ? [RULE_WORDS.takeoverMore(hidden)] : []),
-          ...kindLines,
         ].join(' '),
       };
     },
