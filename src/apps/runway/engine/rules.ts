@@ -9,6 +9,23 @@ import type { OpenPurchase, OpenRule } from '@apps/runway/types';
 /** The `target` of a rule that asks every time. */
 export const RULE_VARIES = 'varies';
 
+/** Whether a rule names an envelope that is no longer live (archived, ended or turned into a goal), so it sorts nothing until it is given another. A rule that asks every time names none. */
+export const needsNewHome = (
+  rule: Pick<OpenRule, 'target'>,
+  liveEnvelopeIds: ReadonlySet<string>,
+): boolean => rule.target !== RULE_VARIES && !liveEnvelopeIds.has(rule.target);
+
+/** The one item every rule points at, or null when there are none or they differ. */
+export const getSharedTarget = (
+  rules: readonly Pick<OpenRule, 'target'>[],
+): string | null => {
+  const [first] = rules;
+  return first !== undefined &&
+    rules.every((rule) => rule.target === first.target)
+    ? first.target
+    : null;
+};
+
 /** Stores that sell everything, so what they sold says nothing about the kind of place. */
 const BROAD_MERCHANTS = [
   'amazon',

@@ -1,7 +1,7 @@
 import { useAppSelector } from '@/store';
 import { RULE_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { RULE_VARIES } from '@apps/runway/engine/rules';
+import { needsNewHome, RULE_VARIES } from '@apps/runway/engine/rules';
 import {
   selectAllCards,
   selectEnvelopes,
@@ -35,8 +35,7 @@ export function useRuleNames() {
           rule.target === RULE_VARIES ? '' : getEnvelopeName(rule.target),
         card: getCardLabel(rule.cardId),
       }),
-    isEnded: (rule: RuleSealed) =>
-      rule.target !== RULE_VARIES && !liveIds.has(rule.target),
+    isEnded: (rule: RuleSealed) => needsNewHome(rule, liveIds),
     getEnvelopeName,
     getCardLabel,
   };

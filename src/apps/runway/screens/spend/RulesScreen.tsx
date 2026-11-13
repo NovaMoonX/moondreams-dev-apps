@@ -1,20 +1,46 @@
 import { useState } from 'react';
 import { Repeat } from 'lucide-react';
 
+import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
+import FormSheet from '@/components/FormSheet';
+import Pill from '@/components/Pill';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
+import SectionHeader from '@/components/SectionHeader';
+import SelectionBar from '@/components/SelectionBar';
 import Subview from '@/components/Subview';
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
+import { useAuth } from '@/hooks/useAuth';
+import { useLongPress } from '@/hooks/useLongPress';
+import { useSelection } from '@/hooks/useSelection';
 import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
-import { RULE_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import {
+  RULE_WORDS,
+  RUNWAY_SEARCH_THRESHOLD,
+  TICK_HIT_CLASS,
+} from '@apps/runway/constants';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { RULE_VARIES } from '@apps/runway/engine/rules';
 import RuleSheet from '@apps/runway/forms/RuleSheet';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
+import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import {
+  deleteRules,
+  undoDeleteRules,
+  undoUpdateRules,
+  updateRules,
+  type RuleMove,
+} from '@apps/runway/store/actions/ruleActions';
 import {
   selectAllCards,
+  selectEnvelopes,
   selectIsRulesLoaded,
+  selectItemKinds,
+  selectItemLooks,
   selectRules,
+  selectRulesNeedingHome,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { OpenRule } from '@apps/runway/types';
@@ -23,49 +49,223 @@ interface RulesScreenProps {
   onClose: () => void;
 }
 
-/** The rules made from purchases in Needs a home, as sentences grouped by card, the rules for any card last. */
+const HOME_KEY = 'needs-a-new-home';
+
+function EnvelopePickSheet({
+  count,
+  onPick,
+  onClose,
+}: {
+  count: number;
+  onPick: (envelopeId: string) => void;
+  onClose: () => void;
+}) {
+  const envelopes = useAppSelector((state) =>
+    selectEnvelopes(state, todayAsUtcDate()),
+  );
+  const looks = useAppSelector(selectItemLooks);
+  const [query, setQuery] = useState('');
+  const shown = envelopes.filter(({ item }) =>
+    (looks.get(item.id)?.name ?? '')
+      .toLowerCase()
+      .includes(query.trim().toLowerCase()),
+  );
+
+  return (
+    <FormSheet isOpen isDrawerWhenShort onClose={onClose} title='Envelopes'>
+      <div className='space-y-3 pb-4'>
+        <div>
+          <h3 className='text-2xl font-semibold'>{RULE_WORDS.bulkPickTitle}</h3>
+          <p className='text-muted-foreground text-sm'>
+            {RULE_WORDS.bulkPickSub(count)}
+          </p>
+        </div>
+        {envelopes.length >= RUNWAY_SEARCH_THRESHOLD && (
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder={RULE_WORDS.bulkSearch}
+          />
+        )}
+        {envelopes.length === 0 ? (
+          <p className='text-muted-foreground text-sm'>
+            {RULE_WORDS.bulkNoEnvelopes}
+          </p>
+        ) : shown.length === 0 ? (
+          <p className='text-muted-foreground text-sm'>
+            {RULE_WORDS.bulkNoMatch}
+          </p>
+        ) : (
+          <ul className='border-border divide-border bg-card max-h-[max(9rem,calc(92dvh-29rem))] divide-y overflow-y-auto rounded-2xl border'>
+            {shown.map(({ item }) => {
+              const name = looks.get(item.id)?.name ?? item.id;
+              return (
+                <ItemRow
+                  key={item.id}
+                  name={name}
+                  emoji={looks.get(item.id)?.emoji ?? null}
+                  isPrivate={false}
+                  ariaLabel={name}
+                  isAction
+                  onOpen={() => onPick(item.id)}
+                />
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </FormSheet>
+  );
+}
+
+/** A group's heading: press and hold starts picking with the group ticked; while picking, it ticks or clears the whole group. */
+function GroupHead({
+  label,
+  total,
+  ticked,
+  isSelecting,
+  onToggle,
+  onHold,
+}: {
+  label: string;
+  total: number;
+  ticked: number;
+  isSelecting: boolean;
+  onToggle: () => void;
+  onHold: () => void;
+}) {
+  const longPress = useLongPress(onHold);
+  const isAll = total > 0 && ticked === total;
+  const tickLabel = isAll
+    ? RULE_WORDS.groupUntick(label)
+    : RULE_WORDS.groupTick(label);
+
+  return (
+    <SectionDivider
+      label={
+        isSelecting ? (
+          <span className='flex items-center gap-2'>
+            <Checkbox
+              className={TICK_HIT_CLASS}
+              checked={isAll}
+              indeterminate={ticked > 0 && !isAll}
+              onCheckedChange={onToggle}
+              aria-label={tickLabel}
+            />
+            <Button
+              type='button'
+              variant='tertiary'
+              size='stripped'
+              className='text-muted-foreground! text-sm font-medium whitespace-normal'
+              aria-label={tickLabel}
+              onClick={onToggle}
+            >
+              {label} · {RULE_WORDS.groupPicked(ticked, total)}
+            </Button>
+          </span>
+        ) : (
+          <span
+            className='block select-none [-webkit-touch-callout:none]'
+            {...longPress}
+          >
+            {label}
+          </span>
+        )
+      }
+    />
+  );
+}
+
+/** The rules made from purchases in Needs a home, as sentences: those whose envelope is gone first, then grouped by card, the rules for any card last. Press and hold picks several to move, set to ask every time, or remove. */
 function RulesScreen({ onClose }: RulesScreenProps) {
+  const today = todayAsUtcDate();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const { confirm } = useActionModal();
   const rules = useAppSelector(selectRules);
+  const homeless = useAppSelector((state) =>
+    selectRulesNeedingHome(state, today),
+  );
+  const kinds = useAppSelector(selectItemKinds);
+  const looks = useAppSelector(selectItemLooks);
   const cards = useAppSelector(selectAllCards);
   const isLoaded = useAppSelector(selectIsRulesLoaded);
-  const { describe, isEnded, getEnvelopeName, getCardLabel } = useRuleNames();
+  const { describe, getEnvelopeName, getCardLabel } = useRuleNames();
   const { openView } = useRunwayUrlState();
+  const selection = useSelection();
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [isPicking, setIsPicking] = useState(false);
+  const [isWriting, setIsWriting] = useState(false);
   const opened = rules.find((rule) => rule.id === openId) ?? null;
   const needle = query.trim().toLowerCase();
+  const homelessIds = new Set(homeless.map((rule) => rule.id));
   const shown = rules.filter(
     (rule) => needle === '' || describe(rule).toLowerCase().includes(needle),
   );
+  const shownHomeless = shown.filter((rule) => homelessIds.has(rule.id));
+  const shownRest = shown.filter((rule) => !homelessIds.has(rule.id));
   const cardIds = [
     ...cards.map((card) => card.id),
-    ...shown.flatMap((rule) =>
+    ...shownRest.flatMap((rule) =>
       rule.cardId !== null && !cards.some((card) => card.id === rule.cardId)
         ? [rule.cardId]
         : [],
     ),
   ];
-  const groups = [...cardIds, null].flatMap((cardId) => {
-    const rows = shown.filter((rule) => rule.cardId === cardId);
-    return rows.length === 0
+  const groups = [
+    ...(shownHomeless.length === 0
       ? []
       : [
           {
-            key: cardId ?? 'any',
-            label:
-              cardId === null
-                ? RULE_WORDS.anyCard
-                : (getCardLabel(cardId) ?? RULE_WORDS.removedCard),
-            rows,
+            key: HOME_KEY,
+            label: RULE_WORDS.homeHeading,
+            rows: shownHomeless,
           },
-        ];
-  });
+        ]),
+    ...[...cardIds, null].flatMap((cardId) => {
+      const rows = shownRest.filter((rule) => rule.cardId === cardId);
+      return rows.length === 0
+        ? []
+        : [
+            {
+              key: cardId ?? 'any',
+              label:
+                cardId === null
+                  ? RULE_WORDS.anyCard
+                  : (getCardLabel(cardId) ?? RULE_WORDS.removedCard),
+              rows,
+            },
+          ];
+    }),
+  ];
+  const selected = rules.filter((rule) => selection.ids.has(rule.id));
+  const isNothingPicked = selected.length === 0;
+  const canAsk = (rule: OpenRule) =>
+    rule.merchantKey !== null && rule.target !== RULE_VARIES;
+  const nameOf = (envelopeId: string) =>
+    looks.get(envelopeId)?.name ?? 'An envelope';
+
+  const begin = (ids: readonly string[]) => {
+    if (selection.isActive) {
+      selection.toggle(ids);
+      return;
+    }
+    selection.start();
+    selection.toggle(ids);
+  };
+
+  const getDetail = (rule: OpenRule) => {
+    if (!homelessIds.has(rule.id)) return undefined;
+    const name = getEnvelopeName(rule.target);
+    return kinds.get(rule.target) === 'goal'
+      ? RULE_WORDS.goalNow(name)
+      : RULE_WORDS.endedEnvelope(name);
+  };
 
   const renderRow = (rule: OpenRule, isCardLeftOut: boolean) => {
     const sentence = describe(rule, isCardLeftOut);
-    const detail = isEnded(rule)
-      ? RULE_WORDS.endedEnvelope(getEnvelopeName(rule.target))
-      : undefined;
+    const detail = getDetail(rule);
     return (
       <ItemRow
         key={rule.id}
@@ -80,14 +280,219 @@ function RulesScreen({ onClose }: RulesScreenProps) {
         }
         detail={detail}
         isPrivate={false}
-        ariaLabel={`${sentence}${detail ? `, ${detail}` : ''}. Open`}
-        onOpen={() => setOpenId(rule.id)}
+        ariaLabel={`${sentence}${detail ? `, ${detail}` : ''}${selection.isActive ? '' : '. Open'}`}
+        tick={
+          selection.isActive
+            ? {
+                checked: selection.ids.has(rule.id),
+                onChange: () => selection.toggle([rule.id]),
+                label: RULE_WORDS.pickRule(sentence),
+              }
+            : undefined
+        }
+        onOpen={selection.isActive ? undefined : () => setOpenId(rule.id)}
+        onLongPress={() => begin([rule.id])}
       />
     );
   };
 
+  const withWrite = async <T,>(
+    run: (
+      uid: string,
+      encryption: Awaited<ReturnType<typeof getRunwayEncryption>>,
+    ) => Promise<T>,
+  ): Promise<T | null> => {
+    if (!user || isWriting) return null;
+    setIsWriting(true);
+    try {
+      return await run(user.uid, await getRunwayEncryption(user.uid));
+    } catch {
+      addToast({ title: RULE_WORDS.bulkFailed, type: 'error' });
+      return null;
+    } finally {
+      setIsWriting(false);
+    }
+  };
+
+  const reportUndo = (
+    doneCount: number,
+    stayed: readonly string[],
+    failedCount: number,
+  ) => {
+    const notes = [
+      ...(stayed.length > 0 ? [RULE_WORDS.undoLeft(stayed)] : []),
+      ...(failedCount > 0 ? [RULE_WORDS.notSaved(failedCount)] : []),
+    ];
+    addToast({
+      title:
+        doneCount === 0
+          ? RULE_WORDS.undoFailed
+          : RULE_WORDS.undoneMany(doneCount),
+      description: notes.length === 0 ? undefined : notes.join(' '),
+      type:
+        doneCount === 0 ? 'error' : notes.length === 0 ? 'success' : 'warning',
+    });
+  };
+
+  const undoMoved = (moves: readonly RuleMove[]) => () =>
+    void withWrite((uid, encryption) =>
+      undoUpdateRules(uid, encryption, moves, RULE_WORDS.changeUndoMoved),
+    ).then((outcome) => {
+      if (outcome === null) return;
+      reportUndo(
+        outcome.done.length,
+        outcome.skipped.map(({ after }) => describe(after)),
+        outcome.failed.length,
+      );
+    });
+
+  const undoRemoved = (removed: readonly OpenRule[]) => () =>
+    void withWrite((uid, encryption) =>
+      undoDeleteRules(uid, encryption, removed, RULE_WORDS.changeUndoRemoved),
+    ).then((outcome) => {
+      if (outcome === null) return;
+      reportUndo(
+        outcome.done.length,
+        outcome.skipped.map((rule) => describe(rule)),
+        outcome.failed.length,
+      );
+    });
+
+  const report = (
+    title: string,
+    done: readonly { id: string }[],
+    left: { skipped: readonly OpenRule[]; failed: readonly OpenRule[] },
+    notes: readonly string[],
+    undo: () => void,
+  ) => {
+    const lines = [
+      ...notes,
+      ...(left.skipped.length > 0
+        ? [RULE_WORDS.leftAlone(left.skipped.map((rule) => describe(rule)))]
+        : []),
+      ...(left.failed.length > 0
+        ? [RULE_WORDS.notSaved(left.failed.length)]
+        : []),
+    ];
+    addToast({
+      title: done.length === 0 ? RULE_WORDS.bulkNothing : title,
+      description: lines.length === 0 ? undefined : lines.join(' '),
+      type:
+        done.length === 0
+          ? left.failed.length > 0
+            ? 'error'
+            : 'warning'
+          : lines.length === 0
+            ? 'success'
+            : 'warning',
+      action:
+        done.length === 0
+          ? undefined
+          : { label: RULE_WORDS.undo, onClick: undo },
+    });
+    if (done.length === 0) return;
+    if (left.skipped.length + left.failed.length === 0) selection.exit();
+    else selection.toggle(done.map(({ id }) => id));
+  };
+
+  const sendTo = async (envelopeId: string) => {
+    setIsPicking(false);
+    const targets = selected.filter((rule) => rule.target !== envelopeId);
+    if (targets.length === 0) {
+      addToast({ title: RULE_WORDS.bulkNothing, type: 'info' });
+      return;
+    }
+    const outcome = await withWrite((uid, encryption) =>
+      updateRules(uid, encryption, targets, envelopeId, (count) =>
+        RULE_WORDS.changeMovedMany(count, nameOf(envelopeId)),
+      ),
+    );
+    if (outcome === null) return;
+    report(
+      RULE_WORDS.movedMany(outcome.done.length, nameOf(envelopeId)),
+      outcome.done.map(({ after }) => after),
+      outcome,
+      [],
+      undoMoved(outcome.done),
+    );
+  };
+
+  const askEachTime = async () => {
+    const askable = selected.filter(canAsk);
+    const stayCount = selected.filter(
+      (rule) => rule.merchantKey === null,
+    ).length;
+    if (askable.length === 0) {
+      addToast({
+        title: RULE_WORDS.bulkNothing,
+        description: RULE_WORDS.askNone,
+        type: 'info',
+      });
+      return;
+    }
+    const skipNote =
+      stayCount > 0 ? RULE_WORDS.askSkipNote(stayCount, selected.length) : null;
+    if (
+      skipNote !== null &&
+      !(await confirm({
+        title: RULE_WORDS.askConfirmTitle(askable.length),
+        message: skipNote,
+        confirmText: RULE_WORDS.askConfirmButton,
+      }))
+    ) {
+      return;
+    }
+    const outcome = await withWrite((uid, encryption) =>
+      updateRules(
+        uid,
+        encryption,
+        askable,
+        RULE_VARIES,
+        RULE_WORDS.changeAskMany,
+      ),
+    );
+    if (outcome === null) return;
+    report(
+      RULE_WORDS.askedMany(outcome.done.length),
+      outcome.done.map(({ after }) => after),
+      outcome,
+      skipNote === null ? [] : [skipNote],
+      undoMoved(outcome.done),
+    );
+  };
+
+  const removeSelected = async () => {
+    const targets = selected;
+    if (targets.length === 0) return;
+    const isConfirmed = await confirm({
+      title: RULE_WORDS.deleteConfirmTitle(targets.length),
+      message: RULE_WORDS.deleteConfirmBody,
+      confirmText: RULE_WORDS.deleteConfirmButton(targets.length),
+    });
+    if (!isConfirmed) return;
+    const outcome = await withWrite((uid, encryption) =>
+      deleteRules(uid, encryption, targets, RULE_WORDS.changeRemovedMany),
+    );
+    if (outcome === null) return;
+    report(
+      RULE_WORDS.removedMany(outcome.done.length),
+      outcome.done,
+      outcome,
+      [],
+      undoRemoved(outcome.done),
+    );
+  };
+
+  const allShownIds = shown.map((rule) => rule.id);
+  const isAllPicked =
+    allShownIds.length > 0 && allShownIds.every((id) => selection.ids.has(id));
+
   return (
-    <Subview title={RULE_WORDS.title} onClose={onClose}>
+    <Subview
+      title={RULE_WORDS.title}
+      onClose={onClose}
+      onBack={selection.isActive ? selection.exit : undefined}
+    >
       <div className='space-y-4'>
         {!isLoaded ? (
           <p className='text-muted-foreground text-sm'>{RULE_WORDS.loading}</p>
@@ -100,6 +505,34 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           </div>
         ) : (
           <>
+            {selection.isActive && (
+              <div className='space-y-2'>
+                <SectionHeader
+                  title={RULE_WORDS.pickedCount(selected.length)}
+                  action={
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      rounded='full'
+                      className="relative h-7 px-3 after:absolute after:-inset-1.5 after:content-['']"
+                      onClick={selection.exit}
+                    >
+                      {RULE_WORDS.done}
+                    </Button>
+                  }
+                />
+                <div className='flex flex-wrap items-center gap-2'>
+                  <Pill
+                    isThin
+                    isSelected={false}
+                    onClick={() => selection.toggle(allShownIds)}
+                  >
+                    {isAllPicked ? RULE_WORDS.clearAll : RULE_WORDS.selectAll}
+                  </Pill>
+                </div>
+              </div>
+            )}
             {rules.length >= RUNWAY_SEARCH_THRESHOLD && (
               <SearchInput
                 value={query}
@@ -114,10 +547,25 @@ function RulesScreen({ onClose }: RulesScreenProps) {
             ) : (
               groups.map((group) => (
                 <div key={group.key} className='space-y-2'>
-                  <SectionDivider label={group.label} />
+                  <GroupHead
+                    label={group.label}
+                    total={group.rows.length}
+                    ticked={
+                      group.rows.filter((rule) => selection.ids.has(rule.id))
+                        .length
+                    }
+                    isSelecting={selection.isActive}
+                    onToggle={() =>
+                      selection.toggle(group.rows.map((rule) => rule.id))
+                    }
+                    onHold={() => begin(group.rows.map((rule) => rule.id))}
+                  />
                   <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                     {group.rows.map((rule) =>
-                      renderRow(rule, group.key !== 'any'),
+                      renderRow(
+                        rule,
+                        group.key !== 'any' && group.key !== HOME_KEY,
+                      ),
                     )}
                   </ul>
                 </div>
@@ -126,6 +574,42 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           </>
         )}
       </div>
+      {selection.isActive && (
+        <SelectionBar
+          note={isNothingPicked ? RULE_WORDS.nothingPicked : null}
+          actions={[
+            {
+              key: 'ask',
+              label: RULE_WORDS.bulkAsk,
+              shortLabel: RULE_WORDS.bulkAskShort,
+              isDisabled: isNothingPicked || isWriting,
+              onClick: () => void askEachTime(),
+            },
+            {
+              key: 'delete',
+              label: RULE_WORDS.bulkDelete,
+              isDestructive: true,
+              isDisabled: isNothingPicked || isWriting,
+              onClick: () => void removeSelected(),
+            },
+          ]}
+          primary={{
+            key: 'send',
+            label: RULE_WORDS.bulkSend,
+            shortLabel: RULE_WORDS.bulkSendShort,
+            isDisabled: isNothingPicked,
+            isLoading: isWriting,
+            onClick: () => setIsPicking(true),
+          }}
+        />
+      )}
+      {isPicking && (
+        <EnvelopePickSheet
+          count={selected.length}
+          onPick={(envelopeId) => void sendTo(envelopeId)}
+          onClose={() => setIsPicking(false)}
+        />
+      )}
       {opened !== null && (
         <RuleSheet
           key={opened.id}
