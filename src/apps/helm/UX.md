@@ -28,7 +28,7 @@ The owner's words: cool colours that inspire confidence, "an experienced butler 
 
 - **Palette roles.** Pewter page, white cards, ink navy for the one filled button per screen and the Talk button; a pale pewter tint for the assistant's lines, the reply card, the context chip and selected pills; verdigris only for "your call" (above). Overdue is the one warm colour (amber text); destructive is red text, never a fill except in its confirm.
 - **Type.** Titles (page title, a sheet's title, the name in an identity header) are the serif at 600; everything else is the sans. Figures are tabular. Sentence case everywhere; at most one eyebrow per screen (none planned).
-- **Shapes.** Corners between formal and playful: cards 14, fields 10, pills and every tick round (`TickMark`, a round checkbox rule in `helm.css`). Hairlines, no shadows on cards; the subview card keeps the site's soft shadow.
+- **Shapes.** Corners between formal and playful: cards 14, fields 10, pills and every tick round (`TickMark`, and `AppCheckbox` made round by `--checkbox-radius: 9999px` in `helm.css`). Hairlines, no shadows on cards; the subview card keeps the site's soft shadow.
 - **Tone of fixed copy.** Plain, short and assured, an exception to "Playful by default" like Runway's: past-tense reports ("Made a task and linked it to Wedding"), no cheerleading, streaks or emoji in copy. Emoji appear only where the person chose one (a project's 💍). The person's chosen tone (section 1a) changes what {Name} writes freely, not these lines (see "For the owner").
 
 ### 1a. The assistant's name and tone
@@ -94,7 +94,7 @@ Helm reads from the person's other apps on this site and from Google, and change
 | Shape | Control | Ends with |
 |---|---|---|
 | Pick one (2 to 6) | Tall choice rows (a fact under a name when it tells them apart); `PillGroup` only when every option is one or two words | "Something else" → a field "Tell {Name} what you mean" |
-| Pick several (2 to 8) | `Checkbox` rows in a card (staged, so checkboxes, not a toggle) | "None of these" last, clearing the others; "Done", then "Done · 2"; tapped with nothing: "Pick at least one, or None of these" |
+| Pick several (2 to 8) | `AppCheckbox` rows in a card (staged, so checkboxes, not a toggle) | "None of these" last, clearing the others; "Done", then "Done · 2"; tapped with nothing: "Pick at least one, or None of these" |
 | Yes or no | Two equal outlined buttons, No then Yes | Nothing more |
 | A few words | `DictationField` (a field with a mic; up to 500 characters) | Send |
 | A date or a time | Up to three `SuggestionChips` of real days, then `DateInput` (with time when it needs one) | Nothing more |

@@ -1,10 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import {
-  Button,
-  Calendar,
-  Checkbox,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Calendar } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronDown, ListChecks, ListX } from 'lucide-react';
@@ -679,7 +676,7 @@ export function ShoppingPick({
                   )}
                   <label className='flex min-h-12 cursor-pointer items-start gap-3 py-2.5'>
                     <span className='mt-0.5 inline-flex shrink-0'>
-                      <Checkbox
+                      <AppCheckbox
                         aria-label={`Add ${row.name}`}
                         checked={isTicked(row)}
                         disabled={!isReady}

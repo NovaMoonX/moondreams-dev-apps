@@ -1,18 +1,7 @@
 import { useMemo, useState } from 'react';
 
-import {
-  Avatar,
-  Badge,
-  Button,
-  Checkbox,
-  Form,
-  FormFactories,
-  Input,
-  Label,
-  Modal,
-  Select,
-  Textarea,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Avatar, Badge, Button, Form, FormFactories, Input, Label, Modal, Select, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronLeft, ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
 import { shallowEqual } from 'react-redux';
@@ -521,7 +510,7 @@ function VisitOutcomeCatDetail({
           <div className='space-y-1'>
             {openSymptoms.map((symptom) => (
               <div key={symptom.id} className='flex items-center gap-2'>
-                <Checkbox
+                <AppCheckbox
                   checked={value.linkedSymptoms.some(
                     (item) => item.id === symptom.id,
                   )}
@@ -554,7 +543,7 @@ function VisitOutcomeCatDetail({
           <div className='space-y-1'>
             {openConditions.map((condition) => (
               <div key={condition.id} className='flex items-center gap-2'>
-                <Checkbox
+                <AppCheckbox
                   checked={value.linkedConditions.some(
                     (item) => item.id === condition.id,
                   )}

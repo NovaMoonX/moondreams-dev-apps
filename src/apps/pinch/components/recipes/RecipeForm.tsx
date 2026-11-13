@@ -7,13 +7,8 @@ import {
   type RefObject,
 } from 'react';
 
-import {
-  Button,
-  Checkbox,
-  Form,
-  FormFactories,
-  type FormCustomFieldProps,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Form, FormFactories, type FormCustomFieldProps } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUp, X } from 'lucide-react';
@@ -1067,7 +1062,7 @@ function RecipeForm({
             ).map((change) => (
               <li key={change.id} className='flex items-start gap-3'>
                 {initialChanges.length > 1 && (
-                  <Checkbox
+                  <AppCheckbox
                     aria-label={`Apply: ${change.text ?? ''}`}
                     checked={appliedIds.includes(change.id)}
                     onCheckedChange={(checked) =>
