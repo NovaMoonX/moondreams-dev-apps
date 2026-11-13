@@ -412,7 +412,7 @@ function HorizonForm({
         formData.isYearly === null
           ? ''
           : formData.isYearly
-            ? HORIZON_WORDS.yearlyEvery
+            ? HORIZON_WORDS.yearlyEverySummary
             : HORIZON_WORDS.yearlyOnce,
       isAnswered: formData.isYearly !== null,
       render: ({ moveOn }) => (

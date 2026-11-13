@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 import SummaryEditor from '@/components/SummaryEditor';
 import DateInput from '@/components/DateInput';
 import RevealChip from '@/components/RevealChip';
@@ -14,44 +16,51 @@ interface PaysStartRowProps {
   lastDate: number;
 }
 
-/** "Starting · Today": the one folded row under "My pays before each cost is due", whose editor picks a later day for the pays to start saving. */
+/** "Saving starts · Today": the one folded row under "My pays before each cost is due", whose editor picks a later day for the pays to start saving. */
 function PaysStartRow({ value, onChange, today, lastDate }: PaysStartRowProps) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  // Below four choice cards it can sit under the fold on a short screen.
+  useEffect(() => {
+    rowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, []);
   return (
-    <SummaryEditor
-      label={HORIZON_WORDS.startingLabel}
-      summary={
-        value === null
-          ? HORIZON_WORDS.startingToday
-          : formatDateOrdinalUTC(value)
-      }
-      placeholder={HORIZON_WORDS.startingPick}
-      title={HORIZON_WORDS.startingTitle}
-      isFramed
-      shouldFocus={false}
-    >
-      <DateInput
-        variant='outline'
-        aria-label={HORIZON_WORDS.startingLabel}
-        min={toDateInputValue(today)}
-        max={toDateInputValue(lastDate)}
-        value={toDateInputValue(value ?? undefined)}
-        onChange={(event) => {
-          const picked = fromDateInputValue(event.target.value);
-          onChange(
-            picked === undefined || picked <= today
-              ? null
-              : Math.min(picked, lastDate),
-          );
-        }}
-      />
-      {value !== null && (
-        <div>
-          <RevealChip onClick={() => onChange(null)}>
-            {HORIZON_WORDS.startingFromToday}
-          </RevealChip>
-        </div>
-      )}
-    </SummaryEditor>
+    <div ref={rowRef}>
+      <SummaryEditor
+        label={HORIZON_WORDS.startingLabel}
+        summary={
+          value === null
+            ? HORIZON_WORDS.startingToday
+            : formatDateOrdinalUTC(value)
+        }
+        placeholder={HORIZON_WORDS.startingPick}
+        title={HORIZON_WORDS.startingTitle}
+        isFramed
+        shouldFocus={false}
+      >
+        <DateInput
+          variant='outline'
+          aria-label={HORIZON_WORDS.startingLabel}
+          min={toDateInputValue(today)}
+          max={toDateInputValue(lastDate)}
+          value={toDateInputValue(value ?? undefined)}
+          onChange={(event) => {
+            const picked = fromDateInputValue(event.target.value);
+            onChange(
+              picked === undefined || picked <= today
+                ? null
+                : Math.min(picked, lastDate),
+            );
+          }}
+        />
+        {value !== null && (
+          <div>
+            <RevealChip onClick={() => onChange(null)}>
+              {HORIZON_WORDS.startingFromToday}
+            </RevealChip>
+          </div>
+        )}
+      </SummaryEditor>
+    </div>
   );
 }
 

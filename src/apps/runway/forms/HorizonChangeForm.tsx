@@ -356,22 +356,22 @@ function HorizonChangeForm({
     },
     {
       id: 'yearly',
-      title: HORIZON_WORDS.yearlyTitle,
+      title: HORIZON_WORDS.yearly,
       summaryLabel: HORIZON_WORDS.yearly,
       summaryValue: isYearly
-        ? HORIZON_WORDS.yearlyEvery
+        ? HORIZON_WORDS.yearlyEverySummary
         : HORIZON_WORDS.yearlyOnce,
       isAnswered: true,
       render: () => (
         <div className='flex items-center justify-between gap-3'>
           <div className='min-w-0 space-y-0.5'>
-            <p className='font-medium'>{HORIZON_WORDS.yearlyEvery}</p>
+            <p className='font-medium'>{HORIZON_WORDS.yearlySwitch}</p>
             <p className='text-muted-foreground text-sm'>
-              {HORIZON_WORDS.yearlyEveryMeaning}
+              {HORIZON_WORDS.yearlySwitchMeaning}
             </p>
           </div>
           <AppToggle
-            aria-label={HORIZON_WORDS.yearlyEvery}
+            aria-label={HORIZON_WORDS.yearlySwitch}
             checked={isYearly}
             onCheckedChange={setIsYearly}
           />
