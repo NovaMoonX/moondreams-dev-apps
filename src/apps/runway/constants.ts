@@ -2960,7 +2960,7 @@ export const CONVERT_WORDS = {
   lockedGoalLinked: (event: string) => `Linked to ${event}. Unlink it first.`,
   lockedPartOf: (event: string) => `Part of ${event}. Take it out there first.`,
   lockedOver: (name: string, amount: string) =>
-    `${name} is ${amount} over. Set what it holds first.`,
+    `${name} is ${amount} over.`,
   showToSet: 'Show amounts to set the target',
   fromLimitBefore: 'From its ',
   fromLimitAfter: ' limit',
@@ -5550,20 +5550,19 @@ export const RULE_WORDS = {
   done: 'Done',
   bulkSend: 'Send to an envelope',
   bulkSendShort: 'Send to…',
-  bulkAsk: 'Ask each time',
-  bulkAskShort: 'Always ask',
+  bulkAsk: 'Always ask',
   holdToPick: 'Press and hold a rule to fix several at once.',
   bulkDelete: 'Remove',
   bulkPickTitle: 'Which envelope?',
   bulkPickSub: (count: number) =>
     `${ruleCount(count)} will send purchases here.`,
   bulkNoEnvelopes: 'You have no envelope to send them to yet.',
-  bulkSearch: 'Search envelopes',
+  bulkSearch: 'Search your envelopes',
   bulkNoMatch: 'No envelope matches that.',
   askSkipNote: (stay: number, total: number) =>
     `${stay} of ${total} name a card or kind of place and stay as they are.`,
   askConfirmTitle: (count: number) => `Ask every time for ${ruleCount(count)}?`,
-  askConfirmButton: 'Ask me each time',
+  askConfirmButton: 'Always ask',
   askNone:
     'None of these can ask every time: they name a card or kind of place.',
   deleteConfirmTitle: (count: number) => `Remove ${ruleCount(count)}?`,

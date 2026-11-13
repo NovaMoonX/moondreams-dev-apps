@@ -174,9 +174,9 @@ function DoorButton({
       {attention > 0 ? (
         <span
           aria-hidden='true'
-          className='text-warning flex items-center gap-1 font-medium'
+          className='flex items-center gap-1 font-medium text-(--runway-warning-ink)'
         >
-          <CircleAlert className='h-3.5 w-3.5' />
+          <CircleAlert className='text-warning h-3.5 w-3.5' />
           {attention}
         </span>
       ) : (

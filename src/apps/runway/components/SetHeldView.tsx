@@ -104,7 +104,7 @@ function SetHeldView({
   const [moveId] = useState(newTransferMoveId);
   const isBill = kind === 'bill';
   const [amount, setAmount] = useState(() =>
-    isHidden || isBill ? '' : centsToInputValue(heldCents),
+    isHidden || isBill || heldCents < 0 ? '' : centsToInputValue(heldCents),
   );
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);

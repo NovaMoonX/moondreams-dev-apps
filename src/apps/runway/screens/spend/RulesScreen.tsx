@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 import { MessageCircleQuestion, Repeat, Send, Trash2 } from 'lucide-react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
@@ -49,19 +49,6 @@ interface RulesScreenProps {
 }
 
 const HOME_KEY = 'needs-a-new-home';
-
-const NARROW_QUERY = '(max-width: 359px)';
-const subscribeNarrow = (onChange: () => void) => {
-  const list = window.matchMedia(NARROW_QUERY);
-  list.addEventListener('change', onChange);
-  return () => list.removeEventListener('change', onChange);
-};
-const useIsNarrow = () =>
-  useSyncExternalStore(
-    subscribeNarrow,
-    () => window.matchMedia(NARROW_QUERY).matches,
-    () => false,
-  );
 
 function EnvelopePickSheet({
   count,
@@ -208,7 +195,6 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const cards = useAppSelector(selectAllCards);
   const isLoaded = useAppSelector(selectIsRulesLoaded);
   const { describe, describeHome, getCardLabel } = useRuleNames();
-  const isNarrow = useIsNarrow();
   const { openView } = useRunwayUrlState();
   const selection = useSelection();
   const [query, setQuery] = useState('');
@@ -598,9 +584,6 @@ function RulesScreen({ onClose }: RulesScreenProps) {
             {
               key: 'ask',
               label: RULE_WORDS.bulkAsk,
-              shortLabel: isNarrow
-                ? RULE_WORDS.bulkAskShort
-                : RULE_WORDS.bulkAsk,
               icon: <MessageCircleQuestion className='h-4 w-4' />,
               isDisabled: isNothingPicked || isWriting,
               onClick: () => void askEachTime(),
