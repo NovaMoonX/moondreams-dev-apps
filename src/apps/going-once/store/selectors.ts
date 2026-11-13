@@ -3,6 +3,7 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { FINISHED_SALE_STATUS } from '@apps/going-once/constants';
 import type {
+  Bundle,
   Inquiry,
   Item,
   Sale,
@@ -44,10 +45,52 @@ export const selectItems = createSelector(
       : [],
 );
 
+/** The open sale's things by id; empty while another sale's are still arriving. */
+export const selectItemsById = createSelector(
+  [
+    (state: RootState) => state.goingOnce.items,
+    (_state: RootState, saleId: string | null) => saleId,
+  ],
+  (items, saleId): Record<string, Item> =>
+    items.saleId === saleId
+      ? Object.fromEntries(items.items.map((item) => [item.id, item]))
+      : {},
+);
+
+const NO_BUNDLES: Bundle[] = [];
+
+/** The open sale's bundles in the order they were made; empty while another sale's are still arriving. */
+export const selectBundles = createSelector(
+  [
+    (state: RootState) => state.goingOnce.bundles,
+    (_state: RootState, saleId: string | null) => saleId,
+  ],
+  (bundles, saleId): Bundle[] =>
+    bundles.saleId === saleId && bundles.items.length > 0
+      ? [...bundles.items].sort(
+          (first, second) => first.createdAt - second.createdAt,
+        )
+      : NO_BUNDLES,
+);
+
+/** The bundle with this id in the open sale, or `null`. */
+export const selectBundleById = (
+  state: RootState,
+  saleId: string | null,
+  bundleId: string | null,
+): Bundle | null =>
+  state.goingOnce.bundles.saleId === saleId && bundleId !== null
+    ? (state.goingOnce.bundles.items.find((found) => found.id === bundleId) ??
+      null)
+    : null;
+
 /** The open sale's counts and sums per status, worked out once per change to its things. */
 export const selectStatusSummary = createSelector([selectItems], (items) =>
   getStatusSummary(items),
 );
+
+export const selectBundlesStatus = (state: RootState) =>
+  state.goingOnce.bundles.status;
 
 export const selectItemsStatus = (state: RootState) =>
   state.goingOnce.items.status;

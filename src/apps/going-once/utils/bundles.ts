@@ -1,4 +1,11 @@
-import type { Bundle, Item } from '@apps/going-once/types';
+import type { Bundle, BundleChange, Item } from '@apps/going-once/types';
+
+/** A bundle's history with one more entry, keeping the last `limit` (oldest first). */
+export const appendBundleChange = (
+  history: BundleChange[],
+  change: BundleChange,
+  limit: number,
+): BundleChange[] => [...history, change].slice(-limit);
 
 export interface BundleParts {
   /** The things the bundle price covers now. */
