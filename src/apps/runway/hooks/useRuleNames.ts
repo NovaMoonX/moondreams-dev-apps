@@ -53,18 +53,23 @@ export function useRuleNames() {
         : RULE_WORDS.endedEnvelope(name);
     },
     describeTakeover: ({ removed, by }: RuleTakeover) => {
+      const onYourCard = (cardId: string | null) => {
+        const label = getCardLabel(cardId);
+        if (label === null) return 'a card';
+        return /\bcard$/i.test(label) ? `your ${label}` : `your ${label} card`;
+      };
       const subject =
         removed.merchantName ??
         (removed.category !== null
           ? getCategoryLabel(removed.category)
-          : `everything on ${getCardLabel(removed.cardId) ?? 'a card'}`);
+          : `everything on ${onYourCard(removed.cardId)}`);
+      const scopeCardId =
+        removed.merchantKey === null && removed.category === null
+          ? null
+          : (removed.cardId ?? by.cardId);
       const onCard =
-        removed.cardId === null && by.cardId !== null
-          ? ` on ${getCardLabel(by.cardId) ?? 'a card'}`
-          : '';
+        scopeCardId === null ? '' : ` on ${onYourCard(scopeCardId)}`;
       const what = `${subject}${onCard}`;
-      if (by.target === RULE_VARIES) return RULE_WORDS.takeoverAsk(what);
-      if (needsNewHome(by, liveIds)) return RULE_WORDS.takeoverWait(what);
       return RULE_WORDS.takeover(what, getEnvelopeName(by.target));
     },
     getEnvelopeName,
