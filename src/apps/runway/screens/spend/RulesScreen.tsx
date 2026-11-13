@@ -65,11 +65,11 @@ interface RulesScreenProps {
 const HOME_KEY = 'needs-a-new-home';
 
 function EnvelopePickSheet({
-  count,
+  names,
   onPick,
   onClose,
 }: {
-  count: number;
+  names: readonly string[];
   onPick: (envelopeId: string) => void;
   onClose: () => void;
 }) {
@@ -89,11 +89,11 @@ function EnvelopePickSheet({
       isOpen
       isDrawerWhenShort
       onClose={onClose}
-      title={RULE_WORDS.bulkPickTitle(count)}
+      title={RULE_WORDS.bulkPickTitle(names.length)}
     >
       <div className='space-y-3 pb-4'>
         <p className='text-muted-foreground text-sm'>
-          {RULE_WORDS.bulkPickSub(count)}
+          {RULE_WORDS.bulkPickSub(names)}
         </p>
         {envelopes.length >= RUNWAY_SEARCH_THRESHOLD && (
           <SearchInput
@@ -706,7 +706,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
       )}
       {isPicking && (
         <EnvelopePickSheet
-          count={selected.length}
+          names={selected.map((rule) => describe(rule))}
           onPick={(envelopeId) => void sendTo(envelopeId)}
           onClose={() => setIsPicking(false)}
         />

@@ -422,7 +422,9 @@ function RuleSheet({
         {onBack && <BackLink onBack={onBack} />}
         {rule && isEnded(rule) && (
           <InlineNotice tone='warning'>
-            <p>{describeHome(rule)}.</p>
+            <p>
+              {describeHome(rule)}. {RULE_WORDS.pausedRestart}
+            </p>
           </InlineNotice>
         )}
         {stayName !== null && (

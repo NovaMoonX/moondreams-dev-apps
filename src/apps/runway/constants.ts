@@ -5549,11 +5549,10 @@ export const RULE_WORDS = {
     `“${sentence}” will stop sending purchases on its own. Purchases it already placed stay where they are.`,
   removeConfirmButton: 'Remove the rule',
   takeover: (what: string, envelope: string) =>
-    `After this, ${what} will go to ${envelope}.`,
+    `After this, ${envelope} will catch ${what}.`,
   takeoverAsk: (what: string) =>
-    `After this, ${what} will ask which envelope each time.`,
-  takeoverWait: (what: string) =>
-    `After this, ${what} will wait in Needs a home.`,
+    `After this, you'll be asked which envelope for ${what} each time.`,
+  takeoverWait: (what: string) => `After this, Needs a home will hold ${what}.`,
   takeoverMore: (count: number) =>
     `${ruleCount(count)} more will be caught by a broader rule.`,
   removed: 'Rule removed',
@@ -5586,6 +5585,7 @@ export const RULE_WORDS = {
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,
   homeHeading: 'Needs a new envelope',
   goalNow: (name: string) => `${name} is a goal now, so this rule is paused`,
+  pausedRestart: 'Pick an envelope and save to start it again.',
   landingTitle: (count: number) =>
     count === 1
       ? 'This rule needs a new envelope'
@@ -5613,9 +5613,9 @@ export const RULE_WORDS = {
     count === 1
       ? 'Where should this rule send purchases?'
       : `Where should these ${count} rules send purchases?`,
-  bulkPickSub: (count: number) =>
-    count === 1
-      ? 'Its purchases will go there from now on.'
+  bulkPickSub: (names: readonly string[]) =>
+    names.length === 1
+      ? `“${names[0]}” will send its purchases there from now on.`
       : 'Their purchases will go there from now on.',
   bulkNoEnvelopes: 'You have no envelope to send them to yet.',
   bulkSearch: 'Search your envelopes',
