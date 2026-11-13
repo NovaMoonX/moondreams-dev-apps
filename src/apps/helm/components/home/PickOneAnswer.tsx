@@ -11,9 +11,6 @@ import {
 } from '@apps/helm/components/home/ChoiceButton';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
-const ICON_CLASS = 'text-muted-foreground size-5 shrink-0';
-
-/** The options as radio rows in one group, "new" and "none" quieter after them, and "Something else" last, opening a short field when the options may not cover it. A tap on an option fills its radio and sends. */
 function PickOneAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
   const name = useAssistantName();
   const [isElseOpen, setIsElseOpen] = useState(false);
@@ -26,6 +23,7 @@ function PickOneAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
   ];
   const pick = (optionId: string) => {
     setChosenId(optionId);
+    setIsElseOpen(false);
     onAnswer({ shape: 'pickOne', optionId, otherText: null });
   };
 
@@ -47,7 +45,7 @@ function PickOneAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
         <ChoiceRow
           kind='radio'
           label={HELM_COPY.questionSomethingElse}
-          icon={<Pencil className={ICON_CLASS} aria-hidden='true' />}
+          opensWith={Pencil}
           isSelected={isElseOpen}
           isDisabled={isBusy}
           onClick={() => setIsElseOpen((isOpen) => !isOpen)}

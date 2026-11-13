@@ -11,7 +11,7 @@ type RecordRef = { collection: 'who' | 'places'; id: string };
 /** The answer to a model-written question as the device structures it, before who gave it and when. */
 export type QuestionAnswerValue =
   | { shape: 'pickOne' | 'yesNo'; optionId: string; otherText: string | null }
-  | { shape: 'pickSeveral'; optionIds: string[] }
+  | { shape: 'pickSeveral'; optionIds: string[]; otherText?: string | null }
   | { shape: 'freeText'; text: string }
   | { shape: 'dateTime'; date: number | null; time: string | null }
   | { shape: 'pickRecord'; ref: RecordRef | null; newName: string | null }

@@ -784,7 +784,7 @@ const readAsk = (
   if (options.length < 2) return null;
   return {
     ...base,
-    allowsSomethingElse: !isSeveral && item.allowsSomethingElse === true,
+    allowsSomethingElse: item.allowsSomethingElse === true,
     noneOption: isSeveral,
     options: [
       ...toOptionIds(options),

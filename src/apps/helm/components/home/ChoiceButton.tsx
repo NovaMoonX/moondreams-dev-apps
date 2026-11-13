@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import type { LucideIcon } from 'lucide-react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check } from 'lucide-react';
@@ -11,14 +13,11 @@ export const QUIET_CLASS =
   "relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']";
 
 interface ChoiceGroupProps {
-  /** The question, read out as the group's name. */
   label: string;
-  /** `radio` is one answer, `checkbox` is several. */
   kind: 'radio' | 'checkbox';
   children: ReactNode;
 }
 
-/** A question's options as one grouped card with hairlines between its rows. */
 export function ChoiceGroup({ label, kind, children }: ChoiceGroupProps) {
   return (
     <div
@@ -41,7 +40,7 @@ function Indicator({ kind, isSelected }: IndicatorProps) {
     <span
       aria-hidden='true'
       className={join(
-        'grid size-5 shrink-0 place-items-center border-2',
+        'mt-px grid size-5 shrink-0 place-items-center border-2',
         kind === 'radio' ? 'rounded-full' : 'rounded-[6px]',
         isSelected
           ? 'border-primary bg-primary text-primary-foreground'
@@ -64,14 +63,11 @@ interface ChoiceRowProps {
   kind: 'radio' | 'checkbox';
   isSelected: boolean;
   isDisabled: boolean;
-  /** "None of these" and "New" read as options but one step quieter than the real ones. */
   isQuiet?: boolean;
-  /** Replaces the radio or tick, for a row that opens a field ("Something else"). */
-  icon?: ReactNode;
+  opensWith?: LucideIcon;
   onClick: () => void;
 }
 
-/** One option: a leading radio or tick, its label, and what tells it apart under it. The whole row is the tap target. */
 export function ChoiceRow({
   label,
   detail = null,
@@ -79,32 +75,44 @@ export function ChoiceRow({
   isSelected,
   isDisabled,
   isQuiet = false,
-  icon,
+  opensWith: OpenerIcon,
   onClick,
 }: ChoiceRowProps) {
   return (
     <Button
       type='button'
       variant='base'
-      role={kind}
-      aria-checked={isSelected}
+      role={OpenerIcon ? undefined : kind}
+      aria-checked={OpenerIcon ? undefined : isSelected}
+      aria-expanded={OpenerIcon ? isSelected : undefined}
       aria-label={HELM_COPY.questionOptionAria(label, detail)}
       disabled={isDisabled}
-      className='h-auto min-h-[52px] w-full justify-start gap-3 rounded-none px-3.5 py-2.5 text-left font-normal transition-none'
+      className='focus-visible:outline-primary h-auto min-h-[52px] w-full items-start justify-start gap-3 rounded-none px-3.5 py-[15px] text-left font-normal transition-none focus-visible:outline-2 focus-visible:-outline-offset-2'
       onClick={onClick}
     >
-      {icon ?? <Indicator kind={kind} isSelected={isSelected} />}
+      {OpenerIcon ? (
+        <OpenerIcon
+          className={join(
+            'mt-px size-5 shrink-0',
+            isSelected ? 'text-primary' : 'text-muted-foreground',
+          )}
+          aria-hidden='true'
+        />
+      ) : (
+        <Indicator kind={kind} isSelected={isSelected} />
+      )}
       <span className='flex min-w-0 flex-1 flex-col items-start'>
         <span
           className={join(
-            'text-[15px] leading-[21px] break-words',
+            'line-clamp-2 text-[15px] leading-[21px] break-words',
             isQuiet && 'text-muted-foreground',
+            OpenerIcon && isSelected && 'text-primary',
           )}
         >
           {label}
         </span>
         {detail && (
-          <span className='text-muted-foreground text-[13px] break-words'>
+          <span className='text-muted-foreground line-clamp-2 text-[13px] break-words'>
             {detail}
           </span>
         )}

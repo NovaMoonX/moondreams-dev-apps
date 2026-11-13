@@ -117,12 +117,7 @@ function PickRecordAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
             <ChoiceRow
               kind='radio'
               label={newOption.label}
-              icon={
-                <Plus
-                  className='text-muted-foreground size-5 shrink-0'
-                  aria-hidden='true'
-                />
-              }
+              opensWith={Plus}
               isSelected={isNewOpen}
               isDisabled={isBusy}
               onClick={() => setIsNewOpen((isOpen) => !isOpen)}

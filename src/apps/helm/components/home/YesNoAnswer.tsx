@@ -7,7 +7,6 @@ import {
 } from '@apps/helm/components/home/ChoiceButton';
 import { HELM_COPY } from '@apps/helm/constants';
 
-/** Yes and No as two radio rows; a tap fills one and sends. */
 function YesNoAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
   const [chosen, setChosen] = useState<'yes' | 'no' | null>(null);
   const answer = (optionId: 'yes' | 'no') => {

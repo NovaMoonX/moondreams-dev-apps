@@ -13,7 +13,6 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
 const NONE_ID = 'none';
 
-/** Checkbox rows that tick on and off in one group; "None of these" clears the others and any tick clears it, "Something else" opens a field, and Send with the count sends what is ticked. */
 function PickSeveralAnswer({
   question,
   isBusy,
@@ -84,12 +83,7 @@ function PickSeveralAnswer({
           <ChoiceRow
             kind='checkbox'
             label={HELM_COPY.questionSomethingElse}
-            icon={
-              <Pencil
-                className='text-muted-foreground size-5 shrink-0'
-                aria-hidden='true'
-              />
-            }
+            opensWith={Pencil}
             isSelected={isElseOpen}
             isDisabled={isBusy}
             onClick={() => {
