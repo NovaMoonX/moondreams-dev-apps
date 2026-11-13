@@ -149,7 +149,7 @@ export const toGoalRow = (id: string, goal: GoalSealed): StartRow => ({
   emoji: goal.emoji,
   line:
     goal.targetDate === null
-      ? describeFundingShort(withExtras(goal))
+      ? describeFundingShort(withExtras(goal), [], 'goal')
       : `By ${formatDateOrdinalUTC(goal.targetDate)}`,
   amount: formatCentsShort(goal.targetCents),
 });

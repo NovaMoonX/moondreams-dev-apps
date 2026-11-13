@@ -23,7 +23,12 @@ import {
   DEFAULT_DAY_START_TIME,
   DEFAULT_PLAN_FILL_PERCENT,
 } from '@apps/helm/constants';
-import type { AssistantTone, HelmProfile, VoiceMode } from '@apps/helm/types';
+import type {
+  AssistantTone,
+  HelmProfile,
+  HelmTheme,
+  VoiceMode,
+} from '@apps/helm/types';
 
 /** Creates the profile on first open, with this device's zone, and leaves an existing one alone, so two tabs opening together make one. */
 export async function ensureHelmProfile(uid: string) {
@@ -36,6 +41,7 @@ export async function ensureHelmProfile(uid: string) {
     const profile: HelmProfile = {
       assistantName: null,
       assistantTone: null,
+      theme: null,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       dayStartTime: DEFAULT_DAY_START_TIME,
       dayEndTime: DEFAULT_DAY_END_TIME,
@@ -118,6 +124,12 @@ export const setAssistantNameAndTone = (
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     assistantName,
     assistantTone,
+    lastEditedAt: Date.now(),
+  });
+
+export const setHelmTheme = (uid: string, theme: HelmTheme) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    theme,
     lastEditedAt: Date.now(),
   });
 

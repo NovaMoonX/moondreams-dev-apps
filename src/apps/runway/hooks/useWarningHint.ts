@@ -107,11 +107,12 @@ export function useWarningHint(
         return;
       }
       state.observer = new IntersectionObserver(
-        ([entry]) => setIsOutOfView(entry.intersectionRatio < 1),
+        // Any part showing above the footer counts as seen: a long warning is rarely whole on a phone, and repeating it read as twice.
+        ([entry]) => setIsOutOfView(!entry.isIntersecting),
         {
           root: getScroller(element.parentElement),
           rootMargin: `0px 0px -${FOOTER_ALLOWANCE_PX}px 0px`,
-          threshold: [0, 1],
+          threshold: [0],
         },
       );
       state.observer.observe(element);

@@ -235,9 +235,15 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    // A profile written before themes has no key; a written one is null or a palette Helm ships.
+    function isHelmTheme(data) {
+      return !('theme' in data) || data.theme == null || data.theme in ['chestnut', 'plum', 'teal', 'indigo'];
+    }
+
     // A profile is private to one person and only the server deletes it, so a stray client can't half-delete a Helm.
     match /apps/helm/users/{uid} {
-      allow read, create, update: if isHelmOwner(uid);
+      allow read: if isHelmOwner(uid);
+      allow create, update: if isHelmOwner(uid) && isHelmTheme(request.resource.data);
     }
 
     // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out.
@@ -439,7 +445,7 @@ service cloud.firestore {
     // (apps/runway/server, apps/runway/keyChecks) have no match, so only Functions reach them.
     // Versions, changes, moves and a day's records are append-only: their ids come from their own
     // fields, so writing the same record twice is refused rather than overwriting it.
-    // `links` and `accountBalances` are written only by Functions (bank data), and a card's or account's `linkId`
+    // `links`, `accountBalances` and `cardStatements` are written only by Functions (bank data), and a card's or account's `linkId`
     // is set only by `attachRunwayAccounts`: a client creates them unlinked and never changes it. A purchase brought
     // in from a bank (`source` 'link', a `dedupeKey`) is made only by Functions: a client creates purchases with
     // neither and never changes either. `releasedCharges` notes (a pending charge the bank dropped) are made only by
@@ -447,7 +453,7 @@ service cloud.firestore {
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
-        && !(document[0] in ['links', 'accountBalances', 'releasedCharges'])
+        && !(document[0] in ['links', 'accountBalances', 'cardStatements', 'releasedCharges'])
         && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null)
         && (document[0] != 'purchases' || (request.resource.data.get('dedupeKey', null) == null && request.resource.data.get('source', null) != 'link'));
     }
@@ -461,7 +467,7 @@ service cloud.firestore {
         && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules']
         && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
         && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null)));
-      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'releasedCharges'];
+      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'memories', 'releasedCharges'];
     }
 
     match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {

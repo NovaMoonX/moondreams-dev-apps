@@ -425,6 +425,7 @@ function RunwayContent() {
 
     if (
       view === 'freeToSpend' ||
+      (typeof view === 'string' && view.startsWith('held')) ||
       ((view === 'checkAmount' || view === 'checkBalance') &&
         isTrackingLevel(level)) ||
       (view === 'cashPosition' && level === 'link')

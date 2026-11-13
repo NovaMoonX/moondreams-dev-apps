@@ -148,12 +148,14 @@ const SEED_PROFILES = [
     timeZone: 'America/Los_Angeles',
     assistantName: null,
     assistantTone: null,
+    theme: null,
   },
   {
     user: FIXTURE_USERS.partnerTwo,
     timeZone: 'America/New_York',
     assistantName: 'Juniper',
     assistantTone: 'warm',
+    theme: 'plum',
   },
 ];
 
@@ -909,6 +911,7 @@ async function buildGmailTurn(input: {
         text: 'Your cake tasting is at 2:00 PM. See you then!',
         deepLink:
           'https://mail.google.com/mail/?authuser=personal@example.com#all/18f0c0de00000001',
+        record: null,
         deletedAt: null,
       },
     ],
@@ -4790,11 +4793,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const batch = context.firestore.batch();
 
   const turnCounts = await Promise.all(
-    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone }) => {
+    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone, theme }) => {
       batch.set(users.doc(user.uid), {
         timeZone,
         assistantName,
         assistantTone,
+        theme,
         dayStartTime: DEFAULT_DAY_START_TIME,
         dayEndTime: DEFAULT_DAY_END_TIME,
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
@@ -6119,6 +6123,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       moneySummary: { isOn: true, changedAt: connectedAt },
       upcomingBills: { isOn: false, changedAt: connectedAt },
       horizon: { isOn: false, changedAt: connectedAt },
+      transactions: { isOn: true, changedAt: connectedAt },
     },
     options: null,
     status: 'live',
@@ -6127,7 +6132,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         share.categories.map((category) => [
           category.id,
           {
-            lastOkAt: syncedAt,
+            lastOkAt: category.mode === 'live' ? null : syncedAt,
             lastError: null,
             count: runwayCopies.filter((copy) => copy.category === category.id)
               .length,
@@ -6156,6 +6161,27 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: runwayConnectorId,
     grantId: runwayGrantId,
   });
+  // Jamie's plan is the one that tracks spending, so a question about a store has rows to find there.
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerTwo.uid)
+      .collection('grants')
+      .doc(runwayGrantId),
+    {
+      ...runwayGrant,
+      categories: {
+        ...runwayGrant.categories,
+        moneySummary: { isOn: false, changedAt: connectedAt },
+      },
+      categoryState: Object.fromEntries(
+        Object.entries(runwayGrant.categoryState).map(([id, state]) => [
+          id,
+          { ...state, count: 0 },
+        ]),
+      ),
+    } satisfies ConnectionGrant,
+  );
 
   const worthTheWaitConnectorId = toAppConnectorId('worth-the-wait');
   const worthTheWaitGrantId = toGrantId(
@@ -6475,6 +6501,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       nineLivesCopies.length +
       1 +
       waypointCopies.length +
+      1 +
       1 +
       6,
   };

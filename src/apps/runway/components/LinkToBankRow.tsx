@@ -58,7 +58,7 @@ function LinkToBankRow({ linkId, onOpen }: LinkToBankRowProps) {
     if (isRefreshing) return;
     setIsRefreshing(true);
     try {
-      const results = await syncLinks();
+      const results = await syncLinks({ fresh: true });
       const mine = results.find((entry) => entry.linkId === linkId);
       addToast(
         mine?.state === 'needsAttention'

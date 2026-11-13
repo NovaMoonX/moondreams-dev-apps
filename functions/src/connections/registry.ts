@@ -45,6 +45,21 @@ export interface SyncPageResult {
   resumeState: string | null;
 }
 
+export interface LiveQueryRequest {
+  category: string;
+  args: unknown;
+}
+
+export interface LiveQueryResult {
+  records: SharedRecord[];
+  matchedCount: number;
+  totalCents: number | null;
+  currency: string | null;
+  isPartial: boolean;
+  from: string | null;
+  to: string | null;
+}
+
 export type SourceStatus = 'ok' | 'noAccess' | 'needsReconnect';
 
 export interface SourceAdapter {
@@ -53,6 +68,7 @@ export interface SourceAdapter {
   secrets?: SecretParam[];
   status(ctx: SourceCtx): Promise<SourceStatus>;
   syncPage(ctx: SourceCtx, req: SyncPageRequest): Promise<SyncPageResult>;
+  query?(ctx: SourceCtx, req: LiveQueryRequest): Promise<LiveQueryResult>;
   /** A site path under the source's own route, or null. */
   deepLink(ref: string, ctx: SourceCtx): string | null;
   /** The choices the account offers (calendars), read live. */

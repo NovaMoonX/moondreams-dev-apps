@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import AppCheckbox from '@/components/AppCheckbox';
 
 import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
@@ -96,7 +98,7 @@ function DisconnectForm({
       {count > 0 && (
         <div className='flex flex-col gap-1'>
           <label className='flex min-h-12 items-start gap-3 py-2'>
-            <Checkbox
+            <AppCheckbox
               className='mt-0.5'
               checked={deletesCopies}
               disabled={isEnding}

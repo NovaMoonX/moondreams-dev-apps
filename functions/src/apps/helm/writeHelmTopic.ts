@@ -11,6 +11,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import type { ModelProvider } from '../../ai/modelProvider.js';
 import type { SealedPayload } from '../../appKeys/seal.js';
+import { isForcedFixture } from '../../emulator.js';
 import { HELM_MASTER_KEYS } from './getHelmKey.js';
 import {
   openForHelm,
@@ -167,6 +168,7 @@ const release = (
   });
 
 const readApiKey = () => {
+  if (isForcedFixture('anthropic')) return '';
   try {
     return ANTHROPIC_API_KEY.value();
   } catch {

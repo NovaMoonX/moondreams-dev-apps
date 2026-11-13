@@ -37,9 +37,17 @@ export const RUNWAY_SHARES: SourceShares = {
           isOnAtConnect: false,
           addedInVersion: 1,
         },
+        {
+          id: 'transactions',
+          kind: 'transaction',
+          label: 'Transactions',
+          detail: 'The date, who you paid, the amount and its category',
+          mode: 'live',
+          isOnAtConnect: false,
+          addedInVersion: 2,
+        },
       ],
       never: [
-        'transactions',
         'accounts and balances',
         'cards',
         'income sources',
