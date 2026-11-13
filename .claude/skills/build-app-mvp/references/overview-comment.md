@@ -31,10 +31,12 @@ Everything that must exist before the merge (Functions secrets: CI deploys every
 - a last line: "Then tell me it's done and I'll merge it."
 - the IAM fix in case CI's service account can't attach a secret, in a collapsed `<details>`.
 
-### 2. Optional local verification of anything mocked
-- the real key in `functions/.secret.local` (git-ignored; an empty value means fixtures);
-- restart the emulators after editing it;
-- what to try in the UI.
+### 2. Try it locally, real or fixtures
+Every outside service the app calls works locally both ways, with the seeded data: real when its key can be read (signed in to `gcloud`, or `functions/.secret.local`), fixtures otherwise. Give, each in its own block:
+- `npm run local:services` to see which way each service goes (the app's services must be rows in it, `cloud-functions.md`);
+- `npm run local:services -- fixtures <service|all>` and `-- real <service|all>`, then the emulator restart;
+- anything a real connection needs locally (an OAuth redirect URI, a sandbox account);
+- what to try in the UI, as which seeded person.
 
 ### 3. After the first deploy
 Nothing to run for a new callable: the deploy opens it to the browser (README's "New Cloud Functions & Cloud Run invoker access"). Only if the browser still shows a CORS error, `npm run fb:invoker -- <function>`.
