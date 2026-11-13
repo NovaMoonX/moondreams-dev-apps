@@ -16,6 +16,13 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { openJson, sealJson } from '@apps/helm/security';
+import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import {
+  deleteWhoDatesIn,
+  readWhoDateIds,
+  readWhoDatesIn,
+  restoreWhoDates,
+} from '@apps/helm/store/actions/keyDateActions';
 import {
   getPhotoIdsOf,
   removeMediaOf,
@@ -135,7 +142,8 @@ export class ForgetPartialError extends Error {
   }
 }
 
-export type RestoreOutcome = 'restored' | 'exists' | 'withoutPhotos';
+export type RestoreOutcome =
+  'restored' | 'exists' | 'withoutPhotos' | 'withoutDates';
 
 export interface Forgotten {
   counts: ForgetCounts;
@@ -327,15 +335,26 @@ export async function forgetLinked(
     throw reason;
   };
   if (failedOutcome) await abandon(failedOutcome.reason);
-  const raw = await runTransaction(db, async (transaction) => {
+  const encryption =
+    target === 'who' ? await getHelmEncryption(uid).catch(abandon) : null;
+  const dateIds =
+    encryption !== null ? await readWhoDateIds(uid, id).catch(abandon) : [];
+  const removed = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const data = snapshot.data() as DocumentData | undefined;
     if (!data) return null;
     if (data.isSelf === true) throw new Error('This is you.');
+    const dates = encryption
+      ? await readWhoDatesIn(transaction, uid, encryption, id, dateIds)
+      : null;
     transaction.delete(ref);
-    return data;
+    if (encryption && dates) {
+      await deleteWhoDatesIn(transaction, uid, encryption, id, dates);
+    }
+    return { data, dates };
   }).catch(abandon);
-  if (!raw) throw new Error('This is already gone.');
+  if (!removed) throw new Error('This is already gone.');
+  const raw = removed.data;
   const countOf = (source: LinkSource) =>
     taken
       .filter((entry) => entry.source === source)
@@ -370,8 +389,18 @@ export async function forgetLinked(
       return true;
     });
     if (!isBack) return 'exists';
+    const areDatesBack =
+      encryption && removed.dates
+        ? await restoreWhoDates(uid, encryption, id, removed.dates).then(
+            () => true,
+            (error: unknown) => {
+              console.error('Helm dates were not put back', error);
+              return false;
+            },
+          )
+        : true;
     await putBack();
-    return 'restored';
+    return areDatesBack ? 'restored' : 'withoutDates';
   };
   return {
     counts: {

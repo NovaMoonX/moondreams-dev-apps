@@ -3,7 +3,17 @@ import { createHmac } from 'node:crypto';
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { buildWhoDoc } from './executeCommands.js';
 import type { Effect, EffectRef } from './executeCommands.js';
+import { formatYearlyDate } from '../../../vendor/yearlyDateUtils.js';
+import type { IndexChange } from '../keyDateIndex.js';
 import { matchWho } from './matchEntities.js';
+import {
+  MAX_YEARLY_PER_WHO,
+  checkKeyDateParts,
+  partsPaths,
+  toIndexEntry,
+  type KeyDateParts,
+} from './planKeyDates.js';
+import { buildKeyDateLine } from './summaries.js';
 import { readWhoTier } from './whoTier.js';
 
 export const PHOTOS_PER_WHO = 12;
@@ -15,6 +25,8 @@ export interface ContactInput {
   emails: string[];
   phones: string[];
   photoUrl: string | null;
+  /** Google's birthday; the year is null when Google gives none. */
+  birthday?: { month: number; day: number; year: number | null } | null;
 }
 
 export interface ImportedFrom {
@@ -41,6 +53,23 @@ export interface ExistingWho {
   sealed: Record<string, unknown>;
   /** The nonce of the sealed words as read, so a write can tell the who changed meanwhile. */
   sealedNonce: string;
+  /** How many dates that come back the who holds. */
+  yearlyDateCount: number;
+  /** The who's birthday as the yearly index holds it. */
+  birthday: BirthdayOf | null;
+}
+
+interface Birthday {
+  month: number;
+  day: number;
+  year: number | null;
+}
+
+export interface BirthdayOf {
+  id: string;
+  month: number;
+  day: number | null;
+  year: number | null;
 }
 
 type TextField = 'name' | 'email' | 'phone';
@@ -52,9 +81,15 @@ export interface WhoChange {
   /** The words to write: every field for a new who, only the empty or unedited ones for an existing one. */
   fields: Partial<Record<TextField, string>>;
   photo: { mediaId: string; url: string } | null;
+  /** Google's birthday: written into an empty one, or replacing one the person has not edited. */
+  birthday: BirthdayChange | null;
 }
 
-export type NewId = (collection: 'who' | 'media') => string;
+export type BirthdayChange =
+  | { kind: 'add'; id: string; value: Birthday }
+  | { kind: 'replace'; id: string; value: Birthday; was: BirthdayOf };
+
+export type NewId = (collection: 'who' | 'media' | 'keyDates') => string;
 
 export type Digest = (field: string, value: string) => string;
 
@@ -108,7 +143,7 @@ const findMatch = (
       aliases: who.aliases,
       lastMentionedAt: who.lastMentionedAt,
     })),
-    assistantName: null,
+    assistantNames: [],
   })[0];
   return (
     people.find(isSameContact) ??
@@ -124,6 +159,48 @@ const findMatch = (
       : undefined) ??
     null
   );
+};
+
+const birthdayKey = (value: {
+  month: number;
+  day: number | null;
+  year: number | null;
+}) => `${value.month}-${value.day}-${value.year ?? ''}`;
+
+/** Google's birthday as the code would keep it: a year that can't be one is dropped, a day that can't be one drops the birthday. */
+const usableBirthday = (birthday: Birthday | null | undefined) => {
+  if (!birthday) return null;
+  const thisYear = new Date().getFullYear();
+  const check = (year: number | null) =>
+    checkKeyDateParts(
+      {
+        kind: 'birthday',
+        label: null,
+        month: birthday.month,
+        day: birthday.day,
+        year,
+      },
+      thisYear,
+    );
+  const refusal = check(birthday.year);
+  if (refusal === null) return birthday;
+  return refusal === 'badYear' && check(null) === null
+    ? { ...birthday, year: null }
+    : null;
+};
+
+/** A birthday goes into an empty one only, and never past the cap of dates a who holds. */
+const addBirthday = (
+  contact: ContactInput,
+  who: ExistingWho | null,
+  newId: NewId,
+): BirthdayChange | null => {
+  const value = usableBirthday(contact.birthday);
+  return value &&
+    who?.birthday == null &&
+    (who?.yearlyDateCount ?? 0) < MAX_YEARLY_PER_WHO
+    ? { kind: 'add', id: newId('keyDates'), value }
+    : null;
 };
 
 const photoFor = (
@@ -183,6 +260,8 @@ export function planContactImport(input: {
           lastMentionedAt: null,
           sealed: {},
           sealedNonce: '',
+          yearlyDateCount: 0,
+          birthday: null,
         };
         return {
           ...state,
@@ -200,6 +279,7 @@ export function planContactImport(input: {
                 ...(made.phone && { phone: made.phone }),
               },
               photo: photoFor(contact, null, input.newId),
+              birthday: addBirthday(contact, null, input.newId),
             },
           ],
         };
@@ -216,7 +296,8 @@ export function planContactImport(input: {
         match.photoMediaId === null
           ? photoFor(contact, match, input.newId)
           : null;
-      if (Object.keys(fields).length === 0 && !photo)
+      const birthday = addBirthday(contact, match, input.newId);
+      if (Object.keys(fields).length === 0 && !photo && !birthday)
         return { ...state, alreadyIn: state.alreadyIn + 1 };
       const filled: ExistingWho = {
         ...match,
@@ -231,7 +312,7 @@ export function planContactImport(input: {
         touched: new Set([...state.touched, match.id]),
         changes: [
           ...state.changes,
-          { id: match.id, before: match, contact, fields, photo },
+          { id: match.id, before: match, contact, fields, photo, birthday },
         ],
       };
     },
@@ -279,7 +360,29 @@ export function planContactUpdate(input: {
     isPhotoNew && isPhotoUntouched && who.mediaIds.length < PHOTOS_PER_WHO
       ? photoFor(contact, who, input.newId)
       : null;
-  return fields.length === 0 && !photo
+  const incomingBirthday = usableBirthday(contact.birthday);
+  const isBirthdayUnedited =
+    who.birthday !== null &&
+    who.importedFields.birthday !== undefined &&
+    digest('birthday', birthdayKey(who.birthday)) ===
+      who.importedFields.birthday;
+  const birthday: BirthdayChange | null =
+    incomingBirthday === null
+      ? null
+      : who.birthday === null
+        ? who.importedFields.birthday === undefined
+          ? addBirthday(contact, who, input.newId)
+          : null
+        : isBirthdayUnedited &&
+            birthdayKey(who.birthday) !== birthdayKey(incomingBirthday)
+          ? {
+              kind: 'replace',
+              id: who.birthday.id,
+              value: incomingBirthday,
+              was: who.birthday,
+            }
+          : null;
+  return fields.length === 0 && !photo && !birthday
     ? null
     : {
         id: who.id,
@@ -287,8 +390,29 @@ export function planContactUpdate(input: {
         contact,
         fields: Object.fromEntries(fields),
         photo,
+        birthday,
       };
 }
+
+const sealBirthday = (birthday: BirthdayChange, ownerName: string) => {
+  const { value } = birthday;
+  const sealedParts: KeyDateParts = {
+    kind: 'birthday',
+    label: null,
+    month: value.month,
+    day: value.day,
+    year: value.year,
+    captureId: null,
+  };
+  const title = buildKeyDateLine({
+    verb: birthday.kind === 'add' ? 'Added' : 'Changed',
+    owner: ownerName,
+    kind: 'birthday',
+    label: null,
+    when: formatYearlyDate(value),
+  });
+  return { title, sealedParts, birthday };
+};
 
 export interface PhotoSeal {
   bytesNonce: string;
@@ -299,6 +423,12 @@ export interface ImportWrites {
   whoCreates: { id: string; data: Record<string, unknown> }[];
   whoUpdates: { id: string; data: Record<string, unknown> }[];
   media: { id: string; data: Record<string, unknown> }[];
+  keyDateCreates: { id: string; data: Record<string, unknown> }[];
+  keyDateUpdates: { id: string; data: Record<string, unknown> }[];
+  /** Index changes for the birthdays written, applied in the same transaction. */
+  indexChanges: IndexChange[];
+  /** Dates gained per existing who; a new who's count is in its document. */
+  counterDeltas: Map<string, number>;
   effectRefs: EffectRef[];
   effects: Effect[];
   createdCount: number;
@@ -342,7 +472,14 @@ export function buildImportWrites(input: {
             photoUrl: digest('photoUrl', kept.photo.url),
           }
         : {}),
+      ...(change.birthday
+        ? { birthday: digest('birthday', birthdayKey(change.birthday.value)) }
+        : {}),
     };
+    const ownerName = before?.name ?? contact.name;
+    const dated = change.birthday
+      ? sealBirthday(change.birthday, ownerName)
+      : null;
     const mediaIds = [
       ...(before?.mediaIds ?? []),
       ...(kept ? [kept.photo.mediaId] : []),
@@ -361,6 +498,8 @@ export function buildImportWrites(input: {
             createdAt: now,
             decidedAt: now,
             deleteAfter: null,
+            sourceCaptureId: null,
+            executionId: null,
             sealed: seal({
               bytesNonce: kept.sealed.bytesNonce,
               thumbNonce: kept.sealed.thumbNonce,
@@ -404,6 +543,7 @@ export function buildImportWrites(input: {
         }),
         lastMentionedAt: null,
         createdBy: 'person',
+        yearlyDateCount: dated?.birthday.kind === 'add' ? 1 : 0,
         importedFrom,
         importedFields,
         ...photoFields,
@@ -416,7 +556,7 @@ export function buildImportWrites(input: {
         },
         previous: null,
       };
-      return { change, mediaDoc, create: doc, update: null, effect };
+      return { change, mediaDoc, create: doc, update: null, effect, dated };
     }
     const label = { 'sealed.name': before.name };
     const update = {
@@ -453,10 +593,10 @@ export function buildImportWrites(input: {
           : {}),
       },
     };
-    return { change, mediaDoc, create: null, update, effect };
+    return { change, mediaDoc, create: null, update, effect, dated };
   });
 
-  const refs = parts.flatMap(({ change, mediaDoc, create, effect }) => [
+  const refs = parts.flatMap(({ change, mediaDoc, create, effect, dated }) => [
     {
       ref: {
         op: create ? 'create' : 'update',
@@ -465,6 +605,40 @@ export function buildImportWrites(input: {
       } as EffectRef,
       effect,
     },
+    ...(dated
+      ? [
+          {
+            ref: {
+              op: dated.birthday.kind === 'add' ? 'create' : 'update',
+              collection: 'keyDates',
+              docId: dated.birthday.id,
+            } as EffectRef,
+            effect: {
+              written: {
+                'sealed.title': dated.title,
+                ...(dated.birthday.kind === 'add'
+                  ? { whoId: change.id, shape: 'yearly' }
+                  : {}),
+                ...partsPaths(dated.sealedParts),
+              },
+              previous:
+                dated.birthday.kind === 'add'
+                  ? null
+                  : {
+                      'sealed.title': dated.title,
+                      ...partsPaths({
+                        kind: 'birthday',
+                        label: null,
+                        month: dated.birthday.was.month,
+                        day: dated.birthday.was.day,
+                        year: dated.birthday.was.year,
+                        captureId: null,
+                      } as KeyDateParts),
+                    },
+            } as Effect,
+          },
+        ]
+      : []),
     ...(mediaDoc
       ? [
           {
@@ -490,6 +664,54 @@ export function buildImportWrites(input: {
       update ? [{ id: change.id, data: update }] : [],
     ),
     media: parts.flatMap(({ mediaDoc }) => (mediaDoc ? [mediaDoc] : [])),
+    keyDateCreates: parts.flatMap(({ change, dated }) =>
+      dated && dated.birthday.kind === 'add'
+        ? [
+            {
+              id: dated.birthday.id,
+              data: {
+                whoId: change.id,
+                shape: 'yearly',
+                source: 'google:contacts',
+                createdBy: 'person',
+                executionId: input.executionId,
+                createdAt: now,
+                lastEditedAt: null,
+                sealed: seal({ ...dated.sealedParts }),
+              },
+            },
+          ]
+        : [],
+    ),
+    keyDateUpdates: parts.flatMap(({ dated }) =>
+      dated && dated.birthday.kind === 'replace'
+        ? [
+            {
+              id: dated.birthday.id,
+              data: {
+                sealed: seal({ ...dated.sealedParts }),
+                lastEditedAt: now,
+              },
+            },
+          ]
+        : [],
+    ),
+    indexChanges: parts.flatMap(({ change, dated }): IndexChange[] =>
+      dated
+        ? [
+            {
+              op: 'upsert',
+              whoId: change.id,
+              entry: toIndexEntry(dated.birthday.id, dated.sealedParts),
+            },
+          ]
+        : [],
+    ),
+    counterDeltas: new Map(
+      parts.flatMap(({ change, create, dated }): [string, number][] =>
+        !create && dated?.birthday.kind === 'add' ? [[change.id, 1]] : [],
+      ),
+    ),
     effectRefs: refs.map((entry) => entry.ref),
     effects: refs.map((entry) => entry.effect),
     createdCount: parts.filter(({ create }) => create).length,
@@ -543,6 +765,7 @@ export const buildImportExecution = (input: {
     effects: input.writes.effects,
     undoReport: null,
     goneIds: null,
+    lines: null,
     spoken: null,
   }),
 });

@@ -25,7 +25,7 @@ import { useUnpairAccounts } from '@apps/runway/hooks/useBankMatch';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { undoCardPayment } from '@apps/runway/store/actions/cardActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   selectAccountPairs,
