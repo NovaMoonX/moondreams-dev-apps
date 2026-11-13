@@ -80,6 +80,7 @@ import {
   VARIES_HINT,
 } from '@apps/runway/constants';
 import { getUsualCardId } from '@apps/runway/engine/cards';
+import { isRefundCandidate, isSameStore } from '@apps/runway/engine/matching';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { needsCostAmount } from '@apps/runway/engine/horizon';
 import { countCostMarks } from '@apps/runway/engine/progress';
@@ -1243,14 +1244,23 @@ function PurchaseFormBody({
     }
   };
 
-  const candidates = others.filter(
+  const refundStore = formData.extras.merchant?.trim() || null;
+  const matching = others.filter(
     (purchase) =>
-      purchase.amountCents > 0 &&
+      isRefundCandidate(purchase) &&
       getRefundableCents(purchase, others) > 0 &&
       getPurchaseTitle(purchase, nameOf)
         .toLowerCase()
         .includes(originQuery.trim().toLowerCase()),
   );
+  const candidates = [
+    ...matching.filter((purchase) =>
+      isSameStore(purchase.merchant, refundStore),
+    ),
+    ...matching.filter(
+      (purchase) => !isSameStore(purchase.merchant, refundStore),
+    ),
+  ];
 
   const usage = purchases
     .slice(0, RECENT_PURCHASES)
@@ -1386,7 +1396,12 @@ function PurchaseFormBody({
     if (isPresetPay && preset !== null) {
       return HORIZON_WORDS.costLineName(preset.cost.name, preset.itemName);
     }
-    if (isRefund) return `Back to ${describeEnvelopes(lines, nameOf)}`;
+    if (isRefund && original !== null) {
+      return SPEND_WORDS.refundGoesTo(
+        describeEnvelopes(lines, nameOf),
+        getPurchaseTitle(original, nameOf),
+      );
+    }
     return describeEnvelopes(lines, nameOf);
   };
   const todayValue = toDateInputValue(today);
@@ -1473,7 +1488,7 @@ function PurchaseFormBody({
               onClick={() => openView('original')}
               detail={
                 original !== null && returnsToOriginal && lines
-                  ? `Returns to ${describeEnvelopes(lines, nameOf)}.`
+                  ? `Goes to ${describeEnvelopes(lines, nameOf)}.`
                   : undefined
               }
             >

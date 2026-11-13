@@ -301,7 +301,7 @@ export const isRefundLike = (purchase: OpenPurchase) =>
 /** How far back a bank refund looks for the purchase it returns. */
 export const REFUND_LOOKBACK_DAYS = 120;
 
-const getMerchantKey = (purchase: OpenPurchase) =>
+const getMerchantKey = (purchase: Pick<OpenPurchase, 'merchant' | 'label'>) =>
   toComparable(purchase.merchant?.trim() || purchase.label?.trim() || '')
     .split(' ')
     .filter((word) => !/^\d+$/.test(word))
@@ -310,6 +310,20 @@ const getMerchantKey = (purchase: OpenPurchase) =>
 // A bank adds store numbers and suffixes ("KOHLS #1234", "TARGET T-0456"), so one name starting with the other is the same store.
 const isSameMerchant = (a: string, b: string) =>
   Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a));
+
+/** Whether two merchant names (or labels) name the same store, store numbers, spacing and punctuation aside. */
+export const isSameStore = (a: string | null, b: string | null) =>
+  isSameMerchant(
+    getMerchantKey({ merchant: a, label: null }),
+    getMerchantKey({ merchant: b, label: null }),
+  );
+
+/** A purchase a refund could return: posted money out that is not a move between the person's own accounts. */
+export const isRefundCandidate = (purchase: OpenPurchase) =>
+  purchase.amountCents > 0 &&
+  purchase.status !== 'pending' &&
+  purchase.pairedWithId === null &&
+  !OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
 
 /** The one purchase a waiting bank refund most likely returns, when that purchase went to an envelope or goal: same merchant (store numbers and suffixes aside), on or before the refund's day within `REFUND_LOOKBACK_DAYS`, with at least the refund left to return; the newest wins. Null when none does, since a refund of a Free to Spend purchase already counts where it belongs. */
 export function findRefundOriginal(

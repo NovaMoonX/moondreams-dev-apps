@@ -291,7 +291,11 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
     >
       <div className='space-y-4 pb-4'>
         <SheetHead
-          label={NEEDS_HOME_WORDS.moneyIn}
+          label={
+            isRefundLike(purchase)
+              ? NEEDS_HOME_WORDS.refundLabel
+              : NEEDS_HOME_WORDS.moneyIn
+          }
           figure={`+${formatCents(-purchase.amountCents)}`}
           fact={`${formatDateOrdinalUTC(purchase.date)} · ${sourceName}`}
         />
