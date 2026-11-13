@@ -93,6 +93,9 @@ function BusyAllDayRow({ eventId }: { eventId: string }) {
           }}
         />
       </label>
+      <p className='text-muted-foreground text-[13px] text-pretty'>
+        {HELM_COPY.busyAllDayHint}
+      </p>
       {hasFailed && (
         <p className='text-[13px] text-[var(--helm-overdue)]'>
           {HELM_COPY.busyAllDayFailed}

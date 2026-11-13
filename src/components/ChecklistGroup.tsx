@@ -1,12 +1,8 @@
 import type { ReactNode } from 'react';
 
-import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import AppCheckbox from '@/components/AppCheckbox';
 
 import SectionDivider from '@/components/SectionDivider';
-
-/** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
-export const TICK_HIT_CLASS =
-  "relative before:absolute before:-inset-[11px] before:content-['']";
 
 interface ChecklistGroupProps {
   /** Left out for a group with no name (the lines before the first named group): no divider is drawn. */
@@ -31,8 +27,7 @@ function ChecklistGroup({
       {label && <SectionDivider label={label} />}
       {onToggleAll && (
         <div className='flex min-h-10 items-center gap-3 px-[13px]'>
-          <Checkbox
-            className={TICK_HIT_CLASS}
+          <AppCheckbox
             checked={total > 0 && doneCount === total}
             indeterminate={doneCount > 0 && doneCount < total}
             onCheckedChange={(next) => onToggleAll(Boolean(next))}

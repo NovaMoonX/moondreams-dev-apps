@@ -162,7 +162,10 @@ export const reconnectRunwayLink = onCall(
     );
     logger.info('runway.link.reconnected');
 
-    const result = await syncRunwayLink(firestore, keyring, uid, linkId);
+    const result = await syncRunwayLink(firestore, keyring, uid, linkId, {
+      isFresh: false,
+      isStatementsDue: true,
+    });
     if (result.state === 'skipped') {
       await firestore.runTransaction(async (transaction) => {
         const link = await transaction.get(linkRef);
