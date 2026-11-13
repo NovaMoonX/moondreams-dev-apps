@@ -96,7 +96,7 @@ step() {
     if (( HAVE_GCLOUD )); then echo "→ would run: $title"; else echo "? would run (can't check without a signed-in gcloud): $title"; fi
     return 0
   fi
-  echo "→ $title…"
+  echo "→ ${title}…"
   "$run"
   add DONE_LIST "$title"
 }
@@ -303,7 +303,7 @@ optional_step() { # title, detect, run, default, question
     echo "→ would ask ($default): $question, then run: $title"; return 0
   fi
   if ask "$question" "$default"; then
-    echo "→ $title…"; "$run"; add DONE_LIST "$title"
+    echo "→ ${title}…"; "$run"; add DONE_LIST "$title"
   else
     echo "• Skipped: $title"; add SKIPPED_LIST "$title"
   fi
