@@ -255,12 +255,8 @@ const toRef = (prefix: string, keys: string[], index: number) =>
     .digest('hex')
     .slice(0, 16)}`;
 
-const readGoalDetail = (goal: Summary['horizon'][number], currency: string) => {
-  const money = `${formatMoney(goal.setAsideCents, currency)} set aside of ${formatMoney(goal.targetCents, currency)}`;
-  return goal.targetCents > 0
-    ? `${Math.max(0, Math.min(100, Math.floor((goal.setAsideCents * 100) / goal.targetCents)))}% of the way there, ${money}`
-    : money;
-};
+const readGoalDetail = (goal: Summary['horizon'][number], currency: string) =>
+  `${formatMoney(goal.setAsideCents, currency)} set aside of ${formatMoney(goal.targetCents, currency)}`;
 
 const toRecords = (category: string, summary: Summary): SharedRecord[] => {
   const billKeys = summary.bills.map(
@@ -462,7 +458,7 @@ export function createRunwayAdapter(
               ? envelopes.envelopes.map(({ id, name }) =>
                   toRecord({
                     sourceRef: `envelopes/${createHash('sha256').update(id).digest('hex').slice(0, 16)}`,
-                    kind: 'project',
+                    kind: 'artifact',
                     title: name,
                     detail: 'An envelope in the plan',
                   }),

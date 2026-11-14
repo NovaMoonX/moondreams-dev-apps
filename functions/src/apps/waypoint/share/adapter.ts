@@ -638,7 +638,7 @@ const toChecklistRecord = (
     .join('. ');
   return toRecord({
     sourceRef: `trips/${trip.id}/checklist/${encodeURIComponent(group)}`,
-    kind: 'countSummary',
+    kind: 'artifact',
     title: `${clip(trip.title, NAME_CHARS)}: ${group}`,
     subtitle: `${done.length} of ${lines.length} done`,
     detail: clip(detail, DETAIL_CHARS),
@@ -649,7 +649,6 @@ const toChecklistRecord = (
           : Math.max(latest ?? 0, line.updatedAt),
       null,
     ),
-    extra: { items: lines.length },
   });
 };
 

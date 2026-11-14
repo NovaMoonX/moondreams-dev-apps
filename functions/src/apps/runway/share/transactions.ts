@@ -134,7 +134,14 @@ const isCounted = (sealed: Record<string, unknown>, needsHome: boolean) => {
 const readLines = (sealed: Record<string, unknown>) =>
   (Array.isArray(sealed.lines) ? sealed.lines : []).flatMap((line) => {
     const one = asObject(line);
-    return one === null ? [] : [{ envelopeId: readText(one.envelopeId) }];
+    return one === null
+      ? []
+      : [
+          {
+            envelopeId: readText(one.envelopeId),
+            cents: Number.isSafeInteger(one.cents) ? (one.cents as number) : 0,
+          },
+        ];
   });
 
 const envelopeNames = async (
@@ -198,7 +205,7 @@ const readCurrency = async (
   );
 };
 
-/** The person's purchases in a range of days, newest first, each with only its day, payee, amount and category; the total covers every match, not only the rows returned. */
+/** The person's purchases in a range of days, newest first, each with only its day, payee, amount and category; the total covers every match, not only the rows returned, and under an envelope filter counts only the matching lines' share. */
 export async function readTransactions(
   firestore: Firestore,
   keyring: Keyring,
@@ -291,6 +298,16 @@ export async function readTransactions(
       const name = envelopeId === null ? undefined : names.get(envelopeId);
       return toComparable(name ?? FREE_TO_SPEND) === wanted;
     });
+  const toShare = (sealed: Record<string, unknown>) => {
+    const whole = sealed.amountCents as number;
+    const lines = readLines(sealed);
+    if (wanted === null || lines.length === 0) return whole;
+    if (toComparable(toCategory(sealed)) === wanted) return whole;
+    return lines.reduce((sum, { envelopeId, cents }) => {
+      const name = envelopeId === null ? undefined : names.get(envelopeId);
+      return toComparable(name ?? FREE_TO_SPEND) === wanted ? sum + cents : sum;
+    }, 0);
+  };
   const matched = byPayee.filter(({ sealed }) => isCategoryMatch(sealed));
   const shown = matched.slice(0, ROW_LIMIT);
   return {
@@ -302,10 +319,7 @@ export async function readTransactions(
       category: toCategory(sealed),
     })),
     matchedCount: matched.length,
-    totalCents: matched.reduce(
-      (sum, { sealed }) => sum + (sealed.amountCents as number),
-      0,
-    ),
+    totalCents: matched.reduce((sum, { sealed }) => sum + toShare(sealed), 0),
     currency,
     isPartial: snapshot.size > SCAN_LIMIT || unreadable > 0,
     from: toDayText(from),

@@ -102,7 +102,7 @@ export const WAYPOINT_SHARES: SourceShares = {
         },
         {
           id: 'tripChecklist',
-          kind: 'countSummary',
+          kind: 'artifact',
           label: 'Your trip checklist',
           detail: 'Every to-do by category, done ones included',
           mode: 'sync',

@@ -2158,14 +2158,14 @@ assert.deepEqual(refs(checklist).sort(), [
   'trips/nyc/checklist/Documents',
   'trips/nyc/checklist/Packing',
 ]);
-assert.ok(checklist.every((record) => record.kind === 'countSummary'));
+assert.ok(checklist.every((record) => record.kind === 'artifact'));
 const packing = checklist.find((record) =>
   record.sourceRef.endsWith('Packing'),
 );
 assert.equal(packing?.title, 'New York: Packing');
 assert.equal(packing?.subtitle, '1 of 2 done');
 assert.equal(packing?.detail, 'To do: Pack charger. Done: Packed shoes');
-assert.deepEqual(packing?.extra, { items: 2 });
+assert.deepEqual(packing?.extra, {});
 assert.equal(
   checklist.find((record) => record.sourceRef.endsWith('Documents'))?.detail,
   'To do: Passports',
@@ -2700,13 +2700,10 @@ const lisbon = runwayHorizon.find((record) => record.title === 'Lisbon');
 assert.equal(lisbon?.kind, 'project');
 assert.equal(lisbon?.amountCents, 300_000);
 assert.equal(lisbon?.dueAt, Date.UTC(2027, 2, 1));
-assert.match(
-  lisbon?.detail ?? '',
-  /^26% of the way there, \$800\.00 set aside of \$3,000\.00$/,
-);
+assert.match(lisbon?.detail ?? '', /^\$800\.00 set aside of \$3,000\.00$/);
 assert.match(
   runwayHorizon.find((record) => record.title === 'Someday')?.detail ?? '',
-  /^0% of the way there/,
+  /^\$0\.00 set aside of /,
 );
 assert.equal(
   runwayHorizon.find((record) => record.title === 'Someday')?.dueAt,
@@ -3095,7 +3092,7 @@ assert.deepEqual(
   'live envelopes by their newest name; archived, ended and bills are left out',
 );
 envelopes.forEach((record) => {
-  assert.equal(record.kind, 'project');
+  assert.equal(record.kind, 'artifact');
   assert.equal(record.amountCents, null);
   assert.equal(record.currency, null);
   assert.equal(record.dueAt, null);
@@ -3158,10 +3155,18 @@ assert.deepEqual(
   'a split purchase with a line on the envelope matches it',
 );
 assert.equal(food.matchedCount, 3);
-assert.equal(food.totalCents, 12_300, 'the total covers every match');
 assert.equal(
-  (await queryTx(OWNER, { ...inRange, category: 'FUN' })).matchedCount,
-  1,
+  food.totalCents,
+  11_300,
+  "the total covers every match, counting only a split purchase's matching share",
+);
+const fun = await queryTx(OWNER, { ...inRange, category: 'FUN' });
+assert.equal(fun.matchedCount, 1);
+assert.equal(fun.totalCents, 1_000, 'a split counts only its share');
+assert.equal(
+  fun.records[0]?.amountCents,
+  4_000,
+  'the row keeps the purchase amount',
 );
 const split = await queryTx(OWNER, { ...inRange, category: 'split' });
 assert.deepEqual(

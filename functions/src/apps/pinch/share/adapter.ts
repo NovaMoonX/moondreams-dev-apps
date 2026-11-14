@@ -36,7 +36,9 @@ const FULL_STOCK_LIMIT = 300;
 const RECIPE_LIMIT = 500;
 const SAVED_MEAL_LIMIT = 200;
 const PLATE_NAMES_SHOWN = 3;
-const DETAIL_LIMIT = 200;
+const PLATE_ITEMS_READ = 8;
+const NAME_CLIP = 40;
+const DETAIL_LIMIT = 120;
 
 const DISH_WORDS: Record<string, string> = {
   BREAKFAST: 'Breakfast',
@@ -64,8 +66,11 @@ const joinLines = (parts: Array<string | null>, separator = ' · ') =>
   parts.flatMap((part) => (part === null ? [] : [part])).join(separator) ||
   null;
 
+const clipTo = (text: string, limit: number) =>
+  text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`;
+
 const clip = (text: string | null) =>
-  text === null ? null : text.slice(0, DETAIL_LIMIT);
+  text === null ? null : clipTo(text, DETAIL_LIMIT);
 
 const MEAL_TYPE_WORDS: Record<string, string> = {
   BREAKFAST: 'Breakfast',
@@ -418,10 +423,12 @@ const toStockRecord = (
         typeof place === 'string' && Object.hasOwn(PLACE_WORDS, place)
           ? PLACE_WORDS[place]
           : null,
-      detail: joinLines([
-        amount,
-        day === null ? null : `${dateLabel} ${formatDay(day)}`,
-      ]),
+      detail: clip(
+        joinLines([
+          amount,
+          day === null ? null : `${dateLabel} ${formatDay(day)}`,
+        ]),
+      ),
       sourceUpdatedAt: readTime(doc.get('updatedAt')),
     }),
   ];
@@ -539,9 +546,16 @@ async function syncRecipes(
   return { records, isFull: snapshot.size < RECIPE_LIMIT };
 }
 
-const describePlate = (names: string[], more: number) => {
-  if (names.length === 0) return null;
-  if (more > 0) return `${names.join(', ')} and ${more} more`;
+const describePlate = (all: string[], more: number) => {
+  if (all.length === 0) return null;
+  const tail = ` and ${more} more`;
+  const room = Math.floor(
+    (DETAIL_LIMIT - tail.length - 2 * (all.length - 1)) / all.length,
+  );
+  const names = all.map((name) =>
+    clipTo(name, more > 0 ? Math.min(NAME_CLIP, room) : NAME_CLIP),
+  );
+  if (more > 0) return `${names.join(', ')}${tail}`;
   const last = names[names.length - 1];
   return names.length === 1
     ? last
@@ -564,7 +578,7 @@ async function syncSavedMeals(
     items: readItems(doc.get('items')),
     updatedAt: readTime(doc.get('updatedAt')),
   }));
-  const shown = meals.flatMap((meal) => meal.items.slice(0, PLATE_NAMES_SHOWN));
+  const shown = meals.flatMap((meal) => meal.items.slice(0, PLATE_ITEMS_READ));
   const [recipeTitles, ingredientNames] = await Promise.all([
     readRecipeTitles(
       firestore,
@@ -581,20 +595,25 @@ async function syncSavedMeals(
   ]);
   const records = meals.flatMap((meal) => {
     if (meal.name === null) return [];
-    const names = meal.items.slice(0, PLATE_NAMES_SHOWN).flatMap((item) => {
+    const read = meal.items.slice(0, PLATE_ITEMS_READ);
+    const found = read.flatMap((item, index) => {
       const name = (
         item.kind === 'RECIPE' ? recipeTitles : ingredientNames
       ).get(item.refId);
-      return name === null || name === undefined ? [] : [name];
+      return name === null || name === undefined ? [] : [{ name, index }];
     });
+    const first = found.slice(0, PLATE_NAMES_SHOWN);
+    const names = first.map(({ name }) => name);
+    const consumed =
+      first.length === PLATE_NAMES_SHOWN
+        ? first[first.length - 1].index + 1
+        : read.length;
     return [
       toRecord({
         sourceRef: `meals/${meal.id}`,
         kind: 'artifact',
         title: meal.name,
-        detail: clip(
-          describePlate(names, meal.items.length - PLATE_NAMES_SHOWN),
-        ),
+        detail: clip(describePlate(names, meal.items.length - consumed)),
         sourceUpdatedAt: meal.updatedAt,
       }),
     ];
