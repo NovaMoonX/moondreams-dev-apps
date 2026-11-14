@@ -102,6 +102,9 @@ export const readRange = (args: unknown, now: number) => {
 
 const readPayeeFilter = (args: unknown) => readText(asObject(args)?.payee);
 
+const readCategoryFilter = (args: unknown) =>
+  readText(asObject(args)?.category);
+
 const readPayee = (sealed: Record<string, unknown>) =>
   readText(sealed.label) ?? readText(sealed.merchant);
 
@@ -205,6 +208,7 @@ export async function readTransactions(
 ): Promise<TransactionRead> {
   const { from, to } = readRange(args, now);
   const payee = readPayeeFilter(args);
+  const category = readCategoryFilter(args);
   const empty: TransactionRead = {
     rows: [],
     matchedCount: 0,
@@ -248,22 +252,21 @@ export async function readTransactions(
   ).length;
   if (unreadable > 0)
     logger.warn('runway.share.transactionsUnreadable', { count: unreadable });
-  const matched = opened.filter(({ sealed }) => {
+  const byPayee = opened.filter(({ sealed }) => {
     if (payee === null) return true;
     const names = [readText(sealed.label), readText(sealed.merchant)].filter(
       (name): name is string => name !== null,
     );
     return isPayeeMatch(payee, names);
   });
-  const shown = matched.slice(0, ROW_LIMIT);
   const envelopeIds = [
     ...new Set(
-      shown.flatMap(({ sealed }) => {
-        const lines = readLines(sealed);
-        return lines.length === 1 && lines[0].envelopeId !== null
-          ? [lines[0].envelopeId]
-          : [];
-      }),
+      (category === null ? byPayee.slice(0, ROW_LIMIT) : byPayee).flatMap(
+        ({ sealed }) =>
+          readLines(sealed).flatMap((line) =>
+            line.envelopeId === null ? [] : [line.envelopeId],
+          ),
+      ),
     ),
   ];
   const [names, currency] = await Promise.all([
@@ -280,6 +283,16 @@ export async function readTransactions(
     if (!only || only.envelopeId === null) return FREE_TO_SPEND;
     return names.get(only.envelopeId) ?? FREE_TO_SPEND;
   };
+  const wanted = category === null ? null : toComparable(category);
+  const isCategoryMatch = (sealed: Record<string, unknown>) =>
+    wanted === null ||
+    toComparable(toCategory(sealed)) === wanted ||
+    readLines(sealed).some(({ envelopeId }) => {
+      const name = envelopeId === null ? undefined : names.get(envelopeId);
+      return name !== undefined && toComparable(name) === wanted;
+    });
+  const matched = byPayee.filter(({ sealed }) => isCategoryMatch(sealed));
+  const shown = matched.slice(0, ROW_LIMIT);
   return {
     rows: shown.map(({ id, date, sealed }) => ({
       id,

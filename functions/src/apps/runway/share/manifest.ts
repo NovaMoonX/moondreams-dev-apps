@@ -61,6 +61,28 @@ export const RUNWAY_SHARES: SourceShares = {
             },
             { label: 'Its target amount', sinceVersion: 1, addedOn: null },
             { label: 'How much is set aside', sinceVersion: 1, addedOn: null },
+            {
+              label: 'How far along each goal is, as a percentage',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 2,
+        },
+        {
+          id: 'envelopes',
+          kind: 'project',
+          label: 'Envelopes',
+          detail: 'The name of each envelope in your plan, no amounts',
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: "Each envelope's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
           ],
           scopeVersion: 1,
         },

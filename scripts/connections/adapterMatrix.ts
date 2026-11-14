@@ -2618,6 +2618,7 @@ assert.deepEqual(
     ['moneySummary', true],
     ['upcomingBills', false],
     ['horizon', false],
+    ['envelopes', false],
     ['transactions', false],
   ],
 );
@@ -2699,7 +2700,14 @@ const lisbon = runwayHorizon.find((record) => record.title === 'Lisbon');
 assert.equal(lisbon?.kind, 'project');
 assert.equal(lisbon?.amountCents, 300_000);
 assert.equal(lisbon?.dueAt, Date.UTC(2027, 2, 1));
-assert.match(lisbon?.detail ?? '', /\$800\.00 set aside of \$3,000\.00/);
+assert.match(
+  lisbon?.detail ?? '',
+  /^26% of the way there, \$800\.00 set aside of \$3,000\.00$/,
+);
+assert.match(
+  runwayHorizon.find((record) => record.title === 'Someday')?.detail ?? '',
+  /^0% of the way there/,
+);
 assert.equal(
   runwayHorizon.find((record) => record.title === 'Someday')?.dueAt,
   null,
@@ -3025,6 +3033,177 @@ await assert.rejects(
       args: {},
     }),
   /Unknown category/,
+);
+
+// Envelopes: names only, from the newest version of each live envelope.
+const ENVELOPE_SECRETS = ['ENV BALANCE 987654', 'ENV MAX 777777'];
+const envItem = (
+  uid: string,
+  id: string,
+  fields: Record<string, unknown> = {},
+) =>
+  runwayPlans
+    .doc(uid)
+    .collection('items')
+    .doc(id)
+    .set({
+      kind: 'envelope',
+      createdAt: 1,
+      endedAt: null,
+      archivedAt: null,
+      ...fields,
+    });
+const envVersion = (
+  uid: string,
+  id: string,
+  itemId: string,
+  createdAt: number,
+  name: string,
+  kind = 'envelope',
+) =>
+  runwayPlans
+    .doc(uid)
+    .collection('versions')
+    .doc(id)
+    .set({
+      itemId,
+      kind,
+      createdAt,
+      sealed: sealTx({
+        name,
+        startingCents: 987_654,
+        maxCents: 777_777,
+        balance: ENVELOPE_SECRETS[0],
+      }),
+    });
+await Promise.all([
+  envItem(OWNER, 'env-groceries'),
+  envItem(OWNER, 'env-fun'),
+  envItem(OWNER, 'env-archived', { archivedAt: NOW }),
+  envItem(OWNER, 'env-ended', { endedAt: dayText(TODAY - DAY) }),
+  envItem(OWNER, 'env-ending-soon', { endedAt: dayText(TODAY + DAY) }),
+  envItem(OWNER, 'bill-rent', { kind: 'bill' }),
+  envVersion(OWNER, 'ev-fun', 'env-fun', 1, 'Fun'),
+  envVersion(OWNER, 'ev-archived', 'env-archived', 1, 'Old Fund'),
+  envVersion(OWNER, 'ev-ended', 'env-ended', 1, 'Ended'),
+  envVersion(OWNER, 'ev-soon', 'env-ending-soon', 1, 'Ending soon'),
+  envVersion(OWNER, 'ev-rent', 'bill-rent', 1, 'Rent', 'bill'),
+]);
+const envelopes = await runRunway(OWNER, 'envelopes');
+assert.deepEqual(
+  titles(envelopes),
+  ['Ending soon', 'Food', 'Fun'],
+  'live envelopes by their newest name; archived, ended and bills are left out',
+);
+envelopes.forEach((record) => {
+  assert.equal(record.kind, 'project');
+  assert.equal(record.amountCents, null);
+  assert.equal(record.currency, null);
+  assert.equal(record.dueAt, null);
+  assert.deepEqual(record.extra, {});
+  assert.match(record.sourceRef, /^envelopes\/[0-9a-f]{16}$/);
+});
+assert.equal(new Set(refs(envelopes)).size, envelopes.length);
+const envelopeOutput = JSON.stringify(envelopes);
+[...ENVELOPE_SECRETS, '987654', '777777', 'Rent', 'Old Fund'].forEach(
+  (secret) =>
+    assert.ok(!envelopeOutput.includes(secret), `Envelopes have ${secret}`),
+);
+await Promise.all(
+  [OTHER, 'runway-legacy'].map(async (uid) => {
+    const page = await readRunway(uid, 'envelopes');
+    assert.deepEqual(page.records, [], uid);
+    assert.equal(page.isFull, false, uid);
+  }),
+);
+const noEnvelopes = await readRunway('runway-cleared', 'envelopes');
+assert.deepEqual(noEnvelopes.records, []);
+assert.equal(
+  noEnvelopes.isFull,
+  true,
+  'a plan with none is a full, empty read',
+);
+await runwayPlanWith('runway-env-bad', null);
+await Promise.all([
+  envItem('runway-env-bad', 'e1'),
+  envItem('runway-env-bad', 'e2'),
+  envVersion('runway-env-bad', 'v1', 'e1', 1, 'Good'),
+  runwayPlans
+    .doc('runway-env-bad')
+    .collection('versions')
+    .doc('v2')
+    .set({
+      itemId: 'e2',
+      kind: 'envelope',
+      createdAt: 1,
+      sealed: { value: 'garbage', nonce: 'garbage' },
+    }),
+]);
+const badEnvelope = await readRunway('runway-env-bad', 'envelopes');
+assert.deepEqual(titles(badEnvelope.records), ['Good']);
+assert.equal(
+  badEnvelope.isFull,
+  false,
+  'a name that will not open makes the read partial',
+);
+
+// A category asked of the live search matches the way Spend's envelope filter does.
+const inRange = { from: dayText(TODAY - 30 * DAY), to: dayText(TODAY) };
+const food = await queryTx(OWNER, { ...inRange, category: ' food ' });
+assert.deepEqual(
+  food.records.map((record) => [record.title, record.amountCents]),
+  [
+    ['Costco Wholesale', -500],
+    ['Target', 4_000],
+    ['Costco Wholesale', 8_800],
+  ],
+  'a split purchase with a line on the envelope matches it',
+);
+assert.equal(food.matchedCount, 3);
+assert.equal(food.totalCents, 12_300, 'the total covers every match');
+assert.equal(
+  (await queryTx(OWNER, { ...inRange, category: 'FUN' })).matchedCount,
+  1,
+);
+const split = await queryTx(OWNER, { ...inRange, category: 'split' });
+assert.deepEqual(
+  split.records.map((record) => record.title),
+  ['Target'],
+);
+assert.deepEqual(
+  (await queryTx(OWNER, { ...inRange, category: 'bill' })).records.map(
+    (record) => record.title,
+  ),
+  ['Costco Insurance'],
+);
+const unsorted = await queryTx(OWNER, {
+  ...inRange,
+  category: 'free to spend',
+});
+assert.equal(unsorted.matchedCount, 3);
+assert.equal(unsorted.totalCents, 2_200);
+assert.equal(
+  (await queryTx(OWNER, { ...inRange, category: 'Nothing here' })).matchedCount,
+  0,
+);
+assert.equal(
+  (await queryTx(OWNER, { ...inRange, category: 'food', payee: 'target' }))
+    .matchedCount,
+  1,
+  'a category and a payee both apply',
+);
+assert.equal(
+  (await queryTx(OWNER, { ...inRange, category: null })).matchedCount,
+  everyone.matchedCount,
+  'no category is every category',
+);
+assert.equal(
+  (await queryTx(OWNER, { ...inRange, category: '' })).matchedCount,
+  everyone.matchedCount,
+);
+const filtered = JSON.stringify([food, split, unsorted]);
+[...TX_SECRETS, ...ENVELOPE_SECRETS, '987654', '777777'].forEach((secret) =>
+  assert.ok(!filtered.includes(secret), `Filtered rows have ${secret}`),
 );
 
 await runwayPlanWith('runway-many', null);
