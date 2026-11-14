@@ -25,6 +25,33 @@ function getErrorDetails(error: unknown) {
   return { message: String(error), stack: null };
 }
 
+const FILE_URL = /https?:\/\/\S+?\.(?:js|css)\b/;
+
+const describeFetch = async (url: string, init?: RequestInit) =>
+  fetch(url, init)
+    .then(async (response) => {
+      const size = (await response.text()).length;
+      return `${response.status} ${response.headers.get('content-type') ?? 'no type'}, ${size} chars`;
+    })
+    .catch((fetchError: unknown) => `failed: ${String(fetchError)}`);
+
+/** What the device gets for the file that would not load, through the worker and straight from the network. */
+function useFileCheck(message: string, isEnabled: boolean) {
+  const url = message.match(FILE_URL)?.[0] ?? null;
+  const [result, setResult] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isEnabled || !url) return;
+    void Promise.all([
+      describeFetch(url),
+      describeFetch(url, { cache: 'no-store' }),
+    ]).then(([viaWorker, fresh]) => {
+      const worker = navigator.serviceWorker?.controller ? 'on' : 'off';
+      setResult(`File check (worker ${worker}): normal ${viaWorker}; fresh ${fresh}`);
+    });
+  }, [isEnabled, url]);
+  return result;
+}
+
 function ErrorScreen({ error }: { error: unknown }) {
   const isChunkError = isStaleChunkError(error);
   // A plain reload goes through the same worker and fails the same way, so this one also drops its cached files.
@@ -37,6 +64,7 @@ function ErrorScreen({ error }: { error: unknown }) {
   const { pathname } = useLocation();
   const { message, stack } = getErrorDetails(error);
   const showDetails = useCanSeeDebugDetails();
+  const fileCheck = useFileCheck(message, showDetails && isChunkError);
   // A screen's file missing after a deploy: the new version is loaded straight into the screen asked for.
   const [isReloading] = useState(
     () => isChunkError && canReloadForStaleChunk(),
@@ -68,6 +96,11 @@ function ErrorScreen({ error }: { error: unknown }) {
             <p className='text-destructive text-sm font-medium wrap-break-word'>
               {message}
             </p>
+            {fileCheck && (
+              <p className='text-foreground/70 mt-2 text-xs wrap-break-word'>
+                {fileCheck}
+              </p>
+            )}
             {stack && (
               <pre className='text-foreground/60 mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap'>
                 {stack}
@@ -79,6 +112,7 @@ function ErrorScreen({ error }: { error: unknown }) {
               label='Copy error'
               text={[
                 message,
+                fileCheck,
                 stack,
                 `Page: ${pathname}`,
                 `Version: ${SITE_VERSION}`,

@@ -4,6 +4,8 @@ const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 const listeners = new Set<() => void>();
 let isUpdateReady = false;
+// The person already asked for the new version, so the strip offering it would only repeat their tap.
+let isUpdatingOnRequest = false;
 
 export function subscribeToUpdateReady(listener: () => void) {
   listeners.add(listener);
@@ -18,7 +20,7 @@ export function getIsUpdateReady() {
 
 /** Raises the top strip's "New version ready · Restart"; the page itself never reloads on its own. */
 export function markUpdateReady() {
-  if (isUpdateReady) return;
+  if (isUpdateReady || isUpdatingOnRequest) return;
   isUpdateReady = true;
   listeners.forEach((listener) => listener());
 }
@@ -178,6 +180,7 @@ const clearPrecache = async () => {
  * reload comes from the network. Never runs on its own. Resolves false when the device went offline first.
  */
 export async function updateToLatest(latestVersion: string) {
+  isUpdatingOnRequest = true;
   const previous = readUpdateAttempt();
   const isRetry =
     previous?.version === latestVersion && Date.now() - previous.at < UPDATE_RETRY_WINDOW_MS;
@@ -191,7 +194,10 @@ export async function updateToLatest(latestVersion: string) {
 
   const isFresh = await needsFreshFiles();
   // The connection can drop during the wait; reloading then would land on the browser's offline page.
-  if (!navigator.onLine) return false;
+  if (!navigator.onLine) {
+    isUpdatingOnRequest = false;
+    return false;
+  }
   writeUpdateAttempt(latestVersion);
   if (isFresh) await clearPrecache().catch(() => undefined);
   window.location.reload();
@@ -203,6 +209,7 @@ export async function updateToLatest(latestVersion: string) {
  * the worker could not hand over even after a reload. The worker fetches dropped files from the network.
  */
 export async function restartWithFreshFiles() {
+  isUpdatingOnRequest = true;
   // Offline, the dropped files could not be fetched again and every app would stop opening.
   if (!navigator.onLine) {
     window.location.reload();
