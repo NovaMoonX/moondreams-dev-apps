@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { Button, Disclosure } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CalendarCheck, CalendarDays, Tag } from 'lucide-react';
+import { CalendarCheck, CalendarDays, ChevronDown, Tag } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import AppToggle from '@/components/AppToggle';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
+import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
 import SectionHeader from '@/components/SectionHeader';
 import SettingsSection from '@apps/helm/components/settings/SettingsSection';
 import SettingsRow from '@/components/SettingsRow';
@@ -96,6 +97,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   >({});
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [seenNow, setSeenNow] = useState<Record<string, number>>({});
+  const [openReads, setOpenReads] = useState<Record<string, boolean>>({});
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
   const [isLabelOpen, setIsLabelOpen] = useState(false);
@@ -449,7 +451,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
               : [];
             return (
               <li key={category.id} className='flex flex-col gap-1 px-4 py-3'>
-                <div className='flex min-h-11 items-center gap-3'>
+                <label className='flex min-h-11 items-center gap-3'>
                   <span className='min-w-0 flex-1'>
                     <span className='text-foreground block text-[15px]'>
                       {category.label}
@@ -482,47 +484,67 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                       onCheckedChange={(next) => void change(category.id, next)}
                     />
                   )}
-                </div>
+                </label>
                 {category.reads.length > 0 && (
-                  <Disclosure
-                    label={
-                      <span className='text-muted-foreground text-[13px]'>
-                        {HELM_COPY.connectionWhatReads}
-                      </span>
-                    }
-                    buttonClassName='min-h-8 py-1'
+                  <div>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='sm'
+                      aria-expanded={openReads[category.id] === true}
+                      className="text-muted-foreground! relative h-auto! gap-1 px-0! py-0.5! text-[13px] font-normal after:absolute after:-inset-x-2 after:-inset-y-2.5 after:content-['']"
+                      onClick={() =>
+                        setOpenReads((open) => ({
+                          ...open,
+                          [category.id]: !open[category.id],
+                        }))
+                      }
+                    >
+                      {HELM_COPY.connectionWhatReads}
+                      <ChevronDown
+                        className={join(
+                          'h-3.5 w-3.5',
+                          openReads[category.id] === true && 'rotate-180',
+                        )}
+                        aria-hidden='true'
+                      />
+                    </Button>
+                    {openReads[category.id] === true && (
+                      <ul className='text-muted-foreground mt-1 list-disc pl-5 text-[13px] text-pretty'>
+                        {category.reads.map((read) => (
+                          <li key={read.label}>{read.label}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {newReads.length > 0 && (
+                  <InlineNotice
+                    tone='info'
+                    title={HELM_COPY.connectionNewReadsTitle}
+                    className='mt-1'
                   >
-                    <ul className='text-muted-foreground list-disc pb-1 pl-5 text-[13px] text-pretty'>
-                      {category.reads.map((read) => (
+                    <ul className='list-disc pl-5 text-[13px]'>
+                      {newReads.map((read) => (
                         <li key={read.label}>{read.label}</li>
                       ))}
                     </ul>
-                  </Disclosure>
-                )}
-                {newReads.length > 0 && (
-                  <p className='text-foreground flex flex-wrap items-center gap-x-2 text-[13px] text-pretty'>
-                    {HELM_COPY.connectionNewReads(
-                      newReads
-                        .map(
-                          (read) =>
-                            read.label.charAt(0).toLowerCase() +
-                            read.label.slice(1),
-                        )
-                        .join(', '),
-                    )}
                     {!isOffline && (
-                      <Button
-                        type='button'
-                        variant='tertiary'
-                        size='sm'
-                        onClick={() =>
-                          void markSeen(category.id, category.scopeVersion)
-                        }
-                      >
-                        {HELM_COPY.connectionGotIt}
-                      </Button>
+                      <div className='mt-3 flex'>
+                        <Button
+                          type='button'
+                          variant='primary'
+                          size='sm'
+                          className={NOTICE_ACTION_CLASSES.info}
+                          onClick={() =>
+                            void markSeen(category.id, category.scopeVersion)
+                          }
+                        >
+                          {HELM_COPY.connectionGotIt}
+                        </Button>
+                      </div>
                     )}
-                  </p>
+                  </InlineNotice>
                 )}
                 {failures[category.id] && (
                   <p className='text-destructive text-[13px]' role='alert'>

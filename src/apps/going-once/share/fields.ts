@@ -100,7 +100,7 @@ const ITEM_FIELDS = {
   notes: 'never',
   isDraft: 'filter',
   photos: 'filter',
-  status: 'shared',
+  status: 'filter',
   pending: 'shared',
   sale: 'never',
   statusHistory: 'notUseful',

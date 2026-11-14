@@ -2,6 +2,11 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
+import type { ConnectorManifest } from '../../src/lib/connections/contract.ts';
+import { GOOGLE_CALENDAR_MANIFEST } from '../../src/lib/connections/google/calendarManifest.ts';
+import { GOOGLE_CONTACTS_MANIFEST } from '../../src/lib/connections/google/contactsManifest.ts';
+import { GOOGLE_DRIVE_MANIFEST } from '../../src/lib/connections/google/driveManifest.ts';
+import { GOOGLE_GMAIL_MANIFEST } from '../../src/lib/connections/google/gmailManifest.ts';
 import { SOURCE_SHARES } from '../../src/lib/connections/sources.ts';
 import type { ShareDecision } from '../../src/lib/connections/fieldDecisions.ts';
 
@@ -197,11 +202,41 @@ const appIds = SOURCE_SHARES.filter(
 
 for (const appId of appIds) await checkApp(appId);
 
+/** Every category says what it reads, and its scopeVersion is the newest read's, so a new read always raises it and the reader shows it as new. */
+const checkReads = (manifest: ConnectorManifest) =>
+  manifest.categories.forEach((category) => {
+    const where = `${manifest.id} ${category.id}`;
+    if (category.reads.length === 0)
+      problems.push(`${where} — reads is empty: say what the category reads`);
+    const newest = Math.max(
+      0,
+      ...category.reads.map(({ sinceVersion }) => sinceVersion),
+    );
+    if (
+      !Number.isInteger(category.scopeVersion) ||
+      category.scopeVersion < 1 ||
+      category.scopeVersion !== newest
+    )
+      problems.push(
+        `${where} — scopeVersion is ${category.scopeVersion} but the newest read is since ${newest}: a new read raises scopeVersion to its sinceVersion`,
+      );
+  });
+
+[
+  ...SOURCE_SHARES.flatMap(({ shares }) => shares),
+  GOOGLE_CALENDAR_MANIFEST,
+  GOOGLE_CONTACTS_MANIFEST,
+  GOOGLE_DRIVE_MANIFEST,
+  GOOGLE_GMAIL_MANIFEST,
+].forEach(checkReads);
+
 if (problems.length > 0) {
   console.error(problems.join('\n'));
   console.error(
-    "\nUpdate the app's share/fields.ts; when a field is shared, also send it in the adapter and name it in the manifest's reads.",
+    "\nUpdate the app's share/fields.ts; when a field is shared, also send it in the adapter and add a read with a raised scopeVersion.",
   );
   process.exit(1);
 }
-console.log(`share fields checked for ${appIds.length} apps`);
+console.log(
+  `share fields checked for ${appIds.length} apps; every manifest's reads match its scopeVersion`,
+);

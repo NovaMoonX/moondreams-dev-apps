@@ -1807,18 +1807,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             isNamedIn(combined.text, procedure.title),
         ));
     const provider = pickProvider(combined.text, combined.reading);
-    const liveGrants =
-      mode !== 'rest' && isQuestion(combined.text.trim())
-        ? await readLiveGrants(firestore, uid)
-        : [];
-    const siteGrants =
-      mode !== 'rest' && isQuestion(combined.text.trim())
-        ? await readSiteGrants(firestore, uid)
-        : [];
-    const offCategories =
-      mode !== 'rest' && isQuestion(combined.text.trim())
-        ? await readOffCategories(firestore, uid)
-        : [];
+    const isAsking = mode !== 'rest' && isQuestion(combined.text.trim());
+    const [liveGrants, siteGrants, offCategories] = isAsking
+      ? await Promise.all([
+          readLiveGrants(firestore, uid),
+          readSiteGrants(firestore, uid),
+          readOffCategories(firestore, uid),
+        ])
+      : [[], [], []];
     const quotes = createQuoteBook();
     const searched = createSearchedLog();
     const system = [

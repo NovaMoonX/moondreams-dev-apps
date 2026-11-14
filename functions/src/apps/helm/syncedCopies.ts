@@ -50,7 +50,7 @@ const SUBTITLE_CHARS = 120;
 const DETAIL_CHARS = 120;
 const MAX_SCANNED_MONEY = 50;
 const MAX_CONTEXT_MONEY = 3;
-const MAX_SCANNED_STANDING = 40;
+const MAX_SCANNED_STANDING = 120;
 const MAX_CONTEXT_STANDING = 15;
 const STANDING_KINDS: SharedKind[] = ['project', 'countSummary', 'pet'];
 const PLACE_CHARS = 120;
@@ -129,12 +129,17 @@ const toExtra = (kind: string, value: unknown) => {
   const allowed = isSharedKind(kind) ? EXTRA_KEYS[kind] : [];
   return typeof value === 'object' && value !== null
     ? Object.fromEntries(
-        Object.entries(value).filter(
-          (entry): entry is [string, ExtraValue] =>
-            allowed.includes(entry[0]) &&
-            (entry[1] === null ||
-              ['string', 'number', 'boolean'].includes(typeof entry[1])),
-        ),
+        Object.entries(value)
+          .filter(
+            (entry): entry is [string, ExtraValue] =>
+              allowed.includes(entry[0]) &&
+              (entry[1] === null ||
+                ['string', 'number', 'boolean'].includes(typeof entry[1])),
+          )
+          .map(([name, extra]) => [
+            name,
+            typeof extra === 'string' ? extra.slice(0, PLACE_CHARS) : extra,
+          ]),
       )
     : {};
 };

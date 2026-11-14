@@ -133,8 +133,8 @@ const SHARE_SUMMARY_FIELDS = {
 } satisfies Record<keyof ShareSummary, ShareDecision>;
 
 const MONEY_RANGE_FIELDS = {
-  lowCents: 'notUseful',
-  highCents: 'notUseful',
+  lowCents: 'never',
+  highCents: 'never',
 } satisfies Record<keyof MoneyRange, ShareDecision>;
 
 const ENDING_FIELDS = {
@@ -166,7 +166,7 @@ const PAY_LINE_SEALED_FIELDS = {
 
 const PAIRING_FIELDS = {
   targetItemId: 'notUseful',
-  amount: 'notUseful',
+  amount: 'never',
   topUpFromAnySource: 'notUseful',
 } satisfies Record<keyof Pairing, ShareDecision>;
 
@@ -174,7 +174,7 @@ const DAY_OVERRIDE_SEALED_FIELDS = {
   pairings: 'notUseful',
   holdResolutions: 'notUseful',
   payloads: 'notUseful',
-  billCents: 'notUseful',
+  billCents: 'never',
 } satisfies Record<keyof DayOverrideSealed, ShareDecision>;
 
 const INCOME_DAY_DOC_FIELDS = {
@@ -253,7 +253,7 @@ const CORRECTION_SEALED_FIELDS = {
 } satisfies Record<keyof CorrectionSealed, ShareDecision>;
 
 const FUNDING_RULE_FIELDS = {
-  amount: 'notUseful',
+  amount: 'never',
   cadence: 'notUseful',
   sourceId: 'notUseful',
   pay: 'notUseful',
@@ -266,7 +266,7 @@ const FUNDING_PAY_FIELDS = {
 
 const PRIORITY_EXTRA_FIELDS = {
   tier: 'notUseful',
-  cents: 'notUseful',
+  cents: 'never',
   orderIndex: 'notUseful',
 } satisfies Record<keyof PriorityExtra, ShareDecision>;
 
@@ -276,10 +276,10 @@ const ENVELOPE_SEALED_FIELDS = {
   priority: 'notUseful',
   orderIndex: 'notUseful',
   funding: 'notUseful',
-  maxCents: 'notUseful',
+  maxCents: 'never',
   groupId: 'notUseful',
   spillTo: 'notUseful',
-  startingCents: 'notUseful',
+  startingCents: 'never',
   extras: 'notUseful',
 } satisfies Record<keyof EnvelopeSealed, ShareDecision>;
 
@@ -288,16 +288,16 @@ const BILL_SEALED_FIELDS = {
   emoji: 'notUseful',
   priority: 'notUseful',
   orderIndex: 'notUseful',
-  amount: 'notUseful',
+  amount: 'never',
   timing: 'notUseful',
   ending: 'notUseful',
   fundedBy: 'notUseful',
   stanceOverride: 'notUseful',
   groupId: 'notUseful',
-  paidByCardId: 'notUseful',
-  accountId: 'notUseful',
+  paidByCardId: 'never',
+  accountId: 'never',
   paysItself: 'notUseful',
-  startingCents: 'notUseful',
+  startingCents: 'never',
   payOnDay: 'notUseful',
   cardFeeOf: 'notUseful',
 } satisfies Record<keyof BillSealed, ShareDecision>;
@@ -315,10 +315,10 @@ const GOAL_SEALED_FIELDS = {
   emoji: 'notUseful',
   priority: 'notUseful',
   orderIndex: 'notUseful',
-  targetCents: 'notUseful',
+  targetCents: 'never',
   targetDate: 'notUseful',
   funding: 'notUseful',
-  startingCents: 'notUseful',
+  startingCents: 'never',
   state: 'notUseful',
   extras: 'notUseful',
   groupId: 'notUseful',
@@ -327,7 +327,7 @@ const GOAL_SEALED_FIELDS = {
 const HORIZON_MONEY_LEFT_FIELDS = {
   kind: 'notUseful',
   toId: 'notUseful',
-  cents: 'notUseful',
+  cents: 'never',
   moveId: 'notUseful',
 } satisfies Record<keyof HorizonMoneyLeft, ShareDecision>;
 
@@ -345,7 +345,7 @@ const HORIZON_SEALED_FIELDS = {
   orderIndex: 'notUseful',
   rest: 'notUseful',
   note: 'never',
-  costs: 'notUseful',
+  costs: 'never',
   state: 'notUseful',
   stateOn: 'notUseful',
   stateMoney: 'notUseful',
@@ -356,7 +356,7 @@ const HORIZON_SEALED_FIELDS = {
 const HORIZON_COST_FIELDS = {
   id: 'notUseful',
   name: 'notUseful',
-  amount: 'notUseful',
+  amount: 'never',
   schedule: 'notUseful',
   ending: 'notUseful',
   isOutside: 'notUseful',
@@ -501,7 +501,7 @@ const RULE_SEALED_FIELDS = {
   merchantKey: 'notUseful',
   merchantName: 'notUseful',
   category: 'notUseful',
-  cardId: 'notUseful',
+  cardId: 'never',
   target: 'notUseful',
 } satisfies Record<keyof RuleSealed, ShareDecision>;
 
@@ -556,7 +556,7 @@ const CHANGE_MOVE_FIELDS = {
   date: 'notUseful',
   fromId: 'notUseful',
   toId: 'notUseful',
-  cents: 'notUseful',
+  cents: 'never',
   note: 'never',
   isOutside: 'notUseful',
   undoText: 'notUseful',
@@ -591,10 +591,10 @@ const MOVE_DOC_FIELDS = {
 } satisfies Record<keyof MoveDoc, ShareDecision>;
 
 const BILL_PAID_SEALED_FIELDS = {
-  amountCents: 'notUseful',
+  amountCents: 'never',
   paidOn: 'notUseful',
-  fromFreeCents: 'notUseful',
-  cardId: 'notUseful',
+  fromFreeCents: 'never',
+  cardId: 'never',
   auto: 'notUseful',
 } satisfies Record<keyof BillPaidSealed, ShareDecision>;
 
@@ -606,30 +606,30 @@ const AUTO_PAID_MARK_FIELDS = {
 const COST_PAID_SEALED_FIELDS = {
   costId: 'notUseful',
   dueOn: 'notUseful',
-  amountCents: 'notUseful',
+  amountCents: 'never',
   paidOn: 'notUseful',
-  fromFreeCents: 'notUseful',
+  fromFreeCents: 'never',
   mark: 'notUseful',
   purchaseId: 'notUseful',
-  fromGoalCents: 'notUseful',
+  fromGoalCents: 'never',
   goalId: 'notUseful',
 } satisfies Record<keyof CostPaidSealed, ShareDecision>;
 
 const CARD_PAYMENT_SEALED_FIELDS = {
-  amountCents: 'notUseful',
+  amountCents: 'never',
   covers: 'notUseful',
 } satisfies Record<keyof CardPaymentSealed, ShareDecision>;
 
 const TRANSFER_SEALED_FIELDS = {
   fromId: 'notUseful',
   toId: 'notUseful',
-  cents: 'notUseful',
+  cents: 'never',
   note: 'never',
   isOutside: 'notUseful',
 } satisfies Record<keyof TransferSealed, ShareDecision>;
 
 const START_SEALED_FIELDS = {
-  amountCents: 'notUseful',
+  amountCents: 'never',
   holding: 'notUseful',
 } satisfies Record<keyof StartSealed, ShareDecision>;
 
@@ -639,8 +639,8 @@ const TRACKING_CHANGE_SEALED_FIELDS = {
 
 const PURCHASE_LINE_FIELDS = {
   envelopeId: 'shared',
-  cents: 'notUseful',
-  via: 'notUseful',
+  cents: 'never',
+  via: 'never',
 } satisfies Record<keyof PurchaseLine, ShareDecision>;
 
 const COST_REF_FIELDS = {
@@ -666,7 +666,7 @@ const PURCHASE_SEALED_FIELDS = {
   note: 'never',
   lines: 'shared',
   refundOfId: 'notUseful',
-  paidByCardId: 'notUseful',
+  paidByCardId: 'never',
   link: 'notUseful',
   receiptText: 'never',
   costRef: 'notUseful',
@@ -686,7 +686,7 @@ const PURCHASE_DOC_FIELDS = {
   source: 'notUseful',
   status: 'notUseful',
   needsHome: 'filter',
-  accountId: 'notUseful',
+  accountId: 'never',
   dedupeKey: 'notUseful',
   expenseId: 'notUseful',
   createdAt: 'notUseful',
@@ -703,17 +703,17 @@ const RELEASED_CHARGE_DOC_FIELDS = {
 
 const RELEASED_CHARGE_SEALED_FIELDS = {
   title: 'notUseful',
-  amountCents: 'notUseful',
+  amountCents: 'never',
   lines: 'notUseful',
 } satisfies Record<keyof ReleasedChargeSealed, ShareDecision>;
 
 const CLOSING_SEALED_FIELDS = {
   version: 'notUseful',
   startDay: 'notUseful',
-  arrivedCents: 'notUseful',
+  arrivedCents: 'never',
   given: 'notUseful',
   late: 'notUseful',
-  spentCents: 'notUseful',
+  spentCents: 'never',
   spentByItem: 'notUseful',
   funded: 'notUseful',
   paid: 'notUseful',
