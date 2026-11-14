@@ -152,6 +152,9 @@ export function useHelmVoice() {
   const speakingCaptureId = useRef<string | null>(null);
   // The line the person talked over, kept for the turn that follows it.
   const interruptedCaptureId = useRef<string | null>(null);
+  // Words spoken into the open text box go to the field, not out as a turn.
+  const dictation = useRef<((text: string) => void) | null>(null);
+  const [isDictating, setIsDictating] = useState(false);
   const [tokenSource] = useState(() =>
     createVoiceTokenSource({
       appId: 'helm',
@@ -198,10 +201,12 @@ export function useHelmVoice() {
     },
     onNothingHeard: (isAsked) => {
       interruptedCaptureId.current = null;
+      endDictation();
       if (isAsked) showNote(HELM_COPY.talkHeardNothing);
     },
     onDeviceListenFailed: (isAsked) => {
       interruptedCaptureId.current = null;
+      endDictation();
       if (isAsked) showNote(HELM_COPY.talkListenFailed);
     },
     onCloudHeld: () => setShowsPhoneLine(true),
@@ -226,6 +231,11 @@ export function useHelmVoice() {
       isAllowed: voiceMode === 'cloudWhenOnline',
     },
   });
+
+  function endDictation() {
+    dictation.current = null;
+    setIsDictating(false);
+  }
 
   function showNote(text: string) {
     setNote(text);
@@ -278,6 +288,14 @@ export function useHelmVoice() {
   async function handleUtterance(text: string, sttProvider: string) {
     const interrupted = interruptedCaptureId.current;
     interruptedCaptureId.current = null;
+    const write = dictation.current;
+    if (write) {
+      dictation.current = null;
+      voice.settle();
+      queueMicrotask(() => setIsDictating(false));
+      write(text);
+      return;
+    }
     if (isUndoPhrase(text)) {
       await undoLatest();
       return;
@@ -632,6 +650,7 @@ export function useHelmVoice() {
     queueMicrotask(() => {
       if (state === 'listening') {
         interruptedCaptureId.current = null;
+        endDictation();
         voice.cancel();
       } else if (state === 'speaking') voice.stop();
       else if (state === 'thinking') {
@@ -696,8 +715,28 @@ export function useHelmVoice() {
     return 'started' as const;
   }
 
+  /** Listens for words that go into the open text box through `write`; tapped again while listening, it keeps what was heard so far. */
+  const dictate = (write: (text: string) => void) => {
+    if (dictation.current !== null) {
+      voice.stop();
+      return 'stopped' as const;
+    }
+    if (voice.state !== 'idle') return 'blocked' as const;
+    dictation.current = write;
+    setIsDictating(true);
+    const result = talk(null);
+    if (result !== 'started') endDictation();
+    return result;
+  };
+
   return {
     ...voice,
+    isDictating,
+    dictate,
+    cancel: () => {
+      endDictation();
+      voice.cancel();
+    },
     note,
     notice,
     showsPhoneLine,

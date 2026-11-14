@@ -543,6 +543,8 @@ export const HELM_COPY = {
   todayFirstRun: (name: string) =>
     `Nothing is planned for today yet. Once you have told ${name} about a task or an event, it appears here.`,
   send: 'Send',
+  dictate: 'Speak your message',
+  dictateDone: 'Done speaking',
   sendFailed: "That didn't send. Your words are still here.",
   savedAsWritten: 'Saved as written',
   reading: 'Reading…',

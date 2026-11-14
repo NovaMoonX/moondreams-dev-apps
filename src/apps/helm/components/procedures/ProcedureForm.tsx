@@ -99,7 +99,7 @@ function StepRow({
           variant='outline'
           rows={1}
           autoExpand
-          className='w-full'
+          className='max-h-[calc(6lh+1rem)] w-full overflow-y-auto'
           value={step.text}
           maxLength={PROCEDURE_STEP_TEXT_CAP}
           placeholder={HELM_COPY.procedureStepPlaceholder}

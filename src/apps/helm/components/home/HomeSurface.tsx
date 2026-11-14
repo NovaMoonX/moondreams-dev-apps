@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -32,7 +32,7 @@ import { formatClock, getDayNoon, toDayKey } from '@apps/helm/utils/planDays';
 import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
 interface HomeSurfaceProps {
-  composerRef: Ref<HTMLTextAreaElement>;
+  composerRef: RefObject<HTMLTextAreaElement | null>;
   isComposing: boolean;
   onComposerFocusChange: (isFocused: boolean) => void;
   onOpenSettings: () => void;
@@ -282,7 +282,7 @@ function HomeSurface({
       <div
         className={join(
           'pointer-events-none fixed inset-x-0 bottom-[calc(var(--helm-dock-top,env(safe-area-inset-bottom,0px))+8px)] z-30 px-4 transition-[bottom] duration-200 ease-out motion-reduce:transition-none',
-          voice.state !== 'idle' && 'invisible',
+          voice.state !== 'idle' && !voice.isDictating && 'invisible',
         )}
       >
         <div
@@ -296,6 +296,7 @@ function HomeSurface({
           <Composer
             key={keyStatus === 'ready' ? 'ready' : 'waiting'}
             fieldRef={composerRef}
+            maxLines={10}
             screen={null}
             onFocusChange={onComposerFocusChange}
             isReady={keyStatus === 'ready'}

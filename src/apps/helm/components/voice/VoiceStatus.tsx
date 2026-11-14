@@ -22,7 +22,7 @@ interface VoiceStatusProps {
   screen?: ScreenContext | null;
 }
 
-function VoiceNotice() {
+export function VoiceNotice() {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <>

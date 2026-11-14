@@ -6,7 +6,7 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
   type ReactNode,
-  type Ref,
+  type RefObject,
 } from 'react';
 
 import {
@@ -31,6 +31,7 @@ import LockedButton from '@/components/LockedButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
+import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { readFormDraft, writeFormDraft } from '@lib/app/formDrafts';
 import { formatClock } from '@/utils/durationUtils';
@@ -48,6 +49,7 @@ import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { VoiceNotice } from '@apps/helm/components/voice/VoiceStatus';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { useTurnAttachments } from '@apps/helm/hooks/useMediaUpload';
 import { useSaveAsNote } from '@apps/helm/hooks/useSaveAsNote';
@@ -94,7 +96,9 @@ const parseDraft = (stored: unknown) =>
 
 interface ComposerProps {
   /** Lets the dock's Type and Talk put the cursor here. */
-  fieldRef: Ref<HTMLTextAreaElement>;
+  fieldRef: RefObject<HTMLTextAreaElement | null>;
+  /** How far the field grows before it scrolls: 10 lines on home, 6 over a page. */
+  maxLines?: number;
   onFocusChange: (isFocused: boolean) => void;
   /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft and the words typed while waiting. */
   isReady: boolean;
@@ -117,6 +121,7 @@ interface ComposerProps {
 /** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter sends and Shift+Enter starts a new line. */
 function Composer({
   fieldRef,
+  maxLines = 6,
   onFocusChange,
   isReady,
   isOutbox = false,
@@ -392,12 +397,10 @@ function Composer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (
-      event.key !== 'Enter' ||
-      event.shiftKey ||
-      event.nativeEvent.isComposing
-    )
+    const isSend = event.shiftKey || event.metaKey || event.ctrlKey;
+    if (event.key !== 'Enter' || !isSend || event.nativeEvent.isComposing) {
       return;
+    }
     event.preventDefault();
     void send();
   };
@@ -457,6 +460,14 @@ function Composer({
   };
 
   const canType = isReady || isOutbox;
+  useGrowingTextarea(fieldRef, text, maxLines);
+  const isDictating = voice.isDictating && voice.state === 'listening';
+  const writeDictation = (words: string) => {
+    setText((current) =>
+      current.trim().length > 0 ? `${current.trimEnd()} ${words}` : words,
+    );
+    setTypedAt(Date.now());
+  };
   const showsActions = waitingPlaceholder === null;
 
   return (
@@ -605,13 +616,12 @@ function Composer({
               ref={fieldRef}
               variant='base'
               rounded='none'
-              autoExpand
               rows={1}
               aria-label={HELM_COPY.composerLabel(name)}
               placeholder={
                 waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)
               }
-              className='max-h-32 min-h-10 resize-none border-0 bg-transparent px-1 py-2.5 text-[15px] leading-5 shadow-none outline-none focus:outline-none focus-visible:ring-0 focus-visible:outline-none'
+              className='min-h-10 resize-none border-0 bg-transparent px-1 py-2.5 text-[15px] leading-5 shadow-none outline-none focus:outline-none focus-visible:ring-0 focus-visible:outline-none'
               disabled={!canType}
               value={text}
               onChange={(event) => {
@@ -661,6 +671,31 @@ function Composer({
           </div>
         )}
         {showsActions &&
+          canType &&
+          !isRecording &&
+          (isFocused || isDictating) && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              rounded='full'
+              aria-label={
+                isDictating ? HELM_COPY.dictateDone : HELM_COPY.dictate
+              }
+              aria-pressed={isDictating}
+              className={join(
+                'size-10 min-h-0 min-w-10 shrink-0 p-0',
+                isDictating && 'bg-primary/12! ring-primary/40 ring-2',
+              )}
+              onClick={() => voice.dictate(writeDictation)}
+            >
+              <Mic
+                className={join('size-5', isDictating && 'text-primary')}
+                aria-hidden='true'
+              />
+            </Button>
+          )}
+        {showsActions &&
           (isHeldBackByPhotos ? (
             <LockedButton
               label={HELM_COPY.send}
@@ -691,6 +726,25 @@ function Composer({
           ))}
       </div>
       <div className='flex flex-col gap-2 px-1 pb-1 empty:hidden'>
+        {isDictating && (
+          <div
+            className='flex flex-col items-start gap-0.5'
+            role='status'
+            aria-live='polite'
+          >
+            <p className='text-muted-foreground line-clamp-2 text-[13px] break-words'>
+              {voice.heard ||
+                (voice.isPreparing
+                  ? HELM_COPY.talkGettingReady
+                  : HELM_COPY.talkListeningHint)}
+            </p>
+            {voice.listeningRoute === 'cloud' && (
+              <div className='-ml-3'>
+                <VoiceNotice />
+              </div>
+            )}
+          </div>
+        )}
         {(recorder.state === 'refused' || recorder.state === 'unsupported') && (
           <p className='text-muted-foreground text-[13px]' role='status'>
             {recorder.state === 'unsupported'

@@ -1,4 +1,8 @@
+import { useRef } from 'react';
+
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
+
+import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 
 import { HELM_COPY } from '@apps/helm/constants';
 
@@ -27,10 +31,13 @@ function AnswerField({
   autoFocus = false,
 }: AnswerFieldProps) {
   const canSend = value.trim() !== '' && !isDisabled;
+  const field = useRef<HTMLTextAreaElement>(null);
+  useGrowingTextarea(field, value, 6);
   return (
     <div className='flex w-full flex-col items-stretch gap-2'>
       {isMultiline ? (
         <Textarea
+          ref={field}
           variant='outline'
           rows={3}
           aria-label={label}
