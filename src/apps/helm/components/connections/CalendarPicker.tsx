@@ -29,7 +29,7 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { setShiftCalendarIds } from '@apps/helm/store/actions/settingsActions';
 
 export interface CalendarPickerTarget {
-  /** Null while the trip back from Google is still finishing, so the sheet is already up when the person lands. */
+  /** Null while the return from Google is still finishing. */
   accountId: string | null;
   /** Connecting stages everything until Connect; editing a live grant applies on Save. */
   mode: 'connect' | 'edit';
@@ -112,8 +112,10 @@ function PickerForm({
       Number(b.isPrimary) - Number(a.isPrimary) ||
       Number(b.isOnByDefault) - Number(a.isOnByDefault),
   );
-  const mine = ordered.filter((option) => option.isOnByDefault);
-  const others = ordered.filter((option) => !option.isOnByDefault);
+  const isMine = (option: ConnectorOption) =>
+    option.isPrimary || option.isOnByDefault;
+  const mine = ordered.filter(isMine);
+  const others = ordered.filter((option) => !isMine(option));
   const ticked = ordered.filter(isTicked);
   const isDirty =
     mode === 'edit' &&
@@ -288,14 +290,15 @@ function PickerForm({
             }))}
             values={ticked.filter(isShift).map((option) => option.id)}
             onChange={(values) =>
-              setShiftEdits(
-                Object.fromEntries(
+              setShiftEdits((edits) => ({
+                ...edits,
+                ...Object.fromEntries(
                   ticked.map((option) => [
                     option.id,
                     values.includes(option.id),
                   ]),
                 ),
-              )
+              }))
             }
           />
         </div>

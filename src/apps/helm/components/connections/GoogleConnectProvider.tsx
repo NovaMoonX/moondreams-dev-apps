@@ -91,10 +91,17 @@ const toIntroTitle = (connectorId: GoogleConnectorId, isReconnect: boolean) => {
     : HELM_COPY.googleConnectTitle;
 };
 
-const keepConnector = (connectorId: GoogleConnectorId | null) => {
+const RECONNECT_KEY = 'helm-google-reconnect';
+
+const keepConnector = (
+  connectorId: GoogleConnectorId | null,
+  isReconnect = false,
+) => {
   try {
     if (connectorId === null) sessionStorage.removeItem(CONNECTOR_KEY);
     else sessionStorage.setItem(CONNECTOR_KEY, connectorId);
+    if (isReconnect) sessionStorage.setItem(RECONNECT_KEY, '1');
+    else sessionStorage.removeItem(RECONNECT_KEY);
   } catch {
     // Private browsing can refuse storage; a return then falls back to the calendar.
   }
@@ -110,6 +117,14 @@ const readKeptConnector = (): GoogleConnectorId => {
       : 'google:calendar';
   } catch {
     return 'google:calendar';
+  }
+};
+
+const readKeptReconnect = () => {
+  try {
+    return sessionStorage.getItem(RECONNECT_KEY) === '1';
+  } catch {
+    return false;
   }
 };
 
@@ -134,7 +149,7 @@ const connectGoogle = async ({
     accountId,
     isAnotherAccount,
   });
-  keepConnector(connectorId);
+  keepConnector(connectorId, accountId !== null);
   const result = await requestGoogleAuthCode({ authUrl, state });
   if (result !== 'redirected') keepConnector(null);
   return typeof result === 'string' ? result : finishGoogleConnection(result);
@@ -243,6 +258,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     readGoogleAuthReturn(window.location.search),
   );
   const [returnedConnector] = useState(readKeptConnector);
+  const [isReturnedReconnect] = useState(readKeptReconnect);
   const [intro, setIntro] = useState<Intro | null>(() =>
     returned && 'error' in returned && !isPopupPage()
       ? {
@@ -260,7 +276,8 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     returned &&
     'code' in returned &&
     !isPopupPage() &&
-    returnedConnector === 'google:calendar'
+    returnedConnector === 'google:calendar' &&
+    !isReturnedReconnect
       ? { accountId: null, mode: 'connect' }
       : null,
   );
@@ -326,7 +343,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     setIntro(null);
     const wasDismissed = isReturn && !isAwaitingReturnRef.current;
     isAwaitingReturnRef.current = false;
-    setPicker(null);
+    if (isReturn) setPicker((open) => (open?.accountId === null ? null : open));
     const hasGrant = grants.some(
       (grant) =>
         grant.connectorId === finished.connectorId &&
@@ -459,7 +476,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
         )}
       </FormSheet>
       <CalendarPicker
-        target={picker}
+        target={picker?.accountId === null && !loading && !user ? null : picker}
         onClose={() => {
           isAwaitingReturnRef.current = false;
           setPicker(null);

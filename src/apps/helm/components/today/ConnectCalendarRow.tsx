@@ -2,7 +2,6 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { CalendarX, ChevronRight } from 'lucide-react';
 
 import { GoogleCalendarMark } from '@/components/BrandMarks';
-
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAuth } from '@/hooks/useAuth';

@@ -1049,7 +1049,7 @@ export const HELM_COPY = {
   calendarPickerOthers: 'Holidays and shared',
   calendarPickerShiftsTitle: 'Work shifts',
   calendarPickerShiftsHint:
-    'Tap any calendar that holds your shifts. The day after a late shift stays free of suggestions.',
+    'Tap the ones that hold your shifts, so the day after a late one stays free.',
   calendarPickerConnect: 'Connect',
   calendarPickerSave: 'Save',
   calendarPickerTickOne: 'Tick at least one calendar',
