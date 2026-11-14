@@ -881,9 +881,28 @@ const tests: [string, () => void | Promise<void>][] = [
         get: async () => ({ docs: byKind[kind ?? ''] ?? [] }),
       });
       const firestore = { collection: () => query(null) } as never;
-      const read = await readContextSynced(firestore, 'u1', key, at, 'UTC');
+      const { copies: read } = await readContextSynced(
+        firestore,
+        'u1',
+        key,
+        at,
+        'UTC',
+      );
       assert.equal(read.length, MAX_CONTEXT_SYNCED);
       assert.equal(read[0]?.kind, 'moneySummary');
+      const isOdd = (copy: { id: string }) =>
+        copy.id.startsWith('e') && Number(copy.id.slice(1)) % 2 === 1;
+      const narrowed = await readContextSynced(
+        firestore,
+        'u1',
+        key,
+        at,
+        'UTC',
+        (copies) => copies.filter((copy) => !isOdd(copy)),
+      );
+      assert.equal(narrowed.copies.some(isOdd), false);
+      assert.equal(narrowed.copies.length, 21);
+      assert.equal(narrowed.heldBack.length, 20);
     },
   ],
   [

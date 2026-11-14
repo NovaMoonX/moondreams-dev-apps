@@ -3,22 +3,48 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import type { OpenCapture, OpenExecution, OpenTask } from '@apps/helm/types';
 import { toHeldItems } from '@apps/helm/utils/heldCaptures';
+import { isOutsideTurn } from '@apps/helm/utils/outsideTurns';
 
-const selectRecent = (state: RootState) => state.helm.recentCaptures.captures;
-const selectUnseen = (state: RootState) => state.helm.unseenCaptures.captures;
-const selectEarlier = (state: RootState) => state.helm.earlier.captures;
+const selectRecentRaw = (state: RootState) =>
+  state.helm.recentCaptures.captures;
+const selectOutside = (state: RootState) => state.helm.outsideCaptures.captures;
+const selectEarlierRaw = (state: RootState) => state.helm.earlier.captures;
 
-/** Every turn home has loaded once, oldest first; a turn in both sets takes the live snapshot. */
+const toHomeTurns = (captures: OpenCapture[]) =>
+  captures.filter((capture) => !isOutsideTurn(capture));
+
+// Home's thread, counts and Needs you all read these; an outside assistant's turn is dropped here and nowhere else.
+const selectRecent = createSelector([selectRecentRaw], toHomeTurns);
+const selectUnseen = createSelector(
+  [(state: RootState) => state.helm.unseenCaptures.captures],
+  toHomeTurns,
+);
+const selectEarlier = createSelector([selectEarlierRaw], toHomeTurns);
+
+const toTurnsById = (captures: OpenCapture[]) => {
+  const byId = new Map(captures.map((capture) => [capture.id, capture]));
+  return [...byId.values()].sort(
+    (a, b) => a.createdAt - b.createdAt || a.turnIndex - b.turnIndex,
+  );
+};
+
+/** Every turn home has loaded once, oldest first, without an outside assistant's; a turn in both sets takes the live snapshot. */
 export const selectAllCaptures = createSelector(
-  [selectRecent, selectEarlier],
-  (recent, earlier): OpenCapture[] => {
-    const byId = new Map(
-      [...earlier, ...recent].map((capture) => [capture.id, capture]),
-    );
-    return [...byId.values()].sort(
-      (a, b) => a.createdAt - b.createdAt || a.turnIndex - b.turnIndex,
-    );
-  },
+  [selectEarlier, selectRecent],
+  (earlier, recent): OpenCapture[] => toTurnsById([...earlier, ...recent]),
+);
+
+/** Every turn loaded, an outside assistant's included, for a screen that looks one up by id (Activity, a result sheet, a source line). */
+export const selectEveryCapture = createSelector(
+  [selectEarlierRaw, selectRecentRaw, selectOutside],
+  (earlier, recent, outside): OpenCapture[] =>
+    toTurnsById([...earlier, ...recent, ...outside]),
+);
+
+/** Every turn an outside assistant sent, oldest first. */
+export const selectOutsideCaptures = createSelector(
+  [selectOutside],
+  (outside): OpenCapture[] => toTurnsById(outside),
 );
 
 /** Turns not seen yet, newest first. */
@@ -28,7 +54,10 @@ export const selectUnseenCaptures = createSelector(
     [...unseen].sort((a, b) => b.createdAt - a.createdAt),
 );
 
-const selectWaiting = (state: RootState) => state.helm.waitingCaptures.captures;
+const selectWaiting = createSelector(
+  [(state: RootState) => state.helm.waitingCaptures.captures],
+  toHomeTurns,
+);
 
 /** The turns that need the person and the ones that only wait, oldest first. */
 export const selectHeldItems = createSelector([selectWaiting], toHeldItems);
@@ -70,3 +99,8 @@ export const selectOpenTasksById = createSelector(
   (tasks): Map<string, OpenTask> =>
     new Map(tasks.map((task) => [task.id, task])),
 );
+
+/** Whether "From your assistants" has anything to offer: an outside turn arrived, or an assistant is connected. */
+export const selectHasOutsideSource = (state: RootState) =>
+  state.helm.outsideCaptures.captures.length > 0 ||
+  state.helm.assistants.items.length > 0;

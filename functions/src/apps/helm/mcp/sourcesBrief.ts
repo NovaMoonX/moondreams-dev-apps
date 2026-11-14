@@ -24,6 +24,41 @@ export const accessForConnector = (connectorId: string): McpReadScope | null =>
         ? 'apps'
         : null;
 
+/** Keeps the records an outside assistant's own switches allow: a source no switch covers (a calendar) stays, a site app needs Read your apps, Gmail Read Gmail, Drive Read Google Drive. */
+export const filterSourcesForOutside = <T extends { connectorId: string }>(
+  scopes: McpReadScope[],
+  records: T[],
+): T[] =>
+  records.filter((record) => {
+    const scope = accessForConnector(record.connectorId);
+    return scope === null || scopes.includes(scope);
+  });
+
+const READ_SCOPE_COVERS: Record<McpReadScope, string> = {
+  mail: "the person's email",
+  drive: "the person's documents in Google Drive",
+  apps: "records from the person's connected apps",
+};
+
+/** For an outside turn only: the sources its switches hold back and the exact switch that opens each, or '' when none is held back. */
+export const toHeldBackPrompt = (
+  clientName: string,
+  scopes: McpReadScope[],
+  heldBackNames: string[],
+) => {
+  const held = MCP_READ_SCOPES.filter((scope) => !scopes.includes(scope));
+  if (held.length === 0) return '';
+  const assistant = clientName.trim() || 'the outside assistant';
+  return `This question came from ${assistant}, an outside assistant that may read only what its own switches in Helm allow. Held back from this answer: ${held
+    .map(
+      (scope) =>
+        `${READ_SCOPE_COVERS[scope]}${scope === 'apps' && heldBackNames.length > 0 ? ` (${heldBackNames.join(', ')})` : ''}, opened by the switch "${READ_SCOPE_LABELS[scope]}"`,
+    )
+    .join(
+      '; ',
+    )}. Never answer from, quote or hint at their contents. When the answer would need one, say so in one plain line that names the source and the switch, such as "That's in A-List, which ${assistant} can't read; turn on Read your apps for it in Helm.", with no first person.`;
+};
+
 export interface ConnectedSource {
   name: string;
   about: string;
