@@ -1,5 +1,6 @@
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
@@ -159,7 +160,13 @@ async function readOpenSales(
                   .count()
                   .get()
                   .then((counted) => counted.data().count)
-                  .catch(() => null)
+                  .catch((error: unknown) => {
+                    logger.warn('going-once.share.inquiryCountFailed', {
+                      reason:
+                        error instanceof Error ? error.message : 'unknown',
+                    });
+                    return null;
+                  })
               : null,
             updatedAt: readTime(doc.get('lastEditedAt')),
             items: items.docs.flatMap(readItem),
