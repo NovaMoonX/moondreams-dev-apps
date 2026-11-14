@@ -59,6 +59,7 @@
     "check:pinch-share": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchShare.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchShareBuild.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pinchShareImport.ts",
     "check:waypoint-balances": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/waypointBalances.ts",
     "check:going-once-share": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/goingOnceShare.ts",
+    "check:share-fields": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/shareFields.ts",
     "check:gates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/gates.ts",
     "check:gate-rules": "firebase emulators:exec --only auth,firestore --project demo-gate-rules \"python3 scripts/checks/gateRules.py\"",
     "check:waypoint-pushes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/waypointPushes.ts",
