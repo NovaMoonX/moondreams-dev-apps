@@ -1559,11 +1559,12 @@ export const HELM_COPY = {
   assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
   assistantNameLabel: 'Name',
   assistantNameHint:
-    'Up to 16 letters, numbers, spaces, hyphens or apostrophes. With Hey on in Voice service, it is also the name you say.',
+    "With Hey on in Voice service, it's also the name you say.",
   assistantRenameConnected: (name: string, hasClaude: boolean) =>
-    `Your connected assistants call it ${name} from their next new chat; a chat already open keeps the old name.${hasClaude ? " Claude's connector keeps the label you gave it until you rename it there." : ''}`,
-  assistantNameError: 'Letters, numbers, spaces, hyphens or apostrophes only.',
-  assistantUseDefault: (name: string) => `Use the default name (${name})`,
+    `Connected assistants use ${name} from their next chat.${hasClaude ? ' Rename the connector in Claude to match.' : ''}`,
+  assistantNameError:
+    'Up to 16 letters, numbers, spaces, hyphens or apostrophes.',
+  assistantUseDefault: (name: string) => `Use ${name}`,
   assistantToneLabel: 'How it answers',
   assistantToneHint:
     'Shapes its written answers. Names, dates and what it files never change.',

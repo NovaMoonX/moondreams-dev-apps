@@ -81,9 +81,22 @@ function AssistantForm({
   return (
     <div className='space-y-5'>
       <div className='space-y-1.5'>
-        <label htmlFor={`${fieldId}-name`} className='text-sm font-medium'>
-          {HELM_COPY.assistantNameLabel}
-        </label>
+        <div className='flex min-h-7 items-center justify-between gap-3'>
+          <label htmlFor={`${fieldId}-name`} className='text-sm font-medium'>
+            {HELM_COPY.assistantNameLabel}
+          </label>
+          {text !== '' && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className='relative -mr-2 after:absolute after:inset-x-0 after:-inset-y-1.5'
+              onClick={() => change('', tone)}
+            >
+              {HELM_COPY.assistantUseDefault(DEFAULT_ASSISTANT_NAME)}
+            </Button>
+          )}
+        </div>
         <Input
           id={`${fieldId}-name`}
           variant='outline'
@@ -95,28 +108,14 @@ function AssistantForm({
           onChange={(event) => change(event.target.value, tone)}
         />
         {isNameValid && (
-          <p className='text-muted-foreground text-[13px] text-pretty'>
-            {HELM_COPY.assistantNameHint}
-          </p>
-        )}
-        {isNameValid && assistants.length > 0 && nextName !== savedName && (
           <p
             className='text-muted-foreground text-[13px] text-pretty'
             role='status'
           >
-            {HELM_COPY.assistantRenameConnected(nextName, hasClaude)}
+            {assistants.length > 0 && nextName !== savedName
+              ? HELM_COPY.assistantRenameConnected(nextName, hasClaude)
+              : HELM_COPY.assistantNameHint}
           </p>
-        )}
-        {text !== '' && (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className='-ml-2'
-            onClick={() => change('', tone)}
-          >
-            {HELM_COPY.assistantUseDefault(DEFAULT_ASSISTANT_NAME)}
-          </Button>
         )}
       </div>
       <div className='space-y-2'>

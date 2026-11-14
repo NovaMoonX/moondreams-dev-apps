@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Bot, ChevronRight } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import { ClaudeMark, GeminiMark } from '@/components/BrandMarks';
 import CopyTextButton from '@/components/CopyTextButton';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
@@ -116,7 +117,8 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                 />
               </div>
               <div className='flex flex-col gap-1'>
-                <h3 className='text-[15px] font-medium'>
+                <h3 className='flex items-center gap-2 text-[15px] font-medium'>
+                  <ClaudeMark className='size-5' />
                   {HELM_COPY.assistantsClaudeHeading}
                 </h3>
                 <ol className='text-muted-foreground list-decimal pl-5 text-[15px] text-pretty'>
@@ -126,7 +128,8 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                 </ol>
               </div>
               <div className='flex flex-col gap-1'>
-                <h3 className='text-[15px] font-medium'>
+                <h3 className='flex items-center gap-2 text-[15px] font-medium'>
+                  <GeminiMark className='size-5' />
                   {HELM_COPY.assistantsGeminiHeading}
                 </h3>
                 <ol className='text-muted-foreground list-decimal pl-5 text-[15px] text-pretty'>
