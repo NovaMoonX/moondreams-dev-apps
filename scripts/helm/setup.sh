@@ -16,6 +16,7 @@ for arg in "$@"; do
 done
 
 source scripts/lib/firebaseLogin.sh
+source scripts/lib/gcloudTracks.sh
 
 CURRENT="starting"
 trap 'status=$?; (( status == 0 )) || echo "✗ Stopped at: $CURRENT. Fix that and run npm run helm:setup again; finished steps are skipped." >&2' EXIT
@@ -65,7 +66,7 @@ api_enabled() {
 
 policies_present() {
   local have name
-  have="$(gcloud alpha monitoring policies list --project="$PROJECT" --format='value(displayName)' 2>/dev/null)"
+  have="$(gcloud alpha monitoring policies list --project="$PROJECT" --format='value(displayName)' </dev/null 2>/dev/null)"
   for name in "$@"; do
     grep -qxF "$name" <<<"$have" || return 1
   done
@@ -151,6 +152,7 @@ check_tools() {
     fi
   fi
   align_gcloud_project
+  (( DRY )) || require_gcloud_tracks alpha beta
   (( DRY )) || require_firebase_login
   HAVE_GCLOUD=1
   echo "✓ Tools ready: gcloud signed in as $account, project $PROJECT"
