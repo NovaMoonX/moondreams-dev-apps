@@ -54,8 +54,12 @@ function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | null 
 }
 
 function getSpeechRecognitionError(error: string): string {
-  if (error === 'not-allowed' || error === 'service-not-allowed') {
-    return 'Microphone access was blocked. Allow microphone access and try again.';
+  if (error === 'not-allowed') {
+    return 'The microphone is blocked.';
+  }
+
+  if (error === 'service-not-allowed') {
+    return 'This browser’s speech service is off, so it can’t listen. Turn on dictation in the device settings and try again.';
   }
 
   if (error === 'no-speech') {
@@ -67,6 +71,8 @@ function getSpeechRecognitionError(error: string): string {
 
 export interface VoiceTranscription {
   error: string | null;
+  /** The browser refused the microphone, as opposed to any other stop. */
+  isBlocked: boolean;
   isListening: boolean;
   isSupported: boolean;
   start: () => void;
@@ -85,6 +91,7 @@ export function useVoiceTranscription(): VoiceTranscription {
   const resolveStopRef = useRef<((transcript: string) => void) | null>(null);
   const rejectStopRef = useRef<((error: Error) => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const isSupported = getSpeechRecognitionConstructor() !== null;
@@ -140,6 +147,7 @@ export function useVoiceTranscription(): VoiceTranscription {
 
       const nextError = new Error(getSpeechRecognitionError(event.error));
       setError(nextError.message);
+      setIsBlocked(event.error === 'not-allowed');
       setIsListening(false);
       recognitionRef.current = null;
       finish(nextError);
@@ -174,6 +182,7 @@ export function useVoiceTranscription(): VoiceTranscription {
     transcriptRef.current = '';
     setTranscript('');
     setError(null);
+    setIsBlocked(false);
     isStoppingRef.current = false;
     setIsListening(true);
     createAndStartRecognition();
@@ -207,6 +216,7 @@ export function useVoiceTranscription(): VoiceTranscription {
 
   const reset = useCallback(() => {
     setError(null);
+    setIsBlocked(false);
     setTranscript('');
     transcriptRef.current = '';
   }, []);
@@ -220,6 +230,7 @@ export function useVoiceTranscription(): VoiceTranscription {
 
   return {
     error,
+    isBlocked,
     isListening,
     isSupported,
     start,
