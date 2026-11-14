@@ -160,3 +160,27 @@ export const disconnectMcpClient = onCall(
     return { ok: true };
   },
 );
+
+/** Disconnects every assistant the person connected, for any app: the record at once, then each provider grant (best effort). */
+export async function disconnectAllMcpClients(uid: string): Promise<void> {
+  const now = Date.now();
+  const live = await getFirestore()
+    .collection(`mcpClients/${uid}/clients`)
+    .where('revokedAt', '==', null)
+    .get();
+  await Promise.all(
+    live.docs.map(async (snapshot) => {
+      await snapshot.ref.update({ revokedAt: now });
+      const { workosUserId, clientId } = snapshot.data();
+      if (typeof workosUserId !== 'string' || typeof clientId !== 'string') {
+        return;
+      }
+      await deleteClientAuthorization(workosUserId, clientId).catch(
+        (error: unknown) =>
+          logger.warn('mcp.disconnect.authorizationNotDeleted', {
+            code: failureCode(error),
+          }),
+      );
+    }),
+  );
+}

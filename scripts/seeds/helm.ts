@@ -515,6 +515,7 @@ async function buildMove(input: {
   const execution: Execution = {
     captureId: input.captureId,
     actor: 'nomos',
+    via: null,
     category: 'organize',
     autonomyLevel: 2,
     state: 'succeeded',
@@ -674,6 +675,7 @@ async function buildBackToBack(input: {
   const execution: Execution = {
     captureId: leadId,
     actor: 'nomos',
+    via: null,
     category: 'organize',
     autonomyLevel: 2,
     state: 'succeeded',
@@ -979,6 +981,7 @@ async function buildGmailTurn(input: {
   const execution: Execution = {
     captureId: 'seed-turn-answer-gmail',
     actor: 'nomos',
+    via: null,
     category: 'remember',
     autonomyLevel: 2,
     state: 'succeeded',
@@ -1121,6 +1124,7 @@ async function buildAnswerTurns(input: {
       const execution: Execution = {
         captureId,
         actor: 'nomos',
+        via: null,
         category: 'answer',
         autonomyLevel: 1,
         state: 'succeeded',
@@ -1757,6 +1761,7 @@ async function buildNoteTurn(input: {
   const execution: Execution = {
     captureId: CAPTURE_NOTE_TURN_ID,
     actor: 'nomos',
+    via: null,
     category: 'organize',
     autonomyLevel: 2,
     state: 'succeeded',
@@ -2406,6 +2411,7 @@ async function buildKnowledge(input: {
   const tyreExecution: Execution = {
     captureId: TYRE_TURN_ID,
     actor: 'nomos',
+    via: null,
     category: 'organize',
     autonomyLevel: 2,
     state: 'succeeded',
@@ -3151,6 +3157,7 @@ async function buildPhotoTurns(input: {
   const execution: Execution = {
     captureId: keptTurn,
     actor: 'nomos',
+    via: null,
     category: 'organize',
     autonomyLevel: 2,
     state: 'succeeded',
@@ -3521,6 +3528,7 @@ async function buildFileTurns(input: {
   ): Promise<Execution> => ({
     captureId,
     actor: 'nomos',
+    via: null,
     category: 'organize',
     autonomyLevel: 2,
     state: 'succeeded',
@@ -4985,6 +4993,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             ? {
                 captureId: `seed-turn-${index + 1}`,
                 actor: 'nomos',
+                via: null,
                 category: 'organize',
                 autonomyLevel: 2,
                 state: 'succeeded',

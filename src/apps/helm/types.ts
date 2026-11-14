@@ -971,6 +971,8 @@ export interface ExecutionEffect {
 export interface Execution {
   captureId: string | null;
   actor: 'nomos' | 'person';
+  /** The outside assistant whose turn this was (Claude, Gemini); null for the person's own. */
+  via: string | null;
   category: ActionCategory;
   autonomyLevel: AutonomyLevel;
   state: ExecutionState;

@@ -18,6 +18,8 @@ import {
   unwrapHelmKey,
   type HelmKey,
 } from '../helmKey.js';
+import { readDates, readIsUrgent } from '../dateReading.js';
+import { toKnownZone } from '../syncedCopies.js';
 import { createAliasBook, createSealedAliasBook } from '../nomos/aliases.js';
 import { readMadeTitles } from '../nomos/buildContext.js';
 import {
@@ -228,6 +230,10 @@ async function fileTurn({
 }) {
   const firestore = getFirestore();
   const createdAt = Date.now();
+  const profile = await firestore.doc(`apps/helm/users/${ctx.uid}`).get();
+  const timeZone = toKnownZone(
+    (profile.data()?.timeZone as string | undefined) ?? 'UTC',
+  );
   const reference = firestore
     .collection(`apps/helm/users/${ctx.uid}/captures`)
     .doc(retryKeyFor(ctx, words, createdAt));
@@ -271,8 +277,8 @@ async function fileTurn({
           places: [],
           documents: [],
           commands: [],
-          isUrgent: false,
-          dates: [],
+          isUrgent: readIsUrgent(words),
+          dates: readDates(words, { now: createdAt, timeZone }),
           addressedAs: null,
         },
         answer: null,

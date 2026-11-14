@@ -156,6 +156,27 @@ export async function uidForWorkosUser(
 }
 
 /** Removes the person's authorization of one client, so it can't refresh. A client already gone counts as done. */
+/** The name a client registered with, from the person's authorized applications; null when WorkOS can't say. */
+export async function registeredClientName(
+  workosUserId: string,
+  clientId: string,
+): Promise<string | null> {
+  try {
+    const listed = (await workosFetch(
+      `/user_management/users/${encodeURIComponent(workosUserId)}/authorized_applications?limit=100`,
+      { method: 'GET' },
+    )) as {
+      data?: { application?: { client_id?: unknown; name?: unknown } }[];
+    };
+    const name = listed.data?.find(
+      (entry) => entry.application?.client_id === clientId,
+    )?.application?.name;
+    return typeof name === 'string' ? name : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteClientAuthorization(
   workosUserId: string,
   clientId: string,

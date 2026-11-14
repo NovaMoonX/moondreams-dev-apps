@@ -12,20 +12,23 @@ import {
 
 const RESOURCE = 'https://apps.moondreams.dev/mcp/helm';
 
-const names: [string, string][] = [
-  ['https://claude.ai/oauth/mcp-oauth-client-metadata', 'Claude'],
-  ['https://mcp.anthropic.com/client.json', 'Claude'],
-  ['https://chatgpt.com/oauth/client.json', 'ChatGPT'],
-  ['https://auth.openai.com/x', 'ChatGPT'],
-  ['https://gemini.google.com/client', 'Gemini'],
-  ['https://x.googleusercontent.com/c', 'Gemini'],
-  ['https://notclaude.ai/x', 'An assistant'],
-  ['https://claude.ai.evil.example/x', 'An assistant'],
-  ['client_01HXYZ', 'An assistant'],
-  ['', 'An assistant'],
+const names: [string, string | null, string][] = [
+  ['https://claude.ai/oauth/mcp-oauth-client-metadata', null, 'Claude'],
+  ['https://chatgpt.com/oauth/client.json', null, 'ChatGPT'],
+  ['https://sub.claude.ai/x', null, 'Unnamed assistant'],
+  ['https://sites.google.com/view/x', null, 'Unnamed assistant'],
+  ['https://gemini.evil.example/x', null, 'Unnamed assistant'],
+  ['https://notclaude.ai/x', null, 'Unnamed assistant'],
+  ['https://claude.ai.evil.example/x', null, 'Unnamed assistant'],
+  ['client_01HXYZ', 'Gemini', 'Gemini'],
+  ['client_01HXYZ', '  Gemini\u200b  CLI ', 'Gemini CLI'],
+  ['client_01HXYZ', 'Claude (official)', 'Unnamed assistant'],
+  ['https://evil.example/c', 'chatgpt helper', 'Unnamed assistant'],
+  ['client_01HXYZ', null, 'Unnamed assistant'],
+  ['', '', 'Unnamed assistant'],
 ];
-names.forEach(([clientId, name]) =>
-  assert.equal(clientNameFor(clientId), name, clientId),
+names.forEach(([clientId, registered, name]) =>
+  assert.equal(clientNameFor(clientId, registered), name, clientId),
 );
 
 assert.match(clientKeyFor('https://claude.ai/x'), /^[0-9a-f]{32}$/);

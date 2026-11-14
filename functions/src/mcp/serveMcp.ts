@@ -6,7 +6,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import type { Request } from 'firebase-functions/v2/https';
 
-import { clientNameFor } from './clientName.js';
+import { clientNameFor, verifiedClientName } from './clientName.js';
 import {
   clientKeyFor,
   clientStanding,
@@ -19,6 +19,7 @@ import {
 } from './shapes.js';
 import {
   authkitOrigin,
+  registeredClientName,
   uidForWorkosUser,
   verifyMcpAccessToken,
   type McpAccessClaims,
@@ -103,7 +104,14 @@ async function sealClient(
   const firestore = getFirestore();
   const clientKey = clientKeyFor(claims.clientId);
   const ref = firestore.doc(`mcpClients/${uid}/clients/${clientKey}`);
-  const clientName = clientNameFor(claims.clientId);
+  const isUnverified =
+    verifiedClientName(claims.clientId) === null && !(await ref.get()).exists;
+  const clientName = clientNameFor(
+    claims.clientId,
+    isUnverified
+      ? await registeredClientName(claims.workosUserId, claims.clientId)
+      : null,
+  );
   const now = Date.now();
   return firestore.runTransaction(async (transaction) => {
     const stored = (await transaction.get(ref)).data();
@@ -153,7 +161,7 @@ async function sealClient(
       uid,
       clientKey,
       clientId: claims.clientId,
-      clientName,
+      clientName: typeof stored.name === 'string' ? stored.name : clientName,
       canWrite: stored.canWrite === true,
     };
   });

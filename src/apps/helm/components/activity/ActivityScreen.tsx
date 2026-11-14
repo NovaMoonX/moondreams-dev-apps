@@ -215,9 +215,10 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
                         : null
                     }
                     via={
-                      execution.captureId
+                      execution.via ??
+                      (execution.captureId
                         ? (viaByCapture.get(execution.captureId) ?? null)
-                        : null
+                        : null)
                     }
                     onOpen={() => setOpen(execution)}
                   />

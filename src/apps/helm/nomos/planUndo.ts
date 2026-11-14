@@ -1288,6 +1288,7 @@ export function planUndo(input: {
     undoExecution: {
       captureId: original.captureId,
       actor: 'person',
+      via: null,
       category: 'undo',
       autonomyLevel: 1,
       state: 'succeeded',

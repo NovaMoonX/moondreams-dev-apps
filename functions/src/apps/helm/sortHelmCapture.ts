@@ -1545,7 +1545,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
 
   const readJoined = async (): Promise<
-    JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean }
+    JoinedRead & {
+      messages: JoinedMessage[];
+      isSpoken: boolean;
+      isOutside: boolean;
+    }
   > => {
     const lead = (await claimed.captureRef.get()).data() as
       CaptureDoc | undefined;
@@ -1584,6 +1588,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ids: mode === 'rest' ? [] : joined.map((snapshot) => snapshot.id),
       joinedCount: listed.length,
       messages: [leadMessage, ...messages],
+      isOutside: lead?.medium === 'mcp',
       // A turn is spoken when any of its messages was, so a spoken message joined behind a typed one still hears its reply.
       isSpoken:
         lead?.inputMode === 'voice' ||
@@ -1594,7 +1599,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   };
 
   const run = async (
-    read: JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean },
+    read: JoinedRead & {
+      messages: JoinedMessage[];
+      isSpoken: boolean;
+      isOutside: boolean;
+    },
     signal: AbortSignal,
     isRestart: boolean,
   ) => {
@@ -1795,14 +1804,15 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             isNamedIn(combined.text, procedure.title),
         ));
     const provider = pickProvider(combined.text, combined.reading);
-    const liveGrants =
-      mode !== 'rest' && isQuestion(combined.text.trim())
-        ? await readLiveGrants(firestore, uid)
-        : [];
-    const siteGrants =
-      mode !== 'rest' && isQuestion(combined.text.trim())
-        ? await readSiteGrants(firestore, uid)
-        : [];
+    // An outside assistant's answer leaves Helm, and the person granted mail, documents and app records to Helm alone.
+    const isLiveReadOffered =
+      mode !== 'rest' && !read.isOutside && isQuestion(combined.text.trim());
+    const liveGrants = isLiveReadOffered
+      ? await readLiveGrants(firestore, uid)
+      : [];
+    const siteGrants = isLiveReadOffered
+      ? await readSiteGrants(firestore, uid)
+      : [];
     const quotes = createQuoteBook();
     const searched = createSearchedLog();
     const system = [
@@ -3052,9 +3062,9 @@ async function writeResult(
         });
       }
       if (home) transaction.update(firestore.doc(base), home.data);
-      transaction.create(
-        executionRef,
-        buildExecution(
+      transaction.create(executionRef, {
+        via: capture.via ?? null,
+        ...buildExecution(
           { ...plan, questions },
           {
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
@@ -3081,7 +3091,7 @@ async function writeResult(
             timeZone,
           },
         ),
-      );
+      });
     }
     plan.mediaLetGo.forEach(({ id, data }) =>
       transaction.update(firestore.doc(`${base}/media/${id}`), data),
@@ -3107,9 +3117,9 @@ async function writeResult(
           })
         : null;
       if (factWrite) transaction.create(factRef, factWrite.data);
-      transaction.create(
-        answerExecutionRef,
-        buildAnswerExecution({
+      transaction.create(answerExecutionRef, {
+        via: capture?.via ?? null,
+        ...buildAnswerExecution({
           captureId: captureRef.id,
           answer: reply.answer,
           spoken: spokenLine,
@@ -3118,7 +3128,7 @@ async function writeResult(
           fact: factWrite,
           notDone: [...noted.refused, ...liveRefused],
         }),
-      );
+      });
     }
     const quietLine = isStale
       ? ALREADY_ANSWERED_LINE

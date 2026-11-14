@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
+import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
+import {
+  readDates,
+  readIsUrgent,
+} from '../../functions/src/apps/helm/dateReading.ts';
 import {
   createAliasBook,
   createSealedAliasBook,
@@ -133,4 +138,38 @@ assert.equal(book.idOf('tp'), null);
 assert.equal(book.idOf('tpAAAA'), null);
 assert.equal(book.idOf(`${alias.slice(0, -2)}AA`), null);
 
+// An assistant's turn is read on the server by the vendored copy of the device's date and urgency reader.
+const READ_AT = Date.UTC(2026, 10, 14, 17, 0);
+const READ_OPTIONS = { now: READ_AT, timeZone: 'America/Los_Angeles' };
+const PARITY_PHRASES = [
+  'Remind me to call Dana on Friday',
+  'call Dana on Friday',
+  'venue deposit due March 3',
+  'tomorrow at 3 pick up the dry cleaning',
+  'urgent: renew passport',
+  '! renew passport',
+  'passport renewed in March 2015',
+  'no date here',
+];
+PARITY_PHRASES.forEach((phrase) => {
+  const device = readCapture(phrase, { ...READ_OPTIONS, assistantName: '' });
+  assert.deepEqual(readDates(phrase, READ_OPTIONS), device.dates, phrase);
+  assert.equal(readIsUrgent(phrase), device.isUrgent, phrase);
+});
+assert.deepEqual(
+  readDates('call Dana on Friday', READ_OPTIONS).map((span) => span.due),
+  [{ kind: 'day', date: Date.UTC(2026, 10, 20) }],
+);
+assert.equal(readDates('no date here', READ_OPTIONS).length, 0);
+assert.equal(readIsUrgent('! renew passport'), true);
+assert.equal(readIsUrgent('urgent: renew passport'), false);
+
 console.log('check:helm-mcp passed');
+
+// An outside assistant's question never reads mail, documents or app records: its answer leaves Helm.
+const sortSource = readFileSync(
+  new URL('../../functions/src/apps/helm/sortHelmCapture.ts', import.meta.url),
+  'utf8',
+);
+assert.match(sortSource, /isOutside: lead\?\.medium === 'mcp'/);
+assert.match(sortSource, /mode !== 'rest' && !read\.isOutside && isQuestion/);

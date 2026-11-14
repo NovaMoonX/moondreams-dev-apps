@@ -133,6 +133,21 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/utils/naturalDateUtils.ts',
+    dest: 'functions/src/apps/helm/naturalDate.ts',
+    importRewrites: {
+      '@/utils/timezoneUtils': '../../notifications/zonedTime.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/utils/dateReading.ts',
+    dest: 'functions/src/apps/helm/dateReading.ts',
+    importRewrites: {
+      '@/utils/naturalDateUtils': './naturalDate.js',
+      '@apps/helm/types': './nomos/commands.js',
+    },
+  },
+  {
     src: 'src/apps/helm/utils/mediaCaps.ts',
     dest: 'functions/src/apps/helm/media/mediaCaps.ts',
     importRewrites: {},
