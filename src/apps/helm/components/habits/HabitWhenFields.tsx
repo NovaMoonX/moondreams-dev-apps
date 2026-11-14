@@ -33,6 +33,12 @@ interface HabitWhenFieldsProps {
   profile: { dayStartTime: string; dayEndTime: string };
   /** The question each group answers is asked by the caller; these are the answers only. */
   onChange: (draft: WhenDraft) => void;
+  /** Heads each group with its words, where no question above it already does. */
+  showsLabels?: boolean;
+}
+
+function GroupLabel({ children }: { children: string }) {
+  return <span className='block text-sm font-medium'>{children}</span>;
 }
 
 const OFTEN: readonly PillOption<OftenKind>[] = [
@@ -85,7 +91,7 @@ function WindowRow({ window, onChange, onRemove }: WindowRowProps) {
           type='button'
           variant='tertiary'
           size='icon'
-          className="relative size-8 shrink-0 after:absolute after:-inset-1 after:content-['']"
+          className='-mr-2 size-10 shrink-0'
           aria-label={HELM_COPY.habitWindowRemove(window.label)}
           onClick={onRemove}
         >
@@ -139,9 +145,11 @@ function WindowRow({ window, onChange, onRemove }: WindowRowProps) {
 export function OftenFields({
   draft,
   onChange,
+  showsLabels = false,
 }: Omit<HabitWhenFieldsProps, 'profile'>) {
   return (
     <div className='space-y-4'>
+      {showsLabels && <GroupLabel>{HELM_COPY.habitWhenOftenLabel}</GroupLabel>}
       <PillGroup
         label={HELM_COPY.habitWhenOftenLabel}
         options={OFTEN}
@@ -185,6 +193,7 @@ export function TimesFields({
   draft,
   profile,
   onChange,
+  showsLabels = false,
 }: HabitWhenFieldsProps) {
   const toggleParts = (parts: DayPart[]) => {
     const kept = draft.windows.filter(
@@ -203,6 +212,9 @@ export function TimesFields({
   );
   return (
     <div className='space-y-4'>
+      {showsLabels && (
+        <GroupLabel>{HELM_COPY.habitWhenTimesHeading}</GroupLabel>
+      )}
       <PillGroup
         label={HELM_COPY.habitWhenTimesLabel}
         options={MODES}

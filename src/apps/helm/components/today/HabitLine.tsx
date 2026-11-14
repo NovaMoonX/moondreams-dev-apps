@@ -3,6 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarCheck, Plus } from 'lucide-react';
 
 import TickMark from '@/components/TickMark';
+import { useHabitWhoName } from '@apps/helm/components/habits/useHabitWhoName';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { HabitLine as HabitLineModel } from '@apps/helm/utils/habitToday';
@@ -19,7 +20,7 @@ interface HabitLineProps {
 }
 
 const TRAILING =
-  "relative shrink-0 text-muted-foreground after:absolute after:-inset-x-2 after:-inset-y-1.5 after:content-['']";
+  "relative shrink-0 text-muted-foreground after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']";
 
 const readTitle = (line: HabitLineModel) => {
   const { name } = line.habit;
@@ -30,10 +31,13 @@ const readTitle = (line: HabitLineModel) => {
       line.habit.timesPerDay ?? 0,
     );
   }
-  return line.label ? HELM_COPY.habitLineWindow(name, line.label) : name;
+  return name;
 };
 
-const readMeta = (line: HabitLineModel, timeZone: string) => {
+const toSentenceStart = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+
+const readState = (line: HabitLineModel, timeZone: string) => {
   if (line.kind === 'tally') {
     return line.count > 0 && line.lastAt !== null
       ? HELM_COPY.habitLastAt(formatClock(line.lastAt, timeZone))
@@ -55,6 +59,19 @@ const readMeta = (line: HabitLineModel, timeZone: string) => {
   return formatClock(line.startAt, timeZone);
 };
 
+const readMeta = (
+  line: HabitLineModel,
+  timeZone: string,
+  whoName: string | null,
+) =>
+  [
+    whoName === null ? null : HELM_COPY.habitForWho(whoName),
+    line.kind === 'tick' && line.label ? toSentenceStart(line.label) : null,
+    readState(line, timeZone),
+  ]
+    .filter((part): part is string => part !== null)
+    .join('\u00a0· ');
+
 /** A habit due today as a bare 44px line, never a card: a tick (or a "+" for a counted one), its name and part of the day, one muted meta, and the Undo of what was just done or a Skip. A window that passed stays, muted and still tickable. */
 function HabitLine({
   line,
@@ -66,6 +83,7 @@ function HabitLine({
   onOpen,
 }: HabitLineProps) {
   const { habit } = line;
+  const whoName = useHabitWhoName(habit);
   const isTally = line.kind === 'tally';
   const isMarked = line.kind === 'tick' && line.state === 'done';
   const isSkipped = line.kind === 'tick' && line.state === 'skipped';
@@ -133,7 +151,7 @@ function HabitLine({
             {readTitle(line)}
           </PrivateTitle>
           <span className='text-muted-foreground block text-[13px] leading-[18px] break-words'>
-            {readMeta(line, timeZone)}
+            {readMeta(line, timeZone, whoName)}
           </span>
         </span>
       </Button>

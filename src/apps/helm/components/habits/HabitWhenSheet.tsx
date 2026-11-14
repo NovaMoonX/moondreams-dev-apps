@@ -87,7 +87,7 @@ function HabitWhenForm({
       <p className='text-muted-foreground text-[15px] text-pretty'>
         {HELM_COPY.habitWhenHint}
       </p>
-      <OftenFields draft={draft} onChange={change} />
+      <OftenFields draft={draft} onChange={change} showsLabels />
       <TimesFields
         draft={draft}
         profile={{
@@ -95,6 +95,7 @@ function HabitWhenForm({
           dayEndTime: profile?.dayEndTime ?? '22:00',
         }}
         onChange={change}
+        showsLabels
       />
       <ModalFooterActions
         note={blocker}

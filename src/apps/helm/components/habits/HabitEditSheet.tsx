@@ -9,6 +9,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
+import HabitWhoField from '@apps/helm/components/habits/HabitWhoField';
 import {
   HABIT_NAME_MAX,
   HABIT_NOTES_MAX,
@@ -44,6 +45,7 @@ function HabitEditForm({
   const [name, setName] = useState(habit.name);
   const [emoji, setEmoji] = useState(habit.emoji ?? '');
   const [notes, setNotes] = useState(habit.notes ?? '');
+  const [forWhoId, setForWhoId] = useState(habit.forWhoId);
   const [isTouched, setIsTouched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isMissing = name.trim() === '';
@@ -67,7 +69,12 @@ function HabitEditForm({
         user.uid,
         await getHelmEncryption(user.uid),
         habit.id,
-        { name, emoji: emoji || null, notes: notes.trim() || null },
+        {
+          name,
+          emoji: emoji || null,
+          notes: notes.trim() || null,
+          forWhoId: habit.isCare ? forWhoId : habit.forWhoId,
+        },
       );
       if (result === 'saved') {
         onClose();
@@ -124,6 +131,14 @@ function HabitEditForm({
           onChange={(event) => edit(setNotes)(event.target.value)}
         />
       </div>
+      {habit.isCare && (
+        <div className='space-y-1.5'>
+          <span className='block text-sm font-medium'>
+            {HELM_COPY.habitWhoQuestion}
+          </span>
+          <HabitWhoField value={forWhoId} onChange={edit(setForWhoId)} />
+        </div>
+      )}
       <ModalFooterActions
         note={isTouched && isMissing ? HELM_COPY.habitEditNameMissing : null}
         cancelAction={

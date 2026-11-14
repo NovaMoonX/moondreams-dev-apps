@@ -3,6 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { selectHabitWeek } from '@apps/helm/engine/habitDay';
 import type { OpenHabit, OpenHabitDay } from '@apps/helm/types';
+import { readWeekFigure } from '@apps/helm/store/selectors/habitSelectors';
 import { readWeekDays, type WeekCell } from '@apps/helm/utils/habitWeek';
 
 interface HabitWeekProps {
@@ -11,17 +12,28 @@ interface HabitWeekProps {
   clock: { now: number; dayKey: string; timeZone: string };
 }
 
-const CELL_STATE: Record<WeekCell, string> = {
+type ShownCell = WeekCell | 'skipped';
+
+const CELL_STATE: Record<ShownCell, string> = {
   done: HELM_COPY.habitWeekDone,
   open: HELM_COPY.habitWeekOpen,
   later: HELM_COPY.habitWeekLater,
+  skipped: HELM_COPY.habitWeekSkipped,
 };
 
-function Cell({ cell }: { cell: WeekCell }) {
+function Cell({ cell }: { cell: ShownCell }) {
   if (cell === 'later') {
     return (
       <span
-        className='bg-muted-foreground/40 h-0.5 w-2.5 rounded-full'
+        className='bg-muted-foreground/40 size-1.5 rounded-full'
+        aria-hidden='true'
+      />
+    );
+  }
+  if (cell === 'skipped') {
+    return (
+      <span
+        className='bg-muted-foreground h-0.5 w-2.5 rounded-full'
         aria-hidden='true'
       />
     );
@@ -39,7 +51,7 @@ function Cell({ cell }: { cell: WeekCell }) {
   );
 }
 
-/** This week in the habit's own unit, Monday to today, and a seven-day row of what was marked. No streak, bar or percentage. */
+/** This week in the habit's own unit, Monday to today, and a seven-day row of what was marked; today sits in a pill, a day skipped on purpose is a dash. No streak, bar or percentage. */
 function HabitWeek({ habit, days, clock }: HabitWeekProps) {
   const week = selectHabitWeek(
     { ...habit, status: 'active' },
@@ -50,11 +62,8 @@ function HabitWeek({ habit, days, clock }: HabitWeekProps) {
 
   return (
     <section className='helm-card space-y-3 p-4'>
-      <h2 className='text-muted-foreground text-[13px]'>
-        {HELM_COPY.habitWeekTitle}
-      </h2>
       <p className='helm-serif text-[24px] leading-[30px] tabular-nums'>
-        {HELM_COPY.habitsWeekLine(week.done, week.due)}
+        {readWeekFigure(habit, week, clock.dayKey)}
       </p>
       <ul className='grid grid-cols-7 gap-1'>
         {weekDays.map((day) => {
@@ -63,7 +72,9 @@ function HabitWeek({ habit, days, clock }: HabitWeekProps) {
             ? HELM_COPY.habitWeekOff
             : day.count !== null
               ? `${day.count}${day.isReached ? `, ${HELM_COPY.habitWeekReached}` : ''}`
-              : day.cells.map((cell) => CELL_STATE[cell]).join(', ');
+              : (day.cells as ShownCell[])
+                  .map((cell) => CELL_STATE[cell])
+                  .join(', ');
           return (
             <li
               key={day.key}
@@ -72,9 +83,9 @@ function HabitWeek({ habit, days, clock }: HabitWeekProps) {
             >
               <span
                 className={join(
-                  'text-[13px]',
+                  'grid size-6 place-items-center rounded-full text-[13px]',
                   day.key === clock.dayKey
-                    ? 'text-foreground font-semibold'
+                    ? 'bg-foreground/10 text-foreground font-semibold'
                     : 'text-muted-foreground',
                 )}
                 aria-hidden='true'
@@ -97,7 +108,7 @@ function HabitWeek({ habit, days, clock }: HabitWeekProps) {
                     {day.count}
                   </span>
                 ) : (
-                  day.cells.map((cell, index) => (
+                  (day.cells as ShownCell[]).map((cell, index) => (
                     <Cell key={index} cell={cell} />
                   ))
                 )}
