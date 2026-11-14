@@ -493,7 +493,7 @@ export const HELM_COPY = {
   homeOpening: 'Opening your conversation',
   newConversation: 'New conversation',
   dailyFreshTitle: 'Start each day fresh',
-  dailyFreshDescription: `Your first message after midnight starts a new conversation, even if you were mid-chat. Without it, a chat ends only after ${SESSION_IDLE_MS / 60_000} minutes with no messages. Anything waiting on you stays in Needs you.`,
+  dailyFreshDescription: `Your first message after midnight starts a new conversation, even if you were mid-chat. Without it, a chat ends only after ${SESSION_IDLE_MS / 60_000} minutes with no messages.`,
   dailyFreshFailed: "Couldn't save that. Check your connection.",
   newConversationStarted: 'New conversation. Earlier turns are under Earlier.',
   newConversationFailed:
@@ -586,7 +586,7 @@ export const HELM_COPY = {
   overdueDue: (due: string) => `Overdue · ${due}`,
   unreadable: "Couldn't open this",
   loadingEarlier: 'Opening earlier turns',
-  earlierFold: (count: number) => `Earlier · ${count}`,
+  earlierFold: 'Show earlier',
   homeNextEvent: (clock: string, title: string) => `${clock} · ${title}`,
   homeNextEventTomorrow: (clock: string, title: string) =>
     `Tomorrow ${clock} · ${title}`,

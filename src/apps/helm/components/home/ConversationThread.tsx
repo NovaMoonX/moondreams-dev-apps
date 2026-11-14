@@ -191,10 +191,6 @@ function ConversationThread({
     (session.startedAt < freshFrom ||
       (session.startedAt < foldsBefore && session.sessionId !== lastSessionId));
   const foldedSessions = sessions.filter(isFolded);
-  const foldedCount = foldedSessions.reduce(
-    (sum, session) => sum + groupTurns(session.turns).length,
-    0,
-  );
   const hasFold = foldedSessions.length > 0 && !isUnfolded;
   const shownSessions = hasFold
     ? sessions.filter((session) => !isFolded(session))
@@ -217,7 +213,7 @@ function ConversationThread({
             setIsUnfolded(true);
           }}
         >
-          {HELM_COPY.earlierFold(foldedCount)}
+          {HELM_COPY.earlierFold}
           <ChevronDown className='size-4' aria-hidden='true' />
         </Button>
       )}
