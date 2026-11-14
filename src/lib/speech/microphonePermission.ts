@@ -23,7 +23,9 @@ const startWatching = () => {
       setState(status.state);
       status.addEventListener('change', () => setState(status.state));
     })
-    .catch(() => undefined);
+    .catch(() => {
+      watched.isStarted = false;
+    });
 };
 
 /** Whether the browser already holds the microphone permission for this site: 'granted' only when it says so, 'unknown' where it cannot tell. Never asks. */
@@ -59,16 +61,16 @@ export const watchMicrophonePermission = (
 export type MicrophoneRequestResult =
   'granted' | 'denied' | 'no-microphone' | 'unavailable';
 
-/**
- * Asks for the microphone the standard way (`getUserMedia`) and releases it at once. This is the request a browser
- * and the phone record as this site's microphone permission; speech recognition alone can fail in an installed app
- * without ever asking, which leaves no microphone entry in its settings. Call it from a tap.
- */
 /** Whether this page can ask for the microphone directly (a secure page in a browser with `getUserMedia`). */
 export const canRequestMicrophone = () =>
   typeof navigator !== 'undefined' &&
   typeof navigator.mediaDevices?.getUserMedia === 'function';
 
+/**
+ * Asks for the microphone the standard way (`getUserMedia`) and releases it at once. This is the request a browser
+ * and the phone record as this site's microphone permission; speech recognition alone can fail in an installed app
+ * without ever asking, which leaves no microphone entry in its settings. Call it from a tap.
+ */
 export const requestMicrophone = async (): Promise<MicrophoneRequestResult> => {
   if (!canRequestMicrophone()) return 'unavailable';
   try {
@@ -93,7 +95,8 @@ export type MicrophoneDevice =
 
 /** Which kind of device and window this page runs in, for how to unblock the microphone there. */
 export const detectMicrophoneDevice = (): MicrophoneDevice => {
-  if (typeof navigator === 'undefined') return 'computer';
+  if (typeof navigator === 'undefined' || typeof window === 'undefined')
+    return 'computer';
   const agent = navigator.userAgent;
   const isIOS =
     /iPad|iPhone|iPod/.test(agent) ||
@@ -116,7 +119,8 @@ export const getMicrophoneHowTo = (
     'ios-app': [
       'Open the Settings app, then Apps › Safari (on older iPhones, just Safari).',
       'Under Settings for Websites, tap Microphone and choose Ask or Allow.',
-      'Close this app fully (swipe it up from the app switcher), open it again and tap Allow microphone.',
+      'Close this app fully (swipe it up from the app switcher), open it again and tap Try again.',
+      'Still blocked? Remove this app from the Home Screen and add it again from Safari.',
     ],
     'ios-browser': [
       'Tap the page menu (ᴀA or the page icon) beside the address bar, then Website Settings.',
@@ -124,9 +128,8 @@ export const getMicrophoneHowTo = (
       'Come back and tap Try again.',
     ],
     'android-app': [
-      'Open Chrome (the browser, not this app), tap ⋮ › Settings › Site settings › Microphone.',
-      `Check “Use your microphone” is on, then under Blocked tap ${host} and choose Allow.`,
-      'If Chrome itself has no microphone: phone Settings › Apps › Chrome › Permissions › Microphone › Allow.',
+      'Press and hold this app’s icon, tap App info, then Permissions (or Site settings) › Microphone › Allow.',
+      `Not there? In Chrome, tap ⋮ › Settings › Site settings › Microphone, find ${host} and choose Allow.`,
       'Come back and tap Try again.',
     ],
     'android-browser': [

@@ -38,9 +38,8 @@ const MAX_WAIT_MINUTES = COOK_WAKE_MAX_MS / 60_000;
 /** Why voice control stopped by itself: one line for the footer, and the whole cause with what to do for the explainer that a tap on the mic opens (none where a tap simply starts it again). */
 const STOP_TEXT: Record<VoiceStop, { line: string; detail: string | null }> = {
   denied: {
-    line: 'The microphone is blocked.',
-    detail:
-      'Your browser blocked the microphone. Allow it below, then tap Turn on.',
+    line: 'The microphone is blocked. Tap the mic to fix it.',
+    detail: 'Your browser blocked the microphone.',
   },
   service: {
     line: 'Your browser’s speech service is off.',
@@ -379,10 +378,7 @@ function CookVoiceSheet({
     {
       label: 'Tips and notes',
       rows: [
-        [
-          'ingredients for this step',
-          'Opens what this step uses, and reads it',
-        ],
+        ['ingredients for this step', 'Opens what this step uses, and reads it'],
         ['note from last time', 'Opens it on the first step, and reads it'],
         ['show me the tips', 'Opens this step’s tips on screen'],
         ['show my notes', 'Opens your notes for this step'],
@@ -439,12 +435,15 @@ function CookVoiceSheet({
       className='border-border border'
     >
       <div className='space-y-3 text-left text-sm'>
-        {lastStop !== null && (
-          <p className='bg-muted/50 border-border rounded-xl border px-3 py-2'>
-            Last time: {lastStop}
-          </p>
+        {voice.error === 'denied' ? (
+          <MicrophoneAccess />
+        ) : (
+          lastStop !== null && (
+            <p className='bg-muted/50 border-border rounded-xl border px-3 py-2'>
+              Last time: {lastStop}
+            </p>
+          )
         )}
-        {voice.error === 'denied' && <MicrophoneAccess />}
         <ListenRows voice={voice} selected={selected} onChoose={voice.choose} />
         <p className='text-muted-foreground text-xs'>
           {LISTEN_NOTES[selected]}
@@ -727,7 +726,7 @@ export function CookVoiceExplainer({
             '[&_.form-footer]:border-border [&_.form-footer]:border-t',
         )}
       >
-        {lastStop === null ? (
+        {lastStop === null || voice.error === 'denied' ? (
           <p>
             Say “next”, “back” or “how much {ingredientExample}” instead of
             tapping.

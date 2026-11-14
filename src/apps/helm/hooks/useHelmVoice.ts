@@ -108,6 +108,7 @@ export function useHelmVoice() {
   const [note, setNote] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [hasNoticeDoor, setHasNoticeDoor] = useState(false);
+  const [needsMicrophone, setNeedsMicrophone] = useState(false);
   const captures = useAppSelector(selectAllCaptures);
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
@@ -215,9 +216,10 @@ export function useHelmVoice() {
     noteId.current = window.setTimeout(() => setNote(null), NOTE_MS);
   }
 
-  function showNotice(text: string, hasDoor: boolean) {
+  function showNotice(text: string, hasDoor: boolean, isMicrophone = false) {
     setNotice(text);
     setHasNoticeDoor(hasDoor);
+    setNeedsMicrophone(isMicrophone);
   }
 
   function say(line: string) {
@@ -253,6 +255,7 @@ export function useHelmVoice() {
     screen.current = page;
     setNotice(null);
     setHasNoticeDoor(false);
+    setNeedsMicrophone(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
     return voice.submit(text, sttProvider);
@@ -667,11 +670,13 @@ export function useHelmVoice() {
       return 'blocked' as const;
     }
     if (!voice.isAvailable) {
+      const isMicrophone = voice.unavailableReason === 'no-permission';
       showNotice(
-        voice.unavailableReason === 'no-permission'
+        isMicrophone
           ? HELM_COPY.talkNeedsMicrophone
           : HELM_COPY.talkNeedsRecognition,
         false,
+        isMicrophone,
       );
       return 'blocked' as const;
     }
@@ -684,6 +689,7 @@ export function useHelmVoice() {
     screen.current = page;
     setNotice(null);
     setHasNoticeDoor(false);
+    setNeedsMicrophone(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
     voice.listen();
@@ -721,11 +727,12 @@ export function useHelmVoice() {
     showsPhoneLine,
     hasNoticeDoor,
     /** The notice is about a blocked microphone, so the screen offers the way to allow it. */
-    needsMicrophone: notice === HELM_COPY.talkNeedsMicrophone,
+    needsMicrophone,
     openVoiceSettings,
     clearNotice: () => {
       setNotice(null);
       setHasNoticeDoor(false);
+      setNeedsMicrophone(false);
     },
     talk,
     setSurfaceShown,

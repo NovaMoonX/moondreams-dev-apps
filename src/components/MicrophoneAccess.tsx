@@ -1,10 +1,14 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Mic } from 'lucide-react';
 
 import InlineNotice from '@/components/InlineNotice';
+import {
+  NOTICE_ACTION_CLASSES,
+  NOTICE_QUIET_CLASSES,
+} from '@/components/noticeActionClasses';
 import {
   detectMicrophoneDevice,
   getMicrophoneHowTo,
@@ -25,42 +29,45 @@ const RESULT_LINES: Partial<Record<MicrophoneRequestResult, string>> = {
   unavailable: 'This browser can’t use a microphone here.',
 };
 
-/** The way out of a blocked microphone: an Allow microphone button that asks the browser properly, and, once the browser refuses, the steps to allow it on this device. Clears itself once the permission is granted. */
+/** The way out of a blocked microphone: an Allow microphone button that asks the browser properly and, once the browser refuses, how to allow it on this device behind one tap. Clears itself once the permission is granted. */
 function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
   const [result, setResult] = useState<MicrophoneRequestResult | null>(null);
   const [isAsking, setIsAsking] = useState(false);
+  const [isHowToOpen, setIsHowToOpen] = useState(false);
   const permission = useSyncExternalStore(
     watchMicrophonePermission,
     peekMicrophonePermission,
   );
 
+  const allowed = useRef(onAllowed);
+  useEffect(() => {
+    allowed.current = onAllowed;
+  });
   useEffect(
     () =>
       watchMicrophonePermission((state) => {
-        if (state === 'granted') onAllowed?.();
+        if (state === 'granted') allowed.current?.();
       }),
-    [onAllowed],
+    [],
   );
 
   if (permission === 'granted') return null;
 
-  const isBlocked = result === 'denied' || permission === 'denied';
-  const steps = getMicrophoneHowTo(
-    detectMicrophoneDevice(),
-    window.location.host,
-  );
+  const isBlocked =
+    permission === 'denied' || (result === 'denied' && permission !== 'prompt');
+  const tone = isBlocked ? 'warning' : 'info';
+  const canAsk = result !== 'unavailable';
 
   const ask = async () => {
     setIsAsking(true);
     const answer = await requestMicrophone();
     setIsAsking(false);
     setResult(answer);
-    if (answer === 'granted') onAllowed?.();
   };
 
   return (
     <InlineNotice
-      tone='warning'
+      tone={tone}
       title={
         isBlocked ? 'The microphone is blocked' : 'The microphone isn’t on yet'
       }
@@ -68,29 +75,52 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
     >
       <p>
         {isBlocked
-          ? 'Your browser said no for this site. To turn it back on:'
+          ? 'Your browser said no for this site, so it has to be allowed in its settings.'
           : 'Tap below and allow it when your browser asks.'}
       </p>
-      {isBlocked && (
+      {result !== null && RESULT_LINES[result] && (
+        <p className='mt-2'>{RESULT_LINES[result]}</p>
+      )}
+      {isBlocked && isHowToOpen && (
         <ol className='mt-2 list-decimal space-y-1 pl-4'>
-          {steps.map((step) => (
+          {getMicrophoneHowTo(
+            detectMicrophoneDevice(),
+            window.location.host,
+          ).map((step) => (
             <li key={step}>{step}</li>
           ))}
         </ol>
       )}
-      {result !== null && RESULT_LINES[result] && (
-        <p className='mt-2'>{RESULT_LINES[result]}</p>
-      )}
-      <Button
-        type='button'
-        variant='secondary'
-        size='sm'
-        className={join('mt-3 gap-1.5', isAsking && 'pointer-events-none')}
-        onClick={() => void ask()}
-      >
-        <Mic className='h-4 w-4' aria-hidden='true' />
-        {isBlocked ? 'Try again' : 'Allow microphone'}
-      </Button>
+      <div className='mt-3 flex flex-wrap items-center gap-x-4 gap-y-2'>
+        {canAsk && (
+          <Button
+            type='button'
+            variant='primary'
+            size='sm'
+            className={join(
+              'gap-1.5',
+              NOTICE_ACTION_CLASSES[tone],
+              isAsking && 'pointer-events-none',
+            )}
+            onClick={() => void ask()}
+          >
+            <Mic className='h-4 w-4' aria-hidden='true' />
+            {isBlocked ? 'Try again' : 'Allow microphone'}
+          </Button>
+        )}
+        {isBlocked && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            aria-expanded={isHowToOpen}
+            className={NOTICE_QUIET_CLASSES.warning}
+            onClick={() => setIsHowToOpen((isOpen) => !isOpen)}
+          >
+            {isHowToOpen ? 'Hide how' : 'How to allow it'}
+          </Button>
+        )}
+      </div>
     </InlineNotice>
   );
 }

@@ -496,12 +496,13 @@ function Composer({
           className='text-muted-foreground flex flex-col items-start gap-0.5 px-1 text-[13px]'
           role='status'
         >
-          <p>{voice.notice}</p>
-          {voice.needsMicrophone && (
+          {voice.needsMicrophone ? (
             <MicrophoneAccess
               onAllowed={voice.clearNotice}
-              className='mt-1.5 w-full'
+              className='w-full'
             />
+          ) : (
+            <p>{voice.notice}</p>
           )}
           {voice.hasNoticeDoor && (
             <Button
@@ -731,11 +732,9 @@ function Composer({
       </div>
       <div className='flex flex-col gap-2 px-1 pb-1 empty:hidden'>
         <DictationLine owner={dictationOwner} />
-        {(recorder.state === 'refused' || recorder.state === 'unsupported') && (
+        {recorder.state === 'unsupported' && (
           <p className='text-muted-foreground text-[13px]' role='status'>
-            {recorder.state === 'unsupported'
-              ? HELM_COPY.recordUnsupported
-              : HELM_COPY.recordNoMicrophone}
+            {HELM_COPY.recordUnsupported}
           </p>
         )}
         {recorder.state === 'refused' && <MicrophoneAccess />}
