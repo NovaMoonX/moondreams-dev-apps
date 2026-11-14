@@ -2,10 +2,38 @@
 import { getWordSimilarity } from './stringUtils.js';
 
 const MIN_SIMILARITY = 0.82;
+const SOUND_MIN_SCORE = 0.8;
+const SOUND_MIN_LEAD = 0.15;
+const SOUND_MAX_SPELLING_GAP = 0.4;
+const SOUND_MAX_SPELLING_GAP_SAME_KEY = 0.75;
+const SOUND_SPAN_WORDS = 3;
+const SOUND_MIN_LETTERS = 3;
+const SOUND_KEY_WEIGHT = 0.8;
 const MIN_TYPO_WORD_LENGTH = 6;
 const ACRONYM = /^[A-Z]{2,4}$/;
 const INNER_CAPITAL = /\p{Ll}\p{Lu}/u;
 const LETTERS = /^\p{L}+$/u;
+
+/** Everyday English words a recognizer already gets right and that are easily another word's sound-alike ("mark" the verb): never swapped for a name and not worth a recognizer hint. */
+export const COMMON_WORDS: ReadonlySet<string> = new Set(
+  `
+    a about above after again all also am an and any are as at back be
+    because been before being between both but by can come could day did do
+    does down each even every few first for from get give go going good got
+    had has have he her here hers him his how i if in into is it its just
+    know let like little look made make many may me more most my new no not
+    now of off on one only or other our out over own people really right
+    said same say see she should so some such take than that the their them
+    then there these they thing think this those through time to too two up
+    us use very want was way we well went were what when where which while
+    who why will with would yes yet you your mark grace rose hope bill art
+    june april august dawn faith joy pat sue ray sandy summer holly ivy lily
+    violet amber ruby pearl heather rich frank dean drew guy jean jay page
+    penny sky star van bell blue cash chase cliff dale daisy dash dusk
+  `
+    .split(/\s+/)
+    .filter(Boolean),
+);
 
 const toSingular = (word: string) => {
   if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
@@ -73,6 +101,80 @@ export const toDisplayCase = (
   return capitalize(joined);
 };
 
+const VOWELS = 'aeiou';
+const isVowel = (letter: string | undefined) =>
+  letter !== undefined && VOWELS.includes(letter);
+
+const readInitial = (word: string) => {
+  const head = word.slice(0, 2);
+  if (['kn', 'gn', 'pn', 'wr', 'ae'].includes(head)) return word.slice(1);
+  if (head === 'wh') return `w${word.slice(2)}`;
+  return word.startsWith('x') ? `s${word.slice(1)}` : word;
+};
+
+/** A compact English phonetic key (Metaphone family) so spellings that sound alike share it: "Shivon" and "Siobhan" are both XFN, "Xander" and "Zander" both SNTR. Letters of other scripts are kept as they are. */
+export const toSoundKey = (word: string) => {
+  const letters = toComparable(word).replace(/[^\p{L}]/gu, '');
+  if (!/^[a-z]+$/.test(letters)) return letters;
+  const text = readInitial(letters);
+  const sound = (at: number): string => {
+    const letter = text[at];
+    const previous = text[at - 1];
+    const next = text[at + 1];
+    const after = text[at + 2];
+    if (letter === previous && letter !== 'c') return '';
+    if (isVowel(letter)) return at === 0 ? 'A' : '';
+    switch (letter) {
+      case 'b':
+        if (next === 'h') return 'F';
+        return previous === 'm' && next === undefined ? '' : 'B';
+      case 'c':
+        if (next === 'i' && after === 'a') return 'X';
+        if (next === 'h') return text[at + 2] === 'r' ? 'K' : 'X';
+        if (next !== undefined && 'iey'.includes(next))
+          return previous === 's' ? '' : 'S';
+        return 'K';
+      case 'd':
+        return next === 'g' && after !== undefined && 'eiy'.includes(after)
+          ? 'J'
+          : 'T';
+      case 'g':
+        if (next === 'h') return isVowel(after) ? 'K' : '';
+        if (next === 'n' && at + 2 >= text.length) return '';
+        return next !== undefined && 'eiy'.includes(next) ? 'J' : 'K';
+      case 'h':
+        return isVowel(next) && !'bcgpst'.includes(previous ?? '') ? 'H' : '';
+      case 'k':
+        return previous === 'c' ? '' : 'K';
+      case 'm':
+        return next === 'h' && at + 2 >= text.length ? 'F' : 'M';
+      case 'p':
+        return next === 'h' ? 'F' : 'P';
+      case 'q':
+        return 'K';
+      case 's':
+        if (next === 'h') return 'X';
+        return next === 'i' && (after === 'o' || after === 'a') ? 'X' : 'S';
+      case 't':
+        if (next === 'h') return '0';
+        if (next === 'i' && (after === 'o' || after === 'a')) return 'X';
+        return next === 'c' && after === 'h' ? '' : 'T';
+      case 'v':
+        return 'F';
+      case 'w':
+      case 'y':
+        return isVowel(next) ? letter.toUpperCase() : '';
+      case 'x':
+        return 'KS';
+      case 'z':
+        return 'S';
+      default:
+        return letter.toUpperCase();
+    }
+  };
+  return Array.from(text, (_, at) => sound(at)).join('');
+};
+
 const sortedWords = (text: string) => text.split(' ').sort().join(' ');
 
 const getSimilarity = (left: string, right: string) => {
@@ -130,6 +232,36 @@ export interface OptionMatcherConfig<T> {
   typos?: boolean | 'loose';
   /** How the label of a custom option is written; `resolve` uses it. */
   casing?: DisplayCaseOptions;
+  /** Turns on `matchSounds`, which reads sound-alikes in heard text. Off by default. */
+  sounds?: boolean;
+  /** Forms an option was misheard as before: `matchSounds` reads them as the option, but `match` never does. */
+  soundsLike?: (option: T) => readonly string[];
+}
+
+export interface SoundSpan {
+  start: number;
+  end: number;
+  heard: string;
+}
+
+/** A span of heard text that sounds like exactly one option, clearly ahead of the next. */
+export interface SoundMatch<T> extends SoundSpan {
+  option: T;
+  /** The name to show in place of the heard words: the option's own, never a form it was misheard as. */
+  name: string;
+  score: number;
+}
+
+/** A span that sounds like two options about equally well, so neither is picked. */
+export interface SoundTie<T> extends SoundSpan {
+  options: [T, T];
+}
+
+interface SoundForm {
+  spelling: string;
+  key: string;
+  /** The option's own name this form stands for, as it is written. */
+  shown: string;
 }
 
 export type OptionResolution<T> =
@@ -154,7 +286,10 @@ export function createOptionMatcher<T = string>(
     reorder = true,
     typos = true,
     casing,
+    sounds = false,
+    soundsLike,
   } = config;
+  const soundsByOption = new WeakMap<object, SoundForm[]>();
   const namesByOption = new WeakMap<object, KnownName[]>();
 
   const analyze = (text: string, isTyped = false): KnownName => {
@@ -253,5 +388,155 @@ export function createOptionMatcher<T = string>(
     return { kind: 'custom', label: toDisplayCase(prepare(value), casing) };
   };
 
-  return { comparable, match, resolve };
+  const toSoundForm = (text: string, shown = text): SoundForm => {
+    const words = toComparable(prepare(text)).split(' ').filter(Boolean);
+    return {
+      spelling: words.join(''),
+      key: words.map(toSoundKey).join(''),
+      shown,
+    };
+  };
+
+  const getSoundForms = (option: T) => {
+    const compute = () =>
+      [
+        ...names(option).map((name) => toSoundForm(name)),
+        ...(soundsLike?.(option) ?? []).map((form) =>
+          toSoundForm(form, names(option)[0] ?? form),
+        ),
+      ].filter(({ spelling }) => spelling !== '');
+    if (typeof option !== 'object' || option === null) return compute();
+    const cached = soundsByOption.get(option);
+    if (cached) return cached;
+    const result = compute();
+    soundsByOption.set(option, result);
+    return result;
+  };
+
+  const scoreSound = (heard: SoundForm, known: SoundForm) => {
+    const keyGap = 1 - getWordSimilarity(heard.key, known.key);
+    const keyEdits = Math.round(
+      keyGap * Math.max(heard.key.length, known.key.length),
+    );
+    const spellingGap = 1 - getWordSimilarity(heard.spelling, known.spelling);
+    const isSameKey = keyEdits === 0;
+    const maxGap = isSameKey
+      ? SOUND_MAX_SPELLING_GAP_SAME_KEY
+      : SOUND_MAX_SPELLING_GAP;
+    if (keyEdits > 1 || spellingGap > maxGap) return 0;
+    return (
+      SOUND_KEY_WEIGHT * (1 - keyGap) +
+      (1 - SOUND_KEY_WEIGHT) * (1 - spellingGap)
+    );
+  };
+
+  const readSpan = (
+    heard: SoundForm,
+    known: { option: T; forms: SoundForm[]; names: KnownName[] }[],
+  ) => {
+    const scored = known
+      .map((entry) => {
+        const forms = entry.forms
+          .map((form) => ({
+            shown: form.shown,
+            score: scoreSound(heard, form),
+          }))
+          .sort((left, right) => right.score - left.score);
+        return {
+          option: entry.option,
+          name: forms[0]?.shown ?? '',
+          score: forms[0]?.score ?? 0,
+        };
+      })
+      .filter(({ score }) => score >= SOUND_MIN_SCORE)
+      .sort((left, right) => right.score - left.score);
+    if (scored.length === 0) return null;
+    if (
+      scored.length === 1 ||
+      scored[0].score - scored[1].score >= SOUND_MIN_LEAD
+    ) {
+      return { kind: 'match' as const, ...scored[0] };
+    }
+    return {
+      kind: 'tie' as const,
+      options: [scored[0].option, scored[1].option] as [T, T],
+    };
+  };
+
+  /** Reads a span of one to three words of heard text that sounds like one known option (or two near-equal ones, as a tie), never a word that already is a known name or an everyday word. */
+  const matchSounds = (
+    text: string,
+    options: readonly T[],
+  ): { matches: SoundMatch<T>[]; ties: SoundTie<T>[] } => {
+    if (!sounds) return { matches: [], ties: [] };
+    const words = Array.from(
+      text.matchAll(/\p{L}[\p{L}\p{M}'’]*/gu),
+      (hit) => ({
+        text: hit[0],
+        start: hit.index,
+        end: hit.index + hit[0].length,
+        comparable: toComparable(hit[0]),
+      }),
+    );
+    const known = options.map((option) => ({
+      option,
+      forms: getSoundForms(option),
+      names: getKnownNames(option),
+    }));
+    const isKnown = (comparable: string) =>
+      known.some((entry) =>
+        entry.names.some((name) => name.full === comparable),
+      );
+    const isEdgeCommon = (span: typeof words) =>
+      COMMON_WORDS.has(span[0].comparable) ||
+      COMMON_WORDS.has(span[span.length - 1].comparable);
+    const readAt = (at: number) =>
+      [SOUND_SPAN_WORDS, 2, 1].flatMap((length) => {
+        const span = words.slice(at, at + length);
+        if (span.length !== length || isEdgeCommon(span)) return [];
+        const comparable = span.map((word) => word.comparable).join(' ');
+        const heard = toSoundForm(comparable);
+        if (heard.spelling.length < SOUND_MIN_LETTERS || isKnown(comparable)) {
+          return [];
+        }
+        const read = readSpan(heard, known);
+        if (read === null) return [];
+        const base = {
+          start: span[0].start,
+          end: span[span.length - 1].end,
+          heard: text.slice(span[0].start, span[span.length - 1].end),
+        };
+        return [
+          read.kind === 'match'
+            ? {
+                match: {
+                  ...base,
+                  option: read.option,
+                  name: read.name,
+                  score: read.score,
+                },
+              }
+            : { tie: { ...base, options: read.options } },
+        ];
+      })[0] ?? null;
+
+    const { matches, ties } = words.reduce(
+      (found, word, at) => {
+        if (word.start < found.until) return found;
+        const read = readAt(at);
+        if (read === null) return found;
+        const span = read.match ?? read.tie;
+        return {
+          until: span.end,
+          matches: read.match ? [...found.matches, read.match] : found.matches,
+          ties: read.tie ? [...found.ties, read.tie] : found.ties,
+        };
+      },
+      { until: 0, matches: [] as SoundMatch<T>[], ties: [] as SoundTie<T>[] },
+    );
+
+    return { matches, ties };
+  };
+
+  return { comparable, match, resolve, matchSounds };
 }
