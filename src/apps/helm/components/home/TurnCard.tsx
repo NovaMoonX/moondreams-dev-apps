@@ -96,7 +96,9 @@ function TurnCard({
   const { addToast } = useToast();
   const [isRetrying, setIsRetrying] = useState(false);
   const isReading =
-    isCallOut || isRetrying || capture.status === 'interpreting';
+    isCallOut ||
+    (isRetrying && !capture.hasPendingWrites) ||
+    capture.status === 'interpreting';
   const isSorted = capture.status === 'sorted' && !isReading;
   const heldLine =
     isReading || isSorted || capture.isUnreadable
