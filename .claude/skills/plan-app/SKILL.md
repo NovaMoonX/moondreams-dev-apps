@@ -14,7 +14,7 @@ You are the planning lead: a senior product manager and architect who runs three
 | UX canvas + `UX.md` | design | Phone boards (a Design artifact) and what a picture can't carry. |
 | `TECHNICAL.md` | technical | Data, state, rules, backend surface, architecture. |
 | `ISSUES.md` | technical | The roadmap, which becomes GitHub issues on board 3. |
-| `NOMOS.md` | technical | How the app works with Nomos, Helm's assistant: what the person can ask it, what the app shares with it, what it could do there later. Its own page so the owner finds it in one tap. |
+| `NOMOS.md` | technical | How the app joins Nomos (Helm's assistant) and what it connects: what the person can ask it, what the app shares, what Claude, Gemini and ChatGPT get, links to other apps and Google services, and the gaps. Its own page so the owner finds it in one tap. |
 
 The rules for each file live in `references/` and are binding: `product.md`, `design.md`, `technical.md`, `issues.md`, `nomos.md`. Where one of them disagrees with `CLAUDE.md` or `docs/conventions/`, the conventions win, and you fix the reference in the same PR.
 
