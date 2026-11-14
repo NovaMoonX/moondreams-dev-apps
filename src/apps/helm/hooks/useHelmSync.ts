@@ -53,6 +53,10 @@ import {
   setMediaFailed,
   setWho,
   setWhoFailed,
+  setHabits,
+  setHabitsFailed,
+  setHabitDays,
+  setHabitDaysFailed,
   setOpenTasks,
   setOpenTasksFailed,
   setPlanDays,
@@ -86,6 +90,11 @@ import { startProjectsListener } from '@apps/helm/store/listeners/projectListene
 import { startProceduresListener } from '@apps/helm/store/listeners/procedureListener';
 import { startOpenRunsListener } from '@apps/helm/store/listeners/runListener';
 import { startTopicsListener } from '@apps/helm/store/listeners/topicListener';
+import { startHabitsListener } from '@apps/helm/store/listeners/habitListener';
+import {
+  getHabitDaysWindow,
+  startHabitDaysListener,
+} from '@apps/helm/store/listeners/habitDayListener';
 import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
 import { startPlanDaysListener } from '@apps/helm/store/listeners/planDayListener';
@@ -356,6 +365,25 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm people listener failed', error);
               dispatch(setWhoFailed());
+            },
+          ),
+          startHabitsListener(
+            uid,
+            read,
+            (habits) => dispatch(setHabits(habits)),
+            (error) => {
+              console.error('Helm habits listener failed', error);
+              dispatch(setHabitsFailed());
+            },
+          ),
+          startHabitDaysListener(
+            uid,
+            read,
+            getHabitDaysWindow(Date.now()),
+            (days) => dispatch(setHabitDays(days)),
+            (error) => {
+              console.error('Helm habit days listener failed', error);
+              dispatch(setHabitDaysFailed());
             },
           ),
           startKeyDateIndexListener(

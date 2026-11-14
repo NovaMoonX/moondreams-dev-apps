@@ -106,3 +106,5 @@ jobs:
       - run: npm run check:helm-trust
       - run: npm run check:helm-where
       - run: npm run check:helm-whereabouts
+      - run: npm run check:helm-habits
+      - run: npm run check:helm-checkin-match

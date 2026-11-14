@@ -127,6 +127,7 @@ interface Parts {
   projects?: unknown[];
   topics?: unknown[];
   procedures?: unknown[];
+  habits?: unknown[];
   tasks?: unknown[];
   captures?: unknown[];
 }
@@ -138,12 +139,30 @@ const toState = (parts: Parts): NameHintState =>
     projects: loaded(parts.projects ?? []),
     topics: loaded(parts.topics ?? []),
     procedures: loaded(parts.procedures ?? []),
+    habits: loaded(parts.habits ?? []),
     openTasks: loaded(parts.tasks ?? []),
     projectTasks: loaded([]),
     recentCaptures: captures(parts.captures ?? []),
     unseenCaptures: captures([]),
     waitingCaptures: captures([]),
   }) as unknown as NameHintState;
+
+const habit = (
+  id: string,
+  name: string,
+  extra: Record<string, unknown> = {},
+) => ({
+  ...base,
+  ...ordinary,
+  id,
+  name,
+  status: 'active',
+  isCare: false,
+  forWhoId: null,
+  projectId: null,
+  medicine: null,
+  ...extra,
+});
 
 const screenOf = (taskId: string | null): ScreenContext | null =>
   taskId === null
@@ -354,6 +373,46 @@ test('the shared list drops everyday words, dates, numbers, units and addresses,
     ['Anya', 'Bram', 'Mark', 'zed'],
   );
   assert.equal(countHintTokens(['abcdefg', 'ab']), 1 + 3 + 1 + 1);
+});
+
+test('a habit name joins the hints; a care habit, a medicine and its dose never do', () => {
+  const state = toState({
+    who: [person('mom', 'Mom')],
+    habits: [
+      habit('guitar', 'Guitar practice'),
+      habit('stretch', 'Evening stretch', { status: 'paused' }),
+      habit('care', 'Metoprolol round', {
+        isCare: true,
+        privateMark: 'health',
+        medicine: { name: 'Metoprolol', dose: '25 mg' },
+      }),
+      habit('mom', 'Mom walk', { forWhoId: 'mom', isCare: true }),
+      habit('vit', 'Vitamin D', {
+        medicine: { name: 'Cholecalciferol', dose: null },
+      }),
+      habit('pills', 'Pills'),
+      habit('under', 'Hidden Garden', { isUnreadable: true, name: '' }),
+      habit('mine', 'Garden Hour', { projectId: 'secret' }),
+    ],
+    projects: [project('secret', 'Secret Garden', marked)],
+  });
+  const hints = readHelmNameHints(state, null, UID, NOW);
+  assert.ok(hints.includes('Guitar practice'), 'a habit name is a hint');
+  assert.ok(hints.includes('Evening stretch'), 'a paused one too');
+  [
+    'Metoprolol',
+    'Mom walk',
+    '25 mg',
+    'Cholecalciferol',
+    'Pills',
+    'Garden',
+  ].forEach((word) =>
+    assert.equal(
+      hints.some((hint) => hint.toLowerCase().includes(word.toLowerCase())),
+      false,
+      `${word} stays out`,
+    ),
+  );
 });
 
 test('the same slices and page give the same list without rebuilding it', () => {

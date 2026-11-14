@@ -105,6 +105,8 @@
     "check:helm-contact-import": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmContactImport.ts",
     "check:helm-match-entities": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmMatchEntities.ts",
     "check:helm-whereabouts": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhereabouts.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhereabouts.ts",
+    "check:helm-habits": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts",
+    "check:helm-checkin-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmCheckinMatch.ts",
     "check:helm-where": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhere.ts",
     "check:helm-close": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmClose.ts",
     "check:helm-questions": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmQuestions.ts",

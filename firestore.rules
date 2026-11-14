@@ -254,10 +254,10 @@ service cloud.firestore {
 
     // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out.
     // `facts` are what an answer noted, `planDays` one plan per day, `keyDates` and `meta` (their sealed index) move in one transaction,
-    // and `notes` and `topics` are the person's Knowledge, sealed.
+    // and `notes` and `topics` are the person's Knowledge, sealed. `habits`, `habitDays` and `patterns` are the person's habits, their ticks by day and what Helm noticed.
     match /apps/helm/users/{uid}/{collection}/{docId} {
       allow read, create, update, delete: if isHelmOwner(uid)
-        && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places', 'keyDates', 'meta', 'projects', 'notes', 'topics'];
+        && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places', 'keyDates', 'meta', 'projects', 'notes', 'topics', 'habits', 'habitDays', 'patterns'];
     }
 
     // A topic's versions are history: the owner reads, adds and trims them, and nobody rewrites one.

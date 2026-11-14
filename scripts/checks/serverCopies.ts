@@ -184,6 +184,28 @@ const COPIES: Copy[] = [
     dest: 'functions/src/vendor/yearlyDateUtils.ts',
     importRewrites: {},
   },
+  {
+    src: 'src/utils/cadenceUtils.ts',
+    dest: 'functions/src/vendor/cadenceUtils.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/habitDay.ts',
+    dest: 'functions/src/apps/helm/nomos/habitDay.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+      '@apps/helm/engine/whereabouts': './whereabouts.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/engine/checkInMatch.ts',
+    dest: 'functions/src/apps/helm/nomos/checkInMatch.ts',
+    importRewrites: {
+      '@/utils/optionMatchUtils': '../../../vendor/optionMatchUtils.js',
+      '@apps/helm/engine/habitDay': './habitDay.js',
+    },
+  },
 ];
 
 interface Generated {

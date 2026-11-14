@@ -1,4 +1,6 @@
 import type { City } from '@/lib/cities/types';
+import type { Cadence, Weekday } from '@/utils/cadenceUtils';
+import type { DayPart } from '@apps/helm/engine/habitDay';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
@@ -8,6 +10,7 @@ import type { PrivacyClass, PrivateMark } from '@apps/helm/utils/privacy';
 import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
 
 export type { SharedKind };
+export type { Cadence, Weekday, DayPart };
 
 /** The views that have a screen so far; each later issue adds its own. */
 export type HelmView =
@@ -1349,4 +1352,282 @@ export interface PlanDay {
   reasons: Record<string, string>;
   calendarSnapshot: PlanCalendarEntry[];
   isUnreadable: boolean;
+}
+
+export type HabitStatus = 'active' | 'paused' | 'ended' | 'retired';
+export type HabitStage = 'building' | 'holding' | 'formed' | 'buildingAgain';
+export type ReminderPace = 'adaptive' | 'start' | 'late';
+export type HabitEventKind =
+  | 'started'
+  | 'reminderOn'
+  | 'reminderOff'
+  | 'reminderPace'
+  | 'stage'
+  | 'paused'
+  | 'resumed'
+  | 'retired'
+  | 'broughtBack'
+  | 'ended'
+  | 'restarted'
+  | 'nameShown'
+  | 'nameHidden';
+
+/** Issue 110 owns reminders; a habit made now writes null. */
+export interface HabitReminder {
+  isOn: boolean;
+  pace: ReminderPace;
+  anyTimeAt: string | null;
+  allowQuietHours: boolean;
+  turnedOnAt: number;
+  easedAt: number | null;
+}
+
+/** A window's times are a floating "HH:mm" in the profile's zone; `{}` means any time of the day. */
+export interface HabitWindowState {
+  start: string;
+  end: string;
+  part: DayPart | null;
+  order: number;
+  editedAt: number | null;
+}
+
+export interface HabitHistoryEvent {
+  kind: HabitEventKind;
+  at: number;
+  by: 'person' | 'nomos';
+  pace: ReminderPace | null;
+  stage: HabitStage | null;
+}
+
+/** What a person said matters, in their own words; sealed inside a habit's payload. */
+export interface HabitImportance {
+  rank: number;
+  words: string | null;
+  saidAt: number;
+  until: number | null;
+  captureId: string | null;
+}
+
+/** `apps/helm/users/{uid}/habits/{habitId}`: something kept up rather than finished; a missed time simply passes. */
+export interface Habit {
+  status: HabitStatus;
+  cadence: Cadence;
+  windowState: Record<string, HabitWindowState>;
+  timesPerDay: number | null;
+  projectId: string | null;
+  forWhoId: string | null;
+  isCare: boolean;
+  /** Date-only, UTC midnight. */
+  startsOn: number;
+  endsOn: number | null;
+  pausedUntil: number | null;
+  reminder: HabitReminder | null;
+  lockScreenName: string | null;
+  stage: HabitStage | null;
+  stageAt: number;
+  stageWeek: string | null;
+  rejudgeFrom: string | null;
+  careAskedAt: number | null;
+  untoldSince: number | null;
+  formedAt: number | null;
+  formedSummary: { doneCount: number; dueCount: number; since: number } | null;
+  history: HabitHistoryEvent[];
+  createdBy: 'person' | 'nomos';
+  sourceCaptureId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  pausedAt: number | null;
+  endedAt: number | null;
+  retiredAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
+  sealed: Sealed;
+}
+
+export interface HabitSealed {
+  name: string;
+  emoji: string | null;
+  notes: string | null;
+  medicine: { name: string; dose: string | null } | null;
+  windows: Record<string, { label: string }>;
+  importance: HabitImportance | null;
+  /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
+  privateMark: PrivateMark | null;
+  /** The person said it needn't be private, so code never marks it again. */
+  isPrivacyCleared: boolean | null;
+}
+
+/** A habit after its words are opened; one that would not open keeps `isUnreadable` and an empty name. */
+export interface OpenHabit extends Omit<Habit, 'sealed'>, HabitSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+export interface HabitCheck {
+  status: 'done' | 'skipped';
+  /** The instant it happened, not when it was typed. */
+  at: number;
+  by: 'person' | 'nomos';
+  executionId: string | null;
+}
+
+export interface HabitDayEntry {
+  /** windowId, or 'day' for a habit with no windows. */
+  checks: Record<string, HabitCheck>;
+  count: number;
+  lastCountAt: number | null;
+  reminded: Record<string, number>;
+  followUpAt: number | null;
+  followUpState: 'asked' | 'answered' | 'skipped' | null;
+  noteKeys: string[];
+}
+
+/** `habitDays/{dayKey}`: one per habit day, every habit in it. */
+export interface HabitDay {
+  /** Date-only, UTC midnight of the day key. */
+  date: number;
+  isInUse: boolean;
+  entries: Record<string, HabitDayEntry>;
+  sealed: Sealed | null;
+}
+
+export interface HabitDaySealed {
+  /** "habitId/windowId" to the check-in note, word for word. */
+  notes: Record<string, { text: string; at: number; captureId: string | null }>;
+}
+
+/** A day after its notes are opened; `id` is the day key. */
+export interface OpenHabitDay extends Omit<HabitDay, 'sealed'> {
+  id: string;
+  notes: HabitDaySealed['notes'];
+  isUnreadable: boolean;
+}
+
+export type PatternKind =
+  | 'windowMissed'
+  | 'doneOutsideWindow'
+  | 'plannedSlotMissed'
+  | 'offerDeclined'
+  | 'habitFormed'
+  | 'reminderEase'
+  | 'saidStruggling'
+  | 'saidWorking'
+  | 'saidLink'
+  | 'tooManyGoals'
+  | 'deadlineWontFit'
+  | 'starved'
+  | 'busyStretch';
+
+export type PatternBucket =
+  | { kind: 'weekdayPart'; weekday: Weekday; part: DayPart }
+  | { kind: 'shift'; relation: 'beforeShift' | 'afterShift'; part: DayPart }
+  | { kind: 'stretch'; from: number; to: number }
+  | { kind: 'none' };
+
+export type PatternState =
+  'candidate' | 'suggested' | 'accepted' | 'declined' | 'undone' | 'retired';
+
+export type PatternHandling = 'actAndTell' | 'suggest' | 'askOnly';
+export type PatternMoment = 'daily' | 'onStart';
+
+export type PatternEffect =
+  | { kind: 'plannerAvoid'; bucket: PatternBucket }
+  | {
+      kind: 'moveWindow';
+      habitId: string;
+      windowId: string;
+      start: string;
+      end: string;
+    }
+  | { kind: 'retireHabit'; habitId: string }
+  | { kind: 'easeReminders'; habitId: string }
+  | {
+      kind: 'pause';
+      collection: 'projects' | 'habits';
+      id: string;
+      until: number | null;
+    }
+  | { kind: 'lowerCadence'; habitId: string; cadence: Cadence }
+  | {
+      kind: 'talkItThrough';
+      start: 'differentTime' | 'smaller' | 'somethingNew';
+    }
+  | { kind: 'keepTime'; habitId: string; windowId: string }
+  | { kind: 'raiseCadence'; habitId: string; cadence: Cadence }
+  | { kind: 'none' };
+
+export type PatternEvidence =
+  | {
+      kind: 'occurrences';
+      from: number;
+      to: number;
+      matched: number;
+      total: number;
+      dayKeys: string[];
+    }
+  | {
+      kind: 'load';
+      measured: number;
+      limit: number;
+      unit: 'goals' | 'minutes' | 'days';
+      asOf: number;
+      refs: string[];
+    }
+  | {
+      kind: 'said';
+      from: number;
+      to: number;
+      matched: number;
+      dayKeys: string[];
+      observationIds: string[];
+    };
+
+/** `apps/helm/users/{uid}/patterns/{patternId}`, id `pt_` + the first 24 hex of sha256(signature): what Helm has noticed, and what the person said about it. */
+export interface Pattern {
+  kind: PatternKind;
+  subject: {
+    collection:
+      | 'habits'
+      | 'tasks'
+      | 'projects'
+      | 'procedures'
+      | 'topics'
+      | 'who'
+      | 'planner';
+    id: string | null;
+    windowId: string | null;
+    otherId: string | null;
+  };
+  bucket: PatternBucket;
+  signature: string;
+  moment: PatternMoment;
+  state: PatternState;
+  handling: PatternHandling;
+  acceptedBy: 'person' | 'auto' | null;
+  effect: PatternEffect;
+  evidence: PatternEvidence;
+  reasons: { kind: PatternKind; evidence: PatternEvidence }[];
+  evidenceSince: number;
+  sourceKeys: string[];
+  declineCount: number;
+  nextEligibleOn: number | null;
+  offReason: 'thirdNo' | 'askedToStop' | null;
+  history: {
+    to: PatternState | 'off' | 'reopened';
+    at: number;
+    by: 'person' | 'nomos';
+  }[];
+  seenAt: number | null;
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  stateAt: number;
+  sealed: Sealed;
+}
+
+export interface PatternSealed {
+  statement: string;
+  evidenceLine: string;
+  reasonLine: string | null;
 }

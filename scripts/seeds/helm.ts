@@ -52,6 +52,10 @@ import type {
   KeyDateSealed,
   Execution,
   ExecutionSealed,
+  Habit,
+  HabitDay,
+  HabitDayEntry,
+  HabitSealed,
   CaptureAnswer,
   Fact,
   FactSealed,
@@ -1755,6 +1759,199 @@ async function buildProjects(input: {
     }),
   ]);
   return { projects, tasks };
+}
+
+/** A habit as stored: every key written, its words sealed. */
+export const toHabit = async (
+  fields: Partial<Habit> & Pick<Habit, 'cadence' | 'createdAt' | 'startsOn'>,
+  words: Partial<HabitSealed> & Pick<HabitSealed, 'name'>,
+  encryption: HelmEncryption,
+): Promise<Habit> => ({
+  status: 'active',
+  windowState: {},
+  timesPerDay: null,
+  projectId: null,
+  forWhoId: null,
+  isCare: false,
+  endsOn: null,
+  pausedUntil: null,
+  reminder: null,
+  lockScreenName: null,
+  stage: fields.forWhoId ? null : 'building',
+  stageAt: fields.createdAt,
+  stageWeek: null,
+  rejudgeFrom: null,
+  careAskedAt: null,
+  untoldSince: null,
+  formedAt: null,
+  formedSummary: null,
+  history: [
+    {
+      kind: 'started',
+      at: fields.createdAt,
+      by: 'person',
+      pace: null,
+      stage: null,
+    },
+  ],
+  createdBy: 'person',
+  sourceCaptureId: null,
+  executionId: null,
+  lastEditedAt: null,
+  pausedAt: null,
+  endedAt: null,
+  retiredAt: null,
+  privacy: 'ordinary',
+  ...fields,
+  sealed: await sealJson<HabitSealed>(
+    {
+      emoji: null,
+      notes: null,
+      medicine: null,
+      windows: {},
+      importance: null,
+      privateMark: null,
+      isPrivacyCleared: false,
+      ...words,
+    },
+    encryption,
+  ),
+});
+
+export const toHabitDay = (
+  dayKey: string,
+  entries: Record<string, Partial<HabitDayEntry>>,
+): HabitDay => ({
+  date: Date.parse(`${dayKey}T00:00:00Z`),
+  isInUse: true,
+  entries: Object.fromEntries(
+    Object.entries(entries).map(([habitId, entry]) => [
+      habitId,
+      {
+        checks: {},
+        count: 0,
+        lastCountAt: null,
+        reminded: {},
+        followUpAt: null,
+        followUpState: null,
+        noteKeys: [],
+        ...entry,
+      },
+    ]),
+  ),
+  sealed: null,
+});
+
+const HABIT_ZONE = 'America/Los_Angeles';
+
+/** Alex's habits for the week that holds today: 💊 Pills (morning and evening, health: 10 of 12 Monday to Saturday when today is a Sunday, the morning ticked today, so "11 of 13"), 💧 Water (6 a day, 4 of 6 days), 🎸 Guitar (3 times a week) and Mom's metoprolol (a care habit, private). */
+async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
+  const { now, encryption } = input;
+  const today = getSeedToday(now);
+  const todayKey = new Date(today).toISOString().slice(0, 10);
+  const mondayAt = today - ((new Date(today).getUTCDay() + 6) % 7) * DAY_MS;
+  const keys = Array.from(
+    { length: Math.round((today - mondayAt) / DAY_MS) + 1 },
+    (_, at) => new Date(mondayAt + at * DAY_MS).toISOString().slice(0, 10),
+  );
+  const startsOn = today - 37 * DAY_MS;
+  const createdAt = now - 37 * DAY_MS;
+  const morning = { start: '08:00', end: '10:00', order: 0, part: 'morning' as const, editedAt: null };
+  const evening = { start: '20:00', end: '22:00', order: 1, part: 'evening' as const, editedAt: null };
+  const habits = await Promise.all([
+    toHabit(
+      {
+        cadence: { kind: 'everyDay' },
+        windowState: { m: morning, e: evening },
+        isCare: true,
+        privacy: 'private',
+        startsOn,
+        createdAt,
+      },
+      {
+        name: 'Pills',
+        emoji: '💊',
+        windows: { m: { label: 'Morning' }, e: { label: 'Evening' } },
+        privateMark: 'health',
+      },
+      encryption,
+    ).then((habit) => ({ id: 'seed-habit-pills', habit })),
+    toHabit(
+      {
+        cadence: { kind: 'everyDay' },
+        timesPerDay: 6,
+        startsOn,
+        createdAt,
+      },
+      { name: 'Water', emoji: '💧' },
+      encryption,
+    ).then((habit) => ({ id: 'seed-habit-water', habit })),
+    toHabit(
+      {
+        cadence: { kind: 'timesPerWeek', count: 3 },
+        windowState: {
+          e: { start: '19:00', end: '22:00', order: 0, part: 'evening', editedAt: null },
+        },
+        startsOn,
+        createdAt,
+      },
+      {
+        name: 'Practice guitar',
+        emoji: '🎸',
+        windows: { e: { label: 'Evening' } },
+      },
+      encryption,
+    ).then((habit) => ({ id: 'seed-habit-guitar', habit })),
+    toHabit(
+      {
+        cadence: { kind: 'everyDay' },
+        windowState: { m: morning },
+        forWhoId: 'seed-who-mom',
+        isCare: true,
+        privacy: 'private',
+        startsOn,
+        createdAt,
+      },
+      {
+        name: 'Metoprolol',
+        emoji: '💊',
+        medicine: { name: 'Metoprolol', dose: '25 mg' },
+        windows: { m: { label: 'Morning' } },
+        privateMark: 'care',
+      },
+      encryption,
+    ).then((habit) => ({ id: 'seed-habit-mom-metoprolol', habit })),
+  ]);
+  const check = (key: string, time: string) => ({
+    status: 'done' as const,
+    at: zonedDateTimeToEpoch(key, time, HABIT_ZONE),
+    by: 'person' as const,
+    executionId: null,
+  });
+  const days = keys.map((key, at) => {
+    const isToday = key === todayKey;
+    const waterCount = isToday ? 3 : [6, 6, 4, 6, 6, 5][at % 6];
+    return {
+      id: key,
+      day: toHabitDay(key, {
+        'seed-habit-pills': {
+          checks: {
+            m: check(key, '08:45'),
+            ...(isToday || at === 1 || at === 3 ? {} : { e: check(key, '20:30') }),
+          },
+        },
+        'seed-habit-water': {
+          count: waterCount,
+          lastCountAt: zonedDateTimeToEpoch(key, '12:00', HABIT_ZONE),
+        },
+        ...(!isToday && [0, 3, 5].includes(at)
+          ? { 'seed-habit-guitar': { checks: { e: check(key, '19:30') } } }
+          : {}),
+        'seed-habit-mom-metoprolol': { checks: { m: check(key, '08:05') } },
+      }),
+    };
+  });
+  return { habits, days };
 }
 
 const TYRE_TURN_ID = 'seed-turn-tyre-size';
@@ -4008,6 +4205,21 @@ async function buildPeople(input: {
       ),
     },
     {
+      id: 'seed-who-mom',
+      who: toWho(
+        {
+          kind: 'person',
+          tier: 'close',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 2 * DAY_MS,
+        },
+        now - 40 * DAY_MS,
+        await seal(wordsOf('Mom', { relation: 'mother', aliases: ['Mother'], kin: { kind: 'mother', order: null } })),
+      ),
+    },
+    {
       id: 'seed-who-miso',
       who: toWho(
         {
@@ -5616,6 +5828,17 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           batch.set(person.collection('tasks').doc(entry.id), entry.task),
         );
       }
+      const habitWorld = people
+        ? await buildHabits({ now: context.now, encryption })
+        : null;
+      if (habitWorld) {
+        habitWorld.habits.forEach((entry) =>
+          batch.set(person.collection('habits').doc(entry.id), entry.habit),
+        );
+        habitWorld.days.forEach((entry) =>
+          batch.set(person.collection('habitDays').doc(entry.id), entry.day),
+        );
+      }
       const knowledge = people
         ? await buildKnowledge({
             uid: user.uid,
@@ -5718,6 +5941,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           1 +
           7 +
           (projects ? projects.projects.length + projects.tasks.length : 0) +
+          (habitWorld ? habitWorld.habits.length + habitWorld.days.length : 0) +
           (knowledge
             ? knowledge.topics.length +
               knowledge.notes.length +

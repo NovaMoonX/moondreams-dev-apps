@@ -9,6 +9,8 @@ import type {
   OpenCapture,
   OpenExecution,
   OpenFact,
+  OpenHabit,
+  OpenHabitDay,
   OpenMedia,
   OpenNote,
   OpenPlace,
@@ -48,6 +50,13 @@ export interface PlanDaySet {
   isFailed: boolean;
 }
 
+export interface HabitDaySet {
+  /** Keyed by habit day ("YYYY-MM-DD" in the profile's zone, rolling over at 03:00). */
+  byId: Record<string, OpenHabitDay>;
+  isLoaded: boolean;
+  isFailed: boolean;
+}
+
 /** Whether the data key is here: `offline` when it couldn't be asked for, `failed` when the server refused it. */
 export type KeyStatus = 'loading' | 'ready' | 'offline' | 'failed';
 
@@ -80,6 +89,10 @@ export interface HelmState {
   facts: LoadedSet<OpenFact>;
   /** The people, pets and organizations the person knows. */
   who: LoadedSet<OpenWho>;
+  /** The things the person keeps up, active or not. */
+  habits: LoadedSet<OpenHabit>;
+  /** Each habit's ticks and tallies for the days from two weeks back. */
+  habitDays: HabitDaySet;
   /** The sealed index of the dates that come back each year, opened. */
   keyDateIndex: KeyDateIndexSet;
   /** The places the person has named. */
@@ -127,6 +140,12 @@ const emptyPlanDays: PlanDaySet = {
   isFailed: false,
 };
 
+const emptyHabitDays: HabitDaySet = {
+  byId: {},
+  isLoaded: false,
+  isFailed: false,
+};
+
 const emptyKeyDateIndex: KeyDateIndexSet = {
   byWho: {},
   entryCount: 0,
@@ -151,6 +170,8 @@ const initialState: HelmState = {
   planDays: emptyPlanDays,
   facts: emptyLoadedSet,
   who: emptyLoadedSet,
+  habits: emptyLoadedSet,
+  habitDays: emptyHabitDays,
   keyDateIndex: emptyKeyDateIndex,
   places: emptyLoadedSet,
   projects: emptyLoadedSet,
@@ -278,6 +299,24 @@ const helmSlice = createSlice({
     },
     setWhoFailed: (state) => {
       state.who.isFailed = true;
+    },
+    setHabits: (state, action: PayloadAction<OpenHabit[]>) => {
+      state.habits = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setHabitsFailed: (state) => {
+      state.habits.isFailed = true;
+    },
+    setHabitDays: (state, action: PayloadAction<OpenHabitDay[]>) => {
+      state.habitDays = {
+        byId: Object.fromEntries(
+          action.payload.map((entry) => [entry.id, entry]),
+        ),
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setHabitDaysFailed: (state) => {
+      state.habitDays.isFailed = true;
     },
     setKeyDateIndex: (state, action: PayloadAction<OpenKeyDateIndex>) => {
       state.keyDateIndex = {
@@ -459,6 +498,10 @@ export const {
   setFactsFailed,
   setWho,
   setWhoFailed,
+  setHabits,
+  setHabitsFailed,
+  setHabitDays,
+  setHabitDaysFailed,
   setKeyDateIndex,
   setKeyDateIndexFailed,
   setPlaces,

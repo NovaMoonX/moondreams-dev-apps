@@ -228,6 +228,10 @@ export const TOPIC_MAX = 40;
 /** The most who and places the app keeps listening to. */
 export const WHO_LIMIT = 2_500;
 export const PLACES_LIMIT = 500;
+/** 30 active or paused habits plus the 200 ended or retired ones kept. */
+export const HABITS_LIMIT = 230;
+/** Habit days read for Today and the week: from two weeks back to tomorrow. */
+export const HABIT_DAYS_BEHIND = 14;
 export const PROJECTS_LIMIT = 500;
 export const NOTES_LIMIT = 1_000;
 export const TOPICS_LIMIT = 100;

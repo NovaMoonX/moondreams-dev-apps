@@ -61,7 +61,14 @@ import {
   toGrantId,
   type ConnectionGrant,
 } from '../../src/lib/connections/contract.ts';
-import { buildSeedPhoto, toWho, uploadSealedSeed, wordsOf } from './helm.ts';
+import {
+  buildSeedPhoto,
+  toHabit,
+  toHabitDay,
+  toWho,
+  uploadSealedSeed,
+  wordsOf,
+} from './helm.ts';
 import { readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
@@ -128,6 +135,8 @@ const TURN_COUNT = 400;
 const SESSION_COUNT = 60;
 const MEDIA_COUNT = 200;
 const PROJECT_COUNT = 40;
+const HABIT_COUNT = 30;
+const HABIT_DAY_COUNT = 28;
 const OWNER_TIME_ZONE = 'America/New_York';
 
 const FIRST_NAMES = [
@@ -917,6 +926,106 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   projects.forEach((entry) =>
     put('projects', `projects/${entry.id}`, entry.project),
   );
+
+  // Thirty habits (a tenth of them care) and four weeks of ticks and tallies.
+  const habitIds = range(HABIT_COUNT).map(
+    (index) => `scale-habit-${pad(index, 3)}`,
+  );
+  const habitSpecs = habitIds.map((id, index) => {
+    const isCare = index % 10 === 0;
+    const kind = index % 4;
+    return {
+      id,
+      index,
+      isCare,
+      kind,
+      windows:
+        kind === 0
+          ? { m: ['08:00', '10:00'], e: ['20:00', '22:00'] }
+          : kind === 2
+            ? { e: ['19:00', '22:00'] }
+            : {},
+    };
+  });
+  const habits = await Promise.all(
+    habitSpecs.map(async ({ id, index, isCare, kind, windows }) => ({
+      id,
+      habit: await toHabit(
+        {
+          cadence:
+            kind === 2
+              ? { kind: 'timesPerWeek', count: 3 }
+              : kind === 3 && index % 8 === 3
+                ? { kind: 'onWeekdays', weekdays: [1, 3, 5] }
+                : { kind: 'everyDay' },
+          windowState: Object.fromEntries(
+            Object.entries(windows).map(([windowId, [start, end]], order) => [
+              windowId,
+              { start, end, part: null, order, editedAt: null },
+            ]),
+          ),
+          timesPerDay: kind === 1 ? 6 : null,
+          isCare,
+          privacy: isCare ? 'private' : 'ordinary',
+          startsOn: dayStart(now - 60 * DAY_MS),
+          createdAt: now - 60 * DAY_MS,
+        },
+        {
+          name: `Habit ${index + 1}`,
+          emoji: null,
+          windows: Object.fromEntries(
+            Object.keys(windows).map((windowId) => [
+              windowId,
+              { label: windowId === 'm' ? 'Morning' : 'Evening' },
+            ]),
+          ),
+          privateMark: isCare ? 'health' : null,
+        },
+        encryption,
+      ),
+    })),
+  );
+  habits.forEach((entry) => put('habits', `habits/${entry.id}`, entry.habit));
+  range(HABIT_DAY_COUNT).forEach((back) => {
+    const dayKey = new Date(dayStart(now - back * DAY_MS))
+      .toISOString()
+      .slice(0, 10);
+    put(
+      'habitDays',
+      `habitDays/${dayKey}`,
+      toHabitDay(
+        dayKey,
+        Object.fromEntries(
+          habitSpecs.map(({ id, index, kind, windows }) => [
+            id,
+            (index + back) % 5 === 0
+              ? {}
+              : kind === 1
+                ? {
+                    count: 6,
+                    lastCountAt: dayStart(now - back * DAY_MS) + 12 * HOUR_MS,
+                  }
+                : {
+                    checks: Object.fromEntries(
+                      (Object.keys(windows).length === 0
+                        ? ['day']
+                        : Object.keys(windows)
+                      ).map((windowId) => [
+                        windowId,
+                        {
+                          status: 'done',
+                          at: dayStart(now - back * DAY_MS) + 15 * HOUR_MS,
+                          by: 'person',
+                          executionId: null,
+                        },
+                      ]),
+                    ),
+                  },
+          ]),
+        ),
+      ),
+    );
+  });
 
   const taskDocs = await mapChunked(range(TASK_COUNT), async (index) => {
     const isDone = index % 3 === 2;

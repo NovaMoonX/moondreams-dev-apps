@@ -51,6 +51,7 @@ import {
   readRecordPrivacy,
   readNewRecordPrivacy,
   withParentFacts,
+  PRIVATE_COLLECTIONS,
 } from '../../src/apps/helm/utils/privacyParents.ts';
 
 const tests: [string, () => void | Promise<void>][] = [];
@@ -1248,6 +1249,51 @@ test('the message the model reads over masked inputs holds no private word', () 
     assert.ok(!message.includes(word), `${word} reached the message`),
   );
   assert.ok(message.includes('a private task'));
+});
+
+test('a care habit is private by its own flag, a habit for another who or under a private project inherits, and a habit lives in habits', () => {
+  assert.equal(PRIVATE_COLLECTIONS.habit, 'habits');
+  const index = buildParentIndex(
+    [{ id: 'goal', name: 'Goal', privateMark: 'person' }],
+    [{ id: 'mom', name: 'Mom', privateMark: 'care' }],
+    [],
+  );
+  const habit = (extra: Record<string, unknown>) => ({
+    id: 'h',
+    privateMark: null,
+    isPrivacyCleared: false,
+    isCare: false,
+    projectId: null,
+    forWhoId: null,
+    ...extra,
+  });
+  assert.equal(readRecordPrivacy('habit', habit({}), index), 'ordinary');
+  assert.equal(
+    readRecordPrivacy('habit', habit({ isCare: true }), index),
+    'private',
+  );
+  assert.equal(
+    readRecordPrivacy('habit', habit({ forWhoId: 'mom' }), index),
+    'private',
+  );
+  assert.equal(
+    readRecordPrivacy('habit', habit({ projectId: 'goal' }), index),
+    'private',
+  );
+  assert.deepEqual(
+    planCascade(
+      [{ kind: 'habit', record: habit({ projectId: 'goal' }) }],
+      index,
+    ),
+    [{ kind: 'habit', id: 'h', privacy: 'private' }],
+  );
+  const facts = mark('Take the pill', NONE, true);
+  assert.equal(facts.privateMark, 'care');
+  assert.equal(
+    mark('Water', NONE, false).privateMark,
+    null,
+    'an ordinary habit is not marked',
+  );
 });
 
 const failures = (

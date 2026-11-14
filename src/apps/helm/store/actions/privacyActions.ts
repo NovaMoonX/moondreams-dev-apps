@@ -71,6 +71,7 @@ const readRecords = (kind: PrivateKind): PrivacyRecord[] => {
   if (kind === 'note') return helm.notes.items;
   if (kind === 'topic') return helm.topics.items;
   if (kind === 'fact') return helm.facts.items;
+  if (kind === 'habit') return helm.habits.items;
   return helm.procedures.items;
 };
 
@@ -101,6 +102,10 @@ const LINK_FIELDS: Record<
   who: {},
   place: {},
   procedure: {},
+  habit: {
+    project: ['projectId', 'eq'],
+    who: ['forWhoId', 'eq'],
+  },
 };
 
 const asIds = (value: unknown) =>
