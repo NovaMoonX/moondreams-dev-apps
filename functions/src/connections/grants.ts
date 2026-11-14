@@ -102,6 +102,21 @@ const readCategoryChanges = (value: unknown): Record<string, boolean> => {
   return value as Record<string, boolean>;
 };
 
+const readSeenScopes = (value: unknown): Record<string, number> => {
+  if (!isRecord(value)) throw badRequest();
+  const entries = Object.entries(value);
+  if (entries.length === 0 || entries.length > MAX_CATEGORIES)
+    throw badRequest();
+  if (
+    !entries.every(
+      ([id, version]) =>
+        isText(id) && Number.isInteger(version) && (version as number) >= 1,
+    )
+  )
+    throw badRequest();
+  return value as Record<string, number>;
+};
+
 export function readUpdateConnectionRequest(
   data: unknown,
 ): UpdateConnectionRequest {
@@ -109,7 +124,9 @@ export function readUpdateConnectionRequest(
   const hasCategories = data.categories !== undefined;
   const hasOptions = data.options !== undefined;
   const hasLabel = data.accountLabel !== undefined;
-  if (!hasCategories && !hasOptions && !hasLabel) throw badRequest();
+  const hasSeen = data.seenScopes !== undefined;
+  if (!hasCategories && !hasOptions && !hasLabel && !hasSeen)
+    throw badRequest();
   return {
     grantId: data.grantId,
     ...(hasCategories
@@ -119,6 +136,7 @@ export function readUpdateConnectionRequest(
     ...(hasLabel
       ? { accountLabel: readAccountLabelInput(data.accountLabel) }
       : {}),
+    ...(hasSeen ? { seenScopes: readSeenScopes(data.seenScopes) } : {}),
   };
 }
 
@@ -188,7 +206,11 @@ export function buildNewGrant(
     categories: Object.fromEntries(
       manifest.categories.map((category) => [
         category.id,
-        { isOn: req.categoryIds.includes(category.id), changedAt: now },
+        {
+          isOn: req.categoryIds.includes(category.id),
+          changedAt: now,
+          seenScopeVersion: category.scopeVersion,
+        },
       ]),
     ),
     options: req.options,
@@ -210,21 +232,62 @@ export function buildNewGrant(
   };
 }
 
-/** The grant's categories with the changes applied; a switch already in the asked state keeps its time. */
+/** The grant's categories with the changes applied; a switch already in the asked state keeps its time, and a switch changed or a scope seen records the category's current scope as seen. */
 export function applyCategoryChanges(
   grant: ConnectionGrant,
   changes: Record<string, boolean>,
   manifest: ConnectorManifest,
   now: number,
+  seenScopes: Record<string, number> = {},
 ): Record<string, GrantCategory> {
   assertDeclaredCategories(manifest, Object.keys(changes));
-  return Object.entries(changes).reduce(
+  assertSeenScopes(manifest, seenScopes);
+  const scopeOf = (id: string) =>
+    manifest.categories.find((category) => category.id === id)?.scopeVersion ??
+    1;
+  const switched = Object.entries(changes).reduce(
     (categories, [id, isOn]) =>
       categories[id]?.isOn === isOn
         ? categories
-        : { ...categories, [id]: { isOn, changedAt: now } },
+        : {
+            ...categories,
+            [id]: { isOn, changedAt: now, seenScopeVersion: scopeOf(id) },
+          },
     grant.categories,
   );
+  return Object.entries(seenScopes).reduce(
+    (categories, [id, version]) =>
+      categories[id]
+        ? {
+            ...categories,
+            [id]: {
+              ...categories[id],
+              seenScopeVersion: Math.max(
+                version,
+                categories[id].seenScopeVersion ?? 1,
+              ),
+            },
+          }
+        : categories,
+    switched,
+  );
+}
+
+/** A seen scope names a declared category and no version past the manifest's. */
+export function assertSeenScopes(
+  manifest: ConnectorManifest,
+  seenScopes: Record<string, number>,
+) {
+  const isValid = Object.entries(seenScopes).every(([id, version]) =>
+    manifest.categories.some(
+      (category) =>
+        category.id === id &&
+        Number.isInteger(version) &&
+        version >= 1 &&
+        version <= category.scopeVersion,
+    ),
+  );
+  if (!isValid) throw badRequest();
 }
 
 const GRANT_STATUSES: GrantStatus[] = [
@@ -245,6 +308,10 @@ const readCategories = (value: unknown): Record<string, GrantCategory> =>
               isRecord(entry) && isNumber(entry.changedAt)
                 ? entry.changedAt
                 : 0,
+            seenScopeVersion:
+              isRecord(entry) && isNumber(entry.seenScopeVersion)
+                ? entry.seenScopeVersion
+                : null,
           },
         ]),
       )

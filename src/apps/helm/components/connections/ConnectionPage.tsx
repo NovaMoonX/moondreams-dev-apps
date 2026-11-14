@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Disclosure } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarCheck, CalendarDays, Tag } from 'lucide-react';
 
@@ -95,6 +95,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     Record<string, { isOn: boolean; since: number }>
   >({});
   const [failures, setFailures] = useState<Record<string, string>>({});
+  const [seenNow, setSeenNow] = useState<Record<string, number>>({});
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
   const [isLabelOpen, setIsLabelOpen] = useState(false);
@@ -202,6 +203,28 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     } catch (error) {
       console.error('Helm connection did not change', error);
       setPending((current) => without(current, categoryId));
+      setFailures((current) => ({
+        ...current,
+        [categoryId]: failureLine(
+          error,
+          appName,
+          HELM_COPY.connectionToggleFailed,
+        ),
+      }));
+    }
+  };
+
+  const markSeen = async (categoryId: string, scopeVersion: number) => {
+    setSeenNow((current) => ({ ...current, [categoryId]: scopeVersion }));
+    setFailures((current) => without(current, categoryId));
+    try {
+      await updateConnection({
+        grantId: grant.id,
+        seenScopes: { [categoryId]: scopeVersion },
+      });
+    } catch (error) {
+      console.error('Helm connection scope was not marked seen', error);
+      setSeenNow((current) => without(current, categoryId));
       setFailures((current) => ({
         ...current,
         [categoryId]: failureLine(
@@ -417,9 +440,16 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             const isOn =
               waiting?.isOn ?? grant.categories[category.id]?.isOn ?? false;
             const isWaiting = waiting !== null;
+            const seenVersion = Math.max(
+              grant.categories[category.id]?.seenScopeVersion ?? 1,
+              seenNow[category.id] ?? 1,
+            );
+            const newReads = isOn
+              ? category.reads.filter((read) => read.sinceVersion > seenVersion)
+              : [];
             return (
               <li key={category.id} className='flex flex-col gap-1 px-4 py-3'>
-                <label className='flex min-h-11 items-center gap-3'>
+                <div className='flex min-h-11 items-center gap-3'>
                   <span className='min-w-0 flex-1'>
                     <span className='text-foreground block text-[15px]'>
                       {category.label}
@@ -452,7 +482,48 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                       onCheckedChange={(next) => void change(category.id, next)}
                     />
                   )}
-                </label>
+                </div>
+                {category.reads.length > 0 && (
+                  <Disclosure
+                    label={
+                      <span className='text-muted-foreground text-[13px]'>
+                        {HELM_COPY.connectionWhatReads}
+                      </span>
+                    }
+                    buttonClassName='min-h-8 py-1'
+                  >
+                    <ul className='text-muted-foreground list-disc pb-1 pl-5 text-[13px] text-pretty'>
+                      {category.reads.map((read) => (
+                        <li key={read.label}>{read.label}</li>
+                      ))}
+                    </ul>
+                  </Disclosure>
+                )}
+                {newReads.length > 0 && (
+                  <p className='text-foreground flex flex-wrap items-center gap-x-2 text-[13px] text-pretty'>
+                    {HELM_COPY.connectionNewReads(
+                      newReads
+                        .map(
+                          (read) =>
+                            read.label.charAt(0).toLowerCase() +
+                            read.label.slice(1),
+                        )
+                        .join(', '),
+                    )}
+                    {!isOffline && (
+                      <Button
+                        type='button'
+                        variant='tertiary'
+                        size='sm'
+                        onClick={() =>
+                          void markSeen(category.id, category.scopeVersion)
+                        }
+                      >
+                        {HELM_COPY.connectionGotIt}
+                      </Button>
+                    )}
+                  </p>
+                )}
                 {failures[category.id] && (
                   <p className='text-destructive text-[13px]' role='alert'>
                     {failures[category.id]}

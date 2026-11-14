@@ -15,6 +15,13 @@ export const GOOGLE_CALENDAR_MANIFEST: ConnectorManifest = {
       mode: 'sync',
       isOnAtConnect: true,
       addedInVersion: 1,
+      reads: [
+        { label: "Each event's title", sinceVersion: 1 },
+        { label: 'Its start and end', sinceVersion: 1 },
+        { label: 'Which of your calendars it is on', sinceVersion: 1 },
+        { label: 'Whether you are free or busy', sinceVersion: 1 },
+      ],
+      scopeVersion: 1,
     },
   ],
   never: ['Descriptions', 'guests', 'places', 'video links', 'attachments'],

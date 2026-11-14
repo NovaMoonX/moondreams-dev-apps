@@ -23,7 +23,12 @@ const toGrant = (
   readerAppId: data.readerAppId ?? '',
   connectorId: data.connectorId ?? ('app:' as ConnectorId),
   accountId: data.accountId ?? '',
-  categories: data.categories ?? {},
+  categories: Object.fromEntries(
+    Object.entries(data.categories ?? {}).map(([id, category]) => [
+      id,
+      { ...category, seenScopeVersion: category.seenScopeVersion ?? null },
+    ]),
+  ),
   options: data.options ?? null,
   status: STATUSES.find((status) => status === data.status) ?? 'ended',
   categoryState: data.categoryState ?? {},

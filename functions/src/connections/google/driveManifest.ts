@@ -16,6 +16,14 @@ export const GOOGLE_DRIVE_MANIFEST: ConnectorManifest = {
       mode: 'live',
       isOnAtConnect: true,
       addedInVersion: 1,
+      reads: [
+        {
+          label: 'The name of each Doc or PDF that matches a search',
+          sinceVersion: 1,
+        },
+        { label: 'Passages from the files that match', sinceVersion: 1 },
+      ],
+      scopeVersion: 1,
     },
   ],
   never: [

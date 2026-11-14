@@ -18,6 +18,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [{ label: "Each cat's name", sinceVersion: 1 }],
+          scopeVersion: 1,
         },
         {
           id: 'vetVisits',
@@ -27,6 +29,15 @@ export const NINE_LIVES_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            {
+              label: 'The cats going and the reason for the visit',
+              sinceVersion: 1,
+            },
+            { label: "The clinic's name", sinceVersion: 1 },
+            { label: 'The date and time', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'dueCare',
@@ -36,6 +47,14 @@ export const NINE_LIVES_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            {
+              label: 'The cats and the vaccine or preventive due',
+              sinceVersion: 1,
+            },
+            { label: 'The day it is due', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'clinics',
@@ -45,6 +64,11 @@ export const NINE_LIVES_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            { label: "Each clinic's name", sinceVersion: 1 },
+            { label: 'Its phone number and address', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'conditions',
@@ -54,6 +78,17 @@ export const NINE_LIVES_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
+          reads: [
+            {
+              label: "Each condition's name and the cat it is for",
+              sinceVersion: 1,
+            },
+            {
+              label: 'Whether it is active, ongoing or resolved',
+              sinceVersion: 1,
+            },
+          ],
+          scopeVersion: 1,
         },
       ],
       never: [

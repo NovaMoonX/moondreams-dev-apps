@@ -39,6 +39,10 @@ export interface CategoryManifest {
   isOnAtConnect: boolean;
   /** A category added after people connected starts off and shows as new once. */
   addedInVersion: number;
+  /** Each detail the category reads, in the person's words, and the `scopeVersion` it arrived in. */
+  reads: { label: string; sinceVersion: number }[];
+  /** Starts at 1; bumped whenever `reads` gains an entry. */
+  scopeVersion: number;
 }
 
 export interface ConnectorManifest {
@@ -128,6 +132,8 @@ export type GrantStatus = 'live' | 'needsReconnect' | 'noAccess' | 'ended';
 export interface GrantCategory {
   isOn: boolean;
   changedAt: number;
+  /** The category's `scopeVersion` the person last saw (granting counts); null reads as 1. */
+  seenScopeVersion: number | null;
 }
 
 export interface CategoryState {
@@ -191,6 +197,8 @@ export interface UpdateConnectionRequest {
   options?: GrantOptions;
   /** The account's short name ("work"); null clears it. */
   accountLabel?: string | null;
+  /** Category id to the `scopeVersion` the person has now seen. */
+  seenScopes?: Record<string, number>;
 }
 
 /** Outside accounts are keyed by provider: `g_` and 16 hex of a hash of Google's account id. */

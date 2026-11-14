@@ -17,6 +17,12 @@ export const WAYPOINT_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            { label: "Each trip's name", sinceVersion: 1 },
+            { label: 'Its dates and time zone', sinceVersion: 1 },
+            { label: 'The city', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'itinerary',
@@ -27,6 +33,16 @@ export const WAYPOINT_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            {
+              label:
+                'Each plan, flight, drive, stay and rental you are part of',
+              sinceVersion: 1,
+            },
+            { label: 'Its times and time zone', sinceVersion: 1 },
+            { label: 'Its place name', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'myTasks',
@@ -36,6 +52,16 @@ export const WAYPOINT_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            {
+              label:
+                'Each Before the Road task assigned to you or private to you',
+              sinceVersion: 1,
+            },
+            { label: 'The trip it belongs to', sinceVersion: 1 },
+            { label: 'The day it is due', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'tripBalances',
@@ -45,6 +71,11 @@ export const WAYPOINT_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
+          reads: [
+            { label: "The trip's name", sinceVersion: 1 },
+            { label: 'What you owe and what you are owed', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
       ],
       never: [

@@ -18,6 +18,12 @@ export const A_LIST_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            { label: "The movie's title", sinceVersion: 1 },
+            { label: 'The showtime and when it ends', sinceVersion: 1 },
+            { label: "The theater's name and time zone", sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'savedTheaters',
@@ -27,6 +33,12 @@ export const A_LIST_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            { label: "Each theater's name", sinceVersion: 1 },
+            { label: 'Its address', sinceVersion: 1 },
+            { label: 'Its time zone', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'seenMovies',
@@ -36,6 +48,11 @@ export const A_LIST_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
+          reads: [
+            { label: 'The title of each movie you have seen', sinceVersion: 1 },
+            { label: 'Your rating', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
       ],
       never: ['what you paid', 'savings', 'membership', 'share links'],
