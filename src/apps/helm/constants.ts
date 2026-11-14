@@ -2890,7 +2890,6 @@ export const HELM_COPY = {
   whereSourcePage: 'Set here',
   whereSourceTrip: 'from Waypoint',
   whereAddHome: 'Add home',
-  whereAddHomeHint: 'Not set yet',
   wherePickCity: 'Pick a city to save.',
   whereAddAway: 'Add a time away',
   whereHomeSheetTitle: 'Home',

@@ -8,6 +8,7 @@ import { useAppSelector } from '@/store';
 import WhereSheet, {
   type WhereTarget,
 } from '@apps/helm/components/where/WhereSheet';
+import AddRow from '@apps/helm/components/who/AddRow';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
   type AwaySpanLike,
@@ -102,14 +103,7 @@ function WhereCard({ who }: WhereCardProps) {
             target: { kind: 'home' } as WhereTarget,
           },
         ]
-      : [
-          {
-            key: 'home',
-            line: HELM_COPY.whereAddHome,
-            source: HELM_COPY.whereAddHomeHint,
-            target: { kind: 'home' } as WhereTarget,
-          },
-        ]),
+      : []),
     ...away.map((span) => ({
       key: span.id,
       line: formatAwayLine(span, todayKey),
@@ -124,20 +118,7 @@ function WhereCard({ who }: WhereCardProps) {
 
   return (
     <section className='space-y-3'>
-      <SectionDivider
-        label={HELM_COPY.whereTitle}
-        trailing={
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
-            onClick={() => setTarget({ kind: 'away', spanId: null })}
-          >
-            {HELM_COPY.whereAddAway}
-          </Button>
-        }
-      />
+      <SectionDivider label={HELM_COPY.whereTitle} />
 
       <ul className='helm-card divide-border divide-y overflow-hidden'>
         {rows.map(({ key, line, source, target: rowTarget }) => (
@@ -187,6 +168,22 @@ function WhereCard({ who }: WhereCardProps) {
             )}
           </li>
         ))}
+        {!who.home && (
+          <li>
+            <AddRow
+              label={HELM_COPY.whereAddHome}
+              isInList
+              onClick={() => setTarget({ kind: 'home' })}
+            />
+          </li>
+        )}
+        <li>
+          <AddRow
+            label={HELM_COPY.whereAddAway}
+            isInList
+            onClick={() => setTarget({ kind: 'away', spanId: null })}
+          />
+        </li>
       </ul>
       <WhereSheet
         who={who}
