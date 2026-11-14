@@ -317,6 +317,11 @@ function propsTypeFor(file: string | null) {
 function withReactImport(source: string) {
   const reactImport = /import \{([^}]*)\} from 'react';\n/;
   const needs = /\buseId\(/.test(source);
+  if (/import (\* as )?React\b/.test(source) && !reactImport.test(source)) {
+    if (needs)
+      throw new Error("Add useId to the file's react import, then re-run.");
+    return source;
+  }
   const match = source.match(reactImport);
   const names = (match?.[1] ?? '')
     .split(',')
@@ -404,10 +409,15 @@ async function main() {
   const viewBox = squareViewBox(body, rendered.attributes.viewBox, args.trim);
 
   if (args.svg) {
-    const prefixed = prefixIdsForFile(body, basename(args.svg, '.svg'));
+    const prefixed = prefixIdsForFile(
+      body,
+      basename(args.svg, '.svg')
+        .replace(/[^\w-]/g, '-')
+        .replace(/^(?=\d)/, 'i'),
+    );
     writeFileSync(
       args.svg,
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${prefixed}</svg>\n`,
+      `<svg ${XMLNS} viewBox="${viewBox}">${prefixed}</svg>\n`,
     );
     upsertNotice(
       join(dirname(args.svg), 'NOTICE.md'),
