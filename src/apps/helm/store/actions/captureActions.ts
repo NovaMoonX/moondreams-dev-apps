@@ -281,6 +281,7 @@ export const dismissQuestion = (
   isLastOpen: boolean,
 ) => {
   const now = Date.now();
+  // Not a transaction: a server write adding a question to this turn in the same instant is a rare race, accepted.
   return updateDoc(doc(capturesOf(uid), captureId), {
     [`questionState.${questionId}.answeredAt`]: now,
     [`questionState.${questionId}.dismissedAt`]: now,
@@ -396,6 +397,7 @@ export async function retryCapture(
     attempts: 0,
     lastErrorCode: null,
     heldReason: null,
+    dismissedAt: null,
     ...closedQuestions,
   });
   joined.forEach((entry) =>

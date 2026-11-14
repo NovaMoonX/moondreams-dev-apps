@@ -75,9 +75,12 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
   const clearAll = async () => {
     if (!user) return;
     const isConfirmed = await confirm({
-      title: HELM_COPY.clearNeedsYouTitle(clearable.length),
+      title: HELM_COPY.clearNeedsYouTitle(
+        clearable.length,
+        held.needsYou.length,
+      ),
       message: HELM_COPY.clearNeedsYouBody(
-        clearable.some((capture) =>
+        held.needsYou.some(({ capture }) =>
           Object.values(capture.questionState).some(
             (state) =>
               state.answeredAt === null && state.kind === 'whichIsTrue',

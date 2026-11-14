@@ -10,7 +10,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 
 // A 28px button reaches 40px tall through its pseudo-element, which the 12px gaps leave clear.
 export const QUIET_CLASS =
-  "relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']";
+  "relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']";
 
 interface ChoiceGroupProps {
   label: string;

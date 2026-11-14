@@ -598,7 +598,10 @@ export const HELM_COPY = {
   inboxEmpty: 'Nothing new since you looked.',
   markAllSeen: 'Mark all seen',
   clearNeedsYou: 'Clear all',
-  clearNeedsYouTitle: (count: number) => `Clear all ${count} from Needs you?`,
+  clearNeedsYouTitle: (count: number, total: number) =>
+    count === total
+      ? `Clear all ${count} from Needs you?`
+      : `Clear ${count} of ${total} from Needs you?`,
   clearNeedsYouBody: (keepsDisputes: boolean) =>
     [
       'Each question is dismissed unanswered and each turn that couldn’t be sorted leaves this list. What you said stays in your conversation.',
@@ -720,6 +723,7 @@ export const HELM_COPY = {
     `${name} tried three times and couldn't read this.`,
   makeTaskAsWritten: 'Make it a task as written',
   tryReadingAgain: 'Try again',
+  failedDismissed: 'Dismissed. What you said stays in your conversation.',
   deleteCapture: 'Delete',
   deleteCaptureTitle: 'Delete this?',
   deleteCaptureBody: 'What you said is deleted. Nothing was made from it.',
