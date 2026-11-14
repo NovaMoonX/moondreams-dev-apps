@@ -249,7 +249,6 @@ const setMode = (mode: string, target: string) => {
   console.log(RESTART);
 };
 
-
 const readSecret = (prompt: string) =>
   new Promise<string>((resolve) => {
     const typed: string[] = [];
@@ -279,8 +278,13 @@ const readSecret = (prompt: string) =>
 
 const saveValue = (file: string, key: string, value: string) => {
   const lines = readLines(file);
-  const kept = lines.length > 0 && lines[lines.length - 1] === '' ? lines.slice(0, -1) : lines;
-  const others = kept.filter((line) => !new RegExp(`^\\s*${key}\\s*=`).test(line));
+  const kept =
+    lines.length > 0 && lines[lines.length - 1] === ''
+      ? lines.slice(0, -1)
+      : lines;
+  const others = kept.filter(
+    (line) => !new RegExp(`^\\s*${key}\\s*=`).test(line),
+  );
   writeFileSync(file, `${[...others, `${key}=${value}`].join('\n')}\n`);
 };
 
@@ -314,26 +318,35 @@ const askForKeys = async (appId: string, isRunning: boolean) => {
   );
   if (missing.length === 0) return;
   if (!process.stdin.isTTY) {
-    console.log(`No keys saved for ${missing.join(', ')}: not an interactive terminal (see npm run local:services).`);
+    console.log(
+      `No keys saved for ${missing.join(', ')}: not an interactive terminal (see npm run local:services).`,
+    );
     return;
   }
   console.log(
     `\n${missing.join(', ')}: no key here, so fixtures are used. Paste a key to use the real service, or press Enter to keep fixtures.\n(To stop being asked: npm run local:services -- fixtures <service>)`,
   );
-  const saved = await missing.reduce<Promise<string[]>>(async (done, service) => {
-    const soFar = await done;
-    const { keys, isBound } = SERVICES[service];
-    const file = isBound ? SECRET_FILE : ENV_FILE;
-    const values = await readValuesInOrder(keys.map((key) => `${service}: ${key} (hidden) > `));
-    if (values.length < keys.length) return soFar;
-    if (!isIgnoredByGit(file)) {
-      console.log(`${file} is not git-ignored, so nothing was written. Fix .gitignore first.`);
-      return soFar;
-    }
-    keys.forEach((key, index) => saveValue(file, key, values[index]));
-    console.log(`Saved ${keys.join(' and ')} to ${file}.`);
-    return [...soFar, service];
-  }, Promise.resolve([]));
+  const saved = await missing.reduce<Promise<string[]>>(
+    async (done, service) => {
+      const soFar = await done;
+      const { keys, isBound } = SERVICES[service];
+      const file = isBound ? SECRET_FILE : ENV_FILE;
+      const values = await readValuesInOrder(
+        keys.map((key) => `${service}: ${key} (hidden) > `),
+      );
+      if (values.length < keys.length) return soFar;
+      if (!isIgnoredByGit(file)) {
+        console.log(
+          `${file} is not git-ignored, so nothing was written. Fix .gitignore first.`,
+        );
+        return soFar;
+      }
+      keys.forEach((key, index) => saveValue(file, key, values[index]));
+      console.log(`Saved ${keys.join(' and ')} to ${file}.`);
+      return [...soFar, service];
+    },
+    Promise.resolve([]),
+  );
   if (saved.length > 0 && isRunning) {
     console.log(`The running emulators read keys when they start. ${RESTART}`);
   }

@@ -41,8 +41,11 @@ interface Started {
 const started: Started[] = [];
 let isStopping = false;
 
-/** Resolves when the URLs answer; fails fast, naming the service, if the process that should serve them exits first. */
-const waitForService = ({ name, exited }: Started, urls: string[], seconds: number) =>
+const waitForService = (
+  { name, exited }: Started,
+  urls: string[],
+  seconds: number,
+) =>
   Promise.race([
     pollUntilUp(urls, seconds),
     exited.then((code) => {
@@ -57,7 +60,9 @@ const startService = (name: string, args: string[]) => {
   const service = {
     name,
     child,
-    exited: new Promise<number>((resolve) => child.on('exit', (code) => resolve(code ?? 1))),
+    exited: new Promise<number>((resolve) =>
+      child.on('exit', (code) => resolve(code ?? 1)),
+    ),
   };
   started.push(service);
   console.log(`▶ Starting ${name}…`);
@@ -78,7 +83,8 @@ process.on('SIGINT', () => void stopAndExit('SIGINT'));
 process.on('SIGTERM', () => void stopAndExit('SIGTERM'));
 
 const isEmulatorModeOn = () =>
-  loadEnv('development', process.cwd(), 'VITE_').VITE_USE_FIREBASE_EMULATORS === 'true';
+  loadEnv('development', process.cwd(), 'VITE_').VITE_USE_FIREBASE_EMULATORS ===
+  'true';
 
 const isVite = (url: string) =>
   fetch(`${url}/@vite/client`, { signal: AbortSignal.timeout(3000) }).then(
@@ -121,9 +127,15 @@ const seed = () => {
 };
 
 const showServices = () => {
-  console.log(`\nOutside services ${app.name} uses (emulators need a restart after a switch):`);
+  console.log(
+    `\nOutside services ${app.name} uses (emulators need a restart after a switch):`,
+  );
   try {
-    execFileSync('npm', ['run', '--silent', 'local:services', '--', 'for', app.id], { stdio: 'inherit' });
+    execFileSync(
+      'npm',
+      ['run', '--silent', 'local:services', '--', 'for', app.id],
+      { stdio: 'inherit' },
+    );
   } catch {
     console.log('Could not read the service list; run npm run local:services.');
   }
@@ -134,11 +146,21 @@ const offerKeys = (isRunning: boolean) => {
   try {
     execFileSync(
       'npm',
-      ['run', '--silent', 'local:services', '--', 'keys', app.id, ...(isRunning ? ['--running'] : [])],
+      [
+        'run',
+        '--silent',
+        'local:services',
+        '--',
+        'keys',
+        app.id,
+        ...(isRunning ? ['--running'] : []),
+      ],
       { stdio: 'inherit' },
     );
   } catch {
-    console.log('Skipped the key check; run npm run local:services to see which keys are set.');
+    console.log(
+      'Skipped the key check; run npm run local:services to see which keys are set.',
+    );
   }
 };
 
@@ -152,17 +174,28 @@ const main = async () => {
     await waitForService(emulators, EMULATOR_READY_URLS, 180);
   }
 
-  if (isSkippingSeed) console.log('✓ Not seeding (--no-seed); data left as it is.');
+  if (isSkippingSeed)
+    console.log('✓ Not seeding (--no-seed); data left as it is.');
   else seed();
 
   const wasViteUp = await isUp(VITE_URL);
   if (wasViteUp && !(await isVite(VITE_URL))) {
-    throw new Error(`Something that is not the dev server is using ${VITE_URL}. Stop it, then run the same command again.`);
+    throw new Error(
+      `Something that is not the dev server is using ${VITE_URL}. Stop it, then run the same command again.`,
+    );
   }
   if (wasViteUp) {
-    console.log('✓ Dev server already running; leaving it alone (it read its env when it started).');
+    console.log(
+      '✓ Dev server already running; leaving it alone (it read its env when it started).',
+    );
   } else {
-    const vite = startService('the dev server', ['dev', '--', '--port', '5173', '--strictPort']);
+    const vite = startService('the dev server', [
+      'dev',
+      '--',
+      '--port',
+      '5173',
+      '--strictPort',
+    ]);
     await waitForService(vite, [VITE_URL], 120);
   }
 
@@ -180,11 +213,15 @@ const main = async () => {
   showServices();
 
   if (started.length === 0) return;
-  console.log('   Ctrl+C stops what this command started; npm run emulators:kill stops the rest.\n');
+  console.log(
+    '   Ctrl+C stops what this command started; npm run emulators:kill stops the rest.\n',
+  );
   const stopped = await Promise.race(
     started.map(({ name, exited }) => exited.then(() => name)),
   );
-  throw new Error(`${stopped} stopped, so everything this command started is stopping too.`);
+  throw new Error(
+    `${stopped} stopped, so everything this command started is stopping too.`,
+  );
 };
 
 try {
@@ -193,7 +230,10 @@ try {
   if (!isStopping) {
     stopStarted('SIGTERM');
     console.error(error instanceof Error ? error.message : error);
-    await Promise.race([Promise.all(started.map(({ exited }) => exited)), sleep(10_000)]);
+    await Promise.race([
+      Promise.all(started.map(({ exited }) => exited)),
+      sleep(10_000),
+    ]);
     process.exit(1);
   }
 }
