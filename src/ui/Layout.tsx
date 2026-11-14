@@ -6,6 +6,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   getRegistryAppForPath,
   rememberAppLocation,
+  stampAppOpened,
   SITE_VERSION,
 } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
@@ -74,6 +75,7 @@ function LocationSync() {
   useEffect(() => {
     if (user) {
       rememberAppLocation(user.uid, location.pathname, location.search);
+      stampAppOpened(user.uid, location.pathname);
     }
   }, [user, location.pathname, location.search]);
 
