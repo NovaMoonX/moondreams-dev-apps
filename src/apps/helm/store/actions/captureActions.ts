@@ -36,7 +36,7 @@ import {
 import { loadEarlierCaptures } from '@apps/helm/store/listeners/captureListener';
 import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
 import {
-  selectAllCaptures,
+  selectEveryCapture,
   selectExecutionsById,
 } from '@apps/helm/store/selectors/captureSelectors';
 import {
@@ -322,7 +322,7 @@ export async function retryCapture(
       .filter(([, question]) => question.answeredAt === null)
       .map(([id]) => [`questionState.${id}.answeredAt`, now]),
   );
-  const joined = selectAllCaptures(store.getState()).filter(
+  const joined = selectEveryCapture(store.getState()).filter(
     (entry) =>
       entry.turnLeadId === capture.id &&
       capture.joinedCaptureIds.includes(entry.id) &&
@@ -363,7 +363,7 @@ const photosToLetGo = (ids: string[]) => {
 
 /** Deletes a turn; the photos it carried are let go with it, due in 24 hours. */
 export function deleteCapture(uid: string, captureId: string) {
-  const capture = selectAllCaptures(store.getState()).find(
+  const capture = selectEveryCapture(store.getState()).find(
     (entry) => entry.id === captureId,
   );
   const batch = writeBatch(db);
@@ -391,7 +391,7 @@ export async function makeTaskAsWritten(
   if (!canMakeTaskAsWritten(current, isSorting(capture.id), Date.now())) {
     throw new Error('This turn is being read.');
   }
-  const joined = selectAllCaptures(store.getState()).filter(
+  const joined = selectEveryCapture(store.getState()).filter(
     (entry) =>
       entry.turnLeadId === current.id &&
       current.joinedCaptureIds.includes(entry.id),

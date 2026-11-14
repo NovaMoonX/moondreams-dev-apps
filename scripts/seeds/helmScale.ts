@@ -1244,6 +1244,46 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     put('captures', `captures/${entry.id}`, entry.capture),
   );
 
+  // Outside turns: 240 questions from three assistants, four to a sitting, so the outside view groups 60 conversations.
+  const OUTSIDE_VIAS = ['Claude', 'Gemini', 'ChatGPT'];
+  const outsideDocs = await mapChunked(range(240), async (index) => {
+    const sitting = Math.floor(index / 4);
+    const at =
+      now - sitting * 3 * HOUR_MS - (3 - (index % 4)) * 5 * MINUTE_MS - HOUR_MS;
+    const capture: Capture = {
+      ...turnDocs[index % turnDocs.length].capture,
+      medium: 'mcp',
+      via: OUTSIDE_VIAS[sitting % OUTSIDE_VIAS.length],
+      outsideReadScopes: index % 2 === 0 ? ['apps'] : [],
+      sessionId: `scale-outside-${pad(index, 3)}`,
+      turnIndex: 0,
+      seenAt: at,
+      createdAt: at,
+      sortedAt: at + 4_000,
+      sealed: await seal<CaptureSealed>({
+        text: pick(TURN_TEXTS).replace(
+          '%s',
+          nameOf(between(1, WHO_COUNT - 1)).split(' ')[0],
+        ),
+        reading: {
+          people: [],
+          places: [],
+          documents: [],
+          commands: [],
+          isUrgent: false,
+          dates: [],
+          addressedAs: null,
+        },
+        answer: null,
+        questionAnswer: null,
+      }),
+    };
+    return { id: `scale-outside-${pad(index, 3)}`, capture };
+  });
+  outsideDocs.forEach((entry) =>
+    put('captures', `captures/${entry.id}`, entry.capture),
+  );
+
   // Synced copies: 2,641 from five apps, with each app's grant counting what it holds.
   const sources = [
     { app: 'pinch', shares: PINCH_SHARES.shares },

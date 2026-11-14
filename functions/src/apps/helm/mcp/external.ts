@@ -274,7 +274,8 @@ async function fileTurn({
       turnLeadId: null,
       joinedCaptureIds: [],
       attachmentIds: [],
-      seenAt: null,
+      // Home never shows an outside turn, so it is filed seen and stays out of home's unseen window.
+      seenAt: createdAt,
       quotedSourceKeys: [],
       answerSavedNoteId: null,
       whoIds: [],

@@ -1347,6 +1347,7 @@ export const HELM_COPY = {
   deleteAllSignIn: 'Sign in again to delete. Nothing has been removed.',
   activityTitle: 'Activity',
   outsideTitle: 'From your assistants',
+  outsideUnnamed: 'an assistant',
   outsideRowHint: 'Questions Claude, Gemini or ChatGPT sent',
   outsideLead: 'What your assistants asked or told you, kept apart from home.',
   outsideEmpty:

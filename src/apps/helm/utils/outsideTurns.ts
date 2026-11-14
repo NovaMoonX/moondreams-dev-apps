@@ -1,3 +1,4 @@
+import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenCapture } from '@apps/helm/types';
 
 export interface OutsideConversation {
@@ -18,7 +19,7 @@ export function groupOutsideConversations(
   gapMs: number,
 ): OutsideConversation[] {
   const byVia = captures.filter(isOutsideTurn).reduce((groups, capture) => {
-    const via = capture.via ?? '';
+    const via = capture.via || HELM_COPY.outsideUnnamed;
     groups.set(via, [...(groups.get(via) ?? []), capture]);
     return groups;
   }, new Map<string, OpenCapture[]>());
