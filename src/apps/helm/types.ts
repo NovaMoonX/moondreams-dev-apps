@@ -1,6 +1,7 @@
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
+import type { PrivacyClass, PrivateMark } from '@apps/helm/utils/privacy';
 import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
 
 export type { SharedKind };
@@ -309,6 +310,16 @@ export interface Capture {
   planDayKey: string | null;
   /** The page it was asked from; null from home and on turns made before pages could be asked about. */
   screen: ScreenContext | null;
+  /** The class of what the turn quotes; private when the turn filed or touched a private thing. */
+  privacy: PrivacyClass | null;
+  /** Whether the turn filed or touched a private thing, set by the executor; null before it ran. */
+  touchesPrivate: boolean | null;
+  /** How the turn began and whether anyone was looking: a wake-phrase turn on a hidden or untouched page is answered without private names. Null on a turn made before the field. */
+  presence: {
+    startedByWake: boolean;
+    isHidden: boolean;
+    isUntouched: boolean;
+  } | null;
   sealed: Sealed;
 }
 
@@ -454,6 +465,8 @@ export interface Task {
   completedAt: number | null;
   /** Set when the person clears the done tasks of a project: hidden from its done fold, still found by search. */
   clearedAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
@@ -486,6 +499,8 @@ export interface Who {
   executionId: string | null;
   createdAt: number;
   lastEditedAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
@@ -501,6 +516,10 @@ export interface WhoSealed {
   species: string | null;
   /** Organizations only ("Bakery"). */
   organizationKind: string | null;
+  /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
+  privateMark: PrivateMark | null;
+  /** The person said it needn't be private, so code never marks it again. */
+  isPrivacyCleared: boolean | null;
 }
 
 /** A who after its words are opened; one that would not open keeps `isUnreadable` and an empty name. */
@@ -535,6 +554,8 @@ export interface KeyDate {
   executionId: string | null;
   createdAt: number;
   lastEditedAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
@@ -586,6 +607,8 @@ export interface Place {
   executionId: string | null;
   createdAt: number;
   lastEditedAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
@@ -594,6 +617,10 @@ export interface PlaceSealed {
   aliases: string[];
   address: string | null;
   notes: string | null;
+  /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
+  privateMark: PrivateMark | null;
+  /** The person said it needn't be private, so code never marks it again. */
+  isPrivacyCleared: boolean | null;
 }
 
 export interface OpenPlace extends Omit<Place, 'sealed'>, PlaceSealed {
@@ -619,6 +646,8 @@ export interface Project {
   createdAt: number;
   lastEditedAt: number | null;
   finishedAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
@@ -629,6 +658,10 @@ export interface ProjectSealed {
   milestones: Record<string, { title: string }>;
   /** whoId to a short note ("florist"). */
   roleNotes: Record<string, string>;
+  /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
+  privateMark: PrivateMark | null;
+  /** The person said it needn't be private, so code never marks it again. */
+  isPrivacyCleared: boolean | null;
 }
 
 export interface OpenProject extends Omit<Project, 'sealed'>, ProjectSealed {
@@ -653,12 +686,18 @@ export interface Note {
   executionId: string | null;
   createdAt: number;
   lastEditedAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
 export interface NoteSealed {
   title: string;
   body: string;
+  /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
+  privateMark: PrivateMark | null;
+  /** The person said it needn't be private, so code never marks it again. */
+  isPrivacyCleared: boolean | null;
 }
 
 export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
@@ -704,6 +743,8 @@ export interface Topic {
   createdAt: number;
   lastEditedAt: number | null;
   lastWrittenAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
@@ -712,6 +753,10 @@ export interface TopicSealed {
   emoji: string | null;
   overview: string | null;
   sections: TopicSection[];
+  /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
+  privateMark: PrivateMark | null;
+  /** The person said it needn't be private, so code never marks it again. */
+  isPrivacyCleared: boolean | null;
 }
 
 export interface OpenTopic extends Omit<Topic, 'sealed'>, TopicSealed {
@@ -756,10 +801,20 @@ export interface OpenTopicVersion
   id: string;
 }
 
+/** The words of a procedure that a version keeps; the private marks belong to the record, not to a version. */
+export type ProcedureBody = Omit<
+  ProcedureSealed,
+  'privateMark' | 'isPrivacyCleared'
+>;
+
 export interface ProcedureSealed {
   title: string;
   steps: Record<string, StepBody>;
   groups: Record<string, { name: string }>;
+  /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
+  privateMark: PrivateMark | null;
+  /** The person said it needn't be private, so code never marks it again. */
+  isPrivacyCleared: boolean | null;
 }
 
 /** `apps/helm/users/{uid}/procedures/{id}`: a routine kept once, its steps in named groups. */
@@ -773,6 +828,8 @@ export interface Procedure {
   executionId: string | null;
   createdAt: number;
   lastEditedAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
@@ -798,7 +855,7 @@ export interface ProcedureVersion {
   sealed: Sealed;
 }
 
-export interface ProcedureVersionSealed extends ProcedureSealed {
+export interface ProcedureVersionSealed extends ProcedureBody {
   changeSummary: string;
   requestQuote: string | null;
 }
@@ -912,6 +969,10 @@ export interface TaskSealed {
   title: string;
   notes: string | null;
   steps: Record<string, { text: string }>;
+  /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
+  privateMark: PrivateMark | null;
+  /** The person said it needn't be private, so code never marks it again. */
+  isPrivacyCleared: boolean | null;
 }
 
 /** A task after its words are opened; one that would not open keeps `isUnreadable` and an empty title. */
@@ -920,6 +981,8 @@ export interface OpenTask extends Omit<Task, 'sealed'> {
   title: string;
   notes: string | null;
   steps: Record<string, { text: string }>;
+  privateMark: PrivateMark | null;
+  isPrivacyCleared: boolean | null;
   isUnreadable: boolean;
 }
 
@@ -985,6 +1048,8 @@ export interface Execution {
   createdAt: number;
   decidedAt: number | null;
   finishedAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
@@ -1122,6 +1187,8 @@ export interface Fact {
   createdAt: number;
   confirmedAt: number | null;
   lastEditedAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   sealed: Sealed;
 }
 
@@ -1132,6 +1199,10 @@ export interface FactSealed {
   topic: string | null;
   /** The shown text of what the fact says about its field, such as "2:00 PM", or the preferred or favorite thing ("Shell"). */
   value: string | null;
+  /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
+  privateMark: PrivateMark | null;
+  /** The person said it needn't be private, so code never marks it again. */
+  isPrivacyCleared: boolean | null;
 }
 
 /** A fact after its words are opened; one that would not open is left out. */
@@ -1141,6 +1212,8 @@ export interface OpenFact extends Omit<Fact, 'sealed'> {
   quote: string | null;
   topic: string | null;
   value: string | null;
+  privateMark: PrivateMark | null;
+  isPrivacyCleared: boolean | null;
 }
 
 export type PlanSlotStatus = 'suggested' | 'kept' | 'notToday';

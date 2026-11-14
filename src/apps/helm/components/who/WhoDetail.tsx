@@ -38,6 +38,7 @@ import {
 import { useImportContacts } from '@apps/helm/queries/contactsQueries';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 const { option } = DropdownMenuFactories;
 
@@ -373,6 +374,9 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
               </section>
             )}
           </>
+        )}
+        {who && !who.isUnreadable && (
+          <PrivateRow kind='who' record={who} title={who.name} />
         )}
       </main>
       {who && !who.isUnreadable && (

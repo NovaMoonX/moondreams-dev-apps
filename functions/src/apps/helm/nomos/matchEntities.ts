@@ -1,3 +1,4 @@
+import type { PrivacyFacts } from '../privacy.js';
 import { createOptionMatcher } from '../../../vendor/optionMatchUtils.js';
 import type { MentionKind } from './commands.js';
 
@@ -7,6 +8,7 @@ export interface KnownWho {
   name: string;
   aliases: string[];
   lastMentionedAt: number | null;
+  privacyFacts?: PrivacyFacts;
 }
 
 export interface KnownPlace {
@@ -14,6 +16,7 @@ export interface KnownPlace {
   name: string;
   aliases: string[];
   address?: string | null;
+  privacyFacts?: PrivacyFacts;
 }
 
 export type EntityMatch =

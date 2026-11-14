@@ -259,6 +259,7 @@ export const addKeyDate = (
                 source: 'person',
                 createdBy: 'person',
                 executionId: null,
+                privacy: 'ordinary',
                 createdAt: now,
                 lastEditedAt: null,
               },

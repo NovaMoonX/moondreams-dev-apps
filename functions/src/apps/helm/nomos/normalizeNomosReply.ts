@@ -997,12 +997,43 @@ const readLinks = (
   };
 };
 
+const RELEASE_PHRASE =
+  /\b(not|no longer|isn t|aren t|doesn t|don t|didn t|never|stop|unmark|unprivate|make \w+ public|be public|is public|as public)\b/;
+
+/** A mark names private without a negation; a release negates private or asks for public. */
+const isQuoteOfDirection = (quote: string, isPrivate: boolean) => {
+  const isRelease =
+    /\bpublic\b/.test(quote) ||
+    (/\bprivate\b/.test(quote) && RELEASE_PHRASE.test(quote)) ||
+    /\bunmark\b/.test(quote);
+  return isPrivate
+    ? /\bprivate\b/.test(quote) && !isRelease
+    : isRelease;
+};
+
+/** Changing whether a thing is private is kept only when the person's own words, quoted, say so. */
+const isQuotedPrivateChange = (
+  item: Record<string, unknown>,
+  captureText: string,
+  isPrivate: boolean,
+) => {
+  const quote = toComparable(
+    typeof item.requestQuote === 'string' ? item.requestQuote : '',
+  );
+  return (
+    quote.split(' ').filter(Boolean).length >= 2 &&
+    ` ${toComparable(captureText)} `.includes(` ${quote} `) &&
+    isQuoteOfDirection(quote, isPrivate)
+  );
+};
+
 const readCommand = (
   item: Record<string, unknown>,
   state: { refs: Set<string> },
   reading: CaptureReading,
   aliases: AliasBook,
   entities: Entities,
+  captureText: string,
 ): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
   if (
@@ -1019,6 +1050,14 @@ const readCommand = (
     kind === 'createNote'
   ) {
     return null;
+  }
+  if (kind === 'setPrivate') {
+    const alias = typeof item.taskAlias === 'string' ? item.taskAlias : '';
+    const subjectId = state.refs.has(alias) ? alias : aliases.idOf(alias);
+    if (!subjectId || typeof item.isPrivate !== 'boolean') return null;
+    return isQuotedPrivateChange(item, captureText, item.isPrivate)
+      ? { kind, taskId: subjectId, isPrivate: item.isPrivate }
+      : null;
   }
   const title = toTitle(item.title);
   const due = toDue(item.dueSpanId, reading);
@@ -1912,6 +1951,7 @@ export function normalizeNomosReply(
       context.reading,
       context.aliases,
       entities,
+      context.captureText ?? '',
     );
     return command ? [command] : [];
   });

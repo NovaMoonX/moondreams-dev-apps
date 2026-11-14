@@ -34,6 +34,7 @@ import type {
   NoteSealed,
   Procedure,
   ProcedureRun,
+  ProcedureBody,
   ProcedureSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
@@ -687,6 +688,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       }),
     ),
   );
+  const isPrivateWho = (index: number) => index > 0 && index % 40 === 7;
+  const isPrivateProject = (index: number) => index % 10 === 4;
   const whoDocs = await mapChunked(range(WHO_COUNT), async (index) => {
     const kind = whoKindOf(index);
     const name = nameOf(index);
@@ -717,9 +720,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             species: kind === 'pet' ? SPECIES[index % 4] : null,
             organizationKind:
               kind === 'organization' ? ORG_KINDS[index % 8] : null,
+            ...(isPrivateWho(index) && { privateMark: 'person' as const }),
           }),
         ),
       ),
+      ...(isPrivateWho(index) && { privacy: 'private' as const }),
       yearlyDateCount: YEARLY_PER_WHO,
       momentCount: momentsOf(index),
       photoMediaId: photoIds[0] ?? null,
@@ -734,6 +739,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     async (entry: { id: string; whoId: string; words: KeyDateSealed }) => ({
       id: entry.id,
       keyDate: {
+        privacy: 'ordinary',
         whoId: entry.whoId,
         shape,
         source: 'person',
@@ -817,6 +823,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       const isDone = index % 10 === 9;
       const finishedAt = isDone ? now - between(10, 300) * DAY_MS : null;
       const project: Project = {
+        privacy: isPrivateProject(index) ? 'private' : 'ordinary',
         targetDate: isDone ? null : dayStart(now + between(5, 365) * DAY_MS),
         status: isDone ? 'finished' : 'active',
         milestoneState: {
@@ -847,6 +854,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             'm-2': { title: 'Final stage' },
           },
           roleNotes: {},
+          privateMark: isPrivateProject(index) ? 'person' : null,
+          isPrivacyCleared: false,
         }),
       };
       return { id, project };
@@ -867,7 +876,14 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           : { kind: 'day', date: dueDay };
     const hasProject = index % 2 === 0;
     const createdAt = now - between(1, 700) * DAY_MS;
+    const projectAt = (index / 2) % PROJECT_COUNT;
+    const whoAt = index % 6 === 0 ? between(1, WHO_COUNT - 1) : null;
     const task: Task = {
+      privacy:
+        (hasProject && isPrivateProject(projectAt)) ||
+        (whoAt !== null && isPrivateWho(whoAt))
+          ? 'private'
+          : 'ordinary',
       status: isDone ? 'done' : 'open',
       importance: (['must', 'should', 'could', null] as const)[index % 4],
       isUrgent: index % 17 === 0,
@@ -877,9 +893,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       context: (['atHome', 'out', 'atComputer', 'onPhone', null] as const)[
         index % 5
       ],
-      projectId: hasProject ? projectIds[(index / 2) % PROJECT_COUNT] : null,
+      projectId: hasProject ? projectIds[projectAt] : null,
       milestoneId: hasProject && index % 4 === 0 ? 'm-1' : null,
-      whoIds: index % 6 === 0 ? [whoIdOf(between(1, WHO_COUNT - 1))] : [],
+      whoIds: whoAt === null ? [] : [whoIdOf(whoAt)],
       placeIds: [],
       notUntil: null,
       waitsOnTaskIds: [],
@@ -898,6 +914,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         notes:
           index % 9 === 0 ? 'Ask for the earlier slot if there is one.' : null,
         steps: {},
+        privateMark: null,
+        isPrivacyCleared: false,
       }),
     };
     return { id: `scale-task-${pad(index, 3)}`, task };
@@ -910,6 +928,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     const isConfirmed = index % 2 === 0;
     const createdAt = now - between(1, 700) * DAY_MS;
     const fact: Fact = {
+      privacy: isPrivateWho(whoIndex) ? 'private' : 'ordinary',
       status: isConfirmed ? 'confirmed' : 'inferred',
       stated: isConfirmed ? 'personSaid' : 'nomosInferred',
       kind: (['world', 'preference', 'favorite', 'identity'] as const)[
@@ -938,6 +957,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         quote: null,
         topic: index % 4 === 1 ? 'coffee' : null,
         value: null,
+        privateMark: null,
+        isPrivacyCleared: false,
       }),
     };
     return { id: `scale-fact-${pad(index)}`, fact };
@@ -989,6 +1010,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       }));
       const writtenAt = now - between(1, 300) * DAY_MS;
       const topic: Topic = {
+        privacy: 'ordinary',
         parentId: spec.parentId,
         depth: spec.depth,
         projectIds: [],
@@ -1007,6 +1029,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           emoji: null,
           overview: null,
           sections,
+          privateMark: null,
+          isPrivacyCleared: false,
         }),
       };
       const version: TopicVersion = {
@@ -1038,6 +1062,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       index % 20 === 19 ? null : topicSpecs[index % topicSpecs.length].id;
     const subject = NOTE_SUBJECTS[(index * 5 + Math.floor(index / 14)) % 14];
     const note: Note = {
+      privacy: 'ordinary',
       topicIds: topicId ? [topicId] : [],
       source: 'typed',
       isFromGeneralAnswer: false,
@@ -1053,6 +1078,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       sealed: await seal<NoteSealed>({
         title: `Notes on ${subject} ${index + 1}`,
         body: `What worked last time for ${subject}: ${pick(FACT_TEMPLATES)}. Check again before the next ${pick(['season', 'trip', 'service', 'filing'])}.`,
+        privateMark: null,
+        isPrivacyCleared: false,
       }),
     };
     return { id, note };
@@ -1083,7 +1110,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       const stepState = toStepState(
         steps.map(({ id: stepId, groupId }) => ({ id: stepId, groupId })),
       );
-      const body: ProcedureSealed = {
+      const body: ProcedureBody = {
         title,
         steps: Object.fromEntries(
           steps.map((step) => [step.id, { text: step.text, detail: null }]),
@@ -1094,6 +1121,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       };
       const madeAt = now - between(30, 700) * DAY_MS;
       const procedure: Procedure = {
+        privacy: 'ordinary',
         stepState,
         groupOrder: groups.map((group) => group.id),
         version: 1,
@@ -1103,7 +1131,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         executionId: null,
         createdAt: madeAt,
         lastEditedAt: madeAt,
-        sealed: await seal<ProcedureSealed>(body),
+        sealed: await seal<ProcedureSealed>({
+          ...body,
+          privateMark: null,
+          isPrivacyCleared: false,
+        }),
       };
       const version: ProcedureVersion = {
         version: 1,
@@ -1191,6 +1223,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       nameOf(between(1, WHO_COUNT - 1)).split(' ')[0],
     );
     const capture: Capture = {
+      privacy: 'ordinary',
+      touchesPrivate: null,
+      presence: null,
       inputMode: 'typed',
       sttProvider: null,
       interruptedCaptureId: null,
@@ -1395,7 +1430,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         source.shares.flatMap((share) =>
           share.categories.map((category) => [
             category.id,
-            { isOn: used.has(category.id), changedAt: createdAt, seenScopeVersion: null },
+            {
+              isOn: used.has(category.id),
+              changedAt: createdAt,
+              seenScopeVersion: null,
+            },
           ]),
         ),
       ),

@@ -17,6 +17,7 @@ import type {
   ProjectRole,
   ProjectSealed,
 } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your projects did not open.');
@@ -89,6 +90,7 @@ async function openProject(
     createdBy: data.createdBy ?? 'nomos',
     executionId: data.executionId ?? null,
     createdAt: data.createdAt ?? 0,
+    privacy: readPrivacy(data.privacy),
     lastEditedAt: data.lastEditedAt ?? null,
     finishedAt: data.finishedAt ?? null,
   } as const;
@@ -102,6 +104,8 @@ async function openProject(
       objective: toText(payload.objective),
       milestones: toMilestones(payload.milestones),
       roleNotes: toNotes(payload.roleNotes),
+      privateMark: payload.privateMark ?? null,
+      isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,
     };
   } catch {
@@ -113,6 +117,8 @@ async function openProject(
       milestones: {},
       roleNotes: {},
       isUnreadable: true,
+      privateMark: null,
+      isPrivacyCleared: false,
     };
   }
 }

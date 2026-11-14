@@ -51,10 +51,25 @@ const problems = [
   return [];
 });
 
+// A copy of text leaves the app, so every file that copies goes through `filterPrivate` (one thing copied from its own page is `filterPrivateOwnPage`, which contains it).
+const copiers = listFiles('src/apps/helm')
+  .filter((path) => /\.tsx?$/.test(path) && !path.endsWith('privacy.ts'))
+  .filter((path) =>
+    /\b(copyToClipboard|CopyTextButton)\b/.test(readFileSync(path, 'utf8')),
+  );
+const unfiltered = copiers.filter(
+  (path) => !readFileSync(path, 'utf8').includes('filterPrivate'),
+);
+unfiltered.forEach((path) =>
+  problems.push(
+    `${path} copies text without filterPrivate; private things are left out of a copy unless this copy includes them`,
+  ),
+);
+
 if (problems.length > 0) {
   problems.forEach((problem) => console.error(problem));
   process.exit(1);
 }
 console.log(
-  'check:helm-copy: no literal assistant or app name in Helm screen copy.',
+  `check:helm-copy: no literal assistant or app name in Helm screen copy; ${copiers.length} copying files all filter private things.`,
 );

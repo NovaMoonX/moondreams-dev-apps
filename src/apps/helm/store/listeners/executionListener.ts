@@ -20,6 +20,7 @@ import type {
   ExecutionSealed,
   OpenExecution,
 } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const executionsOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'executions');
@@ -48,6 +49,7 @@ export async function openExecution(
     questionRef: data.questionRef ?? null,
     errorCode: data.errorCode ?? null,
     createdAt: data.createdAt ?? 0,
+    privacy: readPrivacy(data.privacy),
     decidedAt: data.decidedAt ?? null,
     finishedAt: data.finishedAt ?? null,
   } as const;

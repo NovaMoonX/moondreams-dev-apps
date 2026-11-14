@@ -1,6 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 import { HELM_COPY } from '@apps/helm/constants';
 import { formatDayLabel } from '@apps/helm/utils/keyDateText';
 import type { UpcomingKeyDate } from '@apps/helm/utils/keyDateUpcoming';
@@ -36,9 +37,13 @@ function ComingUpRow({ date, onOpen }: ComingUpRowProps) {
       className='flex h-auto w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
       onClick={() => onOpen(date.whoId)}
     >
-      <span className='text-foreground min-w-0 flex-1 text-[15px] leading-[21px] break-words'>
+      <PrivateTitle
+        kind='fact'
+        record={{ id: date.id, subjectIds: [date.whoId] }}
+        className='text-foreground flex-1 text-[15px] leading-[21px]'
+      >
         {line}
-      </span>
+      </PrivateTitle>
       <ChevronRight
         className='text-muted-foreground size-4 shrink-0'
         aria-hidden='true'

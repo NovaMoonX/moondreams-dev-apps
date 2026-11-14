@@ -126,6 +126,8 @@ export async function sendCapture(
     attachmentIds?: string[];
     /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
+    /** Whether the wake phrase began the turn and anyone was looking; left out on a typed turn. */
+    presence?: Capture['presence'];
   },
 ) {
   const text = turn.text.trim();
@@ -180,6 +182,9 @@ export async function sendCapture(
     createdAt,
     sortedAt: null,
     screen: turn.screen,
+    privacy: 'ordinary',
+    touchesPrivate: null,
+    presence: turn.presence ?? null,
     sealed,
   };
   const reference = doc(capturesOf(uid));
@@ -477,8 +482,15 @@ export async function makeTaskAsWritten(
     lastEditedAt: null,
     completedAt: null,
     clearedAt: null,
+    privacy: 'ordinary',
     sealed: await sealJson<TaskSealed>(
-      { title, notes: null, steps: {} },
+      {
+        title,
+        notes: null,
+        steps: {},
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       encryption,
     ),
   };

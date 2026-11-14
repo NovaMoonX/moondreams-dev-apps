@@ -86,6 +86,7 @@ import {
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
 import { getOpenSessionId } from '@apps/helm/utils/sessions';
+import { readPresence } from '@apps/helm/utils/presence';
 import { toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
@@ -137,6 +138,7 @@ export function useHelmVoice() {
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
   const screen = useRef<ScreenContext | null>(null);
+  const isWakeStarted = useRef(false);
   const noteId = useRef(0);
   const waiting = useRef(new Set<string>());
   // Code-built questions already asked again once, so a second miss goes on as a turn.
@@ -268,6 +270,7 @@ export function useHelmVoice() {
       rest === null
         ? talk(page) === 'started'
         : sendHeard(rest, page, heardBy.sttProvider);
+    if (isStarted) isWakeStarted.current = true;
     if (isStarted && page !== null && !isAskRequested) void openAsk();
     return isStarted;
   }
@@ -627,6 +630,8 @@ export function useHelmVoice() {
     const timeZone = helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
     const turn = { ...getNextTurn(), createdAt: Date.now() };
     const stopsAtSend = stopCount.current;
+    const startedByWake = isWakeStarted.current;
+    isWakeStarted.current = false;
     const fail = (error: unknown) => {
       console.error('Helm spoken turn did not send', error);
       voice.settle();
@@ -654,6 +659,7 @@ export function useHelmVoice() {
           sttProvider,
           interruptedCaptureId: interrupted,
         },
+        presence: { startedByWake, ...readPresence() },
       });
       recordSentTurn(uid, turn, id);
       if (isFinish) finishedIds.current.add(turn.leadId ?? id);

@@ -14,6 +14,7 @@ import {
   type EditResult,
   forgetWithPhotos,
 } from '@apps/helm/store/actions/whoActions';
+import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
   Place,
@@ -86,5 +87,7 @@ export async function updatePlace(
   }
 }
 
-export const forgetPlace = (uid: string, placeId: string) =>
-  forgetWithPhotos(uid, 'places', placeId);
+export const forgetPlace = async (uid: string, placeId: string) => {
+  await keepInheritedPrivate(uid, 'place', placeId);
+  return forgetWithPhotos(uid, 'places', placeId);
+};

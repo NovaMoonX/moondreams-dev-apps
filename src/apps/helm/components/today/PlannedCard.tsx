@@ -5,6 +5,7 @@ import { ChevronRight, TriangleAlert } from 'lucide-react';
 import TickMark from '@/components/TickMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenTask } from '@apps/helm/types';
+import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 
 interface PlannedCardProps {
   task: OpenTask;
@@ -59,16 +60,18 @@ function PlannedCard({
           onClick={() => onOpen(task)}
         >
           <span className='min-w-0 flex-1'>
-            <span
+            <PrivateTitle
+              kind='task'
+              record={task}
               className={join(
-                'block text-[15px] leading-[21px] break-words',
+                'text-[15px] leading-[21px]',
                 isDone
                   ? 'text-muted-foreground line-through'
                   : 'text-foreground',
               )}
             >
               {title}
-            </span>
+            </PrivateTitle>
             {timeLine && (
               <span className='text-muted-foreground block text-[13px] break-words'>
                 {isDone ? HELM_COPY.rowDone : timeLine}

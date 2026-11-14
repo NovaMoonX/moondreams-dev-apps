@@ -491,6 +491,34 @@ const mediaWordOf = (kind: MediaKind) => MEDIA_WORDS[kind].word;
 export const HOME_COMPOSER_ID = 'home-composer';
 
 export const HELM_COPY = {
+  copyList: 'Copy list',
+  listCopied: 'Copied the list',
+  copyFailed: "Couldn't copy that",
+  privateRowTitle: 'Private',
+  privateRowSubtitle:
+    "Left out of copied lists, and only read as a label when you aren't looking at the screen",
+  privateLockLabel: 'Private',
+  privateMarkedHealth: "Marked private because it's about health",
+  privateMarkedCare: "Marked private because it's about someone's care",
+  privateChange: 'Change',
+  privateFromParent: (name: string) => `Private because ${name} is private`,
+  privateOpenParent: 'Open',
+  privateClearTitle: 'Make this not private?',
+  privateClearMessage: (title: string, name: string, kind: 'health' | 'care') =>
+    `\u201c${title}\u201d is about ${kind === 'health' ? 'health' : "someone's care"}. It could then be copied in a list, and read by name when you aren't looking at the screen. ${name} won't mark it private again.`,
+  privateKeep: 'Keep it private',
+  privateClearAction: 'Make it not private',
+  privateNeedsConnection: 'Changing this needs a connection.',
+  privateLeftOutToastMs: 8000,
+  privateFailed: "That didn't save. Try the switch again.",
+  privateStillBecause: (name: string) =>
+    `Still private because ${name} is private`,
+  privateCascadePartial: "Saved, but some things filed under it didn't follow.",
+  privateLeftOut: (count: number) =>
+    `${count} private ${count === 1 ? 'thing' : 'things'} left out`,
+  privateIncludeThem: 'Include them',
+  copyNothing: 'Nothing to copy',
+  copyEmpty: 'The list is empty',
   homeHint: 'Tap to talk, or type',
   talk: 'Talk',
   talkListening: 'Listening',

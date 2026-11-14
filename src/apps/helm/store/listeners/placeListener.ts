@@ -12,6 +12,7 @@ import type { SealedReader } from '@lib/security';
 
 import { PLACES_LIMIT } from '@apps/helm/constants';
 import type { OpenPlace, Place, PlaceSealed } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your places did not open.');
@@ -31,6 +32,7 @@ async function openPlace(
     createdBy: data.createdBy ?? 'nomos',
     executionId: data.executionId ?? null,
     createdAt: data.createdAt ?? 0,
+    privacy: readPrivacy(data.privacy),
     lastEditedAt: data.lastEditedAt ?? null,
   } as const;
   try {
@@ -46,6 +48,8 @@ async function openPlace(
         : [],
       address: toText(payload.address),
       notes: toText(payload.notes),
+      privateMark: payload.privateMark ?? null,
+      isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,
     };
   } catch {
@@ -56,6 +60,8 @@ async function openPlace(
       address: null,
       notes: null,
       isUnreadable: true,
+      privateMark: null,
+      isPrivacyCleared: false,
     };
   }
 }

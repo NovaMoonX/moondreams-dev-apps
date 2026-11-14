@@ -238,6 +238,21 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     taps: ['startRun', 'tickRunSteps', 'finishRun'],
   }),
   row({
+    thing: 'Whether a thing is private',
+    home: 'tasks',
+    classes: ['readable', 'sealed'],
+    commands: ['setPrivate'],
+    writer: 'actions/privacyActions',
+    taps: ['setPrivate', 'keepInheritedPrivate'],
+  }),
+  row({
+    thing: 'Whether a turn touched a private thing',
+    home: 'captures',
+    classes: ['readable'],
+    writer: 'server/sortHelmCapture',
+    jobFields: [{ field: 'touchesPrivate', job: 'sortHelmCapture' }],
+  }),
+  row({
     thing: 'Photos and files kept with a record',
     home: 'media',
     contextBlock: '<attachments>',

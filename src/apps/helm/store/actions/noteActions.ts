@@ -99,10 +99,16 @@ export async function createNote(
     projectIds: [],
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     sealed: await sealJson<NoteSealed>(
-      { title: words.title, body: words.body },
+      {
+        title: words.title,
+        body: words.body,
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       encryption,
     ),
   };
@@ -390,10 +396,16 @@ export async function saveAnswerAsNote(
     projectIds: [],
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     sealed: await sealJson<NoteSealed>(
-      { title: words.title, body: words.body },
+      {
+        title: words.title,
+        body: words.body,
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       encryption,
     ),
   };

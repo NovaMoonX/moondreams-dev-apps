@@ -47,6 +47,7 @@ export const COMMAND_KINDS = [
   'setProjectRole',
   'addMilestone',
   'createNote',
+  'setPrivate',
 ] as const;
 
 /** Commands that delete a record. A deleting command is kept only when its subject is still named once every closing phrase is taken out of the turn's words. */
@@ -271,7 +272,8 @@ export type NomosCommand =
       whoRefs: string[];
       placeRefs: string[];
     }
-  | { kind: 'completeTask'; taskId: string };
+  | { kind: 'completeTask'; taskId: string }
+  | { kind: 'setPrivate'; taskId: string; isPrivate: boolean };
 
 /** A person, pet or organization the reply names. */
 export interface MentionRead {
@@ -633,6 +635,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'title',
             'dueSpanId',
             'isUrgent',
+            'isPrivate',
             'scope',
             'question',
             'isHealth',
@@ -715,7 +718,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             taskAlias: nullable(
               'string',
-              'updateTask and completeTask: the alias of an open task from the context or a search result, or a $new ref from this reply; null for createTask.',
+              'updateTask, completeTask and setPrivate: the alias of an open task from the context or a search result, or a $new ref from this reply; null for createTask.',
             ),
             title: nullable(
               'string',
@@ -728,6 +731,10 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             isUrgent: nullable(
               'boolean',
               'true when the capture marks this task urgent; null to leave it as it is.',
+            ),
+            isPrivate: nullable(
+              'boolean',
+              'setPrivate: true to keep the task private, false only when the person asks to stop keeping it private; null for every other kind.',
             ),
             scope: nullable(
               'string',
@@ -999,7 +1006,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun and tickRun: the words of the capture that ask for it, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun and setPrivate: the words of the capture that ask for it, copied exactly.',
             ),
             topicChanges: {
               type: ['array', 'null'],

@@ -24,6 +24,7 @@ import type {
   ProcedureVersionSealed,
 } from '@apps/helm/types';
 import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your procedures did not open.');
@@ -89,6 +90,8 @@ const toBody = (payload: Partial<ProcedureSealed>): ProcedureSealed => ({
   title: toText(payload.title) ?? '',
   steps: toSteps(payload.steps),
   groups: toGroups(payload.groups),
+  privateMark: payload.privateMark ?? null,
+  isPrivacyCleared: payload.isPrivacyCleared ?? null,
 });
 
 /** A procedure that won't open is skipped, so a half-written one never shows as a blank row. */
@@ -110,8 +113,11 @@ async function openProcedure(
       sourceTaskId: data.sourceTaskId ?? null,
       executionId: data.executionId ?? null,
       createdAt: data.createdAt ?? 0,
+      privacy: readPrivacy(data.privacy),
       lastEditedAt: data.lastEditedAt ?? null,
       ...toBody(payload),
+      privateMark: payload.privateMark ?? null,
+      isPrivacyCleared: payload.isPrivacyCleared ?? false,
     };
   } catch {
     return null;

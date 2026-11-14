@@ -110,11 +110,19 @@ export async function createTopic(
     overviewOf: {},
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     lastWrittenAt: null,
     sealed: await sealJson<TopicSealed>(
-      { name: words.name, emoji: words.emoji, overview: null, sections: [] },
+      {
+        name: words.name,
+        emoji: words.emoji,
+        overview: null,
+        sections: [],
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       encryption,
     ),
   });

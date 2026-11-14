@@ -33,6 +33,8 @@ export interface ContextFact {
   subject: string;
   statement: string;
   by: 'said' | 'inferred';
+  isPrivate?: boolean;
+  isSubjectPrivate?: boolean;
 }
 
 /** What the records hold about the person themself: a preference, a favorite or who they are. */
@@ -43,6 +45,7 @@ export interface ContextSelfFact {
   value: string | null;
   statement: string;
   by: 'said' | 'inferred';
+  isPrivate?: boolean;
 }
 
 /** A topic as the model sees it: its name and its path from the top down ("Car care › Washing"). */
@@ -50,6 +53,9 @@ export interface ContextTopic {
   id: string;
   name: string;
   path: string;
+  /** The path with each private topic on it named as one, for a turn nobody is looking at. */
+  maskedPath?: string;
+  isPrivate?: boolean;
 }
 
 /** A procedure as the model sees it: its title and how many steps it has. */
@@ -57,6 +63,7 @@ export interface ContextProcedure {
   id: string;
   title: string;
   stepCount: number;
+  isPrivate?: boolean;
 }
 
 /** The open procedure with its steps in their groups, ungrouped first. */
@@ -65,6 +72,7 @@ export interface ContextFocusedProcedure {
   title: string;
   version: number;
   blocks: StepGroupBlock[];
+  isPrivate?: boolean;
 }
 
 export const MAX_CONTEXT_PROCEDURES = 50;
@@ -74,6 +82,7 @@ export interface ContextRun {
   id: string;
   title: string;
   forLabel: string | null;
+  isPrivate?: boolean;
   /** The run the person has open on screen. */
   isOpen: boolean;
   doneCount: number;
@@ -90,6 +99,7 @@ export interface ContextNote {
   title: string;
   body?: string;
   isUnchecked?: boolean;
+  isPrivate?: boolean;
 }
 
 /** Each body trimmed so that all together stay within the cap: the shortest keep every word and what they leave over is shared by the longer ones. */
@@ -176,6 +186,7 @@ export interface ContextFocusedTopic {
   id: string;
   name: string;
   version: number;
+  isPrivate?: boolean;
   sections: {
     id: string;
     heading: string | null;
