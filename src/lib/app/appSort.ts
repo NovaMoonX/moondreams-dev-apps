@@ -1,4 +1,4 @@
-import { APP_REGISTRY_ID_MAP, getRegistryAppForPath } from './app.registry';
+import { APP_REGISTRY_ID_MAP } from './app.registry';
 
 export type AppSort = 'recent' | 'name' | 'newest';
 
@@ -39,13 +39,11 @@ export function readAppOpenTimes(uid: string | null): Record<string, number> {
   }
 }
 
-export function stampAppOpened(uid: string, pathname: string) {
-  const app = getRegistryAppForPath(pathname);
-  if (!app) return;
+export function stampAppOpened(uid: string, appId: string) {
   try {
     localStorage.setItem(
       `${OPENED_PREFIX}${uid}`,
-      JSON.stringify({ ...readAppOpenTimes(uid), [app.id]: Date.now() }),
+      JSON.stringify({ ...readAppOpenTimes(uid), [appId]: Date.now() }),
     );
   } catch {
     // Without storage the list keeps its other orders.
