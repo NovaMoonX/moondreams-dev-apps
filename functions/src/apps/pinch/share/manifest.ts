@@ -18,6 +18,11 @@ export const PINCH_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            { label: "The meal's name", sinceVersion: 1 },
+            { label: 'The day and the slot, like dinner', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'shoppingList',
@@ -27,6 +32,11 @@ export const PINCH_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            { label: 'Each item still to buy', sinceVersion: 1 },
+            { label: 'How much of it to buy', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'useSoon',
@@ -36,6 +46,12 @@ export const PINCH_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
+          reads: [
+            { label: 'Each food near its date', sinceVersion: 1 },
+            { label: 'Where it is kept', sinceVersion: 1 },
+            { label: 'The day to use it by', sinceVersion: 1 },
+          ],
+          scopeVersion: 1,
         },
       ],
       never: [

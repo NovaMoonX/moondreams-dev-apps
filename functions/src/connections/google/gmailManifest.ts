@@ -15,6 +15,14 @@ export const GOOGLE_GMAIL_MANIFEST: ConnectorManifest = {
       mode: 'live',
       isOnAtConnect: true,
       addedInVersion: 1,
+      reads: [
+        {
+          label: 'The subject and sender of messages that match a search',
+          sinceVersion: 1,
+        },
+        { label: 'A short snippet of each', sinceVersion: 1 },
+      ],
+      scopeVersion: 1,
     },
   ],
   never: ['Attachments', 'Sending, labelling, archiving or deleting'],

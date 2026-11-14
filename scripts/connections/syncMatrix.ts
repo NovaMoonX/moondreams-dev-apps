@@ -19,8 +19,11 @@ import {
 } from '../../functions/src/connections/callables.ts';
 import { expireCopies } from '../../functions/src/connections/expire.ts';
 import {
+  applyCategoryChanges,
+  assertSeenScopes,
   buildNewGrant,
   readGrant,
+  readUpdateConnectionRequest,
 } from '../../functions/src/connections/grants.ts';
 import { toSyncedId } from '../../functions/src/apps/helm/connections/sink.ts';
 import {
@@ -510,6 +513,49 @@ const main = async () => {
       (await t.grant()).keptCopies,
       null,
       'the grant stops counting kept copies',
+    );
+  }
+
+  {
+    const fresh = buildNewGrant(
+      {
+        readerAppId: 'helm',
+        connectorId: 'app:pinch',
+        accountId: 'site',
+        categoryIds: ['shoppingList'],
+        options: null,
+      },
+      manifest,
+      NOW,
+    );
+    assert.equal(fresh.categories.shoppingList.seenScopeVersion, 1);
+    assert.equal(readGrant({}).categories.shoppingList, undefined);
+    assert.equal(
+      readGrant({ categories: { shoppingList: { isOn: true } } }).categories
+        .shoppingList.seenScopeVersion,
+      null,
+      'a legacy grant reads its seen scope as null',
+    );
+    assert.equal(
+      applyCategoryChanges(fresh, {}, manifest, NOW, { shoppingList: 1 })
+        .shoppingList.seenScopeVersion,
+      1,
+    );
+    const request = (seenScopes: unknown) => () =>
+      readUpdateConnectionRequest({ grantId: GRANT_ID, seenScopes });
+    assert.deepEqual(request({ shoppingList: 1 })().seenScopes, {
+      shoppingList: 1,
+    });
+    assert.throws(request({ shoppingList: 1.5 }), 'a fraction is refused');
+    assert.throws(request({ shoppingList: 0 }), 'zero is refused');
+    assert.throws(request({}), 'an empty map is refused');
+    assert.throws(
+      () => assertSeenScopes(manifest, { shoppingList: 2 }),
+      'a version past the manifest is refused',
+    );
+    assert.throws(
+      () => assertSeenScopes(manifest, { nope: 1 }),
+      'an unknown category is refused',
     );
   }
 

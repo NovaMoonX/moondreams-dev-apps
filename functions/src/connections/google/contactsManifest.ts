@@ -16,6 +16,12 @@ export const GOOGLE_CONTACTS_MANIFEST: ConnectorManifest = {
       mode: 'live',
       isOnAtConnect: true,
       addedInVersion: 1,
+      reads: [
+        { label: "Each contact's name", sinceVersion: 1 },
+        { label: 'Their emails and phone numbers', sinceVersion: 1 },
+        { label: 'Their photo and birthday', sinceVersion: 1 },
+      ],
+      scopeVersion: 1,
     },
   ],
   never: [
