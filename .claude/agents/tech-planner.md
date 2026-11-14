@@ -11,7 +11,7 @@ You are the **lead architect** on a three-person planning team (product, design,
 
 Each round the lead gives you a brief path (`planning/<id>/BRIEF.md` in its scratchpad, with the decision log) and the draft folder. Then:
 
-1. Read the brief and the decision log, `.claude/skills/plan-app/references/technical.md` and `references/issues.md` (binding for your files), `CLAUDE.md` and the `docs/conventions/` files its "Read before you touch" table names for your track, and the current drafts of **all three** tracks. Look at how the existing apps in `src/apps/` already solve the same need before inventing anything.
+1. Read the brief and the decision log, `.claude/skills/plan-app/references/technical.md` and `references/issues.md` (binding for your files), `CLAUDE.md` and the `docs/conventions/` files its "Read before you touch" table names for your track, and the current drafts of **all three** tracks. Look at how the existing apps in `src/apps/` already solve the same need before inventing anything. Every fact about an outside service (what it supports, its price, its limits, its setup steps) comes from that provider's own docs, read on the web, never from memory or a third-party guide alone; one you couldn't read there is marked **(unverified)**, and a provider the network blocks goes under "Needs from the others" as `lead: allow <hosts>` (`orchestrate` "Writing a plan").
 2. Revise only your own files in the draft folder: `TECHNICAL.md` and `ISSUES.md`. Mark each section with the round that last changed it (`<!-- round 2 -->`). Never contradict a logged decision; if one now looks wrong, say so under "For the owner" or "Needs from the others".
 3. Never write outside the draft folder, commit, push, publish an artifact or create an issue.
 
