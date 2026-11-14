@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import {
   FIXTURE_SERVICES,
@@ -207,7 +207,10 @@ const rewriteEnv = (file: string, keys: string[], block: string[]) => {
     block.length > 0
       ? [...rest, ...(rest.length > 0 ? [''] : []), ...block]
       : rest;
-  writeFileSync(file, next.length > 0 ? `${next.join('\n')}\n` : '');
+  writeFileSync(file, next.length > 0 ? `${next.join('\n')}\n` : '', {
+    mode: 0o600,
+  });
+  chmodSync(file, 0o600);
 };
 
 const writeSwitch = (names: string[]) =>
@@ -340,6 +343,12 @@ const askYesNo = async (question: string, isDefaultYes: boolean) => {
     input: process.stdin,
     output: process.stdout,
   });
+  prompt.on('SIGINT', () => {
+    process.stdout.write(
+      '\nStopped. Choices already made are saved; restart the emulators to apply them.\n',
+    );
+    process.exit(130);
+  });
   const answer = (
     await prompt.question(`${question} ${isDefaultYes ? '[Y/n]' : '[y/N]'} `)
   )
@@ -349,7 +358,10 @@ const askYesNo = async (question: string, isDefaultYes: boolean) => {
   return answer === '' ? isDefaultYes : answer.startsWith('y');
 };
 
+const gcloudLogin = { isReady: false };
+
 const ensureGcloudLogin = () => {
+  if (gcloudLogin.isReady) return true;
   const works = () => {
     try {
       execFileSync('gcloud', ['auth', 'print-access-token'], {
@@ -361,7 +373,7 @@ const ensureGcloudLogin = () => {
       return false;
     }
   };
-  if (works()) return true;
+  if (works()) return (gcloudLogin.isReady = true);
   console.log(
     'gcloud is signed out or its sign-in expired; a fresh sign-in is needed to read the production key.',
   );
@@ -370,7 +382,7 @@ const ensureGcloudLogin = () => {
   } catch {
     return false;
   }
-  return works();
+  return (gcloudLogin.isReady = works());
 };
 
 const pullFromProduction = (key: string) => {
@@ -405,6 +417,10 @@ const isStoredLocally = (service: FixtureService) => {
 const storeKeys = (service: FixtureService, values: string[]) => {
   const { keys, isBound } = SERVICES[service];
   const file = isBound ? SECRET_FILE : ENV_FILE;
+  if (values.some((value) => /[\r\n]/.test(value))) {
+    console.log('A key contained a line break, so nothing was written.');
+    return false;
+  }
   if (!isIgnoredByGit(file)) {
     console.log(
       `${file} is not git-ignored, so nothing was written. Fix .gitignore first.`,
@@ -449,20 +465,28 @@ const chooseOne = async (service: FixtureService) => {
     `\n${service} (${apps}): now ${state}.${caution && isReal ? `\n  ⚠ ${caution}` : ''}`,
   );
   const wantsReal = await askYesNo(`Use the real ${service}?`, isReal);
-  if (wantsReal === isReal) return false;
-  if (!wantsReal) {
+  if (wantsReal) {
+    if (isReal) return false;
+    if (!isStoredLocally(service) && !(await getKeys(service))) {
+      console.log(`No key was set, so ${service} stays on fixtures.`);
+      return false;
+    }
+    applyForced('real', [service]);
+    console.log(`${service} will use the real service.`);
+    return true;
+  }
+  const wasForced = isForced(forced, service);
+  const isRemovable = !SERVICES[service].isNotPulled;
+  if (isRemovable) {
     [SECRET_FILE, ENV_FILE]
       .filter((file) => existsSync(file))
       .forEach((file) => rewriteEnv(file, SERVICES[service].keys, []));
-    applyForced('fixtures', [service]);
-    console.log(`${service} will use fixtures (local key removed).`);
-    return true;
   }
-  applyForced('real', [service]);
-  if (isStoredLocally(service) || (await getKeys(service))) return true;
-  applyForced('fixtures', [service]);
-  console.log(`No key was set, so ${service} stays on fixtures.`);
-  return false;
+  if (!wasForced) applyForced('fixtures', [service]);
+  console.log(
+    `${service} will use fixtures${isRemovable ? ' (local key removed)' : ' (your local key is kept: it cannot be pulled back)'}.`,
+  );
+  return isReal || !wasForced;
 };
 
 const chooseServices = async (appId: string) => {

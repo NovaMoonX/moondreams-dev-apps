@@ -154,7 +154,9 @@ const askAboutServices = () => {
     );
     return false;
   } catch (error) {
-    return (error as { status?: number }).status === 10;
+    const { status } = error as { status?: number };
+    if (status !== 10) process.exit(status ?? 1);
+    return true;
   }
 };
 
@@ -163,9 +165,13 @@ const askToRestartEmulators = async () => {
     input: process.stdin,
     output: process.stdout,
   });
+  prompt.on('SIGINT', () => {
+    process.stdout.write('\n');
+    process.exit(130);
+  });
   const answer = (
     await prompt.question(
-      '\nThe running emulators need a restart to use that. Restart them now? Their data is cleared and the fixtures reseeded. [Y/n] ',
+      `\nThe running emulators need a restart to use that. Restart them now? Their data is cleared and only ${app.name}'s fixtures are reseeded (npm run seed:reset restores the rest). [Y/n] `,
     )
   )
     .trim()
