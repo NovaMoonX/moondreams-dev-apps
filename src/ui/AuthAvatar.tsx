@@ -1,7 +1,7 @@
 import { Button, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Bug, House } from 'lucide-react';
+import { House } from 'lucide-react';
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -121,7 +121,9 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     <Button
       variant='base'
       size='sm'
-      aria-label='Your account'
+      aria-label={
+        isDebugListed ? 'Your account, debug details are on' : 'Your account'
+      }
       aria-expanded={isOpen}
       className={join(
         "gap-2 max-sm:relative max-sm:min-w-0 max-sm:px-0 max-sm:after:absolute max-sm:after:-inset-1.5 max-sm:after:content-['']",
@@ -129,17 +131,14 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       )}
       onClick={() => setIsOpen((open) => !open)}
     >
-      <span className='relative inline-flex'>
+      <span
+        className={join(
+          'relative inline-flex rounded-full',
+          isDebugListed &&
+            'ring-offset-background ring-2 ring-amber-600 ring-offset-2 dark:ring-amber-300',
+        )}
+      >
         <UserAvatar user={user} size='sm' />
-        {isDebugListed ? (
-          <span
-            role='img'
-            aria-label='Debug details are on'
-            className='bg-primary text-primary-foreground ring-background absolute -top-1 -right-1 flex size-3.5 items-center justify-center rounded-full ring-2'
-          >
-            <Bug className='size-2' aria-hidden='true' />
-          </span>
-        ) : null}
       </span>
       <span className='hidden sm:inline'>{displayName}</span>
       {isPhone ? null : <ChevronDown className='h-4 w-4' />}

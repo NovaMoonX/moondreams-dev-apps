@@ -190,7 +190,7 @@ const openAfterDeploy = async (isRetry: boolean) => {
       document
         .querySelector<HTMLScriptElement>('script[type=module]')
         ?.src.endsWith(script) === true ||
-      document.body.innerText.includes('something went wrong'),
+      /something went wrong/i.test(document.body.innerText),
     newScript,
     { timeout: 20000 },
   );
@@ -239,7 +239,7 @@ report(
     fresh.pathname === '/runway' &&
     !fresh.isOldPage &&
     fresh.script.endsWith(newScript) &&
-    !fresh.text.includes('something went wrong') &&
+    !/something went wrong/i.test(fresh.text) &&
     fresh.stamp !== null,
   fresh,
 );
@@ -247,7 +247,7 @@ report(
   'a second miss within half a minute: the error screen with Restart, no reload',
   retry.isRunwayMissed &&
     retry.isOldPage &&
-    retry.text.includes('something went wrong') &&
+    /something went wrong/i.test(retry.text) &&
     retry.text.includes('Restart') &&
     retry.stamp === retry.presetStamp,
   retry,
