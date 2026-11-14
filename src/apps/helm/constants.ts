@@ -2322,6 +2322,9 @@ export const HELM_COPY = {
   habitsPausedUntil: (date: string) => `Paused until ${date}`,
   habitsStoppedOn: (date: string) => `Stopped ${date}`,
   habitsWeekLine: (done: number, due: number) => `${done} of ${due} this week`,
+  habitsStartsToday: 'Starts today',
+  habitsStartsOn: (day: string) => `Starts ${day}`,
+  habitsNothingYet: 'Nothing asked yet this week',
   askHabits: 'Ask about your habits',
   chipHabits: 'About your habits',
   backToHabits: 'Back to Habits',
@@ -2332,8 +2335,6 @@ export const HELM_COPY = {
   habitMarkDone: (name: string) => `Mark ${name} done`,
   habitMarkNotDone: (name: string) => `Take back ${name}`,
   habitAddOne: (name: string) => `Add one to ${name}`,
-  habitLineWindow: (name: string, label: string) =>
-    `${name} · ${label.toLowerCase()}`,
   habitLineCount: (name: string, count: number, perDay: number) =>
     count > perDay
       ? `${name} · ${count} today`
@@ -2367,15 +2368,13 @@ export const HELM_COPY = {
     count === 1 ? 'Once a day' : `${count} times a day`,
   habitSinceBySaid: (date: string) => `Since ${date} · from what you said`,
   habitSinceByHand: (date: string) => `Since ${date} · added by you`,
-  habitCareLine: (assistant: string) =>
-    `Health: ${assistant} never moves this, only asks.`,
-  habitWeekTitle: 'This week',
   habitWeekDayLabel: (day: string, state: string) => `${day}: ${state}`,
   habitWeekDone: 'marked',
   habitWeekOpen: 'not marked',
   habitWeekLater: 'still to come',
   habitWeekOff: 'not asked',
   habitWeekReached: 'reached the number',
+  habitWeekSkipped: 'skipped',
   habitNotesTitle: 'Notes',
   habitNoteHeading: (day: string, label: string | null) =>
     label ? `${day} · ${label.toLowerCase()}` : day,
@@ -2385,7 +2384,6 @@ export const HELM_COPY = {
   habitNotesPlaceholder: 'Anything worth remembering about it',
   habitWhenRow: 'When',
   habitMenuEdit: 'Change name, emoji or notes',
-  habitMenuWhen: 'Change days or times',
   habitMenuPause: 'Pause for a while',
   habitMenuResume: 'Resume now',
   habitMenuStop: 'Stop this habit',
@@ -2394,6 +2392,12 @@ export const HELM_COPY = {
   habitCareRowSubtitle: (assistant: string) =>
     `Kept private, and ${assistant} never moves it, only asks.`,
   habitCareForWho: 'Always on for someone you look after.',
+  habitCareOnToast: (name: string) => `${name} is kept private as care`,
+  habitForWho: (name: string) => `For ${name}`,
+  habitWhoQuestion: 'Who is it for?',
+  habitWhoLabel: 'Who it is for',
+  habitWhoYou: 'You',
+  habitWhoSummary: (name: string | null) => name ?? 'You',
   habitCareOffTitle: 'Not medicine or care?',
   habitCareOffMessage: (name: string) =>
     `${name} stops being kept private, and is treated like any other habit.`,
@@ -2413,6 +2417,7 @@ export const HELM_COPY = {
     'Times are on your own clock. A time that passes stays quiet and can still be ticked.',
   habitWhenOftenLabel: 'How often',
   habitWhenTimesLabel: 'When',
+  habitWhenTimesHeading: 'When in the day',
   habitWhenWeekdaysLabel: 'Which days',
   habitWhenWeekCountLabel: 'Times a week',
   habitWhenPerDayLabel: 'Times a day',
@@ -2439,11 +2444,16 @@ export const HELM_COPY = {
   },
   habitPauseTitle: (name: string) => `Pause ${name}`,
   habitPauseHint: "Off Today until a day you pick. Paused days don't count.",
-  habitPauseUntil: 'Back on',
+  habitPauseQuickLabel: 'How long',
+  habitPauseWeek: 'A week',
+  habitPauseTwoWeeks: 'Two weeks',
+  habitPauseOpen: 'Until I resume',
+  habitPauseUntil: 'Or pick the day it is back on',
   habitPauseAction: 'Pause',
   habitPauseNeedsDay: 'Pick a day after today.',
   habitPausedToast: (name: string, date: string) =>
     `Paused ${name} until ${date}`,
+  habitPausedOpenToast: (name: string) => `Paused ${name}`,
   habitResumedToast: (name: string) => `${name} is back on Today`,
   habitStopTitle: (name: string) => `Stop ${name}?`,
   habitStopMessage: 'Off Today for good. Its weeks stay.',

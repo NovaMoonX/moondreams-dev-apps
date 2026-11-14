@@ -5,7 +5,7 @@ import {
   DropdownMenuFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { CalendarCheck, ChevronRight } from 'lucide-react';
+import { CalendarCheck, ChevronRight, CircleStop } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -16,7 +16,9 @@ import HabitEditSheet from '@apps/helm/components/habits/HabitEditSheet';
 import HabitPauseSheet from '@apps/helm/components/habits/HabitPauseSheet';
 import HabitWeek from '@apps/helm/components/habits/HabitWeek';
 import HabitWhenSheet from '@apps/helm/components/habits/HabitWhenSheet';
+import { useHabitWhoName } from '@apps/helm/components/habits/useHabitWhoName';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
+import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY, HABIT_NOTES_SHOWN } from '@apps/helm/constants';
 import { windowInstants } from '@apps/helm/engine/habitDay';
@@ -35,7 +37,7 @@ import { readHabitStatus } from '@apps/helm/utils/habitToday';
 import { formatSlotRange } from '@apps/helm/utils/planDays';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 
-const { option } = DropdownMenuFactories;
+const { option, separator } = DropdownMenuFactories;
 
 interface HabitScreenProps {
   habitId: string | null;
@@ -67,6 +69,7 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
   const { isLoaded } = useAppSelector((state) => state.helm.habits);
   const habit = useAppSelector(selectHabitById).get(habitId ?? '') ?? null;
   const days = useAppSelector((state) => state.helm.habitDays.byId);
+  const whoName = useHabitWhoName(habit ?? { forWhoId: null });
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingWhen, setIsChangingWhen] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
@@ -151,7 +154,7 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
     }
     setIsWritingCare(true);
     try {
-      const { result } = await setHabitCare(
+      const { result, undo } = await setHabitCare(
         user.uid,
         await getHelmEncryption(user.uid),
         habit,
@@ -161,6 +164,19 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
         addToast({ title: HELM_COPY.habitCareNeedsConnection, type: 'info' });
       } else if (result !== 'saved') {
         addToast({ title: HELM_COPY.habitCareFailed, type: 'error' });
+      } else if (isCare) {
+        addToast({
+          title: HELM_COPY.habitCareOnToast(habit.name),
+          type: 'success',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () =>
+              void undo().catch((error: unknown) => {
+                console.error('Helm habit care mark was not put back', error);
+                addToast({ title: HELM_COPY.habitCareFailed, type: 'error' });
+              }),
+          },
+        });
       }
     } catch (error) {
       console.error('Helm habit care mark did not save', error);
@@ -175,7 +191,6 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
       ? {
           items: [
             option({ label: HELM_COPY.habitMenuEdit, value: 'edit' }),
-            option({ label: HELM_COPY.habitMenuWhen, value: 'when' }),
             ...(habit.status === 'ended'
               ? [
                   option({
@@ -193,12 +208,21 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
                         label: HELM_COPY.habitMenuPause,
                         value: 'pause',
                       }),
-                  option({ label: HELM_COPY.habitMenuStop, value: 'stop' }),
+                  separator(),
+                  option({
+                    label: HELM_COPY.habitMenuStop,
+                    value: 'stop',
+                    icon: (
+                      <CircleStop
+                        className='text-destructive size-4'
+                        aria-hidden='true'
+                      />
+                    ),
+                  }),
                 ]),
           ],
           onItemSelect: (value: string) => {
             if (value === 'edit') setIsEditing(true);
-            else if (value === 'when') setIsChangingWhen(true);
             else if (value === 'pause') setIsPausing(true);
             else if (value === 'resume') {
               changeStatus('active', HELM_COPY.habitResumedToast(habit.name));
@@ -239,20 +263,25 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
           <>
             <div className='space-y-1'>
               <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
-                {habit.emoji ? (
-                  <span aria-hidden='true'>{habit.emoji} </span>
-                ) : (
-                  <CalendarCheck
-                    className='text-muted-foreground mr-2 inline size-6 align-[-0.1em]'
-                    aria-hidden='true'
-                  />
-                )}
-                {habit.name}
+                <PrivateTitle kind='habit' record={habit}>
+                  {habit.emoji ? (
+                    <span aria-hidden='true'>{habit.emoji} </span>
+                  ) : (
+                    <CalendarCheck
+                      className='text-muted-foreground mr-2 inline size-6 align-[-0.1em]'
+                      aria-hidden='true'
+                    />
+                  )}
+                  {habit.name}
+                </PrivateTitle>
               </h1>
               <p className='text-[15px]'>
-                {[formatCadence(habit.cadence), readWindowsLine(habit)].join(
-                  ' · ',
-                )}
+                {[
+                  whoName === null ? null : HELM_COPY.habitForWho(whoName),
+                  formatCadence(habit.cadence),
+                ]
+                  .filter((part): part is string => part !== null)
+                  .join('\u00a0· ')}
               </p>
               <p className='text-muted-foreground text-[13px]'>
                 {(habit.createdBy === 'nomos'
@@ -264,11 +293,6 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
               {statusLine && (
                 <p className='text-muted-foreground text-[13px]'>
                   {statusLine}
-                </p>
-              )}
-              {habit.isCare && (
-                <p className='text-muted-foreground text-[13px] text-pretty'>
-                  {HELM_COPY.habitCareLine(assistantName)}
                 </p>
               )}
               {habit.notes && (
@@ -308,7 +332,7 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
                 )}
               </section>
             )}
-            <section className='helm-card divide-border divide-y overflow-hidden'>
+            <section className='helm-card overflow-hidden'>
               <Button
                 type='button'
                 variant='tertiary'
@@ -352,6 +376,8 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
                   aria-hidden='true'
                 />
               </Button>
+            </section>
+            <section className='helm-card'>
               <div className='flex items-center gap-3 px-4 py-3'>
                 <div className='min-w-0 flex-1'>
                   <p className='text-foreground text-[15px] leading-[21px]'>
@@ -397,10 +423,12 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
               setIsPausing(false);
               changeStatus(
                 'paused',
-                HELM_COPY.habitPausedToast(
-                  habit.name,
-                  formatWeekdayDayUTC(until),
-                ),
+                until === null
+                  ? HELM_COPY.habitPausedOpenToast(habit.name)
+                  : HELM_COPY.habitPausedToast(
+                      habit.name,
+                      formatWeekdayDayUTC(until),
+                    ),
                 until,
               );
             }}

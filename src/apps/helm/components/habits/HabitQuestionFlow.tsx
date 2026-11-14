@@ -13,6 +13,7 @@ import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAppSelector } from '@/store';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
+import HabitWhoField from '@apps/helm/components/habits/HabitWhoField';
 import {
   OftenFields,
   TimesFields,
@@ -27,6 +28,7 @@ import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { createHabit } from '@apps/helm/store/actions/habitActions';
 import { selectKeptHabits } from '@apps/helm/store/selectors/habitSelectors';
+import { selectWhoById } from '@apps/helm/store/selectors/whoSelectors';
 import {
   EMPTY_WHEN,
   formatCadence,
@@ -46,6 +48,7 @@ interface Answers {
   emoji: string;
   when: WhenDraft;
   isCare: boolean;
+  forWhoId: string | null;
   notes: string;
   /** Steps the person skipped on purpose. */
   skipped: string[];
@@ -56,6 +59,7 @@ const INITIAL: Answers = {
   emoji: '',
   when: EMPTY_WHEN,
   isCare: false,
+  forWhoId: null,
   notes: '',
   skipped: [],
 };
@@ -86,6 +90,7 @@ function HabitFlowForm({
   const clock = useHabitClock();
   const profile = useAppSelector((state) => state.helm.profile);
   const kept = useAppSelector(selectKeptHabits);
+  const whoById = useAppSelector(selectWhoById);
   const [answers, setAnswers] = useState<Answers>(INITIAL);
   const [isSaving, setIsSaving] = useState(false);
   const [isNameTouched, setIsNameTouched] = useState(false);
@@ -191,6 +196,27 @@ function HabitFlowForm({
         </div>
       ),
     },
+    ...(answers.isCare
+      ? [
+          {
+            id: 'who',
+            title: HELM_COPY.habitWhoQuestion,
+            summaryLabel: HELM_COPY.habitWhoLabel,
+            summaryValue: HELM_COPY.habitWhoSummary(
+              answers.forWhoId === null
+                ? null
+                : (whoById.get(answers.forWhoId)?.name ?? null),
+            ),
+            isAnswered: true,
+            render: () => (
+              <HabitWhoField
+                value={answers.forWhoId}
+                onChange={(forWhoId) => set({ forWhoId })}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       id: 'notes',
       title: HELM_COPY.habitFlowNotesQuestion,
@@ -251,6 +277,7 @@ function HabitFlowForm({
           emoji: answers.emoji || null,
           notes: answers.notes.trim() || null,
           isCare: answers.isCare,
+          forWhoId: answers.isCare ? answers.forWhoId : null,
           startsOn: Date.parse(`${clock.dayKey}T00:00:00Z`),
           when: fromWhenDraft(answers.when, null, Date.now()),
         },
