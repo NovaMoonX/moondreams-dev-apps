@@ -975,6 +975,7 @@ export const HELM_COPY = {
   connectionUndo: 'Undo',
   connectionWhatReads: 'What this reads',
   connectionNewReadsTitle: 'New: it now also reads',
+  connectionNewReadsOffTitle: 'New: turn this on to share',
   connectionGotIt: 'Got it',
   connectionToggleFailed: "That didn't change. Try again.",
   connectionNeverShared: (never: string) => `Never shared: ${never}`,

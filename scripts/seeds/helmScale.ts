@@ -1243,7 +1243,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     put('captures', `captures/${entry.id}`, entry.capture),
   );
 
-  // Synced copies: 1,501 from five apps, with each app's grant counting what it holds.
+  // Synced copies: 2,641 from five apps, with each app's grant counting what it holds.
   const sources = [
     { app: 'pinch', shares: PINCH_SHARES.shares },
     { app: 'a-list', shares: A_LIST_SHARES.shares },
@@ -1261,7 +1261,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   type Copy = {
     source: number;
     category: string;
-    kind: 'event' | 'task' | 'place' | 'trip' | 'pet' | 'moneySummary';
+    kind:
+      'event' | 'task' | 'place' | 'trip' | 'pet' | 'moneySummary' | 'artifact';
     title: string;
     subtitle: string | null;
     startAt: number | null;
@@ -1272,6 +1273,13 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     detail: string | null;
     amountCents: number | null;
     currency: string | null;
+  };
+  const SHARE_ARTIFACT_NAMES = {
+    recipes: 'Recipe',
+    pantryStock: 'Leftovers',
+    savedMeals: 'Saved meal',
+    envelopes: 'Envelope',
+    tripChecklist: 'Trip: Packing',
   };
   const eventAt = () => spreadDay(now) + between(8, 21) * 3_600_000;
   const makeCopy = (
@@ -1299,9 +1307,15 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
                     ? `${pick(['Flight', 'Dinner', 'Tour', 'Check-in'])} ${index + 1}`
                     : category === 'myTasks'
                       ? `${pick(TASK_VERBS)} ${pick(TASK_OBJECTS)} ${index + 1}`
-                      : category === 'cats'
-                        ? `${PET_NAMES[index % 10]} ${index + 1}`
-                        : `${PET_NAMES[index % 10]}: ${pick(['Advantage Multi', 'Heartgard', 'Nexgard'])} ${index + 1}`;
+                      : category === 'recipes' ||
+                          category === 'pantryStock' ||
+                          category === 'savedMeals' ||
+                          category === 'envelopes' ||
+                          category === 'tripChecklist'
+                        ? `${SHARE_ARTIFACT_NAMES[category]} ${index + 1}`
+                        : category === 'cats'
+                          ? `${PET_NAMES[index % 10]} ${index + 1}`
+                          : `${PET_NAMES[index % 10]}: ${pick(['Advantage Multi', 'Heartgard', 'Nexgard'])} ${index + 1}`;
     return {
       source,
       category,
@@ -1325,14 +1339,19 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   const plans: [number, string, Copy['kind'], number][] = [
     [0, 'plannedMeals', 'event', 200],
     [0, 'shoppingList', 'task', 175],
+    [0, 'recipes', 'artifact', 500],
+    [0, 'pantryStock', 'artifact', 300],
+    [0, 'savedMeals', 'artifact', 200],
     [1, 'plannedShowings', 'event', 250],
     [1, 'savedTheaters', 'place', 125],
     [2, 'trips', 'trip', 25],
     [2, 'itinerary', 'event', 250],
     [2, 'myTasks', 'task', 100],
+    [2, 'tripChecklist', 'artifact', 40],
     [3, 'cats', 'pet', 25],
     [3, 'dueCare', 'task', 350],
     [4, 'moneySummary', 'moneySummary', 1],
+    [4, 'envelopes', 'artifact', 100],
   ];
   const copies = plans.flatMap(([source, category, kind, count]) =>
     range(count).map((index) => makeCopy(source, category, kind, index)),
@@ -1396,7 +1415,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         source.shares.flatMap((share) =>
           share.categories.map((category) => [
             category.id,
-            { isOn: used.has(category.id), changedAt: createdAt, seenScopeVersion: null },
+            {
+              isOn: used.has(category.id),
+              changedAt: createdAt,
+              seenScopeVersion: null,
+            },
           ]),
         ),
       ),

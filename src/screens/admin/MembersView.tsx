@@ -220,7 +220,7 @@ function MembersView({
         </CountedNote>
       </section>
 
-      <DebugDetailsSection />
+      <DebugDetailsSection users={users} />
 
       <MemberDetailSheet
         member={selectedMember}

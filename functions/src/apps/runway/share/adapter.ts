@@ -255,6 +255,9 @@ const toRef = (prefix: string, keys: string[], index: number) =>
     .digest('hex')
     .slice(0, 16)}`;
 
+const readGoalDetail = (goal: Summary['horizon'][number], currency: string) =>
+  `${formatMoney(goal.setAsideCents, currency)} set aside of ${formatMoney(goal.targetCents, currency)}`;
+
 const toRecords = (category: string, summary: Summary): SharedRecord[] => {
   const billKeys = summary.bills.map(
     (bill) => `${bill.name}\n${formatDay(bill.dueAt)}`,
@@ -298,7 +301,7 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
           sourceRef: toRef('horizon', goalKeys, index),
           kind: 'project',
           title: goal.name,
-          detail: `${formatMoney(goal.setAsideCents, summary.currency)} set aside of ${formatMoney(goal.targetCents, summary.currency)}`,
+          detail: readGoalDetail(goal, summary.currency),
           amountCents: goal.targetCents,
           currency: summary.currency,
           dueAt: goal.targetAt,
@@ -310,6 +313,99 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
       throw new Error('Unknown category.');
   }
 };
+
+const ENVELOPE_LIMIT = 100;
+// Archived and ended envelopes stay in the collection, so the read is sized apart from what is sent.
+const ENVELOPE_READ_LIMIT = 500;
+const ENVELOPE_CHUNK = 30;
+
+type StoredEnvelopes =
+  | { kind: 'unknown' }
+  | {
+      kind: 'envelopes';
+      envelopes: { id: string; name: string }[];
+      isFull: boolean;
+    };
+
+const warnEnvelopesUnreadable = (reason: 'key' | 'names', count: number) =>
+  logger.warn('runway.share.envelopesUnreadable', { reason, count });
+
+async function readStoredEnvelopes(
+  firestore: Firestore,
+  keyring: Keyring,
+  uid: string,
+  today: number,
+): Promise<StoredEnvelopes> {
+  const planKey = await unwrapPlanKey(firestore, keyring, uid).catch(
+    () => null,
+  );
+  if (planKey === null) {
+    warnEnvelopesUnreadable('key', 1);
+    return { kind: 'unknown' };
+  }
+  const items = await firestore
+    .collection(`apps/runway/plans/${uid}/items`)
+    .where('kind', '==', 'envelope')
+    .limit(ENVELOPE_READ_LIMIT)
+    .get();
+  const allLive = items.docs.filter((doc) => {
+    const endedAt = readDay(doc.get('endedAt'));
+    return (
+      doc.get('archivedAt') == null && (endedAt === null || endedAt >= today)
+    );
+  });
+  const live = allLive.slice(0, ENVELOPE_LIMIT);
+  const snapshots = await Promise.all(
+    Array.from(
+      { length: Math.ceil(live.length / ENVELOPE_CHUNK) },
+      (_, index) =>
+        firestore
+          .collection(`apps/runway/plans/${uid}/versions`)
+          .where(
+            'itemId',
+            'in',
+            live
+              .slice(index * ENVELOPE_CHUNK, (index + 1) * ENVELOPE_CHUNK)
+              .map((doc) => doc.id),
+          )
+          .get(),
+    ),
+  );
+  const newest = snapshots
+    .flatMap((snapshot) => snapshot.docs)
+    .filter((doc) => doc.get('kind') === 'envelope')
+    .sort(
+      (a, b) =>
+        (b.get('createdAt') as number) - (a.get('createdAt') as number) ||
+        b.id.localeCompare(a.id),
+    );
+  const names = newest.reduce((found, doc) => {
+    const itemId = doc.get('itemId') as string;
+    const sealed = doc.get('sealed');
+    if (found.has(itemId) || !isSealed(sealed)) return found;
+    try {
+      const name = readName(openWithKey(planKey.key, sealed).name);
+      return name === null ? found : found.set(itemId, name);
+    } catch {
+      return found;
+    }
+  }, new Map<string, string>());
+  const unnamed = live.filter((doc) => !names.has(doc.id)).length;
+  if (unnamed > 0) warnEnvelopesUnreadable('names', unnamed);
+  return {
+    kind: 'envelopes',
+    envelopes: live
+      .flatMap((doc) => {
+        const name = names.get(doc.id);
+        return name === undefined ? [] : [{ id: doc.id, name }];
+      })
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+    isFull:
+      unnamed === 0 &&
+      items.size < ENVELOPE_READ_LIMIT &&
+      allLive.length <= ENVELOPE_LIMIT,
+  };
+}
 
 const toTransactionRef = (id: string) =>
   `purchases/${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
@@ -349,6 +445,32 @@ export function createRunwayAdapter(
     syncPage: async (ctx, req): Promise<SyncPageResult> => {
       if (!manifest.categories.some(({ id }) => id === req.category))
         throw new Error('Unknown category.');
+      if (req.category === 'envelopes') {
+        const envelopes = await readStoredEnvelopes(
+          deps.firestore(),
+          deps.keyring(),
+          ctx.uid,
+          Math.floor(deps.now() / DAY_MS) * DAY_MS,
+        );
+        return {
+          records:
+            envelopes.kind === 'envelopes'
+              ? envelopes.envelopes.map(({ id, name }) =>
+                  toRecord({
+                    sourceRef: `envelopes/${createHash('sha256').update(id).digest('hex').slice(0, 16)}`,
+                    kind: 'artifact',
+                    title: name,
+                    detail: 'An envelope in the plan',
+                  }),
+                )
+              : [],
+          isFull: envelopes.kind === 'envelopes' && envelopes.isFull,
+          deletedRefs: [],
+          cursor: null,
+          isDone: true,
+          resumeState: null,
+        };
+      }
       const stored = await readStoredSummary(
         deps.firestore(),
         deps.keyring(),

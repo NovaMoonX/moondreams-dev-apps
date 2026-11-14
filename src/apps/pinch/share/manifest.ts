@@ -68,9 +68,91 @@ export const PINCH_SHARES: SourceShares = {
           ],
           scopeVersion: 1,
         },
+        {
+          id: 'pantryStock',
+          kind: 'artifact',
+          label: 'Pantry, fridge and freezer stock',
+          meaning:
+            'All the food the person has on hand in their pantry, fridge and freezer.',
+          detail: 'Everything you have on hand, not only what is near its date',
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 2,
+          reads: [
+            {
+              label: 'Each thing in your pantry, fridge or freezer',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'Where it is kept',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'How much is left and the day to use it by',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'recipes',
+          kind: 'artifact',
+          label: 'Recipes',
+          meaning:
+            "The person's saved recipes, each with how many it serves, how long it takes and what kind of dish it is.",
+          detail: 'Each recipe with its servings, time and kind of dish',
+          mode: 'sync',
+          isOnAtConnect: true,
+          addedInVersion: 2,
+          reads: [
+            {
+              label: "Each recipe's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'How many it serves and how long it takes',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'The kinds of dish it is, like Main dishes',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
+          id: 'savedMeals',
+          kind: 'artifact',
+          label: 'Saved meals',
+          meaning:
+            'Meals the person saved to plan again, each a plate of recipes or foods eaten together.',
+          detail: 'Each saved meal and what is on its plate',
+          mode: 'sync',
+          isOnAtConnect: true,
+          addedInVersion: 2,
+          reads: [
+            {
+              label: "Each saved meal's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'What is on its plate, in one line',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
       never: [
-        "Recipes' text",
+        'Recipe steps and ingredients',
         'prices and costs',
         'nutrition',
         'cooking history',

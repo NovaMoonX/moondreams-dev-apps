@@ -197,3 +197,25 @@ export async function updateToLatest(latestVersion: string) {
   window.location.reload();
   return true;
 }
+
+/**
+ * Reloads with this build's cached files dropped and the worker re-checked, for a screen whose file
+ * the worker could not hand over even after a reload. The worker fetches dropped files from the network.
+ */
+export async function restartWithFreshFiles() {
+  // Offline, the dropped files could not be fetched again and every app would stop opening.
+  if (!navigator.onLine) {
+    window.location.reload();
+    return;
+  }
+  await clearPrecache().catch(() => undefined);
+  const registration =
+    'serviceWorker' in navigator
+      ? await navigator.serviceWorker.getRegistration().catch(() => undefined)
+      : undefined;
+  await Promise.race([
+    registration?.update().catch(() => undefined),
+    new Promise((resolve) => window.setTimeout(resolve, 4000)),
+  ]);
+  window.location.reload();
+}

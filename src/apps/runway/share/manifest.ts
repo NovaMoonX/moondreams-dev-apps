@@ -72,6 +72,25 @@ export const RUNWAY_SHARES: SourceShares = {
           scopeVersion: 1,
         },
         {
+          id: 'envelopes',
+          kind: 'artifact',
+          label: 'Envelopes',
+          meaning:
+            "Envelopes are the spending buckets the person's paychecks fill in Runway, such as groceries or gas; only their names are shared.",
+          detail: "Each envelope's name, no amounts",
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: "Each envelope's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
           id: 'transactions',
           kind: 'transaction',
           label: 'Transactions',

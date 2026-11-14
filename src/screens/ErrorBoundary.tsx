@@ -14,6 +14,7 @@ import {
   canReloadForStaleChunk,
   isStaleChunkError,
   reloadForStaleChunk,
+  restartWithFreshFiles,
 } from '../lib/app/appUpdate';
 
 function getErrorDetails(error: unknown) {
@@ -25,14 +26,20 @@ function getErrorDetails(error: unknown) {
 }
 
 function ErrorScreen({ error }: { error: unknown }) {
-  const restart = useRestartApp();
+  const isChunkError = isStaleChunkError(error);
+  // A plain reload goes through the same worker and fails the same way, so this one also drops its cached files.
+  const restart = useRestartApp(
+    undefined,
+    isChunkError ? restartWithFreshFiles : undefined,
+  );
   const isUpdateReady = useUpdateReady();
+  const canRestart = isUpdateReady || isChunkError;
   const { pathname } = useLocation();
   const { message, stack } = getErrorDetails(error);
   const showDetails = useCanSeeDebugDetails();
   // A screen's file missing after a deploy: the new version is loaded straight into the screen asked for.
   const [isReloading] = useState(
-    () => isStaleChunkError(error) && canReloadForStaleChunk(),
+    () => isChunkError && canReloadForStaleChunk(),
   );
 
   useEffect(() => {
@@ -81,15 +88,17 @@ function ErrorScreen({ error }: { error: unknown }) {
             />
           </div>
         )}
-        {isUpdateReady && (
+        {canRestart && (
           <p className='text-foreground/70 mt-3 text-base'>
-            A new version is ready. Restart to load it.
+            {isChunkError
+              ? 'Part of this page didn’t load. Restart to fetch it fresh.'
+              : 'A new version is ready. Restart to load it.'}
           </p>
         )}
         <div className='mt-6 flex flex-wrap justify-center gap-3'>
-          {isUpdateReady && <Button onClick={restart}>Restart</Button>}
+          {canRestart && <Button onClick={restart}>Restart</Button>}
           <Link to='/'>
-            <Button variant={isUpdateReady ? 'secondary' : 'primary'}>
+            <Button variant={canRestart ? 'secondary' : 'primary'}>
               Back home
             </Button>
           </Link>

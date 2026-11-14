@@ -237,7 +237,13 @@ async function runLeased(
   }
 
   const session = sink.openSession(deps.firestore, uid);
-  const windowStart = startedAt - SYNC_WINDOW_DAYS * DAY_MS;
+  const toWindowStart = (category: string) =>
+    startedAt -
+    Math.max(
+      SYNC_WINDOW_DAYS,
+      deps.source.historyDays?.(grant.connectorId, category) ?? 0,
+    ) *
+      DAY_MS;
   const results = await sequence(
     Object.entries(grant.categories)
       .filter(
@@ -247,7 +253,14 @@ async function runLeased(
       .map(
         ([category]) =>
           () =>
-            syncCategory(deps, session, ctx, grantId, category, windowStart),
+            syncCategory(
+              deps,
+              session,
+              ctx,
+              grantId,
+              category,
+              toWindowStart(category),
+            ),
       ),
   );
   await settle(deps, session, uid, grantId, results);

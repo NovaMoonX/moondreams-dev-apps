@@ -250,13 +250,13 @@ const POINT_TO_POINT_TRANSIT_DETAILS_FIELDS = {
 const FLIGHT_TRANSIT_DETAILS_FIELDS = {
   notes: 'never',
   estimatedTravelTimeMs: 'notUseful',
-  airline: 'notUseful',
+  airline: 'shared',
   airlineIataCode: 'notUseful',
   airlineIcaoCode: 'notUseful',
-  flightNumber: 'notUseful',
+  flightNumber: 'shared',
   confirmationCode: 'never',
-  departureAirportCode: 'notUseful',
-  arrivalAirportCode: 'notUseful',
+  departureAirportCode: 'shared',
+  arrivalAirportCode: 'shared',
 } satisfies Record<keyof FlightTransitDetails, ShareDecision>;
 
 const DRIVE_TRANSIT_DETAILS_FIELDS = {
@@ -310,7 +310,7 @@ const OTHER_TRANSIT_DETAILS_FIELDS = {
 
 const TRAVEL_EVENT_DETAILS_FIELDS = {
   transitType: 'shared',
-  transitDetails: 'never',
+  transitDetails: 'shared',
 } satisfies Record<keyof TravelEventDetails, ShareDecision>;
 
 const DINING_EVENT_DETAILS_FIELDS = {
@@ -449,8 +449,8 @@ const CHECKLIST_ITEM_FIELDS = {
   id: 'notUseful',
   tripId: 'filter',
   title: 'shared',
-  category: 'notUseful',
-  customCategoryLabel: 'notUseful',
+  category: 'shared',
+  customCategoryLabel: 'shared',
   note: 'never',
   completeByDayIndex: 'shared',
   assignedToUids: 'filter',
