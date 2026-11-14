@@ -15,6 +15,7 @@ export type HelmView =
   | 'activity'
   | 'connectedApps'
   | 'connection'
+  | 'assistants'
   | 'people'
   | 'who'
   | 'place'
@@ -275,7 +276,10 @@ export interface Capture {
   ttsProvider: string | null;
   /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
   arrivedVia: 'direct' | 'dropBox';
-  medium: 'web';
+  /** 'mcp' for a turn an outside assistant (Claude, Gemini) sent; 'web' for every turn typed or spoken in Helm. */
+  medium: 'web' | 'mcp';
+  /** The outside assistant's name on an 'mcp' turn; null on every web turn and on every turn made before the field. */
+  via: string | null;
   sessionId: string;
   turnIndex: number;
   route: CaptureRoute | null;
@@ -967,6 +971,8 @@ export interface ExecutionEffect {
 export interface Execution {
   captureId: string | null;
   actor: 'nomos' | 'person';
+  /** The outside assistant whose turn this was (Claude, Gemini); null for the person's own. */
+  via: string | null;
   category: ActionCategory;
   autonomyLevel: AutonomyLevel;
   state: ExecutionState;
@@ -1178,4 +1184,22 @@ export interface PlanDay {
   reasons: Record<string, string>;
   calendarSnapshot: PlanCalendarEntry[];
   isUnreadable: boolean;
+}
+
+/** An outside assistant the person connected to Helm (`mcpClients/{uid}/clients/{clientKey}`); written only by the server. */
+export interface ConnectedAssistant {
+  appId: 'helm';
+  clientId: string;
+  name: string;
+  workosUserId: string;
+  firstSeenAt: number;
+  lastUsedAt: number;
+  canWrite: boolean;
+  /** The kinds of source it may read (`mail`, `drive`, `apps`); each is off until the person turns it on. */
+  readScopes: string[];
+  revokedAt: number | null;
+}
+
+export interface OpenConnectedAssistant extends ConnectedAssistant {
+  clientKey: string;
 }

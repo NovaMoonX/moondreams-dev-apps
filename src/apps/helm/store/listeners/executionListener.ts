@@ -45,6 +45,7 @@ export async function openExecution(
     linkedPlaceIds: data.linkedPlaceIds ?? [],
     undoesExecutionId: data.undoesExecutionId ?? null,
     undoneByExecutionId: data.undoneByExecutionId ?? null,
+    via: typeof data.via === 'string' ? data.via : null,
     questionRef: data.questionRef ?? null,
     errorCode: data.errorCode ?? null,
     createdAt: data.createdAt ?? 0,

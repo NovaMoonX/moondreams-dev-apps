@@ -37,6 +37,7 @@ const VIEW_ENTRIES: Record<
   activity: { label: HELM_COPY.activityTitle, icon: History },
   connectedApps: { label: HELM_COPY.connectedAppsRowTitle, icon: Link2 },
   connection: { label: HELM_COPY.connectedAppsRowTitle, icon: Link2 },
+  assistants: { label: HELM_COPY.assistantsRowTitle, icon: Link2 },
   people: { label: HELM_COPY.peopleTitle, icon: Users },
   who: { label: HELM_COPY.peopleTitle, icon: Users },
   place: { label: HELM_COPY.linkedPlace, icon: MapPin },

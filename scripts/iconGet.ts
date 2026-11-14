@@ -107,23 +107,60 @@ const round = (value: number) => Math.round(value * 1000) / 1000;
 
 function cleanBody(body: string) {
   return body
+    .replace(
+      /(\s[\w:-]+)='([^']*)'/g,
+      (_, name: string, value: string) =>
+        `${name}="${value.replace(/"/g, '&quot;')}"`,
+    )
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<(title|desc|metadata)\b[\s\S]*?<\/\1>/g, '')
     .replace(/\s(data-[\w-]+|xml:space|version|xmlns(:\w+)?)="[^"]*"/g, '')
     .trim();
 }
 
+const XMLNS =
+  'xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"';
+
+// Masks, blurs and strokes all change what is painted, so the artwork is measured from pixels.
+function artworkBounds(body: string, viewBox: string) {
+  const [x, y, width, height] = viewBox.split(/\s+/).map(Number);
+  const pad = Math.max(width, height) / 2;
+  const frame = [x - pad, y - pad, width + 2 * pad, height + 2 * pad];
+  const svg = `<svg ${XMLNS} viewBox="${frame.join(' ')}">${body}</svg>`;
+  const image = new Resvg(svg, {
+    fitTo: { mode: 'width', value: 1024 },
+  }).render();
+  const scale = frame[2] / image.width;
+  const rowBytes = image.width * 4;
+  const isPainted = (value: number, i: number) => i % 4 === 3 && value > 8;
+  const edges = Array.from({ length: image.height }, (_, row) =>
+    image.pixels.subarray(row * rowBytes, (row + 1) * rowBytes),
+  ).reduce(
+    (box, line, row) => {
+      const first = line.findIndex(isPainted);
+      if (first === -1) return box;
+      const last = line.findLastIndex(isPainted);
+      return {
+        left: Math.min(box.left, Math.floor(first / 4)),
+        top: Math.min(box.top, row),
+        right: Math.max(box.right, Math.floor(last / 4) + 1),
+        bottom: Math.max(box.bottom, row + 1),
+      };
+    },
+    { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
+  );
+  if (edges.right < 0) throw new Error('The icon paints nothing to measure.');
+  return {
+    x: frame[0] + edges.left * scale,
+    y: frame[1] + edges.top * scale,
+    width: (edges.right - edges.left) * scale,
+    height: (edges.bottom - edges.top) * scale,
+  };
+}
+
 function squareViewBox(body: string, viewBox: string, trim: boolean) {
   const [x, y, width, height] = viewBox.split(/\s+/).map(Number);
-  if (!trim) {
-    const side = Math.max(width, height);
-    return [x - (side - width) / 2, y - (side - height) / 2, side, side]
-      .map(round)
-      .join(' ');
-  }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${body}</svg>`;
-  const box = new Resvg(svg).getBBox();
-  if (!box) throw new Error('The icon has no visible artwork to measure.');
+  const box = trim ? artworkBounds(body, viewBox) : { x, y, width, height };
   const side = Math.max(box.width, box.height);
   return [
     box.x - (side - box.width) / 2,
@@ -138,46 +175,71 @@ function squareViewBox(body: string, viewBox: string, trim: boolean) {
 const toCamel = (name: string) =>
   name.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
 
-function styleToJsx(style: string) {
-  const entries = style
-    .split(';')
-    .map((rule) => rule.split(':').map((part) => part.trim()))
-    .filter(([key, value]) => key && value)
-    .map(([key, value]) => `${toCamel(key)}: '${value}'`);
-  return `{{ ${entries.join(', ')} }}`;
-}
+const URL_REF = /url\(\s*['"]?#([^)'"\s]+)['"]?\s*\)/g;
 
-function collectIds(body: string) {
-  return Array.from(body.matchAll(/\sid="([^"]+)"/g), (match) => match[1]);
-}
-
-function toJsx(body: string) {
-  const ids = collectIds(body);
-  const suffixOf = Object.fromEntries(
+function idSuffixes(body: string) {
+  const ids = Array.from(body.matchAll(/\sid="([^"]+)"/g), (match) => match[1]);
+  return new Map(
     ids.map((id, i) => [
       id,
       String.fromCharCode(97 + (i % 26)) + (i >= 26 ? i : ''),
     ]),
   );
-  const refersToId = (name: string, value: string) =>
-    /url\(#/.test(value) || (/href$/.test(name) && value.slice(1) in suffixOf);
-  const jsxValue = (value: string) =>
-    value.replace(
-      /url\(#([^)]+)\)|^#(.+)$/g,
-      (match, urlId?: string, hrefId?: string) => {
-        const id = urlId ?? hrefId ?? '';
-        if (!(id in suffixOf)) return match;
-        return urlId ? `url(#\${id}${suffixOf[id]})` : `#\${id}${suffixOf[id]}`;
-      },
+}
+
+function toJsx(body: string) {
+  const suffixOf = idSuffixes(body);
+  const withIds = (value: string) =>
+    value
+      .replace(URL_REF, (match, id: string) =>
+        suffixOf.has(id) ? `url(#\${id}${suffixOf.get(id)})` : match,
+      )
+      .replace(/^#(.+)$/, (match, id: string) =>
+        suffixOf.has(id) ? `#\${id}${suffixOf.get(id)}` : match,
+      );
+  const jsxValue = (name: string, value: string) => {
+    const refers =
+      [...value.matchAll(URL_REF)].some(([, id]) => suffixOf.has(id)) ||
+      (/href$/.test(name) && suffixOf.has(value.slice(1)));
+    return refers ? `{\`${withIds(value)}\`}` : `"${value}"`;
+  };
+  const styleToJsx = (style: string) => {
+    const entries = style
+      .split(';')
+      .map((rule) => [
+        rule.slice(0, rule.indexOf(':')),
+        rule.slice(rule.indexOf(':') + 1),
+      ])
+      .map(([key, value]) => [key.trim(), value.trim()])
+      .filter(([key, value]) => key && value)
+      .map(([key, value]) => {
+        const name = key.startsWith('--') ? JSON.stringify(key) : toCamel(key);
+        const refers = [...value.matchAll(URL_REF)].some(([, id]) =>
+          suffixOf.has(id),
+        );
+        return `${name}: ${refers ? `\`${withIds(value)}\`` : JSON.stringify(value)}`;
+      });
+    return `{{ ${entries.join(', ')} }}`;
+  };
+  const tagPattern = /<([\w:-]+)((?:\s+[\w:-]+="[^"]*")*)\s*(\/?)>/g;
+  const openingTags = body.match(/<[a-zA-Z]/g)?.length ?? 0;
+  const convertible = body.match(tagPattern)?.length ?? 0;
+  if (openingTags !== convertible)
+    throw new Error(
+      'The icon has a tag icon:get cannot convert (an attribute without a value?). Pick another icon or convert it by hand.',
+    );
+  if (/[{}]/.test(body.replace(/<[^>]*>/g, '')))
+    throw new Error(
+      'The icon has a <style> block or text with braces, which icon:get does not convert. Pick another icon.',
     );
   const jsx = body.replace(
-    /<([\w:-]+)((?:\s+[\w:-]+="[^"]*")*)\s*(\/?)>/g,
+    tagPattern,
     (_, tag: string, attrs: string, selfClose: string) => {
       const converted = Array.from(
         attrs.matchAll(/([\w:-]+)="([^"]*)"/g),
         ([, rawName, value]) => {
-          if (rawName === 'id' && value in suffixOf)
-            return `id={\`\${id}${suffixOf[value]}\`}`;
+          if (rawName === 'id' && suffixOf.has(value))
+            return `id={\`\${id}${suffixOf.get(value)}\`}`;
           if (rawName === 'style') return `style=${styleToJsx(value)}`;
           const name =
             rawName === 'class'
@@ -187,31 +249,40 @@ function toJsx(body: string) {
                 : /^(data|aria)-/.test(rawName)
                   ? rawName
                   : toCamel(rawName);
-          if (refersToId(rawName, value))
-            return `${name}={\`${jsxValue(value)}\`}`;
-          return `${name}='${value}'`;
+          return `${name}=${jsxValue(rawName, value)}`;
         },
       );
       return `<${tag}${converted.map((attr) => ` ${attr}`).join('')}${selfClose ? ' /' : ''}>`;
     },
   );
-  return { jsx, hasIds: ids.length > 0 };
+  return { jsx, hasIds: suffixOf.size > 0 };
 }
 
 function prefixIdsForFile(body: string, prefix: string) {
-  return collectIds(body).reduce(
-    (text, id) =>
-      text
-        .replaceAll(`id="${id}"`, `id="${prefix}-${id}"`)
-        .replaceAll(`url(#${id})`, `url(#${prefix}-${id})`)
-        .replaceAll(`href="#${id}"`, `href="#${prefix}-${id}"`),
-    body,
-  );
+  const ids = new Set(idSuffixes(body).keys());
+  return body
+    .replace(/(\sid=")([^"]+)"/g, (match, start: string, id: string) =>
+      ids.has(id) ? `${start}${prefix}-${id}"` : match,
+    )
+    .replace(URL_REF, (match, id: string) =>
+      ids.has(id) ? `url(#${prefix}-${id})` : match,
+    )
+    .replace(/(href=")#([^"]+)"/g, (match, start: string, id: string) =>
+      ids.has(id) ? `${start}#${prefix}-${id}"` : match,
+    );
 }
 
+const isIdentifier = (name: string) => /^[A-Z][A-Za-z0-9]*$/.test(name);
+
 function componentName(icon: string) {
-  const name = icon.split(':')[1];
-  return `${name.replace(/(^|[-_])(\w)/g, (_, __, letter: string) => letter.toUpperCase())}Mark`;
+  const words = icon
+    .split(':')[1]
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean);
+  const name = words
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join('');
+  return /^[0-9]/.test(name) ? `Icon${name}Mark` : `${name}Mark`;
 }
 
 function buildComponent(
@@ -219,10 +290,11 @@ function buildComponent(
   viewBox: string,
   body: string,
   size: string,
+  propsType: string,
 ) {
   const { jsx, hasIds } = toJsx(body);
   return [
-    `export function ${name}({ className = '${size}' }: BrandMarkProps) {`,
+    `export function ${name}({ className = '${size}' }: ${propsType}) {`,
     hasIds ? `  const id = useId().replace(/[^\\w-]/g, '');` : null,
     `  return (`,
     `    <svg viewBox='${viewBox}' aria-hidden='true' className={className}>`,
@@ -235,20 +307,42 @@ function buildComponent(
     .join('\n');
 }
 
+function propsTypeFor(file: string | null) {
+  if (!file || !existsSync(file)) return '{ className?: string }';
+  return /\b(interface|type) BrandMarkProps\b/.test(readFileSync(file, 'utf8'))
+    ? 'BrandMarkProps'
+    : '{ className?: string }';
+}
+
+function withReactImport(source: string) {
+  const reactImport = /import \{([^}]*)\} from 'react';\n/;
+  const needs = /\buseId\(/.test(source);
+  const match = source.match(reactImport);
+  const names = (match?.[1] ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => part !== 'useId');
+  const wanted = needs ? [...names, 'useId'].sort() : names;
+  const line =
+    wanted.length > 0 ? `import { ${wanted.join(', ')} } from 'react';\n` : '';
+  if (match) return source.replace(reactImport, line);
+  return line ? `${line}\n${source}` : source;
+}
+
 function writeIntoComponentFile(file: string, name: string, component: string) {
   const source = readFileSync(file, 'utf8');
-  const start = source.indexOf(`export function ${name}(`);
+  const start = source.search(new RegExp(`export (function|const) ${name}\\b`));
+  const end = start === -1 ? -1 : source.indexOf('\n}', start);
+  if (start !== -1 && end === -1)
+    throw new Error(
+      `Found ${name} in ${file} but not where it ends; replace it by hand.`,
+    );
   const replaced =
     start === -1
       ? `${source.trimEnd()}\n\n${component}\n`
-      : `${source.slice(0, start)}${component}${source.slice(source.indexOf('\n}\n', start) + 2)}`;
-  const needsUseId =
-    component.includes('useId()') &&
-    !/import\s*\{[^}]*\buseId\b[^}]*\}\s*from 'react'/.test(replaced);
-  const withImport = needsUseId
-    ? `import { useId } from 'react';\n\n${replaced}`
-    : replaced;
-  writeFileSync(file, withImport);
+      : `${source.slice(0, start)}${component}${source.slice(end + 2).replace(/^;/, '')}`;
+  writeFileSync(file, withReactImport(replaced));
   execFileSync('npx', ['prettier', '--write', file], { stdio: 'ignore' });
 }
 
@@ -283,6 +377,7 @@ function upsertNotice(
       ? [...lines, row]
       : lines.map((line, i) => (i === at ? row : line));
   writeFileSync(noticeFile, `${next.join('\n')}\n`);
+  execFileSync('npx', ['prettier', '--write', noticeFile], { stdio: 'ignore' });
 }
 
 async function main() {
@@ -325,7 +420,15 @@ async function main() {
   }
 
   const name = args.name ?? componentName(args.icon);
-  const component = buildComponent(name, viewBox, body, args.size);
+  if (!isIdentifier(name))
+    throw new Error(`"${name}" is not a component name; pass --name.`);
+  const component = buildComponent(
+    name,
+    viewBox,
+    body,
+    args.size,
+    propsTypeFor(args.into),
+  );
   if (!args.into) {
     console.log(component);
     console.log(

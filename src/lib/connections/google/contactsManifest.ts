@@ -4,6 +4,8 @@ export const GOOGLE_CONTACTS_MANIFEST: ConnectorManifest = {
   id: 'google:contacts',
   kind: 'oauth',
   contractVersion: 1,
+  about:
+    "Google Contacts, the people saved in the person's Google account, connected through their Google account.",
   transformVersion: 1,
   categories: [
     {
@@ -12,6 +14,8 @@ export const GOOGLE_CONTACTS_MANIFEST: ConnectorManifest = {
       label: 'Contacts',
       detail:
         'Listed when you choose who to bring in. Only the people you tick are copied.',
+      meaning:
+        "The people in the person's Google Contacts, with their emails, phone numbers, photo and birthday.",
       mode: 'live',
       isOnAtConnect: true,
       addedInVersion: 1,

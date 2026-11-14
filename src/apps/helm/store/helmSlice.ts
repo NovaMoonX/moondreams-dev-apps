@@ -7,6 +7,7 @@ import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexLi
 import type {
   HelmProfile,
   OpenCapture,
+  OpenConnectedAssistant,
   OpenExecution,
   OpenFact,
   OpenMedia,
@@ -98,6 +99,8 @@ export interface HelmState {
   media: LoadedSet<OpenMedia>;
   /** The person's writing-style profiles, opened. */
   style: LoadedSet<OpenStyle>;
+  /** The outside assistants the person connected, most recently used first; disconnected ones are left out. */
+  assistants: LoadedSet<OpenConnectedAssistant>;
   /** Copies of other apps' records, opened. */
   synced: LoadedSet<SyncedRecord>;
   /** What the assistant did for the turns in the eager window. */
@@ -160,6 +163,7 @@ const initialState: HelmState = {
   openRuns: emptyLoadedSet,
   media: emptyLoadedSet,
   style: emptyLoadedSet,
+  assistants: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
@@ -272,6 +276,16 @@ const helmSlice = createSlice({
     },
     setStyleFailed: (state) => {
       state.style.isFailed = true;
+    },
+    setAssistants: (state, action: PayloadAction<OpenConnectedAssistant[]>) => {
+      state.assistants = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setAssistantsFailed: (state) => {
+      state.assistants.isFailed = true;
     },
     setWho: (state, action: PayloadAction<OpenWho[]>) => {
       state.who = { items: action.payload, isLoaded: true, isFailed: false };
@@ -491,6 +505,8 @@ export const {
   setEarlierFailed,
   setStyle,
   setStyleFailed,
+  setAssistants,
+  setAssistantsFailed,
   clearHelm,
   setKeyStatus,
   retryKey,

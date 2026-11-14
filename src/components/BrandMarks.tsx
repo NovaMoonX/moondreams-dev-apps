@@ -6,7 +6,7 @@ interface BrandMarkProps {
 
 export function GitHubMark({ className = 'size-4' }: BrandMarkProps) {
   return (
-    <svg viewBox='0 -0.251 16 16' aria-hidden='true' className={className}>
+    <svg viewBox='0 -0.25 16 16' aria-hidden='true' className={className}>
       <path
         fill='currentColor'
         d='M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656c0-.781.281-1.625.75-2.188c-.203-.515-.172-1.609.063-2.062c.625-.078 1.468.25 1.968.703c.594-.187 1.219-.281 1.985-.281c.765 0 1.39.094 1.953.265c.484-.437 1.344-.765 1.969-.687c.218.422.25 1.515.046 2.047c.5.593.766 1.39.766 2.203c0 1.922-1.453 3.375-3.547 3.64c.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03C16 3.61 12.406 0 7.984 0C3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156c-1.031 0-1.64-.562-2.078-1.609c-.172-.422-.36-.672-.719-.719c-.187-.015-.25-.093-.25-.187c0-.188.313-.328.625-.328c.453 0 .844.281 1.25.86c.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656'
@@ -18,7 +18,7 @@ export function GitHubMark({ className = 'size-4' }: BrandMarkProps) {
 export function ClaudeMark({ className = 'size-4' }: BrandMarkProps) {
   return (
     <svg
-      viewBox='-0.097 0 256.194 256.194'
+      viewBox='-0.25 -0.25 256.5 256.5'
       aria-hidden='true'
       className={className}
     >
@@ -35,7 +35,7 @@ export function GoogleCalendarMark({ className = 'size-5' }: BrandMarkProps) {
   const id = useId().replace(/[^\w-]/g, '');
   return (
     <svg
-      viewBox='-11.001 -1.836 278.042 278.042'
+      viewBox='-9.417 -0.083 274.834 274.834'
       aria-hidden='true'
       className={className}
     >
@@ -138,6 +138,361 @@ export function GoogleCalendarMark({ className = 'size-5' }: BrandMarkProps) {
         fill='#fff'
         d='M93.438 209.77q-10.521 0-18.051-3.421q-7.528-3.422-12.746-9.153q-5.133-5.82-7.273-11.379q-2.137-5.558-1.711-6.758a3.47 3.47 0 0 1 1.711-1.882l9.497-3.765q1.196-.598 2.395-.17q1.196.34 2.822 3.935q1.714 3.592 4.79 7.613a24 24 0 0 0 7.529 6.245q4.368 2.226 10.779 2.225q10.351 0 16.426-5.99q6.16-5.986 6.16-15.226q0-10.01-6.503-15.4q-6.5-5.476-17.195-5.476h-8.981a3.17 3.17 0 0 1-2.225-.853q-.853-.94-.855-2.139v-9.153q0-1.284.854-2.14a3.06 3.06 0 0 1 2.226-.94h7.783q9.583 0 15.4-5.22q5.817-5.218 5.816-13.517q.002-8.21-5.218-13.258t-14.371-5.049q-5.135.001-8.898 1.712a19.3 19.3 0 0 0-6.502 4.791a38.3 38.3 0 0 0-4.705 6.33q-1.964 3.252-3.165 3.593q-1.195.256-2.31-.426l-8.983-4.364q-1.11-.599-1.454-1.882q-.342-1.284 2.055-5.989q2.48-4.788 7.526-9.752a35.2 35.2 0 0 1 11.807-7.7q6.758-2.74 15.741-2.738q16.681.001 26.434 8.81q9.752 8.73 9.753 23.099q0 9.926-4.79 17.196q-4.706 7.27-13.347 10.268v.341q10.438 3.08 16.425 11.291c4.05 5.421 6.075 11.891 6.074 19.419q0 16.17-11.293 26.522q-11.29 10.35-29.429 10.35zm85.841-1.967q-1.452 0-2.567-1.112a3.78 3.78 0 0 1-1.026-2.652v-95.131l-19.249 13.859q-1.026.77-2.396.514a3.3 3.3 0 0 1-2.052-1.283l-5.561-7.871a3.32 3.32 0 0 1-.6-2.397q.258-1.365 1.369-2.136l34.133-24.382q.43-.343.942-.514q.515-.256 1.197-.256h7.188q1.455.001 2.31 1.027q.941.94.941 2.396v116.174q0 1.542-1.112 2.652a3.35 3.35 0 0 1-2.568 1.112z'
       />
+    </svg>
+  );
+}
+
+/** Gemini's spark in its blue-to-rose gradient, for steps or rows that name Gemini. */
+export function GeminiMark({ className = 'size-4' }: BrandMarkProps) {
+  const id = useId().replace(/[^\w-]/g, '');
+  return (
+    <svg
+      viewBox='-0.5 -0.25 256.5 256.5'
+      aria-hidden='true'
+      className={className}
+    >
+      <defs>
+        <filter
+          id={`${id}a`}
+          width='39.274'
+          height='43.217'
+          x='-19.824'
+          y='13.152'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='2.46'
+          />
+        </filter>
+        <filter
+          id={`${id}b`}
+          width='84.868'
+          height='85.688'
+          x='-15.001'
+          y='-40.257'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='11.891'
+          />
+        </filter>
+        <filter
+          id={`${id}c`}
+          width='79.454'
+          height='90.917'
+          x='-20.776'
+          y='11.927'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='10.109'
+          />
+        </filter>
+        <filter
+          id={`${id}d`}
+          width='79.731'
+          height='81.505'
+          x='-19.845'
+          y='15.459'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='10.109'
+          />
+        </filter>
+        <filter
+          id={`${id}e`}
+          width='75.117'
+          height='73.758'
+          x='29.832'
+          y='-11.552'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='9.606'
+          />
+        </filter>
+        <filter
+          id={`${id}f`}
+          width='78.135'
+          height='78.758'
+          x='-38.583'
+          y='-16.253'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='8.706'
+          />
+        </filter>
+        <filter
+          id={`${id}g`}
+          width='78.877'
+          height='77.539'
+          x='8.107'
+          y='-5.966'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='7.775'
+          />
+        </filter>
+        <filter
+          id={`${id}h`}
+          width='56.272'
+          height='51.81'
+          x='13.587'
+          y='-18.488'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='6.957'
+          />
+        </filter>
+        <filter
+          id={`${id}i`}
+          width='70.856'
+          height='69.306'
+          x='-15.526'
+          y='-31.297'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='5.876'
+          />
+        </filter>
+        <filter
+          id={`${id}j`}
+          width='55.502'
+          height='51.571'
+          x='-14.168'
+          y='20.964'
+          colorInterpolationFilters='sRGB'
+          filterUnits='userSpaceOnUse'
+        >
+          <feFlood floodOpacity='0' result='BackgroundImageFix' />
+          <feBlend in='SourceGraphic' in2='BackgroundImageFix' result='shape' />
+          <feGaussianBlur
+            result='effect1_foregroundBlur_10859_4895'
+            stdDeviation='7.273'
+          />
+        </filter>
+        <linearGradient
+          id={`${id}k`}
+          x1='18.447'
+          x2='52.153'
+          y1='43.42'
+          y2='15.004'
+          gradientUnits='userSpaceOnUse'
+        >
+          <stop stopColor='#4893fc' />
+          <stop offset='.27' stopColor='#4893fc' />
+          <stop offset='.777' stopColor='#969dff' />
+          <stop offset='1' stopColor='#bd99fe' />
+        </linearGradient>
+      </defs>
+      <path
+        fill='#fff'
+        d='M228.265 114.441c-19.721-8.49-36.974-20.134-51.776-34.927c-14.792-14.789-26.436-32.056-34.93-51.779a154 154 0 0 1-7.884-23.295A5.86 5.86 0 0 0 127.999 0a5.86 5.86 0 0 0-5.674 4.44a154 154 0 0 1-7.882 23.295c-8.494 19.723-20.141 36.99-34.929 51.779c-14.794 14.793-32.058 26.437-51.779 34.927a154 154 0 0 1-23.297 7.889A5.855 5.855 0 0 0 0 127.999a5.86 5.86 0 0 0 4.438 5.678a154 154 0 0 1 23.297 7.886c19.721 8.49 36.978 20.139 51.779 34.93c14.795 14.789 26.435 32.055 34.929 51.774a154 154 0 0 1 7.882 23.297a5.854 5.854 0 0 0 5.674 4.436a5.85 5.85 0 0 0 5.676-4.436a154 154 0 0 1 7.884-23.297q12.742-29.58 34.93-51.774c14.793-14.791 32.055-26.44 51.776-34.93a154 154 0 0 1 23.297-7.886a5.86 5.86 0 0 0 4.438-5.678a5.855 5.855 0 0 0-4.438-5.669a154.4 154.4 0 0 1-23.297-7.889'
+      />
+      <g
+        filter={`url(#${id}a)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='14.407'
+          cy='16.95'
+          fill='#ffe432'
+          rx='14.407'
+          ry='16.95'
+          transform='rotate(19.552 -44.576 -16.496)'
+        />
+      </g>
+      <g
+        filter={`url(#${id}b)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='27.433'
+          cy='2.587'
+          fill='#fc413d'
+          rx='18.652'
+          ry='19.062'
+        />
+      </g>
+      <g
+        filter={`url(#${id}c)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='18.951'
+          cy='57.386'
+          fill='#00b95c'
+          rx='19.493'
+          ry='25.253'
+          transform='rotate(-2.799 18.951 57.386)'
+        />
+      </g>
+      <g
+        filter={`url(#${id}c)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='18.951'
+          cy='57.386'
+          fill='#00b95c'
+          rx='19.493'
+          ry='25.253'
+          transform='rotate(-2.799 18.951 57.386)'
+        />
+      </g>
+      <g
+        filter={`url(#${id}d)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='20.02'
+          cy='56.211'
+          fill='#00b95c'
+          rx='19.107'
+          ry='21.035'
+          transform='rotate(-31.318 20.02 56.211)'
+        />
+      </g>
+      <g
+        filter={`url(#${id}e)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='67.391'
+          cy='25.327'
+          fill='#3186ff'
+          rx='18.346'
+          ry='17.667'
+        />
+      </g>
+      <g
+        filter={`url(#${id}f)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='21.222'
+          cy='22.384'
+          fill='#fbbc04'
+          rx='21.222'
+          ry='22.384'
+          transform='rotate(37.252 9.752 -8.009)'
+        />
+      </g>
+      <g
+        filter={`url(#${id}g)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='24.469'
+          cy='22.604'
+          fill='#3186ff'
+          rx='24.469'
+          ry='22.604'
+          transform='rotate(34.51 19.587 64.852)'
+        />
+      </g>
+      <g
+        filter={`url(#${id}h)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <path
+          fill='#749bff'
+          d='M54.984-2.336c2.833 3.852-.808 11.34-8.131 16.727s-15.557 6.631-18.39 2.78c-2.833-3.853.807-11.342 8.13-16.728s15.558-6.631 18.39-2.78'
+        />
+      </g>
+      <g
+        filter={`url(#${id}i)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='19.902'
+          cy='3.356'
+          fill='#fc413d'
+          rx='27.971'
+          ry='17.388'
+          transform='rotate(-42.848 19.902 3.356)'
+        />
+      </g>
+      <g
+        filter={`url(#${id}j)`}
+        mask={`url(#${id}l)`}
+        transform='translate(-.101 -.049)scale(3.9436)'
+      >
+        <ellipse
+          cx='13.583'
+          cy='46.75'
+          fill='#ffee48'
+          rx='14.989'
+          ry='8.717'
+          transform='rotate(35.592 13.583 46.75)'
+        />
+      </g>
+      <mask
+        id={`${id}l`}
+        width='65'
+        height='65'
+        x='0'
+        y='0'
+        maskUnits='userSpaceOnUse'
+        style={{ maskType: 'alpha' }}
+      >
+        <path d='M32.447 0c.68 0 1.273.465 1.439 1.125a39 39 0 0 0 1.999 5.905q3.23 7.5 8.854 13.125q5.627 5.626 13.125 8.855a39 39 0 0 0 5.906 1.999c.66.166 1.124.758 1.124 1.438s-.464 1.273-1.125 1.439a39 39 0 0 0-5.905 1.999q-7.5 3.23-13.125 8.854q-5.625 5.627-8.854 13.125a39 39 0 0 0-2 5.906a1.485 1.485 0 0 1-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a39 39 0 0 0-2-5.905q-3.227-7.5-8.854-13.125q-5.625-5.625-13.125-8.854a39 39 0 0 0-5.905-2A1.485 1.485 0 0 1 0 32.448c0-.68.465-1.272 1.125-1.438a39 39 0 0 0 5.905-2q7.5-3.228 13.125-8.854q5.626-5.624 8.855-13.125a39 39 0 0 0 1.999-5.905A1.485 1.485 0 0 1 32.447 0' />
+        <path
+          fill={`url(#${id}k)`}
+          d='M32.447 0c.68 0 1.273.465 1.439 1.125a39 39 0 0 0 1.999 5.905q3.23 7.5 8.854 13.125q5.627 5.626 13.125 8.855a39 39 0 0 0 5.906 1.999c.66.166 1.124.758 1.124 1.438s-.464 1.273-1.125 1.439a39 39 0 0 0-5.905 1.999q-7.5 3.23-13.125 8.854q-5.625 5.627-8.854 13.125a39 39 0 0 0-2 5.906a1.485 1.485 0 0 1-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a39 39 0 0 0-2-5.905q-3.227-7.5-8.854-13.125q-5.625-5.625-13.125-8.854a39 39 0 0 0-5.905-2A1.485 1.485 0 0 1 0 32.448c0-.68.465-1.272 1.125-1.438a39 39 0 0 0 5.905-2q7.5-3.228 13.125-8.854q5.626-5.624 8.855-13.125a39 39 0 0 0 1.999-5.905A1.485 1.485 0 0 1 32.447 0'
+        />
+      </mask>
     </svg>
   );
 }
