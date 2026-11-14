@@ -13,12 +13,16 @@ export interface UseVoiceQuickEntryResult {
   isModalOpen: boolean;
   transcript: string;
   error: string | null;
+  /** The browser refused the microphone; the modal offers the way to allow it. */
+  isBlocked: boolean;
   activeDraft: IngestionDraft | null;
   /** Starts listening, or — while already listening — stops and extracts a draft from what was said. */
   handleTrigger: () => void;
   /** Discards any in-progress draft and starts listening again without leaving the review flow. */
   handleReRecord: () => void;
   handleClose: () => void;
+  /** Clears the last error, once the microphone has been allowed. */
+  clearError: () => void;
 }
 
 /**
@@ -36,6 +40,7 @@ export function useVoiceQuickEntry(householdId: string, uid: string): UseVoiceQu
   const {
     cancel,
     error: transcriptionError,
+    isBlocked: isTranscriptionBlocked,
     isListening,
     isSupported,
     reset,
@@ -51,6 +56,7 @@ export function useVoiceQuickEntry(householdId: string, uid: string): UseVoiceQu
   );
 
   const error = submissionError ?? transcriptionError;
+  const isBlocked = submissionError === null && isTranscriptionBlocked;
 
   const discardActiveDraft = (draftId: string | null) => {
     if (draftId) {
@@ -110,6 +116,11 @@ export function useVoiceQuickEntry(householdId: string, uid: string): UseVoiceQu
     setSubmissionError(null);
   };
 
+  const clearError = () => {
+    reset();
+    setSubmissionError(null);
+  };
+
   return {
     isListening,
     isExtracting,
@@ -117,9 +128,11 @@ export function useVoiceQuickEntry(householdId: string, uid: string): UseVoiceQu
     isModalOpen,
     transcript,
     error,
+    isBlocked,
     activeDraft,
     handleTrigger,
     handleReRecord,
     handleClose,
+    clearError,
   };
 }

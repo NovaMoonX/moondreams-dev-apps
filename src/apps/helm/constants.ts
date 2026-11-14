@@ -826,8 +826,6 @@ export const HELM_COPY = {
   recordCancel: 'Cancel',
   recordStop: 'Stop',
   recordStoppedAtLimit: 'Voice notes stop at 5 minutes. This one is saved.',
-  recordNoMicrophone:
-    "The microphone isn't available. Allow it in your browser's settings, or type instead.",
   recordUnsupported: "This browser can't record. Type instead.",
   recordNeedsConnection:
     "Voice notes need a connection. Type it, or try again when you're back online.",
