@@ -289,7 +289,7 @@ export async function readTransactions(
     toComparable(toCategory(sealed)) === wanted ||
     readLines(sealed).some(({ envelopeId }) => {
       const name = envelopeId === null ? undefined : names.get(envelopeId);
-      return name !== undefined && toComparable(name) === wanted;
+      return toComparable(name ?? FREE_TO_SPEND) === wanted;
     });
   const matched = byPayee.filter(({ sealed }) => isCategoryMatch(sealed));
   const shown = matched.slice(0, ROW_LIMIT);

@@ -255,7 +255,7 @@ const searchAppRecordsShape = {
     .max(MAX_QUERY_CHARS)
     .optional()
     .describe(
-      "A spending category to narrow to, such as an envelope's name, Bill, Split or Free to Spend; leave out for every one.",
+      "Runway's transactions only: a spending category to narrow to, such as an envelope's name, Bill, Split or Free to Spend; leave out for every one.",
     ),
   from: z
     .string()
