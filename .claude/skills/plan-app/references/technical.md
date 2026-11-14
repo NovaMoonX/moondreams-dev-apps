@@ -71,6 +71,10 @@ This is a UX decision as much as a schema one: whether a Select/Combobox actuall
 
 **Reusable entities via upsert-on-first-mention**: when a user-invented label or value will recur (a doctor's name at a given clinic, a custom document type), give it its own small entity scoped to the right level (household, clinic, etc.) rather than a free-text field copied onto every record. Create it inline the first time it's typed if it doesn't already match an existing one, and offer it as a select from then on. This avoids both retyping and the data drift that comes from two records meaning the same thing with slightly different spelling.
 
+### Where Things Live (apps with an assistant)
+
+An app whose assistant reads and writes the person's records has a "Where things live" table beside the schema: each kind of thing, its one home, the one writer that changes it, the records worked out from it, and the tool that reads it. The build keeps it as code and generates the prompt's map, tool list, command table and delete cascades from it (`docs/conventions/data-contracts.md` "Every fact has one home").
+
 ### State Machines & Logic
 
 - Map out core state changes (e.g., `locked -> pending -> complete`).
