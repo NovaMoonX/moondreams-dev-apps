@@ -104,6 +104,11 @@ export const needsMicrophoneAsk = (state: MicrophonePermission) =>
 export type MicrophoneRequestResult =
   'granted' | 'denied' | 'system-denied' | 'no-microphone' | 'unavailable';
 
+const isChromium = () =>
+  typeof navigator !== 'undefined' &&
+  /Chrome\//.test(navigator.userAgent) &&
+  !/iPad|iPhone|iPod/.test(navigator.userAgent);
+
 const readsPrompt = async () => {
   try {
     return (await queryMicrophone()).state === 'prompt';
@@ -133,8 +138,13 @@ export const requestMicrophone = async (): Promise<MicrophoneRequestResult> => {
   } catch (error) {
     recordSpeechEvent(`getUserMedia refused: ${describeThrown(error)}`);
     const name = error instanceof DOMException ? error.name : '';
-    // A refusal that leaves the site at "prompt" came from the phone or computer keeping the microphone from the browser itself.
-    if (name === 'NotAllowedError' && (await readsPrompt())) {
+    // In Chromium a refusal that leaves the site at "prompt" without being dismissed came from the device keeping the microphone from the browser.
+    if (
+      name === 'NotAllowedError' &&
+      isChromium() &&
+      !/dismiss/i.test(error instanceof Error ? error.message : '') &&
+      (await readsPrompt())
+    ) {
       setState('prompt');
       return 'system-denied';
     }
@@ -212,11 +222,13 @@ export const getSystemMicrophoneHowTo = (
     return [
       'Open your phone’s Settings › Apps › Chrome (or the browser you installed this app from) › Permissions › Microphone and choose Allow.',
       'If your phone has a Microphone access tile in Quick Settings, make sure it’s on.',
+      `Already allowed? In Chrome, tap ⋮ › Settings › Site settings › Microphone, find ${window.location.host} and choose Allow.`,
       'Come back and tap Try again.',
     ];
   if (device === 'computer')
     return [
       'Open your computer’s privacy settings (on a Mac, System Settings › Privacy & Security › Microphone) and turn the microphone on for your browser.',
+      `Already on? Click the icon left of the address bar and set Microphone to Allow for ${window.location.host}.`,
       'Quit and reopen the browser, then click Try again.',
     ];
   return getMicrophoneHowTo(device, window.location.host);

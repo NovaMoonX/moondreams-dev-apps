@@ -50,8 +50,8 @@ const getTitle = (
 ) => {
   if (isSystemBlocked)
     return isPhone
-      ? 'Your phone is keeping the microphone from your browser'
-      : 'Your computer is keeping the microphone from your browser';
+      ? 'Your phone may be keeping the microphone from your browser'
+      : 'Your computer may be keeping the microphone from your browser';
   return isBlocked
     ? 'The microphone is blocked'
     : 'The microphone isn’t on yet';
@@ -63,7 +63,7 @@ const getBody = (
   isPhone: boolean,
 ) => {
   if (isSystemBlocked)
-    return `This site is fine, but your browser isn’t allowed to use the microphone at all, so it has to be turned on in your ${isPhone ? 'phone’s' : 'computer’s'} settings.`;
+    return `Your browser said no without asking you. Unless you chose Block, the microphone is off for the browser itself, so turn it on in your ${isPhone ? 'phone’s' : 'computer’s'} settings.`;
   return isBlocked
     ? 'Your browser said no for this site, so it has to be allowed in its settings.'
     : 'Allow it below when your browser asks.';
