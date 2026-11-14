@@ -33,9 +33,15 @@ export function registerHelmTools(
   server: McpServer,
   tools: ReturnType<typeof buildHelmTools>,
   audience: 'nomos' | 'external',
+  extraTools: string[] = [],
 ) {
   tools
-    .filter((tool) => tool.audience === 'both' || tool.audience === audience)
+    .filter(
+      (tool) =>
+        tool.audience === 'both' ||
+        tool.audience === audience ||
+        extraTools.includes(tool.name),
+    )
     .forEach((tool) => {
       server.registerTool(
         tool.name,

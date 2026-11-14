@@ -2,13 +2,17 @@ import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '@lib/firebase/config';
 
+/** A kind of source an assistant can be allowed to read. */
+export type McpReadScope = 'mail' | 'drive' | 'apps';
+
 const completeMcpSignInCallable = httpsCallable<
   { externalAuthId: string },
   { redirectUri: string }
 >(functions, 'completeMcpSignIn');
 
 const updateMcpClientCallable = httpsCallable<
-  { clientKey: string; canWrite: boolean },
+  | { clientKey: string; canWrite: boolean }
+  | { clientKey: string; readScope: McpReadScope; isOn: boolean },
   unknown
 >(functions, 'updateMcpClient');
 
@@ -23,6 +27,14 @@ export const completeMcpSignIn = async (externalAuthId: string) =>
 
 export const updateMcpClient = async (clientKey: string, canWrite: boolean) => {
   await updateMcpClientCallable({ clientKey, canWrite });
+};
+
+export const setMcpReadScope = async (
+  clientKey: string,
+  readScope: McpReadScope,
+  isOn: boolean,
+) => {
+  await updateMcpClientCallable({ clientKey, readScope, isOn });
 };
 
 export const disconnectMcpClient = async (clientKey: string) => {

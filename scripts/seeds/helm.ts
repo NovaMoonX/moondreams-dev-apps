@@ -116,13 +116,7 @@ interface CopyDefinition {
   category: string;
   sourceRef: string;
   kind:
-    | 'event'
-    | 'task'
-    | 'place'
-    | 'project'
-    | 'pet'
-    | 'trip'
-    | 'moneySummary';
+    'event' | 'task' | 'place' | 'project' | 'pet' | 'trip' | 'moneySummary';
   title: string;
   subtitle: string | null;
   startAt: number | null;
@@ -4816,11 +4810,13 @@ const SEED_ASSISTANTS = [
     clientId: 'https://claude.ai/oauth/seed-claude.json',
     name: 'Claude',
     canWrite: true,
+    readScopes: ['apps'],
   },
   {
     clientId: 'https://gemini.google.com/oauth/seed-gemini.json',
     name: 'Gemini',
     canWrite: false,
+    readScopes: [],
   },
 ] as const;
 
@@ -4834,775 +4830,802 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const batch = context.firestore.batch();
 
   const turnCounts = await Promise.all(
-    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone, theme }) => {
-      batch.set(users.doc(user.uid), {
-        timeZone,
-        assistantName,
-        assistantTone,
-        theme,
-        dayStartTime: DEFAULT_DAY_START_TIME,
-        dayEndTime: DEFAULT_DAY_END_TIME,
-        planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
-        shiftCalendarIds:
-          user.uid === FIXTURE_USERS.partnerOne.uid
-            ? [`${GOOGLE_ACCOUNT_ID}/${GOOGLE_SHIFTS_CALENDAR}`]
-            : [],
-        busyAllDayEventRefs: [],
-        calendarOfferFoldedAt: null,
-        hasSeenAiNotice: false,
-        voiceMode: 'cloudWhenOnline',
-        isWakeWordOn: false,
-        isHandsFreeOn: true,
-        hasSeenVoiceNotice: null,
-        selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
-        currentPlace: null,
-        styleLearnedThroughAt:
-          user.uid === FIXTURE_USERS.partnerOne.uid ? context.now : null,
-        createdAt,
-        lastEditedAt: null,
-      });
+    SEED_PROFILES.map(
+      async ({ user, timeZone, assistantName, assistantTone, theme }) => {
+        batch.set(users.doc(user.uid), {
+          timeZone,
+          assistantName,
+          assistantTone,
+          theme,
+          dayStartTime: DEFAULT_DAY_START_TIME,
+          dayEndTime: DEFAULT_DAY_END_TIME,
+          planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
+          shiftCalendarIds:
+            user.uid === FIXTURE_USERS.partnerOne.uid
+              ? [`${GOOGLE_ACCOUNT_ID}/${GOOGLE_SHIFTS_CALENDAR}`]
+              : [],
+          busyAllDayEventRefs: [],
+          calendarOfferFoldedAt: null,
+          hasSeenAiNotice: false,
+          voiceMode: 'cloudWhenOnline',
+          isWakeWordOn: false,
+          isHandsFreeOn: true,
+          hasSeenVoiceNotice: null,
+          selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
+          currentPlace: null,
+          styleLearnedThroughAt:
+            user.uid === FIXTURE_USERS.partnerOne.uid ? context.now : null,
+          createdAt,
+          lastEditedAt: null,
+        });
 
-      const data = deriveSeedDataKey(keyring, user.uid);
-      batch.set(
-        context.firestore.doc(wrappedKeyPath(user.uid)),
-        wrapDataKey(keyring, user.uid, data, createdAt),
-      );
-      const encryption: HelmEncryption = {
-        appId: 'helm',
-        keyId: data.keyId,
-        keyVersion: 1,
-        key: data.key.toString('hex'),
-      };
+        const data = deriveSeedDataKey(keyring, user.uid);
+        batch.set(
+          context.firestore.doc(wrappedKeyPath(user.uid)),
+          wrapDataKey(keyring, user.uid, data, createdAt),
+        );
+        const encryption: HelmEncryption = {
+          appId: 'helm',
+          keyId: data.keyId,
+          keyVersion: 1,
+          key: data.key.toString('hex'),
+        };
 
-      const builtTurns = await Promise.all(
-        ALL_TURNS.map(async (turn, index) => {
-          const turnTime = context.now - turn.minutesAgo * MINUTE_MS;
-          const reading = readCapture(turn.text, {
-            now: turnTime,
-            timeZone,
-            assistantName: DEFAULT_ASSISTANT_NAME,
-          });
-          const sortedTasks = (SEED_TASKS[index] ?? []).map((entry, order) => ({
-            id: `seed-task-${index + 1}-${order + 1}`,
-            title: entry.title,
-            due: dueFrom(reading.dates, entry.dueWords),
-          }));
-          const executionId = `seed-execution-${index + 1}`;
-          const isMove = index === MOVE_TURN;
-          const isSorted = sortedTasks.length > 0 || isMove;
-          const sortedAt = turnTime + SORT_DELAY_MS;
-          const heldFields = toHeldFields(turn.held, turnTime, isSorted);
-          const spoken =
-            isSorted && SEED_VOICE_TURNS.has(index)
-              ? (buildSpokenAck({
-                  inputMode: 'voice',
-                  counts: {
-                    made: sortedTasks.length,
-                    updated: 0,
-                    completed: 0,
-                  },
-                  messageCount: 1,
-                  created: sortedTasks,
-                  timeZone,
-                  now: sortedAt,
-                }) ?? undefined)
-              : undefined;
-          const capture: Capture = {
-            inputMode: spoken === undefined ? 'typed' : 'voice',
-            sttProvider: spoken === undefined ? null : 'browser',
-            interruptedCaptureId: null,
-            answersQuestion: null,
-            ttsProvider: spoken === undefined ? null : 'natural',
-            arrivedVia: 'direct',
-            medium: 'web',
-            via: null,
-            sessionId: `seed-${user.uid}-${turn.session}`,
-            turnIndex: ALL_TURNS.filter(
-              (entry) => entry.session === turn.session,
-            ).indexOf(turn),
-            route: !isSorted
-              ? null
-              : sortedTasks.length > 2 || turn.text.length > 55
-                ? 'full'
-                : 'quick',
-            claimId: null,
-            claimedAt: null,
-            ...heldFields,
-            executionIds: isSorted ? [executionId] : [],
-            turnLeadId: null,
-            joinedCaptureIds: [],
-            attachmentIds: [],
-            seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
-            quotedSourceKeys: [],
-            answerSavedNoteId: null,
-            whoIds: [],
-            placeIds: [],
-            planDayKey: null,
-            createdAt: turnTime,
-            sortedAt: isSorted ? sortedAt : null,
-            screen: isMove ? MOVE_SCREEN : null,
-            sealed: await sealJson<CaptureSealed>(
-              { text: turn.text, reading, answer: null, questionAnswer: null },
-              encryption,
-            ),
-          };
-          const tasks = await Promise.all(
-            sortedTasks.map(async ({ id, title, due }) => {
-              const task: Task = {
-                status: 'open',
-                importance: null,
-                isUrgent: false,
-                due,
-                durationMinutes: null,
-                energy: null,
-                context: null,
-                projectId: null,
-                milestoneId: null,
-                whoIds: [],
-                placeIds: [],
-                notUntil: null,
-                waitsOnTaskIds: [],
-                waitsOnWhoId: null,
-                stepState: {},
-                mediaIds: [],
-                createdBy: 'nomos',
-                sourceCaptureId: `seed-turn-${index + 1}`,
-                executionId,
-                createdAt: sortedAt,
-                lastEditedAt: null,
-                completedAt: null,
-                clearedAt: null,
-                sealed: await sealJson<TaskSealed>(
-                  { title, notes: null, steps: {} },
-                  encryption,
-                ),
-              };
-              return { id, task };
-            }),
-          );
-          const effects = sortedTasks.map(({ title, due }) => ({
-            written: {
-              'sealed.title': title,
-              due,
-              status: 'open',
-              isUrgent: false,
-            },
-            previous: null,
-          }));
-          const originalExecution: Execution | null = isSorted
-            ? {
-                captureId: `seed-turn-${index + 1}`,
-                actor: 'nomos',
-                via: null,
-                category: 'organize',
-                autonomyLevel: 2,
-                state: 'succeeded',
-                effectRefs: sortedTasks.map(({ id }) => ({
-                  op: 'create',
-                  collection: 'tasks',
-                  docId: id,
-                })),
-                linkedWhoIds: [],
-                linkedPlaceIds: [],
-                undoesExecutionId: null,
-                undoneByExecutionId: null,
-                questionRef: null,
-                errorCode: null,
-                createdAt: sortedAt,
-                decidedAt: sortedAt,
-                finishedAt: sortedAt,
-                sealed: await sealJson<ExecutionSealed>(
-                  {
-                    summary: summarize(sortedTasks.length),
-                    said: null,
-                    commands: sortedTasks.map(({ title, due }) => ({
-                      kind: 'createTask',
-                      title,
-                      due,
-                    })),
-                    effects,
-                    undoReport: null,
-                    spoken: spoken ?? null,
-                    goneIds: null,
-                    lines: [],
-                  },
-                  encryption,
-                ),
-              }
-            : null;
-          const undone =
-            index === UNDONE_TURN && originalExecution
-              ? await buildUndone({
+        const builtTurns = await Promise.all(
+          ALL_TURNS.map(async (turn, index) => {
+            const turnTime = context.now - turn.minutesAgo * MINUTE_MS;
+            const reading = readCapture(turn.text, {
+              now: turnTime,
+              timeZone,
+              assistantName: DEFAULT_ASSISTANT_NAME,
+            });
+            const sortedTasks = (SEED_TASKS[index] ?? []).map(
+              (entry, order) => ({
+                id: `seed-task-${index + 1}-${order + 1}`,
+                title: entry.title,
+                due: dueFrom(reading.dates, entry.dueWords),
+              }),
+            );
+            const executionId = `seed-execution-${index + 1}`;
+            const isMove = index === MOVE_TURN;
+            const isSorted = sortedTasks.length > 0 || isMove;
+            const sortedAt = turnTime + SORT_DELAY_MS;
+            const heldFields = toHeldFields(turn.held, turnTime, isSorted);
+            const spoken =
+              isSorted && SEED_VOICE_TURNS.has(index)
+                ? (buildSpokenAck({
+                    inputMode: 'voice',
+                    counts: {
+                      made: sortedTasks.length,
+                      updated: 0,
+                      completed: 0,
+                    },
+                    messageCount: 1,
+                    created: sortedTasks,
+                    timeZone,
+                    now: sortedAt,
+                  }) ?? undefined)
+                : undefined;
+            const capture: Capture = {
+              inputMode: spoken === undefined ? 'typed' : 'voice',
+              sttProvider: spoken === undefined ? null : 'browser',
+              interruptedCaptureId: null,
+              answersQuestion: null,
+              ttsProvider: spoken === undefined ? null : 'natural',
+              arrivedVia: 'direct',
+              medium: 'web',
+              via: null,
+              sessionId: `seed-${user.uid}-${turn.session}`,
+              turnIndex: ALL_TURNS.filter(
+                (entry) => entry.session === turn.session,
+              ).indexOf(turn),
+              route: !isSorted
+                ? null
+                : sortedTasks.length > 2 || turn.text.length > 55
+                  ? 'full'
+                  : 'quick',
+              claimId: null,
+              claimedAt: null,
+              ...heldFields,
+              executionIds: isSorted ? [executionId] : [],
+              turnLeadId: null,
+              joinedCaptureIds: [],
+              attachmentIds: [],
+              seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
+              quotedSourceKeys: [],
+              answerSavedNoteId: null,
+              whoIds: [],
+              placeIds: [],
+              planDayKey: null,
+              createdAt: turnTime,
+              sortedAt: isSorted ? sortedAt : null,
+              screen: isMove ? MOVE_SCREEN : null,
+              sealed: await sealJson<CaptureSealed>(
+                {
+                  text: turn.text,
+                  reading,
+                  answer: null,
+                  questionAnswer: null,
+                },
+                encryption,
+              ),
+            };
+            const tasks = await Promise.all(
+              sortedTasks.map(async ({ id, title, due }) => {
+                const task: Task = {
+                  status: 'open',
+                  importance: null,
+                  isUrgent: false,
+                  due,
+                  durationMinutes: null,
+                  energy: null,
+                  context: null,
+                  projectId: null,
+                  milestoneId: null,
+                  whoIds: [],
+                  placeIds: [],
+                  notUntil: null,
+                  waitsOnTaskIds: [],
+                  waitsOnWhoId: null,
+                  stepState: {},
+                  mediaIds: [],
+                  createdBy: 'nomos',
+                  sourceCaptureId: `seed-turn-${index + 1}`,
                   executionId,
-                  execution: originalExecution,
-                  effects,
-                  tasks,
+                  createdAt: sortedAt,
+                  lastEditedAt: null,
+                  completedAt: null,
+                  clearedAt: null,
+                  sealed: await sealJson<TaskSealed>(
+                    { title, notes: null, steps: {} },
+                    encryption,
+                  ),
+                };
+                return { id, task };
+              }),
+            );
+            const effects = sortedTasks.map(({ title, due }) => ({
+              written: {
+                'sealed.title': title,
+                due,
+                status: 'open',
+                isUrgent: false,
+              },
+              previous: null,
+            }));
+            const originalExecution: Execution | null = isSorted
+              ? {
+                  captureId: `seed-turn-${index + 1}`,
+                  actor: 'nomos',
+                  via: null,
+                  category: 'organize',
+                  autonomyLevel: 2,
+                  state: 'succeeded',
+                  effectRefs: sortedTasks.map(({ id }) => ({
+                    op: 'create',
+                    collection: 'tasks',
+                    docId: id,
+                  })),
+                  linkedWhoIds: [],
+                  linkedPlaceIds: [],
+                  undoesExecutionId: null,
+                  undoneByExecutionId: null,
+                  questionRef: null,
+                  errorCode: null,
+                  createdAt: sortedAt,
+                  decidedAt: sortedAt,
+                  finishedAt: sortedAt,
+                  sealed: await sealJson<ExecutionSealed>(
+                    {
+                      summary: summarize(sortedTasks.length),
+                      said: null,
+                      commands: sortedTasks.map(({ title, due }) => ({
+                        kind: 'createTask',
+                        title,
+                        due,
+                      })),
+                      effects,
+                      undoReport: null,
+                      spoken: spoken ?? null,
+                      goneIds: null,
+                      lines: [],
+                    },
+                    encryption,
+                  ),
+                }
+              : null;
+            const undone =
+              index === UNDONE_TURN && originalExecution
+                ? await buildUndone({
+                    executionId,
+                    execution: originalExecution,
+                    effects,
+                    tasks,
+                    sortedAt,
+                    encryption,
+                  })
+                : null;
+            const moved = isMove
+              ? await buildMove({
+                  movedTitle: SEED_TASKS[MOVED_TASK.turn][1].title,
+                  fromDue: dueFrom(
+                    readCapture(ALL_TURNS[MOVED_TASK.turn].text, {
+                      now:
+                        context.now -
+                        ALL_TURNS[MOVED_TASK.turn].minutesAgo * MINUTE_MS,
+                      timeZone,
+                      assistantName: DEFAULT_ASSISTANT_NAME,
+                    }).dates,
+                    SEED_TASKS[MOVED_TASK.turn][1].dueWords,
+                  ),
+                  toDue: dueFrom(reading.dates, 'Saturday'),
+                  captureId: `seed-turn-${index + 1}`,
                   sortedAt,
                   encryption,
                 })
               : null;
-          const moved = isMove
-            ? await buildMove({
-                movedTitle: SEED_TASKS[MOVED_TASK.turn][1].title,
-                fromDue: dueFrom(
-                  readCapture(ALL_TURNS[MOVED_TASK.turn].text, {
-                    now:
-                      context.now -
-                      ALL_TURNS[MOVED_TASK.turn].minutesAgo * MINUTE_MS,
-                    timeZone,
-                    assistantName: DEFAULT_ASSISTANT_NAME,
-                  }).dates,
-                  SEED_TASKS[MOVED_TASK.turn][1].dueWords,
-                ),
-                toDue: dueFrom(reading.dates, 'Saturday'),
-                captureId: `seed-turn-${index + 1}`,
-                sortedAt,
+            const execution =
+              moved?.execution ?? undone?.original ?? originalExecution;
+            return {
+              moved,
+              id: `seed-turn-${index + 1}`,
+              capture,
+              tasks: undone?.tasks ?? tasks,
+              execution,
+              executionId,
+              undo: undone?.undo ?? null,
+            };
+          }),
+        );
+        const moved = builtTurns.find((turn) => turn.moved)?.moved ?? null;
+        const turns = builtTurns.map((turn) => ({
+          ...turn,
+          tasks: turn.tasks.map((entry) =>
+            moved && entry.id === MOVED_TASK.id
+              ? {
+                  ...entry,
+                  task: {
+                    ...entry.task,
+                    due: moved.due,
+                    lastEditedAt: moved.editedAt,
+                  },
+                }
+              : entry,
+          ),
+        }));
+        const person = users.doc(user.uid);
+        SEED_ASSISTANTS.forEach((assistant, index) => {
+          const lastUsedAt = context.now - index * 3 * DAY_MS - 20 * MINUTE_MS;
+          batch.set(
+            context.firestore
+              .collection('mcpClients')
+              .doc(user.uid)
+              .collection('clients')
+              .doc(
+                createHash('sha256')
+                  .update(assistant.clientId)
+                  .digest('hex')
+                  .slice(0, 32),
+              ),
+            {
+              appId: 'helm',
+              clientId: assistant.clientId,
+              name: assistant.name,
+              workosUserId: `seed-workos-${user.uid}`,
+              firstSeenAt: context.now - (9 - index * 4) * DAY_MS,
+              lastUsedAt,
+              canWrite: assistant.canWrite,
+              readScopes: assistant.readScopes,
+              revokedAt: null,
+            },
+          );
+        });
+        const today = getDueDay({ kind: 'moment', at: context.now }, timeZone);
+        const handTasks = await Promise.all(
+          SEED_HAND_TASKS.map(async (entry, index) => {
+            const made = context.now - (index + 1) * 90 * MINUTE_MS;
+            const stepIds = (entry.steps ?? []).map(
+              (_, order) => `seed-step-${index + 1}-${order + 1}`,
+            );
+            const task: Task = {
+              status: 'open',
+              importance: entry.importance ?? null,
+              isUrgent: entry.isUrgent ?? false,
+              due:
+                entry.dueDays !== undefined
+                  ? { kind: 'day', date: today + entry.dueDays * DAY_MS }
+                  : null,
+              durationMinutes: entry.durationMinutes ?? null,
+              energy: entry.energy ?? null,
+              context: entry.context ?? null,
+              projectId: null,
+              milestoneId: null,
+              whoIds: [],
+              placeIds: [],
+              notUntil:
+                entry.notUntilDays !== undefined
+                  ? today + entry.notUntilDays * DAY_MS
+                  : null,
+              waitsOnTaskIds: entry.waitsOnTaskIds ?? [],
+              waitsOnWhoId: entry.waitsOnWhoId ?? null,
+              stepState: Object.fromEntries(
+                stepIds.map((id, order) => [
+                  id,
+                  {
+                    order,
+                    doneAt:
+                      order < (entry.stepsDone ?? 0) ? made + MINUTE_MS : null,
+                  },
+                ]),
+              ),
+              mediaIds: [],
+              createdBy: 'person',
+              sourceCaptureId: null,
+              executionId: null,
+              createdAt: made,
+              lastEditedAt: made + 3 * MINUTE_MS,
+              completedAt: null,
+              clearedAt: null,
+              sealed: await sealJson<TaskSealed>(
+                {
+                  title: entry.title,
+                  notes: entry.notes ?? null,
+                  steps: Object.fromEntries(
+                    stepIds.map((id, order) => [
+                      id,
+                      { text: (entry.steps ?? [])[order] },
+                    ]),
+                  ),
+                },
+                encryption,
+              ),
+            };
+            return { id: `seed-task-hand-${index + 1}`, task };
+          }),
+        );
+        handTasks.forEach((entry) =>
+          batch.set(person.collection('tasks').doc(entry.id), entry.task),
+        );
+        turns.forEach(
+          ({ id, capture, tasks, execution, executionId, undo }) => {
+            batch.set(person.collection('captures').doc(id), capture);
+            tasks.forEach((entry) =>
+              batch.set(person.collection('tasks').doc(entry.id), entry.task),
+            );
+            if (execution) {
+              batch.set(
+                person.collection('executions').doc(executionId),
+                execution,
+              );
+            }
+            if (undo) {
+              batch.set(
+                person.collection('executions').doc(undo.id),
+                undo.execution,
+              );
+            }
+          },
+        );
+        const backToBack = await buildBackToBack({
+          uid: user.uid,
+          turnIndexFrom: ALL_TURNS.filter((entry) => entry.session === 'today')
+            .length,
+          now: context.now,
+          timeZone,
+          encryption,
+        });
+        backToBack.captures.forEach(({ id, capture }) =>
+          batch.set(person.collection('captures').doc(id), capture),
+        );
+        backToBack.tasks.forEach((entry) =>
+          batch.set(person.collection('tasks').doc(entry.id), entry.task),
+        );
+        batch.set(
+          person.collection('executions').doc(backToBack.executionId),
+          backToBack.execution,
+        );
+        const answerTurns =
+          user.uid === FIXTURE_USERS.partnerOne.uid
+            ? await buildAnswerTurns({
+                uid: user.uid,
+                now: context.now,
+                timeZone,
+                encryption,
+              })
+            : { turns: [], tasks: [], notes: [] };
+        answerTurns.turns.forEach((entry) => {
+          batch.set(
+            person.collection('captures').doc(entry.captureId),
+            entry.capture,
+          );
+          batch.set(
+            person.collection('executions').doc(entry.executionId),
+            entry.execution,
+          );
+        });
+        answerTurns.tasks.forEach((entry) =>
+          batch.set(person.collection('tasks').doc(entry.id), entry.task),
+        );
+        answerTurns.notes.forEach((entry) =>
+          batch.set(person.collection('notes').doc(entry.id), entry.note),
+        );
+        const gmailTurn =
+          user.uid === FIXTURE_USERS.partnerOne.uid
+            ? await buildGmailTurn({
+                uid: user.uid,
+                now: context.now,
+                timeZone,
                 encryption,
               })
             : null;
-          const execution =
-            moved?.execution ?? undone?.original ?? originalExecution;
-          return {
-            moved,
-            id: `seed-turn-${index + 1}`,
-            capture,
-            tasks: undone?.tasks ?? tasks,
-            execution,
-            executionId,
-            undo: undone?.undo ?? null,
-          };
-        }),
-      );
-      const moved = builtTurns.find((turn) => turn.moved)?.moved ?? null;
-      const turns = builtTurns.map((turn) => ({
-        ...turn,
-        tasks: turn.tasks.map((entry) =>
-          moved && entry.id === MOVED_TASK.id
-            ? {
-                ...entry,
-                task: {
-                  ...entry.task,
-                  due: moved.due,
-                  lastEditedAt: moved.editedAt,
-                },
-              }
-            : entry,
-        ),
-      }));
-      const person = users.doc(user.uid);
-      SEED_ASSISTANTS.forEach((assistant, index) => {
-        const lastUsedAt = context.now - index * 3 * DAY_MS - 20 * MINUTE_MS;
-        batch.set(
-          context.firestore
-            .collection('mcpClients')
-            .doc(user.uid)
-            .collection('clients')
-            .doc(
-              createHash('sha256')
-                .update(assistant.clientId)
-                .digest('hex')
-                .slice(0, 32),
-            ),
-          {
-            appId: 'helm',
-            clientId: assistant.clientId,
-            name: assistant.name,
-            workosUserId: `seed-workos-${user.uid}`,
-            firstSeenAt: context.now - (9 - index * 4) * DAY_MS,
-            lastUsedAt,
-            canWrite: assistant.canWrite,
-            revokedAt: null,
-          },
-        );
-      });
-      const today = getDueDay({ kind: 'moment', at: context.now }, timeZone);
-      const handTasks = await Promise.all(
-        SEED_HAND_TASKS.map(async (entry, index) => {
-          const made = context.now - (index + 1) * 90 * MINUTE_MS;
-          const stepIds = (entry.steps ?? []).map(
-            (_, order) => `seed-step-${index + 1}-${order + 1}`,
-          );
-          const task: Task = {
-            status: 'open',
-            importance: entry.importance ?? null,
-            isUrgent: entry.isUrgent ?? false,
-            due:
-              entry.dueDays !== undefined
-                ? { kind: 'day', date: today + entry.dueDays * DAY_MS }
-                : null,
-            durationMinutes: entry.durationMinutes ?? null,
-            energy: entry.energy ?? null,
-            context: entry.context ?? null,
-            projectId: null,
-            milestoneId: null,
-            whoIds: [],
-            placeIds: [],
-            notUntil:
-              entry.notUntilDays !== undefined
-                ? today + entry.notUntilDays * DAY_MS
-                : null,
-            waitsOnTaskIds: entry.waitsOnTaskIds ?? [],
-            waitsOnWhoId: entry.waitsOnWhoId ?? null,
-            stepState: Object.fromEntries(
-              stepIds.map((id, order) => [
-                id,
-                {
-                  order,
-                  doneAt:
-                    order < (entry.stepsDone ?? 0) ? made + MINUTE_MS : null,
-                },
-              ]),
-            ),
-            mediaIds: [],
-            createdBy: 'person',
-            sourceCaptureId: null,
-            executionId: null,
-            createdAt: made,
-            lastEditedAt: made + 3 * MINUTE_MS,
-            completedAt: null,
-            clearedAt: null,
-            sealed: await sealJson<TaskSealed>(
-              {
-                title: entry.title,
-                notes: entry.notes ?? null,
-                steps: Object.fromEntries(
-                  stepIds.map((id, order) => [
-                    id,
-                    { text: (entry.steps ?? [])[order] },
-                  ]),
-                ),
-              },
-              encryption,
-            ),
-          };
-          return { id: `seed-task-hand-${index + 1}`, task };
-        }),
-      );
-      handTasks.forEach((entry) =>
-        batch.set(person.collection('tasks').doc(entry.id), entry.task),
-      );
-      turns.forEach(({ id, capture, tasks, execution, executionId, undo }) => {
-        batch.set(person.collection('captures').doc(id), capture);
-        tasks.forEach((entry) =>
-          batch.set(person.collection('tasks').doc(entry.id), entry.task),
-        );
-        if (execution) {
+        if (gmailTurn) {
           batch.set(
-            person.collection('executions').doc(executionId),
-            execution,
+            person.collection('captures').doc('seed-turn-answer-gmail'),
+            gmailTurn.capture,
+          );
+          batch.set(
+            person.collection('executions').doc(gmailTurn.executionId),
+            gmailTurn.execution,
+          );
+          batch.set(
+            person.collection('facts').doc(gmailTurn.factId),
+            gmailTurn.fact,
           );
         }
-        if (undo) {
+        const noteTurn =
+          user.uid === FIXTURE_USERS.partnerOne.uid
+            ? await buildNoteTurn({
+                uid: user.uid,
+                now: context.now,
+                timeZone,
+                encryption,
+              })
+            : null;
+        if (noteTurn) {
           batch.set(
-            person.collection('executions').doc(undo.id),
-            undo.execution,
+            person.collection('captures').doc(CAPTURE_NOTE_TURN_ID),
+            noteTurn.capture,
+          );
+          batch.set(
+            person.collection('executions').doc(CAPTURE_NOTE_EXECUTION_ID),
+            noteTurn.execution,
+          );
+          batch.set(
+            person.collection('notes').doc(CAPTURE_NOTE_ID),
+            noteTurn.note,
           );
         }
-      });
-      const backToBack = await buildBackToBack({
-        uid: user.uid,
-        turnIndexFrom: ALL_TURNS.filter((entry) => entry.session === 'today')
-          .length,
-        now: context.now,
-        timeZone,
-        encryption,
-      });
-      backToBack.captures.forEach(({ id, capture }) =>
-        batch.set(person.collection('captures').doc(id), capture),
-      );
-      backToBack.tasks.forEach((entry) =>
-        batch.set(person.collection('tasks').doc(entry.id), entry.task),
-      );
-      batch.set(
-        person.collection('executions').doc(backToBack.executionId),
-        backToBack.execution,
-      );
-      const answerTurns =
-        user.uid === FIXTURE_USERS.partnerOne.uid
-          ? await buildAnswerTurns({
-              uid: user.uid,
-              now: context.now,
-              timeZone,
-              encryption,
-            })
-          : { turns: [], tasks: [], notes: [] };
-      answerTurns.turns.forEach((entry) => {
-        batch.set(
-          person.collection('captures').doc(entry.captureId),
-          entry.capture,
-        );
-        batch.set(
-          person.collection('executions').doc(entry.executionId),
-          entry.execution,
-        );
-      });
-      answerTurns.tasks.forEach((entry) =>
-        batch.set(person.collection('tasks').doc(entry.id), entry.task),
-      );
-      answerTurns.notes.forEach((entry) =>
-        batch.set(person.collection('notes').doc(entry.id), entry.note),
-      );
-      const gmailTurn =
-        user.uid === FIXTURE_USERS.partnerOne.uid
-          ? await buildGmailTurn({
-              uid: user.uid,
-              now: context.now,
-              timeZone,
-              encryption,
-            })
-          : null;
-      if (gmailTurn) {
-        batch.set(
-          person.collection('captures').doc('seed-turn-answer-gmail'),
-          gmailTurn.capture,
-        );
-        batch.set(
-          person.collection('executions').doc(gmailTurn.executionId),
-          gmailTurn.execution,
-        );
-        batch.set(
-          person.collection('facts').doc(gmailTurn.factId),
-          gmailTurn.fact,
-        );
-      }
-      const noteTurn =
-        user.uid === FIXTURE_USERS.partnerOne.uid
-          ? await buildNoteTurn({
-              uid: user.uid,
-              now: context.now,
-              timeZone,
-              encryption,
-            })
-          : null;
-      if (noteTurn) {
-        batch.set(
-          person.collection('captures').doc(CAPTURE_NOTE_TURN_ID),
-          noteTurn.capture,
-        );
-        batch.set(
-          person.collection('executions').doc(CAPTURE_NOTE_EXECUTION_ID),
-          noteTurn.execution,
-        );
-        batch.set(
-          person.collection('notes').doc(CAPTURE_NOTE_ID),
-          noteTurn.note,
-        );
-      }
-      const planDays =
-        user.uid === FIXTURE_USERS.partnerOne.uid
-          ? await buildPlanDays({
-              now: context.now,
-              timeZone,
-              encryption,
-            })
-          : null;
-      if (planDays) {
-        planDays.days.forEach((entry) =>
-          batch.set(person.collection('planDays').doc(entry.id), entry.day),
-        );
-        batch.set(
-          person.collection('tasks').doc(planDays.task.id),
-          planDays.task.task,
-        );
-      }
-      const people =
-        user.uid === FIXTURE_USERS.partnerOne.uid
-          ? await buildPeople({
-              uid: user.uid,
-              displayName: user.displayName,
-              now: context.now,
-              timeZone,
-              encryption,
-            })
-          : null;
-      if (people) {
-        people.who.forEach((entry) =>
-          batch.set(person.collection('who').doc(entry.id), entry.who),
-        );
-        people.places.forEach((entry) =>
-          batch.set(person.collection('places').doc(entry.id), entry.place),
-        );
-        people.keyDates.forEach((entry) =>
-          batch.set(person.collection('keyDates').doc(entry.id), entry.keyDate),
-        );
-        batch.set(
-          person.collection('meta').doc('keyDateIndex'),
-          people.keyDateIndex,
-        );
-        people.media.forEach((entry) =>
-          batch.set(person.collection('media').doc(entry.id), entry.media),
-        );
-        await Promise.all(
-          people.media.flatMap((entry) =>
-            entry.uploads.map((upload) =>
-              uploadSealedSeed(upload.path, upload.bytes),
+        const planDays =
+          user.uid === FIXTURE_USERS.partnerOne.uid
+            ? await buildPlanDays({
+                now: context.now,
+                timeZone,
+                encryption,
+              })
+            : null;
+        if (planDays) {
+          planDays.days.forEach((entry) =>
+            batch.set(person.collection('planDays').doc(entry.id), entry.day),
+          );
+          batch.set(
+            person.collection('tasks').doc(planDays.task.id),
+            planDays.task.task,
+          );
+        }
+        const people =
+          user.uid === FIXTURE_USERS.partnerOne.uid
+            ? await buildPeople({
+                uid: user.uid,
+                displayName: user.displayName,
+                now: context.now,
+                timeZone,
+                encryption,
+              })
+            : null;
+        if (people) {
+          people.who.forEach((entry) =>
+            batch.set(person.collection('who').doc(entry.id), entry.who),
+          );
+          people.places.forEach((entry) =>
+            batch.set(person.collection('places').doc(entry.id), entry.place),
+          );
+          people.keyDates.forEach((entry) =>
+            batch.set(
+              person.collection('keyDates').doc(entry.id),
+              entry.keyDate,
             ),
-          ),
-        );
-        people.tasks.forEach((entry) =>
-          batch.set(person.collection('tasks').doc(entry.id), entry.task),
-        );
-        batch.set(
-          person.collection('captures').doc(people.capture.id),
-          people.capture.capture,
-        );
-        batch.set(
-          person.collection('captures').doc(people.factCapture.id),
-          people.factCapture.capture,
-        );
-        people.facts.forEach((entry) =>
-          batch.set(person.collection('facts').doc(entry.id), entry.fact),
-        );
-        batch.set(
-          person.collection('captures').doc(people.oldPriceCapture.id),
-          people.oldPriceCapture.capture,
-        );
-        batch.set(
-          person.collection('captures').doc(people.contradictionCapture.id),
-          people.contradictionCapture.capture,
-        );
-        batch.set(
-          person.collection('captures').doc(people.questionCapture.id),
-          people.questionCapture.capture,
-        );
-        batch.set(
-          person.collection('captures').doc(people.askedCapture.id),
-          people.askedCapture.capture,
-        );
-        batch.set(
-          person.collection('captures').doc(people.clashCapture.id),
-          people.clashCapture.capture,
-        );
-      }
-      const photoTurns = people
-        ? await buildPhotoTurns({
-            uid: user.uid,
-            now: context.now,
-            timeZone,
-            encryption,
-          })
-        : null;
-      if (photoTurns) {
-        photoTurns.captures.forEach((entry) =>
-          batch.set(person.collection('captures').doc(entry.id), entry.capture),
-        );
-        photoTurns.media.forEach((entry) =>
-          batch.set(person.collection('media').doc(entry.id), entry.media),
-        );
-        await Promise.all(
-          photoTurns.media.flatMap((entry) =>
-            entry.uploads.map((upload) =>
-              uploadSealedSeed(upload.path, upload.bytes),
+          );
+          batch.set(
+            person.collection('meta').doc('keyDateIndex'),
+            people.keyDateIndex,
+          );
+          people.media.forEach((entry) =>
+            batch.set(person.collection('media').doc(entry.id), entry.media),
+          );
+          await Promise.all(
+            people.media.flatMap((entry) =>
+              entry.uploads.map((upload) =>
+                uploadSealedSeed(upload.path, upload.bytes),
+              ),
             ),
-          ),
-        );
-        batch.set(
-          person.collection('tasks').doc(photoTurns.task.id),
-          photoTurns.task.task,
-        );
-        batch.set(
-          person.collection('executions').doc(photoTurns.execution.id),
-          photoTurns.execution.execution,
-        );
-      }
-      const fileTurns = photoTurns
-        ? await buildFileTurns({
-            uid: user.uid,
-            now: context.now,
-            timeZone,
-            encryption,
-          })
-        : null;
-      if (fileTurns) {
-        fileTurns.captures.forEach((entry) =>
-          batch.set(person.collection('captures').doc(entry.id), entry.capture),
-        );
-        fileTurns.media.forEach((entry) =>
-          batch.set(person.collection('media').doc(entry.id), entry.media),
-        );
-        await Promise.all(
-          fileTurns.media.flatMap((entry) =>
-            entry.uploads.map((upload) =>
-              uploadSealedSeed(upload.path, upload.bytes),
+          );
+          people.tasks.forEach((entry) =>
+            batch.set(person.collection('tasks').doc(entry.id), entry.task),
+          );
+          batch.set(
+            person.collection('captures').doc(people.capture.id),
+            people.capture.capture,
+          );
+          batch.set(
+            person.collection('captures').doc(people.factCapture.id),
+            people.factCapture.capture,
+          );
+          people.facts.forEach((entry) =>
+            batch.set(person.collection('facts').doc(entry.id), entry.fact),
+          );
+          batch.set(
+            person.collection('captures').doc(people.oldPriceCapture.id),
+            people.oldPriceCapture.capture,
+          );
+          batch.set(
+            person.collection('captures').doc(people.contradictionCapture.id),
+            people.contradictionCapture.capture,
+          );
+          batch.set(
+            person.collection('captures').doc(people.questionCapture.id),
+            people.questionCapture.capture,
+          );
+          batch.set(
+            person.collection('captures').doc(people.askedCapture.id),
+            people.askedCapture.capture,
+          );
+          batch.set(
+            person.collection('captures').doc(people.clashCapture.id),
+            people.clashCapture.capture,
+          );
+        }
+        const photoTurns = people
+          ? await buildPhotoTurns({
+              uid: user.uid,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+        if (photoTurns) {
+          photoTurns.captures.forEach((entry) =>
+            batch.set(
+              person.collection('captures').doc(entry.id),
+              entry.capture,
             ),
-          ),
-        );
-        fileTurns.tasks.forEach((entry) =>
-          batch.set(person.collection('tasks').doc(entry.id), entry.task),
-        );
-        fileTurns.executions.forEach((entry) =>
+          );
+          photoTurns.media.forEach((entry) =>
+            batch.set(person.collection('media').doc(entry.id), entry.media),
+          );
+          await Promise.all(
+            photoTurns.media.flatMap((entry) =>
+              entry.uploads.map((upload) =>
+                uploadSealedSeed(upload.path, upload.bytes),
+              ),
+            ),
+          );
           batch.set(
-            person.collection('executions').doc(entry.id),
-            entry.execution,
-          ),
-        );
-        fileTurns.notes.forEach((entry) =>
-          batch.set(person.collection('notes').doc(entry.id), entry.note),
-        );
-        fileTurns.topics.forEach((entry) =>
-          batch.set(person.collection('topics').doc(entry.id), entry.topic),
-        );
-        fileTurns.versions.forEach((entry) =>
+            person.collection('tasks').doc(photoTurns.task.id),
+            photoTurns.task.task,
+          );
           batch.set(
-            person
-              .collection('topics')
-              .doc(entry.topicId)
-              .collection('versions')
-              .doc(entry.id),
-            entry.version,
-          ),
-        );
-      }
-      const projects = people
-        ? await buildProjects({ now: context.now, encryption })
-        : null;
-      if (projects) {
-        projects.projects.forEach((entry) =>
-          batch.set(person.collection('projects').doc(entry.id), entry.project),
-        );
-        projects.tasks.forEach((entry) =>
-          batch.set(person.collection('tasks').doc(entry.id), entry.task),
-        );
-      }
-      const knowledge = people
-        ? await buildKnowledge({
-            uid: user.uid,
-            now: context.now,
-            timeZone,
-            encryption,
-          })
-        : null;
-      if (knowledge) {
-        knowledge.topics.forEach((entry) =>
-          batch.set(person.collection('topics').doc(entry.id), entry.topic),
-        );
-        knowledge.notes.forEach((entry) =>
-          batch.set(person.collection('notes').doc(entry.id), entry.note),
-        );
-        knowledge.versions.forEach((entry) =>
-          batch.set(
-            person
-              .collection('topics')
-              .doc(entry.topicId)
-              .collection('versions')
-              .doc(entry.id),
-            entry.version,
-          ),
-        );
-        knowledge.captures.forEach((entry) =>
-          batch.set(person.collection('captures').doc(entry.id), entry.capture),
-        );
-        knowledge.executions.forEach((entry) =>
-          batch.set(
-            person.collection('executions').doc(entry.id),
-            entry.execution,
-          ),
-        );
-      }
-      const procedures = people
-        ? await buildProcedures({ now: context.now, encryption })
-        : null;
-      if (procedures) {
-        procedures.procedures.forEach((entry) =>
-          batch.set(
-            person.collection('procedures').doc(entry.id),
-            entry.procedure,
-          ),
-        );
-        procedures.versions.forEach((entry) =>
-          batch.set(
-            person
-              .collection('procedures')
-              .doc(entry.procedureId)
-              .collection('versions')
-              .doc(entry.id),
-            entry.version,
-          ),
-        );
-      }
-      const runs = procedures
-        ? await buildRuns({
-            now: context.now,
-            encryption,
-            packing: procedures.basis.packing,
-            cabin: procedures.basis.cabin,
-          })
-        : null;
-      if (runs) {
-        runs.forEach((entry) =>
-          batch.set(
-            person.collection('procedureRuns').doc(entry.id),
-            entry.run,
-          ),
-        );
-      }
-      const style = people
-        ? await buildStyle({ now: context.now, encryption })
-        : null;
-      if (style) {
-        style.forEach((entry) =>
-          batch.set(person.collection('style').doc(entry.id), entry.style),
-        );
-      }
-      const peopleCount = people
-        ? (photoTurns
-            ? photoTurns.captures.length + photoTurns.media.length + 2
-            : 0) +
-          (fileTurns
-            ? fileTurns.captures.length +
-              fileTurns.media.length +
-              fileTurns.tasks.length +
-              fileTurns.executions.length +
-              fileTurns.notes.length +
-              fileTurns.topics.length +
-              fileTurns.versions.length
-            : 0) +
-          people.who.length +
-          people.places.length +
-          people.media.length +
-          people.tasks.length +
-          people.facts.length +
-          people.keyDates.length +
-          1 +
-          7 +
-          (projects ? projects.projects.length + projects.tasks.length : 0) +
-          (knowledge
-            ? knowledge.topics.length +
-              knowledge.notes.length +
-              knowledge.versions.length +
-              knowledge.captures.length +
-              knowledge.executions.length
-            : 0) +
-          (procedures
-            ? procedures.procedures.length + procedures.versions.length
-            : 0) +
-          (runs ? runs.length : 0) +
-          (style ? style.length : 0)
-        : 0;
-      const backToBackCount =
-        peopleCount +
-        backToBack.captures.length +
-        backToBack.tasks.length +
-        1 +
-        answerTurns.turns.length * 2 +
-        answerTurns.tasks.length +
-        answerTurns.notes.length +
-        (gmailTurn ? 3 : 0) +
-        (noteTurn ? 3 : 0) +
-        (planDays ? planDays.days.length + 1 : 0);
-      return (
-        backToBackCount +
-        turns.reduce(
-          (total, turn) =>
-            total +
+            person.collection('executions').doc(photoTurns.execution.id),
+            photoTurns.execution.execution,
+          );
+        }
+        const fileTurns = photoTurns
+          ? await buildFileTurns({
+              uid: user.uid,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+        if (fileTurns) {
+          fileTurns.captures.forEach((entry) =>
+            batch.set(
+              person.collection('captures').doc(entry.id),
+              entry.capture,
+            ),
+          );
+          fileTurns.media.forEach((entry) =>
+            batch.set(person.collection('media').doc(entry.id), entry.media),
+          );
+          await Promise.all(
+            fileTurns.media.flatMap((entry) =>
+              entry.uploads.map((upload) =>
+                uploadSealedSeed(upload.path, upload.bytes),
+              ),
+            ),
+          );
+          fileTurns.tasks.forEach((entry) =>
+            batch.set(person.collection('tasks').doc(entry.id), entry.task),
+          );
+          fileTurns.executions.forEach((entry) =>
+            batch.set(
+              person.collection('executions').doc(entry.id),
+              entry.execution,
+            ),
+          );
+          fileTurns.notes.forEach((entry) =>
+            batch.set(person.collection('notes').doc(entry.id), entry.note),
+          );
+          fileTurns.topics.forEach((entry) =>
+            batch.set(person.collection('topics').doc(entry.id), entry.topic),
+          );
+          fileTurns.versions.forEach((entry) =>
+            batch.set(
+              person
+                .collection('topics')
+                .doc(entry.topicId)
+                .collection('versions')
+                .doc(entry.id),
+              entry.version,
+            ),
+          );
+        }
+        const projects = people
+          ? await buildProjects({ now: context.now, encryption })
+          : null;
+        if (projects) {
+          projects.projects.forEach((entry) =>
+            batch.set(
+              person.collection('projects').doc(entry.id),
+              entry.project,
+            ),
+          );
+          projects.tasks.forEach((entry) =>
+            batch.set(person.collection('tasks').doc(entry.id), entry.task),
+          );
+        }
+        const knowledge = people
+          ? await buildKnowledge({
+              uid: user.uid,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+        if (knowledge) {
+          knowledge.topics.forEach((entry) =>
+            batch.set(person.collection('topics').doc(entry.id), entry.topic),
+          );
+          knowledge.notes.forEach((entry) =>
+            batch.set(person.collection('notes').doc(entry.id), entry.note),
+          );
+          knowledge.versions.forEach((entry) =>
+            batch.set(
+              person
+                .collection('topics')
+                .doc(entry.topicId)
+                .collection('versions')
+                .doc(entry.id),
+              entry.version,
+            ),
+          );
+          knowledge.captures.forEach((entry) =>
+            batch.set(
+              person.collection('captures').doc(entry.id),
+              entry.capture,
+            ),
+          );
+          knowledge.executions.forEach((entry) =>
+            batch.set(
+              person.collection('executions').doc(entry.id),
+              entry.execution,
+            ),
+          );
+        }
+        const procedures = people
+          ? await buildProcedures({ now: context.now, encryption })
+          : null;
+        if (procedures) {
+          procedures.procedures.forEach((entry) =>
+            batch.set(
+              person.collection('procedures').doc(entry.id),
+              entry.procedure,
+            ),
+          );
+          procedures.versions.forEach((entry) =>
+            batch.set(
+              person
+                .collection('procedures')
+                .doc(entry.procedureId)
+                .collection('versions')
+                .doc(entry.id),
+              entry.version,
+            ),
+          );
+        }
+        const runs = procedures
+          ? await buildRuns({
+              now: context.now,
+              encryption,
+              packing: procedures.basis.packing,
+              cabin: procedures.basis.cabin,
+            })
+          : null;
+        if (runs) {
+          runs.forEach((entry) =>
+            batch.set(
+              person.collection('procedureRuns').doc(entry.id),
+              entry.run,
+            ),
+          );
+        }
+        const style = people
+          ? await buildStyle({ now: context.now, encryption })
+          : null;
+        if (style) {
+          style.forEach((entry) =>
+            batch.set(person.collection('style').doc(entry.id), entry.style),
+          );
+        }
+        const peopleCount = people
+          ? (photoTurns
+              ? photoTurns.captures.length + photoTurns.media.length + 2
+              : 0) +
+            (fileTurns
+              ? fileTurns.captures.length +
+                fileTurns.media.length +
+                fileTurns.tasks.length +
+                fileTurns.executions.length +
+                fileTurns.notes.length +
+                fileTurns.topics.length +
+                fileTurns.versions.length
+              : 0) +
+            people.who.length +
+            people.places.length +
+            people.media.length +
+            people.tasks.length +
+            people.facts.length +
+            people.keyDates.length +
             1 +
-            turn.tasks.length +
-            (turn.execution ? 1 : 0) +
-            (turn.undo ? 1 : 0),
-          handTasks.length,
-        )
-      );
-    }),
+            7 +
+            (projects ? projects.projects.length + projects.tasks.length : 0) +
+            (knowledge
+              ? knowledge.topics.length +
+                knowledge.notes.length +
+                knowledge.versions.length +
+                knowledge.captures.length +
+                knowledge.executions.length
+              : 0) +
+            (procedures
+              ? procedures.procedures.length + procedures.versions.length
+              : 0) +
+            (runs ? runs.length : 0) +
+            (style ? style.length : 0)
+          : 0;
+        const backToBackCount =
+          peopleCount +
+          backToBack.captures.length +
+          backToBack.tasks.length +
+          1 +
+          answerTurns.turns.length * 2 +
+          answerTurns.tasks.length +
+          answerTurns.notes.length +
+          (gmailTurn ? 3 : 0) +
+          (noteTurn ? 3 : 0) +
+          (planDays ? planDays.days.length + 1 : 0);
+        return (
+          backToBackCount +
+          turns.reduce(
+            (total, turn) =>
+              total +
+              1 +
+              turn.tasks.length +
+              (turn.execution ? 1 : 0) +
+              (turn.undo ? 1 : 0),
+            handTasks.length,
+          )
+        );
+      },
+    ),
   );
 
   const connectedAt = context.now - 3 * DAY_MS;
@@ -5727,8 +5750,16 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: pinchConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
-      plannedMeals: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
-      shoppingList: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      plannedMeals: {
+        isOn: true,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
+      shoppingList: {
+        isOn: true,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
       useSoon: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
     },
     options: null,
@@ -5824,9 +5855,21 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: aListConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
-      plannedShowings: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
-      savedTheaters: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
-      seenMovies: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
+      plannedShowings: {
+        isOn: true,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
+      savedTheaters: {
+        isOn: true,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
+      seenMovies: {
+        isOn: false,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
     },
     options: null,
     status: 'live',
@@ -5983,7 +6026,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       vetVisits: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
       dueCare: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
       clinics: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
-      conditions: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
+      conditions: {
+        isOn: false,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
     },
     options: null,
     status: 'live',
@@ -6109,7 +6156,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       trips: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
       itinerary: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
       myTasks: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
-      tripBalances: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
+      tripBalances: {
+        isOn: false,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
     },
     options: null,
     status: 'live',
@@ -6189,10 +6240,22 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: runwayConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
-      moneySummary: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
-      upcomingBills: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
+      moneySummary: {
+        isOn: true,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
+      upcomingBills: {
+        isOn: false,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
       horizon: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
-      transactions: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      transactions: {
+        isOn: true,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
     },
     options: null,
     status: 'live',
@@ -6241,7 +6304,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       ...runwayGrant,
       categories: {
         ...runwayGrant.categories,
-        moneySummary: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
+        moneySummary: {
+          isOn: false,
+          changedAt: connectedAt,
+          seenScopeVersion: null,
+        },
       },
       categoryState: Object.fromEntries(
         Object.entries(runwayGrant.categoryState).map(([id, state]) => [
@@ -6262,7 +6329,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     readerAppId: 'helm',
     connectorId: worthTheWaitConnectorId,
     accountId: SITE_ACCOUNT_ID,
-    categories: { boxCounts: { isOn: false, changedAt: connectedAt, seenScopeVersion: null } },
+    categories: {
+      boxCounts: {
+        isOn: false,
+        changedAt: connectedAt,
+        seenScopeVersion: null,
+      },
+    },
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -6310,7 +6383,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     readerAppId: 'helm',
     connectorId: googleConnectorId,
     accountId: GOOGLE_ACCOUNT_ID,
-    categories: { events: { isOn: true, changedAt: connectedAt, seenScopeVersion: null } },
+    categories: {
+      events: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+    },
     options: { calendarIds: [GOOGLE_PRIMARY_CALENDAR, GOOGLE_SHIFTS_CALENDAR] },
     status: 'live',
     categoryState: {
@@ -6345,7 +6420,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     {
       ...googleGrant,
       connectorId: 'google:gmail',
-      categories: { mail: { isOn: true, changedAt: connectedAt, seenScopeVersion: null } },
+      categories: {
+        mail: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      },
       options: null,
       categoryState: { mail: { lastOkAt: null, lastError: null, count: 0 } },
       lastSyncAt: null,
@@ -6358,7 +6435,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     {
       ...googleGrant,
       connectorId: 'google:drive',
-      categories: { documents: { isOn: true, changedAt: connectedAt, seenScopeVersion: null } },
+      categories: {
+        documents: {
+          isOn: true,
+          changedAt: connectedAt,
+          seenScopeVersion: null,
+        },
+      },
       options: null,
       categoryState: {
         documents: { lastOkAt: null, lastError: null, count: 0 },
@@ -6373,7 +6456,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     {
       ...googleGrant,
       connectorId: 'google:contacts',
-      categories: { contacts: { isOn: true, changedAt: connectedAt, seenScopeVersion: null } },
+      categories: {
+        contacts: {
+          isOn: true,
+          changedAt: connectedAt,
+          seenScopeVersion: null,
+        },
+      },
       options: null,
       categoryState: {
         contacts: { lastOkAt: null, lastError: null, count: 0 },

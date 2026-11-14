@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
-import { sourcesBriefFor } from '../../functions/src/apps/helm/mcp/sourcesBrief.ts';
+import {
+  READ_SCOPE_LABELS,
+  READ_SCOPE_TOOLS,
+  sourcesBriefFor,
+} from '../../functions/src/apps/helm/mcp/sourcesBrief.ts';
+import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
 import {
   readDates,
@@ -87,6 +92,26 @@ assert.deepEqual(
     .sort(),
   OUTSIDE_TOOLS,
   'the tools offered to outside assistants changed: review the new one and name it in OUTSIDE_TOOLS',
+);
+
+// Mail, documents and app records reach an outside assistant only behind its own read permission, listed by name.
+assert.deepEqual(READ_SCOPE_TOOLS, {
+  mail: ['search_mail', 'read_mail'],
+  drive: ['search_documents', 'read_document'],
+  apps: ['search_synced', 'search_app_records'],
+});
+const nomosOnly = tools
+  .filter((tool) => tool.audience === 'nomos')
+  .map((tool) => tool.name);
+Object.values(READ_SCOPE_TOOLS)
+  .flat()
+  .forEach((name) =>
+    assert.ok(nomosOnly.includes(name), `${name} stays a Nomos tool`),
+  );
+assert.deepEqual(
+  READ_SCOPE_LABELS,
+  HELM_COPY.assistantReadScopeLabels,
+  'the permission names on the device match the ones the assistant is told',
 );
 
 // A tool in buildTools only reads; tell_helm is the one external tool that files, and lives in external.ts.
@@ -180,25 +205,84 @@ assert.match(
 );
 assert.match(
   external,
-  /instructions: instructionsFor\(\s*name,\s*ctx\.canWrite,\s*await readConnectedSources\(firestore, ctx\.uid\),?\s*\)/,
+  /instructions: instructionsFor\(\s*name,\s*ctx\.canWrite,\s*await readConnectedSources\(firestore, ctx\.uid\),\s*\{ clientName: ctx\.clientName, readScopes: ctx\.readScopes \},?\s*\)/,
 );
 
+assert.match(
+  external,
+  /registerHelmTools\(\s*server,\s*tools,\s*'external',\s*ctx\.readScopes\.flatMap\(\(scope\) => READ_SCOPE_TOOLS\[scope\]\),?\s*\)/,
+);
+assert.match(external, /readScopes: ctx\.readScopes/);
+
 // It also hears what each connected source is, in the manifest's words, and is sent back to Helm for what it can't read.
-assert.equal(sourcesBriefFor('Nomos', []), '');
-const brief = sourcesBriefFor('Sol', [
+const SOURCES = [
   {
     name: 'Runway',
     about: 'Runway is the money app.',
     categories: [{ label: 'Horizon goals', meaning: 'Costs coming up.' }],
+    access: 'apps' as const,
   },
-  { name: 'Gmail', about: 'The mail account.', categories: [] },
-]);
+  {
+    name: 'Gmail',
+    about: 'The mail account.',
+    categories: [],
+    access: 'mail' as const,
+  },
+  {
+    name: 'Google Calendar',
+    about: 'The calendar.',
+    categories: [],
+    access: null,
+  },
+];
+const CONNECTED = { clientName: 'Claude', readScopes: [] as never[] };
+assert.equal(sourcesBriefFor('Nomos', [], CONNECTED), '');
+const brief = sourcesBriefFor('Sol', SOURCES, CONNECTED);
 assert.match(
   brief,
   /Runway: Runway is the money app\. It shares Horizon goals \(Costs coming up\)\./,
 );
-assert.match(brief, /Gmail: The mail account\. From these/);
+assert.match(
+  brief,
+  /Gmail: The mail account\. Google Calendar: The calendar\. From these/,
+);
 assert.match(brief, /they can ask Sol in Helm\./);
+// With nothing allowed, each connected kind names the exact permission to turn on, for this client.
+for (const label of Object.values(READ_SCOPE_LABELS).filter(
+  (entry) => entry !== READ_SCOPE_LABELS.drive,
+)) {
+  assert.ok(
+    brief.includes(
+      `turn on the following permission for Claude in Helm (Settings, Connected assistants): ${label}.`,
+    ),
+    label,
+  );
+}
+assert.ok(
+  !brief.includes('Read Google Drive'),
+  'no Drive connected, no Drive permission',
+);
+assert.ok(
+  !brief.includes('search_mail') && !brief.includes('search_app_records'),
+);
+// With a permission on, that source is readable by name and its permission is no longer offered.
+const withApps = sourcesBriefFor('Sol', SOURCES, {
+  clientName: 'Claude',
+  readScopes: ['apps'],
+});
+assert.match(withApps, /Runway through search_synced and search_app_records/);
+assert.ok(!withApps.includes('Read your apps'));
+assert.ok(
+  withApps.includes(
+    'for Claude in Helm (Settings, Connected assistants): Read Gmail.',
+  ),
+);
+const withAll = sourcesBriefFor('Sol', SOURCES, {
+  clientName: 'Claude',
+  readScopes: ['mail', 'drive', 'apps'],
+});
+assert.match(withAll, /Gmail through search_mail and read_mail/);
+assert.ok(!withAll.includes('turn on'));
 assert.match(external, /`Tells \$\{name\}/);
 assert.match(external, /`Asks \$\{name\}/);
 

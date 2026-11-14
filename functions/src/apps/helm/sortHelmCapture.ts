@@ -375,7 +375,7 @@ const readApiKey = () => {
   }
 };
 
-const readLiveGrants = (firestore: Firestore, uid: string) =>
+export const readLiveGrants = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listLiveGrants }) => listLiveGrants(firestore, uid, 'helm'))
     .catch((error): LiveGrant[] => {
@@ -385,7 +385,7 @@ const readLiveGrants = (firestore: Firestore, uid: string) =>
       return [];
     });
 
-const readSiteGrants = (firestore: Firestore, uid: string) =>
+export const readSiteGrants = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listSiteLiveGrants }) =>
       listSiteLiveGrants(firestore, uid, 'helm'),
@@ -397,7 +397,7 @@ const readSiteGrants = (firestore: Firestore, uid: string) =>
       return [];
     });
 
-const readOffCategories = (firestore: Firestore, uid: string) =>
+export const readOffCategories = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listSiteOffCategories }) =>
       listSiteOffCategories(firestore, uid, 'helm'),

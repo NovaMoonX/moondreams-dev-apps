@@ -917,7 +917,29 @@ export const HELM_COPY = {
   assistantsListHeading: 'Connected',
   assistantLastUsed: (when: string) => `Last used ${when}`,
   assistantNeverUsed: 'Not used yet',
-  assistantReads: (app: string) => `Can read your ${app}`,
+  assistantReads: 'Can look up your tasks, calendar, topics and procedures',
+  assistantReadScopeLabels: {
+    mail: 'Read Gmail',
+    drive: 'Read Google Drive',
+    apps: 'Read your apps',
+  },
+  assistantReadScopeHint: (
+    scope: 'mail' | 'drive' | 'apps',
+    name: string,
+    app: string,
+    isOn: boolean,
+  ) =>
+    ({
+      mail: isOn
+        ? `${name} can search and read your email when you ask. Emails come from other people, so read them with care.`
+        : `${name} can't see your email.`,
+      drive: isOn
+        ? `${name} can search and read your Drive files when you ask. Files can come from other people, so read them with care.`
+        : `${name} can't see your Drive files.`,
+      apps: isOn
+        ? `${name} can look up what your apps share with ${app}.`
+        : `${name} can't see what your apps share.`,
+    })[scope],
   assistantWrites: (app: string) => `Can add things to ${app}`,
   assistantWritesHint: (canWrite: boolean) =>
     canWrite

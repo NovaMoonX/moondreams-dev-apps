@@ -28,13 +28,21 @@ import { readMadeTitles } from '../nomos/buildContext.js';
 import {
   ANTHROPIC_API_KEY,
   loadKeyringOrFail,
+  readLiveGrants,
+  readSiteGrants,
   runHelmSort,
   type CaptureDoc,
   type SortResult,
 } from '../sortHelmCapture.js';
+import type { McpReadScope } from '../../../mcp/shapes.js';
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { buildHelmTools } from './buildTools.js';
-import { sourcesBriefFor, type ConnectedSource } from './sourcesBrief.js';
+import {
+  READ_SCOPE_TOOLS,
+  accessForConnector,
+  sourcesBriefFor,
+  type ConnectedSource,
+} from './sourcesBrief.js';
 import { registerHelmTools } from './server.js';
 
 const RESOURCE = 'https://apps.moondreams.dev/mcp/helm';
@@ -372,6 +380,7 @@ const readConnectedSources = async (
   return [...byConnector.entries()].map(
     ([connectorId, { manifest, onIds }]) => ({
       name: connectorLabel(connectorId),
+      access: accessForConnector(connectorId),
       about: manifest.about,
       categories: manifest.categories
         .filter((category) => onIds.has(category.id))
@@ -385,13 +394,14 @@ const instructionsFor = (
   name: string,
   canWrite: boolean,
   sources: ConnectedSource[],
+  access: { clientName: string; readScopes: McpReadScope[] },
 ) =>
   [
     `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
     canWrite
       ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools: tell_helm passes on something for ${name} to file or do, ask_helm asks ${name} a question, and the search tools look things up directly.`
       : `When they say "ask ${name}" or mention Helm, look things up with the search tools. This connection can't add anything, since the person turned that off in Helm; when they ask ${name} to add or change something, say so.`,
-    sourcesBriefFor(name, sources),
+    sourcesBriefFor(name, sources, access),
   ]
     .filter((line) => line !== '')
     .join(' ');
@@ -410,8 +420,23 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   const profile = await firestore.doc(`apps/helm/users/${ctx.uid}`).get();
   const name =
     readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
+  const [liveGrants, siteGrants] =
+    ctx.readScopes.length > 0
+      ? await Promise.all([
+          readLiveGrants(firestore, ctx.uid),
+          readSiteGrants(firestore, ctx.uid),
+        ])
+      : [[], []];
   const tools = buildHelmTools({
     uid: ctx.uid,
+    liveGrants: liveGrants.filter(
+      (grant) =>
+        (grant.connectorId === 'google:gmail' &&
+          ctx.readScopes.includes('mail')) ||
+        (grant.connectorId === 'google:drive' &&
+          ctx.readScopes.includes('drive')),
+    ),
+    siteGrants: ctx.readScopes.includes('apps') ? siteGrants : [],
     key,
     firestore,
     timeZone: (profile.data()?.timeZone as string | undefined) ?? 'UTC',
@@ -435,10 +460,16 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
         name,
         ctx.canWrite,
         await readConnectedSources(firestore, ctx.uid),
+        { clientName: ctx.clientName, readScopes: ctx.readScopes },
       ),
     },
   );
-  registerHelmTools(server, tools, 'external');
+  registerHelmTools(
+    server,
+    tools,
+    'external',
+    ctx.readScopes.flatMap((scope) => READ_SCOPE_TOOLS[scope]),
+  );
   if (!ctx.canWrite) return server;
   server.registerTool(
     'tell_helm',

@@ -1195,6 +1195,8 @@ export interface ConnectedAssistant {
   firstSeenAt: number;
   lastUsedAt: number;
   canWrite: boolean;
+  /** The kinds of source it may read (`mail`, `drive`, `apps`); each is off until the person turns it on. */
+  readScopes: string[];
   revokedAt: number | null;
 }
 

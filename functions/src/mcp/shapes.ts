@@ -2,6 +2,16 @@ import { createHash } from 'node:crypto';
 
 export const LAST_USED_WRITE_MS = 10 * 60 * 1000;
 
+/** The kinds of source an assistant can be allowed to read, each its own permission on the connection. */
+export const MCP_READ_SCOPES = ['mail', 'drive', 'apps'] as const;
+export type McpReadScope = (typeof MCP_READ_SCOPES)[number];
+
+/** The known permissions in a stored list, once each; anything else is dropped. */
+export const readScopesOf = (stored: unknown): McpReadScope[] =>
+  MCP_READ_SCOPES.filter(
+    (scope) => Array.isArray(stored) && stored.includes(scope),
+  );
+
 /** The document key for an OAuth client: the first 32 hex characters of its id's SHA-256. */
 export const clientKeyFor = (clientId: string) =>
   createHash('sha256').update(clientId).digest('hex').slice(0, 32);

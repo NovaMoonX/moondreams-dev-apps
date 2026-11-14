@@ -13,9 +13,11 @@ import {
   jsonRpcError,
   protectedResourceMetadata,
   readBearerToken,
+  readScopesOf,
   resourcePathOf,
   signInPathFor,
   wwwAuthenticate,
+  type McpReadScope,
 } from './shapes.js';
 import {
   authkitOrigin,
@@ -50,6 +52,7 @@ export interface McpRequestContext {
   clientId: string;
   clientName: string;
   canWrite: boolean;
+  readScopes: McpReadScope[];
 }
 
 interface McpHttpOptions {
@@ -124,6 +127,7 @@ async function sealClient(
         firstSeenAt: now,
         lastUsedAt: now,
         canWrite: true,
+        readScopes: [],
         revokedAt: null,
       });
       return {
@@ -132,6 +136,7 @@ async function sealClient(
         clientId: claims.clientId,
         clientName,
         canWrite: true,
+        readScopes: [],
       };
     }
     const revokedAt =
@@ -163,6 +168,7 @@ async function sealClient(
       clientId: claims.clientId,
       clientName: typeof stored.name === 'string' ? stored.name : clientName,
       canWrite: stored.canWrite === true,
+      readScopes: readScopesOf(stored.readScopes),
     };
   });
 }

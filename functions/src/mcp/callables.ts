@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import {
   HttpsError,
@@ -8,7 +8,7 @@ import {
   type CallableRequest,
 } from 'firebase-functions/v2/https';
 
-import { signInPathFor } from './shapes.js';
+import { MCP_READ_SCOPES, signInPathFor } from './shapes.js';
 import {
   WORKOS_API_KEY,
   completeExternalAuth,
@@ -104,18 +104,30 @@ export const completeMcpSignIn = onCall(
   },
 );
 
+/** What a person changed on a connected assistant: whether it may write, or one read permission on or off. */
+const readClientChange = (data: unknown) => {
+  const { canWrite, readScope, isOn } = readObject(data);
+  const scope = MCP_READ_SCOPES.find((entry) => entry === readScope);
+  if (typeof canWrite === 'boolean') return { canWrite };
+  if (scope && typeof isOn === 'boolean') {
+    return {
+      readScopes: isOn
+        ? FieldValue.arrayUnion(scope)
+        : FieldValue.arrayRemove(scope),
+    };
+  }
+  throw new HttpsError(
+    'invalid-argument',
+    'Choose what this assistant can do.',
+  );
+};
+
 export const updateMcpClient = onCall(
   OPTIONS,
   async (request): Promise<{ ok: true }> => {
     const uid = requireUid(request);
     const clientKey = readClientKey(request.data);
-    const { canWrite } = readObject(request.data);
-    if (typeof canWrite !== 'boolean') {
-      throw new HttpsError(
-        'invalid-argument',
-        'Choose read only or read and write.',
-      );
-    }
+    const change = readClientChange(request.data);
     const ref = clientRef(uid, clientKey);
     await getFirestore().runTransaction(async (transaction) => {
       if (!(await transaction.get(ref)).exists) {
@@ -124,7 +136,7 @@ export const updateMcpClient = onCall(
           'That assistant is no longer connected.',
         );
       }
-      transaction.update(ref, { canWrite });
+      transaction.update(ref, change);
     });
     return { ok: true };
   },

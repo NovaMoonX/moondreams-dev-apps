@@ -29,6 +29,11 @@ export function startAssistantsListener(
               firstSeenAt: data.firstSeenAt ?? 0,
               lastUsedAt: data.lastUsedAt ?? data.firstSeenAt ?? 0,
               canWrite: data.canWrite === true,
+              readScopes: (['mail', 'drive', 'apps'] as const).filter(
+                (scope) =>
+                  Array.isArray(data.readScopes) &&
+                  data.readScopes.includes(scope),
+              ),
               revokedAt: data.revokedAt ?? null,
             };
           })
