@@ -261,6 +261,7 @@ export function useHelmVoice() {
   /** The phrase was heard: it starts what a Talk tap starts, from the page in front, or sends the words that came with it. */
   function wakeUp(rest: string | null, heardBy: { sttProvider: string }) {
     if (!voice.isAvailable) return false;
+    endDictation();
     const page = isHomeView
       ? null
       : (selectTopScreen(store.getState())?.context ?? null);
@@ -731,10 +732,13 @@ export function useHelmVoice() {
     return result;
   };
 
+  // A listen that ends on a lasting error (the mic refused) reports nothing, so the owner counts only while it listens.
+  const liveOwner = voice.state === 'listening' ? dictationOwner : null;
+
   return {
     ...voice,
-    isDictating: dictationOwner !== null,
-    dictationOwner,
+    isDictating: liveOwner !== null,
+    dictationOwner: liveOwner,
     dictate,
     cancel: () => {
       endDictation();
@@ -767,9 +771,5 @@ export function useHelmVoiceContext() {
 /** Whether this field is the one being spoken into: only one field listens at a time. */
 export function useIsDictatingHere(owner: string) {
   const voice = useHelmVoiceContext();
-  return (
-    voice.isDictating &&
-    voice.dictationOwner === owner &&
-    voice.state === 'listening'
-  );
+  return voice.dictationOwner === owner;
 }

@@ -1,4 +1,10 @@
-import { useId, useLayoutEffect, useRef, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+} from 'react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 
@@ -9,6 +15,10 @@ import {
   DictationLine,
 } from '@apps/helm/components/voice/Dictation';
 import { HELM_COPY } from '@apps/helm/constants';
+import {
+  useHelmVoiceContext,
+  useIsDictatingHere,
+} from '@apps/helm/hooks/useHelmVoice';
 
 interface AnswerFieldProps {
   label: string;
@@ -41,11 +51,16 @@ function AnswerField({
   const field = useRef<HTMLTextAreaElement>(null);
   useGrowingTextarea(field, value, 6);
   const owner = useId();
+  const voice = useHelmVoiceContext();
+  const isHere = useIsDictatingHere(owner);
   // Words arrive after the tap, by which time more may have been typed.
   const latest = useRef(value);
+  const stopOnLeave = useRef<() => void>(() => {});
   useLayoutEffect(() => {
     latest.current = value;
+    stopOnLeave.current = isHere ? voice.cancel : () => {};
   });
+  useEffect(() => () => stopOnLeave.current(), []);
   const appendWords = (words: string) => {
     const current = latest.current.trimEnd();
     onChange(
