@@ -22,9 +22,6 @@ interface PastDayProps {
   sources: PlanSources;
 }
 
-const BRING_BUTTON =
-  "relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']";
-
 const titleOf = (task: OpenTask) =>
   task.isUnreadable ? HELM_COPY.unreadable : task.title;
 
@@ -128,22 +125,7 @@ function PastDay({ dayKey, sources }: PastDayProps) {
       )}
       {notDone.length > 0 && (
         <section className='space-y-3'>
-          <SectionDivider
-            label={HELM_COPY.planNotDone}
-            trailing={
-              bringable.length > 0 ? (
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='sm'
-                  className={BRING_BUTTON}
-                  onClick={bring}
-                >
-                  {HELM_COPY.planBringToToday}
-                </Button>
-              ) : null
-            }
-          />
+          <SectionDivider label={HELM_COPY.planNotDone} />
           <ul className='helm-card divide-border divide-y overflow-hidden'>
             {notDone.map((task) => (
               <li key={task.id} className='flex items-center gap-3 px-4 py-3'>
@@ -162,6 +144,16 @@ function PastDay({ dayKey, sources }: PastDayProps) {
               </li>
             ))}
           </ul>
+          {bringable.length > 0 && (
+            <Button
+              type='button'
+              variant='secondary'
+              className='w-full'
+              onClick={bring}
+            >
+              {HELM_COPY.planBringToToday}
+            </Button>
+          )}
         </section>
       )}
       {events.length === 0 && kept.length === 0 && (

@@ -203,11 +203,6 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
             </p>
           )}
         </form>
-        <div className='flex justify-end'>
-          <Button type='button' onClick={onClose}>
-            {HELM_COPY.aliasDone}
-          </Button>
-        </div>
       </div>
     </FormSheet>
   );
