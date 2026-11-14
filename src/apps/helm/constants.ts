@@ -530,6 +530,13 @@ export const HELM_COPY = {
   talkSendLabel: 'Send what you said',
   talkListeningHint: 'Listening…',
   talkGettingReady: 'Getting ready…',
+  heardAsTitle: (heard: string) => `Heard “${heard}”`,
+  heardAsShownAs: (name: string) =>
+    `Shown as ${name}, a name you've told your assistant.`,
+  heardAsUse: 'Use what I said',
+  heardAsKeep: (name: string) => `Keep ${name}`,
+  heardAsTapLabel: (name: string, heard: string) =>
+    `${name}, heard as ${heard}. Tap to see what was heard.`,
   talkListenFailed: "Couldn't start listening on this phone. Try again.",
   talkNeedsConnection:
     'Talk needs a connection on this phone. Turn on Hear me offline to talk without one.',

@@ -635,6 +635,7 @@ async function buildBackToBack(input: {
             }),
             answer: null,
             questionAnswer: null,
+            heardNames: null,
           },
           encryption,
         ),
@@ -984,6 +985,7 @@ async function buildGmailTurn(input: {
         }),
         answer,
         questionAnswer: null,
+        heardNames: null,
       },
       encryption,
     ),
@@ -1132,6 +1134,7 @@ async function buildAnswerTurns(input: {
             }),
             answer,
             questionAnswer: null,
+            heardNames: null,
           },
           encryption,
         ),
@@ -1801,6 +1804,7 @@ async function buildNoteTurn(input: {
         }),
         answer: null,
         questionAnswer: null,
+        heardNames: null,
       },
       encryption,
     ),
@@ -2456,6 +2460,7 @@ async function buildKnowledge(input: {
         reading: tyreBase.reading,
         answer: null,
         questionAnswer: null,
+        heardNames: null,
       },
       encryption,
     ),
@@ -2538,6 +2543,7 @@ async function buildKnowledge(input: {
         reading: groupBase.reading,
         answer: null,
         questionAnswer: null,
+        heardNames: null,
         questions: {
           [groupQuestionId]: buildGroupQuestion({
             name: 'Fitness',
@@ -3119,6 +3125,7 @@ async function buildPhotoTurns(input: {
           }),
           answer: null,
           questionAnswer: null,
+          heardNames: null,
         },
         encryption,
       ),
@@ -3415,6 +3422,7 @@ async function buildFileTurns(input: {
         reading,
         answer: null,
         questionAnswer: null,
+        heardNames: null,
       }),
     };
     return { id, createdAt, reading, capture };
@@ -4263,6 +4271,7 @@ async function buildPeople(input: {
       }),
       answer: null,
       questionAnswer: null,
+      heardNames: null,
     }),
   };
   const factText = 'Dana is the florist, and she does the wedding flowers';
@@ -4285,6 +4294,7 @@ async function buildPeople(input: {
       }),
       answer: null,
       questionAnswer: null,
+      heardNames: null,
     }),
   };
   const oldPriceText = 'Dana says centerpieces are $1,800';
@@ -4306,6 +4316,7 @@ async function buildPeople(input: {
       }),
       answer: null,
       questionAnswer: null,
+      heardNames: null,
     }),
   };
   const newPriceText = 'Dana just told me centerpieces are $2,100 now';
@@ -5020,7 +5031,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             sortedAt: isSorted ? sortedAt : null,
             screen: isMove ? MOVE_SCREEN : null,
             sealed: await sealJson<CaptureSealed>(
-              { text: turn.text, reading, answer: null, questionAnswer: null },
+              { text: turn.text, reading, answer: null, questionAnswer: null, heardNames: null },
               encryption,
             ),
           };

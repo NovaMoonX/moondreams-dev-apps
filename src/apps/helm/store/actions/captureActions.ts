@@ -44,12 +44,15 @@ import {
   isLeft,
   toTaskTitle,
 } from '@apps/helm/utils/heldCaptures';
+import { selectNameRecords } from '@apps/helm/store/selectors/nameSelectors';
+import { readTypedHeardNames } from '@apps/helm/utils/spokenNames';
 import { rankNotes } from '@apps/helm/utils/noteSearch';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
   CaptureReading,
   CaptureSealed,
+  HeardName,
   HelmEncryption,
   OpenCapture,
   QuestionAnswerValue,
@@ -128,6 +131,8 @@ export async function sendCapture(
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
     /** Whether the wake phrase began the turn and anyone was looking; left out on a typed turn. */
     presence?: Capture['presence'];
+    /** Names a spoken turn's words were swapped for or tied between; left out, they are read from the words as typed, without changing them. */
+    heardNames?: HeardName[];
   },
 ) {
   const text = turn.text.trim();
@@ -140,12 +145,17 @@ export async function sendCapture(
     throw new Error('A turn is 1 to 4,000 characters, or up to 5 photos.');
   }
   const leadId = attachmentIds.length > 0 ? null : turn.leadId;
+  const heardNames =
+    turn.heardNames ??
+    readTypedHeardNames(text, selectNameRecords(store.getState())) ??
+    [];
   const sealed = await sealJson<CaptureSealed>(
     {
       text,
       reading: turn.reading,
       answer: null,
       questionAnswer: turn.questionAnswer,
+      heardNames: heardNames.length > 0 ? heardNames : null,
     },
     encryption,
   );

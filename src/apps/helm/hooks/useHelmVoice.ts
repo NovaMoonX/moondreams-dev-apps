@@ -24,6 +24,7 @@ import {
   type MintVoiceTokenResult,
 } from '@/lib/speech/voice/voiceToken';
 import { store, useAppSelector } from '@/store';
+import { toComparable } from '@/utils/optionMatchUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { END_PHRASES, HELM_COPY, SESSION_IDLE_MS } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -69,6 +70,7 @@ import {
   selectExecutionsById,
 } from '@apps/helm/store/selectors/captureSelectors';
 import type {
+  HeardName,
   HelmQuestion,
   OpenCapture,
   QuestionAnswerValue,
@@ -90,6 +92,9 @@ import {
 } from '@apps/helm/utils/spokenQuestion';
 import { getOpenSessionId } from '@apps/helm/utils/sessions';
 import { readPresence } from '@apps/helm/utils/presence';
+import { readHelmNameHints } from '@apps/helm/utils/nameHints';
+import { readSwappedWords } from '@apps/helm/utils/spokenNames';
+import { selectNameRecords } from '@apps/helm/store/selectors/nameSelectors';
 import { toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
@@ -191,6 +196,11 @@ export function useHelmVoice() {
       (isWakeWordOn || voiceMode !== 'cloudWhenOnline'),
   });
 
+  const nameRecords = useAppSelector(selectNameRecords);
+  const [restored, setRestored] = useState<string[]>([]);
+  // The forms the person chose to keep as said, read when the turn is sent.
+  const restoredRef = useRef<string[]>([]);
+
   const voice = useVoiceConversation({
     lang,
     isOnDeviceReady: onDevice.isOn,
@@ -198,6 +208,8 @@ export function useHelmVoice() {
     endPhrases: END_PHRASES,
     readsClose: true,
     conversationIdleMs: SESSION_IDLE_MS,
+    getNameHints: () =>
+      readHelmNameHints(store.getState().helm, screen.current),
     onUtterance: (text, heardBy) => {
       void handleUtterance(text, heardBy.sttProvider);
     },
@@ -239,6 +251,16 @@ export function useHelmVoice() {
     dictation.current = null;
     setDictationOwner(null);
   }
+
+  function clearRestored() {
+    restoredRef.current = [];
+    setRestored([]);
+  }
+
+  const restoreHeard = (heard: string) => {
+    restoredRef.current = [...restoredRef.current, toComparable(heard)];
+    setRestored(restoredRef.current);
+  };
 
   function showNote(text: string) {
     setNote(text);
@@ -303,11 +325,18 @@ export function useHelmVoice() {
       write(text);
       return;
     }
-    await takeOnDevice(text, {
+    const swapped = readSwappedWords(
+      text,
+      selectNameRecords(store.getState()),
+      restoredRef.current,
+    );
+    clearRestored();
+    await takeOnDevice(swapped.text, {
       isSpoken: true,
       sttProvider,
       interrupted,
       hasPage: screen.current !== null,
+      heardNames: swapped.heardNames,
     });
   }
 
@@ -319,6 +348,7 @@ export function useHelmVoice() {
       sttProvider: string | undefined;
       interrupted: string | null;
       hasPage: boolean;
+      heardNames?: HeardName[];
     },
   ) {
     const { isSpoken, sttProvider, interrupted } = opts;
@@ -368,6 +398,7 @@ export function useHelmVoice() {
       sttProvider ?? 'browser',
       interrupted,
       turn.kind === 'send' && turn.isFinish,
+      opts.heardNames,
     );
     return true;
   }
@@ -625,6 +656,7 @@ export function useHelmVoice() {
     sttProvider: string,
     interrupted: string | null,
     isFinish: boolean,
+    heardNames?: HeardName[],
   ) {
     const { helm } = store.getState();
     if (!uid || helm.keyStatus !== 'ready' || !helm.recentCaptures.isLoaded) {
@@ -659,6 +691,7 @@ export function useHelmVoice() {
         answersQuestion: null,
         questionAnswer: null,
         noteIds: rankStoredNotes(text),
+        ...(heardNames ? { heardNames } : {}),
         ...turn,
         voice: {
           sttProvider,
@@ -905,6 +938,7 @@ export function useHelmVoice() {
     // A listen that ended on an error never says so, so each new one starts as a turn.
     endDictation();
     screen.current = page;
+    clearRestored();
     setClosed(null);
     setNotice(null);
     setHasNoticeDoor(false);
@@ -932,8 +966,17 @@ export function useHelmVoice() {
   // A listen that ends on a lasting error (the mic refused) reports nothing, so the owner counts only while it listens.
   const liveOwner = voice.state === 'listening' ? dictationOwner : null;
 
+  const live = useMemo(
+    () => readSwappedWords(voice.heard, nameRecords, restored),
+    [voice.heard, nameRecords, restored],
+  );
+
   return {
     ...voice,
+    /** What is being heard, with each clear sound-alike of a known name shown as that name; the raw words while a field is being spoken into. */
+    heard: dictationOwner === null ? live.text : voice.heard,
+    heardSwaps: dictationOwner === null ? live.swaps : [],
+    restoreHeard,
     isDictating: liveOwner !== null,
     dictationOwner: liveOwner,
     dictate,

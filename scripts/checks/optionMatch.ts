@@ -7,6 +7,7 @@ import {
   createOptionMatcher,
   toComparable,
   toDisplayCase,
+  toSoundKey,
 } from '../../src/utils/optionMatchUtils.ts';
 
 const named = (...names: string[]) =>
@@ -396,5 +397,65 @@ assert.equal(
 
 assert.equal(normalizeCustomLabelCasing('  flea   & TICK '), 'Flea & tick');
 assert.equal(normalizeCustomLabelCasing(''), '');
+
+const sounding = createOptionMatcher<{ id: string; name: string }>({
+  names: (option) => [option.name],
+  sounds: true,
+});
+const heardAs = (text: string, ...people: string[]) => {
+  const { matches, ties } = sounding.matchSounds(text, named(...people));
+  return { matches: matches.map((hit) => [hit.heard, hit.option.name]), ties };
+};
+const swapped = (text: string, ...people: string[]) =>
+  heardAs(text, ...people).matches;
+
+assert.equal(toSoundKey('Shivon'), toSoundKey('Siobhan'));
+assert.equal(toSoundKey('Zander'), toSoundKey('Xander'));
+assert.deepEqual(swapped('call Shivon tomorrow', 'Siobhan', 'Marcus'), [
+  ['Shivon', 'Siobhan'],
+]);
+assert.deepEqual(swapped('lunch with Nieve', 'Niamh', 'Noel'), [
+  ['Nieve', 'Niamh'],
+]);
+assert.deepEqual(swapped('text Zander', 'Xander', 'Alexa'), [
+  ['Zander', 'Xander'],
+]);
+assert.deepEqual(swapped('ask Jon', 'John', 'Mary'), [['Jon', 'John']]);
+assert.deepEqual(swapped('ask John', 'Jon', 'Mary'), [['John', 'Jon']]);
+assert.deepEqual(
+  swapped('ask Jon', 'Jon', 'John'),
+  [],
+  'a heard word that is already a known name is never swapped',
+);
+assert.deepEqual(
+  swapped('please mark the box', 'Marc', 'Mary'),
+  [],
+  'an everyday word is never swapped for a name',
+);
+assert.deepEqual(swapped('buy bread and milk', 'Siobhan', 'Niamh'), []);
+const two = heardAs('call Shivon', 'Siobhan', 'Siobhan');
+assert.deepEqual(two.matches, [], 'two names that fit equally give no winner');
+assert.equal(two.ties.length, 1, 'the two close fits are reported as a tie');
+assert.equal(
+  createOptionMatcher<string>().matchSounds('call Shivon', ['Siobhan']).matches
+    .length,
+  0,
+  'sounds are off unless asked for',
+);
+const remembered = createOptionMatcher<{ id: string; name: string }>({
+  names: (option) => [option.name],
+  soundsLike: () => ['Shivawn'],
+  sounds: true,
+});
+assert.equal(
+  remembered.matchSounds('with Shivawn', named('Kate')).matches[0]?.option.name,
+  'Kate',
+  'a form the person said was misheard reads as that name',
+);
+assert.equal(
+  remembered.match('Shivawn', named('Kate')),
+  null,
+  'an also-heard-as form is never a name',
+);
 
 console.log('optionMatch: all checks passed');

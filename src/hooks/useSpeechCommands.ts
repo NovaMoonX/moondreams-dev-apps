@@ -21,9 +21,32 @@ interface SpeechRecognitionLike {
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
   start: () => void;
   abort: () => void;
+  phrases?: unknown[];
 }
 
 type RecognitionConstructor = new () => SpeechRecognitionLike;
+
+export type PhraseConstructor = new (phrase: string, boost: number) => unknown;
+
+const MAX_PHRASES = 50;
+const PHRASE_BOOST = 5;
+
+/** The browser's phrase objects for a list of words to expect (at most 50, boosted); null where the browser has no such objects. */
+export const toRecognitionPhrases = (
+  phrases: readonly string[],
+  Phrase: PhraseConstructor | null,
+) =>
+  Phrase === null
+    ? null
+    : phrases
+        .slice(0, MAX_PHRASES)
+        .map((phrase) => new Phrase(phrase, PHRASE_BOOST));
+
+const getPhraseConstructor = () =>
+  typeof window === 'undefined'
+    ? null
+    : ((window as Window & { SpeechRecognitionPhrase?: PhraseConstructor })
+        .SpeechRecognitionPhrase ?? null);
 
 /** A session that ends sooner than this without hearing anything counts as a failed start. */
 const FAST_SESSION_MS = 1500;
@@ -65,6 +88,10 @@ interface ListenerOptions {
   onHalt?: (error: SpeechCommandsError) => void;
   /** Read with the natural voice (see `useNaturalVoice`) whenever it is ready; the browser's voice otherwise. */
   isNaturalVoice?: boolean;
+  /** Words to expect, where the browser can be told them (Chrome's contextual biasing); ignored elsewhere, and dropped for the session if the browser refuses them. */
+  phrases?: string[] | null;
+  /** The browser refused `phrases`; listening restarts without them. */
+  onPhrasesRefused?: () => void;
 }
 
 const getRecognitionConstructor = (): RecognitionConstructor | null => {
@@ -102,6 +129,7 @@ export const createSpeechListener = (
     speechToken: 0,
     stopReading: null as (() => void) | null,
     deafUntil: 0,
+    arePhrasesOff: false,
   };
 
   const clearRestart = () => {
@@ -202,6 +230,12 @@ export const createSpeechListener = (
     if (event.error === 'service-not-allowed') return halt('service');
     if (event.error === 'audio-capture') return halt('no-microphone');
     if (event.error === 'language-not-supported') return halt('language');
+    if ((event.error as string) === 'phrases-not-supported') {
+      state.arePhrasesOff = true;
+      state.startAfterEnd = true;
+      state.options?.onPhrasesRefused?.();
+      return;
+    }
     if (event.error !== 'no-speech' && event.error !== 'aborted') {
       session.isFailed = true;
     }
@@ -270,6 +304,19 @@ export const createSpeechListener = (
     return recognition;
   };
 
+  const applyPhrases = (recognition: SpeechRecognitionLike) => {
+    if (state.arePhrasesOff) return;
+    try {
+      const phrases = toRecognitionPhrases(
+        state.options?.phrases ?? [],
+        getPhraseConstructor(),
+      );
+      if (phrases !== null) recognition.phrases = phrases;
+    } catch {
+      state.arePhrasesOff = true;
+    }
+  };
+
   function beginSession() {
     state.restartId = 0;
     if (!state.isWanted || state.isSpeaking || state.isHidden) return;
@@ -280,6 +327,7 @@ export const createSpeechListener = (
     const recognition = getRecognition();
     if (recognition === null) return;
     recognition.lang = state.options?.lang ?? '';
+    applyPhrases(recognition);
     state.session = {
       startedAt: Date.now(),
       hadResult: false,
