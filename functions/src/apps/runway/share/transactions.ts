@@ -43,6 +43,7 @@ interface Opened {
   id: string;
   date: number;
   sealed: Record<string, unknown>;
+  isWaiting: boolean;
 }
 
 const payeeMatcher = createOptionMatcher<string>();
@@ -244,7 +245,7 @@ export async function readTransactions(
         const fields = openWithKey(planKey.key, sealed);
         const needsHome = doc.get('needsHome') === true;
         return isCounted(fields, needsHome)
-          ? { id: doc.id, date, sealed: fields }
+          ? { id: doc.id, date, sealed: fields, isWaiting: needsHome }
           : null;
       } catch {
         return 'unreadable';
@@ -291,6 +292,10 @@ export async function readTransactions(
     return names.get(only.envelopeId) ?? FREE_TO_SPEND;
   };
   const wanted = category === null ? null : toComparable(category);
+  const isLeftOut = ({ sealed, isWaiting }: Opened) =>
+    !isWaiting &&
+    asObject(sealed.billRef) === null &&
+    readLines(sealed).length === 0;
   const isCategoryMatch = (sealed: Record<string, unknown>) =>
     wanted === null ||
     toComparable(toCategory(sealed)) === wanted ||
@@ -308,7 +313,10 @@ export async function readTransactions(
       return toComparable(name ?? FREE_TO_SPEND) === wanted ? sum + cents : sum;
     }, 0);
   };
-  const matched = byPayee.filter(({ sealed }) => isCategoryMatch(sealed));
+  const matched = byPayee.filter(
+    (one) =>
+      wanted === null || (!isLeftOut(one) && isCategoryMatch(one.sealed)),
+  );
   const shown = matched.slice(0, ROW_LIMIT);
   return {
     rows: shown.map(({ id, date, sealed }) => ({

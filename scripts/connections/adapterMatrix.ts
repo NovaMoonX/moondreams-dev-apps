@@ -3183,8 +3183,12 @@ const unsorted = await queryTx(OWNER, {
   ...inRange,
   category: 'free to spend',
 });
-assert.equal(unsorted.matchedCount, 3);
-assert.equal(unsorted.totalCents, 2_200);
+assert.deepEqual(
+  unsorted.records.map((record) => record.title),
+  ['Gas at Costco', "Trader Joe's"],
+  'a waiting charge counts in Free to Spend; one left out of spending never matches a category',
+);
+assert.equal(unsorted.totalCents, 3_100);
 assert.equal(
   (await queryTx(OWNER, { ...inRange, category: 'Nothing here' })).matchedCount,
   0,
