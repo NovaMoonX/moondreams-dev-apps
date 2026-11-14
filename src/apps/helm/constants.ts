@@ -289,6 +289,7 @@ export const MEDIA_LIMIT = 2_000;
 export const PHOTOS_PER_RECORD = 12;
 /** Mentions a who's page lists before "Show all". */
 export const MAX_ALIASES = 10;
+export const MAX_SOUNDS_LIKE = 5;
 export const MAX_REFUSED_ALIASES = 20;
 
 export const MENTIONS_SHOWN = 10;
@@ -1885,6 +1886,11 @@ export const HELM_COPY = {
     `${name} is already called ${alias}.`,
   aliasDone: 'Done',
   aliasNone: 'No nicknames yet.',
+  soundsLikeTitle: 'Also heard as',
+  soundsLikeHelp:
+    'Ways your voice came out that were really this name. They help it be recognized, and are never a name to search or tag.',
+  soundsLikeRemove: (heard: string) => `Remove ${heard}`,
+  soundsLikeRemovedToast: (heard: string) => `Removed ${heard}`,
   kinTitle: (name: string) => `Family · ${name}`,
   kinKindField: 'How you are related',
   kinNotSet: 'Not set',

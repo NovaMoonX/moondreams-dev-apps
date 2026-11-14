@@ -582,6 +582,8 @@ export const buildPickQuestion = (input: {
   name: string;
   candidates: PickCandidate[];
   held: HeldLink;
+  /** Words for a name the device heard as two near ones: the question and its "new" choice. */
+  heard?: { prompt: string; newLabel: string };
 }) => {
   const collection = input.kind === 'whichPerson' ? 'who' : 'places';
   const words = PICK_WORDS[input.kind];
@@ -589,13 +591,18 @@ export const buildPickQuestion = (input: {
     kind: input.kind,
     builtBy: 'code' as const,
     shape: 'pickOne' as const,
-    prompt: words.prompt(input.name),
+    prompt: input.heard?.prompt ?? words.prompt(input.name),
     options: [
       ...input.candidates.map((candidate) => ({
         ...candidate,
         ref: { collection, id: candidate.id },
       })),
-      { id: 'new', label: words.newLabel, detail: null, ref: null },
+      {
+        id: 'new',
+        label: input.heard?.newLabel ?? words.newLabel,
+        detail: null,
+        ref: null,
+      },
       { id: 'none', label: words.noneLabel, detail: null, ref: null },
     ],
     allowsSomethingElse: false,
@@ -610,6 +617,23 @@ export const buildPickQuestion = (input: {
     answer: null,
   };
 };
+
+export const HEARD_NEW_LABEL = 'Someone else';
+
+/** "Which Siobhan: Kelly or Doyle?": each choice without the words the heard name shares with it, when it starts with them. */
+export const buildHeardPrompt = (name: string, labels: string[]) => {
+  const lead = `${name.trim().toLowerCase()} `;
+  const rest = labels.map((label) =>
+    label.toLowerCase().startsWith(lead) && label.length > lead.length
+      ? label.slice(lead.length)
+      : label,
+  );
+  return `Which ${name}: ${joinOr(rest)}?`;
+};
+
+/** The execution line of a spelled correction: "Kept “Shivon” as how Siobhan sounds". */
+export const buildSoundsLikeLine = (heard: string, name: string) =>
+  `Kept \u201c${heard}\u201d as how ${name} sounds`;
 
 export const WHICH_IS_TRUE_WORDS = {
   prompt: 'Which is true now?',

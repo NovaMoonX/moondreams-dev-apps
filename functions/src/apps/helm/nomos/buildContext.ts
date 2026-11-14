@@ -5,6 +5,7 @@ import {
   type SyncedBook,
 } from './aliases.js';
 import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
+import type { HeardName } from './heardNames.js';
 import {
   MAX_CONTEXT_PROJECTS,
   MAX_CONTEXT_TOPICS,
@@ -162,6 +163,8 @@ export interface ContextInput {
   facts?: ContextFact[];
   /** The people the person has, most useful first, at most `MAX_CONTEXT_PEOPLE`. */
   people?: ContextPerson[];
+  /** Words the device heard and the names it matched them to, already withheld where the context withholds the person. */
+  heardNames?: HeardName[];
   selfFacts?: ContextSelfFact[];
   /** The dates that come back of the people the turn names. */
   keyDates?: ContextKeyDate[];
@@ -322,6 +325,20 @@ export function buildContext(input: ContextInput): {
     did: turn.did,
     records: turn.taskIds.map((id) => aliases.add(id)),
   }));
+  const listed = new Set(
+    (input.people ?? []).slice(0, MAX_CONTEXT_PEOPLE).map(({ id }) => id),
+  );
+  const aliasOf = (id: string | null) =>
+    id !== null && listed.has(id) ? people.add(id) : null;
+  const heardRecords = (input.heardNames ?? []).map((entry) => {
+    const either = entry.candidateIds.flatMap((id) => aliasOf(id) ?? []);
+    return {
+      heard: entry.heard,
+      swappedTo: entry.said,
+      person: aliasOf(entry.recordId),
+      couldBeEither: either.length > 1 ? either : null,
+    };
+  });
   const keptNotes = (input.notes ?? []).slice(0, MAX_HINT_NOTES);
   const noteBodies = toNoteBodies(keptNotes);
   const noteRecords = keptNotes.map((note, index) => ({
@@ -478,6 +495,9 @@ export function buildContext(input: ContextInput): {
               })),
           )}</people>`,
         ]
+      : []),
+    ...(heardRecords.length
+      ? [`<heard_names>${toDataJson(heardRecords)}</heard_names>`]
       : []),
     ...(input.selfFacts?.length
       ? [
