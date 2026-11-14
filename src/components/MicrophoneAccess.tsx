@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Mic } from 'lucide-react';
 
 import InlineNotice from '@/components/InlineNotice';
+import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import {
   NOTICE_ACTION_CLASSES,
   NOTICE_QUIET_CLASSES,
@@ -12,7 +13,6 @@ import {
 import {
   detectMicrophoneDevice,
   getMicrophoneHowTo,
-  peekMicrophonePermission,
   requestMicrophone,
   watchMicrophonePermission,
   type MicrophoneRequestResult,
@@ -34,10 +34,7 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
   const [result, setResult] = useState<MicrophoneRequestResult | null>(null);
   const [isAsking, setIsAsking] = useState(false);
   const [isHowToOpen, setIsHowToOpen] = useState(false);
-  const permission = useSyncExternalStore(
-    watchMicrophonePermission,
-    peekMicrophonePermission,
-  );
+  const permission = useMicrophonePermission();
 
   const allowed = useRef(onAllowed);
   useEffect(() => {
