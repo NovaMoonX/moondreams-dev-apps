@@ -345,7 +345,7 @@ const askYesNo = async (question: string, isDefaultYes: boolean) => {
   });
   prompt.on('SIGINT', () => {
     process.stdout.write(
-      '\nStopped. Choices already made are saved; restart the emulators to apply them.\n',
+      '\nStopped. Any choices already made are saved; restart the emulators to apply them.\n',
     );
     process.exit(130);
   });
@@ -358,10 +358,11 @@ const askYesNo = async (question: string, isDefaultYes: boolean) => {
   return answer === '' ? isDefaultYes : answer.startsWith('y');
 };
 
-const gcloudLogin = { isReady: false };
+const gcloudLogin = { isReady: false, hasFailed: false };
 
 const ensureGcloudLogin = () => {
   if (gcloudLogin.isReady) return true;
+  if (gcloudLogin.hasFailed) return false;
   const works = () => {
     try {
       execFileSync('gcloud', ['auth', 'print-access-token'], {
@@ -373,40 +374,59 @@ const ensureGcloudLogin = () => {
       return false;
     }
   };
-  if (works()) return (gcloudLogin.isReady = true);
+  if (works()) {
+    gcloudLogin.isReady = true;
+    return true;
+  }
   console.log(
     'gcloud is signed out or its sign-in expired; a fresh sign-in is needed to read the production key.',
   );
   try {
     execFileSync('gcloud', ['auth', 'login'], { stdio: 'inherit' });
   } catch {
+    gcloudLogin.hasFailed = true;
     return false;
   }
-  return (gcloudLogin.isReady = works());
+  gcloudLogin.isReady = works();
+  gcloudLogin.hasFailed = !gcloudLogin.isReady;
+  return gcloudLogin.isReady;
 };
 
-const pullFromProduction = (key: string) => {
+const readCommandOutput = (command: string, args: string[]) => {
   try {
-    return execFileSync(
-      'gcloud',
-      [
-        'secrets',
-        'versions',
-        'access',
-        'latest',
-        `--secret=${key}`,
-        `--project=${PROJECT}`,
-      ],
-      {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 30_000,
-      },
-    ).trim();
+    const value = execFileSync(command, args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 30_000,
+    }).trim();
+    return /\s/.test(value) ? '' : value;
   } catch {
     return '';
   }
 };
+
+const fetchFromFirebase = (key: string) =>
+  readCommandOutput('npx', [
+    '--no-install',
+    'firebase',
+    'functions:secrets:access',
+    key,
+    '--project',
+    PROJECT,
+  ]);
+
+const fetchFromGcloud = (key: string) =>
+  readCommandOutput('gcloud', [
+    'secrets',
+    'versions',
+    'access',
+    'latest',
+    `--secret=${key}`,
+    `--project=${PROJECT}`,
+  ]);
+
+const fetchKey = (key: string) =>
+  fetchFromFirebase(key) || (ensureGcloudLogin() ? fetchFromGcloud(key) : '');
 
 const isStoredLocally = (service: FixtureService) => {
   const { keys, isBound } = SERVICES[service];
@@ -437,19 +457,24 @@ const storeKeys = (service: FixtureService, values: string[]) => {
 
 const getKeys = async (service: FixtureService) => {
   const { keys, isBound, isNotPulled, setup } = SERVICES[service];
-  if (isBound && !isNotPulled && ensureGcloudLogin()) {
-    const pulled = keys.map(pullFromProduction);
-    if (pulled.every(Boolean)) {
-      console.log(
-        `Pulled ${keys.join(' and ')} from production Secret Manager.`,
-      );
-      return storeKeys(service, pulled);
+  if (isBound && !isNotPulled) {
+    const fetched = keys.map(fetchKey);
+    if (fetched.every(Boolean)) {
+      console.log(`Fetched ${keys.join(' and ')} from production.`);
+      return storeKeys(service, fetched);
     }
-    console.log('No production key found for it.');
+    console.log(
+      `Couldn't fetch ${keys.join(' and ')} automatically (sign in with firebase login --reauth, or gcloud auth login). Run this, then paste the result below:`,
+    );
+    keys.forEach((key) =>
+      console.log(
+        `  firebase functions:secrets:access ${key} --project ${PROJECT}`,
+      ),
+    );
+  } else {
+    console.log(`To get one: ${setup}. Then paste it below.`);
   }
-  console.log(
-    `To get one: ${setup}. Or paste it now (hidden), or press Enter to skip.`,
-  );
+  console.log('Paste is hidden; press Enter to skip.');
   const values = await readValuesInOrder(
     keys.map((key) => `${service}: ${key} > `),
   );
@@ -476,17 +501,18 @@ const chooseOne = async (service: FixtureService) => {
     return true;
   }
   const wasForced = isForced(forced, service);
-  const isRemovable = !SERVICES[service].isNotPulled;
-  if (isRemovable) {
+  const isRecoverable =
+    SERVICES[service].isBound && !SERVICES[service].isNotPulled;
+  if (isRecoverable) {
     [SECRET_FILE, ENV_FILE]
       .filter((file) => existsSync(file))
       .forEach((file) => rewriteEnv(file, SERVICES[service].keys, []));
   }
   if (!wasForced) applyForced('fixtures', [service]);
   console.log(
-    `${service} will use fixtures${isRemovable ? ' (local key removed)' : ' (your local key is kept: it cannot be pulled back)'}.`,
+    `${service} will use fixtures${isRecoverable ? ' (local key removed)' : ' (your local key is kept: it cannot be fetched back)'}.`,
   );
-  return isReal || !wasForced;
+  return isReal || state.includes('production not checked');
 };
 
 const chooseServices = async (appId: string) => {

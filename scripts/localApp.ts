@@ -154,8 +154,8 @@ const askAboutServices = () => {
     );
     return false;
   } catch (error) {
-    const { status } = error as { status?: number };
-    if (status !== 10) process.exit(status ?? 1);
+    const { status, signal } = error as { status?: number; signal?: string };
+    if (status !== 10) process.exit(status ?? (signal === 'SIGINT' ? 130 : 1));
     return true;
   }
 };
