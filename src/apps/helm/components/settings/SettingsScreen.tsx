@@ -80,7 +80,7 @@ function DailyFreshRow() {
     <SettingsRow
       icon={<Sunrise className='size-5' aria-hidden='true' />}
       title={HELM_COPY.dailyFreshTitle}
-      description={isOn ? HELM_COPY.dailyFreshOn : HELM_COPY.dailyFreshOff}
+      description={HELM_COPY.dailyFreshDescription}
       control={
         <AppToggle
           aria-label={HELM_COPY.dailyFreshTitle}

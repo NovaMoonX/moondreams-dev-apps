@@ -42,7 +42,7 @@ const getScroller = (
     ? (root?.closest<HTMLElement>('[data-subview-scroller]') ?? null)
     : null;
 
-// The first session in view, so turns added above it (Earlier opening, an older page, a session drawn for real) never move what the person is reading. Safari on iOS does no scroll anchoring of its own.
+// The first session whose top is in view (one straddling the edge can grow itself), so turns added above never move what the person reads. iOS Safari does no scroll anchoring.
 const readPlace = (
   root: HTMLElement | null,
   scroller: HTMLElement | null,

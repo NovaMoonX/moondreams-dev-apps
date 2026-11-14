@@ -300,11 +300,6 @@ function HomeSurface({
             </p>
           </div>
         )}
-        {!hasTurns && !isOpening && !isWaitingOnKey && (
-          <p className='text-muted-foreground text-center text-[15px]'>
-            {HELM_COPY.homeHint}
-          </p>
-        )}
         {isCapturesFailed && !isCapturesLoaded && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.turnsFailed}
@@ -326,7 +321,7 @@ function HomeSurface({
             freshFrom={freshFrom}
           />
         )}
-        {hasTurns && !hasFreshTurns && !isWaitingOnKey && (
+        {!hasFreshTurns && !isOpening && !isWaitingOnKey && (
           <p className='text-muted-foreground text-center text-[15px]'>
             {HELM_COPY.homeHint}
           </p>
