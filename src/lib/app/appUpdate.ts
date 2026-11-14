@@ -216,6 +216,11 @@ const STATIC_IMPORT = /(?:from|import)\s*["'](\.\/[^"']+\.js)["']/g;
 
 type FileProblem = { url: string; note: string };
 
+const FILE_FETCH_MS = 8000;
+// A stalled phone connection never settles a fetch, and a screen waiting on one would sit on Loading for good.
+const withinTime = <T>(work: Promise<T>, fallback: T, ms: number) =>
+  Promise.race([work, new Promise<T>((resolve) => window.setTimeout(() => resolve(fallback), ms))]);
+
 /**
  * Fetches a build file and every file it imports, as the page would, and lists the ones that don't come back as
  * JavaScript. A module fails to load when any file under it does, and the error names only the top one.
@@ -226,13 +231,13 @@ export async function checkModuleFiles(entry: string, init?: RequestInit) {
   const visit = async (url: string): Promise<void> => {
     if (seen.has(url)) return;
     seen.add(url);
-    const response = await fetch(url, init).catch(() => null);
+    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(FILE_FETCH_MS) }).catch(() => null);
     const type = response?.headers.get('content-type') ?? '';
     if (!response?.ok || !type.includes('javascript')) {
       problems.push({ url, note: `${response?.status ?? 'failed'} ${type || 'no type'}` });
       return;
     }
-    const text = await response.text();
+    const text = await response.text().catch(() => '');
     const imports = Array.from(text.matchAll(STATIC_IMPORT), (match) => new URL(match[1], url).href);
     await Promise.all(imports.map(visit));
   };
@@ -256,13 +261,19 @@ const dropFromPrecache = async (url: string) => {
  */
 export async function repairModuleFiles(entry: string) {
   if (!navigator.onLine) return;
-  const { problems } = await checkModuleFiles(entry).catch(() => ({ problems: [] as FileProblem[] }));
-  await Promise.all(
-    problems.map(async ({ url }) => {
-      await dropFromPrecache(url).catch(() => undefined);
-      await fetch(url, { cache: 'reload' }).catch(() => undefined);
-    }),
-  );
+  const repair = async () => {
+    // `reload` refreshes the browser's copy of every file the worker doesn't hold; the worker's copies are checked as they are.
+    const { problems } = await checkModuleFiles(entry, { cache: 'reload' }).catch(() => ({
+      problems: [] as FileProblem[],
+    }));
+    await Promise.all(
+      problems.map(async ({ url }) => {
+        await dropFromPrecache(url).catch(() => undefined);
+        await fetch(url, { cache: 'reload', signal: AbortSignal.timeout(FILE_FETCH_MS) }).catch(() => undefined);
+      }),
+    );
+  };
+  await withinTime(repair(), undefined, 15000);
 }
 
 /**
@@ -277,7 +288,7 @@ export async function restartWithFreshFiles(entry: string | null) {
     return;
   }
   await clearPrecache().catch(() => undefined);
-  if (entry) await checkModuleFiles(entry, { cache: 'reload' }).catch(() => undefined);
+  if (entry) await withinTime(checkModuleFiles(entry, { cache: 'reload' }).catch(() => undefined), undefined, 15000);
   const registration =
     'serviceWorker' in navigator
       ? await navigator.serviceWorker.getRegistration().catch(() => undefined)

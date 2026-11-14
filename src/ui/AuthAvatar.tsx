@@ -121,7 +121,9 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     <Button
       variant='base'
       size='sm'
-      aria-label='Your account'
+      aria-label={
+        isDebugListed ? 'Your account, debug details are on' : 'Your account'
+      }
       aria-expanded={isOpen}
       className={join(
         "gap-2 max-sm:relative max-sm:min-w-0 max-sm:px-0 max-sm:after:absolute max-sm:after:-inset-1.5 max-sm:after:content-['']",
@@ -133,13 +135,10 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         className={join(
           'relative inline-flex rounded-full',
           isDebugListed &&
-            'ring-offset-background ring-2 ring-amber-500 ring-offset-2 dark:ring-amber-300',
+            'ring-offset-background ring-2 ring-amber-600 ring-offset-2 dark:ring-amber-300',
         )}
       >
         <UserAvatar user={user} size='sm' />
-        {isDebugListed ? (
-          <span className='sr-only'>Debug details are on</span>
-        ) : null}
       </span>
       <span className='hidden sm:inline'>{displayName}</span>
       {isPhone ? null : <ChevronDown className='h-4 w-4' />}

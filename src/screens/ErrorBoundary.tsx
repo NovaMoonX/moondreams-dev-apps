@@ -21,7 +21,7 @@ import {
   restartWithFreshFiles,
 } from '../lib/app/appUpdate';
 
-const FILE_URL = /https?:\/\/\S+?\.(?:js|css)\b/;
+const FILE_URL = /https?:\/\/\S+?\.js\b/;
 
 function getErrorDetails(error: unknown) {
   if (error instanceof Error) {
@@ -54,7 +54,8 @@ function useFileCheck(url: string | null, isEnabled: boolean) {
 }
 
 function getLead(isChunkError: boolean, isUpdateReady: boolean) {
-  if (isChunkError) return 'Part of this page didn’t load. Restart to fetch it fresh.';
+  if (isChunkError)
+    return 'Part of this page didn’t load. Restart to fetch it fresh.';
   if (isUpdateReady) return 'A new version is ready. Restart to load it.';
   return 'We hit a snag loading this page. Head back home, or refresh to try again.';
 }
