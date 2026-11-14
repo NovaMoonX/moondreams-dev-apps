@@ -71,6 +71,8 @@ export interface HelmState {
   unseenCaptures: CaptureSet;
   /** Turns waiting to be read, being read, failed or asking the person, whenever they were said. */
   waitingCaptures: CaptureSet;
+  /** Turns an outside assistant sent, whenever they were sent: the "From your assistants" view reads these, never home. */
+  outsideCaptures: CaptureSet;
   /** The person's open tasks, newest first. */
   openTasks: LoadedSet<OpenTask>;
   /** Every task that belongs to a project, open or done. */
@@ -149,6 +151,7 @@ const initialState: HelmState = {
   recentCaptures: emptySet,
   unseenCaptures: emptySet,
   waitingCaptures: emptySet,
+  outsideCaptures: emptySet,
   openTasks: emptyLoadedSet,
   projectTasks: emptyLoadedSet,
   planDays: emptyPlanDays,
@@ -232,6 +235,16 @@ const helmSlice = createSlice({
     },
     setWaitingCapturesFailed: (state) => {
       state.waitingCaptures.isFailed = true;
+    },
+    setOutsideCaptures: (state, action: PayloadAction<OpenCapture[]>) => {
+      state.outsideCaptures = {
+        captures: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setOutsideCapturesFailed: (state) => {
+      state.outsideCaptures.isFailed = true;
     },
     setOpenTasks: (state, action: PayloadAction<OpenTask[]>) => {
       state.openTasks = {
@@ -463,6 +476,8 @@ export const {
   setUnseenCapturesFailed,
   setWaitingCaptures,
   setWaitingCapturesFailed,
+  setOutsideCaptures,
+  setOutsideCapturesFailed,
   setOpenTasks,
   setOpenTasksFailed,
   setProjectTasks,

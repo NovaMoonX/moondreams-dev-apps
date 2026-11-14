@@ -156,7 +156,7 @@ interface Capture {
   answerSavedNoteId: string | null;
   quotedSourceKeys: string[];          // round 5: "{connectorId}|{accountId}" of every quote and synced source
   planDayKey: string | null; planTaskIds: string[];
-  seenAt: number | null; // a turn typed on home arrives seen (its card is in front of the person); whatever later lands a result the person hasn't seen sets it back to null
+  seenAt: number | null; // a turn typed on home arrives seen (its card is in front of the person); whatever later lands a result the person hasn't seen sets it back to null, except an outside assistant's turn (`medium: 'mcp'`), which is filed seen and stays seen, since home never shows it
   createdAt: number;                   // when it was said: the "now" its reading and its sorting use
   sortedAt: number | null;
   sealed: Sealed;
@@ -173,7 +173,7 @@ interface CaptureSealed {
 }
 
 type HelmView = 'home' | 'today' | 'inbox' | 'task' | 'project' | 'who' | 'place' | 'knowledge' | 'note' | 'topic'
-              | 'procedure' | 'run' | 'howNomosSeesYou' | 'activity' | 'search' | 'settings' | 'connection'
+              | 'procedure' | 'run' | 'howNomosSeesYou' | 'activity' | 'outside' | 'search' | 'settings' | 'connection'
               | 'comingUp';  // round 6; 6e: Coming up
 interface RecordRef { collection: HelmCollection | 'synced'; id: string; }
 ```
@@ -1034,6 +1034,7 @@ Calendar is one connector on the platform (section 19, connector `google:calenda
 
 - **Automatic commands** are written as `succeeded` in the same server transaction as their effects. A capture's automatic commands make one execution, so the result card's single Undo undoes the whole capture; an answer adds an `answer` execution with no effects.
 - **Suggestions** (plan slots, written by the device planner): slots with `status: 'suggested'` plus one `proposed` execution in one batch. Keep, Another time and Not today are dotted-path slot updates (offline-friendly, a quick action that locks nothing); the execution becomes `succeeded` when every slot is decided, or stays `proposed` and lapses with its day.
+- **Outside turns (`view=outside`, "From your assistants").** A capture with `medium: 'mcp'` is read by its own always-on listener (`where medium == 'mcp'`, `createdAt desc`, 200; index `captures (medium, createdAt)`) into `outsideCaptures`. `captureSelectors.ts` drops them from the recent, earlier, unseen and waiting sets in one place, so `selectAllCaptures`, `selectHeldItems` and `selectNewSinceLooked` (home's thread, "Earlier · N", counts, Needs you, the next turn's session) never see one; `selectEveryCapture` is the unfiltered lookup by id (Activity, result sheets, a fact's source). `groupOutsideConversations(captures, gapMs)` (`utils/outsideTurns.ts`, covered by `check:helm-joined`) groups one `via`'s turns with a gap under `OUTSIDE_CONVERSATION_GAP_MS` (30 minutes); the screen is shown while `selectHasOutsideSource` (an outside turn or a connected assistant).
 - **Undo** (`nomos/undoExecution.ts`, on the device, one transaction): re-reads the execution and each affected document and opens their sealed payloads. An `update` effect restores `previous` only for paths whose current value still equals `written` (sealed fields compared after opening, then the payload resealed). A `create` effect deletes the document only while its `lastEditedAt` is null or equals the original execution's `createdAt` (its own later effect stamps it); an update path with no recorded `previous` value keeps the record rather than writing `undefined`. Per record it refuses what changed; across records it goes on past the changed ones and writes a new `undo` execution (`actor: 'person'`, `undoesExecutionId`) whose sealed payload holds the summary ("Took back 1 task, kept 1" when anything was kept or found gone), the `undoReport` ("Took back 1 task. Kept 1 you changed since.", with no titles, since the rows mark which) and `goneIds`, the records found deleted (null on every other execution), so a row says "Deleted since" rather than "Kept". It sets `undoneByExecutionId` on the original, so Activity gains a line and loses none. An undone execution can't be undone again, and an execution with more than 40 effects is refused as unreadable. Undo needs a connection (a transaction); offline the button says so. The toast, the result card and the Activity sheet call the same function.
 - **How Undo decides** (`nomos/planUndo.ts` is pure and checked by `check:helm-undo`; `undoExecution.ts` is the transaction around it):
   - **D1, per record all-or-nothing.** A record whose every changed path still matches is taken back whole; if any one doesn't, the record is kept as it is.
@@ -1913,3 +1914,11 @@ Nothing here is built in the MVP; each line names the MVP field or contract that
 - **Browse ordered by use:** tiles carry a declared `importance`; a later ordering by the person's own use counts each view's opens on the device (never on the server) and changes only the order inside each size, never the cap (Next).
 - **Groups and households:** new `who.kind` values with member links; tiers and roles already apply.
 - **Apple contacts and sign-in:** site-wide work (an auth provider, a connector), not Helm's.
+
+## 28. When Helm graduates
+
+Helm's own steps on top of `GRADUATING.md`'s checklist.
+
+- **An official listing in Gemini.** A custom app added by URL shows on Google's account-linking page as "[Custom] Moondreams" (the name seems to come from the site's domain) with a grey placeholder icon, and nothing the server sends changes it. Listing Helm in Google Connected Console gives it its own name and icon: apply for access, serve the domain check at `/.well-known/google-connected-apps`, then supply the name, a one-sentence description under 30 words, a 512×512 PNG or JPEG icon, at least three capabilities, at least three example prompts (two starting with "Helm"), and public Terms of Service and Privacy Policy pages, then pass Google's review. The category can't be changed later. Requirements: developers.google.com/connected-apps/gpc/prerequisites.
+- **The assistant address moves.** Claude and Gemini connections point at `https://apps.moondreams.dev/mcp/helm`; on a new domain, keep that path answering (or redirecting) until people have reconnected, and update WorkOS's Login URI (`/connect-assistant`), its resource indicators and the setup script's `RESOURCES`.
+

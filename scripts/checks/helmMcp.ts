@@ -6,7 +6,9 @@ import { offeredHelmTools } from '../../functions/src/apps/helm/mcp/server.ts';
 import {
   READ_SCOPE_LABELS,
   READ_SCOPE_TOOLS,
+  filterSourcesForOutside,
   sourcesBriefFor,
+  toHeldBackPrompt,
 } from '../../functions/src/apps/helm/mcp/sourcesBrief.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
@@ -334,5 +336,37 @@ assert.match(
   /Text only: it can't carry a photo, file or other media/,
 );
 assert.match(external, /`Asks \$\{name\}/);
+
+// An outside turn reads stored records only through its own switches.
+const stored = [
+  'google:calendar',
+  'google:contacts',
+  'app:a-list',
+  'app:going-once',
+  'google:gmail',
+  'google:drive',
+].map((connectorId) => ({ connectorId }));
+const idsFor = (scopes: ('mail' | 'drive' | 'apps')[]) =>
+  filterSourcesForOutside(scopes, stored).map((record) => record.connectorId);
+assert.deepEqual(idsFor([]), ['google:calendar', 'google:contacts']);
+assert.deepEqual(idsFor(['apps']), [
+  'google:calendar',
+  'google:contacts',
+  'app:a-list',
+  'app:going-once',
+]);
+assert.deepEqual(idsFor(['mail', 'drive']), [
+  'google:calendar',
+  'google:contacts',
+  'google:gmail',
+  'google:drive',
+]);
+assert.equal(idsFor(['mail', 'drive', 'apps']).length, stored.length);
+const held = toHeldBackPrompt('Sol', ['mail'], ['A-List']);
+assert.match(held, /"Read your apps"/);
+assert.match(held, /"Read Google Drive"/);
+assert.doesNotMatch(held, /"Read Gmail"/);
+assert.match(held, /A-List/);
+assert.equal(toHeldBackPrompt('Sol', ['mail', 'drive', 'apps'], []), '');
 
 console.log('check:helm-mcp passed');
