@@ -19,6 +19,16 @@ export const RUNWAY_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
+          reads: [
+            {
+              label: 'The amount free to spend',
+              sinceVersion: 1,
+              addedOn: null,
+            },
+            { label: 'The next income day', sinceVersion: 1, addedOn: null },
+            { label: 'What is due before it', sinceVersion: 1, addedOn: null },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'upcomingBills',
@@ -28,6 +38,12 @@ export const RUNWAY_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
+          reads: [
+            { label: "Each bill's name", sinceVersion: 1, addedOn: null },
+            { label: 'Its amount', sinceVersion: 1, addedOn: null },
+            { label: 'The day it is due', sinceVersion: 1, addedOn: null },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'horizon',
@@ -37,6 +53,16 @@ export const RUNWAY_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
+          reads: [
+            {
+              label: "Each goal's name and day",
+              sinceVersion: 1,
+              addedOn: null,
+            },
+            { label: 'Its target amount', sinceVersion: 1, addedOn: null },
+            { label: 'How much is set aside', sinceVersion: 1, addedOn: null },
+          ],
+          scopeVersion: 1,
         },
         {
           id: 'transactions',
@@ -46,6 +72,16 @@ export const RUNWAY_SHARES: SourceShares = {
           mode: 'live',
           isOnAtConnect: false,
           addedInVersion: 2,
+          reads: [
+            {
+              label: 'The date and who you paid',
+              sinceVersion: 1,
+              addedOn: null,
+            },
+            { label: 'The amount', sinceVersion: 1, addedOn: null },
+            { label: 'Its category', sinceVersion: 1, addedOn: null },
+          ],
+          scopeVersion: 1,
         },
       ],
       never: [

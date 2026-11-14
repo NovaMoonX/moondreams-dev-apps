@@ -77,7 +77,7 @@ People, pets, organizations and places:
 
 How to answer a question:
 - When the person asks a question, send one answer command, at most one per reply, and never turn the question itself into a task. A reply may hold tasks and an answer together.
-- Answer from the person's records first: <open_tasks>, <synced_records> (events and tasks from their connected apps and calendars; "source" names the app) and what the tools return. A money figure from a connected app is as of its asOf (ageDays old) and may be out of date, so say when it was current. Use get_calendar for days beyond today and tomorrow, search_synced for anything a connected app shares, search_tasks for tasks not listed, and list_connections or connection_status when asked what is connected or when it last updated.
+- Answer from the person's records first: <open_tasks>, <synced_records> (events, tasks and standing summaries such as a project's counts or a pet, from their connected apps and calendars; "source" names the app; a record from one of their own apps also carries place, amount, detail and details, such as a clinic's phone or a sale's counts) and what the tools return. A money figure from a connected app is as of its asOf (ageDays old) and may be out of date, so say when it was current. Use get_calendar for days beyond today and tomorrow, search_synced for anything a connected app shares, with words or listed by app or kind ("what clinics do I have"), search_tasks for tasks not listed, and list_connections or connection_status when asked what is connected or when it last updated.
 - scope is yourThings when the question is about the person's own plans, people, tasks or things; theWorld when it asks how the world works; both when the records answer part of it and the world the rest.
 - fromRecordsText says only what the records it cites say, never a conclusion they don't state (a task to ask about something doesn't mean nobody has answered it), at most ${ANSWER_TEXT_CAP} characters, and sourceAliases names every record it rests on. Never state a fact from a record without its alias; with no record that says it, leave fromRecordsText and sourceAliases empty.
 - generalText is general knowledge, at most ${ANSWER_TEXT_CAP} characters, only for what the records do not say and only about the world: never about the person's own plans, people or things, and never for a yourThings question, which stays empty when the records hold nothing. Never mix the two in one sentence: facts from records go in fromRecordsText and general knowledge in generalText, and generalText never repeats or guesses a record.
@@ -147,6 +147,23 @@ Use this voice only for replyLine, fromRecordsText, generalText and generalSpoke
 export const INTERRUPTED_PROMPT = `The person talked over the spoken reply to the earlier turn to say this, so they may mean it as a correction or a follow-up to what that turn did.`;
 
 export const REST_PROMPT = `Some of this capture has already been filed. The titles are in <already_made>. File only what those tasks do not already cover, and never make one of them again.`;
+
+export const CONNECTED_APPS_TITLE = 'Connected apps';
+
+/** Names what the person has switched off on a connected app, so a question that needs it is answered with how to turn it on instead of a guess. */
+export const toOffCategoriesPrompt = (
+  grants: { connectorLabel: string; categories: { label: string }[] }[],
+) =>
+  grants.length === 0
+    ? null
+    : `The person has these things turned off, so they are not being read: ${grants
+        .map(
+          (grant) =>
+            `${grant.connectorLabel} (${grant.categories.map((category) => category.label).join(', ')})`,
+        )
+        .join(
+          '; ',
+        )}. When a question needs one of them, say plainly that it isn't being read and that it can be turned on in ${CONNECTED_APPS_TITLE}; never guess an answer from it.`;
 
 export const APP_RECORDS_PROMPT = `The person's apps can be looked in with search_app_records when it is offered:
 - Use it only for a question their records and calendar cannot answer, such as what they spent at a place. Pass who was paid as they say it, and the first and last day as YYYY-MM-DD (a month asked for is the whole month). Name the range you looked in as real dates, as the from and to it returns ("in October (Oct 1\u201331)"), never only "last month".
