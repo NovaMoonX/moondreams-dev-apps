@@ -245,6 +245,13 @@ export const resolveHelmQuestion = onCall(
       ]);
       const capture = captureSnap.data() as CaptureDoc | undefined;
       if (!capture) throw new HttpsError('not-found', 'This capture is gone.');
+      if ((capture.questionState?.[questionId]?.leftAt ?? null) !== null) {
+        throw new HttpsError(
+          'failed-precondition',
+          'That was left, so it can no longer be answered.',
+          { reason: 'gone' },
+        );
+      }
       const opened = openOrRefuse(key, capture.sealed);
       const questions = (opened.questions ?? {}) as Record<
         string,

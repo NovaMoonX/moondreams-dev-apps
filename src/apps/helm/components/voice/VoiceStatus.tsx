@@ -69,9 +69,11 @@ function VoiceStatus({
   const isIdle = voice.state === 'idle';
   const isWorking = voice.state === 'thinking' || voice.state === 'speaking';
   const showsPhoneLine = isIdle && voice.showsPhoneLine;
+  const closedLine = isIdle ? voice.closed : null;
   if (voice.isDictating) return null;
   if (
     text === '' &&
+    closedLine === null &&
     !(hasControls && isIdle) &&
     !voice.isMuted &&
     !showsPhoneLine
@@ -107,6 +109,24 @@ function VoiceStatus({
       )}
       {voice.state === 'listening' && voice.listeningRoute === 'cloud' && (
         <VoiceNotice />
+      )}
+      {closedLine !== null && (
+        <div className='flex items-center gap-1'>
+          <p className='text-muted-foreground text-[15px]'>
+            {HELM_COPY.closedLeft}
+          </p>
+          {closedLine.hasDropped && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="relative gap-1 text-[15px] before:absolute before:-inset-x-2 before:-inset-y-2 before:content-['']"
+              onClick={() => void voice.undoClose()}
+            >
+              {HELM_COPY.closedUndo}
+            </Button>
+          )}
+        </div>
       )}
       {showsPhoneLine && (
         <p className='text-muted-foreground text-[13px] text-pretty'>

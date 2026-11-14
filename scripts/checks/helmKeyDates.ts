@@ -761,6 +761,7 @@ const settleInput = (
           askedAt: 4000,
           answeredAt: null,
           skippedAt: null,
+          leftAt: null,
         },
       },
     },

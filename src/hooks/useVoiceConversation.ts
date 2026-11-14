@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createSpeechListener } from '@/hooks/useSpeechCommands';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { unlockAudio } from '@/lib/speech/audioContext';
+import { playListeningSound } from '@/lib/speech/listeningSound';
 import {
   createListeningState,
   getListeningEffect,
@@ -363,11 +364,26 @@ export function useVoiceConversation({
   const submit = (text: string, sttProvider: string) => {
     const pattern = toEndPattern(latest.current.endPhrases);
     const said = (pattern ? text.replace(pattern, '') : text).trim();
-    if (pattern?.test(text)) endConversation();
-    if (said === '') return false;
+    const isEnded = pattern?.test(text) ?? false;
+    if (isEnded) endConversation();
+    // An end phrase that is the whole turn goes to the app as it was said, so it can read it as a close.
+    const handed = said === '' && isEnded ? text.trim() : said;
+    if (handed === '') return false;
     setIsThinking(true);
-    latest.current.onUtterance(said, { sttProvider });
+    latest.current.onUtterance(handed, { sttProvider });
     return true;
+  };
+
+  /** The app read the words as a closing phrase: nothing is sent, no window reopens, whatever was being said is cut off and the falling cue plays once. The microphone is already released when a final transcript arrives. */
+  const closeByPhrase = () => {
+    send({ type: 'CLOSE_HEARD' });
+    endFollowUp();
+    closeGate();
+    getQueue().clear();
+    endConversation();
+    setIsThinking(false);
+    setHeard('');
+    playListeningSound('close');
   };
 
   const closeGate = () => {
@@ -814,6 +830,7 @@ export function useVoiceConversation({
     isPreparing,
     stop,
     cancel,
+    closeByPhrase,
     speak,
     markThinking: () => setIsThinking(true),
     /** Ends "thinking" for a turn that has nothing to say. */

@@ -453,6 +453,7 @@ const resolve = (optionId: 'yes' | 'no', withGroup: boolean) =>
           askedAt: NOW,
           answeredAt: null,
           skippedAt: null,
+          leftAt: null,
         },
       },
     },

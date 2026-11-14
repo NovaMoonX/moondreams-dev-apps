@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -14,6 +15,8 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
+import type { ClosingRead } from '@/lib/speech/closingPhrase';
+import { toPlainText } from '@/lib/speech/speechText';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
 import {
   createVoiceTokenSource,
@@ -40,8 +43,11 @@ import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
 import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
 import {
+  closeQuestions,
   loadExecutionsById,
   markCaptureSpoken,
+  reopenQuestions,
+  type QuestionRef,
   rankStoredNotes,
   sendCapture,
   skipQuestion,
@@ -69,15 +75,21 @@ import {
   readCapture,
 } from '@apps/helm/utils/captureReading';
 import { getOpenQuestions } from '@apps/helm/utils/heldCaptures';
+import {
+  readCloseEffects,
+  readDeviceTurn,
+} from '@apps/helm/utils/closeConversation';
 import { matchSpokenAnswer } from '@apps/helm/utils/questionAnswers';
 import {
   buildAskAgainLine,
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
 import { getOpenSessionId } from '@apps/helm/utils/sessions';
-import { isUndoPhrase, toWakeSpellings } from '@apps/helm/utils/voicePhrases';
+import { toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
+const CLOSED_MS = 10_000;
+const CLOSE_FRESH_MS = 30_000;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
 const OFFLINE_WAIT_MS = 20_000;
 const ASK_AGAIN_MAX_WORDS = 3;
@@ -109,6 +121,16 @@ export function useHelmVoice() {
   const [notice, setNotice] = useState<string | null>(null);
   const [hasNoticeDoor, setHasNoticeDoor] = useState(false);
   const [needsMicrophone, setNeedsMicrophone] = useState(false);
+  const [closed, setClosed] = useState<{
+    left: QuestionRef[];
+    words: string[];
+    hasDropped: boolean;
+  } | null>(null);
+  const closedId = useRef(0);
+  // Where Undo puts dropped unsent words back: the open field, in memory only.
+  const fieldWriter = useRef<((text: string) => void) | null>(null);
+  // Turns whose reply, once said, doesn't reopen listening: they ended with a finish phrase.
+  const finishedIds = useRef(new Set<string>());
   const captures = useAppSelector(selectAllCaptures);
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
@@ -272,14 +294,136 @@ export function useHelmVoice() {
       write(text);
       return;
     }
-    if (isUndoPhrase(text)) {
-      await undoLatest();
-      return;
-    }
-    // eslint-disable-next-line react-hooks/purity -- runs from a heard phrase; the compiler flags every clock read once the answer path calls the sender
-    if (await answerQuestion(text, sttProvider, Date.now())) return;
-    await sendTurn(text, sttProvider, interrupted);
+    await takeOnDevice(text, {
+      isSpoken: true,
+      sttProvider,
+      interrupted,
+      hasPage: screen.current !== null,
+    });
   }
+
+  /** Reads a final transcript or sent text in the device's order (undo, the open question's answer, stop, a closing phrase) and says whether the device took it. A spoken turn that none took goes on to the server; a typed one is left to the field. */
+  async function takeOnDevice(
+    text: string,
+    opts: {
+      isSpoken: boolean;
+      sttProvider: string | undefined;
+      interrupted: string | null;
+      hasPage: boolean;
+    },
+  ) {
+    const { isSpoken, sttProvider, interrupted } = opts;
+    // eslint-disable-next-line react-hooks/purity -- runs from a heard phrase or a Send; the compiler flags every clock read once the answer path calls the sender
+    const now = Date.now();
+    const state = store.getState();
+    const timeZone =
+      state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
+    const asked = findAsked(isSpoken, now);
+    const turn = readDeviceTurn({
+      text,
+      isSpoken,
+      isTalkedOver: interrupted !== null,
+      question: asked?.question ?? null,
+      isPending: asked !== undefined || waiting.current.size > 0,
+      hasPage: opts.hasPage,
+      extra: [toPlainText(name), ...toWakeSpellings(name)],
+      now,
+      timeZone,
+    });
+    if (turn.kind === 'undo') {
+      await undoLatest();
+      return true;
+    }
+    if (turn.kind === 'stopVoice') {
+      voice.settle();
+      startListening(screen.current);
+      return true;
+    }
+    if (turn.kind === 'close') {
+      await closeConversation(turn.close, isSpoken);
+      return true;
+    }
+    if (!isSpoken) {
+      return turn.kind === 'answer'
+        ? answerQuestion(text, sttProvider, now, false)
+        : false;
+    }
+    const said = turn.kind === 'send' ? turn.text : text;
+    if (await answerQuestion(said, sttProvider, now, true)) return true;
+    await sendTurn(
+      said,
+      sttProvider ?? 'browser',
+      interrupted,
+      turn.kind === 'send' && turn.isFinish,
+    );
+    return true;
+  }
+
+  /** The device-side close: drops what was pending, keeps what was done, releases the microphone when it was spoken, and offers Undo only when something was dropped. Nothing is sent to the server. */
+  async function closeConversation(close: ClosingRead, isSpoken: boolean) {
+    const state = store.getState();
+    const all = selectAllCaptures(state);
+    const sessionId = getOpenSessionId(all, Date.now());
+    const executions = selectExecutionsById(state);
+    const effects = readCloseEffects({
+      unsentWords: [close.rest],
+      captures: all.filter((capture) => capture.sessionId === sessionId),
+      isFiled: (capture) =>
+        capture.executionIds
+          .flatMap((id) => executions.get(id) ?? [])
+          .some((execution) => execution.effectRefs.length > 0),
+    });
+    interruptedCaptureId.current = null;
+    if (isSpoken) voice.closeByPhrase();
+    else voice.settle();
+    setNote(null);
+    if (uid && effects.left.length + effects.skipped.length > 0) {
+      try {
+        await closeQuestions(uid, effects);
+      } catch (error) {
+        console.error('Helm close was not written', error);
+        say(HELM_COPY.heldActionFailed);
+        return;
+      }
+    }
+    setClosed({
+      left: effects.left,
+      words: effects.dropWords,
+      hasDropped: effects.hasDropped,
+    });
+    window.clearTimeout(closedId.current);
+    closedId.current = window.setTimeout(() => setClosed(null), CLOSED_MS);
+  }
+
+  async function undoClose() {
+    if (!closed) return;
+    const { left, words } = closed;
+    window.clearTimeout(closedId.current);
+    try {
+      if (uid && left.length > 0) await reopenQuestions(uid, left);
+      if (words.length > 0) fieldWriter.current?.(words.join(' '));
+      setClosed(null);
+    } catch (error) {
+      console.error('Helm close was not undone', error);
+      addToast({ title: HELM_COPY.closedUndoFailed, type: 'error' });
+    }
+  }
+
+  /** Typed Send: true when the device took the words (a close, or an answer to the open question), so the field is cleared and nothing is sent. */
+  const handleTyped = (text: string, page: ScreenContext | null) =>
+    takeOnDevice(text, {
+      isSpoken: false,
+      sttProvider: undefined,
+      interrupted: null,
+      hasPage: page !== null,
+    });
+
+  const registerField = useCallback((write: (text: string) => void) => {
+    fieldWriter.current = write;
+    return () => {
+      if (fieldWriter.current === write) fieldWriter.current = null;
+    };
+  }, []);
 
   /** The words that ask the next open question of a turn aloud, leaving out the one just settled; null when none is left. */
   function sayNextQuestion(captureId: string, settledId: string) {
@@ -294,29 +438,36 @@ export function useHelmVoice() {
     return next ? buildSpokenQuestion(next.question) : null;
   }
 
-  /** An answer to the open question of the latest spoken turn settles it instead of becoming a turn of its own kind: a code-built question is answered on the server, one the assistant wrote goes as an answer turn (what could not be placed goes as its words). A code-built question's reply that is none of its choices is asked again once, then goes on as a turn. */
-  async function answerQuestion(
-    text: string,
-    sttProvider: string,
-    now: number,
-  ) {
-    const state = store.getState();
-    const all = selectAllCaptures(state);
+  /** The open question of the latest turn that can be answered by words: a spoken turn's for a spoken answer, any turn's for a typed one. */
+  function findAsked(isSpoken: boolean, now: number) {
+    const all = selectAllCaptures(store.getState());
     const sessionId = getOpenSessionId(all, now);
     const latest = all
       .filter((capture) => capture.sessionId === sessionId)
       .reverse()
       .find((capture) => capture.answersQuestion === null);
-    const asked =
-      latest?.inputMode === 'voice' && latest.status === 'needsYou'
-        ? getOpenQuestions(latest)
-            .filter(
-              (entry) =>
-                entry.skippedAt === null &&
-                !isAnswerInFlight(latest.id, entry.id),
-            )
-            .map((entry) => ({ captureId: latest.id, ...entry }))[0]
-        : undefined;
+    return latest &&
+      (!isSpoken || latest.inputMode === 'voice') &&
+      latest.status === 'needsYou'
+      ? getOpenQuestions(latest)
+          .filter(
+            (entry) =>
+              entry.skippedAt === null &&
+              !isAnswerInFlight(latest.id, entry.id),
+          )
+          .map((entry) => ({ captureId: latest.id, ...entry }))[0]
+      : undefined;
+  }
+
+  /** An answer to the open question of the latest turn settles it instead of becoming a turn of its own kind: a code-built question is answered on the server, one the assistant wrote goes as an answer turn (what could not be placed goes as its words). A code-built question's reply that is none of its choices is asked again once, then goes on as a turn. */
+  async function answerQuestion(
+    text: string,
+    sttProvider: string | undefined,
+    now: number,
+    isSpoken: boolean,
+  ) {
+    const state = store.getState();
+    const asked = findAsked(isSpoken, now);
     if (!uid || !asked) return false;
     const { question } = asked;
     const askedKey = `${asked.captureId}:${asked.id}`;
@@ -366,7 +517,7 @@ export function useHelmVoice() {
       return true;
     }
     const result = await resolveQuestion(asked.captureId, asked.id, {
-      by: 'voice',
+      by: isSpoken ? 'voice' : 'tap',
       ...choice,
     });
     if (result.kind === 'done') {
@@ -388,7 +539,7 @@ export function useHelmVoice() {
     asked: { captureId: string; id: string; question: HelmQuestion },
     value: QuestionAnswerValue | null,
     transcript: string,
-    sttProvider: string,
+    sttProvider: string | undefined,
   ) {
     if (!uid) return false;
     const stopsAtSend = stopCount.current;
@@ -448,6 +599,7 @@ export function useHelmVoice() {
     text: string,
     sttProvider: string,
     interrupted: string | null,
+    isFinish: boolean,
   ) {
     const { helm } = store.getState();
     if (!uid || helm.keyStatus !== 'ready' || !helm.recentCaptures.isLoaded) {
@@ -487,6 +639,7 @@ export function useHelmVoice() {
         },
       });
       recordSentTurn(uid, turn, id);
+      if (isFinish) finishedIds.current.add(turn.leadId ?? id);
       trackSent(uid, id, turn.leadId ?? id, write, stopsAtSend);
     } catch (error) {
       fail(error);
@@ -542,7 +695,8 @@ export function useHelmVoice() {
       canAnswer:
         capture.inputMode === 'voice' &&
         isHandsFreeOn &&
-        isSurfaceShown.current,
+        isSurfaceShown.current &&
+        !finishedIds.current.has(capture.id),
     });
     if (speakingCaptureId.current === capture.id) {
       speakingCaptureId.current = null;
@@ -609,10 +763,37 @@ export function useHelmVoice() {
     onSettled.current();
   }, [captures, executionsById, failedIds, uid]);
 
+  // A turn the assistant's own reading closed ("ugh, doesn't matter") gets the same close as a phrase matched here, once, while it is fresh.
+  const appliedCloses = useRef(new Set<string>());
+  const applyClose = useRef(closeConversation);
+  useEffect(() => {
+    applyClose.current = closeConversation;
+  });
+  useEffect(() => {
+    const fresh = captures.filter(
+      (capture) =>
+        capture.endedConversation &&
+        capture.sortedAt !== null &&
+        Date.now() - capture.sortedAt < CLOSE_FRESH_MS &&
+        !appliedCloses.current.has(capture.id),
+    );
+    fresh.forEach((capture) => appliedCloses.current.add(capture.id));
+    fresh.forEach((capture) =>
+      queueMicrotask(
+        () =>
+          void applyClose.current(
+            { kind: 'dismiss', position: 'whole', rest: '' },
+            capture.inputMode === 'voice',
+          ),
+      ),
+    );
+  }, [captures]);
+
   useEffect(
     () => () => {
       window.clearTimeout(noteId.current);
       window.clearTimeout(offlineId.current);
+      window.clearTimeout(closedId.current);
     },
     [],
   );
@@ -687,6 +868,7 @@ export function useHelmVoice() {
     // A listen that ended on an error never says so, so each new one starts as a turn.
     endDictation();
     screen.current = page;
+    setClosed(null);
     setNotice(null);
     setHasNoticeDoor(false);
     setNeedsMicrophone(false);
@@ -736,6 +918,11 @@ export function useHelmVoice() {
     },
     talk,
     setSurfaceShown,
+    /** The quiet line after a close: Undo is offered only when something was dropped; null when none is showing. */
+    closed: closed === null ? null : { hasDropped: closed.hasDropped },
+    undoClose,
+    handleTyped,
+    registerField,
   };
 }
 

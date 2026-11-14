@@ -138,6 +138,16 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/lib/speech/speechText.ts',
+    dest: 'functions/src/vendor/speechText.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/lib/speech/closingPhrase.ts',
+    dest: 'functions/src/vendor/closingPhrase.ts',
+    importRewrites: { '@/lib/speech/speechText': './speechText.js' },
+  },
+  {
     src: 'src/utils/yearlyDateUtils.ts',
     dest: 'functions/src/vendor/yearlyDateUtils.ts',
     importRewrites: {},

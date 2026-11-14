@@ -221,7 +221,11 @@ assert.equal(
   null,
   'no guess with the phrase wakes nothing',
 );
-assert.deepEqual(rest('hey pepper next'), ['next'], 'a lone string is one guess');
+assert.deepEqual(
+  rest('hey pepper next'),
+  ['next'],
+  'a lone string is one guess',
+);
 
 const afterWake = (heard: string[]) => {
   const woke = readWakeWord(heard);
@@ -336,6 +340,7 @@ const stateOf = (
   epoch,
   lockEndsAt: phase === 'LOCKED' ? at : null,
   stopped: phase === 'OFF' ? 'denied' : null,
+  closedByPhrase: false,
 });
 
 type Row = [

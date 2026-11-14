@@ -162,6 +162,8 @@ export const CAPTURE_MAX_CHARS = 4_000;
 
 /** Said at the end of an utterance to send it without a tap. */
 export const END_PHRASES = ["that's all", 'thats all'];
+/** Commands that delete a record. A closing phrase never reaches one: the reading keeps one only when its subject is still named once every closing phrase is taken out of the words. */
+export const DELETING_COMMANDS = ['removeKeyDate'] as const;
 /** A whole utterance that is one of these takes the open session's latest turn back, on the device, before anything is sent. */
 export const UNDO_PHRASES = ['undo that', 'undo', 'take that back'];
 
@@ -517,6 +519,11 @@ export const HELM_COPY = {
   talkNotReady: 'Not ready yet. Try again in a moment.',
   talkSendFailed: "That didn't send. Say it again.",
   nothingToUndo: 'Nothing to undo yet.',
+  closedLeft: 'Okay, left it',
+  closedUndo: 'Undo',
+  closedUndoFailed: "That didn't come back. Try again.",
+  questionLeft: 'Left it',
+  questionLeftGone: 'That was left, so it can no longer be answered.',
   undoWhilePending: 'Still working on that one. Try again in a moment.',
   askToday: 'Ask about today',
   chipToday: 'About today',

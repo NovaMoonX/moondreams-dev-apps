@@ -357,6 +357,7 @@ const resolveInput = (
         askedAt: 4000,
         answeredAt: null,
         skippedAt: null,
+        leftAt: null,
       },
     },
   },
@@ -516,6 +517,7 @@ test('answering one of two questions leaves the capture needing you', () => {
     askedAt: 4000,
     answeredAt: null,
     skippedAt: null,
+    leftAt: null,
   };
   assert.equal(planned(input).capture.status, 'needsYou');
 });
@@ -613,6 +615,7 @@ const settleInput = (
         askedAt: 4000,
         answeredAt: null,
         skippedAt: null,
+        leftAt: null,
       },
     },
   },
@@ -936,6 +939,7 @@ test('an open grouping question keeps its turn in Needs you, and answered it doe
           askedAt: 1,
           answeredAt,
           skippedAt: null,
+          leftAt: null,
         },
       },
     }) as unknown as OpenCapture;

@@ -25,6 +25,8 @@ export interface ListeningState {
   epoch: number;
   lockEndsAt: number | null;
   stopped: ListeningStop | null;
+  /** True once a closing phrase ended the listening, until the mic opens again. */
+  closedByPhrase: boolean;
 }
 
 export type ListeningEvent =
@@ -35,6 +37,8 @@ export type ListeningEvent =
   | { type: 'MODE'; mode: ListeningMode }
   | { type: 'WAKE_HEARD' }
   | { type: 'COMMAND_HEARD' }
+  /** A closing phrase was heard: from a window or a kept-open mic it closes like the window ending. */
+  | { type: 'CLOSE_HEARD' }
   | { type: 'WINDOW_ENDED' }
   | { type: 'WAIT_ENDED' }
   | { type: 'LOCK_ENDED' }
@@ -52,6 +56,7 @@ export const createListeningState = (mode: ListeningMode): ListeningState => ({
   epoch: 0,
   lockEndsAt: null,
   stopped: null,
+  closedByPhrase: false,
 });
 
 const turnOff = (
@@ -70,6 +75,7 @@ const openWindow = (state: ListeningState): ListeningState => ({
   epoch: state.epoch + 1,
   lockEndsAt: null,
   stopped: null,
+  closedByPhrase: false,
 });
 
 const startWaiting = (state: ListeningState): ListeningState => ({
@@ -77,6 +83,7 @@ const startWaiting = (state: ListeningState): ListeningState => ({
   phase: 'WAITING',
   lockEndsAt: null,
   stopped: null,
+  closedByPhrase: false,
 });
 
 const closeWindow = (state: ListeningState) =>
@@ -108,6 +115,7 @@ const choose = (
       phase: 'LOCKED',
       lockEndsAt: at + config.lockMs,
       stopped: null,
+      closedByPhrase: false,
     };
   }
   if (choice === 'WAKE' && state.phase === 'OFF') {
@@ -141,6 +149,10 @@ export const reduceListening = (
         : state;
     case 'COMMAND_HEARD':
       return state.phase === 'WINDOW' ? openWindow(state) : state;
+    case 'CLOSE_HEARD':
+      return state.phase === 'WINDOW' || state.phase === 'LOCKED'
+        ? { ...closeWindow(state), closedByPhrase: true }
+        : state;
     case 'WINDOW_ENDED':
       return state.phase === 'WINDOW' ? closeWindow(state) : state;
     case 'WAIT_ENDED':
@@ -249,12 +261,12 @@ export const getListeningEffect = (
   return null;
 };
 
-
-/** Which cue goes with a change of phase: a rising chime when the mic opens for commands or starts waiting, none when a window closes, a wait runs out, the mic is turned off or a failure stops it. */
+/** Which cue goes with a change of phase: a rising chime when the mic opens for commands or starts waiting, a falling one exactly when a closing phrase ends the listening, none when a window closes, a wait runs out, the mic is turned off or a failure stops it. */
 export const getListeningCue = (
   previous: ListeningState,
   next: ListeningState,
-): 'start' | null => {
+): 'start' | 'close' | null => {
+  if (!previous.closedByPhrase && next.closedByPhrase) return 'close';
   if (previous.phase === next.phase) return null;
   if (next.phase === 'OFF') return null;
   if (previous.phase === 'WINDOW' && next.phase === 'WAITING') return null;

@@ -270,6 +270,42 @@ export const skipQuestion = (
     [`questionState.${questionId}.skippedAt`]: Date.now(),
   });
 
+export interface QuestionRef {
+  captureId: string;
+  questionId: string;
+}
+
+/** Applies a closing phrase: stamps `leftAt` on what it drops and `skippedAt` on what it keeps waiting in Needs you, in one write; nothing else is touched and nothing runs. */
+export function closeQuestions(
+  uid: string,
+  { left, skipped }: { left: QuestionRef[]; skipped: QuestionRef[] },
+) {
+  const now = Date.now();
+  const batch = writeBatch(db);
+  left.forEach(({ captureId, questionId }) =>
+    batch.update(doc(capturesOf(uid), captureId), {
+      [`questionState.${questionId}.leftAt`]: now,
+    }),
+  );
+  skipped.forEach(({ captureId, questionId }) =>
+    batch.update(doc(capturesOf(uid), captureId), {
+      [`questionState.${questionId}.skippedAt`]: now,
+    }),
+  );
+  return batch.commit();
+}
+
+/** Undo of a close: the dropped questions stand again. */
+export function reopenQuestions(uid: string, left: QuestionRef[]) {
+  const batch = writeBatch(db);
+  left.forEach(({ captureId, questionId }) =>
+    batch.update(doc(capturesOf(uid), captureId), {
+      [`questionState.${questionId}.leftAt`]: null,
+    }),
+  );
+  return batch.commit();
+}
+
 /** Marks a question answered without running anything, because what it asked was settled another way; touches only its own fields, and the turn is sorted once none is left open. */
 export const closeQuestion = (
   uid: string,

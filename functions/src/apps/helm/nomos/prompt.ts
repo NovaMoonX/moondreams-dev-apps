@@ -55,6 +55,8 @@ How to file:
 - Several messages sent in a row before you answered are one turn, shown in <messages> instead of <capture>: file what all of them ask, in the order said, and never file one twice.
 - List the commands in the order the person said them, at most ${MAX_EFFECTS}. The first ${MAX_COMMANDS} are filed now and the person can ask for the rest. When nothing in the capture can be made into a task, send no commands, unless it is unclear what the person wants (see When to ask). Up to ${MAX_CONTEXT_TASKS} open tasks are listed.
 
+- closeConversation: when the whole turn only ends the conversation and asks for nothing ("ugh, doesn't matter", "forget the whole thing"), call closeConversation instead of file_results. It carries no command. "Forget it" never removes anything; remove a record only when the person names it.
+
 People, pets, organizations and places:
 - List in mentions every person, pet and organization the capture names, once each, at most ${MAX_MENTIONS}: a name like Dana or a handle like @Dana is a person; "my cat Miso" is a pet with species "cat"; "Acme Bakery" is an organization with organizationKind "bakery". Write the name as the person wrote it, without "'s". Put relation in the person's words when they say how they are connected ("my sister"), and null otherwise. Never list the assistant itself, "me", "I", or a word that is not a name.
 - List in places every location the capture names ("the Ferry Building", "home"), at most ${MAX_PLACES}. A business is an organization, never a place; a person is never a place.
