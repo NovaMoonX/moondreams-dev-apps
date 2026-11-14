@@ -61,6 +61,7 @@ function ProcedureStepSheet({
                   variant='outline'
                   rows={2}
                   autoExpand
+                  className='max-h-[calc(6lh+1rem)] overflow-y-auto'
                   value={step.detail ?? ''}
                   maxLength={PROCEDURE_STEP_DETAIL_CAP}
                   placeholder={HELM_COPY.procedureStepDetail}

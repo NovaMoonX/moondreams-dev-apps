@@ -128,6 +128,9 @@ export function useHelmVoice() {
   const speakingCaptureId = useRef<string | null>(null);
   // The line the person talked over, kept for the turn that follows it.
   const interruptedCaptureId = useRef<string | null>(null);
+  // Words spoken into the open text box go to the field, not out as a turn.
+  const dictation = useRef<((text: string) => void) | null>(null);
+  const [dictationOwner, setDictationOwner] = useState<string | null>(null);
   const [tokenSource] = useState(() =>
     createVoiceTokenSource({
       appId: 'helm',
@@ -169,10 +172,12 @@ export function useHelmVoice() {
     },
     onNothingHeard: (isAsked) => {
       interruptedCaptureId.current = null;
+      endDictation();
       if (isAsked) showNote(HELM_COPY.talkHeardNothing);
     },
     onDeviceListenFailed: (isAsked) => {
       interruptedCaptureId.current = null;
+      endDictation();
       if (isAsked) showNote(HELM_COPY.talkListenFailed);
     },
     onCloudHeld: () => setShowsPhoneLine(true),
@@ -199,6 +204,11 @@ export function useHelmVoice() {
     },
   });
 
+  function endDictation() {
+    dictation.current = null;
+    setDictationOwner(null);
+  }
+
   function showNote(text: string) {
     setNote(text);
     window.clearTimeout(noteId.current);
@@ -223,6 +233,7 @@ export function useHelmVoice() {
   /** The phrase was heard: it starts what a Talk tap starts, from the page in front, or sends the words that came with it. */
   function wakeUp(rest: string | null, heardBy: { sttProvider: string }) {
     if (!voice.isAvailable) return false;
+    endDictation();
     const page = isHomeView
       ? null
       : (selectTopScreen(store.getState())?.context ?? null);
@@ -250,6 +261,14 @@ export function useHelmVoice() {
   async function handleUtterance(text: string, sttProvider: string) {
     const interrupted = interruptedCaptureId.current;
     interruptedCaptureId.current = null;
+    const write = dictation.current;
+    if (write) {
+      dictation.current = null;
+      voice.settle();
+      queueMicrotask(() => setDictationOwner(null));
+      write(text);
+      return;
+    }
     if (isUndoPhrase(text)) {
       await undoLatest();
       return;
@@ -604,6 +623,7 @@ export function useHelmVoice() {
     queueMicrotask(() => {
       if (state === 'listening') {
         interruptedCaptureId.current = null;
+        endDictation();
         voice.cancel();
       } else if (state === 'speaking') voice.stop();
       else if (state === 'thinking') {
@@ -659,6 +679,8 @@ export function useHelmVoice() {
   };
 
   function startListening(page: ScreenContext | null) {
+    // A listen that ended on an error never says so, so each new one starts as a turn.
+    endDictation();
     screen.current = page;
     setNotice(null);
     setHasNoticeDoor(false);
@@ -668,8 +690,32 @@ export function useHelmVoice() {
     return 'started' as const;
   }
 
+  const dictate = (write: (text: string) => void, owner: string) => {
+    if (dictation.current !== null && voice.state === 'listening') {
+      voice.stop();
+      return 'stopped' as const;
+    }
+    if (voice.state !== 'idle') return 'blocked' as const;
+    const result = talk(null);
+    if (result === 'started') {
+      dictation.current = write;
+      setDictationOwner(owner);
+    }
+    return result;
+  };
+
+  // A listen that ends on a lasting error (the mic refused) reports nothing, so the owner counts only while it listens.
+  const liveOwner = voice.state === 'listening' ? dictationOwner : null;
+
   return {
     ...voice,
+    isDictating: liveOwner !== null,
+    dictationOwner: liveOwner,
+    dictate,
+    cancel: () => {
+      endDictation();
+      voice.cancel();
+    },
     note,
     notice,
     showsPhoneLine,
@@ -692,4 +738,10 @@ export function useHelmVoiceContext() {
   const voice = useContext(HelmVoiceContext);
   if (voice === null) throw new Error('Helm voice is not provided.');
   return voice;
+}
+
+/** Whether this field is the one being spoken into: only one field listens at a time. */
+export function useIsDictatingHere(owner: string) {
+  const voice = useHelmVoiceContext();
+  return voice.dictationOwner === owner;
 }

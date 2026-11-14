@@ -53,7 +53,12 @@ const PARTS: Record<QuestionShape, ComponentType<AnswerPartProps>> = {
 };
 
 /** The shapes that draw their own primary button, which Skip shares a row with. */
-const OWN_PRIMARY: QuestionShape[] = ['pickSeveral', 'number', 'dateTime'];
+const OWN_PRIMARY: QuestionShape[] = [
+  'pickSeveral',
+  'number',
+  'dateTime',
+  'freeText',
+];
 
 /** One open question in the shape that fits it, with Skip. A code-built question (which person or place) is answered on the server and needs a connection; one the assistant wrote is answered as a turn, which waits offline like any other. */
 function QuestionCard({

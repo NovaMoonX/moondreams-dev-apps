@@ -1,12 +1,13 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type KeyboardEvent,
   type ReactNode,
-  type Ref,
+  type RefObject,
 } from 'react';
 
 import {
@@ -31,6 +32,7 @@ import LockedButton from '@/components/LockedButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
+import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { readFormDraft, writeFormDraft } from '@lib/app/formDrafts';
 import { formatClock } from '@/utils/durationUtils';
@@ -48,7 +50,14 @@ import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
+import {
+  DictateButton,
+  DictationLine,
+} from '@apps/helm/components/voice/Dictation';
+import {
+  useHelmVoiceContext,
+  useIsDictatingHere,
+} from '@apps/helm/hooks/useHelmVoice';
 import { useTurnAttachments } from '@apps/helm/hooks/useMediaUpload';
 import { useSaveAsNote } from '@apps/helm/hooks/useSaveAsNote';
 import {
@@ -94,7 +103,9 @@ const parseDraft = (stored: unknown) =>
 
 interface ComposerProps {
   /** Lets the dock's Type and Talk put the cursor here. */
-  fieldRef: Ref<HTMLTextAreaElement>;
+  fieldRef: RefObject<HTMLTextAreaElement | null>;
+  maxLines?: number;
+  dictationId?: string;
   onFocusChange: (isFocused: boolean) => void;
   /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft and the words typed while waiting. */
   isReady: boolean;
@@ -114,9 +125,11 @@ interface ComposerProps {
   topSlot?: ReactNode;
 }
 
-/** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter sends and Shift+Enter starts a new line. */
+/** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter starts a new line and Shift+Enter sends. */
 function Composer({
   fieldRef,
+  maxLines = 6,
+  dictationId,
   onFocusChange,
   isReady,
   isOutbox = false,
@@ -171,14 +184,15 @@ function Composer({
   const canTakePhoto = useCanTakePhoto();
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
+  const appendWords = (words: string) => {
+    setText((current) =>
+      current.trim().length > 0 ? `${current.trimEnd()} ${words}` : words,
+    );
+    setTypedAt(Date.now());
+  };
   const attachments = useTurnAttachments({
     timeZone,
-    onTranscript: (words) => {
-      setText((current) =>
-        current.trim().length > 0 ? `${current.trimEnd()} ${words}` : words,
-      );
-      setTypedAt(Date.now());
-    },
+    onTranscript: (words) => appendWords(words),
   });
   const recorder = useAudioRecorder({
     maxMs: MAX_VOICE_NOTE_MS,
@@ -392,12 +406,10 @@ function Composer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (
-      event.key !== 'Enter' ||
-      event.shiftKey ||
-      event.nativeEvent.isComposing
-    )
+    const isSend = event.shiftKey || event.metaKey || event.ctrlKey;
+    if (event.key !== 'Enter' || !isSend || event.nativeEvent.isComposing) {
       return;
+    }
     event.preventDefault();
     void send();
   };
@@ -457,6 +469,11 @@ function Composer({
   };
 
   const canType = isReady || isOutbox;
+  useGrowingTextarea(fieldRef, text, maxLines);
+  const ownId = useId();
+  const dictationOwner = dictationId ?? ownId;
+  const isDictating = useIsDictatingHere(dictationOwner);
+  const isOpen = (isFocused || isDictating) && !isRecording;
   const showsActions = waitingPlaceholder === null;
 
   return (
@@ -507,7 +524,7 @@ function Composer({
           </div>
         </div>
       )}
-      <div className='flex items-end gap-1'>
+      <div className={join('flex items-end gap-1', isOpen && 'flex-wrap')}>
         {showsActions && !isRecording && !(isOutbox && !isReady) && (
           <EllipsisDropdown
             variant='tertiary'
@@ -600,18 +617,22 @@ function Composer({
             </Button>
           </div>
         ) : (
-          <div className='min-w-0 flex-1 [&_textarea]:block'>
+          <div
+            className={join(
+              'min-w-0 flex-1 [&_textarea]:block',
+              isOpen && 'order-first basis-full',
+            )}
+          >
             <Textarea
               ref={fieldRef}
               variant='base'
               rounded='none'
-              autoExpand
               rows={1}
               aria-label={HELM_COPY.composerLabel(name)}
               placeholder={
                 waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)
               }
-              className='max-h-32 min-h-10 resize-none border-0 bg-transparent px-1 py-2.5 text-[15px] leading-5 shadow-none outline-none focus:outline-none focus-visible:ring-0 focus-visible:outline-none'
+              className='min-h-10 resize-none border-0 bg-transparent px-1 py-2.5 text-[15px] leading-5 shadow-none outline-none focus:outline-none focus-visible:ring-0 focus-visible:outline-none'
               disabled={!canType}
               value={text}
               onChange={(event) => {
@@ -661,6 +682,17 @@ function Composer({
           </div>
         )}
         {showsActions &&
+          canType &&
+          !isRecording &&
+          (isFocused || isDictating) && (
+            <DictateButton
+              owner={dictationOwner}
+              label={HELM_COPY.dictate}
+              onWords={appendWords}
+              className='mr-1 ml-auto'
+            />
+          )}
+        {showsActions &&
           (isHeldBackByPhotos ? (
             <LockedButton
               label={HELM_COPY.send}
@@ -691,6 +723,7 @@ function Composer({
           ))}
       </div>
       <div className='flex flex-col gap-2 px-1 pb-1 empty:hidden'>
+        <DictationLine owner={dictationOwner} />
         {(recorder.state === 'refused' || recorder.state === 'unsupported') && (
           <p className='text-muted-foreground text-[13px]' role='status'>
             {recorder.state === 'unsupported'

@@ -1,11 +1,12 @@
 import { useLayoutEffect, useRef } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Keyboard, LayoutGrid, X } from 'lucide-react';
 
 import VoiceControl from '@apps/helm/components/voice/VoiceControl';
 import VoiceStatus from '@apps/helm/components/voice/VoiceStatus';
-import { HELM_COPY } from '@apps/helm/constants';
+import { HELM_COPY, HOME_COMPOSER_ID } from '@apps/helm/constants';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 
 interface VoiceDockProps {
@@ -22,6 +23,8 @@ const SIDE_BUTTON =
 function VoiceDock({ onBrowse, onTalkBlocked, onType }: VoiceDockProps) {
   const voice = useHelmVoiceContext();
   const isListening = voice.state === 'listening';
+  const isDictatingElsewhere =
+    voice.isDictating && voice.dictationOwner !== HOME_COMPOSER_ID;
   const nav = useRef<HTMLElement>(null);
 
   // The composer floats this far above the foot of the screen; with the dock gone it drops to the edge.
@@ -47,7 +50,10 @@ function VoiceDock({ onBrowse, onTalkBlocked, onType }: VoiceDockProps) {
     <nav
       ref={nav}
       aria-label='Talk, type or browse'
-      className='helm-dock-in from-background via-background/95 pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t to-transparent px-4 pt-10 pb-[max(1rem,env(safe-area-inset-bottom))]'
+      className={join(
+        'helm-dock-in from-background pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[calc(100%-1rem)] to-transparent px-4 pt-10 pb-[max(1rem,env(safe-area-inset-bottom))] transition-[translate,opacity,visibility] duration-200 ease-out motion-reduce:transition-none',
+        isDictatingElsewhere && 'invisible translate-y-8 opacity-0',
+      )}
     >
       <div className='pointer-events-auto mx-auto flex max-w-xl flex-col gap-4'>
         <VoiceStatus />
