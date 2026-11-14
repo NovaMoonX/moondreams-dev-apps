@@ -36,7 +36,7 @@ assert.notEqual(clientKeyFor('a'), clientKeyFor('b'));
 
 assert.equal(
   wwwAuthenticate(RESOURCE),
-  'Bearer error="unauthorized", error_description="Authorization needed", resource_metadata="https://apps.moondreams.dev/.well-known/oauth-protected-resource/mcp/helm"',
+  'Bearer error="unauthorized", error_description="Authorization needed", resource_metadata="https://apps.moondreams.dev/.well-known/oauth-protected-resource/mcp/helm", scope="openid profile email offline_access"',
 );
 assert.deepEqual(
   protectedResourceMetadata(RESOURCE, 'https://bright-sky-12.authkit.app'),
@@ -44,6 +44,7 @@ assert.deepEqual(
     resource: RESOURCE,
     authorization_servers: ['https://bright-sky-12.authkit.app'],
     bearer_methods_supported: ['header'],
+    scopes_supported: ['openid', 'profile', 'email', 'offline_access'],
   },
 );
 
