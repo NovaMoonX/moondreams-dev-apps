@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import type { User } from 'firebase/auth';
 import {
+  Bug,
   ChevronDown,
   LogOut,
   Plus,
@@ -23,6 +24,7 @@ import UserAvatar from '@/ui/UserAvatar';
 interface AccountPanelProps {
   user: User;
   isAdmin: boolean;
+  isDebugListed: boolean;
   otherAccounts: RememberedAccount[];
   onSwitch: (account: RememberedAccount | null) => void;
   onManageAccount: () => void;
@@ -83,6 +85,7 @@ function PanelRow({
 function AccountPanel({
   user,
   isAdmin,
+  isDebugListed,
   otherAccounts,
   onSwitch,
   onManageAccount,
@@ -215,6 +218,28 @@ function AccountPanel({
           />
         ) : null}
       </ul>
+
+      {isDebugListed ? (
+        <div
+          className={join(
+            SURFACE_CLASS,
+            'border-border/60 flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-sm',
+          )}
+        >
+          <IconTile>
+            <Bug className='size-5' />
+          </IconTile>
+          <div className='min-w-0'>
+            <p className='text-foreground text-sm font-medium'>
+              Debug details are on
+            </p>
+            <p className='text-muted-foreground text-xs'>
+              When something breaks, the error screen shows what went wrong so
+              you can copy it and send it over.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <div className='text-muted-foreground pb-1 text-center text-xs'>
         <VersionLabel />
