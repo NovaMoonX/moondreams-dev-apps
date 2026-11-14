@@ -181,7 +181,6 @@ export async function updateToLatest(latestVersion: string) {
   const previous = readUpdateAttempt();
   const isRetry =
     previous?.version === latestVersion && Date.now() - previous.at < UPDATE_RETRY_WINDOW_MS;
-  writeUpdateAttempt(latestVersion);
 
   const needsFreshFiles = async () => {
     if (isRetry) return true;
@@ -193,6 +192,7 @@ export async function updateToLatest(latestVersion: string) {
   const isFresh = await needsFreshFiles();
   // The connection can drop during the wait; reloading then would land on the browser's offline page.
   if (!navigator.onLine) return false;
+  writeUpdateAttempt(latestVersion);
   if (isFresh) await clearPrecache().catch(() => undefined);
   window.location.reload();
   return true;

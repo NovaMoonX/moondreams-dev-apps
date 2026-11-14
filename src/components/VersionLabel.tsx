@@ -37,7 +37,13 @@ export function VersionLabel() {
       {canUpdate && (
         <span className='mt-2 flex flex-col items-center gap-2'>
           <span>Version {latest} is out</span>
-          <Button size='sm' variant='secondary' loading={isUpdating} onClick={update}>
+          <Button
+            size='sm'
+            variant='secondary'
+            className='relative after:absolute after:-inset-1.5'
+            loading={isUpdating}
+            onClick={update}
+          >
             Update to the latest
           </Button>
         </span>
