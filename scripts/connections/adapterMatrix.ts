@@ -506,8 +506,10 @@ assert.deepEqual(readGrant({ status: 'live' }).categories, {});
 assert.equal(readGrant({}).status, 'ended');
 assert.deepEqual(readGrant(JSON.parse(JSON.stringify(staged))), staged);
 
-const membership = (uid: string, path: string) =>
-  firestore.doc(`apps/a-list/memberships/${uid}/${path}`);
+const membership = (uid: string, path = '') =>
+  firestore.doc(
+    `apps/a-list/memberships/${uid}${path === '' ? '' : `/${path}`}`,
+  );
 
 const showing = (
   status: string,
@@ -528,6 +530,7 @@ const showing = (
     timeZone: 'America/Chicago',
   },
   ticket: {
+    entryMode: 'ITEMIZED',
     priceCents: SECRET_PRICE,
     totalCents: 777,
     feeAvoidedCents: 999,
@@ -543,7 +546,10 @@ await Promise.all([
     showing('PLANNED', 'Starlight Harbor', NOW + DAY),
   ),
   membership(OWNER, 'viewings/v-notheatre').set(
-    showing('PLANNED', 'Galaxy Drift', NOW + 2 * DAY, { theatre: null }),
+    showing('PLANNED', 'Galaxy Drift', NOW + 2 * DAY, {
+      theatre: null,
+      ticket: null,
+    }),
   ),
   membership(OWNER, 'viewings/v-old').set(
     showing('PLANNED', 'Ancient Showing', NOW - 60 * DAY),
@@ -554,6 +560,39 @@ await Promise.all([
   membership(OWNER, 'viewings/v-seen-unrated').set(
     showing('SEEN', 'The Matrix', NOW - 4 * DAY),
   ),
+  membership(OWNER, 'watchlist/tmdb-10').set({
+    movieKey: 'tmdb-10',
+    movie: { title: 'Moon Garden', releaseDate: Date.UTC(2026, 11, 18) },
+    priority: 'MUST_SEE',
+    archivedAt: null,
+    lastEditedAt: NOW - 3,
+  }),
+  membership(OWNER, 'watchlist/tmdb-11').set({
+    movieKey: 'tmdb-11',
+    movie: { title: 'Undated Tale', releaseDate: null },
+    priority: 'IF_I_HAVE_TIME',
+    lastEditedAt: NOW - 3,
+  }),
+  membership(OWNER, 'watchlist/tmdb-12').set({
+    movieKey: 'tmdb-12',
+    movie: { title: 'Put Away', releaseDate: null },
+    priority: 'WANT_TO_SEE',
+    archivedAt: NOW - DAY,
+    lastEditedAt: NOW - 3,
+  }),
+  membership(OWNER, 'watchlist/tmdb-1').set({
+    movieKey: 'tmdb-1',
+    movie: { title: 'Dune', releaseDate: null },
+    priority: 'WANT_TO_SEE',
+    archivedAt: null,
+    lastEditedAt: NOW - 3,
+  }),
+  membership(OWNER).set({
+    weeklyGoal: 2,
+    monthlyGoal: 5,
+    monthlyCostCents: SECRET_PRICE,
+    lastEditedAt: NOW - 2,
+  }),
   membership(OWNER, 'theatres/2078').set({
     theatreId: '2078',
     name: 'AMC Town Center 20',
@@ -580,6 +619,7 @@ await Promise.all([
 
 const aListAdapter = createAListAdapter({
   firestore: () => firestore,
+  now: () => NOW,
   canOpen: async (uid) => uid === OWNER,
 });
 
@@ -591,7 +631,12 @@ const aListCtx = (uid: string) => ({
       readerAppId: 'helm',
       connectorId: 'app:a-list',
       accountId: 'site',
-      categoryIds: ['plannedShowings', 'savedTheaters', 'seenMovies'],
+      categoryIds: [
+        'plannedShowings',
+        'savedTheaters',
+        'seenMovies',
+        'watchlist',
+      ],
       options: null,
     },
     aListAdapter.manifest,
@@ -622,6 +667,11 @@ assert.equal(nextShowing?.startAt, NOW + DAY);
 assert.equal(nextShowing?.endAt, NOW + DAY + 3 * 3_600_000);
 assert.equal(nextShowing?.placeLabel, 'AMC Town Center 20');
 assert.equal(nextShowing?.timeZone, 'America/Chicago');
+assert.deepEqual(nextShowing?.extra, { hasTicket: true });
+assert.deepEqual(
+  showings.find((entry) => entry.sourceRef === 'viewings/v-notheatre')?.extra,
+  { hasTicket: false },
+);
 assert.equal(
   showings.find((entry) => entry.sourceRef === 'viewings/v-notheatre')
     ?.placeLabel,
@@ -641,13 +691,36 @@ assert.deepEqual(
 );
 
 const seen = await runAList(OWNER, 'seenMovies');
-assert.deepEqual(refs(seen), ['viewings/v-seen']);
-assert.equal(seen[0].kind, 'knowledge');
-assert.equal(seen[0].title, 'Dune');
-assert.deepEqual(seen[0].extra, { rating: 4.5 });
+assert.deepEqual(refs(seen), ['goals', 'viewings/v-seen']);
+assert.ok(seen.every((entry) => entry.kind === 'knowledge'));
+assert.equal(seen[0].title, 'Movie goals');
+assert.equal(
+  seen[0].detail,
+  'Weekly goal 2, 2 seen this week · Monthly goal 5, 2 seen this month',
+);
+assert.deepEqual(seen[0].extra, {});
+assert.equal(seen[1].title, 'Dune');
+assert.equal(seen[1].startAt, null);
+assert.match(seen[1].detail ?? '', /^Seen [A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+assert.deepEqual(seen[1].extra, { rating: 4.5 });
+
+const watchlist = await runAList(OWNER, 'watchlist');
+assert.deepEqual(refs(watchlist).sort(), [
+  'watchlist/tmdb-10',
+  'watchlist/tmdb-11',
+]);
+assert.ok(watchlist.every((entry) => entry.kind === 'artifact'));
+const moonGarden = watchlist.find((entry) => entry.title === 'Moon Garden');
+assert.equal(moonGarden?.startAt, null);
+assert.equal(moonGarden?.detail, 'Out Dec 18, 2026');
+assert.deepEqual(moonGarden?.extra, { status: 'Must see' });
+assert.equal(
+  watchlist.find((entry) => entry.title === 'Undated Tale')?.detail,
+  null,
+);
 await assert.rejects(() => runAList(OWNER, 'nothing'), /Unknown category/);
 
-const aListAll = [...showings, ...theaters, ...seen];
+const aListAll = [...showings, ...theaters, ...seen, ...watchlist];
 assertShape(aListAll);
 aListAll.forEach((record) => {
   const values = flatten(record);
@@ -668,11 +741,11 @@ aListAll.forEach((record) => {
 });
 
 const otherAList = await Promise.all(
-  ['plannedShowings', 'savedTheaters', 'seenMovies'].map((category) =>
-    runAList(OTHER, category),
+  ['plannedShowings', 'savedTheaters', 'seenMovies', 'watchlist'].map(
+    (category) => runAList(OTHER, category),
   ),
 );
-assert.deepEqual(otherAList, [[], [], []]);
+assert.deepEqual(otherAList, [[], [], [], []]);
 assert.equal(await aListAdapter.status(aListCtx(OWNER)), 'ok');
 assert.equal(await aListAdapter.status(aListCtx(OTHER)), 'noAccess');
 assert.equal(

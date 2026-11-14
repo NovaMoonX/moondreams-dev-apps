@@ -116,7 +116,7 @@ export const SHARED_RECORD_KEYS: (keyof SharedRecord)[] = [
 export const EXTRA_KEYS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
-  event: ['calendarId', 'isTentative', 'isFree', 'sameEventKey'],
+  event: ['calendarId', 'isTentative', 'isFree', 'sameEventKey', 'hasTicket'],
   task: [],
   project: [
     'available',

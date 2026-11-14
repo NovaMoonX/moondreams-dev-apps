@@ -148,7 +148,7 @@ const toExtra = (kind: string, value: unknown) => {
 const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
-  event: ['isTentative', 'isFree'],
+  event: ['isTentative', 'isFree', 'hasTicket'],
   task: [],
   project: [
     'available',
