@@ -1,4 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { createInterface } from 'node:readline/promises';
 
 import { loadEnv } from 'vite';
 
@@ -141,35 +142,78 @@ const showServices = () => {
   }
 };
 
-const offerKeys = (isRunning: boolean) => {
-  if (!process.stdin.isTTY) return;
+/** True when a choice changed which services the emulators should use (they read that at startup). */
+const askAboutServices = () => {
+  if (!process.stdin.isTTY) return false;
   try {
     execFileSync(
       'npm',
-      [
-        'run',
-        '--silent',
-        'local:services',
-        '--',
-        'keys',
-        app.id,
-        ...(isRunning ? ['--running'] : []),
-      ],
-      { stdio: 'inherit' },
+      ['run', '--silent', 'local:services', '--', 'choose', app.id],
+      {
+        stdio: 'inherit',
+      },
+    );
+    return false;
+  } catch (error) {
+    return (error as { status?: number }).status === 10;
+  }
+};
+
+const askToRestartEmulators = async () => {
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const answer = (
+    await prompt.question(
+      '\nThe running emulators need a restart to use that. Restart them now? Their data is cleared and the fixtures reseeded. [Y/n] ',
+    )
+  )
+    .trim()
+    .toLowerCase();
+  prompt.close();
+  return answer === '' || answer.startsWith('y');
+};
+
+const checkFirebaseLogin = () => {
+  try {
+    execFileSync(
+      'bash',
+      ['-c', 'source scripts/lib/firebaseLogin.sh && require_firebase_login'],
+      {
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+          PATH: `${process.cwd()}/node_modules/.bin:${process.env.PATH}`,
+        },
+      },
     );
   } catch {
     console.log(
-      'Skipped the key check; run npm run local:services to see which keys are set.',
+      'Continuing without a firebase sign-in. That is fine offline; otherwise run: firebase login --reauth',
     );
   }
 };
 
 const main = async () => {
-  const wereEmulatorsUp = await areAllUp(EMULATOR_READY_URLS);
-  offerKeys(wereEmulatorsUp);
-  if (wereEmulatorsUp) {
+  const isRunning = await areAllUp(EMULATOR_READY_URLS);
+  const hasChanged = askAboutServices();
+  const isRestarting =
+    isRunning && hasChanged && (await askToRestartEmulators());
+  if (isRestarting) {
+    execFileSync('npm', ['run', '--silent', 'emulators:kill'], {
+      stdio: 'inherit',
+    });
+  }
+  if (isRunning && hasChanged && !isRestarting) {
+    console.log(
+      'Kept the running emulators; the change applies the next time they start.',
+    );
+  }
+  if (isRunning && !isRestarting) {
     console.log('✓ Emulators already running; leaving them alone.');
   } else {
+    checkFirebaseLogin();
     const emulators = startService('the emulators', ['emulators']);
     await waitForService(emulators, EMULATOR_READY_URLS, 180);
   }

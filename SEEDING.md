@@ -126,7 +126,7 @@ When you're finished with a friend, remove the share in the same admin console p
 | Command                                          | Purpose                                                                                          |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | `npm run emulators`                              | Start Auth, Firestore, and RTDB emulators with their UI.                                         |
-| `npm run local:app -- <app>`                     | Offer to save missing keys, start the emulators and dev server if needed, refresh the app's fixtures, open the app, and show which outside services it uses are real or fixtures. |
+| `npm run local:app -- <app>`                     | Ask which outside services to use for real (pulling or removing keys), start the emulators and dev server if needed, refresh the app's fixtures, open the app, and show which outside services it uses are real or fixtures. |
 | `npm run emulators:lan` / `dev:lan`              | The same, reachable from a phone on a trusted network.                                           |
 | `npm run share`                                  | Start the LAN emulators, seed, start the dev server, and copy a Tailscale link to send a friend. |
 | `npm run lan:trust` / `lan:untrust` / `lan:list` | Name and trust the current network for the `:lan` commands, remove one, or list them.            |

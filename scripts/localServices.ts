@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createInterface } from 'node:readline/promises';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import {
@@ -19,6 +20,10 @@ interface ServiceInfo {
   isBound: boolean;
   setup: string;
   note?: string;
+  // Shown when the real service means something heavier than a sandbox.
+  caution?: string;
+  // The production value must never be copied to this machine.
+  isNotPulled?: boolean;
 }
 
 const SERVICES: Record<FixtureService, ServiceInfo> = {
@@ -80,6 +85,9 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
     appIds: ['runway'],
     keys: ['RUNWAY_PLAID_CLIENT_ID', 'RUNWAY_PLAID_SECRET'],
     isBound: true,
+    isNotPulled: true,
+    caution:
+      'A production Plaid key links real banks; local use should be sandbox keys (npm run runway:plaid-secrets).',
     setup:
       'npm run runway:plaid-secrets, or add both keys (sandbox ones) to functions/.secret.local',
   },
@@ -172,18 +180,49 @@ const describeService = (
     : 'fixtures (no key)';
 };
 
-const writeSwitch = (names: string[]) => {
-  const lines = readLines(ENV_FILE).filter(
-    (line) => !new RegExp(`^\\s*${SWITCH}\\s*=`).test(line),
+const isManagedComment = (line: string) => /^#.*npm run local:/.test(line);
+const isKeyLine = (line: string, key: string) =>
+  new RegExp(`^\\s*${key}\\s*=`).test(line);
+
+const dropKey = (lines: string[], key: string) =>
+  lines.filter(
+    (line, index) =>
+      !isKeyLine(line, key) &&
+      !(isManagedComment(line) && isKeyLine(lines[index + 1] ?? '', key)),
   );
-  const kept =
-    lines.length > 0 && lines[lines.length - 1] === ''
-      ? lines.slice(0, -1)
-      : lines;
+
+const tidyLines = (lines: string[]) =>
+  lines
+    .filter(
+      (line, index) => line !== '' || (index > 0 && lines[index - 1] !== ''),
+    )
+    .reduceRight<string[]>(
+      (kept, line) =>
+        kept.length === 0 && line === '' ? kept : [line, ...kept],
+      [],
+    );
+
+/** Replaces the keys' lines in an env file with a block set off by a blank line and led by a comment; an empty block just removes them. */
+const rewriteEnv = (file: string, keys: string[], block: string[]) => {
+  const rest = tidyLines(keys.reduce(dropKey, readLines(file)));
   const next =
-    names.length > 0 ? [...kept, `${SWITCH}=${names.join(',')}`] : kept;
-  writeFileSync(ENV_FILE, next.length > 0 ? `${next.join('\n')}\n` : '');
+    block.length > 0
+      ? [...rest, ...(rest.length > 0 ? [''] : []), ...block]
+      : rest;
+  writeFileSync(file, next.length > 0 ? `${next.join('\n')}\n` : '');
 };
+
+const writeSwitch = (names: string[]) =>
+  rewriteEnv(
+    ENV_FILE,
+    [SWITCH],
+    names.length > 0
+      ? [
+          '# Outside services the emulators answer from fixtures even when a key exists (npm run local:services).',
+          `${SWITCH}=${names.join(',')}`,
+        ]
+      : [],
+  );
 
 const toServices = (target: string) => {
   if (target === 'all') return [...FIXTURE_SERVICES];
@@ -222,8 +261,7 @@ const showStatus = (appId?: string) => {
   );
 };
 
-const setMode = (mode: string, target: string) => {
-  const targets = toServices(target);
+const applyForced = (mode: 'fixtures' | 'real', targets: FixtureService[]) => {
   const forced = readForced();
   const current = forced.includes('all') ? [...FIXTURE_SERVICES] : forced;
   const next =
@@ -232,6 +270,12 @@ const setMode = (mode: string, target: string) => {
       : current.filter((name) => !targets.some((service) => service === name));
   const isEvery = FIXTURE_SERVICES.every((service) => next.includes(service));
   writeSwitch(isEvery ? ['all'] : next);
+  return { next, isEvery };
+};
+
+const setMode = (mode: 'fixtures' | 'real', target: string) => {
+  const targets = toServices(target);
+  const { next, isEvery } = applyForced(mode, targets);
   const isGcloudReady = isSignedInToGcloud();
   console.log(
     `${SWITCH} in ${ENV_FILE} is now ${isEvery ? 'all' : next.join(',') || '(empty)'}.`,
@@ -276,18 +320,6 @@ const readSecret = (prompt: string) =>
     process.stdin.on('data', onData);
   });
 
-const saveValue = (file: string, key: string, value: string) => {
-  const lines = readLines(file);
-  const kept =
-    lines.length > 0 && lines[lines.length - 1] === ''
-      ? lines.slice(0, -1)
-      : lines;
-  const others = kept.filter(
-    (line) => !new RegExp(`^\\s*${key}\\s*=`).test(line),
-  );
-  writeFileSync(file, `${[...others, `${key}=${value}`].join('\n')}\n`);
-};
-
 const isIgnoredByGit = (file: string) => {
   try {
     execFileSync('git', ['check-ignore', '-q', file], { stdio: 'ignore' });
@@ -305,66 +337,171 @@ const readValuesInOrder = (prompts: string[]) =>
     return value ? [...soFar, value] : soFar;
   }, Promise.resolve([]));
 
-/** Offers to save a key for each service this app uses that has none locally. Never prints a key; writes only git-ignored files. */
-const askForKeys = async (appId: string, isRunning: boolean) => {
-  const forced = readForced();
-  const isGcloudReady = isSignedInToGcloud();
-  const missing = FIXTURE_SERVICES.filter(
-    (service) =>
-      SERVICES[service].appIds.includes(appId) &&
-      SERVICES[service].keys.length > 0 &&
-      !isForced(forced, service) &&
-      describeService(service, forced, isGcloudReady).startsWith('fixtures'),
-  );
-  if (missing.length === 0) return;
-  if (!process.stdin.isTTY) {
-    console.log(
-      `No keys saved for ${missing.join(', ')}: not an interactive terminal (see npm run local:services).`,
-    );
-    return;
-  }
+const askYesNo = async (question: string, isDefaultYes: boolean) => {
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const answer = (
+    await prompt.question(`${question} ${isDefaultYes ? '[Y/n]' : '[y/N]'} `)
+  )
+    .trim()
+    .toLowerCase();
+  prompt.close();
+  return answer === '' ? isDefaultYes : answer.startsWith('y');
+};
+
+/** A gcloud call that works: signed in and the token still valid, else a fresh sign-in. */
+const ensureGcloudLogin = () => {
+  const works = () => {
+    try {
+      execFileSync('gcloud', ['auth', 'print-access-token'], {
+        stdio: 'ignore',
+        timeout: 20_000,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (works()) return true;
   console.log(
-    `\n${missing.join(', ')}: no key here, so fixtures are used. Paste a key to use the real service, or press Enter to keep fixtures.\n(To stop being asked: npm run local:services -- fixtures <service>)`,
+    'gcloud is signed out or its sign-in expired; a fresh sign-in is needed to read the production key.',
   );
-  const saved = await missing.reduce<Promise<string[]>>(
-    async (done, service) => {
-      const soFar = await done;
-      const { keys, isBound } = SERVICES[service];
-      const file = isBound ? SECRET_FILE : ENV_FILE;
-      const values = await readValuesInOrder(
-        keys.map((key) => `${service}: ${key} (hidden) > `),
-      );
-      if (values.length < keys.length) return soFar;
-      if (!isIgnoredByGit(file)) {
-        console.log(
-          `${file} is not git-ignored, so nothing was written. Fix .gitignore first.`,
-        );
-        return soFar;
-      }
-      keys.forEach((key, index) => saveValue(file, key, values[index]));
-      console.log(`Saved ${keys.join(' and ')} to ${file}.`);
-      return [...soFar, service];
-    },
-    Promise.resolve([]),
-  );
-  if (saved.length > 0 && isRunning) {
-    console.log(`The running emulators read keys when they start. ${RESTART}`);
+  try {
+    execFileSync('gcloud', ['auth', 'login'], { stdio: 'inherit' });
+  } catch {
+    return false;
+  }
+  return works();
+};
+
+const pullFromProduction = (key: string) => {
+  try {
+    return execFileSync(
+      'gcloud',
+      [
+        'secrets',
+        'versions',
+        'access',
+        'latest',
+        `--secret=${key}`,
+        `--project=${PROJECT}`,
+      ],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 30_000,
+      },
+    ).trim();
+  } catch {
+    return '';
   }
 };
 
-const [mode, target, extra] = process.argv.slice(2);
+const isStoredLocally = (service: FixtureService) => {
+  const { keys, isBound } = SERVICES[service];
+  const values = readValues(isBound ? SECRET_FILE : ENV_FILE);
+  return keys.every((key) => Boolean(values[key]));
+};
+
+const storeKeys = (service: FixtureService, values: string[]) => {
+  const { keys, isBound } = SERVICES[service];
+  const file = isBound ? SECRET_FILE : ENV_FILE;
+  if (!isIgnoredByGit(file)) {
+    console.log(
+      `${file} is not git-ignored, so nothing was written. Fix .gitignore first.`,
+    );
+    return false;
+  }
+  rewriteEnv(file, keys, [
+    `# Real ${service} for ${SERVICES[service].apps} in the local emulators; delete it to use fixtures (npm run local:services).`,
+    ...keys.map((key, index) => `${key}=${values[index]}`),
+  ]);
+  console.log(`Saved ${keys.join(' and ')} to ${file}.`);
+  return true;
+};
+
+/** Pulls the key from Secret Manager when the service allows it, else asks for it; false when no key could be set. */
+const getKeys = async (service: FixtureService) => {
+  const { keys, isBound, isNotPulled, setup } = SERVICES[service];
+  if (isBound && !isNotPulled && ensureGcloudLogin()) {
+    const pulled = keys.map(pullFromProduction);
+    if (pulled.every(Boolean)) {
+      console.log(
+        `Pulled ${keys.join(' and ')} from production Secret Manager.`,
+      );
+      return storeKeys(service, pulled);
+    }
+    console.log('No production key found for it.');
+  }
+  console.log(
+    `To get one: ${setup}. Or paste it now (hidden), or press Enter to skip.`,
+  );
+  const values = await readValuesInOrder(
+    keys.map((key) => `${service}: ${key} > `),
+  );
+  return values.length === keys.length && storeKeys(service, values);
+};
+
+const chooseOne = async (service: FixtureService) => {
+  const forced = readForced();
+  const state = describeService(service, forced, isSignedInToGcloud());
+  const isReal = state.startsWith('real');
+  const { apps, caution } = SERVICES[service];
+  console.log(
+    `\n${service} (${apps}): now ${state}.${caution && isReal ? `\n  ⚠ ${caution}` : ''}`,
+  );
+  const wantsReal = await askYesNo(`Use the real ${service}?`, isReal);
+  if (wantsReal === isReal) return false;
+  if (!wantsReal) {
+    [SECRET_FILE, ENV_FILE]
+      .filter((file) => existsSync(file))
+      .forEach((file) => rewriteEnv(file, SERVICES[service].keys, []));
+    applyForced('fixtures', [service]);
+    console.log(`${service} will use fixtures (local key removed).`);
+    return true;
+  }
+  applyForced('real', [service]);
+  if (isStoredLocally(service) || (await getKeys(service))) return true;
+  applyForced('fixtures', [service]);
+  console.log(`No key was set, so ${service} stays on fixtures.`);
+  return false;
+};
+
+/** Asks, for each outside service the app uses, whether to use the real one; exits 10 when a change needs the emulators restarted. */
+const chooseServices = async (appId: string) => {
+  const services = FIXTURE_SERVICES.filter(
+    (service) =>
+      SERVICES[service].appIds.includes(appId) &&
+      SERVICES[service].keys.length > 0,
+  );
+  if (!process.stdin.isTTY) {
+    console.log(
+      'Not an interactive terminal, so no service was changed (npm run local:services shows them).',
+    );
+    return;
+  }
+  const changes = await services.reduce<Promise<boolean[]>>(
+    async (done, service) => [...(await done), await chooseOne(service)],
+    Promise.resolve([]),
+  );
+  if (changes.some(Boolean)) process.exitCode = 10;
+};
+
+const [mode, target] = process.argv.slice(2);
 
 if (!mode) {
   showStatus();
 } else if (mode === 'for' && target) {
   showStatus(target);
-} else if (mode === 'keys' && target) {
-  await askForKeys(target, extra === '--running');
+} else if (mode === 'choose' && target) {
+  await chooseServices(target);
 } else if ((mode === 'fixtures' || mode === 'real') && target) {
   setMode(mode, target);
 } else {
   console.error(
-    'Usage: npm run local:services [-- for <app> | keys <app> | fixtures|real <service|all>]',
+    'Usage: npm run local:services [-- for <app> | choose <app> | fixtures|real <service|all>]',
   );
   process.exitCode = 1;
 }
