@@ -33,6 +33,7 @@ import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
 interface HomeSurfaceProps {
   composerRef: Ref<HTMLTextAreaElement>;
+  isComposing: boolean;
   onComposerFocusChange: (isFocused: boolean) => void;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
@@ -150,6 +151,7 @@ function QuietLines({ now }: { now: number }) {
 
 function HomeSurface({
   composerRef,
+  isComposing,
   onComposerFocusChange,
   onOpenSettings,
   onOpenSearch,
@@ -279,13 +281,17 @@ function HomeSurface({
       {/* While the voice is in use the dock's words take this place; the field keeps its draft and its room. */}
       <div
         className={join(
-          'pointer-events-none fixed inset-x-0 bottom-[calc(var(--helm-dock-top,env(safe-area-inset-bottom,0px))+8px)] z-30 px-4',
+          'pointer-events-none fixed inset-x-0 bottom-[calc(var(--helm-dock-top,env(safe-area-inset-bottom,0px))+8px)] z-30 px-4 transition-[bottom] duration-200 ease-out motion-reduce:transition-none',
           voice.state !== 'idle' && 'invisible',
         )}
       >
         <div
           ref={composerBox}
-          className="before:from-background pointer-events-auto relative mx-auto max-w-xl before:pointer-events-none before:absolute before:inset-x-[-1rem] before:-top-6 before:bottom-1/2 before:-z-10 before:bg-gradient-to-t before:to-transparent before:content-['']"
+          className={join(
+            "before:from-background pointer-events-auto relative mx-auto max-w-xl before:pointer-events-none before:absolute before:inset-x-[-1rem] before:-top-6 before:bottom-1/2 before:-z-10 before:bg-gradient-to-t before:to-transparent before:content-['']",
+            isComposing &&
+              "after:bg-background after:pointer-events-none after:absolute after:inset-x-[-1rem] after:top-1/2 after:-bottom-24 after:-z-10 after:content-['']",
+          )}
         >
           <Composer
             key={keyStatus === 'ready' ? 'ready' : 'waiting'}

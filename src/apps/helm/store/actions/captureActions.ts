@@ -285,11 +285,6 @@ export const closeQuestion = (
 export const markAiNoticeSeen = (uid: string) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), { hasSeenAiNotice: true });
 
-export const markVoiceNoticeSeen = (uid: string) =>
-  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
-    hasSeenVoiceNotice: true,
-  });
-
 /** Marks every given turn seen, in batches under Firestore's write limit. */
 export async function markAllSeen(uid: string, captureIds: string[]) {
   const seenAt = Date.now();

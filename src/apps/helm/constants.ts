@@ -661,6 +661,8 @@ export const HELM_COPY = {
   needsYouCount: (count: number) =>
     count === 1 ? '1 needs you' : `${count} need you`,
   couldNotRead: "Couldn't read this",
+  nothingToFile: 'Read it · nothing to file in it',
+  readAgainNothing: 'Read again · still nothing to file in it',
   moreToSort: 'Too much to file at once',
   moreToSortFiled: (count: number | null) =>
     count === null
@@ -1187,6 +1189,7 @@ export const HELM_COPY = {
   voicePickerNormal: 'Normal',
   voicePickerFaster: 'Faster',
   voiceOnPhone: 'Listening with this browser for the rest of today.',
+  voiceNoticeTitle: 'Where your speech goes',
   voiceNotice:
     "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound or use it to train its models. You can change this in Settings.",
   settingsYourData: 'Your data',

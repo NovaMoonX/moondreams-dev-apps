@@ -55,7 +55,7 @@ export async function ensureHelmProfile(uid: string) {
       voiceSpeed: null,
       isWakeWordOn: false,
       isHandsFreeOn: true,
-      hasSeenVoiceNotice: false,
+      hasSeenVoiceNotice: null,
       selfWhoId: null,
       currentPlace: null,
       styleLearnedThroughAt: null,

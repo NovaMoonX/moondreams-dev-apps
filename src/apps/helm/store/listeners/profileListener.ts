@@ -26,7 +26,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   voiceSpeed: data.voiceSpeed ?? null,
   isWakeWordOn: data.isWakeWordOn ?? false,
   isHandsFreeOn: data.isHandsFreeOn ?? true,
-  hasSeenVoiceNotice: data.hasSeenVoiceNotice ?? false,
+  hasSeenVoiceNotice: data.hasSeenVoiceNotice ?? null,
   selfWhoId: data.selfWhoId ?? null,
   currentPlace: data.currentPlace ?? null,
   styleLearnedThroughAt: data.styleLearnedThroughAt ?? null,

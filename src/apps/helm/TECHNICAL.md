@@ -98,7 +98,7 @@ interface HelmProfile {
   busyAllDayEventRefs: string[];       // synced ids of all-day events the person said block the day
   calendarOfferFoldedAt: number | null;
   hasSeenAiNotice: boolean;            // the first-capture AI line was shown
-  hasSeenVoiceNotice: boolean;         // round 6: the first-voice line (who hears what) was shown
+  hasSeenVoiceNotice: boolean | null; // deprecated: where speech goes is a help icon while listening; written null
   voiceMode: VoiceMode;                // round 6: default 'cloudWhenOnline'
   voiceId: string | null;              // a Chirp 3 HD voice's bare name from voices.ts; null = 'Aoede'; the server ignores a name it doesn't know
   voiceSpeed: number | null;           // 0.8–1.2 (the picker's five notches); null = 1; rule isHelmVoice bounds both

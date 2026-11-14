@@ -23,7 +23,7 @@ function ShorthandRow({ onInsert }: ShorthandRowProps) {
     <div
       role='group'
       aria-label={HELM_COPY.shorthandLabel}
-      className='-mx-2 flex [scrollbar-width:none] items-center gap-2 overflow-x-auto [mask-image:linear-gradient(to_right,#000_calc(100%-28px),transparent)] py-1.5 pr-9 pl-3 [&::-webkit-scrollbar]:hidden'
+      className='flex [scrollbar-width:none] items-center gap-2 overflow-x-auto [mask-image:linear-gradient(to_right,#000_calc(100%-28px),transparent)] py-1.5 pr-9 pl-3 [&::-webkit-scrollbar]:hidden'
     >
       {SHORTHANDS.map((entry) => (
         <Button

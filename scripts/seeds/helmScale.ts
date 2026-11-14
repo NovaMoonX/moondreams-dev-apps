@@ -626,7 +626,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       voiceMode: 'cloudWhenOnline',
       isWakeWordOn: false,
       isHandsFreeOn: true,
-      hasSeenVoiceNotice: true,
+      hasSeenVoiceNotice: null,
       selfWhoId: 'self',
       currentPlace: null,
       styleLearnedThroughAt: null,
