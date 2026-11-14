@@ -1,7 +1,7 @@
 import { Button, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Bug, House } from 'lucide-react';
+import { House } from 'lucide-react';
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -129,16 +129,16 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       )}
       onClick={() => setIsOpen((open) => !open)}
     >
-      <span className='relative inline-flex'>
+      <span
+        className={join(
+          'relative inline-flex rounded-full',
+          isDebugListed &&
+            'ring-offset-background ring-2 ring-amber-500 ring-offset-2 dark:ring-amber-300',
+        )}
+      >
         <UserAvatar user={user} size='sm' />
         {isDebugListed ? (
-          <span
-            role='img'
-            aria-label='Debug details are on'
-            className='bg-primary text-primary-foreground ring-background absolute -top-1 -right-1 flex size-3.5 items-center justify-center rounded-full ring-2'
-          >
-            <Bug className='size-2' aria-hidden='true' />
-          </span>
+          <span className='sr-only'>Debug details are on</span>
         ) : null}
       </span>
       <span className='hidden sm:inline'>{displayName}</span>
