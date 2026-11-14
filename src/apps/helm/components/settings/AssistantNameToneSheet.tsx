@@ -47,7 +47,6 @@ function AssistantForm({
   const savedName = useAssistantName();
   const savedTone = useAssistantTone();
   const assistants = useAppSelector((state) => state.helm.assistants.items);
-  const hasClaude = assistants.some((entry) => entry.name === 'Claude');
   const [text, setText] = useState(
     savedName === DEFAULT_ASSISTANT_NAME ? '' : savedName,
   );
@@ -113,7 +112,7 @@ function AssistantForm({
             role='status'
           >
             {assistants.length > 0 && nextName !== savedName
-              ? HELM_COPY.assistantRenameConnected(nextName, hasClaude)
+              ? HELM_COPY.assistantRenameConnected(nextName)
               : HELM_COPY.assistantNameHint}
           </p>
         )}
