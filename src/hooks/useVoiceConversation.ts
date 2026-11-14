@@ -159,6 +159,7 @@ export function useVoiceConversation({
   wake = null,
 }: VoiceConversationOptions) {
   const [isListening, setIsListening] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -317,6 +318,7 @@ export function useVoiceConversation({
   const clearTimers = () => {
     window.clearTimeout(run.current.showId);
     run.current.showId = 0;
+    setIsStarting(false);
     window.clearTimeout(run.current.quietId);
     window.clearTimeout(run.current.holdId);
     run.current.quietId = 0;
@@ -482,6 +484,7 @@ export function useVoiceConversation({
       onFinal: handleFinal,
       onSpeechStart: () => {
         window.clearTimeout(run.current.showId);
+        setIsStarting(false);
         setIsListening(true);
         isMicGranted.current = true;
         setReason(null);
@@ -525,13 +528,18 @@ export function useVoiceConversation({
       isOnDeviceReady: latest.current.canHearOnDevice,
     });
     // Until the microphone is known to be allowed, a refusal can come back at once: showing Listening only after a moment keeps it from flashing.
-    if (peekMicrophonePermission() === 'granted') setIsListening(true);
+    const isKnownAllowed =
+      peekMicrophonePermission() === 'granted' ||
+      wasMicrophoneGranted() ||
+      isMicGranted.current;
+    if (isKnownAllowed) setIsListening(true);
     else {
       window.clearTimeout(run.current.showId);
-      run.current.showId = window.setTimeout(
-        () => setIsListening(true),
-        LISTEN_SHOW_DELAY_MS,
-      );
+      setIsStarting(true);
+      run.current.showId = window.setTimeout(() => {
+        setIsStarting(false);
+        setIsListening(true);
+      }, LISTEN_SHOW_DELAY_MS);
     }
     setIsThinking(false);
     setHeard('');
@@ -844,6 +852,8 @@ export function useVoiceConversation({
     isFollowUpOpen,
     /** Listening has started but the model on the device is still getting ready, so nothing is being heard yet. */
     isPreparing,
+    /** A tapped listen is under way but not yet shown as listening, while a refusal could still come back at once. */
+    isStarting,
     stop,
     cancel,
     speak,

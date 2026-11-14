@@ -41,8 +41,11 @@ function AskConversation({ entry: liveEntry, onClose }: AskConversationProps) {
   const { sessions, openSessionId } = useSession();
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const voice = useHelmVoiceContext();
-  // Opened by the mic, the field stays unfocused so the keyboard doesn't cover the words being heard.
-  const [startsByVoice] = useState(() => voice.state === 'listening');
+  // Opened by the mic, the field stays unfocused so the keyboard doesn't cover the words being heard, or the notice a blocked tap shows.
+  const [startsByVoice] = useState(
+    () =>
+      voice.state === 'listening' || voice.isStarting || voice.notice !== null,
+  );
   const [isChipRemoved, setIsChipRemoved] = useState(false);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const chip = isChipRemoved ? HELM_COPY.chipAnything : entry.labels.chip;

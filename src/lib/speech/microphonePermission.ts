@@ -94,10 +94,10 @@ export const watchMicrophonePermission = (
   };
 };
 
-/** Whether listening should not start from a tap: the microphone is refused, or it hasn't been asked for on a device where recognition was refused without asking. The way in is `requestMicrophone`. */
 /** Whether the microphone was allowed at some point in this visit, so a later refusal of recognition is about the speech service (Siri or Dictation off), not the microphone. */
 export const wasMicrophoneGranted = () => watched.wasGranted;
 
+/** Whether listening should not start from a tap: the microphone is refused, or it hasn't been asked for on a device where recognition was refused without asking. The way in is `requestMicrophone`. */
 export const needsMicrophoneAsk = (state: MicrophonePermission) =>
   state === 'denied' || (state === 'prompt' && wasRecognitionRefused());
 

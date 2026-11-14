@@ -8,6 +8,7 @@ import { useVoiceTranscription } from './useVoiceTranscription';
 
 export interface UseVoiceQuickEntryResult {
   isListening: boolean;
+  isStarting: boolean;
   isExtracting: boolean;
   isSupported: boolean;
   isModalOpen: boolean;
@@ -42,6 +43,7 @@ export function useVoiceQuickEntry(householdId: string, uid: string): UseVoiceQu
     error: transcriptionError,
     isBlocked: isTranscriptionBlocked,
     isListening,
+    isStarting,
     isSupported,
     reset,
     start,
@@ -123,6 +125,7 @@ export function useVoiceQuickEntry(householdId: string, uid: string): UseVoiceQu
 
   return {
     isListening,
+    isStarting,
     isExtracting,
     isSupported,
     isModalOpen,

@@ -83,6 +83,8 @@ export interface VoiceTranscription {
   /** The browser refused the microphone, as opposed to any other stop. */
   isBlocked: boolean;
   isListening: boolean;
+  /** Tapped and waiting for the browser to start listening (or ask for the microphone). */
+  isStarting: boolean;
   isSupported: boolean;
   start: () => void;
   stop: () => Promise<string>;
@@ -102,6 +104,7 @@ export function useVoiceTranscription(): VoiceTranscription {
   const [error, setError] = useState<string | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [transcript, setTranscript] = useState('');
   const isSupported = getSpeechRecognitionConstructor() !== null;
 
@@ -165,6 +168,7 @@ export function useVoiceTranscription(): VoiceTranscription {
 
       const nextError = new Error(getSpeechRecognitionError(code));
       setError(nextError.message);
+      setIsStarting(false);
       setIsBlocked(code === 'not-allowed');
       setIsListening(false);
       recognitionRef.current = null;
@@ -183,7 +187,10 @@ export function useVoiceTranscription(): VoiceTranscription {
       createAndStartRecognitionRef.current();
     };
 
-    recognition.onstart = () => setIsListening(true);
+    recognition.onstart = () => {
+      setIsStarting(false);
+      setIsListening(true);
+    };
     recognitionRef.current = recognition;
     recognition.start();
   }, [finish]);
@@ -212,6 +219,7 @@ export function useVoiceTranscription(): VoiceTranscription {
     isStoppingRef.current = false;
     // Until the microphone is allowed, Listening waits for the browser to start, so a refusal never flashes it.
     if (peekMicrophonePermission() === 'granted') setIsListening(true);
+    else setIsStarting(true);
     createAndStartRecognition();
   }, [createAndStartRecognition]);
 
@@ -238,6 +246,7 @@ export function useVoiceTranscription(): VoiceTranscription {
     recognitionRef.current = null;
     resolveStopRef.current = null;
     rejectStopRef.current = null;
+    setIsStarting(false);
     setIsListening(false);
   }, []);
 
@@ -259,6 +268,7 @@ export function useVoiceTranscription(): VoiceTranscription {
     error,
     isBlocked,
     isListening,
+    isStarting,
     isSupported,
     start,
     stop,
