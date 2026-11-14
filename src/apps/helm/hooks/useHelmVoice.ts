@@ -209,7 +209,7 @@ export function useHelmVoice() {
     readsClose: true,
     conversationIdleMs: SESSION_IDLE_MS,
     getNameHints: () =>
-      readHelmNameHints(store.getState().helm, screen.current),
+      readHelmNameHints(store.getState().helm, screen.current, uid),
     onUtterance: (text, heardBy) => {
       void handleUtterance(text, heardBy.sttProvider);
     },

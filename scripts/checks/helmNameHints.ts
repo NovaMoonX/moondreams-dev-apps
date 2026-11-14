@@ -21,6 +21,7 @@ import {
 } from '../../src/apps/helm/utils/spokenNames.ts';
 
 const NOW = Date.UTC(2026, 10, 23, 12);
+const UID = 'u1';
 const DAY = 24 * 60 * 60 * 1000;
 
 const tests: [string, () => void][] = [];
@@ -229,7 +230,7 @@ const hostile = toState({
 });
 
 test('no private name, health word, dose, address or misheard form reaches the list, the Deepgram URL or Chrome phrases', () => {
-  const hints = readHelmNameHints(hostile, screenOf('t1'), NOW);
+  const hints = readHelmNameHints(hostile, screenOf('t1'), UID, NOW);
   const url = decodeURIComponent(toListenUrl('nova-3', 'en-US', hints));
   const seen: string[] = [];
   class Phrase {
@@ -269,14 +270,14 @@ test('no private name, health word, dose, address or misheard form reaches the l
 });
 
 test('a non-private alias equal to a private name is refused, and the rest of its record stays', () => {
-  const hints = readHelmNameHints(hostile, null, NOW);
+  const hints = readHelmNameHints(hostile, null, UID, NOW);
   assert.equal(hints.includes('Marcus Webb'), false);
   assert.equal(hints.includes('Hollowbrook'), false);
   assert.ok(hints.includes('Tobias'));
 });
 
 test('a record inherits privacy from its project, and a health word in an ordinary title is refused', () => {
-  const hints = readHelmNameHints(hostile, null, NOW);
+  const hints = readHelmNameHints(hostile, null, UID, NOW);
   assert.equal(
     hints.some((hint) => /okonkwo/i.test(hint)),
     false,
@@ -288,7 +289,7 @@ test('a record inherits privacy from its project, and a health word in an ordina
 });
 
 test('ranking: the assistant and the page in view, then the last 2 weeks, then the most named, then the rest; a misheard name ranks up a step', () => {
-  const hints = readHelmNameHints(hostile, screenOf('t1'), NOW);
+  const hints = readHelmNameHints(hostile, screenOf('t1'), UID, NOW);
   const at = (term: string) => hints.indexOf(term);
   const order = [
     'Nomos',
@@ -324,10 +325,10 @@ test('the cut stays within 90 terms and 450 counted tokens, for short and long n
         ),
       ),
     });
-  const short = readHelmNameHints(crowd(6, 300), null, NOW);
+  const short = readHelmNameHints(crowd(6, 300), null, UID, NOW);
   assert.equal(short.length, 90);
   assert.ok(countHintTokens(short) <= 450);
-  const long = readHelmNameHints(crowd(26, 300), null, NOW);
+  const long = readHelmNameHints(crowd(26, 300), null, UID, NOW);
   assert.ok(long.length < 90 && long.length > 20);
   assert.ok(countHintTokens(long) <= 450, `${countHintTokens(long)} tokens`);
 });
@@ -341,6 +342,7 @@ test('the shared list drops everyday words, dates, numbers, units and addresses,
         { text: 'Studio 54', rank: 0, weight: 1 },
         { text: 'a@b.co', rank: 0, weight: 1 },
         { text: 'Mark', rank: 0, weight: 1 },
+        { text: 'the', rank: 0, weight: 9 },
         { text: 'Zed', rank: 1, weight: 9 },
         { text: 'zed', rank: 0, weight: 1 },
         { text: 'Anya', rank: 0, weight: 5 },
@@ -349,15 +351,15 @@ test('the shared list drops everyday words, dates, numbers, units and addresses,
       ],
       { exclude: (text) => text === 'Cato' },
     ),
-    ['Anya', 'Bram', 'zed'],
+    ['Anya', 'Bram', 'Mark', 'zed'],
   );
   assert.equal(countHintTokens(['abcdefg', 'ab']), 1 + 3 + 1 + 1);
 });
 
 test('the same slices and page give the same list without rebuilding it', () => {
   const screen = screenOf('t1');
-  const first = readHelmNameHints(hostile, screen, NOW);
-  assert.equal(readHelmNameHints(hostile, screen, NOW), first);
+  const first = readHelmNameHints(hostile, screen, UID, NOW);
+  assert.equal(readHelmNameHints(hostile, screen, UID, NOW), first);
 });
 
 const record = (
@@ -413,6 +415,112 @@ test('two names that fit are a tie, a typed turn keeps its words, and a form tha
   assert.equal(readTypedHeardNames('call Priya', FRIENDS), null);
   const remembered = [record('k', 'Kate', ['Cait'])];
   assert.equal(readSwappedWords('with Cait', remembered).text, 'with Kate');
+});
+
+test('a name that is also a word is hinted: Mark, Grace, Rose, Bill, Joy and Hope all stay', () => {
+  const names = ['Mark', 'Grace', 'Rose', 'Bill', 'Joy', 'Hope'];
+  assert.deepEqual(
+    buildNameHints(
+      [...names, 'the', 'and', 'with'].map((text) => ({
+        text,
+        rank: 0,
+        weight: 1,
+      })),
+    ),
+    names,
+  );
+});
+
+test('the kept list is per person: the same slices under another uid are rebuilt', () => {
+  const screen = screenOf('t1');
+  const mine = readHelmNameHints(hostile, screen, 'a', NOW);
+  assert.equal(readHelmNameHints(hostile, screen, 'a', NOW), mine);
+  const theirs = readHelmNameHints(hostile, screen, 'b', NOW);
+  assert.notEqual(theirs, mine);
+  assert.deepEqual(theirs, mine);
+  assert.equal(readHelmNameHints(hostile, screen, 'b', NOW), theirs);
+  assert.notEqual(readHelmNameHints(hostile, screen, null, NOW), theirs);
+});
+
+const FALSE_FRIENDS = [
+  record('kate', 'Kate'),
+  record('dan', 'Dan'),
+  record('cole', 'Cole'),
+  record('ben', 'Ben'),
+  record('nick', 'Nick'),
+  record('marc', 'Marc'),
+  record('jon', 'Jon'),
+];
+
+test('an everyday word is never swapped for a name that sounds like it', () => {
+  [
+    'the cat is on the mat',
+    'we are done for today',
+    'call me when you land',
+    'buy a bun for lunch',
+    'my neck hurts',
+    'please mark the box',
+    'I need to mark it done and call back',
+    'Cat food is on the list',
+    'Done with the dishes',
+    'Call the plumber',
+    'Bun and cheese for lunch',
+    'Neck pillow from the shop',
+    'Mark that as finished',
+    'ask jon to come',
+  ].forEach((said) => {
+    const swapped = readSwappedWords(said, FALSE_FRIENDS);
+    assert.equal(swapped.text, said, said);
+    assert.deepEqual(swapped.heardNames, [], said);
+    assert.equal(readTypedHeardNames(said, FALSE_FRIENDS), null, said);
+  });
+});
+
+test('a capitalised word mid-sentence is read as a name, and one that only starts the sentence is held to a closer spelling', () => {
+  assert.equal(
+    readSwappedWords('ask Jon to come', FALSE_FRIENDS.slice(0, 1)).text,
+    'ask Jon to come',
+  );
+  assert.equal(
+    readSwappedWords('ask Jon to come', [record('j', 'John')]).text,
+    'ask John to come',
+  );
+  assert.equal(
+    readSwappedWords('Jon needs a ride', [record('j', 'John')]).text,
+    'John needs a ride',
+  );
+  assert.equal(
+    readSwappedWords('Nieve needs a ride', FRIENDS).text,
+    'Nieve needs a ride',
+  );
+  assert.equal(
+    readSwappedWords('a ride for Nieve', FRIENDS).text,
+    'a ride for Niamh',
+  );
+});
+
+const CROWD_SIZE = 2000;
+const crowdNames = Array.from({ length: CROWD_SIZE }, (_, at) =>
+  record(
+    `c${at}`,
+    `${['Anya', 'Bram', 'Cato', 'Dina', 'Elio', 'Faye', 'Gus', 'Hana'][at % 8]}${String.fromCharCode(97 + (at % 26))}${at} ${['Ward', 'Stone', 'Lake', 'Frost', 'Moss'][at % 5]}`,
+  ),
+);
+
+test('2,000 people are read in a few milliseconds once the index is built, and a long text reads only its first 300 words', () => {
+  const said =
+    'Remind me to call Nieve and Dina about the party on Friday with Marcus then ask Jon to buy bread and milk near Shivon house';
+  readSpokenNames(said, crowdNames);
+  const runs = 20;
+  const began = performance.now();
+  Array.from({ length: runs }, () => readSwappedWords(said, crowdNames));
+  const each = (performance.now() - began) / runs;
+  assert.ok(each < 20, `${each.toFixed(1)} ms per read`);
+  const long = `${'Thanks again Nieve '.repeat(400)}`;
+  const hits = readSpokenNames(long, [...crowdNames, ...FRIENDS]);
+  assert.ok(hits.every((hit) => hit.end <= long.length));
+  assert.ok(hits.length <= 100, `${hits.length} swaps from 400 repeats`);
+  assert.deepEqual(readSwappedWords(said, []).swaps, []);
 });
 
 const failures = tests.flatMap(([name, run]) => {

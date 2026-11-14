@@ -1,4 +1,4 @@
-import { COMMON_WORDS, toComparable } from '@/utils/optionMatchUtils';
+import { toComparable } from '@/utils/optionMatchUtils';
 
 export interface NameHintCandidate {
   text: string;
@@ -18,6 +18,23 @@ export interface NameHintOptions {
 const DEFAULT_MAX_TERMS = 90;
 const DEFAULT_MAX_TOKENS = 450;
 const CHARS_PER_TOKEN = 3;
+
+/** Only words no one names a person, pet or place: a name that is also a word (Mark, Grace, Rose, Bill, Joy, Hope) is exactly what a recognizer needs told. */
+const STOP_WORDS: ReadonlySet<string> = new Set(
+  `
+    a about above after again all also am an and any are as at back be
+    because been before being between both but by can come could did do
+    does down each even every few for from get give go going got had has
+    have he her here hers him his how i if in into is it its just let me
+    more most my no not now of off on one only or other our out over own
+    really said same say see she should so some such than that the their
+    them then there these they this those through to too two up us very
+    was we well went were what when where which while who why will with
+    would yes yet you your
+  `
+    .split(/\s+/)
+    .filter(Boolean),
+);
 
 const DATE_AND_UNIT_WORDS: ReadonlySet<string> = new Set([
   ...'monday tuesday wednesday thursday friday saturday sunday january february march april june july august september october november december today tomorrow tonight yesterday morning afternoon evening noon midnight am pm'.split(
@@ -43,12 +60,12 @@ const isWorthHinting = (text: string) => {
   return (
     words.length > 0 &&
     !words.every(
-      (word) => COMMON_WORDS.has(word) || DATE_AND_UNIT_WORDS.has(word),
+      (word) => STOP_WORDS.has(word) || DATE_AND_UNIT_WORDS.has(word),
     )
   );
 };
 
-/** The names a recognizer should expect, best first: drops what recognizers already hear well (everyday words, dates, numbers, units, anything with `@`) and whatever `exclude` refuses, keeps one of each spelling, and cuts to the budget. */
+/** The names a recognizer should expect, best first: drops what recognizers already hear well (small function words, dates, numbers, units, anything with `@`) and whatever `exclude` refuses, keeps one of each spelling, and cuts to the budget. */
 export const buildNameHints = (
   candidates: NameHintCandidate[],
   {

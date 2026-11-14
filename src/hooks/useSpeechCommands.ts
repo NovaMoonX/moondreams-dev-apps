@@ -231,9 +231,12 @@ export const createSpeechListener = (
     if (event.error === 'audio-capture') return halt('no-microphone');
     if (event.error === 'language-not-supported') return halt('language');
     if ((event.error as string) === 'phrases-not-supported') {
+      const isFirst = !state.arePhrasesOff;
       state.arePhrasesOff = true;
-      state.startAfterEnd = true;
+      clearPhrases(state.recognition);
       state.options?.onPhrasesRefused?.();
+      if (isFirst) state.startAfterEnd = true;
+      else session.isFailed = true;
       return;
     }
     if (event.error !== 'no-speech' && event.error !== 'aborted') {
@@ -304,8 +307,19 @@ export const createSpeechListener = (
     return recognition;
   };
 
+  const clearPhrases = (recognition: SpeechRecognitionLike | null) => {
+    try {
+      if (recognition !== null && recognition.phrases !== undefined) {
+        recognition.phrases = [];
+      }
+    } catch {
+      // Nothing to clear on a recognizer that refuses even an empty list.
+    }
+  };
+
+  // The recognizer is reused across sessions, so a list set earlier stays until replaced: always set it, to nothing when hints are off.
   const applyPhrases = (recognition: SpeechRecognitionLike) => {
-    if (state.arePhrasesOff) return;
+    if (state.arePhrasesOff) return clearPhrases(recognition);
     try {
       const phrases = toRecognitionPhrases(
         state.options?.phrases ?? [],
@@ -314,6 +328,7 @@ export const createSpeechListener = (
       if (phrases !== null) recognition.phrases = phrases;
     } catch {
       state.arePhrasesOff = true;
+      clearPhrases(recognition);
     }
   };
 

@@ -7,6 +7,7 @@ const SOUND_MIN_LEAD = 0.15;
 const SOUND_MAX_SPELLING_GAP = 0.4;
 const SOUND_MAX_SPELLING_GAP_SAME_KEY = 0.75;
 const SOUND_SPAN_WORDS = 3;
+const SOUND_MAX_WORDS = 300;
 const SOUND_MIN_LETTERS = 3;
 const SOUND_KEY_WEIGHT = 0.8;
 const MIN_TYPO_WORD_LENGTH = 6;
@@ -30,6 +31,7 @@ export const COMMON_WORDS: ReadonlySet<string> = new Set(
     june april august dawn faith joy pat sue ray sandy summer holly ivy lily
     violet amber ruby pearl heather rich frank dean drew guy jean jay page
     penny sky star van bell blue cash chase cliff dale daisy dash dusk
+    cat dog done call bun neck
   `
     .split(/\s+/)
     .filter(Boolean),
@@ -264,6 +266,22 @@ interface SoundForm {
   shown: string;
 }
 
+interface SoundIndex<T> {
+  /** Every form under its key and under each key one letter shorter, so a heard key finds every form at most one edit away without scanning the list. */
+  byKey: Map<string, { at: number; option: T; form: SoundForm }[]>;
+  names: Set<string>;
+}
+
+const toKeyVariants = (key: string) => [
+  ...new Set([
+    key,
+    ...Array.from(
+      { length: key.length },
+      (_, at) => key.slice(0, at) + key.slice(at + 1),
+    ),
+  ]),
+];
+
 export type OptionResolution<T> =
   { kind: 'match'; option: T } | { kind: 'custom'; label: string };
 
@@ -290,6 +308,7 @@ export function createOptionMatcher<T = string>(
     soundsLike,
   } = config;
   const soundsByOption = new WeakMap<object, SoundForm[]>();
+  const indexes = new WeakMap<readonly T[], SoundIndex<T>>();
   const namesByOption = new WeakMap<object, KnownName[]>();
 
   const analyze = (text: string, isTyped = false): KnownName => {
@@ -413,16 +432,58 @@ export function createOptionMatcher<T = string>(
     return result;
   };
 
-  const scoreSound = (heard: SoundForm, known: SoundForm) => {
+  const getSoundIndex = (options: readonly T[]) => {
+    const cached = indexes.get(options);
+    if (cached) return cached;
+    const index: SoundIndex<T> = { byKey: new Map(), names: new Set() };
+    options.forEach((option, at) => {
+      getKnownNames(option).forEach(({ full }) => index.names.add(full));
+      getSoundForms(option).forEach((form) =>
+        toKeyVariants(form.key).forEach((variant) =>
+          index.byKey.set(variant, [
+            ...(index.byKey.get(variant) ?? []),
+            { at, option, form },
+          ]),
+        ),
+      );
+    });
+    indexes.set(options, index);
+    return index;
+  };
+
+  const findCandidates = (index: SoundIndex<T>, key: string) => {
+    const found = new Set(
+      toKeyVariants(key).flatMap((variant) => index.byKey.get(variant) ?? []),
+    );
+    const grouped = Array.from(found).reduce(
+      (groups, { at, option, form }) =>
+        groups.set(at, {
+          at,
+          option,
+          forms: [...(groups.get(at)?.forms ?? []), form],
+        }),
+      new Map<number, { at: number; option: T; forms: SoundForm[] }>(),
+    );
+    return Array.from(grouped.values()).sort(
+      (left, right) => left.at - right.at,
+    );
+  };
+
+  const scoreSound = (
+    heard: SoundForm,
+    known: SoundForm,
+    isProper: boolean,
+  ) => {
     const keyGap = 1 - getWordSimilarity(heard.key, known.key);
     const keyEdits = Math.round(
       keyGap * Math.max(heard.key.length, known.key.length),
     );
     const spellingGap = 1 - getWordSimilarity(heard.spelling, known.spelling);
     const isSameKey = keyEdits === 0;
-    const maxGap = isSameKey
-      ? SOUND_MAX_SPELLING_GAP_SAME_KEY
-      : SOUND_MAX_SPELLING_GAP;
+    const maxGap =
+      isSameKey && isProper
+        ? SOUND_MAX_SPELLING_GAP_SAME_KEY
+        : SOUND_MAX_SPELLING_GAP;
     if (keyEdits > 1 || spellingGap > maxGap) return 0;
     return (
       SOUND_KEY_WEIGHT * (1 - keyGap) +
@@ -432,14 +493,15 @@ export function createOptionMatcher<T = string>(
 
   const readSpan = (
     heard: SoundForm,
-    known: { option: T; forms: SoundForm[]; names: KnownName[] }[],
+    known: { option: T; forms: SoundForm[] }[],
+    isProper: boolean,
   ) => {
     const scored = known
       .map((entry) => {
         const forms = entry.forms
           .map((form) => ({
             shown: form.shown,
-            score: scoreSound(heard, form),
+            score: scoreSound(heard, form, isProper),
           }))
           .sort((left, right) => right.score - left.score);
         return {
@@ -463,12 +525,13 @@ export function createOptionMatcher<T = string>(
     };
   };
 
-  /** Reads a span of one to three words of heard text that sounds like one known option (or two near-equal ones, as a tie), never a word that already is a known name or an everyday word. */
+  /** Reads a span of one to three words of heard text that sounds like one known option (or two near-equal ones, as a tie). Only a word the recognizer capitalised is read, never a lowercase one, and never a word that already is a known name or an everyday word; a word that is capitalised only because it starts a sentence is held to a stricter spelling. At most the first 300 words are read, and the options are indexed once per array, so pass a new array when they change. */
   const matchSounds = (
     text: string,
     options: readonly T[],
   ): { matches: SoundMatch<T>[]; ties: SoundTie<T>[] } => {
-    if (!sounds) return { matches: [], ties: [] };
+    if (!sounds || options.length === 0) return { matches: [], ties: [] };
+    const index = getSoundIndex(options);
     const words = Array.from(
       text.matchAll(/\p{L}[\p{L}\p{M}'’]*/gu),
       (hit) => ({
@@ -477,29 +540,49 @@ export function createOptionMatcher<T = string>(
         end: hit.index + hit[0].length,
         comparable: toComparable(hit[0]),
       }),
-    );
-    const known = options.map((option) => ({
-      option,
-      forms: getSoundForms(option),
-      names: getKnownNames(option),
-    }));
-    const isKnown = (comparable: string) =>
-      known.some((entry) =>
-        entry.names.some((name) => name.full === comparable),
-      );
+    )
+      .slice(0, SOUND_MAX_WORDS)
+      .map((word, at, all) => {
+        const isInitial =
+          at === 0 || /[.!?\n]/.test(text.slice(all[at - 1].end, word.start));
+        const isCapital = /^\p{Lu}/u.test(word.text);
+        return {
+          ...word,
+          reading: !isCapital
+            ? null
+            : !isInitial
+              ? ('proper' as const)
+              : COMMON_WORDS.has(word.comparable)
+                ? null
+                : ('initial' as const),
+        };
+      });
     const isEdgeCommon = (span: typeof words) =>
       COMMON_WORDS.has(span[0].comparable) ||
       COMMON_WORDS.has(span[span.length - 1].comparable);
     const readAt = (at: number) =>
       [SOUND_SPAN_WORDS, 2, 1].flatMap((length) => {
         const span = words.slice(at, at + length);
-        if (span.length !== length || isEdgeCommon(span)) return [];
-        const comparable = span.map((word) => word.comparable).join(' ');
-        const heard = toSoundForm(comparable);
-        if (heard.spelling.length < SOUND_MIN_LETTERS || isKnown(comparable)) {
+        if (
+          span.length !== length ||
+          span.some((word) => word.reading === null) ||
+          isEdgeCommon(span)
+        ) {
           return [];
         }
-        const read = readSpan(heard, known);
+        const comparable = span.map((word) => word.comparable).join(' ');
+        const heard = toSoundForm(comparable);
+        if (
+          heard.spelling.length < SOUND_MIN_LETTERS ||
+          index.names.has(comparable)
+        ) {
+          return [];
+        }
+        const read = readSpan(
+          heard,
+          findCandidates(index, heard.key),
+          span.every((word) => word.reading === 'proper'),
+        );
         if (read === null) return [];
         const base = {
           start: span[0].start,

@@ -433,6 +433,45 @@ assert.deepEqual(
   'an everyday word is never swapped for a name',
 );
 assert.deepEqual(swapped('buy bread and milk', 'Siobhan', 'Niamh'), []);
+[
+  'the cat is on the mat',
+  'we are done for today',
+  'call me when you land',
+  'buy a bun for lunch',
+  'my neck hurts',
+  'I will mark it and call back',
+  'Cat food is on the list',
+  'Done with the dishes',
+  'Call the plumber',
+  'Bun and cheese',
+  'Neck pillow',
+  'ask jon to come',
+].forEach((text) =>
+  assert.deepEqual(
+    swapped(text, 'Kate', 'Dan', 'Cole', 'Ben', 'Nick', 'Marc', 'John'),
+    [],
+    `a common or lowercase word is not swapped for a name: ${text}`,
+  ),
+);
+assert.deepEqual(
+  swapped('Nieve needs a ride', 'Niamh'),
+  [],
+  'a word capitalised only for starting the sentence is held to a closer spelling',
+);
+assert.deepEqual(swapped('Jon needs a ride', 'John'), [['Jon', 'John']]);
+assert.deepEqual(
+  swapped(`${'okay '.repeat(400)} call Shivon`, 'Siobhan'),
+  [],
+  'only the first 300 words are read',
+);
+assert.deepEqual(swapped('call Shivon'), [], 'no options reads nothing');
+const options = named('Siobhan', 'Niamh');
+const first = sounding.matchSounds('call Shivon', options);
+assert.deepEqual(
+  sounding.matchSounds('call Shivon', options),
+  first,
+  'the same options array reads the same through its index',
+);
 const two = heardAs('call Shivon', 'Siobhan', 'Siobhan');
 assert.deepEqual(two.matches, [], 'two names that fit equally give no winner');
 assert.equal(two.ties.length, 1, 'the two close fits are reported as a tie');

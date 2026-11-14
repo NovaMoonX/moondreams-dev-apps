@@ -59,6 +59,7 @@ const slicesOf = (state: NameHintState) => [
 ];
 
 const memo = {
+  uid: null as string | null,
   slices: [] as unknown[],
   screen: null as ScreenContext | null,
   hour: -1,
@@ -207,15 +208,17 @@ const toExclude = (privateEntries: Entry[]) => {
     toWords(text).some((word) => words.has(word));
 };
 
-/** The names a listen is told to expect, built from the store at the start of each listen: the person's own who, places, projects, topics and procedures by name, and the assistant's, ranked by the page in view, the last 2 weeks and how often each is named, and cut to the recognizers' budget. Nothing private, no care item and no health word or dose is ever in it, and a record that was misheard before ranks up a step. */
+/** The names a listen is told to expect, built from the store at the start of each listen: the person's own who, places, projects, topics and procedures by name, and the assistant's, ranked by the page in view, the last 2 weeks and how often each is named, and cut to the recognizers' budget. Nothing private, no care item and no health word or dose is ever in it, and a record that was misheard before ranks up a step. The list is kept per `uid`, so a sign-in on the same page never reads the last person's. */
 export function readHelmNameHints(
   state: NameHintState,
   screen: ScreenContext | null,
+  uid: string | null,
   now: number = Date.now(),
 ): string[] {
   const slices = slicesOf(state);
   const hour = Math.floor(now / HOUR_MS);
   if (
+    memo.uid === uid &&
     memo.screen === screen &&
     memo.hour === hour &&
     memo.slices.length === slices.length &&
@@ -267,7 +270,7 @@ export function readHelmNameHints(
     ],
     { exclude: toExclude(entries.filter(isPrivate)) },
   );
-  Object.assign(memo, { slices, screen, hour, result });
+  Object.assign(memo, { uid, slices, screen, hour, result });
 
   return result;
 }

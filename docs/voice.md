@@ -63,7 +63,7 @@ Every text goes through `toSpokenText` first ("1/2 tsp" becomes "half a teaspoon
 - **Command voice:** say one of a fixed set of phrases and the screen does it ("next step", "start a timer"). `useSpeechCommands` owns the recognizer, its wake window and its restarts; the app supplies the phrases.
 - **Conversation voice:** say anything to an assistant that answers. `useVoiceConversation` runs the router, the playback queue and the follow-up window; the app supplies its end phrases, identity and what an utterance becomes.
 
-Both stand on the same base: `createSpeechListener` (browser recognition), `listeningMode` (closed, waiting for a phrase, a command window, kept open, and their clocks), `readWakePhrase` and `readAloud`. Conversation voice adds the router, the cloud, the on-device model and the queue.
+Both stand on the same base: `createSpeechListener` (browser recognition), `listeningMode` (closed, waiting for a phrase, a command window, kept open, and their clocks), `readWakePhrase` and `readAloud`. Conversation voice adds the router, the cloud, the on-device model and the queue. A recognizer is reused between listens, so an option set on it (the name hints in `phrases`) stays until replaced: every start sets it, to an empty list when the feature is off or the browser refused it, and a refusal counts as a failed start so a browser that keeps refusing stops instead of restarting forever (`speechListener` check).
 
 ### One conversation turn
 
