@@ -42,8 +42,10 @@ function SettingsRow({
   );
   const text = (
     <span className='flex min-h-10 min-w-0 flex-1 flex-col justify-center'>
-      <span className='flex flex-wrap items-center gap-x-2 gap-y-1'>
-        <span className='text-foreground font-medium text-pretty'>{title}</span>
+      <span className='flex items-center gap-x-2'>
+        <span className='text-foreground min-w-0 font-medium text-pretty'>
+          {title}
+        </span>
         {badge}
       </span>
       {description && (
