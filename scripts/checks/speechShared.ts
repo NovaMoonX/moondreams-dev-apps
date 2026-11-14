@@ -1303,7 +1303,7 @@ const fakeGoogleCall = () => {
     cancel: () => {
       state.cancels += 1;
     },
-    on: (event: string, listener: (...args: never[]) => void) =>
+    on: (event: string, listener: (...args: unknown[]) => void) =>
       events.on(event, listener),
   } as unknown as SynthesisCall;
   return { call, state, emit: events.emit.bind(events) };
