@@ -33,12 +33,15 @@ import { formatMoney } from '../../../utils/formatMoney.js';
 import {
   connectorLabel,
   getLocalDay,
+  isSharedKind,
   parseDay,
+  readFilteredCopies,
   readRecentCopies,
   readSyncedEvents,
   toKnownZone,
   toLocalText,
   toSyncedView,
+  SITE_CONNECTOR_IDS,
   type SyncedCopy,
 } from '../syncedCopies.js';
 
@@ -181,7 +184,24 @@ const searchSyncedShape = {
   query: z
     .string()
     .max(MAX_QUERY_CHARS)
-    .describe('Words from the record, as the person would say them.'),
+    .optional()
+    .describe(
+      'Words from the record, as the person would say them; leave out to list by app or kind.',
+    ),
+  app: z
+    .string()
+    .max(40)
+    .optional()
+    .describe(
+      `One connected app, by name or id, to list only its records: ${SITE_CONNECTOR_IDS.map((id) => `${id} (${connectorLabel(id)})`).join(', ')}.`,
+    ),
+  kind: z
+    .string()
+    .max(20)
+    .optional()
+    .describe(
+      'One kind of record to list: person, place, event, task, project, knowledge, artifact, scenario, trip, pet, moneySummary, transaction or countSummary.',
+    ),
 };
 
 const connectionStatusShape = {
@@ -369,25 +389,42 @@ export function buildHelmTools(scope: HelmToolScope) {
   const searchSynced: HelmTool<typeof searchSyncedShape> = {
     name: 'search_synced',
     description:
-      "Finds records the person's connected apps and calendars share, by words in their title: events, tasks, plans and more. It looks through the 300 most recently updated, so finding nothing does not prove a record is absent. Upcoming ones come first; a record marked noLongerUpdated is a kept copy from a connection that has ended.",
+      "Finds records the person's connected apps and calendars share, by words in their title, or lists them by app and/or kind without any words (their clinics, a sale's counts): events, tasks, places, projects, ratings and more. A record from one of their own apps also carries its place, amount, detail and details (a place's phone and address, a sale's counts). It looks through at most 300 records, so finding nothing does not prove a record is absent. Upcoming ones come first; a record marked noLongerUpdated is a kept copy from a connection that has ended. Give words, an app or a kind.",
     shape: searchSyncedShape,
-    run: async ({ query }) => {
-      const words = toWords(query);
+    run: async ({ query, app, kind }) => {
+      const words = toWords(query ?? '');
+      const connectorId =
+        app === undefined
+          ? null
+          : (SITE_CONNECTOR_IDS.find(
+              (id) =>
+                id === app.trim() ||
+                connectorLabel(id).toLowerCase() === app.trim().toLowerCase(),
+            ) ?? '');
+      if (connectorId === '') {
+        return { error: 'No such app: use one from the description.' };
+      }
+      const kindName = kind?.trim() || null;
+      if (kindName !== null && !isSharedKind(kindName)) {
+        return { error: 'No such kind: use one from the description.' };
+      }
+      if (words.length === 0 && connectorId === null && kindName === null) {
+        return { error: 'Give words from the record, an app or a kind.' };
+      }
       const now = Date.now();
-      const copies = await readRecentCopies(
-        scope.firestore,
-        scope.uid,
-        scope.key,
-      );
+      const copies =
+        connectorId === null && kindName === null
+          ? await readRecentCopies(scope.firestore, scope.uid, scope.key)
+          : await readFilteredCopies(scope.firestore, scope.uid, scope.key, {
+              connectorId,
+              kind: kindName,
+            });
       const anchorOf = (copy: SyncedCopy) => copy.startAt ?? copy.dueAt;
       const found = copies
         .filter((copy) => {
           const haystack = toWords(`${copy.title} ${copy.subtitle ?? ''}`);
-          return (
-            words.length > 0 &&
-            words.every((word) =>
-              haystack.some((entry) => entry.includes(word)),
-            )
+          return words.every((word) =>
+            haystack.some((entry) => entry.includes(word)),
           );
         })
         .sort((a, b) => {

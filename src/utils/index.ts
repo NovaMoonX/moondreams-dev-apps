@@ -14,3 +14,4 @@ export * from './pwaUtils';
 export * from './stringUtils';
 export * from './timezoneUtils';
 export * from './urlUtils';
+export * from './newnessUtils';

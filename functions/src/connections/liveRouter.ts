@@ -411,6 +411,34 @@ export const listSiteLiveGrants = async (
   });
 };
 
+/** The categories a person has off on each site app's live grant for the reader, by the app's name, so a question that needs one can say how to turn it on. */
+export const listSiteOffCategories = async (
+  firestore: Firestore,
+  uid: string,
+  readerAppId: string,
+): Promise<
+  { connectorId: string; categories: { id: string; label: string }[] }[]
+> => {
+  const connectorIds = Object.keys(SOURCE_ADAPTERS).filter(
+    (id) => readConnectorAppId(id) !== null,
+  );
+  const snapshots = await Promise.all(
+    connectorIds.map((id) =>
+      firestore.doc(siteGrantPath(uid, readerAppId, id)).get(),
+    ),
+  );
+  return connectorIds.flatMap((connectorId, index) => {
+    if (!snapshots[index].exists) return [];
+    const grant = readGrant(snapshots[index].data());
+    const categories = SOURCE_ADAPTERS[connectorId].manifest.categories
+      .filter(({ id }) => grant.categories[id]?.isOn !== true)
+      .map(({ id, label }) => ({ id, label }));
+    return grant.status === 'live' && categories.length > 0
+      ? [{ connectorId, categories }]
+      : [];
+  });
+};
+
 export const querySiteLive = async (
   firestore: Firestore,
   input: {
