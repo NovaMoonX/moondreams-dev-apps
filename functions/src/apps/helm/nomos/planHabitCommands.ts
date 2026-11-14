@@ -497,8 +497,13 @@ const planUpdate = (
         lastEditedAt: input.now,
       },
       {
-        written: { ...readable, lastEditedAt: input.now },
+        written: {
+          ...readable,
+          lastEditedAt: input.now,
+          'sealed.title': habit.name,
+        },
         previous: {
+          'sealed.title': habit.name,
           ...(command.cadence ? { cadence: habit.cadence } : {}),
           ...(windows ? { windowState: habit.windowState } : {}),
           lastEditedAt: null,
@@ -546,13 +551,14 @@ const planUpdate = (
   return finish(
     fields,
     {
-      written: fields,
+      written: { ...fields, 'sealed.title': habit.name },
       previous: {
+        'sealed.title': habit.name,
         status: habit.status,
-        pausedAt: null,
+        pausedAt: habit.pausedAt ?? null,
         pausedUntil: habit.pausedUntil,
-        endedAt: null,
-        retiredAt: null,
+        endedAt: habit.endedAt ?? null,
+        retiredAt: habit.retiredAt ?? null,
         history: habit.history,
         lastEditedAt: null,
       },
@@ -612,8 +618,9 @@ const applyCare = (
     acc,
     { op: 'update', collection: 'habits', docId: habit.id },
     {
-      written: readable,
+      written: { ...readable, 'sealed.title': habit.name },
       previous: {
+        'sealed.title': habit.name,
         isCare: habit.isCare,
         privacy: habit.privacy,
         careAskedAt: habit.careAskedAt,
@@ -776,12 +783,23 @@ const writeCheckIn = (
     },
     isTally
       ? {
-          written: { [`${entry}.count`]: count },
-          previous: { [`${entry}.count`]: count - 1 },
+          written: { [`${entry}.count`]: count, 'sealed.title': habit.name },
+          previous: {
+            [`${entry}.count`]: count - 1,
+            'sealed.title': habit.name,
+          },
         }
       : {
-          written: { [`${entry}.checks.${windowId}`]: check },
-          previous: { [`${entry}.checks.${windowId}`]: null },
+          written: {
+            [`${entry}.checks.${windowId}`]: check,
+            'sealed.title': habit.name,
+            noteKey: note ? noteKey : null,
+          },
+          previous: {
+            [`${entry}.checks.${windowId}`]: null,
+            'sealed.title': habit.name,
+            noteKey: null,
+          },
         },
     isSkip
       ? `Not today. ${label ? `${label} ${name}` : name} skipped`

@@ -183,10 +183,11 @@ assert.deepEqual(
   'felt dizzy',
 );
 assert.ok(
-  note.effects.every((effect) =>
-    Object.keys(effect.written).every((path) => !path.startsWith('sealed')),
+  note.effects.every(
+    (effect) => !JSON.stringify(effect).includes('felt dizzy'),
   ),
 );
+assert.equal(note.effects[0].written.noteKey, 'pills-pm/w1');
 
 const tally = plan([
   checkIn({ habitIds: ['water'] }),

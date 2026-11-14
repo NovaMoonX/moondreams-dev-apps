@@ -9,7 +9,9 @@ import {
 } from '@apps/helm/store/actions/habitDayWrites';
 import type { CheckInEffect } from '@apps/helm/engine/checkInMatch';
 import type {
+  EffectRef,
   Execution,
+  ExecutionEffect,
   ExecutionSealed,
   HabitCheck,
   HelmEncryption,
@@ -21,20 +23,21 @@ import {
 
 const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
 
-/** The execution a check-in made on the device is recorded with: nothing it did is something Activity's Undo can plan, so it has no effect refs and its Undo is the line it was said on. */
+/** The execution a check-in made on the device is recorded with, holding the day's field it wrote and what it was before so Activity's Undo can take it back. */
 const toExecution = async (
   summary: string,
   spoken: string | null,
   at: number,
   encryption: HelmEncryption,
   isPrivate: boolean,
+  record: { refs: EffectRef[]; effects: ExecutionEffect[] },
 ): Promise<Execution> => ({
   captureId: null,
   actor: 'person',
   category: 'organize',
   autonomyLevel: 1,
   state: 'succeeded',
-  effectRefs: [],
+  effectRefs: record.refs,
   linkedWhoIds: [],
   linkedPlaceIds: [],
   undoesExecutionId: null,
@@ -49,7 +52,7 @@ const toExecution = async (
     {
       summary,
       commands: [],
-      effects: [],
+      effects: record.effects,
       undoReport: null,
       spoken,
       goneIds: null,
@@ -71,6 +74,8 @@ export async function writeDeviceCheckIn(
     spoken: string | null;
     encryption: HelmEncryption | null;
     isPrivate: boolean;
+    habitName: string;
+    isNewDay: boolean;
   },
 ) {
   const batch = writeBatch(db);
@@ -97,6 +102,11 @@ export async function writeDeviceCheckIn(
     );
   }
   if (input.encryption) {
+    const path =
+      effect.kind === 'tick'
+        ? `entries.${effect.habitId}.checks.${effect.windowId}`
+        : `entries.${effect.habitId}.count`;
+    const title = { 'sealed.title': input.habitName };
     batch.set(
       executionRef,
       await toExecution(
@@ -105,6 +115,35 @@ export async function writeDeviceCheckIn(
         effect.at,
         input.encryption,
         input.isPrivate,
+        {
+          refs: [
+            {
+              op: input.isNewDay ? 'create' : 'update',
+              collection: 'habitDays',
+              docId: effect.dayKey,
+            },
+          ],
+          effects: [
+            effect.kind === 'tick'
+              ? {
+                  written: {
+                    [path]: {
+                      status: 'done',
+                      at: effect.at,
+                      by: 'person',
+                      executionId: executionRef.id,
+                    },
+                    noteKey: null,
+                    ...title,
+                  },
+                  previous: { [path]: null, noteKey: null, ...title },
+                }
+              : {
+                  written: { [path]: effect.count, ...title },
+                  previous: { [path]: effect.count - 1, ...title },
+                },
+          ],
+        },
       ),
     );
   }

@@ -248,7 +248,14 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     readers: ['device', 'server', 'turn', 'quick'],
     contextBlock: '<habits>',
     commands: ['createHabit', 'updateHabit', 'setCare'],
-    writer: 'server/planHabitCommands',
+    writer: 'actions/habitActions',
+    taps: [
+      'createHabit',
+      'updateHabitWords',
+      'updateHabitWhen',
+      'setHabitStatus',
+      'setHabitCare',
+    ],
   }),
   row({
     thing: 'A habit ticked, skipped or counted by a sentence',
@@ -256,7 +263,8 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     classes: ['readable', 'sealed'],
     readers: ['device', 'server', 'turn', 'quick'],
     commands: ['checkIn'],
-    writer: 'server/planHabitCommands',
+    writer: 'actions/habitCheckInActions',
+    taps: ['writeDeviceCheckIn'],
   }),
   row({
     thing: "Each day's ticks and tallies for a habit",

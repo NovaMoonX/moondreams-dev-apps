@@ -131,6 +131,22 @@ export function buildResultLines(
           },
         ];
       }
+      if (ref.collection === 'habits' || ref.collection === 'habitDays') {
+        const check = Object.values(effect?.written ?? {}).find(
+          (value): value is { status: string } =>
+            typeof value === 'object' && value !== null && 'status' in value,
+        );
+        return [
+          {
+            key: `${ref.docId}:${index}`,
+            docId: ref.docId,
+            title:
+              toText(effect?.written['sealed.title']) ??
+              HELM_COPY.resultHabitFallback,
+            detail: check?.status === 'done' ? HELM_COPY.resultDone : null,
+          },
+        ];
+      }
       if (ref.collection === 'keyDates') {
         return [
           {

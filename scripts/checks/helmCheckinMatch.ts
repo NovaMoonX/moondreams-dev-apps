@@ -237,7 +237,7 @@ test('a retired, ended or paused habit writes nothing and says so', () => {
   );
   assert.equal(
     retired.kind === 'notActive' && retired.line,
-    'Your evening walk is retired. Bring it back?',
+    'Your evening walk is retired. Say "bring back evening walk" to start it again.',
   );
 });
 

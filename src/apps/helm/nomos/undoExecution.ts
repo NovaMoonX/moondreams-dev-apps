@@ -41,6 +41,8 @@ import {
 import type {
   EffectRef,
   ExecutionSealed,
+  HabitDaySealed,
+  HabitSealed,
   HelmEncryption,
   KeyDateSealed,
   MediaKind,
@@ -397,7 +399,9 @@ export async function undoExecution(
                 ref.collection === 'keyDates' ||
                 ref.collection === 'notes' ||
                 ref.collection === 'procedures' ||
-                ref.collection === 'procedureRuns';
+                ref.collection === 'procedureRuns' ||
+                ref.collection === 'habits' ||
+                ref.collection === 'habitDays';
               const entry = await transaction.get(docOf(ref));
               if (ref.collection === 'keyDates' && ref.op === 'delete') {
                 const whoId =
@@ -464,6 +468,8 @@ export async function undoExecution(
                       | NoteSealed
                       | ProcedureSealed
                       | RunSealed
+                      | HabitSealed
+                      | HabitDaySealed
                     >(data.sealed as Sealed, encryption)
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);
@@ -554,7 +560,12 @@ export async function undoExecution(
             update.reseal
               ? {
                   sealed: await sealJson<
-                    TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed
+                    | TaskSealed
+                    | WhoSealed
+                    | KeyDateSealed
+                    | ProjectSealed
+                    | HabitSealed
+                    | HabitDaySealed
                   >(update.reseal, encryption),
                 }
               : {},
@@ -591,7 +602,9 @@ export async function undoExecution(
             ...Object.fromEntries(
               Object.entries(update.fields).map(([path, value]) => [
                 path,
-                path.startsWith('milestoneState.') && value === null
+                value === null &&
+                (path.startsWith('milestoneState.') ||
+                  /^entries\.[^.]+\.checks\.[^.]+$/.test(path))
                   ? deleteField()
                   : value,
               ]),

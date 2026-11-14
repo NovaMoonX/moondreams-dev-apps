@@ -335,6 +335,9 @@ const SAME_CHANGE: [string, string, string][] = [
   ['tickRun', 'runActions', 'tickRunSteps'],
   ['setCurrentPlace', 'planActions', 'setCurrentPlace'],
   ['closeConversation', 'captureActions', 'closeQuestions'],
+  ['createHabit', 'habitActions', 'createHabit'],
+  ['setCare', 'habitActions', 'setHabitCare'],
+  ['checkIn', 'habitCheckInActions', 'writeDeviceCheckIn'],
 ];
 
 test('a sentence and a tap make the same change through one writer', () => {

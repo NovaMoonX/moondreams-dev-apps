@@ -9,7 +9,12 @@ import type {
 import type { SealedPayload } from '../../appKeys/seal.js';
 import type { Cadence } from '../../vendor/cadenceUtils.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
-import { habitDayKey, isHabitDue, type ClockWindow } from './nomos/habitDay.js';
+import {
+  habitDayKey,
+  isHabitDue,
+  readHabitStatusOn,
+  type ClockWindow,
+} from './nomos/habitDay.js';
 import { readPrivacy, type PrivacyClass, type PrivateMark } from './privacy.js';
 
 const HABITS_READ = 200;
@@ -52,6 +57,9 @@ export interface LiveHabit extends HabitWords {
   startsOn: number;
   endsOn: number | null;
   pausedUntil: number | null;
+  pausedAt: number | null;
+  endedAt: number | null;
+  retiredAt: number | null;
   careAskedAt: number | null;
   stage: string | null;
   reminder: { isOn: boolean; pace: string } | null;
@@ -174,6 +182,9 @@ export const openLiveHabit = (
       startsOn: toNumber(data.startsOn) ?? toNumber(data.createdAt) ?? 0,
       endsOn: toNumber(data.endsOn),
       pausedUntil: toNumber(data.pausedUntil),
+      pausedAt: toNumber(data.pausedAt),
+      endedAt: toNumber(data.endedAt),
+      retiredAt: toNumber(data.retiredAt),
       careAskedAt: toNumber(data.careAskedAt),
       stage: toText(data.stage),
       reminder: reminder
@@ -399,6 +410,7 @@ export const readContextHabits = async (
   const day = openLiveHabitDay(key, daySnap.data());
   return habitsSnap.docs
     .flatMap((doc) => openLiveHabit(key, doc.id, doc.data()) ?? [])
+    .map((habit) => ({ ...habit, status: readHabitStatusOn(habit, dayKey) }))
     .filter((habit) => habit.status !== 'retired')
     .map((habit) => toContextHabit(habit, day, dayKey));
 };
@@ -424,9 +436,12 @@ export const readHabitState = async (
     ),
   ]);
   return {
-    habits: habitsSnap.docs.flatMap(
-      (doc) => openLiveHabit(key, doc.id, doc.data()) ?? [],
-    ),
+    habits: habitsSnap.docs
+      .flatMap((doc) => openLiveHabit(key, doc.id, doc.data()) ?? [])
+      .map((habit) => ({
+        ...habit,
+        status: readHabitStatusOn(habit, dayKeys[0]),
+      })),
     days: new Map(
       daySnaps.map((snap, index): [string, LiveHabitDay] => [
         dayKeys[index],

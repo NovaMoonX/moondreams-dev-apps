@@ -18,6 +18,7 @@ import {
   isHabitDue,
   openWindowAt,
   readHabitClock,
+  readHabitStatusOn,
   saidTimeWindow,
   selectHabitWeek,
   windowInstants,
@@ -408,6 +409,60 @@ test('a counted habit counts days that reached its number; weekdays and a late s
     done: 0,
     due: 2,
   });
+});
+
+test('days inside a pause are neither due nor counted, and a finished pause reads as active', () => {
+  const done = (...keys: string[]) =>
+    Object.fromEntries(keys.map((key) => [key, pillsDay(['day'])]));
+  const week = done('2026-11-02', '2026-11-03', '2026-11-05', '2026-11-07');
+  const pausedMidWeek = schedule({
+    status: 'paused',
+    pausedAt: Date.UTC(2026, 10, 4, 12),
+    pausedUntil: utc(2026, 11, 7),
+  });
+  assert.deepEqual(selectHabitWeek(pausedMidWeek, week, '2026-11-08'), {
+    done: 3,
+    due: 3,
+  });
+  assert.deepEqual(
+    selectHabitWeek(
+      schedule({ pausedAt: Date.UTC(2026, 10, 5, 9), pausedUntil: null }),
+      week,
+      '2026-11-08',
+    ),
+    { done: 2, due: 3 },
+  );
+  assert.deepEqual(
+    selectHabitWeek(
+      { ...pausedMidWeek, cadence: { kind: 'timesPerWeek', count: 3 } },
+      week,
+      '2026-11-08',
+    ),
+    { done: 3, due: 3 },
+  );
+  assert.deepEqual(selectHabitWeek(schedule(), week, '2026-11-08'), {
+    done: 4,
+    due: 6,
+  });
+  const until = { status: 'paused', pausedUntil: utc(2026, 11, 10) };
+  assert.equal(readHabitStatusOn(until, '2026-11-09'), 'paused');
+  assert.equal(readHabitStatusOn(until, '2026-11-10'), 'active');
+  assert.equal(
+    readHabitStatusOn({ status: 'paused', pausedUntil: null }, '2030-01-01'),
+    'paused',
+  );
+  assert.equal(readHabitStatusOn({ status: 'ended' }, '2030-01-01'), 'ended');
+  const back = {
+    ...schedule({ status: 'paused', pausedUntil: until.pausedUntil }),
+  };
+  assert.equal(isHabitDue(back, '2026-11-10'), false);
+  assert.equal(
+    isHabitDue(
+      { ...back, status: readHabitStatusOn(back, '2026-11-10') },
+      '2026-11-10',
+    ),
+    true,
+  );
 });
 
 test('parts of the day follow Your day, a fixed table until it was set, and a said time is an hour', () => {

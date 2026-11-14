@@ -462,6 +462,16 @@ const toRunParts = (deleted: string[], unticked: number) =>
 const toCapital = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
 
+const toHabitParts = (ticked: number, changed: number) =>
+  [
+    ticked === 0
+      ? ''
+      : `unticked ${ticked === 1 ? '1 check-in' : `${ticked} check-ins`}`,
+    changed === 0
+      ? ''
+      : `took back ${changed === 1 ? '1 habit change' : `${changed} habit changes`}`,
+  ].filter(Boolean);
+
 /** Each kind of medium in a sentence: its word, its titled and "the" forms, its sheet title, and whether its file name stands in for them. */
 const MEDIA_WORDS: Record<
   MediaKind,
@@ -2264,6 +2274,26 @@ export const HELM_COPY = {
       .join(' '),
   undoReportRunsToo: (deleted: string[], unticked: number) =>
     `${toRunParts(deleted, unticked).map(toCapital).join('. ')}.`,
+  undoHabitChanges: (ticked: number, changed: number) =>
+    toCapital(toHabitParts(ticked, changed).join(' and ')),
+  undoHabitPhrase: (ticked: number, changed: number) =>
+    toHabitParts(ticked, changed).join(' and '),
+  undoReportHabits: (
+    ticked: number,
+    changed: number,
+    kept: number,
+    gone: number,
+  ) =>
+    [
+      `${toHabitParts(ticked, changed).map(toCapital).join('. ')}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportHabitsToo: (ticked: number, changed: number) =>
+    `${toHabitParts(ticked, changed).map(toCapital).join('. ')}.`,
+  resultHabitFallback: 'Habit',
   undoReportNoteUnfiled: 'Took the note back out of those topics.',
   tookBackNoteUnfiled: 'Took the note back out of those topics',
   undoReportNotesToo: (count: number) =>

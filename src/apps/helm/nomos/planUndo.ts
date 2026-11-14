@@ -7,6 +7,8 @@ import type {
   Execution,
   ExecutionEffect,
   ExecutionSealed,
+  HabitDaySealed,
+  HabitSealed,
   KeyDateSealed,
   NoteSealed,
   OpenExecution,
@@ -36,6 +38,8 @@ export interface UndoTarget {
     | WhoSealed
     | KeyDateSealed
     | ProjectSealed
+    | HabitSealed
+    | HabitDaySealed
     | NoteSealed
     | TopicSealed
     | ProcedureSealed
@@ -56,7 +60,14 @@ export type UndoPlan =
         docId: string;
         fields: Record<string, unknown>;
         collection: EffectRef['collection'];
-        reseal: TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | null;
+        reseal:
+          | TaskSealed
+          | WhoSealed
+          | KeyDateSealed
+          | ProjectSealed
+          | HabitSealed
+          | HabitDaySealed
+          | null;
       }[];
       /** Topics and procedures whose document goes back to an earlier version, written as a new version `from + 1` holding the parts of `to`. */
       versionRestores: {
@@ -149,7 +160,14 @@ type RecordOutcome =
       kind: 'restored';
       title: string;
       fields: Values;
-      reseal: TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | null;
+      reseal:
+        | TaskSealed
+        | WhoSealed
+        | KeyDateSealed
+        | ProjectSealed
+        | HabitSealed
+        | HabitDaySealed
+        | null;
       effect: ExecutionEffect;
     }
   | {
@@ -456,6 +474,103 @@ const planRecord = (
   };
 };
 
+const isDaySealed = (opened: UndoTarget['opened']): opened is HabitDaySealed =>
+  opened !== null &&
+  'notes' in opened &&
+  !('name' in opened) &&
+  typeof opened.notes === 'object';
+
+const isCountPath = (path: string) => /^entries\.[^.]+\.count$/.test(path);
+const isCheckPath = (path: string) =>
+  /^entries\.[^.]+\.checks\.[^.]+$/.test(path);
+
+/** A check-in on a habit day goes back field by field: each check to what it was (nothing when the turn made it) and each tally to its earlier count, only while the day still holds what the turn wrote there; a note it sealed with the tick is taken out of the day's notes. */
+const planHabitDay = (
+  target: UndoTarget,
+  entries: Entry[],
+  original: OpenExecution,
+): RecordOutcome => {
+  const title = toTitle(
+    target,
+    entries.map((entry) => entry.effect),
+  );
+  if (target.data === null) return { kind: 'gone' };
+  const stepped = [...entries].reverse().reduce<{
+    data: Values;
+    restored: Values;
+    current: Values;
+    isKept: boolean;
+  }>(
+    (step, { effect }) => {
+      const own = Object.keys(effect.written).filter(
+        (path) => isCheckPath(path) || isCountPath(path),
+      );
+      const previous = effect.previous;
+      if (step.isKept || !previous) return { ...step, isKept: true };
+      const isMatch = own.every(
+        (path) =>
+          isSame(readPath(step.data, path) ?? null, effect.written[path]) &&
+          previous[path] !== undefined,
+      );
+      return isMatch
+        ? {
+            data: writePaths(step.data, own, previous, (path) => path),
+            restored: {
+              ...step.restored,
+              ...Object.fromEntries(own.map((path) => [path, previous[path]])),
+            },
+            current: {
+              ...Object.fromEntries(
+                own.map((path) => [path, effect.written[path]]),
+              ),
+              ...step.current,
+            },
+            isKept: false,
+          }
+        : { ...step, isKept: true };
+    },
+    { data: target.data, restored: {}, current: {}, isKept: false },
+  );
+  if (stepped.isKept) return { kind: 'kept', title };
+  const notes = isDaySealed(target.opened) ? target.opened.notes : null;
+  const noteKeys = entries.flatMap(({ effect }) => {
+    const key = toText(effect.written.noteKey);
+    const note = key && notes ? notes[key] : null;
+    return key && note && note.captureId === original.captureId ? [key] : [];
+  });
+  const noteFields = Object.fromEntries(
+    [...new Set(noteKeys.map((key) => key.split('/')[0]))].map((habitId) => {
+      const live = readPath(target.data, `entries.${habitId}.noteKeys`);
+      return [
+        `entries.${habitId}.noteKeys`,
+        (Array.isArray(live) ? live : []).filter(
+          (key) => !noteKeys.includes(key as string),
+        ),
+      ];
+    }),
+  );
+  const fields = { ...stepped.restored, ...noteFields };
+  if (Object.keys(fields).length === 0) return { kind: 'skipped' };
+  const reseal: HabitDaySealed | null =
+    noteKeys.length > 0 && notes
+      ? {
+          notes: Object.fromEntries(
+            Object.entries(notes).filter(([key]) => !noteKeys.includes(key)),
+          ),
+        }
+      : null;
+  return {
+    kind: 'restored',
+    title,
+    fields,
+    reseal,
+    effect: {
+      written: { ...stepped.restored, 'sealed.title': title },
+      previous: { ...stepped.current, 'sealed.title': title },
+    },
+  };
+};
+
 const groupByDoc = (original: OpenExecution) =>
   original.effectRefs.reduce<
     Map<string, { ref: EffectRef; effect: ExecutionEffect }[]>
@@ -640,6 +755,9 @@ export function planUndo(input: {
     collectionOf.get(docId) === 'procedures';
   const isRunDoc = (docId: string) =>
     collectionOf.get(docId) === 'procedureRuns';
+  const isHabitDayDoc = (docId: string) =>
+    collectionOf.get(docId) === 'habitDays';
+  const isHabitDoc = (docId: string) => collectionOf.get(docId) === 'habits';
   const isMediaDoc = (docId: string) => collectionOf.get(docId) === 'media';
   const targetOf = (docId: string) =>
     targets.get(docId) ?? { docId, data: null, opened: null };
@@ -648,6 +766,7 @@ export function planUndo(input: {
       ([docId]) =>
         !isEntityDoc(docId) &&
         !isMediaDoc(docId) &&
+        !isHabitDayDoc(docId) &&
         !isTopicDoc(docId) &&
         !isProcedureDoc(docId),
     )
@@ -928,17 +1047,30 @@ export function planUndo(input: {
             : { kind: 'skipped' };
       return { docId, outcome };
     });
-  const kept = [...outcomes, ...topicOutcomes, ...procedureOutcomes].flatMap(
-    ({ outcome }) => (outcome.kind === 'kept' ? [outcome.title] : []),
+  const habitDayOutcomes = groups
+    .filter(([docId]) => isHabitDayDoc(docId))
+    .map(([docId, entries]) => ({
+      docId,
+      outcome: planHabitDay(targetOf(docId), entries, original),
+    }));
+  const everyOutcome = [
+    ...outcomes,
+    ...topicOutcomes,
+    ...procedureOutcomes,
+    ...habitDayOutcomes,
+  ];
+  const kept = everyOutcome.flatMap(({ outcome }) =>
+    outcome.kind === 'kept' ? [outcome.title] : [],
   );
-  const goneIds = [...outcomes, ...topicOutcomes, ...procedureOutcomes].flatMap(
-    ({ docId, outcome }) => (outcome.kind === 'gone' ? [docId] : []),
+  const goneIds = everyOutcome.flatMap(({ docId, outcome }) =>
+    outcome.kind === 'gone' ? [docId] : [],
   );
   const gone = goneIds.length;
   const done = [
     ...outcomes,
     ...topicOutcomes,
     ...procedureOutcomes,
+    ...habitDayOutcomes,
     ...photoOutcomes,
   ].flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted' ||
@@ -976,8 +1108,13 @@ export function planUndo(input: {
         !isNoteDoc(docId) &&
         !isTopicDoc(docId) &&
         !isProcedureDoc(docId) &&
-        !isRunDoc(docId),
+        !isRunDoc(docId) &&
+        !isHabitDoc(docId) &&
+        !isHabitDayDoc(docId),
   );
+  const habitsDone = done.filter(({ docId }) => isHabitDoc(docId));
+  const habitDaysDone = done.filter(({ docId }) => isHabitDayDoc(docId));
+  const habitCount = habitsDone.length + habitDaysDone.length;
   const photosLetGo = done.filter(
     ({ docId, outcome }) => isMediaDoc(docId) && outcome.kind === 'restored',
   );
@@ -1055,7 +1192,8 @@ export function planUndo(input: {
     projectsDone.length === 0 &&
     topicCount === 0 &&
     procedureCount === 0 &&
-    runCount === 0
+    runCount === 0 &&
+    habitCount === 0
   ) {
     return refuse(
       'nothingToTakeBack',
@@ -1198,9 +1336,27 @@ export function planUndo(input: {
     : runCount > 0
       ? `${withProcedures} ${HELM_COPY.undoReportRunsToo(runTitles, untickedCount)}`
       : withProcedures;
+  const habitsTicked = habitDaysDone.length;
+  const habitsChanged = habitsDone.length;
+  const isHabitsOnly =
+    habitCount > 0 &&
+    photoCount === 0 &&
+    notesDone.length === 0 &&
+    records.length === 0 &&
+    factCount === 0 &&
+    dateCount === 0 &&
+    projectCount === 0 &&
+    topicCount === 0 &&
+    procedureCount === 0 &&
+    runCount === 0;
+  const withHabits = isHabitsOnly
+    ? HELM_COPY.undoReportHabits(habitsTicked, habitsChanged, kept.length, gone)
+    : habitCount > 0
+      ? `${withRuns} ${HELM_COPY.undoReportHabitsToo(habitsTicked, habitsChanged)}`
+      : withRuns;
   const report = isPhotosOnly
     ? HELM_COPY.undoReportPhotos(photoCount)
-    : [withRuns, photosToo].filter(Boolean).join(' ');
+    : [withHabits, photosToo].filter(Boolean).join(' ');
   const baseSummary =
     records.length === 0
       ? isNotesOnly
@@ -1236,6 +1392,11 @@ export function planUndo(input: {
     : runCount > 0
       ? `${summary} and ${HELM_COPY.undoRunPhrase(runTitles, untickedCount)}`
       : summary;
+  const withHabitsSummary = isHabitsOnly
+    ? HELM_COPY.undoHabitChanges(habitsTicked, habitsChanged)
+    : habitCount > 0
+      ? `${withRunsSummary} and ${HELM_COPY.undoHabitPhrase(habitsTicked, habitsChanged)}`
+      : withRunsSummary;
   const deletes = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted'
       ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]
@@ -1310,7 +1471,7 @@ export function planUndo(input: {
     undoSealed: {
       summary: isPhotosOnly
         ? HELM_COPY.tookBackPhotos(photoCount)
-        : withRunsSummary,
+        : withHabitsSummary,
       said: null,
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
@@ -1330,6 +1491,8 @@ export function planUndo(input: {
       ...procedureChanges,
       ...runsDeleted,
       ...runsUnticked,
+      ...habitsDone,
+      ...habitDaysDone,
     ].map(({ outcome }) => outcome.title),
     kept,
     gone,

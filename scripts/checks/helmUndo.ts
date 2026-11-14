@@ -16,6 +16,8 @@ import { buildResultLines } from '../../src/apps/helm/utils/resultLines.ts';
 import type {
   EffectRef,
   ExecutionEffect,
+  HabitDaySealed,
+  HabitSealed,
   OpenExecution,
   ProcedureSealed,
   RunSealed,
@@ -2070,6 +2072,280 @@ test('a turn that made a note and a run takes back both and says so', () => {
   assert.equal(
     result.report,
     'Took back 1 note. Took back the run of Packing for a work trip.',
+  );
+});
+
+const habitSealed = (name: string): HabitSealed => ({
+  name,
+  emoji: null,
+  notes: null,
+  medicine: null,
+  windows: { w1: { label: 'Evening' } },
+  importance: null,
+  privateMark: null,
+  isPrivacyCleared: null,
+});
+
+const habitEntry = (
+  collection: 'habits' | 'habitDays',
+  op: EffectRef['op'],
+  docId: string,
+  written: Record<string, unknown>,
+  previous: Record<string, unknown> | null,
+) => ({
+  ref: { op, collection, docId } as EffectRef,
+  effect: { written, previous },
+});
+
+const habitTarget = (
+  docId: string,
+  data: Record<string, unknown> | null,
+  name = 'Pills',
+): [string, UndoTarget] => [docId, { docId, data, opened: habitSealed(name) }];
+
+const dayTarget = (
+  docId: string,
+  data: Record<string, unknown> | null,
+  notes: HabitDaySealed['notes'] = {},
+): [string, UndoTarget] => [docId, { docId, data, opened: { notes } }];
+
+const CHECK = {
+  status: 'done',
+  at: NOW,
+  by: 'nomos',
+  executionId: 'exec-1',
+};
+const TICK_PATH = 'entries.h1.checks.w1';
+
+test('a created habit is deleted while it is as it was made and never reads as a task', () => {
+  const made = habitEntry(
+    'habits',
+    'create',
+    'h1',
+    { 'sealed.title': 'Pills', cadence: { kind: 'everyDay' } },
+    null,
+  );
+  const result = asWrite(
+    plan(execution([made]), [habitTarget('h1', { lastEditedAt: null })]),
+  );
+  assert.deepEqual(result.deletes, [{ docId: 'h1', collection: 'habits' }]);
+  assert.equal(result.report, 'Took back 1 habit change.');
+  assert.equal(result.undoSealed.summary, 'Took back 1 habit change');
+  const kept = asRefused(
+    plan(execution([made]), [habitTarget('h1', { lastEditedAt: EARLIER + 5 })]),
+  );
+  assert.deepEqual(kept.kept, ['Pills']);
+});
+
+test('an updated habit gets its status, pause and schedule back, field by field', () => {
+  const paused = habitEntry(
+    'habits',
+    'update',
+    'h1',
+    {
+      status: 'paused',
+      pausedAt: EARLIER,
+      pausedUntil: SUNDAY,
+      history: [{ kind: 'paused' }],
+      lastEditedAt: EARLIER,
+      'sealed.title': 'Pills',
+    },
+    {
+      status: 'active',
+      pausedAt: null,
+      pausedUntil: null,
+      history: [],
+      lastEditedAt: null,
+      'sealed.title': 'Pills',
+    },
+  );
+  const result = asWrite(
+    plan(execution([paused]), [
+      habitTarget('h1', {
+        status: 'paused',
+        pausedAt: EARLIER,
+        pausedUntil: SUNDAY,
+        history: [{ kind: 'paused' }],
+        lastEditedAt: EARLIER,
+      }),
+    ]),
+  );
+  assert.deepEqual(result.updates, [
+    {
+      docId: 'h1',
+      collection: 'habits',
+      fields: {
+        status: 'active',
+        pausedAt: null,
+        pausedUntil: null,
+        history: [],
+        lastEditedAt: NOW,
+      },
+      reseal: null,
+    },
+  ]);
+  assert.equal(result.report, 'Took back 1 habit change.');
+  const rescheduled = habitEntry(
+    'habits',
+    'update',
+    'h1',
+    {
+      cadence: { kind: 'onWeekdays', weekdays: [1] },
+      lastEditedAt: EARLIER,
+      'sealed.title': 'Pills',
+    },
+    {
+      cadence: { kind: 'everyDay' },
+      lastEditedAt: null,
+      'sealed.title': 'Pills',
+    },
+  );
+  const changedSince = asRefused(
+    plan(execution([rescheduled]), [
+      habitTarget('h1', {
+        cadence: { kind: 'everyDay' },
+        lastEditedAt: EARLIER + 9,
+      }),
+    ]),
+  );
+  assert.deepEqual(changedSince.kept, ['Pills']);
+});
+
+test('a check-in is taken off one window and the other windows and devices stay', () => {
+  const tick = habitEntry(
+    'habitDays',
+    'update',
+    '2026-11-09',
+    { [TICK_PATH]: CHECK, 'sealed.title': 'Pills', noteKey: null },
+    { [TICK_PATH]: null, 'sealed.title': 'Pills', noteKey: null },
+  );
+  const result = asWrite(
+    plan(execution([tick]), [
+      dayTarget('2026-11-09', {
+        entries: {
+          h1: {
+            checks: { w1: CHECK, w2: { ...CHECK, at: NOW + 1 } },
+            count: 0,
+          },
+        },
+      }),
+    ]),
+  );
+  assert.deepEqual(result.updates, [
+    {
+      docId: '2026-11-09',
+      collection: 'habitDays',
+      fields: { [TICK_PATH]: null },
+      reseal: null,
+    },
+  ]);
+  assert.deepEqual(result.undoExecution.effectRefs, [
+    { op: 'update', collection: 'habitDays', docId: '2026-11-09' },
+  ]);
+  assert.equal(result.report, 'Unticked 1 check-in.');
+  assert.equal(result.undoSealed.summary, 'Unticked 1 check-in');
+  assert.equal(result.deletes.length, 0);
+});
+
+test('a check-in the person already took off is left, and says so', () => {
+  const tick = habitEntry(
+    'habitDays',
+    'create',
+    '2026-11-09',
+    { [TICK_PATH]: CHECK, 'sealed.title': 'Pills', noteKey: null },
+    { [TICK_PATH]: null, 'sealed.title': 'Pills', noteKey: null },
+  );
+  const result = asRefused(
+    plan(execution([tick]), [
+      dayTarget('2026-11-09', { entries: { h1: { checks: {}, count: 0 } } }),
+    ]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['Pills']);
+});
+
+test('a tally goes back to its earlier count only while it is the count the turn left', () => {
+  const COUNT_PATH = 'entries.h2.count';
+  const tally = habitEntry(
+    'habitDays',
+    'update',
+    '2026-11-09',
+    { [COUNT_PATH]: 3, 'sealed.title': 'Water' },
+    { [COUNT_PATH]: 2, 'sealed.title': 'Water' },
+  );
+  const back = asWrite(
+    plan(execution([tally]), [
+      dayTarget('2026-11-09', { entries: { h2: { checks: {}, count: 3 } } }),
+    ]),
+  );
+  assert.deepEqual(back.updates[0].fields, { [COUNT_PATH]: 2 });
+  const another = asRefused(
+    plan(execution([tally]), [
+      dayTarget('2026-11-09', { entries: { h2: { checks: {}, count: 4 } } }),
+    ]),
+  );
+  assert.deepEqual(another.kept, ['Water']);
+});
+
+test('a note said with a check-in is cleared from the day when the check-in is taken back', () => {
+  const tick = habitEntry(
+    'habitDays',
+    'update',
+    '2026-11-09',
+    { [TICK_PATH]: CHECK, 'sealed.title': 'Pills', noteKey: 'h1/w1' },
+    { [TICK_PATH]: null, 'sealed.title': 'Pills', noteKey: null },
+  );
+  const result = asWrite(
+    plan(execution([tick]), [
+      dayTarget(
+        '2026-11-09',
+        {
+          entries: {
+            h1: {
+              checks: { w1: CHECK },
+              count: 0,
+              noteKeys: ['h1/w1', 'h1/w2'],
+            },
+          },
+        },
+        {
+          'h1/w1': { text: 'felt dizzy', at: NOW, captureId: 'turn-1' },
+          'h1/w2': { text: 'with food', at: NOW, captureId: 'turn-0' },
+        },
+      ),
+    ]),
+  );
+  assert.deepEqual(result.updates[0].fields, {
+    [TICK_PATH]: null,
+    'entries.h1.noteKeys': ['h1/w2'],
+  });
+  assert.deepEqual(result.updates[0].reseal, {
+    notes: { 'h1/w2': { text: 'with food', at: NOW, captureId: 'turn-0' } },
+  });
+});
+
+test('a habit turn names its habits in the result lines, never as a task', () => {
+  const lines = buildResultLines(
+    execution([
+      habitEntry('habits', 'create', 'h1', { 'sealed.title': 'Pills' }, null),
+      habitEntry(
+        'habitDays',
+        'update',
+        '2026-11-09',
+        { [TICK_PATH]: CHECK, 'sealed.title': 'Pills' },
+        { [TICK_PATH]: null, 'sealed.title': 'Pills' },
+      ),
+    ]),
+    new Map(),
+    'America/Los_Angeles',
+    NOW,
+  );
+  assert.deepEqual(
+    lines.map((line) => [line.title, line.detail]),
+    [
+      ['Pills', null],
+      ['Pills', HELM_COPY.resultDone],
+    ],
   );
 });
 

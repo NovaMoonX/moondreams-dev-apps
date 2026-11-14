@@ -76,6 +76,8 @@ export async function takeDeviceCheckIn(
     spoken: resolution.line,
     encryption,
     isPrivate,
+    habitName: habit.name,
+    isNewDay: !helm.habitDays.byId[dayKey],
   });
   return {
     kind: 'done',

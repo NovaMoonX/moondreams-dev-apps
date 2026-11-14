@@ -1,15 +1,12 @@
-import { isHabitDue, readWindowSpans } from '@apps/helm/engine/habitDay';
+import {
+  isHabitDue,
+  readHabitStatusOn,
+  readWindowSpans,
+} from '@apps/helm/engine/habitDay';
 import type { HabitCheck, OpenHabit, OpenHabitDay } from '@apps/helm/types';
 
-const toMs = (dayKey: string) => Date.parse(`${dayKey}T00:00:00Z`);
-
-/** A paused habit whose day has come is active again, so it needs no write to come back. */
 export const readHabitStatus = (habit: OpenHabit, dayKey: string) =>
-  habit.status === 'paused' &&
-  habit.pausedUntil !== null &&
-  habit.pausedUntil <= toMs(dayKey)
-    ? 'active'
-    : habit.status;
+  readHabitStatusOn(habit, dayKey);
 
 /** The habits as they stand on a day, a finished pause counted as over. */
 export const readHabitsOn = (habits: readonly OpenHabit[], dayKey: string) =>

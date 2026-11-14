@@ -1,4 +1,4 @@
-import { countDueDays, isDueOn, type Cadence } from '@/utils/cadenceUtils';
+import { isDueOn, type Cadence } from '@/utils/cadenceUtils';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { readZoneFor } from '@apps/helm/engine/whereabouts';
 
@@ -18,6 +18,8 @@ export interface HabitScheduleLike {
   timesPerDay: number | null;
   startsOn: number;
   endsOn: number | null;
+  pausedAt?: number | null;
+  pausedUntil?: number | null;
 }
 
 export interface HabitDayLike {
@@ -186,6 +188,23 @@ export function readWindowSpans(
     }));
 }
 
+/** A paused habit whose day has come is active again, so coming back needs no write. */
+export function readHabitStatusOn<Status extends string>(
+  habit: { status: Status; pausedUntil?: number | null },
+  dayKey: string,
+): Status | 'active' {
+  return habit.status === 'paused' &&
+    habit.pausedUntil != null &&
+    habit.pausedUntil <= toMs(dayKey)
+    ? 'active'
+    : habit.status;
+}
+
+const isPausedOn = (habit: HabitScheduleLike, dayKey: string) =>
+  habit.pausedAt != null &&
+  dayKey >= toKey(habit.pausedAt) &&
+  (habit.pausedUntil == null || dayKey < toKey(habit.pausedUntil));
+
 /** Whether the habit asks for something on this day. */
 export function isHabitDue(habit: HabitScheduleLike, dayKey: string): boolean {
   const day = toMs(dayKey);
@@ -248,14 +267,15 @@ export function selectHabitWeek(
   const unitsOf = (key: string) =>
     doneUnits(habit, days[key]?.entries[habit.id]);
   const full = unitsPerDay(habit);
+  const open = keys.filter((key) => !isPausedOn(habit, key));
   if (habit.cadence.kind === 'timesPerWeek') {
-    const due = countDueDays(habit.cadence, from, to);
+    const due = Math.min(habit.cadence.count, open.length);
     return {
-      done: Math.min(keys.filter((key) => unitsOf(key) >= full).length, due),
+      done: Math.min(open.filter((key) => unitsOf(key) >= full).length, due),
       due,
     };
   }
-  return keys
+  return open
     .filter((key) => isDueOn(habit.cadence, key))
     .reduce(
       (total, key) => {

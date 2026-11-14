@@ -180,7 +180,7 @@ const toSubject = (habit: CheckInHabit, windowId: string) => {
 
 const readNotActiveLine = (habit: CheckInHabit) => {
   if (habit.status === 'retired')
-    return `Your ${lowerName(habit.name)} is retired. Bring it back?`;
+    return `Your ${lowerName(habit.name)} is retired. Say "bring back ${lowerName(habit.name)}" to start it again.`;
   if (habit.status === 'ended')
     return `Your ${lowerName(habit.name)} has ended.`;
   return `Your ${lowerName(habit.name)} is paused.`;
