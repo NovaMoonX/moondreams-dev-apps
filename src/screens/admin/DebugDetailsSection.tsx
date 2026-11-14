@@ -1,4 +1,4 @@
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionHeader from '@/components/SectionHeader';
+import UserAvatar from '@/ui/UserAvatar';
 import { useAuth } from '@hooks/useAuth';
 import { ADMIN_QUERY_KEY } from '@lib/admin/adminQueries';
 import { debugProfilesQueryOptions } from '@lib/debugProfiles/debugProfileQueries';
@@ -17,20 +18,21 @@ import {
   removeDebugProfile,
   toDebugProfileId,
 } from '@lib/debugProfiles/debugProfiles';
+import type { UserProfile } from '@lib/types/appCatalog';
 
 import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
+import UserPicker from './UserPicker';
 
 const EMAIL_PATTERN = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
 
 /** The emails that see what went wrong on error screens; each row opens a sheet holding Remove. */
-function DebugDetailsSection() {
+function DebugDetailsSection({ users }: { users: UserProfile[] }) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const queryClient = useQueryClient();
   const query = useQuery(debugProfilesQueryOptions());
   const profiles = query.data ?? [];
   const [isAdding, setIsAdding] = useState(false);
-  const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [openEmail, setOpenEmail] = useState<string | null>(null);
@@ -43,26 +45,20 @@ function DebugDetailsSection() {
     });
   const closeAdd = () => {
     setIsAdding(false);
-    setValue('');
     setError(null);
   };
 
-  const getEmailError = (email: string) => {
-    if (!email) return 'Enter an email address to add.';
-    if (!EMAIL_PATTERN.test(email)) return 'Enter a valid email address.';
-    return profiles.some((profile) => profile.email === email)
-      ? 'That email is already on the list.'
-      : null;
-  };
+  const getProfile = (email: string) =>
+    users.find((candidate) => candidate.email?.toLowerCase() === email) ?? null;
 
-  const handleAdd = async () => {
+  const handleAdd = async (value: string) => {
     const email = toDebugProfileId(value);
-    const problem = getEmailError(email);
-    if (problem || !user) {
-      setError(problem);
+    if (!EMAIL_PATTERN.test(email) || !user) {
+      setError('Enter a valid email address.');
       return;
     }
     setIsSaving(true);
+    setError(null);
     try {
       await addDebugProfile(email, user.uid);
       await refresh();
@@ -138,8 +134,19 @@ function DebugDetailsSection() {
                   setOpenEmail(profile.email);
                 }}
               >
-                <span className='text-foreground min-w-0 flex-1 truncate text-sm font-medium'>
-                  {profile.email}
+                <UserAvatar
+                  user={getProfile(profile.email) ?? { email: profile.email }}
+                  size='sm'
+                />
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground block truncate text-sm font-medium'>
+                    {getProfile(profile.email)?.displayName ?? profile.email}
+                  </span>
+                  {getProfile(profile.email)?.displayName ? (
+                    <span className='text-muted-foreground block truncate text-xs'>
+                      {profile.email}
+                    </span>
+                  ) : null}
                 </span>
                 <ChevronRight
                   className='text-muted-foreground size-4 shrink-0'
@@ -155,43 +162,29 @@ function DebugDetailsSection() {
         isOpen={isAdding}
         isDrawerWhenShort
         onClose={closeAdd}
-        title='Add email'
+        title='Add someone'
       >
         <div className='space-y-2 pb-2'>
-          <Input
-            type='email'
-            aria-label='Email'
-            placeholder='name@example.com'
-            value={value}
-            onChange={(event) => {
-              setValue(event.target.value);
-              setError(null);
-            }}
-          />
+          <div className={isSaving ? 'pointer-events-none opacity-60' : ''}>
+            <UserPicker
+              users={users.filter((candidate) => candidate.email)}
+              takenValues={profiles.map((profile) => profile.email)}
+              pickLabel='Add'
+              onPickUser={(profile) => void handleAdd(profile.email)}
+              onAddEmail={(email) => void handleAdd(email)}
+              emailHint="No account yet? That's fine: it starts working as soon as they sign in with that email."
+            />
+          </div>
           {error ? (
             <p role='alert' className='text-destructive text-xs'>
               {error}
             </p>
           ) : null}
-          <p className='text-muted-foreground text-xs'>
-            When they sign in with this email, error screens show them what
-            failed.
-          </p>
         </div>
         <ModalFooterActions
-          cancelAction={
-            <Button type='button' variant='tertiary' onClick={closeAdd}>
-              Cancel
-            </Button>
-          }
           rightActions={
-            <Button
-              type='button'
-              variant='primary'
-              disabled={isSaving}
-              onClick={() => void handleAdd()}
-            >
-              Add email
+            <Button type='button' variant='primary' onClick={closeAdd}>
+              Done
             </Button>
           }
         />
@@ -201,7 +194,11 @@ function DebugDetailsSection() {
         isOpen={openEmail !== null}
         isDrawerWhenShort
         onClose={() => setOpenEmail(null)}
-        title={openEmail ?? 'Debug details'}
+        title={
+          (openEmail && getProfile(openEmail)?.displayName) ||
+          openEmail ||
+          'Debug details'
+        }
       >
         <p className='text-muted-foreground pb-2 text-sm'>
           They see what went wrong on error screens while signed in with this
