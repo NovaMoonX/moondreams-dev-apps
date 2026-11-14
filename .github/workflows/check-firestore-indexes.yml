@@ -99,3 +99,4 @@ jobs:
       - run: npm run check:helm-search
       - run: npm run check:helm-drop-box
       - run: npm run check:helm-trust
+      - run: npm run check:helm-where
