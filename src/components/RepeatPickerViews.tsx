@@ -13,6 +13,7 @@ import SegmentedControl from '@/components/SegmentedControl';
 import Stepper from '@/components/Stepper';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import {
+  ordinalNumber,
   sameRepeatRule,
   describeRepeat,
   listOccurrences,
@@ -356,7 +357,7 @@ export function CustomView({
   const monthRows: { by: MonthBy; label: string; detail: string | null }[] = [
     {
       by: 'day',
-      label: `On day ${startDate}`,
+      label: `On the ${ordinalNumber(startDate)}`,
       detail:
         repeatPresets(startsOn, weekStart).find(
           (preset) => preset.key === 'monthlyDay',

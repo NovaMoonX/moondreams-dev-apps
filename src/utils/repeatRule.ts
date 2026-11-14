@@ -489,7 +489,8 @@ export function nextOccurrence(
   return listOccurrences(rule, startsOn, { ...options, limit: 1 })[0] ?? null;
 }
 
-const ordinalNumber = (day: number) => {
+/** "1st", "22nd", "29th". */
+export const ordinalNumber = (day: number) => {
   const tens = day % 100;
   if (tens >= 11 && tens <= 13) return `${day}th`;
   return `${day}${['th', 'st', 'nd', 'rd'][day % 10] ?? 'th'}`;
@@ -593,6 +594,22 @@ export function repeatPresets(
       }),
     },
   ];
+  const lastWeekday: RepeatPreset[] =
+    nth === 4 && day + 7 > length
+      ? [
+          {
+            key: 'monthlyLastWeekday',
+            label: `Every month on ${nthWeekdayWords(-1, startWeekday)}`,
+            detail: null,
+            rule: make({
+              freq: 'monthly',
+              monthBy: 'nthWeekday',
+              nth: -1,
+              weekdays: [startWeekday],
+            }),
+          },
+        ]
+      : [];
   const lastDay: RepeatPreset[] =
     day === length
       ? [
@@ -610,7 +627,7 @@ export function repeatPresets(
     detail: month === 1 && day === 29 ? 'Only in leap years' : null,
     rule: make({ freq: 'yearly' }),
   };
-  return [...presets, ...lastDay, yearly];
+  return [...presets, ...lastWeekday, ...lastDay, yearly];
 }
 
 function defaultTimeFormat(time: string) {
@@ -664,18 +681,21 @@ export function describeRepeat(
     (rule.freq === 'yearly' && startsOn.slice(5) === '02-29');
   const untilYearShown =
     rule.until !== null && rule.until.slice(0, 4) !== startsOn.slice(0, 4);
+  const timeWords = time ? ` at ${timeFormat(time)}` : '';
+  if (rule.count === 1) {
+    const [only = startsOn] = listOccurrences(rule, startsOn, { limit: 1 });
+    return `Once, on ${formatDay(only, only.slice(0, 4) !== startsOn.slice(0, 4))}${timeWords}`;
+  }
   return [
     describeCadence(rule, startsOn),
-    time ? ` at ${timeFormat(time)}` : '',
+    timeWords,
     skipsMonths
       ? rule.freq === 'yearly'
         ? ' (leap years only)'
         : ' (months without one are skipped)'
       : '',
     rule.until ? `, until ${formatDay(rule.until, untilYearShown)}` : '',
-    rule.count !== null
-      ? `, ${rule.count} ${rule.count === 1 ? 'time' : 'times'}`
-      : '',
+    rule.count !== null ? `, ${rule.count} times` : '',
   ].join('');
 }
 

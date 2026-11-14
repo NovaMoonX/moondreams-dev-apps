@@ -87,6 +87,16 @@ test('presets: last day only on a month end; a year other than this one is shown
     'Every year on Nov 30',
   ]);
   assert.ok(!repeatPresets(SUN).some((p) => p.key === 'monthlyLastDay'));
+  assert.deepEqual(
+    repeatPresets('2026-11-27')
+      .filter((p) => p.key.startsWith('monthly'))
+      .map((p) => p.label),
+    [
+      'Every month on the 27th',
+      'Every month on the fourth Friday',
+      'Every month on the last Friday',
+    ],
+  );
   assert.equal(
     repeatPresets('2027-03-07')[0].detail,
     'Runs once, Sun, Mar 7, 2027',
@@ -173,7 +183,7 @@ test('describeRepeat wordings', () => {
   );
   assert.equal(
     describeRepeat({ ...days, count: 1 }, SUN),
-    'Every 3 days, 1 time',
+    'Once, on Sun, Nov 29',
   );
 });
 
