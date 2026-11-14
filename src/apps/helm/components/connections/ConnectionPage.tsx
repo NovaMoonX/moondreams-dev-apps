@@ -24,6 +24,7 @@ import {
 import { GOOGLE_CONTACTS_MANIFEST } from '@/lib/connections/google/contactsManifest';
 import { GOOGLE_DRIVE_MANIFEST } from '@/lib/connections/google/driveManifest';
 import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
+import { readOpenedNews } from '@/lib/connections/connectionNews';
 import { readUnseenNews } from '@/lib/connections/newReads';
 import { getConnectorManifest } from '@/lib/connections/sources';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
@@ -98,14 +99,8 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   >({});
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [seenNow, setSeenNow] = useState<Record<string, number>>({});
-  const [openedNews] = useState(() =>
-    grant
-      ? readUnseenNews(
-          getConnectorManifest(grant.connectorId),
-          grant.categories,
-          now,
-        )
-      : {},
+  const [handedNews] = useState(() =>
+    grantId === null ? null : readOpenedNews(grantId),
   );
   const [openReads, setOpenReads] = useState<Record<string, boolean>>({});
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
@@ -172,6 +167,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           : HELM_COPY.googleCalendarName
     : (apps.find((app) => app.id === appId)?.name ?? appId);
   const manifest = getConnectorManifest(grant.connectorId);
+  const liveNews = readUnseenNews(manifest, grant.categories, now);
   const kinds = new Set(
     (manifest?.categories ?? [])
       .filter((category) => grant.categories[category.id]?.isOn)
@@ -196,6 +192,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const showsContactsRow = isGoogle && !isContactsGrant && !hasStopped;
 
   const change = async (categoryId: string, isOn: boolean) => {
+    if (isOn)
+      setSeenNow((current) => ({
+        ...current,
+        [categoryId]:
+          manifest?.categories.find((category) => category.id === categoryId)
+            ?.scopeVersion ?? 1,
+      }));
     setPending((current) => ({
       ...current,
       [categoryId]: { isOn, since: grant.updatedAt },
@@ -453,9 +456,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
               waiting?.isOn ?? grant.categories[category.id]?.isOn ?? false;
             const isWaiting = waiting !== null;
             const newReads =
-              seenNow[category.id] === undefined
-                ? (openedNews[category.id] ?? [])
-                : [];
+              seenNow[category.id] !== undefined
+                ? []
+                : ((handedNews ?? liveNews)[category.id] ?? []);
             return (
               <li key={category.id} className='flex flex-col gap-1 px-4 py-3'>
                 <label className='flex min-h-11 items-center gap-3'>
