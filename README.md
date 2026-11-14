@@ -27,6 +27,8 @@ npm run dev
 
 Then open the local Vite app in your browser to explore the collection.
 
+To work on one app, run `npm run local:app -- helm` (any app id; it needs `VITE_USE_FIREBASE_EMULATORS=true` in `.env.local`). It starts the emulators and the dev server unless they are already running, seeds that app's fixtures when it started the emulators (add `--reset` to wipe and reseed any time, `--no-open` to skip opening the browser), and prints the app's link. Ctrl+C stops only what it started. `npm run local:services` shows which outside services are real or fixtures.
+
 `npm run dev` only listens on your machine. To try the app (and the emulators) from a phone on your home Wi-Fi, run `npm run lan:trust -- Home` once (`lan:list` and `lan:untrust` manage the list), then `npm run dev:lan` and `npm run emulators:lan`; they refuse to start on a network you haven't trusted. See [SEEDING.md](SEEDING.md#phone-testing). To let a friend try the app on their phone from anywhere, run `npm run share` (it starts everything and copies a private Tailscale link); setup and troubleshooting are in [SEEDING.md](SEEDING.md#sharing-with-a-friend).
 
 For how an app leaves this site and becomes its own, see [GRADUATING.md](GRADUATING.md). For local Firebase emulator fixtures, see [SEEDING.md](SEEDING.md). For every Cloud Function (what it does, its secrets, and local testing), see [functions/README.md](functions/README.md).
