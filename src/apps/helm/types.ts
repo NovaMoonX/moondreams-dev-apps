@@ -27,6 +27,8 @@ export type HelmView =
   | 'place'
   | 'projects'
   | 'project'
+  | 'habits'
+  | 'habit'
   | 'knowledge'
   | 'topic'
   | 'procedures'

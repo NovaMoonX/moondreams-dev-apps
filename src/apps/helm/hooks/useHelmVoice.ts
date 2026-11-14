@@ -91,6 +91,8 @@ import {
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
 import { getOpenSessionId } from '@apps/helm/utils/sessions';
+import { takeDeviceCheckIn } from '@apps/helm/utils/deviceCheckIn';
+import { isUnattendedTurn } from '@apps/helm/utils/privacy';
 import { readPresence } from '@apps/helm/utils/presence';
 import { readHelmNameHints } from '@apps/helm/utils/nameHints';
 import { readSwappedWords } from '@apps/helm/utils/spokenNames';
@@ -147,6 +149,10 @@ export function useHelmVoice() {
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
   const screen = useRef<ScreenContext | null>(null);
   const isWakeStarted = useRef(false);
+  // The latest tick the device made from words, so "undo that" takes it back when nothing newer was done.
+  const lastCheckIn = useRef<{ undo: () => Promise<void>; at: number } | null>(
+    null,
+  );
   const noteId = useRef(0);
   const waiting = useRef(new Set<string>());
   // Code-built questions already asked again once, so a second miss goes on as a turn.
@@ -385,6 +391,9 @@ export function useHelmVoice() {
       else say(HELM_COPY.talkSendFailed);
       return true;
     }
+    if (turn.kind === 'send' && (await takeCheckIn(turn.text, isSpoken))) {
+      return true;
+    }
     if (!isSpoken) {
       return turn.kind === 'answer'
         ? answerQuestion(text, sttProvider, now, false)
@@ -399,6 +408,52 @@ export function useHelmVoice() {
       turn.kind === 'send' && turn.isFinish,
       opts.heardNames,
     );
+    return true;
+  }
+
+  /** A plain check-in on a habit due today ("took my evening pills"): ticked on the device with no model call and offline, recorded with Undo and answered in a few words. Anything more than the check-in goes on as a turn. */
+  async function takeCheckIn(text: string, isSpoken: boolean) {
+    if (!uid) return false;
+    const result = await takeDeviceCheckIn(uid, text).catch(
+      (error: unknown) => {
+        console.error('Helm check-in was not read', error);
+        return null;
+      },
+    );
+    if (result === null || result.kind === 'none') return false;
+    if (result.kind === 'said') {
+      if (isSpoken) say(result.line);
+      else addToast({ title: result.line, type: 'info' });
+      return true;
+    }
+    const entry = { undo: result.undo, at: Date.now() };
+    lastCheckIn.current = entry;
+    result.committed.catch((error: unknown) => {
+      console.error('Helm check-in was not saved', error);
+      if (lastCheckIn.current === entry) lastCheckIn.current = null;
+      addToast({ title: HELM_COPY.habitCheckInFailed, type: 'error' });
+    });
+    const line =
+      isSpoken &&
+      result.isPrivate &&
+      isUnattendedTurn(isWakeStarted.current, readPresence())
+        ? HELM_COPY.habitCheckInQuiet
+        : result.line;
+    if (isSpoken) say(line);
+    addToast({
+      title: result.line,
+      type: 'success',
+      action: {
+        label: HELM_COPY.undo,
+        onClick: () => {
+          if (lastCheckIn.current === entry) lastCheckIn.current = null;
+          void result.undo().catch((error: unknown) => {
+            console.error('Helm check-in was not taken back', error);
+            addToast({ title: HELM_COPY.habitUndoFailed, type: 'error' });
+          });
+        },
+      },
+    });
     return true;
   }
 
@@ -728,6 +783,18 @@ export function useHelmVoice() {
       .flatMap((id) => executions.get(id) ?? [])
       .filter(canUndo)
       .sort((a, b) => b.createdAt - a.createdAt)[0];
+    const checkIn = lastCheckIn.current;
+    if (checkIn && (!latest || checkIn.at > latest.createdAt)) {
+      lastCheckIn.current = null;
+      try {
+        await checkIn.undo();
+        say(HELM_COPY.habitCheckInTakenBack);
+      } catch (error) {
+        console.error('Helm check-in undo by voice failed', error);
+        say(HELM_COPY.undoFailed);
+      }
+      return;
+    }
     if (!uid || !latest) {
       say(HELM_COPY.nothingToUndo);
       return;
@@ -1000,6 +1067,7 @@ export function useHelmVoice() {
     closed: closed === null ? null : { hasDropped: closed.hasDropped },
     undoClose,
     handleTyped,
+    handleCheckIn: (text: string) => takeCheckIn(text, false),
     registerField,
   };
 }

@@ -25,6 +25,7 @@ import SuggestionSheet, {
   type SuggestionTarget,
 } from '@apps/helm/components/today/SuggestionSheet';
 import SyncedToday from '@apps/helm/components/today/SyncedToday';
+import HabitQuestionFlow from '@apps/helm/components/habits/HabitQuestionFlow';
 import NewTaskSheet from '@apps/helm/components/tasks/NewTaskSheet';
 import TaskRow from '@apps/helm/components/tasks/TaskRow';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
@@ -49,6 +50,7 @@ import {
 
 const { option } = DropdownMenuFactories;
 const NEW_TASK = 'new-task';
+const NEW_HABIT = 'new-habit';
 
 interface TodayViewProps {
   onBack: () => void;
@@ -56,6 +58,7 @@ interface TodayViewProps {
   onOpenTasks: () => void;
   onOpenComingUp: () => void;
   onOpenWho: (whoId: string) => void;
+  onOpenHabit: (habitId: string) => void;
 }
 
 /** Today: a strip of days with each day's events and plan (what was kept and what is suggested), and on today the open tasks that are awake and overdue or due in the next week, soonest first, with a door to all of them; its first-run line until there is a task. */
@@ -65,6 +68,7 @@ function TodayView({
   onOpenTasks,
   onOpenComingUp,
   onOpenWho,
+  onOpenHabit,
 }: TodayViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -88,6 +92,7 @@ function TodayView({
   const { pending, showUndo, undo } = useUndoRemoval();
   const [openId, setOpenId] = useState<string | null>(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
+  const [isNewHabitOpen, setIsNewHabitOpen] = useState(false);
   const [isDeletedNoteShown, setIsDeletedNoteShown] = useState(readDeletedNote);
   const hasTasks = tasks.length > 0;
   useEffect(() => {
@@ -158,9 +163,13 @@ function TodayView({
         onBack={onBack}
         onHome={onHome}
         menu={{
-          items: [option({ label: HELM_COPY.newTask, value: NEW_TASK })],
+          items: [
+            option({ label: HELM_COPY.newTask, value: NEW_TASK }),
+            option({ label: HELM_COPY.newHabit, value: NEW_HABIT }),
+          ],
           onItemSelect: (value) => {
             if (value === NEW_TASK) setIsNewOpen(true);
+            else if (value === NEW_HABIT) setIsNewHabitOpen(true);
           },
         }}
       />
@@ -215,6 +224,7 @@ function TodayView({
               onTick={tick}
               onUndoTick={(taskId) => void undoTick(taskId)}
               onSelectDay={setPickedKey}
+              onOpenHabit={onOpenHabit}
             />
           ))}
         {isToday && <SyncedToday now={now} />}
@@ -267,6 +277,11 @@ function TodayView({
           </section>
         )}
       </main>
+      <HabitQuestionFlow
+        isOpen={isNewHabitOpen}
+        onClose={() => setIsNewHabitOpen(false)}
+        onOpenHabit={onOpenHabit}
+      />
       <NewTaskSheet
         isOpen={isNewOpen}
         onClose={() => setIsNewOpen(false)}
