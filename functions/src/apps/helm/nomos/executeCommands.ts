@@ -1,6 +1,7 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import {
   readEffectivePrivacy,
+  readPersonMark,
   readPrivacyFacts,
   readPrivateMark,
   readSetPrivate,
@@ -138,6 +139,8 @@ export interface ExistingTask {
   /** What the task says about being private and the parents it is filed under, read with it. */
   privacyFacts?: PrivacyFacts;
   privateParents?: PrivateParent[];
+  /** The class stored on the task, which an unreadable parent may be the only source of. */
+  privacy?: string | null;
 }
 
 /** A who the person already has, with what the tier rule reads about it. */
@@ -732,6 +735,8 @@ interface PlanInput {
   /** When the capture was said, which a note's mark in a document carries. */
   capturedAt?: number;
   media?: MediaInput;
+  /** The wake phrase began this turn and nobody is looking at the screen. */
+  isUnattended?: boolean;
 }
 
 interface Draft {
@@ -743,6 +748,7 @@ interface Draft {
   isUrgent: boolean;
   status: 'open' | 'done';
   projectId: string | null;
+  isPrivate: boolean;
 }
 
 const union = (left: string[], right: string[]) => [
@@ -1083,6 +1089,24 @@ export function planWrites(input: PlanInput): WritePlan {
   const patch = (id: string, data: Record<string, unknown>) =>
     patches.set(id, { ...patches.get(id), ...data });
   const privacyLines: string[] = [];
+  const NO_FACTS: PrivacyFacts = { privateMark: null, isPrivacyCleared: false };
+  const linkedFactsOf = (whoIds: string[], placeIds: string[]) => [
+    ...whoIds.flatMap(
+      (id) =>
+        input.people?.known.find((who) => who.id === id)?.privacyFacts ?? [],
+    ),
+    ...placeIds.flatMap(
+      (id) =>
+        input.people?.knownPlaces.find((place) => place.id === id)
+          ?.privacyFacts ?? [],
+    ),
+  ];
+  const isTaskPrivate = (task: ExistingTask) =>
+    task.privacy === 'private' ||
+    readEffectivePrivacy(
+      task.privacyFacts ?? NO_FACTS,
+      (task.privateParents ?? []).map((parent) => parent.facts),
+    ) === 'private';
 
   input.commands.forEach((command) => {
     if (effects.length + drafts.size >= MAX_EFFECTS) return;
@@ -1100,12 +1124,17 @@ export function planWrites(input: PlanInput): WritePlan {
         projectId: command.projectRef
           ? matchProject(command.projectRef, projectStart.pool)
           : null,
+        isPrivate: false,
       });
       return;
     }
     const draft = drafts.get(command.taskId);
     if (command.kind === 'setPrivate') {
-      const settled = draft ? null : working.get(command.taskId);
+      if (draft) {
+        if (command.isPrivate) draft.isPrivate = true;
+        return;
+      }
+      const settled = working.get(command.taskId);
       if (!settled) return;
       const facts = settled.privacyFacts ?? {
         privateMark: null,
@@ -1116,6 +1145,7 @@ export function planWrites(input: PlanInput): WritePlan {
         current: facts,
         isPrivate: command.isPrivate,
         parents,
+        byTurn: { isUnattended: input.isUnattended === true },
       });
       if (outcome.kind === 'refused') {
         privacyLines.push(outcome.line);
@@ -1160,6 +1190,7 @@ export function planWrites(input: PlanInput): WritePlan {
         ...settled,
         sealed,
         privacyFacts: outcome.facts,
+        privacy,
       });
       counts.updated += 1;
       return;
@@ -1237,12 +1268,38 @@ export function planWrites(input: PlanInput): WritePlan {
     ) {
       return;
     }
+    const before = current.privacyFacts ?? NO_FACTS;
+    const marked =
+      title === null
+        ? before
+        : readPrivateMark({
+            current: before,
+            isCare: false,
+            isForOtherWho: false,
+            commandMark: null,
+            isSensitiveHealth: false,
+            words: title,
+          });
+    const hasNewMark = marked.privateMark !== before.privateMark;
+    const isPrivateBefore = isTaskPrivate(current);
+    const isPrivateAfter =
+      isPrivateBefore ||
+      readEffectivePrivacy(marked, [
+        ...(current.privateParents ?? []).map((parent) => parent.facts),
+        ...linkedFactsOf(
+          whoIds.filter((who) => !current.whoIds.includes(who)),
+          placeIds.filter((place) => !current.placeIds.includes(place)),
+        ),
+      ]) === 'private';
+    const hasNewClass = isPrivateAfter && !isPrivateBefore;
     const written: Record<string, unknown> = {
       'sealed.title': title ?? current.title,
       ...(due !== undefined && { due }),
       ...(isUrgent !== null && { isUrgent }),
       ...(hasNewWho && { whoIds }),
       ...(hasNewPlace && { placeIds }),
+      ...(hasNewMark && { 'sealed.privateMark': marked.privateMark }),
+      ...(hasNewClass && { privacy: 'private' }),
     };
     const previous: Record<string, unknown> = {
       'sealed.title': current.title,
@@ -1250,16 +1307,23 @@ export function planWrites(input: PlanInput): WritePlan {
       ...(isUrgent !== null && { isUrgent: current.isUrgent }),
       ...(hasNewWho && { whoIds: current.whoIds }),
       ...(hasNewPlace && { placeIds: current.placeIds }),
+      ...(hasNewMark && { 'sealed.privateMark': before.privateMark }),
+      ...(hasNewClass && { privacy: 'ordinary' }),
     };
     record(id, 'update', written, previous);
     patch(id, {
-      ...(title !== null && {
-        sealed: seal({ ...current.sealed, title }),
+      ...((title !== null || hasNewMark) && {
+        sealed: seal({
+          ...current.sealed,
+          ...(title !== null && { title }),
+          ...(hasNewMark && { privateMark: marked.privateMark }),
+        }),
       }),
       ...(due !== undefined && { due }),
       ...(isUrgent !== null && { isUrgent }),
       ...(hasNewWho && { whoIds }),
       ...(hasNewPlace && { placeIds }),
+      ...(hasNewClass && { privacy: 'private' }),
       lastEditedAt: now,
     });
     working.set(id, {
@@ -1269,6 +1333,8 @@ export function planWrites(input: PlanInput): WritePlan {
       title: title ?? current.title,
       due: due === undefined ? current.due : due,
       isUrgent: isUrgent ?? current.isUrgent,
+      privacyFacts: marked,
+      privacy: isPrivateAfter ? 'private' : current.privacy,
     });
     counts.updated += 1;
   });
@@ -1985,7 +2051,7 @@ export function planWrites(input: PlanInput): WritePlan {
   });
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
-    const facts = readPrivateMark({
+    const marked = readPrivateMark({
       current: { privateMark: null, isPrivacyCleared: false },
       isCare: false,
       isForOtherWho: false,
@@ -1993,6 +2059,7 @@ export function planWrites(input: PlanInput): WritePlan {
       isSensitiveHealth: false,
       words: draft.title,
     });
+    const facts = draft.isPrivate ? readPersonMark(marked, true) : marked;
     record(
       draft.id,
       'create',
@@ -2496,15 +2563,7 @@ export function planWrites(input: PlanInput): WritePlan {
         (command) =>
           command.kind !== 'createTask' &&
           [existing.get(command.taskId), working.get(command.taskId)].some(
-            (task) =>
-              task !== undefined &&
-              readEffectivePrivacy(
-                task.privacyFacts ?? {
-                  privateMark: null,
-                  isPrivacyCleared: false,
-                },
-                (task.privateParents ?? []).map((parent) => parent.facts),
-              ) === 'private',
+            (task) => task !== undefined && isTaskPrivate(task),
           ),
       ),
     topicLines: topicPlan.topicLines,

@@ -1020,10 +1020,25 @@ const readLinks = (
   };
 };
 
-/** Taking a thing out of private is kept only when the person's own words, quoted, say so. */
-const isQuotedPrivateRelease = (
+const RELEASE_PHRASE =
+  /\b(not|no longer|isn t|aren t|doesn t|don t|didn t|never|stop|unmark|unprivate|make \w+ public|be public|is public|as public)\b/;
+
+/** A mark names private without a negation; a release negates private or asks for public. */
+const isQuoteOfDirection = (quote: string, isPrivate: boolean) => {
+  const isRelease =
+    /\bpublic\b/.test(quote) ||
+    (/\bprivate\b/.test(quote) && RELEASE_PHRASE.test(quote)) ||
+    /\bunmark\b/.test(quote);
+  return isPrivate
+    ? /\bprivate\b/.test(quote) && !isRelease
+    : isRelease;
+};
+
+/** Changing whether a thing is private is kept only when the person's own words, quoted, say so. */
+const isQuotedPrivateChange = (
   item: Record<string, unknown>,
   captureText: string,
+  isPrivate: boolean,
 ) => {
   const quote = toComparable(
     typeof item.requestQuote === 'string' ? item.requestQuote : '',
@@ -1031,7 +1046,7 @@ const isQuotedPrivateRelease = (
   return (
     quote.split(' ').filter(Boolean).length >= 2 &&
     ` ${toComparable(captureText)} `.includes(` ${quote} `) &&
-    /\b(private|public)\b/.test(quote)
+    isQuoteOfDirection(quote, isPrivate)
   );
 };
 
@@ -1063,7 +1078,7 @@ const readCommand = (
     const alias = typeof item.taskAlias === 'string' ? item.taskAlias : '';
     const subjectId = state.refs.has(alias) ? alias : aliases.idOf(alias);
     if (!subjectId || typeof item.isPrivate !== 'boolean') return null;
-    return item.isPrivate || isQuotedPrivateRelease(item, captureText)
+    return isQuotedPrivateChange(item, captureText, item.isPrivate)
       ? { kind, taskId: subjectId, isPrivate: item.isPrivate }
       : null;
   }

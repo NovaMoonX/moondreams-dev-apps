@@ -1592,7 +1592,7 @@ The growth area is Issues 101–130, written out in full and in build order: the
 **Prerequisites:** 65, 20. Adds `drive.file` by incremental consent; export through a callable on the platform's token store. A private topic or note is left out of an export unless the person taps "Include them" for that export (`filterPrivate`, section 28 "Private is a class").
 
 ### Issue 67: Put a planned task on Google Calendar, approved one by one
-**Prerequisites:** 32, 81. The first outbound action: `calendar.events` scope, `executing` / `verificationRequired` states, an approvals queue. A proposal for a private thing shows "· Private" in the queue and, once approved, is written with Google Calendar's `visibility: 'private'`.
+**Prerequisites:** 32, 81. The first outbound action: `calendar.events` scope, `executing` / `verificationRequired` states, an approvals queue. A proposal for a private thing shows the lock in the queue and, once approved, is written with Google Calendar's `visibility: 'private'`.
 
 ### Issue 68: Preparation before an event
 **Prerequisites:** 65, 55. A scheduled drafter leaves a procedure run or a briefing topic on Today; no push.
@@ -1705,7 +1705,7 @@ The assistant always knows where to look and where to write. `WHERE_THINGS_LIVE`
 **Target PR Size:** ~500 lines (L)
 **Context:** `TECHNICAL.md` section 2 ("Readable versus sealed": Private), section 28 ("Private is a class, not only health"); `PRODUCT.md` "Private Things"; `UX.md` 1i, D19.
 ### Description
-Health and care things are private on their own on any kind of record, and anything else is private when the person says so or turns on its Private switch; a thing filed under a private project or about a private person is private too. A private thing shows a quiet lock in lists and "· Private" on its filing line, is never named in a push, copy, export or anything written outside Helm unless turned on for that one thing or copy, and inside Helm nothing changes. Habits and their care switch join in Issue 108, the lock-screen name in Issue 110.
+Health and care things are private on their own on any kind of record, and anything else is private when the person says so or turns on its Private switch; a thing filed under a private project or about a private person is private too. A private thing shows a quiet lock after its name in lists, is never named in a push, copy, export or anything written outside Helm unless turned on for that one thing or copy, and inside Helm nothing changes. Habits and their care switch join in Issue 108, the lock-screen name in Issue 110.
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** "keep this private" on a new thing; a health or care thing marked by code with its reason shown.
 - [ ] **Read:** the lock beside a private thing's name; the sheet saying where an inherited class comes from.
@@ -1713,7 +1713,7 @@ Health and care things are private on their own on any kind of record, and anyth
 - [ ] **Delete:** a copy or export leaves private things out with "Include them" for that copy.
 ### Success Criteria
 - [ ] Every derived kind (patterns, observations, reflections, seen-as lines, Activity lines, moments, timeline, Today's lines) is private when any source is; copies and exports of them leave private ones out with "Include them" (`check:helm-private`).
-- [x] A wake-phrase turn with the page hidden or untouched answers private things by label ("your morning medicine") in speech and on screen, until the first touch; names never reach the model in that turn (`check:helm-private`).
+- [x] A wake-phrase turn with the page hidden or untouched answers private things by a neutral label ("a private task this morning") in speech and on screen, until the first touch; names never reach the model in that turn (`check:helm-private`).
 - [x] Deleting a private project or forgetting a private person leaves each child that inherited it with its own mark (`check:helm-private`).
 - [ ] Each source of the class (care, a health word the model missed, the person, a private project, a private who) and leaving the project; code never clears a health mark and never re-marks a cleared one; `setPrivate` is refused on an inherited class with its code-built line (`check:helm-private`); every copy and export goes through `filterPrivate` (`check:helm-copy`).
 - [ ] No rules change (`privacy` is a readable field under the owner wildcard); stated. Rows added to `WHERE_THINGS_LIVE` for `privacy` and `touchesPrivate`. Conventions: `security-privacy.md` "Private is a class any record can carry" written (Issue 110 folds the push bullet into it).

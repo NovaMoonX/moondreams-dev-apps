@@ -25,12 +25,11 @@ import type {
   TaskWordsChange,
 } from '@apps/helm/types';
 import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
+import { readPrivacyFacts, readPrivateMark } from '@apps/helm/utils/privacy';
 import {
-  readEffectivePrivacy,
-  readPersonMark,
-  readPrivateMark,
-} from '@apps/helm/utils/privacy';
-import { readRecordPrivacy } from '@apps/helm/utils/privacyParents';
+  readNewRecordPrivacy,
+  readRecordPrivacy,
+} from '@apps/helm/utils/privacyParents';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
 import {
   planPhotoRelease,
@@ -57,15 +56,13 @@ export async function createTask(
 ) {
   const title = toTaskTitle(input.title).slice(0, TASK_TITLE_CAP);
   if (!title) throw new Error('A task needs words.');
-  const marked = readPrivateMark({
-    current: { privateMark: null, isPrivacyCleared: false },
-    isCare: false,
-    isForOtherWho: false,
-    commandMark: null,
-    isSensitiveHealth: false,
-    words: title,
-  });
-  const facts = input.isPrivate ? readPersonMark(marked, true) : marked;
+  const { facts, privacy } = readNewRecordPrivacy(
+    'task',
+    { id: '' },
+    title,
+    readParentIndex(),
+    { isPrivate: input.isPrivate === true },
+  );
   const task: Task = {
     status: 'open',
     importance: null,
@@ -86,7 +83,7 @@ export async function createTask(
     createdBy: 'person',
     sourceCaptureId: null,
     executionId: null,
-    privacy: readEffectivePrivacy(facts),
+    privacy,
     createdAt: Date.now(),
     lastEditedAt: null,
     completedAt: null,
@@ -158,8 +155,24 @@ export async function updateTaskWords(
           encryption,
         ).catch(() => null);
         if (!opened) return 'unreadable';
+        const changed = applyWordsChange(opened, change);
+        const before = readPrivacyFacts(opened);
+        const marked =
+          change.kind === 'title'
+            ? readPrivateMark({
+                current: before,
+                isCare: false,
+                isForOtherWho: false,
+                commandMark: null,
+                isSensitiveHealth: false,
+                words: change.title,
+              })
+            : before;
+        const isNewlyMarked = marked.privateMark !== before.privateMark;
         const sealed = await sealJson<TaskSealed>(
-          applyWordsChange(opened, change),
+          isNewlyMarked
+            ? { ...changed, privateMark: marked.privateMark }
+            : changed,
           encryption,
         );
         const stepFields =
@@ -176,6 +189,7 @@ export async function updateTaskWords(
         transaction.update(ref, {
           sealed,
           lastEditedAt: Date.now(),
+          ...(isNewlyMarked && { privacy: 'private' }),
           ...stepFields,
         });
         return 'saved';

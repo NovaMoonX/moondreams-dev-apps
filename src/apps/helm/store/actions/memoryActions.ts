@@ -9,7 +9,12 @@ import {
 
 import { db } from '@lib/firebase/config';
 
+import { store } from '@/store';
+
 import { sealJson } from '@apps/helm/security';
+import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
+import { readPrivacyFacts } from '@apps/helm/utils/privacy';
+import { readNewRecordPrivacy } from '@apps/helm/utils/privacyParents';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import type { Fact, FactKind, FactSealed } from '@apps/helm/types';
 import {
@@ -93,14 +98,24 @@ export const correctFact = (
     const facts = factsOf(uid);
     const oldRef = doc(facts, factId);
     const newRef = doc(facts);
+    const earlier = store
+      .getState()
+      .helm.facts.items.find((entry) => entry.id === factId);
+    const own = readNewRecordPrivacy(
+      'fact',
+      { id: factId, ...earlier },
+      statement,
+      readParentIndex(),
+      { current: readPrivacyFacts(earlier) },
+    );
     const sealed = await sealJson<FactSealed>(
       {
         statement,
         quote: null,
         topic,
         value: null,
-        privateMark: null,
-        isPrivacyCleared: false,
+        privateMark: own.facts.privateMark,
+        isPrivacyCleared: own.facts.isPrivacyCleared,
       },
       await getHelmEncryption(uid),
     );
@@ -134,7 +149,10 @@ export const correctFact = (
         supersededById: null,
         supersededAt: null,
         disputedWithId: null,
-        privacy: 'ordinary',
+        privacy:
+          own.privacy === 'private' || data.privacy === 'private'
+            ? 'private'
+            : 'ordinary',
         createdAt: now,
         confirmedAt: now,
         lastEditedAt: null,
@@ -303,14 +321,22 @@ export const addFact = (
   guard(async (): Promise<FactChange> => {
     const ref = doc(factsOf(uid));
     const now = Date.now();
+    const whoIds = subject.kind === 'who' ? [subject.id] : [];
+    const placeIds = subject.kind === 'place' ? [subject.id] : [];
+    const own = readNewRecordPrivacy(
+      'fact',
+      { id: '', whoIds, placeIds, subjectIds: [subject.id] },
+      statement,
+      readParentIndex(),
+    );
     const sealed = await sealJson<FactSealed>(
       {
         statement,
         quote: null,
         topic: about.topic,
         value: null,
-        privateMark: null,
-        isPrivacyCleared: false,
+        privateMark: own.facts.privateMark,
+        isPrivacyCleared: own.facts.isPrivacyCleared,
       },
       await getHelmEncryption(uid),
     );
@@ -323,8 +349,8 @@ export const addFact = (
       sourceExecutionId: null,
       sourceConnection: null,
       aboutField: null,
-      whoIds: subject.kind === 'who' ? [subject.id] : [],
-      placeIds: subject.kind === 'place' ? [subject.id] : [],
+      whoIds,
+      placeIds,
       projectIds: [],
       syncedIds: [],
       subjectIds: [subject.id],
@@ -333,7 +359,7 @@ export const addFact = (
       supersededById: null,
       supersededAt: null,
       disputedWithId: null,
-      privacy: 'ordinary',
+      privacy: own.privacy,
       createdAt: now,
       confirmedAt: now,
       lastEditedAt: null,

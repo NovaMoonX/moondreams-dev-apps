@@ -3,7 +3,21 @@ import assert from 'node:assert/strict';
 
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import type { CaptureReading } from '../../functions/src/apps/helm/nomos/commands.ts';
-import { planWrites } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import {
+  sealForHelm,
+  type HelmKey,
+} from '../../functions/src/apps/helm/helmKey.ts';
+import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
+import {
+  planWrites,
+  type KnownWhoState,
+  type PeopleInput,
+} from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import {
+  readAlreadyMade,
+  readEarlierTurns,
+} from '../../functions/src/apps/helm/sortHelmCapture.ts';
+import { buildContext } from '../../functions/src/apps/helm/nomos/buildContext.ts';
 import {
   maskContextRecords,
   toContextTask,
@@ -13,6 +27,8 @@ import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normali
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
   buildInheritedLine,
+  buildOnItsPageLine,
+  buildUnattendedReleaseLine,
   buildLeftOutLine,
   filterPrivate,
   filterPrivateOwnPage,
@@ -30,12 +46,16 @@ import {
 } from '../../src/apps/helm/utils/privacy.ts';
 import {
   buildParentIndex,
+  planCascade,
   planKeepOnLeaving,
   readRecordPrivacy,
+  readNewRecordPrivacy,
+  withParentFacts,
 } from '../../src/apps/helm/utils/privacyParents.ts';
 
-const tests: [string, () => void][] = [];
-const test = (name: string, run: () => void) => tests.push([name, run]);
+const tests: [string, () => void | Promise<void>][] = [];
+const test = (name: string, run: () => void | Promise<void>) =>
+  tests.push([name, run]);
 
 const NONE: PrivacyFacts = { privateMark: null, isPrivacyCleared: false };
 const mark = (words: string, current: PrivacyFacts = NONE, isCare = false) =>
@@ -222,34 +242,27 @@ test('a touch ends the unattended turn', () => {
   );
 });
 
-test('a private thing is named by its label, never its name', () => {
+test('a private task is named by its time of day, never its name or what it seems to be about', () => {
   assert.equal(
-    readMaskedLabel({
-      mark: 'health',
-      windowLabel: 'morning',
-      timeLabel: '8:00 AM',
-    }),
-    'your morning medicine',
+    readMaskedLabel({ windowLabel: 'morning' }),
+    'a private task this morning',
   );
   assert.equal(
-    readMaskedLabel({
-      mark: 'person',
-      windowLabel: null,
-      timeLabel: '3:00 PM',
-    }),
-    'a private thing at 3:00 PM',
+    readMaskedLabel({ windowLabel: 'evening' }),
+    'a private task this evening',
   );
+  assert.equal(readMaskedLabel({ windowLabel: null }), 'a private task');
   assert.equal(
-    readMaskedLabel({ mark: null, windowLabel: null, timeLabel: null }),
-    'a private thing',
+    /medicine|health|care/i.test(readMaskedLabel({ windowLabel: 'morning' })),
+    false,
   );
 });
 
 test('a private name left in a reply is replaced, an ordinary one is named as usual', () => {
-  const names = [{ name: 'Metoprolol', label: 'your morning medicine' }];
+  const names = [{ name: 'Metoprolol', label: 'a private task this morning' }];
   assert.equal(
     maskPrivateNames('Done: Metoprolol, and buy milk.', names),
-    'Done: your morning medicine, and buy milk.',
+    'Done: a private task this morning, and buy milk.',
   );
   assert.equal(maskPrivateNames('Added buy milk', names), 'Added buy milk');
   assert.equal(
@@ -265,10 +278,7 @@ const contextOf = (isOn: boolean, privacy: 'private' | 'ordinary') => {
   const task = toContextTask(
     'task-1',
     { privacy, due: { kind: 'moment', at: MORNING } },
-    {
-      title: 'Metoprolol',
-      sealed: { privateMark: privacy === 'private' ? 'health' : null },
-    },
+    { title: 'Metoprolol' },
     { isOn, timeZone: 'UTC', names },
   );
   return { task, names };
@@ -276,10 +286,10 @@ const contextOf = (isOn: boolean, privacy: 'private' | 'ordinary') => {
 
 test('in an unattended turn the model is given the label of a private task, never its name', () => {
   const { task, names } = contextOf(true, 'private');
-  assert.equal(task.title, 'your morning medicine');
+  assert.equal(task.title, 'a private task this morning');
   assert.equal(JSON.stringify(task).includes('Metoprolol'), false);
   assert.deepEqual(names, [
-    { name: 'Metoprolol', label: 'your morning medicine' },
+    { name: 'Metoprolol', label: 'a private task this morning' },
   ]);
 });
 
@@ -364,9 +374,15 @@ const setPrivate = (isPrivate: boolean, requestQuote: string | null) => ({
   requestQuote,
 });
 
-test('the model can mark a task private, and a release is kept only with the person words quoted', () => {
+test('the model can mark a task private, and either change is kept only with the person words quoted', () => {
   assert.deepEqual(
     readCommands('keep the dentist task private', [setPrivate(true, null)]),
+    [],
+  );
+  assert.deepEqual(
+    readCommands('keep the dentist task private', [
+      setPrivate(true, 'keep the dentist task private'),
+    ]),
     [{ kind: 'setPrivate', taskId: 'task-1', isPrivate: true }],
   );
   assert.deepEqual(
@@ -377,8 +393,33 @@ test('the model can mark a task private, and a release is kept only with the per
   );
   assert.deepEqual(readCommands('buy milk', [setPrivate(false, null)]), []);
   assert.deepEqual(
-    readCommands('buy milk', [setPrivate(false, 'not private anymore')]),
+    readCommands('buy milk', [setPrivate(true, 'keep it private')]),
     [],
+  );
+});
+
+test('a release is kept only when the quote releases, and a mark only when it does not', () => {
+  assert.deepEqual(
+    readCommands('please keep that one private', [
+      setPrivate(false, 'keep that one private'),
+    ]),
+    [],
+  );
+  assert.deepEqual(
+    readCommands("that doesn't need to be private", [
+      setPrivate(false, "that doesn't need to be private"),
+    ]),
+    [{ kind: 'setPrivate', taskId: 'task-1', isPrivate: false }],
+  );
+  assert.deepEqual(
+    readCommands("it doesn't need to be private", [
+      setPrivate(true, "it doesn't need to be private"),
+    ]),
+    [],
+  );
+  assert.deepEqual(
+    readCommands('make it public', [setPrivate(false, 'make it public')]),
+    [{ kind: 'setPrivate', taskId: 'task-1', isPrivate: false }],
   );
 });
 
@@ -781,17 +822,447 @@ test('a private record read on an ordinary turn is remembered so an answer that 
   assert.equal(quoting('Nothing private here.'), false);
 });
 
-const failures = tests.flatMap(([name, run]) => {
-  try {
-    run();
-    console.log(`ok   ${name}`);
-    return [];
-  } catch (error) {
-    console.error(
-      `FAIL ${name}\n${error instanceof Error ? error.stack : error}`,
-    );
-    return [name];
-  }
+const HELM_KEY: HelmKey = {
+  keyId: 'k',
+  keyVersion: 1,
+  key: Buffer.alloc(32, 7),
+};
+
+const planOf = (
+  commands: Record<string, unknown>[],
+  options: {
+    task?: Record<string, unknown>;
+    isUnattended?: boolean;
+    known?: KnownWhoState[];
+    mentions?: PeopleInput['mentions'];
+  } = {},
+) => {
+  const people: PeopleInput | undefined = options.known && {
+    mentions: options.mentions ?? [],
+    places: [],
+    known: options.known,
+    knownPlaces: [],
+    assistantName: null,
+    assistantNames: [],
+    dayKey: '2026-11-10',
+    capturedAt: 4000,
+  };
+  return planWrites({
+    commands: commands as never,
+    existing: new Map([
+      [
+        'task-1',
+        {
+          status: 'open' as const,
+          due: null,
+          isUrgent: false,
+          title: 'Dentist',
+          whoIds: [],
+          placeIds: [],
+          sealed: { title: 'Dentist', notes: null, steps: {} },
+          ...options.task,
+        },
+      ],
+    ]),
+    people,
+    isUnattended: options.isUnattended,
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: 5000,
+    seal: seal as never,
+    newId: () => 'new-1',
+  });
+};
+
+const PRIVATE_WHO = (id: string): KnownWhoState => ({
+  id,
+  kind: 'person',
+  name: 'Mom',
+  aliases: [],
+  lastMentionedAt: null,
+  tier: 'passing',
+  tierSetBy: 'nomos',
+  mentionDayKeys: [],
+  taskLinkCount: 0,
+  yearlyDateCount: 0,
+  momentCount: 0,
+  hasRole: false,
+  privacyFacts: readPersonMark(NONE, true),
 });
+
+test('a turn cannot clear a mark code set, and says to change it on its page', () => {
+  const plan = planOf(
+    [{ kind: 'setPrivate', taskId: 'task-1', isPrivate: false }],
+    {
+      task: {
+        privacy: 'private',
+        privacyFacts: mark('Take my medicine'),
+      },
+    },
+  );
+  assert.equal(plan.effects.length, 0);
+  assert.deepEqual(plan.notKept, [buildOnItsPageLine()]);
+  assert.equal(plan.isPrivate, true);
+});
+
+test('nothing is made not private on an unattended turn, though the same words release a person mark when attended', () => {
+  const task = {
+    privacy: 'private',
+    privacyFacts: readPersonMark(NONE, true),
+  };
+  const release = [{ kind: 'setPrivate', taskId: 'task-1', isPrivate: false }];
+  const unattended = planOf(release, { task, isUnattended: true });
+  assert.equal(unattended.effects.length, 0);
+  assert.deepEqual(unattended.notKept, [buildUnattendedReleaseLine()]);
+  const attended = planOf(release, { task, isUnattended: false });
+  assert.equal(attended.effects.length, 1);
+  assert.equal(attended.effects[0].written.privacy, 'ordinary');
+});
+
+test('a task private only through its stored class stays private when it is completed', () => {
+  const plan = planOf([{ kind: 'completeTask', taskId: 'task-1' }], {
+    task: { privacy: 'private' },
+  });
+  assert.equal(plan.isPrivate, true);
+  assert.equal(
+    planOf([{ kind: 'completeTask', taskId: 'task-1' }]).isPrivate,
+    false,
+  );
+});
+
+test('linking a private person to a task makes it private with an Undo that restores it', () => {
+  const plan = planOf(
+    [
+      {
+        kind: 'updateTask',
+        taskId: 'task-1',
+        title: null,
+        hasDue: false,
+        due: null,
+        isUrgent: null,
+        whoRefs: ['$w1'],
+        placeRefs: [],
+      },
+    ],
+    {
+      known: [PRIVATE_WHO('who-1')],
+      mentions: [
+        {
+          ref: '$w1',
+          name: 'Mom',
+          kind: 'person',
+          relation: null,
+          species: null,
+          organizationKind: null,
+        },
+      ],
+    },
+  );
+  assert.equal(plan.effects[0].written.privacy, 'private');
+  assert.equal(plan.effects[0].previous?.privacy, 'ordinary');
+  assert.equal(plan.updates[0].data.privacy, 'private');
+  assert.equal(plan.isPrivate, true);
+});
+
+test('retitling a task with a health word marks it private, with the reason', () => {
+  const plan = planOf([
+    {
+      kind: 'updateTask',
+      taskId: 'task-1',
+      title: 'Take my medicine',
+      hasDue: false,
+      due: null,
+      isUrgent: null,
+      whoRefs: [],
+      placeRefs: [],
+    },
+  ]);
+  assert.equal(plan.effects[0].written['sealed.privateMark'], 'health');
+  assert.equal(plan.effects[0].written.privacy, 'private');
+  assert.equal(plan.isPrivate, true);
+});
+
+test('make this and keep it private starts the new task private', () => {
+  const plan = planOf([
+    {
+      kind: 'createTask',
+      ref: '$new1',
+      title: 'Plan the surprise',
+      due: null,
+      isUrgent: false,
+      whoRefs: [],
+      placeRefs: [],
+      projectRef: null,
+    },
+    { kind: 'setPrivate', taskId: '$new1', isPrivate: true },
+  ]);
+  assert.equal(plan.creates[0].data.privacy, 'private');
+  assert.equal(plan.isPrivate, true);
+});
+
+test('a cascade takes the parent facts from the write, never the store', () => {
+  const stale = buildParentIndex([], [{ id: 'w1', name: 'Mom', ...NONE }], []);
+  const fresh = withParentFacts(stale, 'who', 'w1', readPersonMark(NONE, true));
+  const child = {
+    kind: 'task' as const,
+    record: { id: 't1', whoIds: ['w1'], privacy: 'ordinary' as const },
+  };
+  assert.deepEqual(planCascade([child], stale), []);
+  assert.deepEqual(planCascade([child], fresh), [
+    { kind: 'task', id: 't1', privacy: 'private' },
+  ]);
+  assert.equal(stale.who.get('w1')?.facts.privateMark, null);
+});
+
+test('a child with a parent that cannot be read is not made ordinary, and a record with no parent has nothing to cascade', () => {
+  const index = buildParentIndex([], [], []);
+  assert.deepEqual(
+    planCascade(
+      [
+        {
+          kind: 'task',
+          record: { id: 't1', whoIds: ['gone'], privacy: 'private' },
+        },
+        { kind: 'task', record: { id: 't2', privacy: 'private' } },
+      ],
+      index,
+    ),
+    [{ kind: 'task', id: 't2', privacy: 'ordinary' }],
+  );
+});
+
+test('a new fact about a private person starts private, and a new task takes the class of its parents and words', () => {
+  const private_ = readPersonMark(NONE, true);
+  const index = buildParentIndex(
+    [],
+    [{ id: 'w1', name: 'Mom', ...private_ }],
+    [],
+  );
+  const fact = readNewRecordPrivacy(
+    'fact',
+    { id: '', subjectIds: ['w1'] },
+    'likes tea',
+    index,
+  );
+  assert.equal(fact.privacy, 'private');
+  const task = readNewRecordPrivacy(
+    'task',
+    { id: '' },
+    'Take my medicine',
+    index,
+  );
+  assert.equal(task.privacy, 'private');
+  assert.equal(task.facts.privateMark, 'health');
+  assert.equal(
+    readNewRecordPrivacy('task', { id: '' }, 'Buy milk', index).privacy,
+    'ordinary',
+  );
+});
+
+const UNATTENDED = () => ({
+  isOn: true,
+  timeZone: 'UTC',
+  names: [] as MaskedName[],
+  quoted: [] as MaskedName[],
+});
+
+test('a tool result on an unattended turn names a private task by its time of day and pushes its name into the mask', async () => {
+  const makeDoc = (id: string, title: string, privacy: string) => ({
+    id,
+    data: () => ({
+      status: 'open',
+      due: null,
+      createdAt: 1000,
+      privacy,
+      sealed: sealForHelm(HELM_KEY, { title }),
+    }),
+  });
+  const query = {
+    where: () => query,
+    orderBy: () => query,
+    limit: () => query,
+    get: async () => ({
+      docs: [
+        makeDoc('a', 'Metoprolol refill', 'private'),
+        makeDoc('b', 'Metoprolol is not a word here', 'ordinary'),
+      ],
+    }),
+  };
+  const run = async (mask: ReturnType<typeof UNATTENDED> | undefined) => {
+    const tools = buildHelmTools({
+      uid: 'u1',
+      key: HELM_KEY,
+      aliases: createAliasBook('t'),
+      timeZone: 'UTC',
+      firestore: { collection: () => query } as never,
+      mask,
+    });
+    const found = (await tools
+      .find((tool) => tool.name === 'search_tasks')
+      ?.run({ query: 'metoprolol', includeDone: false } as never)) as {
+      tasks: { title: string }[];
+    };
+    return found.tasks.map((task) => task.title);
+  };
+  const mask = UNATTENDED();
+  const masked = await run(mask);
+  assert.ok(masked.includes('a private task'));
+  assert.ok(masked.includes('Metoprolol is not a word here'));
+  assert.ok(!masked.some((title) => title.includes('refill')));
+  assert.deepEqual(mask.names, [
+    { name: 'Metoprolol refill', label: 'a private task' },
+  ]);
+  const attended = await run({ ...UNATTENDED(), isOn: false });
+  assert.ok(attended.includes('Metoprolol refill'));
+});
+
+test('earlier turns and already-made lines that touch something private are labelled, and their words join the mask', async () => {
+  const sealedDoc = (fields: Record<string, unknown>) =>
+    sealForHelm(HELM_KEY, fields);
+  const docs = {
+    'exec-1': {
+      privacy: 'private',
+      effectRefs: [{ op: 'create', collection: 'tasks', docId: 't1' }],
+      sealed: sealedDoc({
+        summary: 'Made Metoprolol refill',
+        effects: [{ written: { 'sealed.title': 'Metoprolol refill' } }],
+      }),
+    },
+  };
+  const firestore = {
+    doc: (path: string) => ({
+      get: async () => ({
+        data: () => docs[path.split('/').pop() as keyof typeof docs],
+      }),
+    }),
+    collection: () => {
+      const query = {
+        where: () => query,
+        orderBy: () => query,
+        limit: () => query,
+        get: async () => ({
+          docs: [
+            {
+              id: 'c1',
+              data: () => ({
+                turnIndex: 0,
+                sessionId: 's',
+                executionIds: ['exec-1'],
+                sealed: sealedDoc({
+                  text: 'remind me about my metoprolol refill',
+                }),
+              }),
+            },
+          ],
+        }),
+      };
+      return query;
+    },
+  };
+  const mask = UNATTENDED();
+  const turns = await readEarlierTurns(
+    firestore as never,
+    'apps/helm/users/u1',
+    HELM_KEY,
+    { sessionId: 's', turnIndex: 1 } as never,
+    mask,
+  );
+  assert.equal(turns[0].said, 'Something private was said.');
+  assert.equal(turns[0].did, 'Something private was done.');
+  assert.ok(mask.names.some((entry) => entry.name.includes('metoprolol')));
+  const made = await readAlreadyMade(
+    firestore as never,
+    'apps/helm/users/u1',
+    HELM_KEY,
+    ['exec-1'],
+    UNATTENDED(),
+  );
+  assert.deepEqual(made, ['a private task']);
+});
+
+test('a topic under a private ancestor shows the masked path on an unattended turn', () => {
+  const mask = UNATTENDED();
+  const out = maskContextRecords(mask, {
+    topics: [
+      {
+        id: 't1',
+        name: 'Recipes',
+        path: 'Therapy > Recipes',
+        maskedPath: 'a private topic > Recipes',
+      },
+    ],
+    synced: [],
+  } as never);
+  assert.equal(out.topics?.[0].path, 'a private topic > Recipes');
+  const off = maskContextRecords({ ...UNATTENDED(), isOn: false }, {
+    topics: [
+      {
+        id: 't1',
+        name: 'Recipes',
+        path: 'Therapy > Recipes',
+        maskedPath: 'a private topic > Recipes',
+      },
+    ],
+    synced: [],
+  } as never);
+  assert.equal(off.topics?.[0].path, 'Therapy > Recipes');
+});
+
+test('the message the model reads over masked inputs holds no private word', () => {
+  const mask = UNATTENDED();
+  const masked = maskContextRecords(mask, {
+    facts: [
+      {
+        id: 'f1',
+        subject: 'Dr. Chen',
+        statement: 'prescribed Metoprolol',
+        by: 'said',
+        isPrivate: true,
+        isSubjectPrivate: true,
+      },
+    ],
+    notes: [
+      { id: 'n1', title: 'Lab results', body: 'LDL high', isPrivate: true },
+    ],
+    synced: [],
+  } as never);
+  const { message } = buildContext({
+    text: 'what is on my plate',
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 10, 12),
+    timeZone: 'UTC',
+    tasks: [
+      toContextTask(
+        'task-1',
+        { privacy: 'private', due: null },
+        { title: 'Metoprolol refill' },
+        mask,
+      ),
+    ],
+    facts: masked.facts,
+    notes: masked.notes,
+  });
+  ['Metoprolol', 'Chen', 'Lab results', 'LDL'].forEach((word) =>
+    assert.ok(!message.includes(word), `${word} reached the message`),
+  );
+  assert.ok(message.includes('a private task'));
+});
+
+const failures = (
+  await Promise.all(
+    tests.map(async ([name, run]) => {
+      try {
+        await run();
+        console.log(`ok   ${name}`);
+        return [];
+      } catch (error) {
+        console.error(
+          `FAIL ${name}\n${error instanceof Error ? error.stack : error}`,
+        );
+        return [name];
+      }
+    }),
+  )
+).flat();
 console.log(`${tests.length - failures.length}/${tests.length} passed`);
 process.exit(failures.length ? 1 : 0);

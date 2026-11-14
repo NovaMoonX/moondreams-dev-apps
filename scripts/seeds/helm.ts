@@ -747,16 +747,19 @@ const ANSWER_TASKS = [
     id: 'seed-task-answer-cake',
     title: 'Cake tasting at Sweet Layer Bakery',
     dueDays: 3,
+    isHealth: false,
   },
   {
     id: 'seed-task-answer-dinner',
     title: "Ask Dana's parents about the rehearsal dinner",
     dueDays: 9,
+    isHealth: false,
   },
   {
     id: 'seed-task-answer-refill',
     title: "Refill Mom's metoprolol",
     dueDays: 1,
+    isHealth: true,
   },
 ];
 
@@ -1209,7 +1212,7 @@ async function buildAnswerTurns(input: {
     ANSWER_TASKS.map(async (entry, order) => {
       const made = now - (order + 4) * 60 * MINUTE_MS;
       const task: Task = {
-        privacy: 'ordinary',
+        privacy: entry.isHealth ? 'private' : 'ordinary',
         status: 'open',
         importance: null,
         isUrgent: false,
@@ -1234,7 +1237,7 @@ async function buildAnswerTurns(input: {
         completedAt: null,
         clearedAt: null,
         sealed: await sealJson<TaskSealed>(
-          { title: entry.title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
+          { title: entry.title, notes: null, steps: {}, privateMark: entry.isHealth ? 'health' : null, isPrivacyCleared: false },
           encryption,
         ),
       };
@@ -1720,7 +1723,7 @@ async function buildProjects(input: {
     taskOf('seed-task-medicine', 'Take the morning medicine', {
       projectId: null,
       privacy: 'private',
-      due: { kind: 'moment', at: today + 8 * 60 * MINUTE_MS },
+      due: { kind: 'moment', at: zonedDateTimeToEpoch(new Date(today).toISOString().slice(0, 10), '08:00', 'America/Los_Angeles') },
       createdAt: now - 2 * DAY_MS,
     }),
     taskOf('seed-task-move-1', 'Change the address', {

@@ -1,7 +1,9 @@
 import {
   isPrivateInEffect,
   readEffectivePrivacy,
+  readPersonMark,
   readPrivacyFacts,
+  readPrivateMark,
   type PrivacyClass,
   type PrivacyFacts,
   type PrivateParent,
@@ -96,6 +98,28 @@ export const parentsOf = (
     ids.flatMap((id) => index[parentKind].get(id) ?? []),
   );
 
+/** Whether a record is filed under or about the given parent. */
+export const isLinkedTo = (
+  kind: PrivateKind,
+  record: PrivacyRecord,
+  parentKind: ParentKind,
+  parentId: string,
+) =>
+  linksOf(kind, record).some(
+    ([linkKind, ids]) => linkKind === parentKind && ids.includes(parentId),
+  );
+
+/** The one derivation of a record's class: its own mark and care mark, and the marks of the parents it is filed under that are still there. */
+export const deriveRecordPrivacy = (
+  kind: PrivateKind,
+  record: PrivacyRecord,
+  index: ParentIndex,
+): PrivacyClass =>
+  readEffectivePrivacy(
+    readPrivacyFacts(record),
+    parentsOf(kind, record, index).map((parent) => parent.facts),
+  );
+
 /** The class a record is in right now, worked out from the store so a child whose rewrite has not landed still reads as private. */
 export const readRecordPrivacy = (
   kind: PrivateKind,
@@ -104,24 +128,63 @@ export const readRecordPrivacy = (
 ): PrivacyClass =>
   record.privacy === 'private'
     ? 'private'
-    : readEffectivePrivacy(
-        readPrivacyFacts(record),
-        parentsOf(kind, record, index).map((parent) => parent.facts),
-      );
+    : deriveRecordPrivacy(kind, record, index);
+
+/** A copy of the index in which one parent has the facts a write just gave it, so a cascade never reads the store before the write has reached it. */
+export const withParentFacts = (
+  index: ParentIndex,
+  parentKind: ParentKind,
+  parentId: string,
+  facts: PrivacyFacts,
+): ParentIndex => {
+  const parent = index[parentKind].get(parentId);
+  return {
+    ...index,
+    [parentKind]: new Map(index[parentKind]).set(parentId, {
+      id: parentId,
+      name: parent?.name ?? '',
+      facts,
+    }),
+  };
+};
+
+/** The own mark and class a new record starts with: code's mark for its words, the person's when they asked for it, and the class its parents give. */
+export const readNewRecordPrivacy = (
+  kind: PrivateKind,
+  links: PrivacyRecord,
+  words: string,
+  index: ParentIndex,
+  options: { isPrivate?: boolean; current?: PrivacyFacts } = {},
+) => {
+  const marked = readPrivateMark({
+    current: options.current ?? { privateMark: null, isPrivacyCleared: false },
+    isCare: false,
+    isForOtherWho: false,
+    commandMark: null,
+    isSensitiveHealth: false,
+    words,
+  });
+  const facts = options.isPrivate ? readPersonMark(marked, true) : marked;
+  return {
+    facts,
+    privacy: deriveRecordPrivacy(kind, { ...links, ...facts }, index),
+  };
+};
 
 export interface Child {
   kind: PrivateKind;
   record: PrivacyRecord;
 }
 
-/** Children whose stored class differs from the one their own mark and parents give. */
+/** Children whose stored class differs from the one their own mark and parents give. A private child with a parent that cannot be read stays as it is, since that parent may be the reason. */
 export const planCascade = (children: readonly Child[], index: ParentIndex) =>
   children.flatMap(({ kind, record }) => {
-    const next = readEffectivePrivacy(
-      readPrivacyFacts(record),
-      parentsOf(kind, record, index).map((parent) => parent.facts),
+    const next = deriveRecordPrivacy(kind, record, index);
+    const stored = record.privacy ?? 'ordinary';
+    const hasUnreadParent = linksOf(kind, record).some(([parentKind, ids]) =>
+      ids.some((id) => !index[parentKind].has(id)),
     );
-    return next === (record.privacy ?? 'ordinary')
+    return next === stored || (next === 'ordinary' && hasUnreadParent)
       ? []
       : [{ kind, id: record.id, privacy: next }];
   });

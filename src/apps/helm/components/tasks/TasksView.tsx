@@ -168,6 +168,25 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
       (task) => readRecordPrivacy('task', task, parentIndex) === 'private',
       { include },
     );
+    const includeThem = line
+      ? {
+          action: {
+            label: HELM_COPY.privateIncludeThem,
+            onClick: () => void copyList(true),
+          },
+          duration: HELM_COPY.privateLeftOutToastMs,
+        }
+      : {};
+    if (kept.length === 0) {
+      addToast({
+        title: line
+          ? `${HELM_COPY.copyNothing} · ${line}`
+          : HELM_COPY.copyEmpty,
+        type: 'info',
+        ...includeThem,
+      });
+      return;
+    }
     const isCopied = await copyToClipboard(
       kept.map((task) => `- ${titleOf(task.id)}`).join('\n'),
     );
@@ -178,14 +197,7 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
     addToast({
       title: line ? `${HELM_COPY.listCopied} · ${line}` : HELM_COPY.listCopied,
       type: 'success',
-      ...(line
-        ? {
-            action: {
-              label: HELM_COPY.privateIncludeThem,
-              onClick: () => void copyList(true),
-            },
-          }
-        : {}),
+      ...includeThem,
     });
   };
 

@@ -5,7 +5,7 @@ import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenWho } from '@apps/helm/types';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
-import PrivateLock from '@apps/helm/components/privacy/PrivateLock';
+import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 
 interface WhoRowProps {
   who: OpenWho;
@@ -30,10 +30,13 @@ function WhoRow({ who, onOpen }: WhoRowProps) {
     >
       <WhoPhoto kind={who.kind} name={name} mediaId={who.photoMediaId} />
       <span className='min-w-0 flex-1'>
-        <span className='text-foreground block text-[15px] leading-[21px] break-words'>
+        <PrivateTitle
+          kind='who'
+          record={who}
+          className='text-foreground text-[15px] leading-[21px]'
+        >
           {name}
-          <PrivateLock kind='who' record={who} />
-        </span>
+        </PrivateTitle>
         {!who.isUnreadable && line && (
           <span className='text-muted-foreground block text-[13px] break-words'>
             {line}

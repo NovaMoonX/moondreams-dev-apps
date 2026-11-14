@@ -65,6 +65,8 @@ export interface ContextTopic {
   id: string;
   name: string;
   path: string;
+  /** The path with each private topic on it named as one, for a turn nobody is looking at. */
+  maskedPath?: string;
   isPrivate?: boolean;
 }
 

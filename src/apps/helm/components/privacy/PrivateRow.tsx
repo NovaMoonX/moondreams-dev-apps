@@ -2,15 +2,15 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { HeartHandshake, Lock, Stethoscope } from 'lucide-react';
+import { HeartHandshake, Stethoscope } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import AppToggle from '@/components/AppToggle';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import PrivateSwitchLine from '@apps/helm/components/privacy/PrivateSwitchLine';
 import { setPrivate } from '@apps/helm/store/actions/privacyActions';
 import { selectParentIndex } from '@apps/helm/store/selectors/privacySelectors';
 import {
@@ -70,7 +70,21 @@ function PrivateRow({ kind, record, title, onOpenParent }: PrivateRowProps) {
     try {
       const result = await setPrivate(user.uid, kind, record.id, isPrivate);
       if (result.kind === 'refused')
-        addToast({ title: result.line, type: 'info' });
+        addToast({
+          title: inherited
+            ? HELM_COPY.privateStillBecause(inherited.name)
+            : result.line,
+          type: 'info',
+        });
+      else if (result.kind === 'saved' && result.isCascadeIncomplete)
+        addToast({
+          title: HELM_COPY.privateCascadePartial,
+          type: 'error',
+          action: {
+            label: HELM_COPY.tryAgain,
+            onClick: () => void write(isPrivate),
+          },
+        });
       else if (result.kind === 'offline')
         addToast({ title: HELM_COPY.privateNeedsConnection, type: 'info' });
       else if (result.kind !== 'saved' && result.kind !== 'unchanged')
@@ -100,59 +114,41 @@ function PrivateRow({ kind, record, title, onOpenParent }: PrivateRowProps) {
   const Mark = codeMark === 'care' ? HeartHandshake : Stethoscope;
   return (
     <div className='border-border mt-3 border-t pt-3'>
-      <div className='flex items-center gap-3'>
-        <Lock
-          className='text-muted-foreground size-[18px] shrink-0'
-          aria-hidden='true'
-        />
-        <div className='min-w-0 flex-1'>
-          <p className='text-foreground text-[15px] leading-[21px]'>
-            {HELM_COPY.privateRowTitle}
-          </p>
-          <p className='text-muted-foreground text-[13px]'>
-            {HELM_COPY.privateRowSubtitle}
-          </p>
-        </div>
-        <AppToggle
-          checked={isOn}
-          onCheckedChange={onChange}
-          aria-label={HELM_COPY.privateRowTitle}
-        />
-      </div>
+      <PrivateSwitchLine checked={isOn} onCheckedChange={onChange} />
       {codeMark !== null && (
-        <p className='text-muted-foreground mt-2 flex items-center gap-2 text-[13px]'>
+        <div className='text-muted-foreground mt-2 flex items-center gap-2 pl-[30px] text-[13px]'>
           <Mark className='size-3.5 shrink-0' aria-hidden='true' />
-          <span className='min-w-0 flex-1'>
+          <p className='min-w-0 flex-1'>
             {codeMark === 'care'
               ? HELM_COPY.privateMarkedCare
               : HELM_COPY.privateMarkedHealth}
-          </span>
+          </p>
           <Button
             type='button'
             variant='tertiary'
             size='sm'
-            className='relative after:absolute after:-inset-2 after:content-[""]'
+            className='relative shrink-0 after:absolute after:-inset-2 after:content-[""]'
             onClick={clear}
           >
             {HELM_COPY.privateChange}
           </Button>
-        </p>
+        </div>
       )}
       {inherited !== null && (
-        <p className='text-muted-foreground mt-2 flex items-center gap-2 text-[13px]'>
-          <span className='min-w-0 flex-1'>
+        <div className='text-muted-foreground mt-2 flex items-center gap-2 pl-[30px] text-[13px]'>
+          <p className='min-w-0 flex-1'>
             {HELM_COPY.privateFromParent(inherited.name)}
-          </span>
+          </p>
           <Button
             type='button'
             variant='tertiary'
             size='sm'
-            className='relative after:absolute after:-inset-2 after:content-[""]'
+            className='relative shrink-0 after:absolute after:-inset-2 after:content-[""]'
             onClick={() => openParent(inherited.id)}
           >
-            {HELM_COPY.privateOpenParent(inherited.name)}
+            {HELM_COPY.privateOpenParent}
           </Button>
-        </p>
+        </div>
       )}
     </div>
   );

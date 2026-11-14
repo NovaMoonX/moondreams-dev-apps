@@ -420,6 +420,13 @@ test('a question sends the hinted notes with their bodies, anything else sends t
   assert.deepEqual(toContextNotes(hinted, 'Remember the cake tin is blue'), [
     { id: 'cake', title: 'Cake' },
   ]);
+  assert.deepEqual(
+    toContextNotes(
+      [{ ...hinted[0], isPrivate: true }],
+      'Remember the cake tin is blue',
+    ),
+    [{ id: 'cake', title: 'Cake', isPrivate: true }],
+  );
 });
 
 const failures: string[] = [];
