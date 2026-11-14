@@ -137,7 +137,7 @@ export interface WorkosIdentity {
 
 // A token from a sign-in completed through our own page carries our uid (WorkOS's `external_id`) as its subject;
 // one from a WorkOS-hosted sign-in carries WorkOS's `user_…` id. Either way the other id comes from WorkOS.
-const isWorkosUserId = (id: string) => id.startsWith('user_');
+const isWorkosUserId = (id: string) => /^user_[0-9A-Z]{26}$/.test(id);
 
 /** Our uid and WorkOS's user id for a token's subject, cached for a day. `null` when WorkOS has no link between them. */
 export async function identityForSubject(
@@ -161,7 +161,10 @@ export async function identityForSubject(
       ? `/user_management/users/${encodeURIComponent(subject)}`
       : `/user_management/users/external_id/${encodeURIComponent(subject)}`,
     { method: 'GET' },
-  );
+  ).catch((error: unknown) => {
+    if (error instanceof WorkosError && error.status === 404) return null;
+    throw error;
+  });
   const uid = readField(body, 'external_id');
   const workosUserId = readField(body, 'id');
   if (typeof uid !== 'string' || !uid || typeof workosUserId !== 'string') {
