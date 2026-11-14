@@ -40,21 +40,25 @@ export const sourcesBriefFor = (
   {
     clientName,
     readScopes,
-  }: { clientName: string; readScopes: McpReadScope[] },
+    toolNames,
+  }: { clientName: string; readScopes: McpReadScope[]; toolNames: string[] },
 ) => {
   if (sources.length === 0) return '';
-  const readable = MCP_READ_SCOPES.flatMap((scope) => {
-    const names = sources
+  const namesFor = (scope: McpReadScope) =>
+    sources
       .filter((source) => source.access === scope)
       .map((source) => source.name);
-    return names.length > 0 && readScopes.includes(scope)
-      ? [{ names, tools: READ_SCOPE_TOOLS[scope] }]
+  const readable = MCP_READ_SCOPES.flatMap((scope) => {
+    const tools = READ_SCOPE_TOOLS[scope].filter((tool) =>
+      toolNames.includes(tool),
+    );
+    const names = namesFor(scope);
+    return names.length > 0 && readScopes.includes(scope) && tools.length > 0
+      ? [{ names, tools }]
       : [];
   });
   const blocked = MCP_READ_SCOPES.flatMap((scope) => {
-    const names = sources
-      .filter((source) => source.access === scope)
-      .map((source) => source.name);
+    const names = namesFor(scope);
     return names.length > 0 && !readScopes.includes(scope)
       ? [{ scope, names }]
       : [];

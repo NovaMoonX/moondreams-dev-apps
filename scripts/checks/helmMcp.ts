@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
+import { offeredHelmTools } from '../../functions/src/apps/helm/mcp/server.ts';
 import {
   READ_SCOPE_LABELS,
   READ_SCOPE_TOOLS,
@@ -203,14 +204,34 @@ assert.match(
   external,
   /readAssistantName\(profile\.data\(\)\?\.assistantName\) \?\?\s+DEFAULT_ASSISTANT_NAME/,
 );
+// The instructions name only the tools this connection is actually offered, and a failed source read never stops the server.
 assert.match(
   external,
-  /instructions: instructionsFor\(\s*name,\s*ctx\.canWrite,\s*await readConnectedSources\(firestore, ctx\.uid\),\s*\{ clientName: ctx\.clientName, readScopes: ctx\.readScopes \},?\s*\)/,
+  /readConnectedSources\(firestore, ctx\.uid\)\.catch\(\(\): ConnectedSource\[\] => \[\]\)/,
 );
-
 assert.match(
   external,
-  /registerHelmTools\(\s*server,\s*tools,\s*'external',\s*ctx\.readScopes\.flatMap\(\(scope\) => READ_SCOPE_TOOLS\[scope\]\),?\s*\)/,
+  /toolNames: offeredHelmTools\(tools, 'external', permittedTools\)\.map\(/,
+);
+assert.match(
+  external,
+  /registerHelmTools\(server, tools, 'external', permittedTools\)/,
+);
+const externalNames = (extra: string[]) =>
+  offeredHelmTools(tools, 'external', extra).map((tool) => tool.name);
+assert.ok(
+  Object.values(READ_SCOPE_TOOLS)
+    .flat()
+    .every((tool) => !externalNames([]).includes(tool)),
+  'no permission, no mail, document, synced or app-record tool',
+);
+const withMailNames = externalNames(READ_SCOPE_TOOLS.mail);
+assert.ok(
+  READ_SCOPE_TOOLS.mail.every((tool) => withMailNames.includes(tool)) &&
+    ![...READ_SCOPE_TOOLS.drive, ...READ_SCOPE_TOOLS.apps].some((tool) =>
+      withMailNames.includes(tool),
+    ),
+  'Read Gmail adds the mail tools and nothing else',
 );
 assert.match(external, /readScopes: ctx\.readScopes/);
 
@@ -235,7 +256,11 @@ const SOURCES = [
     access: null,
   },
 ];
-const CONNECTED = { clientName: 'Claude', readScopes: [] as never[] };
+const CONNECTED = {
+  clientName: 'Claude',
+  readScopes: [] as never[],
+  toolNames: externalNames([]),
+};
 assert.equal(sourcesBriefFor('Nomos', [], CONNECTED), '');
 const brief = sourcesBriefFor('Sol', SOURCES, CONNECTED);
 assert.match(
@@ -269,6 +294,7 @@ assert.ok(
 const withApps = sourcesBriefFor('Sol', SOURCES, {
   clientName: 'Claude',
   readScopes: ['apps'],
+  toolNames: externalNames(READ_SCOPE_TOOLS.apps),
 });
 assert.match(withApps, /Runway through search_synced and search_app_records/);
 assert.ok(!withApps.includes('Read your apps'));
@@ -280,9 +306,22 @@ assert.ok(
 const withAll = sourcesBriefFor('Sol', SOURCES, {
   clientName: 'Claude',
   readScopes: ['mail', 'drive', 'apps'],
+  toolNames: externalNames(Object.values(READ_SCOPE_TOOLS).flat()),
 });
 assert.match(withAll, /Gmail through search_mail and read_mail/);
 assert.ok(!withAll.includes('turn on'));
+// A permission that is on promises only the tools the server registered: no app record shared, no search_app_records; no mail account readable, no mail tools.
+const onButEmpty = sourcesBriefFor('Sol', SOURCES, {
+  clientName: 'Claude',
+  readScopes: ['mail', 'apps'],
+  toolNames: ['search_synced'],
+});
+assert.match(onButEmpty, /Runway through search_synced\./);
+assert.ok(
+  !onButEmpty.includes('search_app_records') &&
+    !onButEmpty.includes('search_mail') &&
+    !onButEmpty.includes('turn on'),
+);
 assert.match(external, /`Tells \$\{name\}/);
 assert.match(external, /`Asks \$\{name\}/);
 

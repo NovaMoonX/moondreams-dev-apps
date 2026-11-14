@@ -937,10 +937,12 @@ export const HELM_COPY = {
         ? `${name} can search and read your Drive files when you ask. Files can come from other people, so read them with care.`
         : `${name} can't see your Drive files.`,
       apps: isOn
-        ? `${name} can look up what your apps share with ${app}.`
+        ? `${name} can look up what your apps share with ${app}, including copies ${app} keeps after an app is disconnected.`
         : `${name} can't see what your apps share.`,
     })[scope],
-  assistantWrites: (app: string) => `Can add things to ${app}`,
+  assistantWrites: (app: string) => `Add things to ${app}`,
+  assistantReadsAndWrites: (name: string) =>
+    `${name} can read email or files and add things at once, so a message from someone else could try to steer what it adds. You can undo anything in Activity.`,
   assistantWritesHint: (canWrite: boolean) =>
     canWrite
       ? 'It can also ask questions and add tasks and notes. You can undo what it adds in Activity.'

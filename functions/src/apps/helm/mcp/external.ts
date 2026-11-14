@@ -43,7 +43,7 @@ import {
   sourcesBriefFor,
   type ConnectedSource,
 } from './sourcesBrief.js';
-import { registerHelmTools } from './server.js';
+import { offeredHelmTools, registerHelmTools } from './server.js';
 
 const RESOURCE = 'https://apps.moondreams.dev/mcp/helm';
 const GATE_APP_ID = 'helm';
@@ -361,10 +361,18 @@ const readConnectedSources = async (
     .collection(`connections/${uid}/grants`)
     .where('readerAppId', '==', 'helm')
     .get();
-  const { SOURCE_ADAPTERS } = await import('../../../connections/registry.js');
-  const grants = snapshot.docs
+  const [{ SOURCE_ADAPTERS }, { isConnectorGateOpen }] = await Promise.all([
+    import('../../../connections/registry.js'),
+    import('../../../connections/liveRouter.js'),
+  ]);
+  const live = snapshot.docs
     .filter((doc) => doc.get('status') !== 'ended')
-    .map((doc) => doc.data() as ConnectionGrant)
+    .map((doc) => doc.data() as ConnectionGrant);
+  const isOpen = await Promise.all(
+    live.map((grant) => isConnectorGateOpen(uid, 'helm', grant.connectorId)),
+  );
+  const grants = live
+    .filter((_, index) => isOpen[index])
     .sort((a, b) => (a.connectorId < b.connectorId ? -1 : 1));
   const byConnector = grants.reduce((sources, grant) => {
     const manifest = SOURCE_ADAPTERS[grant.connectorId]?.manifest;
@@ -394,7 +402,11 @@ const instructionsFor = (
   name: string,
   canWrite: boolean,
   sources: ConnectedSource[],
-  access: { clientName: string; readScopes: McpReadScope[] },
+  access: {
+    clientName: string;
+    readScopes: McpReadScope[];
+    toolNames: string[];
+  },
 ) =>
   [
     `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
@@ -420,13 +432,11 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   const profile = await firestore.doc(`apps/helm/users/${ctx.uid}`).get();
   const name =
     readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
-  const [liveGrants, siteGrants] =
-    ctx.readScopes.length > 0
-      ? await Promise.all([
-          readLiveGrants(firestore, ctx.uid),
-          readSiteGrants(firestore, ctx.uid),
-        ])
-      : [[], []];
+  const [liveGrants, siteGrants, sources] = await Promise.all([
+    ctx.readScopes.length > 0 ? readLiveGrants(firestore, ctx.uid) : [],
+    ctx.readScopes.length > 0 ? readSiteGrants(firestore, ctx.uid) : [],
+    readConnectedSources(firestore, ctx.uid).catch((): ConnectedSource[] => []),
+  ]);
   const tools = buildHelmTools({
     uid: ctx.uid,
     liveGrants: liveGrants.filter(
@@ -453,23 +463,22 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
       names: new Map(),
     },
   });
+  const permittedTools = ctx.readScopes.flatMap(
+    (scope) => READ_SCOPE_TOOLS[scope],
+  );
   const server = new McpServer(
     { name: 'helm', version: '1.0.0' },
     {
-      instructions: instructionsFor(
-        name,
-        ctx.canWrite,
-        await readConnectedSources(firestore, ctx.uid),
-        { clientName: ctx.clientName, readScopes: ctx.readScopes },
-      ),
+      instructions: instructionsFor(name, ctx.canWrite, sources, {
+        clientName: ctx.clientName,
+        readScopes: ctx.readScopes,
+        toolNames: offeredHelmTools(tools, 'external', permittedTools).map(
+          (tool) => tool.name,
+        ),
+      }),
     },
   );
-  registerHelmTools(
-    server,
-    tools,
-    'external',
-    ctx.readScopes.flatMap((scope) => READ_SCOPE_TOOLS[scope]),
-  );
+  registerHelmTools(server, tools, 'external', permittedTools);
   if (!ctx.canWrite) return server;
   server.registerTool(
     'tell_helm',

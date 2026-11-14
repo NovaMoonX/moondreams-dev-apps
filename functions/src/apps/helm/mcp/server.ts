@@ -28,6 +28,19 @@ const fitResult = (result: unknown, cap: number): string => {
   return fit(list.length - 1);
 };
 
+/** The tools an audience is offered, plus any named in extraTools. */
+export const offeredHelmTools = (
+  tools: ReturnType<typeof buildHelmTools>,
+  audience: 'nomos' | 'external',
+  extraTools: string[] = [],
+) =>
+  tools.filter(
+    (tool) =>
+      tool.audience === 'both' ||
+      tool.audience === audience ||
+      extraTools.includes(tool.name),
+  );
+
 /** Registers the tools an audience is offered; every one only reads and none reaches beyond the person's own records. */
 export function registerHelmTools(
   server: McpServer,
@@ -35,41 +48,34 @@ export function registerHelmTools(
   audience: 'nomos' | 'external',
   extraTools: string[] = [],
 ) {
-  tools
-    .filter(
-      (tool) =>
-        tool.audience === 'both' ||
-        tool.audience === audience ||
-        extraTools.includes(tool.name),
-    )
-    .forEach((tool) => {
-      server.registerTool(
-        tool.name,
-        {
-          description:
-            audience === 'external'
-              ? (tool.externalDescription ?? tool.description)
-              : tool.description,
-          inputSchema: tool.shape,
-          annotations: {
-            readOnlyHint: true,
-            destructiveHint: false,
-            openWorldHint: false,
-          },
+  offeredHelmTools(tools, audience, extraTools).forEach((tool) => {
+    server.registerTool(
+      tool.name,
+      {
+        description:
+          audience === 'external'
+            ? (tool.externalDescription ?? tool.description)
+            : tool.description,
+        inputSchema: tool.shape,
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          openWorldHint: false,
         },
-        async (input: Record<string, unknown>) => {
-          const result = await tool.run(input as never);
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: fitResult(result, tool.maxChars ?? RESULT_CHAR_CAP),
-              },
-            ],
-          };
-        },
-      );
-    });
+      },
+      async (input: Record<string, unknown>) => {
+        const result = await tool.run(input as never);
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: fitResult(result, tool.maxChars ?? RESULT_CHAR_CAP),
+            },
+          ],
+        };
+      },
+    );
+  });
 }
 
 /** A server and its client, joined in process for one call: Anthropic sees the tool definitions and results, never an endpoint or a credential. */

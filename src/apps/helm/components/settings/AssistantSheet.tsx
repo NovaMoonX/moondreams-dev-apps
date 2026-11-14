@@ -5,6 +5,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useConnections } from '@/lib/connections/useConnections';
 import {
   disconnectMcpClient,
@@ -41,9 +42,23 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [busyScopes, setBusyScopes] = useState<McpReadScope[]>([]);
   const { grants } = useConnections({ readerAppId: 'helm' });
-  const connectedScopes = READ_SCOPE_ORDER.filter((scope) =>
-    grants.some((grant) => readScopeOf(grant.connectorId) === scope),
+  const isGoogleReadOpen = useIsGateOpen('helm', 'google-mail-and-drive');
+  const connectedScopes = READ_SCOPE_ORDER.filter(
+    (scope) =>
+      (scope === 'apps' || isGoogleReadOpen) &&
+      grants.some(
+        (grant) =>
+          grant.status !== 'ended' && readScopeOf(grant.connectorId) === scope,
+      ),
   );
+  const readsOthersMail =
+    assistant !== null &&
+    assistant.canWrite &&
+    assistant.readScopes.some(
+      (scope) =>
+        (scope === 'mail' || scope === 'drive') &&
+        connectedScopes.includes(scope),
+    );
 
   const setReadScope = async (scope: McpReadScope, isOn: boolean) => {
     if (!assistant || busyScopes.includes(scope)) return;
@@ -160,6 +175,11 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
               </div>
             );
           })}
+          {readsOthersMail && (
+            <p className='text-muted-foreground text-[13px] text-pretty'>
+              {HELM_COPY.assistantReadsAndWrites(assistant.name)}
+            </p>
+          )}
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.assistantPrivacy(assistant.name)}
           </p>
