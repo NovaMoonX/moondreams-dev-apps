@@ -3,6 +3,7 @@ import { LoaderCircle, Mic, Square } from 'lucide-react';
 
 import MicrophoneAccess from '@/components/MicrophoneAccess';
 import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
+import { canRequestMicrophone } from '@/lib/speech/microphonePermission';
 
 import type { UseVoiceQuickEntryResult } from '../hooks/useVoiceQuickEntry';
 import IngestionDraftReviewModal from './IngestionDraftReviewModal';
@@ -32,6 +33,7 @@ function VoiceQuickEntryModals({
 }: VoiceQuickEntryModalsProps) {
   const permission = useMicrophonePermission();
   const needsMicrophone = isBlocked && permission !== 'granted';
+  const isRetryInNotice = needsMicrophone && canRequestMicrophone();
   const shownError = isBlocked && permission === 'granted' ? GRANTED_BUT_REFUSED : error;
 
   if (activeDraft) {
@@ -72,7 +74,7 @@ function VoiceQuickEntryModals({
             <Button type='button' onClick={handleTrigger}>
               <Square className='h-4 w-4' /> Stop and review
             </Button>
-          ) : needsMicrophone ? null : (
+          ) : isRetryInNotice ? null : (
             <Button type='button' onClick={handleTrigger} disabled={isExtracting}>
               {isExtracting ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Mic className='h-4 w-4' />}
               {isExtracting ? 'Reading note…' : 'Try again'}
