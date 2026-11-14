@@ -765,6 +765,7 @@ export const buildImportExecution = (input: {
     effects: input.writes.effects,
     undoReport: null,
     goneIds: null,
+    said: null,
     lines: null,
     spoken: null,
   }),

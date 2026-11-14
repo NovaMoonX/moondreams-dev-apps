@@ -1445,6 +1445,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       setCurrentPlace: null,
       asks: [],
       answerTurn,
+      replyLine: null,
       mentions: [],
       places: [],
       assistantName: null,
@@ -2039,6 +2040,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     logger.info('helm.media.dropped', { code }),
   );
   reply.askDropped.forEach((code) => logger.info('helm.ask.dropped', { code }));
+  const rawLine = (loop.terminalInput as { replyLine?: unknown } | null)
+    ?.replyLine;
+  logger.info('helm.reply.line', {
+    written: typeof rawLine === 'string',
+    kept: reply.replyLine !== null,
+  });
   reply.noteDropped.forEach((code) =>
     logger.info('helm.sort.noteDropped', { code }),
   );
@@ -2089,6 +2096,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
     asks: mode === 'full' ? reply.asks : [],
     answerTurn,
+    replyLine: reply.replyLine,
     mentions: reply.mentions,
     places: reply.places,
     assistantName,
@@ -2201,6 +2209,7 @@ async function writeResult(
     setCurrentPlace: SetCurrentPlaceCommand | null;
     asks: AskCommand[];
     answerTurn: AnswerTurn | null;
+    replyLine: string | null;
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
@@ -2238,6 +2247,7 @@ async function writeResult(
     setCurrentPlace: requestedHome,
     asks,
     answerTurn,
+    replyLine,
     mentions,
     places,
     assistantName,
@@ -3036,6 +3046,10 @@ async function writeResult(
           { ...plan, questions },
           {
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
+            said:
+              plan.notKept.length === 0 && !hasMore && !homeRefusal
+                ? replyLine
+                : null,
             questionRef: answerTurn?.ref ?? null,
             commands,
             captureId: captureRef.id,
@@ -3097,11 +3111,12 @@ async function writeResult(
               ? null
               : plan.notKept.length > 0
                 ? plan.notKept.join('. ')
-                : answerTurn && commands.length > 0
-                  ? NOTHING_CHANGED_LINE
-                  : answerTurn && turn?.kind === 'apply'
-                    ? buildAnswerKeptLine(answerTurn.words)
-                    : null));
+                : answerTurn && (commands.length > 0 || turn?.kind === 'apply')
+                  ? (replyLine ??
+                    (commands.length > 0
+                      ? NOTHING_CHANGED_LINE
+                      : buildAnswerKeptLine(answerTurn.words)))
+                  : null));
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,

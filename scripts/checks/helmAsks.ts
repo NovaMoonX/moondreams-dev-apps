@@ -13,7 +13,10 @@ import {
   settleCapture,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtureProvider.ts';
-import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import {
+  normalizeNomosReply,
+  readReplyLine,
+} from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { buildSpokenQuestion } from '../../functions/src/apps/helm/nomos/summaries.ts';
 
 const READING: CaptureReading = {
@@ -58,6 +61,20 @@ const only = (commands: unknown[]) => {
 
 const tests: [string, () => void][] = [];
 const test = (name: string, run: () => void) => tests.push([name, run]);
+
+test("an answered question's reply is the model's own line, never first person or a template", () => {
+  assert.equal(readReplyLine('  Dropped   it. '), 'Dropped it.');
+  assert.equal(
+    readReplyLine('Added both to the list.'),
+    'Added both to the list.',
+  );
+  assert.equal(readReplyLine("I've dropped it."), null);
+  assert.equal(readReplyLine('Dropped it for me.'), null);
+  assert.equal(readReplyLine('Got it: Picked Drop it.'), null);
+  assert.equal(readReplyLine(''), null);
+  assert.equal(readReplyLine(null), null);
+  assert.ok((readReplyLine('word '.repeat(40)) ?? '').length <= 80);
+});
 
 test('a seventh pickOne option is cut', () => {
   const question = only([

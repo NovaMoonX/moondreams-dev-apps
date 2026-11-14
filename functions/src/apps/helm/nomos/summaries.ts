@@ -707,7 +707,7 @@ export const ASK_WORDS = {
 };
 
 export const ASK_DEFERRED_LINE =
-  "I'll ask about that once you've answered a few of the waiting questions.";
+  'That waits until a few of the open questions are answered.';
 
 export const ALREADY_ANSWERED_LINE = 'That was already answered.';
 

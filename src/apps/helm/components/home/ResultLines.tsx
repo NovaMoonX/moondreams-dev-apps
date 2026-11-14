@@ -117,7 +117,9 @@ function ResultLines({
       ) : (
         <>
           {execution.summary && execution.category !== 'answer' && (
-            <AssistantLine>{toSentence(execution.summary)}</AssistantLine>
+            <AssistantLine>
+              {execution.said ?? toSentence(execution.summary)}
+            </AssistantLine>
           )}
           {lines.length > 0 && (
             <div className='helm-card ml-[30px] w-[calc(100%-30px)] overflow-hidden'>

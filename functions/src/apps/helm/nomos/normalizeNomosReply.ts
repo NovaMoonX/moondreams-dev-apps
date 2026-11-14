@@ -24,6 +24,7 @@ import {
   type AskCommand,
   type AskOption,
   ANSWER_SPOKEN_CAP,
+  REPLY_LINE_CAP,
   DIFFERS_SAYS_CAP,
   ANSWER_TEXT_CAP,
   COMMAND_KINDS,
@@ -222,6 +223,13 @@ const toText = (value: unknown, cap: number) =>
   typeof value === 'string'
     ? cutAtWord(value.replace(/\s+/g, ' ').trim(), cap) || null
     : null;
+
+/** The model's line for an answered question, refused when it speaks as "I" or falls back on a template, so code's own line stands. */
+export const readReplyLine = (value: unknown) => {
+  const line = toText(value, REPLY_LINE_CAP);
+  if (line === null) return null;
+  return /\b(i|i'm|i've|i'll|me|my)\b|^got it\b/i.test(line) ? null : line;
+};
 
 const toCutText = (value: unknown, cap: number) => {
   const whole = toText(value, Number.MAX_SAFE_INTEGER);
@@ -1729,6 +1737,7 @@ export function normalizeNomosReply(
   mediaDropped: MediaDrop[];
   commands: NomosCommand[];
   hasMore: boolean;
+  replyLine: string | null;
   answer: AnswerCommand | null;
   remember: RememberCommand[];
   noteFacts: NoteFactCommand[];
@@ -1896,6 +1905,7 @@ export function normalizeNomosReply(
     mediaDropped,
     commands: kept,
     hasMore: fresh.length > MAX_COMMANDS,
+    replyLine: readReplyLine(raw.replyLine),
     answer,
     remember,
     noteFacts,

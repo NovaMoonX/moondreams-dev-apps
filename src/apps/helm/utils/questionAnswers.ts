@@ -106,7 +106,7 @@ const formatClock = (time: string) =>
     minute: '2-digit',
   });
 
-/** An answer in the words the turn that carries it seals ("Picked Snow chains and Sunscreen", "4 nights", "Friday, Nov 13"); `recordName` is the chosen person's or place's name when it is not one of the question's options. */
+/** An answer in the words the turn that carries it seals ("Snow chains and Sunscreen", "4 nights", "Friday, Nov 13"); `recordName` is the chosen person's or place's name when it is not one of the question's options. */
 export function describeAnswer(
   question: HelmQuestion,
   value: QuestionAnswerValue,
@@ -116,17 +116,15 @@ export function describeAnswer(
     question.options.find((option) => option.id === id)?.label ?? id;
   if (value.shape === 'yesNo') return labelOf(value.optionId);
   if (value.shape === 'pickOne') {
-    return value.otherText ?? HELM_COPY.answerPicked(labelOf(value.optionId));
+    return value.otherText ?? labelOf(value.optionId);
   }
   if (value.shape === 'pickSeveral') {
     return value.optionIds.includes('none')
       ? HELM_COPY.answerNone
-      : HELM_COPY.answerPicked(
-          joinLabels([
-            ...value.optionIds.map(labelOf),
-            ...(value.otherText ? [value.otherText] : []),
-          ]),
-        );
+      : joinLabels([
+          ...value.optionIds.map(labelOf),
+          ...(value.otherText ? [value.otherText] : []),
+        ]);
   }
   if (value.shape === 'freeText') return value.text;
   if (value.shape === 'number') {
@@ -176,5 +174,5 @@ export function describeYourAnswer(
   ) {
     return HELM_COPY.answerYouAnswered(words);
   }
-  return HELM_COPY.answerYouPicked(words.replace(/^Picked /, ''));
+  return HELM_COPY.answerYouPicked(words);
 }

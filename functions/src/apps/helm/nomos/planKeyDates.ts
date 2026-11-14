@@ -574,7 +574,7 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
       notKept: [...plan.notKept, buildKeyDateSkipLine(reason)],
     });
     if (input.isIndexUnreadable) {
-      return skip("I couldn't open your dates just now");
+      return skip("Couldn't open your dates just now");
     }
     const apply = (
       base: KeyDatePlan,
@@ -648,10 +648,10 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
       existing?.whoId ??
       input.whoIdOf.get(command.whoRefs[0] ?? '') ??
       (command.isAboutMe ? input.selfWhoId : null);
-    if (!whoId) return skip("I couldn't tell whose it is");
+    if (!whoId) return skip("Couldn't tell whose it is");
     const owner = ownerOf(whoId);
     const date = command.date;
-    if (!date) return skip("I couldn't tell the date");
+    if (!date) return skip("Couldn't tell the date");
     const isMoment =
       isMomentKind(command.keyKind) ||
       (command.keyKind === 'custom' && command.comesBack === false);
@@ -661,12 +661,12 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
       command.keyKind !== 'anniversary' &&
       command.keyKind !== 'custom'
     ) {
-      return skip("I couldn't tell the date");
+      return skip("Couldn't tell the date");
     }
     if (command.keyKind === 'custom' && command.comesBack !== true) {
-      return skip("I couldn't tell if it comes back each year");
+      return skip("Couldn't tell if it comes back each year");
     }
-    if (date.month === null) return skip("I couldn't tell the date");
+    if (date.month === null) return skip("Couldn't tell the date");
     const parts: KeyDateParts = {
       kind: command.keyKind,
       label:

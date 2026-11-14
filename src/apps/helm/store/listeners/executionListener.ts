@@ -57,6 +57,7 @@ export async function openExecution(
     return {
       ...base,
       summary: payload.summary ?? '',
+      said: payload.said ?? null,
       effects: payload.effects ?? [],
       undoReport: payload.undoReport ?? null,
       spoken: payload.spoken ?? null,
@@ -68,6 +69,7 @@ export async function openExecution(
     return {
       ...base,
       summary: '',
+      said: null,
       effects: [],
       undoReport: null,
       spoken: null,
