@@ -2760,6 +2760,13 @@ function buildPickQuestions(input: {
       label: via ? shownName(who, input.isUnattended) : who.name,
       detail: detailOfWho(who, isMixed),
     }));
+    if (
+      via?.kind === 'heard' &&
+      input.isUnattended &&
+      candidates.length > 1 &&
+      candidates.every((who) => who.label === PRIVATE_PERSON_LABEL)
+    )
+      return [];
     const { name, kind, relation, species, organizationKind } = entry.item;
     const taskIds = taskIdsFor(whoEntries, entry);
     if (via?.kind === 'alias') {

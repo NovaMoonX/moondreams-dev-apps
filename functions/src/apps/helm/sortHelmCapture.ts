@@ -1470,7 +1470,7 @@ export async function readEarlierTurns(
   return turns.flat().reverse();
 }
 
-/** What a spelled correction is checked against: the words and heard names of the session's previous turn (all of its messages), and the tasks that turn touched. Null when there is none. */
+/** What a spelled correction is checked against: the words and heard names of the session's previous turn (all of its messages), and the tasks that turn created. Null when there is none. */
 export async function readPreviousTurn(
   firestore: Firestore,
   base: string,
@@ -1518,6 +1518,7 @@ export async function readPreviousTurn(
           const refs: unknown = snapshot.data()?.effectRefs;
           return (Array.isArray(refs) ? refs : []).flatMap((ref) =>
             ref?.collection === 'tasks' &&
+            ref.op === 'create' &&
             typeof ref.docId === 'string' &&
             ID_RE.test(ref.docId)
               ? [ref.docId as string]
@@ -1642,6 +1643,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       runCommands: [],
       soundsLike: [],
       previousTaskIds: [],
+      previousHeard: [],
+      knownNames: [],
       heardNames: [],
       topics: [],
       hinted: [],
@@ -2297,6 +2300,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureTitleByTask,
       focusedProcedureId: focusedLive?.id ?? null,
       focusedTaskId: screen?.focus?.id ?? null,
+      knownNames: contextPeople.map((person) => ({
+        id: person.id,
+        names: [person.name, ...person.alsoCalled],
+      })),
       keyDateNames: new Map(
         contextKeyDates.map((date) => [
           date.id,
@@ -2345,6 +2352,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     focusedProcedureId,
     focusedTaskId,
     keyDateNames,
+    knownNames,
   } = result;
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
@@ -2470,6 +2478,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     runCommands: mode === 'full' ? reply.runCommands : [],
     soundsLike: mode === 'full' ? reply.soundsLike : [],
     previousTaskIds: previousTurn?.taskIds ?? [],
+    previousHeard: previousTurn?.heard ?? [],
+    knownNames,
     heardNames: read.heardNames,
     topics,
     hinted,
@@ -2613,6 +2623,8 @@ async function writeResult(
     runCommands: RunCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     previousTaskIds: string[];
+    previousHeard: HeardName[];
+    knownNames: { id: string; names: string[] }[];
     heardNames: HeardName[];
     topics: OpenTopicRecord[];
     hinted: HintedNote[];
@@ -2654,6 +2666,8 @@ async function writeResult(
     runCommands,
     soundsLike,
     previousTaskIds,
+    previousHeard,
+    knownNames,
     topics: contextTopics,
     hinted,
     captureText,
@@ -2946,7 +2960,11 @@ async function writeResult(
             selfWhoId:
               (profileSnap?.get('selfWhoId') as string | null | undefined) ??
               null,
-            heardNames: input.heardNames,
+            heardNames: toContextHeard(
+              input.heardNames,
+              new Set(knownNames.map((person) => person.id)),
+              input.isUnattended === true,
+            ),
           })
         : undefined;
     const existingProjects =
@@ -3364,6 +3382,8 @@ async function writeResult(
             : [];
         }),
       ),
+      heardNames: previousHeard,
+      people: knownNames,
       now,
       isUnattended: input.isUnattended === true,
       seal,
@@ -3459,10 +3479,15 @@ async function writeResult(
       plan.whoCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/who/${id}`), data),
       );
-      plan.whoUpdates.forEach(({ id, data }) =>
-        transaction.update(firestore.doc(`${base}/who/${id}`), data),
-      );
-      soundsPlan.whoRewrites.forEach(({ id, data }) =>
+      [
+        ...[...plan.whoUpdates, ...soundsPlan.whoRewrites]
+          .reduce(
+            (merged, { id, data }) =>
+              merged.set(id, { ...merged.get(id), ...data }),
+            new Map<string, Record<string, unknown>>(),
+          )
+          .entries(),
+      ].forEach(([id, data]) =>
         transaction.update(firestore.doc(`${base}/who/${id}`), data),
       );
       soundsPlan.taskUpdates.forEach(({ id, data }) =>
@@ -3685,7 +3710,7 @@ async function writeResult(
           topicCommands.length +
           procedureCommands.length +
           runCommands.length +
-          keptSounds.length +
+          soundsPlan.lines.length +
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,

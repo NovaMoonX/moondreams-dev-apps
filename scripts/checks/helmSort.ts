@@ -1950,7 +1950,7 @@ const planHeard = (
   heardNames: ReturnType<typeof readHeardNames>,
   isUnattended = false,
   name = 'Shivon',
-  privateId: string | null = null,
+  privateIds: string[] = [],
 ) => {
   const people: PeopleInput = {
     mentions: [{ ...siobhanMention, name }],
@@ -1959,7 +1959,7 @@ const planHeard = (
       knownWho('who-kelly', 'Siobhan Kelly'),
       knownWho('who-doyle', 'Siobhan Doyle'),
     ].map((who) =>
-      who.id === privateId
+      privateIds.includes(who.id)
         ? {
             ...who,
             privacyFacts: readPrivacyFacts({
@@ -2059,7 +2059,7 @@ test('on an unattended turn a private candidate is "a private person" in the que
   ]);
   const options = (isUnattended: boolean) =>
     (
-      planHeard(heard, isUnattended, 'Shivon', 'who-doyle').questions[0]
+      planHeard(heard, isUnattended, 'Shivon', ['who-doyle']).questions[0]
         .sealed as { options: { label: string }[] }
     ).options.map((option) => option.label);
   assert.deepEqual(options(true).slice(0, 2), [
@@ -2070,6 +2070,24 @@ test('on an unattended turn a private candidate is "a private person" in the que
     'Siobhan Kelly',
     'Siobhan Doyle',
   ]);
+});
+
+test('on an unattended turn a tie whose candidates are both private is not asked', () => {
+  const heard = readHeardNames([
+    HEARD_UNSURE({ candidateIds: ['who-kelly', 'who-doyle'] }),
+  ]);
+  const both = ['who-kelly', 'who-doyle'];
+  assert.equal(planHeard(heard, true, 'Shivon', both).questions.length, 0);
+  assert.equal(planHeard(heard, false, 'Shivon', both).questions.length, 1);
+});
+
+test('a heard tie that names a record the context leaves out is dropped on an unattended turn', () => {
+  const entries = readHeardNames([
+    HEARD_UNSURE({ candidateIds: ['who-kelly', 'who-private'] }),
+  ]) as NonNullable<ReturnType<typeof readHeardNames>>;
+  const visible = new Set(['who-kelly', 'who-doyle']);
+  assert.equal(toContextHeard(entries, visible, true).length, 0);
+  assert.equal(toContextHeard(entries, visible, false).length, 1);
 });
 
 const PREVIOUS = { text: 'Call Shivon on Friday', heard: ['Siobhan'] };
@@ -2133,8 +2151,37 @@ const planKept = (
     commands: [{ kind: 'noteSoundsLike', whoId: 'who-kelly', heardSpan }],
     whos: new Map([['who-kelly', who]]),
     earlierTasks: new Map([
-      ['task-1', { title: 'Call Shivon', whoIds: [], status: 'open' as const }],
+      [
+        'task-1',
+        {
+          title: 'Call Shivon',
+          whoIds: ['who-doyle'],
+          status: 'open' as const,
+        },
+      ],
+      [
+        'task-2',
+        {
+          title: 'Buy milk',
+          whoIds: ['who-other'],
+          status: 'open' as const,
+        },
+      ],
+      ['task-3', { title: 'Wave', whoIds: [], status: 'open' as const }],
     ]),
+    heardNames: [
+      {
+        heard: 'Shivon',
+        said: 'Siobhan Doyle',
+        recordId: 'who-doyle',
+        candidateIds: ['who-doyle'],
+      },
+    ],
+    people: [
+      { id: 'who-kelly', names: ['Siobhan Kelly', 'Vonnie'] },
+      { id: 'who-doyle', names: ['Siobhan Doyle'] },
+      { id: 'who-other', names: ['Maeve Byrne', 'Mae'] },
+    ],
     now: 9000,
     isUnattended,
     seal,
@@ -2147,6 +2194,8 @@ test('a kept correction writes soundsLike, links the earlier task and says what 
     written: { 'sealed.soundsLike': ['Shivon'] },
     previous: { 'sealed.soundsLike': null },
   });
+  assert.equal(kept.taskUpdates.length, 1);
+  assert.equal(kept.taskUpdates[0].id, 'task-1');
   assert.deepEqual(kept.taskUpdates[0].data.whoIds, ['who-kelly']);
   assert.deepEqual(kept.lines, ['Kept “Shivon” as how Siobhan Kelly sounds']);
   assert.ok(!/\b(I|my|me|Helm|Nomos)\b/.test(kept.lines[0]));
@@ -2171,6 +2220,27 @@ test('a correction is refused for a missing person, a duplicate, the name itself
     0,
   );
   assert.deepEqual(mergeSoundsLike(['One'], 'Two', ['Name']), ['One', 'Two']);
+});
+
+test('a task linked to someone else, or to no one, stays untouched when a heard form is kept', () => {
+  const kept = planKept('Shivon');
+  assert.ok(!kept.taskUpdates.some((update) => update.id !== 'task-1'));
+  assert.equal(
+    kept.effectRefs.filter((ref) => ref.collection === 'tasks').length,
+    1,
+  );
+});
+
+test("a heard form that is another person's name word or alias, a stop word or one letter is refused", () => {
+  assert.equal(planKept('Maeve').effects.length, 0);
+  assert.equal(planKept('mae').effects.length, 0);
+  assert.equal(planKept('Doyle').effects.length, 0);
+  assert.equal(planKept('Byrne').effects.length, 0);
+  assert.equal(planKept('The').effects.length, 0);
+  assert.equal(planKept('J').effects.length, 0);
+  assert.equal(mergeSoundsLike(null, 'Zoë', ['Zoe']), null);
+  assert.equal(mergeSoundsLike(null, 'Noor', ['Nur'], ['Noor Ali']), null);
+  assert.deepEqual(mergeSoundsLike(null, 'Noor', ['Nur'], ['Ali']), ['Noor']);
 });
 
 test('a private person is "a private person" in the line on an unattended turn', () => {
@@ -2249,7 +2319,7 @@ test('Undo takes the heard form and the earlier link back', () => {
   assert.ok(
     writes.includes('sealed.soundsLike') || writes.includes('soundsLike'),
   );
-  assert.ok(writes.includes('"whoIds":[]'));
+  assert.ok(writes.includes('"whoIds":["who-doyle"]'));
 });
 
 const failures: string[] = [];

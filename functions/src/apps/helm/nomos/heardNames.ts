@@ -55,17 +55,30 @@ export const isSpanOf = (span: string, text: string) => {
   return wanted !== '' && ` ${toComparable(text)} `.includes(` ${wanted} `);
 };
 
-/** The heard forms kept for a record: deduped, none equal to one of its names, at most five of at most 40 characters; null when none are left. */
+const STOP_WORDS = new Set(
+  'a an and are as at be but by can did do for from had has have her him his how i if in is it its me my no not of on or our she so that the their them then there they this to up us was we were what when who why will with would yes you your'.split(
+    ' ',
+  ),
+);
+
+/** The heard forms kept for a record: deduped, none equal to one of its names, none that is another person's name word or alias, a stop word or under two letters, at most five of at most 40 characters; null when none are left. */
 export const mergeSoundsLike = (
   current: string[] | null,
   added: string,
   names: string[],
+  others: string[] = [],
 ): string[] | null => {
   const entry = added.trim();
   const key = toComparable(entry);
   const kept = (current ?? []).filter((text) => toComparable(text) !== '');
-  return key === '' ||
+  const isOthers = others.some((name) => {
+    const comparable = toComparable(name);
+    return comparable === key || comparable.split(' ').includes(key);
+  });
+  return key.length < 2 ||
+    STOP_WORDS.has(key) ||
     entry.length > SOUNDS_LIKE_CAP ||
+    isOthers ||
     names.some((name) => toComparable(name) === key) ||
     kept.some((text) => toComparable(text) === key) ||
     kept.length >= SOUNDS_LIKE_MAX
@@ -73,7 +86,7 @@ export const mergeSoundsLike = (
     : [...kept, entry];
 };
 
-/** What the model may be told: on a turn nobody is watching, a word that points at someone the context leaves out (a private person) is dropped whole, so neither the name nor the match is told. */
+/** What the model may be told: on a turn nobody is watching, a word that points at anyone the context does not list is dropped whole, so neither the name nor the match is told. */
 export const toContextHeard = (
   entries: HeardName[],
   visibleIds: Set<string>,
