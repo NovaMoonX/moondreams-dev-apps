@@ -103,3 +103,97 @@ export function reloadForStaleChunk() {
   }
   window.location.reload();
 }
+
+const UPDATE_ATTEMPT_KEY = 'updateToLatestAttempt';
+const UPDATE_RETRY_WINDOW_MS = 2 * 60 * 1000;
+const NEW_WORKER_WAIT_MS = 10 * 1000;
+
+const readUpdateAttempt = () => {
+  try {
+    const raw = window.sessionStorage.getItem(UPDATE_ATTEMPT_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    const result =
+      parsed && typeof parsed === 'object' && 'version' in parsed && 'at' in parsed
+        ? (parsed as { version: string; at: number })
+        : null;
+    return result;
+  } catch {
+    return null;
+  }
+};
+
+const writeUpdateAttempt = (version: string) => {
+  try {
+    window.sessionStorage.setItem(UPDATE_ATTEMPT_KEY, JSON.stringify({ version, at: Date.now() }));
+  } catch {
+    // A refused write only means a second tap repeats the gentle path first.
+  }
+};
+
+// Resolves true once a newer worker controls the page, so the reload is served the new build. A page
+// with no worker yet is only being claimed by the one it already has, which proves nothing.
+const waitForNewWorker = async () => {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return false;
+  const registration = await navigator.serviceWorker.getRegistration().catch(() => undefined);
+  if (!registration) return false;
+
+  const took = { over: false };
+  const controller = new AbortController();
+  const tookOver = new Promise<boolean>((resolve) => {
+    const timer = window.setTimeout(() => {
+      controller.abort();
+      resolve(took.over);
+    }, NEW_WORKER_WAIT_MS);
+    navigator.serviceWorker.addEventListener(
+      'controllerchange',
+      () => {
+        took.over = true;
+        window.clearTimeout(timer);
+        controller.abort();
+        resolve(true);
+      },
+      { signal: controller.signal },
+    );
+  });
+  await registration.update().catch(() => undefined);
+  if (!registration.installing && !registration.waiting) {
+    if (!took.over) controller.abort();
+    return took.over;
+  }
+  return tookOver;
+};
+
+// Only the worker's precache: the voice models and cached photos live in other caches and stay.
+const clearPrecache = async () => {
+  if (!('caches' in window)) return;
+  const names = await caches.keys();
+  await Promise.all(
+    names.filter((name) => name.startsWith('workbox-precache')).map((name) => caches.delete(name)),
+  );
+};
+
+/**
+ * Loads the newest build when the person asks for it: the worker's own update when it has one, and
+ * otherwise (or on a second try for the same version) the old build's cached files are dropped so the
+ * reload comes from the network. Never runs on its own. Resolves false when the device went offline first.
+ */
+export async function updateToLatest(latestVersion: string) {
+  const previous = readUpdateAttempt();
+  const isRetry =
+    previous?.version === latestVersion && Date.now() - previous.at < UPDATE_RETRY_WINDOW_MS;
+
+  const needsFreshFiles = async () => {
+    if (isRetry) return true;
+    if (isUpdateReady) return false;
+    const hasNewWorker = await waitForNewWorker();
+    return !hasNewWorker;
+  };
+
+  const isFresh = await needsFreshFiles();
+  // The connection can drop during the wait; reloading then would land on the browser's offline page.
+  if (!navigator.onLine) return false;
+  writeUpdateAttempt(latestVersion);
+  if (isFresh) await clearPrecache().catch(() => undefined);
+  window.location.reload();
+  return true;
+}
