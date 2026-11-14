@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
@@ -130,8 +130,10 @@ interface StoredExecution {
 
 const WAITING_TEXT = 'It is waiting in Helm.';
 
+const FILED_TEXT = 'Helm filed it.';
+
 const STATUS_TEXT: Record<Exclude<SortResult['status'], 'sorted'>, string> = {
-  received: `Helm has it but has not read it yet. ${WAITING_TEXT}`,
+  received: `Helm is still reading it. ${WAITING_TEXT}`,
   needsYou: `Helm needs the person to decide something about it, so it is waiting in Helm.`,
   failed: `Helm could not read it just now. ${WAITING_TEXT}`,
 };
@@ -185,9 +187,23 @@ async function describeTurn({
       ...(answer?.fromRecords ? [answer.fromRecords] : []),
       ...(titles.length > 0 ? [`From: ${titles.join('; ')}`] : []),
       ...(answer?.general ? [`Not from your records:\n${answer.general}`] : []),
-    ].join('\n\n') || 'Helm filed it.'
+    ].join('\n\n') || FILED_TEXT
   );
 }
+
+const ALREADY_EXISTS = 6;
+const RETRY_WINDOW_MS = 2 * 60 * 1000;
+const ALREADY_FILED_TEXT =
+  'Helm already has these words from a moment ago, so they were not filed twice. What it did is in Helm\'s Activity.';
+
+/** The same words from the same assistant within two minutes are one turn, so a retried call never files them twice. */
+const retryKeyFor = (ctx: McpRequestContext, words: string, now: number) =>
+  `mcp_${createHash('sha256')
+    .update(
+      [ctx.uid, ctx.clientKey, words, Math.floor(now / RETRY_WINDOW_MS)].join('|'),
+    )
+    .digest('hex')
+    .slice(0, 28)}`;
 
 /** Writes a turn the way the device does (same fields, the words sealed under the person's key) and has Helm sort it, under the same limits as a typed one. */
 async function fileTurn({
@@ -203,8 +219,8 @@ async function fileTurn({
   const createdAt = Date.now();
   const reference = firestore
     .collection(`apps/helm/users/${ctx.uid}/captures`)
-    .doc();
-  await reference.set({
+    .doc(retryKeyFor(ctx, words, createdAt));
+  const isNew = await reference.create({
     inputMode: 'typed',
     sttProvider: null,
     interruptedCaptureId: null,
@@ -250,21 +266,36 @@ async function fileTurn({
       answer: null,
       questionAnswer: null,
     }),
-  });
+  }).then(
+    () => true,
+    (error: unknown) => {
+      if ((error as { code?: unknown }).code === ALREADY_EXISTS) return false;
+      throw error;
+    },
+  );
+  if (!isNew) return ALREADY_FILED_TEXT;
   const result = await runHelmSort({
     uid: ctx.uid,
     captureId: reference.id,
     requestKey: randomUUID(),
     mode: 'full',
     noteIds: [],
-  });
+  }).catch(
+    (): SortResult => ({
+      status: 'failed',
+      executionId: null,
+      releasedIds: [],
+      hasAnswer: false,
+      spoken: null,
+    }),
+  );
   return describeTurn({
     firestore,
     uid: ctx.uid,
     key,
     captureId: reference.id,
     result,
-  });
+  }).catch(() => FILED_TEXT);
 }
 
 const tellShape = {
