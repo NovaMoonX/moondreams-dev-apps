@@ -6,6 +6,8 @@ on:
       - 'functions/src/**'
       - 'firestore.indexes.json'
       - 'firestore.rules'
+      - 'firebase.json'
+      - 'cloudflare-worker.js'
       - 'scripts/checkRulesSize.ts'
       - 'scripts/checkFirestoreIndexes.ts'
       - 'scripts/fbInvoker.ts'
@@ -31,6 +33,7 @@ jobs:
       - run: npm run check:connection-boundaries
       - run: npm run check:share-fields
       - run: npm run check:rules-size
+      - run: npm run check:serving
       - run: npm run check:gates
       - run: npm run check:pipeline-map
       - run: npm run check:pipeline-answers

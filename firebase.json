@@ -30,7 +30,7 @@
         "function": { "functionId": "helmMcp", "region": "us-central1" }
       },
       {
-        "source": "**",
+        "source": "!/assets/**",
         "destination": "/index.html"
       }
     ]
