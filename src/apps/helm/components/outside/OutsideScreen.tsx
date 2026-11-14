@@ -4,12 +4,14 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import OutsideConversationView from '@apps/helm/components/outside/OutsideConversationView';
 import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY, OUTSIDE_CONVERSATION_GAP_MS } from '@apps/helm/constants';
+import { markCaptureSeen } from '@apps/helm/store/actions/captureActions';
 import { selectOutsideCaptures } from '@apps/helm/store/selectors/captureSelectors';
 import {
   groupOutsideConversations,
@@ -83,6 +85,7 @@ function OutsideScreen({
   const { isLoaded, isFailed } = useAppSelector(
     (state) => state.helm.outsideCaptures,
   );
+  const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const conversations = useMemo(
@@ -97,6 +100,18 @@ function OutsideScreen({
         ),
       )
     : conversations;
+  // An outside turn filed before outside turns were kept seen is marked seen once its conversation is opened.
+  const openConversation = (conversation: OutsideConversation) => {
+    setOpenId(conversation.id);
+    if (!user) return;
+    conversation.turns
+      .filter((turn) => turn.seenAt === null)
+      .forEach((turn) =>
+        markCaptureSeen(user.uid, turn.id).catch((error: unknown) =>
+          console.error('Helm outside turn not marked seen', error),
+        ),
+      );
+  };
   const open = conversations.find((entry) => entry.id === openId) ?? null;
 
   return (
@@ -152,7 +167,7 @@ function OutsideScreen({
               <li key={conversation.id}>
                 <ConversationRow
                   conversation={conversation}
-                  onOpen={() => setOpenId(conversation.id)}
+                  onOpen={() => openConversation(conversation)}
                 />
               </li>
             ))}
