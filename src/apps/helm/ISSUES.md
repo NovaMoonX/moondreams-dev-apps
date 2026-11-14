@@ -17,6 +17,7 @@ The tiers mirror PRODUCT.md's Build Plan: `## MVP` is Core MVP, `## Next Steps` 
 - `docs/conventions/code.md` (CLAUDE.md "Voice for any app"): round 6 adds `src/lib/speech/voice/`, `useVoiceConversation`, `readSpokenAnswer` (round 6c), the on-device recognizer in `src/lib/speech/onDevice/` and `useOnDeviceRecognition`, all covered by `check:pinch-voice`; the on-device model's licences and download size are said where the person turns it on, as for the natural voice.
 - `docs/conventions/data-contracts.md` (round 6b, 6e): a yearly date whose year or day may be unknown is `month`, a nullable `day` and a nullable `year`, never a placeholder, read through `@/utils/yearlyDateUtils`; a one-time life event is a moment with a precision, never a yearly date. `docs/conventions/state-data.md` (round 6e, owner's choice: seal everything): a sealed app that must find records by a sealed value keeps one sealed index document, rewritten in the same transaction as each change, with a stated size cap and split plan, never a readable or derived field.
 - `docs/conventions/product.md`: an answer from outside the person's records is labelled wherever it shows, aloud too, and is never stored as one of their records unless they save it.
+- `docs/conventions/cloud-functions.md` (in Issue 113, with the nightly pass): the batch test, the never-batched list and the `BATCH_JOBS` registry with `check:batch-jobs` (text: `TECHNICAL.md` section 18). `docs/conventions/security-privacy.md` (in Issue 103): private as a class, never named outside the app unless turned on for that thing or that copy. `docs/conventions/data-contracts.md` (in Issue 102): an assistant's map of where things live is the one source of its prompt map, tools, writers, batch reads and cascades, checked by `check:helm-where`.
 
 **Shared code built or moved, by issue:** `createSealedReader` and `functions/src/appKeys/` (2), `parseNaturalDate` (4), `functions/src/ai/` (5), the voice skeleton in `src/lib/speech/voice/` and `useVoiceConversation` (12), the server voice providers and `voiceConfig` (13), `mintVoiceToken`, the streaming listener and the voice usage counters (14), `streamSpeech` (15), barge-in (16), the on-device recognizer in `src/lib/speech/onDevice/` and `useOnDeviceRecognition` (17), the connections contract, `useConnections`, `ConnectedSourcesList` and `functions/src/connections/` (18), the sync runner and expiry (19), `requestGoogleAuthCode`, the token store and the Google connectors (20, 28, 29, 38), `functions/src/vendor/` and `check:server-copies` (24; the matcher copies in 34), `readSpokenAnswer` in `@/lib/speech` (36), `useSealedObjectUrl` with Runway's receipt hook moved onto it (37), `yearlyDateUtils` with Nine Lives' anniversary helper moved onto it, and the server copy of `keyDateIndex.ts` under `check:server-copies` (43), `LinkedText` (46), `MarkdownText` (49), `transcribeVoiceNote` (52), `ChecklistGroup` moved from Runway (54), `recentSignIn` (62, moved from Runway), the site callable `signOutEverywhere` and `TrustBrowserRow`'s optional `onSignOutEverywhere` (61). Trust this browser itself is PR #819's shared store and row, reused by 60 with nothing rebuilt. Round 5's `BottomTabBar` and `DictationField` are dropped. Each adds its Pattern-index line in that PR. The account page's "Connected apps" index lands with issue 18.
 
@@ -438,6 +439,7 @@ The person can talk over a spoken reply and it stops at once, hearing their firs
 ### CRUD & Entry-Point Requirements
 - [ ] **Update:** hands-free and wake word switches in voice settings.
 ### Success Criteria
+- [ ] A turn spoken on home, from the "Ask about this" bar's mic or by "Hey {name}" on any page, and a choice tapped while that spoken conversation is open, each carry `isSpokenTurn` and are answered aloud; a typed turn is answered in writing (`TECHNICAL.md` section 5, "The spoken reply"; `check:helm-voice-turn`).
 - [ ] The person can interrupt a reply mid-sentence and be understood, answer a question without tapping, and start a turn by saying "Hey {name}" after turning it on; renaming the assistant renames the wake phrase; said on a content page, it opens the conversation over that page with its chip (round 6e), and on a utility screen with none.
 - [ ] No audio reaches the cloud listener before the wake phrase or a tap (network log while waiting).
 - [ ] Barge-in checked with a long reply in Chrome desktop and Android; iOS behaviour recorded, and the tap fallback works there.
@@ -452,27 +454,27 @@ The person can talk over a spoken reply and it stops at once, hearing their firs
 **Files:** `src/lib/speech/onDevice/{capability,modelStore,recognizerWorker,onDeviceStt}.ts`, `src/hooks/useOnDeviceRecognition.ts`, `public/speech/asr/*` + `NOTICE`, `src/lib/speech/voice/{voiceRouter,bargeIn}.ts`, `src/hooks/useVoiceConversation.ts` (wake listening on the model), `scripts/checks/speechShared.ts` (file list widened), `scripts/checks/voiceRouter.ts`, `src/apps/helm/components/voice/VoiceSettings.tsx` ("Hear me offline" row), `vite.config.ts` or the service worker's cache list (the model files), `CLAUDE.md` (Pattern index), `docs/conventions/code.md`
 **Context:** `TECHNICAL.md` section 20 ("On-device recognition", "Routing", "Wake word, barge-in and hands-free"); `useNaturalVoice` and its licence row as the pattern; CLAUDE.md "A vendored third-party asset keeps its licence beside it".
 ### Description
-In voice settings, "Hear me offline" downloads a speech-recognition model to the phone (the row says the size, 57 MB, before it starts), after checking the phone can run it. From then on Helm hears the person with no connection on any phone, talking over a reply works offline too, and "Hey {name}" listens on the phone itself so nothing leaves it.
+In voice settings, "Hear me offline" downloads a speech-recognition model to the phone (the row says the size, about 40–75 MB, before it starts), after checking the phone can run it. From then on Helm hears the person with no connection on any phone, talking over a reply works offline too, and "Hey {name}" listens on the phone itself so nothing leaves it.
 ### Possible Approach
 1. Build sherpa-onnx's WebAssembly speech-recognition-only target with a streaming English Zipformer (int8); measure size and real-time factor on a mid-range Android phone and an iPhone; fall back to `vosk-browser` if it fails. Correct `TECHNICAL.md`'s unverified sizes.
 2. Licences: confirm Apache-2.0 (sherpa-onnx) and MIT (ONNX Runtime) for the release used, prove from the build's file list that eSpeak NG (GPL-3.0) is not inside, and record the model weights' licence; `NOTICE` beside the files and the licences named on the row, as the natural voice does.
 3. `capability.ts` (WebAssembly SIMD, `AudioWorklet`, storage estimate, memory hint) gates the row; `modelStore.ts` downloads from the site's origin with a hash check, a progress line and Cancel, caches it, and removes it on "Remove".
 4. `recognizerWorker.ts` runs the model in a Web Worker on the PCM worklet's frames; `onDeviceStt.ts` is an `SttAdapter`; the router prefers it whenever cloud listening isn't used, and for wake listening.
 ### CRUD & Entry-Point Requirements
-- [x] **Create:** download the model ("Hear me offline").
-- [x] **Read:** the row's state (size, downloading with progress, ready, can't run here).
-- [x] **Update:** n/a.
-- [x] **Delete:** Remove frees the space.
+- [ ] **Create:** download the model ("Hear me offline").
+- [ ] **Read:** the row's state (size, downloading with progress, ready, can't run here).
+- [ ] **Update:** n/a.
+- [ ] **Delete:** Remove frees the space.
 ### Success Criteria
 - [ ] The person can turn on "Hear me offline", go into airplane mode, and still talk to Helm, interrupt a reply by voice and say "Hey {name}".
-- [x] A phone that can't run it, or lacks the space, is told why before any download; a cancelled or failed download leaves nothing cached.
-- [x] No audio leaves the device while the model listens (network log); the model files are served from the site's origin and checked by hash.
-- [x] The licences are named in the PR with the eSpeak NG check's evidence; anything not confirmed is listed in the PR as unverified and the owner decides whether to ship it.
-- [x] `check:pinch-voice` covers `src/lib/speech/onDevice/**` and `useOnDeviceRecognition.ts`; shared code has no Helm words.
-- [x] No rules or schema change (download state is browser state); stated.
-- [x] Conventions: `code.md`'s "Voice for any app" bullet gains the on-device model; Pattern index line for `useOnDeviceRecognition`.
+- [ ] A phone that can't run it, or lacks the space, is told why before any download; a cancelled or failed download leaves nothing cached.
+- [ ] No audio leaves the device while the model listens (network log); the model files are served from the site's origin and checked by hash.
+- [ ] The licences are named in the PR with the eSpeak NG check's evidence; anything not confirmed is listed in the PR as unverified and the owner decides whether to ship it.
+- [ ] `check:pinch-voice` covers `src/lib/speech/onDevice/**` and `useOnDeviceRecognition.ts`; shared code has no Helm words.
+- [ ] No rules or schema change (download state is browser state); stated.
+- [ ] Conventions: `code.md`'s "Voice for any app" bullet gains the on-device model; Pattern index line for `useOnDeviceRecognition`.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
-- [x] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 
 ### Issue 18: Connected apps: the site's read contract, grants and the Pinch adapter
 
@@ -1580,14 +1582,16 @@ An oversized sealed fixture (600 tasks, 2,000 who records with 20,000 key dates,
 
 Bodies are filled in before each starts; titles and prerequisites are settled. Round 5's Next 57, 59 and 63 moved into the MVP (16, 51, 50), and this round's Beyond 95 (on-device recognition) moved to MVP 17; "Playbooks" (Beyond) is absorbed by procedures.
 
+The growth area is Issues 101–127, written out in full and in build order: the follow-ups on built voice and people (101, 104, 105) early, among the foundations the rest stands on (102: one map of where things live; 103: private things; 106: the shared repeat rule; 107: where you and your people are), then habits and what grows from them (108–114), scheduled actions (115), the voice across the area (116, 117), thinking ahead (118–123), and what widens what is already read and shown (124–127). Each behaviour is decided by code, and its check is named on the line (`TECHNICAL.md` section 28, the table of deciders, checks and issues). Repeating tasks (Issue 70) now sit on Issue 106.
+
 ### Issue 65: Documents the assistant drafts: briefings, research notes, interview questions and plans
 **Prerequisites:** 51. Drafted as topics whose sections cite their sources (`source: 'assistantDraft'`), refined by asking with versions; replaces round 5's artifacts and their threads.
 
 ### Issue 66: Export a topic's document to Google Docs
-**Prerequisites:** 65, 20. Adds `drive.file` by incremental consent; export through a callable on the platform's token store.
+**Prerequisites:** 65, 20. Adds `drive.file` by incremental consent; export through a callable on the platform's token store. A private topic or note is left out of an export unless the person taps "Include them" for that export (`filterPrivate`, section 28 "Private is a class").
 
 ### Issue 67: Put a planned task on Google Calendar, approved one by one
-**Prerequisites:** 32, 81. The first outbound action: `calendar.events` scope, `executing` / `verificationRequired` states, an approvals queue.
+**Prerequisites:** 32, 81. The first outbound action: `calendar.events` scope, `executing` / `verificationRequired` states, an approvals queue. A proposal for a private thing shows "· Private" in the queue and, once approved, is written with Google Calendar's `visibility: 'private'`.
 
 ### Issue 68: Preparation before an event
 **Prerequisites:** 65, 55. A scheduled drafter leaves a procedure run or a briefing topic on Today; no push.
@@ -1596,7 +1600,9 @@ Bodies are filled in before each starts; titles and prerequisites are settled. R
 **Prerequisites:** 31.
 
 ### Issue 70: Repeating tasks, and procedures run on a schedule
-**Prerequisites:** 8, 55.
+**Prerequisites:** 8, 55, 106. When a repeating task pushes, it uses fixed words with its name switch off by default, private or not (section 28, "Private is a class"). Repeats through the shared `RepeatPicker` and `src/utils/repeatRule.ts` (built in Issue 106).
+**Success Criteria:**
+- [ ] A repeating task and a procedure's schedule repeat through the shared `RepeatPicker` and `src/utils/repeatRule.ts` (the same presets, Custom screen, words line and rule shape as scheduled actions: `rule`, `startsOn`, `skipped`, `moved`), so "the cat's flea dose on the 1st" and "every other Tuesday" mean one thing everywhere; habits keep `Cadence` (`check:repeat-rule`, `check:helm-tasks`).
 
 ### Issue 71: Merge two who records, and Google Contacts kept in step
 **Prerequisites:** 38. Merge keeps every link and fact with Undo; a synced Contacts category (mode `sync`) beside the MVP's pick-only one.
@@ -1614,7 +1620,7 @@ Bodies are filled in before each starts; titles and prerequisites are settled. R
 **Prerequisites:** 20. A Google Tasks connector on the platform (`tasks.readonly`), synced like Calendar.
 
 ### Issue 76: A weekly look back and ahead, on request
-**Prerequisites:** 65.
+**Prerequisites:** 65. Runs at once: it is asked for, so it fails the batch test (section 5, "What runs in a batch"); a version prepared ahead would be a new registered job.
 
 ### Issue 77: Knowledge found by meaning
 **Prerequisites:** 49. `embedHelmNote` seals an embedding per note.
@@ -1658,10 +1664,502 @@ Bodies are filled in before each starts; titles and prerequisites are settled. R
 ### Issue 90: Browse ordered by how you use it
 **Prerequisites:** 1. Tiles keep their declared importance and the cap on big tiles; inside each size, tiles are ordered by how often the person opens each view, counted on the device only (TECHNICAL.md section 27).
 
+### Issue 101: End a conversation by saying so
+
+**Prerequisites:** 12, 16, 36
+**Target PR Size:** ~400 lines (M)
+**Context:** `TECHNICAL.md` section 20 ("Ending a conversation by saying so"), section 28 ("Hands-free, for the whole area"); `PRODUCT.md` "Speaking and Listening"; `UX.md` 1c; canvas row 23 (CE1, CE2). A follow-up on built issues 12 and 16.
+### Description
+"Never mind", "forget it", "that's all" and their kin close the conversation, typed or spoken, matched on the device with no model call: what was pending is dropped, what was done keeps its Undo, and spoken, the microphone is released with a soft falling chime. A phrase that answers the open question is its answer, and no closing phrase ever deletes anything.
+### CRUD & Entry-Point Requirements
+- [ ] **Update:** a close drops what was pending ("Okay, left it · Undo"); Undo restores it.
+- [ ] **Read:** a typed close folds the question card to "Left it".
+### Success Criteria
+- [ ] "Never mind", "forget it", "cancel", "stop", "that's all", "thanks", "I'm done", "nothing", "no thanks", "leave it" and close variants, as the whole turn or (for a dismiss phrase after "actually", or a finish phrase after content) its end, close the conversation typed or spoken, matched on the device by the shared `readClosingPhrase` with no model call and offline; "remind me to cancel" and "stop suggesting that" are requests; "ugh, doesn't matter" closes through the model's `closeConversation`, which can carry no command (`check:helm-close`, `check:pinch-voice`).
+- [ ] A phrase that answers the open question is its answer ("nothing" = None of these, "no thanks" = No); "cancel it" with a page in view and nothing pending goes as a turn about that page; "stop" while it talks stops the voice and closes only when nothing is pending (`check:helm-close`).
+- [ ] A close drops unsent words, questions about requests not yet done and confirms waiting for a yes (`leftAt`; answering one late is refused), keeps everything done with its Undo, and moves a question about something already filed to Needs you as skipped; "Okay, left it · Undo" restores what was dropped; nothing else is written (`check:helm-close`).
+- [ ] No closing phrase reaches a delete: every `CLOSING_PHRASES` entry and variant writes nothing but `leftAt`/`skippedAt`, a model answer that pairs "forget it" with a deleting command is refused, and "forget that I like olives" still forgets that fact (`check:helm-close`).
+- [ ] Spoken, the microphone is released (TAP mode OFF, the follow-up gate stopped; WAKE mode back to waiting for the phrase), the window doesn't reopen, and the shared `close` cue plays a soft falling chime once; a typed close is silent; Pinch's cooking voice is unchanged (driven, `check:pinch-voice`).
+- [ ] Shared code built with no app words: `closingPhrase.ts`, the `close` cue and `CLOSE_HEARD` in `listeningMode.ts`. Conventions: `code.md`'s voice bullet gains `readClosingPhrase`, `CLOSING_PHRASES` (an app supplies extra words, never its own list) and the `close` cue.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 102: One map of where things live
+
+**Prerequisites:** 5, 27
+**Target PR Size:** ~350 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("Where things live"), section 18 (the "Every fact has one home" bullets); `PRODUCT.md` "Use Cases This Area Must Carry" ("One home for each thing").
+### Description
+The assistant always knows where to look and where to write. `WHERE_THINGS_LIVE` (`src/apps/helm/whereThingsLive.ts`) holds one row per thing Helm keeps or reads (its home, its one writer, the derived records that cite it, the tool or context block that reads it), and the prompt's `<where_things_live>` block, the tool list, `COMMAND_WRITERS` and the delete cascades are generated from it. Rows are written for everything the MVP built; every later issue adds its own.
+### Success Criteria
+- [ ] The person's questions about any kind of record are answered from that kind's block or tool, never a guess, and a sentence and a tap make the same change through one writer (fixtures over the MVP's kinds).
+- [ ] `check:helm-where` fails a tool, command, collection, context block, connected category or batch job with no row, a row naming something that doesn't exist and a derived home without `sourceKeys`; the generated block matches a snapshot.
+- [ ] No rules change; stated. Conventions: `data-contracts.md` "Every fact has one home, and what is worked out from it says so" and its `WHERE_THINGS_LIVE` sentence written; `agents.md`'s technical reviewer reads the map's diff.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 103: Private things
+
+**Prerequisites:** 7, 8, 16, 35, 40, 45, 47, 54, 102
+**Target PR Size:** ~500 lines (L)
+**Context:** `TECHNICAL.md` section 2 ("Readable versus sealed": Private), section 28 ("Private is a class, not only health"); `PRODUCT.md` "Private Things"; `UX.md` 1i, D19.
+### Description
+Health and care things are private on their own on any kind of record, and anything else is private when the person says so or turns on its Private switch; a thing filed under a private project or about a private person is private too. A private thing shows a quiet lock in lists and "· Private" on its filing line, is never named in a push, copy, export or anything written outside Helm unless turned on for that one thing or copy, and inside Helm nothing changes. Habits and their care switch join in Issue 108, the lock-screen name in Issue 110.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** "keep this private" on a new thing; a health or care thing marked by code with its reason shown.
+- [ ] **Read:** the lock beside a private thing's name; the sheet saying where an inherited class comes from.
+- [ ] **Update:** the Private switch on every record's sheet; `setPrivate` by voice, with Undo; clearing a health mark with one confirm.
+- [ ] **Delete:** a copy or export leaves private things out with "Include them" for that copy.
+### Success Criteria
+- [ ] Every derived kind (patterns, observations, reflections, seen-as lines, Activity lines, moments, timeline, Today's lines) is private when any source is; copies and exports of them leave private ones out with "Include them" (`check:helm-private`).
+- [ ] A wake-phrase turn with the page hidden or untouched answers private things by label ("your morning medicine") in speech and on screen, until the first touch; names never reach the model in that turn (`check:helm-private`).
+- [ ] Deleting a private project or forgetting a private person leaves each child that inherited it with its own mark (`check:helm-private`).
+- [ ] Each source of the class (care, a health word the model missed, the person, a private project, a private who) and leaving the project; code never clears a health mark and never re-marks a cleared one; `setPrivate` is refused on an inherited class with its code-built line (`check:helm-private`); every copy and export goes through `filterPrivate` (`check:helm-copy`).
+- [ ] No rules change (`privacy` is a readable field under the owner wildcard); stated. Rows added to `WHERE_THINGS_LIVE` for `privacy` and `touchesPrivate`. Conventions: `security-privacy.md` "Private is a class any record can carry" written (Issue 110 folds the push bullet into it).
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 104: People: Also called and family words
+
+**Prerequisites:** 34, 35, 43, 103
+**Target PR Size:** ~400 lines (M)
+**Context:** `TECHNICAL.md` section 22 ("Also called and family words"); `PRODUCT.md` "People, Pets and Organizations"; `UX.md` 1d; canvas row 23 (NK1 to NK3b). A follow-up on built issues 34 and 35.
+### Description
+A person can carry other names ("Bubs") and a family word ("younger brother"). Aliases find them everywhere a name does; a new nickname is asked about before it is saved; "this is for my younger brother" finds the right one from what was said or from birthdays with a year, and asks when it can't tell. The self's own birthday is a key date on the You page.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** an alias by Add or a Yes to "Is Bubs Eli?"; a family word from the who page's list or said.
+- [ ] **Read:** "Also called" and the family word on the who page.
+- [ ] **Update:** change the family word; the saved answer to "Is Eli younger than you?".
+- [ ] **Delete:** Remove an alias; clear the family word.
+### Success Criteria
+- [ ] The who page shows "Also called" with Add and Remove; aliases find the person in Search, `@`, the turn's matching, the context, the hints (never a private one's) and the sound-alike fix; "Also heard as" (`soundsLike`) and refused names are separate sealed lists (`check:helm-sort`, `check:helm-name-hints`).
+- [ ] A new nickname the model links to someone asks "Is Bubs Eli?" · Yes · No · Someone new before anything is saved; Yes saves the alias, No leaves the turn as written and is never asked again for that name and person (`refusedAliases`), Someone new makes the who (`check:helm-kin`).
+- [ ] Family words come only from `KIN_KINDS`, with order only on sibling and child kinds; the normalizer refuses anything else and keeps the said words in `relation` (`check:helm-kin`).
+- [ ] "This is for my younger brother" uses a said order first; else derives older/younger only from the person's and the brother's birthdays both with a year, and oldest/youngest from the siblings' years alone; one fit is used and named ("Added for Eli: …"), two ask "Which brother: Eli or Marcus?", an order it can't tell asks "Is Eli younger than you?" once and saves the answer, never asking for a birthday; no brother asks who with "Add your brother"; a private who resolves the same way (`check:helm-kin`).
+- [ ] No rules change (sealed fields only); stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 105: Names heard right
+
+**Prerequisites:** 16, 101, 103, 104
+**Target PR Size:** ~450 lines (M)
+**Context:** `TECHNICAL.md` section 20 ("Listening knows your names"); `PRODUCT.md` "Speaking and Listening" ("It knows your names"); `UX.md` 1c; canvas row 23 (NM1, NM1b, NM2). A follow-up on built issues 12 and 16.
+### Description
+The names the person has told {Name} (people, pets, organizations, places, projects and their aliases) are heard as those names: the recognizer is handed them as hints at each listen, a near miss is fixed on the device when one name clearly fits, two close fits ask which, and a spelled correction is remembered as "Also heard as". Nothing private is ever a hint. Habit names join the hints in Issue 108; care habits and medicines are refused by the same `exclude` from the start.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** a `soundsLike` entry from a spelled correction.
+- [ ] **Read:** the dotted underline with "Use what I said"; "Also heard as" on the name sheet.
+- [ ] **Delete:** Remove an "Also heard as" entry; Forget removes them with the record.
+### Success Criteria
+- [ ] Each listen hands the recognizer the person's own proper nouns (who, aliases, places, projects, goals, habits, lists, topics, procedures, the wake phrase, connected apps' nameable things while connected), ranked page in view, last 2 weeks, most named, the rest, cut to 90 terms and 450 counted tokens: Deepgram `keyterm` set at connect and never updated mid-stream, Chrome `phrases` only where `SpeechRecognitionPhrase` exists (`check:helm-name-hints`).
+- [ ] No private record's name or alias, care habit, medicine, dose or health word is ever in the hint list, the Deepgram URL or Chrome's phrases, even through a non-private record carrying the same word (`check:helm-name-hints`).
+- [ ] A heard word that sounds like exactly one known name, clearly ahead of the next (score ≥0.8, lead ≥0.15), shows as that name with a dotted underline and "Use what I said"; two close fits ask "Which Siobhan: Kelly or Doyle?"; a typed misspelling reaches the model as a guess and the text isn't changed (`check:option-match`, `check:helm-sort`).
+- [ ] "No, Siobhan, S-I-O-B-H-A-N" fixes the earlier turn with Undo and keeps the heard form in her sealed `soundsLike`, shown as "Also heard as" with Remove, never as a name or a hint (`check:helm-sort`).
+- [ ] Shared code built with no app words: `closingPhrase.ts`, `nameHints.ts`, the `close` cue and `CLOSE_HEARD` in `listeningMode.ts`, the `sounds` option in `optionMatchUtils`; `code.md`'s voice bullet and the option-match bullet updated.
+- [ ] Deepgram `keyterm` with a token-granted stream and Chrome's `phrases` checked on a real run and the result stated in the PR.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 106: How often: the shared repeat rule and picker
+
+**Prerequisites:** none
+**Target PR Size:** ~500 lines (L)
+**Context:** `TECHNICAL.md` section 28 ("Repeats like a calendar"); `PRODUCT.md` "Scheduled Actions"; `UX.md` 1j; canvas row 23 (RP1 to RP3).
+### Description
+One way to say how often something repeats, for every app: Google Calendar's presets worded from the first date, a Custom screen for the rest, and one words line with the next three dates. The rule is a date-only RFC 5545 RRULE body with a floating time and a zone, iterated by our own code and checked against `rrule`. Scheduled actions (Issue 115) and repeating tasks and procedures (Issue 70) sit on it; habits keep their own cadence.
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Update:** the `RepeatPicker` sets and changes a rule (presets, Custom, Ends).
+- [ ] **Read:** the words line and the next three dates.
+### Success Criteria
+- [ ] "How often" offers Google Calendar's presets worded from the first date (Does not repeat · Every day · Every weekday (Mon–Fri) · Every week on Monday · Every month on the 23rd / the fourth Monday / the last Monday / the last day · Every year on Nov 23 · Custom…); Custom sets every N days (1–365), weeks (1–52), months (1–12) or years (1–10), weeks starting on the locale's first day (Sunday by default), several weekdays, day of month or nth/last weekday, and Ends Never / On a date / After N (≤999); the words line and the next three dates come from `describeRepeat`/`listOccurrences`, and "the 31st" says months without one are skipped (`check:repeat-rule`).
+- [ ] The rule is stored as a date-only RRULE body in the closed subset with `startsOn`, a floating `time`, `timeZone`, `skipped` and `moved`; our iterator matches `rrule` (devDependency oracle) on a few thousand generated rules, and nothing from `rrule` ships to browsers or Functions (`check:repeat-rule`, bundle check).
+- [ ] Shared code built: `src/utils/repeatRule.ts` and the `RepeatPicker` with no app words (grep), a server copy under `check:server-copies`, and the Pattern index line.
+- [ ] `FormSheet` gains its `viewKey` view swap for the Custom screen (the phone's Back returns to the presets), with every `FormSheet` consumer checked before and after.
+- [ ] Conventions: `data-contracts.md` "Know which of the two kinds of time value a field is" gains the repeat clause (a date-only RRULE body with a separate floating time and zone, never a TZID or a timed DTSTART).
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 107: Where you and your people are
+
+**Prerequisites:** 20, 24, 34, 103
+**Target PR Size:** ~450 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("Where the person is, and where they will be"); `PRODUCT.md` "Where You and Your People Are"; `UX.md` 1g (Where people are); canvas rows 20 (LC1, LC2) and 22 (SA4).
+### Description
+The person and each who have a home and, now and then, somewhere else for a while, from what is said, the calendar and Waypoint trips, each with its source; "nearby" is worked out from them. The phone's location is the person's choice of Off, City only or Precise, offered only when an answer needs it. A time away in another zone offers its time and a pause of what runs at home. What exists when this lands (Today's planning, the day's turn) follows the away zone here; habits, reminders, the nightly pass and scheduled actions read the same `zoneSpans` in Issues 108, 110, 113 and 115, and each re-runs this criterion's case for itself.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** a home or a time away, said or set on the page (`CitySelect`).
+- [ ] **Read:** "Lives in Leavenworth" and "In Portland · until Sun, Nov 15" with their source.
+- [ ] **Update:** Change; "I'm back" ends a time away early; the phone location setting.
+- [ ] **Delete:** Remove; a time away ends on its last day on its own.
+### Success Criteria
+- [ ] Saying "I'm in Lisbon Dec 2–9" offers "Use Lisbon time Dec 2–9" (Undo) and "Pause what runs at home", once per span, only when the offsets differ; a Waypoint trip in another zone offers the same; with it on, reminders, the 03:00 day, Today's planning and the nightly pass follow Lisbon time while scheduled actions stay on home time unless paused, and no day is counted twice (`check:helm-whereabouts`, `check:helm-habits`, `check:helm-scheduled`).
+- [ ] `readWhereabouts` picks a stated away, then a trip, then a marked calendar event, then the current place, then home; two cities at 49 km are nearby and at 51 km are not; phone location stores no coordinates at City only (`check:helm-whereabouts`).
+- [ ] No rules change (sealed fields on the self who and each who); stated. Rows added to `WHERE_THINGS_LIVE` for `home`, `away`, `zoneSpans` and `nearNow`. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 108: Habits
+
+**Prerequisites:** 16, 32, 36, 102, 103, 107
+**Target PR Size:** ~600 lines (L)
+**Context:** `TECHNICAL.md` section 2 ("Habit and HabitDay"), section 28 ("Habits and repeating tasks", "Time: a habit's day and its windows", "Check-ins"); `PRODUCT.md` "Habits"; `UX.md` 1g; canvas row 13 (HB1 to HB6).
+### Description
+Something kept up rather than finished (pills morning and evening, water through the day, Mom's doses), made by talking, ticked by a tap or a word without naming the window, with a note kept as said and now and then "How was it?". A bare line on Today at its time that follows shifts, read as "11 of 13 this week" and never as a streak. Health and care habits are private and kept exactly as said; the person can mark one as medicine or care. Habit names join the recognizer's hints, care habits and medicines never.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** a habit said ("pills morning and evening") or by hand.
+- [ ] **Read:** the habit's line on Today; the habit's page with its weeks.
+- [ ] **Update:** tick, skip, a tally, a note; change its windows; pause; "This is medicine or care".
+- [ ] **Delete:** end a habit, with Undo.
+### Success Criteria
+- [ ] "Took my pills", "gave Mom her pills" or a typed "done water" with nothing else ticks the habit on the device with no model call, offline and over the day's turn limit, with Undo and the spoken line; extra words go to the model (`check:helm-checkin-match`).
+- [ ] "This is medicine or care" on a habit's sheet, and "this is a medicine" said, mark it care and private, with Undo; a private habit with a dose-like count asks "Is this a medicine?" once, never again (`check:helm-private`).
+- [ ] A window past midnight, the 03:00 rollover, both clock changes in two zones, a tally from two devices and an away zone each land a check-in on the right day (`check:helm-habits`); a habit's name joins the hint list and a care habit's never does (`check:helm-name-hints`).
+- [ ] No rules change beyond the wildcard's three new collections (`habits`, `habitDays`, `patterns`), proven as owner, another user and signed out. Rows added to `WHERE_THINGS_LIVE`; lists added to `helmScale.ts`. Conventions: `data-contracts.md` gains the floating time-of-day clause; Pattern index gains `cadenceUtils`.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 109: A care tick names its medicine
+
+**Prerequisites:** 103, 108
+**Target PR Size:** ~200 lines (S)
+**Context:** `TECHNICAL.md` section 28 ("Check-ins"); `PRODUCT.md` "Habits"; `UX.md` 1g (HB2); canvas row 23 (MC1).
+### Description
+Ticking a care habit says which medicine and whose ("Done: Mom's morning metoprolol."), so a misheard tick is caught at once; an unattended wake-phrase turn says the label until the first tap. A care habit turned on without a medicine asks for it once.
+### CRUD & Entry-Point Requirements
+- [ ] **Update:** the habit's medicine, from "Which medicine is it?" or its sheet.
+### Success Criteria
+- [ ] Ticking a care habit, by tap, word or the model, replies and writes the line with the medicine and whose ("Done: Mom's morning metoprolol."; "Noted" stays for kept-not-acted), from one `checkInLine`; after a wake phrase on a locked phone or untouched page it says the label until the first tap, then redraws with the name; with no medicine said it uses the habit's name, and "Which medicine is it?" is asked once when care is turned on without one (`check:helm-checkin-match`, `check:helm-private`).
+- [ ] No rules change; stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 110: Forming a habit: reminders while it builds, and its stages
+
+**Prerequisites:** 103, 108
+**Target PR Size:** ~700 lines (L)
+**Context:** `TECHNICAL.md` section 28 ("A habit's life", "Reminders: opt-in, adaptive, quiet, and kept going by the server", "Formed, and letting it go"), section 14 (`lockScreenName`); `PRODUCT.md` "Habits" ("A habit's life", "Reminders while it builds", "Taking a formed habit off Today"); `UX.md` 1g; canvas row 16 (HF1 to HF10).
+### Description
+Reminders the person turns on while a habit builds, sent whether or not Helm is opened, in fixed words on the lock screen unless the person shows that habit's name, and fading as it holds (asked first on health and care). Stages judged from the ticks (Building, Holding, Formed, Building again), and a formed habit offered its way off Today a week later, leaving its weeks, its count and a moment.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** reminders turned on from the offer when a habit is said, or its sheet (`PushOptInRow`).
+- [ ] **Read:** the stage on the habit's page; the reminders sheet; "This one's formed".
+- [ ] **Update:** pace, fewer reminders, "Show its name on the lock screen" (with its warning); take a formed habit off Today; bring it back.
+- [ ] **Delete:** reminders off; a retired habit's reminders end with it.
+### Success Criteria
+- [ ] A check-in for a day in an already judged week re-judges the stage from that week, once, and a change it causes shows in Activity and on the habit (`check:helm-habits`).
+- [ ] Asking by voice to show a thing's name on the lock screen speaks the warning and writes nothing until a tapped or spoken yes matched on the device; hiding it by voice is one step (`check:helm-private`).
+- [ ] Each pace and stage's fire time, quiet hours, bundling, the cap of 6, both clock changes and templates reading only readable values (`check:helm-reminders`); both run bodies against the Firestore emulator (`check:helm-reminders-server`); each stage step at product's thresholds (`check:helm-habits`).
+- [ ] Rules for the reminder queue proven as owner, another user and signed out. Conventions: `security-privacy.md` gains the fixed-words push bullet (folded into Issue 103's private bullet); `cloud-functions.md` gains `REMINDER_SEND_HOOKS` and the sealed-app scheduled function bullet; Pattern index gains `PushOptInRow`.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 111: Goals
+
+**Prerequisites:** 45, 46, 108
+**Target PR Size:** ~500 lines (L)
+**Context:** `TECHNICAL.md` section 2 ("Project as a goal"), section 28 ("Goals"); `PRODUCT.md` "Goals"; `UX.md` 1g; canvas row 14 (GO1 to GO6).
+### Description
+A goal is a project about becoming, with its why (the person's words kept, a tidy version on their yes, a short summary for filing), milestones and a small regular step kept as a habit. Drafted with the person when asked, read as showing up and milestones reached, set aside rather than failed.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** "I want to get back into guitar", or New goal by hand; the why; a regular step from the offer.
+- [ ] **Read:** the Goals group in Projects; a goal's page with its why, evidence line and Habits group.
+- [ ] **Update:** a new why; "Use this" or "Keep mine"; set aside, finish, reopen; turn into a project.
+- [ ] **Delete:** a goal, with its habits kept or deleted.
+### Success Criteria
+- [ ] Deleting a goal, or turning it into a project, names its habits in the confirm with "Keep them" (default: standalone, out of the goal's importance place) and "Delete them"; forgetting a person ends their care habits and cancels their reminders, with Undo (`check:helm-where`).
+- [ ] The why's original is never changed by code; a tidy version shows only after "Use this"; progress is never a percentage or a bar (`check:helm-copy`).
+- [ ] No rules change (`kind` and sealed fields on `projects`); stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 112: What matters most
+
+**Prerequisites:** 45, 108, 111
+**Target PR Size:** ~450 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("Importance: what matters most, in the person's words"); `PRODUCT.md` "What Matters Most"; `UX.md` 1g; canvas row 18 (IM1 to IM6).
+### Description
+Importance said in the person's own words and kept as one order of their projects, goals and habits, with no cap and a "which comes first?" when too much is tied at the top. Shown in How {name} sees you and on each placed thing, changed by saying it again or by hand, and used by Today and Pause or hold off. Health and care are never placed.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** a place, said ("the wedding matters most, then work") or from "Change the order".
+- [ ] **Read:** "What matters most" and its line on a placed thing.
+- [ ] **Update:** move up, down, beside another or to Can wait (`ReorderList`), with Undo.
+- [ ] **Delete:** take a thing out of the order.
+### Success Criteria
+- [ ] The person can say "the wedding matters most, then work" and hear the order said back with Undo, and is asked "Which comes first?" only when 3 or more would share the top.
+- [ ] Each relation's rank, a renumbering keeping ties and order, `until` passing, a health habit refused and dates ordering the unplaced (`check:helm-importance`).
+- [ ] Shared built: `ReorderList` with no app words, and its Pattern index line. No rules change; stated.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 113: What Helm learns: when things work for you
+
+**Prerequisites:** 31, 102, 103, 108
+**Target PR Size:** ~700 lines (L)
+**Context:** `TECHNICAL.md` section 2 ("Pattern", "Observation, Reflection, Research and ScheduledAction"), section 5 ("What runs in a batch"), section 28 ("Learning", layers 1 to 4, "Learning from what is said", "Nothing learned lives on one device", "What Helm keeps, and for how long"); `PRODUCT.md` "What Helm Learns"; `UX.md` 1g; canvas rows 15 (LN1 to LN7) and 20 (AN1, WS1).
+### Description
+Patterns about when things work, from the person's ticks and from what they say (a fixed set of signals both ways), always answered then acted on or noted, looked at once a night in a batch, kept synced on every device and shown under "What I've noticed" with their evidence. Acted on with Undo for what Helm planned, suggested once for what the person set, never for health or care; each answer remembered under the back-off. On from the start, with a switch.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** a pattern found; an observation from a turn or a check-in note.
+- [ ] **Read:** "What I've noticed"; a pattern's sheet with its evidence.
+- [ ] **Update:** answer an offer (yes, Not now, "Stop suggesting that"); the "Notice what works for me" switch.
+- [ ] **Delete:** "Forget these words"; "Forget what you've noticed".
+### Success Criteria
+- [ ] With learning off, no reply says "Noted" or promises to keep an eye; a nightly result for someone who turned learning off or chose "Forget what you've noticed" after it was sent is dropped (`check:helm-act-now`, `check:helm-reflection`).
+- [ ] An observation whose quote names another person with a health word keeps its tags and no quote (`check:helm-said`).
+- [ ] Retention runs weekly: observations past 26 weeks not cited by a live pattern deleted, stopped patterns cut to their signature and still blocking, seen-as and Activity caps held (`check:helm-retention`).
+- [ ] A candidate on 2 days refused, a care candidate forced to ask-only, a result written once on a retry, a lost run re-queued (`check:helm-reflection`); every batch job registered (`check:batch-jobs`); derived records carry `privacy` from their sources (`check:helm-private`).
+- [ ] Rows added to `WHERE_THINGS_LIVE` for patterns, observations and reflections; lists added to `helmScale.ts`. Conventions: `cloud-functions.md` gains the batch test and `BATCH_JOBS`; `product.md` gains the back-off for anything learned and offered.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 114: Pause or hold off
+
+**Prerequisites:** 111, 112, 113
+**Target PR Size:** ~450 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("Guardrails: pause this, or maybe don't start it now"); `PRODUCT.md` "Pause or Hold Off"; `UX.md` 1g; canvas row 17 (GR1 to GR4).
+### Description
+When two different reasons agree (too many goals, what comes first going without, a busy stretch ahead) or a deadline won't fit, one dashed line suggests holding off or pausing, with its reasons, when something starts or when the person looks at it. Never about health or care, never blocking, and under the back-off.
+### CRUD & Entry-Point Requirements
+- [ ] **Read:** the card's reasons; "Why, and other choices".
+- [ ] **Update:** Hold it until a date, Pause until a date, Set another aside, Start it now, Stop suggesting this, each with Undo.
+### Success Criteria
+- [ ] The person starting a fourth goal in a busy month sees "Maybe hold Italian until Dec 1?" with its two reasons, and can start it anyway or hold it with Undo.
+- [ ] One reason alone shows nothing, health and care are never named, the first thing in What matters most is never named, and nothing shows in the first 7 days or with the switch off (`check:helm-guardrails`).
+- [ ] No rules change; stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 115: Scheduled actions
+
+**Prerequisites:** 7, 102, 103, 106, 107
+**Target PR Size:** ~650 lines (L)
+**Context:** `TECHNICAL.md` section 2 ("Observation, Reflection, Research and ScheduledAction"), section 28 ("Scheduled actions", "Repeats like a calendar"); `PRODUCT.md` "Scheduled Actions"; `UX.md` 1j; canvas rows 22 (SA1 to SA4) and 23 (RP3, RP4).
+### Description
+Something the assistant does for the person at a set time ("put next week's groceries on the calendar every Sunday"), repeating through Issue 106's rule, listed under Scheduled with Pause, Change and End, each run told on Today and in Activity with Undo, never pushed. Until Issue 67 only Helm's own kinds run; with 67 an outbound part waits for approval each time, until Issue 93.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** said in a turn, or from Browse › Scheduled.
+- [ ] **Read:** Browse › Scheduled; an action's sheet; each run's line on Today and in Activity.
+- [ ] **Update:** Pause, Change (this and following, or just this one), Skip this one, Move this one, each with Undo.
+- [ ] **Delete:** End.
+### Success Criteria
+- [ ] Browse › Scheduled lists them (at most 50); each opens a sheet with Pause, Change and End; each run leaves one line on Today on the next open and one in Activity (`check:helm-scheduled`).
+- [ ] A run that can't go shows the code-built failure line with Reconnect (then Run it now, only before the next scheduled run) and Skip this one (was Skip this week: exactly the next run, whatever the rule); a run over the person's limits waits and runs on the next open; one missed by downtime runs under 6 hours late, else says it was skipped; no outcome ever sends a push (`check:helm-scheduled`).
+- [ ] "Every other Tuesday at 8", "the last Friday of every month" and "weekdays at 7 until the end of March" each make the right rule from the model's structured fields, validated by code, and the reply shows the same words line with Change; "every 2 hours" or "at 8 and 6" offers separate daily actions made only on a yes, and a sub-daily rule reaching code is refused (`check:helm-sort`, `check:helm-scheduled`).
+- [ ] Runs come from the every-5-minute function by indexed queries on `actionQueue.lookAt` and `nextRunAt`, never a cron per action; a run happens within 5 minutes of its time, its line shows the set time, and one occurrence makes one capture (`sa_{actionId}_{originalDayKey}`) across retries, moves and time changes (`check:helm-scheduled`).
+- [ ] Skip this one and Move this one (today or later, at most the day before the next run, never onto a day that ran) each have Undo; Change from a run asks Just this one (a move) · This and following (default), from the sheet always this and following; from the next run it rewrites in place, from a later run it splits into two actions with `COUNT` carried; past runs are never rewritten (`check:helm-scheduled`).
+- [ ] 8:00 AM stays 8:00 AM across both clock changes in two zones; a spring-forward 02:30 runs at 03:30 and a fall-back 01:30 runs once; "Use Lisbon time" never moves an action and "Pause what runs at home" pauses by span, including an action made or running inside the time away; moving home moves actions with no zone of their own (`check:helm-scheduled`, `check:repeat-rule`).
+- [ ] An action whose end came leaves the list after its last run with one Activity line and stops counting toward the 50; a stored rule that fails its caps doesn't run and says to change it (`check:helm-scheduled`).
+- [ ] Rules for `scheduledActions` and the Admin-only `actionQueue` proven as owner, another user and signed out; the single-field indexes in `firestore.indexes.json`. Row added to `WHERE_THINGS_LIVE`. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 116: Hands-free first
+
+**Prerequisites:** 16, 36, 101
+**Target PR Size:** ~400 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("Hands-free, for the whole area"); `PRODUCT.md` "Hands-Free First"; `UX.md` 1g; canvas row 20 (HV1).
+### Description
+Every question in habits, goals, learning and thinking ahead can be answered aloud: it says the question and its choices, listens again at once, can be talked over, and "Hey {Name}" answers an open question for 2 minutes after listening ends. Taps stay; nothing waits on voice.
+### Success Criteria
+- [ ] A typed turn opens no listening window; a message typed during a spoken conversation leaves the open question answerable by tap or wake phrase for 2 minutes (`check:helm-voice-turn`).
+- [ ] Every question shape has a code-built spoken prompt; ordinals, "both", "neither", "skip" and option aliases match on the device (`check:speech-choice`); speaking over a question is matched against it first.
+- [ ] Shared built: `src/lib/speech/spokenChoice.ts` with no app words, under `check:pinch-voice`. No rules change; stated.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 117: Voice follows the turn on every page
+
+**Prerequisites:** 9, 16
+**Target PR Size:** ~250 lines (S)
+**Context:** `TECHNICAL.md` section 5 ("The spoken reply"), section 21 ("Asking from a content page"); `PRODUCT.md` "Speaking and Listening" ("Voice follows the turn, on every page"); `UX.md` 1c.
+### Description
+A turn spoken on home, through "Ask about this" on any content page, or after "Hey {Name}" anywhere is answered aloud and in writing on that page, without opening home; a typed turn is answered in writing.
+### Success Criteria
+- [ ] The person can ask from Grandpa's page by voice and hear the answer there, then type a follow-up and get it in writing.
+- [ ] A voice turn on home, from the ask bar's mic and by the wake phrase each sets `isSpokenTurn`; a typed turn after it is written; Mute ends it (`check:helm-voice-turn`).
+- [ ] No rules change; stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 118: Research with live web search
+
+**Prerequisites:** 74, 103
+**Target PR Size:** ~400 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("Research depth and live web search"); `PRODUCT.md` "Use Cases This Area Must Carry" ("Research depth and allowance"); `UX.md` 1g; canvas row 19 (RA2).
+### Description
+Research reads the web, quick or thorough, with a default the person sets and a question when the depth matters, within a monthly allowance per person ("About 4 thorough looks left this month"). Depth is how widely it reads, never when it arrives.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** a research request with its depth.
+- [ ] **Read:** what is left this month; the "Not from the web" label.
+- [ ] **Update:** the default depth ("Always quick" · "Always thorough").
+- [ ] **Delete:** Cancel a research item.
+### Success Criteria
+- [ ] Depth changes only breadth: a Quick look asked in a turn answers in about 2 minutes, a Thorough one says "about 5 to 10 minutes; I'll tell you when it's in"; only a lead-time offer or a learn-later item promises "ready by morning" (`check:helm-research`).
+- [ ] Past the month's cap, Thorough shows locked with its reset date; a Quick look answers at once with no web search, labelled "Not from the web"; "Look on Dec 1" writes `rerunOn` only on a yes, and the item runs that day only then (`check:helm-research`).
+- [ ] Cancelling a research item releases its reservation, and a batch answer that arrives after it is dropped unread (`check:helm-research`, `check:helm-reflection`).
+- [ ] Usage kept in `apps/helm/server/{uid}/research/usage` (Admin only, no client rule); stated. Row added to `WHERE_THINGS_LIVE`. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 119: To learn: a question saved for later
+
+**Prerequisites:** 49, 111, 113, 118
+**Target PR Size:** ~550 lines (L)
+**Context:** `TECHNICAL.md` section 28 ("The use cases: what the data needs", learn later); `PRODUCT.md` "Use Cases This Area Must Carry" ("Learn it later"); `UX.md` 1g; canvas row 19 (LL1 to LL3).
+### Description
+A question saved for later and brought back on a quiet evening as a short overview with a table, a picture where one helps and up to 2 videos, labelled "Not from your records"; Keep it files it in Knowledge. Found in Knowledge › Learn later, in Search and by asking.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** "save it", or a wish said in passing.
+- [ ] **Read:** Knowledge › Learn later; the overview.
+- [ ] **Update:** Not now; "actually I meant diesel engines"; Together (merge two).
+- [ ] **Delete:** "I'm not into that anymore", with Undo.
+### Success Criteria
+- [ ] "One day I want to learn how engines work" is saved at once with no answer; a second wish on the same subject merges into it, a different subject makes its own item; each is found in Knowledge › Learn later, in Search and by asking (`check:helm-sort`).
+- [ ] "Learn piano" is offered as a goal; an unclear wish asks one pickOne ("Read up on it later" · "Make it a goal you practise" · Something else); a turn that both saves it for later and creates a goal on the same words is refused and asks instead (`check:helm-sort`).
+- [ ] A tapped Not now keeps the item for another evening and teaches which evenings work; "I'm not into that anymore" removes it with Undo and it is never offered or named as related until the person raises it; "actually I meant diesel engines" edits it; a third Not now in a row asks "Still want…? Keep it · Remove it" (`check:helm-sort`, `check:helm-research`).
+- [ ] Two saved subjects that belong together are offered as one at most once a turn and once every 4 weeks per pair, never for a removed subject and never mid-task in a spoken turn; Together merges them with Undo (`check:helm-sort`).
+- [ ] Shared built: `VideoEmbed` (Pinch's `HowToVideo` moved to `src/components` with Pinch's import) and `searchVideos`, with no app words; `YOUTUBE_API_KEY` by its script, optional. Conventions: Pattern index line for `VideoEmbed`.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 120: Research offered ahead of a dated project
+
+**Prerequisites:** 45, 65, 113, 118
+**Target PR Size:** ~350 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("Research ahead of a dated project"); `PRODUCT.md` "Use Cases This Area Must Carry" ("Research ahead of the move"); `UX.md` 1g; canvas row 19 (RA1, RA2).
+### Description
+When a project has a date, research is offered ahead of it once ("Want me to look into apartments before you start touring?"), asks a few questions first, and comes back as a topic under the project.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** the offer on a dated project, or asked for.
+- [ ] **Read:** the result topic under the project.
+- [ ] **Update:** the offer moves when the project's date moves; Not now.
+### Success Criteria
+- [ ] The person sees the offer once on the move's page 8 weeks out, answers a few questions by voice or tap, and finds the research as a topic under the move the next morning.
+- [ ] `computeOfferOn` rewrites the offer when the date moves; at most 3 per project; the offer sits under the back-off (`check:helm-research`).
+- [ ] No rules change; stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 121: Questions for someone
+
+**Prerequisites:** 8, 20, 36, 68
+**Target PR Size:** ~250 lines (S)
+**Context:** `TECHNICAL.md` section 28 ("The use cases: what the data needs"); `PRODUCT.md` "Use Cases This Area Must Carry" (the questions for the couple); `UX.md` 1g; canvas row 19 (RT3).
+### Description
+Questions for someone are a task with a step for each question, linked to the meeting, and before it "Do they feel ready?"; questions found in a Drive document are offered once as that task.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** the task with its steps, said or offered from a document.
+- [ ] **Read:** "two are answered and four are to ask Monday".
+- [ ] **Update:** tick a question; "not yet" finds time before the meeting.
+### Success Criteria
+- [ ] The person hears "Of your six questions for Priya and Sam, two are answered and four are to ask Monday. Do they feel ready?" before the call, and "not yet" finds time for them.
+- [ ] No rules change; stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 122: Days away
+
+**Prerequisites:** 24, 32, 45, 107
+**Target PR Size:** ~350 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("The use cases: what the data needs", the road trip); `PRODUCT.md` "Use Cases This Area Must Carry" ("The road trip"); `UX.md` 1g; canvas row 19 (RT1, RT4).
+### Description
+"Could I hit the road this weekend?" answered with what must be done first, what it would move and whether it's a poor fit, across projects, the calendar and connected apps, worked out by code rather than guessed.
+### Success Criteria
+- [ ] The person can ask "what would I need to get done before leaving Sunday?" with their hands on the wheel and hear what must be done first and what would move, then ask "what's left before I go?" later.
+- [ ] `readFreeMinutes` and `readDeadlineFit` vendored for the server (`check:server-copies`) and sent as a `<fit>` block for date-range questions; the days away count as full.
+- [ ] No rules change; stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 123: How and where a meeting happens
+
+**Prerequisites:** 20, 32, 107
+**Target PR Size:** ~300 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("The use cases": the gaps table); `PRODUCT.md` "How and Where a Meeting Happens"; `UX.md` 1g; canvas row 20 (MF1).
+### Description
+Helm's own events carry how they meet (in person, video or phone) and where, from what the person says, and Google Calendar fills them in from its conference data and location. Used for "nearby", for what Today keeps free around an in-person meeting, and for offers like "Keep it on video, or meet at the orchard?".
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Update:** "Monday's call is on video" sets it, with Undo.
+- [ ] **Read:** "Call with Priya and Sam · Mon 10:00 AM · Video".
+### Success Criteria
+- [ ] The person sees how and where each meeting happens on its line, set by saying it or read from Google Calendar, and a meeting said with no format stays without one.
+- [ ] The Calendar adapter adds `placeLabel` and `format` and never keeps a link, description or attendee; `transformVersion` bumped (`check:adapters`).
+- [ ] No rules change; stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 124: Connected apps read as their full state
+
+**Prerequisites:** 19, 21, 22, 23, 24, 25, 26
+**Target PR Size:** ~600 lines (L)
+**Context:** `TECHNICAL.md` section 19 ("What each source shares"), section 28 ("Connected apps: what Helm reads against what the person sees there"); `PRODUCT.md` "What Each Source Shares"; canvas row 19 (RT2).
+### Description
+Each connected app is read as the full state the person sees in it: Going Once's drafts, unpriced and unlisted items and buyers' questions, and the gaps the audit found in A-List, Nine Lives, Pinch, Runway, Waypoint and Worth the Wait. Every new category is off at connect and read live when a question needs it.
+### Success Criteria
+- [ ] The person can ask "is anyone asking about the couch?" or "what's left in groceries?" once that category is on, and the answer lists where it looked.
+- [ ] Each new category's left-out fields are absent (no buyer email or phone, no account number) (`check:adapters`); each new category is Off at connect.
+- [ ] Rows added to `WHERE_THINGS_LIVE` for each new category. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 125: How {name} sees you, widened
+
+**Prerequisites:** 41, 56, 113
+**Target PR Size:** ~350 lines (M)
+**Context:** `TECHNICAL.md` section 2 ("SeenAsLine"), section 28 ("How Nomos sees you", the profile behind it); `PRODUCT.md` "How [name] Sees You"; canvas row 20 (SY1).
+### Description
+How {name} sees you adds how the person talks and what works for them, each line citing what it came from, corrected or removed by tap or voice.
+### CRUD & Entry-Point Requirements
+- [ ] **Read:** the lines grouped by kind, each opening its sources.
+- [ ] **Update:** Correct, by tap or "that's not right".
+- [ ] **Delete:** Remove; a removed line never comes back.
+### Success Criteria
+- [ ] The person can read what {name} thinks works for them, open where a line came from, and strike a wrong one by voice.
+- [ ] Fewer than 2 sources refused, a care-body line refused, a removed line never coming back, a correction surviving a rebuild (`check:helm-seen-as`).
+- [ ] Row added to `WHERE_THINGS_LIVE`. No rules change; stated.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 126: The assistant's personality
+
+**Prerequisites:** 11, 58
+**Target PR Size:** ~350 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("Personality"); `PRODUCT.md` "Your Assistant" ("Personality"); canvas row 20 (PT1).
+### Description
+Up to 5 traits the person picks or says, how honest the assistant may be, a line when two clash with a choice of which wins, and a sample of how replies will read before they keep it.
+### CRUD & Entry-Point Requirements
+- [ ] **Update:** traits and honesty on the personality sheet, or said ("be more blunt with me").
+- [ ] **Read:** the sample replies; the traits in How {name} sees you.
+### Success Criteria
+- [ ] The person can pick Blunt and Unvarnished, read how a hard reply will sound, and hear the next reply that way.
+- [ ] Every clash pair found and its winner kept; the preview reused by its hash; no trait adds cheerleading, emoji or exclamation marks (`check:helm-personality`, `check:helm-copy`).
+- [ ] No rules change; stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 127: One chosen Google Calendar kept in step both ways
+
+**Prerequisites:** 67, 103, 108, 123
+**Target PR Size:** ~450 lines (M)
+**Context:** `TECHNICAL.md` section 28 ("Two-way sync with one chosen Google Calendar"), section 19; `PRODUCT.md` "Use Cases This Area Must Carry" (the gaps).
+### Description
+The person picks one calendar (or lets Helm make one); Helm writes its plan slots, habit windows and appointments there and reads changes back on the existing sync: a moved or deleted event moves or removes the slot, and a habit window's move is offered, never applied silently.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** choose the calendar, or make one.
+- [ ] **Update:** a move in Google moves the slot; the newer edit wins, with an Activity line.
+- [ ] **Delete:** stop keeping it in step.
+### Success Criteria
+- [ ] The person sees Helm's plan in the calendar they already look at, and moving a slot there moves it in Helm.
+- [ ] A private thing is written as "Busy" with no title (`check:helm-private`); only the chosen calendar's grant carries `calendar.events`.
+- [ ] No rules change; stated. Conventions: none new; check made.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
 ## Beyond
 
 ### Issue 91: Information service: a digest of what matters
-**Prerequisites:** 77.
+**Prerequisites:** 77. Public feeds and saved pages may be summarized in a registered batch job; newsletters in Gmail are a live read and are summarized only at once, when opened.
 
 ### Issue 92: Gmail: commitments and dates from mail, replies drafted for approval
 **Prerequisites:** 67, 72, 81, 83.
