@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Lock } from 'lucide-react';
+import { ChevronRight, Lock } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import DetailSheet from '@/components/DetailSheet';
@@ -16,7 +16,9 @@ import {
 } from '@/hooks/useOnDeviceRecognition';
 import { useAppSelector } from '@/store';
 import { canUseBrowserStt } from '@/lib/speech/voice/browserStt';
+import VoicePicker from '@apps/helm/components/voice/VoicePicker';
 import { HELM_COPY } from '@apps/helm/constants';
+import { findHelmVoice, toFeelLabel } from '@apps/helm/voices';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
   setHandsFreeOn,
@@ -273,6 +275,10 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
   const onDevice = useOnDeviceRecognition({
     lang: navigator.language || 'en-US',
   });
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const chosenVoice = findHelmVoice(
+    useAppSelector((state) => state.helm.profile?.voiceId ?? null),
+  );
   const canListenForPhrase = canUseBrowserStt() || onDevice.isOn;
 
   const change = (isOn: boolean) => {
@@ -299,79 +305,107 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
   };
 
   return (
-    <DetailSheet
-      isOpen={isOpen}
-      onClose={onClose}
-      title={HELM_COPY.settingsVoiceRowTitle}
-      footer={
-        <div className='px-6 pt-2 pb-3'>
-          <ModalFooterActions
-            rightActions={
-              <Button type='button' variant='primary' onClick={onClose}>
-                {HELM_COPY.voiceDone}
-              </Button>
+    <>
+      <DetailSheet
+        isOpen={isOpen && !isPickerOpen}
+        onClose={onClose}
+        title={HELM_COPY.settingsVoiceRowTitle}
+        footer={
+          <div className='px-6 pt-2 pb-3'>
+            <ModalFooterActions
+              rightActions={
+                <Button type='button' variant='primary' onClick={onClose}>
+                  {HELM_COPY.voiceDone}
+                </Button>
+              }
+            />
+          </div>
+        }
+      >
+        <div className='flex flex-col gap-5'>
+          <SwitchRow
+            title={HELM_COPY.voiceDeviceOnlyTitle}
+            description={
+              onDevice.isOn
+                ? isDeviceOnly
+                  ? HELM_COPY.voiceDeviceOnlyOnOffline
+                  : HELM_COPY.voiceDeviceOnlyOffOffline
+                : isDeviceOnly
+                  ? HELM_COPY.voiceDeviceOnlyOn
+                  : HELM_COPY.voiceDeviceOnlyOff
             }
+            alternatives={
+              isDeviceOnly
+                ? [
+                    HELM_COPY.voiceDeviceOnlyOnOffline,
+                    HELM_COPY.voiceDeviceOnlyOn,
+                  ]
+                : [
+                    HELM_COPY.voiceDeviceOnlyOffOffline,
+                    HELM_COPY.voiceDeviceOnlyOff,
+                  ]
+            }
+            checked={isDeviceOnly}
+            onChange={change}
           />
+          <Button
+            type='button'
+            variant='tertiary'
+            size='stripped'
+            className='h-auto min-h-10 items-start justify-start gap-3 rounded-xl p-0 text-left font-normal'
+            onClick={() => setIsPickerOpen(true)}
+          >
+            <span className='flex min-w-0 flex-1 flex-col text-pretty'>
+              <span className='text-foreground text-[15px] leading-[21px] font-medium'>
+                {HELM_COPY.voicePickerRowTitle}
+              </span>
+              <span className='text-muted-foreground text-[15px] leading-[21px]'>
+                {HELM_COPY.voicePickerRowHint(
+                  chosenVoice.name,
+                  toFeelLabel(chosenVoice.feel),
+                )}
+              </span>
+            </span>
+            <ChevronRight
+              className='text-muted-foreground mt-0.5 size-5 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+          <SwitchRow
+            title={HELM_COPY.voiceHandsFreeTitle}
+            description={
+              isHandsFreeOn
+                ? HELM_COPY.voiceHandsFreeOn
+                : HELM_COPY.voiceHandsFreeOff
+            }
+            checked={isHandsFreeOn}
+            onChange={(isOn) => changeSwitch(setHandsFreeOn, isOn)}
+          />
+          <SwitchRow
+            title={HELM_COPY.voiceWakeTitle(name)}
+            description={
+              onDevice.isOn
+                ? HELM_COPY.voiceWakeOffline(name)
+                : canListenForPhrase
+                  ? HELM_COPY.voiceWake(name)
+                  : HELM_COPY.voiceWakeLocked
+            }
+            alternatives={[
+              HELM_COPY.voiceWakeOffline(name),
+              HELM_COPY.voiceWake(name),
+              HELM_COPY.voiceWakeLocked,
+            ]}
+            checked={canListenForPhrase && isWakeWordOn}
+            isLocked={!canListenForPhrase}
+            onChange={(isOn) => changeSwitch(setWakeWordOn, isOn)}
+          />
+          <OfflineListeningRow onDevice={onDevice} name={name} />
         </div>
-      }
-    >
-      <div className='flex flex-col gap-5'>
-        <SwitchRow
-          title={HELM_COPY.voiceDeviceOnlyTitle}
-          description={
-            onDevice.isOn
-              ? isDeviceOnly
-                ? HELM_COPY.voiceDeviceOnlyOnOffline
-                : HELM_COPY.voiceDeviceOnlyOffOffline
-              : isDeviceOnly
-                ? HELM_COPY.voiceDeviceOnlyOn
-                : HELM_COPY.voiceDeviceOnlyOff
-          }
-          alternatives={
-            isDeviceOnly
-              ? [
-                  HELM_COPY.voiceDeviceOnlyOnOffline,
-                  HELM_COPY.voiceDeviceOnlyOn,
-                ]
-              : [
-                  HELM_COPY.voiceDeviceOnlyOffOffline,
-                  HELM_COPY.voiceDeviceOnlyOff,
-                ]
-          }
-          checked={isDeviceOnly}
-          onChange={change}
-        />
-        <SwitchRow
-          title={HELM_COPY.voiceHandsFreeTitle}
-          description={
-            isHandsFreeOn
-              ? HELM_COPY.voiceHandsFreeOn
-              : HELM_COPY.voiceHandsFreeOff
-          }
-          checked={isHandsFreeOn}
-          onChange={(isOn) => changeSwitch(setHandsFreeOn, isOn)}
-        />
-        <SwitchRow
-          title={HELM_COPY.voiceWakeTitle(name)}
-          description={
-            onDevice.isOn
-              ? HELM_COPY.voiceWakeOffline(name)
-              : canListenForPhrase
-                ? HELM_COPY.voiceWake(name)
-                : HELM_COPY.voiceWakeLocked
-          }
-          alternatives={[
-            HELM_COPY.voiceWakeOffline(name),
-            HELM_COPY.voiceWake(name),
-            HELM_COPY.voiceWakeLocked,
-          ]}
-          checked={canListenForPhrase && isWakeWordOn}
-          isLocked={!canListenForPhrase}
-          onChange={(isOn) => changeSwitch(setWakeWordOn, isOn)}
-        />
-        <OfflineListeningRow onDevice={onDevice} name={name} />
-      </div>
-    </DetailSheet>
+      </DetailSheet>
+      {isOpen && isPickerOpen && (
+        <VoicePicker onClose={() => setIsPickerOpen(false)} />
+      )}
+    </>
   );
 }
 

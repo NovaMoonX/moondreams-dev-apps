@@ -17,8 +17,19 @@ import {
   normalizeSaid,
   toWakeSpellings,
 } from '../../src/apps/helm/utils/voicePhrases.ts';
+import {
+  HELM_DEFAULT_VOICE as SERVER_DEFAULT_VOICE,
+  HELM_SPEED_RANGE,
+  HELM_VOICE_NAMES,
+} from '../../functions/src/apps/helm/voiceIdentity.ts';
 import type { HelmQuestion } from '../../src/apps/helm/types.ts';
 import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
+import {
+  HELM_DEFAULT_VOICE,
+  HELM_VOICES,
+  HELM_VOICE_SPEEDS,
+  toHelmVoiceSpeed,
+} from '../../src/apps/helm/voices.ts';
 import { readWakePhrase } from '../../src/lib/speech/speechText.ts';
 
 const NOW = Date.UTC(2026, 10, 9, 20, 0);
@@ -274,6 +285,46 @@ assert.equal(
   null,
   'a day inside another request is not an answer',
 );
+
+// The server's list of allowed voices and the picker's list are the same 30 names.
+const pickerNames = HELM_VOICES.map((voice) => voice.name);
+assert.equal(pickerNames.length, 30, 'the picker offers 30 voices');
+assert.equal(new Set(pickerNames).size, 30, 'no voice is listed twice');
+assert.ok(
+  pickerNames.includes(HELM_DEFAULT_VOICE),
+  'the default voice is one the picker offers',
+);
+assert.deepEqual(
+  [...pickerNames].sort(),
+  [...HELM_VOICE_NAMES].sort(),
+  "the picker's voices are the server's voices",
+);
+assert.equal(
+  HELM_DEFAULT_VOICE,
+  SERVER_DEFAULT_VOICE,
+  'the picker and the server default to the same voice',
+);
+assert.deepEqual(
+  [HELM_VOICE_SPEEDS[0], HELM_VOICE_SPEEDS.at(-1)],
+  [HELM_SPEED_RANGE.min, HELM_SPEED_RANGE.max],
+  "the speed notches span the server's range",
+);
+(['female', 'male'] as const).forEach((gender) =>
+  (['calm', 'clear', 'lively'] as const).forEach((group) =>
+    assert.ok(
+      HELM_VOICES.some(
+        (voice) => voice.gender === gender && voice.group === group,
+      ),
+      `${gender} ${group} has voices`,
+    ),
+  ),
+);
+assert.deepEqual(
+  [toHelmVoiceSpeed(null), toHelmVoiceSpeed(1.04), toHelmVoiceSpeed(0.85)],
+  [1, 1, 0.8],
+  'a stored speed reads as its nearest notch, normal when null',
+);
+assert.ok(HELM_VOICE_SPEEDS.includes(1), 'normal pace is a notch');
 
 console.log(
   'check:helm-voice: spoken lines, undo phrases and the wake phrase passed.',

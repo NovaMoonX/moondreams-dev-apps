@@ -1,5 +1,11 @@
 import { getAudioContext } from '@/lib/speech/audioContext';
 import { toSpokenText } from '@/lib/speech/spokenText';
+import {
+  createPcmSink,
+  parsePcmFormat,
+  type PcmFormat,
+  type PcmSink,
+} from '@/lib/speech/voice/pcmStream';
 import type { SpeechSource } from '@/lib/speech/voice/speechSource';
 import type { SpeechHeldReason, TtsAdapter } from '@/lib/speech/voice/types';
 
@@ -15,9 +21,25 @@ export interface CloudPlayer {
     signal: AbortSignal,
     onStart: () => void,
   ) => Promise<void>;
+  /** Opens a sink that plays raw PCM as it is pushed; `onStart` fires at the first scheduled sound. Throws when audio can't run. */
+  openStream: (format: PcmFormat, onStart: () => void) => Promise<PcmSink>;
 }
 
+const resumeContext = async (context: AudioContext) => {
+  await Promise.race([
+    context.resume().catch(() => undefined),
+    new Promise((resolve) => setTimeout(resolve, RESUME_MS)),
+  ]);
+};
+
 const webAudioPlayer: CloudPlayer = {
+  openStream: async (format, onStart) => {
+    const context = getAudioContext();
+    if (context === null) throw new Error('Audio is not available');
+    await resumeContext(context);
+    if (context.state !== 'running') throw new Error('Audio could not start');
+    return createPcmSink({ context, sampleRate: format.sampleRate, onStart });
+  },
   decode: async (bytes) => {
     const context = getAudioContext();
     if (context === null) throw new Error('Audio is not available');
@@ -26,10 +48,7 @@ const webAudioPlayer: CloudPlayer = {
   play: async (audio, signal, onStart) => {
     const context = getAudioContext();
     if (context === null) throw new Error('Audio is not available');
-    await Promise.race([
-      context.resume().catch(() => undefined),
-      new Promise((resolve) => setTimeout(resolve, RESUME_MS)),
-    ]);
+    await resumeContext(context);
     if (context.state !== 'running' && !signal.aborted) {
       throw new Error('Audio could not start');
     }
@@ -79,20 +98,25 @@ const concat = (chunks: Uint8Array[]) => {
   return bytes.buffer;
 };
 
-/** Speaks through the cloud voice, playing once the whole answer has arrived; before any sound, a slow, held, failed or undecodable answer is spoken by `fallback` instead. */
+/** Speaks through the cloud voice: a raw PCM answer plays as it arrives, any other audio once it has all arrived. Before any sound, a slow, held, failed or undecodable answer is spoken by `fallback` instead; once sound has started, a failure ends the line quietly. `onFallback` hears each time the device voice stands in. */
 export const createCloudTts = ({
   source,
   fallback,
   firstByteMs = 2500,
   bodyMs = 8000,
+  gapMs = 4000,
   onHeld,
+  onFallback,
   player = webAudioPlayer,
 }: {
   source: SpeechSource;
   fallback: TtsAdapter;
   firstByteMs?: number;
   bodyMs?: number;
+  /** The longest a streamed body may go without a chunk. */
+  gapMs?: number;
   onHeld?: (reason: SpeechHeldReason) => void;
+  onFallback?: () => void;
   player?: CloudPlayer;
 }): TtsAdapter => ({
   id: 'cloud',
@@ -106,21 +130,68 @@ export const createCloudTts = ({
     if (spoken.length > MAX_CHARS) return speakFallback();
     if (signal.aborted) return;
     const controller = new AbortController();
-    const abort = () => controller.abort();
+    const sinks: PcmSink[] = [];
+    const abort = () => {
+      controller.abort();
+      sinks.forEach((sink) => sink.stop());
+    };
     signal.addEventListener('abort', abort);
     const state = { isPlaying: false, playedBy: 'cloud' };
     const timers: ReturnType<typeof setTimeout>[] = [];
     const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
     const within = <T>(work: Promise<T>, ms: number) =>
-      Promise.race([
-        work,
-        new Promise<'late'>((resolve) => {
-          timers.push(setTimeout(() => resolve('late'), ms));
-        }),
-      ]);
+      new Promise<T | 'late'>((resolve, reject) => {
+        const id = setTimeout(() => resolve('late'), ms);
+        timers.push(id);
+        work.then(
+          (value) => {
+            clearTimeout(id);
+            resolve(value);
+          },
+          (error: unknown) => {
+            clearTimeout(id);
+            reject(error instanceof Error ? error : new Error(String(error)));
+          },
+        );
+      });
     const toFallback = () => {
       controller.abort();
-      return signal.aborted ? undefined : speakFallback();
+      if (signal.aborted) return undefined;
+      onFallback?.();
+      return speakFallback();
+    };
+    const streamPcm = async (
+      format: PcmFormat,
+      reader: ReadableStreamDefaultReader<Uint8Array>,
+      first: Uint8Array,
+    ) => {
+      const sink = await player.openStream(format, () => {
+        state.isPlaying = true;
+        onStart();
+      });
+      sinks.push(sink);
+      if (signal.aborted) {
+        sink.stop();
+        return;
+      }
+      sink.push(first);
+      const pump = async (): Promise<void> => {
+        const next = await within(reader.read(), gapMs);
+        if (next === 'late' || next.done || signal.aborted) return;
+        sink.push(next.value);
+        return pump();
+      };
+      try {
+        await pump();
+      } catch (error) {
+        if (!state.isPlaying) throw error;
+        console.error('The cloud voice stopped partway', error);
+      }
+      if (!state.isPlaying && !signal.aborted) {
+        throw new Error('The cloud voice sent no audio');
+      }
+      sink.end();
+      await sink.done;
     };
     const firstByteBy = Date.now() + firstByteMs;
     try {
@@ -150,6 +221,11 @@ export const createCloudTts = ({
         if (signal.aborted) controller.abort();
         return first === 'late' ? await toFallback() : undefined;
       }
+      const pcm = parsePcmFormat(answer.contentType);
+      if (pcm !== null && !first.done) {
+        await streamPcm(pcm, reader, first.value);
+        return state.isPlaying ? state.playedBy : undefined;
+      }
       const rest = await within(
         first.done
           ? Promise.resolve([] as Uint8Array[])
@@ -171,6 +247,7 @@ export const createCloudTts = ({
       return await toFallback();
     } finally {
       timers.forEach(clearTimeout);
+      sinks.forEach((sink) => sink.stop());
       readers.forEach((reader) => reader.cancel().catch(() => undefined));
       signal.removeEventListener('abort', abort);
     }

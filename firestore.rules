@@ -240,10 +240,16 @@ service cloud.firestore {
       return !('theme' in data) || data.theme == null || data.theme in ['chestnut', 'plum', 'teal', 'indigo'];
     }
 
+    // A profile written before voices has neither key; a written voice is a short name and its speed stays within what the server speaks.
+    function isHelmVoice(data) {
+      return (!('voiceId' in data) || data.voiceId == null || (data.voiceId is string && data.voiceId.size() <= 32))
+        && (!('voiceSpeed' in data) || data.voiceSpeed == null || (data.voiceSpeed is number && data.voiceSpeed >= 0.8 && data.voiceSpeed <= 1.2));
+    }
+
     // A profile is private to one person and only the server deletes it, so a stray client can't half-delete a Helm.
     match /apps/helm/users/{uid} {
       allow read: if isHelmOwner(uid);
-      allow create, update: if isHelmOwner(uid) && isHelmTheme(request.resource.data);
+      allow create, update: if isHelmOwner(uid) && isHelmTheme(request.resource.data) && isHelmVoice(request.resource.data);
     }
 
     // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out.

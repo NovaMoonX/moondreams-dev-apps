@@ -54,7 +54,16 @@ import {
 import { readSpeechRequest } from '../../functions/src/voice/streamSpeech.ts';
 import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
 import { createCloudTts } from '../../src/lib/speech/voice/cloudTts.ts';
-import type { SpeechSource } from '../../src/lib/speech/voice/speechSource.ts';
+import {
+  createSpeechSource,
+  type SpeechSource,
+} from '../../src/lib/speech/voice/speechSource.ts';
+import {
+  createPcmSink,
+  parsePcmFormat,
+  toFloatSamples,
+  type PcmContext,
+} from '../../src/lib/speech/voice/pcmStream.ts';
 import { createPlaybackQueue } from '../../src/lib/speech/voice/playbackQueue.ts';
 import {
   createVoiceTokenSource,
@@ -794,6 +803,7 @@ const SPEAKER_ON = {
   isCloudAllowed: true,
   isCloudHeld: false,
   hasCloud: true,
+  isDeviceSticky: false,
 } as const;
 assert.equal(
   pickSpeaker(SPEAKER_ON),
@@ -821,6 +831,7 @@ assert.equal(
     { isCloudAllowed: false },
     { isCloudHeld: true },
     { hasCloud: false },
+    { isDeviceSticky: true },
   ] as const
 ).forEach((off) => {
   const key = Object.keys(off)[0];
@@ -1019,6 +1030,7 @@ console.log('speechShared: voice router and playback queue checks passed');
       fetchSpeech: async () => ({
         status: 'ready',
         provider: 'googleTts',
+        contentType: 'audio/mpeg',
         body: new ReadableStream<Uint8Array>({
           start: (stream) => {
             stream.enqueue(new Uint8Array([1, 2, 3]));
@@ -1034,6 +1046,9 @@ console.log('speechShared: voice router and playback queue checks passed');
         return {} as AudioBuffer;
       },
       play: async (_audio, _signal, onStart) => onStart(),
+      openStream: async () => {
+        throw new Error('not a stream');
+      },
     },
   }).speak('Five', options);
   assert.equal(
@@ -1047,6 +1062,280 @@ console.log('speechShared: voice router and playback queue checks passed');
     false,
     'a played answer never reaches the fallback',
   );
+}
+
+{
+  assert.deepEqual(
+    parsePcmFormat('audio/L16; rate=24000; channels=1'),
+    { sampleRate: 24000 },
+    'a raw PCM type gives its rate',
+  );
+  assert.equal(parsePcmFormat('audio/mpeg'), null, 'mp3 is not PCM');
+  assert.equal(
+    parsePcmFormat('audio/L16; rate=24000; channels=2'),
+    null,
+    'stereo is not read as PCM',
+  );
+  assert.deepEqual(
+    Array.from(toFloatSamples(new Uint8Array([0x00, 0x80, 0xff, 0x7f, 0, 0]))),
+    [-1, 32767 / 32768, 0],
+    'little-endian 16-bit samples become floats',
+  );
+
+  const makeContext = () => {
+    const starts: { at: number; length: number; stopped: boolean }[] = [];
+    const nodes: { onended: (() => void) | null; entry: (typeof starts)[0] }[] =
+      [];
+    const clock = { now: 1 };
+    const context: PcmContext = {
+      get currentTime() {
+        return clock.now;
+      },
+      destination: {} as AudioNode,
+      createBuffer: (_channels, length, rate) =>
+        ({
+          duration: length / rate,
+          length,
+          copyToChannel: () => undefined,
+        }) as unknown as AudioBuffer,
+      createBufferSource: () => {
+        const entry = { at: -1, length: 0, stopped: false };
+        const node = {
+          buffer: null as AudioBuffer | null,
+          onended: null as (() => void) | null,
+          connect: () => undefined,
+          start: (at: number) => {
+            entry.at = at;
+            entry.length = node.buffer?.length ?? 0;
+            starts.push(entry);
+          },
+          stop: () => {
+            entry.stopped = true;
+          },
+        };
+        nodes.push({
+          get onended() {
+            return node.onended;
+          },
+          entry,
+        } as (typeof nodes)[0]);
+        return node as unknown as AudioBufferSourceNode;
+      },
+    };
+    return { context, starts, nodes, clock };
+  };
+
+  const fake = makeContext();
+  let startedCount = 0;
+  const sink = createPcmSink({
+    context: fake.context,
+    sampleRate: 24000,
+    onStart: () => {
+      startedCount += 1;
+    },
+  });
+  sink.push(new Uint8Array([1, 0, 2]));
+  sink.push(new Uint8Array([0, 3, 0, 4]));
+  sink.push(new Uint8Array([0]));
+  assert.deepEqual(
+    fake.starts.map((entry) => entry.length),
+    [1, 2, 1],
+    'an odd trailing byte joins the next chunk, so no sample is split',
+  );
+  assert.equal(startedCount, 1, 'started is reported once, at the first sound');
+  assert.ok(
+    Math.abs(fake.starts[0]!.at - 1.05) < 1e-9,
+    'the first chunk starts one lead after now',
+  );
+  assert.ok(
+    Math.abs(fake.starts[1]!.at - (fake.starts[0]!.at + 1 / 24000)) < 1e-9,
+    'each chunk starts where the one before ends',
+  );
+  fake.clock.now = 5;
+  sink.push(new Uint8Array([1, 0]));
+  assert.ok(
+    Math.abs(fake.starts[3]!.at - 5.05) < 1e-9,
+    'after a gap the next chunk starts one lead after now, never in the past',
+  );
+  let isDone = false;
+  void sink.done.then(() => {
+    isDone = true;
+  });
+  sink.end();
+  await tick();
+  assert.equal(isDone, false, 'done waits for the last sound to end');
+  sink.stop();
+  await tick();
+  assert.equal(isDone, true, 'stop resolves done');
+  assert.equal(
+    fake.starts.every((entry) => entry.stopped),
+    true,
+    'stop cuts every scheduled sound',
+  );
+  sink.push(new Uint8Array([1, 0]));
+  assert.equal(fake.starts.length, 4, 'nothing is scheduled after stop');
+
+  const calls: string[] = [];
+  const fallback: TtsAdapter = {
+    id: 'system',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: async (text) => {
+      calls.push(text);
+    },
+  };
+  const options = (signal = new AbortController().signal) => ({
+    priority: 'reply' as const,
+    signal,
+    onStart: () => undefined,
+    onEnd: () => undefined,
+  });
+  const pcmBody = (chunks: Uint8Array[], isStalled = false) =>
+    new ReadableStream<Uint8Array>({
+      start: (stream) => {
+        chunks.forEach((chunk) => stream.enqueue(chunk));
+        if (!isStalled) stream.close();
+      },
+    });
+  const streamed = (body: ReadableStream<Uint8Array>) => ({
+    fetchSpeech: async () => ({
+      status: 'ready' as const,
+      provider: 'googleTts',
+      contentType: 'audio/L16; rate=24000; channels=1',
+      body,
+    }),
+  });
+  const pushed: number[] = [];
+  const player = (events: string[]) => ({
+    decode: async () => ({}) as AudioBuffer,
+    play: async () => undefined,
+    openStream: async (_format: unknown, onStart: () => void) => ({
+      push: (bytes: Uint8Array) => {
+        if (pushed.length === 0) onStart();
+        pushed.push(bytes.length);
+      },
+      end: () => events.push('end'),
+      stop: () => events.push('stop'),
+      done: Promise.resolve(),
+    }),
+  });
+  const events: string[] = [];
+  assert.equal(
+    await createCloudTts({
+      source: streamed(
+        pcmBody([new Uint8Array([1, 0, 2, 0]), new Uint8Array([3, 0])]),
+      ),
+      fallback,
+      player: player(events),
+    }).speak('Six', options()),
+    'cloud:googleTts',
+    'a PCM answer is played through the stream',
+  );
+  assert.deepEqual(pushed, [4, 2], 'every chunk reaches the player');
+  assert.equal(events[0], 'end', 'the stream is ended when the body ends');
+  assert.equal(calls.length, 0, 'a streamed answer never reaches the fallback');
+
+  const emptyBy = await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array(0)])),
+    fallback,
+    player: player([]),
+  }).speak('Seven', options());
+  assert.equal(
+    emptyBy,
+    'system',
+    'a PCM answer with no audio is spoken by the fallback',
+  );
+
+  const stalledBy = await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0])], true)),
+    fallback,
+    gapMs: 20,
+    player: {
+      ...player([]),
+      openStream: async () => ({
+        push: () => undefined,
+        end: () => undefined,
+        stop: () => undefined,
+        done: Promise.resolve(),
+      }),
+    },
+  }).speak('Eight', options());
+  assert.equal(
+    stalledBy,
+    'system',
+    'a stream that gives no sound before the gap clock falls back',
+  );
+  pushed.length = 0;
+  const quietEvents: string[] = [];
+  const quietBy = await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0])], true)),
+    fallback,
+    gapMs: 20,
+    player: player(quietEvents),
+  }).speak('Nine', options());
+  assert.equal(
+    quietBy,
+    'cloud:googleTts',
+    'a stream that stalls after sound ends the line quietly',
+  );
+  assert.equal(
+    calls.includes('Nine'),
+    false,
+    'a line that stalled after sound never repeats on the device',
+  );
+
+  const fellBack: string[] = [];
+  await createCloudTts({
+    source: { fetchSpeech: async () => ({ status: 'unavailable' }) },
+    fallback,
+    onFallback: () => fellBack.push('fallback'),
+  }).speak('Ten', options());
+  assert.deepEqual(fellBack, ['fallback'], 'a fallback is reported');
+
+  const sent: Record<string, unknown>[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    sent.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+    return new Response(new Uint8Array([1, 0]), {
+      headers: { 'Content-Type': 'audio/L16; rate=24000; channels=1' },
+    });
+  }) as typeof fetch;
+  try {
+    const voice = { voiceId: 'Sulafat', speed: 1.1 };
+    const speech = createSpeechSource({
+      appId: 'helm',
+      url: 'http://localhost/speech',
+      getHeaders: async () => ({}),
+      readVoice: () => voice,
+    });
+    const answer = await speech.fetchSpeech(
+      'Hi',
+      'reply',
+      new AbortController().signal,
+    );
+    voice.voiceId = 'Kore';
+    await speech.fetchSpeech('Hi', 'reply', new AbortController().signal);
+    await speech.fetchSpeech('Hi', 'reply', new AbortController().signal, {
+      voiceId: 'Puck',
+      speed: null,
+    });
+    assert.deepEqual(
+      sent.map((body) => [body.voiceId, body.speed]),
+      [
+        ['Sulafat', 1.1],
+        ['Kore', 1.1],
+        ['Puck', null],
+      ],
+      'the voice is read on every request, and a given voice replaces it',
+    );
+    assert.equal(
+      answer.status === 'ready' && answer.contentType,
+      'audio/L16; rate=24000; channels=1',
+      'the response type is passed on',
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 }
 console.log('speechShared: cloud voice checks passed');
 

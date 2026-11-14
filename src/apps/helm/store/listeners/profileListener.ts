@@ -22,6 +22,8 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   calendarOfferFoldedAt: data.calendarOfferFoldedAt ?? null,
   hasSeenAiNotice: data.hasSeenAiNotice ?? false,
   voiceMode: data.voiceMode ?? 'cloudWhenOnline',
+  voiceId: data.voiceId ?? null,
+  voiceSpeed: data.voiceSpeed ?? null,
   isWakeWordOn: data.isWakeWordOn ?? false,
   isHandsFreeOn: data.isHandsFreeOn ?? true,
   hasSeenVoiceNotice: data.hasSeenVoiceNotice ?? false,
