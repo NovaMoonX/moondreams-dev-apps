@@ -118,7 +118,6 @@ function HelmApp() {
           !isComposing && (
             <VoiceDock
               onBrowse={openBrowse}
-              onTalkBlocked={focusComposer}
               onType={focusComposer}
             />
           )

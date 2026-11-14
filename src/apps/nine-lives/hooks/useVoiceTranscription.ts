@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  needsMicrophoneAsk,
+  peekMicrophonePermission,
+  rememberRecognitionRefused,
+} from '@/lib/speech/microphonePermission';
+import { recordSpeechEvent } from '@/lib/speech/speechDiagnostics';
+
 interface SpeechRecognitionAlternativeLike {
   transcript: string;
 }
@@ -144,6 +151,10 @@ export function useVoiceTranscription(): VoiceTranscription {
       if (event.error === 'no-speech' || isStoppingRef.current) {
         return;
       }
+      recordSpeechEvent(`Recognition error: ${event.error}`);
+      if (event.error === 'not-allowed' && peekMicrophonePermission() !== 'granted') {
+        rememberRecognitionRefused();
+      }
 
       const nextError = new Error(getSpeechRecognitionError(event.error));
       setError(nextError.message);
@@ -181,6 +192,13 @@ export function useVoiceTranscription(): VoiceTranscription {
     accumulatedTranscriptRef.current = '';
     transcriptRef.current = '';
     setTranscript('');
+    // Starting would only flash on and off: the modal shows the way to allow the microphone instead.
+    if (needsMicrophoneAsk(peekMicrophonePermission())) {
+      recordSpeechEvent('Not started: the microphone has to be allowed first');
+      setError(getSpeechRecognitionError('not-allowed'));
+      setIsBlocked(true);
+      return;
+    }
     setError(null);
     setIsBlocked(false);
     isStoppingRef.current = false;

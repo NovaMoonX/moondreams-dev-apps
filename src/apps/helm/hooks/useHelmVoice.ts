@@ -181,6 +181,18 @@ export function useHelmVoice() {
       endDictation();
       if (isAsked) showNote(HELM_COPY.talkListenFailed);
     },
+    onUnavailable: (reason) => {
+      interruptedCaptureId.current = null;
+      endDictation();
+      const isMicrophone = reason === 'no-permission';
+      showNotice(
+        isMicrophone
+          ? HELM_COPY.talkNeedsMicrophone
+          : HELM_COPY.talkNeedsRecognition,
+        false,
+        isMicrophone,
+      );
+    },
     onCloudHeld: () => setShowsPhoneLine(true),
     onBargeIn: () => {
       interruptedCaptureId.current = speakingCaptureId.current;

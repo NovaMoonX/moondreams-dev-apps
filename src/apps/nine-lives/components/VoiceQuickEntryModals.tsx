@@ -2,6 +2,7 @@ import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { LoaderCircle, Mic, Square } from 'lucide-react';
 
 import MicrophoneAccess from '@/components/MicrophoneAccess';
+import SpeechDebugDetails from '@/components/SpeechDebugDetails';
 import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import { canRequestMicrophone } from '@/lib/speech/microphonePermission';
 
@@ -66,6 +67,7 @@ function VoiceQuickEntryModals({
         </div>
         {needsMicrophone && <MicrophoneAccess onAllowed={clearError} />}
         {shownError && !needsMicrophone && <p className='text-sm text-red-500'>{shownError}</p>}
+        {shownError && !needsMicrophone && <SpeechDebugDetails message={shownError} />}
         <div className='flex justify-end gap-2'>
           <Button type='button' variant='secondary' onClick={handleClose} disabled={isExtracting}>
             Cancel

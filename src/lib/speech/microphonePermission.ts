@@ -1,3 +1,5 @@
+import { describeThrown, recordSpeechEvent } from './speechDiagnostics';
+
 type MicrophonePermission = PermissionState | 'unknown';
 
 const watched = {
@@ -6,9 +8,38 @@ const watched = {
   listeners: new Set<(state: MicrophonePermission) => void>(),
 };
 
+const REFUSED_KEY = 'speech:recognition-refused';
+
+/** Remembers that speech recognition was refused here before the browser was asked for the microphone, as an installed app can do without ever prompting, so the next tap asks for the microphone first instead of failing again. */
+export const rememberRecognitionRefused = () => {
+  try {
+    window.localStorage.setItem(REFUSED_KEY, 'true');
+  } catch {
+    // Without storage the next tap fails once more and shows the same notice.
+  }
+};
+
+const forgetRecognitionRefused = () => {
+  try {
+    window.localStorage.removeItem(REFUSED_KEY);
+  } catch {
+    // Nothing was kept.
+  }
+};
+
+const wasRecognitionRefused = () => {
+  try {
+    return window.localStorage.getItem(REFUSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
 const setState = (state: MicrophonePermission) => {
+  if (state === 'granted') forgetRecognitionRefused();
   if (state === watched.state) return;
   watched.state = state;
+  recordSpeechEvent(`Microphone permission: ${state}`);
   watched.listeners.forEach((listener) => listener(state));
 };
 
@@ -58,6 +89,10 @@ export const watchMicrophonePermission = (
   };
 };
 
+/** Whether listening should not start from a tap: the microphone is refused, or it hasn't been asked for on a device where recognition was refused without asking. The way in is `requestMicrophone`. */
+export const needsMicrophoneAsk = (state: MicrophonePermission) =>
+  state === 'denied' || (state === 'prompt' && wasRecognitionRefused());
+
 export type MicrophoneRequestResult =
   'granted' | 'denied' | 'no-microphone' | 'unavailable';
 
@@ -76,9 +111,11 @@ export const requestMicrophone = async (): Promise<MicrophoneRequestResult> => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stream.getTracks().forEach((track) => track.stop());
+    recordSpeechEvent('getUserMedia: allowed');
     setState('granted');
     return 'granted';
   } catch (error) {
+    recordSpeechEvent(`getUserMedia refused: ${describeThrown(error)}`);
     const name = error instanceof DOMException ? error.name : '';
     if (name === 'NotAllowedError' || name === 'SecurityError') {
       setState('denied');

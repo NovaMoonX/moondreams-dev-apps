@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Mic } from 'lucide-react';
 
 import InlineNotice from '@/components/InlineNotice';
+import SpeechDebugDetails from '@/components/SpeechDebugDetails';
 import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import {
   NOTICE_ACTION_CLASSES,
@@ -50,8 +51,8 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
 
   if (permission === 'granted') return null;
 
-  const isBlocked =
-    permission === 'denied' || (result === 'denied' && permission !== 'prompt');
+  // An installed app on Android can refuse without a prompt and still read "prompt", so a refused ask counts as blocked.
+  const isBlocked = permission === 'denied' || result === 'denied';
   const tone = isBlocked ? 'warning' : 'info';
   const canAsk = result !== 'unavailable';
 
@@ -118,6 +119,10 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
           </Button>
         )}
       </div>
+      <SpeechDebugDetails
+        message={`Microphone ${permission}; last ask: ${result ?? 'not yet'}`}
+        className='mt-3'
+      />
     </InlineNotice>
   );
 }

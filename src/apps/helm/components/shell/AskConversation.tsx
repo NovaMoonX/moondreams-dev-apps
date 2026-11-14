@@ -70,11 +70,7 @@ function AskConversation({ entry: liveEntry, onClose }: AskConversationProps) {
           loadsEarlier={false}
         />
         <div className='form-footer flex flex-col gap-3'>
-          <VoiceStatus
-            hasControls
-            screen={screen}
-            onBlocked={() => fieldRef.current?.focus()}
-          />
+          <VoiceStatus hasControls screen={screen} />
           <div
             className={
               voice.state === 'idle' || voice.isDictating ? undefined : 'hidden'
