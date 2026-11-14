@@ -36,12 +36,13 @@ interface FormSheetProps {
   viewKey?: string;
 }
 
-const findScroller = (node: HTMLElement | null) => {
-  for (let el = node?.parentElement; el; el = el.parentElement) {
-    const { overflowY } = getComputedStyle(el);
-    if (overflowY === 'auto' || overflowY === 'scroll') return el;
-  }
-  return null;
+const findScroller = (node: HTMLElement | null): HTMLElement | null => {
+  const parent = node?.parentElement ?? null;
+  if (!parent) return null;
+  const { overflowY } = getComputedStyle(parent);
+  return overflowY === 'auto' || overflowY === 'scroll'
+    ? parent
+    : findScroller(parent);
 };
 
 const STICKY_FOOTER =

@@ -79,12 +79,6 @@ const addMonths = (key: string, months: number) => {
   return toKey(date);
 };
 
-const ordinalDay = (day: number) => {
-  const mod = day % 100;
-  if (mod >= 11 && mod <= 13) return `${day}th`;
-  return `${day}${['th', 'st', 'nd', 'rd'][day % 10] ?? 'th'}`;
-};
-
 const toParts = (rule: RepeatRule | null, startsOn: string): RepeatParts => {
   if (!rule) {
     return {
@@ -357,9 +351,9 @@ export function CustomView({
       by: 'day',
       label: `On day ${startDate}`,
       detail:
-        startDate > 28
-          ? `Months without a ${ordinalDay(startDate)} are skipped`
-          : null,
+        repeatPresets(startsOn, weekStart).find(
+          (preset) => preset.key === 'monthlyDay',
+        )?.detail ?? null,
     },
     {
       by: 'nthWeekday',
