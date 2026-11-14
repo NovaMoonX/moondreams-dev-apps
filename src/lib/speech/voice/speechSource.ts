@@ -82,6 +82,15 @@ export const createSpeechSource = ({
   },
 });
 
+/** Whether the person picked a different voice or speed than the one a conversation is speaking with. */
+export const isOtherVoice = (
+  held: SpeechVoice | null,
+  wanted: SpeechVoice | null,
+) =>
+  held !== null &&
+  wanted !== null &&
+  (held.voiceId !== wanted.voiceId || held.speed !== wanted.speed);
+
 /** A source that always speaks with this voice and speed. */
 export const withSpeechVoice = (
   source: SpeechSource,

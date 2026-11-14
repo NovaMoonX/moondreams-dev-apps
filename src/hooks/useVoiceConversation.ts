@@ -26,6 +26,7 @@ import { createCloudTts } from '@/lib/speech/voice/cloudTts';
 import { createDeviceTts } from '@/lib/speech/voice/deviceTts';
 import { createPlaybackQueue } from '@/lib/speech/voice/playbackQueue';
 import {
+  isOtherVoice,
   withSpeechVoice,
   type SpeechSource,
   type SpeechVoice,
@@ -246,6 +247,9 @@ export function useVoiceConversation({
         const { lang: speechLang, identity: voice } = latest.current;
         const cloud = latest.current.cloudSpeaking;
         const today = toLocalDateInputValue(Date.now());
+        // A voice the person picked since this conversation began starts it afresh, so the pick is heard at once.
+        const wanted = cloud?.readVoice ? cloud.readVoice() : null;
+        if (isOtherVoice(run.current.voice, wanted)) endConversation();
         const isNaturalReady =
           latest.current.isNaturalVoiceReady && voice.device.naturalVoice;
         const choice = pickSpeaker({
@@ -268,7 +272,7 @@ export function useVoiceConversation({
         if (choice !== 'cloud' || !cloud) return device;
         const isFirstLine = !run.current.hasSpokenCloud;
         run.current.hasSpokenCloud = true;
-        if (cloud.readVoice) run.current.voice ??= cloud.readVoice();
+        run.current.voice ??= wanted;
         return createCloudTts({
           source: run.current.voice
             ? withSpeechVoice(cloud.source, run.current.voice)
