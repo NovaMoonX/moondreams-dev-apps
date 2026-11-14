@@ -963,10 +963,10 @@ export const HELM_COPY = {
   assistantsAddress: 'https://apps.moondreams.dev/mcp/helm',
   assistantsCopyAddress: 'Copy address',
   assistantsClaudeHeading: 'Claude',
-  assistantsClaudeSteps: (name: string) => [
+  assistantsClaudeSteps: (app: string) => [
     'Open Customize, then Connectors.',
     'Tap Add, then Add custom connector.',
-    `Name it ${name}, paste the address and tap Connect. The free plan can add one connector.`,
+    `Name it ${app}, paste the address and tap Connect. The free plan can add one connector.`,
   ],
   assistantsDescriptionLabel: 'Description, for apps that ask',
   assistantsDescription: (app: string) =>
@@ -976,9 +976,9 @@ export const HELM_COPY = {
   assistantsDownloadIcon: 'Download icon',
   assistantsIconFailed: "The icon didn't download. Try again.",
   assistantsChatGptHeading: 'ChatGPT',
-  assistantsChatGptSteps: (name: string) => [
+  assistantsChatGptSteps: (app: string) => [
     'Open Plugins, tap Add, then Add custom MCP server.',
-    `Add the icon, name it ${name}, paste the description and the address, and leave Authentication on OAuth.`,
+    `Add the icon, name it ${app}, paste the description and the address, and leave Authentication on OAuth.`,
     'Tick I understand and want to continue, tap Create as a plugin, then sign in.',
   ],
   assistantsGeminiHeading: 'Gemini',
@@ -987,8 +987,8 @@ export const HELM_COPY = {
     'Open Settings, then Connected Apps, then Add a custom app.',
     'Paste the address. Gemini needs its Keep Activity setting on, and asks you to confirm each change it makes.',
   ],
-  assistantsAfterConnect: (name: string) =>
-    `Once it connects, it shows up here. Try "ask ${name} what is on my list today".`,
+  assistantsAfterConnect: (app: string) =>
+    `Once it connects, it shows up here. Try "ask ${app} what is on my list today".`,
   connectSheetTitle: 'Connect an app',
   connectQuestion: (name: string, app: string) => `Let ${name} read ${app}?`,
   connectStartsTicked: (labels: string, count: number) =>
@@ -1598,8 +1598,8 @@ export const HELM_COPY = {
   assistantNameLabel: 'Name',
   assistantNameHint:
     "With Hey on in Voice service, it's also the name you say.",
-  assistantRenameConnected: (name: string, hasClaude: boolean) =>
-    `Connected assistants use ${name} from their next chat.${hasClaude ? ' Rename the connector in Claude to match.' : ''}`,
+  assistantRenameConnected: (name: string) =>
+    `Connected assistants use ${name} from their next chat.`,
   assistantNameError:
     'Up to 16 letters, numbers, spaces, hyphens or apostrophes.',
   assistantUseDefault: (name: string) => `Use ${name}`,
