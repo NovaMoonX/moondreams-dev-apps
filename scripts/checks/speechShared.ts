@@ -753,8 +753,8 @@ console.log('speechShared: on-device recognition checks passed');
   );
   const ends = hook.match(/endConversation\(\)/g) ?? [];
   assert.ok(
-    ends.length === 4,
-    'a conversation ends on an end phrase, a stop in either phase and the idle gap',
+    ends.length === 3,
+    'a conversation ends on an end phrase, a stop and the idle gap',
   );
   assert.match(
     hook,

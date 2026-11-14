@@ -184,8 +184,9 @@ export const createCloudTts = ({
       try {
         await pump();
       } catch (error) {
+        const wasPlaying = state.isPlaying;
         sink.end();
-        if (!state.isPlaying) throw error;
+        if (!wasPlaying) throw error;
         if (!signal.aborted) {
           console.error('The cloud voice stopped partway', error);
         }

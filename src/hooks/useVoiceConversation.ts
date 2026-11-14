@@ -568,8 +568,8 @@ export function useVoiceConversation({
 
   const stop = () => {
     if (run.current.mode.phase !== 'OFF') {
+      // Stopping while listening sends what was heard, so the conversation goes on.
       finish();
-      endConversation();
       return;
     }
     getQueue().clear();
