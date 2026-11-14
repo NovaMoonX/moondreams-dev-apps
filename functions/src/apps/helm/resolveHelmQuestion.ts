@@ -1,3 +1,4 @@
+import { toTurnZone } from './nomos/planWhereabouts.js';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -491,7 +492,7 @@ export const resolveHelmQuestion = onCall(
         optionIds,
         by,
         now: Date.now(),
-        timeZone: (profileSnap.data()?.timeZone as string | undefined) ?? 'UTC',
+        timeZone: toTurnZone(profileSnap.data(), Date.now()),
         executionId: executionRef.id,
         capture: {
           status: capture.status,

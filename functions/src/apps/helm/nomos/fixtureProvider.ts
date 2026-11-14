@@ -763,6 +763,75 @@ const readAtHome = (text: string) =>
     ? [toAnswer({ kind: 'setCurrentPlace', place: 'home', isHealth: null })]
     : null;
 
+const AWAY_RE =
+  /^\s*i['’]?m\s+in\s+([A-Z][\p{L}'’.-]*(?:\s+[A-Z][\p{L}'’.-]*)*)\b/u;
+const BACK_RE = /^\s*i['’]?m\s+back(?:\s+home)?\s*[.!]?\s*$/i;
+const LIVE_RE =
+  /^\s*([A-Z][\p{L}'’.-]*(?:(?:\s*,\s*|\s+and\s+)[A-Z][\p{L}'’.-]*)*)\s+(?:live|lives)\s+in\s+([A-Z][\p{L}'’.-]*(?:\s+[A-Z][\p{L}'’.-]*)*)\s*[.!]?\s*$/u;
+
+interface ListedPerson {
+  alias: string;
+  name: string;
+}
+
+const toWhereabouts = (fields: Record<string, unknown>) =>
+  toAnswer({
+    kind: 'setWhereabouts',
+    isHealth: null,
+    change: null,
+    cityName: null,
+    fromSpanId: null,
+    toSpanId: null,
+    labelSpanId: null,
+    ...fields,
+  });
+
+/** The emulator's stand-in for "I'm in Lisbon Dec 2 to Dec 9", "I'm back" and "Priya and Sam live in Leavenworth": setWhereabouts for the person themself or for each named person already in the records. Null for any other words. */
+const readWhereabouts = (
+  text: string,
+  reading: CaptureReading,
+  message: string,
+) => {
+  const quote = text.trim().replace(/[.!]$/, '');
+  const wrap = (commands: ReturnType<typeof toWhereabouts>[]) =>
+    commands.length > 0 ? { commands, mentions: [], places: [] } : null;
+  if (BACK_RE.test(text)) {
+    return wrap([toWhereabouts({ whoAlias: 'me', change: 'back', quote })]);
+  }
+  const live = LIVE_RE.exec(text);
+  if (live) {
+    const listed = readBlock<ListedPerson[]>(message, 'people') ?? [];
+    return wrap(
+      live[1].split(/\s*,\s*|\s+and\s+/).flatMap((name) => {
+        const found = listed.find((entry) => entry.name === name);
+        return found
+          ? [
+              toWhereabouts({
+                whoAlias: found.alias,
+                change: 'home',
+                cityName: live[2],
+                quote,
+              }),
+            ]
+          : [];
+      }),
+    );
+  }
+  const away = AWAY_RE.exec(text);
+  const [from, to] = reading.dates;
+  if (!away || !from) return null;
+  return wrap([
+    toWhereabouts({
+      whoAlias: 'me',
+      change: 'away',
+      cityName: away[1],
+      fromSpanId: from.id,
+      toSpanId: to?.id ?? null,
+      quote,
+    }),
+  ]);
+};
+
 const LEAD_RE = /^\s*(?:please\s+)?(?:remember\s+that|note\s*(?:that|:))\s+/i;
 
 const withoutLead = (text: string) => text.replace(LEAD_RE, '');
@@ -1707,6 +1776,21 @@ function createTextFixtureProvider(
       if (grown) {
         return {
           terminalInput: grown,
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const whereabouts = readWhereabouts(
+        text,
+        reading,
+        messageText(messages[0]?.content ?? ''),
+      );
+      if (whereabouts) {
+        return {
+          terminalInput: whereabouts,
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,
