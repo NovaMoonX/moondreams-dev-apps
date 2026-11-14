@@ -968,6 +968,19 @@ export const HELM_COPY = {
     'Tap Add, then Add custom connector.',
     `Name it ${name}, paste the address and tap Connect. The free plan can add one connector.`,
   ],
+  assistantsDescriptionLabel: 'Description, for apps that ask',
+  assistantsDescription: (app: string) =>
+    `Your ${app}: look up tasks, calendar, topics and procedures, and tell it things to add.`,
+  assistantsCopyDescription: 'Copy description',
+  assistantsIconLabel: 'Icon, for apps that ask',
+  assistantsDownloadIcon: 'Download icon',
+  assistantsIconFailed: "The icon didn't download. Try again.",
+  assistantsChatGptHeading: 'ChatGPT',
+  assistantsChatGptSteps: (app: string) => [
+    'Open Plugins, tap Add, then Add custom MCP server.',
+    `Add the icon, name it ${app}, paste the description and the address, and leave Authentication on OAuth.`,
+    'Tick I understand and want to continue, tap Create as a plugin, then sign in.',
+  ],
   assistantsGeminiHeading: 'Gemini',
   assistantsGeminiSteps: [
     "Go to gemini.google.com (it works in your phone's browser too).",
