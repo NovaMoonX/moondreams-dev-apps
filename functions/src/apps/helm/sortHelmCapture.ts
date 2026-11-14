@@ -167,6 +167,7 @@ import {
 import {
   getLocalDay,
   MAX_CONTEXT_TRIPS,
+  connectorLabel,
   readContextSynced,
   readSyncedTrips,
   toKnownZone,
@@ -210,6 +211,7 @@ import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   INTERRUPTED_PROMPT,
   APP_RECORDS_PROMPT,
+  toOffCategoriesPrompt,
   MAIL_PROMPT,
   MAX_CONTEXT_TASKS,
   MEDIA_PROMPT,
@@ -391,6 +393,18 @@ const readSiteGrants = (firestore: Firestore, uid: string) =>
     )
     .catch((error): SiteLiveGrant[] => {
       logger.warn('helm.live.siteGrantsFailed', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+      return [];
+    });
+
+const readOffCategories = (firestore: Firestore, uid: string) =>
+  import('../../connections/liveRouter.js')
+    .then(({ listSiteOffCategories }) =>
+      listSiteOffCategories(firestore, uid, 'helm'),
+    )
+    .catch((error) => {
+      logger.warn('helm.live.offCategoriesFailed', {
         cause: error instanceof Error ? error.name : 'error',
       });
       return [];
@@ -1796,14 +1810,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             isNamedIn(combined.text, procedure.title),
         ));
     const provider = pickProvider(combined.text, combined.reading);
-    const liveGrants =
-      mode !== 'rest' && isQuestion(combined.text.trim())
-        ? await readLiveGrants(firestore, uid)
-        : [];
-    const siteGrants =
-      mode !== 'rest' && isQuestion(combined.text.trim())
-        ? await readSiteGrants(firestore, uid)
-        : [];
+    const isAsking = mode !== 'rest' && isQuestion(combined.text.trim());
+    const [liveGrants, siteGrants, offCategories] = isAsking
+      ? await Promise.all([
+          readLiveGrants(firestore, uid),
+          readSiteGrants(firestore, uid),
+          readOffCategories(firestore, uid),
+        ])
+      : [[], [], []];
     const quotes = createQuoteBook();
     const searched = createSearchedLog();
     const system = [
@@ -1817,6 +1831,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ]),
       liveGrants.length > 0 ? MAIL_PROMPT : null,
       siteGrants.length > 0 ? APP_RECORDS_PROMPT : null,
+      toOffCategoriesPrompt(
+        offCategories.map((grant) => ({
+          connectorLabel: connectorLabel(grant.connectorId),
+          categories: grant.categories,
+        })),
+      ),
       topics.length > 0 ? TOPIC_PROMPT : null,
       style ? STYLE_PROMPT : null,
       mode !== 'rest' &&

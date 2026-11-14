@@ -85,8 +85,10 @@ const COPY: SyncedCopy = {
   isAllDay: false,
   isEnded: false,
   detail: null,
+  placeLabel: null,
   amountCents: null,
   currency: null,
+  extra: {},
   asOf: null,
 };
 
@@ -784,6 +786,58 @@ const tests: [string, () => void | Promise<void>][] = [
       assert.equal(copy?.detail, null);
       assert.equal(copy?.amountCents, null);
       assert.equal(copy?.currency, null);
+    },
+  ],
+  [
+    'a site app copy carries its place, counts and phone to the view; a Google copy never carries a place',
+    () => {
+      const key: HelmKey = {
+        keyId: 'k',
+        keyVersion: 1,
+        key: Buffer.alloc(32, 7),
+      };
+      const open = (
+        connectorId: string,
+        kind: string,
+        sealed: Record<string, unknown>,
+      ) => {
+        const copy = openSyncedCopy(key, 'c1', {
+          connectorId,
+          kind,
+          startAt: null,
+          dueAt: null,
+          isAllDay: false,
+          connectionEndedAt: null,
+          sealed: sealForHelm(key, { title: 'Title', ...sealed }),
+        });
+        assert.ok(copy);
+        return toSyncedView(copy, 'UTC');
+      };
+      const sale = open('app:going-once', 'project', {
+        detail: 'Closes Friday',
+        extra: { available: 3, pending: 1, sold: 12, sameEventKey: 'x' },
+      });
+      assert.deepEqual(sale.details, { available: 3, pending: 1, sold: 12 });
+      assert.equal(sale.detail, 'Closes Friday');
+      const clinic = open('app:nine-lives', 'place', {
+        placeLabel: 'Maple Vet',
+        extra: { phone: '555-0100', address: '1 Main St', secret: 'no' },
+      });
+      assert.equal(clinic.place, 'Maple Vet');
+      assert.deepEqual(clinic.details, {
+        phone: '555-0100',
+        address: '1 Main St',
+      });
+      const google = open('google:calendar', 'event', {
+        placeLabel: 'Dentist, 2 Elm St',
+        detail: 'Bring forms',
+        subtitle: 'Work',
+        extra: { calendarId: 'c', isTentative: false },
+      });
+      assert.equal('place' in google, false);
+      assert.equal('detail' in google, false);
+      assert.equal('details' in google, false);
+      assert.equal('subtitle' in google, false);
     },
   ],
   [

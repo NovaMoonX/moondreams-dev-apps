@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, TriangleAlert } from 'lucide-react';
 
+import NewBadge from '@/components/NewBadge';
+
 export interface ConnectedSourceRow {
   id: string;
   logo: ReactNode;
@@ -10,6 +12,8 @@ export interface ConnectedSourceRow {
   /** One quiet line: what is read, or what went wrong. */
   meta: string;
   isTrouble: boolean;
+  /** Shows a New badge: something it reads was added recently and not seen yet. */
+  isNew?: boolean;
 }
 
 interface ConnectedSourcesListProps {
@@ -31,8 +35,11 @@ function ConnectedSourcesList({ rows, onOpen }: ConnectedSourcesListProps) {
           >
             {row.logo}
             <span className='min-w-0 flex-1'>
-              <span className='text-foreground block truncate text-[15px] leading-[21px]'>
-                {row.title}
+              <span className='flex min-w-0 items-center gap-2'>
+                <span className='text-foreground min-w-0 truncate text-[15px] leading-[21px]'>
+                  {row.title}
+                </span>
+                {row.isNew && <NewBadge />}
               </span>
               <span className='text-muted-foreground flex items-start gap-1 text-[13px]'>
                 {row.isTrouble && (

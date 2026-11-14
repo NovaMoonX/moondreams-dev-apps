@@ -71,8 +71,10 @@ const trip: SyncedCopy = {
   isAllDay: true,
   isEnded: false,
   detail: null,
+  placeLabel: null,
   amountCents: null,
   currency: null,
+  extra: {},
   asOf: null,
 };
 const timedEvent: SyncedCopy = {
