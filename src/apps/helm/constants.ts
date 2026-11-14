@@ -1071,6 +1071,7 @@ export const HELM_COPY = {
   googleContinue: 'Continue to Google',
   googleTryAgain: 'Try again',
   googleReconnected: 'Reconnected',
+  googleServiceConnected: (service: string) => `${service} connected`,
   googleNeedsPermission: (name: string) =>
     `${name} needs permission to see your events to plan around them. Nothing was connected.`,
   googleConnectFailed: "That didn't connect. Try again.",

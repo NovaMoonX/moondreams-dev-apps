@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Lock } from 'lucide-react';
+import { ChevronRight, Lock } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -166,25 +166,10 @@ function AssistantSheet({
                       )}
                     </p>
                   ) : (
-                    <div className='flex flex-col items-start gap-1'>
-                      <p className='text-muted-foreground flex items-center gap-1.5 text-[13px] text-pretty'>
-                        <Lock
-                          className='size-3.5 shrink-0'
-                          aria-hidden='true'
-                        />
-                        {HELM_COPY.assistantNeedsSource(scope)}
-                      </p>
-                      <Button
-                        variant='tertiary'
-                        size='sm'
-                        className='px-0!'
-                        onClick={() =>
-                          afterBackLayersClose(onOpenConnectedApps)
-                        }
-                      >
-                        {HELM_COPY.assistantOpenConnectedApps}
-                      </Button>
-                    </div>
+                    <p className='text-muted-foreground flex items-center gap-1.5 text-[13px] text-pretty'>
+                      <Lock className='size-3.5 shrink-0' aria-hidden='true' />
+                      {HELM_COPY.assistantNeedsSource(scope)}
+                    </p>
                   )}
                 </div>
                 {(isConnected(scope) || isOn) && (
@@ -200,6 +185,17 @@ function AssistantSheet({
               </div>
             );
           })}
+          {shownScopes.some((scope) => !isConnected(scope)) && (
+            <Button
+              variant='secondary'
+              size='sm'
+              className='self-start'
+              onClick={() => afterBackLayersClose(onOpenConnectedApps)}
+            >
+              {HELM_COPY.assistantOpenConnectedApps}
+              <ChevronRight className='size-4' aria-hidden='true' />
+            </Button>
+          )}
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.assistantPrivacy(assistant.name)}
           </p>

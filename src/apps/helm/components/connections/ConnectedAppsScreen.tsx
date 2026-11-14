@@ -301,6 +301,12 @@ function ConnectedAppsScreen({
         categoryIds: [service.categoryId],
         options: null,
       });
+      addToast({
+        title: HELM_COPY.googleServiceConnected(
+          GOOGLE_SERVICES[service.connectorId]?.name ?? '',
+        ),
+        type: 'success',
+      });
     } catch (failure) {
       console.error('Helm could not connect a Google service', failure);
       addToast({ title: service.failed, type: 'error' });
