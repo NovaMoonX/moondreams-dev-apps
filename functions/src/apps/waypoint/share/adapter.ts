@@ -31,6 +31,7 @@ const DOC_LIMIT = 500;
 const DAYS_OUTSIDE_TRIP = 3;
 const DETAIL_CHARS = 120;
 const NAME_CHARS = 60;
+const LISTED_NAMES = 3;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const EMPTY_RECORD: SharedRecord = {
@@ -628,16 +629,17 @@ const toChecklistRecord = (
       .sort();
   const todo = names(false);
   const done = names(true);
-  const detail = [
-    todo.length === 0 ? null : `To do: ${todo.join(', ')}`,
-    done.length === 0 ? null : `Done: ${done.join(', ')}`,
-  ]
+  const listed = (label: string, titles: string[]) =>
+    titles.length === 0
+      ? null
+      : `${label}: ${titles.slice(0, LISTED_NAMES).join(', ')}${titles.length > LISTED_NAMES ? ` and ${titles.length - LISTED_NAMES} more` : ''}`;
+  const detail = [listed('To do', todo), listed('Done', done)]
     .flatMap((part) => (part === null ? [] : [part]))
     .join('. ');
   return toRecord({
     sourceRef: `trips/${trip.id}/checklist/${encodeURIComponent(group)}`,
     kind: 'countSummary',
-    title: clip(`${trip.title}: ${group}`, 2 * NAME_CHARS),
+    title: `${clip(trip.title, NAME_CHARS)}: ${group}`,
     subtitle: `${done.length} of ${lines.length} done`,
     detail: clip(detail, DETAIL_CHARS),
     sourceUpdatedAt: lines.reduce<number | null>(
