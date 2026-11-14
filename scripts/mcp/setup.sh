@@ -85,12 +85,12 @@ echo
 if secret_saved WORKOS_API_KEY; then
   echo "5. ✓ WORKOS_API_KEY is already saved in Firebase, so this step is skipped."
 else
-  echo "5. Open API Keys in the left menu (under Developer) and copy the secret key (it starts with sk_live_)."
+  echo "5. Open API Keys in the left menu (under Developer) and copy the Production secret key (it starts with sk_)."
   printf '   Paste it here (it stays hidden) and press Enter: '
   read -rs key || true
   echo
   key=${key//[[:space:]]/}
-  [[ "$key" == sk_live_* ]] || { echo "✗ That isn't a Production secret key (those start with sk_live_). Switch to Production in step 1 and copy it again. Nothing was saved." >&2; exit 1; }
+  [[ "$key" == sk_* ]] || { echo "✗ That isn't a WorkOS secret key (those start with sk_). Copy it again from API Keys. Nothing was saved." >&2; exit 1; }
   # Listing one user reads only. The key goes to curl's stdin as a header file, never argv.
   status=$(printf 'Authorization: Bearer %s\n' "$key" \
     | curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H @- "https://api.workos.com/user_management/users?limit=1") || true
