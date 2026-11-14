@@ -5,11 +5,6 @@ import VoiceStateRing from '@apps/helm/components/voice/VoiceStateRing';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 
-interface VoiceControlProps {
-  /** Talking isn't possible here (no recognition, or the microphone is refused): the person types instead. */
-  onBlocked: () => void;
-}
-
 const CAPTION = {
   idle: HELM_COPY.talk,
   listening: HELM_COPY.talkListening,
@@ -18,7 +13,7 @@ const CAPTION = {
 } as const;
 
 /** The dock's Talk button: tap to listen, tap again to send, and it becomes Stop while the turn is being worked on, and a tap while a line is being said stops the line and listens. */
-function VoiceControl({ onBlocked }: VoiceControlProps) {
+function VoiceControl() {
   const voice = useHelmVoiceContext();
   const isStop = voice.state === 'thinking';
   const label = isStop
@@ -35,9 +30,7 @@ function VoiceControl({ onBlocked }: VoiceControlProps) {
           variant='primary'
           aria-label={label}
           className="relative size-[68px] min-w-[68px] rounded-full! p-0 before:absolute before:-inset-1 before:content-['']"
-          onClick={() => {
-            if (voice.talk(null) === 'blocked') onBlocked();
-          }}
+          onClick={() => voice.talk(null)}
         >
           {isStop ? (
             <Square className='size-6 fill-current' aria-hidden='true' />

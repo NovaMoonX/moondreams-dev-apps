@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Mic } from 'lucide-react';
 
 import InlineNotice from '@/components/InlineNotice';
+import SpeechDebugDetails from '@/components/SpeechDebugDetails';
 import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import {
   NOTICE_ACTION_CLASSES,
@@ -29,6 +30,16 @@ const RESULT_LINES: Partial<Record<MicrophoneRequestResult, string>> = {
   unavailable: 'This browser can’t use a microphone here.',
 };
 
+const describeAsk = (
+  permission: string,
+  result: MicrophoneRequestResult | null,
+) => {
+  if (result === null) return 'Not asked for the microphone yet';
+  if (result === 'denied' && permission !== 'denied')
+    return `Refused when asked, while the browser reads "${permission}"`;
+  return `Last ask for the microphone: ${result}`;
+};
+
 /** The way out of a blocked microphone: an Allow microphone button that asks the browser properly and, once the browser refuses, how to allow it on this device behind one tap. Clears itself once the permission is granted. */
 function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
   const [result, setResult] = useState<MicrophoneRequestResult | null>(null);
@@ -50,8 +61,8 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
 
   if (permission === 'granted') return null;
 
-  const isBlocked =
-    permission === 'denied' || (result === 'denied' && permission !== 'prompt');
+  // An installed app on Android can refuse without a prompt and still read "prompt", so a refused ask counts as blocked.
+  const isBlocked = permission === 'denied' || result === 'denied';
   const tone = isBlocked ? 'warning' : 'info';
   const canAsk = result !== 'unavailable';
 
@@ -73,7 +84,7 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
       <p>
         {isBlocked
           ? 'Your browser said no for this site, so it has to be allowed in its settings.'
-          : 'Tap below and allow it when your browser asks.'}
+          : 'Allow it below when your browser asks.'}
       </p>
       {result !== null && RESULT_LINES[result] && (
         <p className='mt-2'>{RESULT_LINES[result]}</p>
@@ -118,6 +129,10 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
           </Button>
         )}
       </div>
+      <SpeechDebugDetails
+        message={describeAsk(permission, result)}
+        className='mt-3'
+      />
     </InlineNotice>
   );
 }

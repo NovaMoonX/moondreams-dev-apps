@@ -2,6 +2,10 @@ import {
   loadRecognizer,
   openRecognition,
 } from '@/lib/speech/onDevice/recognizer';
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 import { startPcmCapture } from '@/lib/speech/voice/pcmWorklet';
 import type {
   FrameSource,
@@ -22,6 +26,7 @@ export const toHeardText = (parts: string[]) => {
 };
 
 const toErrorCode = (error: unknown): SttErrorCode => {
+  recordSpeechEvent(`On-device listening failed: ${describeThrown(error)}`);
   if (error instanceof DOMException) {
     if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
       return 'denied';
