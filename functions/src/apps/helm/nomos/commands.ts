@@ -107,6 +107,9 @@ export const PROCEDURE_SUMMARY_CAP = 200;
 /** The kinds the reply may carry that start a run of a procedure or tick its steps; each is read from its own list and is no `NomosCommand`. */
 export const RUN_COMMAND_KINDS = ['startRun', 'tickRun'] as const;
 
+/** A spelled correction of a heard name; read from its own list and is no `NomosCommand`. */
+export const SOUNDS_LIKE_COMMAND_KINDS = ['noteSoundsLike'] as const;
+
 export const RUN_STEPS_MAX = 80;
 export const RUN_EXTRA_MAX = 20;
 export const RUN_EXTRA_TEXT_CAP = 200;
@@ -511,6 +514,13 @@ export interface TickRunCommand {
 
 export type RunCommand = StartRunCommand | TickRunCommand;
 
+/** How a person is heard when the person spells the name again: the heard form is a span of the turn before, and `whoId` is someone the context listed. */
+export interface NoteSoundsLikeCommand {
+  kind: 'noteSoundsLike';
+  whoId: string;
+  heardSpan: string;
+}
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -717,6 +727,8 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'procedureSteps',
             'fromTaskAlias',
             'runStepAliases',
+            'whoAlias',
+            'heardSpan',
           ],
           properties: {
             kind: {
@@ -726,6 +738,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
                 ...TOPIC_COMMAND_KINDS,
                 ...PROCEDURE_COMMAND_KINDS,
                 ...RUN_COMMAND_KINDS,
+                ...SOUNDS_LIKE_COMMAND_KINDS,
                 'answer',
                 'ask',
               ],
@@ -1111,6 +1124,14 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               items: { type: 'string' },
               description: `tickRun: the alias (rs1, rs2, …) of each step of <open_runs> the person says is done, at most ${MAX_TICKS_PER_TURN}; null otherwise.`,
             },
+            whoAlias: nullable(
+              'string',
+              'noteSoundsLike: the alias (w1, w2, …) from <people> of the person the spelled name belongs to; null otherwise.',
+            ),
+            heardSpan: nullable(
+              'string',
+              'noteSoundsLike: the words as they were written in the turn before, which the person is correcting ("Shivon"), copied exactly; null otherwise.',
+            ),
           },
         },
       },

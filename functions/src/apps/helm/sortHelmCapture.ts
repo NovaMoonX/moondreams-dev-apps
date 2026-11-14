@@ -142,6 +142,7 @@ import {
   type NomosCommand,
   type TopicCommand,
   type ProcedureCommand,
+  type NoteSoundsLikeCommand,
   type RunCommand,
   type PlaceRead,
   type PlanDayCommand,
@@ -203,6 +204,13 @@ import {
   type JoinedMessage,
   type JoinedRead,
 } from './nomos/joinedTurn.js';
+import {
+  MAX_HEARD_NAMES,
+  readHeardNames,
+  toContextHeard,
+  type HeardName,
+} from './nomos/heardNames.js';
+import { planSoundsLike, type EarlierTask } from './nomos/planSoundsLike.js';
 import {
   isNamedIn,
   normalizeNomosReply,
@@ -475,6 +483,14 @@ const readStyleNotes = (firestore: Firestore, base: string, key: HelmKey) =>
     )
     .catch(() => null);
 
+const openSealed = (key: HelmKey, sealed: unknown) => {
+  try {
+    return openForHelm(key, sealed as SealedPayload) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
 const openTitle = (key: HelmKey, sealed: SealedPayload) => {
   try {
     const opened = openForHelm(key, sealed);
@@ -666,6 +682,7 @@ async function readPeople(
     timeZone: string;
     capturedAt: number;
     selfWhoId: string | null;
+    heardNames: HeardName[];
   },
 ): Promise<PeopleInput | undefined> {
   const { firestore, base, key, captureRef, mentions, places } = input;
@@ -809,6 +826,7 @@ async function readPeople(
     assistantNames,
     dayKey: String(getDayIn(input.capturedAt, zone)),
     capturedAt: input.capturedAt,
+    heardNames: input.heardNames,
   };
 }
 
@@ -1452,6 +1470,65 @@ export async function readEarlierTurns(
   return turns.flat().reverse();
 }
 
+/** What a spelled correction is checked against: the words and heard names of the session's previous turn (all of its messages), and the tasks that turn touched. Null when there is none. */
+export async function readPreviousTurn(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  capture: CaptureDoc,
+): Promise<{ text: string; heard: HeardName[]; taskIds: string[] } | null> {
+  if (typeof capture.sessionId !== 'string') return null;
+  if (typeof capture.turnIndex !== 'number') return null;
+  const earlier = await firestore
+    .collection(`${base}/captures`)
+    .where('sessionId', '==', capture.sessionId)
+    .where('turnIndex', '<', capture.turnIndex)
+    .orderBy('turnIndex', 'desc')
+    .limit(EARLIER_TURNS)
+    .get();
+  const lead = earlier.docs.find(
+    (doc) => typeof (doc.data() as CaptureDoc).turnLeadId !== 'string',
+  );
+  if (!lead) return null;
+  const group = earlier.docs
+    .filter(
+      (doc) =>
+        doc.id === lead.id || (doc.data() as CaptureDoc).turnLeadId === lead.id,
+    )
+    .reverse()
+    .flatMap((doc) => {
+      const opened = openTitle(key, (doc.data() as CaptureDoc).sealed)?.sealed;
+      return opened ? [opened] : [];
+    });
+  const executions = await Promise.all(
+    ((lead.data() as CaptureDoc).executionIds ?? [])
+      .slice(0, EARLIER_EXECUTIONS)
+      .map((id) => firestore.doc(`${base}/executions/${id}`).get()),
+  );
+  return {
+    text: group
+      .flatMap((opened) =>
+        typeof opened.text === 'string' ? [opened.text] : [],
+      )
+      .join('\n'),
+    heard: group.flatMap((opened) => readHeardNames(opened.heardNames) ?? []),
+    taskIds: [
+      ...new Set(
+        executions.flatMap((snapshot) => {
+          const refs: unknown = snapshot.data()?.effectRefs;
+          return (Array.isArray(refs) ? refs : []).flatMap((ref) =>
+            ref?.collection === 'tasks' &&
+            typeof ref.docId === 'string' &&
+            ID_RE.test(ref.docId)
+              ? [ref.docId as string]
+              : [],
+          );
+        }),
+      ),
+    ].slice(0, EARLIER_RECORDS),
+  };
+}
+
 interface AnswerTurn {
   ref: { captureId: string; questionId: string };
   value: unknown;
@@ -1563,6 +1640,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       topicCommands: [],
       procedureCommands: [],
       runCommands: [],
+      soundsLike: [],
+      previousTaskIds: [],
+      heardNames: [],
       topics: [],
       hinted: [],
       captureText: '',
@@ -1598,6 +1678,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           leadText,
         )
       : null;
+  const leadHeard = readHeardNames(opened.heardNames) ?? [];
   const leadMessage: JoinedMessage = {
     text: leadText,
     reading: toReading(opened.reading),
@@ -1637,46 +1718,57 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     names: [] as MaskedName[],
     quoted: [] as MaskedName[],
   };
-  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced, style] =
-    await Promise.all([
-      profileRead,
-      firestore
-        .collection(`${base}/tasks`)
-        .where('status', '==', 'open')
-        .orderBy('createdAt', 'desc')
-        .limit(MAX_CONTEXT_TASKS)
-        .get(),
+  const [
+    profile,
+    openTasks,
+    alreadyMade,
+    screen,
+    earlierTurns,
+    synced,
+    style,
+    previousTurn,
+  ] = await Promise.all([
+    profileRead,
+    firestore
+      .collection(`${base}/tasks`)
+      .where('status', '==', 'open')
+      .orderBy('createdAt', 'desc')
+      .limit(MAX_CONTEXT_TASKS)
+      .get(),
+    mode === 'rest'
+      ? readAlreadyMade(
+          firestore,
+          base,
+          key,
+          capture.executionIds ?? [],
+          earlyMask,
+        )
+      : Promise.resolve(undefined),
+    profileRead.then((snapshot) =>
+      readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen), {
+        ...earlyMask,
+        timeZone: (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
+      }),
+    ),
+    readEarlierTurns(firestore, base, key, capture, earlyMask),
+    profileRead.then((snapshot) =>
       mode === 'rest'
-        ? readAlreadyMade(
+        ? []
+        : readContextSynced(
             firestore,
-            base,
+            uid,
             key,
-            capture.executionIds ?? [],
-            earlyMask,
-          )
-        : Promise.resolve(undefined),
-      profileRead.then((snapshot) =>
-        readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen), {
-          ...earlyMask,
-          timeZone: (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
-        }),
-      ),
-      readEarlierTurns(firestore, base, key, capture, earlyMask),
-      profileRead.then((snapshot) =>
-        mode === 'rest'
-          ? []
-          : readContextSynced(
-              firestore,
-              uid,
-              key,
-              capture.createdAt,
-              toKnownZone(
-                (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
-              ),
+            capture.createdAt,
+            toKnownZone(
+              (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
             ),
-      ),
-      mode === 'rest' ? null : readStyleNotes(firestore, base, key),
-    ]);
+          ),
+    ),
+    mode === 'rest' ? null : readStyleNotes(firestore, base, key),
+    mode === 'rest'
+      ? null
+      : readPreviousTurn(firestore, base, key, capture).catch(() => null),
+  ]);
   const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
   const unattendedMask = { ...earlyMask, timeZone };
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
@@ -1698,7 +1790,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
 
   const readJoined = async (): Promise<
-    JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean }
+    JoinedRead & {
+      messages: JoinedMessage[];
+      isSpoken: boolean;
+      heardNames: HeardName[];
+    }
   > => {
     const lead = (await claimed.captureRef.get()).data() as
       CaptureDoc | undefined;
@@ -1719,6 +1815,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           (mode === 'rest' && data.status === 'sorted'))
       );
     });
+    const joinedHeard = joined.flatMap(
+      (snapshot) =>
+        readHeardNames(
+          openTitle(key, (snapshot.data() as CaptureDoc).sealed)?.sealed
+            .heardNames,
+        ) ?? [],
+    );
     const messages = joined.flatMap((snapshot): JoinedMessage[] => {
       const joinedOpened = openTitle(
         key,
@@ -1737,6 +1840,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ids: mode === 'rest' ? [] : joined.map((snapshot) => snapshot.id),
       joinedCount: listed.length,
       messages: [leadMessage, ...messages],
+      heardNames: [...leadHeard, ...joinedHeard].slice(0, MAX_HEARD_NAMES),
       // A turn is spoken when any of its messages was, so a spoken message joined behind a typed one still hears its reply.
       isSpoken:
         lead?.inputMode === 'voice' ||
@@ -1747,7 +1851,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   };
 
   const run = async (
-    read: JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean },
+    read: JoinedRead & {
+      messages: JoinedMessage[];
+      isSpoken: boolean;
+      heardNames: HeardName[];
+    },
     signal: AbortSignal,
     isRestart: boolean,
   ) => {
@@ -1944,6 +2052,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       answeredQuestion,
       facts: masked.facts,
       people: contextPeople,
+      heardNames: toContextHeard(
+        read.heardNames,
+        new Set(contextPeople.map((person) => person.id)),
+        unattendedMask.isOn,
+      ),
       selfFacts: masked.selfFacts,
       keyDates: masked.keyDates,
       upcoming: masked.upcoming,
@@ -2283,6 +2396,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         alias: item.alias,
         kind: item.kind,
       })),
+      previousTurn: previousTurn
+        ? {
+            text: previousTurn.text,
+            heard: previousTurn.heard.map((entry) => entry.heard),
+          }
+        : undefined,
     },
   );
   reply.mediaDropped.forEach((code) =>
@@ -2349,6 +2468,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     topicCommands: mode === 'full' ? reply.topicCommands : [],
     procedureCommands: mode === 'full' ? reply.procedureCommands : [],
     runCommands: mode === 'full' ? reply.runCommands : [],
+    soundsLike: mode === 'full' ? reply.soundsLike : [],
+    previousTaskIds: previousTurn?.taskIds ?? [],
+    heardNames: read.heardNames,
     topics,
     hinted,
     media: {
@@ -2489,6 +2611,9 @@ async function writeResult(
     topicCommands: TopicCommand[];
     procedureCommands: ProcedureCommand[];
     runCommands: RunCommand[];
+    soundsLike: NoteSoundsLikeCommand[];
+    previousTaskIds: string[];
+    heardNames: HeardName[];
     topics: OpenTopicRecord[];
     hinted: HintedNote[];
     captureText: string;
@@ -2527,6 +2652,8 @@ async function writeResult(
     topicCommands: requestedTopicCommands,
     procedureCommands,
     runCommands,
+    soundsLike,
+    previousTaskIds,
     topics: contextTopics,
     hinted,
     captureText,
@@ -2819,6 +2946,7 @@ async function writeResult(
             selfWhoId:
               (profileSnap?.get('selfWhoId') as string | null | undefined) ??
               null,
+            heardNames: input.heardNames,
           })
         : undefined;
     const existingProjects =
@@ -3189,13 +3317,74 @@ async function writeResult(
         ),
       ),
     });
-    const withHome = home
-      ? {
-          ...written,
-          effectRefs: [...written.effectRefs, home.ref],
-          effects: [...written.effects, home.effect],
-        }
-      : written;
+    const keptSounds = isStale ? [] : soundsLike;
+    const [soundsWhoSnaps, earlierTaskSnaps] =
+      keptSounds.length > 0
+        ? await Promise.all([
+            Promise.all(
+              [...new Set(keptSounds.map((command) => command.whoId))].map(
+                (id) => transaction.get(firestore.doc(`${base}/who/${id}`)),
+              ),
+            ),
+            Promise.all(
+              previousTaskIds.map((id) =>
+                transaction.get(firestore.doc(`${tasksPath}/${id}`)),
+              ),
+            ),
+          ])
+        : [[], []];
+    const soundsPlan = planSoundsLike({
+      commands: keptSounds,
+      whos: new Map(
+        soundsWhoSnaps.map(
+          (snapshot): [string, Record<string, unknown> | null] => [
+            snapshot.id,
+            snapshot.exists ? openSealed(key, snapshot.get('sealed')) : null,
+          ],
+        ),
+      ),
+      earlierTasks: new Map(
+        earlierTaskSnaps.flatMap((snapshot): [string, EarlierTask][] => {
+          const words = snapshot.exists
+            ? openSealed(key, snapshot.get('sealed'))
+            : null;
+          return typeof words?.title === 'string'
+            ? [
+                [
+                  snapshot.id,
+                  {
+                    title: words.title,
+                    whoIds: Array.isArray(snapshot.get('whoIds'))
+                      ? (snapshot.get('whoIds') as string[])
+                      : [],
+                    status: snapshot.get('status') === 'done' ? 'done' : 'open',
+                  },
+                ],
+              ]
+            : [];
+        }),
+      ),
+      now,
+      isUnattended: input.isUnattended === true,
+      seal,
+    });
+    const withHome = {
+      ...written,
+      effectRefs: [
+        ...written.effectRefs,
+        ...(home ? [home.ref] : []),
+        ...soundsPlan.effectRefs,
+      ],
+      effects: [
+        ...written.effects,
+        ...(home ? [home.effect] : []),
+        ...soundsPlan.effects,
+      ],
+      linkedWhoIds: [
+        ...new Set([...written.linkedWhoIds, ...soundsPlan.linkedWhoIds]),
+      ],
+      isPrivate: written.isPrivate || soundsPlan.isPrivate,
+    };
     const plan = sentMedia
       ? {
           ...withHome,
@@ -3272,6 +3461,12 @@ async function writeResult(
       );
       plan.whoUpdates.forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/who/${id}`), data),
+      );
+      soundsPlan.whoRewrites.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/who/${id}`), data),
+      );
+      soundsPlan.taskUpdates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${tasksPath}/${id}`), data),
       );
       plan.placeCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/places/${id}`), data),
@@ -3395,6 +3590,7 @@ async function writeResult(
         buildExecution(
           { ...plan, questions },
           {
+            extraLines: soundsPlan.lines,
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
               plan.notKept,
@@ -3489,6 +3685,7 @@ async function writeResult(
           topicCommands.length +
           procedureCommands.length +
           runCommands.length +
+          keptSounds.length +
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,

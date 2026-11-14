@@ -43,9 +43,11 @@ import {
   settleProjectStart,
   type ExistingProject,
 } from './planProjects.js';
+import type { HeardName } from './heardNames.js';
 import {
   matchPlaces,
   matchWho,
+  type EntityMatch,
   type KnownPlace,
   type KnownWho,
 } from './matchEntities.js';
@@ -102,7 +104,9 @@ import {
   NOTES_NOT_KEPT_LINE,
   buildIsThisWhoQuestion,
   buildKinOrderQuestion,
+  buildHeardPrompt,
   buildPickQuestion,
+  HEARD_NEW_LABEL,
   buildSpokenIsThisWho,
   buildSpokenKinOrder,
   buildSpokenWhichKin,
@@ -176,6 +180,8 @@ export interface PeopleInput {
   /** The day the capture was made, in the person's zone. */
   dayKey: string;
   capturedAt: number;
+  /** Words the device heard as two near names, so a mention of either asks which one. */
+  heardNames?: HeardName[];
 }
 
 /** A fact the person already has, for the repeat check: its words and subjects. */
@@ -834,6 +840,7 @@ export const toNameCase = (name: string) => toDisplayCase(name, NAME_CASE);
 /** How an unsure mention came to be one: more than one fit, a nickname the model linked to someone, or a family word code could not settle. */
 export type UnsureVia =
   | { kind: 'alias'; whoId: string }
+  | { kind: 'heard' }
   | { kind: 'kin'; ref: WhoKin; resolution: 'many' | 'none' }
   | {
       kind: 'kinOrder';
@@ -895,8 +902,32 @@ function settleEntities(input: PlanInput) {
     known: people.known,
     assistantNames: people.assistantNames,
   });
+  const heardTies = new Map(
+    named.flatMap((mention): [string, string[]][] => {
+      const words = mention.name.trim().toLowerCase();
+      const tie = (people.heardNames ?? []).find(
+        (entry) =>
+          entry.candidateIds.length > 1 &&
+          [entry.heard, entry.said ?? ''].some(
+            (said) => said.trim().toLowerCase() === words,
+          ),
+      );
+      const ids = (tie?.candidateIds ?? []).filter((id) =>
+        people.known.some((who) => who.id === id),
+      );
+      return ids.length > 1 ? [[mention.ref, ids]] : [];
+    }),
+  );
   const matchOf = new Map(
-    named.map((mention, index) => [mention.ref, namedMatches[index]]),
+    named.map((mention, index): [string, EntityMatch] => [
+      mention.ref,
+      heardTies.has(mention.ref)
+        ? {
+            kind: 'unsure',
+            candidateIds: heardTies.get(mention.ref) as string[],
+          }
+        : namedMatches[index],
+    ]),
   );
   const placeMatches = matchPlaces({
     names: people.places.map((place) => place.name),
@@ -994,7 +1025,11 @@ function settleEntities(input: PlanInput) {
         named.map((mention) => matchOf.get(mention.ref) ?? { kind: 'new' }),
       ).map(([ref, mention, candidateIds]): [string, UnsureEntry] => [
         ref,
-        { mention, candidateIds, via: null },
+        {
+          mention,
+          candidateIds,
+          via: heardTies.has(ref) ? { kind: 'heard' } : null,
+        },
       ]),
       ...proposed,
       ...kinUnsure,
@@ -2704,6 +2739,7 @@ function buildPickQuestions(input: {
         name: string;
         candidates: PickCandidate[];
         held: HeldLink;
+        heard?: { prompt: string; newLabel: string };
       };
   const whoQuestions = distinct(whoEntries).flatMap((entry): PickEntry[] => {
     const states = entry.candidateIds.flatMap(
@@ -2739,6 +2775,28 @@ function buildPickQuestions(input: {
             }),
             buildSpokenIsThisWho(alias, who.label),
           ),
+        },
+      ];
+    }
+    if (via?.kind === 'heard') {
+      const shown = toNameCase(name);
+      return [
+        {
+          kind: 'whichPerson' as PickKind,
+          name: shown,
+          candidates,
+          held: {
+            kind: 'linkWho',
+            taskIds,
+            mention: { name, kind, relation, species, organizationKind },
+          } as HeldLink,
+          heard: {
+            prompt: buildHeardPrompt(
+              shown,
+              candidates.map((candidate) => candidate.label),
+            ),
+            newLabel: HEARD_NEW_LABEL,
+          },
         },
       ];
     }
@@ -2847,7 +2905,11 @@ function buildPickQuestions(input: {
               buildSpokenPick(
                 question.name,
                 question.candidates.map((candidate) => candidate.label),
-                question.kind === 'whichPlace' ? 'a new place' : 'someone new',
+                question.heard
+                  ? 'someone else'
+                  : question.kind === 'whichPlace'
+                    ? 'a new place'
+                    : 'someone new',
               ),
             ),
           ]
@@ -2900,6 +2962,8 @@ export function buildExecution(
   input: Pick<PlanInput, 'captureId' | 'now' | 'seal'> & {
     /** The line saying the person is home, added to the summary and the spoken reply. */
     homeLine?: string | null;
+    /** Result lines written by code for changes the plan does not count, such as a heard name kept. */
+    extraLines?: string[];
     /** The model's own line about the turn, already checked; the summary stays code's. */
     said?: string | null;
     questionRef?: { captureId: string; questionId: string } | null;
@@ -2920,7 +2984,7 @@ export function buildExecution(
         ]
       : [];
   });
-  const { homeLine = null, said = null } = input;
+  const { homeLine = null, said = null, extraLines = [] } = input;
   const ack = buildSpokenAck({
     inputMode: input.inputMode,
     counts: plan.counts,
@@ -2943,7 +3007,12 @@ export function buildExecution(
   const spokenKept = isVoice && plan.lines.length > 0 ? NOTE_KEPT_SPOKEN : null;
   // Lines only code knows to say (home, a project, a note's name, a duplicate) keep code's summary.
   const own =
-    said && !homeLine && !projectLine && !plan.spokenNote && !plan.lines.length
+    said &&
+    !homeLine &&
+    !projectLine &&
+    !plan.spokenNote &&
+    !plan.lines.length &&
+    extraLines.length === 0
       ? said
       : null;
   return {
@@ -3002,6 +3071,7 @@ export function buildExecution(
           plan.runTicks.reduce((total, tick) => total + tick.stepIds.length, 0),
         ),
         ...plan.notKept,
+        ...extraLines,
         homeLine,
       ]
         .filter(Boolean)
@@ -3015,7 +3085,14 @@ export function buildExecution(
       spoken: withQuestion(
         (own && isVoice
           ? own
-          : [ack, spokenProject, spokenNote, spokenKept, spokenHome]
+          : [
+              ack,
+              spokenProject,
+              spokenNote,
+              spokenKept,
+              spokenHome,
+              isVoice ? extraLines.map((line) => `${line}.`).join(' ') : null,
+            ]
               .filter(Boolean)
               .join(' ')) || null,
         plan.questions[0]?.spoken ?? null,

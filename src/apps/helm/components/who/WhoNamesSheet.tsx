@@ -12,7 +12,9 @@ import { HELM_COPY, MAX_ALIASES } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   setWhoAliases,
+  setWhoSoundsLike,
   type AliasChange,
+  type SoundsLikeChange,
 } from '@apps/helm/store/actions/whoActions';
 import type { OpenWho } from '@apps/helm/types';
 
@@ -63,6 +65,47 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
       setIsWriting(false);
     }
     return false;
+  };
+
+  const saveHeard = async (change: SoundsLikeChange) => {
+    if (!user) return false;
+    setIsWriting(true);
+    try {
+      const result = await setWhoSoundsLike(
+        user.uid,
+        await getHelmEncryption(user.uid),
+        who.id,
+        change,
+      );
+      if (result === 'saved') return true;
+      setNote(
+        result === 'offline'
+          ? HELM_COPY.editNeedsConnection
+          : result === 'missing'
+            ? HELM_COPY.editGone
+            : HELM_COPY.editUnreadable,
+      );
+    } catch (error) {
+      console.error('Helm heard forms were not saved', error);
+      setNote(HELM_COPY.editFailed);
+    } finally {
+      setIsWriting(false);
+    }
+    return false;
+  };
+
+  const removeHeard = async (heard: string) => {
+    if (isWriting) return;
+    setNote(null);
+    if (!(await saveHeard({ remove: heard }))) return;
+    addToast({
+      title: HELM_COPY.soundsLikeRemovedToast(heard),
+      type: 'info',
+      action: {
+        label: HELM_COPY.undo,
+        onClick: () => void saveHeard({ add: heard }),
+      },
+    });
   };
 
   const takenBy = (alias: string) =>
@@ -187,6 +230,38 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
             {note ?? HELM_COPY.aliasHelp}
           </p>
         </form>
+        {who.soundsLike && who.soundsLike.length > 0 && (
+          <div className='space-y-2'>
+            <span className='block text-sm font-medium'>
+              {HELM_COPY.soundsLikeTitle}
+            </span>
+            <ul className='helm-card divide-border divide-y overflow-hidden'>
+              {who.soundsLike.map((heard) => (
+                <li
+                  key={heard}
+                  className='flex min-h-12 items-center justify-between gap-2 py-1 pr-1 pl-4'
+                >
+                  <span className='min-w-0 text-[15px] break-words'>
+                    {heard}
+                  </span>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='sm'
+                    aria-label={HELM_COPY.soundsLikeRemove(heard)}
+                    className="relative size-8 shrink-0 p-0 after:absolute after:-inset-1 after:content-['']"
+                    onClick={() => void removeHeard(heard)}
+                  >
+                    <X className='size-4' aria-hidden='true' />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <p className='text-muted-foreground text-[13px] text-pretty'>
+              {HELM_COPY.soundsLikeHelp}
+            </p>
+          </div>
+        )}
         <div className='flex justify-end'>
           <Button type='button' onClick={onClose}>
             {HELM_COPY.aliasDone}
