@@ -140,8 +140,8 @@ import {
 import {
   ALREADY_ANSWERED_LINE,
   ASK_DEFERRED_LINE,
-  NOTHING_CHANGED_LINE,
-  buildAnswerKeptLine,
+  answerQuietLine,
+  ownLineStands,
   buildPhotosNotOpenedLine,
   buildFileNotReadLine,
 } from './nomos/summaries.js';
@@ -1445,6 +1445,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       setCurrentPlace: null,
       asks: [],
       answerTurn,
+      replyLine: null,
       mentions: [],
       places: [],
       assistantName: null,
@@ -2039,6 +2040,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     logger.info('helm.media.dropped', { code }),
   );
   reply.askDropped.forEach((code) => logger.info('helm.ask.dropped', { code }));
+  const rawLine = (loop.terminalInput as { replyLine?: unknown } | null)
+    ?.replyLine;
+  logger.info('helm.reply.line', {
+    written: typeof rawLine === 'string',
+    kept: reply.replyLine !== null,
+  });
   reply.noteDropped.forEach((code) =>
     logger.info('helm.sort.noteDropped', { code }),
   );
@@ -2089,6 +2096,17 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
     asks: mode === 'full' ? reply.asks : [],
     answerTurn,
+    replyLine: ownLineStands(
+      reply.mediaDropped,
+      reply.askDropped,
+      reply.noteDropped,
+      reply.topicDropped,
+      reply.procedureDropped,
+      reply.runDropped,
+      commands.length < reply.commands.length,
+    )
+      ? reply.replyLine
+      : null,
     mentions: reply.mentions,
     places: reply.places,
     assistantName,
@@ -2201,6 +2219,7 @@ async function writeResult(
     setCurrentPlace: SetCurrentPlaceCommand | null;
     asks: AskCommand[];
     answerTurn: AnswerTurn | null;
+    replyLine: string | null;
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
@@ -2238,6 +2257,7 @@ async function writeResult(
     setCurrentPlace: requestedHome,
     asks,
     answerTurn,
+    replyLine,
     mentions,
     places,
     assistantName,
@@ -3036,6 +3056,19 @@ async function writeResult(
           { ...plan, questions },
           {
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
+            said: ownLineStands(
+              plan.notKept,
+              plan.questions,
+              questions,
+              plan.lines,
+              noted.refused,
+              liveRefused,
+              askPlan.isDeferred,
+              hasMore,
+              Boolean(homeRefusal),
+            )
+              ? replyLine
+              : null,
             questionRef: answerTurn?.ref ?? null,
             commands,
             captureId: captureRef.id,
@@ -3097,11 +3130,13 @@ async function writeResult(
               ? null
               : plan.notKept.length > 0
                 ? plan.notKept.join('. ')
-                : answerTurn && commands.length > 0
-                  ? NOTHING_CHANGED_LINE
-                  : answerTurn && turn?.kind === 'apply'
-                    ? buildAnswerKeptLine(answerTurn.words)
-                    : null));
+                : answerTurn
+                  ? answerQuietLine({
+                      commandCount: commands.length,
+                      isApply: turn?.kind === 'apply',
+                      replyLine,
+                    })
+                  : null));
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,

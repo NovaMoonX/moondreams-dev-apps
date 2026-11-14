@@ -313,6 +313,21 @@ test('a saved note reads in the turn summary and its spoken line', () => {
   assert.ok(built);
 });
 
+test("the assistant's own line never stands in for a line only code knows to say", () => {
+  const { result } = run([note({ topicAliases: ['tp2'] })]);
+  const built = buildExecution(result, {
+    captureId: 'c1',
+    now: 5000,
+    seal,
+    commands: [],
+    inputMode: 'voice',
+    said: 'Saved it.',
+  });
+  const opened = openForHelm(KEY, built.sealed as SealedPayload);
+  assert.equal(opened.said, null);
+  assert.notEqual(opened.spoken, 'Saved it.');
+});
+
 const heldQuestion = () => ({
   kind: 'whichTopic',
   options: [
@@ -413,6 +428,7 @@ const asOpen = (
   }[],
 ): OpenExecution => ({
   id: 'exec-1',
+  said: null,
   captureId: 'c1',
   actor: 'nomos',
   category: 'remember',

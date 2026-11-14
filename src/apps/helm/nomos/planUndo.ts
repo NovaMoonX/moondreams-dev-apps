@@ -1310,6 +1310,7 @@ export function planUndo(input: {
       summary: isPhotosOnly
         ? HELM_COPY.tookBackPhotos(photoCount)
         : withRunsSummary,
+      said: null,
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,

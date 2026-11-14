@@ -166,6 +166,7 @@ export const FACT_KINDS = [
 export type NoteFactKind = (typeof FACT_KINDS)[number];
 export const VALUE_CAP = 80;
 export const ANSWER_SPOKEN_CAP = 200;
+export const REPLY_LINE_CAP = 80;
 export const MAX_ASKS = 5;
 export const MAX_OPEN_ASKED = 20;
 export const OPTION_CAP = 80;
@@ -537,7 +538,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
   inputSchema: {
     type: 'object',
     additionalProperties: false,
-    required: ['commands'],
+    required: ['commands', 'replyLine'],
     properties: {
       media: {
         type: 'array',
@@ -1056,6 +1057,10 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
           },
         },
       },
+      replyLine: nullable(
+        'string',
+        `What you say back about this turn, at most ${REPLY_LINE_CAP} characters, the way a person would reply ("Added it for Friday.", "Dropped it.", "Both are on the packing list now."): what became of what was said, in your voice and the person's style, past tense, with no "I", "me" or "my", never "Got it", never a template and never the person's words repeated back. Only what this reply really does. Always a line when commands holds anything other than answer or ask, and when the capture is the person's reply to your question (<answered_question>); null only when your reply is only an answer command or only asks.`,
+      ),
       mentions: {
         type: 'array',
         description: `Every person, pet or organization the capture names, at most ${MAX_MENTIONS}, each once. A @handle is a person. Never the assistant itself, never "me" or "I".`,

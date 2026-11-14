@@ -13,8 +13,16 @@ import {
   settleCapture,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtureProvider.ts';
-import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
-import { buildSpokenQuestion } from '../../functions/src/apps/helm/nomos/summaries.ts';
+import {
+  normalizeNomosReply,
+  readReplyLine,
+} from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import {
+  answerQuietLine,
+  buildSpokenQuestion,
+  isPlainAcknowledgement,
+  ownLineStands,
+} from '../../functions/src/apps/helm/nomos/summaries.ts';
 
 const READING: CaptureReading = {
   people: [],
@@ -58,6 +66,68 @@ const only = (commands: unknown[]) => {
 
 const tests: [string, () => void][] = [];
 const test = (name: string, run: () => void) => tests.push([name, run]);
+
+test("an answered question's reply is the model's own line, never first person or a template", () => {
+  assert.equal(readReplyLine('  Dropped   it. '), 'Dropped it.');
+  assert.equal(
+    readReplyLine('Added both to the list.'),
+    'Added both to the list.',
+  );
+  assert.equal(readReplyLine("I've dropped it."), null);
+  assert.equal(readReplyLine('Dropped it for me.'), null);
+  assert.equal(readReplyLine('Got it: Picked Drop it.'), null);
+  assert.equal(readReplyLine(''), null);
+  assert.equal(readReplyLine(null), null);
+  assert.equal(readReplyLine('word '.repeat(40)), null);
+  assert.equal(readReplyLine('Sent it to https://example.com.'), null);
+  assert.equal(readReplyLine('Added **both**.'), null);
+  assert.equal(readReplyLine('Paid $500 for it.', 'pay the vet'), null);
+  assert.equal(
+    readReplyLine('Added it for the 3 nights.', 'we stay 3 nights'),
+    'Added it for the 3 nights.',
+  );
+  assert.equal(
+    readReplyLine('Added 2 things to the list.'),
+    'Added 2 things to the list.',
+  );
+  assert.equal(readReplyLine('Added it for Nov 21.', 'on saturday'), null);
+  assert.equal(
+    readReplyLine('Moved it to 3:30.', 'move it to 3:30'),
+    'Moved it to 3:30.',
+  );
+  assert.equal(readReplyLine('Added 2.', 'add both'), 'Added 2.');
+  assert.equal(readReplyLine('Paid $20.', 'paid 20 for it'), 'Paid $20.');
+  assert.equal(readReplyLine('Paid $20.', 'paid 120 for it'), null);
+  assert.equal(isPlainAcknowledgement('Dropped it.'), true);
+  assert.equal(isPlainAcknowledgement('Left it as it is.'), true);
+  assert.equal(isPlainAcknowledgement('Added both to the list.'), false);
+  assert.equal(
+    isPlainAcknowledgement('Snow chains are on the list now.'),
+    false,
+  );
+  assert.equal(isPlainAcknowledgement('Dropped it and added the rest.'), false);
+});
+
+test("an answer that filed nothing never claims work, and the assistant's line stands only when nothing was left over", () => {
+  const quiet = (commandCount: number, replyLine: string | null) =>
+    answerQuietLine({ commandCount, isApply: true, replyLine });
+  assert.equal(quiet(0, 'Dropped it.'), 'Dropped it.');
+  assert.equal(quiet(0, 'Snow chains are on the list now.'), 'Noted.');
+  assert.equal(quiet(0, 'Tasks made for each.'), 'Noted.');
+  assert.equal(quiet(0, null), 'Noted.');
+  assert.equal(quiet(2, 'Dropped it.'), 'Nothing changed.');
+  assert.equal(
+    answerQuietLine({
+      commandCount: 0,
+      isApply: false,
+      replyLine: 'Dropped it.',
+    }),
+    null,
+  );
+  assert.equal(ownLineStands([], [], false, false), true);
+  assert.equal(ownLineStands([], ['a dropped photo'], false), false);
+  assert.equal(ownLineStands([], [], true), false);
+});
 
 test('a seventh pickOne option is cut', () => {
   const question = only([

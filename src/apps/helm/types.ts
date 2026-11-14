@@ -991,6 +991,8 @@ export interface ResultNoteLine {
 
 export interface ExecutionSealed {
   summary: string;
+  /** The assistant's own line about the turn, shown in place of the summary on home; null when it wrote none or something asked for wasn't done. */
+  said: string | null;
   commands: unknown[];
   effects: ExecutionEffect[];
   undoReport: string | null;
@@ -1006,6 +1008,7 @@ export interface ExecutionSealed {
 export interface OpenExecution extends Omit<Execution, 'sealed'> {
   id: string;
   summary: string;
+  said: string | null;
   effects: ExecutionEffect[];
   undoReport: string | null;
   spoken: string | null;

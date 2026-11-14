@@ -340,6 +340,7 @@ const buildWriteExecution = (
     undoReport: null,
     spoken: null,
     goneIds: null,
+    said: null,
     lines: null,
   }),
 });
