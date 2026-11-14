@@ -30,6 +30,8 @@ import type {
 } from '../../../connections/liveRouter.js';
 import type { LiveQueryResult } from '../../../connections/registry.js';
 import { formatMoney } from '../../../utils/formatMoney.js';
+import type { McpReadScope } from '../../../mcp/shapes.js';
+import { filterSourcesForOutside } from './sourcesBrief.js';
 import {
   connectorLabel,
   getLocalDay,
@@ -92,6 +94,8 @@ export interface HelmToolScope {
   siteGrants?: SiteLiveGrant[];
   quotes?: QuoteBook;
   searched?: SearchedLog;
+  /** Set on an outside assistant's turn: its switches, which bound every stored record a tool returns. */
+  outsideReadScopes?: McpReadScope[] | null;
   live?: LiveReads;
   /** Offers `get_topic`; each topic it reads has its version written into `versions`. */
   topicRead?: {
@@ -377,6 +381,10 @@ export function buildHelmTools(scope: HelmToolScope) {
 
   const synced = scope.synced ?? createSyncedBook();
   const timeZone = toKnownZone(scope.timeZone ?? 'UTC');
+  const onlyAllowed = (copies: SyncedCopy[]) =>
+    scope.outsideReadScopes
+      ? filterSourcesForOutside(scope.outsideReadScopes, copies)
+      : copies;
   const toResult = (copy: SyncedCopy) => ({
     alias: synced.add(copy),
     ...toSyncedView(copy, timeZone),
@@ -406,7 +414,7 @@ export function buildHelmTools(scope: HelmToolScope) {
           limit: MAX_CALENDAR_EVENTS,
         },
       );
-      return { events: events.map(toResult) };
+      return { events: onlyAllowed(events).map(toResult) };
     },
   };
 
@@ -445,7 +453,7 @@ export function buildHelmTools(scope: HelmToolScope) {
               kind: kindName,
             });
       const anchorOf = (copy: SyncedCopy) => copy.startAt ?? copy.dueAt;
-      const found = copies
+      const found = onlyAllowed(copies)
         .filter((copy) => {
           const haystack = toWords(`${copy.title} ${copy.subtitle ?? ''}`);
           return words.every((word) =>

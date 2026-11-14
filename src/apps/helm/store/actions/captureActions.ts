@@ -152,6 +152,7 @@ export async function sendCapture(
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: turn.sessionId,
     turnIndex: turn.turnIndex,
     route: null,

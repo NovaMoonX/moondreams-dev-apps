@@ -165,6 +165,12 @@ async function openCapture(
     arrivedVia: data.arrivedVia === 'dropBox' ? 'dropBox' : 'direct',
     medium: data.medium === 'mcp' ? 'mcp' : 'web',
     via: typeof data.via === 'string' ? data.via : null,
+    outsideReadScopes: Array.isArray(data.outsideReadScopes)
+      ? data.outsideReadScopes.filter(
+          (scope): scope is 'mail' | 'drive' | 'apps' =>
+            scope === 'mail' || scope === 'drive' || scope === 'apps',
+        )
+      : null,
     sessionId: data.sessionId ?? entry.id,
     turnIndex: data.turnIndex ?? 0,
     route: data.route ?? null,

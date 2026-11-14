@@ -170,6 +170,11 @@ import {
   readSyncedTrips,
   toKnownZone,
 } from './syncedCopies.js';
+import { readScopesOf, type McpReadScope } from '../../mcp/shapes.js';
+import {
+  filterSourcesForOutside,
+  toHeldBackPrompt,
+} from './mcp/sourcesBrief.js';
 import { getDayIn } from './nomos/spoken.js';
 import { matchWho } from './nomos/matchEntities.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
@@ -312,6 +317,7 @@ export interface CaptureDoc {
   inputMode?: string;
   medium?: 'web' | 'mcp';
   via?: string | null;
+  outsideReadScopes?: unknown;
   attachmentIds?: string[];
   route?: Route | null;
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
@@ -1563,6 +1569,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       messages: JoinedMessage[];
       isSpoken: boolean;
       isOutside: boolean;
+      outsideReadScopes: McpReadScope[];
+      via: string;
     }
   > => {
     const lead = (await claimed.captureRef.get()).data() as
@@ -1603,6 +1611,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       joinedCount: listed.length,
       messages: [leadMessage, ...messages],
       isOutside: lead?.medium === 'mcp',
+      outsideReadScopes: readScopesOf(lead?.outsideReadScopes),
+      via: typeof lead?.via === 'string' ? lead.via : '',
       // A turn is spoken when any of its messages was, so a spoken message joined behind a typed one still hears its reply.
       isSpoken:
         lead?.inputMode === 'voice' ||
@@ -1617,6 +1627,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       messages: JoinedMessage[];
       isSpoken: boolean;
       isOutside: boolean;
+      outsideReadScopes: McpReadScope[];
+      via: string;
     },
     signal: AbortSignal,
     isRestart: boolean,
@@ -1713,9 +1725,19 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             return [];
           })
         : [];
-    const contextSynced = [
+    const allSynced = [
       ...synced,
       ...trips.filter((trip) => !synced.some((copy) => copy.id === trip.id)),
+    ];
+    const contextSynced = read.isOutside
+      ? filterSourcesForOutside(read.outsideReadScopes, allSynced)
+      : allSynced;
+    const heldBackNames = [
+      ...new Set(
+        allSynced
+          .filter((copy) => !contextSynced.includes(copy))
+          .map((copy) => connectorLabel(copy.connectorId)),
+      ),
     ];
     const contextProcedures: ContextProcedure[] = procedureRecords.map(
       (procedure) => ({
@@ -1855,6 +1877,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       capture.interruptedCaptureId !== ''
         ? INTERRUPTED_PROMPT
         : null,
+      read.isOutside
+        ? toHeldBackPrompt(read.via, read.outsideReadScopes, heldBackNames)
+        : null,
       toPersonaPrompt(assistantName, profile.data()?.assistantTone),
     ]
       .filter((part) => part !== null)
@@ -1865,6 +1890,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         key,
         aliases: context.aliases,
         synced: context.synced,
+        outsideReadScopes: read.isOutside ? read.outsideReadScopes : null,
         timeZone,
         firestore,
         liveGrants,
