@@ -20,7 +20,6 @@ interface ServiceInfo {
   isBound: boolean;
   setup: string;
   note?: string;
-  // Shown when the real service means something heavier than a sandbox.
   caution?: string;
   // The production value must never be copied to this machine.
   isNotPulled?: boolean;
@@ -202,7 +201,6 @@ const tidyLines = (lines: string[]) =>
       [],
     );
 
-/** Replaces the keys' lines in an env file with a block set off by a blank line and led by a comment; an empty block just removes them. */
 const rewriteEnv = (file: string, keys: string[], block: string[]) => {
   const rest = tidyLines(keys.reduce(dropKey, readLines(file)));
   const next =
@@ -351,7 +349,6 @@ const askYesNo = async (question: string, isDefaultYes: boolean) => {
   return answer === '' ? isDefaultYes : answer.startsWith('y');
 };
 
-/** A gcloud call that works: signed in and the token still valid, else a fresh sign-in. */
 const ensureGcloudLogin = () => {
   const works = () => {
     try {
@@ -422,7 +419,6 @@ const storeKeys = (service: FixtureService, values: string[]) => {
   return true;
 };
 
-/** Pulls the key from Secret Manager when the service allows it, else asks for it; false when no key could be set. */
 const getKeys = async (service: FixtureService) => {
   const { keys, isBound, isNotPulled, setup } = SERVICES[service];
   if (isBound && !isNotPulled && ensureGcloudLogin()) {
@@ -469,7 +465,6 @@ const chooseOne = async (service: FixtureService) => {
   return false;
 };
 
-/** Asks, for each outside service the app uses, whether to use the real one; exits 10 when a change needs the emulators restarted. */
 const chooseServices = async (appId: string) => {
   const services = FIXTURE_SERVICES.filter(
     (service) =>

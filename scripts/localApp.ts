@@ -142,7 +142,6 @@ const showServices = () => {
   }
 };
 
-/** True when a choice changed which services the emulators should use (they read that at startup). */
 const askAboutServices = () => {
   if (!process.stdin.isTTY) return false;
   try {
@@ -247,13 +246,7 @@ const main = async () => {
   console.log(
     `\n✅ ${app.name} is ready: ${url}\n   Pick a fixture account from the dev switcher.`,
   );
-  if (isOpening) {
-    try {
-      execFileSync('open', [url]);
-    } catch {
-      // No browser to open; the link above is enough.
-    }
-  }
+  if (isOpening && process.platform === 'darwin') execFileSync('open', [url]);
   showServices();
 
   if (started.length === 0) return;
