@@ -277,10 +277,12 @@ export const streamSpeech = onRequest(
     res.on('close', () => {
       if (!isEnded.value) aborter.abort();
     });
-    const signal = AbortSignal.any([
-      aborter.signal,
-      AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-    ]);
+    // The timeout guards only the wait for the first audio; a long line may stream for longer.
+    const firstAudioTimer = setTimeout(
+      () => aborter.abort(new Error('No audio in time')),
+      PROVIDER_TIMEOUT_MS,
+    );
+    const signal = aborter.signal;
 
     const speech = await provider
       .speak({
@@ -294,6 +296,8 @@ export const streamSpeech = onRequest(
         signal,
       })
       .catch(async (error: unknown) => {
+        // A stale channel after a long idle answers UNAVAILABLE; the next request builds a fresh client.
+        kept.googleTts = null;
         await release();
         const status = toStatus(error);
         logger.error('voice.speechFailed', {
@@ -305,11 +309,16 @@ export const streamSpeech = onRequest(
         }
         return null;
       });
-    if (speech === null) return fail(502, 'unavailable');
+    if (speech === null) {
+      clearTimeout(firstAudioTimer);
+      return fail(502, 'unavailable');
+    }
 
     const reader = speech.stream.getReader();
     const first = await reader.read().catch(() => null);
+    clearTimeout(firstAudioTimer);
     if (first === null || first.done || first.value.length === 0) {
+      kept.googleTts = null;
       await release();
       logger.error('voice.speechFailed', {
         event: 'voice.speechFailed',
@@ -341,10 +350,21 @@ export const streamSpeech = onRequest(
       await write(chunk.value);
       return pump();
     };
-    await write(first.value);
-    await pump().catch(() =>
-      logger.error('voice.speechCut', { event: 'voice.speechCut' }),
-    );
+    try {
+      await write(first.value);
+      await pump();
+    } catch (error) {
+      if (aborter.signal.aborted) {
+        logger.info('voice.speechLeft', { event: 'voice.speechLeft' });
+      } else {
+        logger.error('voice.speechCut', {
+          event: 'voice.speechCut',
+          status: toStatus(error),
+        });
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
     isEnded.value = true;
     res.end();
   },

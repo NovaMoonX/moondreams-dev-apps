@@ -12,7 +12,6 @@ const STATUS_BY_CODE: Record<number, number> = {
   14: 503,
   16: 401,
 };
-const CANCELLED = 1;
 
 interface SynthesisRequest {
   streamingConfig?: {
@@ -101,12 +100,9 @@ export function createGoogleTts({
             state.carry = joined.slice(whole);
             if (whole > 0) controller.enqueue(joined.slice(0, whole));
           });
+          // Our own cancel has already finished the stream, so any error here, CANCELLED included, is the server's.
           call.on('error', (error) =>
-            finish(() =>
-              error.code === CANCELLED
-                ? controller.close()
-                : controller.error(toFailure(error)),
-            ),
+            finish(() => controller.error(toFailure(error))),
           );
           call.on('end', () => finish(() => controller.close()));
           call.write({
@@ -123,6 +119,7 @@ export function createGoogleTts({
           call.end();
         },
         cancel() {
+          if (state.isOver) return;
           state.isOver = true;
           call.cancel();
         },
