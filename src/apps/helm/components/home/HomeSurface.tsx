@@ -1,4 +1,10 @@
-import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -15,7 +21,7 @@ import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
 import NeedsConnectionState from '@apps/helm/components/states/NeedsConnectionState';
-import { DAY_MS, HELM_COPY } from '@apps/helm/constants';
+import { DAY_MS, HELM_COPY, HOME_COMPOSER_ID } from '@apps/helm/constants';
 import OutboxSummary from '@apps/helm/components/inbox/OutboxRow';
 import {
   useCanUseDropBox,
@@ -281,8 +287,10 @@ function HomeSurface({
       {/* While the voice is in use the dock's words take this place; the field keeps its draft and its room. */}
       <div
         className={join(
-          'pointer-events-none fixed inset-x-0 bottom-[calc(var(--helm-dock-top,env(safe-area-inset-bottom,0px))+8px)] z-30 px-4 transition-[bottom] duration-200 ease-out motion-reduce:transition-none',
-          voice.state !== 'idle' && !voice.isDictating && 'invisible',
+          'pointer-events-none fixed inset-x-0 bottom-[calc(var(--helm-dock-top,env(safe-area-inset-bottom,0px))+8px)] z-30 px-4 transition-[bottom,translate,opacity,visibility] duration-200 ease-out motion-reduce:transition-none',
+          voice.state !== 'idle' &&
+            voice.dictationOwner !== HOME_COMPOSER_ID &&
+            'invisible translate-y-8 opacity-0',
         )}
       >
         <div
@@ -296,6 +304,7 @@ function HomeSurface({
           <Composer
             key={keyStatus === 'ready' ? 'ready' : 'waiting'}
             fieldRef={composerRef}
+            dictationId={HOME_COMPOSER_ID}
             maxLines={10}
             screen={null}
             onFocusChange={onComposerFocusChange}

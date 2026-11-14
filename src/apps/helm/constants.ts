@@ -485,6 +485,9 @@ const MEDIA_WORDS: Record<
 
 const mediaWordOf = (kind: MediaKind) => MEDIA_WORDS[kind].word;
 
+/** The home composer's name for the voice, so a field elsewhere being spoken into can clear home's dock and box away. */
+export const HOME_COMPOSER_ID = 'home-composer';
+
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
   talk: 'Talk',

@@ -105,6 +105,7 @@ interface ComposerProps {
   /** Lets the dock's Type and Talk put the cursor here. */
   fieldRef: RefObject<HTMLTextAreaElement | null>;
   maxLines?: number;
+  dictationId?: string;
   onFocusChange: (isFocused: boolean) => void;
   /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft and the words typed while waiting. */
   isReady: boolean;
@@ -128,6 +129,7 @@ interface ComposerProps {
 function Composer({
   fieldRef,
   maxLines = 6,
+  dictationId,
   onFocusChange,
   isReady,
   isOutbox = false,
@@ -468,7 +470,8 @@ function Composer({
 
   const canType = isReady || isOutbox;
   useGrowingTextarea(fieldRef, text, maxLines);
-  const dictationOwner = useId();
+  const ownId = useId();
+  const dictationOwner = dictationId ?? ownId;
   const isDictating = useIsDictatingHere(dictationOwner);
   const isOpen = (isFocused || isDictating) && !isRecording;
   const showsActions = waitingPlaceholder === null;
