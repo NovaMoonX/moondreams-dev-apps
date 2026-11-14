@@ -72,6 +72,20 @@ const compareBirths = (a: KinBirthday | null, b: KinBirthday | null) => {
   return a.day < b.day ? -1 : 1;
 };
 
+/** Whether a relative is older or younger than the self by their birth years alone, with the whole years between them; null when either year is missing or the two were born the same year. */
+export const deriveKinGap = (
+  relative: KinBirthday | null,
+  self: KinBirthday | null,
+): { side: 'older' | 'younger'; years: number } | null => {
+  if (!relative || !self || relative.year === null || self.year === null) {
+    return null;
+  }
+  const years = Math.abs(relative.year - self.year);
+  return years === 0
+    ? null
+    : { side: relative.year < self.year ? 'older' : 'younger', years };
+};
+
 const pickResult = (ids: string[]): KinResolution =>
   ids.length === 1 ? { kind: 'one', id: ids[0] } : { kind: 'many', ids };
 
@@ -163,5 +177,9 @@ export function resolveKin(
       shape: unknown.length === 1 ? 'one' : 'several',
     };
   }
-  return { kind: 'many', ids: candidates.map((who) => who.id) };
+  return {
+    kind: 'askOrder',
+    ids: candidates.map((who) => who.id),
+    shape: candidates.length === 1 ? 'one' : 'several',
+  };
 }

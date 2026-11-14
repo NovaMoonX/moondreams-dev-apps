@@ -10,6 +10,7 @@ import {
 import { db } from '@lib/firebase/config';
 import type { SealedReader } from '@lib/security';
 
+import { toComparable } from '@/utils/optionMatchUtils';
 import { WHO_LIMIT } from '@apps/helm/constants';
 import { normalizeKin } from '@apps/helm/engine/kin';
 import type { OpenWho, Who, WhoSealed } from '@apps/helm/types';
@@ -22,6 +23,13 @@ const toTexts = (value: unknown) =>
   Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === 'string')
     : [];
+
+const toUniqueTexts = (value: unknown) =>
+  toTexts(value).filter(
+    (entry, index, all) =>
+      all.findIndex((other) => toComparable(other) === toComparable(entry)) ===
+      index,
+  );
 
 const toText = (value: unknown) => (typeof value === 'string' ? value : null);
 
@@ -70,7 +78,7 @@ async function openWho(
     return {
       ...base,
       name: toText(payload.name) ?? '',
-      aliases: toTexts(payload.aliases),
+      aliases: toUniqueTexts(payload.aliases),
       kin: normalizeKin(payload.kin),
       soundsLike: payload.soundsLike ? toTexts(payload.soundsLike) : null,
       refusedAliases: payload.refusedAliases

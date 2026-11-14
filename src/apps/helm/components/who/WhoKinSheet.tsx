@@ -8,11 +8,22 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
-import { canKinOrder } from '@apps/helm/engine/kin';
+import { useAppSelector } from '@/store';
+import {
+  canKinOrder,
+  deriveKinGap,
+  type KinBirthday,
+} from '@apps/helm/engine/kin';
 import { HELM_COPY, KIN_KINDS } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { setWhoKin } from '@apps/helm/store/actions/whoActions';
-import type { KinKind, KinOrder, OpenWho } from '@apps/helm/types';
+import type {
+  KeyDateIndexEntry,
+  KinKind,
+  KinOrder,
+  OpenWho,
+  WhoKin,
+} from '@apps/helm/types';
 import { KIN_ORDER_LABELS } from '@apps/helm/utils/kinText';
 
 interface WhoKinSheetProps {
@@ -40,6 +51,13 @@ const ORDER_OPTIONS = [
   })),
 ];
 
+const birthdayOf = (
+  entries: KeyDateIndexEntry[] | undefined,
+): KinBirthday | null => {
+  const entry = entries?.find((item) => item[1] === 'birthday');
+  return entry ? { month: entry[2], day: entry[3], year: entry[4] } : null;
+};
+
 interface FormProps extends WhoKinSheetProps {
   requestClose: () => void;
   onDirtyChange: (isDirty: boolean) => void;
@@ -50,27 +68,26 @@ function WhoKinForm({ who, onClose, requestClose, onDirtyChange }: FormProps) {
   const { addToast } = useToast();
   const [kind, setKind] = useState<string>(who.kin?.kind ?? NOT_SET);
   const [order, setOrder] = useState<string>(who.kin?.order ?? NOT_SAID);
+  const [opened] = useState(who.kin);
   const [isSaving, setIsSaving] = useState(false);
+  const selfWhoId = useAppSelector((state) => state.helm.profile?.selfWhoId);
+  const byWho = useAppSelector((state) => state.helm.keyDateIndex.byWho);
+  const whoDates = byWho[who.id];
+  const selfDates = selfWhoId ? byWho[selfWhoId] : undefined;
   const [note, setNote] = useState<string | null>(null);
   const canOrder = kind !== NOT_SET && canKinOrder(kind as KinKind);
 
-  const save = async () => {
+  const write = async (kin: WhoKin | null) => {
     if (!user || isSaving) return;
     setIsSaving(true);
     setNote(null);
-    const kin =
-      kind === NOT_SET
-        ? null
-        : {
-            kind: kind as KinKind,
-            order: canOrder && order !== NOT_SAID ? (order as KinOrder) : null,
-          };
     try {
       const result = await setWhoKin(
         user.uid,
         await getHelmEncryption(user.uid),
         who.id,
         kin,
+        opened,
       );
       if (result === 'saved') {
         addToast({
@@ -78,6 +95,10 @@ function WhoKinForm({ who, onClose, requestClose, onDirtyChange }: FormProps) {
             ? HELM_COPY.kinSavedToast(who.name)
             : HELM_COPY.kinClearedToast(who.name),
           type: 'success',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () => void undo(kin),
+          },
         });
         onClose();
         return;
@@ -87,7 +108,9 @@ function WhoKinForm({ who, onClose, requestClose, onDirtyChange }: FormProps) {
           ? HELM_COPY.editNeedsConnection
           : result === 'missing'
             ? HELM_COPY.editGone
-            : HELM_COPY.editUnreadable,
+            : result === 'changed'
+              ? HELM_COPY.kinChanged
+              : HELM_COPY.editUnreadable,
       );
     } catch (error) {
       console.error('Helm family word was not saved', error);
@@ -95,6 +118,38 @@ function WhoKinForm({ who, onClose, requestClose, onDirtyChange }: FormProps) {
     }
     setIsSaving(false);
   };
+
+  const undo = async (saved: WhoKin | null) => {
+    if (!user) return;
+    const result = await setWhoKin(
+      user.uid,
+      await getHelmEncryption(user.uid),
+      who.id,
+      opened,
+      saved,
+    ).catch((error: unknown) => {
+      console.error('Helm family word was not put back', error);
+      return 'unreadable' as const;
+    });
+    if (result === 'saved') return;
+    addToast({
+      title:
+        result === 'changed' ? HELM_COPY.kinUndoStale : HELM_COPY.editFailed,
+      type: 'error',
+    });
+  };
+
+  const save = () =>
+    write(
+      kind === NOT_SET
+        ? null
+        : {
+            kind: kind as KinKind,
+            order: canOrder && order !== NOT_SAID ? (order as KinOrder) : null,
+          },
+    );
+
+  const years = deriveKinGap(birthdayOf(whoDates), birthdayOf(selfDates));
 
   return (
     <div className='space-y-4'>
@@ -127,11 +182,28 @@ function WhoKinForm({ who, onClose, requestClose, onDirtyChange }: FormProps) {
           />
         </div>
       )}
+      {canOrder && years && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.kinDerived(who.name, years.years, years.side)}
+        </p>
+      )}
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.kinHelp}
       </p>
       <ModalFooterActions
         note={note}
+        leftActions={
+          who.kin && (
+            <Button
+              type='button'
+              variant='tertiary'
+              onClick={() => void write(null)}
+              disabled={isSaving}
+            >
+              {HELM_COPY.kinRemove}
+            </Button>
+          )
+        }
         cancelAction={
           <Button
             type='button'

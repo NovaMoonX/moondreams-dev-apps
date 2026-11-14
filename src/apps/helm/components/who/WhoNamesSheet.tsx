@@ -6,10 +6,14 @@ import { X } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
 import { toComparable } from '@/utils/optionMatchUtils';
 import { HELM_COPY, MAX_ALIASES } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
-import { setWhoAliases } from '@apps/helm/store/actions/whoActions';
+import {
+  setWhoAliases,
+  type AliasChange,
+} from '@apps/helm/store/actions/whoActions';
 import type { OpenWho } from '@apps/helm/types';
 
 interface WhoNamesSheetProps {
@@ -25,8 +29,12 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
   const [text, setText] = useState('');
   const [note, setNote] = useState<string | null>(null);
   const [isWriting, setIsWriting] = useState(false);
+  const people = useAppSelector((state) => state.helm.who.items);
+  const others = people.filter(
+    (entry) => entry.id !== who.id && !entry.isUnreadable,
+  );
 
-  const save = async (aliases: string[]) => {
+  const save = async (change: AliasChange) => {
     if (!user) return false;
     setIsWriting(true);
     try {
@@ -34,7 +42,7 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
         user.uid,
         await getHelmEncryption(user.uid),
         who.id,
-        aliases,
+        change,
       );
       if (result === 'saved') return true;
       setNote(
@@ -42,7 +50,11 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
           ? HELM_COPY.editNeedsConnection
           : result === 'missing'
             ? HELM_COPY.editGone
-            : HELM_COPY.editUnreadable,
+            : result === 'full'
+              ? HELM_COPY.aliasFull(MAX_ALIASES)
+              : result === 'duplicate'
+                ? HELM_COPY.aliasDuplicate
+                : HELM_COPY.editUnreadable,
       );
     } catch (error) {
       console.error('Helm nicknames were not saved', error);
@@ -52,6 +64,13 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
     }
     return false;
   };
+
+  const takenBy = (alias: string) =>
+    others.find((other) =>
+      [other.name, ...other.aliases].some(
+        (word) => toComparable(word) === toComparable(alias),
+      ),
+    ) ?? null;
 
   const add = async () => {
     const alias = text.trim().replace(/\s+/g, ' ');
@@ -68,20 +87,28 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
       setNote(HELM_COPY.aliasFull(MAX_ALIASES));
       return;
     }
-    if (await save([...who.aliases, alias])) setText('');
+    const other = takenBy(alias);
+    if (other) {
+      setNote(
+        toComparable(other.name) === toComparable(alias)
+          ? HELM_COPY.aliasIsNameOf(alias)
+          : HELM_COPY.aliasIsAliasOf(alias, other.name),
+      );
+      return;
+    }
+    if (await save({ add: alias })) setText('');
   };
 
   const remove = async (alias: string) => {
     if (isWriting) return;
     setNote(null);
-    const before = who.aliases;
-    if (!(await save(before.filter((entry) => entry !== alias)))) return;
+    if (!(await save({ remove: alias }))) return;
     addToast({
       title: HELM_COPY.aliasRemovedToast(alias),
       type: 'info',
       action: {
         label: HELM_COPY.undo,
-        onClick: () => void save(before),
+        onClick: () => void save({ add: alias }),
       },
     });
   };

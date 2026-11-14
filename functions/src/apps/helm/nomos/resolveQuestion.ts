@@ -16,6 +16,7 @@ import {
   type QuestionStateEntry,
   type TopicFiling,
 } from './executeCommands.js';
+import { normalizeKin } from './kin.js';
 import { KIN_KINDS, type KinOrder } from './kinKinds.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import {
@@ -111,6 +112,8 @@ export interface ResolveInput {
   } | null;
   /** The corrected statement, with the answer "none" to a "which is true now?" question. */
   text: string | null;
+  /** The name typed for a new person, with the answer "new" to a family question that has none to pick. */
+  newName?: string | null;
   /** The who or place the option names, or null when it is gone; its tier and last mention are read. */
   chosen: {
     tier: WhoTierValue;
@@ -193,14 +196,20 @@ const isOption = (value: unknown): value is PickOption =>
 const isRecordOption = (optionId: string) =>
   optionId !== 'new' && optionId !== 'none';
 
-const hasNewDetails = (held: Record<string, unknown>, isPlace: boolean) =>
+const hasNewDetails = (
+  held: Record<string, unknown>,
+  isPlace: boolean,
+  newName: string | null,
+) =>
   isPlace
     ? isRecord(held.place) &&
       typeof held.place.name === 'string' &&
       held.place.name.trim() !== ''
     : isRecord(held.mention) &&
-      typeof held.mention.name === 'string' &&
-      held.mention.name.trim() !== '';
+      (held.mention.kin
+        ? (newName ?? '').trim() !== ''
+        : typeof held.mention.name === 'string' &&
+          held.mention.name.trim() !== '');
 
 const union = (left: string[], right: string[]) => [
   ...new Set([...left, ...right]),
@@ -1006,6 +1015,25 @@ function planAliasChange(
       };
 }
 
+/** Why a Yes saved no nickname, said in the turn's result line; null when it saved one or was not a Yes. */
+function readAliasRefusal(
+  optionId: string,
+  whoId: string,
+  alias: string,
+  opened: Record<string, unknown>,
+): string | null {
+  if (alias === '' || optionId !== whoId) return null;
+  const name = String(opened.name ?? '');
+  const aliases = toStrings(opened.aliases);
+  if (isSameWord(name, alias)) return `${alias} is already ${name}'s name.`;
+  if (aliases.some((word) => isSameWord(word, alias))) {
+    return `${name} is already called ${alias}.`;
+  }
+  return aliases.length >= ALIASES_CAP
+    ? `${name} already has ${ALIASES_CAP} other names, so ${alias} wasn't saved.`
+    : null;
+}
+
 /** What answering an order question writes: each person asked about keeps the order the answer gave them, and the ones it picked get the held tasks. */
 function planSettleKin(
   input: ResolveInput,
@@ -1211,7 +1239,15 @@ export function planResolve(
   if (held.kind === 'settleKin') {
     return planSettleKin(input, question, held, oldQuestions);
   }
-  if (!options.some((option) => option.id === optionId)) {
+  const isKinSearch =
+    held.kind === 'linkWho' &&
+    isRecord(held.mention) &&
+    !!held.mention.kin &&
+    question.shape === 'pickRecord';
+  if (
+    !options.some((option) => option.id === optionId) &&
+    !(isKinSearch && isRecordOption(optionId))
+  ) {
     return { refused: 'unknown' };
   }
   if (held.kind === 'groupTopics') {
@@ -1224,7 +1260,10 @@ export function planResolve(
     return planSettleKeyDate(input, question, held, oldQuestions, options);
   }
   const isPlace = held.kind === 'linkPlace';
-  if (optionId === 'new' && !hasNewDetails(held, isPlace)) {
+  if (
+    optionId === 'new' &&
+    !hasNewDetails(held, isPlace, input.newName ?? null)
+  ) {
     return { refused: 'unknown' };
   }
   if (isRecordOption(optionId) && !input.chosen) return { refused: 'gone' };
@@ -1250,7 +1289,7 @@ export function planResolve(
   );
   const name = isPlace
     ? toNameCase(placeName)
-    : toNameCase(mention?.name ?? '');
+    : toNameCase(isKinSearch ? (input.newName ?? '') : (mention?.name ?? ''));
 
   const effects = toLink.map(({ id, task }) => ({
     ref: { op: 'update', collection: 'tasks', docId: id } as EffectRef,
@@ -1391,7 +1430,7 @@ export function planResolve(
           },
         ]
       : [];
-  const whoRewrites =
+  const aliasRewrites =
     aliasChange && aliasWhoId && aliasOpened
       ? [
           {
@@ -1407,17 +1446,76 @@ export function planResolve(
         ]
       : [];
 
-  const allEffects = [...effects, ...createEffects, ...aliasEffects];
-  const label = isRecordOption(optionId)
-    ? (options.find((option) => option.id === optionId)?.label ?? name)
-    : name;
+  const kinRef = isKinSearch ? normalizeKin(mention?.kin) : null;
+  const pickedOpened =
+    kinRef && isRecordOption(optionId)
+      ? input.whos?.get(optionId)?.opened
+      : null;
+  if (kinRef && isRecordOption(optionId) && !pickedOpened) {
+    return { refused: 'gone' };
+  }
+  const previousKin = normalizeKin(pickedOpened?.kin);
+  const isKinChanged =
+    kinRef !== null &&
+    pickedOpened != null &&
+    (previousKin?.kind !== kinRef.kind || previousKin?.order !== kinRef.order);
+  const kinEffects =
+    isKinChanged && pickedOpened
+      ? [
+          {
+            ref: {
+              op: 'update',
+              collection: 'who',
+              docId: optionId,
+            } as EffectRef,
+            effect: {
+              written: { 'sealed.kin': kinRef },
+              previous: { 'sealed.kin': pickedOpened.kin ?? null },
+            } as Effect,
+          },
+        ]
+      : [];
+  const kinRewrites =
+    isKinChanged && pickedOpened
+      ? [
+          {
+            id: optionId,
+            data: {
+              sealed: input.seal({ ...pickedOpened, kin: kinRef }),
+              lastEditedAt: now,
+            },
+          },
+        ]
+      : [];
+  const allEffects = [
+    ...effects,
+    ...createEffects,
+    ...aliasEffects,
+    ...kinEffects,
+  ];
+  const whoRewrites = [...aliasRewrites, ...kinRewrites];
+  const label =
+    aliasWhoId && optionId === aliasWhoId && aliasOpened
+      ? String(aliasOpened.name ?? name)
+      : isKinSearch && pickedOpened
+        ? String(pickedOpened.name ?? name)
+        : isRecordOption(optionId)
+          ? (options.find((option) => option.id === optionId)?.label ?? name)
+          : name;
   const [first] = liveTasks;
   const whoLabel = String(aliasOpened?.name ?? '');
+  const aliasRefusal =
+    aliasWhoId && aliasOpened && !aliasChange
+      ? readAliasRefusal(optionId, aliasWhoId, aliasName, aliasOpened)
+      : null;
   const summary =
     liveTasks.length > 0 && isLinking
-      ? liveTasks.length === 1
-        ? `Linked ${label} to ${first.task.title}`
-        : `Linked ${label} to ${liveTasks.length} tasks`
+      ? [
+          liveTasks.length === 1
+            ? `Linked ${label} to ${first.task.title}`
+            : `Linked ${label} to ${liveTasks.length} tasks`,
+          ...(aliasRefusal ? [aliasRefusal] : []),
+        ].join('. ')
       : aliasChange?.field === 'aliases'
         ? `Saved ${aliasName} as another name for ${whoLabel}`
         : `Noted that ${aliasName} is not ${whoLabel}`;

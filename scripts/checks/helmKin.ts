@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { sealForHelm } from '../../functions/src/apps/helm/helmKey.ts';
+import {
+  openForHelm,
+  sealForHelm,
+} from '../../functions/src/apps/helm/helmKey.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import type {
   CaptureReading,
@@ -9,9 +12,14 @@ import type {
 } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
   planWrites,
+  settleCapture,
   type KnownWhoState,
   type PeopleInput,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import {
+  toContextPeople,
+  toPersonRecord,
+} from '../../functions/src/apps/helm/nomos/contextPeople.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import {
   planResolve,
@@ -23,13 +31,17 @@ import {
   type WhoKin,
 } from '../../src/apps/helm/engine/kinKinds.ts';
 import {
+  deriveKinGap,
   normalizeKin,
   resolveKin,
   type KinBirthday,
 } from '../../src/apps/helm/engine/kin.ts';
 import { planReopen } from '../../src/apps/helm/nomos/planUndo.ts';
 import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
-import { toQuestionChoice } from '../../src/apps/helm/utils/questionChoice.ts';
+import {
+  toKinSearchChoice,
+  toQuestionChoice,
+} from '../../src/apps/helm/utils/questionChoice.ts';
 import type { HelmQuestion } from '../../src/apps/helm/types.ts';
 
 const KEY = { keyId: 'helm-key-test', keyVersion: 1, key: Buffer.alloc(32, 7) };
@@ -276,8 +288,12 @@ const counter = () => {
   };
 };
 
-const plan = (people: Partial<PeopleInput>) =>
+const plan = (
+  people: Partial<PeopleInput>,
+  extra: { isUnattended?: boolean } = {},
+) =>
   planWrites({
+    ...extra,
     commands: normalizeNomosReply(
       {
         commands: [
@@ -354,14 +370,265 @@ test('two fitting ask which one, naming them', () => {
   );
 });
 
-test('none of that kind asks who, with Add your brother', () => {
-  const result = plan({ mentions: [kinMention(null)], known: [] });
+const noneKnown = plan({ mentions: [kinMention('younger')], known: [] });
+const searchQuestion = sealedOf(noneKnown.questions[0]) as ReturnType<
+  typeof sealedOf
+> & { shape: string; recordKinds: string[] };
+
+test('none of that kind asks who as a search, with Add your brother', () => {
+  assert.equal(searchQuestion.kind, 'whichKin');
+  assert.equal(searchQuestion.prompt, "Who's your brother?");
+  assert.equal(searchQuestion.shape, 'pickRecord');
+  assert.deepEqual(searchQuestion.recordKinds, ['who']);
+  assert.deepEqual(
+    searchQuestion.options.map((option) => option.label),
+    ['Add your brother'],
+  );
+  assert.equal(noneKnown.whoCreates.length, 0);
+});
+
+const openedKin = (kinValue: WhoKin | null) =>
+  new Map([['dana', { opened: { name: 'Dana', aliases: [], kin: kinValue } }]]);
+
+test('picking an existing person links the held tasks and saves the family word', () => {
+  const result = planned(
+    resolveInput(
+      searchQuestion as unknown as Record<string, unknown>,
+      'whichKin',
+      'dana',
+      { whos: openedKin(null) },
+    ),
+  );
+  assert.deepEqual(result.taskUpdates[0].data.whoIds, ['dana']);
+  assert.equal(result.whoCreate, null);
+  assert.equal(result.whoRewrites?.length, 1);
+  const rewrite = result.whoRewrites?.[0] as unknown as {
+    data: { sealed: never };
+  };
+  assert.deepEqual(
+    (openForHelm(KEY, rewrite.data.sealed) as { kin: WhoKin }).kin,
+    { kind: 'brother', order: 'younger' },
+  );
+  const effects = (
+    result.execution as {
+      sealed: never;
+      effectRefs: { collection: string }[];
+    }
+  ).effectRefs.map((ref) => ref.collection);
+  assert.ok(effects.includes('who'));
+  const line = (
+    openForHelm(KEY, (result.execution as { sealed: never }).sealed) as {
+      summary: string;
+    }
+  ).summary;
+  assert.equal(line, 'Linked Dana to Buy a card');
+});
+
+test('a typed new name makes the person with the family word, never named from the said words', () => {
+  const result = planned(
+    resolveInput(
+      searchQuestion as unknown as Record<string, unknown>,
+      'whichKin',
+      'new',
+      { newName: 'marcus' },
+    ),
+  );
+  const created = result.whoCreate as unknown as {
+    id: string;
+    data: { sealed: never };
+  };
+  const words = openForHelm(KEY, created.data.sealed) as {
+    name: string;
+    kin: WhoKin;
+  };
+  assert.equal(words.name, 'Marcus');
+  assert.deepEqual(words.kin, { kind: 'brother', order: 'younger' });
+  assert.deepEqual(result.taskUpdates[0].data.whoIds, [created.id]);
+  const bare = planResolve(
+    resolveInput(
+      searchQuestion as unknown as Record<string, unknown>,
+      'whichKin',
+      'new',
+    ),
+  );
+  assert.equal(bare.refused, 'unknown');
+});
+
+test('a spoken name answers the search: the person it names, or a new one', () => {
+  const people = [
+    {
+      id: 'dana',
+      name: 'Dana',
+      aliases: ['Dee'],
+      isSelf: false,
+      isUnreadable: false,
+    },
+  ];
+  const asked = toQuestion(searchQuestion);
+  assert.deepEqual(toKinSearchChoice(asked, "it's Dee", people), {
+    optionId: 'dana',
+  });
+  assert.deepEqual(toKinSearchChoice(asked, 'Marcus', people), {
+    optionId: 'new',
+    newName: 'Marcus',
+  });
+  assert.equal(
+    toKinSearchChoice(
+      toQuestion(
+        sealedOf(
+          plan({ mentions: [kinMention(null)], known: [eli, marcus] })
+            .questions[0],
+        ),
+      ),
+      'Marcus',
+      people,
+    ),
+    null,
+  );
+  assert.deepEqual(
+    toQuestionChoice(asked, {
+      shape: 'pickRecord',
+      ref: { collection: 'who', id: 'dana' },
+      newName: null,
+    }),
+    { optionId: 'dana' },
+  );
+});
+
+test('a family question names the kind without its order', () => {
+  const both = (order: KinOrder) => [
+    who('eli', 'Eli', { kin: kin('brother', order) }),
+    who('marcus', 'Marcus', { kin: kin('brother', order) }),
+  ];
+  const result = plan({
+    mentions: [kinMention('younger')],
+    known: both('younger'),
+  });
   const question = sealedOf(result.questions[0]);
   assert.equal(question.kind, 'whichKin');
-  assert.equal(question.prompt, 'Who is your brother?');
-  assert.ok(
-    question.options.some((option) => option.label === 'Add your brother'),
+  assert.equal(question.prompt, 'Which brother: Eli or Marcus?');
+  const spoken = result.questions[0].spoken;
+  assert.ok(!spoken.includes('younger'), spoken);
+});
+
+test('when none fits the said order the order is asked, not the wrong set', () => {
+  const older = [
+    who('eli', 'Eli', { kin: kin('brother', 'older') }),
+    who('marcus', 'Marcus', { kin: kin('brother', 'older') }),
+  ];
+  const result = plan({ mentions: [kinMention('younger')], known: older });
+  const question = sealedOf(result.questions[0]);
+  assert.equal(question.kind, 'kinOrder');
+  assert.equal(question.prompt, 'Which of your brothers are younger than you?');
+  assert.deepEqual(
+    resolveKin(kin('brother', 'younger'), toKinWhos(older), {}, SELF).kind,
+    'askOrder',
   );
+});
+
+test('a private person is masked in a family question and its result line on an unattended turn', () => {
+  const secret = (id: string, name: string) =>
+    who(id, name, {
+      kin: kin('brother'),
+      privacyFacts: { privateMark: 'person', isPrivacyCleared: false },
+    });
+  const unattended = plan(
+    {
+      mentions: [kinMention(null)],
+      known: [secret('eli', 'Eli'), marcus],
+    },
+    { isUnattended: true },
+  );
+  const text = JSON.stringify([
+    unattended.questions.map((entry) => [entry.sealed, entry.spoken]),
+  ]);
+  assert.ok(!text.includes('Eli'), text);
+  assert.ok(text.includes('Marcus') && text.includes('a private person'));
+  const one = plan(
+    {
+      mentions: [kinMention('younger')],
+      known: [
+        who('eli', 'Eli', {
+          kin: kin('brother', 'younger'),
+          privacyFacts: { privateMark: 'person', isPrivacyCleared: false },
+        }),
+      ],
+    },
+    { isUnattended: true },
+  );
+  assert.deepEqual(one.kinLines, ['Added for a private person: Buy a card']);
+  const alias = plan(
+    {
+      mentions: [mention({ name: 'bubs', proposedWhoId: 'eli' })],
+      known: [
+        who('eli', 'Eli', {
+          privacyFacts: { privateMark: 'person', isPrivacyCleared: false },
+        }),
+      ],
+    },
+    { isUnattended: true },
+  );
+  assert.ok(!JSON.stringify(alias.questions).includes('Eli'));
+});
+
+test('a question that is only isThisWho, whichKin or kinOrder sends the turn to Needs you', () => {
+  const asked = [
+    bubs,
+    plan({ mentions: [kinMention(null)], known: [eli, marcus] }),
+    plan({ mentions: [kinMention('younger')], known: [eli] }),
+  ];
+  asked.forEach((result) => {
+    const settled = settleCapture({
+      mode: 'full',
+      filed: 1,
+      hasMore: false,
+      executionId: 'e1',
+      now: 9000,
+      newId: () => 'q-1',
+      opened: { text: 'x', reading: READING },
+      questionState: {},
+      executionIds: [],
+      questions: result.questions,
+    });
+    assert.equal(settled.status, 'needsYou');
+  });
+});
+
+test('a person who is private by its sealed mark never reaches the context on an unattended turn', () => {
+  const sealedWho = (name: string, extra: Record<string, unknown>) => ({
+    id: name.toLowerCase(),
+    get: (field: string) =>
+      ({
+        sealed: seal({
+          name,
+          aliases: [`${name}y`],
+          kin: kin('brother', 'younger'),
+          relation: null,
+          privateMark: null,
+          isPrivacyCleared: false,
+          ...extra,
+        }),
+        lastMentionedAt: 5,
+        isSelf: false,
+        privacy: 'ordinary',
+      })[field],
+  });
+  const records = [
+    sealedWho('Secret', { privateMark: 'person' }),
+    sealedWho('Open', {}),
+  ].flatMap((doc) => toPersonRecord(KEY, doc) ?? []);
+  assert.deepEqual(
+    records.map((record) => record.isPrivate),
+    [true, false],
+  );
+  const shown = toContextPeople(records, { isUnattended: true });
+  assert.deepEqual(
+    shown.map((person) => person.name),
+    ['Open'],
+  );
+  const text = JSON.stringify(shown);
+  assert.ok(!text.includes('Secret') && !text.includes('Secrety'));
+  assert.equal(toContextPeople(records, { isUnattended: false }).length, 2);
 });
 
 test('an order that cannot be told is asked once per person and never asks for a birthday', () => {
@@ -516,6 +783,32 @@ test('Yes saves the alias and links the held tasks', () => {
   assert.ok(effects.includes('who'));
 });
 
+test('a Yes that cannot save the nickname says so in the result line', () => {
+  const line = (opened: Record<string, unknown>) => {
+    const result = planned(
+      resolveInput(
+        bubsQuestion.sealed as Record<string, unknown>,
+        'isThisWho',
+        'eli',
+        { whos: openedEli(opened) },
+      ),
+    );
+    assert.deepEqual(result.taskUpdates[0].data.whoIds, ['eli']);
+    assert.equal(result.whoRewrites?.length, 0);
+    const sealed = (result.execution as { sealed: never }).sealed;
+    return (openForHelm(KEY, sealed) as { summary: string }).summary;
+  };
+  const ten = Array.from({ length: 10 }, (_, index) => `Name${index}`);
+  assert.equal(
+    line({ aliases: ten }),
+    "Linked Eli to Buy a card. Eli already has 10 other names, so Bubs wasn't saved.",
+  );
+  assert.equal(
+    line({ name: 'Bubs' }),
+    "Linked Bubs to Buy a card. Bubs is already Bubs's name.",
+  );
+});
+
 test('No links nothing, remembers the refusal, and the name is never proposed again', () => {
   const result = planned(
     resolveInput(
@@ -651,6 +944,20 @@ test('taking back an answer to a new question reopens it', () => {
       status: 'needsYou',
     });
   });
+});
+
+test('a birthday gap needs both years and says which side', () => {
+  assert.deepEqual(deriveKinGap(born(2015), born(2012)), {
+    side: 'younger',
+    years: 3,
+  });
+  assert.deepEqual(deriveKinGap(born(2009), born(2012)), {
+    side: 'older',
+    years: 3,
+  });
+  assert.equal(deriveKinGap(born(null), born(2012)), null);
+  assert.equal(deriveKinGap(born(2012), null), null);
+  assert.equal(deriveKinGap(born(2012), born(2012)), null);
 });
 
 const failures: string[] = [];

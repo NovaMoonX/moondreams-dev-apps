@@ -92,7 +92,8 @@ import {
 import {
   toBirthdays,
   toContextPeople,
-  type PersonRecord,
+  toPersonRecord,
+  toPrivateMark,
 } from './nomos/contextPeople.js';
 import { normalizeKin } from './nomos/kin.js';
 import { createHelmMcpServer } from './mcp/server.js';
@@ -811,9 +812,6 @@ async function readPeople(
   };
 }
 
-const toPrivateMark = (value: unknown): PrivacyFacts['privateMark'] =>
-  value === 'health' || value === 'care' || value === 'person' ? value : null;
-
 const MAX_KEPT_READS = 20;
 
 export const openKeyDate = (
@@ -1029,34 +1027,7 @@ async function readContextPeople(
       .limit(MAX_CONTEXT_PEOPLE_READ)
       .get();
     return toContextPeople(
-      snap.docs.flatMap((doc): PersonRecord[] => {
-        try {
-          const words = openForHelm(key, doc.get('sealed') as SealedPayload);
-          return typeof words.name === 'string'
-            ? [
-                {
-                  id: doc.id,
-                  isSelf: doc.get('isSelf') === true,
-                  isPrivate: doc.get('privacy') === 'private',
-                  lastMentionedAt: Number.isFinite(doc.get('lastMentionedAt'))
-                    ? Number(doc.get('lastMentionedAt'))
-                    : null,
-                  words: {
-                    name: words.name,
-                    aliases: isStringList(words.aliases) ? words.aliases : [],
-                    relation:
-                      typeof words.relation === 'string'
-                        ? words.relation
-                        : null,
-                    kin: words.kin,
-                  },
-                },
-              ]
-            : [];
-        } catch {
-          return [];
-        }
-      }),
+      snap.docs.flatMap((doc) => toPersonRecord(key, doc) ?? []),
       { isUnattended },
     );
   } catch (error) {

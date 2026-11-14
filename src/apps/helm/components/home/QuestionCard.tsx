@@ -29,6 +29,7 @@ import {
   sendQuestionAnswer,
 } from '@apps/helm/store/actions/questionActions';
 import type { QuestionAnswerValue, QuestionShape } from '@apps/helm/types';
+import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
 import type { OpenQuestion } from '@apps/helm/utils/heldCaptures';
 
 interface QuestionCardProps {
@@ -136,10 +137,13 @@ function QuestionCard({
   };
 
   const answerOnServer = async (value: QuestionAnswerValue, text?: string) => {
+    const kinChoice =
+      value.shape === 'pickRecord' ? toQuestionChoice(question, value) : null;
     if (
       (value.shape !== 'pickOne' &&
         value.shape !== 'pickSeveral' &&
-        value.shape !== 'yesNo') ||
+        value.shape !== 'yesNo' &&
+        kinChoice === null) ||
       isOffline
     )
       return;
@@ -147,19 +151,27 @@ function QuestionCard({
     const result = await resolveQuestion(
       captureId,
       id,
-      value.shape === 'pickSeveral'
-        ? { by: 'tap', optionIds: value.optionIds }
-        : {
-            by: 'tap',
-            optionId: value.optionId,
-            ...(text !== undefined && { text }),
-          },
+      kinChoice
+        ? { by: 'tap', ...kinChoice }
+        : value.shape === 'pickSeveral'
+          ? { by: 'tap', optionIds: value.optionIds }
+          : {
+              by: 'tap',
+              optionId:
+                value.shape === 'pickOne' || value.shape === 'yesNo'
+                  ? value.optionId
+                  : '',
+              ...(text !== undefined && { text }),
+            },
     );
     setIsWorking(false);
     if (result.kind === 'done' && result.executionId && isInSheet && user) {
       const { uid } = user;
       const { executionId } = result;
-      const optionId = value.shape === 'pickSeveral' ? null : value.optionId;
+      const optionId =
+        value.shape === 'pickOne' || value.shape === 'yesNo'
+          ? value.optionId
+          : null;
       const kept = question.options.find((option) => option.id === optionId);
       const title =
         question.kind !== 'whichIsTrue'

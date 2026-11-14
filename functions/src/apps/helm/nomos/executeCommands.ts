@@ -1,5 +1,6 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import {
+  isPrivateInEffect,
   readEffectivePrivacy,
   readPersonMark,
   readPrivacyFacts,
@@ -846,6 +847,18 @@ interface UnsureEntry {
   candidateIds: string[];
   via: UnsureVia;
 }
+
+const PRIVATE_PERSON_LABEL = 'a private person';
+
+/** The family kind as it is spoken, without the order: "brother", never "younger brother". */
+const toKinWord = (kind: string) =>
+  KIN_KINDS.find((entry) => entry.kind === kind)?.spoken ?? kind;
+
+/** A person's name as a question or a result line shows it: on an unattended turn a private person is only "a private person", as the context masks them. */
+const shownName = (who: KnownWhoState, isUnattended: boolean) =>
+  isUnattended && isPrivateInEffect(who.privacyFacts ?? readPrivacyFacts(null))
+    ? PRIVATE_PERSON_LABEL
+    : who.name;
 
 const toKinWho = (who: KnownWhoState) => ({ id: who.id, kin: who.kin ?? null });
 
@@ -2042,9 +2055,10 @@ export function planWrites(input: PlanInput): WritePlan {
   const kinLines = [...drafts.values()].flatMap((draft) => {
     const names = draft.whoIds
       .filter((id) => kinIds.has(id))
-      .flatMap(
-        (id) => input.people?.known.find((who) => who.id === id)?.name ?? [],
-      );
+      .flatMap((id) => {
+        const known = input.people?.known.find((who) => who.id === id);
+        return known ? [shownName(known, input.isUnattended === true)] : [];
+      });
     return names.length > 0
       ? [`Added for ${names.join(' and ')}: ${draft.title}`]
       : [];
@@ -2426,6 +2440,7 @@ export function planWrites(input: PlanInput): WritePlan {
   const pickQuestions = !isFiling
     ? []
     : buildPickQuestions({
+        isUnattended: input.isUnattended === true,
         entities,
         unsureTasks,
         people,
@@ -2608,6 +2623,7 @@ function buildPickQuestions(input: {
   newId: () => string;
   now: number;
   room: number;
+  isUnattended: boolean;
 }): PlannedQuestion[] {
   const { entities, unsureTasks, people, now } = input;
   if (!people) return [];
@@ -2694,14 +2710,14 @@ function buildPickQuestions(input: {
       (id) => people.known.find((who) => who.id === id) ?? [],
     );
     const isMixed = new Set(states.map((who) => who.kind)).size > 1;
+    const via = whoVia.get(entry.ref) ?? null;
     const candidates: PickCandidate[] = states.map((who) => ({
       id: who.id,
-      label: who.name,
+      label: via ? shownName(who, input.isUnattended) : who.name,
       detail: detailOfWho(who, isMixed),
     }));
     const { name, kind, relation, species, organizationKind } = entry.item;
     const taskIds = taskIdsFor(whoEntries, entry);
-    const via = whoVia.get(entry.ref) ?? null;
     if (via?.kind === 'alias') {
       const [who] = candidates;
       if (!who) return [];
@@ -2727,11 +2743,11 @@ function buildPickQuestions(input: {
       ];
     }
     if (via?.kind === 'kin') {
-      const words = entry.item.name;
+      const words = toKinWord(via.ref.kind);
       const mention = {
-        name: words,
+        name: entry.item.name,
         kind: 'person',
-        relation: `my ${words}`,
+        relation: `my ${entry.item.name}`,
         species: null,
         organizationKind: null,
         kin: via.ref,
@@ -2741,20 +2757,21 @@ function buildPickQuestions(input: {
         detail:
           states.find((who) => who.id === candidate.id)?.kin?.order ?? null,
       }));
+      const asked = buildWhichKinQuestion({
+        words,
+        candidates: labelled.map((candidate) => ({
+          ...candidate,
+          detail: candidate.detail && toDisplayCase(candidate.detail),
+        })),
+        mention,
+        taskIds,
+      });
       return [
         {
           planned: toPlanned(
             'whichKin',
-            'pickOne',
-            buildWhichKinQuestion({
-              words,
-              candidates: labelled.map((candidate) => ({
-                ...candidate,
-                detail: candidate.detail && toDisplayCase(candidate.detail),
-              })),
-              mention,
-              taskIds,
-            }),
+            asked.shape,
+            asked,
             buildSpokenWhichKin(
               words,
               candidates.map((candidate) => candidate.label),
@@ -2765,9 +2782,8 @@ function buildPickQuestions(input: {
       ];
     }
     if (via?.kind === 'kinOrder') {
-      const kinWords = KIN_KINDS.find((e) => e.kind === via.ref.kind)?.spoken;
       const sealed = buildKinOrderQuestion({
-        words: kinWords ?? via.ref.kind,
+        words: toKinWord(via.ref.kind),
         wanted: via.ref.order ?? 'younger',
         shape: via.shape,
         candidates,
@@ -3096,6 +3112,9 @@ interface SettleInput {
 const isPickKind = (kind: string) =>
   kind === 'whichPerson' ||
   kind === 'whichPlace' ||
+  kind === 'isThisWho' ||
+  kind === 'whichKin' ||
+  kind === 'kinOrder' ||
   kind === 'whichTopic' ||
   kind === 'whichIsTrue' ||
   kind === 'groupTopics' ||

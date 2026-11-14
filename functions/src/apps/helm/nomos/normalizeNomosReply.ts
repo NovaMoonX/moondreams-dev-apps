@@ -873,7 +873,6 @@ interface Entities {
   placeRefs: Map<string, string>;
 }
 
-/** Reads the people, pets, organizations and places the reply names; a repeat of one name folds into the first, and every @ person and # place of the reading is there whether the model listed it or not. */
 /** "younger brother" for a family word and its order, the name a mention that is only a family word carries. */
 const toKinWords = (kin: { kind: string; order: string | null }) =>
   [
@@ -883,6 +882,7 @@ const toKinWords = (kin: { kind: string; order: string | null }) =>
     .filter(Boolean)
     .join(' ');
 
+/** Reads the people, pets, organizations and places the reply names; a repeat of one name folds into the first, and every @ person and # place of the reading is there whether the model listed it or not. */
 const readEntities = (
   raw: Record<string, unknown>,
   reading: CaptureReading,

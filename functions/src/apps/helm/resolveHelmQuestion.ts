@@ -157,11 +157,26 @@ const toResolveNote = (
   }
 };
 
+const NEW_NAME_MAX = 80;
+
 const readInput = (data: unknown) => {
   const raw = (data ?? {}) as Record<string, unknown>;
   const answer = (raw.answer ?? {}) as Record<string, unknown>;
   const { captureId, questionId } = raw;
   const { by, optionId, optionIds, text } = answer;
+  const typedName =
+    typeof answer.newName === 'string'
+      ? answer.newName.trim().replace(/\s+/g, ' ')
+      : null;
+  if (
+    answer.newName !== undefined &&
+    (optionId !== 'new' ||
+      typedName === null ||
+      typedName === '' ||
+      typedName.length > NEW_NAME_MAX)
+  ) {
+    throw new HttpsError('invalid-argument', 'That answer is not valid.');
+  }
   const isMany =
     Array.isArray(optionIds) &&
     optionIds.length >= 1 &&
@@ -201,6 +216,7 @@ const readInput = (data: unknown) => {
     optionId: isMany ? '' : (optionId as string),
     optionIds: isMany ? (optionIds as string[]) : [],
     text: note,
+    newName: typedName,
   };
 };
 
@@ -222,9 +238,8 @@ export const resolveHelmQuestion = onCall(
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
     }
-    const { captureId, questionId, by, optionId, optionIds, text } = readInput(
-      request.data,
-    );
+    const { captureId, questionId, by, optionId, optionIds, text, newName } =
+      readInput(request.data);
     const firestore = getFirestore();
     const base = `apps/helm/users/${uid}`;
     const captureRef = firestore.doc(`${base}/captures/${captureId}`);
@@ -265,6 +280,7 @@ export const resolveHelmQuestion = onCall(
             kind?: string;
             whoIds?: unknown;
             alias?: { whoId?: unknown };
+            mention?: { kin?: unknown };
           }[];
         }
       >;
@@ -300,9 +316,11 @@ export const resolveHelmQuestion = onCall(
         .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
         .slice(0, 2);
       const isKin = held?.kind === 'settleKin';
+      const isKinSearch = held?.kind === 'linkWho' && !!held.mention?.kin;
       const whoIdsAsked = [
         ...(isKin && Array.isArray(held?.whoIds) ? held.whoIds : []),
         held?.alias?.whoId,
+        ...(isKinSearch ? [optionId] : []),
       ]
         .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
         .slice(0, 20);
@@ -499,6 +517,7 @@ export const resolveHelmQuestion = onCall(
             }
           : null,
         text,
+        newName,
         note: noteWords,
         topics: new Map<string, NoteTopicState>(
           topicSnaps.flatMap((snap): [string, NoteTopicState][] => {

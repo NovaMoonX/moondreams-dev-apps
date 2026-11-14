@@ -1027,44 +1027,51 @@ export const buildIsThisWhoQuestion = (input: {
 export const buildSpokenIsThisWho = (alias: string, name: string) =>
   `Is ${alias} ${name}? Yes, no, or someone new?`;
 
-/** "Which brother: Eli or Marcus?" when two or more fit a family word, or "Who is your brother?" when none of that kind is known; the turn's links are held. */
+/** "Which brother: Eli or Marcus?" when two or more fit a family word, or "Who's your brother?" as a search over the person's people when none of that kind is known: pick one (their family word is then saved) or "Add your brother" with a typed name, never the said words as a name; the turn's links are held. `words` is the kind without its order. */
 export const buildWhichKinQuestion = (input: {
   words: string;
   candidates: { id: string; label: string; detail: string | null }[];
   mention: HeldMention;
   taskIds: string[];
-}) => ({
-  ...noRefs,
-  kind: 'whichKin' as const,
-  shape: 'pickOne' as const,
-  prompt:
-    input.candidates.length > 0
-      ? `Which ${input.words}: ${joinOr(input.candidates.map((c) => c.label))}?`
-      : `Who is your ${input.words}?`,
-  options: [
-    ...input.candidates.map((candidate) => ({
-      ...candidate,
-      ref: { collection: 'who' as const, id: candidate.id },
-    })),
-    input.candidates.length > 0
-      ? { id: 'none', label: KIN_WORDS.somethingElse, detail: null, ref: null }
-      : {
-          id: 'new',
-          label: `Add your ${input.words}`,
-          detail: 'Make a new person',
-          ref: null,
-        },
-    ...(input.candidates.length > 0
-      ? []
-      : [{ id: 'none', label: KIN_WORDS.skip, detail: null, ref: null }]),
-  ],
-  heldCommands: [
-    { kind: 'linkWho', taskIds: input.taskIds, mention: input.mention },
-  ],
-  aboutRef: input.taskIds[0]
-    ? { collection: 'tasks', id: input.taskIds[0] }
-    : null,
-});
+}) => {
+  const isSearch = input.candidates.length === 0;
+  return {
+    ...noRefs,
+    kind: 'whichKin' as const,
+    shape: isSearch ? ('pickRecord' as const) : ('pickOne' as const),
+    recordKinds: isSearch ? ['who' as const] : [],
+    prompt: isSearch
+      ? `Who's your ${input.words}?`
+      : `Which ${input.words}: ${joinOr(input.candidates.map((c) => c.label))}?`,
+    options: isSearch
+      ? [
+          {
+            id: 'new',
+            label: `Add your ${input.words}`,
+            detail: null,
+            ref: null,
+          },
+        ]
+      : [
+          ...input.candidates.map((candidate) => ({
+            ...candidate,
+            ref: { collection: 'who' as const, id: candidate.id },
+          })),
+          {
+            id: 'none',
+            label: KIN_WORDS.somethingElse,
+            detail: null,
+            ref: null,
+          },
+        ],
+    heldCommands: [
+      { kind: 'linkWho', taskIds: input.taskIds, mention: input.mention },
+    ],
+    aboutRef: input.taskIds[0]
+      ? { collection: 'tasks', id: input.taskIds[0] }
+      : null,
+  };
+};
 
 export const buildSpokenWhichKin = (
   words: string,
@@ -1072,7 +1079,7 @@ export const buildSpokenWhichKin = (
   isAdd: boolean,
 ) =>
   isAdd
-    ? `Who is your ${words}? You can add them.`
+    ? `Who's your ${words}? Say their name, or skip it for now.`
     : `Which ${words}, ${joinOr(labels.slice(0, 3))}?`;
 
 /** The order of a family word asked against the person, kept when answered: "Is Eli younger than you?" for one, "Which of your brothers are younger than you?" for several, "Which brother is the youngest?" for the oldest or youngest. */

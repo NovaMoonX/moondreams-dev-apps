@@ -1,3 +1,10 @@
+import { openForHelm, type HelmKey } from '../helmKey.js';
+import {
+  isPrivateInEffect,
+  readPrivacyFacts,
+  type PrivacyFacts,
+} from '../privacy.js';
+import type { SealedPayload } from '../../../appKeys/seal.js';
 import { MAX_CONTEXT_PEOPLE, type ContextPerson } from './buildContext.js';
 import type { ByWho } from '../keyDateIndex.js';
 import { normalizeKin, type KinBirthday } from './kin.js';
@@ -15,6 +22,45 @@ export interface PersonRecord {
     kin: unknown;
   };
 }
+
+export const toPrivateMark = (value: unknown): PrivacyFacts['privateMark'] =>
+  value === 'health' || value === 'care' || value === 'person' ? value : null;
+
+const isStringList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+
+/** A who document as the context reads it. Privacy comes from the sealed facts, as `readPeople` reads it: a who's mark is sealed, never a readable field. Null when it will not open. */
+export const toPersonRecord = (
+  key: HelmKey,
+  doc: { id: string; get: (field: string) => unknown },
+): PersonRecord | null => {
+  try {
+    const words = openForHelm(key, doc.get('sealed') as SealedPayload);
+    if (typeof words.name !== 'string') return null;
+    const lastMentionedAt = doc.get('lastMentionedAt');
+    return {
+      id: doc.id,
+      isSelf: doc.get('isSelf') === true,
+      isPrivate: isPrivateInEffect(
+        readPrivacyFacts({
+          privateMark: toPrivateMark(words.privateMark),
+          isPrivacyCleared: words.isPrivacyCleared === true,
+        }),
+      ),
+      lastMentionedAt: Number.isFinite(lastMentionedAt)
+        ? Number(lastMentionedAt)
+        : null,
+      words: {
+        name: words.name,
+        aliases: isStringList(words.aliases) ? words.aliases : [],
+        relation: typeof words.relation === 'string' ? words.relation : null,
+        kin: words.kin,
+      },
+    };
+  } catch {
+    return null;
+  }
+};
 
 /** "younger brother": the family word as the person says it, with its order first. */
 export const toKinText = (kin: WhoKin) =>

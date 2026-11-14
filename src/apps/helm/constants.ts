@@ -1873,6 +1873,9 @@ export const HELM_COPY = {
   aliasHelp: 'Search, @ and your assistant find them by these too.',
   aliasFull: (max: number) => `That is as many as fit (${max}).`,
   aliasDuplicate: 'They already go by that.',
+  aliasIsNameOf: (alias: string) => `${alias} is already someone else's name.`,
+  aliasIsAliasOf: (alias: string, name: string) =>
+    `${name} is already called ${alias}.`,
   aliasDone: 'Done',
   aliasNone: 'No nicknames yet.',
   kinTitle: (name: string) => `Family · ${name}`,
@@ -1889,6 +1892,11 @@ export const HELM_COPY = {
     'The line under the name stays in your words. This is how “my younger brother” finds them.',
   kinSavedToast: (name: string) => `Saved how ${name} is related`,
   kinClearedToast: (name: string) => `Cleared how ${name} is related`,
+  kinRemove: 'Remove',
+  kinChanged: 'This changed somewhere else. Close this and open it again.',
+  kinUndoStale: 'This changed since, so it was left as it is.',
+  kinDerived: (name: string, years: number, side: 'older' | 'younger') =>
+    `From your birthdays: ${name} is ${years} ${years === 1 ? 'year' : 'years'} ${side}.`,
   whoKindField: 'Kind',
   whoKindPerson: 'Person',
   whoKindPet: 'Pet',

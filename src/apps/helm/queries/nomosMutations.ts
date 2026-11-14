@@ -182,6 +182,8 @@ export interface QuestionAnswerInput {
   optionIds?: string[];
   /** The person's own statement, with the answer "none" to which fact is true. */
   text?: string;
+  /** The name typed for a new person, with the answer "new" to a family question that had no one to pick. */
+  newName?: string;
 }
 
 /** `answered` when another device already answered (nothing to show), `stale` when the question closed because its facts changed since (nothing was written), `gone` when the chosen person or place no longer exists, `offline` when there was no connection (nothing is queued). */
