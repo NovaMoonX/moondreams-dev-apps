@@ -3035,7 +3035,6 @@ await assert.rejects(
   /Unknown category/,
 );
 
-// Envelopes: names only, from the newest version of each live envelope.
 const ENVELOPE_SECRETS = ['ENV BALANCE 987654', 'ENV MAX 777777'];
 const envItem = (
   uid: string,
@@ -3147,7 +3146,6 @@ assert.equal(
   'a name that will not open makes the read partial',
 );
 
-// A category asked of the live search matches the way Spend's envelope filter does.
 const inRange = { from: dayText(TODAY - 30 * DAY), to: dayText(TODAY) };
 const food = await queryTx(OWNER, { ...inRange, category: ' food ' });
 assert.deepEqual(

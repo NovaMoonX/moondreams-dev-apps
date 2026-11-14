@@ -334,7 +334,6 @@ type StoredEnvelopes =
 const warnEnvelopesUnreadable = (reason: 'key' | 'names', count: number) =>
   logger.warn('runway.share.envelopesUnreadable', { reason, count });
 
-/** The names of the envelopes still in the plan (not archived, not ended before today), read from each one's newest version. Names only: no amount, balance or priority. A plan key that will not open is unknown; a name that will not open or a plan past the cap makes the read partial. */
 async function readStoredEnvelopes(
   firestore: Firestore,
   keyring: Keyring,

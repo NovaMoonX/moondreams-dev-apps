@@ -653,7 +653,6 @@ const toChecklistRecord = (
   });
 };
 
-/** The person's own to-dos, assigned to them or private to them, done or not and grouped by category; no one else's private item is ever read. */
 const syncChecklist = async (
   firestore: Firestore,
   uid: string,
