@@ -13,6 +13,7 @@ const SWITCH = 'LOCAL_FIXTURES';
 
 interface ServiceInfo {
   apps: string;
+  appIds: string[] | 'all';
   keys: string[];
   // Bound secrets reach the emulator from production; run-time keys only from the two local files.
   isBound: boolean;
@@ -23,6 +24,7 @@ interface ServiceInfo {
 const SERVICES: Record<FixtureService, ServiceInfo> = {
   anthropic: {
     apps: 'Helm',
+    appIds: ['helm'],
     keys: ['ANTHROPIC_API_KEY'],
     isBound: true,
     setup:
@@ -30,6 +32,7 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
   },
   deepgram: {
     apps: 'voice in every app (listening and Aura speech)',
+    appIds: 'all',
     keys: ['DEEPGRAM_API_KEY'],
     isBound: false,
     setup:
@@ -37,6 +40,7 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
   },
   'google-tts': {
     apps: 'voice in every app (default speech voice)',
+    appIds: 'all',
     keys: [],
     isBound: false,
     setup: 'not available: the emulator never calls Google speech',
@@ -44,6 +48,7 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
   },
   gemini: {
     apps: 'voice (Gemini speech)',
+    appIds: 'all',
     keys: ['GEMINI_API_KEY'],
     isBound: false,
     setup:
@@ -51,24 +56,28 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
   },
   omdb: {
     apps: 'A-List',
+    appIds: ['a-list'],
     keys: ['OMDB_API_KEY'],
     isBound: true,
     setup: 'add OMDB_API_KEY=... to functions/.secret.local',
   },
   tmdb: {
     apps: 'A-List',
+    appIds: ['a-list'],
     keys: ['TMDB_API_KEY'],
     isBound: true,
     setup: 'add TMDB_API_KEY=... to functions/.secret.local',
   },
   amc: {
     apps: 'A-List (theaters and showtimes)',
+    appIds: ['a-list'],
     keys: ['AMC_API_KEY'],
     isBound: true,
     setup: 'add AMC_API_KEY=... to functions/.secret.local',
   },
   plaid: {
     apps: 'Runway (bank linking)',
+    appIds: ['runway'],
     keys: ['RUNWAY_PLAID_CLIENT_ID', 'RUNWAY_PLAID_SECRET'],
     isBound: true,
     setup:
@@ -190,7 +199,7 @@ const toServices = (target: string) => {
 const RESTART =
   'Restart the emulators to apply it: npm run emulators:kill, then npm run emulators.';
 
-const showStatus = () => {
+const showStatus = (appId?: string) => {
   const isGcloudReady = isSignedInToGcloud();
   const forced = readForced();
   if (!isGcloudReady) {
@@ -198,8 +207,12 @@ const showStatus = () => {
       "can't check production: not signed in to gcloud (run `gcloud auth login` to see which production keys the emulator would use)\n",
     );
   }
-  const width = Math.max(...FIXTURE_SERVICES.map((service) => service.length));
-  FIXTURE_SERVICES.forEach((service) =>
+  const shown = FIXTURE_SERVICES.filter((service) => {
+    const { appIds } = SERVICES[service];
+    return !appId || appIds === 'all' || appIds.includes(appId);
+  });
+  const width = Math.max(...shown.map((service) => service.length));
+  shown.forEach((service) =>
     console.log(
       `${service.padEnd(width)}  ${describeService(service, forced, isGcloudReady)}  [${SERVICES[service].apps}]`,
     ),
@@ -240,11 +253,13 @@ const [mode, target] = process.argv.slice(2);
 
 if (!mode) {
   showStatus();
+} else if (mode === 'for' && target) {
+  showStatus(target);
 } else if ((mode === 'fixtures' || mode === 'real') && target) {
   setMode(mode, target);
 } else {
   console.error(
-    'Usage: npm run local:services [-- fixtures|real <service|all>]',
+    'Usage: npm run local:services [-- for <app> | fixtures|real <service|all>]',
   );
   process.exitCode = 1;
 }
