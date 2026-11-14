@@ -182,6 +182,7 @@ export function useVoiceTranscription(): VoiceTranscription {
       createAndStartRecognitionRef.current();
     };
 
+    recognition.onstart = () => setIsListening(true);
     recognitionRef.current = recognition;
     recognition.start();
   }, [finish]);
@@ -208,7 +209,8 @@ export function useVoiceTranscription(): VoiceTranscription {
     setError(null);
     setIsBlocked(false);
     isStoppingRef.current = false;
-    setIsListening(true);
+    // Until the microphone is allowed, Listening waits for the browser to start, so a refusal never flashes it.
+    if (peekMicrophonePermission() === 'granted') setIsListening(true);
     createAndStartRecognition();
   }, [createAndStartRecognition]);
 

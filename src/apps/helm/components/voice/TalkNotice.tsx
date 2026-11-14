@@ -27,7 +27,7 @@ function TalkNotice({ className }: TalkNoticeProps) {
   return (
     <div
       className={join(
-        'text-muted-foreground flex w-full flex-col items-start gap-2 text-[13px]',
+        'text-muted-foreground flex max-h-[45dvh] w-full flex-col items-start gap-2 overflow-y-auto overscroll-contain text-[13px]',
         className,
       )}
       role='status'

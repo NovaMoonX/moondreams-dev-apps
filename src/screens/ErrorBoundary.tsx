@@ -130,6 +130,7 @@ function ErrorScreen({ error }: { error: unknown }) {
           message={message}
           facts={fileCheck ? [fileCheck] : []}
           trace={stack ? { label: 'Stack trace', text: stack } : null}
+          isOpen
           className='mt-6'
         />
 

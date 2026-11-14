@@ -1,7 +1,18 @@
 const KEPT = 12;
 
+const KEY = 'speech:events';
+
+const readKept = () => {
+  try {
+    const kept: unknown = JSON.parse(window.sessionStorage.getItem(KEY) ?? '[]');
+    return Array.isArray(kept) ? kept.filter((line) => typeof line === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
 const log = {
-  lines: [] as string[],
+  lines: typeof window === 'undefined' ? [] : readKept(),
   listeners: new Set<() => void>(),
 };
 
@@ -9,6 +20,11 @@ const log = {
 export const recordSpeechEvent = (text: string) => {
   const time = new Date().toISOString().slice(11, 19);
   log.lines = [...log.lines, `${time} ${text}`].slice(-KEPT);
+  try {
+    window.sessionStorage.setItem(KEY, JSON.stringify(log.lines));
+  } catch {
+    // Kept for this page only, so a reload loses it.
+  }
   log.listeners.forEach((listener) => listener());
 };
 
@@ -20,7 +36,7 @@ export const subscribeSpeechEvents = (listener: () => void) => {
   };
 };
 
-/** The last few things the browser said about listening, oldest first. */
+/** The last few things the browser said about listening in this tab, oldest first, kept across a reload. */
 export const readSpeechEvents = () => log.lines;
 
 /** A thrown value in its own words: the DOMException name and message, or the text. */

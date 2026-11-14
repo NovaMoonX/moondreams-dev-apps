@@ -30,6 +30,16 @@ const RESULT_LINES: Partial<Record<MicrophoneRequestResult, string>> = {
   unavailable: 'This browser can’t use a microphone here.',
 };
 
+const describeAsk = (
+  permission: string,
+  result: MicrophoneRequestResult | null,
+) => {
+  if (result === null) return 'Not asked for the microphone yet';
+  if (result === 'denied' && permission !== 'denied')
+    return `Refused when asked, while the browser reads "${permission}"`;
+  return `Last ask for the microphone: ${result}`;
+};
+
 /** The way out of a blocked microphone: an Allow microphone button that asks the browser properly and, once the browser refuses, how to allow it on this device behind one tap. Clears itself once the permission is granted. */
 function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
   const [result, setResult] = useState<MicrophoneRequestResult | null>(null);
@@ -74,7 +84,7 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
       <p>
         {isBlocked
           ? 'Your browser said no for this site, so it has to be allowed in its settings.'
-          : 'Tap below and allow it when your browser asks.'}
+          : 'Allow it below when your browser asks.'}
       </p>
       {result !== null && RESULT_LINES[result] && (
         <p className='mt-2'>{RESULT_LINES[result]}</p>
@@ -120,7 +130,7 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
         )}
       </div>
       <SpeechDebugDetails
-        message={`Microphone ${permission}; last ask: ${result ?? 'not yet'}`}
+        message={describeAsk(permission, result)}
         className='mt-3'
       />
     </InlineNotice>

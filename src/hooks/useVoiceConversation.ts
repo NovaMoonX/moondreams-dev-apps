@@ -107,6 +107,7 @@ interface VoiceConversationOptions {
 
 export type VoiceListeningRoute = 'cloud' | 'device';
 
+const LISTEN_SHOW_DELAY_MS = 400;
 const QUIET_MS = 8000;
 const CONVERSATION_IDLE_MS = 10 * 60 * 1000;
 const FIRST_LINE_FIRST_BYTE_MS = 4000;
@@ -220,6 +221,7 @@ export function useVoiceConversation({
     cancelListening: null as (() => void) | null,
     quietId: 0,
     holdId: 0,
+    showId: 0,
     followUpId: 0,
     isFollowUp: false,
     isUnasked: false,
@@ -313,6 +315,8 @@ export function useVoiceConversation({
   };
 
   const clearTimers = () => {
+    window.clearTimeout(run.current.showId);
+    run.current.showId = 0;
     window.clearTimeout(run.current.quietId);
     window.clearTimeout(run.current.holdId);
     run.current.quietId = 0;
@@ -477,6 +481,8 @@ export function useVoiceConversation({
       onPartial: handlePartial,
       onFinal: handleFinal,
       onSpeechStart: () => {
+        window.clearTimeout(run.current.showId);
+        setIsListening(true);
         isMicGranted.current = true;
         setReason(null);
       },
@@ -518,7 +524,15 @@ export function useVoiceConversation({
       hasCloud: cloud !== null,
       isOnDeviceReady: latest.current.canHearOnDevice,
     });
-    setIsListening(true);
+    // Until the microphone is known to be allowed, a refusal can come back at once: showing Listening only after a moment keeps it from flashing.
+    if (peekMicrophonePermission() === 'granted') setIsListening(true);
+    else {
+      window.clearTimeout(run.current.showId);
+      run.current.showId = window.setTimeout(
+        () => setIsListening(true),
+        LISTEN_SHOW_DELAY_MS,
+      );
+    }
     setIsThinking(false);
     setHeard('');
     if (choice !== 'onDevice') armQuiet();

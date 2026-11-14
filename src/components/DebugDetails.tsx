@@ -14,6 +14,8 @@ interface DebugDetailsProps {
   /** A long trace, folded behind its own toggle. */
   trace?: { label: string; text: string } | null;
   title?: string;
+  /** Starts unfolded, where the failure is the whole screen (a crash). */
+  isOpen?: boolean;
   className?: string;
 }
 
@@ -23,6 +25,7 @@ function DebugDetails({
   facts = [],
   trace = null,
   title = 'Error details',
+  isOpen = false,
   className,
 }: DebugDetailsProps) {
   const canSee = useCanSeeDebugDetails();
@@ -41,45 +44,50 @@ function DebugDetails({
 
   return (
     <section
-      className={join(
-        'border-border bg-muted/50 rounded-xl border text-left',
-        className,
-      )}
+      className={join('bg-foreground/5 relative rounded-xl text-left', className)}
     >
-      <div className='border-border flex items-center justify-between gap-2 border-b py-1.5 pr-1.5 pl-3'>
-        <h2 className='text-muted-foreground text-xs font-medium'>{title}</h2>
+      <details className='group/debug' open={isOpen}>
+        <summary className='text-muted-foreground flex min-h-10 cursor-pointer list-none items-center gap-1 py-1.5 pr-12 pl-3 text-xs font-medium [&::-webkit-details-marker]:hidden'>
+          <ChevronRight
+            className='size-3.5 transition-transform group-open/debug:rotate-90'
+            aria-hidden='true'
+          />
+          {title}
+        </summary>
+        <div className='space-y-2 px-3 pb-3'>
+          <p className='text-foreground font-mono text-xs leading-relaxed wrap-break-word'>
+            {message}
+          </p>
+          {facts.length > 0 && (
+            <ul className='text-muted-foreground space-y-0.5 font-mono text-xs leading-relaxed wrap-break-word'>
+              {facts.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          )}
+          {trace && (
+            <details className='group/trace'>
+              <summary className='text-muted-foreground flex cursor-pointer list-none items-center gap-1 text-xs [&::-webkit-details-marker]:hidden'>
+                <ChevronRight
+                  className='size-3.5 transition-transform group-open/trace:rotate-90'
+                  aria-hidden='true'
+                />
+                {trace.label}
+              </summary>
+              <pre className='text-muted-foreground mt-2 max-h-48 overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap'>
+                {trace.text}
+              </pre>
+            </details>
+          )}
+        </div>
+      </details>
+      <div className='absolute top-0.5 right-1'>
         <CopyTextButton
           isIconOnly
           variant='tertiary'
           label='Copy error'
           text={copyText}
         />
-      </div>
-      <div className='space-y-2 p-3'>
-        <p className='text-foreground font-mono text-xs leading-relaxed wrap-break-word'>
-          {message}
-        </p>
-        {facts.length > 0 && (
-          <ul className='text-muted-foreground space-y-0.5 font-mono text-xs leading-relaxed wrap-break-word'>
-            {facts.map((fact) => (
-              <li key={fact}>{fact}</li>
-            ))}
-          </ul>
-        )}
-        {trace && (
-          <details className='group'>
-            <summary className='text-muted-foreground flex cursor-pointer list-none items-center gap-1 text-xs [&::-webkit-details-marker]:hidden'>
-              <ChevronRight
-                className='size-3.5 transition-transform group-open:rotate-90'
-                aria-hidden='true'
-              />
-              {trace.label}
-            </summary>
-            <pre className='text-muted-foreground mt-2 max-h-48 overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap'>
-              {trace.text}
-            </pre>
-          </details>
-        )}
       </div>
     </section>
   );
