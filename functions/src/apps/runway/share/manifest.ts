@@ -65,6 +65,23 @@ export const RUNWAY_SHARES: SourceShares = {
           scopeVersion: 1,
         },
         {
+          id: 'envelopes',
+          kind: 'artifact',
+          label: 'Envelopes',
+          detail: "Each envelope's name, no amounts",
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 3,
+          reads: [
+            {
+              label: "Each envelope's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 1,
+        },
+        {
           id: 'transactions',
           kind: 'transaction',
           label: 'Transactions',

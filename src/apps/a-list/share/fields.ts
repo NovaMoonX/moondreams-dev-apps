@@ -18,19 +18,19 @@ const MEMBERSHIP_PROFILE_FIELDS = {
   monthlyTotalCents: 'never',
   taxRate: 'never',
   startDate: 'never',
-  weeklyGoal: 'never',
-  monthlyGoal: 'never',
+  weeklyGoal: 'shared',
+  monthlyGoal: 'shared',
   favoriteTheatreId: 'never',
   ticketPriceKind: 'never',
   showReleasesOnCalendar: 'never',
   setupCompletedAt: 'never',
   createdAt: 'never',
-  lastEditedAt: 'never',
+  lastEditedAt: 'shared',
 } satisfies Record<keyof MembershipProfile, ShareDecision>;
 
 const MOVIE_SNAPSHOT_FIELDS = {
   title: 'shared',
-  releaseDate: 'notUseful',
+  releaseDate: 'shared',
   posterUrl: 'notUseful',
   runtimeMinutes: 'notUseful',
   contentRating: 'notUseful',
@@ -38,23 +38,23 @@ const MOVIE_SNAPSHOT_FIELDS = {
 
 const WATCHLIST_ITEM_FIELDS = {
   movieKey: 'notUseful',
-  movie: 'notUseful',
-  priority: 'notUseful',
+  movie: 'shared',
+  priority: 'shared',
   preferredFormat: 'notUseful',
-  archivedAt: 'notUseful',
+  archivedAt: 'filter',
   archiveReason: 'notUseful',
   createdAt: 'notUseful',
-  lastEditedAt: 'notUseful',
+  lastEditedAt: 'shared',
 } satisfies Record<keyof WatchlistItem, ShareDecision>;
 
 const VIEWING_FIELDS = {
   id: 'notUseful',
-  movieKey: 'notUseful',
+  movieKey: 'filter',
   movie: 'shared',
   showtimeAt: 'shared',
   endsAt: 'shared',
   status: 'filter',
-  ticket: 'never',
+  ticket: 'filter',
   theatre: 'shared',
   purchase: 'never',
   rating: 'shared',
@@ -64,7 +64,7 @@ const VIEWING_FIELDS = {
 } satisfies Record<keyof Viewing, ShareDecision>;
 
 const TICKET_FIELDS = {
-  entryMode: 'never',
+  entryMode: 'filter',
   format: 'never',
   priceCents: 'never',
   standardPriceCents: 'never',

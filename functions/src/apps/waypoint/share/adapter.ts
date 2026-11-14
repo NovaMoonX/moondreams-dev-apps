@@ -29,6 +29,9 @@ const TRIP_LIMIT = 100;
 const DOC_LIMIT = 500;
 // A plan may be dated this many days before the first day or after the last.
 const DAYS_OUTSIDE_TRIP = 3;
+const DETAIL_CHARS = 120;
+const NAME_CHARS = 60;
+const LISTED_NAMES = 3;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const EMPTY_RECORD: SharedRecord = {
@@ -65,6 +68,9 @@ const readText = (value: unknown) =>
 
 const readNumber = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+const clip = (value: string, chars: number) =>
+  value.length > chars ? `${value.slice(0, chars - 1)}…` : value;
 
 const readIds = (value: unknown) =>
   Array.isArray(value)
@@ -221,6 +227,7 @@ interface Item {
   start: Moment | null;
   end: Moment | null;
   placeLabel: string | null;
+  detail?: string | null;
   updatedAt: number | null;
 }
 
@@ -235,6 +242,7 @@ const toItemRecords = (item: Item, windowStart: number): SharedRecord[] => {
       kind: 'event',
       title: item.title,
       subtitle: item.subtitle,
+      detail: item.detail ?? null,
       startAt: start.at,
       endAt:
         end !== null && end.isAllDay === start.isAllDay && end.at > start.at
@@ -246,6 +254,32 @@ const toItemRecords = (item: Item, windowStart: number): SharedRecord[] => {
       sourceUpdatedAt: item.updatedAt,
     }),
   ];
+};
+
+const readFlightDetail = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+  if (doc.get('eventDetails.transitType') !== 'FLIGHT') return null;
+  const flight = [
+    readText(doc.get('eventDetails.transitDetails.airline')),
+    readText(doc.get('eventDetails.transitDetails.flightNumber')),
+  ]
+    .flatMap((part) => (part === null ? [] : [clip(part, NAME_CHARS)]))
+    .join(' ');
+  const from = readText(
+    doc.get('eventDetails.transitDetails.departureAirportCode'),
+  );
+  const to = readText(
+    doc.get('eventDetails.transitDetails.arrivalAirportCode'),
+  );
+  const route =
+    from !== null && to !== null
+      ? `${clip(from, 8)} → ${clip(to, 8)}`
+      : from !== null
+        ? `from ${clip(from, 8)}`
+        : to !== null
+          ? `to ${clip(to, 8)}`
+          : '';
+  const detail = [flight, route].filter((part) => part !== '').join(' · ');
+  return detail === '' ? null : clip(detail, DETAIL_CHARS);
 };
 
 const readEventSubtitle = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
@@ -268,6 +302,10 @@ async function readEvents(trip: Trip, uid: string) {
         'eventType',
         'customTypeLabel',
         'eventDetails.transitType',
+        'eventDetails.transitDetails.airline',
+        'eventDetails.transitDetails.flightNumber',
+        'eventDetails.transitDetails.departureAirportCode',
+        'eventDetails.transitDetails.arrivalAirportCode',
         'title',
         'dayIndex',
         'endDayIndex',
@@ -304,6 +342,7 @@ async function readEvents(trip: Trip, uid: string) {
         sourceRef: `trips/${trip.id}/events/${doc.id}`,
         title,
         subtitle: readEventSubtitle(doc),
+        detail: readFlightDetail(doc),
         start: trip.isRelative
           ? toMoment(trip, dayIndex, readText(doc.get('startTime')), zone)
           : toInstant(doc.get('startAt')),
@@ -531,6 +570,139 @@ const syncTasks = async (
   };
 };
 
+const CHECKLIST_FIELDS = [
+  'title',
+  'category',
+  'customCategoryLabel',
+  'isCompleted',
+  'lastEditedAt',
+];
+
+const CHECKLIST_LABELS: Record<string, string> = {
+  DOCUMENTS: 'Documents',
+  PACKING: 'Packing',
+  BOOKINGS: 'Bookings',
+  LOGISTICS: 'Logistics',
+};
+
+interface ChecklistLine {
+  tripId: string;
+  group: string;
+  title: string;
+  isDone: boolean;
+  updatedAt: number | null;
+}
+
+const toChecklistLine = (
+  tripId: string,
+  doc: FirebaseFirestore.QueryDocumentSnapshot,
+): ChecklistLine[] => {
+  const title = readText(doc.get('title'));
+  if (title === null) return [];
+  const category = readText(doc.get('category')) ?? 'OTHER';
+  const custom = readText(doc.get('customCategoryLabel'));
+  return [
+    {
+      tripId,
+      group: clip(
+        category === 'OTHER'
+          ? (custom ?? 'Other')
+          : (CHECKLIST_LABELS[category] ?? 'Other'),
+        NAME_CHARS,
+      ),
+      title: clip(title, NAME_CHARS),
+      isDone: doc.get('isCompleted') === true,
+      updatedAt: readNumber(doc.get('lastEditedAt')),
+    },
+  ];
+};
+
+const toChecklistRecord = (
+  trip: Trip,
+  group: string,
+  lines: ChecklistLine[],
+) => {
+  const names = (isDone: boolean) =>
+    lines
+      .filter((line) => line.isDone === isDone)
+      .map((line) => line.title)
+      .sort();
+  const todo = names(false);
+  const done = names(true);
+  const listed = (label: string, titles: string[]) =>
+    titles.length === 0
+      ? null
+      : `${label}: ${titles.slice(0, LISTED_NAMES).join(', ')}${titles.length > LISTED_NAMES ? ` and ${titles.length - LISTED_NAMES} more` : ''}`;
+  const detail = [listed('To do', todo), listed('Done', done)]
+    .flatMap((part) => (part === null ? [] : [part]))
+    .join('. ');
+  return toRecord({
+    sourceRef: `trips/${trip.id}/checklist/${encodeURIComponent(group)}`,
+    kind: 'artifact',
+    title: `${clip(trip.title, NAME_CHARS)}: ${group}`,
+    subtitle: `${done.length} of ${lines.length} done`,
+    detail: clip(detail, DETAIL_CHARS),
+    sourceUpdatedAt: lines.reduce<number | null>(
+      (latest, line) =>
+        line.updatedAt === null
+          ? latest
+          : Math.max(latest ?? 0, line.updatedAt),
+      null,
+    ),
+  });
+};
+
+const syncChecklist = async (
+  firestore: Firestore,
+  uid: string,
+  windowStart: number,
+): Promise<CategoryRead> => {
+  const { trips, isFull } = await readTrips(firestore, uid, windowStart);
+  const tripsById = new Map(trips.map((trip) => [trip.id, trip]));
+  const [assigned, privateRead] = await Promise.all([
+    Promise.all(
+      trips.map(async (trip) => {
+        const read = await readDocs(
+          trip.ref
+            .collection('checklist')
+            .where('assignedToUids', 'array-contains', uid)
+            .select(...CHECKLIST_FIELDS),
+        );
+        return {
+          isFull: read.isFull,
+          lines: read.docs.flatMap((doc) => toChecklistLine(trip.id, doc)),
+        };
+      }),
+    ),
+    readDocs(
+      firestore
+        .collection(`apps/waypoint/personalChecklist/${uid}/items`)
+        .select('tripId', ...CHECKLIST_FIELDS),
+    ),
+  ]);
+  const own = privateRead.docs.flatMap((doc) => {
+    const tripId = readText(doc.get('tripId')) ?? '';
+    return tripsById.has(tripId) ? toChecklistLine(tripId, doc) : [];
+  });
+  const groups = [...assigned.flatMap((one) => one.lines), ...own].reduce(
+    (found, line) =>
+      found.set(`${line.tripId}\n${line.group}`, [
+        ...(found.get(`${line.tripId}\n${line.group}`) ?? []),
+        line,
+      ]),
+    new Map<string, ChecklistLine[]>(),
+  );
+  return {
+    records: [...groups.values()].flatMap((lines) => {
+      const trip = tripsById.get(lines[0].tripId);
+      return trip === undefined
+        ? []
+        : [toChecklistRecord(trip, lines[0].group, lines)];
+    }),
+    isFull: isFull && privateRead.isFull && assigned.every((one) => one.isFull),
+  };
+};
+
 const readExpense = (
   doc: FirebaseFirestore.QueryDocumentSnapshot,
 ): ExpenseShape => {
@@ -688,6 +860,8 @@ export function createWaypointAdapter(
         return syncItinerary(firestore, uid, req.windowStart);
       case 'myTasks':
         return syncTasks(firestore, uid, req.windowStart);
+      case 'tripChecklist':
+        return syncChecklist(firestore, uid, req.windowStart);
       case 'tripBalances':
         return syncBalances(firestore, uid, req.windowStart);
       default:

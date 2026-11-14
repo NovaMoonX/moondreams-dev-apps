@@ -370,11 +370,11 @@ const HORIZON_COST_FIELDS = {
 
 const PLAN_ITEM_DOC_FIELDS = {
   id: 'notUseful',
-  kind: 'notUseful',
+  kind: 'filter',
   parentId: 'notUseful',
   createdAt: 'notUseful',
-  endedAt: 'notUseful',
-  archivedAt: 'notUseful',
+  endedAt: 'filter',
+  archivedAt: 'filter',
   heldReleasedOn: 'notUseful',
   matchSealed: 'notUseful',
 } satisfies Record<keyof PlanItemDoc, ShareDecision>;
