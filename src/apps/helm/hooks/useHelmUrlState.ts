@@ -17,6 +17,7 @@ const URL_VIEWS = [
   'comingUp',
   'settings',
   'activity',
+  'outside',
   'connectedApps',
   'connection',
   'assistants',

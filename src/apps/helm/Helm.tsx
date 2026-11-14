@@ -16,6 +16,7 @@ import GoogleConnectProvider from '@apps/helm/components/connections/GoogleConne
 import ConnectedAssistantsScreen from '@apps/helm/components/settings/ConnectedAssistantsScreen';
 import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedAppsScreen';
 import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
+import OutsideScreen from '@apps/helm/components/outside/OutsideScreen';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
 import SearchScreen from '@apps/helm/components/search/SearchScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
@@ -117,10 +118,7 @@ function HelmApp() {
           isHome &&
           !isLocked &&
           !isComposing && (
-            <VoiceDock
-              onBrowse={openBrowse}
-              onType={focusComposer}
-            />
+            <VoiceDock onBrowse={openBrowse} onType={focusComposer} />
           )
         }
       >
@@ -160,6 +158,7 @@ function HelmApp() {
           <SettingsScreen
             onBack={goBack}
             onOpenActivity={() => showView('activity')}
+            onOpenOutside={() => showView('outside')}
             onOpenConnectedApps={() => showView('connectedApps')}
             onOpenAssistants={() => showView('assistants')}
             onOpenSeesYou={() => showView('howNomosSeesYou')}
@@ -173,7 +172,13 @@ function HelmApp() {
             onOpenView={(next, id) => void showView(next, id)}
           />
         )}
-        {!isLocked && view === 'activity' && <ActivityScreen onBack={goBack} />}
+        {!isLocked && view === 'activity' && (
+          <ActivityScreen
+            onBack={goBack}
+            onOpenOutside={() => showView('outside')}
+          />
+        )}
+        {!isLocked && view === 'outside' && <OutsideScreen onBack={goBack} />}
         {!isLocked && view === 'connectedApps' && (
           <ConnectedAppsScreen
             onBack={goBack}

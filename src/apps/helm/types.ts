@@ -13,6 +13,7 @@ export type HelmView =
   | 'tasks'
   | 'settings'
   | 'activity'
+  | 'outside'
   | 'connectedApps'
   | 'connection'
   | 'assistants'

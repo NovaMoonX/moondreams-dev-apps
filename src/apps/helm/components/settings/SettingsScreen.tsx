@@ -5,6 +5,7 @@ import {
   Eye,
   History,
   Link2,
+  MessagesSquare,
   Mic,
   Sparkles,
   Sun,
@@ -37,6 +38,7 @@ import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useNow } from '@/hooks/useNow';
 import { hasUnseenNews } from '@/lib/connections/connectionNews';
 import { useConnections } from '@/lib/connections/useConnections';
+import { selectHasOutsideSource } from '@apps/helm/store/selectors/captureSelectors';
 import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
@@ -52,6 +54,7 @@ import {
 interface SettingsScreenProps {
   onBack: () => void;
   onOpenActivity: () => void;
+  onOpenOutside: () => void;
   onOpenConnectedApps: () => void;
   onOpenAssistants: () => void;
   onOpenSeesYou: () => void;
@@ -61,6 +64,7 @@ interface SettingsScreenProps {
 function SettingsScreen({
   onBack,
   onOpenActivity,
+  onOpenOutside,
   onOpenConnectedApps,
   onOpenAssistants,
   onOpenSeesYou,
@@ -86,6 +90,7 @@ function SettingsScreen({
   const assistantCount = useAppSelector(
     (state) => state.helm.assistants.items.length,
   );
+  const hasOutsideSource = useAppSelector(selectHasOutsideSource);
   const now = useNow(60_000);
   const newestOkAt = grants.reduce<number | null>((newest, grant) => {
     const at = getNewestOkAt(grant);
@@ -169,6 +174,15 @@ function SettingsScreen({
                   : HELM_COPY.assistantsRowNone
               }
               onClick={onOpenAssistants}
+              hasChevron
+            />
+          )}
+          {hasOutsideSource && (
+            <SettingsRow
+              icon={<MessagesSquare className='size-5' aria-hidden='true' />}
+              title={HELM_COPY.outsideTitle}
+              description={HELM_COPY.outsideRowHint}
+              onClick={onOpenOutside}
               hasChevron
             />
           )}

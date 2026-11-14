@@ -35,6 +35,7 @@ import { groupSessions } from '@apps/helm/utils/sessions';
 const EARLIER_FETCH_LIMIT = 200;
 const UNSEEN_LIMIT = 200;
 const WAITING_LIMIT = 200;
+const OUTSIDE_LIMIT = 200;
 
 const capturesOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'captures');
@@ -319,6 +320,25 @@ export const startWaitingCapturesListener = (
     onChange,
     onError,
     true,
+  );
+
+/** The newest turns an outside assistant sent, at most a page of them, whenever they were sent. */
+export const startOutsideCapturesListener = (
+  uid: string,
+  read: SealedReader,
+  onChange: (captures: OpenCapture[]) => void,
+  onError: (error: Error) => void,
+) =>
+  startCapturesListener(
+    uid,
+    read,
+    [
+      where('medium', '==', 'mcp'),
+      orderBy('createdAt', 'desc'),
+      limit(OUTSIDE_LIMIT),
+    ],
+    onChange,
+    onError,
   );
 
 /** The next sessions older than `before`, whole ones only: a session cut by the fetch's end waits for the next page. */
