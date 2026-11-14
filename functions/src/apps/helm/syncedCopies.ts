@@ -51,7 +51,7 @@ const DETAIL_CHARS = 120;
 const MAX_SCANNED_MONEY = 50;
 const MAX_CONTEXT_MONEY = 3;
 const MAX_SCANNED_STANDING = 120;
-const MAX_CONTEXT_STANDING = 15;
+const MAX_CONTEXT_STANDING = 8;
 const STANDING_KINDS: SharedKind[] = ['project', 'countSummary', 'pet'];
 const PLACE_CHARS = 120;
 

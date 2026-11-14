@@ -40,7 +40,7 @@ export const WAYPOINT_SHARES: SourceShares = {
               sinceVersion: 1,
             },
             { label: 'Its times and time zone', sinceVersion: 1 },
-            { label: 'Its place name', sinceVersion: 1 },
+            { label: 'Its place name or street address', sinceVersion: 1 },
           ],
           scopeVersion: 1,
         },

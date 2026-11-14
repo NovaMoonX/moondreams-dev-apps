@@ -514,9 +514,9 @@ const MEMORY_DOC_FIELDS = {
 
 const ROUTE_MEMORY_SEALED_FIELDS = {
   kind: 'notUseful',
-  fromAccountId: 'notUseful',
-  toAccountId: 'notUseful',
-  toCardId: 'notUseful',
+  fromAccountId: 'never',
+  toAccountId: 'never',
+  toCardId: 'never',
 } satisfies Record<keyof RouteMemorySealed, ShareDecision>;
 
 const PAYER_MEMORY_SEALED_FIELDS = {
@@ -711,17 +711,17 @@ const CLOSING_SEALED_FIELDS = {
   version: 'notUseful',
   startDay: 'notUseful',
   arrivedCents: 'never',
-  given: 'notUseful',
-  late: 'notUseful',
+  given: 'never',
+  late: 'never',
   spentCents: 'never',
-  spentByItem: 'notUseful',
-  funded: 'notUseful',
-  paid: 'notUseful',
-  charged: 'notUseful',
-  cardPaid: 'notUseful',
-  transfers: 'notUseful',
-  costPaid: 'notUseful',
-  repaid: 'notUseful',
+  spentByItem: 'never',
+  funded: 'never',
+  paid: 'never',
+  charged: 'never',
+  cardPaid: 'never',
+  transfers: 'never',
+  costPaid: 'never',
+  repaid: 'never',
 } satisfies Record<keyof ClosingSealed, ShareDecision>;
 
 const CLOSING_DOC_FIELDS = {

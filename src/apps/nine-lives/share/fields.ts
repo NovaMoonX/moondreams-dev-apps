@@ -122,7 +122,7 @@ const VET_CLINIC_FIELDS = {
   householdId: 'notUseful',
   name: 'shared',
   phone: 'shared',
-  email: 'notUseful',
+  email: 'never',
   website: 'notUseful',
   address: 'shared',
   isEmergency24Hour: 'notUseful',
