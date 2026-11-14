@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Bot, ChevronRight } from 'lucide-react';
+import { ChevronRight, MessagesSquare } from 'lucide-react';
 
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
@@ -193,20 +193,15 @@ function ActivityScreen({ onBack, onOpenOutside }: ActivityScreenProps) {
           <Button
             type='button'
             variant='tertiary'
-            className='helm-card flex h-auto w-full items-center justify-between gap-3 px-4 py-3 text-left'
+            className='helm-card flex h-auto w-full items-center justify-between gap-3 px-4 py-2.5 text-left'
             onClick={onOpenOutside}
           >
-            <Bot
+            <MessagesSquare
               className='text-muted-foreground size-4 shrink-0'
               aria-hidden='true'
             />
-            <span className='min-w-0 flex-1'>
-              <span className='text-foreground block text-[15px]'>
-                {HELM_COPY.outsideTitle}
-              </span>
-              <span className='text-muted-foreground block text-[13px]'>
-                {HELM_COPY.outsideRowHint}
-              </span>
+            <span className='text-foreground min-w-0 flex-1 truncate text-[15px]'>
+              {HELM_COPY.outsideTitle}
             </span>
             <ChevronRight
               className='text-muted-foreground size-4 shrink-0'

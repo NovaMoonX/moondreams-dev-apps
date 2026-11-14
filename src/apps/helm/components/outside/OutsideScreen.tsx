@@ -5,7 +5,7 @@ import { ChevronRight } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
 import { useAppSelector } from '@/store';
-import { formatDate, formatTime } from '@/utils/formatUtils';
+import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import OutsideConversationView from '@apps/helm/components/outside/OutsideConversationView';
 import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -17,6 +17,11 @@ import {
 } from '@apps/helm/utils/outsideTurns';
 
 const SEARCH_FROM_ROWS = 8;
+
+const whenOf = (at: number) =>
+  new Date(at).toDateString() === new Date().toDateString()
+    ? formatTime(at)
+    : formatDateShort(at);
 
 const firstWords = (conversation: OutsideConversation) =>
   conversation.turns[0].isUnreadable
@@ -36,15 +41,20 @@ function ConversationRow({
     <Button
       type='button'
       variant='tertiary'
-      className='flex h-auto w-full items-center justify-between gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
+      className='flex h-auto w-full items-start justify-between gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
       onClick={onOpen}
     >
       <OutsideMark via={conversation.via} />
       <span className='min-w-0 flex-1'>
-        <span className='text-foreground block text-[13px] font-medium'>
-          {HELM_COPY.assistantFrom(conversation.via)}
+        <span className='flex items-baseline justify-between gap-3'>
+          <span className='text-foreground min-w-0 truncate text-[13px] font-medium'>
+            {HELM_COPY.assistantFrom(conversation.via)}
+          </span>
+          <span className='text-muted-foreground shrink-0 text-[13px] whitespace-nowrap tabular-nums'>
+            {whenOf(conversation.endedAt)}
+          </span>
         </span>
-        <span className='text-foreground line-clamp-1 text-[15px] leading-[21px] break-words'>
+        <span className='text-foreground line-clamp-2 text-[15px] leading-[21px] break-words'>
           {firstWords(conversation)}
         </span>
         {count > 1 && (
@@ -53,11 +63,8 @@ function ConversationRow({
           </span>
         )}
       </span>
-      <span className='text-muted-foreground shrink-0 text-[13px] whitespace-nowrap tabular-nums'>
-        {`${formatDate(conversation.endedAt)} ${formatTime(conversation.endedAt)}`}
-      </span>
       <ChevronRight
-        className='text-muted-foreground size-4 shrink-0'
+        className='text-muted-foreground mt-1 size-4 shrink-0'
         aria-hidden='true'
       />
     </Button>
@@ -65,7 +72,13 @@ function ConversationRow({
 }
 
 /** A utility screen: the conversations outside assistants started, newest first. */
-function OutsideScreen({ onBack }: { onBack: () => void }) {
+function OutsideScreen({
+  onBack,
+  onOpenAssistants,
+}: {
+  onBack: () => void;
+  onOpenAssistants: () => void;
+}) {
   const captures = useAppSelector(selectOutsideCaptures);
   const { isLoaded, isFailed } = useAppSelector(
     (state) => state.helm.outsideCaptures,
@@ -116,9 +129,17 @@ function OutsideScreen({ onBack }: { onBack: () => void }) {
           </p>
         )}
         {isLoaded && conversations.length === 0 && (
-          <p className='helm-card p-4 text-[15px] text-pretty'>
-            {HELM_COPY.outsideEmpty}
-          </p>
+          <div className='helm-card flex flex-col items-start gap-3 p-4'>
+            <p className='text-[15px] text-pretty'>{HELM_COPY.outsideEmpty}</p>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              onClick={onOpenAssistants}
+            >
+              {HELM_COPY.outsideConnect}
+            </Button>
+          </div>
         )}
         {conversations.length > 0 && shown.length === 0 && (
           <p className='text-muted-foreground text-[15px] text-pretty'>

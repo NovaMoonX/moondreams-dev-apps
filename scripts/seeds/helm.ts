@@ -1222,7 +1222,40 @@ async function buildAnswerTurns(input: {
       return { id: entry.id, task };
     }),
   );
-  return { turns, tasks, notes };
+  // Three answered questions copied as an outside assistant's turns: two from Claude in one sitting, one from Gemini the day before.
+  const outsideTurns = turns.slice(0, 3).map((turn, order) => {
+    const createdAt =
+      order < 2
+        ? now - (20 - order * 6) * MINUTE_MS
+        : now - DAY_MS - 3 * HOUR_MS;
+    const captureId = `seed-turn-outside-${order + 1}`;
+    const executionId = `seed-execution-outside-${order + 1}`;
+    return {
+      captureId,
+      executionId,
+      capture: {
+        ...turn.capture,
+        medium: 'mcp' as const,
+        via: order < 2 ? 'Claude' : 'Gemini',
+        outsideReadScopes: order === 0 ? ['apps' as const] : [],
+        sessionId: `seed-${uid}-outside-${order + 1}`,
+        turnIndex: 0,
+        executionIds: [executionId],
+        answerSavedNoteId: null,
+        seenAt: createdAt,
+        createdAt,
+        sortedAt: createdAt + SORT_DELAY_MS,
+      },
+      execution: {
+        ...turn.execution,
+        captureId,
+        createdAt: createdAt + SORT_DELAY_MS,
+        decidedAt: createdAt + SORT_DELAY_MS,
+        finishedAt: createdAt + SORT_DELAY_MS,
+      },
+    };
+  });
+  return { turns: [...turns, ...outsideTurns], tasks, notes };
 }
 
 /** Alex's plan days: yesterday as it was (one event, one kept task done that day and one not) and today (one kept slot and one suggestion), with the done task they need. */

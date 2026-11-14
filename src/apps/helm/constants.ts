@@ -1348,10 +1348,11 @@ export const HELM_COPY = {
   activityTitle: 'Activity',
   outsideTitle: 'From your assistants',
   outsideUnnamed: 'an assistant',
-  outsideRowHint: 'Questions Claude, Gemini or ChatGPT sent',
+  outsideRowHint: 'What your assistants asked',
   outsideLead: 'What your assistants asked or told you, kept apart from home.',
   outsideEmpty:
     'Nothing yet. Questions and notes from your assistants will gather here.',
+  outsideConnect: 'Connect an assistant',
   outsideSearch: 'Search conversations',
   outsideNoMatch: 'No conversation matches that.',
   outsideQuestions: (count: number) => `${count} questions`,

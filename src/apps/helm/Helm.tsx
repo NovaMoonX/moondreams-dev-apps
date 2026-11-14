@@ -178,7 +178,12 @@ function HelmApp() {
             onOpenOutside={() => showView('outside')}
           />
         )}
-        {!isLocked && view === 'outside' && <OutsideScreen onBack={goBack} />}
+        {!isLocked && view === 'outside' && (
+          <OutsideScreen
+            onBack={goBack}
+            onOpenAssistants={() => showView('assistants')}
+          />
+        )}
         {!isLocked && view === 'connectedApps' && (
           <ConnectedAppsScreen
             onBack={goBack}
