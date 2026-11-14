@@ -187,7 +187,7 @@ function AssistantSheet({
                     </div>
                   )}
                 </div>
-                {isConnected(scope) && (
+                {(isConnected(scope) || isOn) && (
                   <AppToggle
                     aria-label={HELM_COPY.assistantReadScopeLabels[scope]}
                     checked={isOn}

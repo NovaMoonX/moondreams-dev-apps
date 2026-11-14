@@ -162,6 +162,7 @@ function ConnectedAppsScreen({
       : [];
   });
   const [openKeptId, setOpenKeptId] = useState<string | null>(null);
+  const [busyServices, setBusyServices] = useState<string[]>([]);
   const [connecting, setConnecting] = useState<{
     id: string;
     name: string;
@@ -268,19 +269,30 @@ function ConnectedAppsScreen({
   const connectMailOrDrive = async (
     service: (typeof MAIL_AND_DRIVE)[number],
   ) => {
-    const account = accounts.find(
-      (entry) =>
-        googleAccountIds.includes(entry.id) &&
-        entry.status !== 'needsReconnect',
-    );
+    if (busyServices.includes(service.id)) return;
     const scope = scopeOf(service.manifest, service.categoryId);
-    if (!account || !account.grantedScopes.includes(scope)) {
+    const candidates = accounts.filter((entry) =>
+      googleAccountIds.includes(entry.id),
+    );
+    const live = candidates.filter(
+      (entry) => entry.status !== 'needsReconnect',
+    );
+    const account =
+      live.find((entry) => entry.grantedScopes.includes(scope)) ??
+      live[0] ??
+      candidates[0];
+    if (
+      !account ||
+      account.status === 'needsReconnect' ||
+      !account.grantedScopes.includes(scope)
+    ) {
       begin({
         accountId: account?.id ?? null,
         connectorId: service.connectorId,
       });
       return;
     }
+    setBusyServices((ids) => [...ids, service.id]);
     try {
       await grantConnection({
         readerAppId: 'helm',
@@ -292,6 +304,8 @@ function ConnectedAppsScreen({
     } catch (failure) {
       console.error('Helm could not connect a Google service', failure);
       addToast({ title: service.failed, type: 'error' });
+    } finally {
+      setBusyServices((ids) => ids.filter((id) => id !== service.id));
     }
   };
 
