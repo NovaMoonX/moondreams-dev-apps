@@ -2882,6 +2882,62 @@ export const HELM_COPY = {
     `Showing the first ${count.toLocaleString('en-US')}. Add a word to narrow it.`,
   searchLooseNote: 'Loose note',
   searchOpenResult: (title: string) => `Open ${title}`,
+  whereTitle: 'Where',
+  whereHomeLine: (city: string) => `Lives in ${city}`,
+  whereSourceSaid: 'You said so',
+  whereSourcePage: 'Set here',
+  whereSourceTrip: 'from Waypoint',
+  whereAddHome: 'Add home',
+  whereAddAway: 'Add a time away',
+  whereHomeSheetTitle: 'Home',
+  whereAwaySheetTitle: 'Time away',
+  whereChange: 'Change',
+  whereRemove: 'Remove',
+  whereBack: "I'm back",
+  whereCityLabel: 'City',
+  whereDatesLabel: 'Dates',
+  whereLabelLabel: 'What for (optional)',
+  whereLabelPlaceholder: "At my sister's",
+  whereSave: 'Save',
+  whereFull: 'Up to 5 times away fit. Remove one first.',
+  whereSaveFailed: "That didn't save. Try again.",
+  phoneLocationRow: "This phone's location",
+  phoneLocationLevels: {
+    off: 'Off',
+    city: 'City only',
+    precise: 'Precise',
+  },
+  phoneLocationKeeps: {
+    off: 'Only what you tell it, your calendar and your trips',
+    city: "The city you're in today, nothing finer, for 6 hours",
+    precise: 'Where you are to about 100 m, for 6 hours, never a history',
+  },
+  phoneLocationRead: (city: string, time: string) => `Near ${city} · ${time}`,
+  phoneLocationNone: 'Nothing read yet.',
+  phoneLocationForget: 'Forget',
+  phoneLocationForgotten: 'Forgot the last place.',
+  phoneLocationDenied:
+    "This phone said no to location. Turn it on in the browser's site settings.",
+  phoneLocationUnsupported: "This browser can't share a location.",
+  phoneLocationFailed:
+    "Couldn't read this phone's location just now. Try again.",
+  phoneLocationSaveFailed: "That didn't save. Try again.",
+  abilityOfferLabel: (level: 'city' | 'precise') =>
+    `Use this phone's location · ${level === 'precise' ? 'Precise' : 'City only'}`,
+  abilityOfferNotNow: 'Not now',
+  abilityOfferTurnOn: 'Turn on',
+  abilityOfferOn: (level: 'city' | 'precise') =>
+    `Using this phone's location · ${level === 'precise' ? 'Precise' : 'City only'}`,
+  abilityOfferLater: 'Okay, not now.',
+  abilityOfferSettingsLine:
+    "This phone said no to location. Turn it on in the browser's site settings.",
+  zoneOfferLine: (city: string) =>
+    `Those days follow ${city}'s clock, then home time comes back on its own`,
+  zoneOfferNotNow: 'Not now',
+  zoneOfferUse: 'Use it',
+  zoneOfferOn: (city: string, days: string) => `Using ${city} time ${days}`,
+  zoneOfferUndo: 'Undo',
+  zoneOfferLater: 'Okay, home time stays.',
 } as const;
 
 export const PLANNER_COPY = {

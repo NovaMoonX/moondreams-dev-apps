@@ -47,6 +47,7 @@ import {
 import { selectNameRecords } from '@apps/helm/store/selectors/nameSelectors';
 import { readTypedHeardNames } from '@apps/helm/utils/spokenNames';
 import { rankNotes } from '@apps/helm/utils/noteSearch';
+import { readLocationPermission } from '@apps/helm/utils/phoneLocation';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
@@ -194,6 +195,12 @@ export async function sendCapture(
     privacy: 'ordinary',
     touchesPrivate: null,
     presence: turn.presence ?? null,
+    abilities: {
+      location: {
+        setting: store.getState().helm.profile?.phoneLocation ?? 'off',
+        permission: await readLocationPermission(),
+      },
+    },
     sealed,
   };
   const reference = doc(capturesOf(uid));

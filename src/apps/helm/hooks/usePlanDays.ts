@@ -10,7 +10,12 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { generatePlan } from '@apps/helm/store/actions/planActions';
 import { selectActiveTasks } from '@apps/helm/store/selectors/taskSelectors';
-import { formatDayWord, needsPlan, toDayKey } from '@apps/helm/utils/planDays';
+import {
+  formatDayWord,
+  needsPlan,
+  readTodayZone,
+  toDayKey,
+} from '@apps/helm/utils/planDays';
 import {
   buildPlanInput,
   findClashes,
@@ -41,7 +46,10 @@ interface SourceParts {
 const toSources = (parts: SourceParts): PlanSources | null => {
   const { profile, now, ...rest } = parts;
   if (!profile) return null;
-  const timeZone = profile.timeZone || getDeviceTimeZone() || 'UTC';
+  const timeZone = readTodayZone(now, {
+    timeZone: profile.timeZone || getDeviceTimeZone() || 'UTC',
+    zoneSpans: profile.zoneSpans,
+  });
   return { ...rest, profile, now, timeZone, todayKey: toDayKey(now, timeZone) };
 };
 

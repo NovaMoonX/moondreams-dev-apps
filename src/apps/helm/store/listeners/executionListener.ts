@@ -65,6 +65,8 @@ export async function openExecution(
       spoken: payload.spoken ?? null,
       goneIds: payload.goneIds ?? null,
       lines: payload.lines ?? [],
+      abilityOffer: payload.abilityOffer ?? null,
+      awayZoneOffer: payload.awayZoneOffer ?? null,
       isUnreadable: false,
     };
   } catch {
@@ -77,6 +79,8 @@ export async function openExecution(
       spoken: null,
       goneIds: null,
       lines: [],
+      abilityOffer: null,
+      awayZoneOffer: null,
       isUnreadable: true,
     };
   }

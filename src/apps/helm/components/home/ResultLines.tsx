@@ -5,6 +5,8 @@ import { useAppSelector } from '@/store';
 import { formatTime } from '@/utils/formatUtils';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import UndoButton from '@apps/helm/components/activity/UndoButton';
+import AbilityOfferRow from '@apps/helm/components/home/AbilityOfferRow';
+import AwayZoneOfferRow from '@apps/helm/components/home/AwayZoneOfferRow';
 import ResultRows from '@apps/helm/components/home/ResultRows';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -148,6 +150,12 @@ function ResultLines({
                 </div>
               )}
             </div>
+          )}
+          {execution.awayZoneOffer && (
+            <AwayZoneOfferRow offer={execution.awayZoneOffer} />
+          )}
+          {execution.abilityOffer && (
+            <AbilityOfferRow offer={execution.abilityOffer} />
           )}
           {isOnHome && showsNotice && <AiNotice />}
         </>

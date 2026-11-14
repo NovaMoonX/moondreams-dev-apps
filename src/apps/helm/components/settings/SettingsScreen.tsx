@@ -4,6 +4,7 @@ import {
   Eye,
   History,
   Link2,
+  MapPin,
   Mic,
   Sparkles,
   Sun,
@@ -27,6 +28,7 @@ import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
 import DeleteHelmData from '@apps/helm/components/settings/DeleteHelmData';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
+import PhoneLocationSheet from '@apps/helm/components/settings/PhoneLocationSheet';
 import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
@@ -68,6 +70,7 @@ function SettingsScreen({
   const { isVoiceSheetRequested, closeSheet } = useHelmUrlState();
   const [isVoiceOpen, setIsVoiceOpen] = useState(isVoiceSheetRequested);
   const [isDayOpen, setIsDayOpen] = useState(false);
+  const [isLocationOpen, setIsLocationOpen] = useState(false);
   const { grants: allGrants, isKnown } = useConnections({
     readerAppId: 'helm',
     includeEnded: true,
@@ -107,6 +110,15 @@ function SettingsScreen({
                 '',
             )}
             onClick={() => setIsAssistantOpen(true)}
+            hasChevron
+          />
+          <SettingsRow
+            icon={<MapPin className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.phoneLocationRow}
+            description={
+              HELM_COPY.phoneLocationLevels[profile?.phoneLocation ?? 'off']
+            }
+            onClick={() => setIsLocationOpen(true)}
             hasChevron
           />
         </SettingsSection>
@@ -217,6 +229,10 @@ function SettingsScreen({
       <AssistantNameToneSheet
         isOpen={isAssistantOpen}
         onClose={() => setIsAssistantOpen(false)}
+      />
+      <PhoneLocationSheet
+        isOpen={isLocationOpen}
+        onClose={() => setIsLocationOpen(false)}
       />
       <YourDaySheet isOpen={isDayOpen} onClose={() => setIsDayOpen(false)} />
       <VoiceSettings

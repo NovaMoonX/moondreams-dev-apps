@@ -221,6 +221,7 @@ async function openCapture(
     privacy: readPrivacy(data.privacy),
     touchesPrivate: data.touchesPrivate ?? null,
     presence: data.presence ?? null,
+    abilities: data.abilities ?? null,
     sortedAt: data.sortedAt ?? null,
     screen: toScreen(data.screen ?? null),
   } as const;

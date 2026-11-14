@@ -1,4 +1,5 @@
 import type { City } from '@/lib/cities/types';
+import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
@@ -367,7 +368,21 @@ export interface Capture {
     isHidden: boolean;
     isUntouched: boolean;
   } | null;
+  /** This phone's location setting and the browser's permission when the turn was sent; null on a turn made before the field. */
+  abilities: {
+    location: { setting: PhoneLocation; permission: LocationPermission };
+  } | null;
   sealed: Sealed;
+}
+
+export type LocationPermission =
+  'granted' | 'prompt' | 'denied' | 'unsupported';
+
+/** A location offer under an answer: a button to turn it on, or the line on how to allow it in the browser. */
+export interface AbilityOffer {
+  ability: 'location';
+  level: 'city' | 'precise';
+  mode: 'offer' | 'settingsLine';
 }
 
 export type SourceRef =
@@ -1144,6 +1159,9 @@ export interface ExecutionSealed {
   goneIds: string[] | null;
   /** Result rows that touch no record (a note already kept); null on executions that said none. */
   lines: ResultNoteLine[] | null;
+  /** Absent in a payload from before offers. */
+  abilityOffer?: AbilityOffer | null;
+  awayZoneOffer?: AwayZoneOffer | null;
 }
 
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */
@@ -1156,6 +1174,8 @@ export interface OpenExecution extends Omit<Execution, 'sealed'> {
   spoken: string | null;
   goneIds: string[] | null;
   lines: ResultNoteLine[];
+  abilityOffer: AbilityOffer | null;
+  awayZoneOffer: AwayZoneOffer | null;
   isUnreadable: boolean;
 }
 

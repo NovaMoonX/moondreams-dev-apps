@@ -1,6 +1,7 @@
 import { getDateTimeFormat, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { DAY_MS } from '@apps/helm/constants';
-import type { PlanDay, PlanSlot } from '@apps/helm/types';
+import { readZoneFor } from '@apps/helm/engine/whereabouts';
+import type { PlanDay, PlanSlot, ZoneSpan } from '@apps/helm/types';
 import { getDueDay } from '@apps/helm/utils/captureReading';
 
 /** Days kept loaded: a day more than the strip holds on each side, since the listener's window is fixed when it starts. */
@@ -20,6 +21,12 @@ export const toDayKey = (at: number, timeZone: string) =>
   new Date(getDueDay({ kind: 'moment', at }, timeZone))
     .toISOString()
     .slice(0, 10);
+
+/** The zone today's clock follows: a chosen away span's when today's date in home time falls in one, else home's. */
+export const readTodayZone = (
+  now: number,
+  profile: { timeZone: string; zoneSpans: ZoneSpan[] },
+) => readZoneFor(toDayKey(now, profile.timeZone), profile);
 
 export const shiftDayKey = (key: string, days: number) =>
   new Date(Date.parse(key) + days * DAY_MS).toISOString().slice(0, 10);
