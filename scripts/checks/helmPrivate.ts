@@ -398,6 +398,31 @@ test('the model can mark a task private, and either change is kept only with the
   );
 });
 
+test('a release is kept only when the quote releases, and a mark only when it does not', () => {
+  assert.deepEqual(
+    readCommands('please keep that one private', [
+      setPrivate(false, 'keep that one private'),
+    ]),
+    [],
+  );
+  assert.deepEqual(
+    readCommands("that doesn't need to be private", [
+      setPrivate(false, "that doesn't need to be private"),
+    ]),
+    [{ kind: 'setPrivate', taskId: 'task-1', isPrivate: false }],
+  );
+  assert.deepEqual(
+    readCommands("it doesn't need to be private", [
+      setPrivate(true, "it doesn't need to be private"),
+    ]),
+    [],
+  );
+  assert.deepEqual(
+    readCommands('make it public', [setPrivate(false, 'make it public')]),
+    [{ kind: 'setPrivate', taskId: 'task-1', isPrivate: false }],
+  );
+});
+
 const seal = (fields: Record<string, unknown>) => ({
   nonce: 'n',
   ciphertext: JSON.stringify(fields),

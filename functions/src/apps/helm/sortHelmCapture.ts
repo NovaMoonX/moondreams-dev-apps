@@ -1791,29 +1791,38 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         ID_RE.test(id) &&
         !procedureRecords.some((procedure) => procedure.id === id),
     );
+    const unlistedSnapshots =
+      unlistedProcedureIds.length > 0
+        ? await firestore.getAll(
+            ...unlistedProcedureIds.map((id) =>
+              firestore.doc(`${base}/procedures/${id}`),
+            ),
+          )
+        : [];
     const privateProcedureIds = new Set([
       ...procedureRecords
         .filter((procedure) => procedure.isPrivate)
         .map((procedure) => procedure.id),
-      ...(unlistedProcedureIds.length > 0
-        ? (
-            await firestore.getAll(
-              ...unlistedProcedureIds.map((id) =>
-                firestore.doc(`${base}/procedures/${id}`),
-              ),
-            )
-          )
-            .filter((snapshot) => snapshot.get('privacy') === 'private')
-            .map((snapshot) => snapshot.id)
-        : []),
+      ...unlistedSnapshots
+        .filter((snapshot) => snapshot.get('privacy') === 'private')
+        .map((snapshot) => snapshot.id),
     ]);
+    const readableProcedureIds = new Set([
+      ...procedureRecords.map((procedure) => procedure.id),
+      ...unlistedSnapshots
+        .filter((snapshot) => snapshot.exists)
+        .map((snapshot) => snapshot.id),
+    ]);
+    // A run whose procedure is gone still holds that procedure's copied words, so its class cannot be known.
     const contextRuns = [...openRunRecords]
       .sort(
         (a, b) => Number(b.id === screenRunId) - Number(a.id === screenRunId),
       )
       .map((run) => ({
         ...toContextRun(run, run.id === screenRunId),
-        isPrivate: privateProcedureIds.has(run.procedureId),
+        isPrivate:
+          privateProcedureIds.has(run.procedureId) ||
+          (unattendedMask.isOn && !readableProcedureIds.has(run.procedureId)),
       }));
     const trips =
       mode !== 'rest' && procedureRecords.length > 0

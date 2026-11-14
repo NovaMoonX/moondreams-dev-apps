@@ -513,8 +513,7 @@ export const HELM_COPY = {
   privateFailed: "That didn't save. Try the switch again.",
   privateStillBecause: (name: string) =>
     `Still private because ${name} is private`,
-  privateCascadePartial:
-    "Saved, but some things filed under it didn't follow. Try the switch again.",
+  privateCascadePartial: "Saved, but some things filed under it didn't follow.",
   privateLeftOut: (count: number) =>
     `${count} private ${count === 1 ? 'thing' : 'things'} left out`,
   privateIncludeThem: 'Include them',

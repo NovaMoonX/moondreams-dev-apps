@@ -25,7 +25,7 @@ type PrivateTitleProps = PrivateSource & {
 
 const NO_RECORD: PrivacyRecord = { id: '' };
 
-/** A title with the quiet lock of a private thing after it. The lock is a flex sibling of the words, so a clamped or wrapped title never hides or strands it. */
+/** A title with the quiet lock of a private thing after it. A clamped title keeps the lock beside its words so the clamp never cuts it; a wrapping one keeps it after the last word. */
 function PrivateTitle({
   kind,
   record,
@@ -37,6 +37,30 @@ function PrivateTitle({
 }: PrivateTitleProps) {
   const isRead = useIsPrivate(kind ?? 'task', record ?? NO_RECORD);
   const isOn = isPrivate ?? isRead;
+  const lock = isOn && (
+    <Lock
+      className={join(
+        'text-muted-foreground size-3.5 shrink-0',
+        lines ? 'mt-[3.5px]' : 'ml-1 inline-block align-[-2px]',
+      )}
+      role='img'
+      aria-label={HELM_COPY.privateLockLabel}
+    />
+  );
+  if (!lines) {
+    // A word joiner keeps the lock on the last word's line when the title wraps.
+    return (
+      <Tag className={join('block min-w-0 break-words', className)}>
+        {children}
+        {isOn && (
+          <span className='whitespace-nowrap'>
+            {'\u2060'}
+            {lock}
+          </span>
+        )}
+      </Tag>
+    );
+  }
   return (
     <Tag className={join('flex min-w-0 items-start gap-1', className)}>
       <span
@@ -48,13 +72,7 @@ function PrivateTitle({
       >
         {children}
       </span>
-      {isOn && (
-        <Lock
-          className='text-muted-foreground mt-[3.5px] size-3.5 shrink-0'
-          role='img'
-          aria-label={HELM_COPY.privateLockLabel}
-        />
-      )}
+      {lock}
     </Tag>
   );
 }

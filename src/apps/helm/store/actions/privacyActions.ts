@@ -266,14 +266,14 @@ export type SetPrivateResult =
   | {
       kind: 'saved';
       undo: () => Promise<void>;
-      /** Some children's class did not follow; they catch up the next time the switch is touched. */
+      /** Some children's class did not follow; asking for the same state again re-runs the cascade for them. */
       isCascadeIncomplete: boolean;
     }
   | { kind: 'unchanged' }
   | { kind: 'refused'; line: string }
   | { kind: 'offline' | 'missing' | 'unreadable' };
 
-/** The person's switch or words: makes one thing private or not. An inherited class is refused with its own line, and a mark code set is cleared only by this. */
+/** The person's switch or words: makes one thing private or not. An inherited class is refused with its own line, and a mark code set is cleared only by this. Asking for the state a project, person or place already has re-runs its cascade over the things filed under it: `saved` when some still did not follow, `unchanged` when nothing was left to do. */
 export async function setPrivate(
   uid: string,
   kind: PrivateKind,
@@ -290,7 +290,20 @@ export async function setPrivate(
     parents,
   });
   if (outcome.kind === 'refused') return outcome;
-  if (outcome.kind === 'unchanged') return outcome;
+  if (outcome.kind === 'unchanged') {
+    const retried = toParent(
+      kind,
+      id,
+      await getHelmEncryption(uid),
+      readPrivacyFacts(record),
+    );
+    if (!retried || (await rewriteChildren(uid, retried)) === 0) return outcome;
+    return {
+      kind: 'saved',
+      isCascadeIncomplete: true,
+      undo: async () => {},
+    };
+  }
   const encryption = await getHelmEncryption(uid);
   const parentFacts = parents.map((parent) => parent.facts);
   const written = await writePrivacy(
