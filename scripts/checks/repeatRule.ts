@@ -116,7 +116,7 @@ test('describeRepeat wordings', () => {
   )!;
   assert.equal(
     describeRepeat(custom, SUN, at),
-    'Every 2 weeks on Sunday and Wednesday at 6:00 PM, until Sun, Feb 28',
+    'Every 2 weeks on Sunday and Wednesday at 6:00 PM, until Sun, Feb 28, 2027',
   );
   assert.equal(
     describeRepeat({ ...custom, until: null, count: 10 }, SUN, at),
@@ -144,7 +144,7 @@ test('describeRepeat wordings', () => {
   )!;
   assert.equal(
     describeRepeat(weekdays, SUN, { time: '07:00' }),
-    'Every weekday at 7:00 AM, until Wed, Mar 31',
+    'Every weekday at 7:00 AM, until Wed, Mar 31, 2027',
   );
   const yearly = repeatFromParts(parts({ freq: 'yearly' }), SUN)!;
   assert.equal(
@@ -332,6 +332,21 @@ test('skipped and moved', () => {
   assert.deepEqual(
     list({ moved: { '2026-12-06': { day: '2026-12-08', time: '07:00' } } }),
     ['2026-11-29', '2026-12-08', '2026-12-13', '2026-12-20'],
+  );
+  assert.deepEqual(
+    list({ moved: { '2026-11-29': { day: '2026-12-15', time: null } } }),
+    ['2026-12-06', '2026-12-13', '2026-12-15', '2026-12-20'],
+  );
+  assert.deepEqual(
+    list({ moved: { '2026-12-06': { day: '2026-12-13', time: null } } }),
+    ['2026-11-29', '2026-12-13', '2026-12-20', '2026-12-27'],
+  );
+  assert.equal(
+    nextOccurrence(rule, SUN, {
+      fromDay: SUN,
+      moved: { '2026-11-29': { day: '2027-01-30', time: null } },
+    }),
+    '2026-12-06',
   );
   assert.deepEqual(list({ fromDay: '2026-12-07' }), [
     '2026-12-13',

@@ -7,16 +7,13 @@ import {
 } from '@/components/RepeatPickerViews';
 import {
   describeRepeat,
-  formatRepeatRule,
   repeatPresets,
+  sameRepeatRule,
   type RepeatRule,
   type Weekday,
 } from '@/utils/repeatRule';
 
 type PickerView = 'form' | 'presets' | 'custom';
-
-const sameRule = (a: RepeatRule | null, b: RepeatRule | null) =>
-  (a && formatRepeatRule(a)) === (b && formatRepeatRule(b));
 
 interface UseRepeatPickerOptions {
   /** Day key of the first run; presets, summaries and the Custom screen are worded from it. */
@@ -73,7 +70,7 @@ export function useRepeatPicker({
       />
     ) : null;
   const matched = repeatPresets(startsOn, resolvedWeekStart).find((preset) =>
-    sameRule(preset.rule, value),
+    sameRepeatRule(preset.rule, value),
   );
   return {
     viewKey: current,

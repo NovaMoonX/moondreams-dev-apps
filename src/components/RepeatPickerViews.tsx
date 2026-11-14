@@ -6,14 +6,15 @@ import { ChevronRight } from 'lucide-react';
 
 import BackLink from '@/components/BackLink';
 import DateInput from '@/components/DateInput';
+import InlineNotice from '@/components/InlineNotice';
 import RepeatSummary from '@/components/RepeatSummary';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SegmentedControl from '@/components/SegmentedControl';
 import Stepper from '@/components/Stepper';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import {
+  sameRepeatRule,
   describeRepeat,
-  formatRepeatRule,
   listOccurrences,
   repeatFromParts,
   repeatPresets,
@@ -113,9 +114,6 @@ const toParts = (rule: RepeatRule | null, startsOn: string): RepeatParts => {
   };
 };
 
-const sameRule = (a: RepeatRule | null, b: RepeatRule | null) =>
-  (a && formatRepeatRule(a)) === (b && formatRepeatRule(b));
-
 interface RadioRowProps {
   label: string;
   detail?: string | null;
@@ -174,9 +172,18 @@ function RadioRow({
   );
 }
 
-const Card = ({ children, role }: { children: ReactNode; role?: string }) => (
+const Card = ({
+  children,
+  role,
+  label,
+}: {
+  children: ReactNode;
+  role?: string;
+  label?: string;
+}) => (
   <div
     role={role}
+    aria-label={label}
     className='bg-card border-border divide-border divide-y overflow-hidden rounded-xl border'
   >
     {children}
@@ -208,7 +215,7 @@ export function PresetsView({
   onCustom,
 }: PresetsViewProps) {
   const presets = repeatPresets(startsOn, weekStart);
-  const matched = presets.find((preset) => sameRule(preset.rule, value));
+  const matched = presets.find((preset) => sameRepeatRule(preset.rule, value));
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -229,7 +236,7 @@ export function PresetsView({
     <div className='flex flex-col gap-4 pb-4'>
       <BackLink onBack={onBack} label={backLabel} />
       <h3 className={HEADING_CLASS}>How often</h3>
-      <Card role='radiogroup'>
+      <Card role='radiogroup' label='How often'>
         {value && !matched && (
           <RadioRow
             label={describeRepeat(value, startsOn)}
@@ -400,7 +407,7 @@ export function CustomView({
       {freq === 'weekly' && (
         <div className='flex flex-col gap-2'>
           <p className={LABEL_CLASS}>On</p>
-          <div className='grid grid-cols-7 gap-1'>
+          <div role='group' aria-label='On' className='grid grid-cols-7 gap-1'>
             {order.map(({ key, name, letter }) => {
               const isPicked = parts.weekdays.includes(key);
               return (
@@ -429,7 +436,7 @@ export function CustomView({
       {freq === 'monthly' && (
         <div className='flex flex-col gap-2'>
           <p className={LABEL_CLASS}>On</p>
-          <Card role='radiogroup'>
+          <Card role='radiogroup' label='Repeats on'>
             {monthRows.map(({ by, label, detail }) => (
               <RadioRow
                 key={by}
@@ -452,7 +459,7 @@ export function CustomView({
 
       <div className='flex flex-col gap-2'>
         <p className={LABEL_CLASS}>Ends</p>
-        <Card role='radiogroup'>
+        <Card role='radiogroup' label='Ends'>
           <RadioRow
             label='Never'
             isChecked={parts.endsKind === 'never'}
@@ -497,6 +504,11 @@ export function CustomView({
             <span className='text-[15px]'>times</span>
           </RadioRow>
         </Card>
+        {parts.endsKind === 'on' && !isUntilValid && (
+          <InlineNotice tone='warning'>
+            Pick a day on or after {monthDay.format(toDate(startsOn))}.
+          </InlineNotice>
+        )}
       </div>
 
       <RepeatSummary

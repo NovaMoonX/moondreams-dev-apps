@@ -438,7 +438,7 @@ function* effectiveDays(
   for (const day of ruleDays(rule, startsOn)) {
     const key = toKey(day);
     if (skippedKeys.has(key)) continue;
-    yield moved[key] ? moved[key].day : key;
+    yield { ruleKey: key, key: moved[key] ? moved[key].day : key };
   }
 }
 
@@ -454,14 +454,30 @@ export function listOccurrences(
   },
 ): string[] {
   const { fromDay = startsOn, limit, skipped = [], moved = {} } = options;
-  const found: string[] = [];
-  if (limit <= 0) return found;
-  for (const day of effectiveDays(rule, startsOn, skipped, moved)) {
-    if (day < fromDay) continue;
-    found.push(day);
-    if (found.length >= limit) break;
+  if (limit <= 0) return [];
+  const lastMoved = Object.values(moved).reduce(
+    (latest, { day }) => (day > latest ? day : latest),
+    '',
+  );
+  const found = new Set<string>();
+  for (const { ruleKey, key } of effectiveDays(
+    rule,
+    startsOn,
+    skipped,
+    moved,
+  )) {
+    if (key >= fromDay) found.add(key);
+    if (found.size >= limit && ruleKey > lastMoved) break;
   }
-  return found;
+  return Array.from(found).sort().slice(0, limit);
+}
+
+/** Whether two rules (or no rule) say the same thing. */
+export function sameRepeatRule(
+  a: RepeatRule | null,
+  b: RepeatRule | null,
+): boolean {
+  return (a && formatRepeatRule(a)) === (b && formatRepeatRule(b));
 }
 
 /** The first run on or after `fromDay`, or `null` when none is left. */
@@ -647,14 +663,7 @@ export function describeRepeat(
       rule.monthDay! >= 29) ||
     (rule.freq === 'yearly' && startsOn.slice(5) === '02-29');
   const untilYearShown =
-    rule.until !== null &&
-    toDays(rule.until) >=
-      Date.UTC(
-        dateOf(toDays(startsOn)).year + 1,
-        dateOf(toDays(startsOn)).month,
-        dateOf(toDays(startsOn)).day,
-      ) /
-        DAY_MS;
+    rule.until !== null && rule.until.slice(0, 4) !== startsOn.slice(0, 4);
   return [
     describeCadence(rule, startsOn),
     time ? ` at ${timeFormat(time)}` : '',

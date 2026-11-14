@@ -127,7 +127,7 @@
     "check:helm-trust": "tsx scripts/checks/helmTrust.ts",
     "check:helm-delete": "tsx scripts/checks/helmDelete.ts",
     "check:helm-copy": "tsx scripts/checks/helmCopy.ts",
-    "check:repeat-rule": "tsx scripts/checks/repeatRule.ts",
+    "check:repeat-rule": "tsx scripts/checks/repeatRule.ts && TZ=America/Los_Angeles tsx scripts/checks/repeatRule.ts",
     "check:helm-name-hints": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmNameHints.ts",
     "check:helm-private": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPrivate.ts",
     "check:yearly-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/yearlyDates.ts",
