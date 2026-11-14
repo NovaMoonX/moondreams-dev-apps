@@ -80,17 +80,25 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS }}
           SITE_VERSION: ${{ steps.version.outputs.version }}
+      # Compared with the last commit whose worker deploy succeeded, not the previous push, so a run that failed earlier never strands a worker change.
       - name: Check for Cloudflare Worker changes
         id: worker_changes
         run: |
-          if git diff --quiet ${{ github.event.before }} ${{ github.sha }} -- cloudflare-worker.js wrangler.toml; then
+          base=$(git rev-parse -q --verify refs/tags/worker-deployed || true)
+          if [ -n "$base" ] && git diff --quiet "$base" ${{ github.sha }} -- cloudflare-worker.js wrangler.toml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Deploy Cloudflare Worker
+        id: worker_deploy
         if: steps.worker_changes.outputs.changed == 'true'
         continue-on-error: true
         run: npm run cf:worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Mark the deployed worker
+        if: steps.worker_deploy.outcome == 'success'
+        run: |
+          git tag -f worker-deployed ${{ github.sha }}
+          git push -f origin refs/tags/worker-deployed
