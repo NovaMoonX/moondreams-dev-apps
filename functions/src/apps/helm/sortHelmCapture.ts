@@ -89,6 +89,13 @@ import {
   readOpenRuns,
   toContextRun,
 } from './runStore.js';
+import {
+  toBirthdays,
+  toContextPeople,
+  toPersonRecord,
+  toPrivateMark,
+} from './nomos/contextPeople.js';
+import { normalizeKin } from './nomos/kin.js';
 import { createHelmMcpServer } from './mcp/server.js';
 import {
   openMedia,
@@ -107,6 +114,7 @@ import {
   topicDocumentFor,
   type ContextFact,
   type ContextFocusedTopic,
+  type ContextPerson,
   type ContextProcedure,
   MAX_CONTEXT_PROCEDURES,
   type ContextSelfFact,
@@ -657,6 +665,7 @@ async function readPeople(
     calledAs: string | null;
     timeZone: string;
     capturedAt: number;
+    selfWhoId: string | null;
   },
 ): Promise<PeopleInput | undefined> {
   const { firestore, base, key, captureRef, mentions, places } = input;
@@ -703,6 +712,10 @@ async function readPeople(
           privateMark: toPrivateMark(words.privateMark),
           isPrivacyCleared: words.isPrivacyCleared === true,
         }),
+        kin: normalizeKin(words.kin),
+        refusedAliases: isStringList(words.refusedAliases)
+          ? words.refusedAliases
+          : [],
         relation: typeof words.relation === 'string' ? words.relation : null,
         species: typeof words.species === 'string' ? words.species : null,
         organizationKind:
@@ -782,10 +795,15 @@ async function readPeople(
       };
     }),
   );
+  const birthdays = mentions.some((mention) => mention.kinRef)
+    ? toBirthdays((await readIndexIn(transaction, firestore, base, key)).byWho)
+    : {};
   return {
     mentions,
     places,
     known: withHistory,
+    selfWhoId: input.selfWhoId,
+    birthdays,
     knownPlaces,
     assistantName: input.assistantName,
     assistantNames,
@@ -793,9 +811,6 @@ async function readPeople(
     capturedAt: input.capturedAt,
   };
 }
-
-const toPrivateMark = (value: unknown): PrivacyFacts['privateMark'] =>
-  value === 'health' || value === 'care' || value === 'person' ? value : null;
 
 const MAX_KEPT_READS = 20;
 
@@ -995,6 +1010,33 @@ const MAX_CONTEXT_FACTS = 20;
 const MAX_SELF_FACTS = 30;
 const MAX_CONTEXT_SUBJECTS = 10;
 const MAX_CONTEXT_SUBJECT_READS = 100;
+
+const MAX_CONTEXT_PEOPLE_READ = 200;
+
+/** The people the model may link a name to, newest mention first so the read stays small. A failed read gives none. */
+async function readContextPeople(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  isUnattended: boolean,
+): Promise<ContextPerson[]> {
+  try {
+    const snap = await firestore
+      .collection(`${base}/who`)
+      .orderBy('lastMentionedAt', 'desc')
+      .limit(MAX_CONTEXT_PEOPLE_READ)
+      .get();
+    return toContextPeople(
+      snap.docs.flatMap((doc) => toPersonRecord(key, doc) ?? []),
+      { isUnattended },
+    );
+  } catch (error) {
+    logger.warn('helm.sort.peopleUnread', {
+      message: error instanceof Error ? error.message : 'unknown',
+    });
+    return [];
+  }
+}
 
 const escapeRegExp = (text: string) =>
   text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1724,6 +1766,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           );
     const selfWhoId =
       (profile.data()?.selfWhoId as string | null | undefined) ?? null;
+    const contextPeople =
+      mode === 'rest'
+        ? []
+        : await readContextPeople(firestore, base, key, unattendedMask.isOn);
     const { keyDates: contextKeyDates, upcoming } =
       mode === 'rest'
         ? { keyDates: [], upcoming: [] }
@@ -1897,6 +1943,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       earlierTurns,
       answeredQuestion,
       facts: masked.facts,
+      people: contextPeople,
       selfFacts: masked.selfFacts,
       keyDates: masked.keyDates,
       upcoming: masked.upcoming,
@@ -2210,6 +2257,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       aliases: context.aliases,
       synced: context.synced,
       facts: context.facts,
+      people: context.people,
       keyDates: context.keyDates,
       topics: context.topics,
       notes: context.notes,
@@ -2768,6 +2816,9 @@ async function writeResult(
             calledAs,
             timeZone,
             capturedAt: capture.createdAt,
+            selfWhoId:
+              (profileSnap?.get('selfWhoId') as string | null | undefined) ??
+              null,
           })
         : undefined;
     const existingProjects =

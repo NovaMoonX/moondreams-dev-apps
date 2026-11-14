@@ -155,7 +155,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   row({
     thing: 'People and pets',
     home: 'who',
-    contextBlock: '<known_facts>',
+    contextBlock: '<people>',
     writer: 'actions/whoActions',
     taps: ['updateWho', 'forgetWho'],
     deleteTakes: ['keyDates', 'facts'],

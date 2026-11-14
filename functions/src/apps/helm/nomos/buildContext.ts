@@ -37,6 +37,18 @@ export interface ContextFact {
   isSubjectPrivate?: boolean;
 }
 
+/** A person, pet or organization the person has, with the other names and the family word the model needs to link a name to them. */
+export interface ContextPerson {
+  id: string;
+  name: string;
+  alsoCalled: string[];
+  relation: string | null;
+  /** The family word and its order as the person says it ("younger brother"). */
+  kin: string | null;
+}
+
+export const MAX_CONTEXT_PEOPLE = 60;
+
 /** What the records hold about the person themself: a preference, a favorite or who they are. */
 export interface ContextSelfFact {
   id: string;
@@ -148,6 +160,8 @@ export interface ContextInput {
   /** For a turn that answers a question the model asked: the question, its choices and the answer in words. */
   answeredQuestion?: string | null;
   facts?: ContextFact[];
+  /** The people the person has, most useful first, at most `MAX_CONTEXT_PEOPLE`. */
+  people?: ContextPerson[];
   selfFacts?: ContextSelfFact[];
   /** The dates that come back of the people the turn names. */
   keyDates?: ContextKeyDate[];
@@ -249,6 +263,7 @@ export function buildContext(input: ContextInput): {
   aliases: AliasBook;
   synced: SyncedBook;
   facts: AliasBook;
+  people: AliasBook;
   keyDates: AliasBook;
   topics: AliasBook;
   notes: AliasBook;
@@ -276,6 +291,7 @@ export function buildContext(input: ContextInput): {
     idOf: (alias) => partIds.get(alias) ?? null,
   };
   const facts = createAliasBook('f');
+  const people = createAliasBook('w');
   const keyDates = createAliasBook('k');
   const synced = createSyncedBook();
   const syncedRecords = (input.synced ?? []).map((copy) => ({
@@ -451,6 +467,18 @@ export function buildContext(input: ContextInput): {
           )}</known_facts>`,
         ]
       : []),
+    ...(input.people?.length
+      ? [
+          `<people>${toDataJson(
+            input.people
+              .slice(0, MAX_CONTEXT_PEOPLE)
+              .map(({ id, ...person }) => ({
+                alias: people.add(id),
+                ...person,
+              })),
+          )}</people>`,
+        ]
+      : []),
     ...(input.selfFacts?.length
       ? [
           `<about_you>${toDataJson(
@@ -544,6 +572,7 @@ export function buildContext(input: ContextInput): {
     aliases,
     synced,
     facts,
+    people,
     keyDates,
     topics,
     notes,

@@ -28,6 +28,9 @@ import {
   removeMediaOf,
   type PhotoOwner,
 } from '@apps/helm/store/actions/mediaActions';
+import { toComparable } from '@/utils/optionMatchUtils';
+import { MAX_ALIASES } from '@apps/helm/constants';
+import { normalizeKin } from '@apps/helm/engine/kin';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
@@ -35,6 +38,7 @@ import type {
   Sealed,
   Who,
   WhoKind,
+  WhoKin,
   WhoSealed,
   WhoTier,
 } from '@apps/helm/types';
@@ -50,10 +54,9 @@ const isUnavailable = (error: unknown) =>
 
 export type EditResult = 'saved' | 'offline' | 'missing' | 'unreadable';
 
-/** The fields a person edits on a who: its sealed words and its kind. */
+/** The fields a person edits on a who's edit sheet: its sealed words and its kind. Its other names and its family word have their own sheets. */
 export interface WhoEdit {
   name: string;
-  aliases: string[];
   kind: WhoKind;
   relation: string | null;
   species: string | null;
@@ -84,7 +87,7 @@ export async function updateWho(
         if (!opened) return 'unreadable';
         const { kind, ...words } = edit;
         const sealed = await sealJson<WhoSealed>(
-          { ...opened, ...words },
+          { ...opened, ...words, ...(kind === 'person' ? {} : { kin: null }) },
           encryption,
         );
         transaction.update(ref, { sealed, kind, lastEditedAt: Date.now() });
@@ -96,6 +99,96 @@ export async function updateWho(
     throw error;
   }
 }
+
+/** Rewrites some of a who's sealed words in one transaction that re-reads it, so everything else on it, changed on another device meanwhile too, is kept. Needs a connection. */
+async function rewriteWhoWords<Refusal extends string = never>(
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  change: (opened: WhoSealed) => Partial<WhoSealed> | Refusal,
+): Promise<EditResult | Refusal> {
+  if (!navigator.onLine) return 'offline';
+  const ref = doc(userOf(uid), 'who', whoId);
+  try {
+    return await runTransaction(
+      db,
+      async (transaction): Promise<EditResult | Refusal> => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists()) return 'missing';
+        const opened = await openJson<WhoSealed>(
+          (snapshot.data() as Who).sealed as Sealed,
+          encryption,
+        ).catch(() => null);
+        if (!opened) return 'unreadable';
+        const changed = change(opened);
+        if (typeof changed === 'string') return changed;
+        const sealed = await sealJson<WhoSealed>(
+          { ...opened, ...changed },
+          encryption,
+        );
+        transaction.update(ref, { sealed, lastEditedAt: Date.now() });
+        return 'saved';
+      },
+    );
+  } catch (error) {
+    if (isUnavailable(error)) return 'offline';
+    throw error;
+  }
+}
+
+export type AliasChange = { add: string } | { remove: string };
+export type AliasResult = EditResult | 'full' | 'duplicate';
+
+const isSameName = (a: string, b: string) =>
+  toComparable(a) === toComparable(b);
+
+/** Adds or removes one nickname on the list opened inside the transaction, so a nickname added on another device or by an answer meanwhile is kept; an add re-checks the cap and duplicates on that fresh list. A name the person adds after saying No to it is theirs now, so it leaves the refused names. */
+export const setWhoAliases = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  change: AliasChange,
+): Promise<AliasResult> =>
+  rewriteWhoWords<'full' | 'duplicate'>(uid, encryption, whoId, (opened) => {
+    const aliases = Array.isArray(opened.aliases) ? opened.aliases : [];
+    if ('remove' in change) {
+      return {
+        aliases: aliases.filter((alias) => !isSameName(alias, change.remove)),
+      };
+    }
+    if (
+      isSameName(opened.name, change.add) ||
+      aliases.some((alias) => isSameName(alias, change.add))
+    ) {
+      return 'duplicate';
+    }
+    if (aliases.length >= MAX_ALIASES) return 'full';
+    const kept = (opened.refusedAliases ?? []).filter(
+      (refused) => !isSameName(refused, change.add),
+    );
+    return {
+      aliases: [...aliases, change.add],
+      refusedAliases: kept.length > 0 ? kept : null,
+    };
+  });
+
+export type KinResult = EditResult | 'changed';
+
+/** Sets or clears a who's family word and its order, a change of the person's own. Refused as `changed` when the word on the record is no longer the one the person was looking at. */
+export const setWhoKin = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  kin: WhoKin | null,
+  expected: WhoKin | null,
+): Promise<KinResult> =>
+  rewriteWhoWords<'changed'>(uid, encryption, whoId, (opened) => {
+    const current = normalizeKin(opened.kin);
+    return current?.kind === expected?.kind &&
+      current?.order === expected?.order
+      ? { kin }
+      : 'changed';
+  });
 
 /** A level the person picks is theirs: the assistant never changes it after. Undo writes the earlier level back with whoever set it. */
 export const setWhoTier = (
@@ -473,6 +566,9 @@ export async function ensureSelfWho(
     {
       name,
       aliases: [],
+      kin: null,
+      soundsLike: null,
+      refusedAliases: null,
       relation: null,
       phone: null,
       email: null,

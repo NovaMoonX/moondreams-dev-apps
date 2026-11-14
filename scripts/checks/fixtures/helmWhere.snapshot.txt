@@ -4,7 +4,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Goals and projects, with their milestones: look in <open_projects>; change it with createProject, setProjectRole or addMilestone.
 - What the person says about themselves: look in <about_you>; change it with noteFact or remember.
 - What is known about the people and places named: look in <known_facts>; change it with noteFact or remember.
-- People and pets: look in <known_facts>; you cannot change it.
+- People and pets: look in <people>; you cannot change it.
 - Places: look in <known_facts>; you cannot change it.
 - Key dates: look in <key_dates>; change it with setKeyDate or removeKeyDate.
 - The next dates coming up: look in <upcoming_dates>; you cannot change it.
@@ -58,7 +58,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Goals and projects, with their milestones: look in <open_projects>; change it with createProject, setProjectRole or addMilestone.
 - What the person says about themselves: look in <about_you>; change it with noteFact or remember.
 - What is known about the people and places named: look in <known_facts>; change it with noteFact or remember.
-- People and pets: look in <known_facts>; you cannot change it.
+- People and pets: look in <people>; you cannot change it.
 - Places: look in <known_facts>; you cannot change it.
 - Key dates: look in <key_dates>; change it with setKeyDate or removeKeyDate.
 - The next dates coming up: look in <upcoming_dates>; you cannot change it.

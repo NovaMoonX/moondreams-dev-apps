@@ -1418,6 +1418,9 @@ export const wordsOf = (
 ): WhoSealed => ({
   name,
   aliases: [],
+  kin: null,
+  soundsLike: null,
+  refusedAliases: null,
   relation: null,
   phone: null,
   email: null,
@@ -3859,7 +3862,7 @@ async function buildPeople(input: {
           lastMentionedAt: now - 3 * DAY_MS,
         },
         madeAt,
-        await seal(wordsOf('Dana')),
+        await seal(wordsOf('Dana', { aliases: ['Dani'], kin: { kind: 'sister', order: 'younger' } })),
       ),
     },
     {
@@ -3915,7 +3918,7 @@ async function buildPeople(input: {
           lastMentionedAt: now - 3 * DAY_MS,
         },
         now - 3 * DAY_MS,
-        await seal(wordsOf('Grandpa Joe', { relation: 'grandfather' })),
+        await seal(wordsOf('Grandpa Joe', { relation: 'grandfather', aliases: ['Pops'], kin: { kind: 'grandfather', order: null } })),
       ),
     },
     {
@@ -4594,7 +4597,7 @@ async function buildPeople(input: {
     dateOf('seed-date-dana-birthday', 'seed-who-dana', {
       kind: 'birthday',
       label: null,
-      year: null,
+      year: 1992,
       daysAhead: 2,
     }),
     dateOf('seed-date-miso-gotcha', 'seed-who-miso', {

@@ -318,6 +318,9 @@ async function raiseWho(
         {
           name: name.trim(),
           aliases: [],
+          kin: null,
+          soundsLike: null,
+          refusedAliases: null,
           relation: null,
           phone: null,
           email: null,

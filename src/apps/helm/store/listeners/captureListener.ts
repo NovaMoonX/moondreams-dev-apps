@@ -103,6 +103,9 @@ const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
       const isKnown =
         question?.kind === 'whichPerson' ||
         question?.kind === 'whichPlace' ||
+        question?.kind === 'isThisWho' ||
+        question?.kind === 'whichKin' ||
+        question?.kind === 'kinOrder' ||
         question?.kind === 'whichIsTrue' ||
         question?.kind === 'whichTopic' ||
         question?.kind === 'groupTopics' ||

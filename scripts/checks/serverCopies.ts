@@ -113,6 +113,16 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/engine/kinKinds.ts',
+    dest: 'functions/src/apps/helm/nomos/kinKinds.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/helm/engine/kin.ts',
+    dest: 'functions/src/apps/helm/nomos/kin.ts',
+    importRewrites: { '@apps/helm/engine/kinKinds': './kinKinds.js' },
+  },
+  {
     src: 'src/apps/helm/utils/keyDateIndex.ts',
     dest: 'functions/src/apps/helm/keyDateIndex.ts',
     importRewrites: {},

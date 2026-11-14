@@ -157,11 +157,26 @@ const toResolveNote = (
   }
 };
 
+const NEW_NAME_MAX = 80;
+
 const readInput = (data: unknown) => {
   const raw = (data ?? {}) as Record<string, unknown>;
   const answer = (raw.answer ?? {}) as Record<string, unknown>;
   const { captureId, questionId } = raw;
   const { by, optionId, optionIds, text } = answer;
+  const typedName =
+    typeof answer.newName === 'string'
+      ? answer.newName.trim().replace(/\s+/g, ' ')
+      : null;
+  if (
+    answer.newName !== undefined &&
+    (optionId !== 'new' ||
+      typedName === null ||
+      typedName === '' ||
+      typedName.length > NEW_NAME_MAX)
+  ) {
+    throw new HttpsError('invalid-argument', 'That answer is not valid.');
+  }
   const isMany =
     Array.isArray(optionIds) &&
     optionIds.length >= 1 &&
@@ -201,6 +216,7 @@ const readInput = (data: unknown) => {
     optionId: isMany ? '' : (optionId as string),
     optionIds: isMany ? (optionIds as string[]) : [],
     text: note,
+    newName: typedName,
   };
 };
 
@@ -222,9 +238,8 @@ export const resolveHelmQuestion = onCall(
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
     }
-    const { captureId, questionId, by, optionId, optionIds, text } = readInput(
-      request.data,
-    );
+    const { captureId, questionId, by, optionId, optionIds, text, newName } =
+      readInput(request.data);
     const firestore = getFirestore();
     const base = `apps/helm/users/${uid}`;
     const captureRef = firestore.doc(`${base}/captures/${captureId}`);
@@ -263,6 +278,9 @@ export const resolveHelmQuestion = onCall(
             noteId?: unknown;
             childIds?: unknown;
             kind?: string;
+            whoIds?: unknown;
+            alias?: { whoId?: unknown };
+            mention?: { kin?: unknown };
           }[];
         }
       >;
@@ -297,7 +315,17 @@ export const resolveHelmQuestion = onCall(
       const factIds = (held?.factIds ?? [])
         .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
         .slice(0, 2);
+      const isKin = held?.kind === 'settleKin';
+      const isKinSearch = held?.kind === 'linkWho' && !!held.mention?.kin;
+      const whoIdsAsked = [
+        ...(isKin && Array.isArray(held?.whoIds) ? held.whoIds : []),
+        held?.alias?.whoId,
+        ...(isKinSearch ? [optionId] : []),
+      ]
+        .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
+        .slice(0, 20);
       const isPick =
+        !isKin &&
         groupIds.length === 0 &&
         held?.kind !== 'groupTopics' &&
         !isSettle &&
@@ -371,6 +399,29 @@ export const resolveHelmQuestion = onCall(
         depth: Number(doc.get('depth') ?? 1),
         name: groupTopics.get(doc.id)?.name ?? '',
       }));
+      const whoSnaps = await Promise.all(
+        whoIdsAsked.map((id) =>
+          transaction.get(firestore.doc(`${base}/who/${id}`)),
+        ),
+      );
+      const whos = new Map<string, { opened: Record<string, unknown> }>(
+        whoSnaps.flatMap(
+          (snap): [string, { opened: Record<string, unknown> }][] => {
+            const data = snap.data();
+            if (!data) return [];
+            try {
+              return [
+                [
+                  snap.id,
+                  { opened: openForHelm(key, data.sealed as SealedPayload) },
+                ],
+              ];
+            } catch {
+              return [];
+            }
+          },
+        ),
+      );
       const [factSnaps, taskSnaps, chosenSnap] = await Promise.all([
         Promise.all(
           factIds.map((id) =>
@@ -453,6 +504,7 @@ export const resolveHelmQuestion = onCall(
         opened,
         tasks,
         facts,
+        whos,
         keyDate: openedDate
           ? {
               id: openedDate[0],
@@ -465,6 +517,7 @@ export const resolveHelmQuestion = onCall(
             }
           : null,
         text,
+        newName,
         note: noteWords,
         topics: new Map<string, NoteTopicState>(
           topicSnaps.flatMap((snap): [string, NoteTopicState][] => {
@@ -624,6 +677,9 @@ export const resolveHelmQuestion = onCall(
           plan.whoUpdate.data,
         );
       }
+      (plan.whoRewrites ?? []).forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/who/${id}`), data),
+      );
       if (plan.execution) transaction.create(executionRef, plan.execution);
       transaction.update(captureRef, {
         ...plan.capture,

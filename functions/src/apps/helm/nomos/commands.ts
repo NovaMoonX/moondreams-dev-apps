@@ -6,6 +6,7 @@ import { SENSITIVE_CATEGORIES } from './sensitive.js';
 import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
 import type { ModelChange } from '../topicWrite.js';
 import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
+import { KIN_KINDS, KIN_ORDERS, type WhoKin } from './kinKinds.js';
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
@@ -283,6 +284,12 @@ export interface MentionRead {
   relation: string | null;
   species: string | null;
   organizationKind: string | null;
+  /** The family word the person said for this one ("my sister Dana"), already checked against the fixed list. */
+  kin?: WhoKin | null;
+  /** A mention that is only a family word ("my younger brother"), settled by code against the people the person has. */
+  kinRef?: WhoKin | null;
+  /** The person this name may be another name of, as the model linked it; code asks before saving it. */
+  proposedWhoId?: string | null;
 }
 
 /** A location the reply names, its ref `$p1`, `$p2`, …. */
@@ -543,6 +550,17 @@ const NAMED_BY_REF = (name: string) => ({
 const nullable = (type: string, description: string) => ({
   type: [type, 'null'],
   description,
+});
+
+const KIN_SCHEMA = (description: string) => ({
+  type: ['object', 'null'],
+  description,
+  additionalProperties: false,
+  required: ['kind', 'order'],
+  properties: {
+    kind: { type: 'string', enum: KIN_KINDS.map((entry) => entry.kind) },
+    order: { type: ['string', 'null'], enum: [...KIN_ORDERS, null] },
+  },
 });
 
 /** A record a photo may be kept on: an existing one by id, or a task this reply makes by its `$new` ref. */
@@ -1113,6 +1131,9 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'relation',
             'species',
             'organizationKind',
+            'kin',
+            'kinRef',
+            'proposedAlias',
           ],
           properties: {
             ref: { type: 'string', description: 'A name such as $w1.' },
@@ -1133,6 +1154,20 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               'string',
               'An organization only: what it is when said ("bakery", "clinic"); null otherwise.',
             ),
+            kin: KIN_SCHEMA(
+              'The family word when the person says how this named person is related to them ("my sister Dana": sister), only from the list; null otherwise. order only for a sibling or child ("my younger brother Eli": younger).',
+            ),
+            kinRef: KIN_SCHEMA(
+              'A mention with no name, only a family word ("my younger brother", "my mum"): the word from the list. Give it name "" and nothing else; code finds who it is. null for a named mention.',
+            ),
+            proposedAlias: {
+              type: ['object', 'null'],
+              description:
+                'A name that is not in <people> but is plainly another name of someone who is ("Bubs" for Eli, said as "call Bubs"): that person\'s alias from <people> (w1, w2, …). null otherwise. Never guess from a name that merely sounds close.',
+              additionalProperties: false,
+              required: ['whoAlias'],
+              properties: { whoAlias: { type: 'string' } },
+            },
           },
         },
       },

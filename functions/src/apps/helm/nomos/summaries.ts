@@ -437,7 +437,7 @@ export const buildTopicQuestion = (input: {
 
 const ADDED_TEXT_CAP = 60;
 
-const joinNames = (names: string[]) =>
+export const joinNames = (names: string[]) =>
   names.length <= 1
     ? (names[0] ?? '')
     : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
@@ -944,3 +944,215 @@ export const describeKeyDates = (lines: string[]) =>
     : lines.length === 1
       ? toNotedLine(lines[0])
       : `Noted ${lines.length} dates`;
+
+/** "children" for "child", else the word with an s: how a family word reads for more than one. */
+export const toKinPlural = (word: string) =>
+  /child$/.test(word) ? `${word.slice(0, -5)}children` : `${word}s`;
+
+export const KIN_WORDS = {
+  yes: 'Yes',
+  no: 'No',
+  someoneNew: 'Someone new',
+  someoneElse: 'Someone else you know',
+  somethingElse: 'Something else',
+  noneOfThese: 'None of these',
+  skip: 'Skip',
+};
+
+interface HeldMention {
+  name: string;
+  kind: string;
+  relation: string | null;
+  species: string | null;
+  organizationKind: string | null;
+  kin?: { kind: string; order: string | null } | null;
+}
+
+const noRefs = {
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: null,
+  number: null,
+  builtBy: 'code' as const,
+  answer: null,
+};
+
+/** "Is Bubs Eli?": the nickname a turn used for someone, asked before it is saved. Yes names the person, No is `none`, Someone new makes one; the turn's links are held until it is answered. */
+export const buildIsThisWhoQuestion = (input: {
+  alias: string;
+  who: { id: string; name: string; detail: string | null };
+  mention: HeldMention;
+  taskIds: string[];
+}) => ({
+  ...noRefs,
+  kind: 'isThisWho' as const,
+  shape: 'pickOne' as const,
+  prompt: `Is ${input.alias} ${input.who.name}?`,
+  options: [
+    {
+      id: input.who.id,
+      label: KIN_WORDS.yes,
+      detail: input.who.detail
+        ? `${input.who.name}, ${input.who.detail}`
+        : input.who.name,
+      ref: { collection: 'who' as const, id: input.who.id },
+    },
+    {
+      id: 'none',
+      label: KIN_WORDS.no,
+      detail: KIN_WORDS.someoneElse,
+      ref: null,
+    },
+    {
+      id: 'new',
+      label: KIN_WORDS.someoneNew,
+      detail: `Add ${input.alias} as a new person`,
+      ref: null,
+    },
+  ],
+  heldCommands: [
+    {
+      kind: 'linkWho',
+      taskIds: input.taskIds,
+      mention: input.mention,
+      alias: { whoId: input.who.id, name: input.alias },
+    },
+  ],
+  aboutRef: input.taskIds[0]
+    ? { collection: 'tasks', id: input.taskIds[0] }
+    : null,
+});
+
+export const buildSpokenIsThisWho = (alias: string, name: string) =>
+  `Is ${alias} ${name}? Yes, no, or someone new?`;
+
+/** "Which brother: Eli or Marcus?" when two or more fit a family word, or "Who's your brother?" as a search over the person's people when none of that kind is known: pick one (their family word is then saved) or "Add your brother" with a typed name, never the said words as a name; the turn's links are held. `words` is the kind without its order. */
+export const buildWhichKinQuestion = (input: {
+  words: string;
+  candidates: { id: string; label: string; detail: string | null }[];
+  mention: HeldMention;
+  taskIds: string[];
+}) => {
+  const isSearch = input.candidates.length === 0;
+  return {
+    ...noRefs,
+    kind: 'whichKin' as const,
+    shape: isSearch ? ('pickRecord' as const) : ('pickOne' as const),
+    recordKinds: isSearch ? ['who' as const] : [],
+    prompt: isSearch
+      ? `Who's your ${input.words}?`
+      : `Which ${input.words}: ${joinOr(input.candidates.map((c) => c.label))}?`,
+    options: isSearch
+      ? [
+          {
+            id: 'new',
+            label: `Add your ${input.words}`,
+            detail: null,
+            ref: null,
+          },
+        ]
+      : [
+          ...input.candidates.map((candidate) => ({
+            ...candidate,
+            ref: { collection: 'who' as const, id: candidate.id },
+          })),
+          {
+            id: 'none',
+            label: KIN_WORDS.somethingElse,
+            detail: null,
+            ref: null,
+          },
+        ],
+    heldCommands: [
+      { kind: 'linkWho', taskIds: input.taskIds, mention: input.mention },
+    ],
+    aboutRef: input.taskIds[0]
+      ? { collection: 'tasks', id: input.taskIds[0] }
+      : null,
+  };
+};
+
+export const buildSpokenWhichKin = (
+  words: string,
+  labels: string[],
+  isAdd: boolean,
+) =>
+  isAdd
+    ? `Who's your ${words}? Say their name, or skip it for now.`
+    : `Which ${words}, ${joinOr(labels.slice(0, 3))}?`;
+
+/** The order of a family word asked against the person, kept when answered: "Is Eli younger than you?" for one, "Which of your brothers are younger than you?" for several, "Which brother is the youngest?" for the oldest or youngest. */
+export const buildKinOrderQuestion = (input: {
+  words: string;
+  wanted: string;
+  shape: 'one' | 'several' | 'extreme';
+  candidates: { id: string; label: string; detail: string | null }[];
+  taskIds: string[];
+}) => {
+  const isOne = input.shape === 'one';
+  const [only] = input.candidates;
+  const refOf = (id: string) => ({ collection: 'who' as const, id });
+  return {
+    ...noRefs,
+    kind: 'kinOrder' as const,
+    shape: isOne
+      ? ('pickOne' as const)
+      : input.shape === 'several'
+        ? ('pickSeveral' as const)
+        : ('pickOne' as const),
+    prompt: isOne
+      ? `Is ${only.label} ${input.wanted} than you?`
+      : input.shape === 'several'
+        ? `Which of your ${toKinPlural(input.words)} are ${input.wanted} than you?`
+        : `Which ${input.words} is the ${input.wanted}?`,
+    options: isOne
+      ? [
+          {
+            id: 'yes',
+            label: KIN_WORDS.yes,
+            detail: `${only.label} is ${input.wanted}`,
+            ref: refOf(only.id),
+          },
+          { id: 'no', label: KIN_WORDS.no, detail: null, ref: null },
+        ]
+      : [
+          ...input.candidates.map((candidate) => ({
+            ...candidate,
+            ref: refOf(candidate.id),
+          })),
+          {
+            id: 'none',
+            label:
+              input.shape === 'several'
+                ? KIN_WORDS.noneOfThese
+                : KIN_WORDS.somethingElse,
+            detail: null,
+            ref: null,
+          },
+        ],
+    heldCommands: [
+      {
+        kind: 'settleKin',
+        taskIds: input.taskIds,
+        whoIds: input.candidates.map((candidate) => candidate.id),
+        wanted: input.wanted,
+        mode: input.shape,
+      },
+    ],
+    aboutRef: input.taskIds[0]
+      ? { collection: 'tasks', id: input.taskIds[0] }
+      : null,
+  };
+};
+
+export const buildSpokenKinOrder = (
+  question: ReturnType<typeof buildKinOrderQuestion>,
+) =>
+  question.shape === 'pickSeveral'
+    ? `${question.prompt} You can say more than one.`
+    : question.options.length === 2 && question.options[0].id === 'yes'
+      ? question.prompt
+      : `${question.prompt} ${joinOr(
+          question.options.slice(0, 3).map((option) => option.label),
+        )}?`;

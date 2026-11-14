@@ -1,5 +1,6 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import {
+  isPrivateInEffect,
   readEffectivePrivacy,
   readPersonMark,
   readPrivacyFacts,
@@ -76,6 +77,8 @@ import { TOPICS_LIMIT } from '../topicLimits.js';
 import { toNoteSource } from '../topicWrite.js';
 import type { LiveTopic } from '../topicVersionStore.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
+import { resolveKin, type KinBirthday, type KinResolution } from './kin.js';
+import { KIN_KINDS, type WhoKin } from './kinKinds.js';
 import { planKeyDates, type KeyDateRecord } from './planKeyDates.js';
 import type { ByWho } from '../keyDateIndex.js';
 import { summarizeAnswer, type CaptureAnswer } from './answerGuards.js';
@@ -97,7 +100,13 @@ import {
   NOTE_KEPT_SPOKEN,
   NOTES_FULL_LINE,
   NOTES_NOT_KEPT_LINE,
+  buildIsThisWhoQuestion,
+  buildKinOrderQuestion,
   buildPickQuestion,
+  buildSpokenIsThisWho,
+  buildSpokenKinOrder,
+  buildSpokenWhichKin,
+  buildWhichKinQuestion,
   buildSpokenPick,
   buildSpokenQuestion,
   buildFactLine,
@@ -137,6 +146,9 @@ export interface ExistingTask {
 
 /** A who the person already has, with what the tier rule reads about it. */
 export interface KnownWhoState extends KnownWho {
+  kin?: WhoKin | null;
+  /** Names the person said are not this one, never proposed again. */
+  refusedAliases?: string[];
   relation?: string | null;
   species?: string | null;
   organizationKind?: string | null;
@@ -154,6 +166,9 @@ export interface PeopleInput {
   mentions: MentionRead[];
   places: PlaceRead[];
   known: KnownWhoState[];
+  /** The self's id and each person's birthday, read only when a mention is a family word. */
+  selfWhoId?: string | null;
+  birthdays?: Record<string, KinBirthday | null>;
   knownPlaces: KnownPlace[];
   assistantName: string | null;
   /** Every name the assistant answers to this turn (its own, the one the person said, the default), so none is filed as a person or place. */
@@ -575,6 +590,8 @@ export function planMediaDecisions(input: {
 }
 
 export interface WritePlan {
+  /** "Added for Eli: Buy a card" for a task whose person was found from a family word. */
+  kinLines: string[];
   creates: { id: string; data: Record<string, unknown> }[];
   updates: { id: string; data: Record<string, unknown> }[];
   whoCreates: { id: string; data: Record<string, unknown> }[];
@@ -774,6 +791,9 @@ export const buildWhoDoc = (input: {
   sealed: input.seal({
     name: input.name,
     aliases: [],
+    kin: input.mention.kin ?? null,
+    soundsLike: null,
+    refusedAliases: null,
     relation: input.mention.relation,
     phone: null,
     email: null,
@@ -811,6 +831,57 @@ export const buildPlaceDoc = (input: {
 /** A new name as the person would write it. */
 export const toNameCase = (name: string) => toDisplayCase(name, NAME_CASE);
 
+/** How an unsure mention came to be one: more than one fit, a nickname the model linked to someone, or a family word code could not settle. */
+export type UnsureVia =
+  | { kind: 'alias'; whoId: string }
+  | { kind: 'kin'; ref: WhoKin; resolution: 'many' | 'none' }
+  | {
+      kind: 'kinOrder';
+      ref: WhoKin;
+      shape: 'one' | 'several' | 'extreme';
+    }
+  | null;
+
+interface UnsureEntry {
+  mention: MentionRead;
+  candidateIds: string[];
+  via: UnsureVia;
+}
+
+const PRIVATE_PERSON_LABEL = 'a private person';
+
+/** The family kind as it is spoken, without the order: "brother", never "younger brother". */
+const toKinWord = (kind: string) =>
+  KIN_KINDS.find((entry) => entry.kind === kind)?.spoken ?? kind;
+
+/** A person's name as a question or a result line shows it: on an unattended turn a private person is only "a private person", as the context masks them. */
+const shownName = (who: KnownWhoState, isUnattended: boolean) =>
+  isUnattended && isPrivateInEffect(who.privacyFacts ?? readPrivacyFacts(null))
+    ? PRIVATE_PERSON_LABEL
+    : who.name;
+
+const toKinWho = (who: KnownWhoState) => ({ id: who.id, kin: who.kin ?? null });
+
+/** A proposed nickname is asked about only when the model linked it to someone who is there, who hasn't been told No to it, and it is not a word of the person's own name or nicknames. */
+const isProposalOpen = (mention: MentionRead, people: PeopleInput) => {
+  const proposed = people.known.find((who) => who.id === mention.proposedWhoId);
+  const comparable = mention.name.trim().toLowerCase();
+  const self = people.known.find((who) => who.id === people.selfWhoId);
+  const isSelfWord =
+    self !== undefined &&
+    self.id !== proposed?.id &&
+    [...self.name.split(/\s+/), ...(self.aliases ?? [])].some(
+      (word) => word.trim().toLowerCase() === comparable,
+    );
+  return (
+    proposed !== undefined &&
+    !isSelfWord &&
+    !(proposed.refusedAliases ?? []).some(
+      (refused) => refused.trim().toLowerCase() === comparable,
+    )
+  );
+};
+
 function settleEntities(input: PlanInput) {
   const people = input.people;
   const empty = {
@@ -818,31 +889,50 @@ function settleEntities(input: PlanInput) {
     placeIdOf: new Map<string, string>(),
     newWho: [] as { id: string; mention: MentionRead }[],
     newPlaces: [] as { id: string; place: PlaceRead }[],
-    unsureWho: new Map<
-      string,
-      { mention: MentionRead; candidateIds: string[] }
-    >(),
+    unsureWho: new Map<string, UnsureEntry>(),
     unsurePlaces: new Map<
       string,
       { place: PlaceRead; candidateIds: string[] }
     >(),
+    kinNamed: new Map<string, string>(),
   };
   if (!people) return empty;
-  const whoMatches = matchWho({
-    mentions: people.mentions,
+  const named = people.mentions.filter((mention) => !mention.kinRef);
+  const namedMatches = matchWho({
+    mentions: named,
     known: people.known,
     assistantNames: people.assistantNames,
   });
+  const matchOf = new Map(
+    named.map((mention, index) => [mention.ref, namedMatches[index]]),
+  );
   const placeMatches = matchPlaces({
     names: people.places.map((place) => place.name),
     known: people.knownPlaces,
     assistantNames: people.assistantNames,
   });
-  const whoSettled = people.mentions.flatMap((mention, index) => {
-    const match = whoMatches[index];
-    return match.kind === 'match'
+  const kinOf = new Map(
+    people.mentions.flatMap((mention): [string, KinResolution][] =>
+      mention.kinRef
+        ? [
+            [
+              mention.ref,
+              resolveKin(
+                mention.kinRef,
+                people.known.map(toKinWho),
+                people.birthdays ?? {},
+                people.selfWhoId ?? null,
+              ),
+            ],
+          ]
+        : [],
+    ),
+  );
+  const whoSettled = named.flatMap((mention) => {
+    const match = matchOf.get(mention.ref);
+    return match?.kind === 'match'
       ? [{ mention, id: match.id, isNew: false }]
-      : match.kind === 'new'
+      : match?.kind === 'new' && !isProposalOpen(mention, people)
         ? [{ mention, id: input.newId(), isNew: true }]
         : [];
   });
@@ -862,19 +952,74 @@ function settleEntities(input: PlanInput) {
       const ids = matches[index].candidateIds;
       return ids && ids.length > 0 ? [[item.ref, item, ids]] : [];
     });
+  const sureKin = [...kinOf.entries()].flatMap(
+    ([ref, resolution]): [string, string][] =>
+      resolution.kind === 'one' ? [[ref, resolution.id]] : [],
+  );
+  const kinUnsure = people.mentions.flatMap(
+    (mention): [string, UnsureEntry][] => {
+      const resolution = kinOf.get(mention.ref);
+      const ref = mention.kinRef;
+      if (!resolution || !ref || resolution.kind === 'one') return [];
+      return [
+        [
+          mention.ref,
+          resolution.kind === 'askOrder'
+            ? {
+                mention,
+                candidateIds: resolution.ids,
+                via: { kind: 'kinOrder', ref, shape: resolution.shape },
+              }
+            : {
+                mention,
+                candidateIds: resolution.kind === 'many' ? resolution.ids : [],
+                via: { kind: 'kin', ref, resolution: resolution.kind },
+              },
+        ],
+      ];
+    },
+  );
+  const proposed = named.flatMap((mention): [string, UnsureEntry][] =>
+    matchOf.get(mention.ref)?.kind === 'new' &&
+    isProposalOpen(mention, people) &&
+    mention.proposedWhoId
+      ? [
+          [
+            mention.ref,
+            {
+              mention,
+              candidateIds: [mention.proposedWhoId],
+              via: { kind: 'alias', whoId: mention.proposedWhoId },
+            },
+          ],
+        ]
+      : [],
+  );
   return {
-    unsureWho: new Map(
-      unsure(people.mentions, whoMatches).map(
-        ([ref, mention, candidateIds]) => [ref, { mention, candidateIds }],
-      ),
-    ),
+    unsureWho: new Map<string, UnsureEntry>([
+      ...unsure(
+        named,
+        named.map((mention) => matchOf.get(mention.ref) ?? { kind: 'new' }),
+      ).map(([ref, mention, candidateIds]): [string, UnsureEntry] => [
+        ref,
+        { mention, candidateIds, via: null },
+      ]),
+      ...proposed,
+      ...kinUnsure,
+    ]),
     unsurePlaces: new Map(
       unsure(people.places, placeMatches).map(([ref, place, candidateIds]) => [
         ref,
         { place, candidateIds },
       ]),
     ),
-    whoIdOf: new Map(whoSettled.map((entry) => [entry.mention.ref, entry.id])),
+    whoIdOf: new Map([
+      ...whoSettled.map((entry): [string, string] => [
+        entry.mention.ref,
+        entry.id,
+      ]),
+      ...sureKin,
+    ]),
     placeIdOf: new Map(
       placeSettled.map((entry) => [entry.place.ref, entry.id]),
     ),
@@ -884,6 +1029,7 @@ function settleEntities(input: PlanInput) {
     newPlaces: placeSettled
       .filter((entry) => entry.isNew)
       .map(({ id, place }) => ({ id, place })),
+    kinNamed: new Map(sureKin),
   };
 }
 
@@ -1913,6 +2059,18 @@ export function planWrites(input: PlanInput): WritePlan {
         )
       : []),
   ];
+  const kinIds = new Set(entities.kinNamed.values());
+  const kinLines = [...drafts.values()].flatMap((draft) => {
+    const names = draft.whoIds
+      .filter((id) => kinIds.has(id))
+      .flatMap((id) => {
+        const known = input.people?.known.find((who) => who.id === id);
+        return known ? [shownName(known, input.isUnattended === true)] : [];
+      });
+    return names.length > 0
+      ? [`Added for ${names.join(' and ')}: ${draft.title}`]
+      : [];
+  });
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
     const marked = readPrivateMark({
@@ -2290,6 +2448,7 @@ export function planWrites(input: PlanInput): WritePlan {
   const pickQuestions = !isFiling
     ? []
     : buildPickQuestions({
+        isUnattended: input.isUnattended === true,
         entities,
         unsureTasks,
         people,
@@ -2356,6 +2515,7 @@ export function planWrites(input: PlanInput): WritePlan {
   ];
 
   return {
+    kinLines,
     creates,
     updates: [...patches.entries()].map(([id, data]) => ({ id, data })),
     whoCreates: countedCreates,
@@ -2471,6 +2631,7 @@ function buildPickQuestions(input: {
   newId: () => string;
   now: number;
   room: number;
+  isUnattended: boolean;
 }): PlannedQuestion[] {
   const { entities, unsureTasks, people, now } = input;
   if (!people) return [];
@@ -2507,6 +2668,9 @@ function buildPickQuestions(input: {
         )
         .flatMap((other) => unsureTasks.get(other.ref) ?? []),
     );
+  const whoVia = new Map(
+    [...entities.unsureWho.entries()].map(([ref, entry]) => [ref, entry.via]),
+  );
   const whoEntries = [...entities.unsureWho.entries()].map(
     ([ref, { mention, candidateIds }]) => ({
       ref,
@@ -2523,17 +2687,127 @@ function buildPickQuestions(input: {
       candidateIds,
     }),
   );
-  const whoQuestions = distinct(whoEntries).flatMap((entry) => {
+  const toPlanned = (
+    kind: string,
+    shape: string,
+    sealed: PlannedQuestion['sealed'],
+    spoken: string,
+  ): PlannedQuestion => ({
+    id: input.newId(),
+    state: {
+      kind,
+      shape,
+      askedAt: now,
+      answeredAt: null,
+      skippedAt: null,
+      leftAt: null,
+    },
+    sealed,
+    spoken,
+  });
+  type PickEntry =
+    | { planned: PlannedQuestion }
+    | {
+        kind: PickKind;
+        name: string;
+        candidates: PickCandidate[];
+        held: HeldLink;
+      };
+  const whoQuestions = distinct(whoEntries).flatMap((entry): PickEntry[] => {
     const states = entry.candidateIds.flatMap(
       (id) => people.known.find((who) => who.id === id) ?? [],
     );
     const isMixed = new Set(states.map((who) => who.kind)).size > 1;
+    const via = whoVia.get(entry.ref) ?? null;
     const candidates: PickCandidate[] = states.map((who) => ({
       id: who.id,
-      label: who.name,
+      label: via ? shownName(who, input.isUnattended) : who.name,
       detail: detailOfWho(who, isMixed),
     }));
     const { name, kind, relation, species, organizationKind } = entry.item;
+    const taskIds = taskIdsFor(whoEntries, entry);
+    if (via?.kind === 'alias') {
+      const [who] = candidates;
+      if (!who) return [];
+      const alias = toNameCase(name);
+      return [
+        {
+          planned: toPlanned(
+            'isThisWho',
+            'pickOne',
+            buildIsThisWhoQuestion({
+              alias,
+              who: {
+                id: who.id,
+                name: who.label,
+                detail: who.detail ?? null,
+              },
+              mention: { name, kind, relation, species, organizationKind },
+              taskIds,
+            }),
+            buildSpokenIsThisWho(alias, who.label),
+          ),
+        },
+      ];
+    }
+    if (via?.kind === 'kin') {
+      const words = toKinWord(via.ref.kind);
+      const mention = {
+        name: entry.item.name,
+        kind: 'person',
+        relation: `my ${entry.item.name}`,
+        species: null,
+        organizationKind: null,
+        kin: via.ref,
+      };
+      const labelled = candidates.map((candidate) => ({
+        ...candidate,
+        detail:
+          states.find((who) => who.id === candidate.id)?.kin?.order ?? null,
+      }));
+      const asked = buildWhichKinQuestion({
+        words,
+        candidates: labelled.map((candidate) => ({
+          ...candidate,
+          detail: candidate.detail && toDisplayCase(candidate.detail),
+        })),
+        mention,
+        taskIds,
+      });
+      return [
+        {
+          planned: toPlanned(
+            'whichKin',
+            asked.shape,
+            asked,
+            buildSpokenWhichKin(
+              words,
+              candidates.map((candidate) => candidate.label),
+              candidates.length === 0,
+            ),
+          ),
+        },
+      ];
+    }
+    if (via?.kind === 'kinOrder') {
+      const sealed = buildKinOrderQuestion({
+        words: toKinWord(via.ref.kind),
+        wanted: via.ref.order ?? 'younger',
+        shape: via.shape,
+        candidates,
+        taskIds,
+      });
+      return [
+        {
+          planned: toPlanned(
+            'kinOrder',
+            sealed.shape,
+            sealed,
+            buildSpokenKinOrder(sealed),
+          ),
+        },
+      ];
+    }
     return [
       {
         kind: 'whichPerson' as PickKind,
@@ -2541,52 +2815,53 @@ function buildPickQuestions(input: {
         candidates,
         held: {
           kind: 'linkWho',
-          taskIds: taskIdsFor(whoEntries, entry),
+          taskIds,
           mention: { name, kind, relation, species, organizationKind },
         } as HeldLink,
       },
     ];
   });
-  const placeQuestions = distinct(placeEntries).flatMap((entry) => {
-    const candidates: PickCandidate[] = entry.candidateIds.flatMap((id) => {
-      const place = people.knownPlaces.find((known) => known.id === id);
-      return place
-        ? [{ id, label: place.name, detail: place.address ?? null }]
-        : [];
-    });
-    return [
-      {
-        kind: 'whichPlace' as PickKind,
-        name: entry.item.name,
-        candidates,
-        held: {
-          kind: 'linkPlace',
-          taskIds: taskIdsFor(placeEntries, entry),
-          place: { name: entry.item.name },
-        } as HeldLink,
-      },
-    ];
-  });
-  return [...whoQuestions, ...placeQuestions]
-    .filter((question) => question.candidates.length > 0)
-    .slice(0, input.room)
-    .map((question) => ({
-      id: input.newId(),
-      state: {
-        kind: question.kind,
-        shape: 'pickOne',
-        askedAt: now,
-        answeredAt: null,
-        skippedAt: null,
-        leftAt: null,
-      },
-      sealed: buildPickQuestion(question),
-      spoken: buildSpokenPick(
-        question.name,
-        question.candidates.map((candidate) => candidate.label),
-        question.kind === 'whichPlace' ? 'a new place' : 'someone new',
-      ),
-    }));
+  const placeQuestions = distinct(placeEntries).flatMap(
+    (entry): PickEntry[] => {
+      const candidates: PickCandidate[] = entry.candidateIds.flatMap((id) => {
+        const place = people.knownPlaces.find((known) => known.id === id);
+        return place
+          ? [{ id, label: place.name, detail: place.address ?? null }]
+          : [];
+      });
+      return [
+        {
+          kind: 'whichPlace' as PickKind,
+          name: entry.item.name,
+          candidates,
+          held: {
+            kind: 'linkPlace',
+            taskIds: taskIdsFor(placeEntries, entry),
+            place: { name: entry.item.name },
+          } as HeldLink,
+        },
+      ];
+    },
+  );
+  const picks = [...whoQuestions, ...placeQuestions].flatMap((question) =>
+    'planned' in question
+      ? [question.planned]
+      : question.candidates.length > 0
+        ? [
+            toPlanned(
+              question.kind,
+              'pickOne',
+              buildPickQuestion(question),
+              buildSpokenPick(
+                question.name,
+                question.candidates.map((candidate) => candidate.label),
+                question.kind === 'whichPlace' ? 'a new place' : 'someone new',
+              ),
+            ),
+          ]
+        : [],
+  );
+  return picks.slice(0, input.room);
 }
 
 /** How many model-written questions the person still has open across their waiting turns, a skipped one included. */
@@ -2708,6 +2983,7 @@ export function buildExecution(
     sealed: input.seal({
       summary: [
         summarize(plan.counts, input.messageCount),
+        ...plan.kinLines,
         describeFacts(plan.factCreates.length + plan.factConfirms.length),
         describeKeyDates(
           plan.effectRefs.flatMap((ref, position) =>
@@ -2844,6 +3120,9 @@ interface SettleInput {
 const isPickKind = (kind: string) =>
   kind === 'whichPerson' ||
   kind === 'whichPlace' ||
+  kind === 'isThisWho' ||
+  kind === 'whichKin' ||
+  kind === 'kinOrder' ||
   kind === 'whichTopic' ||
   kind === 'whichIsTrue' ||
   kind === 'groupTopics' ||

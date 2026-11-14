@@ -1346,7 +1346,15 @@ export const getTakenBackIds = (undo: OpenExecution | null) =>
       : [],
   );
 
-/** What taking back an answer to a "which is true now?" or "group these?" question writes to its turn so the question asks again; null for any other execution. */
+const REOPENABLE_KINDS = [
+  'whichIsTrue',
+  'groupTopics',
+  'isThisWho',
+  'whichKin',
+  'kinOrder',
+];
+
+/** What taking back an answer to a "which is true now?", "group these?", "is this who?" or family question writes to its turn so the question asks again; null for any other execution. */
 export const planReopen = (
   original: Pick<OpenExecution, 'questionRef'>,
   capture: {
@@ -1357,10 +1365,7 @@ export const planReopen = (
   const ref = original.questionRef;
   const state = ref && capture ? capture.questionState[ref.questionId] : null;
   if (!ref || !capture || !state) return null;
-  if (
-    (state.kind !== 'whichIsTrue' && state.kind !== 'groupTopics') ||
-    state.answeredAt === null
-  ) {
+  if (!REOPENABLE_KINDS.includes(state.kind) || state.answeredAt === null) {
     return null;
   }
   return {
