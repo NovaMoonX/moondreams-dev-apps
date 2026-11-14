@@ -397,10 +397,9 @@ const toLine = (entry: WhereRow) => {
   return `- ${entry.thing}: ${read === null ? '' : `${read}; `}${write}.`;
 };
 
-/** Whether a row's source is readable this turn: a synced copy always is; a live read needs its source (`google:gmail`) or its `source/category` pair granted. */
+/** Whether a row's source is readable this turn: its source (`google:gmail`, or a source with synced copies) or its `source/category` pair is in `granted`. */
 export const isRowGranted = (entry: WhereRow, granted: readonly string[]) =>
   entry.grant === null ||
-  entry.isSynced ||
   granted.includes(entry.grant.source) ||
   granted.includes(`${entry.grant.source}/${entry.grant.category}`);
 

@@ -1809,6 +1809,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const system = [
       SYSTEM_PROMPT,
       renderWhereBlock([
+        ...synced.map((copy) => copy.connectorId),
         ...liveGrants.map((grant) => grant.connectorId),
         ...siteGrants.flatMap((grant) =>
           grant.categories.map(({ id }) => `${grant.connectorId}/${id}`),
