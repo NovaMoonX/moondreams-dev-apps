@@ -63,7 +63,7 @@ const getBody = (
   isPhone: boolean,
 ) => {
   if (isSystemBlocked)
-    return `Your browser said no without asking you. Unless you chose Block, the microphone is off for the browser itself, so turn it on in your ${isPhone ? 'phone’s' : 'computer’s'} settings.`;
+    return `Your browser said no without asking you, which usually means the microphone is off for the browser itself. Turn it on in your ${isPhone ? 'phone’s' : 'computer’s'} settings.`;
   return isBlocked
     ? 'Your browser said no for this site, so it has to be allowed in its settings.'
     : 'Allow it below when your browser asks.';

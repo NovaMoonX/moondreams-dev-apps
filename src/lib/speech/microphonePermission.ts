@@ -222,7 +222,7 @@ export const getSystemMicrophoneHowTo = (
     return [
       'Open your phone’s Settings › Apps › Chrome (or the browser you installed this app from) › Permissions › Microphone and choose Allow.',
       'If your phone has a Microphone access tile in Quick Settings, make sure it’s on.',
-      `Already allowed? In Chrome, tap ⋮ › Settings › Site settings › Microphone, find ${window.location.host} and choose Allow.`,
+      `Already allowed? In your browser, tap ⋮ › Settings › Site settings › Microphone, find ${window.location.host} and choose Allow.`,
       'Come back and tap Try again.',
     ];
   if (device === 'computer')
