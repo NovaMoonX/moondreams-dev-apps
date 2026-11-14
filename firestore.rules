@@ -171,6 +171,14 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // Emails whose owners see error details. A person reads only their own entry.
+    match /debugProfiles/{emailLower} {
+      allow read, create, delete: if isAdmin();
+      allow get: if request.auth != null
+        && request.auth.token.get('email_verified', false) == true
+        && emailLower == request.auth.token.email.lower();
+    }
+
     // What a member without access may see of an app open to requests: no access list, nothing else.
     // The admin writes it beside the app doc and deletes it when the app stops taking requests.
     match /appListings/{appId} {
