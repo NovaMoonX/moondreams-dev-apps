@@ -76,11 +76,17 @@ function VoicePicker({ onClose }: VoicePickerProps) {
   const chosen = pendingName ?? savedVoice.name;
   const speed = pendingSpeed ?? savedSpeed;
   const chosenRow = useRef<HTMLLIElement | null>(null);
+  const isLockedAtOpen = useRef(isLocked);
   const chosenVoice = findHelmVoice(chosen);
 
   useEffect(() => {
     const row = chosenRow.current;
-    if (row && row.getBoundingClientRect().bottom > window.innerHeight) {
+    // A locked picker opens at its notice, which says why samples are off.
+    if (
+      !isLockedAtOpen.current &&
+      row &&
+      row.getBoundingClientRect().bottom > window.innerHeight
+    ) {
       row.scrollIntoView({ block: 'center' });
     }
     return () => {
