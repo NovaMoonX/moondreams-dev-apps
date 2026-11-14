@@ -191,6 +191,7 @@ function toJsx(body: string) {
   const suffixOf = idSuffixes(body);
   const withIds = (value: string) =>
     value
+      .replace(/[`\\]|\$\{/g, (char) => `\\${char}`)
       .replace(URL_REF, (match, id: string) =>
         suffixOf.has(id) ? `url(#\${id}${suffixOf.get(id)})` : match,
       )
@@ -376,11 +377,12 @@ function upsertNotice(
     ? readFileSync(noticeFile, 'utf8')
     : `${header}\n`;
   const lines = existing.trimEnd().split('\n');
-  const at = lines.findIndex((line) => line.startsWith(`| \`${item}\` |`));
+  const isItemRow = (line: string) =>
+    line.split('|')[1]?.trim() === `\`${item}\``;
+  const kept = lines.filter((line) => !isItemRow(line));
+  const at = lines.findIndex(isItemRow);
   const next =
-    at === -1
-      ? [...lines, row]
-      : lines.map((line, i) => (i === at ? row : line));
+    at === -1 ? [...kept, row] : [...kept.slice(0, at), row, ...kept.slice(at)];
   writeFileSync(noticeFile, `${next.join('\n')}\n`);
   execFileSync('npx', ['prettier', '--write', noticeFile], { stdio: 'ignore' });
 }
