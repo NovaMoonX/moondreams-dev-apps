@@ -34,8 +34,18 @@ export const WORTH_THE_WAIT_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: null,
             },
+            {
+              label: "Each box's description",
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'When a reveal is waiting on you',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
         },
       ],
       never: [

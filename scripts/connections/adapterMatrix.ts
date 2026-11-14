@@ -1925,16 +1925,21 @@ const waitBox = async (
   emoji: string,
   revealedFlags: boolean[],
   key = SPACE_KEY,
+  revealRequestedBy: {
+    userId: string;
+    method: string;
+    requestedAt: number;
+  }[] = [],
 ) => {
   const box = waitSpaces.doc(space).collection('boxes').doc(id);
   await box.set({
     name: sealed(name, key),
     emoji: sealed(emoji, key),
-    description: sealed('SECRET DESCRIPTION'),
+    description: sealed('Things to try together'),
     isDefault: false,
     createdBy: OWNER,
     revealHistory: [],
-    revealRequestedBy: [],
+    revealRequestedBy,
   });
   await Promise.all(
     revealedFlags.map((flag, index) =>
@@ -1948,8 +1953,13 @@ await Promise.all([
 ]);
 await Promise.all([
   waitBox('wtw-home', 'dates', 'Date ideas', '🍿', [true, true, false]),
-  waitBox('wtw-home', 'trips', 'Trips', '✈️', [false]),
-  waitBox('wtw-home', 'empty', 'Gifts', '🎁', []),
+  waitBox('wtw-home', 'trips', 'Trips', '✈️', [false], SPACE_KEY, [
+    { userId: HOUSEMATE, method: 'raffle', requestedAt: NOW },
+  ]),
+  waitBox('wtw-home', 'empty', 'Gifts', '🎁', [], SPACE_KEY, [
+    { userId: OWNER, method: 'raffle', requestedAt: NOW },
+    { userId: HOUSEMATE, method: 'raffle', requestedAt: NOW },
+  ]),
   waitBox('wtw-home', 'garbled', 'Garbled', '🔒', [true], WRONG_KEY),
   waitBox('wtw-stranger', 'hidden', 'Hidden box', '🙈', [true, false]),
 ]);
@@ -2045,22 +2055,23 @@ const countsOf = (ref: string) => {
   const record = boxCounts.find((one) => one.sourceRef === ref);
   assert.ok(record, ref);
   assert.equal(record.kind, 'countSummary');
+  assert.equal(record.detail, 'Things to try together');
   return [record.title, record.subtitle, record.extra];
 };
 assert.deepEqual(countsOf('spaces/wtw-home/boxes/dates'), [
   'Date ideas',
   '🍿',
-  { items: 3, revealed: 2, notYetRevealed: 1 },
+  { items: 3, revealed: 2, notYetRevealed: 1, revealsWaiting: 0 },
 ]);
 assert.deepEqual(countsOf('spaces/wtw-home/boxes/trips'), [
   'Trips',
   '✈️',
-  { items: 1, revealed: 0, notYetRevealed: 1 },
+  { items: 1, revealed: 0, notYetRevealed: 1, revealsWaiting: 1 },
 ]);
 assert.deepEqual(countsOf('spaces/wtw-home/boxes/empty'), [
   'Gifts',
   '🎁',
-  { items: 0, revealed: 0, notYetRevealed: 0 },
+  { items: 0, revealed: 0, notYetRevealed: 0, revealsWaiting: 0 },
 ]);
 assertShape(boxCounts);
 boxCounts.forEach((record) => {
@@ -2071,8 +2082,7 @@ boxCounts.forEach((record) => {
   assert.ok(
     !flatten(record).some(
       (value) =>
-        typeof value === 'string' &&
-        /SECRET|INVITE|invite|description/i.test(value),
+        typeof value === 'string' && /SECRET|INVITE|invite/i.test(value),
     ),
     record.sourceRef,
   );

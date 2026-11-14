@@ -165,7 +165,7 @@ const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
   pet: [],
   moneySummary: ['nextIncomeAt', 'dueBeforeIncomeCents'],
   transaction: ['category'],
-  countSummary: ['items', 'revealed', 'notYetRevealed'],
+  countSummary: ['items', 'revealed', 'notYetRevealed', 'revealsWaiting'],
 };
 
 /** Opens one synced copy; one that won't open or holds no title is left out. */

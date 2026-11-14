@@ -123,10 +123,22 @@ async function countItems(box: FirebaseFirestore.DocumentReference) {
   return { items: total, revealed: shown, notYetRevealed: total - shown };
 }
 
-async function readBoxes(space: Space) {
+/** Reveal requests from someone else, only while this person has not asked for one too. */
+const countRevealsWaiting = (requests: unknown, uid: string) => {
+  const userIds = (Array.isArray(requests) ? requests : []).map((request) =>
+    typeof request === 'object' && request !== null
+      ? (request as Record<string, unknown>).userId
+      : null,
+  );
+  return userIds.includes(uid)
+    ? 0
+    : userIds.filter((id) => typeof id === 'string').length;
+};
+
+async function readBoxes(space: Space, uid: string) {
   const snapshot = await space.ref
     .collection('boxes')
-    .select('name', 'emoji')
+    .select('name', 'emoji', 'description', 'revealRequestedBy')
     .limit(BOX_LIMIT)
     .get();
   const records = await Promise.all(
@@ -139,7 +151,14 @@ async function readBoxes(space: Space) {
           kind: 'countSummary',
           title: name,
           subtitle: openField(doc.get('emoji'), space.key),
-          extra: await countItems(doc.ref),
+          detail: openField(doc.get('description'), space.key),
+          extra: {
+            ...(await countItems(doc.ref)),
+            revealsWaiting: countRevealsWaiting(
+              doc.get('revealRequestedBy'),
+              uid,
+            ),
+          },
         }),
       ];
     }),
@@ -154,7 +173,7 @@ async function readBoxes(space: Space) {
 
 const syncBoxCounts = async (firestore: Firestore, uid: string) => {
   const { spaces, isFull } = await readSpaces(firestore, uid);
-  const reads = await Promise.all(spaces.map(readBoxes));
+  const reads = await Promise.all(spaces.map((space) => readBoxes(space, uid)));
   return {
     records: reads.flatMap((one) => one.records),
     isFull: isFull && reads.every((one) => one.isFull),

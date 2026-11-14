@@ -130,7 +130,7 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
   pet: [],
   moneySummary: ['nextIncomeAt', 'dueBeforeIncomeCents'],
   transaction: ['category'],
-  countSummary: ['items', 'revealed', 'notYetRevealed'],
+  countSummary: ['items', 'revealed', 'notYetRevealed', 'revealsWaiting'],
 };
 
 export type GrantStatus = 'live' | 'needsReconnect' | 'noAccess' | 'ended';
