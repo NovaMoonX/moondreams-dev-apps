@@ -116,10 +116,16 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
       action: {
         label: HELM_COPY.undo,
         onClick: () =>
-          void change.undo().catch((error: unknown) => {
-            console.error('Helm habit was not put back', error);
-            addToast({ title: HELM_COPY.habitUndoFailed, type: 'error' });
-          }),
+          void change
+            .undo()
+            .then((outcome) => {
+              if (outcome === 'kept')
+                addToast({ title: HELM_COPY.habitUndoKept, type: 'info' });
+            })
+            .catch((error: unknown) => {
+              console.error('Helm habit was not put back', error);
+              addToast({ title: HELM_COPY.habitUndoFailed, type: 'error' });
+            }),
       },
     });
   };

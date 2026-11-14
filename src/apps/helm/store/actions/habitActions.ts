@@ -62,6 +62,7 @@ export interface NewHabit {
   emoji: string | null;
   notes: string | null;
   isCare: boolean;
+  forWhoId: string | null;
   /** The habit day it starts on, as UTC midnight. */
   startsOn: number;
   when: ReturnType<typeof fromWhenDraft>;
@@ -83,7 +84,7 @@ export async function createHabit(
     windowState: input.when.windowState,
     timesPerDay: input.when.timesPerDay,
     projectId: null,
-    forWhoId: null,
+    forWhoId: input.isCare ? input.forWhoId : null,
     isCare: input.isCare,
     startsOn: input.startsOn,
     endsOn: null,
@@ -169,6 +170,7 @@ export interface HabitWords {
   name: string;
   emoji: string | null;
   notes: string | null;
+  forWhoId: string | null;
 }
 
 export const updateHabitWords = (
@@ -184,7 +186,7 @@ export const updateHabitWords = (
       emoji: words.emoji,
       notes: words.notes?.trim().slice(0, HABIT_NOTES_MAX) || null,
     },
-    fields: {},
+    fields: { forWhoId: words.forWhoId },
   }));
 
 export const updateHabitWhen = (
