@@ -412,19 +412,22 @@ const toLine = (entry: WhereRow) => {
   return `- ${entry.thing}: ${read === null ? '' : `${read}; `}${write}.`;
 };
 
-/** The prompt's map of where each thing lives; a row with a grant is listed only when its source is in `grantedSources`. */
+/** Whether a row's source is readable this turn: its source (`google:gmail`, or a source with synced copies) or its `source/category` pair is in `granted`. */
+export const isRowGranted = (entry: WhereRow, granted: readonly string[]) =>
+  entry.grant === null ||
+  granted.includes(entry.grant.source) ||
+  granted.includes(`${entry.grant.source}/${entry.grant.category}`);
+
+/** The prompt's map of where each thing lives; a live-read row is listed only when `isRowGranted` holds. */
 export const renderWhereBlock = (
-  grantedSources: readonly string[] = [],
+  granted: readonly string[] = [],
   rows: readonly WhereRow[] = WHERE_THINGS_LIVE,
 ) =>
   [
     '<where_things_live>',
     'To answer about a thing, look in its block, then call its tool; never guess where it lives. To change it, use only the commands listed for it; a thing with no command is changed by the person.',
     ...rows
-      .filter(
-        (entry) =>
-          entry.grant === null || grantedSources.includes(entry.grant.source),
-      )
+      .filter((entry) => isRowGranted(entry, granted))
       .flatMap((entry) => toLine(entry) ?? []),
     '</where_things_live>',
   ].join('\n');

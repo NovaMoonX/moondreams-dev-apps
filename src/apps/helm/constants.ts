@@ -961,6 +961,9 @@ export const HELM_COPY = {
   connectionSwitchedOff: (label: string) =>
     `${label} switched off. Its copies were removed.`,
   connectionUndo: 'Undo',
+  connectionWhatReads: 'What this reads',
+  connectionNewReadsTitle: 'New: it now also reads',
+  connectionGotIt: 'Got it',
   connectionToggleFailed: "That didn't change. Try again.",
   connectionNeverShared: (never: string) => `Never shared: ${never}`,
   connectionDisconnect: (app: string) => `Disconnect ${app}`,

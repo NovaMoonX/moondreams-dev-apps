@@ -1,6 +1,12 @@
 import type { DocumentData, Firestore } from 'firebase-admin/firestore';
 
 import type { SealedPayload } from '../../appKeys/seal.js';
+import {
+  EXTRA_KEYS,
+  readConnectorAppId,
+  type ExtraValue,
+  type SharedKind,
+} from '../../vendor/connectionsContract.js';
 import { formatMoney } from '../../utils/formatMoney.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
 
@@ -18,8 +24,11 @@ export interface SyncedCopy {
   isAllDay: boolean;
   isEnded: boolean;
   detail: string | null;
+  placeLabel: string | null;
   amountCents: number | null;
   currency: string | null;
+  /** Only the keys the kind's contract allows, scalar values. */
+  extra: Record<string, ExtraValue>;
   /** When the source last worked the copy out; null when it did not say. */
   asOf: number | null;
 }
@@ -41,6 +50,10 @@ const SUBTITLE_CHARS = 120;
 const DETAIL_CHARS = 120;
 const MAX_SCANNED_MONEY = 50;
 const MAX_CONTEXT_MONEY = 3;
+const MAX_SCANNED_STANDING = 120;
+const MAX_CONTEXT_STANDING = 8;
+const STANDING_KINDS: SharedKind[] = ['project', 'countSummary', 'pet'];
+const PLACE_CHARS = 120;
 
 const CONNECTOR_LABELS: Record<string, string> = {
   'app:pinch': 'Pinch',
@@ -54,6 +67,11 @@ const CONNECTOR_LABELS: Record<string, string> = {
   'google:gmail': 'Gmail',
   'google:drive': 'Google Drive',
 };
+
+/** The site apps a person can connect, by connector id. */
+export const SITE_CONNECTOR_IDS = Object.keys(CONNECTOR_LABELS).filter(
+  (id) => readConnectorAppId(id) !== null,
+);
 
 /** The name a person knows a source by, never its id. */
 export const connectorLabel = (connectorId: string) =>
@@ -104,6 +122,45 @@ export const toLocalText = (at: number, timeZone: string) =>
 
 const toNumber = (value: unknown) => (typeof value === 'number' ? value : null);
 
+export const isSharedKind = (kind: string): kind is SharedKind =>
+  Object.hasOwn(EXTRA_KEYS, kind);
+
+const toExtra = (kind: string, value: unknown) => {
+  const allowed = isSharedKind(kind) ? EXTRA_KEYS[kind] : [];
+  return typeof value === 'object' && value !== null
+    ? Object.fromEntries(
+        Object.entries(value)
+          .filter(
+            (entry): entry is [string, ExtraValue] =>
+              allowed.includes(entry[0]) &&
+              (entry[1] === null ||
+                ['string', 'number', 'boolean'].includes(typeof entry[1])),
+          )
+          .map(([name, extra]) => [
+            name,
+            typeof extra === 'string' ? extra.slice(0, PLACE_CHARS) : extra,
+          ]),
+      )
+    : {};
+};
+
+/** The extras a model is told for each kind of shared record; a new kind has to say which. */
+const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
+  person: [],
+  place: ['phone', 'address'],
+  event: ['isTentative', 'isFree'],
+  task: [],
+  project: ['available', 'pending', 'sold'],
+  knowledge: ['rating'],
+  artifact: [],
+  scenario: [],
+  trip: [],
+  pet: [],
+  moneySummary: ['nextIncomeAt', 'dueBeforeIncomeCents'],
+  transaction: ['category'],
+  countSummary: ['items', 'revealed', 'notYetRevealed'],
+};
+
 /** Opens one synced copy; one that won't open or holds no title is left out. */
 export function openSyncedCopy(
   key: HelmKey,
@@ -113,11 +170,12 @@ export function openSyncedCopy(
   try {
     const opened = openForHelm(key, data.sealed as SealedPayload);
     if (typeof opened.title !== 'string' || !opened.title) return null;
+    const kind = typeof data.kind === 'string' ? data.kind : '';
     return {
       id,
       connectorId: typeof data.connectorId === 'string' ? data.connectorId : '',
       accountId: typeof data.accountId === 'string' ? data.accountId : '',
-      kind: typeof data.kind === 'string' ? data.kind : '',
+      kind,
       category: typeof data.category === 'string' ? data.category : null,
       title: opened.title,
       subtitle:
@@ -133,8 +191,13 @@ export function openSyncedCopy(
         typeof opened.detail === 'string' && opened.detail
           ? opened.detail.slice(0, DETAIL_CHARS)
           : null,
+      placeLabel:
+        typeof opened.placeLabel === 'string' && opened.placeLabel
+          ? opened.placeLabel.slice(0, PLACE_CHARS)
+          : null,
       amountCents: toNumber(opened.amountCents),
       currency: typeof opened.currency === 'string' ? opened.currency : null,
+      extra: toExtra(kind, opened.extra),
       asOf: toNumber(data.sourceUpdatedAt),
     };
   } catch {
@@ -142,7 +205,7 @@ export function openSyncedCopy(
   }
 }
 
-/** What a model is told about a copy: words, times in the person's zone and the source's name. Never an id, an address, attendees or notes. */
+/** What a model is told about a copy: words, times in the person's zone and the source's name. A site app's copy also carries its place, detail, amount and the kind's extras (a shared place's phone and address, a project's counts); a Google copy never does, so calendar locations and descriptions stay out. Never an id, attendees or notes. */
 export function toSyncedView(
   copy: SyncedCopy,
   timeZone: string,
@@ -154,23 +217,48 @@ export function toSyncedView(
       : copy.isAllDay
         ? toDayText(at)
         : toLocalText(at, timeZone);
+  const isSite = readConnectorAppId(copy.connectorId) !== null;
+  const amount =
+    copy.amountCents === null || copy.currency === null
+      ? null
+      : formatMoney(copy.amountCents, copy.currency);
+  const shown = isSharedKind(copy.kind) ? SHOWN_EXTRAS[copy.kind] : [];
+  const details = Object.fromEntries(
+    shown.flatMap((key): [string, ExtraValue][] => {
+      const value = copy.extra[key];
+      if (value === undefined || value === null) return [];
+      if (key === 'nextIncomeAt' && typeof value === 'number') {
+        return [[key, toDayText(value)]];
+      }
+      return key.endsWith('Cents') &&
+        typeof value === 'number' &&
+        copy.currency !== null
+        ? [[key, formatMoney(value, copy.currency)]]
+        : [[key, value]];
+    }),
+  );
   return {
     title: copy.title,
     kind: copy.kind,
     source: connectorLabel(copy.connectorId),
-    ...(copy.kind === 'event' ? {} : { subtitle: copy.subtitle }),
+    ...(copy.kind === 'event' && !isSite ? {} : { subtitle: copy.subtitle }),
     ...(copy.kind === 'moneySummary'
       ? {
           detail: copy.detail,
-          amount:
-            copy.amountCents === null || copy.currency === null
-              ? null
-              : formatMoney(copy.amountCents, copy.currency),
+          amount,
           asOf: copy.asOf === null ? null : toLocalText(copy.asOf, timeZone),
           ageDays:
             copy.asOf === null
               ? null
               : Math.max(0, Math.floor((now - copy.asOf) / DAY_MS)),
+        }
+      : {}),
+    ...(isSite
+      ? {
+          ...(copy.placeLabel === null ? {} : { place: copy.placeLabel }),
+          ...(copy.detail === null ? {} : { detail: copy.detail }),
+          ...(amount === null ? {} : { amount }),
+          ...(Object.keys(details).length === 0 ? {} : { details }),
         }
       : {}),
     start: toWhen(copy.startAt),
@@ -275,7 +363,23 @@ export async function readSyncedMoney(
     .slice(0, MAX_CONTEXT_MONEY);
 }
 
-/** The shared money summaries, then today's and tomorrow's events and the week's tasks the context offers; a summary is one line, so it goes first. */
+/** The standing summaries other apps share (a project's counts, a pet), still connected: one line each, so no date window applies. */
+export async function readSyncedStanding(
+  firestore: Firestore,
+  uid: string,
+  key: HelmKey,
+) {
+  const snapshot = await firestore
+    .collection(syncedPath(uid))
+    .where('kind', 'in', STANDING_KINDS)
+    .limit(MAX_SCANNED_STANDING)
+    .get();
+  return openAll(key, snapshot.docs)
+    .filter((copy) => !copy.isEnded)
+    .slice(0, MAX_CONTEXT_STANDING);
+}
+
+/** The shared money and standing summaries, then today's and tomorrow's events and the week's tasks the context offers; a summary is one line, so it goes first. */
 export async function readContextSynced(
   firestore: Firestore,
   uid: string,
@@ -284,7 +388,7 @@ export async function readContextSynced(
   timeZone: string,
 ) {
   const firstDay = getLocalDay(at, timeZone);
-  const [events, tasks, money] = await Promise.all([
+  const [events, tasks, money, standing] = await Promise.all([
     readSyncedEvents(firestore, uid, key, {
       firstDay,
       days: CONTEXT_EVENT_DAYS,
@@ -297,12 +401,14 @@ export async function readContextSynced(
       limit: MAX_CONTEXT_SYNCED,
     }),
     readSyncedMoney(firestore, uid, key),
+    readSyncedStanding(firestore, uid, key),
   ]);
+  const summaries = [...money, ...standing].slice(0, MAX_CONTEXT_SYNCED);
   return [
-    ...money,
+    ...summaries,
     ...[...events, ...tasks].slice(
       0,
-      Math.max(0, MAX_CONTEXT_SYNCED - money.length),
+      Math.max(0, MAX_CONTEXT_SYNCED - summaries.length),
     ),
   ];
 }
@@ -339,6 +445,26 @@ export async function readRecentCopies(
   const snapshot = await firestore
     .collection(syncedPath(uid))
     .orderBy('syncedAt', 'desc')
+    .limit(MAX_SCANNED_COPIES)
+    .get();
+  return openAll(key, snapshot.docs);
+}
+
+/** Copies of one app and/or one kind, opened; equality filters only, so no composite index. */
+export async function readFilteredCopies(
+  firestore: Firestore,
+  uid: string,
+  key: HelmKey,
+  filter: { connectorId: string | null; kind: string | null },
+) {
+  const base = firestore.collection(syncedPath(uid));
+  const withApp =
+    filter.connectorId === null
+      ? base
+      : base.where('connectorId', '==', filter.connectorId);
+  const snapshot = await (
+    filter.kind === null ? withApp : withApp.where('kind', '==', filter.kind)
+  )
     .limit(MAX_SCANNED_COPIES)
     .get();
   return openAll(key, snapshot.docs);

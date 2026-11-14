@@ -353,6 +353,10 @@ function Composer({
         .finally(() => setIsSending(false));
       if (took === 'kept') return;
       if (took) {
+        // What the device did is said in the dock, which a focused field hides.
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
         changeText('');
         setDismissed([]);
         setFixedDays({});

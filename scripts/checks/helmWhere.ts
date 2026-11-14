@@ -222,8 +222,9 @@ test('the map matches the code: nothing missing, nothing invented', () => {
 });
 
 test('the prompt block is the one generated from the rows and matches its snapshot', () => {
-  if (process.argv.includes('--write')) writeFileSync(SNAPSHOT, `${block}\n`);
-  assert.equal(`${block}\n`, readFileSync(SNAPSHOT, 'utf8'));
+  const both = `${block}\n\n${renderWhereBlock([])}\n`;
+  if (process.argv.includes('--write')) writeFileSync(SNAPSHOT, both);
+  assert.equal(both, readFileSync(SNAPSHOT, 'utf8'));
 });
 
 test('the turn reads the generated block', () => {
@@ -234,12 +235,38 @@ test('the turn reads the generated block', () => {
   );
 });
 
-test('a row whose grant is not live is left out of the prompt', () => {
+test('a connected row is listed only when its source is granted or has copies', () => {
   const base = renderWhereBlock([]);
   assert.ok(!base.includes('search_mail'));
   assert.ok(!base.includes('search_app_records'));
+  assert.ok(!base.includes('- Cats:'));
   assert.ok(renderWhereBlock(['google:gmail']).includes('search_mail'));
+  assert.ok(renderWhereBlock(['app:nine-lives']).includes('- Cats:'));
+  assert.ok(
+    renderWhereBlock(['app:runway/transactions']).includes(
+      'search_app_records',
+    ),
+  );
+  assert.ok(
+    !renderWhereBlock(['app:runway/other']).includes('search_app_records'),
+  );
   assert.ok(base.includes('search_tasks'));
+});
+
+test('the turn passes the sources of its synced copies', () => {
+  assert.ok(
+    /\.\.\.synced\.map\(\(copy\) => copy\.connectorId\)/.test(
+      read('functions/src/apps/helm/sortHelmCapture.ts'),
+    ),
+  );
+});
+
+test('the turn passes each site grant as its source and category', () => {
+  assert.ok(
+    /grant\.categories\.map\(\(\{ id \}\) => `\$\{grant\.connectorId\}\/\$\{id\}`\)/.test(
+      read('functions/src/apps/helm/sortHelmCapture.ts'),
+    ),
+  );
 });
 
 const QUESTIONS: [string, string, string][] = [
