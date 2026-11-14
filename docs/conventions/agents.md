@@ -6,7 +6,7 @@ The repo's subagents live in `.claude/agents/`, one file each, with their model 
 |---|---|---|---|---|
 | `implementer` | sonnet | yes | orchestrate | Builds one planned, file-bounded chunk to a brief and runs the fast checks. |
 | `validator` | haiku | no | orchestrate, pr-wrap-up | Typecheck, eslint, `check:*`, the repo-rule greps; reports failures only. |
-| `technical-reviewer` | sonnet | no | pr-wrap-up | The diff (or one shard) for defects with a production state, from the code; then answers product and design's code questions in the same agent. |
+| `technical-reviewer` | sonnet | no | pr-wrap-up | The diff (or one shard) for defects with a production state, from the code, including the diff of an app's map of where things live (Helm's `WHERE_THINGS_LIVE`); then answers product and design's code questions in the same agent. |
 | `product-reviewer` | sonnet | no | pr-wrap-up, build-app-mvp polish | Drives the app: journeys, phases, doors, numbers, copy, docs. |
 | `design-reviewer` | sonnet | no | pr-wrap-up, build-app-mvp polish | Measures the app: containers, reach, alignment, state, colour. |
 | `lead-reviewer` | opus | no | pr-wrap-up (size L) | Verifies the shard findings and does the cross-shard pass. |

@@ -138,6 +138,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/whereThingsLive.ts',
+    dest: 'functions/src/apps/helm/nomos/whereThingsLive.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/lib/speech/speechText.ts',
     dest: 'functions/src/vendor/speechText.ts',
     importRewrites: {},

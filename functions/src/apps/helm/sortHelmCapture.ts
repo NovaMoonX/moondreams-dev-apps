@@ -222,6 +222,7 @@ import {
   TOPIC_PROMPT,
   PROCEDURE_PROMPT,
 } from './nomos/prompt.js';
+import { renderWhereBlock } from './nomos/whereThingsLive.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -1821,6 +1822,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const searched = createSearchedLog();
     const system = [
       SYSTEM_PROMPT,
+      renderWhereBlock([
+        ...synced.map((copy) => copy.connectorId),
+        ...liveGrants.map((grant) => grant.connectorId),
+        ...siteGrants.flatMap((grant) =>
+          grant.categories.map(({ id }) => `${grant.connectorId}/${id}`),
+        ),
+      ]),
       liveGrants.length > 0 ? MAIL_PROMPT : null,
       siteGrants.length > 0 ? APP_RECORDS_PROMPT : null,
       toOffCategoriesPrompt(
