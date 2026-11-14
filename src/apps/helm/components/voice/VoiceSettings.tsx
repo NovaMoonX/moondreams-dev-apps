@@ -18,7 +18,11 @@ import { useAppSelector } from '@/store';
 import { canUseBrowserStt } from '@/lib/speech/voice/browserStt';
 import VoicePicker from '@apps/helm/components/voice/VoicePicker';
 import { HELM_COPY } from '@apps/helm/constants';
-import { findHelmVoice, toFeelLabel } from '@apps/helm/voices';
+import {
+  findHelmVoice,
+  toFeelLabel,
+  toHelmVoiceSpeed,
+} from '@apps/helm/voices';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
   setHandsFreeOn,
@@ -276,9 +280,8 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
     lang: navigator.language || 'en-US',
   });
   const [isPickerOpen, setIsPickerOpen] = useState(false);
-  const chosenVoice = findHelmVoice(
-    useAppSelector((state) => state.helm.profile?.voiceId ?? null),
-  );
+  const profile = useAppSelector((state) => state.helm.profile);
+  const chosenVoice = findHelmVoice(profile?.voiceId ?? null);
   const canListenForPhrase = canUseBrowserStt() || onDevice.isOn;
 
   const change = (isOn: boolean) => {
@@ -360,10 +363,15 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
                 {HELM_COPY.voicePickerRowTitle}
               </span>
               <span className='text-muted-foreground text-[15px] leading-[21px]'>
-                {HELM_COPY.voicePickerRowHint(
-                  chosenVoice.name,
-                  toFeelLabel(chosenVoice.feel),
-                )}
+                {isDeviceOnly
+                  ? HELM_COPY.voicePickerRowDeviceOnly
+                  : HELM_COPY.voicePickerSummary(
+                      chosenVoice.name,
+                      toFeelLabel(chosenVoice.feel),
+                      HELM_COPY.voicePickerPace[
+                        toHelmVoiceSpeed(profile?.voiceSpeed ?? null)
+                      ] ?? null,
+                    )}
               </span>
             </span>
             <ChevronRight

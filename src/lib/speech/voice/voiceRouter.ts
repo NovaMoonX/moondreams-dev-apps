@@ -22,7 +22,7 @@ interface SpeakerInput {
   isCloudHeld: boolean;
   /** The app supplied a speech source. */
   hasCloud: boolean;
-  /** An earlier line of this conversation fell back to the device voice, so the rest stay there and the voice doesn't change mid-conversation. */
+  /** An earlier line of this conversation fell back to the device voice. */
   isDeviceSticky: boolean;
 }
 
@@ -43,7 +43,7 @@ export const pickWakeListener = (input: {
 }): Exclude<ListenerChoice, 'cloud'> =>
   input.isOnDeviceReady ? 'onDevice' : 'browser';
 
-/** Which adapter speaks a line: the cloud's for a reply or summary when online, allowed, not held today, the app has a speech source and no earlier line of the conversation fell back; else the natural voice when it is ready, else the system voice. */
+/** Which adapter speaks a line: the cloud's for a reply or summary when it can, else the natural voice when ready, else the system voice. */
 export const pickSpeaker = (input: SpeakerInput): SpeakerChoice =>
   input.isOnline &&
   input.priority !== 'ack' &&

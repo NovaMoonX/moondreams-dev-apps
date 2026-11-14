@@ -2,7 +2,6 @@ export interface PcmFormat {
   sampleRate: number;
 }
 
-/** What the player needs of an `AudioContext`; the real one satisfies it. */
 export interface PcmContext {
   readonly currentTime: number;
   readonly destination: AudioNode;
@@ -15,21 +14,18 @@ export interface PcmContext {
 }
 
 export interface PcmSink {
-  /** Plays these bytes after what was already given; an odd trailing byte waits for the next call. */
   push: (bytes: Uint8Array) => void;
-  /** No more bytes are coming; `done` resolves once what was scheduled has played. */
   end: () => void;
-  /** Cuts every scheduled sound at once and resolves `done`. */
+  remainingMs: () => number;
   stop: () => void;
-  /** Resolves when the last sound ends (after `end`) or `stop` is called. */
   done: Promise<void>;
 }
 
-/** Seconds of margin before a chunk's start so the next one is queued ahead of the one playing. */
 export const PCM_LEAD_SECONDS = 0.05;
+export const PCM_PREBUFFER_SECONDS = 0.2;
 const DEFAULT_RATE = 24000;
 
-/** The format of a raw 16-bit little-endian mono body (`audio/L16; rate=24000; channels=1`); null for any other type. */
+/** The format of a raw 16-bit mono `audio/L16` body; null for any other type. */
 export const parsePcmFormat = (contentType: string): PcmFormat | null => {
   const [type = '', ...params] = contentType.split(';').map((p) => p.trim());
   if (type.toLowerCase() !== 'audio/l16') return null;
@@ -47,7 +43,6 @@ export const parsePcmFormat = (contentType: string): PcmFormat | null => {
   };
 };
 
-/** Int16 little-endian samples to floats in -1..1. */
 export const toFloatSamples = (bytes: Uint8Array) => {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   return Float32Array.from(
@@ -56,17 +51,19 @@ export const toFloatSamples = (bytes: Uint8Array) => {
   );
 };
 
-/** Plays 16-bit mono PCM as it arrives: each chunk becomes a buffer scheduled right after the one before, and `onStart` fires when the first is scheduled. */
+/** Plays 16-bit mono PCM as it arrives, after holding about 200 ms; `onStart` fires when the first sound is scheduled. */
 export const createPcmSink = ({
   context,
   sampleRate,
   onStart,
   leadSeconds = PCM_LEAD_SECONDS,
+  prebufferSeconds = PCM_PREBUFFER_SECONDS,
 }: {
   context: PcmContext;
   sampleRate: number;
   onStart: () => void;
   leadSeconds?: number;
+  prebufferSeconds?: number;
 }): PcmSink => {
   const state = {
     carry: null as number | null,
@@ -74,6 +71,7 @@ export const createPcmSink = ({
     isStarted: false,
     isEnded: false,
     isStopped: false,
+    held: [] as Float32Array[],
     nodes: new Set<AudioBufferSourceNode>(),
     resolve: () => undefined as void,
   };
@@ -115,19 +113,43 @@ export const createPcmSink = ({
     }
   };
 
+  const flushHeld = () => {
+    const samples = new Float32Array(
+      state.held.reduce((sum, part) => sum + part.length, 0),
+    );
+    state.held.reduce((offset, part) => {
+      samples.set(part, offset);
+      return offset + part.length;
+    }, 0);
+    state.held = [];
+    if (samples.length > 0) schedule(samples);
+  };
+
   return {
     push: (bytes) => {
       if (state.isStopped || state.isEnded) return;
       const samples = toFloatSamples(toEvenBytes(bytes));
-      if (samples.length > 0) schedule(samples);
+      if (samples.length === 0) return;
+      if (state.isStarted) {
+        schedule(samples);
+        return;
+      }
+      state.held.push(samples);
+      const heldLength = state.held.reduce((sum, part) => sum + part.length, 0);
+      if (heldLength >= prebufferSeconds * sampleRate) flushHeld();
     },
     end: () => {
+      if (state.isStopped || state.isEnded) return;
+      flushHeld();
       state.isEnded = true;
       settle();
     },
+    remainingMs: () =>
+      Math.max(0, state.nextStartTime - context.currentTime) * 1000,
     stop: () => {
       state.isStopped = true;
       state.isEnded = true;
+      state.held = [];
       state.nodes.forEach((node) => {
         node.onended = null;
         try {

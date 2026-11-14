@@ -286,7 +286,6 @@ assert.equal(
   'a day inside another request is not an answer',
 );
 
-// The server's list of allowed voices and the picker's list are the same 30 names.
 const pickerNames = HELM_VOICES.map((voice) => voice.name);
 assert.equal(pickerNames.length, 30, 'the picker offers 30 voices');
 assert.equal(new Set(pickerNames).size, 30, 'no voice is listed twice');

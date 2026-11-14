@@ -18,7 +18,7 @@ const noDevice: TtsAdapter = {
   speak: () => Promise.resolve(),
 };
 
-/** Plays one line in the cloud voice outside a conversation, to hear a voice or pace; the device voice never stands in. Call it inside the tap. `onStart` fires at the first sound; `done` says how it ended. */
+/** Plays one line in the cloud voice outside a conversation; the device voice never stands in. */
 export const playSpeechSample = ({
   source,
   text,

@@ -29,17 +29,18 @@ const getSpeechHeaders = async () => {
   };
 };
 
-/** The assistant's speech endpoint, asking for the voice and speed on the person's profile at each request. */
+export const readHelmVoice = () => {
+  const profile = store.getState().helm.profile;
+  return {
+    voiceId: profile?.voiceId ?? null,
+    speed: profile?.voiceSpeed ?? null,
+  };
+};
+
 export const createHelmSpeechSource = () =>
   createSpeechSource({
     appId: 'helm',
     url: getSpeechUrl(),
     getHeaders: getSpeechHeaders,
-    readVoice: () => {
-      const profile = store.getState().helm.profile;
-      return {
-        voiceId: profile?.voiceId ?? null,
-        speed: profile?.voiceSpeed ?? null,
-      };
-    },
+    readVoice: readHelmVoice,
   });

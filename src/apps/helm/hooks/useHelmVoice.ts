@@ -31,7 +31,10 @@ import {
   recordSentTurn,
 } from '@apps/helm/hooks/useSession';
 import { functions } from '@lib/firebase/config';
-import { createHelmSpeechSource } from '@apps/helm/utils/helmSpeechSource';
+import {
+  createHelmSpeechSource,
+  readHelmVoice,
+} from '@apps/helm/utils/helmSpeechSource';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
@@ -192,6 +195,7 @@ export function useHelmVoice() {
     cloudSpeaking: {
       source: speechSource,
       isAllowed: voiceMode === 'cloudWhenOnline',
+      readVoice: readHelmVoice,
     },
   });
 

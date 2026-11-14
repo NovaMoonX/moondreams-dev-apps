@@ -72,15 +72,14 @@ export const setVoiceMode = (uid: string, voiceMode: VoiceMode) =>
     lastEditedAt: Date.now(),
   });
 
-export const setHelmVoice = (
-  uid: string,
-  {
-    voiceId,
-    voiceSpeed,
-  }: { voiceId: string | null; voiceSpeed: number | null },
-) =>
+export const setHelmVoiceId = (uid: string, voiceId: string | null) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     voiceId,
+    lastEditedAt: Date.now(),
+  });
+
+export const setHelmVoiceSpeed = (uid: string, voiceSpeed: number | null) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     voiceSpeed,
     lastEditedAt: Date.now(),
   });

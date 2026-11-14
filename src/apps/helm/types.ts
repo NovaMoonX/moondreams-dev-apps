@@ -63,9 +63,7 @@ export interface HelmProfile {
   hasSeenAiNotice: boolean;
   /** Whether listening may use the cloud voice service while online. */
   voiceMode: VoiceMode;
-  /** The cloud voice's Chirp 3 HD name; null reads as the default. A profile from before voices has no key. */
   voiceId: string | null;
-  /** How fast the cloud voice speaks, 0.8 to 1.2; null reads as normal. */
   voiceSpeed: number | null;
   /** This browser listens for "Hey {name}" while Helm is open on screen. */
   isWakeWordOn: boolean;

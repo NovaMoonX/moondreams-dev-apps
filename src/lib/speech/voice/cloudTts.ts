@@ -11,6 +11,7 @@ import type { SpeechHeldReason, TtsAdapter } from '@/lib/speech/voice/types';
 
 const MAX_CHARS = 600;
 const RESUME_MS = 1000;
+const DONE_GRACE_MS = 1000;
 
 export interface CloudPlayer {
   /** Turns the audio into something `play` can start; throws when it can't. */
@@ -21,7 +22,7 @@ export interface CloudPlayer {
     signal: AbortSignal,
     onStart: () => void,
   ) => Promise<void>;
-  /** Opens a sink that plays raw PCM as it is pushed; `onStart` fires at the first scheduled sound. Throws when audio can't run. */
+  /** Opens a sink for raw PCM; throws when audio can't run. */
   openStream: (format: PcmFormat, onStart: () => void) => Promise<PcmSink>;
 }
 
@@ -98,7 +99,7 @@ const concat = (chunks: Uint8Array[]) => {
   return bytes.buffer;
 };
 
-/** Speaks through the cloud voice: a raw PCM answer plays as it arrives, any other audio once it has all arrived. Before any sound, a slow, held, failed or undecodable answer is spoken by `fallback` instead; once sound has started, a failure ends the line quietly. `onFallback` hears each time the device voice stands in. */
+/** Speaks through the cloud voice, streamed when it is raw PCM; before any sound a slow, held or failed answer goes to `fallback`. */
 export const createCloudTts = ({
   source,
   fallback,
@@ -113,7 +114,6 @@ export const createCloudTts = ({
   fallback: TtsAdapter;
   firstByteMs?: number;
   bodyMs?: number;
-  /** The longest a streamed body may go without a chunk. */
   gapMs?: number;
   onHeld?: (reason: SpeechHeldReason) => void;
   onFallback?: () => void;
@@ -185,13 +185,23 @@ export const createCloudTts = ({
         await pump();
       } catch (error) {
         if (!state.isPlaying) throw error;
-        console.error('The cloud voice stopped partway', error);
+        if (!signal.aborted) {
+          console.error('The cloud voice stopped partway', error);
+        }
       }
       if (!state.isPlaying && !signal.aborted) {
         throw new Error('The cloud voice sent no audio');
       }
       sink.end();
-      await sink.done;
+      await new Promise<void>((resolve) => {
+        const id = setTimeout(resolve, sink.remainingMs() + DONE_GRACE_MS);
+        timers.push(id);
+        void sink.done.then(() => {
+          clearTimeout(id);
+          resolve();
+        });
+      });
+      sink.stop();
     };
     const firstByteBy = Date.now() + firstByteMs;
     try {

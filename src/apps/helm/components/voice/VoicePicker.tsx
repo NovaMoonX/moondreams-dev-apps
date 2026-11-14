@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, Loader2, Lock, Play, Square } from 'lucide-react';
+import { Check, Loader2, Play, Square } from 'lucide-react';
 
 import InlineNotice from '@/components/InlineNotice';
+import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
 import NotchedSlider from '@/components/NotchedSlider';
 import SectionDivider from '@/components/SectionDivider';
 import SegmentedControl from '@/components/SegmentedControl';
@@ -16,7 +17,11 @@ import { unlockAudio } from '@/lib/speech/audioContext';
 import { playSpeechSample } from '@/lib/speech/voice/speechSample';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
-import { setHelmVoice } from '@apps/helm/store/actions/settingsActions';
+import {
+  setHelmVoiceId,
+  setHelmVoiceSpeed,
+  setVoiceMode,
+} from '@apps/helm/store/actions/settingsActions';
 import { createHelmSpeechSource } from '@apps/helm/utils/helmSpeechSource';
 import {
   findHelmVoice,
@@ -52,14 +57,14 @@ const GENDERS = [
   { value: 'male', label: HELM_COPY.voicePickerMen },
 ] as const;
 
-/** The full page that picks the assistant's cloud voice from every voice offered and sets its speed; a tap on a row saves it at once, and each row plays a sample. */
+/** The full page that picks the assistant's cloud voice and its speed; a tap on a row saves it and plays a sample. */
 function VoicePicker({ onClose }: VoicePickerProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const isOffline = useNetworkStatus() === 'offline';
   const profile = useAppSelector((state) => state.helm.profile);
-  const isCloudOn = profile?.voiceMode === 'cloudWhenOnline';
-  const isLocked = !isCloudOn || isOffline;
+  const isDeviceOnly = profile?.voiceMode === 'deviceOnly';
+  const isLocked = isDeviceOnly || isOffline;
   const savedVoice = findHelmVoice(profile?.voiceId ?? null);
   const savedSpeed = toHelmVoiceSpeed(profile?.voiceSpeed ?? null);
   const [gender, setGender] = useState<HelmVoiceGender>(savedVoice.gender);
@@ -70,13 +75,18 @@ function VoicePicker({ onClose }: VoicePickerProps) {
   const playing = useRef<{ stop: () => void } | null>(null);
   const chosen = pendingName ?? savedVoice.name;
   const speed = pendingSpeed ?? savedSpeed;
+  const chosenRow = useRef<HTMLLIElement | null>(null);
+  const chosenVoice = findHelmVoice(chosen);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const row = chosenRow.current;
+    if (row && row.getBoundingClientRect().bottom > window.innerHeight) {
+      row.scrollIntoView({ block: 'center' });
+    }
+    return () => {
       playing.current?.stop();
-    },
-    [],
-  );
+    };
+  }, []);
 
   const stopSample = () => {
     playing.current?.stop();
@@ -107,18 +117,9 @@ function VoicePicker({ onClose }: VoicePickerProps) {
   };
 
   const toggleSample = (voice: HelmVoice) => {
-    if (isLocked) {
-      addToast({ title: HELM_COPY.voicePickerSamplesLocked, type: 'info' });
-      return;
-    }
     if (sample?.key === voice.name) stopSample();
     else play(voice.name, voice.name, speed);
   };
-
-  const save = (voiceId: string | null, voiceSpeed: number | null) =>
-    user
-      ? setHelmVoice(user.uid, { voiceId, voiceSpeed })
-      : Promise.reject(new Error('Not signed in'));
 
   const fail = (error: unknown) => {
     console.error('Helm voice was not saved', error);
@@ -126,18 +127,20 @@ function VoicePicker({ onClose }: VoicePickerProps) {
   };
 
   const select = (voice: HelmVoice) => {
-    if (voice.name === chosen) return;
+    if (!isLocked) play(voice.name, voice.name, speed);
+    if (!user || voice.name === chosen) return;
     setPendingName(voice.name);
-    save(voice.name, profile?.voiceSpeed ?? null)
+    setHelmVoiceId(user.uid, voice.name)
       .catch(fail)
       .finally(() => setPendingName(null));
   };
 
   const changeSpeed = (value: string) => {
+    if (!user) return;
     const next = Number(value);
     unlockAudio();
     setPendingSpeed(next);
-    save(profile?.voiceId ?? null, next)
+    setHelmVoiceSpeed(user.uid, next)
       .then(() => {
         if (!isLocked) play('speed', chosen, next);
       })
@@ -145,20 +148,52 @@ function VoicePicker({ onClose }: VoicePickerProps) {
       .finally(() => setPendingSpeed(null));
   };
 
+  const useCloudVoice = () => {
+    if (!user) return;
+    setVoiceMode(user.uid, 'cloudWhenOnline').catch((error: unknown) => {
+      console.error('Helm voice mode was not changed', error);
+      addToast({ title: HELM_COPY.voiceModeFailed, type: 'error' });
+    });
+  };
+
   return (
     <Subview overlay title={HELM_COPY.voicePickerTitle} onClose={onClose}>
       <div className='flex flex-col gap-5'>
-        {isLocked && (
+        {isDeviceOnly && (
           <InlineNotice tone='info'>
-            {HELM_COPY.voicePickerNeedsCloud}
+            <p>{HELM_COPY.voicePickerDeviceOnly}</p>
+            <Button
+              type='button'
+              size='sm'
+              className={join('mt-2', NOTICE_ACTION_CLASSES.info)}
+              onClick={useCloudVoice}
+            >
+              {HELM_COPY.voicePickerUseCloud}
+            </Button>
           </InlineNotice>
         )}
-        <SegmentedControl
-          label={HELM_COPY.voicePickerGender}
-          options={GENDERS}
-          value={gender}
-          onChange={setGender}
-        />
+        {!isDeviceOnly && isOffline && (
+          <InlineNotice tone='info'>
+            {HELM_COPY.voicePickerOffline}
+          </InlineNotice>
+        )}
+        <div className='flex flex-col gap-2'>
+          <SegmentedControl
+            label={HELM_COPY.voicePickerGenderLabel}
+            options={GENDERS}
+            value={gender}
+            onChange={setGender}
+          />
+          <p className='text-muted-foreground text-[13px] leading-[18px]'>
+            {HELM_COPY.voicePickerChosen(
+              HELM_COPY.voicePickerSummary(
+                chosenVoice.name,
+                toFeelLabel(chosenVoice.feel),
+                HELM_COPY.voicePickerPace[speed] ?? null,
+              ),
+            )}
+          </p>
+        </div>
         <section className='flex flex-col gap-3'>
           <SectionDivider label={HELM_COPY.voicePickerSpeed} />
           <div className='px-3'>
@@ -174,38 +209,36 @@ function VoicePicker({ onClose }: VoicePickerProps) {
         {HELM_VOICE_GROUPS.map((group) => (
           <section key={group} className='flex flex-col gap-1'>
             <SectionDivider label={HELM_COPY.voicePickerGroups[group]} />
-            <ul
-              role='radiogroup'
-              aria-label={HELM_COPY.voicePickerGroups[group]}
-            >
+            <ul>
               {HELM_VOICES.filter(
                 (voice) => voice.gender === gender && voice.group === group,
               ).map((voice) => {
                 const isChosen = voice.name === chosen;
                 const phase = sample?.key === voice.name ? sample.phase : null;
-                const playLabel = isLocked
-                  ? HELM_COPY.voicePickerSamplesLocked
-                  : phase === 'starting'
+                const playLabel =
+                  phase === 'starting'
                     ? HELM_COPY.voicePickerStarting(voice.name)
                     : phase === 'playing'
                       ? HELM_COPY.voicePickerStop(voice.name)
                       : HELM_COPY.voicePickerPlay(voice.name);
-                const PlayIcon = isLocked
-                  ? Lock
-                  : phase === 'starting'
+                const PlayIcon =
+                  phase === 'starting'
                     ? Loader2
                     : phase === 'playing'
                       ? Square
                       : Play;
                 return (
-                  <li key={voice.name} className='flex items-center gap-1'>
+                  <li
+                    key={voice.name}
+                    ref={isChosen ? chosenRow : undefined}
+                    className='flex items-center gap-1'
+                  >
                     <Button
                       type='button'
                       variant='tertiary'
                       size='stripped'
-                      role='radio'
-                      aria-checked={isChosen}
-                      className='min-h-12 min-w-0 flex-1 justify-start gap-3 rounded-xl px-1 text-left font-normal'
+                      aria-pressed={isChosen}
+                      className='min-h-12 min-w-0 flex-1 justify-start gap-3 rounded-xl text-left font-normal'
                       onClick={() => select(voice)}
                     >
                       <span
@@ -228,24 +261,25 @@ function VoicePicker({ onClose }: VoicePickerProps) {
                         </span>
                       </span>
                     </Button>
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      size='icon'
-                      rounded='full'
-                      aria-label={playLabel}
-                      className="relative shrink-0 before:absolute before:-inset-1 before:content-['']"
-                      onClick={() => toggleSample(voice)}
-                    >
-                      <PlayIcon
-                        className={join(
-                          'size-4',
-                          phase === 'starting' && 'animate-spin',
-                          isLocked && 'text-muted-foreground',
-                        )}
-                        aria-hidden='true'
-                      />
-                    </Button>
+                    {!isLocked && (
+                      <Button
+                        type='button'
+                        variant='tertiary'
+                        size='icon'
+                        rounded='full'
+                        aria-label={playLabel}
+                        className="relative shrink-0 before:absolute before:-inset-2 before:content-['']"
+                        onClick={() => toggleSample(voice)}
+                      >
+                        <PlayIcon
+                          className={join(
+                            'size-4',
+                            phase === 'starting' && 'animate-spin',
+                          )}
+                          aria-hidden='true'
+                        />
+                      </Button>
+                    )}
                   </li>
                 );
               })}

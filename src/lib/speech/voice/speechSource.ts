@@ -8,21 +8,17 @@ export type SpeechFetch =
       status: 'ready';
       body: ReadableStream<Uint8Array>;
       provider: string;
-      /** The response's `Content-Type`, empty when it has none. */
       contentType: string;
     }
   | { status: 'held'; reason: SpeechHeldReason }
   | { status: 'unavailable' };
 
 export interface SpeechVoice {
-  /** A voice name the server knows; null leaves the choice to the server. */
   voiceId: string | null;
-  /** 1 is normal pace; null leaves it to the server. */
   speed: number | null;
 }
 
 export interface SpeechSource {
-  /** `voice` replaces what the source would read for this request. */
   fetchSpeech: (
     text: string,
     priority: SpeechPriority,
@@ -34,7 +30,7 @@ export interface SpeechSource {
 const isHeldReason = (value: unknown): value is SpeechHeldReason =>
   value === 'speechLimit' || value === 'budgetReached';
 
-/** Asks the app's speech endpoint for audio; `getHeaders` supplies the credentials, or null when there are none, and `readVoice` is read on every request. */
+/** Asks the app's speech endpoint for audio. */
 export const createSpeechSource = ({
   appId,
   url,
@@ -86,7 +82,7 @@ export const createSpeechSource = ({
   },
 });
 
-/** A source that speaks with this voice and speed whatever the original would read. */
+/** A source that always speaks with this voice and speed. */
 export const withSpeechVoice = (
   source: SpeechSource,
   voice: SpeechVoice,

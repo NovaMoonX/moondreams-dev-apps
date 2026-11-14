@@ -746,6 +746,37 @@ assert.ok(
 assert.equal(ON_DEVICE_SIZE_MB, 57, 'the size the row states is the real one');
 console.log('speechShared: on-device recognition checks passed');
 {
+  const hook = readFileSync(
+    new URL('../../src/hooks/useVoiceConversation.ts', import.meta.url),
+    'utf8',
+  );
+  const ends = hook.match(/endConversation\(\)/g) ?? [];
+  assert.ok(
+    ends.length === 3,
+    'a conversation ends on an end phrase, a stop and the idle gap',
+  );
+  assert.match(
+    hook,
+    /const endConversation = \(\) => \{\s*run\.current\.isDeviceSticky = false;\s*run\.current\.voice = null;/,
+    'ending a conversation resets the device stickiness and the latched voice together',
+  );
+  assert.equal(
+    (hook.match(/readVoice\(\)/g) ?? []).length,
+    1,
+    'the voice is read in one place',
+  );
+  assert.match(
+    hook,
+    /run\.current\.voice \?\?= cloud\.readVoice\(\)/,
+    'the voice is read once and kept for the conversation',
+  );
+  assert.match(
+    hook,
+    /FIRST_LINE_FIRST_BYTE_MS = 4000/,
+    "a conversation's first line waits 4 s for its first byte",
+  );
+}
+{
   const requests: MintVoiceTokenRequest[] = [];
   const state = { isFailing: false, isKeyless: false };
   const READY: MintVoiceTokenResult = {
@@ -1130,6 +1161,7 @@ console.log('speechShared: voice router and playback queue checks passed');
   const sink = createPcmSink({
     context: fake.context,
     sampleRate: 24000,
+    prebufferSeconds: 0,
     onStart: () => {
       startedCount += 1;
     },
@@ -1175,6 +1207,51 @@ console.log('speechShared: voice router and playback queue checks passed');
   sink.push(new Uint8Array([1, 0]));
   assert.equal(fake.starts.length, 4, 'nothing is scheduled after stop');
 
+  {
+    const buffered = makeContext();
+    let started = 0;
+    const held = createPcmSink({
+      context: buffered.context,
+      sampleRate: 24000,
+      onStart: () => {
+        started += 1;
+      },
+    });
+    held.push(new Uint8Array(2000));
+    held.push(new Uint8Array(2000));
+    assert.equal(
+      buffered.starts.length + started,
+      0,
+      'under 200 ms nothing is scheduled and onStart waits',
+    );
+    held.push(new Uint8Array(2000));
+    held.push(new Uint8Array(4000));
+    held.push(new Uint8Array(400));
+    assert.deepEqual(
+      buffered.starts.map((entry) => entry.length),
+      [5000, 200],
+      'the held samples go out as one buffer once 200 ms is buffered, later chunks as they come',
+    );
+    assert.equal(started, 1, 'onStart fires once, when the first buffer goes');
+    const short = makeContext();
+    const brief = createPcmSink({
+      context: short.context,
+      sampleRate: 24000,
+      onStart: () => undefined,
+    });
+    brief.push(new Uint8Array(200));
+    brief.end();
+    assert.equal(
+      short.starts.length,
+      1,
+      'a stream that ends under 200 ms plays what it has',
+    );
+    assert.ok(
+      brief.remainingMs() > 0,
+      'the sink says how much sound is still to play',
+    );
+  }
+
   const calls: string[] = [];
   const fallback: TtsAdapter = {
     id: 'system',
@@ -1215,6 +1292,7 @@ console.log('speechShared: voice router and playback queue checks passed');
         pushed.push(bytes.length);
       },
       end: () => events.push('end'),
+      remainingMs: () => 0,
       stop: () => events.push('stop'),
       done: Promise.resolve(),
     }),
@@ -1255,6 +1333,7 @@ console.log('speechShared: voice router and playback queue checks passed');
       openStream: async () => ({
         push: () => undefined,
         end: () => undefined,
+        remainingMs: () => 0,
         stop: () => undefined,
         done: Promise.resolve(),
       }),
@@ -1283,6 +1362,57 @@ console.log('speechShared: voice router and playback queue checks passed');
     false,
     'a line that stalled after sound never repeats on the device',
   );
+
+  const hungEvents: string[] = [];
+  const hungAt = Date.now();
+  await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0])])),
+    fallback,
+    player: {
+      ...player([]),
+      openStream: async (_format: unknown, onStart: () => void) => ({
+        push: () => onStart(),
+        end: () => hungEvents.push('end'),
+        remainingMs: () => 100,
+        stop: () => hungEvents.push('stop'),
+        done: new Promise<void>(() => undefined),
+      }),
+    },
+  }).speak('Hung', options());
+  assert.ok(
+    Date.now() - hungAt < 3000,
+    'a sink whose audio never finishes is given up on after what remains plus a second',
+  );
+  assert.equal(
+    hungEvents.at(-1),
+    'stop',
+    'a line that gave up waiting stops its sink',
+  );
+
+  const loud: string[] = [];
+  const realError = console.error;
+  console.error = (...args: unknown[]) => loud.push(String(args[0]));
+  const person = new AbortController();
+  await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0])], true)),
+    fallback,
+    gapMs: 50,
+    player: {
+      ...player([]),
+      openStream: async (_format: unknown, onStart: () => void) => ({
+        push: () => {
+          onStart();
+          person.abort();
+        },
+        end: () => undefined,
+        remainingMs: () => 0,
+        stop: () => undefined,
+        done: Promise.resolve(),
+      }),
+    },
+  }).speak('Stopped', options(person.signal));
+  console.error = realError;
+  assert.deepEqual(loud, [], "a person's stop is never logged as a failure");
 
   const fellBack: string[] = [];
   await createCloudTts({

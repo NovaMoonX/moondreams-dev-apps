@@ -2,10 +2,8 @@ export type HelmVoiceGender = 'female' | 'male';
 export type HelmVoiceGroup = 'calm' | 'clear' | 'lively';
 
 export interface HelmVoice {
-  /** The bare Chirp 3 HD name the server speaks with. */
   name: string;
   gender: HelmVoiceGender;
-  /** Google's own word for how it sounds. */
   feel: string;
   group: HelmVoiceGroup;
 }
@@ -52,7 +50,6 @@ export const HELM_VOICES: readonly HelmVoice[] = [
 
 export const HELM_DEFAULT_VOICE = 'Aoede';
 
-/** From slower to faster; 1 is normal pace. */
 export const HELM_VOICE_SPEEDS = [0.8, 0.9, 1, 1.1, 1.2] as const;
 
 export const HELM_VOICE_GROUPS: readonly HelmVoiceGroup[] = [
@@ -61,13 +58,13 @@ export const HELM_VOICE_GROUPS: readonly HelmVoiceGroup[] = [
   'lively',
 ];
 
-/** The voice a stored name stands for; the default when it is null or no longer one Helm offers. */
+/** The voice a stored name stands for, the default when it is null or no longer offered. */
 export const findHelmVoice = (name: string | null): HelmVoice =>
   HELM_VOICES.find((entry) => entry.name === name) ??
   HELM_VOICES.find((entry) => entry.name === HELM_DEFAULT_VOICE) ??
   HELM_VOICES[0]!;
 
-/** The speed a stored value stands for: the nearest notch, normal when null. */
+/** The nearest speed notch to a stored value; normal when null. */
 export const toHelmVoiceSpeed = (speed: number | null): number =>
   HELM_VOICE_SPEEDS.reduce(
     (best, notch) =>
@@ -77,6 +74,5 @@ export const toHelmVoiceSpeed = (speed: number | null): number =>
     1 as number,
   );
 
-/** A feel as the first word of a subtitle ("Easy-going"). */
 export const toFeelLabel = (feel: string) =>
   `${feel.charAt(0).toUpperCase()}${feel.slice(1)}`;
