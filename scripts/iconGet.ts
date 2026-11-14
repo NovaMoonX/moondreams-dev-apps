@@ -377,14 +377,21 @@ function upsertNotice(
     ? readFileSync(noticeFile, 'utf8')
     : `${header}\n`;
   const lines = existing.trimEnd().split('\n');
-  const isItemRow = (line: string) =>
-    line.split('|')[1]?.trim() === `\`${item}\``;
-  const kept = lines.filter((line) => !isItemRow(line));
+  const cells = (line: string) =>
+    line
+      .split('|')
+      .slice(1, -1)
+      .map((cell) => cell.trim());
+  const isItemRow = (line: string) => cells(line)[0] === `\`${item}\``;
   const at = lines.findIndex(isItemRow);
+  const isSame =
+    at !== -1 && cells(lines[at]).join('|') === cells(row).join('|');
+  const kept = lines.filter((line, i) => i === at || !isItemRow(line));
   const next =
-    at === -1 ? [...kept, row] : [...kept.slice(0, at), row, ...kept.slice(at)];
+    at === -1
+      ? [...kept, row]
+      : kept.map((line) => (line === lines[at] && !isSame ? row : line));
   writeFileSync(noticeFile, `${next.join('\n')}\n`);
-  execFileSync('npx', ['prettier', '--write', noticeFile], { stdio: 'ignore' });
 }
 
 async function main() {
