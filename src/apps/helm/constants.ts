@@ -307,6 +307,9 @@ export const SYNCED_LIMIT = 2_000;
 /** Rows a synced task group shows on Today before the fold. */
 export const TODAY_SYNCED_ROWS = 5;
 
+/** Outside turns from one assistant with less than this between them are one conversation. */
+export const OUTSIDE_CONVERSATION_GAP_MS = 30 * 60 * 1000;
+
 /** How many executions Activity lists at first and each time it nears its foot. */
 export const ACTIVITY_PAGE = 30;
 
@@ -1343,6 +1346,16 @@ export const HELM_COPY = {
     "The delete couldn't reach the server. Check your connection and run it again; it picks up where it stopped.",
   deleteAllSignIn: 'Sign in again to delete. Nothing has been removed.',
   activityTitle: 'Activity',
+  outsideTitle: 'From your assistants',
+  outsideUnnamed: 'an assistant',
+  outsideRowHint: 'What they asked',
+  outsideLead: 'What your assistants asked or told you, kept apart from home.',
+  outsideEmpty:
+    'Nothing yet. Questions and notes from your assistants will gather here.',
+  outsideConnect: 'Connect an assistant',
+  outsideSearch: 'Search conversations',
+  outsideNoMatch: 'No conversation matches that.',
+  outsideQuestions: (count: number) => `${count} questions`,
   activityRowHint: 'What was done, and when',
   activityEmpty: (name: string) =>
     `Nothing yet. Whatever ${name} does for you is listed here.`,
