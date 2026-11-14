@@ -1,4 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useRouteError } from 'react-router-dom';
 
@@ -38,18 +39,21 @@ const describeFetch = async (url: string, init?: RequestInit) =>
 /** What the device gets for the file that would not load, through the worker and straight from the network. */
 function useFileCheck(message: string, isEnabled: boolean) {
   const url = message.match(FILE_URL)?.[0] ?? null;
-  const [result, setResult] = useState<string | null>(null);
-  useEffect(() => {
-    if (!isEnabled || !url) return;
-    void Promise.all([
-      describeFetch(url),
-      describeFetch(url, { cache: 'no-store' }),
-    ]).then(([viaWorker, fresh]) => {
+  const query = useQuery({
+    queryKey: ['fileCheck', url],
+    queryFn: async () => {
+      const [viaWorker, fresh] = await Promise.all([
+        describeFetch(url ?? ''),
+        describeFetch(url ?? '', { cache: 'no-store' }),
+      ]);
       const worker = navigator.serviceWorker?.controller ? 'on' : 'off';
-      setResult(`File check (worker ${worker}): normal ${viaWorker}; fresh ${fresh}`);
-    });
-  }, [isEnabled, url]);
-  return result;
+      return `File check (worker ${worker}): normal ${viaWorker}; fresh ${fresh}`;
+    },
+    enabled: isEnabled && Boolean(url),
+    retry: false,
+    staleTime: Infinity,
+  });
+  return query.data ?? null;
 }
 
 function ErrorScreen({ error }: { error: unknown }) {

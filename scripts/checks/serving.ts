@@ -32,7 +32,8 @@ const checkWorker = async () => {
     HTMLRewriter: class {},
     fetch: async (request: Request, init?: RequestInit) => state.script(new URL(request.url), init),
   });
-  const worker = (await import('../../cloudflare-worker.js')).default as {
+  const workerPath = '../../cloudflare-worker.js';
+  const worker = (await import(workerPath)).default as {
     fetch: (request: Request) => Promise<Response>;
   };
   const run = async (path: string, script: Script) => {
