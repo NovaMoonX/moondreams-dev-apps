@@ -22,6 +22,7 @@ import ColoursSection from '@apps/helm/components/settings/ColoursSection';
 import SettingsSection from '@apps/helm/components/settings/SettingsSection';
 import GatesClosedNote from '@/components/GatesClosedNote';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
+import NewBadge from '@/components/NewBadge';
 import SettingsRow from '@/components/SettingsRow';
 import AssistantNameToneSheet from '@apps/helm/components/settings/AssistantNameToneSheet';
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
@@ -34,6 +35,7 @@ import { useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useNow } from '@/hooks/useNow';
+import { hasUnseenNews } from '@/lib/connections/connectionNews';
 import { useConnections } from '@/lib/connections/useConnections';
 import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -138,6 +140,11 @@ function SettingsScreen({
           <SettingsRow
             icon={<Link2 className='size-5' aria-hidden='true' />}
             title={HELM_COPY.connectedAppsRowTitle}
+            badge={
+              grants.some((grant) => hasUnseenNews(grant, now)) ? (
+                <NewBadge />
+              ) : undefined
+            }
             description={
               !isKnown
                 ? undefined

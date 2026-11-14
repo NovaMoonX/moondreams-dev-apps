@@ -5727,9 +5727,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: pinchConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
-      plannedMeals: { isOn: true, changedAt: connectedAt },
-      shoppingList: { isOn: true, changedAt: connectedAt },
-      useSoon: { isOn: false, changedAt: connectedAt },
+      plannedMeals: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      shoppingList: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      useSoon: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
     },
     options: null,
     status: 'live',
@@ -5824,9 +5824,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: aListConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
-      plannedShowings: { isOn: true, changedAt: connectedAt },
-      savedTheaters: { isOn: true, changedAt: connectedAt },
-      seenMovies: { isOn: false, changedAt: connectedAt },
+      plannedShowings: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      savedTheaters: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      seenMovies: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
     },
     options: null,
     status: 'live',
@@ -5903,8 +5903,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: goingOnceConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
-      pickups: { isOn: true, changedAt: connectedAt },
-      sales: { isOn: true, changedAt: connectedAt },
+      pickups: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      sales: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
     },
     options: null,
     status: 'live',
@@ -5979,11 +5979,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: nineLivesConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
-      cats: { isOn: true, changedAt: connectedAt },
-      vetVisits: { isOn: true, changedAt: connectedAt },
-      dueCare: { isOn: true, changedAt: connectedAt },
-      clinics: { isOn: true, changedAt: connectedAt },
-      conditions: { isOn: false, changedAt: connectedAt },
+      cats: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      vetVisits: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      dueCare: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      clinics: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      conditions: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
     },
     options: null,
     status: 'live',
@@ -6106,10 +6106,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: waypointConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
-      trips: { isOn: true, changedAt: connectedAt },
-      itinerary: { isOn: true, changedAt: connectedAt },
-      myTasks: { isOn: true, changedAt: connectedAt },
-      tripBalances: { isOn: false, changedAt: connectedAt },
+      trips: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      itinerary: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      myTasks: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      tripBalances: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
     },
     options: null,
     status: 'live',
@@ -6189,10 +6189,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: runwayConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
-      moneySummary: { isOn: true, changedAt: connectedAt },
-      upcomingBills: { isOn: false, changedAt: connectedAt },
-      horizon: { isOn: false, changedAt: connectedAt },
-      transactions: { isOn: true, changedAt: connectedAt },
+      moneySummary: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
+      upcomingBills: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
+      horizon: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
+      transactions: { isOn: true, changedAt: connectedAt, seenScopeVersion: null },
     },
     options: null,
     status: 'live',
@@ -6241,7 +6241,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       ...runwayGrant,
       categories: {
         ...runwayGrant.categories,
-        moneySummary: { isOn: false, changedAt: connectedAt },
+        moneySummary: { isOn: false, changedAt: connectedAt, seenScopeVersion: null },
       },
       categoryState: Object.fromEntries(
         Object.entries(runwayGrant.categoryState).map(([id, state]) => [
@@ -6262,7 +6262,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     readerAppId: 'helm',
     connectorId: worthTheWaitConnectorId,
     accountId: SITE_ACCOUNT_ID,
-    categories: { boxCounts: { isOn: false, changedAt: connectedAt } },
+    categories: { boxCounts: { isOn: false, changedAt: connectedAt, seenScopeVersion: null } },
     options: null,
     status: 'live',
     categoryState: Object.fromEntries(
@@ -6310,7 +6310,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     readerAppId: 'helm',
     connectorId: googleConnectorId,
     accountId: GOOGLE_ACCOUNT_ID,
-    categories: { events: { isOn: true, changedAt: connectedAt } },
+    categories: { events: { isOn: true, changedAt: connectedAt, seenScopeVersion: null } },
     options: { calendarIds: [GOOGLE_PRIMARY_CALENDAR, GOOGLE_SHIFTS_CALENDAR] },
     status: 'live',
     categoryState: {
@@ -6345,7 +6345,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     {
       ...googleGrant,
       connectorId: 'google:gmail',
-      categories: { mail: { isOn: true, changedAt: connectedAt } },
+      categories: { mail: { isOn: true, changedAt: connectedAt, seenScopeVersion: null } },
       options: null,
       categoryState: { mail: { lastOkAt: null, lastError: null, count: 0 } },
       lastSyncAt: null,
@@ -6358,7 +6358,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     {
       ...googleGrant,
       connectorId: 'google:drive',
-      categories: { documents: { isOn: true, changedAt: connectedAt } },
+      categories: { documents: { isOn: true, changedAt: connectedAt, seenScopeVersion: null } },
       options: null,
       categoryState: {
         documents: { lastOkAt: null, lastError: null, count: 0 },
@@ -6373,7 +6373,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     {
       ...googleGrant,
       connectorId: 'google:contacts',
-      categories: { contacts: { isOn: true, changedAt: connectedAt } },
+      categories: { contacts: { isOn: true, changedAt: connectedAt, seenScopeVersion: null } },
       options: null,
       categoryState: {
         contacts: { lastOkAt: null, lastError: null, count: 0 },

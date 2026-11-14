@@ -1396,7 +1396,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         source.shares.flatMap((share) =>
           share.categories.map((category) => [
             category.id,
-            { isOn: used.has(category.id), changedAt: createdAt },
+            { isOn: used.has(category.id), changedAt: createdAt, seenScopeVersion: null },
           ]),
         ),
       ),

@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CalendarCheck, CalendarDays, Tag } from 'lucide-react';
+import { CalendarCheck, CalendarDays, ChevronDown, Tag } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import AppToggle from '@/components/AppToggle';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
+import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
 import SectionHeader from '@/components/SectionHeader';
 import SettingsSection from '@apps/helm/components/settings/SettingsSection';
 import SettingsRow from '@/components/SettingsRow';
@@ -23,6 +24,11 @@ import {
 import { GOOGLE_CONTACTS_MANIFEST } from '@/lib/connections/google/contactsManifest';
 import { GOOGLE_DRIVE_MANIFEST } from '@/lib/connections/google/driveManifest';
 import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
+import {
+  forgetOpenedNews,
+  readOpenedNews,
+} from '@/lib/connections/connectionNews';
+import { readUnseenNews } from '@/lib/connections/newReads';
 import { getConnectorManifest } from '@/lib/connections/sources';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
@@ -95,6 +101,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     Record<string, { isOn: boolean; since: number }>
   >({});
   const [failures, setFailures] = useState<Record<string, string>>({});
+  const [seenNow, setSeenNow] = useState<Record<string, number>>({});
+  const [handedNews] = useState(() =>
+    grantId === null ? null : readOpenedNews(grantId),
+  );
+  const [openReads, setOpenReads] = useState<Record<string, boolean>>({});
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
   const [isLabelOpen, setIsLabelOpen] = useState(false);
@@ -159,6 +170,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           : HELM_COPY.googleCalendarName
     : (apps.find((app) => app.id === appId)?.name ?? appId);
   const manifest = getConnectorManifest(grant.connectorId);
+  const liveNews = readUnseenNews(manifest, grant.categories, now);
   const kinds = new Set(
     (manifest?.categories ?? [])
       .filter((category) => grant.categories[category.id]?.isOn)
@@ -183,6 +195,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const showsContactsRow = isGoogle && !isContactsGrant && !hasStopped;
 
   const change = async (categoryId: string, isOn: boolean) => {
+    if (isOn)
+      setSeenNow((current) => ({
+        ...current,
+        [categoryId]:
+          manifest?.categories.find((category) => category.id === categoryId)
+            ?.scopeVersion ?? 1,
+      }));
     setPending((current) => ({
       ...current,
       [categoryId]: { isOn, since: grant.updatedAt },
@@ -199,9 +218,34 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           console.error('Helm connection was not updated', error),
         );
       }
+      if (isOn) forgetOpenedNews(grant.id, categoryId);
     } catch (error) {
       console.error('Helm connection did not change', error);
       setPending((current) => without(current, categoryId));
+      setSeenNow((current) => without(current, categoryId));
+      setFailures((current) => ({
+        ...current,
+        [categoryId]: failureLine(
+          error,
+          appName,
+          HELM_COPY.connectionToggleFailed,
+        ),
+      }));
+    }
+  };
+
+  const markSeen = async (categoryId: string, scopeVersion: number) => {
+    setSeenNow((current) => ({ ...current, [categoryId]: scopeVersion }));
+    setFailures((current) => without(current, categoryId));
+    try {
+      await updateConnection({
+        grantId: grant.id,
+        seenScopes: { [categoryId]: scopeVersion },
+      });
+      forgetOpenedNews(grant.id, categoryId);
+    } catch (error) {
+      console.error('Helm connection scope was not marked seen', error);
+      setSeenNow((current) => without(current, categoryId));
       setFailures((current) => ({
         ...current,
         [categoryId]: failureLine(
@@ -417,6 +461,10 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             const isOn =
               waiting?.isOn ?? grant.categories[category.id]?.isOn ?? false;
             const isWaiting = waiting !== null;
+            const newReads =
+              seenNow[category.id] !== undefined
+                ? []
+                : ((handedNews ?? liveNews)[category.id] ?? []);
             return (
               <li key={category.id} className='flex flex-col gap-1 px-4 py-3'>
                 <label className='flex min-h-11 items-center gap-3'>
@@ -453,6 +501,67 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     />
                   )}
                 </label>
+                {category.reads.length > 0 && (
+                  <div>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='sm'
+                      aria-expanded={openReads[category.id] === true}
+                      className="text-muted-foreground! relative h-auto! gap-1 px-0! py-0.5! text-[13px] font-normal after:absolute after:-inset-x-2 after:-inset-y-2.5 after:content-['']"
+                      onClick={() =>
+                        setOpenReads((open) => ({
+                          ...open,
+                          [category.id]: !open[category.id],
+                        }))
+                      }
+                    >
+                      {HELM_COPY.connectionWhatReads}
+                      <ChevronDown
+                        className={join(
+                          'h-3.5 w-3.5',
+                          openReads[category.id] === true && 'rotate-180',
+                        )}
+                        aria-hidden='true'
+                      />
+                    </Button>
+                    {openReads[category.id] === true && (
+                      <ul className='text-muted-foreground mt-1 list-disc pl-5 text-[13px] text-pretty'>
+                        {category.reads.map((read) => (
+                          <li key={read.label}>{read.label}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+                {newReads.length > 0 && (
+                  <InlineNotice
+                    tone='info'
+                    title={HELM_COPY.connectionNewReadsTitle}
+                    className='mt-1 border-0!'
+                  >
+                    <ul className='list-disc pl-5 text-[13px]'>
+                      {newReads.map((read) => (
+                        <li key={read.label}>{read.label}</li>
+                      ))}
+                    </ul>
+                    {!isOffline && (
+                      <div className='mt-3 flex'>
+                        <Button
+                          type='button'
+                          variant='primary'
+                          size='sm'
+                          className={NOTICE_ACTION_CLASSES.info}
+                          onClick={() =>
+                            void markSeen(category.id, category.scopeVersion)
+                          }
+                        >
+                          {HELM_COPY.connectionGotIt}
+                        </Button>
+                      </div>
+                    )}
+                  </InlineNotice>
+                )}
                 {failures[category.id] && (
                   <p className='text-destructive text-[13px]' role='alert'>
                     {failures[category.id]}
