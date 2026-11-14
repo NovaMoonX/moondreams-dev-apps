@@ -192,6 +192,17 @@ function Composer({
     );
     setTypedAt(Date.now());
   };
+  const { registerField } = voice;
+  useEffect(
+    () =>
+      registerField((words) => {
+        setText((current) =>
+          current.trim().length > 0 ? `${current.trimEnd()} ${words}` : words,
+        );
+        setTypedAt(Date.now());
+      }),
+    [registerField],
+  );
   const attachments = useTurnAttachments({
     timeZone,
     onTranscript: (words) => appendWords(words),
@@ -335,6 +346,24 @@ function Composer({
     if (!canSend || !user) return;
     const { uid } = user;
     const sent = text;
+    if (attachments.items.length === 0 && !hasPhotos) {
+      setIsSending(true);
+      const took = await voice
+        .handleTyped(sent, screen)
+        .finally(() => setIsSending(false));
+      if (took === 'kept') return;
+      if (took) {
+        // What the device did is said in the dock, which a focused field hides.
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        changeText('');
+        setDismissed([]);
+        setFixedDays({});
+        setLastDrop(null);
+        return;
+      }
+    }
     const attachmentIds = attachments.mediaIds;
     const sentChips = attachments.items;
     const sentVoice = attachments.hasWrittenVoiceNote;

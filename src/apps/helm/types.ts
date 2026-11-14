@@ -146,6 +146,8 @@ export interface QuestionState {
   askedAt: number;
   answeredAt: number | null;
   skippedAt: number | null;
+  /** When a closing phrase dropped the question; it can't be answered late. Null while it stands, and on a question made before closing phrases (read as null). */
+  leftAt: number | null;
 }
 
 /** One choice of a question; `new` and `none` carry no ref. */
@@ -416,6 +418,8 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
   /** The server's line for the turn, read aloud and shown on its card; null until it wrote one, and on one that would not open. */
   line: string | null;
   isUnreadable: boolean;
+  /** The turn was a closing phrase the assistant's own reading found ("ugh, doesn't matter"); it made nothing. False on a turn made before closing phrases. */
+  endedConversation: boolean;
   /** The write has not reached the server yet, so it waits for a connection. */
   hasPendingWrites: boolean;
 }

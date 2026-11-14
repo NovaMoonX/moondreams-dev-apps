@@ -81,6 +81,7 @@ jobs:
       - run: npm run check:receipts
       - run: npm run check:helm-copy
       - run: npm run check:natural-dates
+      - run: npm run check:helm-close
       - run: npm run check:helm-undo
       - run: npm run check:helm-activation
       - run: npm run check:helm-task-edits

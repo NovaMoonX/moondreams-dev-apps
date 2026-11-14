@@ -100,6 +100,8 @@ import {
   type EarlierTurn,
 } from './nomos/buildContext.js';
 import {
+  CLOSE_CONVERSATION_TOOL,
+  isShortEnoughToClose,
   FILE_RESULTS_TOOL,
   MENTION_KINDS,
   toReading,
@@ -1887,7 +1889,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           ],
           mcpClient: mcp.client,
           terminalTool: FILE_RESULTS_TOOL,
-          extraTerminalTools: canHandOver ? [HAND_OVER_TOOL] : [],
+          extraTerminalTools: [
+            ...(canHandOver ? [HAND_OVER_TOOL] : []),
+            ...(mode === 'full' ? [CLOSE_CONVERSATION_TOOL] : []),
+          ],
           limits: {
             ...LOOP_LIMITS,
             maxMillis: Math.min(maxMillis, timeLeft()),
@@ -1976,6 +1981,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureTitleByTask,
       focusedProcedureId: focusedLive?.id ?? null,
       focusedTaskId: screen?.focus?.id ?? null,
+      keyDateNames: new Map(
+        contextKeyDates.map((date) => [
+          date.id,
+          [date.who, `${date.who}s`, date.label ?? '', date.kind],
+        ]),
+      ),
     };
   };
 
@@ -2017,6 +2028,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     procedureTitleByTask,
     focusedProcedureId,
     focusedTaskId,
+    keyDateNames,
   } = result;
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
@@ -2026,36 +2038,49 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     );
   }
 
-  const reply = normalizeNomosReply(loop.terminalInput, {
-    reading: combined.reading,
-    aliases: context.aliases,
-    synced: context.synced,
-    facts: context.facts,
-    keyDates: context.keyDates,
-    topics: context.topics,
-    notes: context.notes,
-    parts: context.parts,
-    sections: context.sections,
-    topicNames: new Map(topics.map((topic) => [topic.id, topic.name])),
-    focusedTopicId,
-    topicVersions,
-    procedures: context.procedures,
-    procedureSteps: context.procedureSteps,
-    procedureNames,
-    procedureTitleByTask,
-    focusedProcedureId,
-    focusedTaskId,
-    procedureVersions,
-    runSteps: context.runSteps,
-    captureText: combined.text,
-    quotes,
-    alreadyMade,
-    timeZone,
-    attachments: attached.media.map((item) => ({
-      alias: item.alias,
-      kind: item.kind,
-    })),
-  });
+  if (
+    mode === 'full' &&
+    loop.terminalName === CLOSE_CONVERSATION_TOOL.name &&
+    isShortEnoughToClose(combined.text, combined.reading)
+  ) {
+    return writeClose({ ...claimed, joinedIds: read.ids });
+  }
+
+  const isRefusedClose = loop.terminalName === CLOSE_CONVERSATION_TOOL.name;
+  const reply = normalizeNomosReply(
+    isRefusedClose ? { commands: [] } : loop.terminalInput,
+    {
+      reading: combined.reading,
+      aliases: context.aliases,
+      synced: context.synced,
+      facts: context.facts,
+      keyDates: context.keyDates,
+      topics: context.topics,
+      notes: context.notes,
+      parts: context.parts,
+      sections: context.sections,
+      topicNames: new Map(topics.map((topic) => [topic.id, topic.name])),
+      focusedTopicId,
+      topicVersions,
+      procedures: context.procedures,
+      procedureSteps: context.procedureSteps,
+      procedureNames,
+      procedureTitleByTask,
+      focusedProcedureId,
+      focusedTaskId,
+      procedureVersions,
+      runSteps: context.runSteps,
+      captureText: combined.text,
+      keyDateNames,
+      quotes,
+      alreadyMade,
+      timeZone,
+      attachments: attached.media.map((item) => ({
+        alias: item.alias,
+        kind: item.kind,
+      })),
+    },
+  );
   reply.mediaDropped.forEach((code) =>
     logger.info('helm.media.dropped', { code }),
   );
@@ -3272,6 +3297,69 @@ async function writeResult(
       hasFact: noted.fact !== null,
       ...plan.counts,
     });
+    return sorted;
+  });
+  if (!result) {
+    logger.info('helm.sort.leaseLost');
+    return toResult('received');
+  }
+  return result;
+}
+
+/** Settles a turn the model closed with `closeConversation`: nothing is made and no Execution is written. The device applies the same close it applies to a phrase it matched itself. */
+async function writeClose(
+  input: Claimed & { joinedIds: string[] },
+): Promise<SortResult> {
+  const { firestore, captureRef, requestRef, claimId, joinedIds } = input;
+  const result = await firestore.runTransaction(async (transaction) => {
+    const [captureSnap, requestSnap, ...joinedSnaps] = await Promise.all([
+      transaction.get(captureRef),
+      transaction.get(requestRef),
+      ...joinedIds.map((id) => transaction.get(captureRef.parent.doc(id))),
+    ]);
+    const answered = readAnswered(requestSnap.data(), captureRef.id);
+    if (answered) return answered;
+    const capture = captureSnap.data() as CaptureDoc | undefined;
+    if (
+      !capture ||
+      capture.claimId !== claimId ||
+      capture.status !== 'interpreting'
+    ) {
+      return null;
+    }
+    const now = Date.now();
+    joinedSnaps
+      .filter((snapshot) => {
+        const data = snapshot.data() as CaptureDoc | undefined;
+        return data?.turnLeadId === captureRef.id && data.status === 'received';
+      })
+      .forEach((snapshot) =>
+        transaction.update(snapshot.ref, {
+          status: 'sorted',
+          sortedAt: now,
+          claimId: null,
+          claimedAt: null,
+        }),
+      );
+    transaction.update(captureRef, {
+      joinedCaptureIds: joinedIds,
+      turnLeadId: null,
+      status: 'sorted',
+      endedConversation: true,
+      sortedAt: now,
+      claimId: null,
+      claimedAt: null,
+      heldReason: null,
+      lastErrorCode: null,
+      seenAt: now,
+    });
+    const sorted = toResult('sorted');
+    transaction.set(requestRef, {
+      result: sorted,
+      captureId: captureRef.id,
+      createdAt: now,
+    });
+    logger.info('helm.sort.closed');
     return sorted;
   });
   if (!result) {

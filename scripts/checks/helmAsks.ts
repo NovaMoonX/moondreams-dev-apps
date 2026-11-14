@@ -333,6 +333,7 @@ test('the 21st open asked question is refused and the rest are filed', () => {
             askedAt: 1,
             answeredAt: null,
             skippedAt: index === 0 ? 5 : null,
+            leftAt: null,
           },
         ]),
       ),
@@ -371,6 +372,7 @@ test('an answered question does not count against the cap', () => {
           askedAt: 1,
           answeredAt: 2,
           skippedAt: null,
+          leftAt: null,
         },
         b: {
           kind: 'whichPerson',
@@ -378,6 +380,7 @@ test('an answered question does not count against the cap', () => {
           askedAt: 1,
           answeredAt: null,
           skippedAt: null,
+          leftAt: null,
         },
       },
     ]),
@@ -410,6 +413,7 @@ const askedCapture = (overrides: Partial<AskedCapture> = {}): AskedCapture => ({
       askedAt: 1,
       answeredAt: null,
       skippedAt: null,
+      leftAt: null,
     },
   },
   opened: { text: 'Help me pack', questions: { q1: pickSeveral } },
@@ -455,6 +459,7 @@ test('another open question keeps the turn waiting in Needs you', () => {
     askedAt: 1,
     answeredAt: null,
     skippedAt: 4,
+    leftAt: null,
   };
   const plan = turn(asked, { shape: 'pickSeveral', optionIds: ['none'] });
   assert.equal(plan.kind === 'apply' && plan.status, 'needsYou');

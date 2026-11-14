@@ -16,9 +16,16 @@ export interface HeldItem {
   capture: OpenCapture;
 }
 
+/** A question dropped by a closing phrase is no longer open; a turn made before the field has none. */
+export const isLeft = (state: { leftAt?: number | null }) =>
+  (state.leftAt ?? null) !== null;
+
 const hasOpenQuestion = (capture: OpenCapture, kinds: string[]) =>
   Object.values(capture.questionState).some(
-    (question) => kinds.includes(question.kind) && question.answeredAt === null,
+    (question) =>
+      kinds.includes(question.kind) &&
+      question.answeredAt === null &&
+      !isLeft(question),
   );
 
 /** Whether the turn still waits on a question the person answers by choosing or writing (which person or place, which fact is true, or one the assistant asked), read from what is readable so a turn whose words won't open still shows. */
@@ -41,7 +48,7 @@ export interface OpenQuestion {
 /** Every question a turn still asks that can be shown, oldest first; a turn's card shows the first few and the rest wait in Needs you. */
 export const getOpenQuestions = (capture: OpenCapture): OpenQuestion[] =>
   Object.entries(capture.questionState)
-    .filter(([, state]) => state.answeredAt === null)
+    .filter(([, state]) => state.answeredAt === null && !isLeft(state))
     .sort(([, a], [, b]) => a.askedAt - b.askedAt)
     .flatMap(([id, state]) =>
       capture.questions[id]
@@ -54,6 +61,13 @@ export const getOpenQuestions = (capture: OpenCapture): OpenQuestion[] =>
           ]
         : [],
     );
+
+/** The questions a closing phrase dropped, oldest first: their card folds to "Left it". */
+export const getLeftQuestions = (capture: OpenCapture) =>
+  Object.entries(capture.questionState)
+    .filter(([, state]) => state.answeredAt === null && isLeft(state))
+    .sort(([, a], [, b]) => a.askedAt - b.askedAt)
+    .map(([id]) => id);
 
 /** The questions the assistant asked that were answered, oldest first, each with the answer it kept. */
 export const getAnsweredQuestions = (capture: OpenCapture) =>

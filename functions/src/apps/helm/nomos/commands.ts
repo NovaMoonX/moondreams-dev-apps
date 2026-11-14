@@ -1,6 +1,7 @@
 import type { TerminalTool } from '../../../ai/modelProvider.js';
 import type { QuoteEntry } from './aliases.js';
 import type { SyncedCopy } from '../syncedCopies.js';
+import { toPlainText } from '../../../vendor/speechText.js';
 import { SENSITIVE_CATEGORIES } from './sensitive.js';
 import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
 import type { ModelChange } from '../topicWrite.js';
@@ -47,6 +48,37 @@ export const COMMAND_KINDS = [
   'addMilestone',
   'createNote',
 ] as const;
+
+/** Commands that delete a record. A deleting command is kept only when its subject is still named once every closing phrase is taken out of the turn's words. */
+export const DELETING_COMMANDS = ['removeKeyDate'] as const;
+
+/** A terminal tool beside `file_results`: the turn only ends the conversation. It carries no command, so a close can never delete or change anything. */
+export const CLOSE_CONVERSATION_TOOL: TerminalTool = {
+  name: 'closeConversation',
+  description:
+    'Ends the conversation when the whole turn only says to stop or leave it ("ugh, doesn\'t matter", "forget the whole thing") and asks for nothing. kind is dismiss to drop what was pending, finish when it only wraps up. Call it instead of file_results.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind'],
+    properties: {
+      kind: { type: 'string', enum: ['dismiss', 'finish'] },
+    },
+  },
+};
+
+const MAX_CLOSE_WORDS = 8;
+
+/** A model's close is accepted only for a turn this short; a longer turn is filed as usual. */
+/** Whether a turn may end on the model's close: short, and naming no one, no place, no date and no command, so a request said alongside "doesn't matter" is filed. */
+export const isShortEnoughToClose = (
+  turnText: string,
+  reading: CaptureReading,
+) =>
+  toPlainText(turnText).split(' ').filter(Boolean).length <= MAX_CLOSE_WORDS &&
+  [reading.people, reading.places, reading.dates, reading.commands].every(
+    (found) => found.length === 0,
+  );
 
 /** The kinds the reply may carry that change a topic; like a note, each is read from its own list and is no `NomosCommand`. */
 export const TOPIC_COMMAND_KINDS = [

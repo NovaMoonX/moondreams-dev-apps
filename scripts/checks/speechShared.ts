@@ -24,6 +24,10 @@ import {
   readWakePhrase,
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
+import {
+  CLOSING_PHRASES,
+  readClosingPhrase,
+} from '../../src/lib/speech/closingPhrase.ts';
 import { createSpeechGate } from '../../src/lib/speech/voice/bargeIn.ts';
 import { createDeepgramAura } from '../../functions/src/voice/providers/deepgramAura.ts';
 import { createGeminiTts } from '../../functions/src/voice/providers/geminiTts.ts';
@@ -208,7 +212,7 @@ const rows: [
   from: ListeningState,
   to: ListeningState,
   effect: 'START' | 'STOP' | null,
-  cue: 'start' | null,
+  cue: 'start' | 'close' | null,
 ][] = [
   [
     'tap opens a window',
@@ -291,6 +295,145 @@ phases.forEach((phase) => {
     `no change of phase from ${phase} makes no cue`,
   );
 });
+
+const tapWindow = reduce(createListeningState('TAP'), { type: 'TAP_MIC' });
+const wakeWindow = reduce(waiting, { type: 'WAKE_HEARD' });
+const closeRows: [string, ListeningState, ListeningState, string | null][] = [
+  [
+    'a close in a window in tap mode turns the mic off',
+    tapWindow,
+    reduce(tapWindow, { type: 'CLOSE_HEARD' }),
+    'STOP',
+  ],
+  [
+    'a close in a wake window goes back to waiting for the phrase',
+    wakeWindow,
+    reduce(wakeWindow, { type: 'CLOSE_HEARD' }),
+    null,
+  ],
+  [
+    'a close on a kept-open mic ends it',
+    locked,
+    reduce(locked, { type: 'CLOSE_HEARD' }),
+    'STOP',
+  ],
+];
+closeRows.forEach(([title, from, to, effect]) => {
+  assert.equal(getListeningCue(from, to), 'close', `${title}: the close cue`);
+  assert.equal(getListeningEffect(from, to), effect, `${title}: the effect`);
+  assert.equal(to.closedByPhrase, true, `${title}: flagged`);
+  assert.equal(to.lockEndsAt, null, `${title}: no lock left`);
+});
+assert.equal(
+  reduce(wakeWindow, { type: 'CLOSE_HEARD' }).phase,
+  'WAITING',
+  'a close returns wake mode to waiting',
+);
+[waiting, createListeningState('TAP')].forEach((state) =>
+  assert.equal(
+    reduce(state, { type: 'CLOSE_HEARD' }),
+    state,
+    'a close with nothing open changes nothing',
+  ),
+);
+const closedOnce = reduce(wakeWindow, { type: 'CLOSE_HEARD' });
+assert.equal(
+  reduce(closedOnce, { type: 'CLOSE_HEARD' }),
+  closedOnce,
+  'a second close is no change and plays no second cue',
+);
+assert.equal(
+  reduce(closedOnce, { type: 'WAKE_HEARD' }).closedByPhrase,
+  false,
+  'the flag clears when the mic opens',
+);
+assert.equal(
+  reduce(reduce(tapWindow, { type: 'CLOSE_HEARD' }), { type: 'TAP_MIC' })
+    .closedByPhrase,
+  false,
+  'opening the mic by a tap clears it',
+);
+
+const readClose = (text: string, extra: string[] = []) =>
+  readClosingPhrase(text, { extra });
+const dismissWhole = { kind: 'dismiss', position: 'whole', rest: '' };
+const finishWhole = { kind: 'finish', position: 'whole', rest: '' };
+assert.ok(
+  CLOSING_PHRASES.dismiss.length > 0 && CLOSING_PHRASES.finish.length > 0,
+  'both kinds are listed',
+);
+CLOSING_PHRASES.dismiss.forEach((phrase) => {
+  assert.deepEqual(readClose(phrase), dismissWhole, `"${phrase}" dismisses`);
+  assert.deepEqual(
+    readClose(`Oh, ${phrase}.`),
+    dismissWhole,
+    `"${phrase}" after a filler`,
+  );
+});
+CLOSING_PHRASES.finish.forEach((phrase) =>
+  assert.deepEqual(readClose(phrase), finishWhole, `"${phrase}" finishes`),
+);
+assert.deepEqual(readClose('Never mind!'), dismissWhole, 'case and a mark');
+assert.deepEqual(readClose('just forget it'), dismissWhole, 'a leading "just"');
+assert.deepEqual(readClose('thats all'), finishWhole, 'a missing apostrophe');
+assert.deepEqual(
+  readClose('forget it, Robin', ['robin', 'hey robin']),
+  dismissWhole,
+  'a trailing name is ignored',
+);
+assert.deepEqual(
+  readClose('thanks, Robin', ['robin']),
+  finishWhole,
+  'a finish with a name',
+);
+assert.deepEqual(readClose('no thanks'), dismissWhole, '"no thanks" dismisses');
+assert.deepEqual(
+  readClose('Add milk. Actually never mind'),
+  { kind: 'dismiss', position: 'end', rest: 'Add milk' },
+  'a dismiss after a retraction closes the words before it',
+);
+assert.deepEqual(
+  readClose('call mom, actually, forget it'),
+  { kind: 'dismiss', position: 'end', rest: 'call mom' },
+  'a cue between commas',
+);
+assert.deepEqual(
+  readClose("eggs and milk, that's all"),
+  { kind: 'finish', position: 'end', rest: 'eggs and milk' },
+  'a finish after content leaves the content',
+);
+assert.deepEqual(
+  readClose('add milk. thank you'),
+  { kind: 'finish', position: 'end', rest: 'add milk' },
+  'a finish after a sentence break',
+);
+assert.deepEqual(
+  readClose('thanks, Zoë', ['Zoe']),
+  finishWhole,
+  'an accent in a name',
+);
+assert.deepEqual(
+  readClose("thanks, D'Arcy", ['darcy']),
+  finishWhole,
+  'an apostrophe in a name',
+);
+[
+  'tell Sam thank you',
+  'mark the laundry all done',
+  'the movie is all done',
+  'remind me to cancel',
+  'tell him to stop',
+  'stop suggesting that',
+  'I have nothing to wear',
+  'add thanks to the card',
+  'remind me to forget it',
+  'cancel the dentist',
+  'add milk, forget it',
+  'thanks for the reminder',
+  '',
+].forEach((text) =>
+  assert.equal(readClose(text), null, `"${text}" is not a closing phrase`),
+);
 
 const wait = { idleMs: 600_000, maxMs: 3_600_000 };
 assert.equal(

@@ -153,7 +153,9 @@ async function openCapture(
   read: SealedReader,
   isMetadataTracked: boolean,
 ): Promise<OpenCapture> {
-  const data = (entry.data() ?? {}) as Partial<Capture>;
+  const data = (entry.data() ?? {}) as Partial<Capture> & {
+    endedConversation?: boolean;
+  };
   const base = {
     id: entry.id,
     inputMode: data.inputMode ?? 'typed',
@@ -203,6 +205,7 @@ async function openCapture(
       line:
         typeof payload.spoken?.text === 'string' ? payload.spoken.text : null,
       isUnreadable: false,
+      endedConversation: data.endedConversation === true,
     };
   } catch {
     return {
@@ -213,6 +216,7 @@ async function openCapture(
       questions: {},
       line: null,
       isUnreadable: true,
+      endedConversation: data.endedConversation === true,
     };
   }
 }

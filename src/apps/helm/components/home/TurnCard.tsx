@@ -30,6 +30,7 @@ import type { OpenCapture } from '@apps/helm/types';
 import {
   getAnsweredQuestions,
   getHomeHeldLine,
+  getLeftQuestions,
   getOpenQuestions,
   toHeldKind,
 } from '@apps/helm/utils/heldCaptures';
@@ -125,6 +126,7 @@ function TurnCard({
     ...unskipped,
     ...openQuestions.filter((entry) => entry.skippedAt !== null),
   ].slice(0, QUESTIONS_PER_TURN);
+  const leftIds = capture.isUnreadable ? [] : getLeftQuestions(capture);
   const answered = capture.isUnreadable ? [] : getAnsweredQuestions(capture);
   const planLine = getPlanLine();
   const lastMessage = joined.at(-1) ?? capture;
@@ -142,7 +144,8 @@ function TurnCard({
     !capture.answer &&
     !capture.planDayKey &&
     heldLine === null &&
-    openQuestions.length === 0;
+    openQuestions.length === 0 &&
+    leftIds.length === 0;
   const quietLine = isQuietAnswer
     ? (capture.line ?? HELM_COPY.answerNoted)
     : hasNothingShown
@@ -310,6 +313,14 @@ function TurnCard({
           ))}
         </div>
       )}
+      {leftIds.map((id) => (
+        <p
+          key={id}
+          className='text-muted-foreground self-start pl-[30px] text-left text-[13px] text-pretty'
+        >
+          {HELM_COPY.questionLeft}
+        </p>
+      ))}
       {openQuestions.length > questions.length && (
         <p className='text-muted-foreground pl-[30px] text-[13px] text-pretty'>
           {HELM_COPY.questionMore(openQuestions.length - questions.length)}

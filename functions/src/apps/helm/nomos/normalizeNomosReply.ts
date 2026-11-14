@@ -2,6 +2,7 @@ import {
   createOptionMatcher,
   toComparable,
 } from '../../../vendor/optionMatchUtils.js';
+import { withoutClosingPhrases } from '../../../vendor/closingPhrase.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { ASK_WORDS } from './summaries.js';
 import {
@@ -504,19 +505,31 @@ const readKeyDateSpan = (
   };
 };
 
+/** Whether the words, with every closing phrase taken out, still name the subject: a deleting command rests on this, so "forget it" can never remove anything. */
+const isSubjectNamed = (text: string | undefined, names: string[]) => {
+  const words = ` ${toComparable(withoutClosingPhrases(text ?? ''))} `;
+  return names.some((name) => {
+    const comparable = toComparable(name);
+    return comparable !== '' && words.includes(` ${comparable} `);
+  });
+};
+
 const readKeyDate = (
   item: Record<string, unknown>,
   entities: Entities,
   reading: CaptureReading,
   keyDates: AliasBook | undefined,
   timeZone: string,
+  isRemovalAsked: (keyDateId: string) => boolean,
 ): KeyDateCommand | null => {
   const keyDateId =
     typeof item.keyDateAlias === 'string'
       ? (keyDates?.idOf(item.keyDateAlias) ?? null)
       : null;
   if (item.kind === 'removeKeyDate') {
-    return keyDateId ? { kind: 'removeKeyDate', keyDateId } : null;
+    return keyDateId && isRemovalAsked(keyDateId)
+      ? { kind: 'removeKeyDate', keyDateId }
+      : null;
   }
   const keyKind = KEY_DATE_KINDS.find((entry) => entry === item.keyDateKind);
   if (!keyKind) return null;
@@ -1738,6 +1751,8 @@ export function normalizeNomosReply(
     runSteps?: AliasBook;
     /** The words of the turn, which a note's words must come from. */
     captureText?: string;
+    /** What names each date in the context (who, label, kind), for the check that a removal is still asked once closing phrases are taken out. */
+    keyDateNames?: Map<string, string[]>;
     quotes?: QuoteBook;
     alreadyMade?: string[];
     records?: RecordBook;
@@ -1817,6 +1832,11 @@ export function normalizeNomosReply(
         context.reading,
         context.keyDates,
         context.timeZone ?? 'UTC',
+        (keyDateId) =>
+          isSubjectNamed(
+            context.captureText,
+            context.keyDateNames?.get(keyDateId) ?? [],
+          ),
       );
       return read ? [read] : [];
     })

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createSpeechListener } from '@/hooks/useSpeechCommands';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { unlockAudio } from '@/lib/speech/audioContext';
+import { playListeningSound } from '@/lib/speech/listeningSound';
 import {
   createListeningState,
   getListeningEffect,
@@ -66,6 +67,8 @@ interface VoiceConversationOptions {
   endPhrases: string[];
   /** Gets the finished utterance, never empty, with any end phrase taken off, and which listener heard it ('deepgram', 'on-device' or 'browser'). */
   onUtterance: (text: string, heardBy: { sttProvider: string }) => void;
+  /** The app reads a turn that is only an end phrase as a close (and calls `closeByPhrase`); without it that turn ends the conversation and is not handed over. */
+  readsClose?: boolean;
   /** Listening ended with nothing heard (not a cancel). `isAsked` is false when the listen started without a tap (the person's voice opened it after a reply or over a line), where saying so would be a fault the person didn't earn. */
   onNothingHeard?: (isAsked: boolean) => void;
   /** The model on the device couldn't start or died while listening; `isAsked` is as for `onNothingHeard`. Without it this counts as nothing heard. */
@@ -138,6 +141,7 @@ export function useVoiceConversation({
   identity,
   endPhrases,
   onUtterance,
+  readsClose = false,
   onNothingHeard,
   onDeviceListenFailed,
   isNaturalVoiceReady = false,
@@ -179,6 +183,7 @@ export function useVoiceConversation({
     identity,
     endPhrases,
     onUtterance,
+    readsClose,
     onNothingHeard,
     onDeviceListenFailed,
     isNaturalVoiceReady,
@@ -224,6 +229,7 @@ export function useVoiceConversation({
       identity,
       endPhrases,
       onUtterance,
+      readsClose,
       onNothingHeard,
       onDeviceListenFailed,
       isNaturalVoiceReady,
@@ -363,11 +369,25 @@ export function useVoiceConversation({
   const submit = (text: string, sttProvider: string) => {
     const pattern = toEndPattern(latest.current.endPhrases);
     const said = (pattern ? text.replace(pattern, '') : text).trim();
-    if (pattern?.test(text)) endConversation();
-    if (said === '') return false;
+    const isEnded = pattern?.test(text) ?? false;
+    if (isEnded) endConversation();
+    // An end phrase that is the whole turn goes to the app as it was said only when the app reads closes itself.
+    const handed =
+      said === '' && isEnded && latest.current.readsClose ? text.trim() : said;
+    if (handed === '') return false;
     setIsThinking(true);
-    latest.current.onUtterance(said, { sttProvider });
+    latest.current.onUtterance(handed, { sttProvider });
     return true;
+  };
+
+  /** The app read the words as a closing phrase: nothing is sent, no window reopens, whatever was being said is cut off and the falling cue plays once. The microphone is already released when a final transcript arrives. */
+  const closeByPhrase = () => {
+    send({ type: 'CLOSE_HEARD' });
+    endFollowUp();
+    closeGate();
+    stop();
+    setHeard('');
+    playListeningSound('close');
   };
 
   const closeGate = () => {
@@ -814,6 +834,7 @@ export function useVoiceConversation({
     isPreparing,
     stop,
     cancel,
+    closeByPhrase,
     speak,
     markThinking: () => setIsThinking(true),
     /** Ends "thinking" for a turn that has nothing to say. */

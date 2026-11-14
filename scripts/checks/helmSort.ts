@@ -316,6 +316,7 @@ test('an empty reply settles as couldNotRead, with its question sealed and reada
       askedAt: 9000,
       answeredAt: null,
       skippedAt: null,
+      leftAt: null,
     },
   });
   const sealed = settled.sealed as Record<string, unknown> & {
