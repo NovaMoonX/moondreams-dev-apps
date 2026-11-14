@@ -9,8 +9,10 @@ import {
   type QuoteBook,
   type SearchedLog,
   type SyncedBook,
+  TURNED_OFF_FAILURE,
 } from '../nomos/aliases.js';
 import { describeDue } from '../nomos/buildContext.js';
+import { CONNECTED_APPS_TITLE } from '../nomos/prompt.js';
 import type { TaskDue } from '../nomos/commands.js';
 import { openForHelm, type HelmKey } from '../helmKey.js';
 import { openLiveTopic } from '../topicVersionStore.js';
@@ -92,6 +94,11 @@ export interface HelmToolScope {
   firestore: Firestore;
   liveGrants?: LiveGrant[];
   siteGrants?: SiteLiveGrant[];
+  /** The site apps' switched-off categories, so a look in one says it is off instead of finding nothing. */
+  offCategories?: {
+    connectorId: string;
+    categories: { id: string; label: string; kind: string }[];
+  }[];
   quotes?: QuoteBook;
   searched?: SearchedLog;
   /** Set on an outside assistant's turn: its switches, which bound every stored record a tool returns. */
@@ -478,11 +485,39 @@ export function buildHelmTools(scope: HelmToolScope) {
           return isUpcoming(x) ? x - y : y - x;
         })
         .slice(0, MAX_RESULTS);
+      const turnedOff =
+        connectorId === null
+          ? []
+          : (scope.offCategories ?? [])
+              .filter((grant) => grant.connectorId === connectorId)
+              .flatMap((grant) => grant.categories)
+              .filter(
+                (category) => kindName === null || category.kind === kindName,
+              );
+      if (connectorId !== null) {
+        searched.record({
+          connectorId,
+          accountId: SITE_ACCOUNT_ID,
+          label:
+            found.length === 0 && turnedOff.length > 0
+              ? `your ${connectorLabel(connectorId)} ${turnedOff.map((category) => category.label.replace(/^your /i, '').toLowerCase()).join(', ')}`
+              : `your ${connectorLabel(connectorId)} records`,
+          found: found.length,
+          failure:
+            found.length === 0 && turnedOff.length > 0
+              ? TURNED_OFF_FAILURE
+              : null,
+          isStored: true,
+        });
+      }
       return {
         records: found.map((copy) => ({
           ...toResult(copy),
           noLongerUpdated: copy.isEnded,
         })),
+        ...(turnedOff.length > 0 && {
+          turnedOff: `${turnedOff.map((category) => category.label).join(', ')} in ${connectorLabel(connectorId ?? '')} ${turnedOff.length === 1 ? 'is' : 'are'} turned off, so not read. Say so, and that it can be turned on in ${CONNECTED_APPS_TITLE}; never guess from it.`,
+        }),
       };
     },
   };

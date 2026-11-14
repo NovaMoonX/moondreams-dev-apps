@@ -143,6 +143,9 @@ export function createQuoteBook(): QuoteBook {
   };
 }
 
+/** The failure a look in a switched-off category records; an answer that says so may stand without a source. */
+export const TURNED_OFF_FAILURE = `It's turned off in Connected apps`;
+
 export interface SearchedEntry {
   connectorId: string;
   accountId: string;
@@ -159,8 +162,12 @@ export interface SearchedLog {
     label: string;
     found: number;
     failure: string | null;
+    /** A look through stored copies, shown with the answer but never counted as a live read. */
+    isStored?: boolean;
   }) => void;
   entries: () => SearchedEntry[];
+  /** How many accounts had a live call (mail, documents, an app's live records). */
+  liveCount: () => number;
 }
 
 /** Every live call of one answer, merged to one entry per account: results summed, the latest time, and a failure kept only while no call to it succeeded. */
@@ -175,10 +182,11 @@ export function createSearchedLog(now: () => number = Date.now): SearchedLog {
       found: number;
       successes: number;
       failure: string | null;
+      isLive: boolean;
     }
   >();
   return {
-    record: ({ connectorId, accountId, label, found, failure }) => {
+    record: ({ connectorId, accountId, label, found, failure, isStored }) => {
       const key = `${connectorId}|${accountId}`;
       const previous = byAccount.get(key);
       byAccount.set(key, {
@@ -189,8 +197,11 @@ export function createSearchedLog(now: () => number = Date.now): SearchedLog {
         found: (previous?.found ?? 0) + found,
         successes: (previous?.successes ?? 0) + (failure === null ? 1 : 0),
         failure: failure ?? previous?.failure ?? null,
+        isLive: (previous?.isLive ?? false) || isStored !== true,
       });
     },
+    liveCount: () =>
+      [...byAccount.values()].filter((entry) => entry.isLive).length,
     entries: () =>
       [...byAccount.values()].map(
         ({ connectorId, accountId, label, at, found, successes, failure }) => ({

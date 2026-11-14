@@ -426,7 +426,10 @@ export const listSiteOffCategories = async (
   uid: string,
   readerAppId: string,
 ): Promise<
-  { connectorId: string; categories: { id: string; label: string }[] }[]
+  {
+    connectorId: string;
+    categories: { id: string; label: string; kind: string }[];
+  }[]
 > => {
   const connectorIds = Object.keys(SOURCE_ADAPTERS).filter(
     (id) => readConnectorAppId(id) !== null,
@@ -441,7 +444,7 @@ export const listSiteOffCategories = async (
     const grant = readGrant(snapshots[index].data());
     const categories = SOURCE_ADAPTERS[connectorId].manifest.categories
       .filter(({ id }) => grant.categories[id]?.isOn !== true)
-      .map(({ id, label }) => ({ id, label }));
+      .map(({ id, label, kind }) => ({ id, label, kind }));
     return grant.status === 'live' && categories.length > 0
       ? [{ connectorId, categories }]
       : [];

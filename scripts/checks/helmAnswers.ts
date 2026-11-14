@@ -5,6 +5,8 @@ import {
   createQuoteBook,
   createSearchedLog,
   createSyncedBook,
+  TURNED_OFF_FAILURE,
+  type SearchedEntry,
 } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import {
   buildHelmTools,
@@ -2177,6 +2179,118 @@ const tests: [string, () => void | Promise<void>][] = [
       assert.equal(tomorrow[0].kind, 'planDay');
       assert.equal(tomorrow[0].dueSpanId, 's1');
       assert.equal((await ask('Buy milk', []))[0].kind, 'createTask');
+    },
+  ],
+  [
+    'a look in a switched-off category says so, its answer stands, and a stored look never makes a live turn',
+    async () => {
+      const empty = { docs: [] };
+      const query = {
+        where: () => query,
+        limit: () => ({ get: async () => empty }),
+      };
+      const searched = createSearchedLog();
+      const tools = buildHelmTools({
+        uid: 'u1',
+        key: {} as never,
+        aliases: createAliasBook('t'),
+        synced: createSyncedBook(),
+        timeZone: 'UTC',
+        firestore: { collection: () => query } as never,
+        offCategories: [
+          {
+            connectorId: 'app:a-list',
+            categories: [
+              { id: 'watchlist', label: 'Your watchlist', kind: 'artifact' },
+              {
+                id: 'seenMovies',
+                label: 'Movies you have seen',
+                kind: 'knowledge',
+              },
+            ],
+          },
+        ],
+        searched,
+      });
+      const search = tools.find((tool) => tool.name === 'search_synced');
+      const result = (await search?.run({
+        app: 'A-List',
+        kind: 'artifact',
+      } as never)) as { records: unknown[]; turnedOff?: string };
+      assert.deepEqual(result.records, []);
+      assert.match(
+        result.turnedOff ?? '',
+        /^Your watchlist in A-List is turned off/,
+      );
+      assert.doesNotMatch(
+        result.turnedOff ?? '',
+        /seen/,
+        'only the kind asked for is named',
+      );
+      const [entry] = searched.entries();
+      assert.equal(entry.connectorId, 'app:a-list');
+      assert.equal(entry.label, 'your A-List watchlist');
+      assert.equal(entry.failed, TURNED_OFF_FAILURE);
+      assert.equal(
+        searched.liveCount(),
+        0,
+        'a look through stored copies is not a live read',
+      );
+
+      const answer = (text: string, entries: SearchedEntry[]) =>
+        buildAnswer(
+          {
+            question: 'Any movies on my watchlist coming out soon?',
+            scope: 'yourThings',
+            isHealth: false,
+            fromRecordsText: text,
+            sources: [],
+            quotes: [],
+            syncedKeys: [],
+            generalText: null,
+            generalSpoken: null,
+            noteIds: [],
+            differsFromNoteId: null,
+            differsSays: null,
+            suggestedTopicId: null,
+          },
+          undefined,
+          entries,
+        ).answer.fromRecords;
+      const off =
+        "Your watchlist isn't being read; turn it on in Connected apps.";
+      assert.equal(answer(off, searched.entries()), off);
+      const looked = createSearchedLog();
+      looked.record({
+        connectorId: 'app:a-list',
+        accountId: 'site',
+        label: 'your A-List records',
+        found: 6,
+        failure: null,
+        isStored: true,
+      });
+      const none =
+        'None of the six on your watchlist come out in the next month.';
+      assert.equal(answer(none, looked.entries()), none);
+      assert.equal(
+        answer(none, []),
+        null,
+        'with no look, an unsourced answer is still dropped',
+      );
+      const failed = createSearchedLog();
+      failed.record({
+        connectorId: 'app:runway',
+        accountId: 'site',
+        label: 'your Runway transactions',
+        found: 0,
+        failure: 'Something went wrong reaching it',
+      });
+      assert.equal(
+        answer(none, failed.entries()),
+        null,
+        'a failed look rests nothing',
+      );
+      assert.equal(failed.liveCount(), 1);
     },
   ],
 ];
