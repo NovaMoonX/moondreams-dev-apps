@@ -1,8 +1,10 @@
+import { useState } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ArrowUp, Mic, Square, X } from 'lucide-react';
+import { ArrowUp, CircleHelp, Mic, Square, X } from 'lucide-react';
 
-import HelpTip from '@/components/HelpTip';
+import DetailSheet from '@/components/DetailSheet';
 import MuteControl from '@apps/helm/components/voice/MuteControl';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
@@ -18,6 +20,31 @@ interface VoiceStatusProps {
   onBlocked?: () => void;
   /** What a turn started here is asked about; null from home. */
   screen?: ScreenContext | null;
+}
+
+function VoiceNotice() {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        className={join(BUTTON, 'text-muted-foreground gap-1.5 text-[13px]')}
+        onClick={() => setIsOpen(true)}
+      >
+        <CircleHelp className='size-3.5' aria-hidden='true' />
+        {HELM_COPY.voiceNoticeTitle}
+      </Button>
+      <DetailSheet
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        title={HELM_COPY.voiceNoticeTitle}
+      >
+        <p className='text-[15px] text-pretty'>{HELM_COPY.voiceNotice}</p>
+      </DetailSheet>
+    </>
+  );
 }
 
 /** What the voice is doing, in words: what is heard as it is said (the newest words kept in view), the line being spoken, or the short line after an undo, with Mute while a line plays and Muted once it is on. Draws nothing while idle unless it carries the controls or the voice is muted. */
@@ -78,12 +105,7 @@ function VoiceStatus({
         </p>
       )}
       {voice.state === 'listening' && voice.listeningRoute === 'cloud' && (
-        <HelpTip
-          title={HELM_COPY.voiceNoticeTitle}
-          className='text-muted-foreground'
-        >
-          {HELM_COPY.voiceNotice}
-        </HelpTip>
+        <VoiceNotice />
       )}
       {showsPhoneLine && (
         <p className='text-muted-foreground text-[13px] text-pretty'>
