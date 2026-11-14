@@ -28,6 +28,7 @@ import {
   removeMediaOf,
   type PhotoOwner,
 } from '@apps/helm/store/actions/mediaActions';
+import { toComparable } from '@/utils/optionMatchUtils';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
@@ -35,6 +36,7 @@ import type {
   Sealed,
   Who,
   WhoKind,
+  WhoKin,
   WhoSealed,
   WhoTier,
 } from '@apps/helm/types';
@@ -50,10 +52,9 @@ const isUnavailable = (error: unknown) =>
 
 export type EditResult = 'saved' | 'offline' | 'missing' | 'unreadable';
 
-/** The fields a person edits on a who: its sealed words and its kind. */
+/** The fields a person edits on a who's edit sheet: its sealed words and its kind. Its other names and its family word have their own sheets. */
 export interface WhoEdit {
   name: string;
-  aliases: string[];
   kind: WhoKind;
   relation: string | null;
   species: string | null;
@@ -96,6 +97,63 @@ export async function updateWho(
     throw error;
   }
 }
+
+/** Rewrites some of a who's sealed words in one transaction that re-reads it, so everything else on it, changed on another device meanwhile too, is kept. Needs a connection. */
+async function rewriteWhoWords(
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  change: (opened: WhoSealed) => Partial<WhoSealed>,
+): Promise<EditResult> {
+  if (!navigator.onLine) return 'offline';
+  const ref = doc(userOf(uid), 'who', whoId);
+  try {
+    return await runTransaction(
+      db,
+      async (transaction): Promise<EditResult> => {
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists()) return 'missing';
+        const opened = await openJson<WhoSealed>(
+          (snapshot.data() as Who).sealed as Sealed,
+          encryption,
+        ).catch(() => null);
+        if (!opened) return 'unreadable';
+        const sealed = await sealJson<WhoSealed>(
+          { ...opened, ...change(opened) },
+          encryption,
+        );
+        transaction.update(ref, { sealed, lastEditedAt: Date.now() });
+        return 'saved';
+      },
+    );
+  } catch (error) {
+    if (isUnavailable(error)) return 'offline';
+    throw error;
+  }
+}
+
+/** Sets the names a who is also called, cleaned and capped by the caller. A name the person adds after saying No to it is theirs now, so it leaves the refused names. */
+export const setWhoAliases = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  aliases: string[],
+) =>
+  rewriteWhoWords(uid, encryption, whoId, (opened) => {
+    const kept = (opened.refusedAliases ?? []).filter(
+      (refused) =>
+        !aliases.some((alias) => toComparable(alias) === toComparable(refused)),
+    );
+    return { aliases, refusedAliases: kept.length > 0 ? kept : null };
+  });
+
+/** Sets or clears a who's family word and its order, a change of the person's own. */
+export const setWhoKin = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  kin: WhoKin | null,
+) => rewriteWhoWords(uid, encryption, whoId, () => ({ kin }));
 
 /** A level the person picks is theirs: the assistant never changes it after. Undo writes the earlier level back with whoever set it. */
 export const setWhoTier = (
@@ -473,6 +531,9 @@ export async function ensureSelfWho(
     {
       name,
       aliases: [],
+      kin: null,
+      soundsLike: null,
+      refusedAliases: null,
       relation: null,
       phone: null,
       email: null,

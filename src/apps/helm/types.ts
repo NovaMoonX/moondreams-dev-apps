@@ -1,3 +1,4 @@
+import type { WhoKin } from '@apps/helm/engine/kinKinds';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
@@ -125,6 +126,9 @@ export type QuestionKind =
   | 'moreToSort'
   | 'whichPerson'
   | 'whichPlace'
+  | 'isThisWho'
+  | 'whichKin'
+  | 'kinOrder'
   | 'whichIsTrue'
   | 'whichTopic'
   | 'groupTopics'
@@ -197,6 +201,9 @@ export interface HelmQuestion {
   kind:
     | 'whichPerson'
     | 'whichPlace'
+    | 'isThisWho'
+    | 'whichKin'
+    | 'kinOrder'
     | 'whichIsTrue'
     | 'whichTopic'
     | 'groupTopics'
@@ -504,9 +511,18 @@ export interface Who {
   sealed: Sealed;
 }
 
+export type { KinKind, KinOrder, WhoKin } from '@apps/helm/engine/kinKinds';
+
 export interface WhoSealed {
   name: string;
+  /** "Also called": the nicknames the person gave, at most 10; every matcher reads them as names. */
   aliases: string[];
+  /** The person's relation to the self from the fixed family list; `relation` stays the person's own words. Null when none, and in a payload sealed before the field. */
+  kin: WhoKin | null;
+  /** "Also heard as": forms the recognizer got wrong, matched on the device and never shown as a name. Null when none. */
+  soundsLike: string[] | null;
+  /** Names the person said are not this who, so they are never proposed again; at most 20. Null when none. */
+  refusedAliases: string[] | null;
   /** "my sister", "our vet clinic". */
   relation: string | null;
   phone: string | null;

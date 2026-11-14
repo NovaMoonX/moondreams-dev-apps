@@ -31,12 +31,6 @@ const KIND_OPTIONS = [
   { value: 'organization', label: HELM_COPY.whoKindOrganization },
 ] as const;
 
-const toAliases = (text: string) =>
-  text
-    .split(',')
-    .map((alias) => alias.trim())
-    .filter(Boolean);
-
 const toNullable = (text: string) => (text.trim() === '' ? null : text.trim());
 
 function WhoEditForm({
@@ -49,7 +43,6 @@ function WhoEditForm({
   const { addToast } = useToast();
   const fieldId = useId();
   const [name, setName] = useState(who.name);
-  const [aliases, setAliases] = useState(who.aliases.join(', '));
   const [kind, setKind] = useState<WhoKind>(who.kind);
   const [relation, setRelation] = useState(who.relation ?? '');
   const [species, setSpecies] = useState(who.species ?? '');
@@ -83,7 +76,6 @@ function WhoEditForm({
         who.id,
         {
           name: name.trim(),
-          aliases: toAliases(aliases),
           kind,
           relation: kind === 'organization' ? null : toNullable(relation),
           species: kind === 'pet' ? toNullable(species) : null,
@@ -125,19 +117,6 @@ function WhoEditForm({
           autoFocus={canFocusFieldOnOpen()}
           onChange={(event) => edit(setName)(event.target.value)}
         />
-      </div>
-      <div className='space-y-1.5'>
-        <label htmlFor={`${fieldId}-aliases`} className='text-sm font-medium'>
-          {HELM_COPY.whoAliasesField}
-        </label>
-        <Input
-          id={`${fieldId}-aliases`}
-          value={aliases}
-          onChange={(event) => edit(setAliases)(event.target.value)}
-        />
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.whoAliasesHelp}
-        </p>
       </div>
       <div className='space-y-1.5'>
         <span className='block text-sm font-medium'>

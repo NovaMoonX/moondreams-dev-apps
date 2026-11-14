@@ -1284,7 +1284,8 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Dates that come back for people, pets, organizations and you (birthdays with or without a year, anniversaries, custom yearly dates) on each page, on Today a few days ahead for close and regular people, and in a Coming up view by month; from conversation and Contacts, with Undo (O, C)
 - [x] Moments for people, pets, organizations and you (moves, jobs, graduations, adoptions, meeting, passing away) on each page and in a list by decade and year; from conversation and Contacts, used in answers (O, C)
 - [ ] "Ask about this" on every content page, the same control in the same place, opening the conversation about that page and returning to it (O, C)
-- [x] People, pets and organizations, each with a page, a photo and a level (close, regular, passing); passing ones out of the way until they matter (O, C) (Also called and family words: Issue 104)
+- [x] People, pets and organizations, each with a page, a photo and a level (close, regular, passing); passing ones out of the way until they matter (O, C)
+- [x] People can be called other names ("Bubs") and carry a family word ("younger brother"); a new nickname is asked about before it is saved, and a family word finds the right person from what was said or from birthdays with a year, asking only when it can't tell (O, C) (Issue 104)
 - [x] Projects with an objective, tasks, people in roles (key, involved, mentioned) and health from evidence, started by talking or by a short form, finished and reopened with Undo (O, C)
 - [x] Project milestones, and clearing a project's done tasks
 - [x] Add people from Google Contacts, picking each one (O)

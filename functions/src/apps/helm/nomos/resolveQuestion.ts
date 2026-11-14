@@ -16,12 +16,14 @@ import {
   type QuestionStateEntry,
   type TopicFiling,
 } from './executeCommands.js';
+import { KIN_KINDS, type KinOrder } from './kinKinds.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import {
   buildNoteFiledLine,
   buildSettledDateLine,
   buildSettledLine,
   buildSettledNoneLine,
+  joinNames,
   KEY_DATE_INCOMING_ID,
   SETTLE_LINES,
 } from './summaries.js';
@@ -115,6 +117,8 @@ export interface ResolveInput {
     tierSetBy: 'person' | 'nomos';
     lastMentionedAt: number | null;
   } | null;
+  /** The people a held alias or family question names, opened, by id; one that is gone is missing. */
+  whos?: Map<string, { opened: Record<string, unknown> }>;
   /** The note a held fileNote names, or null when it is gone. */
   note?: ResolveNote | null;
   /** The topics that still exist, by id. */
@@ -147,6 +151,8 @@ export interface ResolvePlan {
     indexChange: IndexChange | null;
   } | null;
   whoUpdate: { id: string; data: Record<string, unknown> } | null;
+  /** People whose sealed words an answer rewrote (a nickname saved, a refusal remembered, an order kept). */
+  whoRewrites?: { id: string; data: Record<string, unknown> }[];
   /** A note filed by the answer: its new topic list; its words and edit time stay as they were. */
   noteUpdate: { id: string; data: Record<string, unknown> } | null;
   topicUpdates: TopicFiling[];
@@ -199,6 +205,30 @@ const hasNewDetails = (held: Record<string, unknown>, isPlace: boolean) =>
 const union = (left: string[], right: string[]) => [
   ...new Set([...left, ...right]),
 ];
+
+const ALIASES_CAP = 10;
+const REFUSED_ALIASES_CAP = 20;
+
+const toStrings = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+
+const isSameWord = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+const KIN_ORDER_LIST: KinOrder[] = [
+  'older',
+  'younger',
+  'oldest',
+  'youngest',
+  'twin',
+];
+
+const OPPOSITE: Partial<Record<KinOrder, KinOrder>> = {
+  older: 'younger',
+  younger: 'older',
+};
 
 /** Closes a "which is true now?" question whose facts are no longer in dispute with each other, marked stale; a survivor still pointing at a partner that is gone or no longer points back is freed, and nothing else is written. */
 function closeStale(
@@ -949,6 +979,212 @@ function planGroup(
   };
 }
 
+/** A nickname the answer saves on the person asked about (Yes), or the one it will not suggest again (No); null when it changes nothing. */
+function planAliasChange(
+  optionId: string,
+  whoId: string,
+  alias: string,
+  opened: Record<string, unknown>,
+): { field: string; previous: unknown; next: string[] } | null {
+  if (alias === '') return null;
+  if (optionId === whoId) {
+    const aliases = toStrings(opened.aliases);
+    return aliases.some((word) => isSameWord(word, alias)) ||
+      isSameWord(String(opened.name ?? ''), alias) ||
+      aliases.length >= ALIASES_CAP
+      ? null
+      : { field: 'aliases', previous: aliases, next: [...aliases, alias] };
+  }
+  if (optionId !== 'none') return null;
+  const refused = toStrings(opened.refusedAliases);
+  return refused.some((word) => isSameWord(word, alias))
+    ? null
+    : {
+        field: 'refusedAliases',
+        previous: opened.refusedAliases ?? null,
+        next: [...refused, alias].slice(-REFUSED_ALIASES_CAP),
+      };
+}
+
+/** What answering an order question writes: each person asked about keeps the order the answer gave them, and the ones it picked get the held tasks. */
+function planSettleKin(
+  input: ResolveInput,
+  question: Record<string, unknown>,
+  held: Record<string, unknown>,
+  oldQuestions: Record<string, unknown>,
+): { refused: ResolveRefusal } | { refused: null; plan: ResolvePlan } {
+  const { questionId, optionId, now, capture } = input;
+  const state = capture.questionState[questionId];
+  const mode =
+    held.mode === 'several' || held.mode === 'extreme' ? held.mode : 'one';
+  const wanted = KIN_ORDER_LIST.find((order) => order === held.wanted);
+  const asked = toStrings(held.whoIds);
+  if (!wanted || asked.length === 0) return { refused: 'unknown' };
+  const ticked =
+    mode === 'several' ? [...new Set(input.optionIds ?? [])] : [optionId];
+  const isNone = ticked.length === 1 && ticked[0] === 'none';
+  const isValid =
+    ticked.length > 0 &&
+    (mode === 'one'
+      ? optionId === 'yes' || optionId === 'no'
+      : isNone || ticked.every((id) => asked.includes(id)));
+  if (!isValid) return { refused: 'unknown' };
+  const matched =
+    mode === 'one' ? (optionId === 'yes' ? asked : []) : isNone ? [] : ticked;
+  const nextOrder = (id: string): KinOrder | null =>
+    matched.includes(id) ? wanted : (OPPOSITE[wanted] ?? null);
+  const whos = input.whos ?? new Map();
+  const rewrites = asked.flatMap((id) => {
+    const opened = whos.get(id)?.opened;
+    const kin = opened?.kin as
+      { kind?: unknown; order?: unknown } | null | undefined;
+    const entry = KIN_KINDS.find((known) => known.kind === kin?.kind);
+    const order = nextOrder(id);
+    return opened && kin && entry?.canOrder && order && kin.order !== order
+      ? [{ id, opened, previous: kin, next: { kind: entry.kind, order } }]
+      : [];
+  });
+  if (matched.length > 0 && matched.some((id) => !whos.has(id))) {
+    return { refused: 'gone' };
+  }
+  const liveTasks = toStrings(held.taskIds).flatMap((id) =>
+    input.tasks.has(id)
+      ? [{ id, task: input.tasks.get(id) as ResolveTask }]
+      : [],
+  );
+  const toLink = liveTasks.filter(({ task }) =>
+    matched.some((id) => !task.whoIds.includes(id)),
+  );
+  const taskEffects = toLink.map(({ id, task }) => {
+    const whoIds = union(task.whoIds, matched);
+    return {
+      ref: { op: 'update', collection: 'tasks', docId: id } as EffectRef,
+      effect: {
+        written: { 'sealed.title': task.title, whoIds },
+        previous: { 'sealed.title': task.title, whoIds: task.whoIds },
+      } as Effect,
+      update: { id, data: { whoIds, lastEditedAt: now } },
+    };
+  });
+  const whoEffects = rewrites.map(({ id, previous, next }) => ({
+    ref: { op: 'update', collection: 'who', docId: id } as EffectRef,
+    effect: {
+      written: { 'sealed.kin': next },
+      previous: { 'sealed.kin': previous },
+    } as Effect,
+  }));
+  const allEffects = [...taskEffects, ...whoEffects];
+  const nameOf = (id: string) => String(whos.get(id)?.opened.name ?? '');
+  const [first] = liveTasks;
+  const summary =
+    toLink.length > 0
+      ? `Linked ${joinNames(matched.map(nameOf))} to ${
+          liveTasks.length === 1
+            ? first.task.title
+            : `${liveTasks.length} tasks`
+        }`
+      : rewrites.length > 0
+        ? `Saved ${joinNames(rewrites.map(({ id }) => nameOf(id)))} as ${
+            mode === 'extreme' ? `your ${wanted}` : `${wanted} than you`
+          }`
+        : null;
+  const execution =
+    allEffects.length === 0 || summary === null
+      ? null
+      : {
+          captureId: input.captureId,
+          actor: 'nomos',
+          category: 'organize',
+          autonomyLevel: AUTOMATIC_LEVEL,
+          state: 'succeeded',
+          effectRefs: allEffects.map(({ ref }) => ref),
+          linkedWhoIds: matched,
+          linkedPlaceIds: [],
+          undoesExecutionId: null,
+          undoneByExecutionId: null,
+          questionRef: { captureId: input.captureId, questionId },
+          errorCode: null,
+          createdAt: now,
+          decidedAt: now,
+          finishedAt: now,
+          sealed: input.seal({
+            summary,
+            commands: [],
+            effects: allEffects.map(({ effect }) => effect),
+            undoReport: null,
+            goneIds: null,
+            said: null,
+            lines: null,
+            spoken: null,
+          }),
+        };
+  const questionState = {
+    ...capture.questionState,
+    [questionId]: { ...state, answeredAt: now },
+  };
+  const isOpen = Object.values(questionState).some(
+    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+  );
+  return {
+    refused: null,
+    plan: {
+      taskUpdates: taskEffects.map(({ update }) => update),
+      whoCreate: null,
+      placeCreate: null,
+      factCreate: null,
+      factUpdates: [],
+      keyDateUpdate: null,
+      whoUpdate: null,
+      whoRewrites: rewrites.map(({ id, opened, next }) => ({
+        id,
+        data: {
+          sealed: input.seal({ ...opened, kin: next }),
+          lastEditedAt: now,
+        },
+      })),
+      noteUpdate: null,
+      topicUpdates: [],
+      execution,
+      isStale: false,
+      capture: {
+        questionState,
+        sealed: {
+          ...input.opened,
+          questions: {
+            ...oldQuestions,
+            [questionId]: {
+              ...question,
+              answer:
+                mode === 'several'
+                  ? {
+                      by: input.by,
+                      at: now,
+                      turnCaptureId: null,
+                      shape: 'pickSeveral',
+                      optionIds: ticked,
+                    }
+                  : {
+                      by: input.by,
+                      at: now,
+                      turnCaptureId: null,
+                      shape: 'pickOne',
+                      optionId,
+                      otherText: null,
+                    },
+            },
+          },
+        },
+        status:
+          !isOpen && capture.status === 'needsYou' ? 'sorted' : capture.status,
+        ...(matched.length > 0 && { whoIds: union(capture.whoIds, matched) }),
+        executionIds: execution
+          ? [...capture.executionIds, input.executionId]
+          : capture.executionIds,
+      },
+    },
+  };
+}
+
 /** Decides what answering a "which one?" question writes, without touching a database: a pick links the held tasks, "new" makes the person or place first, "none" links nothing, and an answered or unknown question is refused. */
 export function planResolve(
   input: ResolveInput,
@@ -971,6 +1207,9 @@ export function planResolve(
   if (!held) return { refused: 'unknown' };
   if (held.kind === 'fileNote') {
     return planFileNote(input, question, held, oldQuestions, options);
+  }
+  if (held.kind === 'settleKin') {
+    return planSettleKin(input, question, held, oldQuestions);
   }
   if (!options.some((option) => option.id === optionId)) {
     return { refused: 'unknown' };
@@ -1123,15 +1362,65 @@ export function planResolve(
         }
       : null;
 
-  const allEffects = [...effects, ...createEffects];
+  const alias = isRecord(held.alias) ? held.alias : null;
+  const aliasWhoId = typeof alias?.whoId === 'string' ? alias.whoId : null;
+  const aliasName = typeof alias?.name === 'string' ? alias.name : '';
+  const aliasOpened = aliasWhoId ? input.whos?.get(aliasWhoId)?.opened : null;
+  if (aliasWhoId && !aliasOpened && optionId === aliasWhoId) {
+    return { refused: 'gone' };
+  }
+  const aliasChange =
+    aliasWhoId && aliasOpened
+      ? planAliasChange(optionId, aliasWhoId, aliasName, aliasOpened)
+      : null;
+  const aliasEffects =
+    aliasChange && aliasWhoId
+      ? [
+          {
+            ref: {
+              op: 'update',
+              collection: 'who',
+              docId: aliasWhoId,
+            } as EffectRef,
+            effect: {
+              written: { [`sealed.${aliasChange.field}`]: aliasChange.next },
+              previous: {
+                [`sealed.${aliasChange.field}`]: aliasChange.previous,
+              },
+            } as Effect,
+          },
+        ]
+      : [];
+  const whoRewrites =
+    aliasChange && aliasWhoId && aliasOpened
+      ? [
+          {
+            id: aliasWhoId,
+            data: {
+              sealed: input.seal({
+                ...aliasOpened,
+                [aliasChange.field]: aliasChange.next,
+              }),
+              lastEditedAt: now,
+            },
+          },
+        ]
+      : [];
+
+  const allEffects = [...effects, ...createEffects, ...aliasEffects];
   const label = isRecordOption(optionId)
     ? (options.find((option) => option.id === optionId)?.label ?? name)
     : name;
   const [first] = liveTasks;
+  const whoLabel = String(aliasOpened?.name ?? '');
   const summary =
-    liveTasks.length === 1
-      ? `Linked ${label} to ${first.task.title}`
-      : `Linked ${label} to ${liveTasks.length} tasks`;
+    liveTasks.length > 0 && isLinking
+      ? liveTasks.length === 1
+        ? `Linked ${label} to ${first.task.title}`
+        : `Linked ${label} to ${liveTasks.length} tasks`
+      : aliasChange?.field === 'aliases'
+        ? `Saved ${aliasName} as another name for ${whoLabel}`
+        : `Noted that ${aliasName} is not ${whoLabel}`;
   const execution =
     allEffects.length === 0
       ? null
@@ -1183,6 +1472,7 @@ export function planResolve(
       factUpdates: [],
       keyDateUpdate: null,
       whoUpdate,
+      whoRewrites,
       noteUpdate: null,
       topicUpdates: [],
       execution,

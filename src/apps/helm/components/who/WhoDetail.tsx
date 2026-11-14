@@ -20,6 +20,7 @@ import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
 import MomentsPreview from '@apps/helm/components/who/MomentsPreview';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import WhoEditSheet from '@apps/helm/components/who/WhoEditSheet';
+import WhoNamesCard from '@apps/helm/components/who/WhoNamesCard';
 import PhotosSection from '@apps/helm/components/media/PhotosSection';
 import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
@@ -63,7 +64,9 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
   const activeProjects = useAppSelector(selectActiveProjects);
   const { showView } = useHelmUrlState();
   const [isAllMentions, setIsAllMentions] = useState(false);
-  const [sheet, setSheet] = useState<'edit' | 'tier' | null>(null);
+  const [sheet, setSheet] = useState<'edit' | 'tier' | 'names' | 'kin' | null>(
+    null,
+  );
   const who = items.find((entry) => entry.id === whoId) ?? null;
   const name = who && !who.isUnreadable ? who.name : '';
   const importedAccountId = who?.importedFrom?.accountId ?? null;
@@ -208,6 +211,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
       ? {
           items: [
             option({ label: HELM_COPY.whoEditMenu, value: 'edit' }),
+            option({ label: HELM_COPY.whoNamesMenu, value: 'names' }),
             ...(who.isSelf
               ? []
               : [
@@ -220,7 +224,8 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
           ],
           onItemSelect: (value: string) => {
             if (value === 'forget') void forget();
-            else if (value === 'edit' || value === 'tier') setSheet(value);
+            else if (value === 'edit' || value === 'tier' || value === 'names')
+              setSheet(value);
           },
         }
       : undefined;
@@ -272,6 +277,11 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
                 )}
               </div>
             </div>
+            <WhoNamesCard
+              who={who}
+              openSheet={sheet === 'names' || sheet === 'kin' ? sheet : null}
+              onOpen={setSheet}
+            />
             {projectLines.length > 0 && (
               <ul className='space-y-1'>
                 {projectLines.map((line) => (

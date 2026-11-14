@@ -263,6 +263,8 @@ export const resolveHelmQuestion = onCall(
             noteId?: unknown;
             childIds?: unknown;
             kind?: string;
+            whoIds?: unknown;
+            alias?: { whoId?: unknown };
           }[];
         }
       >;
@@ -297,7 +299,15 @@ export const resolveHelmQuestion = onCall(
       const factIds = (held?.factIds ?? [])
         .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
         .slice(0, 2);
+      const isKin = held?.kind === 'settleKin';
+      const whoIdsAsked = [
+        ...(isKin && Array.isArray(held?.whoIds) ? held.whoIds : []),
+        held?.alias?.whoId,
+      ]
+        .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
+        .slice(0, 20);
       const isPick =
+        !isKin &&
         groupIds.length === 0 &&
         held?.kind !== 'groupTopics' &&
         !isSettle &&
@@ -371,6 +381,29 @@ export const resolveHelmQuestion = onCall(
         depth: Number(doc.get('depth') ?? 1),
         name: groupTopics.get(doc.id)?.name ?? '',
       }));
+      const whoSnaps = await Promise.all(
+        whoIdsAsked.map((id) =>
+          transaction.get(firestore.doc(`${base}/who/${id}`)),
+        ),
+      );
+      const whos = new Map<string, { opened: Record<string, unknown> }>(
+        whoSnaps.flatMap(
+          (snap): [string, { opened: Record<string, unknown> }][] => {
+            const data = snap.data();
+            if (!data) return [];
+            try {
+              return [
+                [
+                  snap.id,
+                  { opened: openForHelm(key, data.sealed as SealedPayload) },
+                ],
+              ];
+            } catch {
+              return [];
+            }
+          },
+        ),
+      );
       const [factSnaps, taskSnaps, chosenSnap] = await Promise.all([
         Promise.all(
           factIds.map((id) =>
@@ -453,6 +486,7 @@ export const resolveHelmQuestion = onCall(
         opened,
         tasks,
         facts,
+        whos,
         keyDate: openedDate
           ? {
               id: openedDate[0],
@@ -624,6 +658,9 @@ export const resolveHelmQuestion = onCall(
           plan.whoUpdate.data,
         );
       }
+      (plan.whoRewrites ?? []).forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/who/${id}`), data),
+      );
       if (plan.execution) transaction.create(executionRef, plan.execution);
       transaction.update(captureRef, {
         ...plan.capture,

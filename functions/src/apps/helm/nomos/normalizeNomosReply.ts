@@ -4,6 +4,8 @@ import {
 } from '../../../vendor/optionMatchUtils.js';
 import { withoutClosingPhrases } from '../../../vendor/closingPhrase.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
+import { normalizeKin } from './kin.js';
+import { KIN_KINDS } from './kinKinds.js';
 import { ASK_WORDS } from './summaries.js';
 import {
   hasProcedureCue,
@@ -872,9 +874,19 @@ interface Entities {
 }
 
 /** Reads the people, pets, organizations and places the reply names; a repeat of one name folds into the first, and every @ person and # place of the reading is there whether the model listed it or not. */
+/** "younger brother" for a family word and its order, the name a mention that is only a family word carries. */
+const toKinWords = (kin: { kind: string; order: string | null }) =>
+  [
+    kin.order,
+    KIN_KINDS.find((entry) => entry.kind === kin.kind)?.spoken ?? kin.kind,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
 const readEntities = (
   raw: Record<string, unknown>,
   reading: CaptureReading,
+  people?: AliasBook,
 ): Entities => {
   const mentions: MentionRead[] = [];
   const places: PlaceRead[] = [];
@@ -914,11 +926,19 @@ const readEntities = (
   (Array.isArray(raw.mentions) ? raw.mentions.filter(isRecord) : []).forEach(
     (item) => {
       const kind = MENTION_KINDS.find((entry) => entry === item.kind);
-      const name = toName(item.name);
+      const kinRef = normalizeKin(item.kinRef);
+      const name = toName(item.name) ?? (kinRef ? toKinWords(kinRef) : null);
       if (!kind || !name) return;
+      const proposedWhoId =
+        !kinRef && isRecord(item.proposedAlias)
+          ? (people?.idOf(String(item.proposedAlias.whoAlias)) ?? null)
+          : null;
       addMention(typeof item.ref === 'string' ? item.ref : null, {
         name,
-        kind,
+        kind: kinRef ? 'person' : kind,
+        kin: kinRef ? null : normalizeKin(item.kin),
+        kinRef,
+        proposedWhoId,
         relation: toText(item.relation, NAME_CAP),
         species: kind === 'pet' ? toText(item.species, NAME_CAP) : null,
         organizationKind:
@@ -940,6 +960,9 @@ const readEntities = (
     addMention(null, {
       name,
       kind: 'person',
+      kin: null,
+      kinRef: null,
+      proposedWhoId: null,
       relation: null,
       species: null,
       organizationKind: null,
@@ -1751,6 +1774,8 @@ export function normalizeNomosReply(
     synced?: SyncedBook;
     facts?: AliasBook;
     keyDates?: AliasBook;
+    /** The people listed in the context, by alias (w1, w2, …). */
+    people?: AliasBook;
     topics?: AliasBook;
     notes?: AliasBook;
     parts?: AliasBook;
@@ -1815,7 +1840,7 @@ export function normalizeNomosReply(
     throw new NomosReplyError('badShape');
   }
   const state = { refs: new Set<string>() };
-  const entities = readEntities(raw, context.reading);
+  const entities = readEntities(raw, context.reading, context.people);
   const made = new Set((context.alreadyMade ?? []).map(toKey));
   const items = raw.commands.filter(isRecord);
   items.forEach(assertNoDateKeys);

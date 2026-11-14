@@ -1728,18 +1728,18 @@ Health and care things are private on their own on any kind of record, and anyth
 ### Description
 A person can carry other names ("Bubs") and a family word ("younger brother"). Aliases find them everywhere a name does; a new nickname is asked about before it is saved; "this is for my younger brother" finds the right one from what was said or from birthdays with a year, and asks when it can't tell. The self's own birthday is a key date on the You page.
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** an alias by Add or a Yes to "Is Bubs Eli?"; a family word from the who page's list or said.
-- [ ] **Read:** "Also called" and the family word on the who page.
-- [ ] **Update:** change the family word; the saved answer to "Is Eli younger than you?".
-- [ ] **Delete:** Remove an alias; clear the family word.
+- [x] **Create:** an alias by Add or a Yes to "Is Bubs Eli?"; a family word from the who page's list or said.
+- [x] **Read:** "Also called" and the family word on the who page.
+- [x] **Update:** change the family word; the saved answer to "Is Eli younger than you?".
+- [x] **Delete:** Remove an alias; clear the family word.
 ### Success Criteria
-- [ ] The who page shows "Also called" with Add and Remove; aliases find the person in Search, `@`, the turn's matching, the context, the hints (never a private one's) and the sound-alike fix; "Also heard as" (`soundsLike`) and refused names are separate sealed lists (`check:helm-sort`, `check:helm-name-hints`).
-- [ ] A new nickname the model links to someone asks "Is Bubs Eli?" · Yes · No · Someone new before anything is saved; Yes saves the alias, No leaves the turn as written and is never asked again for that name and person (`refusedAliases`), Someone new makes the who (`check:helm-kin`).
-- [ ] Family words come only from `KIN_KINDS`, with order only on sibling and child kinds; the normalizer refuses anything else and keeps the said words in `relation` (`check:helm-kin`).
-- [ ] "This is for my younger brother" uses a said order first; else derives older/younger only from the person's and the brother's birthdays both with a year, and oldest/youngest from the siblings' years alone; one fit is used and named ("Added for Eli: …"), two ask "Which brother: Eli or Marcus?", an order it can't tell asks "Is Eli younger than you?" once and saves the answer, never asking for a birthday; no brother asks who with "Add your brother"; a private who resolves the same way (`check:helm-kin`).
-- [ ] No rules change (sealed fields only); stated. Conventions: none new; check made.
+- [ ] The who page shows "Also called" with Add and Remove; aliases find the person in Search, `@`, the turn's matching, the context, the hints (never a private one's) and the sound-alike fix; "Also heard as" (`soundsLike`) and refused names are separate sealed lists (`check:helm-sort`, `check:helm-name-hints`). Built here: the who page, Search, `@`, the turn's matching, the context and the separate sealed lists; the recognizer hints, the sound-alike fix and `check:helm-name-hints` arrive with Issue 105.
+- [x] A new nickname the model links to someone asks "Is Bubs Eli?" · Yes · No · Someone new before anything is saved; Yes saves the alias, No leaves the turn as written and is never asked again for that name and person (`refusedAliases`), Someone new makes the who (`check:helm-kin`).
+- [x] Family words come only from `KIN_KINDS`, with order only on sibling and child kinds; the normalizer refuses anything else and keeps the said words in `relation` (`check:helm-kin`).
+- [x] "This is for my younger brother" uses a said order first; else derives older/younger only from the person's and the brother's birthdays both with a year, and oldest/youngest from the siblings' years alone; one fit is used and named ("Added for Eli: …"), two ask "Which brother: Eli or Marcus?", an order it can't tell asks "Is Eli younger than you?" once and saves the answer, never asking for a birthday; no brother asks who with "Add your brother"; a private who resolves the same way (`check:helm-kin`).
+- [x] No rules change (sealed fields only); stated. Conventions: none new; check made.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
-- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+- [x] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 
 ### Issue 105: Names heard right
 

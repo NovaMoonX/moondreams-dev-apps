@@ -28,6 +28,7 @@ import {
 } from '@apps/helm/utils/keyDateText';
 import type { WhoMoment } from '@apps/helm/utils/moments';
 import { formatTaskDue } from '@apps/helm/utils/taskDue';
+import { formatKin } from '@apps/helm/utils/kinText';
 import { pathOf } from '@apps/helm/utils/topicTree';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
 
@@ -193,6 +194,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
       title: [entry.name],
       body: [
         ...entry.aliases,
+        entry.kin ? formatKin(entry.kin) : null,
         entry.relation,
         entry.species,
         entry.organizationKind,

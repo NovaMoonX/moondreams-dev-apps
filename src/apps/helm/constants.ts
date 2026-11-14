@@ -17,6 +17,8 @@ import {
   MAX_VOICE_NOTE_MS,
 } from '@apps/helm/utils/mediaCaps';
 
+export { KIN_KINDS, KIN_ORDER_WORDS } from '@apps/helm/engine/kinKinds';
+
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
 export const DEFAULT_ASSISTANT_TONE: AssistantTone = 'composed';
 
@@ -286,6 +288,9 @@ export const MEDIA_LIMIT = 2_000;
 /** Photos one who or place keeps. */
 export const PHOTOS_PER_RECORD = 12;
 /** Mentions a who's page lists before "Show all". */
+export const MAX_ALIASES = 10;
+export const MAX_REFUSED_ALIASES = 20;
+
 export const MENTIONS_SHOWN = 10;
 
 /** Questions a turn shows at once. */
@@ -1854,6 +1859,35 @@ export const HELM_COPY = {
   whoNameField: 'Name',
   whoAliasesField: 'Also called',
   whoAliasesHelp: 'Other names they go by, separated by commas.',
+  whoNamesAlsoCalled: 'Also called',
+  whoNamesAdd: 'Add',
+  whoNamesFamily: 'Family',
+  whoNamesMenu: 'Names and family',
+  aliasesTitle: (name: string) => `Names · ${name}`,
+  aliasAddField: 'Add a nickname',
+  aliasAddPlaceholder: 'Bubs',
+  aliasAdd: 'Add',
+  aliasRemove: (alias: string) => `Remove ${alias}`,
+  aliasRemovedToast: (alias: string) => `Removed ${alias}`,
+  aliasHelp: 'Search, @ and your assistant find them by these too.',
+  aliasFull: (max: number) => `That is as many as fit (${max}).`,
+  aliasDuplicate: 'They already go by that.',
+  aliasDone: 'Done',
+  aliasNone: 'No nicknames yet.',
+  kinTitle: (name: string) => `Family · ${name}`,
+  kinKindField: 'How you are related',
+  kinNotSet: 'Not set',
+  kinOrderField: 'Older or younger',
+  kinOrderNotSaid: 'Not said',
+  kinOrderOlder: 'Older',
+  kinOrderYounger: 'Younger',
+  kinOrderOldest: 'Oldest',
+  kinOrderYoungest: 'Youngest',
+  kinOrderTwin: 'Twin',
+  kinHelp:
+    'The line under the name stays in your words. This is how “my younger brother” finds them.',
+  kinSavedToast: (name: string) => `Saved how ${name} is related`,
+  kinClearedToast: (name: string) => `Cleared how ${name} is related`,
   whoKindField: 'Kind',
   whoKindPerson: 'Person',
   whoKindPet: 'Pet',

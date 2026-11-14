@@ -11,6 +11,7 @@ import { db } from '@lib/firebase/config';
 import type { SealedReader } from '@lib/security';
 
 import { WHO_LIMIT } from '@apps/helm/constants';
+import { normalizeKin } from '@apps/helm/engine/kin';
 import type { OpenWho, Who, WhoSealed } from '@apps/helm/types';
 import { readPrivacy } from '@apps/helm/utils/privacy';
 
@@ -53,6 +54,9 @@ async function openWho(
   const empty = {
     name: '',
     aliases: [],
+    kin: null,
+    soundsLike: null,
+    refusedAliases: null,
     relation: null,
     phone: null,
     email: null,
@@ -67,6 +71,11 @@ async function openWho(
       ...base,
       name: toText(payload.name) ?? '',
       aliases: toTexts(payload.aliases),
+      kin: normalizeKin(payload.kin),
+      soundsLike: payload.soundsLike ? toTexts(payload.soundsLike) : null,
+      refusedAliases: payload.refusedAliases
+        ? toTexts(payload.refusedAliases)
+        : null,
       relation: toText(payload.relation),
       phone: toText(payload.phone),
       email: toText(payload.email),

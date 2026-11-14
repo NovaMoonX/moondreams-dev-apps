@@ -82,6 +82,7 @@
     "check:runway-notify-text": "tsx scripts/checks/runwayNotifyText.ts",
     "check:runway-keys": "firebase emulators:exec --only firestore --project moondreams-dev-apps \"tsx scripts/checks/runwayKeyGuard.ts\"",
     "check:natural-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/naturalDates.ts",
+    "check:helm-kin": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmKin.ts",
     "check:helm-sort": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSort.ts",
     "check:helm-answers": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmAnswers.ts",
     "check:helm-route": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRoute.ts",
