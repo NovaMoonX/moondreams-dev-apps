@@ -41,6 +41,7 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
     isBound: false,
     setup:
       'add DEEPGRAM_API_KEY=... to functions/.env.local (read at run time, so production is not used locally)',
+    caution: 'Real Deepgram is billed per minute of audio.',
   },
   'google-tts': {
     apps: 'voice in Helm and Pinch (default speech voice)',
@@ -57,6 +58,7 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
     isBound: false,
     setup:
       'add GEMINI_API_KEY=... to functions/.env.local (read at run time, so production is not used locally)',
+    caution: 'Real Gemini speech is billed per request.',
   },
   omdb: {
     apps: 'A-List',
@@ -456,8 +458,8 @@ const storeKeys = (service: FixtureService, values: string[]) => {
 };
 
 const getKeys = async (service: FixtureService) => {
-  const { keys, isBound, isNotPulled, setup } = SERVICES[service];
-  if (isBound && !isNotPulled) {
+  const { keys, isNotPulled, setup } = SERVICES[service];
+  if (!isNotPulled) {
     const fetched = keys.map(fetchKey);
     if (fetched.every(Boolean)) {
       console.log(`Fetched ${keys.join(' and ')} from production.`);
@@ -501,8 +503,7 @@ const chooseOne = async (service: FixtureService) => {
     return true;
   }
   const wasForced = isForced(forced, service);
-  const isRecoverable =
-    SERVICES[service].isBound && !SERVICES[service].isNotPulled;
+  const isRecoverable = !SERVICES[service].isNotPulled;
   if (isRecoverable) {
     [SECRET_FILE, ENV_FILE]
       .filter((file) => existsSync(file))
