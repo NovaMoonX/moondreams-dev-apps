@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -49,8 +50,14 @@ import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { VoiceNotice } from '@apps/helm/components/voice/VoiceStatus';
-import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
+import {
+  DictateButton,
+  DictationLine,
+} from '@apps/helm/components/voice/Dictation';
+import {
+  useHelmVoiceContext,
+  useIsDictatingHere,
+} from '@apps/helm/hooks/useHelmVoice';
 import { useTurnAttachments } from '@apps/helm/hooks/useMediaUpload';
 import { useSaveAsNote } from '@apps/helm/hooks/useSaveAsNote';
 import {
@@ -461,7 +468,9 @@ function Composer({
 
   const canType = isReady || isOutbox;
   useGrowingTextarea(fieldRef, text, maxLines);
-  const isDictating = voice.isDictating && voice.state === 'listening';
+  const dictationOwner = useId();
+  const isDictating = useIsDictatingHere(dictationOwner);
+  const isOpen = (isFocused || isDictating) && !isRecording;
   const showsActions = waitingPlaceholder === null;
 
   return (
@@ -512,7 +521,7 @@ function Composer({
           </div>
         </div>
       )}
-      <div className='flex items-end gap-1'>
+      <div className={join('flex items-end gap-1', isOpen && 'flex-wrap')}>
         {showsActions && !isRecording && !(isOutbox && !isReady) && (
           <EllipsisDropdown
             variant='tertiary'
@@ -605,7 +614,12 @@ function Composer({
             </Button>
           </div>
         ) : (
-          <div className='min-w-0 flex-1 [&_textarea]:block'>
+          <div
+            className={join(
+              'min-w-0 flex-1 [&_textarea]:block',
+              isOpen && 'order-first basis-full',
+            )}
+          >
             <Textarea
               ref={fieldRef}
               variant='base'
@@ -668,26 +682,12 @@ function Composer({
           canType &&
           !isRecording &&
           (isFocused || isDictating) && (
-            <Button
-              type='button'
-              variant='tertiary'
-              size='icon'
-              rounded='full'
-              aria-label={
-                isDictating ? HELM_COPY.dictateDone : HELM_COPY.dictate
-              }
-              aria-pressed={isDictating}
-              className={join(
-                'size-10 min-h-0 min-w-10 shrink-0 p-0',
-                isDictating && 'bg-primary/12! ring-primary/40 ring-2',
-              )}
-              onClick={() => voice.dictate(appendWords)}
-            >
-              <Mic
-                className={join('size-5', isDictating && 'text-primary')}
-                aria-hidden='true'
-              />
-            </Button>
+            <DictateButton
+              owner={dictationOwner}
+              label={HELM_COPY.dictate}
+              onWords={appendWords}
+              className='mr-1 ml-auto'
+            />
           )}
         {showsActions &&
           (isHeldBackByPhotos ? (
@@ -720,36 +720,7 @@ function Composer({
           ))}
       </div>
       <div className='flex flex-col gap-2 px-1 pb-1 empty:hidden'>
-        {isDictating && (
-          <div
-            className='flex flex-col items-start gap-0.5'
-            role='status'
-            aria-live='polite'
-          >
-            <div className='flex w-full items-start gap-2'>
-              <p className='text-muted-foreground line-clamp-2 min-w-0 flex-1 py-1 text-[13px] break-words'>
-                {voice.heard ||
-                  (voice.isPreparing
-                    ? HELM_COPY.talkGettingReady
-                    : HELM_COPY.talkListeningHint)}
-              </p>
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                className="relative -mr-1 shrink-0 text-[13px] before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
-                onClick={voice.cancel}
-              >
-                {HELM_COPY.talkCancel}
-              </Button>
-            </div>
-            {voice.listeningRoute === 'cloud' && (
-              <div className='-ml-3'>
-                <VoiceNotice />
-              </div>
-            )}
-          </div>
-        )}
+        <DictationLine owner={dictationOwner} />
         {(recorder.state === 'refused' || recorder.state === 'unsupported') && (
           <p className='text-muted-foreground text-[13px]' role='status'>
             {recorder.state === 'unsupported'

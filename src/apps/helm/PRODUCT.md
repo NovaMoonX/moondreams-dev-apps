@@ -198,7 +198,7 @@ The owner's words: "Agent should be able to ask different types of questions, li
 - **Word for word.**
   - None of these (pick several): "None of these". Picking it clears the other ticks.
   - Something else (pick one): "Something else", which opens a field: "Tell [name] what you mean".
-  - Skip (every shape): "Skip". After it: "Skipped. It's waiting in Needs you." Spoken the same way.
+  - Answer later (every shape): "Answer later". After it: "Saved for later. It's waiting in Needs you." Spoken the same way.
   - Done (pick several): "Done", reading "Done · 2" once two are ticked; with nothing ticked it reads "Pick at least one, or None of these" when tapped.
   - Spoken, pick several with two options: "Which of these? Cake tasting, venue walk, or both?"
   - Spoken, pick several with more: "Which of these? Cake tasting, venue walk or florist call. You can say more than one."

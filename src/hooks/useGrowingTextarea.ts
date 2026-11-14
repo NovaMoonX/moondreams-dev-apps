@@ -6,11 +6,15 @@ const fit = (field: HTMLTextAreaElement, maxLines: number) => {
   const style = getComputedStyle(field);
   const borders = px(style.borderTopWidth) + px(style.borderBottomWidth);
   const lineHeight = px(style.lineHeight) || px(style.fontSize) * 1.25;
-  const max =
+  // With the keyboard up a phone shows little, so the field never takes more than about half of it.
+  const visible = window.visualViewport?.height ?? window.innerHeight;
+  const max = Math.min(
     lineHeight * maxLines +
-    px(style.paddingTop) +
-    px(style.paddingBottom) +
-    borders;
+      px(style.paddingTop) +
+      px(style.paddingBottom) +
+      borders,
+    Math.max(lineHeight * 2, visible * 0.45),
+  );
   field.style.height = 'auto';
   const content = field.scrollHeight + borders;
   field.style.height = `${Math.min(content, max)}px`;
@@ -59,5 +63,15 @@ export function useGrowingTextarea(
     fit(field, maxLines);
   });
 
-  useEffect(() => () => observer.current?.disconnect(), []);
+  useEffect(() => {
+    const refit = () => {
+      const { field, maxLines: lines } = fitted.current;
+      if (field) fit(field, lines);
+    };
+    window.visualViewport?.addEventListener('resize', refit);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', refit);
+      observer.current?.disconnect();
+    };
+  }, []);
 }
