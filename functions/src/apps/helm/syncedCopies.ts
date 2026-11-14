@@ -148,7 +148,7 @@ const toExtra = (kind: string, value: unknown) => {
 const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
-  event: ['isTentative', 'isFree'],
+  event: ['isTentative', 'isFree', 'hasTicket'],
   task: [],
   project: [
     'available',
@@ -165,7 +165,7 @@ const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
   pet: [],
   moneySummary: ['nextIncomeAt', 'dueBeforeIncomeCents'],
   transaction: ['category'],
-  countSummary: ['items', 'revealed', 'notYetRevealed'],
+  countSummary: ['items', 'revealed', 'notYetRevealed', 'revealsWaiting'],
 };
 
 /** Opens one synced copy; one that won't open or holds no title is left out. */

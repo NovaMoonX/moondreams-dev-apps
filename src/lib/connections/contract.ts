@@ -42,6 +42,8 @@ export interface CategoryManifest {
   reads: { label: string; sinceVersion: number; addedOn: string | null }[];
   /** Starts at 1; bumped whenever `reads` gains an entry. */
   scopeVersion: number;
+  /** How many days back a sync reads and keeps what has ended, when longer than the usual window, for records whose past is the point. */
+  historyDays?: number;
 }
 
 export interface ConnectorManifest {
@@ -113,7 +115,7 @@ export const SHARED_RECORD_KEYS: (keyof SharedRecord)[] = [
 export const EXTRA_KEYS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
-  event: ['calendarId', 'isTentative', 'isFree', 'sameEventKey'],
+  event: ['calendarId', 'isTentative', 'isFree', 'sameEventKey', 'hasTicket'],
   task: [],
   project: [
     'available',
@@ -130,7 +132,7 @@ export const EXTRA_KEYS: Record<SharedKind, string[]> = {
   pet: [],
   moneySummary: ['nextIncomeAt', 'dueBeforeIncomeCents'],
   transaction: ['category'],
-  countSummary: ['items', 'revealed', 'notYetRevealed'],
+  countSummary: ['items', 'revealed', 'notYetRevealed', 'revealsWaiting'],
 };
 
 export type GrantStatus = 'live' | 'needsReconnect' | 'noAccess' | 'ended';

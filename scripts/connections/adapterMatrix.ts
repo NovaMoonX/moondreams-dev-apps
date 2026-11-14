@@ -506,8 +506,10 @@ assert.deepEqual(readGrant({ status: 'live' }).categories, {});
 assert.equal(readGrant({}).status, 'ended');
 assert.deepEqual(readGrant(JSON.parse(JSON.stringify(staged))), staged);
 
-const membership = (uid: string, path: string) =>
-  firestore.doc(`apps/a-list/memberships/${uid}/${path}`);
+const membership = (uid: string, path = '') =>
+  firestore.doc(
+    `apps/a-list/memberships/${uid}${path === '' ? '' : `/${path}`}`,
+  );
 
 const showing = (
   status: string,
@@ -528,6 +530,7 @@ const showing = (
     timeZone: 'America/Chicago',
   },
   ticket: {
+    entryMode: 'ITEMIZED',
     priceCents: SECRET_PRICE,
     totalCents: 777,
     feeAvoidedCents: 999,
@@ -543,7 +546,10 @@ await Promise.all([
     showing('PLANNED', 'Starlight Harbor', NOW + DAY),
   ),
   membership(OWNER, 'viewings/v-notheatre').set(
-    showing('PLANNED', 'Galaxy Drift', NOW + 2 * DAY, { theatre: null }),
+    showing('PLANNED', 'Galaxy Drift', NOW + 2 * DAY, {
+      theatre: null,
+      ticket: null,
+    }),
   ),
   membership(OWNER, 'viewings/v-old').set(
     showing('PLANNED', 'Ancient Showing', NOW - 60 * DAY),
@@ -554,6 +560,39 @@ await Promise.all([
   membership(OWNER, 'viewings/v-seen-unrated').set(
     showing('SEEN', 'The Matrix', NOW - 4 * DAY),
   ),
+  membership(OWNER, 'watchlist/tmdb-10').set({
+    movieKey: 'tmdb-10',
+    movie: { title: 'Moon Garden', releaseDate: Date.UTC(2026, 11, 18) },
+    priority: 'MUST_SEE',
+    archivedAt: null,
+    lastEditedAt: NOW - 3,
+  }),
+  membership(OWNER, 'watchlist/tmdb-11').set({
+    movieKey: 'tmdb-11',
+    movie: { title: 'Undated Tale', releaseDate: null },
+    priority: 'IF_I_HAVE_TIME',
+    lastEditedAt: NOW - 3,
+  }),
+  membership(OWNER, 'watchlist/tmdb-12').set({
+    movieKey: 'tmdb-12',
+    movie: { title: 'Put Away', releaseDate: null },
+    priority: 'WANT_TO_SEE',
+    archivedAt: NOW - DAY,
+    lastEditedAt: NOW - 3,
+  }),
+  membership(OWNER, 'watchlist/tmdb-1').set({
+    movieKey: 'tmdb-1',
+    movie: { title: 'Dune', releaseDate: null },
+    priority: 'WANT_TO_SEE',
+    archivedAt: null,
+    lastEditedAt: NOW - 3,
+  }),
+  membership(OWNER).set({
+    weeklyGoal: 2,
+    monthlyGoal: 5,
+    monthlyCostCents: SECRET_PRICE,
+    lastEditedAt: NOW - 2,
+  }),
   membership(OWNER, 'theatres/2078').set({
     theatreId: '2078',
     name: 'AMC Town Center 20',
@@ -580,6 +619,7 @@ await Promise.all([
 
 const aListAdapter = createAListAdapter({
   firestore: () => firestore,
+  now: () => NOW,
   canOpen: async (uid) => uid === OWNER,
 });
 
@@ -591,7 +631,12 @@ const aListCtx = (uid: string) => ({
       readerAppId: 'helm',
       connectorId: 'app:a-list',
       accountId: 'site',
-      categoryIds: ['plannedShowings', 'savedTheaters', 'seenMovies'],
+      categoryIds: [
+        'plannedShowings',
+        'savedTheaters',
+        'seenMovies',
+        'watchlist',
+      ],
       options: null,
     },
     aListAdapter.manifest,
@@ -622,6 +667,11 @@ assert.equal(nextShowing?.startAt, NOW + DAY);
 assert.equal(nextShowing?.endAt, NOW + DAY + 3 * 3_600_000);
 assert.equal(nextShowing?.placeLabel, 'AMC Town Center 20');
 assert.equal(nextShowing?.timeZone, 'America/Chicago');
+assert.deepEqual(nextShowing?.extra, { hasTicket: true });
+assert.deepEqual(
+  showings.find((entry) => entry.sourceRef === 'viewings/v-notheatre')?.extra,
+  { hasTicket: false },
+);
 assert.equal(
   showings.find((entry) => entry.sourceRef === 'viewings/v-notheatre')
     ?.placeLabel,
@@ -641,13 +691,36 @@ assert.deepEqual(
 );
 
 const seen = await runAList(OWNER, 'seenMovies');
-assert.deepEqual(refs(seen), ['viewings/v-seen']);
-assert.equal(seen[0].kind, 'knowledge');
-assert.equal(seen[0].title, 'Dune');
-assert.deepEqual(seen[0].extra, { rating: 4.5 });
+assert.deepEqual(refs(seen), ['goals', 'viewings/v-seen']);
+assert.ok(seen.every((entry) => entry.kind === 'knowledge'));
+assert.equal(seen[0].title, 'Movie goals');
+assert.equal(
+  seen[0].detail,
+  'Weekly goal 2, 2 seen this week · Monthly goal 5, 2 seen this month',
+);
+assert.deepEqual(seen[0].extra, {});
+assert.equal(seen[1].title, 'Dune');
+assert.equal(seen[1].startAt, null);
+assert.match(seen[1].detail ?? '', /^Seen [A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+assert.deepEqual(seen[1].extra, { rating: 4.5 });
+
+const watchlist = await runAList(OWNER, 'watchlist');
+assert.deepEqual(refs(watchlist).sort(), [
+  'watchlist/tmdb-10',
+  'watchlist/tmdb-11',
+]);
+assert.ok(watchlist.every((entry) => entry.kind === 'artifact'));
+const moonGarden = watchlist.find((entry) => entry.title === 'Moon Garden');
+assert.equal(moonGarden?.startAt, null);
+assert.equal(moonGarden?.detail, 'Out Dec 18, 2026');
+assert.deepEqual(moonGarden?.extra, { status: 'Must see' });
+assert.equal(
+  watchlist.find((entry) => entry.title === 'Undated Tale')?.detail,
+  null,
+);
 await assert.rejects(() => runAList(OWNER, 'nothing'), /Unknown category/);
 
-const aListAll = [...showings, ...theaters, ...seen];
+const aListAll = [...showings, ...theaters, ...seen, ...watchlist];
 assertShape(aListAll);
 aListAll.forEach((record) => {
   const values = flatten(record);
@@ -668,11 +741,11 @@ aListAll.forEach((record) => {
 });
 
 const otherAList = await Promise.all(
-  ['plannedShowings', 'savedTheaters', 'seenMovies'].map((category) =>
-    runAList(OTHER, category),
+  ['plannedShowings', 'savedTheaters', 'seenMovies', 'watchlist'].map(
+    (category) => runAList(OTHER, category),
   ),
 );
-assert.deepEqual(otherAList, [[], [], []]);
+assert.deepEqual(otherAList, [[], [], [], []]);
 assert.equal(await aListAdapter.status(aListCtx(OWNER)), 'ok');
 assert.equal(await aListAdapter.status(aListCtx(OTHER)), 'noAccess');
 assert.equal(
@@ -961,9 +1034,28 @@ await Promise.all([
     name: 'Mochi',
     notes: CARE_SECRET,
     microchipNumber: CARE_SECRET,
+    rabiesTagNumber: CARE_SECRET,
+    insurance: { provider: CARE_SECRET, policyNumber: CARE_SECRET },
+    dateOfBirth: Date.UTC(2021, 2, 4),
+    isDateOfBirthEstimated: false,
+    breed: 'Siamese',
+    diet: { foodType: 'dry', brand: 'Royal Canin', notes: CARE_SECRET },
     lastEditedAt: NOW - 13,
   }),
-  careDocs('cats', 'juniper').set({ name: 'Juniper', lastEditedAt: NOW - 14 }),
+  careDocs('cats', 'juniper').set({
+    name: 'Juniper',
+    dateOfBirth: Date.UTC(2023, 5, 1),
+    isDateOfBirthEstimated: true,
+    breed: 'Tabby',
+    diet: null,
+    lastEditedAt: NOW - 14,
+  }),
+  careDocs('doctors', 'lee').set({
+    name: 'Dr. Lee',
+    clinicId: 'blue-bark',
+    notes: CARE_SECRET,
+  }),
+  careDocs('doctors', 'ray').set({ name: 'Dr. Ray', clinicId: 'blue-bark' }),
   careDocs('vetClinics', 'blue-bark').set({
     name: 'Blue Bark Vet',
     phone: '555-0100',
@@ -972,7 +1064,9 @@ await Promise.all([
     notes: CARE_SECRET,
     lastEditedAt: NOW - 15,
   }),
-  careDocs('visits', 'next').set(vetVisit(['mochi', 'juniper'])),
+  careDocs('visits', 'next').set(
+    vetVisit(['mochi', 'juniper'], { doctorId: 'lee' }),
+  ),
   careDocs('visits', 'custom').set(
     vetVisit(['juniper'], {
       clinicId: null,
@@ -984,12 +1078,29 @@ await Promise.all([
   careDocs('visits', 'old').set(
     vetVisit(['mochi'], { scheduledAt: TODAY - 60 * DAY }),
   ),
-  careDocs('visits', 'done').set(vetVisit(['mochi'], { status: 'completed' })),
+  careDocs('visits', 'done').set(
+    vetVisit(['mochi'], {
+      status: 'completed',
+      scheduledAt: TODAY - 45 * DAY,
+      doctorId: 'ray',
+      costCents: EXPENSE_AMOUNT,
+    }),
+  ),
+  careDocs('visits', 'ancient').set(
+    vetVisit(['mochi'], {
+      status: 'completed',
+      scheduledAt: TODAY - 400 * DAY,
+    }),
+  ),
+  careDocs('visits', 'called-off').set(
+    vetVisit(['mochi'], { status: 'cancelled', scheduledAt: TODAY - 20 * DAY }),
+  ),
   careDocs('visits', 'nocat').set(vetVisit(['gone-cat'])),
   careDocs('vaccinations', 'rabies').set({
     catId: 'mochi',
     name: 'Rabies',
     history: [{ lotNumber: CARE_SECRET }],
+    lastAdministeredAt: Date.UTC(2025, 10, 3),
     expiresAt: TODAY + 20 * DAY,
     lastEditedAt: NOW - 16,
   }),
@@ -1007,6 +1118,7 @@ await Promise.all([
     catIds: ['mochi', 'juniper'],
     name: 'Flea and tick',
     history: [{ dosage: CARE_SECRET }],
+    lastAdministeredAt: null,
     expiresAt: TODAY - 5 * DAY,
     lastEditedAt: NOW - 17,
   }),
@@ -1093,7 +1205,15 @@ const runNineLives = async (uid: string, category: string) => {
     category,
     cursor: null,
     resumeState: null,
-    windowStart: WINDOW_START,
+    windowStart:
+      TODAY -
+      Math.max(
+        30,
+        nineLivesAdapter.manifest.categories.find(
+          (entry) => entry.id === category,
+        )?.historyDays ?? 0,
+      ) *
+        DAY,
   });
   assert.equal(page.isFull, true);
   assert.equal(page.isDone, true);
@@ -1106,16 +1226,31 @@ assert.deepEqual(refs(careCats).sort(), [
   'households/home/cats/mochi',
 ]);
 assert.ok(careCats.every((record) => record.kind === 'pet'));
+const mochiRecord = careCats.find((record) =>
+  record.sourceRef.endsWith('mochi'),
+);
+assert.equal(mochiRecord?.title, 'Mochi');
 assert.equal(
-  careCats.find((record) => record.sourceRef.endsWith('mochi'))?.title,
-  'Mochi',
+  mochiRecord?.detail,
+  'Born Mar 4, 2021 · Siamese · Food: Royal Canin dry',
+);
+assert.equal(
+  careCats.find((record) => record.sourceRef.endsWith('juniper'))?.detail,
+  'Born about Jun 1, 2023 · Tabby',
 );
 
 const careVisits = await runNineLives(OWNER, 'vetVisits');
 assert.deepEqual(refs(careVisits).sort(), [
   'households/home/visits/custom',
+  'households/home/visits/done',
   'households/home/visits/next',
 ]);
+const doneVisit = careVisits.find((record) =>
+  record.sourceRef.endsWith('done'),
+);
+assert.equal(doneVisit?.subtitle, 'Past visit');
+assert.equal(doneVisit?.detail, 'Doctor: Dr. Ray');
+assert.equal(doneVisit?.startAt, TODAY - 45 * DAY);
 const nextVisit = careVisits.find((record) =>
   record.sourceRef.endsWith('next'),
 );
@@ -1124,6 +1259,8 @@ assert.equal(nextVisit?.title, 'Mochi and Juniper: Checkup');
 assert.equal(nextVisit?.placeLabel, 'Blue Bark Vet');
 assert.equal(nextVisit?.startAt, TODAY + 3 * DAY + 9 * 3_600_000);
 assert.equal(nextVisit?.isAllDay, false);
+assert.equal(nextVisit?.subtitle, null);
+assert.equal(nextVisit?.detail, 'Doctor: Dr. Lee');
 assert.equal(nextVisit?.sourceUpdatedAt, NOW - 11);
 const customVisit = careVisits.find((record) =>
   record.sourceRef.endsWith('custom'),
@@ -1141,6 +1278,11 @@ assert.equal(rabies?.kind, 'task');
 assert.equal(rabies?.title, 'Mochi: Rabies');
 assert.equal(rabies?.dueAt, TODAY + 20 * DAY);
 assert.equal(rabies?.isAllDay, true);
+assert.equal(rabies?.detail, 'Last given Nov 3, 2025');
+assert.equal(
+  careDue.find((record) => record.sourceRef.endsWith('flea'))?.detail,
+  null,
+);
 assert.equal(
   careDue.find((record) => record.sourceRef.endsWith('flea'))?.title,
   'Mochi and Juniper: Flea and tick',
@@ -1150,6 +1292,7 @@ const careClinics = await runNineLives(OWNER, 'clinics');
 assert.deepEqual(refs(careClinics), ['households/home/vetClinics/blue-bark']);
 assert.equal(careClinics[0].kind, 'place');
 assert.equal(careClinics[0].title, 'Blue Bark Vet');
+assert.equal(careClinics[0].detail, 'Doctors: Dr. Lee, Dr. Ray');
 assert.deepEqual(careClinics[0].extra, {
   phone: '555-0100',
   address: '1 Cat Lane',
@@ -1925,16 +2068,21 @@ const waitBox = async (
   emoji: string,
   revealedFlags: boolean[],
   key = SPACE_KEY,
+  revealRequestedBy: {
+    userId: string;
+    method: string;
+    requestedAt: number;
+  }[] = [],
 ) => {
   const box = waitSpaces.doc(space).collection('boxes').doc(id);
   await box.set({
     name: sealed(name, key),
     emoji: sealed(emoji, key),
-    description: sealed('SECRET DESCRIPTION'),
+    description: sealed('Things to try together'),
     isDefault: false,
     createdBy: OWNER,
     revealHistory: [],
-    revealRequestedBy: [],
+    revealRequestedBy,
   });
   await Promise.all(
     revealedFlags.map((flag, index) =>
@@ -1948,8 +2096,13 @@ await Promise.all([
 ]);
 await Promise.all([
   waitBox('wtw-home', 'dates', 'Date ideas', '🍿', [true, true, false]),
-  waitBox('wtw-home', 'trips', 'Trips', '✈️', [false]),
-  waitBox('wtw-home', 'empty', 'Gifts', '🎁', []),
+  waitBox('wtw-home', 'trips', 'Trips', '✈️', [false], SPACE_KEY, [
+    { userId: HOUSEMATE, method: 'raffle', requestedAt: NOW },
+  ]),
+  waitBox('wtw-home', 'empty', 'Gifts', '🎁', [], SPACE_KEY, [
+    { userId: OWNER, method: 'raffle', requestedAt: NOW },
+    { userId: HOUSEMATE, method: 'raffle', requestedAt: NOW },
+  ]),
   waitBox('wtw-home', 'garbled', 'Garbled', '🔒', [true], WRONG_KEY),
   waitBox('wtw-stranger', 'hidden', 'Hidden box', '🙈', [true, false]),
 ]);
@@ -2045,22 +2198,23 @@ const countsOf = (ref: string) => {
   const record = boxCounts.find((one) => one.sourceRef === ref);
   assert.ok(record, ref);
   assert.equal(record.kind, 'countSummary');
+  assert.equal(record.detail, 'Things to try together');
   return [record.title, record.subtitle, record.extra];
 };
 assert.deepEqual(countsOf('spaces/wtw-home/boxes/dates'), [
   'Date ideas',
   '🍿',
-  { items: 3, revealed: 2, notYetRevealed: 1 },
+  { items: 3, revealed: 2, notYetRevealed: 1, revealsWaiting: 0 },
 ]);
 assert.deepEqual(countsOf('spaces/wtw-home/boxes/trips'), [
   'Trips',
   '✈️',
-  { items: 1, revealed: 0, notYetRevealed: 1 },
+  { items: 1, revealed: 0, notYetRevealed: 1, revealsWaiting: 1 },
 ]);
 assert.deepEqual(countsOf('spaces/wtw-home/boxes/empty'), [
   'Gifts',
   '🎁',
-  { items: 0, revealed: 0, notYetRevealed: 0 },
+  { items: 0, revealed: 0, notYetRevealed: 0, revealsWaiting: 0 },
 ]);
 assertShape(boxCounts);
 boxCounts.forEach((record) => {
@@ -2071,8 +2225,7 @@ boxCounts.forEach((record) => {
   assert.ok(
     !flatten(record).some(
       (value) =>
-        typeof value === 'string' &&
-        /SECRET|INVITE|invite|description/i.test(value),
+        typeof value === 'string' && /SECRET|INVITE|invite/i.test(value),
     ),
     record.sourceRef,
   );
