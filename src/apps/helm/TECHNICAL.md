@@ -1912,3 +1912,11 @@ Nothing here is built in the MVP; each line names the MVP field or contract that
 - **Browse ordered by use:** tiles carry a declared `importance`; a later ordering by the person's own use counts each view's opens on the device (never on the server) and changes only the order inside each size, never the cap (Next).
 - **Groups and households:** new `who.kind` values with member links; tiers and roles already apply.
 - **Apple contacts and sign-in:** site-wide work (an auth provider, a connector), not Helm's.
+
+## 28. When Helm graduates
+
+Helm's own steps on top of `GRADUATING.md`'s checklist.
+
+- **An official listing in Gemini.** A custom app added by URL shows on Google's account-linking page as "[Custom] Moondreams" (the name seems to come from the site's domain) with a grey placeholder icon, and nothing the server sends changes it. Listing Helm in Google Connected Console gives it its own name and icon: apply for access, serve the domain check at `/.well-known/google-connected-apps`, then supply the name, a one-sentence description under 30 words, a 512×512 PNG or JPEG icon, at least three capabilities, at least three example prompts (two starting with "Helm"), and public Terms of Service and Privacy Policy pages, then pass Google's review. The category can't be changed later. Requirements: developers.google.com/connected-apps/gpc/prerequisites.
+- **The assistant address moves.** Claude and Gemini connections point at `https://apps.moondreams.dev/mcp/helm`; on a new domain, keep that path answering (or redirecting) until people have reconnected, and update WorkOS's Login URI (`/connect-assistant`), its resource indicators and the setup script's `RESOURCES`.
+
