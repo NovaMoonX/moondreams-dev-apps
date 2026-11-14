@@ -2480,6 +2480,12 @@ export const HELM_COPY = {
   habitCheckInQuiet: 'Done.',
   habitCheckInTakenBack: 'Took that back.',
   habitCheckInFailed: "That didn't tick. Try again.",
+  habitAlreadyDoneAt: (subject: string, time: string) =>
+    `${subject} already done at ${time}.`,
+  habitAlreadyDoneParts: (name: string, parts: string[]) =>
+    `${name} already done: ${parts.join(', ')}.`,
+  habitAlreadyDonePart: (label: string, time: string) => `${label} at ${time}`,
+  habitUndoKept: 'Kept it as it is now: it changed after that.',
   projectGone: 'This project is gone.',
   projectUnreadable: "This project couldn't be opened.",
   projectUntitled: 'A project',

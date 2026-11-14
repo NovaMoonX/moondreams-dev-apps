@@ -391,7 +391,16 @@ export function useHelmVoice() {
       else say(HELM_COPY.talkSendFailed);
       return true;
     }
-    if (turn.kind === 'send' && (await takeCheckIn(turn.text, isSpoken))) {
+    if (
+      turn.kind === 'send' &&
+      (await takeCheckIn(
+        turn.text,
+        isSpoken,
+        isSpoken
+          ? { sttProvider: sttProvider ?? 'browser', interrupted }
+          : null,
+      ))
+    ) {
       return true;
     }
     if (!isSpoken) {
@@ -411,23 +420,48 @@ export function useHelmVoice() {
     return true;
   }
 
-  /** A plain check-in on a habit due today ("took my evening pills"): ticked on the device with no model call and offline, recorded with Undo and answered in a few words. Anything more than the check-in goes on as a turn. */
-  async function takeCheckIn(text: string, isSpoken: boolean) {
+  /** A plain check-in on a habit due today ("took my evening pills"): ticked on the device with no model call and offline, and kept in the thread as a turn whose card is the habit line with Undo. Anything more than the check-in goes on as a turn. */
+  async function takeCheckIn(
+    text: string,
+    isSpoken: boolean,
+    voiceTurn: {
+      sttProvider: string;
+      interrupted: string | null;
+    } | null = null,
+  ) {
     if (!uid) return false;
-    const result = await takeDeviceCheckIn(uid, text).catch(
-      (error: unknown) => {
-        console.error('Helm check-in was not read', error);
-        return null;
-      },
-    );
+    const turn = getNextTurn();
+    const result = await takeDeviceCheckIn(uid, text, {
+      sessionId: turn.sessionId,
+      turnIndex: turn.turnIndex,
+      inputMode: isSpoken ? 'voice' : 'typed',
+      sttProvider: isSpoken ? (voiceTurn?.sttProvider ?? 'browser') : null,
+      interruptedCaptureId: voiceTurn?.interrupted ?? null,
+      presence: isSpoken
+        ? { startedByWake: isWakeStarted.current, ...readPresence() }
+        : null,
+    }).catch((error: unknown) => {
+      console.error('Helm check-in was not read', error);
+      return null;
+    });
     if (result === null || result.kind === 'none') return false;
     if (result.kind === 'said') {
       if (isSpoken) say(result.line);
       else addToast({ title: result.line, type: 'info' });
       return true;
     }
-    const entry = { undo: result.undo, at: Date.now() };
-    lastCheckIn.current = entry;
+    const { recorded } = result;
+    const createdAt = Date.now();
+    if (recorded) {
+      recordSentTurn(
+        uid,
+        { ...turn, leadId: null, joinedCount: 0, createdAt },
+        recorded.captureId,
+      );
+    }
+    const entry = { undo: result.undo, at: createdAt };
+    // With a recorded turn, "undo that" and the card's Undo go through its execution; the device's own undo is for a tick written without one.
+    if (!recorded) lastCheckIn.current = entry;
     result.committed.catch((error: unknown) => {
       console.error('Helm check-in was not saved', error);
       if (lastCheckIn.current === entry) lastCheckIn.current = null;
@@ -440,6 +474,7 @@ export function useHelmVoice() {
         ? HELM_COPY.habitCheckInQuiet
         : result.line;
     if (isSpoken) say(line);
+    if (recorded) return true;
     addToast({
       title: result.line,
       type: 'success',

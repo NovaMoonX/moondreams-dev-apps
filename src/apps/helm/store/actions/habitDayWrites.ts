@@ -44,7 +44,21 @@ export const tallyHabit = (
     merge: true,
   });
 
-export const untallyHabit = (uid: string, dayKey: string, habitId: string) =>
-  setDoc(dayRef(uid, dayKey), buildUntallyPatch(dayKey, habitId), {
-    merge: true,
-  });
+/** Takes one off a tally, never below none: with nothing counted locally there is nothing to take back. */
+export const untallyHabit = (
+  uid: string,
+  dayKey: string,
+  habitId: string,
+  localCount = 1,
+) =>
+  localCount < 1
+    ? Promise.resolve()
+    : setDoc(dayRef(uid, dayKey), buildUntallyPatch(dayKey, habitId), {
+        merge: true,
+      });
+
+/** A day that was never written (an offline first tick not yet synced) has nothing to take away. */
+export const isMissingDay = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  (error as { code?: unknown }).code === 'not-found';

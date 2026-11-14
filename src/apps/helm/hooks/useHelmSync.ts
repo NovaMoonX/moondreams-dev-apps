@@ -103,6 +103,7 @@ import {
   startOpenTasksListener,
   startProjectTasksListener,
 } from '@apps/helm/store/listeners/taskListener';
+import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { useCaptureOutbox } from '@apps/helm/hooks/useCaptureOutbox';
 import { useCaptureSweep } from '@apps/helm/hooks/useCaptureSweep';
 import { useKeyDateRepair } from '@apps/helm/hooks/useKeyDateRepair';
@@ -247,6 +248,36 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
   useStyleLearning(uid);
 
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);
+  const keyStatus = useAppSelector((state) => state.helm.keyStatus);
+  const { dayKey } = useHabitClock();
+
+  // Its window follows the habit day, so it moves on at the day's turn instead of staying where the sync started.
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready') return;
+    let isCurrent = true;
+    let stop = () => {};
+    getHelmEncryption(uid)
+      .then((encryption) => {
+        if (!isCurrent) return;
+        stop = startHabitDaysListener(
+          uid,
+          createSealedReader(encryption, openJson),
+          getHabitDaysWindow(Date.parse(`${dayKey}T00:00:00Z`)),
+          (days) => dispatch(setHabitDays(days)),
+          (error) => {
+            console.error('Helm habit days listener failed', error);
+            dispatch(setHabitDaysFailed());
+          },
+        );
+      })
+      .catch((error: unknown) =>
+        console.error('Helm habit days listener did not start', error),
+      );
+    return () => {
+      isCurrent = false;
+      stop();
+    };
+  }, [uid, keyStatus, keyAttempt, dayKey, dispatch]);
 
   useEffect(() => {
     if (!uid) return;
@@ -374,16 +405,6 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm habits listener failed', error);
               dispatch(setHabitsFailed());
-            },
-          ),
-          startHabitDaysListener(
-            uid,
-            read,
-            getHabitDaysWindow(Date.now()),
-            (days) => dispatch(setHabitDays(days)),
-            (error) => {
-              console.error('Helm habit days listener failed', error);
-              dispatch(setHabitDaysFailed());
             },
           ),
           startKeyDateIndexListener(

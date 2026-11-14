@@ -245,7 +245,21 @@ export function setHabitStatus(
   };
   return {
     written: updateDoc(ref, { ...fields, lastEditedAt: now }),
-    undo: () => updateDoc(ref, { ...before, lastEditedAt: Date.now() }),
+    /** Puts the earlier state back only while the habit is still as this change left it; 'kept' when something wrote its status or history since. */
+    undo: () =>
+      runTransaction(db, async (transaction): Promise<'undone' | 'kept'> => {
+        const snapshot = await transaction.get(ref);
+        const live = snapshot.data() as Habit | undefined;
+        if (
+          !live ||
+          live.status !== fields.status ||
+          live.history.length !== fields.history.length
+        ) {
+          return 'kept';
+        }
+        transaction.update(ref, { ...before, lastEditedAt: Date.now() });
+        return 'undone';
+      }),
   };
 }
 

@@ -3,6 +3,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { HELM_COPY } from '@apps/helm/constants';
 import { habitDayKey } from '@apps/helm/engine/habitDay';
 import {
+  isMissingDay,
   tallyHabit,
   tickHabit,
   untallyHabit,
@@ -36,7 +37,9 @@ export function useHabitChecks(uid: string | null, timeZone: string) {
       habitDayKey(line.check?.at ?? Date.now(), timeZone),
       line.habit.id,
       line.windowId,
-    ).catch(fail);
+    ).catch((error: unknown) => {
+      if (!isMissingDay(error)) fail(error);
+    });
   };
 
   const tally = (line: HabitLine) => {
@@ -51,6 +54,7 @@ export function useHabitChecks(uid: string | null, timeZone: string) {
       uid,
       habitDayKey(line.lastAt ?? Date.now(), timeZone),
       line.habit.id,
+      line.count,
     ).catch(fail);
   };
 
