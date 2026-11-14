@@ -197,3 +197,17 @@ export async function updateToLatest(latestVersion: string) {
   window.location.reload();
   return true;
 }
+
+/**
+ * Reloads with this build's cached files dropped and the worker re-checked, for a screen whose file
+ * the worker could not hand over even after a reload. The worker fetches dropped files from the network.
+ */
+export async function restartWithFreshFiles() {
+  await clearPrecache().catch(() => undefined);
+  const registration =
+    'serviceWorker' in navigator
+      ? await navigator.serviceWorker.getRegistration().catch(() => undefined)
+      : undefined;
+  await registration?.update().catch(() => undefined);
+  window.location.reload();
+}
