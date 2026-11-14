@@ -2,7 +2,8 @@ import type { SealedPayload } from '../../../appKeys/seal.js';
 import { isPrivateInEffect, readPrivacyFacts } from '../privacy.js';
 import { toPrivateMark } from './contextPeople.js';
 import type { Effect, EffectRef } from './executeCommands.js';
-import { mergeSoundsLike } from './heardNames.js';
+import { mergeSoundsLike, type HeardName } from './heardNames.js';
+import { toComparable } from '../../../vendor/optionMatchUtils.js';
 import type { NoteSoundsLikeCommand } from './commands.js';
 import { buildSoundsLikeLine } from './summaries.js';
 
@@ -30,11 +31,14 @@ const toTexts = (value: unknown) =>
     ? value.filter((entry): entry is string => typeof entry === 'string')
     : [];
 
-/** Keeps each spelled correction that adds something new for someone who is still there: the heard form is written to that person's sealed `soundsLike`, and the turn before's tasks that name no one of this person gain the link. Each is an effect, so Undo restores both. */
+/** Keeps each spelled correction that adds something new for someone who is still there: the heard form is written to that person's sealed `soundsLike`, and the turn before's tasks linked to the person it was wrongly heard as swap that link for this one. Each is an effect, so Undo restores both. */
 export function planSoundsLike(input: {
   commands: NoteSoundsLikeCommand[];
   whos: Map<string, Record<string, unknown> | null>;
   earlierTasks: Map<string, EarlierTask>;
+  heardNames: HeardName[];
+  /** Every listed person's names and aliases, so a heard form never becomes someone else's. */
+  people: { id: string; names: string[] }[];
   now: number;
   isUnattended: boolean;
   seal: (fields: Record<string, unknown>) => SealedPayload;
@@ -55,6 +59,9 @@ export function planSoundsLike(input: {
       Array.isArray(opened.soundsLike) ? toTexts(opened.soundsLike) : null,
       command.heardSpan,
       [opened.name, ...toTexts(opened.aliases)],
+      input.people
+        .filter((person) => person.id !== command.whoId)
+        .flatMap((person) => person.names),
     );
     if (!next) return plan;
     const isPrivate = isPrivateInEffect(
@@ -65,9 +72,32 @@ export function planSoundsLike(input: {
     );
     const name =
       input.isUnattended && isPrivate ? PRIVATE_PERSON_LABEL : opened.name;
+    const wrongIds = new Set(
+      input.heardNames
+        .filter(
+          (entry) =>
+            toComparable(entry.heard) === toComparable(command.heardSpan),
+        )
+        .flatMap((entry) => [entry.recordId, ...entry.candidateIds])
+        .filter((id): id is string => id !== null && id !== command.whoId),
+    );
     const links = [...input.earlierTasks.entries()].flatMap(([id, task]) =>
-      task.status === 'open' && !task.whoIds.includes(command.whoId)
-        ? [{ id, task, whoIds: [...task.whoIds, command.whoId] }]
+      task.status === 'open' &&
+      !task.whoIds.includes(command.whoId) &&
+      task.whoIds.some((whoId) => wrongIds.has(whoId))
+        ? [
+            {
+              id,
+              task,
+              whoIds: [
+                ...new Set(
+                  task.whoIds.map((whoId) =>
+                    wrongIds.has(whoId) ? command.whoId : whoId,
+                  ),
+                ),
+              ],
+            },
+          ]
         : [],
     );
     const whoEffect: Effect = {
