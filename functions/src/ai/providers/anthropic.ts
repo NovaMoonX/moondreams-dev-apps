@@ -131,7 +131,8 @@ export function createAnthropicProvider(
           input_schema:
             tool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
         })),
-        // Not strict: the API refuses a strict schema with more than 16 nullable fields, and every answer is normalized anyway.
+        // Not strict: the API refuses a strict schema with more than 16 nullable
+        // fields, so each caller checks the answer's shape in code.
         ...terminals.map((tool, index) => ({
           name: tool.name,
           description: tool.description,
@@ -244,10 +245,19 @@ export function createAnthropicProvider(
         error instanceof Anthropic.BadRequestError ||
         error instanceof Anthropic.UnprocessableEntityError
       ) {
+        const body = (
+          error.error as { error?: { type?: string; message?: string } }
+        )?.error;
+        const message = body?.message ?? '';
+        // Only a complaint about the request's shape is kept in words; another could quote the person's text.
         logger.warn('ai.requestRejected', {
           role,
           status: error.status,
-          reason: error.message.slice(0, 300),
+          type: body?.type ?? null,
+          reason: /^tools\.|schema/i.test(message)
+            ? message.slice(0, 300)
+            : null,
+          reasonLength: message.length,
         });
       }
       return end('error', null, getErrorCode(error));

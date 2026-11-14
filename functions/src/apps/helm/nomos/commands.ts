@@ -529,7 +529,7 @@ export interface MediaDecision {
   topicIds: string[];
 }
 
-/** One flat object per command, every field required and nullable, so the model's reply is checked against it before code reads it. */
+/** One flat object per command, every field required and nullable; sent non-strict (too many nullable fields for strict mode), so `normalizeNomosReply` checks the reply's shape. */
 export const FILE_RESULTS_TOOL: TerminalTool = {
   name: 'file_results',
   description:
