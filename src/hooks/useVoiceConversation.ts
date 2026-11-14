@@ -717,6 +717,7 @@ export function useVoiceConversation({
       run.current.isCancelled = true;
       window.clearTimeout(run.current.quietId);
       window.clearTimeout(run.current.holdId);
+      window.clearTimeout(run.current.showId);
       run.current.cancelListening?.();
       pauseOnHide.current();
       queueRef.current?.clear();

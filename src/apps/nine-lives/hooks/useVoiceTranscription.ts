@@ -6,7 +6,10 @@ import {
   rememberRecognitionRefused,
   wasMicrophoneGranted,
 } from '@/lib/speech/microphonePermission';
-import { recordSpeechEvent } from '@/lib/speech/speechDiagnostics';
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 
 interface SpeechRecognitionAlternativeLike {
   transcript: string;
@@ -177,6 +180,7 @@ export function useVoiceTranscription(): VoiceTranscription {
     recognition.onend = () => {
       if (isStoppingRef.current) {
         isStoppingRef.current = false;
+        setIsStarting(false);
         setIsListening(false);
         recognitionRef.current = null;
         finish();
@@ -192,7 +196,17 @@ export function useVoiceTranscription(): VoiceTranscription {
       setIsListening(true);
     };
     recognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (thrown) {
+      recordSpeechEvent(`Start threw: ${describeThrown(thrown)}`);
+      const nextError = new Error(getSpeechRecognitionError('aborted'));
+      setError(nextError.message);
+      setIsStarting(false);
+      setIsListening(false);
+      recognitionRef.current = null;
+      finish(nextError);
+    }
   }, [finish]);
 
   useEffect(() => {
@@ -218,7 +232,8 @@ export function useVoiceTranscription(): VoiceTranscription {
     setIsBlocked(false);
     isStoppingRef.current = false;
     // Until the microphone is allowed, Listening waits for the browser to start, so a refusal never flashes it.
-    if (peekMicrophonePermission() === 'granted') setIsListening(true);
+    if (peekMicrophonePermission() === 'granted' || wasMicrophoneGranted())
+      setIsListening(true);
     else setIsStarting(true);
     createAndStartRecognition();
   }, [createAndStartRecognition]);
