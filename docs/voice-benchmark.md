@@ -77,11 +77,11 @@ Read on 2026-11-09 from the providers' docs (search results; the pages could not
 
 ## Data use
 
-All of this is from the providers' docs (search results, 2026-11-09), unverified until the first real run. Still unverified: the model id `gemini-3.8-flash-lite-tts`, the voice ids, Chirp 3 HD with `OGG_OPUS`, Gemini's PCM at 24 kHz, the 2027 Gemini price rise, the `mip_opt_out` default, Gemini on Vertex, and both key checks' 200 answers.
+All of this is from the providers' docs (search results, 2026-11-09), unverified until the first real run. Still unverified: the model id `gemini-3.8-flash-lite-tts`, the voice ids, Chirp 3 HD streaming as 24 kHz PCM, Gemini's PCM at 24 kHz, the 2027 Gemini price rise, the `mip_opt_out` default, Gemini on Vertex, and both key checks' 200 answers.
 
 - Deepgram: the requests send `mip_opt_out=true`, said in the docs to be on `/v1/speak` and on by default otherwise (unverified), so what is sent is not used to improve their models.
 - Gemini: use a key from a project with billing on. The paid tier is not used to improve Google's products; the free tier may be. The model is said to be on Vertex AI at the `global` location (unverified).
-- Google Cloud TTS: stateless and not logged under Google Cloud's terms. Streaming is gRPC only, so the REST call returns the whole clip.
+- Google Cloud TTS: stateless and not logged under Google Cloud's terms. The site streams it over gRPC (`streamingSynthesize`) as raw 24 kHz PCM, so audio plays while it is still being made; the benchmark's own reading uses the same stream.
 
 ## The pick
 

@@ -63,6 +63,7 @@ import {
   parsePcmFormat,
   toFloatSamples,
   type PcmContext,
+  type PcmFormat,
 } from '../../src/lib/speech/voice/pcmStream.ts';
 import { createPlaybackQueue } from '../../src/lib/speech/voice/playbackQueue.ts';
 import {
@@ -752,8 +753,8 @@ console.log('speechShared: on-device recognition checks passed');
   );
   const ends = hook.match(/endConversation\(\)/g) ?? [];
   assert.ok(
-    ends.length === 3,
-    'a conversation ends on an end phrase, a stop and the idle gap',
+    ends.length === 4,
+    'a conversation ends on an end phrase, a stop in either phase and the idle gap',
   );
   assert.match(
     hook,
@@ -1323,6 +1324,27 @@ console.log('speechShared: voice router and playback queue checks passed');
     'system',
     'a PCM answer with no audio is spoken by the fallback',
   );
+
+  const shortLine = makeContext();
+  const shortBy = await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array(4800)])),
+    fallback,
+    player: {
+      ...player([]),
+      openStream: async (format: PcmFormat, onStart: () => void) =>
+        createPcmSink({
+          context: shortLine.context,
+          sampleRate: format.sampleRate,
+          onStart,
+        }),
+    },
+  }).speak('Short', options());
+  assert.equal(
+    shortBy,
+    'cloud:googleTts',
+    'a line shorter than the prebuffer still plays in the cloud voice',
+  );
+  assert.equal(shortLine.starts.length, 1, 'its held audio is played');
 
   const stalledBy = await createCloudTts({
     source: streamed(pcmBody([new Uint8Array([1, 0])], true)),

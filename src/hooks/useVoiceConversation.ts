@@ -199,6 +199,7 @@ export function useVoiceConversation({
     speechHeldDay: null as string | null,
     isDeviceSticky: false,
     voice: null as SpeechVoice | null,
+    hasSpokenCloud: false,
     lastLineAt: null as number | null,
     heardBy: 'browser',
     mode: createListeningState('TAP'),
@@ -265,7 +266,8 @@ export function useVoiceConversation({
           lang: speechLang,
         });
         if (choice !== 'cloud' || !cloud) return device;
-        const isFirstLine = run.current.voice === null;
+        const isFirstLine = !run.current.hasSpokenCloud;
+        run.current.hasSpokenCloud = true;
         if (cloud.readVoice) run.current.voice ??= cloud.readVoice();
         return createCloudTts({
           source: run.current.voice
@@ -310,6 +312,7 @@ export function useVoiceConversation({
   const endConversation = () => {
     run.current.isDeviceSticky = false;
     run.current.voice = null;
+    run.current.hasSpokenCloud = false;
     run.current.lastLineAt = null;
   };
 
@@ -566,6 +569,7 @@ export function useVoiceConversation({
   const stop = () => {
     if (run.current.mode.phase !== 'OFF') {
       finish();
+      endConversation();
       return;
     }
     getQueue().clear();

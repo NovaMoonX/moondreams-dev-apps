@@ -274,8 +274,11 @@ export const streamSpeech = onRequest(
 
     const aborter = new AbortController();
     const isEnded = { value: false };
+    const isClientGone = { value: false };
     res.on('close', () => {
-      if (!isEnded.value) aborter.abort();
+      if (isEnded.value) return;
+      isClientGone.value = true;
+      aborter.abort();
     });
     // The timeout guards only the wait for the first audio; a long line may stream for longer.
     const firstAudioTimer = setTimeout(
@@ -296,10 +299,11 @@ export const streamSpeech = onRequest(
         signal,
       })
       .catch(async (error: unknown) => {
-        // A stale channel after a long idle answers UNAVAILABLE; the next request builds a fresh client.
-        kept.googleTts = null;
         await release();
+        if (isClientGone.value) return null;
         const status = toStatus(error);
+        // A stale channel after a long idle answers UNAVAILABLE; the next request builds a fresh client.
+        if (status === 503) kept.googleTts = null;
         logger.error('voice.speechFailed', {
           event: 'voice.speechFailed',
           status,
@@ -318,8 +322,9 @@ export const streamSpeech = onRequest(
     const first = await reader.read().catch(() => null);
     clearTimeout(firstAudioTimer);
     if (first === null || first.done || first.value.length === 0) {
-      kept.googleTts = null;
       await release();
+      if (isClientGone.value) return;
+      kept.googleTts = null;
       logger.error('voice.speechFailed', {
         event: 'voice.speechFailed',
         status: null,

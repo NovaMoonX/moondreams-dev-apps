@@ -184,22 +184,28 @@ export const createCloudTts = ({
       try {
         await pump();
       } catch (error) {
+        sink.end();
         if (!state.isPlaying) throw error;
         if (!signal.aborted) {
           console.error('The cloud voice stopped partway', error);
         }
       }
+      sink.end();
       if (!state.isPlaying && !signal.aborted) {
         throw new Error('The cloud voice sent no audio');
       }
-      sink.end();
+      // A suspended context freezes its clock: wait while the audio still advances, give up once it stalls.
       await new Promise<void>((resolve) => {
-        const id = setTimeout(resolve, sink.remainingMs() + DONE_GRACE_MS);
-        timers.push(id);
-        void sink.done.then(() => {
-          clearTimeout(id);
-          resolve();
-        });
+        const wait = (before: number) => {
+          const id = setTimeout(() => {
+            const left = sink.remainingMs();
+            if (left > 0 && left < before) wait(left);
+            else resolve();
+          }, before + DONE_GRACE_MS);
+          timers.push(id);
+        };
+        wait(sink.remainingMs());
+        void sink.done.then(resolve);
       });
       sink.stop();
     };

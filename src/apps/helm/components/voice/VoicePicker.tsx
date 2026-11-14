@@ -154,7 +154,7 @@ function VoicePicker({ onClose }: VoicePickerProps) {
       .finally(() => setPendingSpeed(null));
   };
 
-  const useCloudVoice = () => {
+  const switchToCloudVoice = () => {
     if (!user) return;
     setVoiceMode(user.uid, 'cloudWhenOnline').catch((error: unknown) => {
       console.error('Helm voice mode was not changed', error);
@@ -172,7 +172,7 @@ function VoicePicker({ onClose }: VoicePickerProps) {
               type='button'
               size='sm'
               className={join('mt-2', NOTICE_ACTION_CLASSES.info)}
-              onClick={useCloudVoice}
+              onClick={switchToCloudVoice}
             >
               {HELM_COPY.voicePickerUseCloud}
             </Button>
