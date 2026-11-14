@@ -211,11 +211,65 @@ async function reloadIntoLatest(latestVersion: string) {
   return true;
 }
 
+// Static imports only (`from"./x.js"`, `import"./x.js"`): a lazy `import("./x.js")` can't fail the module that names it.
+const STATIC_IMPORT = /(?:from|import)\s*["'](\.\/[^"']+\.js)["']/g;
+
+type FileProblem = { url: string; note: string };
+
 /**
- * Reloads with this build's cached files dropped and the worker re-checked, for a screen whose file
- * the worker could not hand over even after a reload. The worker fetches dropped files from the network.
+ * Fetches a build file and every file it imports, as the page would, and lists the ones that don't come back as
+ * JavaScript. A module fails to load when any file under it does, and the error names only the top one.
  */
-export async function restartWithFreshFiles() {
+export async function checkModuleFiles(entry: string, init?: RequestInit) {
+  const seen = new Set<string>();
+  const problems: FileProblem[] = [];
+  const visit = async (url: string): Promise<void> => {
+    if (seen.has(url)) return;
+    seen.add(url);
+    const response = await fetch(url, init).catch(() => null);
+    const type = response?.headers.get('content-type') ?? '';
+    if (!response?.ok || !type.includes('javascript')) {
+      problems.push({ url, note: `${response?.status ?? 'failed'} ${type || 'no type'}` });
+      return;
+    }
+    const text = await response.text();
+    const imports = Array.from(text.matchAll(STATIC_IMPORT), (match) => new URL(match[1], url).href);
+    await Promise.all(imports.map(visit));
+  };
+  await visit(entry);
+  return { checkedCount: seen.size, problems };
+}
+
+const dropFromPrecache = async (url: string) => {
+  if (!('caches' in window)) return;
+  const names = await caches.keys();
+  await Promise.all(
+    names
+      .filter((name) => name.startsWith('workbox-precache'))
+      .map(async (name) => (await caches.open(name)).delete(url, { ignoreSearch: true })),
+  );
+};
+
+/**
+ * Replaces the files under a module that came back wrong (a page stored under a file's name, in the worker's cache or
+ * the browser's): each is dropped from the worker's cache and fetched again past the browser's. Online only.
+ */
+export async function repairModuleFiles(entry: string) {
+  if (!navigator.onLine) return;
+  const { problems } = await checkModuleFiles(entry).catch(() => ({ problems: [] as FileProblem[] }));
+  await Promise.all(
+    problems.map(async ({ url }) => {
+      await dropFromPrecache(url).catch(() => undefined);
+      await fetch(url, { cache: 'reload' }).catch(() => undefined);
+    }),
+  );
+}
+
+/**
+ * Reloads with this build's cached files dropped, the module that failed and everything under it fetched again past
+ * the browser's cache, and the worker re-checked. The worker fetches dropped files from the network.
+ */
+export async function restartWithFreshFiles(entry: string | null) {
   isUpdatingOnRequest = true;
   // Offline, the dropped files could not be fetched again and every app would stop opening.
   if (!navigator.onLine) {
@@ -223,6 +277,7 @@ export async function restartWithFreshFiles() {
     return;
   }
   await clearPrecache().catch(() => undefined);
+  if (entry) await checkModuleFiles(entry, { cache: 'reload' }).catch(() => undefined);
   const registration =
     'serviceWorker' in navigator
       ? await navigator.serviceWorker.getRegistration().catch(() => undefined)
