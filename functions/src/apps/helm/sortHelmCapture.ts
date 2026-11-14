@@ -970,14 +970,22 @@ async function readContextFacts(
   key: HelmKey,
   text: string,
   selfWhoId: string | null,
+  isAppsHeldBack: boolean,
 ): Promise<{ facts: ContextFact[]; selfFacts: ContextSelfFact[] }> {
   try {
-    const factSnap = await firestore
+    const snapshot = await firestore
       .collection(`${base}/facts`)
       .where('status', 'in', ['confirmed', 'inferred'])
       .orderBy('createdAt', 'desc')
       .limit(MAX_REPEAT_FACTS_READ)
       .get();
+    // A fact learned from an app's record is held back with the record.
+    const factSnap = {
+      docs: snapshot.docs.filter((doc) => {
+        const ids: unknown = doc.get('syncedIds');
+        return !isAppsHeldBack || !isStringList(ids) || ids.length === 0;
+      }),
+    };
     const subjectIdsOf = (doc: QueryDocumentSnapshot) => {
       const ids: unknown = doc.get('subjectIds');
       return isStringList(ids) ? ids : [];
@@ -1521,35 +1529,49 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         };
 
   const profileRead = firestore.doc(base).get();
-  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced, style] =
-    await Promise.all([
-      profileRead,
-      firestore
-        .collection(`${base}/tasks`)
-        .where('status', '==', 'open')
-        .orderBy('createdAt', 'desc')
-        .limit(MAX_CONTEXT_TASKS)
-        .get(),
+  const [
+    profile,
+    openTasks,
+    alreadyMade,
+    screen,
+    earlierTurns,
+    contextRead,
+    style,
+  ] = await Promise.all([
+    profileRead,
+    firestore
+      .collection(`${base}/tasks`)
+      .where('status', '==', 'open')
+      .orderBy('createdAt', 'desc')
+      .limit(MAX_CONTEXT_TASKS)
+      .get(),
+    mode === 'rest'
+      ? readAlreadyMade(firestore, base, key, capture.executionIds ?? [])
+      : Promise.resolve(undefined),
+    readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen)),
+    readEarlierTurns(firestore, base, key, capture),
+    profileRead.then((snapshot) =>
       mode === 'rest'
-        ? readAlreadyMade(firestore, base, key, capture.executionIds ?? [])
-        : Promise.resolve(undefined),
-      readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen)),
-      readEarlierTurns(firestore, base, key, capture),
-      profileRead.then((snapshot) =>
-        mode === 'rest'
-          ? []
-          : readContextSynced(
-              firestore,
-              uid,
-              key,
-              capture.createdAt,
-              toKnownZone(
-                (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
-              ),
+        ? { copies: [], heldBack: [] }
+        : readContextSynced(
+            firestore,
+            uid,
+            key,
+            capture.createdAt,
+            toKnownZone(
+              (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
             ),
-      ),
-      mode === 'rest' ? null : readStyleNotes(firestore, base, key),
-    ]);
+            capture.medium === 'mcp'
+              ? (copies) =>
+                  filterSourcesForOutside(
+                    readScopesOf(capture.outsideReadScopes),
+                    copies,
+                  )
+              : undefined,
+          ),
+    ),
+    mode === 'rest' ? null : readStyleNotes(firestore, base, key),
+  ]);
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
     if (!words?.title) {
@@ -1636,6 +1658,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const timeLeft = () =>
       claimed.startedAt + CALL_BUDGET_MS - Date.now() - RESTART_MARGIN_MS;
     const combined = combineMessages(read.messages);
+    const isAppsHeldBack =
+      read.isOutside && !read.outsideReadScopes.includes('apps');
     const { facts, selfFacts } =
       mode === 'rest'
         ? { facts: [], selfFacts: [] }
@@ -1645,6 +1669,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             key,
             combined.text,
             (profile.data()?.selfWhoId as string | null | undefined) ?? null,
+            isAppsHeldBack,
           );
     const selfWhoId =
       (profile.data()?.selfWhoId as string | null | undefined) ?? null;
@@ -1712,6 +1737,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       .sort(
         (a, b) => Number(b.id === screenRunId) - Number(a.id === screenRunId),
       )
+      // A run's label is a synced record's title, so it is held back with the record.
+      .map((run) =>
+        isAppsHeldBack && run.attachedTo?.kind === 'synced'
+          ? { ...run, attachedLabel: null }
+          : run,
+      )
       .map((run) => toContextRun(run, run.id === screenRunId));
     const trips =
       mode !== 'rest' && procedureRecords.length > 0
@@ -1725,6 +1756,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             return [];
           })
         : [];
+    const synced = contextRead.copies;
     const allSynced = [
       ...synced,
       ...trips.filter((trip) => !synced.some((copy) => copy.id === trip.id)),
@@ -1734,9 +1766,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       : allSynced;
     const heldBackNames = [
       ...new Set(
-        allSynced
-          .filter((copy) => !contextSynced.includes(copy))
-          .map((copy) => connectorLabel(copy.connectorId)),
+        [
+          ...contextRead.heldBack,
+          ...allSynced.filter((copy) => !contextSynced.includes(copy)),
+        ].map((copy) => connectorLabel(copy.connectorId)),
       ),
     ];
     const contextProcedures: ContextProcedure[] = procedureRecords.map(

@@ -131,6 +131,7 @@ const MAX_RESULTS = 10;
 const MAX_SCANNED = 150;
 const MAX_QUERY_CHARS = 100;
 const MAX_CALENDAR_DAYS = 14;
+const OUTSIDE_READ_HEADROOM = 4;
 const MAX_CALENDAR_EVENTS = 40;
 const MAX_MAIL_QUERY_CHARS = 200;
 const MAX_SNIPPET_CHARS = 300;
@@ -411,10 +412,19 @@ export function buildHelmTools(scope: HelmToolScope) {
           firstDay,
           days: Math.min(days, MAX_CALENDAR_DAYS),
           timeZone,
-          limit: MAX_CALENDAR_EVENTS,
+          // Read past the cap for an outside turn, so held-back app events never crowd out the allowed ones.
+          limit: scope.outsideReadScopes
+            ? MAX_CALENDAR_EVENTS * OUTSIDE_READ_HEADROOM
+            : MAX_CALENDAR_EVENTS,
         },
       );
-      return { events: onlyAllowed(events).map(toResult) };
+      const allowed = onlyAllowed(events);
+      return {
+        events: allowed.slice(0, MAX_CALENDAR_EVENTS).map(toResult),
+        ...(allowed.length < events.length && {
+          note: 'Some events come from sources this assistant may not read, so they are left out; the person can open them with its switches in Helm.',
+        }),
+      };
     },
   };
 

@@ -223,9 +223,13 @@ const ALREADY_FILED_TEXT =
 const retryKeyFor = (ctx: McpRequestContext, words: string, now: number) =>
   `mcp_${createHash('sha256')
     .update(
-      [ctx.uid, ctx.clientKey, words, Math.floor(now / RETRY_WINDOW_MS)].join(
-        '|',
-      ),
+      [
+        ctx.uid,
+        ctx.clientKey,
+        [...ctx.readScopes].sort().join(','),
+        words,
+        Math.floor(now / RETRY_WINDOW_MS),
+      ].join('|'),
     )
     .digest('hex')
     .slice(0, 28)}`;
