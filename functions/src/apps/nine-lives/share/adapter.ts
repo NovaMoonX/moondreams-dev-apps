@@ -24,6 +24,9 @@ const manifest = readManifest();
 
 const DAY_MS = 86_400_000;
 const HOUSEHOLD_LIMIT = 50;
+const UPCOMING_LOOKBACK_DAYS = 30;
+const PAST_VISIT_LIMIT = 50;
+const DOCTOR_LIMIT = 10;
 const DOC_LIMIT = 500;
 
 const EMPTY_RECORD: SharedRecord = {
@@ -98,6 +101,19 @@ const CONDITION_STATUS_LABELS: Record<string, string> = {
   resolved: 'Resolved',
 };
 
+const dayFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** A date picked with no time is UTC midnight, so it reads in UTC. */
+const formatDay = (value: number) => dayFormatter.format(new Date(value));
+
+const joinLines = (parts: Array<string | null>) =>
+  parts.flatMap((part) => (part === null ? [] : [part])).join(' · ') || null;
+
 const joinNames = (names: string[]) =>
   names.length < 2
     ? names.join('')
@@ -126,16 +142,40 @@ async function readHouseholds(firestore: Firestore, uid: string) {
 }
 
 /** Each read selects only the fields a record needs, so a private one is never fetched. */
-async function readCatNames(household: Household) {
+async function readCatNames(household: Household, extraFields: string[] = []) {
   const { docs, isFull } = await readDocs(
-    household.ref.collection('cats').select('name', 'lastEditedAt'),
+    household.ref
+      .collection('cats')
+      .select('name', 'lastEditedAt', ...extraFields),
   );
   return {
     cats: docs.flatMap((doc) => {
       const name = readText(doc.get('name'));
       return name === null
         ? []
-        : [{ id: doc.id, name, updatedAt: readTime(doc.get('lastEditedAt')) }];
+        : [
+            {
+              id: doc.id,
+              name,
+              updatedAt: readTime(doc.get('lastEditedAt')),
+              doc,
+            },
+          ];
+    }),
+    isFull,
+  };
+}
+
+async function readDoctors(household: Household) {
+  const { docs, isFull } = await readDocs(
+    household.ref.collection('doctors').select('name', 'clinicId'),
+  );
+  return {
+    doctors: docs.flatMap((doc) => {
+      const name = readText(doc.get('name'));
+      return name === null
+        ? []
+        : [{ id: doc.id, name, clinicId: readText(doc.get('clinicId')) }];
     }),
     isFull,
   };
@@ -181,49 +221,84 @@ const inEveryHousehold = async (
 
 const syncCats = (firestore: Firestore, uid: string) =>
   inEveryHousehold(firestore, uid, async (household) => {
-    const { cats, isFull } = await readCatNames(household);
+    const { cats, isFull } = await readCatNames(household, [
+      'dateOfBirth',
+      'isDateOfBirthEstimated',
+      'breed',
+      'diet.foodType',
+      'diet.brand',
+    ]);
     return {
-      records: cats.map((cat) =>
-        toRecord({
+      records: cats.map((cat) => {
+        const born = readTime(cat.doc.get('dateOfBirth')) || null;
+        const food = readText(
+          [
+            readText(cat.doc.get('diet.brand')),
+            readText(cat.doc.get('diet.foodType')),
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+        return toRecord({
           sourceRef: `households/${household.id}/cats/${cat.id}`,
           kind: 'pet',
           title: cat.name,
+          detail: joinLines([
+            born === null
+              ? null
+              : `Born ${cat.doc.get('isDateOfBirthEstimated') === true ? 'about ' : ''}${formatDay(born)}`,
+            readText(cat.doc.get('breed')),
+            food === null ? null : `Food: ${food}`,
+          ]),
           sourceUpdatedAt: cat.updatedAt,
-        }),
-      ),
+        });
+      }),
       isFull,
     };
   });
 
 const syncClinics = (firestore: Firestore, uid: string) =>
   inEveryHousehold(firestore, uid, async (household) => {
-    const { clinics, isFull } = await readClinics(household);
+    const [clinicRead, doctorRead] = await Promise.all([
+      readClinics(household),
+      readDoctors(household),
+    ]);
     return {
-      records: clinics.map((clinic) =>
-        toRecord({
+      records: clinicRead.clinics.map((clinic) => {
+        const doctors = doctorRead.doctors
+          .filter((doctor) => doctor.clinicId === clinic.id)
+          .slice(0, DOCTOR_LIMIT)
+          .map((doctor) => doctor.name);
+        return toRecord({
           sourceRef: `households/${household.id}/vetClinics/${clinic.id}`,
           kind: 'place',
           title: clinic.name,
+          detail:
+            doctors.length === 0 ? null : `Doctors: ${doctors.join(', ')}`,
           sourceUpdatedAt: clinic.updatedAt,
           extra: { phone: clinic.phone, address: clinic.address },
-        }),
-      ),
-      isFull,
+        });
+      }),
+      isFull: clinicRead.isFull && doctorRead.isFull,
     };
   });
 
 const syncVisits = (firestore: Firestore, uid: string, windowStart: number) =>
   inEveryHousehold(firestore, uid, async (household) => {
-    const [catRead, clinicRead, visitRead] = await Promise.all([
+    const upcomingStart = Date.now() - UPCOMING_LOOKBACK_DAYS * DAY_MS;
+    const [catRead, clinicRead, doctorRead, visitRead] = await Promise.all([
       readCatNames(household),
       readClinics(household),
+      readDoctors(household),
       readDocs(
         household.ref
           .collection('visits')
-          .where('status', '==', 'upcoming')
+          .where('scheduledAt', '>=', windowStart)
           .select(
             'catIds',
             'clinicId',
+            'doctorId',
+            'status',
             'reason',
             'customReasonLabel',
             'scheduledAt',
@@ -231,42 +306,65 @@ const syncVisits = (firestore: Firestore, uid: string, windowStart: number) =>
           ),
       ),
     ]);
+    const doctorNames = new Map(
+      doctorRead.doctors.map((doctor) => [doctor.id, doctor.name]),
+    );
     const catNames = new Map(catRead.cats.map((cat) => [cat.id, cat.name]));
     const clinicNames = new Map(
       clinicRead.clinics.map((clinic) => [clinic.id, clinic.name]),
     );
+    const visitRecords = visitRead.docs.flatMap((doc) => {
+      const status = readText(doc.get('status'));
+      const scheduledAt = readTime(doc.get('scheduledAt'));
+      const names = readIds(doc.get('catIds')).flatMap((id) => {
+        const name = catNames.get(id);
+        return name === undefined ? [] : [name];
+      });
+      const isPast = status === 'completed';
+      if (
+        scheduledAt === null ||
+        names.length === 0 ||
+        (!isPast && (status !== 'upcoming' || scheduledAt < upcomingStart))
+      )
+        return [];
+      const reason = readText(doc.get('reason')) ?? '';
+      const label =
+        REASON_LABELS[reason] ??
+        readText(doc.get('customReasonLabel')) ??
+        'Visit';
+      const clinicId = readText(doc.get('clinicId'));
+      const doctorId = readText(doc.get('doctorId'));
+      const doctorName =
+        doctorId === null ? undefined : doctorNames.get(doctorId);
+      return [
+        toRecord({
+          sourceRef: `households/${household.id}/visits/${doc.id}`,
+          kind: 'event',
+          title: `${joinNames(names)}: ${label}`,
+          subtitle: isPast ? 'Past visit' : null,
+          detail: doctorName === undefined ? null : `Doctor: ${doctorName}`,
+          startAt: scheduledAt,
+          placeLabel:
+            clinicId === null ? null : (clinicNames.get(clinicId) ?? null),
+          sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
+        }),
+      ];
+    });
+    const isPastRecord = (record: SharedRecord) =>
+      record.subtitle === 'Past visit';
     return {
-      records: visitRead.docs.flatMap((doc) => {
-        const scheduledAt = readTime(doc.get('scheduledAt'));
-        const names = readIds(doc.get('catIds')).flatMap((id) => {
-          const name = catNames.get(id);
-          return name === undefined ? [] : [name];
-        });
-        if (
-          scheduledAt === null ||
-          scheduledAt < windowStart ||
-          names.length === 0
-        )
-          return [];
-        const reason = readText(doc.get('reason')) ?? '';
-        const label =
-          REASON_LABELS[reason] ??
-          readText(doc.get('customReasonLabel')) ??
-          'Visit';
-        const clinicId = readText(doc.get('clinicId'));
-        return [
-          toRecord({
-            sourceRef: `households/${household.id}/visits/${doc.id}`,
-            kind: 'event',
-            title: `${joinNames(names)}: ${label}`,
-            startAt: scheduledAt,
-            placeLabel:
-              clinicId === null ? null : (clinicNames.get(clinicId) ?? null),
-            sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
-          }),
-        ];
-      }),
-      isFull: catRead.isFull && clinicRead.isFull && visitRead.isFull,
+      records: [
+        ...visitRecords.filter((record) => !isPastRecord(record)),
+        ...visitRecords
+          .filter(isPastRecord)
+          .sort((a, b) => (b.startAt ?? 0) - (a.startAt ?? 0))
+          .slice(0, PAST_VISIT_LIMIT),
+      ],
+      isFull:
+        catRead.isFull &&
+        clinicRead.isFull &&
+        doctorRead.isFull &&
+        visitRead.isFull,
     };
   });
 
@@ -279,13 +377,25 @@ const syncDueCare = (firestore: Firestore, uid: string, windowStart: number) =>
         household.ref
           .collection('vaccinations')
           .where('expiresAt', '>=', cutoff)
-          .select('catId', 'name', 'expiresAt', 'lastEditedAt'),
+          .select(
+            'catId',
+            'name',
+            'expiresAt',
+            'lastAdministeredAt',
+            'lastEditedAt',
+          ),
       ),
       readDocs(
         household.ref
           .collection('preventives')
           .where('expiresAt', '>=', cutoff)
-          .select('catIds', 'name', 'expiresAt', 'lastEditedAt'),
+          .select(
+            'catIds',
+            'name',
+            'expiresAt',
+            'lastAdministeredAt',
+            'lastEditedAt',
+          ),
       ),
     ]);
     const catNames = new Map(catRead.cats.map((cat) => [cat.id, cat.name]));
@@ -303,6 +413,7 @@ const syncDueCare = (firestore: Firestore, uid: string, windowStart: number) =>
       const names = namesOf(ids);
       const name = readText(doc.get('name'));
       const dueAt = readTime(doc.get('expiresAt'));
+      const lastGiven = readTime(doc.get('lastAdministeredAt'));
       if (
         names.length === 0 ||
         name === null ||
@@ -316,6 +427,8 @@ const syncDueCare = (firestore: Firestore, uid: string, windowStart: number) =>
           kind: 'task',
           title: `${joinNames(names)}: ${name}`,
           subtitle,
+          detail:
+            lastGiven === null ? null : `Last given ${formatDay(lastGiven)}`,
           dueAt,
           isAllDay: true,
           sourceUpdatedAt: readTime(doc.get('lastEditedAt')),

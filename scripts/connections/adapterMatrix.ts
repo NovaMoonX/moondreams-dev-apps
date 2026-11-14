@@ -961,9 +961,28 @@ await Promise.all([
     name: 'Mochi',
     notes: CARE_SECRET,
     microchipNumber: CARE_SECRET,
+    rabiesTagNumber: CARE_SECRET,
+    insurance: { provider: CARE_SECRET, policyNumber: CARE_SECRET },
+    dateOfBirth: Date.UTC(2021, 2, 4),
+    isDateOfBirthEstimated: false,
+    breed: 'Siamese',
+    diet: { foodType: 'dry', brand: 'Royal Canin', notes: CARE_SECRET },
     lastEditedAt: NOW - 13,
   }),
-  careDocs('cats', 'juniper').set({ name: 'Juniper', lastEditedAt: NOW - 14 }),
+  careDocs('cats', 'juniper').set({
+    name: 'Juniper',
+    dateOfBirth: Date.UTC(2023, 5, 1),
+    isDateOfBirthEstimated: true,
+    breed: 'Tabby',
+    diet: null,
+    lastEditedAt: NOW - 14,
+  }),
+  careDocs('doctors', 'lee').set({
+    name: 'Dr. Lee',
+    clinicId: 'blue-bark',
+    notes: CARE_SECRET,
+  }),
+  careDocs('doctors', 'ray').set({ name: 'Dr. Ray', clinicId: 'blue-bark' }),
   careDocs('vetClinics', 'blue-bark').set({
     name: 'Blue Bark Vet',
     phone: '555-0100',
@@ -972,7 +991,9 @@ await Promise.all([
     notes: CARE_SECRET,
     lastEditedAt: NOW - 15,
   }),
-  careDocs('visits', 'next').set(vetVisit(['mochi', 'juniper'])),
+  careDocs('visits', 'next').set(
+    vetVisit(['mochi', 'juniper'], { doctorId: 'lee' }),
+  ),
   careDocs('visits', 'custom').set(
     vetVisit(['juniper'], {
       clinicId: null,
@@ -984,12 +1005,29 @@ await Promise.all([
   careDocs('visits', 'old').set(
     vetVisit(['mochi'], { scheduledAt: TODAY - 60 * DAY }),
   ),
-  careDocs('visits', 'done').set(vetVisit(['mochi'], { status: 'completed' })),
+  careDocs('visits', 'done').set(
+    vetVisit(['mochi'], {
+      status: 'completed',
+      scheduledAt: TODAY - 45 * DAY,
+      doctorId: 'ray',
+      costCents: EXPENSE_AMOUNT,
+    }),
+  ),
+  careDocs('visits', 'ancient').set(
+    vetVisit(['mochi'], {
+      status: 'completed',
+      scheduledAt: TODAY - 400 * DAY,
+    }),
+  ),
+  careDocs('visits', 'called-off').set(
+    vetVisit(['mochi'], { status: 'cancelled', scheduledAt: TODAY - 20 * DAY }),
+  ),
   careDocs('visits', 'nocat').set(vetVisit(['gone-cat'])),
   careDocs('vaccinations', 'rabies').set({
     catId: 'mochi',
     name: 'Rabies',
     history: [{ lotNumber: CARE_SECRET }],
+    lastAdministeredAt: Date.UTC(2025, 10, 3),
     expiresAt: TODAY + 20 * DAY,
     lastEditedAt: NOW - 16,
   }),
@@ -1007,6 +1045,7 @@ await Promise.all([
     catIds: ['mochi', 'juniper'],
     name: 'Flea and tick',
     history: [{ dosage: CARE_SECRET }],
+    lastAdministeredAt: null,
     expiresAt: TODAY - 5 * DAY,
     lastEditedAt: NOW - 17,
   }),
@@ -1093,7 +1132,15 @@ const runNineLives = async (uid: string, category: string) => {
     category,
     cursor: null,
     resumeState: null,
-    windowStart: WINDOW_START,
+    windowStart:
+      TODAY -
+      Math.max(
+        30,
+        nineLivesAdapter.manifest.categories.find(
+          (entry) => entry.id === category,
+        )?.historyDays ?? 0,
+      ) *
+        DAY,
   });
   assert.equal(page.isFull, true);
   assert.equal(page.isDone, true);
@@ -1106,16 +1153,31 @@ assert.deepEqual(refs(careCats).sort(), [
   'households/home/cats/mochi',
 ]);
 assert.ok(careCats.every((record) => record.kind === 'pet'));
+const mochiRecord = careCats.find((record) =>
+  record.sourceRef.endsWith('mochi'),
+);
+assert.equal(mochiRecord?.title, 'Mochi');
 assert.equal(
-  careCats.find((record) => record.sourceRef.endsWith('mochi'))?.title,
-  'Mochi',
+  mochiRecord?.detail,
+  'Born Mar 4, 2021 · Siamese · Food: Royal Canin dry',
+);
+assert.equal(
+  careCats.find((record) => record.sourceRef.endsWith('juniper'))?.detail,
+  'Born about Jun 1, 2023 · Tabby',
 );
 
 const careVisits = await runNineLives(OWNER, 'vetVisits');
 assert.deepEqual(refs(careVisits).sort(), [
   'households/home/visits/custom',
+  'households/home/visits/done',
   'households/home/visits/next',
 ]);
+const doneVisit = careVisits.find((record) =>
+  record.sourceRef.endsWith('done'),
+);
+assert.equal(doneVisit?.subtitle, 'Past visit');
+assert.equal(doneVisit?.detail, 'Doctor: Dr. Ray');
+assert.equal(doneVisit?.startAt, TODAY - 45 * DAY);
 const nextVisit = careVisits.find((record) =>
   record.sourceRef.endsWith('next'),
 );
@@ -1124,6 +1186,8 @@ assert.equal(nextVisit?.title, 'Mochi and Juniper: Checkup');
 assert.equal(nextVisit?.placeLabel, 'Blue Bark Vet');
 assert.equal(nextVisit?.startAt, TODAY + 3 * DAY + 9 * 3_600_000);
 assert.equal(nextVisit?.isAllDay, false);
+assert.equal(nextVisit?.subtitle, null);
+assert.equal(nextVisit?.detail, 'Doctor: Dr. Lee');
 assert.equal(nextVisit?.sourceUpdatedAt, NOW - 11);
 const customVisit = careVisits.find((record) =>
   record.sourceRef.endsWith('custom'),
@@ -1141,6 +1205,11 @@ assert.equal(rabies?.kind, 'task');
 assert.equal(rabies?.title, 'Mochi: Rabies');
 assert.equal(rabies?.dueAt, TODAY + 20 * DAY);
 assert.equal(rabies?.isAllDay, true);
+assert.equal(rabies?.detail, 'Last given Nov 3, 2025');
+assert.equal(
+  careDue.find((record) => record.sourceRef.endsWith('flea'))?.detail,
+  null,
+);
 assert.equal(
   careDue.find((record) => record.sourceRef.endsWith('flea'))?.title,
   'Mochi and Juniper: Flea and tick',
@@ -1150,6 +1219,7 @@ const careClinics = await runNineLives(OWNER, 'clinics');
 assert.deepEqual(refs(careClinics), ['households/home/vetClinics/blue-bark']);
 assert.equal(careClinics[0].kind, 'place');
 assert.equal(careClinics[0].title, 'Blue Bark Vet');
+assert.equal(careClinics[0].detail, 'Doctors: Dr. Lee, Dr. Ray');
 assert.deepEqual(careClinics[0].extra, {
   phone: '555-0100',
   address: '1 Cat Lane',

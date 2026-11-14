@@ -43,6 +43,8 @@ export interface CategoryManifest {
   reads: { label: string; sinceVersion: number; addedOn: string | null }[];
   /** Starts at 1; bumped whenever `reads` gains an entry. */
   scopeVersion: number;
+  /** How many days back a sync reads and keeps what has ended, when longer than the usual window (a past visit, not a past reminder). */
+  historyDays?: number;
 }
 
 export interface ConnectorManifest {
