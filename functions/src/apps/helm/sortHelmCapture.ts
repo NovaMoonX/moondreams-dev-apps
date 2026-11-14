@@ -259,7 +259,7 @@ import { decide } from './nomos/policy.js';
 import {
   HAND_OVER_TOOL,
   hasReviseCue,
-  hasHabitCue,
+  isHabitTurn,
   hasProcedureCue,
   hasProcedureReviseCue,
   isQuestion,
@@ -2161,6 +2161,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             });
             return [];
           });
+    const isHabitsInPlay =
+      mode !== 'rest' &&
+      isHabitTurn(
+        combined.text,
+        sanitizeScreen(capture.screen)?.view ?? null,
+        contextHabits,
+      );
     const contextProcedures: ContextProcedure[] = procedureRecords.map(
       (procedure) => ({
         id: procedure.id,
@@ -2203,7 +2210,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         : null,
       focusedTopic: topicDocument ? focusedTopic : null,
       runs: contextRuns,
-      habits: contextHabits,
+      habits: isHabitsInPlay ? contextHabits : [],
       synced: contextSynced,
     });
     const context = buildContext({
@@ -2324,10 +2331,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         hasProcedureCue(combined.text))
         ? PROCEDURE_PROMPT
         : null,
-      mode !== 'rest' &&
-      (contextHabits.length > 0 || hasHabitCue(combined.text))
-        ? HABIT_PROMPT
-        : null,
+      isHabitsInPlay ? HABIT_PROMPT : null,
       mode === 'rest' ? REST_PROMPT : null,
       attached.media.length > 0 ? MEDIA_PROMPT : null,
       typeof capture.interruptedCaptureId === 'string' &&
@@ -2568,6 +2572,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureVersions,
       runSteps: context.runSteps,
       habits: context.habits,
+      habitNames: context.habitNames,
       captureText: combined.text,
       keyDateNames,
       quotes,

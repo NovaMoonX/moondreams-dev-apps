@@ -11,8 +11,19 @@ export type Cadence =
 const DAY_MS = 86_400_000;
 const SEARCH_DAYS = 400;
 
-const toMs = (dayKey: string) => Date.parse(`${dayKey}T00:00:00Z`);
-const toKey = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+/** UTC midnight of a day key ("YYYY-MM-DD"). */
+export const dayKeyToMs = (dayKey: string) => Date.parse(`${dayKey}T00:00:00Z`);
+
+/** The day key of a UTC instant. */
+export const msToDayKey = (ms: number) =>
+  new Date(ms).toISOString().slice(0, 10);
+
+/** The day key `days` after (or before, when negative) another. */
+export const shiftDayKeyBy = (dayKey: string, days: number) =>
+  msToDayKey(dayKeyToMs(dayKey) + days * DAY_MS);
+
+const toMs = dayKeyToMs;
+const toKey = msToDayKey;
 const mondayOffset = (ms: number) => (new Date(ms).getUTCDay() + 6) % 7;
 
 /** Whether a day ("YYYY-MM-DD") is one the cadence asks for; a times-a-week cadence asks on every day until its count is met. */

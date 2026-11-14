@@ -32,6 +32,7 @@ const habit = (
   startsOn: START,
   endsOn: null,
   forWhoId: null,
+  isCare: false,
   ...extra,
 });
 
@@ -52,6 +53,7 @@ const floss = habit('floss', 'Floss', {
 });
 const metoprolol = habit('meto', 'Metoprolol', {
   forWhoId: 'mom',
+  isCare: true,
   windowState: { m: { start: '08:00', end: '10:00', order: 0 } },
   windows: { m: { label: 'Morning' } },
 });
@@ -73,7 +75,7 @@ test('every verb takes the habit with no model: took, take, gave, done, did, had
     ['took', 'take', 'gave', 'done', 'did', 'had', 'finished', 'drank'],
   );
   assert.deepEqual(read('I took my pills'), match('pills', null));
-  assert.deepEqual(read('take my pills'), match('pills', null));
+  assert.deepEqual(read('I take my pills'), match('pills', null));
   assert.deepEqual(read('gave Mom her metoprolol'), match('meto', null));
   assert.deepEqual(read('done water'), match('water', null));
   assert.deepEqual(read('did guitar'), match('guitar', null));
@@ -124,12 +126,72 @@ test('extra words, no verb, no habit or a refusal all go to the model', () => {
   assert.deepEqual(read('took my pills', []), NONE);
 });
 
+test('a question or an order is never a check-in: a question mark, an opener, "take my X"', () => {
+  assert.deepEqual(read('Did I take my pills?'), NONE);
+  assert.deepEqual(read('did I take my pills'), NONE);
+  assert.deepEqual(read('should I take my pills'), NONE);
+  assert.deepEqual(read('can I take my pills'), NONE);
+  assert.deepEqual(read('have I taken my pills'), NONE);
+  assert.deepEqual(read('did Mom take her metoprolol'), NONE);
+  assert.deepEqual(read('took my pills?'), NONE);
+  assert.deepEqual(read('take my pills'), NONE);
+  assert.deepEqual(read('take my pills please'), NONE);
+  assert.deepEqual(read('did guitar'), match('guitar', null));
+  assert.deepEqual(read('I take my pills'), match('pills', null));
+});
+
+test("the past or -ing form of a name's leading verb is a check-in on its own", () => {
+  const practice = habit('practice', 'Practice guitar');
+  const stretch = habit('stretch', 'Stretch for ten minutes');
+  const both = [practice, stretch];
+  assert.deepEqual(read('practised guitar', both), match('practice', null));
+  assert.deepEqual(read('I practiced guitar', both), match('practice', null));
+  assert.deepEqual(read('practicing guitar', both), match('practice', null));
+  assert.deepEqual(read('practiced', both), match('practice', null));
+  assert.deepEqual(read('stretched', both), match('stretch', null));
+  assert.deepEqual(read('I stretched', both), match('stretch', null));
+  assert.deepEqual(read('practice guitar', both), NONE);
+  assert.deepEqual(
+    read('stretched for ten minutes', both),
+    match('stretch', null),
+  );
+  assert.deepEqual(read('stretched and felt great', both), NONE);
+});
+
+test('a medicine word matches a care habit, a carer needs her name, two care habits are ambiguous', () => {
+  const sertraline = habit('sert', 'Sertraline', { isCare: true });
+  const lisinopril = habit('lisin', 'Lisinopril', { isCare: true });
+  assert.deepEqual(read('took my pills', [sertraline]), match('sert', null));
+  assert.deepEqual(read('took my meds', [sertraline]), match('sert', null));
+  assert.deepEqual(
+    read('took my medication', [sertraline]),
+    match('sert', null),
+  );
+  assert.deepEqual(read('took my tablets', [sertraline]), match('sert', null));
+  assert.deepEqual(read('took my medicine', [sertraline]), match('sert', null));
+  assert.deepEqual(read('took my pills', [sertraline, lisinopril]), {
+    kind: 'ambiguous',
+    habitIds: ['sert', 'lisin'],
+  });
+  assert.deepEqual(
+    read('Mom took her pills', [sertraline, metoprolol]),
+    match('meto', null),
+  );
+  assert.deepEqual(
+    read('took my pills', [sertraline, metoprolol]),
+    match('sert', null),
+  );
+  assert.deepEqual(read('took my pills', [metoprolol]), NONE);
+  assert.deepEqual(read('took my pills', [habit('vit', 'Vitamins')]), NONE);
+  assert.deepEqual(read('took my pills and felt sick', [sertraline]), NONE);
+});
+
 const day = (checks: Record<string, unknown> = {}, count = 0) => ({
   checks,
   count,
 });
 
-test('the tick lands in the open window, else the nearest earlier unticked one, else one about to open, else the day', () => {
+test('the tick lands in the open window, else the nearest earlier unticked one, else the next one to come, never the day', () => {
   const on = (time: string, entry = day(), windowId: string | null = null) =>
     resolveCheckIn(pills, windowId, at('2026-11-08', time), LA, entry);
   const landed = (result: ReturnType<typeof on>) =>
@@ -139,9 +201,10 @@ test('the tick lands in the open window, else the nearest earlier unticked one, 
   assert.equal(landed(on('09:45')), 'm');
   assert.equal(landed(on('21:00', day({ m: {} }))), 'e');
   assert.equal(landed(on('15:00')), 'm');
-  assert.equal(landed(on('15:00', day({ m: {} }))), 'day');
+  assert.equal(landed(on('15:00', day({ m: {} }))), 'e');
   assert.equal(landed(on('06:30')), 'm');
-  assert.equal(landed(on('04:00')), 'day');
+  assert.equal(landed(on('04:00')), 'm');
+  assert.equal(landed(on('04:00', day({ m: {} }))), 'e');
   assert.equal(landed(on('09:00', day(), 'e')), 'e');
   assert.equal(landed(on('21:00', day({ m: {}, e: {} }))), 'alreadyDone');
   assert.equal(landed(on('09:00', day({ m: {} }), 'm')), 'alreadyDone');

@@ -13,11 +13,14 @@ import {
   planResolveHabit,
   type HabitPlanInput,
 } from '../../functions/src/apps/helm/nomos/planHabitCommands.ts';
+import { isHabitTurn } from '../../functions/src/apps/helm/nomos/route.ts';
 import { decideHabit } from '../../functions/src/apps/helm/nomos/policy.ts';
 import { maskContextRecords } from '../../functions/src/apps/helm/nomos/unattended.ts';
 import {
   EMPTY_HABIT_DAY,
+  isPrivateHabit,
   toContextHabit,
+  writeHabitDayIn,
   type LiveHabit,
   type LiveHabitDay,
 } from '../../functions/src/apps/helm/habitStore.ts';
@@ -48,6 +51,8 @@ const habit = (over: Partial<LiveHabit> & { id: string; name: string }) =>
     privateMark: null,
     isPrivacyCleared: false,
     status: 'active',
+    storedStatus: over.status ?? 'active',
+    lastEditedAt: null,
     cadence: { kind: 'everyDay' },
     windowState: {},
     timesPerDay: null,
@@ -467,7 +472,7 @@ const read1 = read(
       ],
     }),
   ],
-  'I took my pills, felt dizzy and pause my water',
+  'I took my pills, felt dizzy and pause my water, and start a habit of vitamins',
 );
 assert.equal(read1.habitCommands.length, 3);
 assert.deepEqual((read1.habitCommands[0] as { habitIds: string[] }).habitIds, [
@@ -514,5 +519,233 @@ assert.equal(masked.habits?.[0].name, 'a private habit');
 assert.ok(
   masked.habits?.[0].windows.every((window) => window.label === 'a time'),
 );
+
+const bare = (kind: string, fields: Record<string, unknown> = {}) =>
+  item({ kind, habitAlias: 'h1', ...fields });
+const drops = (fields: Record<string, unknown>, text: string) =>
+  read([bare('checkIn', fields)], text);
+
+// A write needs words that ask for it.
+assert.deepEqual(
+  drops({ checkDay: 'yesterday' }, 'I took my pills').habitDropped,
+  ['habit-unasked'],
+);
+assert.equal(
+  drops({ checkDay: 'yesterday' }, 'I took my pills last night').habitCommands
+    .length,
+  1,
+);
+assert.equal(
+  drops({ checkDay: 'yesterday' }, 'I took my pills yesterday').habitCommands
+    .length,
+  1,
+);
+assert.deepEqual(
+  drops({ checkStatus: 'skipped' }, 'I took my pills').habitDropped,
+  ['habit-unasked'],
+);
+assert.equal(
+  drops({ checkStatus: 'skipped' }, 'not today for the pills').habitCommands
+    .length,
+  1,
+);
+assert.deepEqual(
+  drops({}, 'the weather is nice and the dog barked').habitDropped,
+  ['habit-unasked'],
+);
+assert.deepEqual(
+  read(
+    [item({ kind: 'createHabit', title: 'Walk the dog' })],
+    'every morning I walk the dog',
+  ).habitDropped,
+  ['habit-unasked'],
+);
+assert.equal(
+  read(
+    [item({ kind: 'createHabit', title: 'Vitamins' })],
+    'start a habit of vitamins',
+  ).habitCommands.length,
+  1,
+);
+const named = createAliasBook('h');
+named.add('pills-pm');
+assert.equal(
+  normalizeNomosReply({ commands: [bare('checkIn')], replyLine: null }, {
+    reading,
+    aliases: createAliasBook('t'),
+    habits: named,
+    habitNames: new Map([['pills-pm', 'Evening pills']]),
+    captureText: 'pills again',
+    timeZone: 'UTC',
+    now: NOW,
+  } as never).habitCommands.length,
+  1,
+);
+
+// A note is the capture's own slice, letters and punctuation as said.
+const verbatim = read(
+  [item({ kind: 'checkIn', habitAlias: 'h1', quote: 'felt dizzy' })],
+  'I took my pills - felt  DIZZY!',
+).habitCommands[0] as { note: string | null };
+assert.equal(verbatim.note, 'felt DIZZY');
+
+// Private in effect: a care habit counts even when its class reads ordinary.
+const quietCare = habit({ ...evening, id: 'quiet', isCare: true });
+assert.equal(isPrivateHabit(quietCare), true);
+assert.equal(
+  toContextHabit(quietCare, EMPTY_HABIT_DAY, DAY_KEY).isPrivate,
+  true,
+);
+const quietPlan = plan([checkIn({ habitIds: ['quiet'] })], {
+  habits: [quietCare],
+  isUnattended: true,
+});
+assert.equal(quietPlan.isPrivate, true);
+assert.ok(quietPlan.lines.every((line) => !/evening pills/i.test(line)));
+
+// A private habit made while the screen is out of sight is not named.
+const hiddenCreate = plan(
+  [
+    {
+      kind: 'createHabit',
+      name: 'Sertraline',
+      emoji: null,
+      cadence: { kind: 'everyDay' },
+      windows: [],
+      timesPerDay: null,
+      forWhoId: null,
+      isCare: true,
+      isPrivate: false,
+      words: 'a habit of sertraline',
+    },
+  ],
+  { isUnattended: true },
+);
+assert.equal(hiddenCreate.lines[0], 'Started private habit');
+
+// A habit made earlier in the turn counts: a second one with the name is not made.
+const dup = plan(
+  ['Walk', 'walk'].map((name) => ({
+    kind: 'createHabit' as const,
+    name,
+    emoji: null,
+    cadence: { kind: 'everyDay' as const },
+    windows: [],
+    timesPerDay: null,
+    forWhoId: null,
+    isCare: false,
+    isPrivate: false,
+    words: 'a habit of walk',
+  })),
+);
+assert.equal(dup.creates.length, 1);
+assert.equal(dup.notKept.length, 1);
+
+// A window cannot start before the rollover.
+const early = plan([
+  {
+    kind: 'createHabit',
+    name: 'Night snack',
+    emoji: null,
+    cadence: { kind: 'everyDay' },
+    windows: [{ part: null, start: '01:00', end: null, label: null }],
+    timesPerDay: null,
+    forWhoId: null,
+    isCare: false,
+    isPrivate: false,
+    words: 'a habit',
+  },
+]);
+assert.ok(
+  Object.values(
+    early.creates[0].doc.windowState as Record<string, { start: string }>,
+  ).every((window) => window.start >= '03:00'),
+);
+
+// An undo restores what was really there: the stored status and the earlier edit time.
+const wasPaused = habit({
+  ...water,
+  status: 'active',
+  storedStatus: 'paused',
+  pausedUntil: Date.UTC(2023, 10, 1),
+  lastEditedAt: 4242,
+});
+const pausedAgain = plan(
+  [
+    {
+      kind: 'updateHabit',
+      habitId: 'water',
+      change: 'pause',
+      cadence: null,
+      windows: null,
+      until: null,
+      requestQuote: 'pause my water',
+    },
+  ],
+  { habits: [wasPaused] },
+);
+assert.equal(pausedAgain.effects[0].previous?.status, 'paused');
+assert.equal(pausedAgain.effects[0].previous?.lastEditedAt, 4242);
+
+// "How was it?" is for today.
+assert.equal(plan([checkIn({ day: 'yesterday' })]).followUp, null);
+
+// A note over an earlier one keeps it; a day whose notes did not open is left alone.
+const earlier: LiveHabitDay = {
+  ...EMPTY_HABIT_DAY,
+  exists: true,
+  notes: { 'pills-pm/w1': { text: 'first', at: 1, captureId: 'cap-0' } },
+};
+const second = plan([checkIn({ note: 'second' })], {
+  days: new Map([[DAY_KEY, earlier]]),
+});
+const sealedNotes = second.dayWrites[0].sealed as unknown as {
+  notes: Record<string, { text: string }>;
+};
+assert.equal(sealedNotes.notes['pills-pm/w1'].text, 'first');
+assert.equal(sealedNotes.notes['pills-pm/w1#2'].text, 'second');
+const locked = plan([checkIn({ note: 'second' })], {
+  days: new Map([
+    [
+      DAY_KEY,
+      {
+        ...EMPTY_HABIT_DAY,
+        exists: true,
+        isNotesUnreadable: true,
+      },
+    ],
+  ]),
+});
+assert.equal(locked.dayWrites[0].sealed, null);
+assert.deepEqual(locked.dayWrites[0].noteKeys, []);
+
+// Two tallies on one habit in a turn are one increment of two.
+const written: Record<string, unknown>[] = [];
+writeHabitDayIn(
+  {
+    set: (_ref: unknown, data: Record<string, unknown>) => written.push(data),
+  } as never,
+  {} as never,
+  {
+    ...tally.dayWrites[0],
+    sealed: null,
+  },
+);
+const counted = (written[0].entries as Record<string, { count: unknown }>).water
+  .count;
+assert.deepEqual(JSON.parse(JSON.stringify(counted)), { operand: 2 });
+
+// The habit prompt and list go only to a turn about habits.
+const mine = [{ name: 'Evening pills' }, { name: 'Stretch for ten minutes' }];
+assert.equal(isHabitTurn('buy milk every day', 'today', mine), false);
+assert.equal(isHabitTurn('call the dentist weekly', null, mine), false);
+assert.equal(isHabitTurn('remind me to buy milk', null, []), false);
+assert.equal(isHabitTurn('start a habit of reading', null, []), true);
+assert.equal(isHabitTurn('I took my vitamins', null, []), true);
+assert.equal(isHabitTurn('I took the dog out', null, mine), true);
+assert.equal(isHabitTurn('I took the dog out', null, []), false);
+assert.equal(isHabitTurn('stretch more', null, mine), true);
+assert.equal(isHabitTurn('what is on today', 'habits', mine), true);
+assert.equal(isHabitTurn('what is on today', 'habit', []), true);
 
 console.log('helm habit commands: ok');

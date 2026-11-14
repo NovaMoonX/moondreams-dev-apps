@@ -305,6 +305,7 @@ export function buildContext(input: ContextInput): {
   procedureSteps: AliasBook;
   runSteps: AliasBook;
   habits: AliasBook;
+  habitNames: Map<string, string>;
   focus: { id: string; version: number } | null;
 } {
   const aliases = createAliasBook('t');
@@ -657,6 +658,11 @@ export function buildContext(input: ContextInput): {
     procedureSteps,
     runSteps,
     habits,
+    habitNames: new Map(
+      (input.habits ?? [])
+        .slice(0, MAX_CONTEXT_HABITS)
+        .map((habit): [string, string] => [habit.id, habit.name]),
+    ),
     focus: focused ? { id: focused.id, version: focused.version } : null,
   };
 }

@@ -23,6 +23,7 @@ const FILLER_WORDS: ReadonlySet<string> = new Set([
   'his',
   'their',
   'i',
+  'im',
   'ive',
   's',
   'a',
@@ -37,14 +38,50 @@ const FILLER_WORDS: ReadonlySet<string> = new Set([
   'cups',
 ]);
 
+/** A question opener, never a check-in; "did" also opens "did guitar", so it counts only before a subject. */
+const QUESTION_OPENERS: ReadonlySet<string> = new Set([
+  'did',
+  'do',
+  'does',
+  'have',
+  'has',
+  'should',
+  'can',
+  'will',
+  'are',
+  'is',
+  'was',
+  'would',
+  'could',
+]);
+
+const SUBJECT_WORDS: ReadonlySet<string> = new Set([
+  'i',
+  'we',
+  'you',
+  'he',
+  'she',
+  'they',
+  'it',
+]);
+
+/** Words that stand for a medicine; they match a care habit by what it is. */
+export const MEDICINE_WORDS = [
+  'pills',
+  'meds',
+  'medicine',
+  'medication',
+  'tablets',
+] as const;
+
 const MAX_RESIDUAL_WORDS = 8;
-const EARLY_MS = 2 * 60 * 60 * 1000;
 
 export interface CheckInHabit extends HabitScheduleLike {
   id: string;
   name: string;
   windows: Record<string, { label: string }>;
   forWhoId: string | null;
+  isCare: boolean;
 }
 
 export type CheckInMatch =
@@ -56,6 +93,8 @@ interface Role {
   kind: 'name' | 'window' | 'who';
   windowId: string | null;
   text: string;
+  /** The text is the past or -ing form of the name's leading verb, which says it was done. */
+  isVerbForm: boolean;
 }
 
 const matcher = createOptionMatcher<Role>({
@@ -63,8 +102,46 @@ const matcher = createOptionMatcher<Role>({
   foldPlurals: true,
 });
 
-const isVerb = (word: string) =>
-  (CHECKIN_VERBS as readonly string[]).includes(word);
+const wordMatcher = createOptionMatcher({ foldPlurals: true });
+
+const IRREGULAR_VERBS: Record<string, string[]> = {
+  take: ['took', 'taken', 'taking'],
+  drink: ['drank', 'drunk', 'drinking'],
+  eat: ['ate', 'eaten', 'eating'],
+  run: ['ran', 'running'],
+  swim: ['swam', 'swimming'],
+  do: ['did', 'done', 'doing'],
+  give: ['gave', 'given', 'giving'],
+  write: ['wrote', 'written', 'writing'],
+  read: ['read', 'reading'],
+  go: ['went', 'gone', 'going'],
+  sit: ['sat', 'sitting'],
+  get: ['got', 'getting'],
+};
+
+const verbForms = (verb: string): string[] => {
+  if (!/^[a-z]{3,}$/.test(verb)) return [];
+  if (IRREGULAR_VERBS[verb]) return IRREGULAR_VERBS[verb];
+  const last = verb.slice(-1);
+  const stem = verb.endsWith('e') ? verb.slice(0, -1) : verb;
+  const doubled = `${verb}${last}`;
+  const past = verb.endsWith('e')
+    ? [`${verb}d`]
+    : /[^aeiou]y$/.test(verb)
+      ? [`${verb.slice(0, -1)}ied`]
+      : [`${verb}ed`, `${doubled}ed`];
+  return [
+    ...past,
+    ...(verb.endsWith('ice') ? [`${verb.slice(0, -3)}ised`] : []),
+    `${stem}ing`,
+    `${doubled}ing`,
+  ];
+};
+
+const isVerb = (words: string[], at: number) =>
+  words[at] === 'take'
+    ? words[at - 1] === 'i'
+    : (CHECKIN_VERBS as readonly string[]).includes(words[at]);
 
 const splits = (words: string[]): string[][] =>
   words.length === 0
@@ -79,31 +156,54 @@ const splits = (words: string[]): string[][] =>
 const rolesOf = (
   habit: CheckInHabit,
   whoNames: Record<string, readonly string[]>,
-): Role[] => [
-  { kind: 'name', windowId: null, text: habit.name },
-  ...Object.entries(habit.windows).map(([windowId, window]): Role => ({
-    kind: 'window',
+): Role[] => {
+  const [lead, ...rest] = toComparable(habit.name).split(' ').filter(Boolean);
+  const forms = lead ? verbForms(lead) : [];
+  const role = (kind: Role['kind'], text: string, windowId: string | null) => ({
+    kind,
     windowId,
-    text: window.label,
-  })),
-  ...(habit.forWhoId
-    ? (whoNames[habit.forWhoId] ?? []).map((text): Role => ({
-        kind: 'who',
-        windowId: null,
-        text,
-      }))
-    : []),
-];
+    text,
+    isVerbForm: false,
+  });
+  return [
+    role('name', habit.name, null),
+    ...forms.flatMap((form): Role[] => [
+      { ...role('name', form, null), isVerbForm: true },
+      ...(rest.length > 0
+        ? [
+            {
+              ...role('name', [form, ...rest].join(' '), null),
+              isVerbForm: true,
+            },
+          ]
+        : []),
+    ]),
+    ...(habit.isCare
+      ? MEDICINE_WORDS.map((word) => role('name', word, null))
+      : []),
+    ...Object.entries(habit.windows).map(([windowId, window]) =>
+      role('window', window.label, windowId),
+    ),
+    ...(habit.forWhoId
+      ? (whoNames[habit.forWhoId] ?? []).map((text) => role('who', text, null))
+      : []),
+  ];
+};
+
+const isFit = (segment: string, role: Role) =>
+  role.isVerbForm
+    ? toComparable(segment, true) === toComparable(role.text, true)
+    : matcher.match(segment, [role]) !== null;
 
 const readHabitMatch = (
   habit: CheckInHabit,
+  roles: Role[],
   segmentations: string[][],
-  whoNames: Record<string, readonly string[]>,
-) => {
-  const roles = rolesOf(habit, whoNames);
-  return segmentations.flatMap((segments) => {
+  hasVerb: boolean,
+) =>
+  segmentations.flatMap((segments) => {
     const found = segments.map((segment) =>
-      roles.filter((role) => matcher.match(segment, [role]) !== null),
+      roles.filter((role) => isFit(segment, role)),
     );
     if (found.some((fits) => fits.length === 0)) return [];
     const kinds = found.map((fits) => fits[0].kind);
@@ -111,31 +211,57 @@ const readHabitMatch = (
       fits[0].kind === 'window' ? [fits[0].windowId] : [],
     );
     const hasWho = kinds.includes('who');
+    const isDoneWord = found.some((fits) =>
+      fits.some((role) => role.isVerbForm),
+    );
     const isValid =
+      (hasVerb || isDoneWord) &&
       kinds.filter((kind) => kind === 'name').length <= 1 &&
       windows.length <= 1 &&
       (kinds.includes('name') || windows.length === 1) &&
       hasWho === (habit.forWhoId !== null);
     return isValid ? [{ windowId: windows[0] ?? null }] : [];
   })[0];
+
+const isQuestion = (
+  text: string,
+  words: string[],
+  whoNames: Record<string, readonly string[]>,
+) => {
+  if (text.includes('?')) return true;
+  if (!QUESTION_OPENERS.has(words[0])) return false;
+  if (words[0] !== 'did') return true;
+  const names = new Set(
+    Object.values(whoNames).flatMap((list) =>
+      list.map((name) => toComparable(name).split(' ')[0]),
+    ),
+  );
+  return SUBJECT_WORDS.has(words[1]) || names.has(words[1]);
 };
 
-/** Reads a typed or said line against today's habits; confident only when nothing but a verb, filler, a habit's name or a window label (and a carer's who) is said, so anything more goes to the model. */
+/** Reads a typed or said line against today's habits; confident only when nothing but a verb (or the past form of a habit's own verb), filler, a habit's name, a medicine word, or a window label (and a carer's who) is said, so a question, an order, or anything more goes to the model. */
 export function matchCheckIn(
   text: string,
   todaysHabits: readonly CheckInHabit[],
   whoNames: Record<string, readonly string[]>,
 ): CheckInMatch {
   const words = toComparable(text).split(' ').filter(Boolean);
-  if (!words.some(isVerb)) return { kind: 'none' };
+  if (isQuestion(text, words, whoNames)) return { kind: 'none' };
+  const hasVerb = words.some((_, at) => isVerb(words, at));
   const residual = words.filter(
-    (word) => !isVerb(word) && !FILLER_WORDS.has(word),
+    (word, at) => !isVerb(words, at) && !FILLER_WORDS.has(word),
   );
   if (residual.length === 0 || residual.length > MAX_RESIDUAL_WORDS)
     return { kind: 'none' };
   const segmentations = splits(residual);
   const matches = todaysHabits.flatMap((habit) => {
-    const found = readHabitMatch(habit, segmentations, whoNames);
+    const roles = rolesOf(habit, whoNames);
+    const tokens = [
+      ...new Set(roles.flatMap((role) => toComparable(role.text).split(' '))),
+    ].filter(Boolean);
+    if (!residual.some((word) => wordMatcher.match(word, tokens) !== null))
+      return [];
+    const found = readHabitMatch(habit, roles, segmentations, hasVerb);
     return found ? [{ habitId: habit.id, windowId: found.windowId }] : [];
   });
   if (matches.length === 0) return { kind: 'none' };
@@ -202,13 +328,13 @@ const pickWindow = (
     .filter((span) => span.endAt <= at)
     .sort((first, second) => second.endAt - first.endAt)[0];
   if (earlier) return earlier.id;
-  const soon = spans.find(
-    (span) => span.startAt > at && span.startAt - at <= EARLY_MS,
-  );
-  return soon?.id ?? 'day';
+  const next = spans
+    .filter((span) => span.startAt > at)
+    .sort((first, second) => first.startAt - second.startAt)[0];
+  return (next ?? spans[spans.length - 1]).id;
 };
 
-/** Decides which window a check-in lands in (the open one, else the nearest unticked earlier one today, else a window about to open, else the day), the write it makes and the line that says so; nothing is written for a habit that is not active. */
+/** Decides which window a check-in lands in (the open one, else the nearest unticked earlier one today, else the next one still to come; never the whole day for a habit with windows), the write it makes and the line that says so; nothing is written for a habit that is not active. */
 export function resolveCheckIn(
   habit: CheckInHabit,
   windowId: string | null,

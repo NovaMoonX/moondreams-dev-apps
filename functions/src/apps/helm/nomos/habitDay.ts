@@ -1,5 +1,11 @@
 // Generated from src/apps/helm/engine/habitDay.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
-import { isDueOn, type Cadence } from '../../../vendor/cadenceUtils.js';
+import {
+  dayKeyToMs as toMs,
+  isDueOn,
+  msToDayKey as toKey,
+  shiftDayKeyBy as shiftKey,
+  type Cadence,
+} from '../../../vendor/cadenceUtils.js';
 import { zonedDateTimeToEpoch } from '../../../notifications/zonedTime.js';
 import { readZoneFor } from './whereabouts.js';
 
@@ -21,6 +27,8 @@ export interface HabitScheduleLike {
   endsOn: number | null;
   pausedAt?: number | null;
   pausedUntil?: number | null;
+  /** Its status history: a pause that was resumed by hand stays excluded from the week. */
+  history?: { kind: string; at: number }[];
 }
 
 export interface HabitDayLike {
@@ -58,13 +66,6 @@ const toClock = (minutes: number) => {
   const wrapped = ((minutes % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
   return `${String(Math.floor(wrapped / 60)).padStart(2, '0')}:${String(wrapped % 60).padStart(2, '0')}`;
 };
-
-const toMs = (dayKey: string) => Date.parse(`${dayKey}T00:00:00Z`);
-
-const toKey = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-
-const shiftKey = (dayKey: string, days: number) =>
-  toKey(toMs(dayKey) + days * DAY_MS);
 
 const formats = new Map<string, Intl.DateTimeFormat>();
 
@@ -143,11 +144,35 @@ export function dayPartWindows(profile: {
   };
 }
 
-/** A window of an hour around a time the person said ("at 8" is 07:30 to 08:30). */
+/** A window can start from the rollover on: an earlier start falls in the day before. */
+export const isWindowStartAllowed = (start: string) =>
+  toMinutes(start) >= toMinutes(HABIT_DAY_ROLLOVER);
+
+/** A window whose start is before the rollover starts at it instead, keeping its end when that is later. */
+export function toAllowedWindow(window: ClockWindow): ClockWindow {
+  if (isWindowStartAllowed(window.start)) return window;
+  const rollover = toMinutes(HABIT_DAY_ROLLOVER);
+  return {
+    start: HABIT_DAY_ROLLOVER,
+    end:
+      toMinutes(window.end) > rollover
+        ? window.end
+        : toClock(rollover + SAID_TIME_HALF_MINUTES),
+  };
+}
+
+/** A window of an hour around a time the person said ("at 8" is 07:30 to 08:30); a time after midnight is the tail of the evening before, ending by the rollover. */
 export function saidTimeWindow(time: string): ClockWindow {
   const at = toMinutes(time);
+  const rollover = toMinutes(HABIT_DAY_ROLLOVER);
+  if (at < rollover) {
+    return {
+      start: '23:30',
+      end: toClock(Math.min(at + SAID_TIME_HALF_MINUTES, rollover)),
+    };
+  }
   return {
-    start: toClock(Math.max(at - SAID_TIME_HALF_MINUTES, 0)),
+    start: toClock(Math.max(at - SAID_TIME_HALF_MINUTES, rollover)),
     end: toClock(at + SAID_TIME_HALF_MINUTES),
   };
 }
@@ -201,10 +226,31 @@ export function readHabitStatusOn<Status extends string>(
     : habit.status;
 }
 
-const isPausedOn = (habit: HabitScheduleLike, dayKey: string) =>
-  habit.pausedAt != null &&
-  dayKey >= toKey(habit.pausedAt) &&
-  (habit.pausedUntil == null || dayKey < toKey(habit.pausedUntil));
+/** The days a habit was paused: each pause up to the event that ended it (a resume by hand included), then the current one up to its end date. */
+const readPauseSpans = (habit: HabitScheduleLike, timeZone: string) => {
+  const events = [...(habit.history ?? [])].sort(
+    (first, second) => first.at - second.at,
+  );
+  const closed = events.flatMap((event, at) =>
+    event.kind === 'paused' && events[at + 1]
+      ? [
+          {
+            from: habitDayKey(event.at, timeZone),
+            to: habitDayKey(events[at + 1].at, timeZone),
+          },
+        ]
+      : [],
+  );
+  return habit.pausedAt != null
+    ? [
+        ...closed,
+        {
+          from: habitDayKey(habit.pausedAt, timeZone),
+          to: habit.pausedUntil != null ? toKey(habit.pausedUntil) : null,
+        },
+      ]
+    : closed;
+};
 
 /** Whether the habit asks for something on this day. */
 export function isHabitDue(habit: HabitScheduleLike, dayKey: string): boolean {
@@ -246,12 +292,27 @@ const doneUnits = (
   return ids.length === 0 ? Number(isDone('day')) : ids.filter(isDone).length;
 };
 
-/** This week's figure in the habit's own unit, Monday to today, counting only the days it asked for so far; today counts once it is done. A times-a-week habit counts days and is met once its count is. */
+const skippedUnits = (
+  habit: HabitScheduleLike,
+  entry: HabitDayLike['entries'][string] | undefined,
+) => {
+  if (!entry) return 0;
+  const isSkipped = (id: string) => entry.checks[id]?.status === 'skipped';
+  if (habit.timesPerDay !== null)
+    return isSkipped('day') && entry.count < habit.timesPerDay ? 1 : 0;
+  const ids = Object.keys(habit.windowState);
+  return ids.length === 0
+    ? Number(isSkipped('day'))
+    : ids.filter(isSkipped).length;
+};
+
+/** This week's figure in the habit's own unit, Monday to today, counting only the days it asked for so far; today counts once it is done. A skipped unit is neither done nor missed: it leaves `due` and is counted in `skipped`. A times-a-week habit counts days and is met once its count is. `due: 0` means nothing has been asked yet ("Starts today"). Days in a pause, read in `timeZone`, are left out. */
 export function selectHabitWeek(
   habit: HabitScheduleLike & { id: string },
   days: Record<string, HabitDayLike>,
   todayKey: string,
-): { done: number; due: number } {
+  timeZone: string,
+): { done: number; due: number; skipped: number } {
   const monday = shiftKey(
     todayKey,
     -((new Date(toMs(todayKey)).getUTCDay() + 6) % 7),
@@ -260,35 +321,51 @@ export function selectHabitWeek(
   const to = toKey(
     Math.min(toMs(todayKey), habit.endsOn === null ? Infinity : habit.endsOn),
   );
-  if (to < from) return { done: 0, due: 0 };
+  if (to < from) return { done: 0, due: 0, skipped: 0 };
   const keys = Array.from(
     { length: Math.round((toMs(to) - toMs(from)) / DAY_MS) + 1 },
     (_, at) => shiftKey(from, at),
   );
-  const unitsOf = (key: string) =>
-    doneUnits(habit, days[key]?.entries[habit.id]);
+  const entryOf = (key: string) => days[key]?.entries[habit.id];
   const full = unitsPerDay(habit);
-  const open = keys.filter((key) => !isPausedOn(habit, key));
+  const spans = readPauseSpans(habit, timeZone);
+  const open = keys.filter(
+    (key) =>
+      !spans.some(
+        (span) => key >= span.from && (span.to === null || key < span.to),
+      ),
+  );
   if (habit.cadence.kind === 'timesPerWeek') {
-    const due = Math.min(habit.cadence.count, open.length);
+    const asked = open.filter(
+      (key) =>
+        doneUnits(habit, entryOf(key)) >= full ||
+        skippedUnits(habit, entryOf(key)) < full,
+    );
+    const due = Math.min(habit.cadence.count, asked.length);
     return {
-      done: Math.min(open.filter((key) => unitsOf(key) >= full).length, due),
+      done: Math.min(
+        asked.filter((key) => doneUnits(habit, entryOf(key)) >= full).length,
+        due,
+      ),
       due,
+      skipped: open.length - asked.length,
     };
   }
   return open
     .filter((key) => isDueOn(habit.cadence, key))
     .reduce(
       (total, key) => {
-        const units = Math.min(unitsOf(key), full);
-        if (key === todayKey) {
-          return {
-            done: total.done + units,
-            due: total.due + units,
-          };
-        }
-        return { done: total.done + units, due: total.due + full };
+        const done = Math.min(doneUnits(habit, entryOf(key)), full);
+        const skipped = Math.min(
+          skippedUnits(habit, entryOf(key)),
+          full - done,
+        );
+        return {
+          done: total.done + done,
+          due: total.due + (key === todayKey ? done : full - skipped),
+          skipped: total.skipped + skipped,
+        };
       },
-      { done: 0, due: 0 },
+      { done: 0, due: 0, skipped: 0 },
     );
 }

@@ -16,11 +16,13 @@ import {
   dayPartWindows,
   habitDayKey,
   isHabitDue,
+  isWindowStartAllowed,
   openWindowAt,
   readHabitClock,
   readHabitStatusOn,
   saidTimeWindow,
   selectHabitWeek,
+  toAllowedWindow,
   windowInstants,
   type HabitDayLike,
   type HabitScheduleLike,
@@ -322,24 +324,28 @@ test('the week is Monday to today in the habit unit: 11 of 13 for pills, 2 of 3 
     '2026-11-08': pillsDay(['m']),
     '2026-11-01': pillsDay(['m', 'e']),
   };
-  assert.deepEqual(selectHabitWeek(pills, days, '2026-11-08'), {
+  assert.deepEqual(selectHabitWeek(pills, days, '2026-11-08', 'UTC'), {
     done: 11,
     due: 13,
+    skipped: 0,
   });
   assert.deepEqual(
     selectHabitWeek(
       pills,
       { ...days, '2026-11-08': pillsDay([]) },
       '2026-11-08',
+      'UTC',
     ),
     {
       done: 10,
       due: 12,
+      skipped: 0,
     },
   );
-  assert.deepEqual(selectHabitWeek(pills, days, '2026-11-02'), {
+  assert.deepEqual(selectHabitWeek(pills, days, '2026-11-02', 'UTC'), {
     done: 2,
     due: 2,
+    skipped: 0,
   });
 
   const guitar = schedule({ cadence: { kind: 'timesPerWeek', count: 3 } });
@@ -348,18 +354,20 @@ test('the week is Monday to today in the habit unit: 11 of 13 for pills, 2 of 3 
   assert.deepEqual(
     selectHabitWeek(
       guitar,
-      practised('2026-11-02', '2026-11-03'),
+      practised('2026-11-02', '2026-11-03', 'UTC'),
       '2026-11-04',
+      'UTC',
     ),
-    { done: 2, due: 3 },
+    { done: 2, due: 3, skipped: 0 },
   );
   assert.deepEqual(
     selectHabitWeek(
       guitar,
-      practised('2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05'),
+      practised('2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', 'UTC'),
       '2026-11-06',
+      'UTC',
     ),
-    { done: 3, due: 3 },
+    { done: 3, due: 3, skipped: 0 },
   );
 });
 
@@ -377,12 +385,13 @@ test('a counted habit counts days that reached its number; weekdays and a late s
         '2026-11-04': counted(3),
       },
       '2026-11-05',
+      'UTC',
     ),
-    { done: 2, due: 3 },
+    { done: 2, due: 3, skipped: 0 },
   );
   assert.deepEqual(
-    selectHabitWeek(water, { '2026-11-05': counted(6) }, '2026-11-05'),
-    { done: 1, due: 4 },
+    selectHabitWeek(water, { '2026-11-05': counted(6) }, '2026-11-05', 'UTC'),
+    { done: 1, due: 4, skipped: 0 },
   );
   const lateStart = schedule({ startsOn: utc(2026, 11, 4) });
   assert.deepEqual(
@@ -390,8 +399,9 @@ test('a counted habit counts days that reached its number; weekdays and a late s
       lateStart,
       { '2026-11-04': pillsDay(['day']) },
       '2026-11-06',
+      'UTC',
     ),
-    { done: 1, due: 2 },
+    { done: 1, due: 2, skipped: 0 },
   );
   const weekdays = schedule({
     cadence: { kind: 'onWeekdays', weekdays: [1, 3] },
@@ -401,48 +411,60 @@ test('a counted habit counts days that reached its number; weekdays and a late s
       weekdays,
       { '2026-11-02': pillsDay(['day']) },
       '2026-11-04',
+      'UTC',
     ),
-    { done: 1, due: 1 },
+    { done: 1, due: 1, skipped: 0 },
   );
   const ended = schedule({ endsOn: utc(2026, 11, 3) });
-  assert.deepEqual(selectHabitWeek(ended, {}, '2026-11-08'), {
+  assert.deepEqual(selectHabitWeek(ended, {}, '2026-11-08', 'UTC'), {
     done: 0,
     due: 2,
+    skipped: 0,
   });
 });
 
 test('days inside a pause are neither due nor counted, and a finished pause reads as active', () => {
   const done = (...keys: string[]) =>
     Object.fromEntries(keys.map((key) => [key, pillsDay(['day'])]));
-  const week = done('2026-11-02', '2026-11-03', '2026-11-05', '2026-11-07');
+  const week = done(
+    '2026-11-02',
+    '2026-11-03',
+    '2026-11-05',
+    '2026-11-07',
+    'UTC',
+  );
   const pausedMidWeek = schedule({
     status: 'paused',
     pausedAt: Date.UTC(2026, 10, 4, 12),
     pausedUntil: utc(2026, 11, 7),
   });
-  assert.deepEqual(selectHabitWeek(pausedMidWeek, week, '2026-11-08'), {
+  assert.deepEqual(selectHabitWeek(pausedMidWeek, week, '2026-11-08', 'UTC'), {
     done: 3,
     due: 3,
+    skipped: 0,
   });
   assert.deepEqual(
     selectHabitWeek(
       schedule({ pausedAt: Date.UTC(2026, 10, 5, 9), pausedUntil: null }),
       week,
       '2026-11-08',
+      'UTC',
     ),
-    { done: 2, due: 3 },
+    { done: 2, due: 3, skipped: 0 },
   );
   assert.deepEqual(
     selectHabitWeek(
       { ...pausedMidWeek, cadence: { kind: 'timesPerWeek', count: 3 } },
       week,
       '2026-11-08',
+      'UTC',
     ),
-    { done: 3, due: 3 },
+    { done: 3, due: 3, skipped: 0 },
   );
-  assert.deepEqual(selectHabitWeek(schedule(), week, '2026-11-08'), {
+  assert.deepEqual(selectHabitWeek(schedule(), week, '2026-11-08', 'UTC'), {
     done: 4,
     due: 6,
+    skipped: 0,
   });
   const until = { status: 'paused', pausedUntil: utc(2026, 11, 10) };
   assert.equal(readHabitStatusOn(until, '2026-11-09'), 'paused');
@@ -465,6 +487,88 @@ test('days inside a pause are neither due nor counted, and a finished pause read
   );
 });
 
+test('a skipped unit is neither done nor missed, and a first day asks for nothing yet', () => {
+  const pills = schedule({
+    windowState: {
+      m: { start: '08:00', end: '10:00', order: 0 },
+      e: { start: '20:00', end: '22:00', order: 1 },
+    },
+  });
+  const skipDay = (id: string): HabitDayLike => ({
+    entries: {
+      h: { checks: { [id]: { status: 'skipped' } }, count: 0 },
+    },
+  });
+  assert.deepEqual(
+    selectHabitWeek(pills, { '2026-11-03': skipDay('e') }, '2026-11-04', 'UTC'),
+    { done: 0, due: 3, skipped: 1 },
+  );
+  const water = schedule({ timesPerDay: 6 });
+  assert.deepEqual(
+    selectHabitWeek(
+      water,
+      { '2026-11-03': skipDay('day') },
+      '2026-11-04',
+      'UTC',
+    ),
+    { done: 0, due: 1, skipped: 1 },
+  );
+  const fresh = schedule({ startsOn: utc(2026, 11, 4) });
+  assert.deepEqual(selectHabitWeek(fresh, {}, '2026-11-04', 'UTC'), {
+    done: 0,
+    due: 0,
+    skipped: 0,
+  });
+  const guitar = schedule({ cadence: { kind: 'timesPerWeek', count: 3 } });
+  assert.deepEqual(
+    selectHabitWeek(
+      guitar,
+      { '2026-11-02': skipDay('day') },
+      '2026-11-04',
+      'UTC',
+    ),
+    { done: 0, due: 2, skipped: 1 },
+  );
+});
+
+test('a pause is read in the zone: 01:00 in Los Angeles is still the day before, and a resumed pause stays out of the week', () => {
+  const done = (...keys: string[]) =>
+    Object.fromEntries(keys.map((key) => [key, pillsDay(['day'])]));
+  const week = done('2026-11-02', '2026-11-03');
+  const pausedAt = Date.UTC(2026, 10, 5, 9);
+  const history = [
+    { kind: 'paused', at: pausedAt },
+    { kind: 'resumed', at: Date.UTC(2026, 10, 7, 20) },
+  ];
+  assert.deepEqual(
+    selectHabitWeek(
+      schedule({ pausedAt, pausedUntil: null }),
+      week,
+      '2026-11-08',
+      LA,
+    ),
+    { done: 2, due: 2, skipped: 0 },
+  );
+  assert.deepEqual(
+    selectHabitWeek(
+      schedule({ pausedAt, pausedUntil: null }),
+      week,
+      '2026-11-08',
+      'UTC',
+    ),
+    { done: 2, due: 3, skipped: 0 },
+  );
+  assert.deepEqual(
+    selectHabitWeek(schedule({ history }), week, '2026-11-08', LA),
+    { done: 2, due: 3, skipped: 0 },
+  );
+  assert.deepEqual(selectHabitWeek(schedule(), week, '2026-11-08', LA), {
+    done: 2,
+    due: 6,
+    skipped: 0,
+  });
+});
+
 test('parts of the day follow Your day, a fixed table until it was set, and a said time is an hour', () => {
   assert.deepEqual(
     dayPartWindows({ dayStartTime: '08:00', dayEndTime: '22:00' }),
@@ -482,6 +586,23 @@ test('parts of the day follow Your day, a fixed table until it was set, and a sa
   );
   assert.deepEqual(saidTimeWindow('08:00'), { start: '07:30', end: '08:30' });
   assert.deepEqual(saidTimeWindow('23:45'), { start: '23:15', end: '00:15' });
+  assert.deepEqual(saidTimeWindow('03:10'), { start: '03:00', end: '03:40' });
+  assert.deepEqual(saidTimeWindow('01:00'), { start: '23:30', end: '01:30' });
+  assert.deepEqual(saidTimeWindow('02:50'), { start: '23:30', end: '03:00' });
+  assert.equal(isWindowStartAllowed('03:00'), true);
+  assert.equal(isWindowStartAllowed('02:59'), false);
+  assert.deepEqual(toAllowedWindow({ start: '02:00', end: '09:00' }), {
+    start: '03:00',
+    end: '09:00',
+  });
+  assert.deepEqual(toAllowedWindow({ start: '02:00', end: '02:30' }), {
+    start: '03:00',
+    end: '03:30',
+  });
+  assert.deepEqual(toAllowedWindow({ start: '08:00', end: '09:00' }), {
+    start: '08:00',
+    end: '09:00',
+  });
 });
 
 const failures = tests.flatMap(([name, run]) => {

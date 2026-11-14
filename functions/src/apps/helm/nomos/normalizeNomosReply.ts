@@ -1969,6 +1969,8 @@ export function normalizeNomosReply(
     runSteps?: AliasBook;
     /** The person's habits, by alias (h1, h2, …). */
     habits?: AliasBook;
+    /** Each habit's real name by id, for the check that words in the turn name it. */
+    habitNames?: Map<string, string>;
     /** The words of the turn, which a note's words must come from. */
     captureText?: string;
     /** What names each date in the context (who, label, kind), for the check that a removal is still asked once closing phrases are taken out. */
@@ -2114,6 +2116,7 @@ export function normalizeNomosReply(
     items,
     {
       habits: context.habits,
+      habitNames: context.habitNames,
       people: context.people,
       reading: context.reading,
       captureText: context.captureText,

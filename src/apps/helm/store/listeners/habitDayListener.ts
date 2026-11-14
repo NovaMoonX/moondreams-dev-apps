@@ -29,7 +29,7 @@ const readEntries = (value: HabitDay['entries'] | undefined) =>
         habitId,
         {
           checks: entry.checks ?? {},
-          count: entry.count ?? 0,
+          count: Math.max(0, entry.count ?? 0),
           lastCountAt: entry.lastCountAt ?? null,
           reminded: entry.reminded ?? {},
           followUpAt: entry.followUpAt ?? null,
