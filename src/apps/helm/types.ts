@@ -13,6 +13,7 @@ export type HelmView =
   | 'tasks'
   | 'settings'
   | 'activity'
+  | 'outside'
   | 'connectedApps'
   | 'connection'
   | 'assistants'
@@ -286,6 +287,8 @@ export interface Capture {
   medium: 'web' | 'mcp';
   /** The outside assistant's name on an 'mcp' turn; null on every web turn and on every turn made before the field. */
   via: string | null;
+  /** The read switches the outside assistant had on when it asked, which bound what its answer may read; null on every web turn and on every turn made before the field. Only the server writes it. */
+  outsideReadScopes: ('mail' | 'drive' | 'apps')[] | null;
   sessionId: string;
   turnIndex: number;
   route: CaptureRoute | null;

@@ -223,9 +223,13 @@ const ALREADY_FILED_TEXT =
 const retryKeyFor = (ctx: McpRequestContext, words: string, now: number) =>
   `mcp_${createHash('sha256')
     .update(
-      [ctx.uid, ctx.clientKey, words, Math.floor(now / RETRY_WINDOW_MS)].join(
-        '|',
-      ),
+      [
+        ctx.uid,
+        ctx.clientKey,
+        [...ctx.readScopes].sort().join(','),
+        words,
+        Math.floor(now / RETRY_WINDOW_MS),
+      ].join('|'),
     )
     .digest('hex')
     .slice(0, 28)}`;
@@ -259,6 +263,7 @@ async function fileTurn({
       arrivedVia: 'direct',
       medium: 'mcp',
       via: ctx.clientName,
+      outsideReadScopes: ctx.readScopes,
       sessionId: randomUUID(),
       turnIndex: 0,
       route: null,
@@ -273,7 +278,8 @@ async function fileTurn({
       turnLeadId: null,
       joinedCaptureIds: [],
       attachmentIds: [],
-      seenAt: null,
+      // Home never shows an outside turn, so it is filed seen and stays out of home's unseen window.
+      seenAt: createdAt,
       quotedSourceKeys: [],
       dismissedAt: null,
       answerSavedNoteId: null,
@@ -450,6 +456,7 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
     ),
     siteGrants: ctx.readScopes.includes('apps') ? siteGrants : [],
     key,
+    outsideReadScopes: ctx.readScopes,
     firestore,
     timeZone: (profile.data()?.timeZone as string | undefined) ?? 'UTC',
     aliases: createSealedAliasBook('t', ctx.uid, key),

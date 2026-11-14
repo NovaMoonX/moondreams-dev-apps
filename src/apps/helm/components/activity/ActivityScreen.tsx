@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, MessagesSquare } from 'lucide-react';
 
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
@@ -23,8 +23,9 @@ import {
 } from '@apps/helm/store/helmSlice';
 import { startActivityListener } from '@apps/helm/store/listeners/executionListener';
 import {
-  selectAllCaptures,
+  selectEveryCapture,
   selectExecutionsById,
+  selectHasOutsideSource,
 } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenExecution } from '@apps/helm/types';
 import {
@@ -38,6 +39,7 @@ import { createSealedReader } from '@lib/security';
 
 interface ActivityScreenProps {
   onBack: () => void;
+  onOpenOutside: () => void;
 }
 
 const ROW_ESTIMATED_HEIGHT = 48;
@@ -150,14 +152,15 @@ function ActivityRow({
 }
 
 /** A utility screen: every execution newest first under its day, thirty at a time. */
-function ActivityScreen({ onBack }: ActivityScreenProps) {
+function ActivityScreen({ onBack, onOpenOutside }: ActivityScreenProps) {
   const { user } = useAuth();
   const name = useAssistantName();
   const { items, isLoaded, isFailed, limit, isExhausted } = useAppSelector(
     (state) => state.helm.activity,
   );
   const byId = useAppSelector(selectExecutionsById);
-  const captures = useAppSelector(selectAllCaptures);
+  const captures = useAppSelector(selectEveryCapture);
+  const hasOutsideSource = useAppSelector(selectHasOutsideSource);
   const viaByCapture = useMemo(
     () =>
       new Map(
@@ -186,6 +189,26 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.activityTitle}
         </h1>
+        {hasOutsideSource && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='helm-card flex h-auto w-full items-center justify-between gap-3 px-4 py-2.5 text-left'
+            onClick={onOpenOutside}
+          >
+            <MessagesSquare
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+            <span className='text-foreground min-w-0 flex-1 truncate text-[15px]'>
+              {HELM_COPY.outsideTitle}
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+        )}
         {isFailed && (
           <p className='helm-card p-4 text-[15px] text-pretty' role='alert'>
             {HELM_COPY.activityFailed}

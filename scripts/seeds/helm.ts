@@ -593,6 +593,7 @@ async function buildBackToBack(input: {
         arrivedVia: 'direct',
         medium: 'web',
         via: null,
+        outsideReadScopes: null,
         sessionId: `seed-${uid}-today`,
         turnIndex: turnIndexFrom + order,
         route: order === 0 ? 'quick' : null,
@@ -937,6 +938,7 @@ async function buildGmailTurn(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: `seed-${uid}-answers`,
     turnIndex: 6,
     route: 'quick',
@@ -1078,6 +1080,7 @@ async function buildAnswerTurns(input: {
         arrivedVia: 'direct',
         medium: 'web',
         via: null,
+        outsideReadScopes: null,
         sessionId: `seed-${uid}-answers`,
         turnIndex: order,
         route: 'quick',
@@ -1223,7 +1226,40 @@ async function buildAnswerTurns(input: {
       return { id: entry.id, task };
     }),
   );
-  return { turns, tasks, notes };
+  // Three answered questions copied as an outside assistant's turns: two from Claude in one sitting, one from Gemini the day before.
+  const outsideTurns = turns.slice(0, 3).map((turn, order) => {
+    const createdAt =
+      order < 2
+        ? now - (20 - order * 6) * MINUTE_MS
+        : now - DAY_MS - 3 * 60 * MINUTE_MS;
+    const captureId = `seed-turn-outside-${order + 1}`;
+    const executionId = `seed-execution-outside-${order + 1}`;
+    return {
+      captureId,
+      executionId,
+      capture: {
+        ...turn.capture,
+        medium: 'mcp' as const,
+        via: order < 2 ? 'Claude' : 'Gemini',
+        outsideReadScopes: order === 0 ? ['apps' as const] : [],
+        sessionId: `seed-${uid}-outside-${order + 1}`,
+        turnIndex: 0,
+        executionIds: [executionId],
+        answerSavedNoteId: null,
+        seenAt: createdAt,
+        createdAt,
+        sortedAt: createdAt + SORT_DELAY_MS,
+      },
+      execution: {
+        ...turn.execution,
+        captureId,
+        createdAt: createdAt + SORT_DELAY_MS,
+        decidedAt: createdAt + SORT_DELAY_MS,
+        finishedAt: createdAt + SORT_DELAY_MS,
+      },
+    };
+  });
+  return { turns: [...turns, ...outsideTurns], tasks, notes };
 }
 
 /** Alex's plan days: yesterday as it was (one event, one kept task done that day and one not) and today (one kept slot and one suggestion), with the done task they need. */
@@ -1719,6 +1755,7 @@ async function buildNoteTurn(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: `seed-${uid}-answers`,
     turnIndex: 7,
     route: 'full',
@@ -2362,6 +2399,7 @@ async function buildKnowledge(input: {
     arrivedVia: 'direct' as const,
     medium: 'web' as const,
     via: null,
+    outsideReadScopes: null,
     sessionId: `seed-${uid}-growth`,
     turnIndex,
     route: 'full' as const,
@@ -3026,6 +3064,7 @@ async function buildPhotoTurns(input: {
       arrivedVia: 'direct',
       medium: 'web',
       via: null,
+      outsideReadScopes: null,
       sessionId,
       turnIndex: index,
       route: 'full',
@@ -3325,6 +3364,7 @@ async function buildFileTurns(input: {
       arrivedVia: 'direct',
       medium: 'web',
       via: null,
+      outsideReadScopes: null,
       sessionId,
       turnIndex: index,
       route: 'full',
@@ -4004,6 +4044,7 @@ async function buildPeople(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: 'seed-alex-question',
     turnIndex: 0,
     route: 'quick',
@@ -4089,6 +4130,7 @@ async function buildPeople(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: 'seed-alex-asked',
     turnIndex: 0,
     route: 'quick',
@@ -4156,6 +4198,7 @@ async function buildPeople(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: 'seed-alex-who',
     turnIndex: 0,
     route: 'quick',
@@ -4934,6 +4977,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               arrivedVia: 'direct',
               medium: 'web',
               via: null,
+              outsideReadScopes: null,
               sessionId: `seed-${user.uid}-${turn.session}`,
               turnIndex: ALL_TURNS.filter(
                 (entry) => entry.session === turn.session,
