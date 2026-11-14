@@ -3602,7 +3602,9 @@ const readInput = (data: unknown) => {
 export const toContextNotes = (hinted: HintedNote[], text: string) =>
   isQuestion(text.trim())
     ? hinted
-    : hinted.map(({ id, title, isPrivate }) => ({ id, title, isPrivate }));
+    : hinted.map(({ id, title, isPrivate }) =>
+        isPrivate === undefined ? { id, title } : { id, title, isPrivate },
+      );
 
 export const sortHelmCapture = onCall(
   {
