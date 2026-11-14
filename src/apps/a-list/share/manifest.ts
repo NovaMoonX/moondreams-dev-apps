@@ -7,6 +7,8 @@ export const A_LIST_SHARES: SourceShares = {
       id: 'app:a-list',
       kind: 'firstPartyApp',
       contractVersion: 1,
+      about:
+        "A-List is the person's movie app: films they plan to see in theaters, the showtimes they picked, their theaters and the films they've seen and rated.",
       transformVersion: 1,
       categories: [
         {
@@ -14,6 +16,8 @@ export const A_LIST_SHARES: SourceShares = {
           kind: 'event',
           label: 'Planned showings',
           detail: 'The movie, time and theater',
+          meaning:
+            'Movies the person has planned to see in a theater, each with the showtime and theater they picked.',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -37,6 +41,8 @@ export const A_LIST_SHARES: SourceShares = {
           kind: 'place',
           label: 'Saved theaters',
           detail: 'Each theater and its address',
+          meaning:
+            'The theaters the person goes to, saved with their address so they can pick one for a showing.',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -52,6 +58,8 @@ export const A_LIST_SHARES: SourceShares = {
           kind: 'knowledge',
           label: 'Movies you have seen',
           detail: 'The title and your rating',
+          meaning:
+            'Movies the person has already watched, with the rating they gave each.',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,

@@ -34,6 +34,8 @@ export interface CategoryManifest {
   label: string;
   /** What it holds, in one line. */
   detail: string;
+  /** What this category is in the person's life, in one sentence for an assistant that has never seen the app, using the app's own words for it; never shown in the app. */
+  meaning: string;
   mode: 'sync' | 'live';
   isOnAtConnect: boolean;
   /** A category added after people connected starts off and shows as new once. */
@@ -47,6 +49,8 @@ export interface CategoryManifest {
 export interface ConnectorManifest {
   id: ConnectorId;
   kind: 'firstPartyApp' | 'oauth' | 'apiKey';
+  /** What the source is, in one or two sentences for an assistant that has never seen it; never shown in the app. */
+  about: string;
   contractVersion: typeof CONTRACT_VERSION;
   /** Bumped whenever the adapter's output shape changes. */
   transformVersion: number;

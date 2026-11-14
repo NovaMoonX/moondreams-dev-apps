@@ -21,7 +21,8 @@ import {
 import { readAssistantName } from '../assistantName.js';
 import { readDates, readIsUrgent } from '../dateReading.js';
 import { DEFAULT_ASSISTANT_NAME } from '../nomos/commands.js';
-import { toKnownZone } from '../syncedCopies.js';
+import { connectorLabel, toKnownZone } from '../syncedCopies.js';
+import type { ConnectionGrant } from '../../../vendor/connectionsContract.js';
 import { createAliasBook, createSealedAliasBook } from '../nomos/aliases.js';
 import { readMadeTitles } from '../nomos/buildContext.js';
 import {
@@ -33,6 +34,7 @@ import {
 } from '../sortHelmCapture.js';
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { buildHelmTools } from './buildTools.js';
+import { sourcesBriefFor, type ConnectedSource } from './sourcesBrief.js';
 import { registerHelmTools } from './server.js';
 
 const RESOURCE = 'https://apps.moondreams.dev/mcp/helm';
@@ -342,14 +344,57 @@ const askShape = {
     ),
 };
 
+/** Each source the person has connected to Helm, once, with the categories they switched on, in the manifest's own words. */
+const readConnectedSources = async (
+  firestore: Firestore,
+  uid: string,
+): Promise<ConnectedSource[]> => {
+  const snapshot = await firestore
+    .collection(`connections/${uid}/grants`)
+    .where('readerAppId', '==', 'helm')
+    .get();
+  const { SOURCE_ADAPTERS } = await import('../../../connections/registry.js');
+  const grants = snapshot.docs
+    .filter((doc) => doc.get('status') !== 'ended')
+    .map((doc) => doc.data() as ConnectionGrant)
+    .sort((a, b) => (a.connectorId < b.connectorId ? -1 : 1));
+  const byConnector = grants.reduce((sources, grant) => {
+    const manifest = SOURCE_ADAPTERS[grant.connectorId]?.manifest;
+    if (!manifest) return sources;
+    const onIds = new Set([
+      ...(sources.get(grant.connectorId)?.onIds ?? []),
+      ...Object.entries(grant.categories)
+        .filter(([, entry]) => entry.isOn)
+        .map(([id]) => id),
+    ]);
+    return new Map(sources).set(grant.connectorId, { manifest, onIds });
+  }, new Map<string, { manifest: (typeof SOURCE_ADAPTERS)[string]['manifest']; onIds: Set<string> }>());
+  return [...byConnector.entries()].map(
+    ([connectorId, { manifest, onIds }]) => ({
+      name: connectorLabel(connectorId),
+      about: manifest.about,
+      categories: manifest.categories
+        .filter((category) => onIds.has(category.id))
+        .map(({ label, meaning }) => ({ label, meaning })),
+    }),
+  );
+};
+
 /** What an assistant is told when it connects: the person calls their Helm assistant by the name they chose, so that name routes here. */
-const instructionsFor = (name: string, canWrite: boolean) =>
+const instructionsFor = (
+  name: string,
+  canWrite: boolean,
+  sources: ConnectedSource[],
+) =>
   [
     `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
     canWrite
       ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools: tell_helm passes on something for ${name} to file or do, ask_helm asks ${name} a question, and the search tools look things up directly.`
       : `When they say "ask ${name}" or mention Helm, look things up with the search tools. This connection can't add anything, since the person turned that off in Helm; when they ask ${name} to add or change something, say so.`,
-  ].join(' ');
+    sourcesBriefFor(name, sources),
+  ]
+    .filter((line) => line !== '')
+    .join(' ');
 
 const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   const firestore = getFirestore();
@@ -385,7 +430,13 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   });
   const server = new McpServer(
     { name: 'helm', version: '1.0.0' },
-    { instructions: instructionsFor(name, ctx.canWrite) },
+    {
+      instructions: instructionsFor(
+        name,
+        ctx.canWrite,
+        await readConnectedSources(firestore, ctx.uid),
+      ),
+    },
   );
   registerHelmTools(server, tools, 'external');
   if (!ctx.canWrite) return server;

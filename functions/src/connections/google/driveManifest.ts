@@ -5,6 +5,8 @@ export const GOOGLE_DRIVE_MANIFEST: ConnectorManifest = {
   id: 'google:drive',
   kind: 'oauth',
   contractVersion: 1,
+  about:
+    "Google Drive, the person's Google documents and PDFs, connected through their Google account.",
   transformVersion: 1,
   categories: [
     {
@@ -13,6 +15,8 @@ export const GOOGLE_DRIVE_MANIFEST: ConnectorManifest = {
       label: 'Documents',
       detail:
         'Docs and PDFs, searched when you ask. Only what an answer quotes is kept.',
+      meaning:
+        "Docs and PDFs in the person's Google Drive that match a search, with passages from the matching files.",
       mode: 'live',
       isOnAtConnect: true,
       addedInVersion: 1,

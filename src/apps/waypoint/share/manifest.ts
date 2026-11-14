@@ -7,6 +7,8 @@ export const WAYPOINT_SHARES: SourceShares = {
       id: 'app:waypoint',
       kind: 'firstPartyApp',
       contractVersion: 1,
+      about:
+        "Waypoint is the person's group travel planner: trips with a day-by-day itinerary, a Before the Road checklist and shared expenses split between travelers.",
       transformVersion: 1,
       categories: [
         {
@@ -14,6 +16,8 @@ export const WAYPOINT_SHARES: SourceShares = {
           kind: 'trip',
           label: 'Your trips',
           detail: 'Name, dates and where',
+          meaning:
+            'The trips the person is part of, with their dates and the city.',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -34,6 +38,8 @@ export const WAYPOINT_SHARES: SourceShares = {
           label: 'Trip plans',
           detail:
             'Activities, flights, drives, stays and rentals, at their local times',
+          meaning:
+            "The plans on the person's trips, such as flights, stays and activities, each with its day, time and place.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -62,6 +68,8 @@ export const WAYPOINT_SHARES: SourceShares = {
           kind: 'task',
           label: 'Your trip to-dos',
           detail: 'Before the Road tasks assigned to you or private to you',
+          meaning:
+            "Before the Road is a trip's checklist of things to do before leaving; these are the items assigned to the person or private to them.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -82,6 +90,8 @@ export const WAYPOINT_SHARES: SourceShares = {
           kind: 'moneySummary',
           label: 'What you owe and are owed',
           detail: 'One line per trip: what you owe and what you are owed',
+          meaning:
+            "For each trip, the shared expenses' result: how much the person owes the group and how much they are owed.",
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,

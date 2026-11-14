@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
+import { sourcesBriefFor } from '../../functions/src/apps/helm/mcp/sourcesBrief.ts';
 import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
 import {
   readDates,
@@ -177,7 +178,27 @@ assert.match(
   external,
   /readAssistantName\(profile\.data\(\)\?\.assistantName\) \?\?\s+DEFAULT_ASSISTANT_NAME/,
 );
-assert.match(external, /instructions: instructionsFor\(name, ctx\.canWrite\)/);
+assert.match(
+  external,
+  /instructions: instructionsFor\(\s*name,\s*ctx\.canWrite,\s*await readConnectedSources\(firestore, ctx\.uid\),?\s*\)/,
+);
+
+// It also hears what each connected source is, in the manifest's words, and is sent back to Helm for what it can't read.
+assert.equal(sourcesBriefFor('Nomos', []), '');
+const brief = sourcesBriefFor('Sol', [
+  {
+    name: 'Runway',
+    about: 'Runway is the money app.',
+    categories: [{ label: 'Horizon goals', meaning: 'Costs coming up.' }],
+  },
+  { name: 'Gmail', about: 'The mail account.', categories: [] },
+]);
+assert.match(
+  brief,
+  /Runway: Runway is the money app\. It shares Horizon goals \(Costs coming up\)\./,
+);
+assert.match(brief, /Gmail: The mail account\. From these/);
+assert.match(brief, /they can ask Sol in Helm\./);
 assert.match(external, /`Tells \$\{name\}/);
 assert.match(external, /`Asks \$\{name\}/);
 

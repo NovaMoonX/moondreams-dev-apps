@@ -7,6 +7,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
       id: 'app:nine-lives',
       kind: 'firstPartyApp',
       contractVersion: 1,
+      about:
+        "Nine Lives is the person's cat care app: their cats, vet visits and clinics, vaccines and preventives, and each cat's health conditions.",
       transformVersion: 1,
       categories: [
         {
@@ -14,6 +16,7 @@ export const NINE_LIVES_SHARES: SourceShares = {
           kind: 'pet',
           label: 'Your cats',
           detail: "Each cat's name",
+          meaning: "The cats in the person's household.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -25,6 +28,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
           kind: 'event',
           label: 'Vet visits',
           detail: 'Upcoming visits: the cats, the clinic and the time',
+          meaning:
+            "Upcoming vet appointments for the person's cats, with the clinic, the time and the reason.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -44,6 +49,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
           kind: 'task',
           label: 'Vaccines and preventives due',
           detail: 'What is next due for each cat, and the day',
+          meaning:
+            "The next vaccine or preventive each of the person's cats is due for, and the day it is due.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -62,6 +69,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
           kind: 'place',
           label: 'Vet clinics',
           detail: 'Name, phone and address',
+          meaning:
+            'The vet clinics the person uses, with their phone number and address.',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -80,6 +89,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
           kind: 'knowledge',
           label: 'Health conditions',
           detail: "Each cat's conditions and whether they are active",
+          meaning:
+            'Health problems the person tracks for each cat, and whether each is active, ongoing or resolved.',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,

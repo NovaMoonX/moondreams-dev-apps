@@ -8,6 +8,8 @@ export const RUNWAY_SHARES: SourceShares = {
       id: 'app:runway',
       kind: 'firstPartyApp',
       contractVersion: 1,
+      about:
+        "Runway is the person's income-first budget planner: money arrives in pieces, and Runway plans where each paycheck goes to cover bills, goals and spending.",
       transformVersion: 1,
       categories: [
         {
@@ -16,6 +18,8 @@ export const RUNWAY_SHARES: SourceShares = {
           label: 'Free to Spend',
           detail:
             'One total: what is free to spend now, the next income day and what is due before it',
+          meaning:
+            "Free to Spend is what is left of the person's money after bills and set-asides, until their next income day.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -35,6 +39,8 @@ export const RUNWAY_SHARES: SourceShares = {
           kind: 'task',
           label: 'Bills coming up',
           detail: 'Each bill due in the next 30 days: its name, amount and day',
+          meaning:
+            'Bills the person pays, here the ones falling due in the next 30 days, each with its amount and due day.',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -50,6 +56,8 @@ export const RUNWAY_SHARES: SourceShares = {
           kind: 'project',
           label: 'Horizon goals',
           detail: 'Each goal: its name, target, what is set aside and its day',
+          meaning:
+            "Horizon goals are costs the person knows are coming, like a cat's surgery in December, that they plan paychecks around and set money aside for, each with a target and a day.",
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -69,6 +77,8 @@ export const RUNWAY_SHARES: SourceShares = {
           kind: 'transaction',
           label: 'Transactions',
           detail: 'The date, who you paid, the amount and its category',
+          meaning:
+            'Money the person has spent, each with its date, who was paid, the amount and a spending category.',
           mode: 'live',
           isOnAtConnect: false,
           addedInVersion: 2,
