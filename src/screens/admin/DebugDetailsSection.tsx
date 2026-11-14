@@ -52,6 +52,7 @@ function DebugDetailsSection({ users }: { users: UserProfile[] }) {
     users.find((candidate) => candidate.email?.toLowerCase() === email) ?? null;
 
   const handleAdd = async (value: string) => {
+    if (isSaving) return;
     const email = toDebugProfileId(value);
     if (!EMAIL_PATTERN.test(email) || !user) {
       setError('Enter a valid email address.');
@@ -62,7 +63,6 @@ function DebugDetailsSection({ users }: { users: UserProfile[] }) {
     try {
       await addDebugProfile(email, user.uid);
       await refresh();
-      closeAdd();
     } catch {
       setError("Couldn't add that email just now. Try again in a moment.");
     } finally {
