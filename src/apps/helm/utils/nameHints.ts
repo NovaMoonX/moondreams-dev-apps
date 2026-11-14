@@ -190,7 +190,7 @@ const readPageIds = (state: NameHintState, screen: ScreenContext | null) => {
 
 const toWords = (text: string) => toComparable(text).split(' ').filter(Boolean);
 
-/** Everything the list must never carry, read from the whole store: the forms of every record private in effect (own, inherited or care) and each of their uncommon words, so a non-private record carrying one of those words is refused too, and anything with a health word or a dose. */
+/** Built from the whole store, not the candidates, so a record sharing a private one's word is refused too. */
 const toExclude = (privateEntries: Entry[]) => {
   const forms = privateEntries.flatMap((entry) => entry.forms);
   const whole = new Set(forms.map((form) => toComparable(form)));
@@ -208,7 +208,7 @@ const toExclude = (privateEntries: Entry[]) => {
     toWords(text).some((word) => words.has(word));
 };
 
-/** The names a listen is told to expect, built from the store at the start of each listen: the person's own who, places, projects, topics and procedures by name, and the assistant's, ranked by the page in view, the last 2 weeks and how often each is named, and cut to the recognizers' budget. Nothing private, no care item and no health word or dose is ever in it, and a record that was misheard before ranks up a step. The list is kept per `uid`, so a sign-in on the same page never reads the last person's. */
+/** The names a listen is told to expect, built per listen; nothing private, care or health is ever in it. */
 export function readHelmNameHints(
   state: NameHintState,
   screen: ScreenContext | null,

@@ -1,12 +1,11 @@
 import { createOptionMatcher, toComparable } from '@/utils/optionMatchUtils';
 import type { HeardName } from '@apps/helm/types';
 
-/** A record a heard word can be read as: a person, pet, organization, place or project, with the forms it answers to. */
+/** A record a heard word can be read as, with the forms it answers to. */
 export interface NameRecord {
   id: string;
   name: string;
   aliases: string[];
-  /** "Also heard as": forms the recognizer got wrong before; they read as the name but are never a name. */
   soundsLike: string[];
 }
 
@@ -19,7 +18,6 @@ export interface SpokenName {
 
 export interface SwappedWords {
   text: string;
-  /** Where each swapped name now sits in `text`. */
   swaps: (SpokenName & { name: string })[];
   heardNames: HeardName[];
 }
@@ -32,7 +30,7 @@ const matcher = createOptionMatcher<NameRecord>({
   sounds: true,
 });
 
-/** The words of a transcript that sound like exactly one known name, clearly the closest; private records are read here, since this never leaves the device. */
+/** Words of a transcript that sound like exactly one known name; private records are read on the device only. */
 export const readSpokenNames = (
   transcript: string,
   names: readonly NameRecord[],
@@ -54,7 +52,7 @@ const toTie = (
   candidateIds: options.map((option) => option.id),
 });
 
-/** What a spoken turn says once each clear sound-alike is shown as the name: the words to send, where the swaps sit, and the names to seal with the turn. `restored` holds forms the person chose to keep as said. */
+/** A spoken turn with each clear sound-alike shown as the name: words to send, swap positions, names to seal. */
 export const readSwappedWords = (
   transcript: string,
   names: readonly NameRecord[],
@@ -109,7 +107,7 @@ export const readSwappedWords = (
   };
 };
 
-/** What typed words may have meant, for the model only: nothing in the words changes and nothing is underlined. Null when no word sounds like a known name. */
+/** What typed words may have meant, for the model only; the words never change. */
 export const readTypedHeardNames = (
   text: string,
   names: readonly NameRecord[],

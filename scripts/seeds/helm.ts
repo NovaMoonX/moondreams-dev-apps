@@ -3870,7 +3870,7 @@ async function buildPeople(input: {
           lastMentionedAt: now - 3 * DAY_MS,
         },
         madeAt,
-        await seal(wordsOf('Dana', { aliases: ['Dani'], kin: { kind: 'sister', order: 'younger' } })),
+        await seal(wordsOf('Dana', { aliases: ['Dani'], kin: { kind: 'sister', order: 'younger' }, soundsLike: ['Donna'] })),
       ),
     },
     {

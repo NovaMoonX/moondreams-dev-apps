@@ -1547,7 +1547,6 @@ const readProcedureCommands = (
     );
 };
 
-/** A spelled correction is kept only for someone the context listed and for words the turn before really held, or that the device heard there. */
 const readSoundsLike = (
   items: Record<string, unknown>[],
   people: AliasBook | undefined,
@@ -1856,7 +1855,6 @@ export function normalizeNomosReply(
     timeZone?: string;
     /** The photos and files the turn sent, by alias. */
     attachments?: { alias: string; kind: string }[];
-    /** The session's previous turn: its words, and the words the device heard there. */
     previousTurn?: { text: string; heard: string[] };
   },
 ): {

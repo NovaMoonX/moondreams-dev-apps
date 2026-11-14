@@ -7,7 +7,7 @@ const readable = <T extends { isUnreadable: boolean; name: string }>(
   items: readonly T[],
 ) => items.filter((item) => !item.isUnreadable && item.name.trim() !== '');
 
-/** The people, pets, organizations, places and projects a heard or typed word can be read as, private ones too: it is read on the device and only the id is sealed. */
+/** The records a heard or typed word can be read as, private ones included; read on the device only. */
 export const selectNameRecords = createSelector(
   [
     (state: RootState) => state.helm.who.items,

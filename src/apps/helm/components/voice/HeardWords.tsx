@@ -8,21 +8,20 @@ import { HELM_COPY } from '@apps/helm/constants';
 import type { SwappedWords } from '@apps/helm/utils/spokenNames';
 
 const SWAP =
-  "relative inline-flex h-auto min-h-0 items-baseline p-0 text-[length:inherit] leading-[inherit] font-[inherit] underline decoration-muted-foreground decoration-[1.5px] decoration-dotted underline-offset-4 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']";
+  "relative inline-flex h-auto min-h-0 items-baseline p-0 text-[length:inherit] leading-[inherit] font-[inherit] underline decoration-muted-foreground decoration-[1.5px] decoration-dotted underline-offset-4 before:absolute min-w-10 justify-center before:-inset-x-2 before:-inset-y-2 before:content-['']";
 
 interface HeardWordsProps {
   text: string;
   swaps: SwappedWords['swaps'];
-  /** Puts the word back as it was heard. */
   onRestore: (heard: string) => void;
 }
 
-/** The words as heard, each name that stands in for what was heard drawn with a dotted underline; a tap shows what was heard and offers to keep it. */
+/** The words as heard, swapped names underlined; a tap shows what was heard and offers to keep it. */
 function HeardWords({ text, swaps, onRestore }: HeardWordsProps) {
-  const [openAt, setOpenAt] = useState<number | null>(null);
-  const open = openAt === null ? undefined : swaps[openAt];
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const open = swaps.find((swap) => `${swap.start}:${swap.heard}` === openKey);
   const { dialogId, onDialogClose } = useSheetHistory(open !== undefined, () =>
-    setOpenAt(null),
+    setOpenKey(null),
   );
 
   return (
@@ -35,7 +34,7 @@ function HeardWords({ text, swaps, onRestore }: HeardWordsProps) {
             variant='base'
             className={SWAP}
             aria-label={HELM_COPY.heardAsTapLabel(swap.name, swap.heard)}
-            onClick={() => setOpenAt(at)}
+            onClick={() => setOpenKey(`${swap.start}:${swap.heard}`)}
           >
             {swap.name}
           </Button>

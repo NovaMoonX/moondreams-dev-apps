@@ -174,7 +174,7 @@ export const setWhoAliases = (
 
 export type SoundsLikeChange = { add: string } | { remove: string };
 
-/** Removes one heard form from a who's "Also heard as" list as opened inside the transaction, or puts it back for an Undo (never past the cap, never twice); the list is null when it empties. */
+/** Removes a heard form from a who's list, or restores it for Undo. */
 export const setWhoSoundsLike = (
   uid: string,
   encryption: HelmEncryption,

@@ -31,13 +31,13 @@ const toTexts = (value: unknown) =>
     ? value.filter((entry): entry is string => typeof entry === 'string')
     : [];
 
-/** Keeps each spelled correction that adds something new for someone who is still there: the heard form is written to that person's sealed `soundsLike`, and the turn before's tasks linked to the person it was wrongly heard as swap that link for this one. Each is an effect, so Undo restores both. */
+/** Plans each spelled correction that adds a new heard form, as undoable effects. */
 export function planSoundsLike(input: {
   commands: NoteSoundsLikeCommand[];
   whos: Map<string, Record<string, unknown> | null>;
   earlierTasks: Map<string, EarlierTask>;
   heardNames: HeardName[];
-  /** Every listed person's names and aliases, so a heard form never becomes someone else's. */
+  /** Names and aliases of everyone listed, so a heard form never becomes someone else's. */
   people: { id: string; names: string[] }[];
   now: number;
   isUnattended: boolean;

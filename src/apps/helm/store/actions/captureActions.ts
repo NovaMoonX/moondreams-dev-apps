@@ -131,7 +131,6 @@ export async function sendCapture(
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
     /** Whether the wake phrase began the turn and anyone was looking; left out on a typed turn. */
     presence?: Capture['presence'];
-    /** Names a spoken turn's words were swapped for or tied between; left out, they are read from the words as typed, without changing them. */
     heardNames?: HeardName[];
   },
 ) {

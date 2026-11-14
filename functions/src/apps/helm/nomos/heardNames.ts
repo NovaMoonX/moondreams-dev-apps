@@ -8,7 +8,7 @@ export const HEARD_CAP = 60;
 export const SOUNDS_LIKE_MAX = 5;
 export const SOUNDS_LIKE_CAP = 40;
 
-/** A word the device heard and what it matched to: the known name it swapped to, the record, and the near names that tied. */
+/** A heard word and what it matched: the swapped name, the record, and any tied near names. */
 export interface HeardName {
   heard: string;
   said: string | null;
@@ -22,7 +22,7 @@ const toId = (value: unknown) =>
 const toWords = (value: unknown) =>
   typeof value === 'string' ? value.trim().slice(0, HEARD_CAP) : '';
 
-/** A capture's sealed `heardNames`, read defensively: an older capture or a bad shape gives null, and each entry is capped and its ids checked. */
+/** A capture's sealed heard names, read defensively; null on an older or bad shape. */
 export const readHeardNames = (value: unknown): HeardName[] | null => {
   if (!Array.isArray(value)) return null;
   const read = value.slice(0, MAX_HEARD_NAMES).flatMap((entry): HeardName[] => {
@@ -61,7 +61,7 @@ const STOP_WORDS = new Set(
   ),
 );
 
-/** The heard forms kept for a record: deduped, none equal to one of its names, none that is another person's name word or alias, a stop word or under two letters, at most five of at most 40 characters; null when none are left. */
+/** The heard forms kept for a record, cleaned and capped; null when none are left. */
 export const mergeSoundsLike = (
   current: string[] | null,
   added: string,
@@ -86,7 +86,7 @@ export const mergeSoundsLike = (
     : [...kept, entry];
 };
 
-/** What the model may be told: on a turn nobody is watching, a word that points at anyone the context does not list is dropped whole, so neither the name nor the match is told. */
+/** What the model may be told of heard names; a word pointing at anyone unlisted is dropped whole. */
 export const toContextHeard = (
   entries: HeardName[],
   visibleIds: Set<string>,

@@ -514,7 +514,7 @@ export interface TickRunCommand {
 
 export type RunCommand = StartRunCommand | TickRunCommand;
 
-/** How a person is heard when the person spells the name again: the heard form is a span of the turn before, and `whoId` is someone the context listed. */
+/** How a spelled correction names the heard form and the person it belongs to. */
 export interface NoteSoundsLikeCommand {
   kind: 'noteSoundsLike';
   whoId: string;

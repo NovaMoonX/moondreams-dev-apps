@@ -15,7 +15,7 @@ const ACRONYM = /^[A-Z]{2,4}$/;
 const INNER_CAPITAL = /\p{Ll}\p{Lu}/u;
 const LETTERS = /^\p{L}+$/u;
 
-/** Everyday English words a recognizer already gets right and that are easily another word's sound-alike ("mark" the verb): never swapped for a name and not worth a recognizer hint. */
+/** Everyday English words a recognizer already gets right: never swapped for a name or hinted. */
 export const COMMON_WORDS: ReadonlySet<string> = new Set(
   `
     a about above after again all also am an and any are as at back be
@@ -114,7 +114,7 @@ const readInitial = (word: string) => {
   return word.startsWith('x') ? `s${word.slice(1)}` : word;
 };
 
-/** A compact English phonetic key (Metaphone family) so spellings that sound alike share it: "Shivon" and "Siobhan" are both XFN, "Xander" and "Zander" both SNTR. Letters of other scripts are kept as they are. */
+/** A compact English phonetic key so spellings that sound alike share it (Shivon and Siobhan: XFN). */
 export const toSoundKey = (word: string) => {
   const letters = toComparable(word).replace(/[^\p{L}]/gu, '');
   if (!/^[a-z]+$/.test(letters)) return letters;
@@ -234,9 +234,7 @@ export interface OptionMatcherConfig<T> {
   typos?: boolean | 'loose';
   /** How the label of a custom option is written; `resolve` uses it. */
   casing?: DisplayCaseOptions;
-  /** Turns on `matchSounds`, which reads sound-alikes in heard text. Off by default. */
   sounds?: boolean;
-  /** Forms an option was misheard as before: `matchSounds` reads them as the option, but `match` never does. */
   soundsLike?: (option: T) => readonly string[];
 }
 
@@ -249,7 +247,6 @@ export interface SoundSpan {
 /** A span of heard text that sounds like exactly one option, clearly ahead of the next. */
 export interface SoundMatch<T> extends SoundSpan {
   option: T;
-  /** The name to show in place of the heard words: the option's own, never a form it was misheard as. */
   name: string;
   score: number;
 }
@@ -262,12 +259,10 @@ export interface SoundTie<T> extends SoundSpan {
 interface SoundForm {
   spelling: string;
   key: string;
-  /** The option's own name this form stands for, as it is written. */
   shown: string;
 }
 
 interface SoundIndex<T> {
-  /** Every form under its key and under each key one letter shorter, so a heard key finds every form at most one edit away without scanning the list. */
   byKey: Map<string, { at: number; option: T; form: SoundForm }[]>;
   names: Set<string>;
 }
@@ -525,7 +520,7 @@ export function createOptionMatcher<T = string>(
     };
   };
 
-  /** Reads a span of one to three words of heard text that sounds like one known option (or two near-equal ones, as a tie). Only a word the recognizer capitalised is read, never a lowercase one, and never a word that already is a known name or an everyday word; a word that is capitalised only because it starts a sentence is held to a stricter spelling. At most the first 300 words are read, and the options are indexed once per array, so pass a new array when they change. */
+  /** Only capitalised words are read, at most the first 300; options are indexed once per array, so pass a new array when they change. */
   const matchSounds = (
     text: string,
     options: readonly T[],

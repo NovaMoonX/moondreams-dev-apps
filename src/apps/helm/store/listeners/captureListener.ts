@@ -99,7 +99,6 @@ const toIdList = (value: unknown) =>
     ? value.filter((id): id is string => typeof id === 'string')
     : [];
 
-/** The names sealed with a turn, as far as they are shaped like the contract; null when none, and on a turn made before the field. */
 const normalizeHeardNames = (value: unknown): HeardName[] | null => {
   const found = (Array.isArray(value) ? value : []).flatMap(
     (entry: Partial<HeardName> | null) =>

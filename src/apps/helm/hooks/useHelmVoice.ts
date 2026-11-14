@@ -198,7 +198,6 @@ export function useHelmVoice() {
 
   const nameRecords = useAppSelector(selectNameRecords);
   const [restored, setRestored] = useState<string[]>([]);
-  // The forms the person chose to keep as said, read when the turn is sent.
   const restoredRef = useRef<string[]>([]);
 
   const voice = useVoiceConversation({
@@ -973,7 +972,6 @@ export function useHelmVoice() {
 
   return {
     ...voice,
-    /** What is being heard, with each clear sound-alike of a known name shown as that name; the raw words while a field is being spoken into. */
     heard: dictationOwner === null ? live.text : voice.heard,
     heardSwaps: dictationOwner === null ? live.swaps : [],
     restoreHeard,

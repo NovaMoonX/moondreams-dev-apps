@@ -27,7 +27,7 @@ interface DeepgramSttOptions {
   onUnavailable: (reason: CloudHeldReason | null) => void;
   /** A minted stream has ended, after `ms` open (0 when it never opened). */
   onClosed: (mintId: string, ms: number) => void;
-  /** Words to expect, set once when the stream connects (Nova-3 only) and never changed mid-stream. */
+  /** Set once when the stream connects, never changed mid-stream. */
   keyterms?: string[] | null;
 }
 

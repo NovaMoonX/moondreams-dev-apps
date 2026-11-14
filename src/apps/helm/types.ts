@@ -412,7 +412,7 @@ export interface CaptureAnswer {
   searched: SearchedSource[];
 }
 
-/** A name the turn may have meant that the words don't carry as written: what was heard or typed, the name it was shown as (a spoken swap; null when the words were left as they were), the record it sounds like (null when none, or two fit), and, for two near fits, both. At most 10 on a turn. */
+/** A name the turn may have meant that the words don't carry as written. At most 10 on a turn. */
 export interface HeardName {
   heard: string;
   said: string | null;
@@ -428,7 +428,6 @@ export interface CaptureSealed {
   questions?: Record<string, unknown>;
   /** On a turn that answers a question, the structured answer; null when a spoken one could not be placed. A turn made before answers had shapes reads as null. */
   questionAnswer: QuestionAnswerValue | null;
-  /** Names the device heard or read as sounding like known ones; null when there were none, and on a turn made before the field. */
   heardNames: HeardName[] | null;
   /** The line the server wrote for the person to hear and read; absent until it wrote one. */
   spoken?: { text: string } | null;
@@ -443,7 +442,6 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
   answer: CaptureAnswer | null;
   /** The questions the turn asked, by id, once opened. */
   questions: Record<string, HelmQuestion>;
-  /** As sealed with the turn; null when there were none and on a turn made before the field. */
   heardNames: HeardName[] | null;
   /** The server's line for the turn, read aloud and shown on its card; null until it wrote one, and on one that would not open. */
   line: string | null;

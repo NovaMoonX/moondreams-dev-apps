@@ -1890,7 +1890,7 @@ export const HELM_COPY = {
   aliasNone: 'No nicknames yet.',
   soundsLikeTitle: 'Also heard as',
   soundsLikeHelp:
-    'Ways your voice came out that were really this name. They help it be recognized, and are never a name to search or tag.',
+    'Ways your voice came out that were really this name. They help the right name come up, and are never searched or tagged.',
   soundsLikeRemove: (heard: string) => `Remove ${heard}`,
   soundsLikeRemovedToast: (heard: string) => `Removed ${heard}`,
   kinTitle: (name: string) => `Family · ${name}`,

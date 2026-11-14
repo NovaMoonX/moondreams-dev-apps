@@ -1470,7 +1470,7 @@ export async function readEarlierTurns(
   return turns.flat().reverse();
 }
 
-/** What a spelled correction is checked against: the words and heard names of the session's previous turn (all of its messages), and the tasks that turn created. Null when there is none. */
+/** What a spelled correction is checked against: the previous turn's words, heard names and tasks. */
 export async function readPreviousTurn(
   firestore: Firestore,
   base: string,

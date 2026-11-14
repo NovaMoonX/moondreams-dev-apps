@@ -2,16 +2,14 @@ import { toComparable } from '@/utils/optionMatchUtils';
 
 export interface NameHintCandidate {
   text: string;
-  /** Lower ranks are kept first. */
   rank: number;
-  /** Orders terms within a rank, higher first. */
   weight: number;
 }
 
 export interface NameHintOptions {
   maxTerms?: number;
   maxTokens?: number;
-  /** Refuses a term outright; the caller builds it from everything it must never send, not only from the candidates. */
+  /** Built from everything that must never be sent, not only the candidates. */
   exclude?: (text: string) => boolean;
 }
 
@@ -19,7 +17,7 @@ const DEFAULT_MAX_TERMS = 90;
 const DEFAULT_MAX_TOKENS = 450;
 const CHARS_PER_TOKEN = 3;
 
-/** Only words no one names a person, pet or place: a name that is also a word (Mark, Grace, Rose, Bill, Joy, Hope) is exactly what a recognizer needs told. */
+/** Only words nobody names a person, pet or place: a name that is also a word (Mark, Grace) is what a recognizer needs told. */
 const STOP_WORDS: ReadonlySet<string> = new Set(
   `
     a about above after again all also am an and any are as at back be
@@ -45,7 +43,7 @@ const DATE_AND_UNIT_WORDS: ReadonlySet<string> = new Set([
   ),
 ]);
 
-/** One per term plus one per 3 characters, so a budget counted this way never undercounts what a recognizer charges. */
+/** Counts tokens the way a recognizer charges, so a budget never undercounts. */
 export const countHintTokens = (terms: string[]) =>
   terms.reduce(
     (total, term) => total + 1 + Math.ceil(term.length / CHARS_PER_TOKEN),
@@ -65,7 +63,7 @@ const isWorthHinting = (text: string) => {
   );
 };
 
-/** The names a recognizer should expect, best first: drops what recognizers already hear well (small function words, dates, numbers, units, anything with `@`) and whatever `exclude` refuses, keeps one of each spelling, and cuts to the budget. */
+/** The names a recognizer should expect, best first, cut to the budget. */
 export const buildNameHints = (
   candidates: NameHintCandidate[],
   {

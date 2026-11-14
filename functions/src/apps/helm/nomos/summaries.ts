@@ -582,7 +582,6 @@ export const buildPickQuestion = (input: {
   name: string;
   candidates: PickCandidate[];
   held: HeldLink;
-  /** Words for a name the device heard as two near ones: the question and its "new" choice. */
   heard?: { prompt: string; newLabel: string };
 }) => {
   const collection = input.kind === 'whichPerson' ? 'who' : 'places';
@@ -620,7 +619,7 @@ export const buildPickQuestion = (input: {
 
 export const HEARD_NEW_LABEL = 'Someone else';
 
-/** "Which Siobhan: Kelly or Doyle?": each choice without the words the heard name shares with it, when it starts with them. */
+/** The question for a heard name that tied between records. */
 export const buildHeardPrompt = (name: string, labels: string[]) => {
   const lead = `${name.trim().toLowerCase()} `;
   const rest = labels.map((label) =>

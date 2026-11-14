@@ -31,7 +31,7 @@ export type PhraseConstructor = new (phrase: string, boost: number) => unknown;
 const MAX_PHRASES = 50;
 const PHRASE_BOOST = 5;
 
-/** The browser's phrase objects for a list of words to expect (at most 50, boosted); null where the browser has no such objects. */
+/** Browser phrase objects for words to expect (at most 50); null where unsupported. */
 export const toRecognitionPhrases = (
   phrases: readonly string[],
   Phrase: PhraseConstructor | null,
@@ -88,9 +88,7 @@ interface ListenerOptions {
   onHalt?: (error: SpeechCommandsError) => void;
   /** Read with the natural voice (see `useNaturalVoice`) whenever it is ready; the browser's voice otherwise. */
   isNaturalVoice?: boolean;
-  /** Words to expect, where the browser can be told them (Chrome's contextual biasing); ignored elsewhere, and dropped for the session if the browser refuses them. */
   phrases?: string[] | null;
-  /** The browser refused `phrases`; listening restarts without them. */
   onPhrasesRefused?: () => void;
 }
 
@@ -317,7 +315,7 @@ export const createSpeechListener = (
     }
   };
 
-  // The recognizer is reused across sessions, so a list set earlier stays until replaced: always set it, to nothing when hints are off.
+  // The recognizer is reused across sessions, so a list set earlier stays until replaced: always set it.
   const applyPhrases = (recognition: SpeechRecognitionLike) => {
     if (state.arePhrasesOff) return clearPhrases(recognition);
     try {

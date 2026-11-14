@@ -180,7 +180,6 @@ export interface PeopleInput {
   /** The day the capture was made, in the person's zone. */
   dayKey: string;
   capturedAt: number;
-  /** Words the device heard as two near names, so a mention of either asks which one. */
   heardNames?: HeardName[];
 }
 
@@ -2977,7 +2976,6 @@ export function buildExecution(
   input: Pick<PlanInput, 'captureId' | 'now' | 'seal'> & {
     /** The line saying the person is home, added to the summary and the spoken reply. */
     homeLine?: string | null;
-    /** Result lines written by code for changes the plan does not count, such as a heard name kept. */
     extraLines?: string[];
     /** The model's own line about the turn, already checked; the summary stays code's. */
     said?: string | null;

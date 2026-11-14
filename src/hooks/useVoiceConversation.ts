@@ -77,7 +77,7 @@ interface VoiceConversationOptions {
   isNaturalVoiceReady?: boolean;
   /** The opt-in recognition model is downloaded (`useOnDeviceRecognition().isOn`): it listens whenever the cloud doesn't, waits for the wake phrase and hears a barge-in, all on the device. */
   isOnDeviceReady?: boolean;
-  /** Words the recognizer should expect (names the person has told the app), read at the start of each listen and never sent mid-stream. */
+  /** Read at the start of each listen, never sent mid-stream. */
   getNameHints?: () => string[];
   /** Silence this long ends the utterance. */
   quietMs?: number;
