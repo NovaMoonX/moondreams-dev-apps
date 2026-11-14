@@ -10,7 +10,9 @@ import {
 import { db } from '@lib/firebase/config';
 import type { SealedReader } from '@lib/security';
 
-import type { Cadence } from '@/utils/cadenceUtils';
+import { dayKeyToMs, type Cadence } from '@/utils/cadenceUtils';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import { habitDayKey } from '@apps/helm/engine/habitDay';
 import { HABITS_LIMIT } from '@apps/helm/constants';
 import type {
   Habit,
@@ -107,7 +109,9 @@ async function openHabit(
     projectId: data.projectId ?? null,
     forWhoId,
     isCare,
-    startsOn: data.startsOn ?? createdAt,
+    startsOn:
+      data.startsOn ??
+      dayKeyToMs(habitDayKey(createdAt, getDeviceTimeZone() ?? 'UTC')),
     endsOn: data.endsOn ?? null,
     pausedUntil: data.pausedUntil ?? null,
     reminder: readReminder(data.reminder, isCare),

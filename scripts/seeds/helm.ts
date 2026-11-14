@@ -106,6 +106,7 @@ import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
 import { RUNWAY_SHARES } from '../../functions/src/apps/runway/share/manifest.ts';
 import { WAYPOINT_SHARES } from '../../functions/src/apps/waypoint/share/manifest.ts';
 import { WORTH_THE_WAIT_SHARES } from '../../functions/src/apps/worth-the-wait/share/manifest.ts';
+import { habitDayKey } from '../../functions/src/apps/helm/nomos/habitDay.ts';
 import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
 import { formatMoney } from '../../functions/src/utils/formatMoney.ts';
 import { getShowtime } from './aList.ts';
@@ -1844,11 +1845,11 @@ export const toHabitDay = (
 
 const HABIT_ZONE = 'America/Los_Angeles';
 
-/** Alex's habits for the week that holds today: 💊 Pills (morning and evening, health: 10 of 12 Monday to Saturday when today is a Sunday, the morning ticked today, so "11 of 13"), 💧 Water (6 a day, 4 of 6 days), 🎸 Guitar (3 times a week) and Mom's metoprolol (a care habit, private). */
+/** Alex's habits for the week that holds today: 💊 Pills (morning and evening, health: 10 of 12 Monday to Saturday when today is a Sunday, the morning ticked today, so "11 of 13"), 💧 Water (6 a day, 4 of 6 days), 🎸 Guitar (3 times a week) and Mom's metoprolol (a care habit, private) and 🧘 Stretch (a morning window left unticked today, so "Window ended" shows once it has passed). */
 async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
   const { now, encryption } = input;
-  const today = getSeedToday(now);
-  const todayKey = new Date(today).toISOString().slice(0, 10);
+  const todayKey = habitDayKey(now, HABIT_ZONE);
+  const today = Date.parse(`${todayKey}T00:00:00Z`);
   const mondayAt = today - ((new Date(today).getUTCDay() + 6) % 7) * DAY_MS;
   const keys = Array.from(
     { length: Math.round((today - mondayAt) / DAY_MS) + 1 },
@@ -1921,6 +1922,22 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
       },
       encryption,
     ).then((habit) => ({ id: 'seed-habit-mom-metoprolol', habit })),
+    toHabit(
+      {
+        cadence: { kind: 'everyDay' },
+        windowState: {
+          m: { start: '06:00', end: '09:00', order: 0, part: 'morning', editedAt: null },
+        },
+        startsOn,
+        createdAt,
+      },
+      {
+        name: 'Stretch for ten minutes',
+        emoji: '🧘',
+        windows: { m: { label: 'Morning' } },
+      },
+      encryption,
+    ).then((habit) => ({ id: 'seed-habit-stretch', habit })),
   ]);
   const check = (key: string, time: string) => ({
     status: 'done' as const,
@@ -1948,6 +1965,9 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
           ? { 'seed-habit-guitar': { checks: { e: check(key, '19:30') } } }
           : {}),
         'seed-habit-mom-metoprolol': { checks: { m: check(key, '08:05') } },
+        ...(isToday || at === 2
+          ? {}
+          : { 'seed-habit-stretch': { checks: { m: check(key, '07:15') } } }),
       }),
     };
   });

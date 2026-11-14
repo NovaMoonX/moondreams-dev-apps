@@ -9,6 +9,7 @@ import {
   sealForHelm,
   wrappedKeyPath,
 } from '../../functions/src/apps/helm/helmKey.ts';
+import { habitDayKey } from '../../functions/src/apps/helm/nomos/habitDay.ts';
 import { NINE_LIVES_SHARES } from '../../functions/src/apps/nine-lives/share/manifest.ts';
 import { RUNWAY_SHARES } from '../../functions/src/apps/runway/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
@@ -987,9 +988,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   );
   habits.forEach((entry) => put('habits', `habits/${entry.id}`, entry.habit));
   range(HABIT_DAY_COUNT).forEach((back) => {
-    const dayKey = new Date(dayStart(now - back * DAY_MS))
-      .toISOString()
-      .slice(0, 10);
+    const dayKey = habitDayKey(now - back * DAY_MS, OWNER_TIME_ZONE);
+    const dayMs = Date.parse(`${dayKey}T00:00:00Z`);
     put(
       'habitDays',
       `habitDays/${dayKey}`,
@@ -1003,7 +1003,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
               : kind === 1
                 ? {
                     count: 6,
-                    lastCountAt: dayStart(now - back * DAY_MS) + 12 * HOUR_MS,
+                    lastCountAt: dayMs + 12 * HOUR_MS,
                   }
                 : {
                     checks: Object.fromEntries(
@@ -1014,7 +1014,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
                         windowId,
                         {
                           status: 'done',
-                          at: dayStart(now - back * DAY_MS) + 15 * HOUR_MS,
+                          at: dayMs + 15 * HOUR_MS,
                           by: 'person',
                           executionId: null,
                         },

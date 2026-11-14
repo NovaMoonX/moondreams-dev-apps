@@ -2,7 +2,7 @@ import { isHabitDue, readWindowSpans } from '@apps/helm/engine/habitDay';
 import type { OpenHabit, OpenHabitDay } from '@apps/helm/types';
 import { shiftDayKey } from '@apps/helm/utils/planDays';
 
-export type WeekCell = 'done' | 'open' | 'later';
+export type WeekCell = 'done' | 'skipped' | 'open' | 'later';
 
 export interface WeekDay {
   key: string;
@@ -13,11 +13,13 @@ export interface WeekDay {
   /** A counted habit's number for the day; null otherwise. */
   count: number | null;
   isReached: boolean;
+  /** A counted habit's day the person said "not today" for, with the count short of its goal. */
+  isSkipped: boolean;
 }
 
 const weekdayOf = (key: string) => new Date(`${key}T00:00:00Z`).getUTCDay();
 
-/** The seven days of the week that holds today, Monday first: one cell per window (marked, not marked, still to come), or a counted habit's number; a day the habit is off is blank. */
+/** The seven days of the week that holds today, Monday first: one cell per window (marked, skipped, not marked, still to come), or a counted habit's number; a day the habit is off is blank. */
 export function readWeekDays(
   habit: OpenHabit,
   days: Record<string, OpenHabitDay>,
@@ -41,6 +43,10 @@ export function readWeekDays(
         cells: [],
         count: isOff || isFuture ? null : count,
         isReached: count >= habit.timesPerDay,
+        isSkipped:
+          !isOff &&
+          entry?.checks.day?.status === 'skipped' &&
+          count < habit.timesPerDay,
       };
     }
     const spans =
@@ -49,12 +55,13 @@ export function readWeekDays(
         : readWindowSpans(habit, key, clock.timeZone);
     const cells = spans.map((span): WeekCell => {
       if (entry?.checks[span.id]?.status === 'done') return 'done';
+      if (entry?.checks[span.id]?.status === 'skipped') return 'skipped';
       if (isFuture) return 'later';
       return key === clock.dayKey &&
         (span.id === 'day' || clock.now < span.endAt)
         ? 'later'
         : 'open';
     });
-    return { ...base, cells, count: null, isReached: false };
+    return { ...base, cells, count: null, isReached: false, isSkipped: false };
   });
 }

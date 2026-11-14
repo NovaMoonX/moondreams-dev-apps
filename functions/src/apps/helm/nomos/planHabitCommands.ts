@@ -2,6 +2,7 @@ import type { SealedPayload } from '../../../appKeys/seal.js';
 import { toComparable } from '../../../vendor/optionMatchUtils.js';
 import {
   EMPTY_HABIT_DAY,
+  isPrivateHabit,
   type HabitDayWrite,
   type HabitWindowDoc,
   type LiveHabit,
@@ -36,6 +37,7 @@ import {
   habitDayKey,
   isHabitDue,
   saidTimeWindow,
+  toAllowedWindow,
   type ClockWindow,
   type DayPart,
 } from './habitDay.js';
@@ -93,8 +95,10 @@ interface Acc extends HabitPlan {
 
 const lower = (name: string) => name.trim().toLowerCase();
 
-const shownName = (habit: LiveHabit, isUnattended: boolean) =>
-  isUnattended && habit.privacy === 'private' ? PRIVATE_HABIT : habit.name;
+const shownName = (
+  habit: Pick<LiveHabit, 'name' | 'privacy' | 'isCare'>,
+  isUnattended: boolean,
+) => (isUnattended && isPrivateHabit(habit) ? PRIVATE_HABIT : habit.name);
 
 const toClockLabel = (time: string) => {
   const [hour, minute] = time.split(':').map(Number);
@@ -137,7 +141,7 @@ const toWindowTimes = (
   if (read.start !== null)
     return read.end === null
       ? saidTimeWindow(read.start)
-      : { start: read.start, end: read.end };
+      : toAllowedWindow({ start: read.start, end: read.end });
   return read.part !== null ? parts[read.part] : null;
 };
 
@@ -373,6 +377,36 @@ const planCreate = (
       isPrivacyCleared: own.isPrivacyCleared === true,
     }),
   };
+  const startedHabit: LiveHabit = {
+    id,
+    name: command.name,
+    emoji: command.emoji,
+    notes: null,
+    medicine: null,
+    windows: labels,
+    importance: null,
+    privateMark: own.privateMark,
+    isPrivacyCleared: own.isPrivacyCleared === true,
+    status: 'active',
+    storedStatus: 'active',
+    lastEditedAt: null,
+    cadence: command.cadence,
+    windowState,
+    timesPerDay: command.timesPerDay,
+    forWhoId,
+    isCare,
+    startsOn: doc.startsOn,
+    endsOn: null,
+    pausedUntil: null,
+    pausedAt: null,
+    endedAt: null,
+    retiredAt: null,
+    careAskedAt: doc.careAskedAt,
+    stage: doc.stage,
+    reminder: null,
+    history: doc.history,
+    privacy,
+  };
   const made = withEffect(
     acc,
     { op: 'create', collection: 'habits', docId: id },
@@ -385,10 +419,11 @@ const planCreate = (
       },
       previous: null,
     },
-    `Started ${lower(command.name)}`,
+    `Started ${lower(shownName(startedHabit, input.isUnattended))}`,
   );
   return {
     ...made,
+    habits: new Map(made.habits).set(id, startedHabit),
     creates: [...made.creates, { id, doc }],
     questions: isAsked
       ? [
@@ -470,7 +505,7 @@ const planUpdate = (
       ...step,
       updates: [...step.updates, { id: habit.id, data }],
       habits: new Map(step.habits).set(habit.id, { ...habit, ...next }),
-      isPrivate: step.isPrivate || habit.privacy === 'private',
+      isPrivate: step.isPrivate || isPrivateHabit(habit),
     };
   };
   if (command.change === 'reschedule') {
@@ -506,11 +541,12 @@ const planUpdate = (
           'sealed.title': habit.name,
           ...(command.cadence ? { cadence: habit.cadence } : {}),
           ...(windows ? { windowState: habit.windowState } : {}),
-          lastEditedAt: null,
+          lastEditedAt: habit.lastEditedAt,
         },
       },
       `Changed ${name}`,
       {
+        lastEditedAt: input.now,
         ...(command.cadence ? { cadence: command.cadence } : {}),
         ...(windows
           ? { windowState: windows.windowState, windows: mergedLabels ?? {} }
@@ -554,17 +590,23 @@ const planUpdate = (
       written: { ...fields, 'sealed.title': habit.name },
       previous: {
         'sealed.title': habit.name,
-        status: habit.status,
+        status: habit.storedStatus,
         pausedAt: habit.pausedAt ?? null,
         pausedUntil: habit.pausedUntil,
         endedAt: habit.endedAt ?? null,
         retiredAt: habit.retiredAt ?? null,
         history: habit.history,
-        lastEditedAt: null,
+        lastEditedAt: habit.lastEditedAt,
       },
     },
     `${next.verb} ${name}`,
-    { status: next.to, pausedUntil: fields.pausedUntil, history },
+    {
+      status: next.to,
+      storedStatus: next.to,
+      pausedUntil: fields.pausedUntil,
+      history,
+      lastEditedAt: input.now,
+    },
   );
 };
 
@@ -624,7 +666,7 @@ const applyCare = (
         isCare: habit.isCare,
         privacy: habit.privacy,
         careAskedAt: habit.careAskedAt,
-        lastEditedAt: null,
+        lastEditedAt: habit.lastEditedAt,
       },
     },
     isCare
@@ -653,9 +695,9 @@ const applyCare = (
       privateMark,
       isPrivacyCleared,
       careAskedAt,
+      lastEditedAt: input.now,
     }),
-    isPrivate:
-      step.isPrivate || privacy === 'private' || habit.privacy === 'private',
+    isPrivate: step.isPrivate || privacy === 'private' || isPrivateHabit(habit),
   };
 };
 
@@ -720,12 +762,18 @@ const toDayWithTick = (
   };
 };
 
+/** A second note on the same tick keeps the first: it lands under the key with a number after it. */
+const toFreeNoteKey = (day: LiveHabitDay, key: string) =>
+  Array.from({ length: 20 }, (_, at) =>
+    at === 0 ? key : `${key}#${at + 1}`,
+  ).find((candidate) => day.notes[candidate] === undefined) ?? key;
+
 /** One resolved check-in: a tick, a "not today" or one more on a tally, with its note kept word for word. */
 const writeCheckIn = (
   acc: Acc,
   habit: LiveHabit,
   resolution: WriteResolution,
-  command: Pick<CheckInCommand, 'status' | 'note'>,
+  command: Pick<CheckInCommand, 'status' | 'note' | 'day'>,
   input: HabitPlanInput,
 ): Acc => {
   const { effect } = resolution;
@@ -736,8 +784,8 @@ const writeCheckIn = (
   const base =
     acc.dayWrites.find((made) => made.dayKey === effect.dayKey) ??
     emptyWrite(effect.dayKey);
-  const note = toNoteText(command.note);
-  const noteKey = `${habit.id}/${windowId}`;
+  const note = day.isNotesUnreadable ? null : toNoteText(command.note);
+  const noteKey = toFreeNoteKey(day, `${habit.id}/${windowId}`);
   const notes = note
     ? {
         ...day.notes,
@@ -752,6 +800,7 @@ const writeCheckIn = (
   };
   const wantsFollowUp =
     !isSkip &&
+    command.day !== 'yesterday' &&
     input.isLearningOn &&
     !input.isUnattended &&
     acc.followUp === null &&
@@ -818,7 +867,7 @@ const writeCheckIn = (
     followUp: wantsFollowUp
       ? { habitId: habit.id, dayKey: effect.dayKey, habitName: habit.name }
       : step.followUp,
-    isPrivate: step.isPrivate || habit.privacy === 'private',
+    isPrivate: step.isPrivate || isPrivateHabit(habit),
   };
 };
 

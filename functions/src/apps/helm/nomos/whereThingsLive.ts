@@ -275,7 +275,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     taps: ['tickHabit', 'untickHabit', 'tallyHabit', 'untallyHabit'],
   }),
   row({
-    thing: 'What Helm has noticed, and what the person said about it',
+    thing: 'What the app has noticed, and what the person said about it',
     home: 'patterns',
     classes: ['readable', 'sealed'],
     readers: ['device', 'server'],

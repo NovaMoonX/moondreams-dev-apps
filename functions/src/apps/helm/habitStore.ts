@@ -49,6 +49,9 @@ export interface HabitEvent {
 export interface LiveHabit extends HabitWords {
   id: string;
   status: string;
+  /** What the document holds; `status` may read a finished pause as active. */
+  storedStatus: string;
+  lastEditedAt: number | null;
   cadence: Cadence;
   windowState: Record<string, HabitWindowDoc>;
   timesPerDay: number | null;
@@ -77,6 +80,8 @@ export interface LiveDayEntry {
 
 export interface LiveHabitDay {
   exists: boolean;
+  /** The day holds sealed notes that did not open, so writing its notes would overwrite them. */
+  isNotesUnreadable: boolean;
   entries: Record<string, LiveDayEntry>;
   notes: Record<string, { text: string; at: number; captureId: string | null }>;
 }
@@ -143,13 +148,25 @@ const toWindowLabels = (value: unknown): Record<string, { label: string }> =>
       )
     : {};
 
-/** Opens a habit document; null when its words will not open. */
+/** Whether a habit is private in effect: marked so, or a medicine or care habit. */
+export const isPrivateHabit = (habit: Pick<LiveHabit, 'privacy' | 'isCare'>) =>
+  habit.privacy === 'private' || habit.isCare;
+
+/** Opens a habit document; null when its words will not open. A record from before `startsOn` starts on the day it was made, in `timeZone`. */
 export const openLiveHabit = (
   key: HelmKey,
   id: string,
   data: DocumentData,
+  timeZone = 'UTC',
 ): LiveHabit | null => {
   try {
+    const status =
+      data.status === 'paused' ||
+      data.status === 'ended' ||
+      data.status === 'retired'
+        ? data.status
+        : 'active';
+    const createdAt = toNumber(data.createdAt);
     const words = openForHelm(key, data.sealed as SealedPayload);
     if (typeof words.name !== 'string') return null;
     const forWhoId = toText(data.forWhoId);
@@ -168,18 +185,19 @@ export const openLiveHabit = (
       importance: words.importance ?? null,
       privateMark: toMark(words.privateMark),
       isPrivacyCleared: words.isPrivacyCleared === true,
-      status:
-        data.status === 'paused' ||
-        data.status === 'ended' ||
-        data.status === 'retired'
-          ? data.status
-          : 'active',
+      status,
+      storedStatus: status,
+      lastEditedAt: toNumber(data.lastEditedAt),
       cadence: toCadence(data.cadence),
       windowState: toWindowState(data.windowState),
       timesPerDay: toNumber(data.timesPerDay),
       forWhoId,
       isCare: data.isCare === true || forWhoId !== null,
-      startsOn: toNumber(data.startsOn) ?? toNumber(data.createdAt) ?? 0,
+      startsOn:
+        toNumber(data.startsOn) ??
+        (createdAt === null
+          ? 0
+          : Date.parse(`${habitDayKey(createdAt, timeZone)}T00:00:00Z`)),
       endsOn: toNumber(data.endsOn),
       pausedUntil: toNumber(data.pausedUntil),
       pausedAt: toNumber(data.pausedAt),
@@ -255,6 +273,7 @@ const toNotes = (value: unknown): LiveHabitDay['notes'] =>
 
 export const EMPTY_HABIT_DAY: LiveHabitDay = {
   exists: false,
+  isNotesUnreadable: false,
   entries: {},
   notes: {},
 };
@@ -274,9 +293,14 @@ export const openLiveHabitDay = (
     const words = data.sealed
       ? openForHelm(key, data.sealed as SealedPayload)
       : null;
-    return { exists: true, entries, notes: toNotes(words?.notes) };
+    return {
+      exists: true,
+      isNotesUnreadable: false,
+      entries,
+      notes: toNotes(words?.notes),
+    };
   } catch {
-    return { exists: true, entries, notes: {} };
+    return { exists: true, isNotesUnreadable: true, entries, notes: {} };
   }
 };
 
@@ -326,8 +350,19 @@ export const writeHabitDayIn = (
       ]),
     ),
     ...Object.fromEntries(
-      write.tallies.flatMap(({ habitId, at }) => [
-        [`${entry(habitId)}.count`, FieldValue.increment(1)],
+      Object.entries(
+        write.tallies.reduce<Record<string, { n: number; at: number }>>(
+          (sums, { habitId, at }) => ({
+            ...sums,
+            [habitId]: {
+              n: (sums[habitId]?.n ?? 0) + 1,
+              at: Math.max(sums[habitId]?.at ?? 0, at),
+            },
+          }),
+          {},
+        ),
+      ).flatMap(([habitId, { n, at }]) => [
+        [`${entry(habitId)}.count`, FieldValue.increment(n)],
         [`${entry(habitId)}.lastCountAt`, at],
       ]),
     ),
@@ -390,11 +425,13 @@ export const toContextHabit = (
     count: habit.timesPerDay === null ? null : (entry?.count ?? 0),
     timesPerDay: habit.timesPerDay,
     isForOther: habit.forWhoId !== null,
-    isPrivate: habit.privacy === 'private',
+    isPrivate: isPrivateHabit(habit),
   };
 };
 
-/** The person's habits that are not retired, with today's state, for the turn's context. */
+const STATUS_ORDER = ['active', 'paused', 'ended', 'retired'];
+
+/** The person's habits with today's state, for the turn's context: active first, retired last and flagged by their status so a check-in on one is answered by code. */
 export const readContextHabits = async (
   firestore: Firestore,
   base: string,
@@ -409,9 +446,13 @@ export const readContextHabits = async (
   ]);
   const day = openLiveHabitDay(key, daySnap.data());
   return habitsSnap.docs
-    .flatMap((doc) => openLiveHabit(key, doc.id, doc.data()) ?? [])
+    .flatMap((doc) => openLiveHabit(key, doc.id, doc.data(), timeZone) ?? [])
     .map((habit) => ({ ...habit, status: readHabitStatusOn(habit, dayKey) }))
-    .filter((habit) => habit.status !== 'retired')
+    .sort(
+      (first, second) =>
+        STATUS_ORDER.indexOf(first.status) -
+        STATUS_ORDER.indexOf(second.status),
+    )
     .map((habit) => toContextHabit(habit, day, dayKey));
 };
 
@@ -437,7 +478,7 @@ export const readHabitState = async (
   ]);
   return {
     habits: habitsSnap.docs
-      .flatMap((doc) => openLiveHabit(key, doc.id, doc.data()) ?? [])
+      .flatMap((doc) => openLiveHabit(key, doc.id, doc.data(), timeZone) ?? [])
       .map((habit) => ({
         ...habit,
         status: readHabitStatusOn(habit, dayKeys[0]),

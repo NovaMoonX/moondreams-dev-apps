@@ -26,12 +26,15 @@ import {
   type UpdateHabitCommand,
 } from './commands.js';
 import { habitDayKey } from './habitDay.js';
+import { hasCheckInWord, hasHabitCue, mentionsHabit } from './route.js';
 
 export type HabitDrop =
   'habit-unknown' | 'habit-unasked' | 'habit-extra' | 'habit-shape';
 
 export interface HabitReadContext {
   habits?: AliasBook;
+  /** Each habit's real name by id. */
+  habitNames?: Map<string, string>;
   people?: AliasBook;
   reading: CaptureReading;
   captureText?: string;
@@ -150,6 +153,24 @@ const toWindowReads = (
     })
     .slice(0, HABIT_WINDOWS_MAX);
 
+/** The words of the capture that read as the quote, with their own letters, spacing and punctuation. */
+const sliceOfCapture = (captureText: string, quote: string) => {
+  const wanted = toComparable(quote).split(' ').filter(Boolean);
+  const tokens = [...captureText.matchAll(/[\p{L}\p{M}\p{N}]+/gu)].map(
+    (found) => ({
+      word: toComparable(found[0]),
+      from: found.index ?? 0,
+      to: (found.index ?? 0) + found[0].length,
+    }),
+  );
+  const at = tokens.findIndex((_, start) =>
+    wanted.every((word, offset) => tokens[start + offset]?.word === word),
+  );
+  return at === -1 || wanted.length === 0
+    ? null
+    : captureText.slice(tokens[at].from, tokens[at + wanted.length - 1].to);
+};
+
 const toAnchor = (context: HabitReadContext) =>
   Date.parse(
     `${habitDayKey(context.now ?? Date.now(), context.timeZone ?? 'UTC')}T00:00:00Z`,
@@ -173,6 +194,14 @@ export const readHabitCommands = (
   const captureWords = ` ${toComparable(context.captureText ?? '')} `;
   const timeZone = context.timeZone ?? 'UTC';
   const anchor = toAnchor(context);
+  const says = (phrase: string) => captureWords.includes(` ${phrase} `);
+  const saysYesterday = says('yesterday') || says('last night');
+  const saysSkip =
+    ['skip', 'skipped', 'skipping', 'skips', 'forgot', 'missed', 'didnt'].some(
+      says,
+    ) ||
+    says('not today') ||
+    says('did not');
   const isQuoted = (quote: string) =>
     toComparable(quote).split(' ').filter(Boolean).length >= 2 &&
     captureWords.includes(` ${toComparable(quote)} `);
@@ -200,6 +229,8 @@ export const readHabitCommands = (
           const name = toWords(item.title, HABIT_NAME_CAP);
           const cadence = toCadence(item.cadence, anchor);
           if (!name || cadence === 'bad') return drop('habit-shape');
+          if (!hasHabitCue(context.captureText ?? ''))
+            return drop('habit-unasked');
           if (count('createHabit') >= MAX_HABITS_PER_TURN)
             return drop('habit-extra');
           const timesPerDay =
@@ -280,6 +311,26 @@ export const readHabitCommands = (
           ),
         ].slice(0, MAX_HABIT_CANDIDATES);
         if (named.length === 0) return drop('habit-unknown');
+        const text = context.captureText ?? '';
+        if (
+          !hasCheckInWord(text) &&
+          !saysSkip &&
+          !mentionsHabit(
+            text,
+            named.flatMap((id) => context.habitNames?.get(id) ?? []),
+          )
+        )
+          return drop('habit-unasked');
+        const day =
+          HABIT_CHECK_DAYS.find((entry) => entry === item.checkDay) ?? 'today';
+        const status =
+          HABIT_CHECK_STATUSES.find((entry) => entry === item.checkStatus) ??
+          'done';
+        if (
+          (day === 'yesterday' && !saysYesterday) ||
+          (status === 'skipped' && !saysSkip)
+        )
+          return drop('habit-unasked');
         if (count('checkIn') >= MAX_CHECKINS_PER_TURN)
           return drop('habit-extra');
         const note = toWords(item.quote, HABIT_NOTE_CAP);
@@ -287,15 +338,11 @@ export const readHabitCommands = (
           kind: 'checkIn',
           habitIds: named,
           windowKey: toWords(item.windowKey, HABIT_LABEL_CAP),
-          day:
-            HABIT_CHECK_DAYS.find((entry) => entry === item.checkDay) ??
-            'today',
-          status:
-            HABIT_CHECK_STATUSES.find((entry) => entry === item.checkStatus) ??
-            'done',
+          day,
+          status,
           note:
-            note && captureWords.includes(` ${toComparable(note)} `)
-              ? note
+            note && says(toComparable(note))
+              ? toWords(sliceOfCapture(text, note), HABIT_NOTE_CAP)
               : null,
         };
         return keep(command);
