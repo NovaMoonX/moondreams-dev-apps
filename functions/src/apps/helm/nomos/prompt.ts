@@ -162,7 +162,7 @@ export const toOffCategoriesPrompt = (
         )
         .join(
           '; ',
-        )}. When a question needs one of them, say plainly that it isn't being read and that it can be turned on in ${CONNECTED_APPS_TITLE}; never guess an answer from it.`;
+        )}. When a question needs one of them, look with search_synced in that app (so where you looked is shown), then say plainly in fromRecordsText that it isn't being read and that it can be turned on in ${CONNECTED_APPS_TITLE}; never guess an answer from it.`;
 
 export const APP_RECORDS_PROMPT = `The person's apps can be looked in with search_app_records when it is offered:
 - Use it only for a question their records and calendar cannot answer, such as what they spent at a place. Pass who was paid as they say it, and the first and last day as YYYY-MM-DD (a month asked for is the whole month). Name the range you looked in as real dates, as the from and to it returns ("in October (Oct 1\u201331)"), never only "last month".
