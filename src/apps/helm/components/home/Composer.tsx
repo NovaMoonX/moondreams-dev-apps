@@ -15,6 +15,7 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ArrowUp,
   AtSign,
@@ -433,8 +434,15 @@ function Composer({
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
+    // The recording row replaces the field, and a field removed while focused gets no blur.
     void recorder.start().then((isStarted) => {
-      if (isStarted) attachments.say(null);
+      if (!isStarted) return;
+      attachments.say(null);
+      setIsFocused(false);
+      setIsShorthandOpen(false);
+      stopKeepingInView.current?.();
+      stopKeepingInView.current = null;
+      onFocusChange(false);
     });
   };
 
@@ -484,11 +492,23 @@ function Composer({
           )}
         </div>
       )}
-      {isShorthandOpen && canType && showsActions && (
-        <ShorthandRow onInsert={insertShorthand} />
+      {canType && showsActions && (
+        <div
+          inert={!isShorthandOpen}
+          className={join(
+            'grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out motion-reduce:transition-none',
+            isShorthandOpen
+              ? 'grid-rows-[1fr] opacity-100'
+              : '-mb-1 grid-rows-[0fr] opacity-0',
+          )}
+        >
+          <div className='-mx-2 min-h-0 overflow-hidden'>
+            <ShorthandRow onInsert={insertShorthand} />
+          </div>
+        </div>
       )}
       <div className='flex items-end gap-1'>
-        {showsActions && !(isOutbox && !isReady) && (
+        {showsActions && !isRecording && !(isOutbox && !isReady) && (
           <EllipsisDropdown
             variant='tertiary'
             placement='top'
@@ -527,7 +547,7 @@ function Composer({
             onItemSelect={chooseAttachment}
           />
         )}
-        {showsActions && canType && (
+        {showsActions && canType && !isRecording && (
           <Button
             type='button'
             variant='tertiary'
@@ -552,7 +572,9 @@ function Composer({
               aria-hidden='true'
             />
             <span className='flex min-w-0 flex-1 items-baseline gap-1.5 text-[15px]'>
-              <span className='whitespace-nowrap'>{HELM_COPY.recording}</span>
+              <span className='min-w-0 truncate max-[359px]:sr-only'>
+                {HELM_COPY.recording}
+              </span>
               <span className='shrink-0 tabular-nums'>
                 {formatClock(recorder.elapsedMs)}
               </span>
@@ -561,7 +583,7 @@ function Composer({
               type='button'
               variant='tertiary'
               size='sm'
-              className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
+              className="relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
               onClick={recorder.cancel}
             >
               {HELM_COPY.recordCancel}
@@ -571,7 +593,7 @@ function Composer({
               variant='secondary'
               size='sm'
               rounded='full'
-              className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
+              className="relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
               onClick={recorder.stop}
             >
               {HELM_COPY.recordStop}
@@ -617,13 +639,20 @@ function Composer({
               }}
               onBlur={(event) => {
                 const field = event.currentTarget;
-                const finish = () => {
-                  if (document.activeElement === field) return;
+                const close = () => {
                   setIsFocused(false);
                   setIsShorthandOpen(false);
                   stopKeepingInView.current?.();
                   stopKeepingInView.current = null;
                   onFocusChange(false);
+                };
+                const finish = () => {
+                  if (document.activeElement === field) return;
+                  // The attach menu takes focus while open and hands it back to the field when it closes.
+                  if (root.current?.querySelector('[aria-expanded="true"]')) {
+                    return;
+                  }
+                  close();
                 };
                 if (press.current.isDown) press.current.pendingBlur = finish;
                 else finish();

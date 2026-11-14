@@ -214,6 +214,11 @@ html.helm-theme .subview-backdrop:has(.helm-ask-overlay) {
   z-index: 110;
 }
 
+/* A sheet opened from inside that conversation mounts after it, so it rises above it too. */
+html.helm-theme .subview-backdrop:has(.helm-ask-overlay) ~ .z-\[100\] {
+  z-index: 120;
+}
+
 /* A title: the serif at 600, tight like stationery. Everything else stays the site's sans. */
 html.helm-theme .helm-serif,
 html.helm-theme [role='dialog'] :is(h1, h2) {
@@ -251,4 +256,21 @@ html.helm-theme .helm-composer {
 
 html.helm-theme.dark .helm-composer {
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.4);
+}
+
+/* The dock comes back once the closing composer card has dropped past it, never under the card mid-slide. */
+@keyframes helm-dock-in {
+  from {
+    opacity: 0;
+  }
+}
+
+html.helm-theme .helm-dock-in {
+  animation: helm-dock-in 160ms ease-out 140ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.helm-theme .helm-dock-in {
+    animation: none;
+  }
 }

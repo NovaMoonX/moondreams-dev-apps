@@ -192,6 +192,14 @@ export function toTaskTitle(text: string) {
 export function getHomeHeldLine(capture: OpenCapture, isNewest: boolean) {
   const kind = toHeldKind(capture);
   if (kind === null || kind === 'question') return null;
+  if (kind === 'failed') return HELM_COPY.couldNotSort;
+  if (kind === 'couldNotRead') {
+    const wasReadAgain = Object.values(capture.questionState).some(
+      (question) =>
+        question.kind === 'couldNotRead' && question.answeredAt !== null,
+    );
+    return wasReadAgain ? HELM_COPY.readAgainNothing : HELM_COPY.nothingToFile;
+  }
   if (kind !== 'waiting') return HELM_COPY.waitingInNeedsYou;
   if (capture.heldReason === 'dailyLimit') {
     return HELM_COPY.savedHeldDaily(getLimitResetTime());

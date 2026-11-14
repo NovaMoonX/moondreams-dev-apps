@@ -1,16 +1,13 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ArrowUp, Mic, Square, X } from 'lucide-react';
+import { ArrowUp, CircleHelp, Mic, Square, X } from 'lucide-react';
 
-import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import DetailSheet from '@/components/DetailSheet';
 import MuteControl from '@apps/helm/components/voice/MuteControl';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
-import { useOnceVisible } from '@apps/helm/hooks/useOnceVisible';
-import { markVoiceNoticeSeen } from '@apps/helm/store/actions/captureActions';
 import type { ScreenContext } from '@apps/helm/types';
 
 const BUTTON =
@@ -26,25 +23,27 @@ interface VoiceStatusProps {
 }
 
 function VoiceNotice() {
-  const { user } = useAuth();
-  const hasSeen = useAppSelector(
-    (state) => state.helm.profile?.hasSeenVoiceNotice,
-  );
-  // Decided when the line first appears, so it stays while it is read and the profile then changes.
-  const [isShown] = useState(hasSeen === false);
-  const ref = useRef<HTMLParagraphElement>(null);
-  useOnceVisible(ref, isShown && user !== null, async () => {
-    if (!user) return;
-    await markVoiceNoticeSeen(user.uid).catch((error: unknown) => {
-      console.error('Helm voice notice was not marked seen', error);
-      throw error;
-    });
-  });
-  if (!isShown) return null;
+  const [isOpen, setIsOpen] = useState(false);
   return (
-    <p ref={ref} className='text-muted-foreground text-[13px] text-pretty'>
-      {HELM_COPY.voiceNotice}
-    </p>
+    <>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        className={join(BUTTON, 'text-muted-foreground gap-1.5 text-[13px]')}
+        onClick={() => setIsOpen(true)}
+      >
+        <CircleHelp className='size-3.5' aria-hidden='true' />
+        {HELM_COPY.voiceNoticeTitle}
+      </Button>
+      <DetailSheet
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        title={HELM_COPY.voiceNoticeTitle}
+      >
+        <p className='text-[15px] text-pretty'>{HELM_COPY.voiceNotice}</p>
+      </DetailSheet>
+    </>
   );
 }
 
