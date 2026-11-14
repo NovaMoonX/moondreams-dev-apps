@@ -36,6 +36,7 @@ interface SpeechRecognitionLike {
   interimResults: boolean;
   lang: string;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
   onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
   start: () => void;
