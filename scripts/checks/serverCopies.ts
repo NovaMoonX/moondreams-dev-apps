@@ -170,6 +170,11 @@ const COPIES: Copy[] = [
     importRewrites: { '@/lib/speech/speechText': './speechText.js' },
   },
   {
+    src: 'src/apps/helm/engine/whereabouts.ts',
+    dest: 'functions/src/apps/helm/nomos/whereabouts.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/utils/repeatRule.ts',
     dest: 'functions/src/vendor/repeatRule.ts',
     importRewrites: {},

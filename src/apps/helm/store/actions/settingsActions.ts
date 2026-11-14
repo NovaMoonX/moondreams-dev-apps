@@ -59,6 +59,9 @@ export async function ensureHelmProfile(uid: string) {
       selfWhoId: null,
       currentPlace: null,
       styleLearnedThroughAt: null,
+      phoneLocation: 'off',
+      zoneSpans: [],
+      abilityOffers: [],
       createdAt: Date.now(),
       lastEditedAt: null,
     };

@@ -1,3 +1,4 @@
+import type { City } from '@/lib/cities/types';
 import {
   collection,
   limit,
@@ -71,6 +72,10 @@ async function openWho(
     notes: null,
     species: null,
     organizationKind: null,
+    home: null,
+    homeSource: null,
+    away: null,
+    nearNow: null,
   };
   try {
     if (!data.sealed) throw new Error('This person has no sealed words.');
@@ -92,6 +97,26 @@ async function openWho(
       organizationKind: toText(payload.organizationKind),
       privateMark: payload.privateMark ?? null,
       isPrivacyCleared: payload.isPrivacyCleared ?? false,
+      home: toCity(payload.home),
+      homeSource: payload.home ? (payload.homeSource ?? 'page') : null,
+      away: Array.isArray(payload.away)
+        ? payload.away.flatMap((span) => {
+            const city = toCity(span?.city);
+            return city &&
+              typeof span.from === 'number' &&
+              typeof span.to === 'number'
+              ? [
+                  {
+                    ...span,
+                    city,
+                    label: toText(span.label),
+                    zoneOffered: span.zoneOffered ?? false,
+                  },
+                ]
+              : [];
+          })
+        : null,
+      nearNow: payload.nearNow ?? null,
       isUnreadable: false,
     };
   } catch {
@@ -106,6 +131,23 @@ async function openWho(
 }
 
 /** Every who the person has. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+const toCity = (value: unknown): City | null => {
+  if (!value || typeof value !== 'object') return null;
+  const city = value as Partial<City>;
+  return typeof city.name === 'string' &&
+    typeof city.latitude === 'number' &&
+    typeof city.longitude === 'number'
+    ? {
+        name: city.name,
+        region: city.region ?? null,
+        country: city.country ?? null,
+        latitude: city.latitude,
+        longitude: city.longitude,
+        timezone: city.timezone ?? null,
+      }
+    : null;
+};
+
 export function startWhoListener(
   uid: string,
   read: SealedReader,

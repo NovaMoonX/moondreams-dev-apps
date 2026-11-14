@@ -598,6 +598,10 @@ export async function ensureSelfWho(
       organizationKind: null,
       privateMark: null,
       isPrivacyCleared: false,
+      home: null,
+      homeSource: null,
+      away: null,
+      nearNow: null,
     },
     encryption,
   );

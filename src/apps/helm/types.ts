@@ -1,3 +1,4 @@
+import type { City } from '@/lib/cities/types';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
@@ -79,8 +80,47 @@ export interface HelmProfile {
   currentPlace: { placeId: string; saidAt: number } | null;
   /** The createdAt of the newest typed capture the style learner has read; null until it has run, and on a profile from before it. */
   styleLearnedThroughAt: number | null;
+  /** How much of this phone's location the assistant may use; only the chosen precision is ever stored. */
+  phoneLocation: PhoneLocation;
+  /** Away spans whose days follow the away city's clock (date-only, inclusive, at most 10). */
+  zoneSpans: ZoneSpan[];
+  /** When the person said Not now to an ability offer, so it waits 4 weeks. */
+  abilityOffers: AbilityDecline[];
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+export type PhoneLocation = 'off' | 'city' | 'precise';
+
+export interface ZoneSpan {
+  zone: string;
+  from: number;
+  to: number;
+  awayId: string;
+}
+
+export interface AbilityDecline {
+  ability: 'location';
+  level: 'city' | 'precise';
+  declinedAt: number;
+}
+
+/** Somewhere else for a while: date-only `from` and `to`, both inclusive. */
+export interface AwaySpan {
+  id: string;
+  city: City;
+  from: number;
+  to: number;
+  label: string | null;
+  source: 'said' | 'page';
+  zoneOffered: boolean;
+}
+
+export interface NearNow {
+  city: string;
+  at: number;
+  /** Only at Precise, rounded to 3 decimals. */
+  point: { lat: number; lng: number } | null;
 }
 
 export type StyleScope = 'general' | 'occasion' | 'audience';
@@ -546,6 +586,13 @@ export interface WhoSealed {
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
   isPrivacyCleared: boolean | null;
+  /** Where they live. Null when unknown, and in a payload sealed before the field. */
+  home: City | null;
+  homeSource: 'said' | 'page' | null;
+  /** At most 5; spans that ended before today are dropped on the next write. */
+  away: AwaySpan[] | null;
+  /** Self only, with phone location on; lapses after 6 hours. */
+  nearNow: NearNow | null;
 }
 
 /** A who after its words are opened; one that would not open keeps `isUnreadable` and an empty name. */
