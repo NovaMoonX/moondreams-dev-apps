@@ -116,12 +116,12 @@ const MEAL_ITEM_FIELDS = {
 
 const MEAL_FIELDS = {
   id: 'notUseful',
-  name: 'notUseful',
-  items: 'notUseful',
+  name: 'shared',
+  items: 'shared',
   isFavorite: 'notUseful',
   categories: 'notUseful',
   createdAt: 'notUseful',
-  updatedAt: 'notUseful',
+  updatedAt: 'shared',
 } satisfies Record<keyof Meal, ShareDecision>;
 
 const PLANNED_SNAPSHOT_FIELDS = {
@@ -241,7 +241,7 @@ const CONTAINER_FIELDS = {
   recipeId: 'notUseful',
   mealId: 'notUseful',
   cookId: 'notUseful',
-  servings: 'notUseful',
+  servings: 'shared',
   status: 'filter',
   place: 'shared',
   eatBy: 'shared',
@@ -263,8 +263,8 @@ const PACKAGE_FIELDS = {
   ingredientId: 'notUseful',
   ingredientName: 'shared',
   productId: 'notUseful',
-  amount: 'notUseful',
-  unit: 'notUseful',
+  amount: 'shared',
+  unit: 'shared',
   place: 'shared',
   expiresAt: 'shared',
   openedAt: 'notUseful',
@@ -316,9 +316,9 @@ const RECIPE_FIELDS = {
   id: 'notUseful',
   title: 'shared',
   description: 'never',
-  servings: 'notUseful',
-  prepMinutes: 'notUseful',
-  cookMinutes: 'notUseful',
+  servings: 'shared',
+  prepMinutes: 'shared',
+  cookMinutes: 'shared',
   coverPath: 'notUseful',
   coverUrl: 'notUseful',
   ingredients: 'never',
@@ -328,12 +328,12 @@ const RECIPE_FIELDS = {
   sourceId: 'notUseful',
   care: 'never',
   collectionIds: 'notUseful',
-  categories: 'notUseful',
+  categories: 'shared',
   links: 'never',
-  isArchived: 'notUseful',
+  isArchived: 'filter',
   isFavorite: 'notUseful',
   createdAt: 'notUseful',
-  updatedAt: 'notUseful',
+  updatedAt: 'shared',
 } satisfies Record<keyof Recipe, ShareDecision>;
 
 const COOKING_RESUME_FIELDS = {

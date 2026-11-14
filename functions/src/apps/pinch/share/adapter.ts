@@ -32,6 +32,45 @@ const manifest = readManifest();
 const MEAL_LIMIT = 500;
 const LINE_LIMIT = 1000;
 const STOCK_LIMIT = 100;
+const FULL_STOCK_LIMIT = 300;
+const RECIPE_LIMIT = 500;
+const SAVED_MEAL_LIMIT = 200;
+const PLATE_NAMES_SHOWN = 3;
+const PLATE_ITEMS_READ = 8;
+const NAME_CLIP = 40;
+const DETAIL_LIMIT = 120;
+
+const DISH_WORDS: Record<string, string> = {
+  BREAKFAST: 'Breakfast',
+  MAIN: 'Main dishes',
+  SIDE: 'Sides',
+  SOUP_SALAD: 'Soups & salads',
+  SNACK: 'Snacks',
+  DESSERT: 'Desserts',
+  BAKING: 'Baking',
+  DRINK: 'Drinks',
+  SAUCE: 'Sauces & dips',
+};
+
+const dayFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** A date picked with no time is UTC midnight, so it reads in UTC. */
+const formatDay = (value: number) => dayFormatter.format(new Date(value));
+
+const joinLines = (parts: Array<string | null>, separator = ' · ') =>
+  parts.flatMap((part) => (part === null ? [] : [part])).join(separator) ||
+  null;
+
+const clipTo = (text: string, limit: number) =>
+  text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`;
+
+const clip = (text: string | null) =>
+  text === null ? null : clipTo(text, DETAIL_LIMIT);
 
 const MEAL_TYPE_WORDS: Record<string, string> = {
   BREAKFAST: 'Breakfast',
@@ -363,7 +402,228 @@ async function syncUseSoon(
   };
 }
 
+const toStockRecord = (
+  collection: string,
+  doc: FirebaseFirestore.QueryDocumentSnapshot,
+  title: unknown,
+  amount: string | null,
+  dateLabel: string,
+  date: unknown,
+) => {
+  const text = readText(title);
+  if (text === null) return [];
+  const day = readTime(date);
+  const place = doc.get('place') as unknown;
+  return [
+    toRecord({
+      sourceRef: `${collection}/${doc.id}`,
+      kind: 'artifact',
+      title: text,
+      subtitle:
+        typeof place === 'string' && Object.hasOwn(PLACE_WORDS, place)
+          ? PLACE_WORDS[place]
+          : null,
+      detail: clip(
+        joinLines([
+          amount,
+          day === null ? null : `${dateLabel} ${formatDay(day)}`,
+        ]),
+      ),
+      sourceUpdatedAt: readTime(doc.get('updatedAt')),
+    }),
+  ];
+};
+
+async function syncPantryStock(
+  firestore: Firestore,
+  uid: string,
+): Promise<CategoryRead> {
+  const [containers, packages] = await Promise.all([
+    firestore
+      .collection(kitchenPath(uid, 'containers'))
+      .where('status', '==', 'IN_STOCK')
+      .select('title', 'place', 'eatBy', 'servings', 'updatedAt')
+      .limit(FULL_STOCK_LIMIT)
+      .get(),
+    firestore
+      .collection(kitchenPath(uid, 'packages'))
+      .where('status', '==', 'IN_STOCK')
+      .select(
+        'ingredientName',
+        'place',
+        'expiresAt',
+        'amount',
+        'unit',
+        'updatedAt',
+      )
+      .limit(FULL_STOCK_LIMIT)
+      .get(),
+  ]);
+  return {
+    records: [
+      ...containers.docs.flatMap((doc) => {
+        const servings = doc.get('servings') as unknown;
+        return toStockRecord(
+          'containers',
+          doc,
+          doc.get('title'),
+          typeof servings === 'number' && servings > 0
+            ? `${servings} ${servings === 1 ? 'serving' : 'servings'}`
+            : null,
+          'eat by',
+          doc.get('eatBy'),
+        );
+      }),
+      ...packages.docs.flatMap((doc) =>
+        toStockRecord(
+          'packages',
+          doc,
+          doc.get('ingredientName'),
+          formatAmount(doc.get('amount'), doc.get('unit')),
+          'use by',
+          doc.get('expiresAt'),
+        ),
+      ),
+    ],
+    isFull:
+      containers.size < FULL_STOCK_LIMIT && packages.size < FULL_STOCK_LIMIT,
+  };
+}
+
+async function syncRecipes(
+  firestore: Firestore,
+  uid: string,
+): Promise<CategoryRead> {
+  const snapshot = await firestore
+    .collection(kitchenPath(uid, 'recipes'))
+    .orderBy('updatedAt', 'desc')
+    .select(
+      'title',
+      'servings',
+      'prepMinutes',
+      'cookMinutes',
+      'categories',
+      'isArchived',
+      'updatedAt',
+    )
+    .limit(RECIPE_LIMIT)
+    .get();
+  const records = snapshot.docs.flatMap((doc) => {
+    const title = readText(doc.get('title'));
+    if (title === null || doc.get('isArchived') === true) return [];
+    const servings = doc.get('servings') as unknown;
+    const minutes =
+      (readTime(doc.get('prepMinutes')) ?? 0) +
+      (readTime(doc.get('cookMinutes')) ?? 0);
+    const dishes = doc.get('categories') as unknown;
+    return [
+      toRecord({
+        sourceRef: `recipes/${doc.id}`,
+        kind: 'artifact',
+        title,
+        detail: clip(
+          joinLines([
+            Array.isArray(dishes)
+              ? joinLines(
+                  dishes.flatMap((dish) =>
+                    typeof dish === 'string' && Object.hasOwn(DISH_WORDS, dish)
+                      ? [DISH_WORDS[dish]]
+                      : [],
+                  ),
+                  ', ',
+                )
+              : null,
+            typeof servings === 'number' && servings > 0
+              ? `serves ${servings}`
+              : null,
+            minutes > 0 ? `${minutes} min` : null,
+          ]),
+        ),
+        sourceUpdatedAt: readTime(doc.get('updatedAt')),
+      }),
+    ];
+  });
+  return { records, isFull: snapshot.size < RECIPE_LIMIT };
+}
+
+const describePlate = (all: string[], more: number) => {
+  if (all.length === 0) return null;
+  const tail = ` and ${more} more`;
+  const room = Math.floor(
+    (DETAIL_LIMIT - tail.length - 2 * (all.length - 1)) / all.length,
+  );
+  const names = all.map((name) =>
+    clipTo(name, more > 0 ? Math.min(NAME_CLIP, room) : NAME_CLIP),
+  );
+  if (more > 0) return `${names.join(', ')}${tail}`;
+  const last = names[names.length - 1];
+  return names.length === 1
+    ? last
+    : `${names.slice(0, -1).join(', ')} and ${last}`;
+};
+
+async function syncSavedMeals(
+  firestore: Firestore,
+  uid: string,
+): Promise<CategoryRead> {
+  const snapshot = await firestore
+    .collection(kitchenPath(uid, 'meals'))
+    .orderBy('updatedAt', 'desc')
+    .select('name', 'items', 'updatedAt')
+    .limit(SAVED_MEAL_LIMIT)
+    .get();
+  const meals = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    name: readText(doc.get('name')),
+    items: readItems(doc.get('items')),
+    updatedAt: readTime(doc.get('updatedAt')),
+  }));
+  const shown = meals.flatMap((meal) => meal.items.slice(0, PLATE_ITEMS_READ));
+  const [recipeTitles, ingredientNames] = await Promise.all([
+    readRecipeTitles(
+      firestore,
+      uid,
+      shown.filter((item) => item.kind === 'RECIPE').map((item) => item.refId),
+    ),
+    readIngredientNames(
+      firestore,
+      uid,
+      shown
+        .filter((item) => item.kind === 'INGREDIENT')
+        .map((item) => item.refId),
+    ),
+  ]);
+  const records = meals.flatMap((meal) => {
+    if (meal.name === null) return [];
+    const read = meal.items.slice(0, PLATE_ITEMS_READ);
+    const found = read.flatMap((item, index) => {
+      const name = (
+        item.kind === 'RECIPE' ? recipeTitles : ingredientNames
+      ).get(item.refId);
+      return name === null || name === undefined ? [] : [{ name, index }];
+    });
+    const first = found.slice(0, PLATE_NAMES_SHOWN);
+    const names = first.map(({ name }) => name);
+    const consumed =
+      first.length === PLATE_NAMES_SHOWN
+        ? first[first.length - 1].index + 1
+        : read.length;
+    return [
+      toRecord({
+        sourceRef: `meals/${meal.id}`,
+        kind: 'artifact',
+        title: meal.name,
+        detail: clip(describePlate(names, meal.items.length - consumed)),
+        sourceUpdatedAt: meal.updatedAt,
+      }),
+    ];
+  });
+  return { records, isFull: snapshot.size < SAVED_MEAL_LIMIT };
+}
+
 const DEEP_LINKS: Record<string, string> = {
+  recipes: '/pinch?tab=recipes',
+  meals: '/pinch?tab=recipes',
   plannedMeals: '/pinch?tab=calendar',
   shoppingItems: '/pinch?tab=shopping',
   containers: '/pinch?tab=kitchen',
@@ -404,6 +664,12 @@ export function createPinchAdapter(
         return syncShoppingList(firestore, uid);
       case 'useSoon':
         return syncUseSoon(firestore, uid, deps.now());
+      case 'pantryStock':
+        return syncPantryStock(firestore, uid);
+      case 'recipes':
+        return syncRecipes(firestore, uid);
+      case 'savedMeals':
+        return syncSavedMeals(firestore, uid);
       default:
         throw new Error('Unknown category.');
     }
