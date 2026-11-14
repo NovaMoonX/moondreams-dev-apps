@@ -26,6 +26,7 @@ import {
   readUpdateConnectionRequest,
 } from '../../functions/src/connections/grants.ts';
 import { toSyncedId } from '../../functions/src/apps/helm/connections/sink.ts';
+import { readUnseenNews } from '../../src/lib/connections/newReads.ts';
 import {
   BULK_CALENDAR,
   FIXTURE_CANCELLED_REF,
@@ -556,6 +557,55 @@ const main = async () => {
     assert.throws(
       () => assertSeenScopes(manifest, { nope: 1 }),
       'an unknown category is refused',
+    );
+    const partial = {
+      ...fresh,
+      categories: { shoppingList: fresh.categories.shoppingList },
+    };
+    assert.deepEqual(
+      applyCategoryChanges(partial, {}, manifest, NOW, { useSoon: 1 }).useSoon,
+      { isOn: false, changedAt: NOW, seenScopeVersion: 1 },
+      'seeing a category the grant never held records it, still off',
+    );
+    const shipped = {
+      ...manifest,
+      categories: manifest.categories.map((category) =>
+        category.id === 'shoppingList'
+          ? {
+              ...category,
+              reads: [
+                ...category.reads,
+                { label: 'Added', sinceVersion: 2, addedOn: '2026-05-01' },
+              ],
+              scopeVersion: 2,
+            }
+          : category,
+      ),
+    };
+    const may2 = Date.parse('2026-05-02T12:00:00Z');
+    assert.deepEqual(
+      Object.keys(readUnseenNews(shipped, fresh.categories, may2)),
+      ['shoppingList'],
+      'a read shipped yesterday is new to someone who saw version 1',
+    );
+    assert.deepEqual(
+      readUnseenNews(shipped, fresh.categories, may2 + 40 * DAY),
+      {},
+      'it stops being new after the window',
+    );
+    assert.deepEqual(
+      readUnseenNews(
+        shipped,
+        applyCategoryChanges(fresh, {}, shipped, NOW, { shoppingList: 2 }),
+        may2,
+      ),
+      {},
+      'seeing it clears it',
+    );
+    assert.deepEqual(
+      readUnseenNews(manifest, {}, may2),
+      {},
+      'reads there from the start are never new',
     );
   }
 

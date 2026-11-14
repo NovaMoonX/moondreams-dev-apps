@@ -16,9 +16,13 @@ export const GOOGLE_CONTACTS_MANIFEST: ConnectorManifest = {
       isOnAtConnect: true,
       addedInVersion: 1,
       reads: [
-        { label: "Each contact's name", sinceVersion: 1 },
-        { label: 'Their emails and phone numbers', sinceVersion: 1 },
-        { label: 'Their photo and birthday', sinceVersion: 1 },
+        { label: "Each contact's name", sinceVersion: 1, addedOn: null },
+        {
+          label: 'Their emails and phone numbers',
+          sinceVersion: 1,
+          addedOn: null,
+        },
+        { label: 'Their photo and birthday', sinceVersion: 1, addedOn: null },
       ],
       scopeVersion: 1,
     },

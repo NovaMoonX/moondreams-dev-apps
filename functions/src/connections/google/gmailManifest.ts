@@ -19,8 +19,9 @@ export const GOOGLE_GMAIL_MANIFEST: ConnectorManifest = {
         {
           label: 'The subject and sender of messages that match a search',
           sinceVersion: 1,
+          addedOn: null,
         },
-        { label: 'A short snippet of each', sinceVersion: 1 },
+        { label: 'A short snippet of each', sinceVersion: 1, addedOn: null },
       ],
       scopeVersion: 1,
     },

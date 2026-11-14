@@ -24,6 +24,7 @@ import {
 import { GOOGLE_CONTACTS_MANIFEST } from '@/lib/connections/google/contactsManifest';
 import { GOOGLE_DRIVE_MANIFEST } from '@/lib/connections/google/driveManifest';
 import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
+import { readUnseenNews } from '@/lib/connections/newReads';
 import { getConnectorManifest } from '@/lib/connections/sources';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
@@ -97,6 +98,15 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   >({});
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [seenNow, setSeenNow] = useState<Record<string, number>>({});
+  const [openedNews] = useState(() =>
+    grant
+      ? readUnseenNews(
+          getConnectorManifest(grant.connectorId),
+          grant.categories,
+          now,
+        )
+      : {},
+  );
   const [openReads, setOpenReads] = useState<Record<string, boolean>>({});
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
@@ -442,13 +452,10 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             const isOn =
               waiting?.isOn ?? grant.categories[category.id]?.isOn ?? false;
             const isWaiting = waiting !== null;
-            const seenVersion = Math.max(
-              grant.categories[category.id]?.seenScopeVersion ?? 1,
-              seenNow[category.id] ?? 1,
-            );
-            const newReads = isOn
-              ? category.reads.filter((read) => read.sinceVersion > seenVersion)
-              : [];
+            const newReads =
+              seenNow[category.id] === undefined
+                ? (openedNews[category.id] ?? [])
+                : [];
             return (
               <li key={category.id} className='flex flex-col gap-1 px-4 py-3'>
                 <label className='flex min-h-11 items-center gap-3'>

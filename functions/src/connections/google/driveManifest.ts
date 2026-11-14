@@ -20,8 +20,13 @@ export const GOOGLE_DRIVE_MANIFEST: ConnectorManifest = {
         {
           label: 'The name of each Doc or PDF that matches a search',
           sinceVersion: 1,
+          addedOn: null,
         },
-        { label: 'Passages from the files that match', sinceVersion: 1 },
+        {
+          label: 'Passages from the files that match',
+          sinceVersion: 1,
+          addedOn: null,
+        },
       ],
       scopeVersion: 1,
     },

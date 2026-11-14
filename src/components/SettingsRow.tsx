@@ -7,6 +7,8 @@ interface SettingsRowProps {
   /** An emoji or icon for the round chip at the start. */
   icon: ReactNode;
   title: string;
+  /** Something small beside the title, such as a `NewBadge`. */
+  badge?: ReactNode;
   /** A quiet line or two under the title: what it does, or why it is off. */
   description?: ReactNode;
   /** The row's own control at its end, usually a switch; the whole top line is its tap target. */
@@ -23,6 +25,7 @@ interface SettingsRowProps {
 function SettingsRow({
   icon,
   title,
+  badge,
   description,
   control,
   children,
@@ -39,13 +42,20 @@ function SettingsRow({
   );
   const text = (
     <span className='flex min-h-10 min-w-0 flex-1 flex-col justify-center'>
-      <span className='text-foreground font-medium text-pretty'>{title}</span>
+      <span className='flex flex-wrap items-center gap-x-2 gap-y-1'>
+        <span className='text-foreground font-medium text-pretty'>{title}</span>
+        {badge}
+      </span>
       {description && (
-        <span className='text-muted-foreground block text-sm text-pretty break-words'>{description}</span>
+        <span className='text-muted-foreground block text-sm text-pretty break-words'>
+          {description}
+        </span>
       )}
     </span>
   );
-  const controlSlot = control && <span className='flex h-10 shrink-0 items-center'>{control}</span>;
+  const controlSlot = control && (
+    <span className='flex h-10 shrink-0 items-center'>{control}</span>
+  );
 
   return (
     <li className='py-3'>
@@ -62,7 +72,10 @@ function SettingsRow({
             {text}
             {hasChevron && (
               <span className='flex h-10 shrink-0 items-center'>
-                <ChevronRight className='text-muted-foreground size-5' aria-hidden='true' />
+                <ChevronRight
+                  className='text-muted-foreground size-5'
+                  aria-hidden='true'
+                />
               </span>
             )}
           </Button>

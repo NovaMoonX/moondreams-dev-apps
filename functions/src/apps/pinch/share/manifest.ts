@@ -19,8 +19,12 @@ export const PINCH_SHARES: SourceShares = {
           isOnAtConnect: true,
           addedInVersion: 1,
           reads: [
-            { label: "The meal's name", sinceVersion: 1 },
-            { label: 'The day and the slot, like dinner', sinceVersion: 1 },
+            { label: "The meal's name", sinceVersion: 1, addedOn: null },
+            {
+              label: 'The day and the slot, like dinner',
+              sinceVersion: 1,
+              addedOn: null,
+            },
           ],
           scopeVersion: 1,
         },
@@ -33,8 +37,8 @@ export const PINCH_SHARES: SourceShares = {
           isOnAtConnect: true,
           addedInVersion: 1,
           reads: [
-            { label: 'Each item still to buy', sinceVersion: 1 },
-            { label: 'How much of it to buy', sinceVersion: 1 },
+            { label: 'Each item still to buy', sinceVersion: 1, addedOn: null },
+            { label: 'How much of it to buy', sinceVersion: 1, addedOn: null },
           ],
           scopeVersion: 1,
         },
@@ -47,9 +51,13 @@ export const PINCH_SHARES: SourceShares = {
           isOnAtConnect: false,
           addedInVersion: 1,
           reads: [
-            { label: 'Each food near its date', sinceVersion: 1 },
-            { label: 'Where it is kept', sinceVersion: 1 },
-            { label: 'The day to use it by', sinceVersion: 1 },
+            {
+              label: 'Each food near its date',
+              sinceVersion: 1,
+              addedOn: null,
+            },
+            { label: 'Where it is kept', sinceVersion: 1, addedOn: null },
+            { label: 'The day to use it by', sinceVersion: 1, addedOn: null },
           ],
           scopeVersion: 1,
         },

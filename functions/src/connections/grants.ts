@@ -256,19 +256,18 @@ export function applyCategoryChanges(
     grant.categories,
   );
   return Object.entries(seenScopes).reduce(
-    (categories, [id, version]) =>
-      categories[id]
+    (categories, [id, version]) => ({
+      ...categories,
+      [id]: categories[id]
         ? {
-            ...categories,
-            [id]: {
-              ...categories[id],
-              seenScopeVersion: Math.max(
-                version,
-                categories[id].seenScopeVersion ?? 1,
-              ),
-            },
+            ...categories[id],
+            seenScopeVersion: Math.max(
+              version,
+              categories[id].seenScopeVersion ?? 1,
+            ),
           }
-        : categories,
+        : { isOn: false, changedAt: now, seenScopeVersion: version },
+    }),
     switched,
   );
 }

@@ -17,7 +17,7 @@ export const NINE_LIVES_SHARES: SourceShares = {
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
-          reads: [{ label: "Each cat's name", sinceVersion: 1 }],
+          reads: [{ label: "Each cat's name", sinceVersion: 1, addedOn: null }],
           scopeVersion: 1,
         },
         {
@@ -32,9 +32,10 @@ export const NINE_LIVES_SHARES: SourceShares = {
             {
               label: 'The cats going and the reason for the visit',
               sinceVersion: 1,
+              addedOn: null,
             },
-            { label: "The clinic's name", sinceVersion: 1 },
-            { label: 'The date and time', sinceVersion: 1 },
+            { label: "The clinic's name", sinceVersion: 1, addedOn: null },
+            { label: 'The date and time', sinceVersion: 1, addedOn: null },
           ],
           scopeVersion: 1,
         },
@@ -50,8 +51,9 @@ export const NINE_LIVES_SHARES: SourceShares = {
             {
               label: 'The cats and the vaccine or preventive due',
               sinceVersion: 1,
+              addedOn: null,
             },
-            { label: 'The day it is due', sinceVersion: 1 },
+            { label: 'The day it is due', sinceVersion: 1, addedOn: null },
           ],
           scopeVersion: 1,
         },
@@ -64,8 +66,12 @@ export const NINE_LIVES_SHARES: SourceShares = {
           isOnAtConnect: true,
           addedInVersion: 1,
           reads: [
-            { label: "Each clinic's name", sinceVersion: 1 },
-            { label: 'Its phone number and address', sinceVersion: 1 },
+            { label: "Each clinic's name", sinceVersion: 1, addedOn: null },
+            {
+              label: 'Its phone number and address',
+              sinceVersion: 1,
+              addedOn: null,
+            },
           ],
           scopeVersion: 1,
         },
@@ -81,10 +87,12 @@ export const NINE_LIVES_SHARES: SourceShares = {
             {
               label: "Each condition's name and the cat it is for",
               sinceVersion: 1,
+              addedOn: null,
             },
             {
               label: 'Whether it is active, ongoing or resolved',
               sinceVersion: 1,
+              addedOn: null,
             },
           ],
           scopeVersion: 1,

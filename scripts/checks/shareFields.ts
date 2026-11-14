@@ -208,6 +208,17 @@ const checkReads = (manifest: ConnectorManifest) =>
     const where = `${manifest.id} ${category.id}`;
     if (category.reads.length === 0)
       problems.push(`${where} — reads is empty: say what the category reads`);
+    category.reads
+      .filter(
+        ({ sinceVersion, addedOn }) =>
+          (sinceVersion > 1 && addedOn === null) ||
+          (addedOn !== null && !/^\d{4}-\d{2}-\d{2}$/.test(addedOn)),
+      )
+      .forEach(({ label }) =>
+        problems.push(
+          `${where} — '${label}' needs addedOn, the YYYY-MM-DD day it ships, so it shows as New`,
+        ),
+      );
     const newest = Math.max(
       0,
       ...category.reads.map(({ sinceVersion }) => sinceVersion),

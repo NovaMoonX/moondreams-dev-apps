@@ -39,8 +39,8 @@ export interface CategoryManifest {
   isOnAtConnect: boolean;
   /** A category added after people connected starts off and shows as new once. */
   addedInVersion: number;
-  /** Each detail the category reads, in the person's words, and the `scopeVersion` it arrived in. */
-  reads: { label: string; sinceVersion: number }[];
+  /** Each detail the category reads, in the person's words, the `scopeVersion` it arrived in, and the day it shipped (`YYYY-MM-DD`, null for what it read from the start); a read shows as New for a while after that day until the person sees it. */
+  reads: { label: string; sinceVersion: number; addedOn: string | null }[];
   /** Starts at 1; bumped whenever `reads` gains an entry. */
   scopeVersion: number;
 }

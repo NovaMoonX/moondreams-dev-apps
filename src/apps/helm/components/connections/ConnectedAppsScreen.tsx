@@ -6,6 +6,7 @@ import AppLogo from '@/components/AppLogo';
 import { GoogleCalendarMark } from '@/components/BrandMarks';
 import ConnectedSourcesList from '@/components/ConnectedSourcesList';
 import SectionHeader from '@/components/SectionHeader';
+import { hasUnseenNews, markNewsSeen } from '@/lib/connections/connectionNews';
 import {
   isOutsideAccount,
   readConnectorAppId,
@@ -18,6 +19,7 @@ import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
 import KeptCopiesSheet from '@apps/helm/components/connections/KeptCopiesSheet';
 import ConnectSheet from '@apps/helm/components/connections/ConnectSheet';
@@ -57,6 +59,7 @@ function ConnectedAppsScreen({
   const name = useAssistantName();
   const { apps } = useAppCatalog();
   const now = useNow(60_000);
+  const isOffline = useNetworkStatus() === 'offline';
   const { user } = useAuth();
   const { accounts } = useConnectionAccounts(user?.uid ?? null);
   const { begin } = useGoogleConnect();
@@ -117,6 +120,7 @@ function ConnectedAppsScreen({
             ? readLine
             : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`,
         isTrouble,
+        covers: [grant],
       };
     })
     .sort((a, b) => a.appName.localeCompare(b.appName));
@@ -160,11 +164,21 @@ function ConnectedAppsScreen({
             ? readLine || HELM_COPY.connectedNothingOn
             : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`,
         isTrouble,
+        covers: own,
       };
     })
     .sort((a, b) => a.appName.localeCompare(b.appName));
   const connectedRows = [...googleConnected, ...connected];
   const hasGoogleAccount = googleConnected.length > 0;
+
+  const openConnection = (id: string) => {
+    const covers = connectedRows.find((row) => row.id === id)?.covers ?? [];
+    if (!isOffline)
+      void markNewsSeen(covers, now).catch((failure: unknown) =>
+        console.error('Helm could not mark what is new as seen', failure),
+      );
+    onOpenConnection(id);
+  };
 
   const connectedIds = new Set(
     grants.flatMap((grant) => readConnectorAppId(grant.connectorId) ?? []),
@@ -215,8 +229,9 @@ function ConnectedAppsScreen({
                   title: row.appName,
                   meta: row.meta,
                   isTrouble: row.isTrouble,
+                  isNew: row.covers.some((grant) => hasUnseenNews(grant, now)),
                 }))}
-                onOpen={onOpenConnection}
+                onOpen={openConnection}
               />
             </div>
           </section>

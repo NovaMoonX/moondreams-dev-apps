@@ -20,11 +20,20 @@ export const WORTH_THE_WAIT_SHARES: SourceShares = {
           isOnAtConnect: false,
           addedInVersion: 1,
           reads: [
-            { label: "Each box's name and emoji", sinceVersion: 1 },
-            { label: 'How many things are in it', sinceVersion: 1 },
+            {
+              label: "Each box's name and emoji",
+              sinceVersion: 1,
+              addedOn: null,
+            },
+            {
+              label: 'How many things are in it',
+              sinceVersion: 1,
+              addedOn: null,
+            },
             {
               label: 'How many are revealed and how many are waiting',
               sinceVersion: 1,
+              addedOn: null,
             },
           ],
           scopeVersion: 1,

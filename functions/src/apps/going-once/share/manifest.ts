@@ -19,9 +19,13 @@ export const GOING_ONCE_SHARES: SourceShares = {
           isOnAtConnect: true,
           addedInVersion: 1,
           reads: [
-            { label: 'The thing waiting for pickup', sinceVersion: 1 },
-            { label: "Its sale's name", sinceVersion: 1 },
-            { label: 'The pickup day', sinceVersion: 1 },
+            {
+              label: 'The thing waiting for pickup',
+              sinceVersion: 1,
+              addedOn: null,
+            },
+            { label: "Its sale's name", sinceVersion: 1, addedOn: null },
+            { label: 'The pickup day', sinceVersion: 1, addedOn: null },
           ],
           scopeVersion: 1,
         },
@@ -34,10 +38,11 @@ export const GOING_ONCE_SHARES: SourceShares = {
           isOnAtConnect: true,
           addedInVersion: 1,
           reads: [
-            { label: "Each open sale's name", sinceVersion: 1 },
+            { label: "Each open sale's name", sinceVersion: 1, addedOn: null },
             {
               label: 'How many things are available, pending and sold',
               sinceVersion: 1,
+              addedOn: null,
             },
           ],
           scopeVersion: 1,
