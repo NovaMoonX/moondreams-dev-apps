@@ -152,11 +152,15 @@ function readCoarseDates(text: string, thisYear: number): DateSpan[] {
 const RANGE_END_RE =
   /^\s*(?:to|through|thru|until|-|–)\s*(\d{1,2})(?:st|nd|rd|th)?\b/i;
 
+const NOT_A_DAY_RE =
+  /^(?:\s*(?::|\d|[ap]\.?m\b)|\s+(?!(?:in|for|at|and|so|but|then|because|since|while|when|on|with|to|from)\b)[a-z])/;
+
 /** The bare day that closes a range ("Dec 2 to 9"), as a day in the same month as the date before it. */
 function readRangeEnds(text: string, natural: DateSpan[]): DateSpan[] {
   return natural.flatMap((span) => {
     const match = RANGE_END_RE.exec(text.slice(span.end));
     if (!match || span.due.kind !== 'day') return [];
+    if (NOT_A_DAY_RE.test(text.slice(span.end + match[0].length))) return [];
     const first = new Date(span.due.date);
     const day = Number(match[1]);
     const date = Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), day);

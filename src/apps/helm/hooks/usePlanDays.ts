@@ -12,8 +12,10 @@ import { generatePlan } from '@apps/helm/store/actions/planActions';
 import { selectActiveTasks } from '@apps/helm/store/selectors/taskSelectors';
 import {
   formatDayWord,
+  fromAwayKey,
   needsPlan,
   readTodayZone,
+  toAwayKey,
   toDayKey,
 } from '@apps/helm/utils/planDays';
 import {
@@ -34,6 +36,7 @@ import type {
 const MINUTE_MS = 60_000;
 
 interface SourceParts {
+  awayKey: string | null;
   grants: ConnectionGrantWithId[];
   profile: HelmProfile | null;
   synced: SyncedRecord[];
@@ -44,12 +47,12 @@ interface SourceParts {
 }
 
 const toSources = (parts: SourceParts): PlanSources | null => {
-  const { profile, now, ...rest } = parts;
+  const { profile, now, awayKey, ...rest } = parts;
   if (!profile) return null;
   const timeZone = readTodayZone(now, {
     timeZone: profile.timeZone || getDeviceTimeZone() || 'UTC',
     zoneSpans: profile.zoneSpans,
-  });
+  }, fromAwayKey(awayKey));
   return { ...rest, profile, now, timeZone, todayKey: toDayKey(now, timeZone) };
 };
 
@@ -59,6 +62,7 @@ const readPlanSources = (grants: ConnectionGrantWithId[]) => {
   const now = Date.now();
   return toSources({
     grants,
+    awayKey: toAwayKey(state.helm.who.items),
     profile: state.helm.profile,
     synced: state.helm.synced.items,
     planDays: state.helm.planDays.byId,
@@ -76,10 +80,12 @@ export function usePlanSources(nowMinute: number) {
   const planDays = useAppSelector((state) => state.helm.planDays.byId);
   const tasks = useAppSelector((state) => selectActiveTasks(state, nowMinute));
   const places = useAppSelector((state) => state.helm.places.items);
+  const awayKey = useAppSelector((state) => toAwayKey(state.helm.who.items));
   return useMemo(
     () =>
       toSources({
         grants,
+        awayKey,
         profile,
         synced,
         planDays,
@@ -87,7 +93,7 @@ export function usePlanSources(nowMinute: number) {
         places,
         now: nowMinute,
       }),
-    [grants, profile, synced, planDays, tasks, places, nowMinute],
+    [grants, awayKey, profile, synced, planDays, tasks, places, nowMinute],
   );
 }
 

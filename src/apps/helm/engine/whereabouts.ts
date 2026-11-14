@@ -175,18 +175,23 @@ export function readWhereabouts(input: WhereInput): Whereabouts | null {
   return null;
 }
 
-/** The zone a day's clock follows: a chosen away span's, else home's. */
+/** The zone a day's clock follows: a chosen away span's, else home's. With `awayIds`, a zone span counts only while its away span is still in the list. */
 export function readZoneFor(
   dayKey: string,
   profile: {
     timeZone: string;
-    zoneSpans: { zone: string; from: number; to: number }[];
+    zoneSpans: { zone: string; from: number; to: number; awayId?: string }[];
   },
+  awayIds: string[] | null = null,
 ): string {
   const day = toDayMs(dayKey);
   return (
-    profile.zoneSpans.find((span) => covers(span, day))?.zone ??
-    profile.timeZone
+    profile.zoneSpans.find(
+      (span) =>
+        covers(span, day) &&
+        (awayIds === null ||
+          (span.awayId !== undefined && awayIds.includes(span.awayId))),
+    )?.zone ?? profile.timeZone
   );
 }
 
@@ -324,7 +329,8 @@ export function readNearNow<T extends { at: number }>(
   return nearNow && now - nearNow.at < NEAR_NOW_MS ? nearNow : null;
 }
 
-const LEVEL_RANK = { off: 0, city: 1, precise: 2 } as const;
+/** Off below City only below Precise. */
+export const LEVEL_RANK = { off: 0, city: 1, precise: 2 } as const;
 
 /** Whether an answer may carry a location offer: only above the setting, never on a phone that can't, and not within 4 weeks of a Not now. */
 export function readAbilityOffer(input: {

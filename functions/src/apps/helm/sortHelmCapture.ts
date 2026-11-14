@@ -220,13 +220,14 @@ import {
   planWhereabouts,
   readCaptureAbilities,
   readWhereProfile,
+  toAwayIds,
   toTurnZone,
   readWhoWhere,
   tripsFromCopies,
+  WHERE_NOT_WITH_NAME_LINE,
   type ResolvedWhereabouts,
 } from './nomos/planWhereabouts.js';
 import { geocodeCity } from './nomos/geocodeCity.js';
-import { type AwayZoneOffer } from './nomos/whereabouts.js';
 import {
   isNamedIn,
   normalizeNomosReply,
@@ -319,9 +320,7 @@ interface SortResult {
   releasedIds: string[];
   hasAnswer: boolean;
   spoken: string | null;
-  /** The offer to follow an away city's clock, when a turn wrote the person's own away span that needs one. */
-  awayZoneOffer: AwayZoneOffer | null;
-  /** The location offer the assistant's answer may carry, kept only when code allows it. */
+  /** The location offer an answer with no Execution may carry, kept only when code allows it; an Execution holds its own. */
   abilityOffer: {
     ability: 'location';
     level: 'city' | 'precise';
@@ -329,7 +328,7 @@ interface SortResult {
   } | null;
 }
 
-const NO_OFFERS = { awayZoneOffer: null, abilityOffer: null } as const;
+const NO_OFFERS = { abilityOffer: null } as const;
 
 const toResult = (
   status: SortResult['status'],
@@ -339,7 +338,7 @@ const toResult = (
     hasAnswer: false,
     spoken: null,
   },
-  offers: Pick<SortResult, 'awayZoneOffer' | 'abilityOffer'> = NO_OFFERS,
+  offers: Pick<SortResult, 'abilityOffer'> = NO_OFFERS,
 ): SortResult => ({ status, executionId, releasedIds, ...answer, ...offers });
 
 const readAnswered = (stored: unknown, captureId: string) => {
@@ -353,7 +352,6 @@ const readAnswered = (stored: unknown, captureId: string) => {
         releasedIds: answered.releasedIds ?? [],
         hasAnswer: answered.hasAnswer ?? false,
         spoken: answered.spoken ?? null,
-        awayZoneOffer: answered.awayZoneOffer ?? null,
         abilityOffer: answered.abilityOffer ?? null,
       }
     : null;
@@ -1799,6 +1797,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         };
 
   const profileRead = firestore.doc(base).get();
+  const awayIdsRead = profileRead
+    .then(async (snapshot) => {
+      const selfId = snapshot.get('selfWhoId') as string | null | undefined;
+      if (!selfId) return null;
+      const self = await firestore.doc(`${base}/who/${selfId}`).get();
+      return self.exists
+        ? toAwayIds(openSealed(key, self.get('sealed')))
+        : null;
+    })
+    .catch(() => null);
   const earlyMask = {
     isOn: isUnattendedTurn(
       capture.presence?.startedByWake === true,
@@ -1838,14 +1846,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           earlyMask,
         )
       : Promise.resolve(undefined),
-    profileRead.then((snapshot) =>
+    Promise.all([profileRead, awayIdsRead]).then(([snapshot, awayIds]) =>
       readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen), {
         ...earlyMask,
-        timeZone: toTurnZone(snapshot.data(), capture.createdAt),
+        timeZone: toTurnZone(snapshot.data(), capture.createdAt, awayIds),
       }),
     ),
     readEarlierTurns(firestore, base, key, capture, earlyMask),
-    profileRead.then((snapshot) =>
+    Promise.all([profileRead, awayIdsRead]).then(([snapshot, awayIds]) =>
       mode === 'rest'
         ? []
         : readContextSynced(
@@ -1853,7 +1861,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             uid,
             key,
             capture.createdAt,
-            toKnownZone(toTurnZone(snapshot.data(), capture.createdAt)),
+            toKnownZone(
+              toTurnZone(snapshot.data(), capture.createdAt, awayIds),
+            ),
           ),
     ),
     mode === 'rest' ? null : readStyleNotes(firestore, base, key),
@@ -1861,7 +1871,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ? null
       : readPreviousTurn(firestore, base, key, capture).catch(() => null),
   ]);
-  const timeZone = toTurnZone(profile.data(), capture.createdAt);
+  const timeZone = toTurnZone(
+    profile.data(),
+    capture.createdAt,
+    await awayIdsRead,
+  );
   const unattendedMask = { ...earlyMask, timeZone };
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
@@ -3544,11 +3558,12 @@ async function writeResult(
       seal,
     });
     const soundsIds = new Set(soundsPlan.whoRewrites.map(({ id }) => id));
+    const isSoundsTarget = ({ command }: ResolvedWhereabouts) =>
+      soundsIds.has(command.whoId ?? selfWhoId ?? '');
     const keptWhere = isStale
       ? []
-      : resolvedWhere.filter(
-          ({ command }) => !soundsIds.has(command.whoId ?? selfWhoId ?? ''),
-        );
+      : resolvedWhere.filter((r) => !isSoundsTarget(r));
+    const heldWhere = isStale ? [] : resolvedWhere.filter(isSoundsTarget);
     const whereWhoIds = [
       ...new Set(
         keptWhere.flatMap(({ command }) => command.whoId ?? selfWhoId ?? []),
@@ -3602,7 +3617,11 @@ async function writeResult(
         ...soundsPlan.effects,
         ...wherePlan.effects,
       ],
-      notKept: [...written.notKept, ...wherePlan.notKept],
+      notKept: [
+        ...written.notKept,
+        ...wherePlan.notKept,
+        ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
+      ],
       linkedWhoIds: [
         ...new Set([
           ...written.linkedWhoIds,
@@ -4010,15 +4029,18 @@ async function writeResult(
       lastErrorCode: null,
       seenAt: null,
     });
+    const resultExecutionId = isFiling
+      ? executionRef.id
+      : (answerExecutionRef?.id ?? null);
     const sorted = toResult(
       settled.status,
-      isFiling ? executionRef.id : (answerExecutionRef?.id ?? null),
+      resultExecutionId,
       releasedJoined.map((snapshot) => snapshot.id),
       {
         hasAnswer: reply !== null,
         spoken: isSpoken ? (spokenLine ?? quietLine) : null,
       },
-      { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
+      { abilityOffer: resultExecutionId === null ? abilityOffer : null },
     );
     transaction.set(requestRef, {
       result: sorted,

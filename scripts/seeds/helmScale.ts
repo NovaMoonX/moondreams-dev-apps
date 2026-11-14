@@ -1279,6 +1279,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       privacy: 'ordinary',
       touchesPrivate: null,
       presence: null,
+      abilities: null,
       inputMode: 'typed',
       sttProvider: null,
       interruptedCaptureId: null,

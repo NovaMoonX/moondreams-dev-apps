@@ -15,6 +15,7 @@ import type { City } from '@/lib/cities/types';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { generateUuid } from '@/utils/idUtils';
 import { HELM_COPY } from '@apps/helm/constants';
+import { formatAwayLine } from '@apps/helm/engine/whereabouts';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   setWhoWhere,
@@ -94,14 +95,21 @@ function HomeForm({
     <div className='space-y-4'>
       <div className='space-y-1.5'>
         <span className='text-sm font-medium'>{HELM_COPY.whereCityLabel}</span>
-        <CitySelect value={city} onChange={change} disabled={isSaving} />
+        <CitySelect
+          isRequired
+          value={city}
+          onChange={change}
+          disabled={isSaving}
+        />
       </div>
       <ModalFooterActions
+        note={city === null ? HELM_COPY.wherePickCity : undefined}
         leftActions={
           who.home && (
             <Button
               type='button'
-              variant='tertiary'
+              variant='secondary'
+              className='text-destructive! border-destructive/40!'
               disabled={isSaving}
               onClick={() => void write({ kind: 'home', city: null })}
             >
@@ -196,6 +204,7 @@ function AwayForm({
       <div className='space-y-1.5'>
         <span className='text-sm font-medium'>{HELM_COPY.whereCityLabel}</span>
         <CitySelect
+          isRequired
           value={city}
           onChange={(next) => touch(next, range, label)}
           disabled={isSaving}
@@ -224,6 +233,7 @@ function AwayForm({
         />
       </div>
       <ModalFooterActions
+        note={city === null ? HELM_COPY.wherePickCity : undefined}
         cancelAction={
           <Button
             type='button'
@@ -248,6 +258,9 @@ function AwayForm({
     </div>
   );
 }
+
+const hintClass =
+  'text-muted-foreground -mt-1 text-center text-[13px] text-pretty';
 
 function AwayActions({
   who,
@@ -285,14 +298,17 @@ function AwayActions({
           {HELM_COPY.whereBack}
         </Button>
       )}
+      {hasStarted && <p className={hintClass}>{HELM_COPY.whereBackHint}</p>}
       <Button
         type='button'
-        variant='tertiary'
+        variant='secondary'
+        className='text-destructive! border-destructive/40!'
         disabled={isSaving}
         onClick={() => void write({ kind: 'remove', id: span.id })}
       >
         {HELM_COPY.whereRemove}
       </Button>
+      <p className={hintClass}>{HELM_COPY.whereRemoveHint}</p>
     </div>
   );
 }
@@ -321,6 +337,21 @@ function WhereBody({ requestClose, onDirtyChange, ...rest }: WhereFormProps) {
   );
 }
 
+const sheetTitle = (
+  who: WhereFormProps['who'],
+  target: WhereSheetProps['target'],
+  todayKey: string,
+) => {
+  if (target?.kind === 'home') return HELM_COPY.whereHomeSheetTitle;
+  const span =
+    target?.kind === 'away'
+      ? (who.away ?? []).find((entry) => entry.id === target.spanId)
+      : undefined;
+  return span
+    ? formatAwayLine(span, todayKey).replace(/^In /, '')
+    : HELM_COPY.whereAwaySheetTitle;
+};
+
 /** Home, a time away, or the choices on one away span: change it, end it early or remove it. */
 function WhereSheet({ who, target, todayKey, onClose }: WhereSheetProps) {
   const [isDirty, setIsDirty] = useState(false);
@@ -333,11 +364,7 @@ function WhereSheet({ who, target, todayKey, onClose }: WhereSheetProps) {
     <FormSheet
       isOpen={target !== null}
       onClose={requestClose}
-      title={
-        target?.kind === 'home'
-          ? HELM_COPY.whereHomeSheetTitle
-          : HELM_COPY.whereAwaySheetTitle
-      }
+      title={sheetTitle(who, target, todayKey)}
     >
       {target && (
         <WhereBody

@@ -1159,9 +1159,10 @@ export interface ExecutionSealed {
   goneIds: string[] | null;
   /** Result rows that touch no record (a note already kept); null on executions that said none. */
   lines: ResultNoteLine[] | null;
-  /** Absent in a payload from before offers. */
-  abilityOffer?: AbilityOffer | null;
-  awayZoneOffer?: AwayZoneOffer | null;
+  /** An answer's phone-location offer; null on executions that made none and on anything made before offers. */
+  abilityOffer: AbilityOffer | null;
+  /** The offer to follow an away city's clock; null like the offer above. */
+  awayZoneOffer: AwayZoneOffer | null;
 }
 
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */

@@ -764,6 +764,8 @@ export const buildImportExecution = (input: {
     commands: [],
     effects: input.writes.effects,
     undoReport: null,
+    abilityOffer: null,
+    awayZoneOffer: null,
     goneIds: null,
     said: null,
     lines: null,

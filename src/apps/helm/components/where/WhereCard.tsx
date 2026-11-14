@@ -10,6 +10,7 @@ import WhereSheet, {
 } from '@apps/helm/components/where/WhereSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
+  type AwaySpanLike,
   formatAwayLine,
   keepCurrentAway,
   readWhereabouts,
@@ -29,6 +30,51 @@ interface Row {
   target: WhereTarget | null;
 }
 
+/** The read-only row for a Waypoint trip covering today, on the self's card only. */
+function readTripRow(
+  who: OpenWho,
+  synced: Parameters<typeof toTrips>[0],
+  people: Parameters<typeof toKnownCities>[0],
+  away: AwaySpanLike[],
+  todayKey: string,
+): Row | null {
+  if (!who.isSelf) return null;
+  const trips = toTrips(synced);
+  const found = readWhereabouts({
+    dayKey: todayKey,
+    home: who.home,
+    homeSource: who.homeSource,
+    away,
+    trips,
+    awayEvents: [],
+    currentPlaceCity: null,
+    knownCities: toKnownCities(people),
+  });
+  if (found?.source !== 'trip') return null;
+  const today = Date.parse(todayKey);
+  const trip = trips.find((entry) => entry.from <= today && today <= entry.to);
+  if (!trip) return null;
+  return {
+    key: 'trip',
+    line: formatAwayLine(
+      {
+        city: {
+          ...found.city,
+          region: null,
+          country: null,
+          latitude: 0,
+          longitude: 0,
+        },
+        from: trip.from,
+        to: trip.to,
+      },
+      todayKey,
+    ),
+    source: HELM_COPY.whereSourceTrip,
+    target: null,
+  };
+}
+
 /** Where a person lives and the times they are away, each opening what can change it. A trip copied from Waypoint shows on the self's card, read-only. */
 function WhereCard({ who }: WhereCardProps) {
   const todayKey = useTodayKey();
@@ -41,46 +87,7 @@ function WhereCard({ who }: WhereCardProps) {
     [who.away, todayKey],
   );
 
-  const tripRow = ((): Row | null => {
-    if (!who.isSelf) return null;
-    const trips = toTrips(synced);
-    const found = readWhereabouts({
-      dayKey: todayKey,
-      home: who.home,
-      homeSource: who.homeSource,
-      away,
-      trips,
-      awayEvents: [],
-      currentPlaceCity: null,
-      knownCities: toKnownCities(people),
-    });
-    if (found?.source !== 'trip') return null;
-    const today = Date.parse(todayKey);
-    const trip = trips.find(
-      (entry) => entry.from <= today && today <= entry.to,
-    );
-    return trip
-      ? {
-          key: 'trip',
-          line: formatAwayLine(
-            {
-              city: {
-                ...found.city,
-                region: null,
-                country: null,
-                latitude: 0,
-                longitude: 0,
-              },
-              from: trip.from,
-              to: trip.to,
-            },
-            todayKey,
-          ),
-          source: HELM_COPY.whereSourceTrip,
-          target: null,
-        }
-      : null;
-  })();
+  const tripRow = readTripRow(who, synced, people, away, todayKey);
 
   const rows: Row[] = [
     ...(who.home
@@ -95,7 +102,14 @@ function WhereCard({ who }: WhereCardProps) {
             target: { kind: 'home' } as WhereTarget,
           },
         ]
-      : []),
+      : [
+          {
+            key: 'home',
+            line: HELM_COPY.whereAddHome,
+            source: HELM_COPY.whereAddHomeHint,
+            target: { kind: 'home' } as WhereTarget,
+          },
+        ]),
     ...away.map((span) => ({
       key: span.id,
       line: formatAwayLine(span, todayKey),
@@ -110,82 +124,70 @@ function WhereCard({ who }: WhereCardProps) {
 
   return (
     <section className='space-y-3'>
-      <SectionDivider label={HELM_COPY.whereTitle} />
-      {rows.length > 0 && (
-        <ul className='helm-card divide-border divide-y overflow-hidden'>
-          {rows.map(({ key, line, source, target: rowTarget }) => (
-            <li key={key}>
-              {rowTarget ? (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='flex h-auto min-h-14 w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
-                  onClick={() => setTarget(rowTarget)}
-                >
-                  {key === 'home' ? (
-                    <House
-                      className='text-muted-foreground size-4 shrink-0'
-                      aria-hidden='true'
-                    />
-                  ) : (
-                    <MapPin
-                      className='text-muted-foreground size-4 shrink-0'
-                      aria-hidden='true'
-                    />
-                  )}
-                  <span className='min-w-0 flex-1'>
-                    <span className='block text-[15px] break-words'>
-                      {line}
-                    </span>
-                    <span className='text-muted-foreground block text-[13px]'>
-                      {source}
-                    </span>
-                  </span>
-                  <ChevronRight
-                    className='text-muted-foreground size-4 shrink-0'
-                    aria-hidden='true'
-                  />
-                </Button>
-              ) : (
-                <div className='flex min-h-14 items-center gap-3 px-4 py-3'>
-                  <MapPin
-                    className='text-muted-foreground size-4 shrink-0'
-                    aria-hidden='true'
-                  />
-                  <span className='min-w-0 flex-1'>
-                    <span className='block text-[15px] break-words'>
-                      {line}
-                    </span>
-                    <span className='text-muted-foreground block text-[13px]'>
-                      {source}
-                    </span>
-                  </span>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className='flex flex-wrap gap-2'>
-        {!who.home && (
+      <SectionDivider
+        label={HELM_COPY.whereTitle}
+        trailing={
           <Button
             type='button'
             variant='secondary'
             size='sm'
-            onClick={() => setTarget({ kind: 'home' })}
+            className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+            onClick={() => setTarget({ kind: 'away', spanId: null })}
           >
-            {HELM_COPY.whereAddHome}
+            {HELM_COPY.whereAddAway}
           </Button>
-        )}
-        <Button
-          type='button'
-          variant='secondary'
-          size='sm'
-          onClick={() => setTarget({ kind: 'away', spanId: null })}
-        >
-          {HELM_COPY.whereAddAway}
-        </Button>
-      </div>
+        }
+      />
+
+      <ul className='helm-card divide-border divide-y overflow-hidden'>
+        {rows.map(({ key, line, source, target: rowTarget }) => (
+          <li key={key}>
+            {rowTarget ? (
+              <Button
+                type='button'
+                variant='tertiary'
+                className='text-foreground flex h-auto min-h-14 w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
+                onClick={() => setTarget(rowTarget)}
+              >
+                {key === 'home' ? (
+                  <House
+                    className='text-muted-foreground size-4 shrink-0'
+                    aria-hidden='true'
+                  />
+                ) : (
+                  <MapPin
+                    className='text-muted-foreground size-4 shrink-0'
+                    aria-hidden='true'
+                  />
+                )}
+                <span className='min-w-0 flex-1'>
+                  <span className='block text-[15px] break-words'>{line}</span>
+                  <span className='text-muted-foreground block text-[13px]'>
+                    {source}
+                  </span>
+                </span>
+                <ChevronRight
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
+            ) : (
+              <div className='flex min-h-14 items-center gap-3 px-4 py-3'>
+                <MapPin
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+                <span className='min-w-0 flex-1'>
+                  <span className='block text-[15px] break-words'>{line}</span>
+                  <span className='text-muted-foreground block text-[13px]'>
+                    {source}
+                  </span>
+                </span>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
       <WhereSheet
         who={who}
         target={target}

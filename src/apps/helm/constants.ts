@@ -2888,12 +2888,16 @@ export const HELM_COPY = {
   whereSourcePage: 'Set here',
   whereSourceTrip: 'from Waypoint',
   whereAddHome: 'Add home',
+  whereAddHomeHint: 'Not set yet',
+  wherePickCity: 'Pick a city to save.',
   whereAddAway: 'Add a time away',
   whereHomeSheetTitle: 'Home',
   whereAwaySheetTitle: 'Time away',
   whereChange: 'Change',
   whereRemove: 'Remove',
   whereBack: "I'm back",
+  whereBackHint: "You're home from today; the days before stay as they were",
+  whereRemoveHint: 'Takes it off as if it was never said',
   whereCityLabel: 'City',
   whereDatesLabel: 'Dates',
   whereLabelLabel: 'What for (optional)',
@@ -2917,7 +2921,7 @@ export const HELM_COPY = {
   phoneLocationForget: 'Forget',
   phoneLocationForgotten: 'Forgot the last place.',
   phoneLocationDenied:
-    "This phone said no to location. Turn it on in the browser's site settings.",
+    "Location is blocked for this site, so nothing changed. Allow it in the browser's site settings, then try again.",
   phoneLocationUnsupported: "This browser can't share a location.",
   phoneLocationFailed:
     "Couldn't read this phone's location just now. Try again.",
@@ -2930,7 +2934,7 @@ export const HELM_COPY = {
     `Using this phone's location · ${level === 'precise' ? 'Precise' : 'City only'}`,
   abilityOfferLater: 'Okay, not now.',
   abilityOfferSettingsLine:
-    "This phone said no to location. Turn it on in the browser's site settings.",
+    "Location is blocked for this site. Allow it in the browser's site settings, then turn it on in Settings, This phone's location.",
   zoneOfferLine: (city: string) =>
     `Those days follow ${city}'s clock, then home time comes back on its own`,
   zoneOfferNotNow: 'Not now',

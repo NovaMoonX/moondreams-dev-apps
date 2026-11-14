@@ -22,6 +22,24 @@ interface AwayZoneOfferRowProps {
 
 const quietClass = 'text-muted-foreground ml-[30px] text-[13px] text-pretty';
 
+const dismissedKey = (awayId: string) => `helm-zone-offer-not-now:${awayId}`;
+
+const readDismissed = (awayId: string) => {
+  try {
+    return localStorage.getItem(dismissedKey(awayId)) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const keepDismissed = (awayId: string) => {
+  try {
+    localStorage.setItem(dismissedKey(awayId), '1');
+  } catch {
+    return;
+  }
+};
+
 /** Under the answer that wrote an away span in another zone: those days follow its clock, once per span, with Not now and Use it, then one line with Undo. */
 function AwayZoneOfferRow({ offer }: AwayZoneOfferRowProps) {
   const { user } = useAuth();
@@ -30,7 +48,9 @@ function AwayZoneOfferRow({ offer }: AwayZoneOfferRowProps) {
   const isUsed = useAppSelector((state) =>
     state.helm.profile?.zoneSpans.some((span) => span.awayId === offer.awayId),
   );
-  const [isDismissed, setIsDismissed] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(() =>
+    readDismissed(offer.awayId),
+  );
   const [isBusy, setIsBusy] = useState(false);
 
   const run = (write: () => Promise<unknown>) => {
@@ -82,7 +102,10 @@ function AwayZoneOfferRow({ offer }: AwayZoneOfferRowProps) {
           type='button'
           variant='tertiary'
           size='sm'
-          onClick={() => setIsDismissed(true)}
+          onClick={() => {
+            keepDismissed(offer.awayId);
+            setIsDismissed(true);
+          }}
         >
           {HELM_COPY.zoneOfferNotNow}
         </Button>

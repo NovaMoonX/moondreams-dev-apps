@@ -148,6 +148,29 @@ export type WhereChange =
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+const nextAway = (
+  away: AwaySpan[],
+  change: Exclude<WhereChange, { kind: 'home' }>,
+  todayKey: string,
+): AwaySpan[] => {
+  if (change.kind === 'remove') {
+    return away.filter((span) => span.id !== change.id);
+  }
+  if (change.kind === 'back') {
+    const yesterday = Date.parse(todayKey) - DAY_MS;
+    return away.flatMap((span) =>
+      span.id !== change.id
+        ? [span]
+        : span.from > yesterday
+          ? []
+          : [{ ...span, to: yesterday }],
+    );
+  }
+  return away.some((span) => span.id === change.span.id)
+    ? away.map((span) => (span.id === change.span.id ? change.span : span))
+    : [...away, change.span];
+};
+
 /** Sets or clears a who's home, or adds, changes, removes or ends early one away span, on the list opened inside the transaction; spans that ended before today are dropped in the same write. */
 export const setWhoWhere = (
   uid: string,
@@ -167,24 +190,7 @@ export const setWhoWhere = (
       Array.isArray(opened.away) ? opened.away : [],
       todayKey,
     );
-    const next = (() => {
-      if (change.kind === 'remove') {
-        return away.filter((span) => span.id !== change.id);
-      }
-      if (change.kind === 'back') {
-        const yesterday = Date.parse(todayKey) - DAY_MS;
-        return away.flatMap((span) =>
-          span.id !== change.id
-            ? [span]
-            : span.from > yesterday
-              ? []
-              : [{ ...span, to: yesterday }],
-        );
-      }
-      return away.some((span) => span.id === change.span.id)
-        ? away.map((span) => (span.id === change.span.id ? change.span : span))
-        : [...away, change.span];
-    })();
+    const next = nextAway(away, change, todayKey);
     if (next.length > MAX_AWAY_SPANS) return 'full';
     return { away: next.length > 0 ? next : null };
   });

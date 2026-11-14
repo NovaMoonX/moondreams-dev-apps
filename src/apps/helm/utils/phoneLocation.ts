@@ -1,6 +1,6 @@
 import type { LocationPermission, PhoneLocation } from '@apps/helm/types';
 
-export type PositionFailure = 'denied' | 'failed';
+export type PositionFailure = 'denied' | 'failed' | 'unsupported';
 
 /** The browser's geolocation permission, read without prompting. */
 export async function readLocationPermission(): Promise<LocationPermission> {
@@ -18,7 +18,7 @@ export async function readLocationPermission(): Promise<LocationPermission> {
 export const readPosition = (level: Exclude<PhoneLocation, 'off'>) =>
   new Promise<{ latitude: number; longitude: number }>((resolve, reject) => {
     if (!('geolocation' in navigator)) {
-      reject('failed' satisfies PositionFailure);
+      reject('unsupported' satisfies PositionFailure);
       return;
     }
     navigator.geolocation.getCurrentPosition(

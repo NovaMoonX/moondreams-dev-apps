@@ -338,6 +338,8 @@ const buildWriteExecution = (
     commands: [],
     effects: [],
     undoReport: null,
+    abilityOffer: null,
+    awayZoneOffer: null,
     spoken: null,
     goneIds: null,
     said: null,

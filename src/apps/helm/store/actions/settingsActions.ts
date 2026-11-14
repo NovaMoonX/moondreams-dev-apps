@@ -165,6 +165,7 @@ export async function setPhoneLocation(
   encryption: HelmEncryption,
   next: PhoneLocation,
 ): Promise<PhoneLocationResult> {
+  if (!navigator.onLine) return 'offline';
   const profile = store.getState().helm.profile;
   const selfWhoId = profile?.selfWhoId ?? null;
   const self = store

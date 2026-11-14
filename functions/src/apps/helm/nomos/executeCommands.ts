@@ -3056,6 +3056,8 @@ export function buildExecution(
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
+      abilityOffer: null,
+      awayZoneOffer: null,
       ...input.offers,
       summary: [
         summarize(plan.counts, input.messageCount),
@@ -3147,6 +3149,8 @@ export function buildAnswerExecution(input: {
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
+      abilityOffer: null,
+      awayZoneOffer: null,
       ...input.offers,
       summary: input.fact
         ? `${summarizeAnswer(input.answer)} ${input.fact.note}`

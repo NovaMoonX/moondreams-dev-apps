@@ -12,7 +12,11 @@ import {
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { setWhoNearNow } from '@apps/helm/store/actions/whoActions';
 import type { NearNow } from '@apps/helm/types';
-import { readPosition, roundTo3 } from '@apps/helm/utils/phoneLocation';
+import {
+  readLocationPermission,
+  readPosition,
+  roundTo3,
+} from '@apps/helm/utils/phoneLocation';
 import { toKnownCities } from '@apps/helm/utils/whereInputs';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -48,6 +52,7 @@ export function useNearNow(isEnabled: boolean) {
     isRunning.current = true;
     lastAttempt.current = Date.now();
     const run = async () => {
+      if ((await readLocationPermission()) !== 'granted') return;
       const encryption = await getHelmEncryption(user.uid);
       const self = () =>
         store.getState().helm.who.items.find((entry) => entry.id === selfWhoId);
@@ -63,12 +68,14 @@ export function useNearNow(isEnabled: boolean) {
           (home && distanceKm(found, home) > NEARBY_KM
             ? 'away from home'
             : null));
+      const setting = store.getState().helm.profile?.phoneLocation ?? 'off';
+      if (setting === 'off') return;
       if (found && city) {
         const reading: NearNow = {
           city,
           at: Date.now(),
           point:
-            level === 'precise'
+            setting === 'precise'
               ? {
                   lat: roundTo3(found.latitude),
                   lng: roundTo3(found.longitude),

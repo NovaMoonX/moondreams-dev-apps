@@ -130,7 +130,6 @@ async function openWho(
   }
 }
 
-/** Every who the person has. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 const toCity = (value: unknown): City | null => {
   if (!value || typeof value !== 'object') return null;
   const city = value as Partial<City>;
@@ -148,6 +147,7 @@ const toCity = (value: unknown): City | null => {
     : null;
 };
 
+/** Every who the person has. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startWhoListener(
   uid: string,
   read: SealedReader,

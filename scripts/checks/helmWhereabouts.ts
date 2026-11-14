@@ -21,6 +21,15 @@ import {
   type KnownCity,
   type WhereInput,
 } from '../../src/apps/helm/engine/whereabouts.ts';
+import { geocodeCity } from '../../functions/src/apps/helm/nomos/geocodeCity.ts';
+import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
+import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import {
+  buildAwayFullLine,
+  planWhereabouts,
+  toTurnZone,
+} from '../../functions/src/apps/helm/nomos/planWhereabouts.ts';
+import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
 
 const DAY_MS = 86_400_000;
 const day = (year: number, month: number, date: number) =>
@@ -73,8 +82,9 @@ const NO_INPUT: WhereInput = {
   knownCities: [],
 };
 
-const tests: [string, () => void][] = [];
-const test = (name: string, run: () => void) => tests.push([name, run]);
+const tests: [string, () => void | Promise<void>][] = [];
+const test = (name: string, run: () => void | Promise<void>) =>
+  tests.push([name, run]);
 
 test('nothing known reads as null', () => {
   assert.equal(readWhereabouts(NO_INPUT), null);
@@ -406,10 +416,207 @@ test('the phone-location rule: only the device writes a point, and only at Preci
   assert.equal(readNearNow({ at: NOW, point: null }, NOW)?.point, null);
 });
 
+test('a zone span counts only while its away span is still listed', () => {
+  const profile = {
+    timeZone: LA,
+    zoneSpans: [
+      {
+        zone: 'Europe/Lisbon',
+        from: day(2026, 12, 2),
+        to: day(2026, 12, 9),
+        awayId: 'a1',
+      },
+    ],
+  };
+  assert.equal(readZoneFor('2026-12-03', profile, ['a1']), 'Europe/Lisbon');
+  assert.equal(readZoneFor('2026-12-03', profile, ['other']), LA);
+  assert.equal(readZoneFor('2026-12-03', profile, []), LA);
+  assert.equal(readZoneFor('2026-12-03', profile, null), 'Europe/Lisbon');
+  const stored = {
+    timeZone: LA,
+    zoneSpans: profile.zoneSpans,
+  };
+  const at = Date.UTC(2026, 11, 3, 18);
+  assert.equal(toTurnZone(stored, at, ['a1']), 'Europe/Lisbon');
+  assert.equal(toTurnZone(stored, at, []), LA);
+});
+
+test('a typed "Portland, Oregon" finds Portland, Oregon and Maine is told apart', async () => {
+  process.env.FUNCTIONS_EMULATOR = 'true';
+  assert.equal((await geocodeCity('Portland, Oregon'))?.region, 'Oregon');
+  assert.equal((await geocodeCity('Portland, Maine'))?.region, 'Maine');
+  assert.equal(
+    (await geocodeCity('portland, united states'))?.name,
+    'Portland',
+  );
+  assert.equal((await geocodeCity('Portland'))?.name, 'Portland');
+  assert.equal(await geocodeCity('Atlantis'), null);
+});
+
+const NORMALIZE_NOW = Date.UTC(2026, 10, 14, 12);
+const normalizeWhere = (text: string, item: Record<string, unknown>) => {
+  const reading = readCapture(text, {
+    now: NORMALIZE_NOW,
+    timeZone: 'UTC',
+    assistantName: 'Nomos',
+  });
+  const people = createAliasBook('w');
+  return normalizeNomosReply(
+    {
+      commands: [
+        {
+          kind: 'setWhereabouts',
+          whoAlias: 'me',
+          fromSpanId: reading.dates[0]?.id ?? null,
+          toSpanId: reading.dates[1]?.id ?? null,
+          labelSpanId: null,
+          quote: text,
+          ...item,
+        },
+      ],
+    },
+    {
+      reading,
+      aliases: createAliasBook('t'),
+      people,
+      captureText: text,
+      now: NORMALIZE_NOW,
+      timeZone: 'UTC',
+    },
+  ).whereabouts;
+};
+
+test('a city the person never said, and an away in the past or over a year, are refused', () => {
+  const said = "I'm in Lisbon Dec 2 to Dec 9";
+  assert.equal(
+    normalizeWhere(said, { change: 'away', cityName: 'Lisbon' }).length,
+    1,
+  );
+  assert.equal(
+    normalizeWhere(said, { change: 'away', cityName: 'Tokyo' }).length,
+    0,
+  );
+  assert.equal(
+    normalizeWhere("I'm in Lisbon Nov 1 2026 to Nov 3 2026", {
+      change: 'away',
+      cityName: 'Lisbon',
+    }).length,
+    0,
+  );
+  assert.equal(
+    normalizeWhere('Priya lives in Tacoma', {
+      change: 'home',
+      cityName: 'Seattle',
+      whoAlias: 'me',
+    }).length,
+    0,
+  );
+  assert.equal(
+    normalizeWhere('I live in Portland', {
+      change: 'home',
+      cityName: 'Portland, Oregon',
+    }).length,
+    1,
+  );
+  assert.equal(
+    normalizeWhere("I'm in Lisbon Dec 2 to Dec 9 2028", {
+      change: 'away',
+      cityName: 'Lisbon',
+    }).length,
+    0,
+  );
+});
+
+test('a range end is a bare day, never a time or a count', () => {
+  const hasEnd = (text: string) =>
+    readCapture(text, {
+      now: NORMALIZE_NOW,
+      timeZone: 'UTC',
+      assistantName: 'Nomos',
+    }).dates.some((entry) => /^\d{1,2}(?:st|nd|rd|th)?$/.test(entry.text));
+  assert.equal(hasEnd('Dec 2 to 9:30'), false);
+  assert.equal(hasEnd('Dec 2 to 9pm'), false);
+  assert.equal(hasEnd('Dec 2 to 9 pm'), false);
+  assert.equal(hasEnd('Dec 2 - 10 tickets'), false);
+  assert.equal(hasEnd('Dec 2 to 9'), true);
+  assert.equal(hasEnd('Dec 2–9'), true);
+  assert.equal(hasEnd("I'm in Lisbon Dec 2 to 9 for a conference"), true);
+  assert.equal(hasEnd("I'm in Lisbon Dec 2 to 9. I'm back soon"), true);
+});
+
+const planInput = (away: ReturnType<typeof span>[], newFrom: number) => {
+  let n = 0;
+  return {
+    commands: [
+      {
+        command: {
+          kind: 'setWhereabouts' as const,
+          whoId: null,
+          change: 'away' as const,
+          cityName: 'Lisbon',
+          from: newFrom,
+          to: newFrom + DAY_MS,
+          label: null,
+          quote: 'x',
+        },
+        city: LISBON,
+      },
+    ],
+    selfWhoId: 'me',
+    whos: new Map([['me', { name: 'Sam', away }]]),
+    profile: { timeZone: LA, zoneSpans: [] },
+    todayKey: '2026-11-14',
+    now: NORMALIZE_NOW,
+    isUnattended: false,
+    newId: () => `n${n++}`,
+    seal: (fields: Record<string, unknown>) =>
+      fields as unknown as ReturnType<
+        Parameters<typeof planWhereabouts>[0]['seal']
+      >,
+  };
+};
+
+test('a sixth away drops the furthest-out span and says which city', () => {
+  const held = [0, 1, 2, 3, 4].map((index) =>
+    span(
+      `s${index}`,
+      SEATTLE,
+      day(2026, 12, 1 + index * 3),
+      day(2026, 12, 2 + index * 3),
+    ),
+  );
+  const plan = planWhereabouts(planInput(held, day(2026, 12, 20)));
+  assert.deepEqual(plan.notKept, [buildAwayFullLine('Lisbon')]);
+  assert.equal(plan.whoRewrites.length, 0);
+  const early = planWhereabouts(
+    planInput(
+      held.map((entry, index) => ({
+        ...entry,
+        city: index === 4 ? PORTLAND : SEATTLE,
+      })),
+      day(2026, 11, 20),
+    ),
+  );
+  const kept = (
+    early.whoRewrites[0]?.data.sealed as unknown as { away: AwaySpanLike[] }
+  ).away;
+  assert.equal(kept.length, 5);
+  assert.ok(kept.every((entry) => entry.city.name !== 'Portland'));
+  assert.deepEqual(early.notKept, [buildAwayFullLine('Portland')]);
+});
+
+test('a where change for a who that cannot be read says nothing changed', () => {
+  const plan = planWhereabouts({
+    ...planInput([], day(2026, 12, 2)),
+    whos: new Map(),
+  });
+  assert.equal(plan.notKept.length, 1);
+});
+
 const failures: string[] = [];
 for (const [name, run] of tests) {
   try {
-    run();
+    await run();
     console.log(`ok   ${name}`);
   } catch (error) {
     failures.push(name);

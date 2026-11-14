@@ -3,8 +3,13 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
+import {
+  ABILITY_OFFER_WAIT_MS,
+  LEVEL_RANK,
+} from '@apps/helm/engine/whereabouts';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   declineAbilityOffer,
@@ -20,14 +25,13 @@ interface AbilityOfferRowProps {
   offer: AbilityOffer;
 }
 
-const RANK = { off: 0, city: 1, precise: 2 } as const;
-
 const rowClass = 'helm-card ml-[30px] w-[calc(100%-30px)] space-y-2 p-3.5';
 const quietClass = 'text-muted-foreground ml-[30px] text-[13px] text-pretty';
 
 /** Under an answer that a finer phone location would improve: what it keeps, Not now and Turn on. Turn on asks the phone inside the tap; it folds to one line once either is chosen, and a phone that said no shows how to allow it. */
 function AbilityOfferRow({ offer }: AbilityOfferRowProps) {
   const { user } = useAuth();
+  const now = useNow(60_000);
   const setting = useAppSelector(
     (state) => state.helm.profile?.phoneLocation ?? 'off',
   );
@@ -38,12 +42,16 @@ function AbilityOfferRow({ offer }: AbilityOfferRowProps) {
   if (offer.mode === 'settingsLine') {
     return <p className={quietClass}>{HELM_COPY.abilityOfferSettingsLine}</p>;
   }
-  if (RANK[setting] >= RANK[offer.level]) {
+  if (LEVEL_RANK[setting] >= LEVEL_RANK[offer.level]) {
     return (
       <p className={quietClass}>{HELM_COPY.abilityOfferOn(offer.level)}</p>
     );
   }
-  if (declines?.some((entry) => entry.level === offer.level)) {
+  if (declines?.some(
+      (entry) =>
+        entry.level === offer.level &&
+        now - entry.declinedAt < ABILITY_OFFER_WAIT_MS,
+    )) {
     return <p className={quietClass}>{HELM_COPY.abilityOfferLater}</p>;
   }
 
@@ -69,9 +77,11 @@ function AbilityOfferRow({ offer }: AbilityOfferRowProps) {
         },
         (failure: PositionFailure) => {
           setProblem(
-            failure === 'denied'
-              ? HELM_COPY.abilityOfferSettingsLine
-              : HELM_COPY.phoneLocationFailed,
+            {
+              denied: HELM_COPY.abilityOfferSettingsLine,
+              unsupported: HELM_COPY.phoneLocationUnsupported,
+              failed: HELM_COPY.phoneLocationFailed,
+            }[failure],
           );
         },
       )

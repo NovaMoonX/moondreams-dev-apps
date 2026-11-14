@@ -172,6 +172,15 @@ export interface WhereaboutsPlan {
 
 export const NOT_AWAY_LINE = "You weren't marked as away, so nothing changed";
 
+export const WHERE_NOT_WITH_NAME_LINE =
+  'Where they are was left as it was, since their name was fixed in the same message. Say it again to change it';
+
+export const NO_WHO_LINE =
+  "Couldn't tell whose whereabouts to change, so nothing changed";
+
+export const buildAwayFullLine = (cityName: string) =>
+  `Away spans are full, so ${cityName} was left out`;
+
 export const buildWhichCityLine = (cityName: string) =>
   `Which ${cityName} is it? Say the city and state or country`;
 
@@ -205,7 +214,12 @@ export function planWhereabouts(input: {
     const { command, city } = entry;
     const id = command.whoId ?? input.selfWhoId;
     const opened = id ? (acc.words.get(id) ?? input.whos.get(id)) : null;
-    if (!id || !opened || typeof opened.name !== 'string') return acc;
+    if (!id || !opened || typeof opened.name !== 'string') {
+      return {
+        ...acc,
+        plan: { ...acc.plan, notKept: [...acc.plan.notKept, NO_WHO_LINE] },
+      };
+    }
     if (command.change !== 'back' && !city) {
       return {
         ...acc,
@@ -316,16 +330,32 @@ export function planWhereabouts(input: {
     const others = keepCurrentAway(before.away, input.todayKey).filter(
       (entry) => entry.from !== span.from || entry.to !== span.to,
     );
-    const next = [...others.slice(0, MAX_AWAY_SPANS - 1), span].sort(
-      (a, b) => a.from - b.from,
-    );
-    return keep(
+    const ordered = [...others, span].sort((a, b) => a.from - b.from);
+    const next = ordered.slice(0, MAX_AWAY_SPANS);
+    const dropped = ordered.slice(MAX_AWAY_SPANS)[0];
+    const droppedLine = dropped ? buildAwayFullLine(dropped.city.name) : null;
+    if (dropped === span) {
+      return {
+        ...acc,
+        plan: {
+          ...acc.plan,
+          notKept: [...acc.plan.notKept, buildAwayFullLine(span.city.name)],
+        },
+      };
+    }
+    const kept = keep(
       { away: next },
       { 'sealed.away': next },
       { 'sealed.away': before.away },
       withSubject(formatAwayLine(span, input.todayKey)),
       offer,
     );
+    return droppedLine
+      ? {
+          ...kept,
+          plan: { ...kept.plan, notKept: [...kept.plan.notKept, droppedLine] },
+        }
+      : kept;
   }, empty);
   return {
     ...plan,
@@ -501,15 +531,21 @@ export const tripsFromCopies = (
       : [],
   );
 
-/** The zone the day of an instant follows: home's, or a chosen away span's for a day it covers. */
+/** The ids of a who's current away spans, or null when its words are not read (the zone check then leaves spans unfiltered). */
+export const toAwayIds = (words: Record<string, unknown> | null) =>
+  words ? readWhoWhere(words).away.map((span) => span.id) : null;
+
+/** The zone the day of an instant follows: home's, or a chosen away span's for a day it covers while its away span still stands. */
 export const toTurnZone = (
   data: Record<string, unknown> | undefined,
   at: number,
+  awayIds: string[] | null = null,
 ) => {
   const profile = readWhereProfile(data);
   const homeZone = toKnownZone(profile.timeZone);
   return readZoneFor(
     new Date(getDayIn(at, homeZone)).toISOString().slice(0, 10),
     { ...profile, timeZone: homeZone },
+    awayIds,
   );
 };

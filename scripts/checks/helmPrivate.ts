@@ -515,6 +515,8 @@ test('the Undo of that turn restores the class and the mark through the same Und
       spoken: null,
       goneIds: null,
       lines: [],
+      abilityOffer: null,
+      awayZoneOffer: null,
       isUnreadable: false,
     },
     targets: new Map([

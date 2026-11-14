@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import FormSheet from '@/components/FormSheet';
 import SegmentedControl from '@/components/SegmentedControl';
@@ -10,7 +11,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatTime } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
-import { readNearNow } from '@apps/helm/engine/whereabouts';
+import { LEVEL_RANK, readNearNow } from '@apps/helm/engine/whereabouts';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   forgetNearNow,
@@ -33,8 +34,6 @@ const OPTIONS = LEVELS.map((level) => ({
   value: level,
   label: HELM_COPY.phoneLocationLevels[level],
 }));
-
-const RANK = { off: 0, city: 1, precise: 2 } as const;
 
 /** This phone's location: Off, City only or Precise, what each keeps, the last place read and Forget. */
 function PhoneLocationSheet({ isOpen, onClose }: PhoneLocationSheetProps) {
@@ -72,7 +71,7 @@ function PhoneLocationSheet({ isOpen, onClose }: PhoneLocationSheetProps) {
     setProblem(null);
     setIsBusy(true);
     const ask =
-      next !== 'off' && RANK[next] > RANK[setting]
+      next !== 'off' && LEVEL_RANK[next] > LEVEL_RANK[setting]
         ? readPosition(next).then(
             () => null,
             (failure: PositionFailure) => failure,
@@ -82,9 +81,11 @@ function PhoneLocationSheet({ isOpen, onClose }: PhoneLocationSheetProps) {
       .then(async (failure) => {
         if (failure) {
           setProblem(
-            failure === 'denied'
-              ? HELM_COPY.phoneLocationDenied
-              : HELM_COPY.phoneLocationFailed,
+            {
+              denied: HELM_COPY.phoneLocationDenied,
+              unsupported: HELM_COPY.phoneLocationUnsupported,
+              failed: HELM_COPY.phoneLocationFailed,
+            }[failure],
           );
           return;
         }
@@ -130,9 +131,28 @@ function PhoneLocationSheet({ isOpen, onClose }: PhoneLocationSheetProps) {
           value={setting}
           onChange={choose}
         />
-        <p className='text-muted-foreground text-[15px] text-pretty'>
-          {HELM_COPY.phoneLocationKeeps[setting]}
-        </p>
+        <dl className='space-y-2 text-[15px]'>
+          {LEVELS.map((level) => (
+            <div
+              key={level}
+              className={join(
+                'border-l-2 pl-3',
+                level === setting ? 'border-primary' : 'border-transparent',
+              )}
+            >
+              <dt
+                className={
+                  level === setting ? 'font-semibold' : 'text-muted-foreground'
+                }
+              >
+                {HELM_COPY.phoneLocationLevels[level]}
+              </dt>
+              <dd className='text-muted-foreground text-pretty'>
+                {HELM_COPY.phoneLocationKeeps[level]}
+              </dd>
+            </div>
+          ))}
+        </dl>
         {problem && (
           <p className='text-[15px] text-pretty' role='status'>
             {problem}

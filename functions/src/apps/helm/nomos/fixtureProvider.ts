@@ -786,7 +786,7 @@ const toWhereabouts = (fields: Record<string, unknown>) =>
     ...fields,
   });
 
-/** The emulator's stand-in for "I'm in Lisbon Dec 2 to Dec 9", "I'm back" and "Priya and Sam live in Leavenworth": setWhereabouts for the person themself or for each named person already in the records. Null for any other words. */
+/** The emulator's stand-in for "I'm in Lisbon Dec 2 to Dec 9", "I'm back" and "Priya and Sam live in Leavenworth": a where change for the person themself or for each named person already in the records. Null for any other words. */
 const readWhereabouts = (
   text: string,
   reading: CaptureReading,
@@ -818,8 +818,17 @@ const readWhereabouts = (
     );
   }
   const away = AWAY_RE.exec(text);
-  const [from, to] = reading.dates;
+  const [from, second] = reading.dates;
   if (!away || !from) return null;
+  const to =
+    second &&
+    second.start >= from.end &&
+    second.due.kind === 'day' &&
+    from.due.kind === 'day' &&
+    new Date(second.due.date).getUTCMonth() ===
+      new Date(from.due.date).getUTCMonth()
+      ? second
+      : null;
   return wrap([
     toWhereabouts({
       whoAlias: 'me',

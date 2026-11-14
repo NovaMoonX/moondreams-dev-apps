@@ -1611,8 +1611,13 @@ const readWhereabouts = (
   reading: CaptureReading,
   captureText: string,
   timeZone: string,
+  now: number | undefined,
 ): SetWhereaboutsCommand[] => {
   const words = ` ${toComparable(captureText)} `;
+  const today =
+    now === undefined ? null : getDayIn(now, toKnownZone(timeZone));
+  const isSaid = (cityName: string) =>
+    words.includes(` ${toComparable(cityName.split(',')[0] ?? '')} `);
   const read = items
     .filter((item) => item.kind === 'setWhereabouts')
     .flatMap((item): SetWhereaboutsCommand[] => {
@@ -1642,7 +1647,7 @@ const readWhereabouts = (
           : [];
       }
       const cityName = toText(item.cityName, WHEREABOUTS_CITY_CAP);
-      if (!cityName) return [];
+      if (!cityName || !isSaid(cityName)) return [];
       if (change === 'home') {
         return [
           {
@@ -1660,6 +1665,8 @@ const readWhereabouts = (
       const from = toDateSpanDay(item.fromSpanId, reading, timeZone);
       const to = toDateSpanDay(item.toSpanId, reading, timeZone) ?? from;
       if (from === null || to === null || to < from) return [];
+      if (today !== null && to < today) return [];
+      if ((to - from) / DAY_MS > 366) return [];
       const label = toTokenWords(item.labelSpanId, reading);
       return [
         {
@@ -2100,6 +2107,7 @@ export function normalizeNomosReply(
     context.reading,
     context.captureText ?? '',
     context.timeZone ?? 'UTC',
+    context.now,
   );
   const projects = readProjects(
     items,
