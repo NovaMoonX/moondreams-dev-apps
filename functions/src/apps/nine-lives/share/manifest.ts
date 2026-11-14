@@ -14,14 +14,14 @@ export const NINE_LIVES_SHARES: SourceShares = {
           id: 'cats',
           kind: 'pet',
           label: 'Your cats',
-          detail: "Each cat's name, age, breed and food",
+          detail: "Each cat's name, birth date, breed and food",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
           reads: [
             { label: "Each cat's name", sinceVersion: 1, addedOn: null },
             {
-              label: 'Its birth date, breed and food',
+              label: "Each cat's birth date, breed and food",
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },

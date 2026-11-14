@@ -40,7 +40,7 @@ export const WORTH_THE_WAIT_SHARES: SourceShares = {
               addedOn: '2026-11-14',
             },
             {
-              label: 'When a reveal is waiting on you',
+              label: 'Whether a reveal is waiting on you',
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
@@ -51,7 +51,7 @@ export const WORTH_THE_WAIT_SHARES: SourceShares = {
       never: [
         'anything an item says',
         'who added an item',
-        'when anything was added or revealed',
+        'when an item was added or revealed',
         'the invite code',
       ],
       capabilities: { read: true, write: false, backgroundSync: true },
