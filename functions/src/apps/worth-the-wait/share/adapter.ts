@@ -150,8 +150,7 @@ async function readBoxes(space: Space, uid: string) {
           kind: 'countSummary',
           title: name,
           subtitle: openField(doc.get('emoji'), space.key),
-          detail:
-            openField(doc.get('description'), space.key)?.slice(0, 300) ?? null,
+          detail: openField(doc.get('description'), space.key),
           extra: {
             ...(await countItems(doc.ref)),
             revealsWaiting: countRevealsWaiting(

@@ -152,6 +152,8 @@ async function syncSavedTheaters(
 
 const DAY_MS = 86_400_000;
 const WATCHLIST_LIMIT = 200;
+/** Seen and archived movies stay in the collection, so the read is sized apart from what is sent. */
+const WATCHLIST_READ_LIMIT = 2000;
 const FRIDAY = 5;
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -205,16 +207,12 @@ async function readGoals(
   uid: string,
   seenDocs: FirebaseFirestore.QueryDocumentSnapshot[],
   now: number,
+  zone: string,
 ): Promise<SharedRecord[]> {
   const profile = await firestore.doc(`apps/a-list/memberships/${uid}`).get();
   const weeklyGoal = readTime(profile.get('weeklyGoal'));
   const monthlyGoal = readTime(profile.get('monthlyGoal'));
   if (weeklyGoal === null && monthlyGoal === null) return [];
-  const zone = readZone(
-    seenDocs
-      .find((doc) => readText(doc.get('theatre.timeZone')) !== null)
-      ?.get('theatre.timeZone'),
-  );
   const today = toDayKey(now, zone);
   const todayDay = Date.parse(`${today}T00:00:00Z`);
   const sinceFriday = (new Date(todayDay).getUTCDay() - FRIDAY + 7) % 7;
@@ -271,6 +269,11 @@ async function syncSeenMovies(
     )
     .limit(SHOWING_LIMIT)
     .get();
+  const fallbackZone = readZone(
+    snapshot.docs
+      .find((doc) => readText(doc.get('theatre.timeZone')) !== null)
+      ?.get('theatre.timeZone'),
+  );
   const seen = snapshot.docs.flatMap((doc) => {
     const title = readMovieTitle(doc);
     const rating = readTime(doc.get('rating'));
@@ -283,14 +286,22 @@ async function syncSeenMovies(
         detail: toDayLine(
           'Seen',
           readTime(doc.get('showtimeAt')),
-          readZone(doc.get('theatre.timeZone')),
+          readText(doc.get('theatre.timeZone')) === null
+            ? fallbackZone
+            : readZone(doc.get('theatre.timeZone')),
         ),
         sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
         extra: { rating },
       }),
     ];
   });
-  const goals = await readGoals(firestore, uid, snapshot.docs, now);
+  const goals = await readGoals(
+    firestore,
+    uid,
+    snapshot.docs,
+    now,
+    fallbackZone,
+  );
   return {
     records: [...goals, ...seen],
     isFull: snapshot.size < SHOWING_LIMIT,
@@ -311,13 +322,14 @@ async function syncWatchlist(
         'archivedAt',
         'lastEditedAt',
       )
-      .limit(WATCHLIST_LIMIT)
+      .limit(WATCHLIST_READ_LIMIT)
       .get(),
     firestore
       .collection(membershipPath(uid, 'viewings'))
       .where('status', '==', 'SEEN')
+      .orderBy('showtimeAt', 'desc')
       .select('movieKey')
-      .limit(SHOWING_LIMIT)
+      .limit(WATCHLIST_READ_LIMIT)
       .get(),
   ]);
   const seenKeys = new Set(
@@ -345,7 +357,12 @@ async function syncWatchlist(
       }),
     ];
   });
-  return { records, isFull: snapshot.size < WATCHLIST_LIMIT };
+  return {
+    records: records.slice(0, WATCHLIST_LIMIT),
+    isFull:
+      snapshot.size < WATCHLIST_READ_LIMIT &&
+      seenSnapshot.size < WATCHLIST_READ_LIMIT,
+  };
 }
 
 export interface AListAdapterDeps {
