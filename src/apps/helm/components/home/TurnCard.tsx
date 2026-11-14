@@ -234,7 +234,7 @@ function TurnCard({
       )}
       {isReading && !capture.isUnreadable && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine isQuiet>
+          <AssistantLine isQuiet isWorking>
             {joined.length > 0
               ? HELM_COPY.readingSeveral(joined.length + 1)
               : HELM_COPY.reading}

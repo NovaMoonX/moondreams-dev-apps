@@ -44,7 +44,7 @@ const sortHelmCaptureCallable = httpsCallable<
   SortResult
 >(functions, 'sortHelmCapture');
 
-/** Turns whose sorting call is out: the home line reads "Reading…" for them until the server's status says otherwise. */
+/** Turns whose sorting call is out: the home line reads "Reading" for them until the server's status says otherwise. */
 const inFlight = new Set<string>();
 const listeners = new Set<() => void>();
 
