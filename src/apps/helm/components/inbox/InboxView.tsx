@@ -117,22 +117,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
             </p>
           </>
         )}
-        <SectionDivider
-          label={HELM_COPY.inboxNewSince}
-          trailing={
-            unseen.length >= 2 && (
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                rounded='full'
-                onClick={markEverythingSeen}
-              >
-                {HELM_COPY.markAllSeen}
-              </Button>
-            )
-          }
-        />
+        <SectionDivider label={HELM_COPY.inboxNewSince} />
         {isFailed && !isLoaded && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.turnsFailed}
@@ -173,6 +158,16 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
               </li>
             ))}
           </ul>
+        )}
+        {unseen.length >= 2 && (
+          <Button
+            type='button'
+            variant='secondary'
+            className='w-full'
+            onClick={markEverythingSeen}
+          >
+            {HELM_COPY.markAllSeen}
+          </Button>
         )}
       </main>
       <HeldCaptureCard
