@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { logger } from 'firebase-functions/v2';
 
 import type {
   ModelProvider,
@@ -130,12 +131,13 @@ export function createAnthropicProvider(
           input_schema:
             tool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
         })),
+        // Not strict: the API refuses a strict schema with more than 16 nullable
+        // fields, so each caller checks the answer's shape in code.
         ...terminals.map((tool, index) => ({
           name: tool.name,
           description: tool.description,
           input_schema:
             tool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
-          strict: true,
           ...(index === terminals.length - 1
             ? { cache_control: { type: 'ephemeral' as const } }
             : {}),
@@ -238,6 +240,25 @@ export function createAnthropicProvider(
     } catch (error) {
       if (signal?.aborted || error instanceof Anthropic.APIUserAbortError) {
         return end('aborted');
+      }
+      if (
+        error instanceof Anthropic.BadRequestError ||
+        error instanceof Anthropic.UnprocessableEntityError
+      ) {
+        const body = (
+          error.error as { error?: { type?: string; message?: string } }
+        )?.error;
+        const message = body?.message ?? '';
+        // Only a complaint about the request's shape is kept in words; another could quote the person's text.
+        logger.warn('ai.requestRejected', {
+          role,
+          status: error.status,
+          type: body?.type ?? null,
+          reason: /^tools\.|schema/i.test(message)
+            ? message.slice(0, 300)
+            : null,
+          reasonLength: message.length,
+        });
       }
       return end('error', null, getErrorCode(error));
     }
