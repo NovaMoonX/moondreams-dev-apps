@@ -2896,6 +2896,7 @@ export const HELM_COPY = {
   whereAwaySheetTitle: 'Time away',
   whereChange: 'Change',
   whereRemove: 'Remove',
+  whereRemoveHome: 'Remove home',
   whereBack: "I'm back",
   whereBackHint: "You're home from today; the days before stay as they were",
   whereRemoveHint: 'Takes it off as if it was never said',

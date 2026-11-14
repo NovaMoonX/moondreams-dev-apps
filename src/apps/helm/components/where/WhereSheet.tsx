@@ -102,21 +102,19 @@ function HomeForm({
           disabled={isSaving}
         />
       </div>
+      {who.home && (
+        <Button
+          type='button'
+          variant='secondary'
+          className='text-destructive! border-destructive/40! w-full'
+          disabled={isSaving}
+          onClick={() => void write({ kind: 'home', city: null })}
+        >
+          {HELM_COPY.whereRemoveHome}
+        </Button>
+      )}
       <ModalFooterActions
         note={city === null ? HELM_COPY.wherePickCity : undefined}
-        leftActions={
-          who.home && (
-            <Button
-              type='button'
-              variant='secondary'
-              className='text-destructive! border-destructive/40!'
-              disabled={isSaving}
-              onClick={() => void write({ kind: 'home', city: null })}
-            >
-              {HELM_COPY.whereRemove}
-            </Button>
-          )
-        }
         cancelAction={
           <Button
             type='button'
@@ -279,7 +277,7 @@ function AwayActions({
   if (!span) return null;
   const hasStarted = span.from <= Date.parse(todayKey);
   return (
-    <div className='flex flex-col gap-2'>
+    <div className='flex flex-col gap-4'>
       <Button
         type='button'
         variant='secondary'
@@ -289,26 +287,30 @@ function AwayActions({
         {HELM_COPY.whereChange}
       </Button>
       {hasStarted && (
+        <div className='flex flex-col gap-1.5'>
+          <Button
+            type='button'
+            variant='secondary'
+            loading={isSaving}
+            onClick={() => void write({ kind: 'back', id: span.id, todayKey })}
+          >
+            {HELM_COPY.whereBack}
+          </Button>
+          <p className={hintClass}>{HELM_COPY.whereBackHint}</p>
+        </div>
+      )}
+      <div className='flex flex-col gap-1.5'>
         <Button
           type='button'
           variant='secondary'
-          loading={isSaving}
-          onClick={() => void write({ kind: 'back', id: span.id, todayKey })}
+          className='text-destructive! border-destructive/40!'
+          disabled={isSaving}
+          onClick={() => void write({ kind: 'remove', id: span.id })}
         >
-          {HELM_COPY.whereBack}
+          {HELM_COPY.whereRemove}
         </Button>
-      )}
-      {hasStarted && <p className={hintClass}>{HELM_COPY.whereBackHint}</p>}
-      <Button
-        type='button'
-        variant='secondary'
-        className='text-destructive! border-destructive/40!'
-        disabled={isSaving}
-        onClick={() => void write({ kind: 'remove', id: span.id })}
-      >
-        {HELM_COPY.whereRemove}
-      </Button>
-      <p className={hintClass}>{HELM_COPY.whereRemoveHint}</p>
+        <p className={hintClass}>{HELM_COPY.whereRemoveHint}</p>
+      </div>
     </div>
   );
 }
