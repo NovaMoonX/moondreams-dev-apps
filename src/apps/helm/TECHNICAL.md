@@ -226,7 +226,7 @@ interface NomosQuestion {
 }
 type QuestionAnswer = { by: 'tap' | 'voice'; at: number; turnCaptureId: string | null } & (
   | { shape: 'pickOne' | 'yesNo'; optionId: string; otherText: string | null }   // otherText with "Something else", ≤500
-  | { shape: 'pickSeveral'; optionIds: string[] }                                 // ['none'] for None of these, never []
+  | { shape: 'pickSeveral'; optionIds: string[]; otherText: string | null }         // ['none'] for None of these, never []; otherText with "Something else" (words only, never a structured answer); older answers lack it, read as null
   | { shape: 'freeText'; text: string }                                           // ≤500
   | { shape: 'dateTime'; date: number | null; time: string | null }               // date-only (UTC midnight) and a floating "HH:mm" in the profile's zone
   | { shape: 'pickRecord'; ref: RecordRef | null; newName: string | null }        // newName when the "new" option was chosen

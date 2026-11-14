@@ -9,10 +9,13 @@ EMAIL="${1:-}"
 [[ "$EMAIL" == *@* ]] || { echo "✗ Give the email that should get the alerts: npm run helm:alerts -- you@example.com" >&2; exit 1; }
 command -v gcloud >/dev/null 2>&1 || { echo "✗ gcloud isn't installed. Install it from https://cloud.google.com/sdk/docs/install and run: gcloud auth login" >&2; exit 1; }
 
+source "$(dirname "$0")/../lib/gcloudTracks.sh"
+require_gcloud_tracks alpha beta
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-CHANNEL="$(gcloud beta monitoring channels list --project="$PROJECT" --filter="displayName=\"Helm owner email\"" --format='value(name)' | head -n1)"
+CHANNEL="$(gcloud beta monitoring channels list --project="$PROJECT" --filter="displayName=\"Helm owner email\"" --format='value(name)' </dev/null | head -n1)"
 if [[ -z "$CHANNEL" ]]; then
   CHANNEL="$(gcloud beta monitoring channels create --project="$PROJECT" --display-name="Helm owner email" --type=email \
     --channel-labels=email_address="$EMAIL" --format='value(name)')"
@@ -20,7 +23,7 @@ if [[ -z "$CHANNEL" ]]; then
 fi
 
 policy_exists() {
-  [[ -n "$(gcloud alpha monitoring policies list --project="$PROJECT" --filter="displayName=\"$1\"" --format='value(name)')" ]]
+  [[ -n "$(gcloud alpha monitoring policies list --project="$PROJECT" --filter="displayName=\"$1\"" --format='value(name)' </dev/null)" ]]
 }
 
 create_policy() {
@@ -66,18 +69,21 @@ cat > "$WORK/heartbeat.json" <<JSON
   "displayName": "Helm: key check heartbeat missing",
   "combiner": "OR",
   "conditions": [{
-    "displayName": "No helm.keys.ok for 26 hours",
-    "conditionAbsent": {
-      "filter": "metric.type=\"logging.googleapis.com/user/helm_keys_ok\"",
-      "duration": "93600s",
-      "aggregations": [{ "alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_SUM", "crossSeriesReducer": "REDUCE_SUM" }]
+    "displayName": "Fewer than one helm.keys.ok in a day",
+    "conditionThreshold": {
+      "filter": "metric.type=\"logging.googleapis.com/user/helm_keys_ok\" AND resource.type=\"cloud_run_revision\"",
+      "comparison": "COMPARISON_LT",
+      "thresholdValue": 1,
+      "duration": "3600s",
+      "evaluationMissingData": "EVALUATION_MISSING_DATA_ACTIVE",
+      "aggregations": [{ "alignmentPeriod": "86400s", "perSeriesAligner": "ALIGN_SUM", "crossSeriesReducer": "REDUCE_SUM" }]
     }
   }],
   "notificationChannels": ["$CHANNEL"]
 }
 JSON
 create_policy "Helm: key check heartbeat missing" "$WORK/heartbeat.json" || {
-  echo "✗ Google refused the 26-hour heartbeat. Choose one of the options under Runway's \"Alert B\" in functions/README.md." >&2
+  echo "✗ Google refused the daily heartbeat condition. Option (b) under Runway's \"Alert B\" in functions/README.md is the next to try." >&2
   exit 1
 }
 

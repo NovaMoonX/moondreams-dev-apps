@@ -1,3 +1,7 @@
+import type { ReactNode } from 'react';
+
+import type { LucideIcon } from 'lucide-react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check } from 'lucide-react';
@@ -8,52 +12,111 @@ import { HELM_COPY } from '@apps/helm/constants';
 export const QUIET_CLASS =
   "relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']";
 
-interface ChoiceButtonProps {
+interface ChoiceGroupProps {
   label: string;
-  detail?: string | null;
-  isDisabled: boolean;
-  onClick: () => void;
-  /** Set on a choice that can be ticked among others; it then says whether it is. */
-  isSelected?: boolean;
+  kind: 'radio' | 'checkbox';
+  children: ReactNode;
 }
 
-/** One answer as a tall choice: its label, what tells it apart under it, and a tick when it is one of several. */
-function ChoiceButton({
+export function ChoiceGroup({ label, kind, children }: ChoiceGroupProps) {
+  return (
+    <div
+      role={kind === 'radio' ? 'radiogroup' : 'group'}
+      aria-label={label}
+      className='helm-card divide-border divide-y overflow-hidden'
+    >
+      {children}
+    </div>
+  );
+}
+
+interface IndicatorProps {
+  kind: 'radio' | 'checkbox';
+  isSelected: boolean;
+}
+
+function Indicator({ kind, isSelected }: IndicatorProps) {
+  return (
+    <span
+      aria-hidden='true'
+      className={join(
+        'mt-px grid size-5 shrink-0 place-items-center border-2',
+        kind === 'radio' ? 'rounded-full' : 'rounded-[6px]',
+        isSelected
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-muted-foreground/60',
+      )}
+    >
+      {isSelected &&
+        (kind === 'radio' ? (
+          <span className='bg-primary-foreground size-2 rounded-full' />
+        ) : (
+          <Check className='size-3.5' strokeWidth={3} />
+        ))}
+    </span>
+  );
+}
+
+interface ChoiceRowProps {
+  label: string;
+  detail?: string | null;
+  kind: 'radio' | 'checkbox';
+  isSelected: boolean;
+  isDisabled: boolean;
+  isQuiet?: boolean;
+  opensWith?: LucideIcon;
+  onClick: () => void;
+}
+
+export function ChoiceRow({
   label,
   detail = null,
-  isDisabled,
-  onClick,
+  kind,
   isSelected,
-}: ChoiceButtonProps) {
+  isDisabled,
+  isQuiet = false,
+  opensWith: OpenerIcon,
+  onClick,
+}: ChoiceRowProps) {
   return (
     <Button
       type='button'
-      variant='secondary'
+      variant='base'
+      role={OpenerIcon ? undefined : kind}
+      aria-checked={OpenerIcon ? undefined : isSelected}
+      aria-expanded={OpenerIcon ? isSelected : undefined}
       aria-label={HELM_COPY.questionOptionAria(label, detail)}
-      aria-pressed={isSelected}
       disabled={isDisabled}
-      className={join(
-        'h-auto min-h-[52px] w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left',
-        isSelected && 'border-primary border',
-      )}
+      className='focus-visible:outline-primary h-auto min-h-[52px] w-full items-start justify-start gap-3 rounded-none px-3.5 py-[15px] text-left font-normal transition-none focus-visible:outline-2 focus-visible:-outline-offset-2'
       onClick={onClick}
     >
+      {OpenerIcon ? (
+        <OpenerIcon
+          className={join(
+            'mt-px size-5 shrink-0',
+            isSelected ? 'text-primary' : 'text-muted-foreground',
+          )}
+          aria-hidden='true'
+        />
+      ) : (
+        <Indicator kind={kind} isSelected={isSelected} />
+      )}
       <span className='flex min-w-0 flex-1 flex-col items-start'>
-        <span className='text-[15px] leading-[21px] break-words'>{label}</span>
+        <span
+          className={join(
+            'line-clamp-2 text-[15px] leading-[21px] break-words',
+            isQuiet && 'text-muted-foreground',
+            OpenerIcon && isSelected && 'text-primary',
+          )}
+        >
+          {label}
+        </span>
         {detail && (
-          <span className='text-muted-foreground text-[13px] break-words'>
+          <span className='text-muted-foreground line-clamp-2 text-[13px] break-words'>
             {detail}
           </span>
         )}
       </span>
-      {isSelected !== undefined && (
-        <Check
-          className={join('size-4 shrink-0', !isSelected && 'invisible')}
-          aria-hidden='true'
-        />
-      )}
     </Button>
   );
 }
-
-export default ChoiceButton;

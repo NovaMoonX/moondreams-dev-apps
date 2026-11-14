@@ -394,11 +394,14 @@ cat > /tmp/runway-alert-heartbeat.json <<JSON
   "displayName": "Runway: key check heartbeat missing",
   "combiner": "OR",
   "conditions": [{
-    "displayName": "No runway.keys.ok for 26 hours",
-    "conditionAbsent": {
-      "filter": "metric.type=\"logging.googleapis.com/user/runway_keys_ok\"",
-      "duration": "93600s",
-      "aggregations": [{ "alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_SUM", "crossSeriesReducer": "REDUCE_SUM" }]
+    "displayName": "Fewer than one runway.keys.ok in a day",
+    "conditionThreshold": {
+      "filter": "metric.type=\"logging.googleapis.com/user/runway_keys_ok\" AND resource.type=\"cloud_run_revision\"",
+      "comparison": "COMPARISON_LT",
+      "thresholdValue": 1,
+      "duration": "3600s",
+      "evaluationMissingData": "EVALUATION_MISSING_DATA_ACTIVE",
+      "aggregations": [{ "alignmentPeriod": "86400s", "perSeriesAligner": "ALIGN_SUM", "crossSeriesReducer": "REDUCE_SUM" }]
     }
   }],
   "notificationChannels": ["$CHANNEL"]
@@ -409,7 +412,7 @@ gcloud alpha monitoring policies create --project=$P --policy-from-file=/tmp/run
 
 The `crossSeriesReducer` merges the metric's series into one. A log-based metric has one series per monitored resource, and a function's resource includes its revision, so without the reducer every redeploy of `verifyRunwayKeys` leaves the old revision's series absent and the alert fires for a check that is running fine. Whether the series are split that way in this project is unconfirmed; the reducer is harmless if they are not.
 
-**Open point to settle while creating it.** Google's documentation of metric-absence conditions, as remembered when this was written and not confirmed, caps the absence duration at 23.5 hours, which is shorter than the 24-hour cadence and would fire every day. If the API refuses `93600s`, or accepts only a shorter duration, do not shorten it to 23.5 hours. Choose one and record which: (a) a threshold condition on the same metric that fires when the sum over a one-day alignment period is below 1 (`conditionThreshold`, `COMPARISON_LT`, `thresholdValue` 1, `duration` `3600s`, the same `aggregations` with a one-day `alignmentPeriod` if the API accepts it, and `evaluationMissingData` set to `EVALUATION_MISSING_DATA_ACTIVE`; without that, a threshold condition on a metric with no data points at all never fires, which is exactly the failure being watched for, and whether this field is accepted here is unconfirmed), accepting up to an hour of extra lag; (b) a PromQL condition with a 26-hour range; or (c) a code change that runs `verifyRunwayKeys` every six hours so that a 23-hour absence means four missed runs (a change to the function, to be made in its own PR). The option chosen is recorded in the table.
+**Settled (Helm and Connections, Nov 2026):** Google refuses an absence condition longer than 23h30m, which would fire every day against a 24-hour cadence, so the policy is option (a): a threshold condition that fires when the day's count is below 1, with missing data counted as firing. The API needs the three things above that the first draft lacked: a non-zero `duration` (it is required once `evaluationMissingData` is set), a `resource.type` in the filter (`cloud_run_revision`, which is what the scheduled functions log as), and the one-day alignment. The API accepts it; that it fires when the check stops is only proven by the drill in the checklist below, so run that before relying on it.
 
 - [ ] Test in the scratch project: pause the job that runs the check (or, with the metric only, stop writing entries) and wait past the window; the email must arrive; resume and confirm the incident closes. In the real project: `gcloud scheduler jobs list --location=us-central1 --project=$PROJECT` shows the job (its name starts `firebase-schedule-verifyRunwayKeys`); `gcloud scheduler jobs pause <name> --location=us-central1 --project=$PROJECT`, wait past the window, check the email, then `gcloud scheduler jobs resume ...` and force-run it once. The pause lasts more than a day, so do it before the first real user.
 
@@ -522,7 +525,7 @@ Filled in by the owner. A row left blank means it has not been done. Never write
 | Deny policy outcome (in place / impossible with controls / deferred) | | | |
 | Alert A tested in scratch, email arrived | | | |
 | Alert A tested in real project, email arrived | | | |
-| Alert B tested in scratch, email arrived; option chosen for the 26-hour window | | | |
+| Alert B tested in scratch, email arrived; option chosen for the 26-hour window | | | Option (a), threshold on a one-day sum |
 | Alert B tested in real project, email arrived | | | |
 | Alert C tested in scratch (disable, destroy, delete), emails arrived | | | |
 | Alert C tested in real project, emails arrived | | | |

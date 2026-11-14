@@ -163,7 +163,7 @@ export interface QuestionOption {
 export type QuestionAnswerValue =
   | { shape: 'pickOne'; optionId: string; otherText: string | null }
   | { shape: 'yesNo'; optionId: string; otherText: string | null }
-  | { shape: 'pickSeveral'; optionIds: string[] }
+  | { shape: 'pickSeveral'; optionIds: string[]; otherText: string | null }
   | { shape: 'freeText'; text: string }
   | { shape: 'dateTime'; date: number | null; time: string | null }
   | {
