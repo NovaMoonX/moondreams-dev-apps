@@ -1758,7 +1758,12 @@ const tests: [string, () => void | Promise<void>][] = [
           readerAppId: 'helm',
           connectorId: 'app:runway',
           category: 'transactions',
-          args: { payee: 'Costco', from: '2026-10-01', to: '2026-10-31' },
+          args: {
+            payee: 'Costco',
+            category: null,
+            from: '2026-10-01',
+            to: '2026-10-31',
+          },
         },
       ]);
       assert.equal(result.matchedCount, 31);
@@ -1788,6 +1793,29 @@ const tests: [string, () => void | Promise<void>][] = [
       assert.equal(line.label, 'your Runway transactions');
       assert.equal(line.found, 31);
       assert.equal(line.failed, null);
+      const spentOnTool = buildHelmTools({
+        ...scope,
+        quotes: createQuoteBook(),
+        searched: createSearchedLog(),
+        siteGrants: SITE,
+      }).find((entry) => entry.name === 'search_app_records');
+      await spentOnTool?.run({
+        app: 'app:runway',
+        category: 'transactions',
+        spentOn: 'Groceries',
+        from: '2026-10-01',
+        to: '2026-10-31',
+      } as never);
+      assert.deepEqual(
+        calls.at(-1)?.args,
+        {
+          payee: null,
+          category: 'Groceries',
+          from: '2026-10-01',
+          to: '2026-10-31',
+        },
+        "a spending category is sent as the read's category filter",
+      );
       const built = buildAnswer(
         {
           question: 'What did I spend at Costco?',
