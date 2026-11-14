@@ -84,6 +84,7 @@
     "check:helm-sort": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSort.ts",
     "check:helm-answers": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmAnswers.ts",
     "check:helm-route": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRoute.ts",
+    "mcp:setup": "bash scripts/mcp/setup.sh",
     "check:mcp": "tsx scripts/checks/mcpServe.ts",
     "check:helm-mcp": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmMcp.ts",
     "check:helm-joined": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmJoined.ts",

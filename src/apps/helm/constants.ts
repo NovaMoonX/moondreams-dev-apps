@@ -942,8 +942,6 @@ export const HELM_COPY = {
   assistantsGeminiHeading: 'Gemini',
   assistantsGeminiSteps:
     "On gemini.google.com (the website, which also opens in your phone's browser), open Settings, then Connected Apps, then Add a custom app, and paste the address. Keep Activity needs to be on, and Gemini asks you to confirm each change it makes.",
-  assistantsPrivacy:
-    'Whatever the assistant reads goes to that company and is handled under its own terms.',
   connectSheetTitle: 'Connect an app',
   connectQuestion: (name: string, app: string) => `Let ${name} read ${app}?`,
   connectStartsTicked: (labels: string, count: number) =>

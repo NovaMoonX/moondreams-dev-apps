@@ -6473,6 +6473,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           reason: 'Seeded: Alex tests Gmail and Drive',
           updatedAt: context.now,
         },
+        'helm-assistants': {
+          rollout: 'testing',
+          alwaysOnUids: [FIXTURE_USERS.partnerOne.uid],
+          alwaysOffUids: [],
+          reason: 'Seeded: Alex tests connected assistants',
+          updatedAt: context.now,
+        },
       },
     },
     { merge: true },

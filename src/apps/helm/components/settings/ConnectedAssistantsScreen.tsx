@@ -129,9 +129,6 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                   {HELM_COPY.assistantsGeminiSteps}
                 </p>
               </div>
-              <p className='text-muted-foreground text-[13px] text-pretty'>
-                {HELM_COPY.assistantsPrivacy}
-              </p>
             </div>
           </section>
         )}
