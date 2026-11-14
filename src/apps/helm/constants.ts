@@ -661,6 +661,8 @@ export const HELM_COPY = {
   needsYouCount: (count: number) =>
     count === 1 ? '1 needs you' : `${count} need you`,
   couldNotRead: "Couldn't read this",
+  nothingToFile: 'Read it · nothing to file in it',
+  readAgainNothing: 'Read again · still nothing to file in it',
   moreToSort: 'Too much to file at once',
   moreToSortFiled: (count: number | null) =>
     count === null

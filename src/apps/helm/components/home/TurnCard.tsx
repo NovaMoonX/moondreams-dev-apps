@@ -315,7 +315,7 @@ function TurnCard({
         <p className='text-muted-foreground text-[13px]'>{heldLine}</p>
       )}
       {canRetry && (
-        <div className='flex items-center gap-1'>
+        <div className='flex flex-wrap items-center justify-end gap-x-1'>
           <p className='text-muted-foreground text-[13px]'>{heldLine}</p>
           <Button
             type='button'
