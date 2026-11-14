@@ -84,7 +84,7 @@ interface ReadSale {
   buyerNote: string | null;
   paymentMethods: string[];
   currency: string | null;
-  newInquiries: number;
+  newInquiries: number | null;
   updatedAt: number | null;
   items: ReadItem[];
   isItemsFull: boolean;
@@ -115,10 +115,11 @@ const readPaymentMethods = (value: unknown) =>
       })
     : [];
 
-/** Items are read with only the fields the figures need, so a private one is never fetched, and inquiries are only counted by status; an available thing counts once buyers could be shown it. */
+/** Selects only the fields the figures need, so a private one is never fetched, and only counts inquiries by status. */
 async function readOpenSales(
   firestore: Firestore,
   uid: string,
+  isCountingInquiries = false,
 ): Promise<{ sales: ReadSale[]; isSalesFull: boolean }> {
   const snapshot = await firestore
     .collection('apps/going-once/sales')
@@ -151,13 +152,15 @@ async function readOpenSales(
             buyerNote: readText(doc.get('buyerNote')),
             paymentMethods: readPaymentMethods(doc.get('paymentMethods')),
             currency: readText(doc.get('currency')),
-            newInquiries: (
-              await doc.ref
-                .collection('inquiries')
-                .where('status', '==', 'NEW')
-                .count()
-                .get()
-            ).data().count,
+            newInquiries: isCountingInquiries
+              ? await doc.ref
+                  .collection('inquiries')
+                  .where('status', '==', 'NEW')
+                  .count()
+                  .get()
+                  .then((counted) => counted.data().count)
+                  .catch(() => null)
+              : null,
             updatedAt: readTime(doc.get('lastEditedAt')),
             items: items.docs.flatMap(readItem),
             isItemsFull: items.size < ITEM_LIMIT,
@@ -189,7 +192,7 @@ async function syncSales(
   firestore: Firestore,
   uid: string,
 ): Promise<CategoryRead> {
-  const { sales, isSalesFull } = await readOpenSales(firestore, uid);
+  const { sales, isSalesFull } = await readOpenSales(firestore, uid, true);
   return {
     records: sales.map((sale) =>
       toRecord({
@@ -207,18 +210,24 @@ async function syncSales(
           pending: countStatus(sale.items, 'PENDING'),
           sold: countStatus(sale.items, 'SOLD'),
           newInquiries: sale.newInquiries,
-          collectedCents: sumCents(
-            sale.items.filter((item) => item.status === 'SOLD'),
-            (item) => item.soldCents,
-          ),
-          leftCents: sumCents(
-            sale.items.filter(
-              (item) =>
-                item.status === 'PENDING' ||
-                (item.status === 'AVAILABLE' && item.isListable),
-            ),
-            (item) => item.askingPriceCents,
-          ),
+          collectedCents:
+            sale.currency === null
+              ? null
+              : sumCents(
+                  sale.items.filter((item) => item.status === 'SOLD'),
+                  (item) => item.soldCents,
+                ),
+          leftCents:
+            sale.currency === null
+              ? null
+              : sumCents(
+                  sale.items.filter(
+                    (item) =>
+                      item.status === 'PENDING' ||
+                      (item.status === 'AVAILABLE' && item.isListable),
+                  ),
+                  (item) => item.askingPriceCents,
+                ),
         },
       }),
     ),
@@ -246,7 +255,7 @@ async function syncThings(
             kind: 'artifact',
             title: item.title,
             subtitle: sale.name,
-            amountCents: item.askingPriceCents,
+            amountCents: sale.currency === null ? null : item.askingPriceCents,
             currency: sale.currency,
             sourceUpdatedAt: sale.updatedAt,
             extra: { status: isPending ? 'pending' : 'available' },
