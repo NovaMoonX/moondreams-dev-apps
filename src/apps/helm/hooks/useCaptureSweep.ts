@@ -35,8 +35,12 @@ const isDue = (capture: OpenCapture, now: number, waiting: OpenCapture[]) => {
   const isLeadWorking =
     lead !== undefined &&
     (lead.status === 'received' || lead.status === 'interpreting');
+  // An assistant's turn is sorted by the server call that filed it; the device takes it over only once that call has had its time.
+  const isServerFiling =
+    capture.medium === 'mcp' && now - capture.createdAt < SWEEP_LEASE_MS;
   return (
     !isLeadWorking &&
+    !isServerFiling &&
     (capture.status === 'received' ||
       (capture.status === 'interpreting' &&
         now - (capture.claimedAt ?? 0) > SWEEP_LEASE_MS))

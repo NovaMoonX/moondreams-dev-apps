@@ -22,7 +22,10 @@ import {
   showMoreActivity,
 } from '@apps/helm/store/helmSlice';
 import { startActivityListener } from '@apps/helm/store/listeners/executionListener';
-import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectAllCaptures,
+  selectExecutionsById,
+} from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenExecution } from '@apps/helm/types';
 import {
   getActivityLine,
@@ -96,10 +99,12 @@ function ActivityLoader({ limit }: { limit: number }) {
 function ActivityRow({
   execution,
   undo,
+  via,
   onOpen,
 }: {
   execution: OpenExecution;
   undo: OpenExecution | null;
+  via: string | null;
   onOpen: () => void;
 }) {
   const subject = getActivitySubject(execution);
@@ -120,6 +125,11 @@ function ActivityRow({
         {subject && (
           <span className='text-muted-foreground block truncate text-[13px]'>
             {subject}
+          </span>
+        )}
+        {via && (
+          <span className='text-muted-foreground block text-[13px]'>
+            {HELM_COPY.assistantFrom(via)}
           </span>
         )}
         {mark && (
@@ -147,6 +157,16 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
     (state) => state.helm.activity,
   );
   const byId = useAppSelector(selectExecutionsById);
+  const captures = useAppSelector(selectAllCaptures);
+  const viaByCapture = useMemo(
+    () =>
+      new Map(
+        captures.flatMap((capture) =>
+          capture.via ? [[capture.id, capture.via] as const] : [],
+        ),
+      ),
+    [captures],
+  );
   const [open, setOpen] = useState<OpenExecution | null>(null);
   const days = useMemo(
     () => groupByDay(items.filter(isShownInActivity)),
@@ -193,6 +213,12 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
                       execution.undoneByExecutionId
                         ? (byId.get(execution.undoneByExecutionId) ?? null)
                         : null
+                    }
+                    via={
+                      execution.via ??
+                      (execution.captureId
+                        ? (viaByCapture.get(execution.captureId) ?? null)
+                        : null)
                     }
                     onOpen={() => setOpen(execution)}
                   />

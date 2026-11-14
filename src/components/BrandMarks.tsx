@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 interface BrandMarkProps {
   className?: string;
 }
@@ -50,6 +52,26 @@ export function GoogleCalendarMark({ className = 'size-5' }: BrandMarkProps) {
       >
         31
       </text>
+    </svg>
+  );
+}
+
+/** Gemini's spark in its blue-to-rose gradient, for steps or rows that name Gemini. */
+export function GeminiMark({ className = 'size-4' }: BrandMarkProps) {
+  const gradientId = useId();
+  return (
+    <svg viewBox='0 0 24 24' aria-hidden='true' className={className}>
+      <defs>
+        <linearGradient id={gradientId} x1='0' y1='24' x2='24' y2='0'>
+          <stop offset='0' stopColor='#4796E3' />
+          <stop offset='0.55' stopColor='#9177C7' />
+          <stop offset='1' stopColor='#CA6673' />
+        </linearGradient>
+      </defs>
+      <path
+        fill={`url(#${gradientId})`}
+        d='M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81'
+      />
     </svg>
   );
 }

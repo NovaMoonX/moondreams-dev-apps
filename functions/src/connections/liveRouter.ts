@@ -87,7 +87,8 @@ const NOT_GRANTED: LiveFailure = { ok: false, reason: 'notGranted' };
 
 const cache = new Map<string, { expiresAt: number; value: unknown }>();
 
-const isGateOpen = async (
+/** Whether a reader app may use a connector for this person, by the connector's own switch; true for a connector with none. */
+export const isConnectorGateOpen = async (
   uid: string,
   readerAppId: string,
   connectorId: string,
@@ -156,7 +157,9 @@ export const listLiveGrants = async (
       ),
     ),
     Promise.all(
-      grants.map((grant) => isGateOpen(uid, readerAppId, grant.connectorId)),
+      grants.map((grant) =>
+        isConnectorGateOpen(uid, readerAppId, grant.connectorId),
+      ),
     ),
   ]);
   return grants.flatMap((grant, index): LiveGrant[] => {
@@ -183,7 +186,13 @@ export const listLiveGrants = async (
 /** The account's email when the grant is live, not ended and has a live category on; otherwise a refusal. */
 const checkGrant = async (firestore: Firestore, input: LiveInput) => {
   if (!liveManifest(input.connectorId)) return NOT_GRANTED;
-  if (!(await isGateOpen(input.uid, input.readerAppId, input.connectorId))) {
+  if (
+    !(await isConnectorGateOpen(
+      input.uid,
+      input.readerAppId,
+      input.connectorId,
+    ))
+  ) {
     return NOT_GRANTED;
   }
   const [grantSnapshot, account] = await Promise.all([

@@ -13,6 +13,7 @@ import BrowseSheet from '@apps/helm/components/shell/BrowseSheet';
 import HelmShell from '@apps/helm/components/shell/HelmShell';
 import VoiceDock from '@apps/helm/components/shell/VoiceDock';
 import GoogleConnectProvider from '@apps/helm/components/connections/GoogleConnectProvider';
+import ConnectedAssistantsScreen from '@apps/helm/components/settings/ConnectedAssistantsScreen';
 import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedAppsScreen';
 import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
@@ -160,6 +161,7 @@ function HelmApp() {
             onBack={goBack}
             onOpenActivity={() => showView('activity')}
             onOpenConnectedApps={() => showView('connectedApps')}
+            onOpenAssistants={() => showView('assistants')}
             onOpenSeesYou={() => showView('howNomosSeesYou')}
           />
         )}
@@ -180,6 +182,9 @@ function HelmApp() {
         )}
         {!isLocked && view === 'connection' && (
           <ConnectionPage grantId={grant} onBack={goBack} />
+        )}
+        {!isLocked && view === 'assistants' && (
+          <ConnectedAssistantsScreen onBack={goBack} />
         )}
         {!isLocked && view === 'people' && (
           <WhoView

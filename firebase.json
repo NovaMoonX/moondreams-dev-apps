@@ -10,6 +10,26 @@
     ],
     "rewrites": [
       {
+        "source": "/mcp/helm",
+        "function": { "functionId": "helmMcp", "region": "us-central1" }
+      },
+      {
+        "source": "/mcp/helm/",
+        "function": { "functionId": "helmMcp", "region": "us-central1" }
+      },
+      {
+        "source": "/.well-known/oauth-protected-resource/mcp/helm",
+        "function": { "functionId": "helmMcp", "region": "us-central1" }
+      },
+      {
+        "source": "/.well-known/oauth-protected-resource",
+        "function": { "functionId": "helmMcp", "region": "us-central1" }
+      },
+      {
+        "source": "/.well-known/oauth-authorization-server",
+        "function": { "functionId": "helmMcp", "region": "us-central1" }
+      },
+      {
         "source": "!/assets/**",
         "destination": "/index.html"
       }

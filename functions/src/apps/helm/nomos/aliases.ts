@@ -1,3 +1,5 @@
+import { gcmDecrypt, gcmEncrypt } from '../../../appKeys/gcm.js';
+import type { HelmKey } from '../helmKey.js';
 import type { SyncedCopy } from '../syncedCopies.js';
 
 export interface AliasBook {
@@ -19,6 +21,38 @@ export function createAliasBook(prefix: string): AliasBook {
       return alias;
     },
     idOf: (alias) => byAlias.get(alias) ?? null,
+  };
+}
+
+const NONCE_BYTES = 12;
+
+/** Aliases that carry the id itself, sealed under the person's key with the uid and prefix as AAD, so a later request opens them with no stored map and no id is ever shown. */
+export function createSealedAliasBook(
+  prefix: string,
+  uid: string,
+  key: HelmKey,
+): AliasBook {
+  const aad = Buffer.from(`${uid}|${prefix}`);
+  return {
+    add: (id) => {
+      const { ciphertext, nonce } = gcmEncrypt(key.key, Buffer.from(id), aad);
+      return `${prefix}${Buffer.concat([Buffer.from(nonce, 'base64'), Buffer.from(ciphertext, 'base64')]).toString('base64url')}`;
+    },
+    idOf: (alias) => {
+      if (!alias.startsWith(prefix)) return null;
+      try {
+        const bytes = Buffer.from(alias.slice(prefix.length), 'base64url');
+        if (bytes.length <= NONCE_BYTES) return null;
+        return gcmDecrypt(
+          key.key,
+          bytes.subarray(NONCE_BYTES).toString('base64'),
+          bytes.subarray(0, NONCE_BYTES).toString('base64'),
+          aad,
+        ).toString('utf8');
+      } catch {
+        return null;
+      }
+    },
   };
 }
 

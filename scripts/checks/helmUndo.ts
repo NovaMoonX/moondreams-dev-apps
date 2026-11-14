@@ -71,6 +71,7 @@ const execution = (
 ): OpenExecution => ({
   id: 'exec-1',
   said: null,
+  via: null,
   captureId: 'turn-1',
   actor: 'nomos',
   category: 'organize',

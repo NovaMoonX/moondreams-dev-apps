@@ -151,6 +151,7 @@ export async function sendCapture(
     ttsProvider: null,
     arrivedVia: 'direct',
     medium: 'web',
+    via: null,
     sessionId: turn.sessionId,
     turnIndex: turn.turnIndex,
     route: null,
