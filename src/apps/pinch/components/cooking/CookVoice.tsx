@@ -10,11 +10,13 @@ import {
   type RefObject,
 } from 'react';
 
+import MicrophoneAccess from '@/components/MicrophoneAccess';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { NaturalVoiceOption } from '@/components/NaturalVoiceOption';
 import { PillGroup } from '@/components/PillGroup';
 import { ViewOptionSwitch } from '@/components/ViewOptions';
 import { useSheetHistory } from '@/hooks/useBackHistory';
+import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import { useNow } from '@/hooks/useNow';
 import { formatClock } from '@/utils/durationUtils';
 import {
@@ -37,9 +39,8 @@ const MAX_WAIT_MINUTES = COOK_WAKE_MAX_MS / 60_000;
 /** Why voice control stopped by itself: one line for the footer, and the whole cause with what to do for the explainer that a tap on the mic opens (none where a tap simply starts it again). */
 const STOP_TEXT: Record<VoiceStop, { line: string; detail: string | null }> = {
   denied: {
-    line: 'The microphone is blocked.',
-    detail:
-      'Your browser blocked the microphone. Allow it in the browser’s settings for this site, then tap Turn on.',
+    line: 'The microphone is blocked. Tap the mic to fix it.',
+    detail: 'Your browser blocked the microphone.',
   },
   service: {
     line: 'Your browser’s speech service is off.',
@@ -351,7 +352,14 @@ function CookVoiceSheet({
   };
   const { dialogId, onDialogClose } = useSheetHistory(voice.isSheetOpen, close);
   useFocusOnOpen(voice.isSheetOpen, doneRef);
-  const lastStop = voice.error === null ? null : STOP_TEXT[voice.error].detail;
+  const permission = useMicrophonePermission();
+  const isBlocked = voice.error === 'denied' && permission !== 'granted';
+  const getLastStop = () => {
+    if (voice.error === null) return null;
+    if (voice.error !== 'denied') return STOP_TEXT[voice.error].detail;
+    return permission === 'granted' ? STOP_TEXT.service.detail : null;
+  };
+  const lastStop = getLastStop();
   const selected: ListenChoice = voice.phase === 'LOCKED' ? 'LOCK' : voice.mode;
   const wakeRows: [string, string][] =
     voice.mode === 'WAKE'
@@ -378,7 +386,10 @@ function CookVoiceSheet({
     {
       label: 'Tips and notes',
       rows: [
-        ['ingredients for this step', 'Opens what this step uses, and reads it'],
+        [
+          'ingredients for this step',
+          'Opens what this step uses, and reads it',
+        ],
         ['note from last time', 'Opens it on the first step, and reads it'],
         ['show me the tips', 'Opens this step’s tips on screen'],
         ['show my notes', 'Opens your notes for this step'],
@@ -435,6 +446,7 @@ function CookVoiceSheet({
       className='border-border border'
     >
       <div className='space-y-3 text-left text-sm'>
+        {isBlocked && <MicrophoneAccess />}
         {lastStop !== null && (
           <p className='bg-muted/50 border-border rounded-xl border px-3 py-2'>
             Last time: {lastStop}
@@ -602,12 +614,17 @@ interface CookVoiceLineProps extends CookVoiceSheetProps {
 /** One line over the cooking footer's buttons: while the mic is on, its state as a chip (which opens the voice sheet) and what to say, or what it last heard or answered; after it stops by itself, why, for a few seconds. */
 export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
   const { voice, ingredientExample } = props;
+  const permission = useMicrophonePermission();
   const sheet = <CookVoiceSheet {...props} />;
+  const shownStop =
+    voice.shownError === 'denied' && permission === 'granted'
+      ? 'service'
+      : voice.shownError;
 
   if (!voice.isOn) {
     return (
       <>
-        {voice.shownError !== null && (
+        {shownStop !== null && (
           <div
             className={join(
               'flex min-h-6 items-center [@media(max-height:500px)]:self-center',
@@ -618,7 +635,7 @@ export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
               role='status'
               className='text-muted-foreground min-w-0 flex-1 truncate text-sm [@media(max-height:500px)]:line-clamp-2 [@media(max-height:500px)]:whitespace-normal'
             >
-              {STOP_TEXT[voice.shownError].line}
+              {STOP_TEXT[shownStop].line}
             </p>
           </div>
         )}
@@ -705,7 +722,14 @@ export function CookVoiceExplainer({
       voice.closeExplainer();
     },
   );
-  const lastStop = voice.error === null ? null : STOP_TEXT[voice.error].detail;
+  const permission = useMicrophonePermission();
+  const isBlocked = voice.error === 'denied' && permission !== 'granted';
+  const getLastStop = () => {
+    if (voice.error === null) return null;
+    if (voice.error !== 'denied') return STOP_TEXT[voice.error].detail;
+    return permission === 'granted' ? STOP_TEXT.service.detail : null;
+  };
+  const lastStop = getLastStop();
 
   return (
     <Modal
@@ -732,6 +756,7 @@ export function CookVoiceExplainer({
             Last time: {lastStop}
           </p>
         )}
+        {isBlocked && <MicrophoneAccess />}
         <p>
           Your browser asks first, its speech service hears you, and Pinch keeps
           nothing.
