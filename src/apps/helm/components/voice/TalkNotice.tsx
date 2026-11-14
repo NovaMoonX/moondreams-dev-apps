@@ -8,6 +8,9 @@ import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 
+// The box with the visible edge scrolls, so its border never runs off the screen with the content.
+const CAPPED_CLASSES = 'max-h-[45dvh] overflow-y-auto overscroll-contain';
+
 interface TalkNoticeProps {
   className?: string;
 }
@@ -27,18 +30,24 @@ function TalkNotice({ className }: TalkNoticeProps) {
   return (
     <div
       className={join(
-        'text-muted-foreground flex max-h-[45dvh] w-full flex-col items-start gap-2 overflow-y-auto overscroll-contain text-[13px]',
+        'text-muted-foreground flex w-full flex-col items-start gap-2 text-[13px]',
         className,
       )}
       role='status'
     >
       {isMicrophone ? (
-        <MicrophoneAccess onAllowed={voice.clearNotice} className='w-full' />
+        <MicrophoneAccess
+          onAllowed={voice.clearNotice}
+          className={join('w-full', CAPPED_CLASSES)}
+        />
       ) : (
         <p className='text-pretty'>{line}</p>
       )}
       {!isMicrophone && line === HELM_COPY.talkNeedsRecognition && (
-        <SpeechDebugDetails message={line} className='w-full' />
+        <SpeechDebugDetails
+          message={line}
+          className={join('w-full', CAPPED_CLASSES)}
+        />
       )}
       {voice.hasNoticeDoor && (
         <Button
