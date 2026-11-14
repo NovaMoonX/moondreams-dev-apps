@@ -3,8 +3,10 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { HeartHandshake, Lock, Stethoscope } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import AppToggle from '@/components/AppToggle';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -26,7 +28,7 @@ interface PrivateRowProps {
   kind: PrivateKind;
   record: PrivacyRecord;
   title: string;
-  /** Opens the project or person an inherited class comes from. */
+  /** Opens the project, person or place an inherited class comes from; left out, the row opens its page. */
   onOpenParent?: (parentId: string) => void;
 }
 
@@ -37,9 +39,22 @@ function PrivateRow({ kind, record, title, onOpenParent }: PrivateRowProps) {
   const { addToast } = useToast();
   const name = useAssistantName();
   const index = useAppSelector(selectParentIndex);
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [isWriting, setIsWriting] = useState(false);
   const facts = readPrivacyFacts(record);
   const inherited = readInheritedFrom(parentsOf(kind, record, index));
+  const openParent = (parentId: string) => {
+    if (onOpenParent) return onOpenParent(parentId);
+    const view = index.project.has(parentId)
+      ? 'project'
+      : index.who.has(parentId)
+        ? 'who'
+        : 'place';
+    afterBackLayersClose(() =>
+      navigate(`${pathname}?view=${view}&item=${encodeURIComponent(parentId)}`),
+    );
+  };
   const isOwn = facts.privateMark !== null || facts.isCare === true;
   const isOn = isOwn || inherited !== null;
   const codeMark =
@@ -128,17 +143,15 @@ function PrivateRow({ kind, record, title, onOpenParent }: PrivateRowProps) {
           <span className='min-w-0 flex-1'>
             {HELM_COPY.privateFromParent(inherited.name)}
           </span>
-          {onOpenParent && (
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className='relative after:absolute after:-inset-2 after:content-[""]'
-              onClick={() => onOpenParent(inherited.id)}
-            >
-              {HELM_COPY.privateOpenParent(inherited.name)}
-            </Button>
-          )}
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='relative after:absolute after:-inset-2 after:content-[""]'
+            onClick={() => openParent(inherited.id)}
+          >
+            {HELM_COPY.privateOpenParent(inherited.name)}
+          </Button>
         </p>
       )}
     </div>

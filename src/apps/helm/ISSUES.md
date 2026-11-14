@@ -1713,8 +1713,8 @@ Health and care things are private on their own on any kind of record, and anyth
 - [ ] **Delete:** a copy or export leaves private things out with "Include them" for that copy.
 ### Success Criteria
 - [ ] Every derived kind (patterns, observations, reflections, seen-as lines, Activity lines, moments, timeline, Today's lines) is private when any source is; copies and exports of them leave private ones out with "Include them" (`check:helm-private`).
-- [ ] A wake-phrase turn with the page hidden or untouched answers private things by label ("your morning medicine") in speech and on screen, until the first touch; names never reach the model in that turn (`check:helm-private`).
-- [ ] Deleting a private project or forgetting a private person leaves each child that inherited it with its own mark (`check:helm-private`).
+- [x] A wake-phrase turn with the page hidden or untouched answers private things by label ("your morning medicine") in speech and on screen, until the first touch; names never reach the model in that turn (`check:helm-private`).
+- [x] Deleting a private project or forgetting a private person leaves each child that inherited it with its own mark (`check:helm-private`).
 - [ ] Each source of the class (care, a health word the model missed, the person, a private project, a private who) and leaving the project; code never clears a health mark and never re-marks a cleared one; `setPrivate` is refused on an inherited class with its code-built line (`check:helm-private`); every copy and export goes through `filterPrivate` (`check:helm-copy`).
 - [ ] No rules change (`privacy` is a readable field under the owner wildcard); stated. Rows added to `WHERE_THINGS_LIVE` for `privacy` and `touchesPrivate`. Conventions: `security-privacy.md` "Private is a class any record can carry" written (Issue 110 folds the push bullet into it).
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.

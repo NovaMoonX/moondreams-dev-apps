@@ -16,7 +16,11 @@ import {
   type PrivacyFacts,
   type PrivateParent,
 } from './privacy.js';
-import { toContextTask, type MaskedName } from './nomos/unattended.js';
+import {
+  maskContextRecords,
+  toContextTask,
+  type MaskedName,
+} from './nomos/unattended.js';
 import {
   HttpsError,
   onCall,
@@ -684,6 +688,10 @@ async function readPeople(
         lastMentionedAt: Number.isFinite(doc.get('lastMentionedAt'))
           ? Number(doc.get('lastMentionedAt'))
           : null,
+        privacyFacts: readPrivacyFacts({
+          privateMark: toPrivateMark(words.privateMark),
+          isPrivacyCleared: words.isPrivacyCleared === true,
+        }),
         relation: typeof words.relation === 'string' ? words.relation : null,
         species: typeof words.species === 'string' ? words.species : null,
         organizationKind:
@@ -716,6 +724,10 @@ async function readPeople(
         name: words.name,
         aliases: aliasesOf(words),
         address: typeof words.address === 'string' ? words.address : null,
+        privacyFacts: readPrivacyFacts({
+          privateMark: toPrivateMark(words.privateMark),
+          isPrivacyCleared: words.isPrivacyCleared === true,
+        }),
       },
     ];
   });
@@ -770,6 +782,9 @@ async function readPeople(
     capturedAt: input.capturedAt,
   };
 }
+
+const toPrivateMark = (value: unknown): PrivacyFacts['privateMark'] =>
+  value === 'health' || value === 'care' || value === 'person' ? value : null;
 
 const MAX_KEPT_READS = 20;
 
@@ -1022,6 +1037,7 @@ async function readContextFacts(
                         typeof words.value === 'string' ? words.value : null,
                       statement: words.statement,
                       by: byOf(doc),
+                      isPrivate: doc.get('privacy') === 'private',
                     },
                   ]
                 : [];
@@ -1064,7 +1080,13 @@ async function readContextFacts(
               ).test(text),
           );
           return isNamed && typeof words.name === 'string'
-            ? [{ id: doc.id, name: words.name }]
+            ? [
+                {
+                  id: doc.id,
+                  name: words.name,
+                  isPrivate: doc.get('privacy') === 'private',
+                },
+              ]
             : [];
         } catch {
           return [];
@@ -1087,6 +1109,9 @@ async function readContextFacts(
                   subject: subject.name,
                   statement: words.statement,
                   by: byOf(doc),
+                  isPrivate:
+                    doc.get('privacy') === 'private' || subject.isPrivate,
+                  isSubjectPrivate: subject.isPrivate,
                 },
               ]
             : [];
@@ -1235,6 +1260,7 @@ async function readFocusedTopic(
           id: topicId,
           name: words.name,
           version: typeof data.version === 'number' ? data.version : 0,
+          isPrivate: data.privacy === 'private',
           sections: sections.map((section) => ({
             id: section.id,
             heading: section.heading,
@@ -1594,6 +1620,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     ),
     timeZone,
     names: [] as MaskedName[],
+    quoted: [] as MaskedName[],
   };
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
@@ -1746,7 +1773,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       .sort(
         (a, b) => Number(b.id === screenRunId) - Number(a.id === screenRunId),
       )
-      .map((run) => toContextRun(run, run.id === screenRunId));
+      .map((run) => ({
+        ...toContextRun(run, run.id === screenRunId),
+        isPrivate: procedureRecords.some(
+          (procedure) =>
+            procedure.id === run.procedureId && procedure.isPrivate,
+        ),
+      }));
     const trips =
       mode !== 'rest' && procedureRecords.length > 0
         ? await readSyncedTrips(firestore, uid, key, {
@@ -1768,6 +1801,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         id: procedure.id,
         title: procedure.title,
         stepCount: Object.keys(procedure.steps).length,
+        isPrivate: procedure.isPrivate,
       }),
     );
     const topicDocument = topicDocumentFor(
@@ -1784,28 +1818,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         hintedNotes,
       )),
     ];
-    const context = buildContext({
-      text: combined.text,
-      texts: combined.texts,
-      reading: combined.reading,
-      createdAt: capture.createdAt,
-      timeZone,
-      tasks,
-      synced: contextSynced,
-      alreadyMade,
-      screen,
-      earlierTurns,
-      answeredQuestion,
+    const masked = maskContextRecords(unattendedMask, {
       facts,
       selfFacts,
       keyDates: contextKeyDates,
       upcoming,
       projects,
       topics,
-      style,
       notes: toContextNotes(hinted, combined.text),
-      focusedTopic: topicDocument ? focusedTopic : null,
-      topicDocument,
       procedures: contextProcedures,
       focusedProcedure: focusedLive
         ? {
@@ -1813,9 +1833,38 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             title: focusedLive.title,
             version: focusedLive.version,
             blocks: blocksOf(focusedLive),
+            isPrivate: focusedLive.isPrivate,
           }
         : null,
+      focusedTopic: topicDocument ? focusedTopic : null,
       runs: contextRuns,
+      synced: contextSynced,
+    });
+    const context = buildContext({
+      text: combined.text,
+      texts: combined.texts,
+      reading: combined.reading,
+      createdAt: capture.createdAt,
+      timeZone,
+      tasks,
+      synced: masked.synced,
+      alreadyMade,
+      screen,
+      earlierTurns,
+      answeredQuestion,
+      facts: masked.facts,
+      selfFacts: masked.selfFacts,
+      keyDates: masked.keyDates,
+      upcoming: masked.upcoming,
+      projects: masked.projects,
+      topics: masked.topics,
+      style,
+      notes: masked.notes,
+      focusedTopic: masked.focusedTopic,
+      topicDocument,
+      procedures: masked.procedures,
+      focusedProcedure: masked.focusedProcedure,
+      runs: masked.runs,
       attachments: attached.media.map((item) => ({
         alias: item.alias,
         kind: item.kind,
@@ -2181,11 +2230,23 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     (command) => decide(command) === 'automatic',
   );
 
+  const answerWords = [
+    reply.answer?.fromRecordsText,
+    reply.answer?.generalText,
+    reply.answer?.generalSpoken,
+  ];
   return writeResult({
     ...claimed,
     key,
     commands,
     answer,
+    isQuotingPrivate:
+      mode === 'full' &&
+      answerWords.some(
+        (text) =>
+          typeof text === 'string' &&
+          maskPrivateNames(text, unattendedMask.quoted) !== text,
+      ),
     remember: mode === 'full' ? reply.remember : [],
     noteFacts: mode === 'full' ? reply.noteFacts : [],
     keyDates: mode === 'full' ? reply.keyDates : [],
@@ -2324,6 +2385,7 @@ async function writeResult(
     key: HelmKey;
     commands: NomosCommand[];
     answer: AnswerCommand | null;
+    isQuotingPrivate?: boolean;
     remember: RememberCommand[];
     noteFacts: NoteFactCommand[];
     keyDates: KeyDateCommand[];
@@ -3397,7 +3459,9 @@ async function writeResult(
           ...new Set([...(capture.placeIds ?? []), ...plan.linkedPlaceIds]),
         ],
       }),
-      ...(plan.isPrivate && { touchesPrivate: true }),
+      ...((plan.isPrivate || input.isQuotingPrivate === true) && {
+        touchesPrivate: true,
+      }),
       status: settled.status,
       sortedAt: now,
       executionIds: settled.executionIds,
@@ -3538,7 +3602,7 @@ const readInput = (data: unknown) => {
 export const toContextNotes = (hinted: HintedNote[], text: string) =>
   isQuestion(text.trim())
     ? hinted
-    : hinted.map(({ id, title }) => ({ id, title }));
+    : hinted.map(({ id, title, isPrivate }) => ({ id, title, isPrivate }));
 
 export const sortHelmCapture = onCall(
   {

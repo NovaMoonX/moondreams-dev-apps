@@ -94,7 +94,14 @@ export const correctFact = (
     const oldRef = doc(facts, factId);
     const newRef = doc(facts);
     const sealed = await sealJson<FactSealed>(
-      { statement, quote: null, topic, value: null },
+      {
+        statement,
+        quote: null,
+        topic,
+        value: null,
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       await getHelmEncryption(uid),
     );
     const now = Date.now();
@@ -297,7 +304,14 @@ export const addFact = (
     const ref = doc(factsOf(uid));
     const now = Date.now();
     const sealed = await sealJson<FactSealed>(
-      { statement, quote: null, topic: about.topic, value: null },
+      {
+        statement,
+        quote: null,
+        topic: about.topic,
+        value: null,
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       await getHelmEncryption(uid),
     );
     const fact: Fact = {

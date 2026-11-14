@@ -5,6 +5,7 @@ import AppLogo from '@/components/AppLogo';
 import TickMark from '@/components/TickMark';
 import { readConnectorAppId } from '@/lib/connections/contract';
 import { formatDateShort } from '@/utils/formatUtils';
+import PrivateLock from '@apps/helm/components/privacy/PrivateLock';
 import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
@@ -68,6 +69,12 @@ function SearchRow({ entry, when, onOpen }: SearchRowProps) {
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {title}
+          {entry.privacy && (
+            <PrivateLock
+              kind={entry.privacy.kind}
+              record={entry.privacy.record}
+            />
+          )}
         </span>
         {detail && (
           <span className='text-muted-foreground block text-[13px] break-words'>

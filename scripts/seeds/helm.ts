@@ -73,6 +73,7 @@ import type {
   TaskDue,
   TaskSealed,
   Procedure,
+  ProcedureBody,
   ProcedureSealed,
   StyleProfile,
   StyleSealed,
@@ -669,7 +670,7 @@ async function buildBackToBack(input: {
         completedAt: null,
         clearedAt: null,
         sealed: await sealJson<TaskSealed>(
-          { title, notes: null, steps: {} },
+          { title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
           encryption,
         ),
       };
@@ -1057,6 +1058,8 @@ async function buildGmailTurn(input: {
         quote: 'Your cake tasting is at 2:00 PM.',
         topic: null,
         value: '2:00 PM',
+        privateMark: null,
+        isPrivacyCleared: false,
       },
       encryption,
     ),
@@ -1193,6 +1196,8 @@ async function buildAnswerTurns(input: {
                 {
                   title: 'How long does cake keep',
                   body: saved.general,
+                  privateMark: null,
+                  isPrivacyCleared: false,
                 },
                 encryption,
               ),
@@ -1229,7 +1234,7 @@ async function buildAnswerTurns(input: {
         completedAt: null,
         clearedAt: null,
         sealed: await sealJson<TaskSealed>(
-          { title: entry.title, notes: null, steps: {} },
+          { title: entry.title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
           encryption,
         ),
       };
@@ -1295,7 +1300,7 @@ async function buildPlanDays(input: {
     completedAt: at(yesterdayKey, '14:25'),
     clearedAt: null,
     sealed: await sealJson<TaskSealed>(
-      { title: doneTitle, notes: null, steps: {} },
+      { title: doneTitle, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
       encryption,
     ),
   };
@@ -1416,6 +1421,8 @@ export const wordsOf = (
   notes: null,
   species: null,
   organizationKind: null,
+  privateMark: null,
+  isPrivacyCleared: false,
   ...extra,
 });
 
@@ -1607,7 +1614,8 @@ async function buildProjects(input: {
         title,
         notes: null,
         steps: {},
-        ...(fields.privacy === 'private' && { privateMark: 'health' }),
+        privateMark: fields.privacy === 'private' ? 'health' : null,
+        isPrivacyCleared: false,
       }),
     },
   });
@@ -1639,6 +1647,8 @@ async function buildProjects(input: {
           'seed-milestone-wedding-3': { title: 'Pick the menu' },
         },
         roleNotes: { 'seed-who-dana': 'florist' },
+        privateMark: null,
+        isPrivacyCleared: false,
       },
       {
         'seed-milestone-wedding-1': {
@@ -1669,6 +1679,8 @@ async function buildProjects(input: {
         objective: null,
         milestones: { 'seed-milestone-move-1': { title: 'Keys handed over' } },
         roleNotes: {},
+        privateMark: null,
+        isPrivacyCleared: false,
       },
       {
         'seed-milestone-move-1': {
@@ -1848,7 +1860,7 @@ async function buildNoteTurn(input: {
     executionId: CAPTURE_NOTE_EXECUTION_ID,
     createdAt: sortedAt,
     lastEditedAt: null,
-    sealed: await sealJson<NoteSealed>({ title, body }, encryption),
+    sealed: await sealJson<NoteSealed>({ title, body, privateMark: null, isPrivacyCleared: false }, encryption),
   };
   return { capture, execution, note };
 }
@@ -1897,7 +1909,7 @@ async function buildKnowledge(input: {
       lastWrittenAt:
         document.version > 0 ? (document.writtenAt ?? now - 2 * DAY_MS) : null,
       sealed: await sealJson<TopicSealed>(
-        { name, emoji, overview: null, sections: document.sections },
+        { name, emoji, overview: null, sections: document.sections, privateMark: null, isPrivacyCleared: false },
         encryption,
       ),
     },
@@ -2201,7 +2213,7 @@ async function buildKnowledge(input: {
       createdAt: now - (21 - index) * DAY_MS,
       lastEditedAt: null,
       ...extra,
-      sealed: await sealJson<NoteSealed>({ title, body }, encryption),
+      sealed: await sealJson<NoteSealed>({ title, body, privateMark: null, isPrivacyCleared: false }, encryption),
     },
   });
   const car = 'seed-topic-car';
@@ -2693,7 +2705,7 @@ async function buildProcedures(input: {
       groups: Object.fromEntries(
         groups.map((group) => [group.id, { name: group.name }]),
       ),
-    } satisfies ProcedureSealed,
+    } satisfies ProcedureBody,
   });
   const build = async (
     id: string,
@@ -2716,7 +2728,10 @@ async function buildProcedures(input: {
         executionId: null,
         createdAt: history[0].at,
         lastEditedAt: latest.at,
-        sealed: await sealJson<ProcedureSealed>(parts.body, encryption),
+        sealed: await sealJson<ProcedureSealed>(
+          { ...parts.body, privateMark: null, isPrivacyCleared: false },
+          encryption,
+        ),
       } satisfies Procedure,
       versions: await Promise.all(
         history.map(async (entry, index) => {
@@ -3192,7 +3207,7 @@ async function buildPhotoTurns(input: {
     completedAt: null,
     clearedAt: null,
     sealed: await sealJson<TaskSealed>(
-      { title, notes: null, steps: {} },
+      { title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
       encryption,
     ),
   };
@@ -3555,7 +3570,7 @@ async function buildFileTurns(input: {
       lastEditedAt: null,
       completedAt: null,
       clearedAt: null,
-      sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
+      sealed: await seal<TaskSealed>({ title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false }),
     };
     return { id, task };
   };
@@ -3647,7 +3662,7 @@ async function buildFileTurns(input: {
     executionId: mdExecution,
     createdAt: mdAt,
     lastEditedAt: null,
-    sealed: await seal<NoteSealed>({ title: noteTitle, body: mdText }),
+    sealed: await seal<NoteSealed>({ title: noteTitle, body: mdText, privateMark: null, isPrivacyCleared: false }),
   };
   const topic: Topic = {
     privacy: 'ordinary',
@@ -3669,6 +3684,8 @@ async function buildFileTurns(input: {
       emoji: null,
       overview: null,
       sections,
+      privateMark: null,
+      isPrivacyCleared: false,
     }),
   };
   const version: TopicVersion = {
@@ -3942,6 +3959,8 @@ async function buildPeople(input: {
       aliases: [],
       address: null,
       notes: null,
+      privateMark: null,
+      isPrivacyCleared: false,
     }),
   };
   const taskOf = async (
@@ -3974,7 +3993,7 @@ async function buildPeople(input: {
       lastEditedAt: null,
       completedAt: null,
       clearedAt: null,
-      sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
+      sealed: await seal<TaskSealed>({ title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false }),
     },
   });
   const tasks = await Promise.all([
@@ -4382,6 +4401,8 @@ async function buildPeople(input: {
             (id === 'seed-fact-dana-florist' ? 'Dana is the florist' : null),
           topic: topic ?? null,
           value: value ?? null,
+          privateMark: null,
+          isPrivacyCleared: false,
         }),
       },
     };
@@ -5025,7 +5046,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                 completedAt: null,
                 clearedAt: null,
                 sealed: await sealJson<TaskSealed>(
-                  { title, notes: null, steps: {} },
+                  { title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
                   encryption,
                 ),
               };
@@ -5199,6 +5220,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                     { text: (entry.steps ?? [])[order] },
                   ]),
                 ),
+                privateMark: null,
+                isPrivacyCleared: false,
               },
               encryption,
             ),

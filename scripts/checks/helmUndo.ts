@@ -32,6 +32,8 @@ const sealedOf = (title: string): TaskSealed => ({
   title,
   notes: 'Ask about the cake',
   steps: { a: { text: 'Find the number' } },
+  privateMark: null,
+  isPrivacyCleared: false,
 });
 
 const target = (
@@ -1012,6 +1014,8 @@ const projectSealed = (
   objective: null,
   milestones,
   roleNotes,
+  privateMark: null,
+  isPrivacyCleared: false,
 });
 
 test('a project the turn made is deleted by its undo, and says projects', () => {
@@ -1224,6 +1228,8 @@ const topicSealed = (name: string): TopicSealed => ({
   emoji: null,
   overview: null,
   sections: [],
+  privateMark: null,
+  isPrivacyCleared: false,
 });
 
 const topicTarget = (
@@ -1761,6 +1767,8 @@ const procedureSealed = (title: string): ProcedureSealed => ({
   title,
   steps: { a: { text: 'Laptop', detail: null } },
   groups: {},
+  privateMark: null,
+  isPrivacyCleared: false,
 });
 
 const procedureTarget = (

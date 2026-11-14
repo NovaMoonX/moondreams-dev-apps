@@ -78,7 +78,13 @@ async function openWho(
       isUnreadable: false,
     };
   } catch {
-    return { ...base, ...empty, isUnreadable: true };
+    return {
+      ...base,
+      ...empty,
+      isUnreadable: true,
+      privateMark: null,
+      isPrivacyCleared: false,
+    };
   }
 }
 

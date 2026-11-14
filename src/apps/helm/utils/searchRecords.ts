@@ -1,5 +1,9 @@
 import { toComparable } from '@/utils/optionMatchUtils';
 import { formatYearlyDate } from '@/utils/yearlyDateUtils';
+import type {
+  PrivacyRecord,
+  PrivateKind,
+} from '@apps/helm/utils/privacyParents';
 import { HELM_COPY } from '@apps/helm/constants';
 import type {
   KeyDateKind,
@@ -107,6 +111,8 @@ export interface SearchEntry {
   bodyText: string;
   target: SearchTarget;
   mark: SearchMark;
+  /** What the row's lock is read from; left out where a row has none. */
+  privacy?: { kind: PrivateKind; record: PrivacyRecord };
   /** Lower first. */
   tier: number;
   /** Higher first within a tier; 0 where A to Z decides. */
@@ -222,6 +228,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
     ...whoTexts[index],
     target: { kind: 'view', view: 'who', id: entry.id },
     mark: { kind: 'who', who: entry },
+    privacy: { kind: 'who', record: entry },
     tier: 0,
     recency: 0,
   }));
@@ -257,6 +264,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
       })),
       target: { kind: 'task', id: task.id },
       mark: isDone ? { kind: 'done', completedAt: task.completedAt } : null,
+      privacy: { kind: 'task', record: task },
       tier: isDone ? 1 : 0,
       recency: isDone ? (task.completedAt ?? task.createdAt) : task.createdAt,
     };
@@ -319,6 +327,10 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
         bodyText: year === null ? '' : String(year),
         target: owner.target,
         mark: null,
+        privacy: {
+          kind: 'fact',
+          record: { id, subjectIds: [owner.who.id] },
+        },
         tier: 0,
         recency: 0,
       }),
@@ -351,6 +363,10 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
             bodyText: String(moment.year),
             target: owner.target,
             mark: null,
+            privacy: {
+              kind: 'fact',
+              record: { id: moment.id, subjectIds: [owner.who.id] },
+            },
             tier: 1,
             recency: moment.year,
           }
@@ -372,6 +388,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
       })),
       target: toFactTarget(fact, whoIds, placeIds, projectIds),
       mark: null,
+      privacy: { kind: 'fact', record: fact },
       tier: 0,
       recency: fact.lastEditedAt ?? fact.createdAt,
     }));
@@ -397,6 +414,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
       bodyText: `${toText(...names)} ${texts.bodyText}`,
       target: { kind: 'note', id: note.id },
       mark: null,
+      privacy: { kind: 'note', record: note },
       tier: 0,
       recency: note.lastEditedAt ?? note.createdAt,
     };
@@ -420,6 +438,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
     })),
     target: { kind: 'view', view: 'topic', id: topic.id },
     mark: null,
+    privacy: { kind: 'topic', record: topic },
     tier: 0,
     recency: 0,
   }));
@@ -441,6 +460,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
       ),
       target: { kind: 'view', view: 'project', id: project.id },
       mark: null,
+      privacy: { kind: 'project', record: project },
       tier: project.status === 'finished' ? 1 : 0,
       recency: 0,
     }));
@@ -457,6 +477,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
     ),
     target: { kind: 'view', view: 'procedure', id: procedure.id },
     mark: null,
+    privacy: { kind: 'procedure', record: procedure },
     tier: 0,
     recency: 0,
   }));
@@ -470,6 +491,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
       bodyText: toText(...place.aliases, place.address, place.notes),
       target: { kind: 'view', view: 'place', id: place.id },
       mark: null,
+      privacy: { kind: 'place', record: place },
       tier: 0,
       recency: 0,
     }));

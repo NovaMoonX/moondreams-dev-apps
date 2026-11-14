@@ -28,6 +28,7 @@ import type {
   HelmEncryption,
   OpenTask,
   Procedure,
+  ProcedureBody,
   ProcedureSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
@@ -59,7 +60,7 @@ const toChunks = <T>(items: T[]) =>
 export interface ProcedureParts {
   stepState: Record<string, StepPlace>;
   groupOrder: string[];
-  body: ProcedureSealed;
+  body: ProcedureBody;
 }
 
 /** A procedure's version document as the person's device writes it, holding the whole procedure at that version. */
@@ -123,7 +124,10 @@ export async function createProcedure(
     privacy: 'ordinary',
     createdAt: now,
     lastEditedAt: now,
-    sealed: await sealJson<ProcedureSealed>(parts.body, encryption),
+    sealed: await sealJson<ProcedureSealed>(
+      { ...parts.body, privateMark: null, isPrivacyCleared: false },
+      encryption,
+    ),
   };
   const batch = writeBatch(db);
   batch.set(ref, made);
@@ -237,7 +241,14 @@ async function writeVersion(
         transaction.update(ref, {
           stepState: step.parts.stepState,
           groupOrder: step.parts.groupOrder,
-          sealed: await sealJson<ProcedureSealed>(step.parts.body, encryption),
+          sealed: await sealJson<ProcedureSealed>(
+            {
+              ...step.parts.body,
+              privateMark: opened.privateMark ?? null,
+              isPrivacyCleared: opened.isPrivacyCleared ?? null,
+            },
+            encryption,
+          ),
           version,
           lastEditedAt: now,
         });

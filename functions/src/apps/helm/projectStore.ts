@@ -19,6 +19,7 @@ const MAX_PROJECTS_READ = 200;
 export interface ContextProject {
   name: string;
   milestones: { title: string; date: string | null }[];
+  isPrivate?: boolean;
 }
 
 const isRole = (value: unknown): value is ProjectRoleName =>
@@ -93,6 +94,7 @@ const openProjects = (
               roleNotes: toNotes(words.roleNotes),
               milestoneState: toMilestoneState(doc.get('milestoneState')),
               milestoneTitles: toMilestoneTitles(words.milestones),
+              isPrivate: doc.get('privacy') === 'private',
               sealed: words,
             },
           ],
@@ -135,6 +137,7 @@ export async function readContextProjects(
     .slice(0, max)
     .map((project) => ({
       name: project.name,
+      isPrivate: project.isPrivate === true,
       milestones: Object.entries(project.milestoneState)
         .flatMap(([id, state]) =>
           state.doneAt === null && project.milestoneTitles[id]

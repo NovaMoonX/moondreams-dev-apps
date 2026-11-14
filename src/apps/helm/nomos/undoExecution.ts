@@ -610,7 +610,15 @@ export async function undoExecution(
                 stepState: restored.procedure.stepState,
                 groupOrder: restored.procedure.groupOrder,
                 sealed: await sealJson<ProcedureSealed>(
-                  restored.procedure.body,
+                  {
+                    ...restored.procedure.body,
+                    privateMark:
+                      (targets.get(docId)?.opened as ProcedureSealed | null)
+                        ?.privateMark ?? null,
+                    isPrivacyCleared:
+                      (targets.get(docId)?.opened as ProcedureSealed | null)
+                        ?.isPrivacyCleared ?? null,
+                  },
                   encryption,
                 ),
                 version: from + 1,

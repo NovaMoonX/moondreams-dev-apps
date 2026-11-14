@@ -60,6 +60,8 @@ async function openPlace(
       address: null,
       notes: null,
       isUnreadable: true,
+      privateMark: null,
+      isPrivacyCleared: false,
     };
   }
 }

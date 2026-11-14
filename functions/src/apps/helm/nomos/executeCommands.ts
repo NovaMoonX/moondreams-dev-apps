@@ -1,6 +1,7 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import {
   readEffectivePrivacy,
+  readPrivacyFacts,
   readPrivateMark,
   readSetPrivate,
   type PrivacyFacts,
@@ -1320,6 +1321,24 @@ export function planWrites(input: PlanInput): WritePlan {
           ],
         };
       }
+      const factMark = readPrivateMark({
+        current: { privateMark: null, isPrivacyCleared: false },
+        isCare: false,
+        isForOtherWho: false,
+        commandMark: null,
+        isSensitiveHealth: fact.isSensitive === true,
+        words: fact.statement,
+      });
+      const factPrivacy = readEffectivePrivacy(
+        factMark,
+        subjectIds.flatMap(
+          (id) =>
+            input.people?.known.find((who) => who.id === id)?.privacyFacts ??
+            input.people?.knownPlaces.find((place) => place.id === id)
+              ?.privacyFacts ??
+            [],
+        ),
+      );
       const existing = existingByKey.get(repeatKey);
       const contradicted =
         existing ||
@@ -1436,6 +1455,7 @@ export function planWrites(input: PlanInput): WritePlan {
           {
             id,
             data: {
+              privacy: factPrivacy,
               status,
               stated,
               kind: fact.kind,
@@ -1462,6 +1482,8 @@ export function planWrites(input: PlanInput): WritePlan {
                 quote,
                 topic,
                 value: fact.value,
+                privateMark: factMark.privateMark,
+                isPrivacyCleared: false,
               }),
             },
           },
@@ -1797,6 +1819,34 @@ export function planWrites(input: PlanInput): WritePlan {
     ]),
   ];
 
+  const parentFactsOf = (draft: Draft): PrivacyFacts[] => [
+    ...draft.whoIds.flatMap(
+      (id) =>
+        input.people?.known.find((who) => who.id === id)?.privacyFacts ?? [],
+    ),
+    ...draft.placeIds.flatMap(
+      (id) =>
+        input.people?.knownPlaces.find((place) => place.id === id)
+          ?.privacyFacts ?? [],
+    ),
+    ...(draft.projectId
+      ? (input.existingProjects ?? []).flatMap((project) =>
+          project.id === draft.projectId
+            ? [
+                readPrivacyFacts({
+                  privateMark:
+                    project.sealed.privateMark === 'health' ||
+                    project.sealed.privateMark === 'care' ||
+                    project.sealed.privateMark === 'person'
+                      ? project.sealed.privateMark
+                      : null,
+                  isPrivacyCleared: project.sealed.isPrivacyCleared === true,
+                }),
+              ]
+            : [],
+        )
+      : []),
+  ];
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
     const facts = readPrivateMark({
@@ -1823,7 +1873,7 @@ export function planWrites(input: PlanInput): WritePlan {
     return {
       id: draft.id,
       data: {
-        privacy: readEffectivePrivacy(facts),
+        privacy: readEffectivePrivacy(facts, parentFactsOf(draft)),
         status: draft.status,
         importance: null,
         isUrgent: draft.isUrgent,
@@ -2304,6 +2354,7 @@ export function planWrites(input: PlanInput): WritePlan {
     notKept: [...notKept, ...knowledge.notKept],
     isPrivate:
       creates.some((made) => made.data.privacy === 'private') ||
+      factCreates.some((made) => made.data.privacy === 'private') ||
       input.commands.some(
         (command) =>
           command.kind !== 'createTask' &&

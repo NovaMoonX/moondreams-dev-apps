@@ -68,7 +68,15 @@ export async function openTask(
       isUnreadable: false,
     };
   } catch {
-    return { ...base, title: '', notes: null, steps: {}, isUnreadable: true };
+    return {
+      ...base,
+      title: '',
+      notes: null,
+      steps: {},
+      isUnreadable: true,
+      privateMark: null,
+      isPrivacyCleared: false,
+    };
   }
 }
 

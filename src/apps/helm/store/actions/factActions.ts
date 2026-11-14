@@ -47,7 +47,14 @@ export async function confirmCalendarRight(
   const oldRef = doc(facts, fact.id);
   const newRef = doc(facts);
   const sealed = await sealJson<FactSealed>(
-    { statement, quote: null, topic: fact.topic, value },
+    {
+      statement,
+      quote: null,
+      topic: fact.topic,
+      value,
+      privateMark: null,
+      isPrivacyCleared: false,
+    },
     encryption,
   );
   const now = Date.now();

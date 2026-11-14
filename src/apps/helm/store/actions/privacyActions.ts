@@ -1,7 +1,10 @@
 import {
   collection,
   doc,
+  getDocs,
+  query,
   runTransaction,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -75,6 +78,93 @@ const readChildren = (): Child[] =>
     readRecords(kind).map((record) => ({ kind, record })),
   );
 
+const LINK_FIELDS: Record<
+  PrivateKind,
+  Partial<Record<ParentKind, [string, 'eq' | 'has']>>
+> = {
+  task: {
+    project: ['projectId', 'eq'],
+    who: ['whoIds', 'has'],
+    place: ['placeIds', 'has'],
+  },
+  fact: {
+    project: ['projectIds', 'has'],
+    who: ['subjectIds', 'has'],
+    place: ['subjectIds', 'has'],
+  },
+  note: { project: ['projectIds', 'has'] },
+  topic: { project: ['projectIds', 'has'] },
+  project: {},
+  who: {},
+  place: {},
+  procedure: {},
+};
+
+const asIds = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+
+/** Every child filed under or about a parent, read from the database so one the screen never loaded is not missed; the store's copy wins where both have it. */
+async function readLinkedChildren(
+  uid: string,
+  encryption: HelmEncryption,
+  parentKind: ParentKind,
+  parentId: string,
+): Promise<Child[]> {
+  const loaded = new Set(readChildren().map((child) => child.record.id));
+  const found = await Promise.all(
+    CHILD_KINDS.flatMap((kind) => {
+      const link = LINK_FIELDS[kind][parentKind];
+      if (!link) return [];
+      return [
+        getDocs(
+          query(
+            collectionOf(uid, kind),
+            where(
+              link[0],
+              link[1] === 'eq' ? '==' : 'array-contains',
+              parentId,
+            ),
+          ),
+        ).then((snapshot) =>
+          Promise.all(
+            snapshot.docs
+              .filter((entry) => !loaded.has(entry.id))
+              .map(async (entry): Promise<Child[]> => {
+                const data = entry.data() as Record<string, unknown>;
+                const opened = await openJson<Record<string, unknown>>(
+                  data.sealed as Sealed,
+                  encryption,
+                ).catch(() => null);
+                if (!opened) return [];
+                return [
+                  {
+                    kind,
+                    record: {
+                      id: entry.id,
+                      privacy: data.privacy === 'private' ? 'private' : null,
+                      projectId:
+                        typeof data.projectId === 'string'
+                          ? data.projectId
+                          : null,
+                      projectIds: asIds(data.projectIds),
+                      whoIds: asIds(data.whoIds),
+                      placeIds: asIds(data.placeIds),
+                      subjectIds: asIds(data.subjectIds),
+                      ...readPrivacyFacts(opened as Partial<PrivacyFacts>),
+                    },
+                  },
+                ];
+              }),
+          ),
+        ),
+      ];
+    }),
+  );
+  return [...readChildren(), ...found.flat(2)];
+}
+
 export type PrivacyWrite =
   | { kind: 'saved'; previous: PrivacyFacts }
   | { kind: 'offline' | 'missing' | 'unreadable' };
@@ -116,8 +206,14 @@ export async function writePrivacy(
 }
 
 /** Rewrites the class of every child whose parents or mark now give another one, in batches of 450. */
-export async function rewriteChildren(uid: string) {
-  const updates = planCascade(readChildren(), readParentIndex());
+export async function rewriteChildren(
+  uid: string,
+  parent?: { kind: ParentKind; id: string; encryption: HelmEncryption },
+) {
+  const children = parent
+    ? await readLinkedChildren(uid, parent.encryption, parent.kind, parent.id)
+    : readChildren();
+  const updates = planCascade(children, readParentIndex());
   const chunks = Array.from(
     { length: Math.ceil(updates.length / BATCH_SIZE) },
     (_, index) => updates.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE),
@@ -134,6 +230,11 @@ export async function rewriteChildren(uid: string) {
     }),
   );
 }
+
+const toParent = (kind: PrivateKind, id: string, encryption: HelmEncryption) =>
+  kind === 'project' || kind === 'who' || kind === 'place'
+    ? { kind, id, encryption }
+    : undefined;
 
 export type SetPrivateResult =
   | { kind: 'saved'; undo: () => Promise<void> }
@@ -170,7 +271,8 @@ export async function setPrivate(
     parentFacts,
   );
   if (written.kind !== 'saved') return written;
-  await rewriteChildren(uid);
+  const parent = toParent(kind, id, encryption);
+  await rewriteChildren(uid, parent);
   return {
     kind: 'saved',
     undo: async () => {
@@ -182,7 +284,7 @@ export async function setPrivate(
         () => written.previous,
         parentFacts,
       );
-      await rewriteChildren(uid);
+      await rewriteChildren(uid, parent);
     },
   };
 }
@@ -194,9 +296,14 @@ export async function keepInheritedPrivate(
   parentId: string,
 ) {
   const index = readParentIndex();
-  const kept = planKeepOnLeaving(parentKind, parentId, readChildren(), index);
-  if (kept.length === 0) return;
   const encryption = await getHelmEncryption(uid);
+  const kept = planKeepOnLeaving(
+    parentKind,
+    parentId,
+    await readLinkedChildren(uid, encryption, parentKind, parentId),
+    index,
+  );
+  if (kept.length === 0) return;
   await Promise.all(
     kept.map((child) =>
       writePrivacy(

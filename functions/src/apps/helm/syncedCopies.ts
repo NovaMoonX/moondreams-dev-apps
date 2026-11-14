@@ -31,6 +31,7 @@ export interface SyncedCopy {
   extra: Record<string, ExtraValue>;
   /** When the source last worked the copy out; null when it did not say. */
   asOf: number | null;
+  isPrivate?: boolean;
 }
 
 export const MAX_CONTEXT_SYNCED = 40;
@@ -199,6 +200,7 @@ export function openSyncedCopy(
       currency: typeof opened.currency === 'string' ? opened.currency : null,
       extra: toExtra(kind, opened.extra),
       asOf: toNumber(data.sourceUpdatedAt),
+      isPrivate: data.privacy === 'private',
     };
   } catch {
     return null;

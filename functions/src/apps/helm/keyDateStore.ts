@@ -147,6 +147,7 @@ export interface ContextKeyDate {
   kind: string;
   label: string | null;
   when: string;
+  isPrivate?: boolean;
 }
 
 /** One of the next dates that come back, for a question about what is coming up. */
@@ -154,6 +155,7 @@ export interface ContextUpcoming {
   who: string;
   what: string;
   on: string;
+  isPrivate?: boolean;
 }
 
 const ABOUT_DATES_RE =
@@ -210,6 +212,11 @@ export async function readContextKeyDates(
             'iu',
           ).test(input.text),
       );
+    const privateWho = new Set(
+      snaps.flatMap((snap) =>
+        snap.exists && snap.get('privacy') === 'private' ? [snap.id] : [],
+      ),
+    );
     const displayOf = (id: string) =>
       id === input.selfWhoId ? 'You' : (names.get(id)?.[0] ?? '');
     const isMine = /\b(my|our|i|me)\b/i.test(input.text);
@@ -226,6 +233,7 @@ export async function readContextKeyDates(
         who: displayOf(whoId),
         kind: entry[1],
         label: entry[5],
+        isPrivate: privateWho.has(whoId),
         when: formatYearlyDate({
           month: entry[2],
           day: entry[3],
@@ -245,6 +253,7 @@ export async function readContextKeyDates(
                     ),
                     who: displayOf(whoId),
                     what: whatOf(entry[1], entry[5]),
+                    isPrivate: privateWho.has(whoId),
                   },
                 ],
           )

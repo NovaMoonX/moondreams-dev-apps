@@ -5,6 +5,7 @@ import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts'
 import type { CaptureReading } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { planWrites } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import {
+  maskContextRecords,
   toContextTask,
   type MaskedName,
 } from '../../functions/src/apps/helm/nomos/unattended.ts';
@@ -547,6 +548,237 @@ test('a task made with a health word is private and carries the reason, one with
   const milk = made('Buy milk');
   assert.equal(milk.creates[0].data.privacy, 'ordinary');
   assert.equal(milk.isPrivate, false);
+});
+
+test('a task made under a private project is stored private from the start, one under an ordinary project is not', () => {
+  const project = (id: string, name: string, mark: 'health' | null) => ({
+    id,
+    name,
+    emoji: null,
+    whoRoles: {},
+    roleNotes: {},
+    milestoneState: {},
+    milestoneTitles: {},
+    sealed: { name, privateMark: mark, isPrivacyCleared: false },
+  });
+  const made = (projectRef: string) =>
+    planWrites({
+      commands: [
+        {
+          kind: 'createTask',
+          ref: '$new1',
+          title: 'Book the visit',
+          due: null,
+          isUrgent: false,
+          whoRefs: [],
+          placeRefs: [],
+          projectRef,
+        },
+      ],
+      existing: new Map(),
+      existingProjects: [
+        project('p1', 'Fertility plan', 'health'),
+        project('p2', 'Garden', null),
+      ],
+      captureId: 'capture-1',
+      executionId: 'exec-1',
+      now: 5000,
+      seal: seal as never,
+      newId: () => 'new-1',
+    });
+  const inherited = made('Fertility plan');
+  assert.equal(inherited.creates[0].data.privacy, 'private');
+  assert.equal(inherited.isPrivate, true);
+  assert.equal(made('Garden').creates[0].data.privacy, 'ordinary');
+});
+
+test('on an unattended turn every private record kind reaches the model as a label, and an ordinary one as itself', () => {
+  const mask = (isOn: boolean) => ({
+    isOn,
+    names: [] as { name: string; label: string }[],
+  });
+  const input = {
+    facts: [
+      {
+        id: 'f1',
+        subject: 'Ann',
+        statement: 'has a rash',
+        by: 'said' as const,
+        isPrivate: true,
+        isSubjectPrivate: false,
+      },
+      {
+        id: 'f2',
+        subject: 'Dr Lee',
+        statement: 'is kind',
+        by: 'said' as const,
+        isPrivate: true,
+        isSubjectPrivate: true,
+      },
+      {
+        id: 'f3',
+        subject: 'Ann',
+        statement: 'likes tea',
+        by: 'said' as const,
+        isPrivate: false,
+        isSubjectPrivate: false,
+      },
+    ],
+    selfFacts: [
+      {
+        id: 's1',
+        kind: 'preference' as const,
+        topic: 'meds',
+        value: 'statin',
+        statement: 'takes statin',
+        by: 'said' as const,
+        isPrivate: true,
+      },
+    ],
+    keyDates: [
+      {
+        id: 'k1',
+        who: 'Dr Lee',
+        kind: 'custom',
+        label: 'surgery',
+        when: 'Mar 3',
+        isPrivate: true,
+      },
+    ],
+    upcoming: [
+      { who: 'Dr Lee', what: 'surgery', on: '2026-03-03', isPrivate: true },
+    ],
+    projects: [
+      {
+        name: 'Fertility plan',
+        milestones: [{ title: 'Clinic visit', date: null }],
+        isPrivate: true,
+      },
+    ],
+    topics: [
+      { id: 't1', name: 'Therapy', path: 'Health › Therapy', isPrivate: true },
+    ],
+    notes: [
+      { id: 'n1', title: 'Lab results', body: 'LDL high', isPrivate: true },
+    ],
+    procedures: [
+      { id: 'p1', title: 'Wound care', stepCount: 3, isPrivate: true },
+    ],
+    focusedProcedure: {
+      id: 'p1',
+      title: 'Wound care',
+      version: 1,
+      blocks: [
+        {
+          groupId: null,
+          name: null,
+          steps: [{ id: 'a', text: 'Clean the cut', detail: null, order: 0 }],
+        },
+      ],
+      isPrivate: true,
+    },
+    focusedTopic: {
+      id: 't1',
+      name: 'Therapy',
+      version: 1,
+      isPrivate: true,
+      sections: [
+        {
+          id: 's',
+          heading: null,
+          markdown: 'Panic attacks',
+          writtenBy: 'person' as const,
+          noteIds: [],
+        },
+      ],
+    },
+    runs: [
+      {
+        id: 'r1',
+        title: 'Wound care',
+        forLabel: 'Sam',
+        isOpen: true,
+        doneCount: 0,
+        total: 1,
+        isPrivate: true,
+        undone: [{ id: 'a', text: 'Clean the cut', group: null }],
+      },
+    ],
+    synced: [
+      {
+        id: 'c1',
+        connectorId: 'x',
+        accountId: 'y',
+        kind: 'event',
+        category: null,
+        title: 'Clinic with Dr Lee',
+        subtitle: 'Room 4',
+        startAt: 1,
+        endAt: null,
+        dueAt: null,
+        isAllDay: false,
+        isEnded: false,
+        detail: 'bring forms',
+        placeLabel: 'Clinic',
+        amountCents: 500,
+        currency: 'USD',
+        extra: {},
+        asOf: null,
+        isPrivate: true,
+      },
+    ],
+  };
+  const on = mask(true);
+  const out = maskContextRecords(on, input as never);
+  const seen = JSON.stringify(out);
+  [
+    'Sam',
+    'rash',
+    'Dr Lee',
+    'statin',
+    'surgery',
+    'Fertility',
+    'Clinic visit',
+    'Therapy',
+    'Lab results',
+    'LDL',
+    'Wound care',
+    'Clean the cut',
+    'Panic',
+    'Room 4',
+    'bring forms',
+    'Mar 3',
+  ].forEach((word) => assert.ok(!seen.includes(word), `${word} leaked`));
+  assert.ok(seen.includes('likes tea') && seen.includes('Ann'));
+  assert.ok(on.names.some((entry) => entry.name === 'LDL high'));
+  const off = mask(false);
+  assert.equal(
+    JSON.stringify(maskContextRecords(off, input as never)).includes(
+      'Wound care',
+    ),
+    true,
+  );
+  assert.equal(off.names.length, 0);
+});
+
+test('a private record read on an ordinary turn is remembered so an answer that quotes it marks the turn', () => {
+  const mask = {
+    isOn: false,
+    names: [] as { name: string; label: string }[],
+    quoted: [] as { name: string; label: string }[],
+  };
+  const out = maskContextRecords(mask, {
+    notes: [
+      { id: 'n1', title: 'Lab results', body: 'LDL high', isPrivate: true },
+    ],
+    synced: [],
+  } as never);
+  assert.equal(out.notes?.[0].title, 'Lab results');
+  assert.equal(mask.names.length, 0);
+  const quoting = (text: string) =>
+    maskPrivateNames(text, mask.quoted) !== text;
+  assert.equal(quoting('Your Lab results say LDL high.'), true);
+  assert.equal(quoting('Nothing private here.'), false);
 });
 
 const failures = tests.flatMap(([name, run]) => {

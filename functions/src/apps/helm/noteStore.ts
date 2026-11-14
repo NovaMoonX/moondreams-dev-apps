@@ -23,6 +23,7 @@ export interface OpenTopicRecord extends ContextTopic {
   parentId: string | null;
   docState: 'empty' | 'current' | 'behind' | 'writing' | 'failed';
   pendingNoteIds: string[];
+  isPrivate: boolean;
 }
 
 /** Opens a topic document; null when its words will not open. */
@@ -43,6 +44,7 @@ export const openTopicRecord = (
           : null,
       parentId: typeof data.parentId === 'string' ? data.parentId : null,
       docState: toDocState(data.docState),
+      isPrivate: data.privacy === 'private',
       pendingNoteIds: Array.isArray(data.pendingNoteIds)
         ? data.pendingNoteIds.filter(
             (entry): entry is string => typeof entry === 'string',
@@ -130,6 +132,7 @@ export async function readHintedNotes(
                 id: snapshot.id,
                 title: words.title,
                 body: words.body,
+                isPrivate: data.privacy === 'private',
                 isUnchecked:
                   data.isFromGeneralAnswer === true && data.checkedAt == null,
                 topicIds: Array.isArray(data.topicIds)

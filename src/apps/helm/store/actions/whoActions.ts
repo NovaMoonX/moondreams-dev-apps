@@ -479,6 +479,8 @@ export async function ensureSelfWho(
       notes: null,
       species: null,
       organizationKind: null,
+      privateMark: null,
+      isPrivacyCleared: false,
     },
     encryption,
   );

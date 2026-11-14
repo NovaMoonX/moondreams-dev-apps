@@ -117,6 +117,8 @@ async function openProject(
       milestones: {},
       roleNotes: {},
       isUnreadable: true,
+      privateMark: null,
+      isPrivacyCleared: false,
     };
   }
 }

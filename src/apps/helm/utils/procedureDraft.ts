@@ -7,7 +7,7 @@ import {
   PROCEDURE_STEPS_MAX,
   PROCEDURE_TITLE_CAP,
 } from '@apps/helm/constants';
-import type { ProcedureSealed } from '@apps/helm/types';
+import type { ProcedureBody } from '@apps/helm/types';
 import {
   flattenSteps,
   groupSteps,
@@ -34,7 +34,7 @@ export interface ProcedureDraft {
   steps: DraftStep[];
 }
 
-interface Source extends ProcedureSealed {
+interface Source extends ProcedureBody {
   stepState: Record<string, StepPlace>;
   groupOrder: string[];
 }
@@ -260,7 +260,7 @@ export const toStoredParts = (content: ProcedureDraft) => ({
     groups: Object.fromEntries(
       content.groups.map((group) => [group.id, { name: group.name }]),
     ),
-  } satisfies ProcedureSealed,
+  } satisfies ProcedureBody,
 });
 
 /** One line for History: what the person's save changed, at most three parts. */

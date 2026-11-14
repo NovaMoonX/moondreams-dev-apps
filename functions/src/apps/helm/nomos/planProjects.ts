@@ -40,6 +40,7 @@ export interface ExistingProject {
   milestoneState: Record<string, ExistingMilestoneState>;
   /** Milestone titles by id; an id with no state, or a state with no title, is not a milestone. */
   milestoneTitles: Record<string, string>;
+  isPrivate?: boolean;
   sealed: Record<string, unknown>;
 }
 

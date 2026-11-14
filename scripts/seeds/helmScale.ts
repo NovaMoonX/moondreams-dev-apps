@@ -34,6 +34,7 @@ import type {
   NoteSealed,
   Procedure,
   ProcedureRun,
+  ProcedureBody,
   ProcedureSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
@@ -849,6 +850,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             'm-2': { title: 'Final stage' },
           },
           roleNotes: {},
+          privateMark: null,
+          isPrivacyCleared: false,
         }),
       };
       return { id, project };
@@ -901,6 +904,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         notes:
           index % 9 === 0 ? 'Ask for the earlier slot if there is one.' : null,
         steps: {},
+        privateMark: null,
+        isPrivacyCleared: false,
       }),
     };
     return { id: `scale-task-${pad(index, 3)}`, task };
@@ -942,6 +947,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         quote: null,
         topic: index % 4 === 1 ? 'coffee' : null,
         value: null,
+        privateMark: null,
+        isPrivacyCleared: false,
       }),
     };
     return { id: `scale-fact-${pad(index)}`, fact };
@@ -1012,6 +1019,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           emoji: null,
           overview: null,
           sections,
+          privateMark: null,
+          isPrivacyCleared: false,
         }),
       };
       const version: TopicVersion = {
@@ -1059,6 +1068,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       sealed: await seal<NoteSealed>({
         title: `Notes on ${subject} ${index + 1}`,
         body: `What worked last time for ${subject}: ${pick(FACT_TEMPLATES)}. Check again before the next ${pick(['season', 'trip', 'service', 'filing'])}.`,
+        privateMark: null,
+        isPrivacyCleared: false,
       }),
     };
     return { id, note };
@@ -1089,7 +1100,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       const stepState = toStepState(
         steps.map(({ id: stepId, groupId }) => ({ id: stepId, groupId })),
       );
-      const body: ProcedureSealed = {
+      const body: ProcedureBody = {
         title,
         steps: Object.fromEntries(
           steps.map((step) => [step.id, { text: step.text, detail: null }]),
@@ -1110,7 +1121,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         executionId: null,
         createdAt: madeAt,
         lastEditedAt: madeAt,
-        sealed: await seal<ProcedureSealed>(body),
+        sealed: await seal<ProcedureSealed>({
+          ...body,
+          privateMark: null,
+          isPrivacyCleared: false,
+        }),
       };
       const version: ProcedureVersion = {
         version: 1,
@@ -1405,7 +1420,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         source.shares.flatMap((share) =>
           share.categories.map((category) => [
             category.id,
-            { isOn: used.has(category.id), changedAt: createdAt, seenScopeVersion: null },
+            {
+              isOn: used.has(category.id),
+              changedAt: createdAt,
+              seenScopeVersion: null,
+            },
           ]),
         ),
       ),

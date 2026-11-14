@@ -484,7 +484,13 @@ export async function makeTaskAsWritten(
     clearedAt: null,
     privacy: 'ordinary',
     sealed: await sealJson<TaskSealed>(
-      { title, notes: null, steps: {} },
+      {
+        title,
+        notes: null,
+        steps: {},
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       encryption,
     ),
   };

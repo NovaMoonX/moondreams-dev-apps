@@ -517,9 +517,9 @@ export interface WhoSealed {
   /** Organizations only ("Bakery"). */
   organizationKind: string | null;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
-  privateMark?: PrivateMark | null;
+  privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
-  isPrivacyCleared?: boolean | null;
+  isPrivacyCleared: boolean | null;
 }
 
 /** A who after its words are opened; one that would not open keeps `isUnreadable` and an empty name. */
@@ -618,9 +618,9 @@ export interface PlaceSealed {
   address: string | null;
   notes: string | null;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
-  privateMark?: PrivateMark | null;
+  privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
-  isPrivacyCleared?: boolean | null;
+  isPrivacyCleared: boolean | null;
 }
 
 export interface OpenPlace extends Omit<Place, 'sealed'>, PlaceSealed {
@@ -659,9 +659,9 @@ export interface ProjectSealed {
   /** whoId to a short note ("florist"). */
   roleNotes: Record<string, string>;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
-  privateMark?: PrivateMark | null;
+  privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
-  isPrivacyCleared?: boolean | null;
+  isPrivacyCleared: boolean | null;
 }
 
 export interface OpenProject extends Omit<Project, 'sealed'>, ProjectSealed {
@@ -695,9 +695,9 @@ export interface NoteSealed {
   title: string;
   body: string;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
-  privateMark?: PrivateMark | null;
+  privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
-  isPrivacyCleared?: boolean | null;
+  isPrivacyCleared: boolean | null;
 }
 
 export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
@@ -754,9 +754,9 @@ export interface TopicSealed {
   overview: string | null;
   sections: TopicSection[];
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
-  privateMark?: PrivateMark | null;
+  privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
-  isPrivacyCleared?: boolean | null;
+  isPrivacyCleared: boolean | null;
 }
 
 export interface OpenTopic extends Omit<Topic, 'sealed'>, TopicSealed {
@@ -801,14 +801,20 @@ export interface OpenTopicVersion
   id: string;
 }
 
+/** The words of a procedure that a version keeps; the private marks belong to the record, not to a version. */
+export type ProcedureBody = Omit<
+  ProcedureSealed,
+  'privateMark' | 'isPrivacyCleared'
+>;
+
 export interface ProcedureSealed {
   title: string;
   steps: Record<string, StepBody>;
   groups: Record<string, { name: string }>;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
-  privateMark?: PrivateMark | null;
+  privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
-  isPrivacyCleared?: boolean | null;
+  isPrivacyCleared: boolean | null;
 }
 
 /** `apps/helm/users/{uid}/procedures/{id}`: a routine kept once, its steps in named groups. */
@@ -849,7 +855,7 @@ export interface ProcedureVersion {
   sealed: Sealed;
 }
 
-export interface ProcedureVersionSealed extends ProcedureSealed {
+export interface ProcedureVersionSealed extends ProcedureBody {
   changeSummary: string;
   requestQuote: string | null;
 }
@@ -964,9 +970,9 @@ export interface TaskSealed {
   notes: string | null;
   steps: Record<string, { text: string }>;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
-  privateMark?: PrivateMark | null;
+  privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
-  isPrivacyCleared?: boolean | null;
+  isPrivacyCleared: boolean | null;
 }
 
 /** A task after its words are opened; one that would not open keeps `isUnreadable` and an empty title. */
@@ -975,8 +981,8 @@ export interface OpenTask extends Omit<Task, 'sealed'> {
   title: string;
   notes: string | null;
   steps: Record<string, { text: string }>;
-  privateMark?: PrivateMark | null;
-  isPrivacyCleared?: boolean | null;
+  privateMark: PrivateMark | null;
+  isPrivacyCleared: boolean | null;
   isUnreadable: boolean;
 }
 
@@ -1194,9 +1200,9 @@ export interface FactSealed {
   /** The shown text of what the fact says about its field, such as "2:00 PM", or the preferred or favorite thing ("Shell"). */
   value: string | null;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
-  privateMark?: PrivateMark | null;
+  privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
-  isPrivacyCleared?: boolean | null;
+  isPrivacyCleared: boolean | null;
 }
 
 /** A fact after its words are opened; one that would not open is left out. */
@@ -1206,8 +1212,8 @@ export interface OpenFact extends Omit<Fact, 'sealed'> {
   quote: string | null;
   topic: string | null;
   value: string | null;
-  privateMark?: PrivateMark | null;
-  isPrivacyCleared?: boolean | null;
+  privateMark: PrivateMark | null;
+  isPrivacyCleared: boolean | null;
 }
 
 export type PlanSlotStatus = 'suggested' | 'kept' | 'notToday';

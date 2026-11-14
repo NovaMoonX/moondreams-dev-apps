@@ -90,6 +90,8 @@ const toBody = (payload: Partial<ProcedureSealed>): ProcedureSealed => ({
   title: toText(payload.title) ?? '',
   steps: toSteps(payload.steps),
   groups: toGroups(payload.groups),
+  privateMark: payload.privateMark ?? null,
+  isPrivacyCleared: payload.isPrivacyCleared ?? null,
 });
 
 /** A procedure that won't open is skipped, so a half-written one never shows as a blank row. */
