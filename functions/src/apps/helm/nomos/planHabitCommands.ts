@@ -23,6 +23,7 @@ import {
   type HabitCommand,
   type HabitWindowRead,
   type SetCareCommand,
+  type SetMedicineCommand,
   type UpdateHabitCommand,
 } from './commands.js';
 import type {
@@ -45,6 +46,8 @@ import { AUTOMATIC_LEVEL } from './policy.js';
 import { buildSpokenQuestion } from './summaries.js';
 
 const DAY_MS = 86_400_000;
+const MEDICINE_NAME_CAP = 60;
+const MEDICINE_DOSE_CAP = 40;
 const PRIVATE_HABIT = 'Private habit';
 const ROOM_LINE = 'Not kept · too much to save in one go';
 
@@ -54,6 +57,8 @@ export interface HabitPlanInput {
   days: ReadonlyMap<string, LiveHabitDay>;
   selfWhoId: string | null;
   knownWhoIds: ReadonlySet<string>;
+  /** The names a care tick is said with, by who id; a habit whose who is not here is said without one. */
+  whoNames?: ReadonlyMap<string, string>;
   timeZone: string;
   profile: { dayStartTime: string; dayEndTime: string };
   isLearningOn: boolean;
@@ -229,6 +234,15 @@ export const buildCareQuestion = (name: string, habitId: string) => ({
   heldCommands: [{ kind: 'askCare', habitId }],
 });
 
+export const buildMedicineQuestion = (habitId: string) => ({
+  ...baseQuestion,
+  kind: 'whichMedicine' as const,
+  shape: 'freeText' as const,
+  prompt: 'Which medicine is it?',
+  options: [],
+  heldCommands: [{ kind: 'setMedicine', habitId }],
+});
+
 export const buildWhichHabitQuestion = (
   candidates: { id: string; name: string; detail: string | null }[],
   held: Pick<CheckInCommand, 'windowKey' | 'day' | 'status' | 'note'>,
@@ -334,6 +348,7 @@ const planCreate = (
     (DOSE_PATTERN.test(words) ||
       Object.keys(windowState).length >= 2 ||
       (command.timesPerDay ?? 0) >= 2);
+  const isMedicineAsked = isCare && !input.isUnattended;
   const id = input.newId();
   const doc = {
     status: 'active',
@@ -353,6 +368,7 @@ const planCreate = (
     stageWeek: null,
     rejudgeFrom: null,
     careAskedAt: isAsked ? input.now : null,
+    medicineAskedAt: isMedicineAsked ? input.now : null,
     untoldSince: null,
     formedAt: null,
     formedSummary: null,
@@ -402,6 +418,7 @@ const planCreate = (
     endedAt: null,
     retiredAt: null,
     careAskedAt: doc.careAskedAt,
+    medicineAskedAt: doc.medicineAskedAt,
     stage: doc.stage,
     reminder: null,
     history: doc.history,
@@ -425,15 +442,25 @@ const planCreate = (
     ...made,
     habits: new Map(made.habits).set(id, startedHabit),
     creates: [...made.creates, { id, doc }],
-    questions: isAsked
-      ? [
-          ...made.questions,
-          toPlannedQuestion(buildCareQuestion(command.name, id), {
-            id: input.newId(),
-            now: input.now,
-          }),
-        ]
-      : made.questions,
+    questions: [
+      ...made.questions,
+      ...(isAsked
+        ? [
+            toPlannedQuestion(buildCareQuestion(command.name, id), {
+              id: input.newId(),
+              now: input.now,
+            }),
+          ]
+        : []),
+      ...(isMedicineAsked
+        ? [
+            toPlannedQuestion(buildMedicineQuestion(id), {
+              id: input.newId(),
+              now: input.now,
+            }),
+          ]
+        : []),
+    ],
     isPrivate: made.isPrivate || privacy === 'private',
   };
 };
@@ -644,7 +671,7 @@ const applyCare = (
   acc: Acc,
   habit: LiveHabit,
   isCare: boolean,
-  input: Pick<HabitPlanInput, 'now' | 'seal'>,
+  input: Pick<HabitPlanInput, 'now' | 'seal' | 'newId' | 'isUnattended'>,
   name: string,
 ): Acc => {
   const privateMark = isCare ? ('health' as const) : null;
@@ -655,7 +682,19 @@ const applyCare = (
     isCare,
   });
   const careAskedAt = habit.careAskedAt ?? input.now;
-  const readable = { isCare, privacy, careAskedAt, lastEditedAt: input.now };
+  const isMedicineAsked =
+    isCare &&
+    habit.medicine === null &&
+    habit.medicineAskedAt === null &&
+    !input.isUnattended;
+  const medicineAskedAt = isMedicineAsked ? input.now : habit.medicineAskedAt;
+  const readable = {
+    isCare,
+    privacy,
+    careAskedAt,
+    ...(isMedicineAsked && { medicineAskedAt }),
+    lastEditedAt: input.now,
+  };
   const step = withEffect(
     acc,
     { op: 'update', collection: 'habits', docId: habit.id },
@@ -666,6 +705,7 @@ const applyCare = (
         isCare: habit.isCare,
         privacy: habit.privacy,
         careAskedAt: habit.careAskedAt,
+        ...(isMedicineAsked && { medicineAskedAt: habit.medicineAskedAt }),
         lastEditedAt: habit.lastEditedAt,
       },
     },
@@ -675,6 +715,15 @@ const applyCare = (
   );
   return {
     ...step,
+    questions: isMedicineAsked
+      ? [
+          ...step.questions,
+          toPlannedQuestion(buildMedicineQuestion(habit.id), {
+            id: input.newId(),
+            now: input.now,
+          }),
+        ]
+      : step.questions,
     updates: [
       ...step.updates,
       {
@@ -695,6 +744,7 @@ const applyCare = (
       privateMark,
       isPrivacyCleared,
       careAskedAt,
+      medicineAskedAt,
       lastEditedAt: input.now,
     }),
     isPrivate: step.isPrivate || privacy === 'private' || isPrivateHabit(habit),
@@ -886,6 +936,7 @@ const resolveFor = (
   const entry = acc.days.get(habitDayKey(at, input.timeZone))?.entries[
     habit.id
   ];
+  const isMasked = input.isUnattended && isPrivateHabit(habit);
   return {
     habit,
     resolution: resolveCheckIn(
@@ -894,6 +945,15 @@ const resolveFor = (
       at,
       input.timeZone,
       entry ? { checks: entry.checks, count: entry.count } : null,
+      isMasked
+        ? null
+        : {
+            whoName:
+              habit.forWhoId === null
+                ? null
+                : (input.whoNames?.get(habit.forWhoId) ?? null),
+            medicine: habit.medicine?.name ?? null,
+          },
     ),
   };
 };
@@ -958,7 +1018,83 @@ const planCheckIn = (
     : acc;
 };
 
+const planMedicine = (
+  acc: Acc,
+  command: SetMedicineCommand,
+  input: HabitPlanInput,
+): Acc => {
+  const habit = acc.habits.get(command.habitId);
+  const name = command.name.trim().slice(0, MEDICINE_NAME_CAP);
+  if (!habit || !habit.isCare || !name || hasNoRoom(acc, input)) return acc;
+  const medicine = {
+    name,
+    dose: command.dose?.trim().slice(0, MEDICINE_DOSE_CAP) || null,
+  };
+  const step = withEffect(
+    acc,
+    { op: 'update', collection: 'habits', docId: habit.id },
+    {
+      written: { 'sealed.title': habit.name, lastEditedAt: input.now },
+      previous: {
+        'sealed.title': habit.name,
+        lastEditedAt: habit.lastEditedAt,
+      },
+    },
+    `Saved the medicine for ${lower(shownName(habit, input.isUnattended))}`,
+  );
+  return {
+    ...step,
+    updates: [
+      ...step.updates,
+      {
+        id: habit.id,
+        data: {
+          lastEditedAt: input.now,
+          sealed: sealedWords(habit, input.seal, { medicine }),
+        },
+      },
+    ],
+    habits: new Map(step.habits).set(habit.id, {
+      ...habit,
+      medicine,
+      lastEditedAt: input.now,
+    }),
+    isPrivate: true,
+  };
+};
+
+const FILLER = /^(?:it'?s|it is|that'?s|that is|the|my|a|an|called|named)\s+/i;
+const SKIPS = /^(?:skip|no|nope|not now|never ?mind|later|i don'?t know)\W*$/i;
+
+/** The medicine and dose an answer to "Which medicine is it?" says ("metoprolol 25 mg"); null for a skip, so nothing is written and the question is not asked again. */
+export const readMedicineAnswer = (
+  asked: { opened: Record<string, unknown> } | null,
+  questionId: string,
+  text: string,
+): SetMedicineCommand | null => {
+  const questions = asked?.opened.questions;
+  const question =
+    isRecord(questions) && isRecord(questions[questionId])
+      ? questions[questionId]
+      : null;
+  const held =
+    question && Array.isArray(question.heldCommands)
+      ? question.heldCommands.find(isRecord)
+      : null;
+  const habitId = question?.kind === 'whichMedicine' ? held?.habitId : null;
+  const words = text.trim().replace(/\s+/g, ' ');
+  if (typeof habitId !== 'string' || !words || SKIPS.test(words)) return null;
+  const dose = DOSE_PATTERN.exec(words)?.[0] ?? null;
+  const name = (dose ? words.replace(dose, ' ') : words)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(FILLER, '')
+    .replace(/[\s.,!]+$/, '');
+  return name ? { kind: 'setMedicine', habitId, name, dose } : null;
+};
+
 const planOne = (acc: Acc, command: HabitCommand, input: HabitPlanInput) => {
+  if (command.kind === 'setMedicine') return planMedicine(acc, command, input);
   if (command.kind === 'createHabit') return planCreate(acc, command, input);
   if (command.kind === 'updateHabit') return planUpdate(acc, command, input);
   if (command.kind === 'setCare') return planCare(acc, command, input);

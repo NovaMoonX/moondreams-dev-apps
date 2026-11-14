@@ -31,6 +31,7 @@ export const decideHabit = (command: HabitCommand): Decision => {
     case 'updateHabit':
     case 'checkIn':
     case 'setCare':
+    case 'setMedicine':
       return 'automatic';
   }
 };

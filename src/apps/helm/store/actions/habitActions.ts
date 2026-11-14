@@ -12,7 +12,12 @@ import { db } from '@lib/firebase/config';
 import { store } from '@/store';
 
 import { generateUuid } from '@/utils';
-import { HABIT_NAME_MAX, HABIT_NOTES_MAX } from '@apps/helm/constants';
+import {
+  HABIT_NAME_MAX,
+  HABIT_NOTES_MAX,
+  MEDICINE_DOSE_MAX,
+  MEDICINE_NAME_MAX,
+} from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
 import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
 import type {
@@ -98,6 +103,7 @@ export async function createHabit(
     stageWeek: null,
     rejudgeFrom: null,
     careAskedAt: input.isCare ? now : null,
+    medicineAskedAt: null,
     untoldSince: null,
     formedAt: null,
     formedSummary: null,
@@ -173,7 +179,19 @@ export interface HabitWords {
   emoji: string | null;
   notes: string | null;
   forWhoId: string | null;
+  /** Only a care habit has one; undefined leaves it as it is. */
+  medicine?: HabitSealed['medicine'];
 }
+
+const toMedicine = (medicine: HabitSealed['medicine']) => {
+  const name = medicine?.name.trim().slice(0, MEDICINE_NAME_MAX);
+  return name
+    ? {
+        name,
+        dose: medicine?.dose?.trim().slice(0, MEDICINE_DOSE_MAX) || null,
+      }
+    : null;
+};
 
 export const updateHabitWords = (
   uid: string,
@@ -181,14 +199,35 @@ export const updateHabitWords = (
   habitId: string,
   words: HabitWords,
 ) =>
-  editHabit(uid, encryption, habitId, (opened) => ({
+  editHabit(uid, encryption, habitId, (opened, current) => ({
     sealed: {
       ...opened,
       name: words.name.trim().slice(0, HABIT_NAME_MAX),
       emoji: words.emoji,
       notes: words.notes?.trim().slice(0, HABIT_NOTES_MAX) || null,
+      medicine:
+        words.medicine === undefined
+          ? opened.medicine
+          : toMedicine(words.medicine),
     },
-    fields: { forWhoId: words.forWhoId },
+    fields: {
+      forWhoId: words.forWhoId,
+      medicineAskedAt: words.medicine
+        ? (current.medicineAskedAt ?? Date.now())
+        : current.medicineAskedAt,
+    },
+  }));
+
+/** Answers "Which medicine is it?": the medicine, or null for Not now. Either way it is marked asked, so the question never comes back. Needs a connection. */
+export const setHabitMedicine = (
+  uid: string,
+  encryption: HelmEncryption,
+  habitId: string,
+  medicine: HabitSealed['medicine'],
+) =>
+  editHabit(uid, encryption, habitId, (opened, current) => ({
+    sealed: { ...opened, medicine: toMedicine(medicine) ?? opened.medicine },
+    fields: { medicineAskedAt: current.medicineAskedAt ?? Date.now() },
   }));
 
 export const updateHabitWhen = (

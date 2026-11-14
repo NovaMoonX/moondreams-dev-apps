@@ -64,6 +64,7 @@ export interface LiveHabit extends HabitWords {
   endedAt: number | null;
   retiredAt: number | null;
   careAskedAt: number | null;
+  medicineAskedAt: number | null;
   stage: string | null;
   reminder: { isOn: boolean; pace: string } | null;
   history: HabitEvent[];
@@ -204,6 +205,7 @@ export const openLiveHabit = (
       endedAt: toNumber(data.endedAt),
       retiredAt: toNumber(data.retiredAt),
       careAskedAt: toNumber(data.careAskedAt),
+      medicineAskedAt: toNumber(data.medicineAskedAt),
       stage: toText(data.stage),
       reminder: reminder
         ? {

@@ -12,6 +12,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
+import HabitMedicineCard from '@apps/helm/components/habits/HabitMedicineCard';
 import HabitEditSheet from '@apps/helm/components/habits/HabitEditSheet';
 import HabitPauseSheet from '@apps/helm/components/habits/HabitPauseSheet';
 import HabitWeek from '@apps/helm/components/habits/HabitWeek';
@@ -402,6 +403,7 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
                 />
               </div>
             </section>
+            {habit.isCare && <HabitMedicineCard habit={habit} />}
             {!habit.isCare && (
               <PrivateRow kind='habit' record={habit} title={habit.name} />
             )}

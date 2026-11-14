@@ -298,9 +298,40 @@ export type CheckInResolution =
 
 const lowerName = (name: string) => name.trim().toLowerCase();
 
-const toSubject = (habit: CheckInHabit, windowId: string) => {
-  const label = habit.windows[windowId]?.label;
-  return label ? `${label} ${lowerName(habit.name)}` : habit.name;
+/** The names a care habit's tick line says, as plain text so the engine holds no store types: whose it is (null for the person's own) and the medicine's name (null when none was said). */
+export interface CareNames {
+  whoName: string | null;
+  medicine: string | null;
+}
+
+const toCareThing = (habit: Pick<CheckInHabit, 'name'>, care: CareNames) =>
+  lowerName(care.medicine?.trim() ? care.medicine : habit.name);
+
+/** What a tick is about: a care habit's "Mom's morning metoprolol" (the medicine, else the habit's name), anything else's "morning pills". */
+export function checkInSubject(
+  habit: Pick<CheckInHabit, 'name' | 'windows' | 'isCare'>,
+  windowId: string | null,
+  care: CareNames | null,
+) {
+  const label = windowId ? habit.windows[windowId]?.label : undefined;
+  if (!habit.isCare || !care)
+    return label ? `${label} ${lowerName(habit.name)}` : habit.name;
+  const owner = care.whoName?.trim() ? `${care.whoName.trim()}'s ` : '';
+  return `${owner}${label ? `${lowerName(label)} ` : ''}${toCareThing(habit, care)}`;
+}
+
+/** The one line every tick says, on the device and on the server: "Done: Mom's morning metoprolol." for a care habit, "Done. Morning pills ticked." for any other, so a misheard tick is caught at once. */
+export const checkInLine = (
+  kind: 'done' | 'alreadyDone',
+  habit: Pick<CheckInHabit, 'name' | 'windows' | 'isCare'>,
+  windowId: string | null,
+  care: CareNames | null,
+) => {
+  const subject = checkInSubject(habit, windowId, care);
+  if (kind === 'alreadyDone') return `${subject} already ticked.`;
+  return habit.isCare && care
+    ? `Done: ${subject}.`
+    : `Done. ${subject} ticked.`;
 };
 
 const readNotActiveLine = (habit: CheckInHabit) => {
@@ -341,6 +372,7 @@ export function resolveCheckIn(
   at: number,
   timeZone: string,
   day: CheckInDay | null,
+  care: CareNames | null = null,
 ): CheckInResolution {
   if (habit.status !== 'active')
     return {
@@ -352,13 +384,15 @@ export function resolveCheckIn(
   const checks = day?.checks ?? {};
   if (habit.timesPerDay !== null) {
     const count = (day?.count ?? 0) + 1;
+    const thing =
+      habit.isCare && care ? toCareThing(habit, care) : lowerName(habit.name);
     return {
       kind: 'write',
       effect: { kind: 'tally', habitId: habit.id, dayKey, count, at },
       line:
         count > habit.timesPerDay
-          ? `${count} ${lowerName(habit.name)} today`
-          : `${count} of ${habit.timesPerDay} ${lowerName(habit.name)}`,
+          ? `${count} ${thing} today`
+          : `${count} of ${habit.timesPerDay} ${thing}`,
     };
   }
   const isTicked = (id: string) =>
@@ -372,11 +406,11 @@ export function resolveCheckIn(
   if (target === null || isTicked(target))
     return {
       kind: 'alreadyDone',
-      line: `${hasWindows && target ? toSubject(habit, target) : habit.name} already ticked.`,
+      line: checkInLine('alreadyDone', habit, hasWindows ? target : null, care),
     };
   return {
     kind: 'write',
     effect: { kind: 'tick', habitId: habit.id, dayKey, windowId: target, at },
-    line: `Done. ${toSubject(habit, target)} ticked.`,
+    line: checkInLine('done', habit, target, care),
   };
 }

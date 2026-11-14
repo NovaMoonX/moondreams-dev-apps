@@ -234,6 +234,8 @@ export const HABITS_ACTIVE_MAX = 30;
 export const HABIT_NAME_MAX = 60;
 export const HABIT_LABEL_MAX = 30;
 export const HABIT_NOTES_MAX = 500;
+export const MEDICINE_NAME_MAX = 60;
+export const MEDICINE_DOSE_MAX = 40;
 export const HABIT_WINDOWS_MAX = 4;
 export const HABIT_PER_DAY_MAX = 20;
 export const HABIT_NOTES_SHOWN = 2;
@@ -2392,6 +2394,16 @@ export const HELM_COPY = {
   habitCareRowSubtitle: (assistant: string) =>
     `Kept private, and ${assistant} never moves it, only asks.`,
   habitCareForWho: 'Always on for someone you look after.',
+  habitMedicineQuestion: 'Which medicine is it?',
+  habitMedicineHelp: (assistant: string) =>
+    `${assistant} will say it each time you tick it, so a wrong tick is caught at once.`,
+  habitMedicineField: 'Medicine',
+  habitMedicinePlaceholder: 'The medicine\'s name',
+  habitDoseField: 'Dose (optional)',
+  habitDosePlaceholder: 'For example 25 mg',
+  habitMedicineSave: 'Save',
+  habitMedicineNotNow: 'Not now',
+  habitMedicineFailed: "That didn't save. Try again.",
   habitCareOnToast: (name: string) => `${name} is kept private as care`,
   habitForWho: (name: string) => `For ${name}`,
   habitWhoQuestion: 'Who is it for?',
@@ -2487,7 +2499,7 @@ export const HELM_COPY = {
   habitFlowDuplicate: (name: string) => `You already have ${name}.`,
   habitCreatedToast: (name: string) => `Added ${name}`,
   habitCreateFailed: "That didn't add. Try again.",
-  habitCheckInQuiet: 'Done.',
+  habitMaskedName: 'Private habit',
   habitCheckInTakenBack: 'Took that back.',
   habitCheckInFailed: "That didn't tick. Try again.",
   habitAlreadyDoneAt: (subject: string, time: string) =>

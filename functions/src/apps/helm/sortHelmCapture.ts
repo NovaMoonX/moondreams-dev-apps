@@ -9,6 +9,7 @@ import {
 import {
   buildHowWasItQuestion,
   planHabitCommands,
+  readMedicineAnswer,
   toPlannedQuestion,
 } from './nomos/planHabitCommands.js';
 import { MAX_EFFECTS, type HabitCommand } from './nomos/commands.js';
@@ -3651,7 +3652,20 @@ async function writeResult(
       newId: () => crypto.randomUUID(),
       seal,
     });
-    const keptHabits = isStale ? [] : habitCommands;
+    const medicineCommand =
+      answerTurn && turn?.kind === 'apply'
+        ? readMedicineAnswer(
+            toAskedCapture(key, askedSnap?.data() as CaptureDoc | undefined),
+            answerTurn.ref.questionId,
+            typeof (answerTurn.value as { text?: unknown } | null)?.text ===
+              'string'
+              ? (answerTurn.value as { text: string }).text
+              : answerTurn.words,
+          )
+        : null;
+    const keptHabits = isStale
+      ? []
+      : [...habitCommands, ...(medicineCommand ? [medicineCommand] : [])];
     const habitState =
       keptHabits.length > 0
         ? await readHabitState(
@@ -3669,6 +3683,11 @@ async function writeResult(
       days: habitState?.days ?? new Map<string, LiveHabitDay>(),
       selfWhoId,
       knownWhoIds: new Set(knownNames.map((person) => person.id)),
+      whoNames: new Map(
+        knownNames.flatMap((person) =>
+          person.names[0] ? [[person.id, person.names[0]] as const] : [],
+        ),
+      ),
       timeZone,
       profile: {
         dayStartTime: String(profileSnap?.get('dayStartTime') ?? '08:00'),

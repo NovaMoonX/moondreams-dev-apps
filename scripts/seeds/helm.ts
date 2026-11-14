@@ -1783,6 +1783,7 @@ export const toHabit = async (
   stageWeek: null,
   rejudgeFrom: null,
   careAskedAt: null,
+  medicineAskedAt: null,
   untoldSince: null,
   formedAt: null,
   formedSummary: null,

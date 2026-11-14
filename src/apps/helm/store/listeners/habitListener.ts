@@ -121,6 +121,7 @@ async function openHabit(
     stageWeek: data.stageWeek ?? null,
     rejudgeFrom: data.rejudgeFrom ?? null,
     careAskedAt: data.careAskedAt ?? null,
+    medicineAskedAt: data.medicineAskedAt ?? null,
     untoldSince: data.untoldSince ?? null,
     formedAt: data.formedAt ?? null,
     formedSummary: data.formedSummary ?? null,

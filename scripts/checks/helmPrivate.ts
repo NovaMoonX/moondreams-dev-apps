@@ -8,6 +8,7 @@ import {
   type HelmKey,
 } from '../../functions/src/apps/helm/helmKey.ts';
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
+import { checkInLine } from '../../src/apps/helm/engine/checkInMatch.ts';
 import {
   planWrites,
   type KnownWhoState,
@@ -241,6 +242,28 @@ test('a touch ends the unattended turn', () => {
     isUnattendedTurn(true, { isHidden: false, isUntouched: false }),
     false,
   );
+});
+
+test('a care tick names the medicine and whose it is, and while nobody is looking says only the masked label until the first tap', () => {
+  const care = {
+    id: 'meds',
+    name: 'Morning metoprolol',
+    isCare: true,
+    windows: { m: { label: 'Morning' } },
+  };
+  const named = checkInLine('done', care, 'm', {
+    whoName: 'Mom',
+    medicine: 'Metoprolol',
+  });
+  assert.equal(named, "Done: Mom's morning metoprolol.");
+  const masked = checkInLine(
+    'done',
+    { ...care, name: 'Private habit' },
+    'm',
+    null,
+  );
+  assert.equal(masked, 'Done. Morning private habit ticked.');
+  assert.ok(!/metoprolol|mom/i.test(masked));
 });
 
 test('a private task is named by its time of day, never its name or what it seems to be about', () => {

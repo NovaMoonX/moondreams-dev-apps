@@ -1432,6 +1432,8 @@ export interface Habit {
   stageWeek: string | null;
   rejudgeFrom: string | null;
   careAskedAt: number | null;
+  /** "Which medicine is it?" asked (once, ever); a record from before the field reads null. */
+  medicineAskedAt: number | null;
   untoldSince: number | null;
   formedAt: number | null;
   formedSummary: { doneCount: number; dueCount: number; since: number } | null;

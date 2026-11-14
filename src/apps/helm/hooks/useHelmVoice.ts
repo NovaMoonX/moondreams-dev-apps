@@ -92,7 +92,6 @@ import {
 } from '@apps/helm/utils/spokenQuestion';
 import { getOpenSessionId } from '@apps/helm/utils/sessions';
 import { takeDeviceCheckIn } from '@apps/helm/utils/deviceCheckIn';
-import { isUnattendedTurn } from '@apps/helm/utils/privacy';
 import { readPresence } from '@apps/helm/utils/presence';
 import { readHelmNameHints } from '@apps/helm/utils/nameHints';
 import { readSwappedWords } from '@apps/helm/utils/spokenNames';
@@ -446,8 +445,9 @@ export function useHelmVoice() {
     });
     if (result === null || result.kind === 'none') return false;
     if (result.kind === 'said') {
-      if (isSpoken) say(result.line);
-      else addToast({ title: result.line, type: 'info' });
+      const line = result.quietLine ?? result.line;
+      if (isSpoken) say(line);
+      else addToast({ title: line, type: 'info' });
       return true;
     }
     const { recorded } = result;
@@ -467,16 +467,11 @@ export function useHelmVoice() {
       if (lastCheckIn.current === entry) lastCheckIn.current = null;
       addToast({ title: HELM_COPY.habitCheckInFailed, type: 'error' });
     });
-    const line =
-      isSpoken &&
-      result.isPrivate &&
-      isUnattendedTurn(isWakeStarted.current, readPresence())
-        ? HELM_COPY.habitCheckInQuiet
-        : result.line;
+    const line = result.quietLine ?? result.line;
     if (isSpoken) say(line);
     if (recorded) return true;
     addToast({
-      title: result.line,
+      title: line,
       type: 'success',
       action: {
         label: HELM_COPY.undo,

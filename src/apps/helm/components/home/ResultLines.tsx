@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
@@ -20,6 +20,7 @@ import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenExecution } from '@apps/helm/types';
+import { readLastTouchAt, subscribeTouch } from '@apps/helm/utils/presence';
 import { readMadeEntities } from '@apps/helm/utils/resultLines';
 
 interface ResultLinesProps {
@@ -96,6 +97,12 @@ function ResultLines({
   const card = useRef<HTMLDivElement>(null);
   const lines = useResultLines(execution);
   const { undo } = useUndoOf(execution);
+  const lastTouchAt = useSyncExternalStore(subscribeTouch, readLastTouchAt);
+  // A tick written on this device while nobody was looking keeps its masked line until the first touch after it.
+  const line =
+    execution.actor === 'person' && lastTouchAt > execution.createdAt
+      ? toSentence(execution.summary)
+      : (execution.said ?? toSentence(execution.summary));
   const isUndone = execution.undoneByExecutionId !== null;
   const hasFoot = canUndo(execution) || isUndone;
 
@@ -119,9 +126,7 @@ function ResultLines({
       ) : (
         <>
           {execution.summary && execution.category !== 'answer' && (
-            <AssistantLine>
-              {execution.said ?? toSentence(execution.summary)}
-            </AssistantLine>
+            <AssistantLine>{line}</AssistantLine>
           )}
           {lines.length > 0 && (
             <div className='helm-card ml-[30px] w-[calc(100%-30px)] overflow-hidden'>

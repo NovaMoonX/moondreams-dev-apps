@@ -213,8 +213,20 @@ export interface SetCareCommand {
   requestQuote: string;
 }
 
+/** Built by code from the answer to "Which medicine is it?", never read from the model. */
+export interface SetMedicineCommand {
+  kind: 'setMedicine';
+  habitId: string;
+  name: string;
+  dose: string | null;
+}
+
 export type HabitCommand =
-  CreateHabitCommand | UpdateHabitCommand | CheckInCommand | SetCareCommand;
+  | CreateHabitCommand
+  | UpdateHabitCommand
+  | CheckInCommand
+  | SetCareCommand
+  | SetMedicineCommand;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
 

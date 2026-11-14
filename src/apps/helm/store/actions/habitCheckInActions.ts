@@ -33,6 +33,7 @@ const toExecution = async (
   captureId: string,
   summary: string,
   spoken: string | null,
+  said: string | null,
   at: number,
   encryption: HelmEncryption,
   isPrivate: boolean,
@@ -62,7 +63,7 @@ const toExecution = async (
       undoReport: null,
       spoken,
       goneIds: null,
-      said: null,
+      said,
       lines: null,
       abilityOffer: null,
       awayZoneOffer: null,
@@ -145,6 +146,8 @@ export async function writeDeviceCheckIn(
   input: {
     summary: string;
     spoken: string | null;
+    /** The line the thread shows until the first tap, when the turn was heard while nobody was looking; null otherwise. */
+    said: string | null;
     encryption: HelmEncryption | null;
     isPrivate: boolean;
     habitName: string;
@@ -199,6 +202,7 @@ export async function writeDeviceCheckIn(
         captureRef.id,
         input.summary,
         input.spoken,
+        input.said,
         effect.at,
         input.encryption,
         input.isPrivate,
