@@ -29,7 +29,7 @@ Every brief has: the goal in one line; the files to touch (and not to touch); wh
 
 1. Read every diff an agent returns (`git diff` in its worktree) before it lands. You own each line; an agent's "done" is a claim.
 2. Bring it into the branch, run `validator`, fix or send back what fails.
-3. Commit in coherent steps. Agents never commit or push (the one exception is `stack-pr-reviewer`, which commits its fix and syncs the stack it was handed), and an agent that needs another revision works in its own `git worktree`, never a checkout in yours.
+3. Commit in coherent steps. Agents never commit or push (the one exception is `stack-pr-reviewer`, which commits its fix and syncs the stack it was handed), and an agent that needs another revision works in its own `git worktree`, never a checkout in yours. A worktree you run the app from first gets the main checkout's untracked `.env.local` and `node_modules` linked in: without the env file the page throws `auth/invalid-api-key`, and a design and a product review came back from code alone (Helm 103).
 4. **Prove each push landed.** Read `git push`'s own output (never piped through `tail` or `-q`) and check `git status -sb` names your branch, not `HEAD (no branch)`. Before a review starts, check the SHA it reads contains every fix commit (`git merge-base --is-ancestor <fix> origin/<branch>`). A detached checkout once turned two pushes into silent no-ops and a whole fix round went unreviewed.
 
 ## Writing a plan
