@@ -221,6 +221,7 @@ function Composer({
   const shownDrop =
     lastDrop && readKeys.includes(lastDrop.key) ? lastDrop : null;
   const stopKeepingInView = useRef<(() => void) | null>(null);
+  const closeAfterMenu = useRef<(() => void) | null>(null);
   const press = useRef<{ isDown: boolean; pendingBlur: (() => void) | null }>({
     isDown: false,
     pendingBlur: null,
@@ -440,8 +441,15 @@ function Composer({
   };
 
   const chooseAttachment = (value: string) => {
-    if (value === RECORD) startRecording();
-    else if (value === CHOOSE_FILE) openFileChooser(fileInput.current);
+    const close = closeAfterMenu.current;
+    closeAfterMenu.current = null;
+    if (value === RECORD) {
+      close?.();
+      startRecording();
+      return;
+    }
+    root.current?.querySelector('textarea')?.focus({ preventScroll: true });
+    if (value === CHOOSE_FILE) openFileChooser(fileInput.current);
     else
       openFileChooser(
         value === TAKE_PHOTO ? cameraInput.current : libraryInput.current,
@@ -613,6 +621,7 @@ function Composer({
               }}
               onKeyDown={handleKeyDown}
               onFocus={(event) => {
+                closeAfterMenu.current = null;
                 onFocusChange(true);
                 setIsFocused(true);
                 setIsShorthandOpen(true);
@@ -630,13 +639,44 @@ function Composer({
               }}
               onBlur={(event) => {
                 const field = event.currentTarget;
-                const finish = () => {
-                  if (document.activeElement === field) return;
+                const close = () => {
                   setIsFocused(false);
                   setIsShorthandOpen(false);
                   stopKeepingInView.current?.();
                   stopKeepingInView.current = null;
                   onFocusChange(false);
+                };
+                const finish = () => {
+                  if (document.activeElement === field) return;
+                  // Focus moves into the attach menu while it is open; the card stays put until the menu is done.
+                  if (root.current?.querySelector('[aria-expanded="true"]')) {
+                    closeAfterMenu.current = close;
+                    const closeOnOutsidePress = (pointer: PointerEvent) => {
+                      const target = pointer.target;
+                      if (
+                        target instanceof Element &&
+                        (root.current?.contains(target) ||
+                          target.closest('[role="dialog"], [role="menu"]'))
+                      ) {
+                        return;
+                      }
+                      document.removeEventListener(
+                        'pointerdown',
+                        closeOnOutsidePress,
+                        true,
+                      );
+                      const pending = closeAfterMenu.current;
+                      closeAfterMenu.current = null;
+                      pending?.();
+                    };
+                    document.addEventListener(
+                      'pointerdown',
+                      closeOnOutsidePress,
+                      true,
+                    );
+                    return;
+                  }
+                  close();
                 };
                 if (press.current.isDown) press.current.pendingBlur = finish;
                 else finish();
