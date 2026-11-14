@@ -149,6 +149,38 @@ function readCoarseDates(text: string, thisYear: number): DateSpan[] {
   return [...months, ...years, ...decades];
 }
 
+const RANGE_END_RE =
+  /^\s*(?:to|through|thru|until|-|–)\s*(\d{1,2})(?:st|nd|rd|th)?\b/i;
+
+/** The bare day that closes a range ("Dec 2 to 9"), as a day in the same month as the date before it. */
+function readRangeEnds(text: string, natural: DateSpan[]): DateSpan[] {
+  return natural.flatMap((span) => {
+    const match = RANGE_END_RE.exec(text.slice(span.end));
+    if (!match || span.due.kind !== 'day') return [];
+    const first = new Date(span.due.date);
+    const day = Number(match[1]);
+    const date = Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), day);
+    if (
+      day <= first.getUTCDate() ||
+      new Date(date).getUTCMonth() !== first.getUTCMonth()
+    ) {
+      return [];
+    }
+    const start = span.end + match[0].search(/\d/);
+    const end = span.end + match[0].length;
+    return [
+      {
+        id: `date:${start}`,
+        text: text.slice(start, end),
+        start,
+        end,
+        due: { kind: 'day' as const, date },
+        precision: null,
+      },
+    ];
+  });
+}
+
 /** Reads what is certain in the words: `@` people, `#` places, `^` procedures or notes, a lone `!`, date phrases and a leading "name,". Nothing is guessed. */
 export function readCapture(
   text: string,
@@ -163,6 +195,7 @@ export function readCapture(
     precision: null,
   }));
   const dates = readCoarseDates(text, new Date(options.now).getUTCFullYear())
+    .concat(readRangeEnds(text, natural))
     .filter(
       (coarse) =>
         !natural.some(

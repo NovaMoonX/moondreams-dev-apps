@@ -3850,6 +3850,7 @@ async function writeResult(
             messageCount,
             inputMode: isSpoken ? 'voice' : capture.inputMode,
             timeZone,
+            offers: { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
           },
         ),
       );
@@ -3881,6 +3882,7 @@ async function writeResult(
       transaction.create(
         answerExecutionRef,
         buildAnswerExecution({
+          offers: { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
           captureId: captureRef.id,
           answer: reply.answer,
           spoken: spokenLine,
