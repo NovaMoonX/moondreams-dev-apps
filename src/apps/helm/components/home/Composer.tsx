@@ -29,10 +29,12 @@ import {
 
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import LockedButton from '@/components/LockedButton';
+import MicrophoneAccess from '@/components/MicrophoneAccess';
 import { useAuth } from '@/hooks/useAuth';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
+import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { readFormDraft, writeFormDraft } from '@lib/app/formDrafts';
 import { formatClock } from '@/utils/durationUtils';
@@ -194,6 +196,7 @@ function Composer({
     timeZone,
     onTranscript: (words) => appendWords(words),
   });
+  const microphone = useMicrophonePermission();
   const recorder = useAudioRecorder({
     maxMs: MAX_VOICE_NOTE_MS,
     onDone: (recording) => {
@@ -495,7 +498,16 @@ function Composer({
           className='text-muted-foreground flex flex-col items-start gap-0.5 px-1 text-[13px]'
           role='status'
         >
-          <p>{voice.notice}</p>
+          {voice.needsMicrophone && microphone === 'granted' ? (
+            <p>{HELM_COPY.talkNeedsRecognition}</p>
+          ) : voice.needsMicrophone ? (
+            <MicrophoneAccess
+              onAllowed={voice.clearNotice}
+              className='w-full'
+            />
+          ) : (
+            <p>{voice.notice}</p>
+          )}
           {voice.hasNoticeDoor && (
             <Button
               type='button'
@@ -724,13 +736,12 @@ function Composer({
       </div>
       <div className='flex flex-col gap-2 px-1 pb-1 empty:hidden'>
         <DictationLine owner={dictationOwner} />
-        {(recorder.state === 'refused' || recorder.state === 'unsupported') && (
+        {recorder.state === 'unsupported' && (
           <p className='text-muted-foreground text-[13px]' role='status'>
-            {recorder.state === 'unsupported'
-              ? HELM_COPY.recordUnsupported
-              : HELM_COPY.recordNoMicrophone}
+            {HELM_COPY.recordUnsupported}
           </p>
         )}
+        {recorder.state === 'refused' && <MicrophoneAccess />}
         <AttachmentChips
           items={attachments.items}
           onRemove={attachments.remove}

@@ -177,6 +177,13 @@ Every script here passes `--project=moondreams-dev-apps` to `gcloud` itself, so 
 
 The project's consent screen (Google Cloud console, Google Auth Platform, Audience) is in **Testing**. It is one screen for the whole project, so it blocks every app's Google sign-in for anyone not listed as a test user and expires refresh tokens after 7 days. Click "Publish app", then "Confirm", so it says "In production". An "unverified app" screen with Advanced then Continue is expected until Google verifies the scopes; the rules and the verification plan are in `docs/conventions/connections.md` ("Google's consent screen is one for the whole project").
 
+### Voice in Pinch or Helm says the microphone is blocked, and the installed app's settings have no microphone
+
+- **Symptom:** on a phone, the installed app (added to the Home Screen) never asked for the microphone, Pinch's cooking voice and Helm's talk said it was blocked, and the app's own settings listed no microphone to switch on.
+- **Cause:** Pinch started the browser's speech recognition without first asking for the microphone through `getUserMedia`. In an installed app that can fail as "not allowed" without a prompt, so the phone never records a request. Every app shares one site (`apps.moondreams.dev`), so one refusal blocks the microphone for all of them. Helm also reported "the browser's speech service is off" as a blocked microphone.
+- **Fix:** every notice for a refused microphone is now `MicrophoneAccess`: an Allow microphone button that asks through `getUserMedia` (the request the browser and phone record as this site's permission), then, once refused, Try again and a tap-to-open How to allow it for that device, and it clears itself when the permission changes. Recognition still starts inside the tap with no request before it, since an iPhone only lets it start straight from a tap. On Android an installed app's microphone is under the app icon's App info, or Chrome › Settings › Site settings › Microphone. On an iPhone it is Settings › Apps › Safari › Microphone, and if that doesn't help, remove the app from the Home Screen and add it again.
+- **Telling it apart:** `navigator.permissions.query({ name: 'microphone' })` reads `denied` for a real refusal and `prompt` when nothing was ever asked. Pinch's "speech service is off" is Siri or Dictation turned off on an iPhone, not the microphone.
+
 ### No offline strip on a plane's Wi-Fi, and Runway won't open there
 
 - **Symptom:** on in-flight Wi-Fi with no internet behind it, the site showed no "You're offline" strip, and opening Runway showed "Your plan cannot be opened right now".
