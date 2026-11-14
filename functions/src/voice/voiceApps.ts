@@ -1,4 +1,9 @@
-import { HELM_VOICE_IDS } from '../apps/helm/voiceIdentity.js';
+import {
+  HELM_DEFAULT_VOICE,
+  HELM_SPEED_RANGE,
+  HELM_VOICE_IDS,
+  HELM_VOICE_NAMES,
+} from '../apps/helm/voiceIdentity.js';
 import type { VoiceAppLimits } from './voiceConfig.js';
 
 export const VOICE_APPS: Record<string, VoiceAppLimits> = {
@@ -7,5 +12,8 @@ export const VOICE_APPS: Record<string, VoiceAppLimits> = {
     mintsPerDay: 300,
     spokenCharsPerDay: 30_000,
     voices: HELM_VOICE_IDS,
+    voiceNames: HELM_VOICE_NAMES,
+    defaultVoice: HELM_DEFAULT_VOICE,
+    speedRange: HELM_SPEED_RANGE,
   },
 };

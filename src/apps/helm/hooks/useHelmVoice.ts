@@ -7,7 +7,6 @@ import {
   useState,
 } from 'react';
 
-import { getToken } from 'firebase/app-check';
 import { httpsCallable } from 'firebase/functions';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -15,7 +14,6 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
-import { createSpeechSource } from '@/lib/speech/voice/speechSource';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
 import {
   createVoiceTokenSource,
@@ -24,7 +22,7 @@ import {
 } from '@/lib/speech/voice/voiceToken';
 import { store, useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
-import { END_PHRASES, HELM_COPY } from '@apps/helm/constants';
+import { END_PHRASES, HELM_COPY, SESSION_IDLE_MS } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
@@ -32,13 +30,11 @@ import {
   getNextTurn,
   recordSentTurn,
 } from '@apps/helm/hooks/useSession';
+import { functions } from '@lib/firebase/config';
 import {
-  app,
-  appCheck,
-  auth,
-  functions,
-  isUsingFirebaseEmulators,
-} from '@lib/firebase/config';
+  createHelmSpeechSource,
+  readHelmVoice,
+} from '@apps/helm/utils/helmSpeechSource';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
@@ -91,26 +87,6 @@ const mintVoiceToken = httpsCallable<
   MintVoiceTokenResult
 >(functions, 'mintVoiceToken');
 
-const getSpeechUrl = () => {
-  const { projectId } = app.options;
-  return isUsingFirebaseEmulators
-    ? `http://${window.location.hostname}:5001/${projectId}/us-central1/streamSpeech`
-    : `https://us-central1-${projectId}.cloudfunctions.net/streamSpeech`;
-};
-
-const getSpeechHeaders = async () => {
-  const { currentUser } = auth;
-  if (!currentUser || !appCheck) return null;
-  const [idToken, appCheckToken] = await Promise.all([
-    currentUser.getIdToken(),
-    getToken(appCheck),
-  ]);
-  return {
-    Authorization: `Bearer ${idToken}`,
-    'X-Firebase-AppCheck': appCheckToken.token,
-  };
-};
-
 const toVoiceIdentity = (label: string): VoiceIdentity => ({
   id: 'helm-assistant',
   label,
@@ -161,13 +137,7 @@ export function useHelmVoice() {
       mint: async (request) => (await mintVoiceToken(request)).data,
     }),
   );
-  const [speechSource] = useState(() =>
-    createSpeechSource({
-      appId: 'helm',
-      url: getSpeechUrl(),
-      getHeaders: getSpeechHeaders,
-    }),
-  );
+  const [speechSource] = useState(createHelmSpeechSource);
   const voiceMode = useAppSelector((state) => state.helm.profile?.voiceMode);
   const isWakeWordOn = useAppSelector(
     (state) => state.helm.profile?.isWakeWordOn ?? false,
@@ -196,6 +166,7 @@ export function useHelmVoice() {
     isOnDeviceReady: onDevice.isOn,
     identity: voiceIdentity,
     endPhrases: END_PHRASES,
+    conversationIdleMs: SESSION_IDLE_MS,
     onUtterance: (text, heardBy) => {
       void handleUtterance(text, heardBy.sttProvider);
     },
@@ -229,6 +200,7 @@ export function useHelmVoice() {
     cloudSpeaking: {
       source: speechSource,
       isAllowed: voiceMode === 'cloudWhenOnline',
+      readVoice: readHelmVoice,
     },
   });
 
@@ -252,7 +224,7 @@ export function useHelmVoice() {
     voice.settle();
     showNote(line);
     void voice.speak(line, {
-      priority: 'ack',
+      priority: 'reply',
       turnKey: Date.now(),
       canAnswer: isHandsFreeOn && isSurfaceShown.current,
     });
@@ -562,7 +534,7 @@ export function useHelmVoice() {
     if (!isSurfaceShown.current) return;
     speakingCaptureId.current = capture.id;
     const result = await voice.speak(line, {
-      priority: 'ack',
+      priority: 'reply',
       turnKey: capture.createdAt,
       canAnswer:
         capture.inputMode === 'voice' &&

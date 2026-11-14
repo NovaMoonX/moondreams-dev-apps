@@ -111,6 +111,7 @@
     "check:helm-style": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmStyle.ts",
     "check:helm-procedure-steps": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmProcedureSteps.ts",
     "voice:benchmark": "tsx scripts/voice/benchmark.ts",
+    "voice:listen": "tsx scripts/voice/benchmark.ts --all-voices",
     "voice:deepgram-secret": "bash scripts/voice/deepgramSecret.sh",
     "voice:gemini-secret": "bash scripts/voice/geminiSecret.sh",
     "voice:google-setup": "bash scripts/voice/googleSetup.sh",

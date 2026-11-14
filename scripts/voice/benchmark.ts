@@ -1,5 +1,6 @@
 // Renders the same replies through each cloud voice, times them and opens a page to listen.
-//   npm run voice:benchmark [-- --fixture [--force]] [-- --no-open]
+//   npm run voice:benchmark [-- --fixture [--force]] [-- --no-open] [-- --only geminiTts] [-- --runs 3]
+//   npm run voice:listen  (every shared Google and Gemini voice reading a few replies once)
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
   existsSync,
@@ -27,12 +28,11 @@ import {
 import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
 
 const PROJECT = 'moondreams-dev-apps';
-const RUNS = 5;
 const ABORT_AFTER_MS = 300;
 /** A request that has not finished by now is a hang, not a slow voice. */
 const REQUEST_TIMEOUT_MS = 30_000;
-const OUT_DIR = new URL('../../voice-benchmark/', import.meta.url);
-const NEXT_DIR = new URL('.next/', OUT_DIR);
+const RETRY_WAITS_MS = [20_000, 40_000, 80_000];
+const RETRY_STATUSES = new Set([429, 500, 503]);
 const DOC_PATH = new URL('../../docs/voice-benchmark.md', import.meta.url);
 const PROVIDER_IDS: TtsProviderId[] = [
   'deepgramAura',
@@ -45,9 +45,79 @@ const PROVIDER_NAMES: Record<TtsProviderId, string> = {
   googleTts: 'Google Cloud TTS Chirp 3 HD',
 };
 
+const argValue = (name: string) => {
+  const index = process.argv.indexOf(name);
+  return index === -1 ? null : (process.argv[index + 1] ?? null);
+};
+
 const isFixture = process.argv.includes('--fixture');
 const isOpening = !process.argv.includes('--no-open');
 const isForced = process.argv.includes('--force');
+const isAllVoices = process.argv.includes('--all-voices');
+const askedIds = (argValue('--only') ?? '')
+  .split(',')
+  .map((id) => id.trim())
+  .filter((id) => id !== '');
+const onlyIds = askedIds.filter((id): id is TtsProviderId =>
+  PROVIDER_IDS.includes(id as TtsProviderId),
+);
+const runsArg = argValue('--runs');
+const RUNS = runsArg === null ? (isAllVoices ? 1 : 5) : Number(runsArg);
+const OUT_DIR = new URL(
+  isAllVoices ? '../../voice-benchmark/all-voices/' : '../../voice-benchmark/',
+  import.meta.url,
+);
+const NEXT_DIR = new URL('.next/', OUT_DIR);
+
+const SHARED_VOICES: readonly [string, string][] = [
+  ['Achernar', 'soft'],
+  ['Achird', 'friendly'],
+  ['Algenib', 'gravelly'],
+  ['Algieba', 'smooth'],
+  ['Alnilam', 'firm'],
+  ['Aoede', 'breezy'],
+  ['Autonoe', 'bright'],
+  ['Callirrhoe', 'easy-going'],
+  ['Charon', 'informative'],
+  ['Despina', 'smooth'],
+  ['Enceladus', 'breathy'],
+  ['Erinome', 'clear'],
+  ['Fenrir', 'excitable'],
+  ['Gacrux', 'mature'],
+  ['Iapetus', 'clear'],
+  ['Kore', 'firm'],
+  ['Laomedeia', 'upbeat'],
+  ['Leda', 'youthful'],
+  ['Orus', 'firm'],
+  ['Pulcherrima', 'forward'],
+  ['Puck', 'upbeat'],
+  ['Rasalgethi', 'informative'],
+  ['Sadachbia', 'lively'],
+  ['Sadaltager', 'knowledgeable'],
+  ['Schedar', 'even'],
+  ['Sulafat', 'warm'],
+  ['Umbriel', 'easy-going'],
+  ['Vindemiatrix', 'gentle'],
+  ['Zephyr', 'bright'],
+  ['Zubenelgenubi', 'casual'],
+];
+
+const voicesFor = (
+  id: TtsProviderId,
+): readonly { id: string; label: string }[] =>
+  !isAllVoices
+    ? TTS_VOICES[id]
+    : id === 'deepgramAura'
+      ? []
+      : SHARED_VOICES.map(([name, feel]) => ({
+          id: id === 'googleTts' ? `en-US-Chirp3-HD-${name}` : name,
+          label: `${name} (${feel})`,
+        }));
+
+const DELIVERY: Record<string, string> = {
+  Composed: 'Say this in a calm, even, composed voice',
+  Warm: 'Say this in a warm, relaxed, unhurried voice',
+};
 
 interface Reply {
   id: string;
@@ -64,7 +134,7 @@ const reply = (kind: string, tone: string, text: string): Reply => ({
 });
 
 const REPLIES: Reply[] = [
-  reply('got-it', 'Composed', 'Got it. Call Dana, Friday.'),
+  reply('got-it', 'Composed', 'Got it. Call Dana on Friday.'),
   reply(
     'got-it',
     'Warm',
@@ -118,6 +188,15 @@ const REPLIES: Reply[] = [
   ),
 ];
 const PROBE_REPLY = REPLIES[10];
+const LISTEN_REPLY_IDS = [
+  'got-it-composed',
+  'got-it-warm',
+  'answer-warm',
+  'question-warm',
+];
+const RUN_REPLIES = isAllVoices
+  ? REPLIES.filter((item) => LISTEN_REPLY_IDS.includes(item.id))
+  : REPLIES;
 
 interface Sample {
   replyId: string;
@@ -137,6 +216,8 @@ interface VoiceResult {
 }
 interface ProviderResult {
   id: TtsProviderId;
+  /** When this provider's readings were made; a run with --only keeps the others' earlier ones. */
+  ranAt?: string;
   skipped: string | null;
   voices: VoiceResult[];
 }
@@ -180,6 +261,9 @@ const readSecret = (name: string) => {
   }
 };
 
+const messageOf = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 const concat = (chunks: Uint8Array[]) => {
   const bytes = new Uint8Array(
     chunks.reduce((sum, chunk) => sum + chunk.length, 0),
@@ -191,16 +275,49 @@ const concat = (chunks: Uint8Array[]) => {
   return bytes;
 };
 
+const statusOf = (error: unknown) => {
+  const match = /answered (\d+)$/.exec(messageOf(error));
+  return match ? Number(match[1]) : null;
+};
+
 const speakOnce = async (
   provider: TtsProvider,
   text: string,
   voiceId: string,
+  delivery?: string,
+  speed?: number,
+  attempt = 0,
+): Promise<{ firstByteMs: number; totalMs: number; audio: Uint8Array }> => {
+  try {
+    return await speakTimed(provider, text, voiceId, delivery, speed);
+  } catch (error) {
+    const status = statusOf(error);
+    const wait = RETRY_WAITS_MS[attempt];
+    if (status === null || !RETRY_STATUSES.has(status) || wait === undefined) {
+      throw error;
+    }
+    process.stdout.write(
+      `\r\x1b[K  ${provider.id} answered ${status}; waiting ${wait / 1000} s and trying again…`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    return speakOnce(provider, text, voiceId, delivery, speed, attempt + 1);
+  }
+};
+
+const speakTimed = async (
+  provider: TtsProvider,
+  text: string,
+  voiceId: string,
+  delivery?: string,
+  speed?: number,
 ) => {
   const startedAt = performance.now();
   const { stream } = await provider.speak({
     text,
     voiceId,
     format: 'mp3',
+    delivery,
+    ...(speed === undefined ? {} : { speed }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   const reader = stream.getReader();
@@ -265,7 +382,7 @@ const toSample = (
   timing: { firstByteMs: number; totalMs: number },
   audio: Uint8Array,
 ): { sample: Sample; bytes: Uint8Array; extension: string } => {
-  const isPcm = providerId === 'geminiTts';
+  const isPcm = providerId === 'geminiTts' || providerId === 'googleTts';
   const audioSeconds = isPcm ? audio.length / (GEMINI_SAMPLE_RATE * 2) : null;
   return {
     bytes: isPcm ? pcmToWav(audio, GEMINI_SAMPLE_RATE) : audio,
@@ -307,10 +424,13 @@ const saveSample = (
   return { ...made.sample, file };
 };
 
-const messageOf = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
-
 const isAuthFailure = (message: string) => /answered (401|403)$/.test(message);
+// Reached only once every retry wait is spent (a quota gone for the day, or an
+// outage), so the provider's other voices would each wait out the same retries.
+const isSpentQuota = (message: string) => {
+  const status = statusOf(message);
+  return status !== null && RETRY_STATUSES.has(status);
+};
 
 const runReply = async (
   provider: TtsProvider,
@@ -319,7 +439,7 @@ const runReply = async (
 ): Promise<Sample> => {
   const text = toSpokenText(item.text);
   const runs = await inSequence(Array.from({ length: RUNS }), () =>
-    speakOnce(provider, text, voice.id),
+    speakOnce(provider, text, voice.id, DELIVERY[item.tone]),
   );
   const sample = saveSample(
     provider.id,
@@ -337,23 +457,27 @@ const runReply = async (
 const runVoice = async (
   provider: TtsProvider,
   voice: { id: string; label: string },
-  auth: { error: string | null },
+  halt: { error: string | null },
 ): Promise<VoiceResult> => {
   const noteFailure = (error: unknown) => {
     const message = messageOf(error);
-    if (isAuthFailure(message)) auth.error = message;
+    if (isAuthFailure(message) || isSpentQuota(message)) halt.error = message;
     return message;
   };
   // One untimed call first, so connection and token setup stay out of the medians.
   const voiceError =
-    auth.error ??
-    (await speakOnce(provider, toSpokenText(REPLIES[0].text), voice.id).then(
-      () => null,
-      noteFailure,
-    ));
+    halt.error ??
+    (isAllVoices
+      ? null
+      : await speakOnce(
+          provider,
+          toSpokenText(RUN_REPLIES[0].text),
+          voice.id,
+          DELIVERY[RUN_REPLIES[0].tone],
+        ).then(() => null, noteFailure));
   const progress = { done: 0 };
-  const samples = await inSequence(REPLIES, async (item) => {
-    const blocked = auth.error ?? voiceError;
+  const samples = await inSequence(RUN_REPLIES, async (item) => {
+    const blocked = halt.error ?? voiceError;
     const sample =
       blocked !== null
         ? failedSample(item, blocked)
@@ -362,13 +486,13 @@ const runVoice = async (
           );
     progress.done += 1;
     process.stdout.write(
-      `\r  ${provider.id} ${voice.label}: reply ${progress.done} of ${REPLIES.length}`,
+      `\r\x1b[K  ${provider.id} ${voice.label}: reply ${progress.done} of ${RUN_REPLIES.length}`,
     );
     return sample;
   });
   process.stdout.write('\r\x1b[K');
   const abortMs =
-    auth.error !== null || voiceError !== null
+    halt.error !== null || voiceError !== null || isAllVoices
       ? null
       : await probeStreamCut(
           provider,
@@ -432,14 +556,7 @@ const buildProviders = async (): Promise<
         }
       : {
           id: 'googleTts',
-          provider: createGoogleTts({
-            projectId: PROJECT,
-            getAccessToken: async () => {
-              const token = await googleAuth.getAccessToken();
-              if (!token) throw new Error('No Google access token');
-              return token;
-            },
-          }),
+          provider: createGoogleTts({ projectId: PROJECT }),
           skipped: null,
         },
   ];
@@ -462,36 +579,38 @@ const makeTone = (seconds: number, hertz: number) => {
 };
 
 const runFixture = (): ProviderResult[] =>
-  PROVIDER_IDS.map((id, providerIndex) => ({
-    id,
-    skipped: null,
-    voices: TTS_VOICES[id].map((voice, voiceIndex) => ({
-      id: voice.id,
-      label: voice.label,
-      abortMs: 40 + providerIndex * 30 + voiceIndex * 5,
-      samples: REPLIES.map((item, replyIndex) => {
-        const characters = toSpokenText(item.text).length;
-        const firstByteMs =
-          200 + providerIndex * 120 + voiceIndex * 15 + replyIndex * 5;
-        const audioSeconds = characters / 15;
-        const file = `samples/${id}-${voice.id}-${item.id}.wav`;
-        writeFileSync(
-          new URL(file, NEXT_DIR),
-          makeTone(0.6, 220 + providerIndex * 110 + voiceIndex * 40),
-        );
-        return {
-          replyId: item.id,
-          file,
-          characters,
-          firstByteMs,
-          totalMs: firstByteMs + characters * 12,
-          audioSeconds,
-          costMicros: costMicros(id, { characters, audioSeconds }),
-          error: null,
-        };
-      }),
-    })),
-  }));
+  PROVIDER_IDS.filter((id) => voicesFor(id).length > 0).map(
+    (id, providerIndex) => ({
+      id,
+      skipped: null,
+      voices: voicesFor(id).map((voice, voiceIndex) => ({
+        id: voice.id,
+        label: voice.label,
+        abortMs: 40 + providerIndex * 30 + voiceIndex * 5,
+        samples: RUN_REPLIES.map((item, replyIndex) => {
+          const characters = toSpokenText(item.text).length;
+          const firstByteMs =
+            200 + providerIndex * 120 + voiceIndex * 15 + replyIndex * 5;
+          const audioSeconds = characters / 15;
+          const file = `samples/${id}-${voice.id}-${item.id}.wav`;
+          writeFileSync(
+            new URL(file, NEXT_DIR),
+            makeTone(0.6, 220 + providerIndex * 110 + voiceIndex * 40),
+          );
+          return {
+            replyId: item.id,
+            file,
+            characters,
+            firstByteMs,
+            totalMs: firstByteMs + characters * 12,
+            audioSeconds,
+            costMicros: costMicros(id, { characters, audioSeconds }),
+            error: null,
+          };
+        }),
+      })),
+    }),
+  );
 
 const dollars = (micros: number) => `$${(micros / 1_000_000).toFixed(4)}`;
 const seconds = (ms: number | null) =>
@@ -513,6 +632,8 @@ const summarizeVoice = (voice: VoiceResult) => {
     perThousandMicros:
       characters === 0 ? null : (totalMicros / characters) * 1000,
     failed: voice.samples.length - done.length,
+    reason:
+      voice.samples.find((sample) => sample.error !== null)?.error ?? null,
   };
 };
 
@@ -522,14 +643,28 @@ const renderTable = (providers: ProviderResult[]) => {
       ? [`| ${PROVIDER_NAMES[provider.id]} | ${provider.skipped} | | | | | |`]
       : provider.voices.map((voice) => {
           const summary = summarizeVoice(voice);
-          return `| ${PROVIDER_NAMES[provider.id]} | ${voice.label}${summary.failed > 0 ? ` (${summary.failed} failed)` : ''} | ${millis(summary.firstByte)} | ${seconds(summary.total)} | ${millis(voice.abortMs)} | ${summary.totalMicros === null ? 'n/a' : dollars(summary.totalMicros)} | ${summary.perThousandMicros === null ? 'n/a' : dollars(summary.perThousandMicros)} |`;
+          return `| ${PROVIDER_NAMES[provider.id]} | ${voice.label}${summary.failed > 0 ? ` (${summary.failed} failed: ${summary.reason})` : ''} | ${millis(summary.firstByte)} | ${seconds(summary.total)} | ${millis(voice.abortMs)} | ${summary.totalMicros === null ? 'n/a' : dollars(summary.totalMicros)} | ${summary.perThousandMicros === null ? 'n/a' : dollars(summary.perThousandMicros)} |`;
         }),
   );
   return [
-    '| Provider | Voice | Median first sound | Median done | Stream cut | All 12 replies | Per 1,000 characters |',
+    `| Provider | Voice | Median first sound | Median done | Stream cut | All ${RUN_REPLIES.length} replies | Per 1,000 characters |`,
     '| --- | --- | --- | --- | --- | --- | --- |',
     ...rows,
   ].join('\n');
+};
+
+const describeRunDates = (providers: ProviderResult[], ranAt: string) => {
+  const byDay = providers.reduce<Record<string, string[]>>((days, provider) => {
+    const day = (provider.ranAt ?? ranAt).slice(0, 10);
+    return {
+      ...days,
+      [day]: [...(days[day] ?? []), PROVIDER_NAMES[provider.id]],
+    };
+  }, {});
+  const days = Object.keys(byDay).sort();
+  return days.length === 1
+    ? `Run on ${days[0]}.`
+    : `Run on ${days.map((day) => `${day} (${byDay[day].join(', ')})`).join('; ')}.`;
 };
 
 const writeDoc = (providers: ProviderResult[], ranAt: string) => {
@@ -542,40 +677,98 @@ const writeDoc = (providers: ProviderResult[], ranAt: string) => {
     console.log('docs/voice-benchmark.md has no results block; not updated.');
     return;
   }
-  const block = `${start}\n\nRun on ${ranAt.slice(0, 10)}.\n\n${renderTable(providers)}\n\n${end}`;
+  const block = `${start}\n\n${describeRunDates(providers, ranAt)}\n\nGemini is asked for each tone ("${DELIVERY.Composed}", "${DELIVERY.Warm}"); the others take no instructions.\n\n${renderTable(providers)}\n\n${end}`;
   writeFileSync(
     DOC_PATH,
     doc.slice(0, from) + block + doc.slice(to + end.length),
   );
 };
 
-const runProviders = async () => {
-  const built = await buildProviders();
+const readPrevious = () => {
+  try {
+    return JSON.parse(
+      readFileSync(new URL('results.json', OUT_DIR), 'utf8'),
+    ) as {
+      ranAt: string;
+      isFixture?: boolean;
+      replies?: Reply[];
+      providers: ProviderResult[];
+    };
+  } catch {
+    return null;
+  }
+};
+
+/** Keeps a provider's earlier readings (and their audio) when this run leaves it out with --only. */
+const carryPrevious = (id: TtsProviderId): ProviderResult | null => {
+  const previous = readPrevious();
+  const found = previous?.providers.find((provider) => provider.id === id);
+  if (!previous || previous.isFixture !== false || !found) return null;
+  const sameWords = new Set(
+    (previous.replies ?? [])
+      .filter((old) =>
+        RUN_REPLIES.some(
+          (item) => item.id === old.id && item.text === old.text,
+        ),
+      )
+      .map((old) => old.id),
+  );
+  const voices = found.voices.map((voice) => ({
+    ...voice,
+    samples: voice.samples.filter((sample) => sameWords.has(sample.replyId)),
+  }));
+  if (voices.every((voice) => voice.samples.length === 0)) return null;
+  const dropped =
+    found.voices.flatMap((voice) => voice.samples).length -
+    voices.flatMap((voice) => voice.samples).length;
+  if (dropped > 0) {
+    console.log(
+      `${PROVIDER_NAMES[id]}: left out ${dropped} earlier readings of replies whose words have changed.`,
+    );
+  }
+  voices
+    .flatMap((voice) => voice.samples)
+    .flatMap((sample) => (sample.file === null ? [] : [sample.file]))
+    .filter((file) => existsSync(new URL(file, OUT_DIR)))
+    .forEach((file) =>
+      writeFileSync(
+        new URL(file, NEXT_DIR),
+        readFileSync(new URL(file, OUT_DIR)),
+      ),
+    );
+  return { ...found, voices, ranAt: found.ranAt ?? previous.ranAt };
+};
+
+const NOT_RUN = 'Not run this time.';
+
+const runProviders = async (ranAt: string) => {
+  const built = (await buildProviders()).filter(
+    (entry) => voicesFor(entry.id).length > 0,
+  );
   return inSequence(built, async (entry): Promise<ProviderResult> => {
+    if (onlyIds.length > 0 && !onlyIds.includes(entry.id)) {
+      const carried = carryPrevious(entry.id);
+      if (carried !== null) {
+        console.log(`${PROVIDER_NAMES[entry.id]}: kept from the earlier run.`);
+        return carried;
+      }
+      return { id: entry.id, ranAt, skipped: NOT_RUN, voices: [] };
+    }
     if (entry.provider === null) {
       console.log(entry.skipped);
-      return { id: entry.id, skipped: entry.skipped, voices: [] };
+      return { id: entry.id, ranAt, skipped: entry.skipped, voices: [] };
     }
     const provider = entry.provider;
     console.log(`${PROVIDER_NAMES[entry.id]}:`);
-    const auth = { error: null as string | null };
-    const voices = await inSequence(TTS_VOICES[entry.id], (voice) =>
-      runVoice(provider, voice, auth),
+    const halt = { error: null as string | null };
+    const voices = await inSequence(voicesFor(entry.id), (voice) =>
+      runVoice(provider, voice, halt),
     );
-    return { id: entry.id, skipped: null, voices };
+    return { id: entry.id, ranAt, skipped: null, voices };
   });
 };
 
-const hasRealRun = () => {
-  try {
-    const previous = JSON.parse(
-      readFileSync(new URL('results.json', OUT_DIR), 'utf8'),
-    ) as { isFixture?: boolean };
-    return previous.isFixture === false;
-  } catch {
-    return false;
-  }
-};
+const hasRealRun = () => readPrevious()?.isFixture === false;
 
 const swapIn = () => {
   const previous = new URL('.previous/', OUT_DIR);
@@ -596,6 +789,26 @@ const swapIn = () => {
 };
 
 const main = async () => {
+  const isMissingValue = (flag: string) =>
+    process.argv.includes(flag) && argValue(flag) === null;
+  if (
+    isMissingValue('--only') ||
+    (argValue('--only') !== null && onlyIds.length !== askedIds.length)
+  ) {
+    console.log(`--only takes one or more of: ${PROVIDER_IDS.join(', ')}.`);
+    process.exitCode = 1;
+    return;
+  }
+  if (
+    isMissingValue('--runs') ||
+    !Number.isInteger(RUNS) ||
+    RUNS < 1 ||
+    RUNS > 20
+  ) {
+    console.log('--runs takes a whole number from 1 to 20.');
+    process.exitCode = 1;
+    return;
+  }
   if (isFixture && !isForced && hasRealRun()) {
     console.log(
       "There's a real run in voice-benchmark/. Add --force to replace it with made-up numbers.",
@@ -608,7 +821,7 @@ const main = async () => {
   const ranAt = new Date().toISOString();
   const providers: ProviderResult[] = isFixture
     ? runFixture()
-    : await runProviders();
+    : await runProviders(ranAt);
   const hasAudio = providers.some((provider) =>
     provider.voices.some((voice) =>
       voice.samples.some((sample) => sample.error === null),
@@ -623,16 +836,32 @@ const main = async () => {
   }
   writeFileSync(
     new URL('results.json', NEXT_DIR),
-    JSON.stringify({ ranAt, isFixture, replies: REPLIES, providers }, null, 2),
+    JSON.stringify(
+      { ranAt, isFixture, replies: RUN_REPLIES, providers },
+      null,
+      2,
+    ),
   );
   swapIn();
   console.log(`Wrote ${new URL('results.json', OUT_DIR).pathname}`);
-  if (!isFixture) writeDoc(providers, ranAt);
+  const isPartial = providers.some((provider) => provider.skipped === NOT_RUN);
+  if (isPartial) {
+    console.log(
+      'Left docs/voice-benchmark.md as it was: some providers had no earlier run to keep.',
+    );
+  }
+  if (!isFixture && !isAllVoices && !isPartial) writeDoc(providers, ranAt);
   if (!isOpening) return;
   console.log('Opening the benchmark page…');
-  spawnSync('npx', ['vite', '--open', '/scripts/voice/benchmark.html'], {
-    stdio: 'inherit',
-  });
+  spawnSync(
+    'npx',
+    [
+      'vite',
+      '--open',
+      `/scripts/voice/benchmark.html${isAllVoices ? '?set=all-voices' : ''}`,
+    ],
+    { stdio: 'inherit' },
+  );
 };
 
 await main();

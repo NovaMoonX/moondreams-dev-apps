@@ -17,8 +17,19 @@ import {
   normalizeSaid,
   toWakeSpellings,
 } from '../../src/apps/helm/utils/voicePhrases.ts';
+import {
+  HELM_DEFAULT_VOICE as SERVER_DEFAULT_VOICE,
+  HELM_SPEED_RANGE,
+  HELM_VOICE_NAMES,
+} from '../../functions/src/apps/helm/voiceIdentity.ts';
 import type { HelmQuestion } from '../../src/apps/helm/types.ts';
 import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
+import {
+  HELM_DEFAULT_VOICE,
+  HELM_VOICES,
+  HELM_VOICE_SPEEDS,
+  toHelmVoiceSpeed,
+} from '../../src/apps/helm/voices.ts';
 import { readWakePhrase } from '../../src/lib/speech/speechText.ts';
 
 const NOW = Date.UTC(2026, 10, 9, 20, 0);
@@ -47,7 +58,7 @@ const cases: [string, string | null, string | null][] = [
         },
       ],
     }),
-    'Got it. Call the florist, Friday.',
+    'Got it. Call the florist on Friday.',
   ],
   [
     'one task due tomorrow',
@@ -59,7 +70,7 @@ const cases: [string, string | null, string | null][] = [
         },
       ],
     }),
-    'Got it. Buy the rings, tomorrow.',
+    'Got it. Buy the rings tomorrow.',
   ],
   [
     'one task at a moment, read in the person zone',
@@ -71,7 +82,19 @@ const cases: [string, string | null, string | null][] = [
         },
       ],
     }),
-    'Got it. Call Dana, tomorrow at 9:30 AM.',
+    'Got it. Call Dana tomorrow at 9:30 AM.',
+  ],
+  [
+    'one task at a moment later this week',
+    ack({
+      created: [
+        {
+          title: 'Call Dana',
+          due: { kind: 'moment', at: Date.UTC(2026, 10, 13, 17, 0) },
+        },
+      ],
+    }),
+    'Got it. Call Dana on Friday at 9 AM.',
   ],
   [
     'one task a week or more away',
@@ -83,7 +106,7 @@ const cases: [string, string | null, string | null][] = [
         },
       ],
     }),
-    'Got it. Send the invitations, November 20.',
+    'Got it. Send the invitations on November 20.',
   ],
   [
     'a title that ends in a full stop',
@@ -169,7 +192,7 @@ const sealedFor = (inputMode: string) => {
 };
 assert.equal(
   sealedFor('voice').spoken,
-  'Got it. Call the florist, Friday.',
+  'Got it. Call the florist on Friday.',
   'a spoken turn seals its line with the execution',
 );
 assert.equal(sealedFor('typed').spoken, null, 'a typed turn seals no line');
@@ -262,6 +285,45 @@ assert.equal(
   null,
   'a day inside another request is not an answer',
 );
+
+const pickerNames = HELM_VOICES.map((voice) => voice.name);
+assert.equal(pickerNames.length, 30, 'the picker offers 30 voices');
+assert.equal(new Set(pickerNames).size, 30, 'no voice is listed twice');
+assert.ok(
+  pickerNames.includes(HELM_DEFAULT_VOICE),
+  'the default voice is one the picker offers',
+);
+assert.deepEqual(
+  [...pickerNames].sort(),
+  [...HELM_VOICE_NAMES].sort(),
+  "the picker's voices are the server's voices",
+);
+assert.equal(
+  HELM_DEFAULT_VOICE,
+  SERVER_DEFAULT_VOICE,
+  'the picker and the server default to the same voice',
+);
+assert.deepEqual(
+  [HELM_VOICE_SPEEDS[0], HELM_VOICE_SPEEDS.at(-1)],
+  [HELM_SPEED_RANGE.min, HELM_SPEED_RANGE.max],
+  "the speed notches span the server's range",
+);
+(['female', 'male'] as const).forEach((gender) =>
+  (['calm', 'clear', 'lively'] as const).forEach((group) =>
+    assert.ok(
+      HELM_VOICES.some(
+        (voice) => voice.gender === gender && voice.group === group,
+      ),
+      `${gender} ${group} has voices`,
+    ),
+  ),
+);
+assert.deepEqual(
+  [toHelmVoiceSpeed(null), toHelmVoiceSpeed(1.04), toHelmVoiceSpeed(0.85)],
+  [1, 1, 0.8],
+  'a stored speed reads as its nearest notch, normal when null',
+);
+assert.ok(HELM_VOICE_SPEEDS.includes(1), 'normal pace is a notch');
 
 console.log(
   'check:helm-voice: spoken lines, undo phrases and the wake phrase passed.',

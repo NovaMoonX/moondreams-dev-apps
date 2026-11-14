@@ -83,4 +83,8 @@ export interface VoiceAppLimits {
   mintsPerDay: number;
   spokenCharsPerDay: number;
   voices: Record<TtsProviderId, string>;
+  /** The bare voice names a person may pick; only googleTts reads them. */
+  voiceNames: readonly string[];
+  defaultVoice: string;
+  speedRange: { min: number; max: number };
 }

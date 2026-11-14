@@ -25,7 +25,11 @@ import { createDeepgramStt } from '@/lib/speech/voice/deepgramStream';
 import { createCloudTts } from '@/lib/speech/voice/cloudTts';
 import { createDeviceTts } from '@/lib/speech/voice/deviceTts';
 import { createPlaybackQueue } from '@/lib/speech/voice/playbackQueue';
-import type { SpeechSource } from '@/lib/speech/voice/speechSource';
+import {
+  withSpeechVoice,
+  type SpeechSource,
+  type SpeechVoice,
+} from '@/lib/speech/voice/speechSource';
 import type {
   CloudHeldReason,
   FrameSource,
@@ -72,8 +76,15 @@ interface VoiceConversationOptions {
   onCloudHeld?: (reason: CloudHeldReason) => void;
   /** Listens in the cloud while `isAllowed`, online and not held for the day; the device takes over whenever it can't (the downloaded model, else the browser's recognition). Null listens on the device only. */
   cloudListening?: { tokenSource: VoiceTokenSource; isAllowed: boolean } | null;
-  /** Speaks a `reply` or `summary` in the cloud while `isAllowed`, online and not held for the day; the device voice takes over whenever it can't. An `ack` always stays on the device. Null speaks on the device only. */
-  cloudSpeaking?: { source: SpeechSource; isAllowed: boolean } | null;
+  /** Speaks a `reply` or `summary` in the cloud while `isAllowed`, online and not held for the day; the device voice takes over whenever it can't. An `ack` always stays on the device, and so does the rest of a conversation once a line falls back. Null speaks on the device only. */
+  cloudSpeaking?: {
+    source: SpeechSource;
+    isAllowed: boolean;
+    /** Read once at a conversation's first cloud line; that voice lasts until it ends. */
+    readVoice?: () => SpeechVoice;
+  } | null;
+  /** A conversation ends after this long with no line spoken; the cloud voice is tried again for the next. */
+  conversationIdleMs?: number;
   /** The person started talking over a line that was playing; the line is already stopped and listening is starting. */
   onBargeIn?: () => void;
   /** Waits for a phrase on the device (the downloaded model, else the browser's own recognition) while nothing else is going on and the page is visible; Null never does. `onWake` gets the words said after the phrase in the same breath, null when there were none, with which listener heard them, and says whether it started something. */
@@ -87,6 +98,8 @@ interface VoiceConversationOptions {
 export type VoiceListeningRoute = 'cloud' | 'device';
 
 const QUIET_MS = 8000;
+const CONVERSATION_IDLE_MS = 10 * 60 * 1000;
+const FIRST_LINE_FIRST_BYTE_MS = 4000;
 const FOLLOW_UP_MS = 8000;
 const WAKE_SETTLE_MS = 400;
 const WAKE_RETRIES = 2;
@@ -114,7 +127,7 @@ const toEndPattern = (phrases: string[]) =>
  * person taps again, says an end phrase or is quiet for `quietMs`. Replies are spoken through a queue (an `ack` first,
  * a newer turn cutting the older turn's audio) by the voice `pickSpeaker` chooses, and muting silences every line until
  * the screen closes (never stored). Listening is the cloud's when the app allows it and `pickListener` agrees, the
- * downloaded on-device model's otherwise, else the browser's; a `reply` or `summary` is spoken in the cloud when the app allows it, the device otherwise. The app supplies its phrases and what an utterance becomes.
+ * downloaded on-device model's otherwise, else the browser's; a `reply` or `summary` is spoken in the cloud when the app allows it, the device otherwise (a conversation ends after `conversationIdleMs` with no line, an end phrase, or a stop). The app supplies its phrases and what an utterance becomes.
  */
 export function useVoiceConversation({
   lang,
@@ -126,6 +139,7 @@ export function useVoiceConversation({
   isNaturalVoiceReady = false,
   isOnDeviceReady = false,
   quietMs = QUIET_MS,
+  conversationIdleMs = CONVERSATION_IDLE_MS,
   cloudListening = null,
   cloudSpeaking = null,
   onCloudHeld,
@@ -136,6 +150,7 @@ export function useVoiceConversation({
   const [isThinking, setIsThinking] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isSounding, setIsSounding] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
   const [heard, setHeard] = useState('');
@@ -165,6 +180,7 @@ export function useVoiceConversation({
     isNaturalVoiceReady,
     canHearOnDevice,
     quietMs,
+    conversationIdleMs,
     isMuted,
     cloudListening,
     cloudSpeaking,
@@ -181,6 +197,10 @@ export function useVoiceConversation({
   const run = useRef({
     heldDay: null as string | null,
     speechHeldDay: null as string | null,
+    isDeviceSticky: false,
+    voice: null as SpeechVoice | null,
+    hasSpokenCloud: false,
+    lastLineAt: null as number | null,
     heardBy: 'browser',
     mode: createListeningState('TAP'),
     isCancelled: false,
@@ -205,6 +225,7 @@ export function useVoiceConversation({
       isNaturalVoiceReady,
       canHearOnDevice,
       quietMs,
+      conversationIdleMs,
       isMuted,
       cloudListening,
       cloudSpeaking,
@@ -233,26 +254,42 @@ export function useVoiceConversation({
           isNaturalVoiceReady: isNaturalReady,
           isCloudAllowed: cloud?.isAllowed ?? false,
           isCloudHeld: run.current.speechHeldDay === today,
+          isDeviceSticky: run.current.isDeviceSticky,
           hasCloud: cloud !== null,
         });
+        if (choice !== 'cloud' && cloud?.isAllowed && priority !== 'ack') {
+          run.current.isDeviceSticky = true;
+        }
         const device = createDeviceTts({
           isNatural:
             choice === 'natural' || (choice === 'cloud' && isNaturalReady),
           lang: speechLang,
         });
-        return choice === 'cloud' && cloud
-          ? createCloudTts({
-              source: cloud.source,
-              fallback: device,
-              onHeld: () => {
-                run.current.speechHeldDay = today;
-              },
-            })
-          : device;
+        if (choice !== 'cloud' || !cloud) return device;
+        const isFirstLine = !run.current.hasSpokenCloud;
+        run.current.hasSpokenCloud = true;
+        if (cloud.readVoice) run.current.voice ??= cloud.readVoice();
+        return createCloudTts({
+          source: run.current.voice
+            ? withSpeechVoice(cloud.source, run.current.voice)
+            : cloud.source,
+          fallback: device,
+          ...(isFirstLine && { firstByteMs: FIRST_LINE_FIRST_BYTE_MS }),
+          onHeld: () => {
+            run.current.speechHeldDay = today;
+          },
+          onFallback: () => {
+            run.current.isDeviceSticky = true;
+          },
+        });
       },
       onActiveChange: (isActive) =>
         queueMicrotask(() => {
           setIsSpeaking(isActive);
+          if (!isActive) {
+            setIsSounding(false);
+            run.current.lastLineAt = Date.now();
+          }
           syncBargeGate();
         }),
     });
@@ -270,6 +307,13 @@ export function useVoiceConversation({
     const before = run.current.mode;
     run.current.mode = reduceListening(before, event, TAP_CONFIG);
     return getListeningEffect(before, run.current.mode);
+  };
+
+  const endConversation = () => {
+    run.current.isDeviceSticky = false;
+    run.current.voice = null;
+    run.current.hasSpokenCloud = false;
+    run.current.lastLineAt = null;
   };
 
   const finish = () => {
@@ -312,6 +356,7 @@ export function useVoiceConversation({
   const submit = (text: string, sttProvider: string) => {
     const pattern = toEndPattern(latest.current.endPhrases);
     const said = (pattern ? text.replace(pattern, '') : text).trim();
+    if (pattern?.test(text)) endConversation();
     if (said === '') return false;
     setIsThinking(true);
     latest.current.onUtterance(said, { sttProvider });
@@ -523,11 +568,13 @@ export function useVoiceConversation({
 
   const stop = () => {
     if (run.current.mode.phase !== 'OFF') {
+      // Stopping while listening sends what was heard, so the conversation goes on.
       finish();
       return;
     }
     getQueue().clear();
     setIsThinking(false);
+    endConversation();
   };
 
   const cancel = () => {
@@ -550,11 +597,24 @@ export function useVoiceConversation({
     if (latest.current.isMuted || run.current.mode.phase !== 'OFF') {
       return Promise.resolve({ status: 'cancelled', adapterId: null });
     }
-    defer(() => setIsThinking(false));
+    const { lastLineAt } = run.current;
+    if (
+      lastLineAt !== null &&
+      Date.now() - lastLineAt >= latest.current.conversationIdleMs
+    ) {
+      endConversation();
+    }
     const { canAnswer = false, ...line } = options;
     const spoken = getQueue().enqueue(text, {
       ...line,
-      onStart: () => setSaying(text),
+      onStart: () => {
+        setSaying(text);
+        setIsSounding(true);
+        setIsThinking(false);
+      },
+    });
+    void spoken.then((result) => {
+      if (result.status !== 'cancelled') defer(() => setIsThinking(false));
     });
     if (canAnswer) {
       void spoken.then((result) => {
@@ -721,9 +781,9 @@ export function useVoiceConversation({
 
   const state: VoiceState = isListening
     ? 'listening'
-    : isSpeaking
+    : isSounding
       ? 'speaking'
-      : isThinking
+      : isThinking || isSpeaking
         ? 'thinking'
         : 'idle';
 
@@ -731,7 +791,7 @@ export function useVoiceConversation({
     state,
     heard,
     /** The line being said right now; empty otherwise. */
-    saying: isSpeaking ? saying : '',
+    saying: isSounding ? saying : '',
     isMuted,
     setMuted,
     listen,

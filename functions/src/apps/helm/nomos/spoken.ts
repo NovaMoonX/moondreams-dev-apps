@@ -34,7 +34,7 @@ export const toKnownZone = (timeZone: string) => {
   }
 };
 
-/** "today", "tomorrow", a weekday within the week, otherwise "November 13"; a moment adds "at 9 AM". A day-only due reads in UTC, a moment in the person's zone. */
+/** "today", "tomorrow", "on Friday" within the week, otherwise "on November 13"; a moment adds "at 9 AM". A day-only due reads in UTC, a moment in the person's zone. */
 const describeWhen = (due: TaskDue, timeZone: string, now: number) => {
   const zone = toKnownZone(timeZone);
   const day = due.kind === 'day' ? due.date : getDayIn(due.at, zone);
@@ -45,11 +45,11 @@ const describeWhen = (due: TaskDue, timeZone: string, now: number) => {
       : away === 1
         ? 'tomorrow'
         : away > 1 && away < 7
-          ? new Date(day).toLocaleDateString('en-US', {
+          ? `on ${new Date(day).toLocaleDateString('en-US', {
               timeZone: 'UTC',
               weekday: 'long',
-            })
-          : new Date(day).toLocaleDateString('en-US', {
+            })}`
+          : `on ${new Date(day).toLocaleDateString('en-US', {
               timeZone: 'UTC',
               month: 'long',
               day: 'numeric',
@@ -57,7 +57,7 @@ const describeWhen = (due: TaskDue, timeZone: string, now: number) => {
               new Date(getDayIn(now, zone)).getUTCFullYear()
                 ? {}
                 : { year: 'numeric' }),
-            });
+            })}`;
   if (due.kind === 'day') return label;
   const time = new Date(due.at)
     .toLocaleTimeString('en-US', {
@@ -91,8 +91,9 @@ export function buildSpokenAck(input: SpokenAckInput): string | null {
   if (!isOneTask || !trimEnd(only.title)) {
     return limit(`Got it. ${trimEnd(summary)}.`);
   }
+  // No comma before the day: a voice pauses at one, so "Call Dana, Friday" reads as two thoughts.
   const when = only.due
-    ? `, ${describeWhen(only.due, input.timeZone, input.now)}`
+    ? ` ${describeWhen(only.due, input.timeZone, input.now)}`
     : '';
   return limit(`Got it. ${trimEnd(only.title)}${when}.`);
 }
