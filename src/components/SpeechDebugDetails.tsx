@@ -1,9 +1,13 @@
+import { useSyncExternalStore } from 'react';
+
 import DebugDetails from '@/components/DebugDetails';
 import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
+import { useCanSeeDebugDetails } from '@lib/debugProfiles/useCanSeeDebugDetails';
 import { detectMicrophoneDevice } from '@/lib/speech/microphonePermission';
 import {
   describeSpeechSetup,
   readSpeechEvents,
+  subscribeSpeechEvents,
 } from '@/lib/speech/speechDiagnostics';
 
 interface SpeechDebugDetailsProps {
@@ -12,10 +16,9 @@ interface SpeechDebugDetailsProps {
   className?: string;
 }
 
-/** Debug details for a failure to listen: the microphone permission, the device, what the browser offers and the last things it said. Only debug viewers see it. */
-function SpeechDebugDetails({ message, className }: SpeechDebugDetailsProps) {
+function SpeechFacts({ message, className }: SpeechDebugDetailsProps) {
   const permission = useMicrophonePermission();
-  const events = readSpeechEvents();
+  const events = useSyncExternalStore(subscribeSpeechEvents, readSpeechEvents);
   return (
     <DebugDetails
       title='What went wrong'
@@ -33,6 +36,13 @@ function SpeechDebugDetails({ message, className }: SpeechDebugDetailsProps) {
       className={className}
     />
   );
+}
+
+/** Debug details for a failure to listen: the microphone permission, the device, what the browser offers and the last things it said, kept current as it says more. Only debug viewers see it. */
+function SpeechDebugDetails(props: SpeechDebugDetailsProps) {
+  const canSee = useCanSeeDebugDetails();
+  if (!canSee) return null;
+  return <SpeechFacts {...props} />;
 }
 
 export default SpeechDebugDetails;

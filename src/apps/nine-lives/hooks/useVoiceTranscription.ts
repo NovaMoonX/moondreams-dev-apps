@@ -4,6 +4,7 @@ import {
   needsMicrophoneAsk,
   peekMicrophonePermission,
   rememberRecognitionRefused,
+  wasMicrophoneGranted,
 } from '@/lib/speech/microphonePermission';
 import { recordSpeechEvent } from '@/lib/speech/speechDiagnostics';
 
@@ -152,13 +153,18 @@ export function useVoiceTranscription(): VoiceTranscription {
         return;
       }
       recordSpeechEvent(`Recognition error: ${event.error}`);
-      if (event.error === 'not-allowed' && peekMicrophonePermission() !== 'granted') {
-        rememberRecognitionRefused();
-      }
+      // With the microphone already allowed, the refusal is the speech service's.
+      const isMicrophoneAllowed =
+        peekMicrophonePermission() === 'granted' || wasMicrophoneGranted();
+      const code =
+        event.error === 'not-allowed' && isMicrophoneAllowed
+          ? 'service-not-allowed'
+          : event.error;
+      if (code === 'not-allowed') rememberRecognitionRefused();
 
-      const nextError = new Error(getSpeechRecognitionError(event.error));
+      const nextError = new Error(getSpeechRecognitionError(code));
       setError(nextError.message);
-      setIsBlocked(event.error === 'not-allowed');
+      setIsBlocked(code === 'not-allowed');
       setIsListening(false);
       recognitionRef.current = null;
       finish(nextError);

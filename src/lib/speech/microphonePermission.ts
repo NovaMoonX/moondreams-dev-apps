@@ -5,6 +5,7 @@ type MicrophonePermission = PermissionState | 'unknown';
 const watched = {
   state: 'unknown' as MicrophonePermission,
   isStarted: false,
+  wasGranted: false,
   listeners: new Set<(state: MicrophonePermission) => void>(),
 };
 
@@ -12,6 +13,7 @@ const REFUSED_KEY = 'speech:recognition-refused';
 
 /** Remembers that speech recognition was refused here before the browser was asked for the microphone, as an installed app can do without ever prompting, so the next tap asks for the microphone first instead of failing again. */
 export const rememberRecognitionRefused = () => {
+  if (watched.wasGranted) return;
   try {
     window.localStorage.setItem(REFUSED_KEY, 'true');
   } catch {
@@ -36,7 +38,10 @@ const wasRecognitionRefused = () => {
 };
 
 const setState = (state: MicrophonePermission) => {
-  if (state === 'granted') forgetRecognitionRefused();
+  if (state === 'granted') {
+    watched.wasGranted = true;
+    forgetRecognitionRefused();
+  }
   if (state === watched.state) return;
   watched.state = state;
   recordSpeechEvent(`Microphone permission: ${state}`);
@@ -90,6 +95,9 @@ export const watchMicrophonePermission = (
 };
 
 /** Whether listening should not start from a tap: the microphone is refused, or it hasn't been asked for on a device where recognition was refused without asking. The way in is `requestMicrophone`. */
+/** Whether the microphone was allowed at some point in this visit, so a later refusal of recognition is about the speech service (Siri or Dictation off), not the microphone. */
+export const wasMicrophoneGranted = () => watched.wasGranted;
+
 export const needsMicrophoneAsk = (state: MicrophonePermission) =>
   state === 'denied' || (state === 'prompt' && wasRecognitionRefused());
 

@@ -14,6 +14,7 @@ import {
   peekMicrophonePermission,
   readMicrophonePermission,
   rememberRecognitionRefused,
+  wasMicrophoneGranted,
   watchMicrophonePermission,
 } from '@/lib/speech/microphonePermission';
 import { readWakePhrase } from '@/lib/speech/speechText';
@@ -438,12 +439,13 @@ export function useVoiceConversation({
     run.current.isCancelled = true;
     const isLasting = BLOCKED.includes(code) || code === 'language';
     const isAsked = !run.current.isUnasked;
-    if (code === 'denied' && peekMicrophonePermission() !== 'granted')
-      rememberRecognitionRefused();
+    const isMicrophoneAllowed =
+      peekMicrophonePermission() === 'granted' || wasMicrophoneGranted();
+    if (code === 'denied' && !isMicrophoneAllowed) rememberRecognitionRefused();
     const lasting: VoiceUnavailableReason | null =
-      code === 'denied' || code === 'no-microphone'
+      (code === 'denied' && !isMicrophoneAllowed) || code === 'no-microphone'
         ? 'no-permission'
-        : code === 'service' || code === 'language'
+        : code === 'denied' || code === 'service' || code === 'language'
           ? 'no-recognition'
           : null;
     if (lasting !== null) setReason(lasting);

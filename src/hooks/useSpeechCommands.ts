@@ -11,6 +11,7 @@ import {
   needsMicrophoneAsk,
   peekMicrophonePermission,
   rememberRecognitionRefused,
+  wasMicrophoneGranted,
 } from '@/lib/speech/microphonePermission';
 import { recordSpeechEvent } from '@/lib/speech/speechDiagnostics';
 import { readAloud } from '@/lib/speech/readAloud';
@@ -208,7 +209,10 @@ export const createSpeechListener = (
       `Recognition error: ${event.error}${event.message ? ` (${event.message})` : ''}`,
     );
     if (event.error === 'not-allowed') {
-      if (peekMicrophonePermission() !== 'granted') rememberRecognitionRefused();
+      // With the microphone already allowed, the refusal is the speech service's.
+      if (peekMicrophonePermission() === 'granted' || wasMicrophoneGranted())
+        return halt('service');
+      rememberRecognitionRefused();
       return halt('denied');
     }
     if (event.error === 'service-not-allowed') return halt('service');

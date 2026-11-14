@@ -1,11 +1,23 @@
 const KEPT = 12;
 
-const log = { lines: [] as string[] };
+const log = {
+  lines: [] as string[],
+  listeners: new Set<() => void>(),
+};
 
 /** Notes something the browser said about listening (an error's raw code and message, a permission change), kept for the debug details on a phone with no console. */
 export const recordSpeechEvent = (text: string) => {
   const time = new Date().toISOString().slice(11, 19);
   log.lines = [...log.lines, `${time} ${text}`].slice(-KEPT);
+  log.listeners.forEach((listener) => listener());
+};
+
+/** Calls back whenever a speech event is recorded, for `useSyncExternalStore`. */
+export const subscribeSpeechEvents = (listener: () => void) => {
+  log.listeners.add(listener);
+  return () => {
+    log.listeners.delete(listener);
+  };
 };
 
 /** The last few things the browser said about listening, oldest first. */
