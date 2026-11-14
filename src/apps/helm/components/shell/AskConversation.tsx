@@ -75,7 +75,11 @@ function AskConversation({ entry: liveEntry, onClose }: AskConversationProps) {
             screen={screen}
             onBlocked={() => fieldRef.current?.focus()}
           />
-          <div className={voice.state === 'idle' ? undefined : 'hidden'}>
+          <div
+            className={
+              voice.state === 'idle' || voice.isDictating ? undefined : 'hidden'
+            }
+          >
             <Composer
               fieldRef={fieldRef}
               onFocusChange={noop}
