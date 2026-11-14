@@ -92,8 +92,12 @@ export const completeMcpSignIn = onCall(
       return { redirectUri };
     } catch (error) {
       logger.warn('mcp.signIn.failed', { code: failureCode(error) });
+      const isStale =
+        error instanceof WorkosError &&
+        error.status >= 400 &&
+        error.status < 500;
       throw new HttpsError(
-        'internal',
+        isStale ? 'invalid-argument' : 'internal',
         'Could not finish connecting. Start again from your assistant.',
       );
     }

@@ -1198,6 +1198,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       ttsProvider: null,
       arrivedVia: 'direct',
       medium: 'web',
+      via: null,
       sessionId: `scale-session-${pad(session, 2)}`,
       turnIndex: inSession,
       route: 'quick',

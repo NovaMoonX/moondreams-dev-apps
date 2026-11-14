@@ -596,6 +596,7 @@ async function buildBackToBack(input: {
         ttsProvider: null,
         arrivedVia: 'direct',
         medium: 'web',
+        via: null,
         sessionId: `seed-${uid}-today`,
         turnIndex: turnIndexFrom + order,
         route: order === 0 ? 'quick' : null,
@@ -937,6 +938,7 @@ async function buildGmailTurn(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     medium: 'web',
+    via: null,
     sessionId: `seed-${uid}-answers`,
     turnIndex: 6,
     route: 'quick',
@@ -1075,6 +1077,7 @@ async function buildAnswerTurns(input: {
         ttsProvider: null,
         arrivedVia: 'direct',
         medium: 'web',
+        via: null,
         sessionId: `seed-${uid}-answers`,
         turnIndex: order,
         route: 'quick',
@@ -1713,6 +1716,7 @@ async function buildNoteTurn(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     medium: 'web',
+    via: null,
     sessionId: `seed-${uid}-answers`,
     turnIndex: 7,
     route: 'full',
@@ -2353,6 +2357,7 @@ async function buildKnowledge(input: {
     ttsProvider: null,
     arrivedVia: 'direct' as const,
     medium: 'web' as const,
+    via: null,
     sessionId: `seed-${uid}-growth`,
     turnIndex,
     route: 'full' as const,
@@ -3013,6 +3018,7 @@ async function buildPhotoTurns(input: {
       ttsProvider: null,
       arrivedVia: 'direct',
       medium: 'web',
+      via: null,
       sessionId,
       turnIndex: index,
       route: 'full',
@@ -3309,6 +3315,7 @@ async function buildFileTurns(input: {
       ttsProvider: null,
       arrivedVia: 'direct',
       medium: 'web',
+      via: null,
       sessionId,
       turnIndex: index,
       route: 'full',
@@ -3985,6 +3992,7 @@ async function buildPeople(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     medium: 'web',
+    via: null,
     sessionId: 'seed-alex-question',
     turnIndex: 0,
     route: 'quick',
@@ -4067,6 +4075,7 @@ async function buildPeople(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     medium: 'web',
+    via: null,
     sessionId: 'seed-alex-asked',
     turnIndex: 0,
     route: 'quick',
@@ -4130,6 +4139,7 @@ async function buildPeople(input: {
     ttsProvider: null,
     arrivedVia: 'direct',
     medium: 'web',
+    via: null,
     sessionId: 'seed-alex-who',
     turnIndex: 0,
     route: 'quick',
@@ -4792,6 +4802,20 @@ async function buildPeople(input: {
   };
 }
 
+/** Two connected assistants: Claude (can add things, used today) and Gemini (read-only, used earlier). */
+const SEED_ASSISTANTS = [
+  {
+    clientId: 'https://claude.ai/oauth/seed-claude.json',
+    name: 'Claude',
+    canWrite: true,
+  },
+  {
+    clientId: 'https://gemini.google.com/oauth/seed-gemini.json',
+    name: 'Gemini',
+    canWrite: false,
+  },
+] as const;
+
 export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const createdAt = context.now - 14 * DAY_MS;
   const keyring = readEmulatorKeyring('HELM_MASTER_KEYS');
@@ -4883,6 +4907,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             ttsProvider: spoken === undefined ? null : 'natural',
             arrivedVia: 'direct',
             medium: 'web',
+            via: null,
             sessionId: `seed-${user.uid}-${turn.session}`,
             turnIndex: ALL_TURNS.filter(
               (entry) => entry.session === turn.session,
@@ -5056,6 +5081,31 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         ),
       }));
       const person = users.doc(user.uid);
+      SEED_ASSISTANTS.forEach((assistant, index) => {
+        const lastUsedAt = context.now - index * 3 * DAY_MS - 20 * MINUTE_MS;
+        batch.set(
+          context.firestore
+            .collection('mcpClients')
+            .doc(user.uid)
+            .collection('clients')
+            .doc(
+              createHash('sha256')
+                .update(assistant.clientId)
+                .digest('hex')
+                .slice(0, 32),
+            ),
+          {
+            appId: 'helm',
+            clientId: assistant.clientId,
+            name: assistant.name,
+            workosUserId: `seed-workos-${user.uid}`,
+            firstSeenAt: context.now - (9 - index * 4) * DAY_MS,
+            lastUsedAt,
+            canWrite: assistant.canWrite,
+            revokedAt: null,
+          },
+        );
+      });
       const today = getDueDay({ kind: 'moment', at: context.now }, timeZone);
       const handTasks = await Promise.all(
         SEED_HAND_TASKS.map(async (entry, index) => {

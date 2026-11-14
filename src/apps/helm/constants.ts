@@ -908,6 +908,42 @@ export const HELM_COPY = {
   connectedAppsFailed:
     "Your connections didn't open. Close this page and open it again.",
   connectedAppsLoading: 'Opening your connections',
+  assistantsRowTitle: 'Connected assistants',
+  assistantsRowNone: 'Claude, Gemini and others',
+  assistantsRowCount: (count: number) => `${count} connected`,
+  assistantsLead: (app: string) =>
+    `Claude, Gemini or another assistant can read your ${app} and, if you let it, add to it. What it reads goes to that company and is handled under its own terms.`,
+  assistantsFailed:
+    "Your assistants didn't open. Close this page and open it again.",
+  assistantsLoading: 'Opening your assistants',
+  assistantsListHeading: 'Connected',
+  assistantLastUsed: (when: string) => `Last used ${when}`,
+  assistantNeverUsed: 'Not used yet',
+  assistantReads: (app: string) => `Can read your ${app}`,
+  assistantWrites: (app: string) => `Can add things to ${app}`,
+  assistantWritesHint: (app: string) =>
+    `Off, it can look things up. On, it can also ask ${app} questions and add tasks and notes, which you can undo in Activity.`,
+  assistantConnectedOn: (date: string) => `Connected ${date}`,
+  assistantDisconnect: 'Disconnect',
+  assistantDisconnectTitle: (name: string) => `Disconnect ${name}?`,
+  assistantDisconnectBody: (name: string, app: string) =>
+    `${name} stops reading your ${app} right away. You can connect it again whenever you like.`,
+  assistantUpdateFailed: "That didn't save. Try again.",
+  assistantDisconnectFailed: "That didn't disconnect. Try again.",
+  assistantDisconnected: (name: string) => `Disconnected ${name}`,
+  assistantFrom: (name: string) => `From ${name}`,
+  assistantsConnectHeading: 'Connect an assistant',
+  assistantsAddressLabel: (app: string) => `Your ${app}'s address`,
+  assistantsAddress: 'https://apps.moondreams.dev/mcp/helm',
+  assistantsCopyAddress: 'Copy address',
+  assistantsClaudeHeading: 'Claude',
+  assistantsClaudeSteps:
+    'Open Customize, then Connectors, then Add, then Add custom connector. Paste the address and tap Connect. The free plan can add one connector.',
+  assistantsGeminiHeading: 'Gemini',
+  assistantsGeminiSteps:
+    "On gemini.google.com (the website, which also opens in your phone's browser), open Settings, then Connected Apps, then Add a custom app, and paste the address. Keep Activity needs to be on, and Gemini asks you to confirm each change it makes.",
+  assistantsPrivacy:
+    'Whatever the assistant reads goes to that company and is handled under its own terms.',
   connectSheetTitle: 'Connect an app',
   connectQuestion: (name: string, app: string) => `Let ${name} read ${app}?`,
   connectStartsTicked: (labels: string, count: number) =>

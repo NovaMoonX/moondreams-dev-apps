@@ -19,6 +19,7 @@ const URL_VIEWS = [
   'activity',
   'connectedApps',
   'connection',
+  'assistants',
   'people',
   'who',
   'place',
