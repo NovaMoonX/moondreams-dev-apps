@@ -51,14 +51,6 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
           grant.status !== 'ended' && readScopeOf(grant.connectorId) === scope,
       ),
   );
-  const readsOthersMail =
-    assistant !== null &&
-    assistant.canWrite &&
-    assistant.readScopes.some(
-      (scope) =>
-        (scope === 'mail' || scope === 'drive') &&
-        connectedScopes.includes(scope),
-    );
 
   const setReadScope = async (scope: McpReadScope, isOn: boolean) => {
     if (!assistant || busyScopes.includes(scope)) return;
@@ -160,7 +152,7 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
                       scope,
                       assistant.name,
                       helmAppName,
-                      isOn,
+                      { isOn, canWrite: assistant.canWrite },
                     )}
                   </p>
                 </div>
@@ -175,11 +167,6 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
               </div>
             );
           })}
-          {readsOthersMail && (
-            <p className='text-muted-foreground text-[13px] text-pretty'>
-              {HELM_COPY.assistantReadsAndWrites(assistant.name)}
-            </p>
-          )}
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.assistantPrivacy(assistant.name)}
           </p>
