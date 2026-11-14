@@ -123,7 +123,6 @@ async function countItems(box: FirebaseFirestore.DocumentReference) {
   return { items: total, revealed: shown, notYetRevealed: total - shown };
 }
 
-/** Reveal requests from someone else, only while this person has not asked for one too. */
 const countRevealsWaiting = (requests: unknown, uid: string) => {
   const userIds = (Array.isArray(requests) ? requests : []).map((request) =>
     typeof request === 'object' && request !== null
@@ -151,7 +150,8 @@ async function readBoxes(space: Space, uid: string) {
           kind: 'countSummary',
           title: name,
           subtitle: openField(doc.get('emoji'), space.key),
-          detail: openField(doc.get('description'), space.key),
+          detail:
+            openField(doc.get('description'), space.key)?.slice(0, 300) ?? null,
           extra: {
             ...(await countItems(doc.ref)),
             revealsWaiting: countRevealsWaiting(

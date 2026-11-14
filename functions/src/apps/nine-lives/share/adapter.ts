@@ -111,6 +111,10 @@ const dayFormatter = new Intl.DateTimeFormat('en-US', {
 /** A date picked with no time is UTC midnight, so it reads in UTC. */
 const formatDay = (value: number) => dayFormatter.format(new Date(value));
 
+/** A dose logged with a tap is an instant in a zone the household doesn't store, so its day may be one off. */
+const formatGivenDay = (value: number) =>
+  value % DAY_MS === 0 ? formatDay(value) : `around ${formatDay(value)}`;
+
 const joinLines = (parts: Array<string | null>) =>
   parts.flatMap((part) => (part === null ? [] : [part])).join(' · ') || null;
 
@@ -294,6 +298,7 @@ const syncVisits = (firestore: Firestore, uid: string, windowStart: number) =>
         household.ref
           .collection('visits')
           .where('scheduledAt', '>=', windowStart)
+          .orderBy('scheduledAt', 'desc')
           .select(
             'catIds',
             'clinicId',
@@ -337,29 +342,29 @@ const syncVisits = (firestore: Firestore, uid: string, windowStart: number) =>
       const doctorName =
         doctorId === null ? undefined : doctorNames.get(doctorId);
       return [
-        toRecord({
-          sourceRef: `households/${household.id}/visits/${doc.id}`,
-          kind: 'event',
-          title: `${joinNames(names)}: ${label}`,
-          subtitle: isPast ? 'Past visit' : null,
-          detail: doctorName === undefined ? null : `Doctor: ${doctorName}`,
-          startAt: scheduledAt,
-          placeLabel:
-            clinicId === null ? null : (clinicNames.get(clinicId) ?? null),
-          sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
-        }),
+        {
+          isPast,
+          record: toRecord({
+            sourceRef: `households/${household.id}/visits/${doc.id}`,
+            kind: 'event',
+            title: `${joinNames(names)}: ${label}`,
+            subtitle: isPast ? 'Past visit' : null,
+            detail: doctorName === undefined ? null : `Doctor: ${doctorName}`,
+            startAt: scheduledAt,
+            placeLabel:
+              clinicId === null ? null : (clinicNames.get(clinicId) ?? null),
+            sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
+          }),
+        },
       ];
     });
-    const isPastRecord = (record: SharedRecord) =>
-      record.subtitle === 'Past visit';
     return {
       records: [
-        ...visitRecords.filter((record) => !isPastRecord(record)),
+        ...visitRecords.filter((visit) => !visit.isPast),
         ...visitRecords
-          .filter(isPastRecord)
-          .sort((a, b) => (b.startAt ?? 0) - (a.startAt ?? 0))
+          .filter((visit) => visit.isPast)
           .slice(0, PAST_VISIT_LIMIT),
-      ],
+      ].map((visit) => visit.record),
       isFull:
         catRead.isFull &&
         clinicRead.isFull &&
@@ -428,7 +433,9 @@ const syncDueCare = (firestore: Firestore, uid: string, windowStart: number) =>
           title: `${joinNames(names)}: ${name}`,
           subtitle,
           detail:
-            lastGiven === null ? null : `Last given ${formatDay(lastGiven)}`,
+            lastGiven === null
+              ? null
+              : `Last given ${formatGivenDay(lastGiven)}`,
           dueAt,
           isAllDay: true,
           sourceUpdatedAt: readTime(doc.get('lastEditedAt')),

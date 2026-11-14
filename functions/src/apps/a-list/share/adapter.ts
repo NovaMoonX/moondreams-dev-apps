@@ -168,7 +168,7 @@ const toDayKey = (at: number, timeZone: string) =>
     day: '2-digit',
   }).format(at);
 
-/** A day in words for a record's detail, since a dated record that has ended leaves a reader's window. */
+/** A day in words, since a dated record that has ended leaves a reader's window. */
 const toDayLine = (lead: string, at: number | null, timeZone: string) =>
   at === null
     ? null
@@ -199,7 +199,7 @@ const toGoalLine = (
   period: string,
 ) => (goal === null ? null : `${label} goal ${goal}, ${seen} seen ${period}`);
 
-/** Weeks run Friday to Thursday, like the app's counters; days are read in the zone of the latest theater, since the app does not store the person's own. */
+/** Weeks run Friday to Thursday, like the app's counters; days are read in the zone of the latest seen movie's theater, since the app does not store the person's own. */
 async function readGoals(
   firestore: Firestore,
   uid: string,
@@ -210,7 +210,11 @@ async function readGoals(
   const weeklyGoal = readTime(profile.get('weeklyGoal'));
   const monthlyGoal = readTime(profile.get('monthlyGoal'));
   if (weeklyGoal === null && monthlyGoal === null) return [];
-  const zone = readZone(seenDocs[0]?.get('theatre.timeZone'));
+  const zone = readZone(
+    seenDocs
+      .find((doc) => readText(doc.get('theatre.timeZone')) !== null)
+      ?.get('theatre.timeZone'),
+  );
   const today = toDayKey(now, zone);
   const todayDay = Date.parse(`${today}T00:00:00Z`);
   const sinceFriday = (new Date(todayDay).getUTCDay() - FRIDAY + 7) % 7;
@@ -240,7 +244,11 @@ async function readGoals(
       kind: 'knowledge',
       title: 'Movie goals',
       detail: lines.join(' · '),
-      sourceUpdatedAt: readTime(profile.get('lastEditedAt')),
+      sourceUpdatedAt:
+        Math.max(
+          readTime(profile.get('lastEditedAt')) ?? 0,
+          ...seenDocs.map((doc) => readTime(doc.get('lastEditedAt')) ?? 0),
+        ) || null,
     }),
   ];
 }
@@ -289,7 +297,6 @@ async function syncSeenMovies(
   };
 }
 
-/** Active movies not yet seen, the ones the app's Watchlist lists first. */
 async function syncWatchlist(
   firestore: Firestore,
   uid: string,
