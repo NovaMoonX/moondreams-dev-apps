@@ -75,8 +75,6 @@ function VoicePicker({ onClose }: VoicePickerProps) {
   const playing = useRef<{ stop: () => void } | null>(null);
   const chosen = pendingName ?? savedVoice.name;
   const speed = pendingSpeed ?? savedSpeed;
-  const chosenRow = useRef<HTMLLIElement | null>(null);
-  const isLockedAtOpen = useRef(isLocked);
   const chosenVoice = findHelmVoice(chosen);
   const SampleIcon =
     phase === 'starting' ? Loader2 : phase === 'playing' ? Square : Play;
@@ -87,20 +85,12 @@ function VoicePicker({ onClose }: VoicePickerProps) {
         ? HELM_COPY.voicePickerStop
         : HELM_COPY.voicePickerPlay;
 
-  useEffect(() => {
-    const row = chosenRow.current;
-    // A locked picker opens at its notice, which says why samples are off.
-    if (
-      !isLockedAtOpen.current &&
-      row &&
-      row.getBoundingClientRect().bottom > window.innerHeight
-    ) {
-      row.scrollIntoView({ block: 'center' });
-    }
-    return () => {
+  useEffect(
+    () => () => {
       playing.current?.stop();
-    };
-  }, []);
+    },
+    [],
+  );
 
   const stopSample = () => {
     playing.current?.stop();
@@ -220,7 +210,7 @@ function VoicePicker({ onClose }: VoicePickerProps) {
           {!isLocked && (
             <Button
               type='button'
-              variant='secondary'
+              variant='primary'
               aria-live='polite'
               className='w-full gap-2'
               onClick={toggleSample}
@@ -251,11 +241,7 @@ function VoicePicker({ onClose }: VoicePickerProps) {
               ).map((voice) => {
                 const isChosen = voice.name === chosen;
                 return (
-                  <li
-                    key={voice.name}
-                    ref={isChosen ? chosenRow : undefined}
-                    className='flex items-center gap-1'
-                  >
+                  <li key={voice.name} className='flex items-center gap-1'>
                     <Button
                       type='button'
                       variant='tertiary'
