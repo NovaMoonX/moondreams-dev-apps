@@ -1,5 +1,19 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import {
+  readContextHabits,
+  habitDayRef,
+  readHabitState,
+  writeHabitDayIn,
+  type LiveHabitDay,
+} from './habitStore.js';
+import {
+  buildHowWasItQuestion,
+  planHabitCommands,
+  toPlannedQuestion,
+} from './nomos/planHabitCommands.js';
+import { MAX_EFFECTS, type HabitCommand } from './nomos/commands.js';
+import { decideHabit } from './nomos/policy.js';
+import {
   FieldValue,
   getFirestore,
   type DocumentReference,
@@ -245,6 +259,7 @@ import { decide } from './nomos/policy.js';
 import {
   HAND_OVER_TOOL,
   hasReviseCue,
+  hasHabitCue,
   hasProcedureCue,
   hasProcedureReviseCue,
   isQuestion,
@@ -268,6 +283,7 @@ import {
   toPersonaPrompt,
   TOPIC_PROMPT,
   PROCEDURE_PROMPT,
+  HABIT_PROMPT,
 } from './nomos/prompt.js';
 import { renderWhereBlock } from './nomos/whereThingsLive.js';
 
@@ -1727,6 +1743,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       topicCommands: [],
       procedureCommands: [],
       runCommands: [],
+      habitCommands: [],
       soundsLike: [],
       whereabouts: [],
       offerAbility: null,
@@ -2129,6 +2146,21 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               ),
             ),
           });
+    const contextHabits =
+      mode === 'rest'
+        ? []
+        : await readContextHabits(
+            firestore,
+            base,
+            key,
+            capture.createdAt,
+            timeZone,
+          ).catch((error): Awaited<ReturnType<typeof readContextHabits>> => {
+            logger.warn('helm.sort.habitsUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          });
     const contextProcedures: ContextProcedure[] = procedureRecords.map(
       (procedure) => ({
         id: procedure.id,
@@ -2171,6 +2203,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         : null,
       focusedTopic: topicDocument ? focusedTopic : null,
       runs: contextRuns,
+      habits: contextHabits,
       synced: contextSynced,
     });
     const context = buildContext({
@@ -2206,6 +2239,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedures: masked.procedures,
       focusedProcedure: masked.focusedProcedure,
       runs: masked.runs,
+      habits: masked.habits,
       attachments: attached.media.map((item) => ({
         alias: item.alias,
         kind: item.kind,
@@ -2289,6 +2323,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         focusedLive !== null ||
         hasProcedureCue(combined.text))
         ? PROCEDURE_PROMPT
+        : null,
+      mode !== 'rest' &&
+      (contextHabits.length > 0 || hasHabitCue(combined.text))
+        ? HABIT_PROMPT
         : null,
       mode === 'rest' ? REST_PROMPT : null,
       attached.media.length > 0 ? MEDIA_PROMPT : null,
@@ -2529,6 +2567,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       focusedTaskId,
       procedureVersions,
       runSteps: context.runSteps,
+      habits: context.habits,
       captureText: combined.text,
       keyDateNames,
       quotes,
@@ -2566,6 +2605,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     logger.info('helm.procedure.dropped', { code }),
   );
   reply.runDropped.forEach((code) => logger.info('helm.run.dropped', { code }));
+  reply.habitDropped.forEach((code) =>
+    logger.info('helm.habit.dropped', { code }),
+  );
   const maskedNames = unattendedMask.names;
   const hide = (text: string | null) =>
     text === null || maskedNames.length === 0
@@ -2610,6 +2652,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     topicCommands: mode === 'full' ? reply.topicCommands : [],
     procedureCommands: mode === 'full' ? reply.procedureCommands : [],
     runCommands: mode === 'full' ? reply.runCommands : [],
+    habitCommands:
+      mode === 'full'
+        ? reply.habitCommands.filter(
+            (command) => decideHabit(command) === 'automatic',
+          )
+        : [],
     soundsLike: mode === 'full' ? reply.soundsLike : [],
     whereabouts: mode === 'full' ? reply.whereabouts : [],
     offerAbility:
@@ -2653,6 +2701,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       reply.topicDropped,
       reply.procedureDropped,
       reply.runDropped,
+      reply.habitDropped,
       commands.length < reply.commands.length,
     )
       ? hide(reply.replyLine)
@@ -2774,6 +2823,7 @@ async function writeResult(
     topicCommands: TopicCommand[];
     procedureCommands: ProcedureCommand[];
     runCommands: RunCommand[];
+    habitCommands: HabitCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     whereabouts: SetWhereaboutsCommand[];
     offerAbility: { ability: 'location'; level: 'city' | 'precise' } | null;
@@ -2820,6 +2870,7 @@ async function writeResult(
     topicCommands: requestedTopicCommands,
     procedureCommands,
     runCommands,
+    habitCommands,
     soundsLike,
     whereabouts,
     offerAbility,
@@ -3595,6 +3646,45 @@ async function writeResult(
       newId: () => crypto.randomUUID(),
       seal,
     });
+    const keptHabits = isStale ? [] : habitCommands;
+    const habitState =
+      keptHabits.length > 0
+        ? await readHabitState(
+            transaction,
+            firestore,
+            base,
+            key,
+            capture.createdAt,
+            timeZone,
+          )
+        : null;
+    const habitPlan = planHabitCommands({
+      commands: keptHabits,
+      habits: habitState?.habits ?? [],
+      days: habitState?.days ?? new Map<string, LiveHabitDay>(),
+      selfWhoId,
+      knownWhoIds: new Set(knownNames.map((person) => person.id)),
+      timeZone,
+      profile: {
+        dayStartTime: String(profileSnap?.get('dayStartTime') ?? '08:00'),
+        dayEndTime: String(profileSnap?.get('dayEndTime') ?? '22:00'),
+      },
+      isLearningOn: profileSnap?.get('isLearningOn') !== false,
+      at: capture.createdAt,
+      now,
+      captureId: captureRef.id,
+      executionId: executionRef.id,
+      isUnattended: input.isUnattended === true,
+      newId: () => crypto.randomUUID(),
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length,
+      ),
+    });
     const abilityOffer = isStale
       ? null
       : decideAbilityOffer({
@@ -3610,16 +3700,19 @@ async function writeResult(
         ...(home ? [home.ref] : []),
         ...soundsPlan.effectRefs,
         ...wherePlan.effectRefs,
+        ...habitPlan.effectRefs,
       ],
       effects: [
         ...written.effects,
         ...(home ? [home.effect] : []),
         ...soundsPlan.effects,
         ...wherePlan.effects,
+        ...habitPlan.effects,
       ],
       notKept: [
         ...written.notKept,
         ...wherePlan.notKept,
+        ...habitPlan.notKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
       linkedWhoIds: [
@@ -3630,7 +3723,10 @@ async function writeResult(
         ]),
       ],
       isPrivate:
-        written.isPrivate || soundsPlan.isPrivate || wherePlan.isPrivate,
+        written.isPrivate ||
+        soundsPlan.isPrivate ||
+        wherePlan.isPrivate ||
+        habitPlan.isPrivate,
     };
     const plan = sentMedia
       ? {
@@ -3666,7 +3762,37 @@ async function writeResult(
       now,
       newId: () => crypto.randomUUID(),
     });
-    const questions = [...plan.questions, ...askPlan.questions];
+    const otherQuestions = [
+      ...plan.questions,
+      ...askPlan.questions,
+      ...habitPlan.questions,
+    ];
+    const followUp =
+      otherQuestions.length === 0 && habitPlan.followUp
+        ? habitPlan.followUp
+        : null;
+    const habitDayWrites = habitPlan.dayWrites.map((write) =>
+      followUp && write.dayKey === followUp.dayKey
+        ? {
+            ...write,
+            followUps: [
+              ...write.followUps,
+              { habitId: followUp.habitId, at: now },
+            ],
+          }
+        : write,
+    );
+    const questions = [
+      ...otherQuestions,
+      ...(followUp
+        ? [
+            toPlannedQuestion(buildHowWasItQuestion(followUp.habitName), {
+              id: crypto.randomUUID(),
+              now,
+            }),
+          ]
+        : []),
+    ];
     const firstQuestion = isSpoken ? (questions[0]?.spoken ?? null) : null;
     const versionNumbers = await Promise.all(
       [...new Set(plan.topicVersions.map((version) => version.topicId))].map(
@@ -3799,6 +3925,19 @@ async function writeResult(
           seal,
         }),
       );
+      habitPlan.creates.forEach(({ id, doc }) =>
+        transaction.create(firestore.doc(`${base}/habits/${id}`), doc),
+      );
+      habitPlan.updates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/habits/${id}`), data),
+      );
+      habitDayWrites.forEach((write) =>
+        writeHabitDayIn(
+          transaction,
+          habitDayRef(firestore, base, write.dayKey),
+          write,
+        ),
+      );
       plan.runCreates.forEach(({ id, doc }) =>
         transaction.create(firestore.doc(`${base}/procedureRuns/${id}`), doc),
       );
@@ -3846,13 +3985,18 @@ async function writeResult(
         buildExecution(
           { ...plan, questions },
           {
-            extraLines: [...soundsPlan.lines, ...wherePlan.lines],
+            extraLines: [
+              ...soundsPlan.lines,
+              ...wherePlan.lines,
+              ...habitPlan.lines,
+            ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
               plan.notKept,
               plan.questions,
               questions,
               plan.lines,
+              habitPlan.lines,
               noted.refused,
               liveRefused,
               askPlan.isDeferred,
@@ -3944,6 +4088,8 @@ async function writeResult(
           procedureCommands.length +
           runCommands.length +
           soundsPlan.lines.length +
+          habitPlan.lines.length +
+          habitPlan.notKept.length +
           wherePlan.lines.length +
           wherePlan.notKept.length +
           written.projectCreates.length +

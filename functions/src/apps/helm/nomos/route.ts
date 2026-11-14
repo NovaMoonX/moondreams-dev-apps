@@ -77,6 +77,24 @@ export const hasProcedureCue = (text: string) =>
 export const hasProcedureReviseCue = (text: string) =>
   hasWordIn(PROCEDURE_REVISE_CUES, text);
 
+const HABIT_CUES = new Set([
+  'habit',
+  'habits',
+  'daily',
+  'everyday',
+  'every',
+  'each',
+  'weekly',
+  'pills',
+  'meds',
+  'medicine',
+  'medication',
+  'vitamins',
+]);
+
+/** Whether the words could make a habit: a cue word of its own, like "every" or "daily". */
+export const hasHabitCue = (text: string) => hasWordIn(HABIT_CUES, text);
+
 const RUN_START_CUES = new Set([
   'start',
   'starting',

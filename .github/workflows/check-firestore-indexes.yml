@@ -108,3 +108,4 @@ jobs:
       - run: npm run check:helm-whereabouts
       - run: npm run check:helm-habits
       - run: npm run check:helm-checkin-match
+      - run: npm run check:helm-habit-commands

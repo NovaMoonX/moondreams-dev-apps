@@ -7,6 +7,8 @@ import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
 import type { ModelChange } from '../topicWrite.js';
 import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
 import { KIN_KINDS, KIN_ORDERS, type WhoKin } from './kinKinds.js';
+import type { Cadence } from '../../../vendor/cadenceUtils.js';
+import type { DayPart } from './habitDay.js';
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
@@ -115,6 +117,104 @@ export const RUN_STEPS_MAX = 80;
 export const RUN_EXTRA_MAX = 20;
 export const RUN_EXTRA_TEXT_CAP = 200;
 export const MAX_TICKS_PER_TURN = 20;
+
+/** The kinds the reply may carry that make or change a habit, tick it or mark it care; each is read from its own list and is no `NomosCommand`. */
+export const HABIT_COMMAND_KINDS = [
+  'createHabit',
+  'updateHabit',
+  'checkIn',
+  'setCare',
+] as const;
+
+export const HABIT_PARTS = [
+  'morning',
+  'midday',
+  'afternoon',
+  'evening',
+  'bedtime',
+] as const;
+export const HABIT_CADENCE_KINDS = [
+  'everyDay',
+  'onWeekdays',
+  'timesPerWeek',
+  'everyNDays',
+] as const;
+export const HABIT_CHANGES = [
+  'pause',
+  'resume',
+  'end',
+  'reschedule',
+  'retire',
+  'bringBack',
+] as const;
+export const HABIT_CHECK_DAYS = ['today', 'yesterday'] as const;
+export const HABIT_CHECK_STATUSES = ['done', 'skipped'] as const;
+export const HABIT_NAME_CAP = 60;
+export const HABIT_LABEL_CAP = 30;
+export const HABIT_WINDOWS_MAX = 4;
+export const HABIT_TIMES_PER_DAY_MAX = 20;
+export const ACTIVE_HABITS_MAX = 30;
+export const HABIT_NOTE_CAP = 500;
+export const HABIT_HISTORY_MAX = 30;
+export const MAX_HABITS_PER_TURN = 3;
+export const MAX_CHECKINS_PER_TURN = 10;
+export const MAX_CARE_PER_TURN = 3;
+export const MAX_HABIT_CANDIDATES = 4;
+export const MAX_CONTEXT_HABITS = 30;
+
+/** One window of a new or rescheduled habit: a named part of the day, or times from the reading; code settles both to "HH:mm". */
+export interface HabitWindowRead {
+  part: DayPart | null;
+  start: string | null;
+  end: string | null;
+  label: string | null;
+}
+
+export interface CreateHabitCommand {
+  kind: 'createHabit';
+  name: string;
+  emoji: string | null;
+  cadence: Cadence;
+  windows: HabitWindowRead[];
+  timesPerDay: number | null;
+  /** The who it is kept for; null is the person themself. */
+  forWhoId: string | null;
+  isCare: boolean;
+  isPrivate: boolean;
+  /** The words of the turn the habit was made from, for its dose and its private mark. */
+  words: string;
+}
+
+export interface UpdateHabitCommand {
+  kind: 'updateHabit';
+  habitId: string;
+  change: (typeof HABIT_CHANGES)[number];
+  cadence: Cadence | null;
+  windows: HabitWindowRead[] | null;
+  /** Date-only: the day a pause ends. */
+  until: number | null;
+  requestQuote: string;
+}
+
+/** A tick, a "not today" or one more on a tally; `habitIds` holds the one habit named, or up to four the model could not choose between. */
+export interface CheckInCommand {
+  kind: 'checkIn';
+  habitIds: string[];
+  windowKey: string | null;
+  day: (typeof HABIT_CHECK_DAYS)[number];
+  status: (typeof HABIT_CHECK_STATUSES)[number];
+  note: string | null;
+}
+
+export interface SetCareCommand {
+  kind: 'setCare';
+  habitId: string;
+  isCare: boolean;
+  requestQuote: string;
+}
+
+export type HabitCommand =
+  CreateHabitCommand | UpdateHabitCommand | CheckInCommand | SetCareCommand;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
 
@@ -753,6 +853,16 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'runStepAliases',
             'whoAlias',
             'heardSpan',
+            'habitAlias',
+            'cadence',
+            'windows',
+            'timesPerDay',
+            'isCare',
+            'habitChange',
+            'windowKey',
+            'candidateAliases',
+            'checkDay',
+            'checkStatus',
           ],
           properties: {
             kind: {
@@ -762,6 +872,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
                 ...TOPIC_COMMAND_KINDS,
                 ...PROCEDURE_COMMAND_KINDS,
                 ...RUN_COMMAND_KINDS,
+                ...HABIT_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
                 'answer',
                 'ask',
@@ -777,7 +888,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             title: nullable(
               'string',
-              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters. createParentTopic: the new topic's name, at most ${PARENT_NAME_CAP} characters. createProcedure: the procedure's name, at most ${PROCEDURE_TITLE_CAP} characters. reviseProcedure: the new name, or null to keep it.`,
+              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters. createParentTopic: the new topic's name, at most ${PARENT_NAME_CAP} characters. createProcedure: the procedure's name, at most ${PROCEDURE_TITLE_CAP} characters. reviseProcedure: the new name, or null to keep it. createHabit: the habit's name ("Evening pills", "Water"), at most ${HABIT_NAME_CAP} characters.`,
             ),
             dueSpanId: nullable(
               'string',
@@ -789,7 +900,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             isPrivate: nullable(
               'boolean',
-              'setPrivate: true to keep the task private, false only when the person asks to stop keeping it private; null for every other kind.',
+              'setPrivate: true to keep the task private, false only when the person asks to stop keeping it private. createHabit: true only when the person asks to keep the habit private; null for every other kind.',
             ),
             scope: nullable(
               'string',
@@ -966,7 +1077,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             quote: nullable(
               'string',
-              `noteFact and setWhereabouts: the person's exact words from the capture that say it, at most ${FACT_QUOTE_CAP} characters; null when none.`,
+              `noteFact and setWhereabouts: the person's exact words from the capture that say it, at most ${FACT_QUOTE_CAP} characters; null when none. checkIn: only words said with the tick ("felt dizzy"), copied exactly, at most ${HABIT_NOTE_CAP} characters; null when none.`,
             ),
             isStated: nullable(
               'boolean',
@@ -1006,7 +1117,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             dateSpanId: nullable(
               'string',
-              'setKeyDate: the id of the date span in the reading that gives the date. Never write a date yourself.',
+              'setKeyDate: the id of the date span in the reading that gives the date; updateHabit pause: the date span of the day it comes back, or null. Never write a date yourself.',
             ),
             comesBack: nullable(
               'boolean',
@@ -1018,7 +1129,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             projectEmoji: nullable(
               'string',
-              'createProject: one emoji that fits it; null when none does.',
+              'createProject and createHabit: one emoji that fits it; null when none does.',
             ),
             objective: nullable(
               'string',
@@ -1083,7 +1194,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun and setPrivate: the words of the capture that ask for it, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare and updateHabit: the words of the capture that ask for it, copied exactly.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -1172,12 +1283,103 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             whoAlias: nullable(
               'string',
-              'noteSoundsLike: the alias (w1, w2, …) from <people> of the person the spelled name belongs to; null otherwise. setWhereabouts: the alias from <people> of who it is about, or "me" for the person talking.',
+              'noteSoundsLike: the alias (w1, w2, …) from <people> of the person the spelled name belongs to; null otherwise. createHabit: the alias from <people> of who it is for, only when it is for someone else; null for the person themself. setWhereabouts: the alias from <people> of who it is about, or "me" for the person talking.',
             ),
             heardSpan: nullable(
               'string',
               'noteSoundsLike: the words as they were written in the turn before, which the person is correcting ("Shivon"), copied exactly; null otherwise.',
             ),
+            habitAlias: nullable(
+              'string',
+              'updateHabit, setCare and checkIn: the alias (h1, h2, …) of the habit in <habits> the words are about; null for createHabit, and for a checkIn that cannot tell which habit (use candidateAliases).',
+            ),
+            cadence: {
+              type: ['object', 'null'],
+              description:
+                'createHabit and updateHabit reschedule: how often, only in these shapes; null for every day (createHabit) or no change (updateHabit).',
+              additionalProperties: false,
+              required: ['kind', 'weekdays', 'count', 'days'],
+              properties: {
+                kind: { type: 'string', enum: [...HABIT_CADENCE_KINDS] },
+                weekdays: {
+                  type: ['array', 'null'],
+                  items: { type: 'integer', enum: [0, 1, 2, 3, 4, 5, 6] },
+                  description:
+                    'onWeekdays: the days, 0 for Sunday; null otherwise.',
+                },
+                count: nullable(
+                  'integer',
+                  'timesPerWeek: how many days a week, 1 to 6; null otherwise.',
+                ),
+                days: nullable(
+                  'integer',
+                  'everyNDays: the gap in days, 2 to 30; null otherwise.',
+                ),
+              },
+            },
+            windows: {
+              type: ['array', 'null'],
+              description: `createHabit and updateHabit reschedule: when in the day, at most ${HABIT_WINDOWS_MAX}; [] or null when it can be done any time. Times only from a named part or the reading's time spans, never written yourself.`,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['part', 'startSpanId', 'endSpanId', 'label'],
+                properties: {
+                  part: {
+                    type: ['string', 'null'],
+                    enum: [...HABIT_PARTS, null],
+                    description:
+                      'A named part of the day; null when times are given.',
+                  },
+                  startSpanId: nullable(
+                    'string',
+                    'The id of a time span from the reading that gives the start; a time said alone ("at 8") is a window around it.',
+                  ),
+                  endSpanId: nullable(
+                    'string',
+                    'The id of a time span that gives the end; null when none.',
+                  ),
+                  label: nullable(
+                    'string',
+                    `A short name for the window ("Morning"), at most ${HABIT_LABEL_CAP} characters; null when the part names it.`,
+                  ),
+                },
+              },
+            },
+            timesPerDay: nullable(
+              'integer',
+              `createHabit: how many times a day for something counted rather than ticked ("8 glasses of water"), 2 to ${HABIT_TIMES_PER_DAY_MAX}; null for a habit with windows or done once.`,
+            ),
+            isCare: nullable(
+              'boolean',
+              'createHabit: true for a medicine, a dose, a treatment or care for someone else. setCare: true to mark the habit as medicine or care, false only when the person says it is not; null otherwise.',
+            ),
+            habitChange: {
+              type: ['string', 'null'],
+              enum: [...HABIT_CHANGES, null],
+              description:
+                'updateHabit: pause, resume, end, reschedule, retire ("I\'ve got this one"), or bringBack, only when the person asks for it; null for every other kind.',
+            },
+            windowKey: nullable(
+              'string',
+              'checkIn: the part of the day or window name the person said ("morning", "tonight"); null when none was said.',
+            ),
+            candidateAliases: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `checkIn: when it cannot tell which habit was meant, the alias of each habit it could be, at most ${MAX_HABIT_CANDIDATES}; null otherwise.`,
+            },
+            checkDay: {
+              type: ['string', 'null'],
+              enum: [...HABIT_CHECK_DAYS, null],
+              description: 'checkIn: yesterday only when said; null is today.',
+            },
+            checkStatus: {
+              type: ['string', 'null'],
+              enum: [...HABIT_CHECK_STATUSES, null],
+              description:
+                'checkIn: skipped for "not today", "skipped it"; null is done.',
+            },
           },
         },
       },

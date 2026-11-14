@@ -196,8 +196,8 @@ const isOpenAsk = (
   kind: string;
 } =>
   isRecord(question) &&
-  question.kind === 'asked' &&
-  question.builtBy === 'model';
+  ((question.kind === 'asked' && question.builtBy === 'model') ||
+    (question.kind === 'howWasIt' && question.builtBy === 'code'));
 
 /** Decides what an answer turn writes to the turn that asked, without touching a database: a question that is gone, answered or not model-written is stale and writes nothing; otherwise it is answered with the checked structured value, or the words when that did not fit. */
 export function planAnswerTurn(input: {

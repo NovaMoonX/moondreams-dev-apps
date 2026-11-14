@@ -211,7 +211,9 @@ export interface EffectRef {
     | 'notes'
     | 'topics'
     | 'procedures'
-    | 'procedureRuns';
+    | 'procedureRuns'
+    | 'habits'
+    | 'habitDays';
   docId: string;
 }
 
@@ -3216,6 +3218,9 @@ const isPickKind = (kind: string) =>
   kind === 'whichTopic' ||
   kind === 'whichIsTrue' ||
   kind === 'groupTopics' ||
+  kind === 'whichHabit' ||
+  kind === 'isMedicine' ||
+  kind === 'howWasIt' ||
   kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>

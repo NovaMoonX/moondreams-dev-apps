@@ -1612,6 +1612,124 @@ const readRunWork = (text: string, message: string) => {
   return null;
 };
 
+const toHabitCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    habitAlias: null,
+    cadence: null,
+    windows: null,
+    timesPerDay: null,
+    isCare: null,
+    habitChange: null,
+    windowKey: null,
+    candidateAliases: null,
+    checkDay: null,
+    checkStatus: null,
+    requestQuote: null,
+    isPrivate: null,
+    projectEmoji: null,
+    whoAlias: null,
+    ...fields,
+  });
+
+interface HabitBlockEntry {
+  habit: string;
+  name: string;
+  isDueToday: boolean;
+  windows: { label: string; isDone: boolean }[];
+}
+
+/** The emulator's stand-in for habits: "Start a habit of vitamins every morning", "Start a habit of pills in the morning and at bedtime" (two windows), "I took my pills" and "I took my vitamins, felt dizzy" (a check-in naming every habit with that word, so two pill habits ask which), "I skipped my vitamins today", "Pause my vitamins", "Bring back my vitamins" and "Those pills are my medicine". Null for any other words, or when the habit is not in the context. */
+const readHabitWork = (text: string, message: string) => {
+  const habits = readBlock<HabitBlockEntry[]>(message, 'habits') ?? [];
+  const quote = text.trim().replace(/[.!]+$/, '');
+  const wrap = (command: ReturnType<typeof toHabitCommand>) => ({
+    commands: [command],
+    mentions: [],
+    places: [],
+  });
+  const named = (word: string) =>
+    habits.filter((habit) => new RegExp(`\\b${word}\\b`, 'i').test(habit.name));
+  const start = text.match(/\bstart a habit of (\w+)(?: every (morning))?/i);
+  if (start && /\bmorning and at bedtime\b/i.test(text)) {
+    return wrap(
+      toHabitCommand({
+        kind: 'createHabit',
+        title: upperFirst(start[1]),
+        windows: [
+          { part: 'morning', startSpanId: null, endSpanId: null, label: null },
+          { part: 'bedtime', startSpanId: null, endSpanId: null, label: null },
+        ],
+      }),
+    );
+  }
+  if (start)
+    return wrap(
+      toHabitCommand({
+        kind: 'createHabit',
+        title: upperFirst(start[1]),
+        windows: start[2]
+          ? [
+              {
+                part: 'morning',
+                startSpanId: null,
+                endSpanId: null,
+                label: null,
+              },
+            ]
+          : [],
+      }),
+    );
+  const word = text.match(/\b(pills|vitamins|walk)\b/i)?.[1]?.toLowerCase();
+  if (!word) return null;
+  const found = named(word);
+  if (found.length === 0) return null;
+  const aliases = found.map((habit) => habit.habit);
+  const base = {
+    habitAlias: aliases.length === 1 ? aliases[0] : null,
+    candidateAliases: aliases.length > 1 ? aliases : null,
+  };
+  if (/\bi took\b|\bi had\b|\bi skipped\b/i.test(text)) {
+    const note = text.match(/,\s*(felt [^.!]+)/i)?.[1] ?? null;
+    return wrap(
+      toHabitCommand({
+        kind: 'checkIn',
+        ...base,
+        quote: note,
+        checkStatus: /\bskipped\b/i.test(text) ? 'skipped' : null,
+      }),
+    );
+  }
+  if (/\bpause\b/i.test(text))
+    return wrap(
+      toHabitCommand({
+        kind: 'updateHabit',
+        habitAlias: aliases[0],
+        habitChange: 'pause',
+        requestQuote: quote,
+      }),
+    );
+  if (/\bbring back\b/i.test(text))
+    return wrap(
+      toHabitCommand({
+        kind: 'updateHabit',
+        habitAlias: aliases[0],
+        habitChange: 'bringBack',
+        requestQuote: quote,
+      }),
+    );
+  if (/\bare my medicine\b/i.test(text))
+    return wrap(
+      toHabitCommand({
+        kind: 'setCare',
+        habitAlias: aliases[0],
+        isCare: true,
+        requestQuote: quote,
+      }),
+    );
+  return null;
+};
+
 /** The emulator's stand-in for the ways a procedure is made and changed: "Make me a packing routine for work trips", "make this a routine" on an open task, and "Add a step for the laptop charger" with a procedure open (with none open it names no procedure, which code drops). Null for any other words. */
 const readProcedureWork = (text: string, message: string) => {
   const open = readBlock<ProcedureOpenBlock>(message, 'procedure_open');
@@ -1780,6 +1898,7 @@ function createTextFixtureProvider(
       }
       const grown =
         readRunWork(text, messageText(messages[0]?.content ?? '')) ??
+        readHabitWork(text, messageText(messages[0]?.content ?? '')) ??
         readProcedureWork(text, messageText(messages[0]?.content ?? '')) ??
         readTopicWork(text, messageText(messages[0]?.content ?? ''));
       if (grown) {

@@ -245,7 +245,17 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     home: 'habits',
     classes: ['readable', 'sealed'],
     readers: ['device', 'server', 'turn', 'quick'],
-    writer: 'none',
+    contextBlock: '<habits>',
+    commands: ['createHabit', 'updateHabit', 'setCare'],
+    writer: 'server/planHabitCommands',
+  }),
+  row({
+    thing: 'A habit ticked, skipped or counted by a sentence',
+    home: 'habitDays',
+    classes: ['readable', 'sealed'],
+    readers: ['device', 'server', 'turn', 'quick'],
+    commands: ['checkIn'],
+    writer: 'server/planHabitCommands',
   }),
   row({
     thing: "Each day's ticks and tallies for a habit",

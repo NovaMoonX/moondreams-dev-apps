@@ -8,6 +8,7 @@ import { normalizeKin } from './kin.js';
 import { isSpanOf, SOUNDS_LIKE_CAP } from './heardNames.js';
 import { KIN_KINDS } from './kinKinds.js';
 import { ASK_WORDS } from './summaries.js';
+import { readHabitCommands, type HabitDrop } from './readHabitCommands.js';
 import {
   hasProcedureCue,
   hasProcedureReviseCue,
@@ -105,6 +106,7 @@ import {
   type SourceRef,
   type NomosCommand,
   type TaskDue,
+  type HabitCommand,
 } from './commands.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import type { ModelChange } from '../topicWrite.js';
@@ -190,6 +192,16 @@ const KNOWN_KEYS = new Set([
   'unit',
   'isMoney',
   'decimals',
+  'habitAlias',
+  'cadence',
+  'windows',
+  'timesPerDay',
+  'isCare',
+  'habitChange',
+  'windowKey',
+  'candidateAliases',
+  'checkDay',
+  'checkStatus',
 ]);
 const DATE_KEY_RE = /due|date|time|when|deadline|day/i;
 const NEW_REF_RE = /^\$new\d+$/;
@@ -1036,9 +1048,7 @@ const isQuoteOfDirection = (quote: string, isPrivate: boolean) => {
     /\bpublic\b/.test(quote) ||
     (/\bprivate\b/.test(quote) && RELEASE_PHRASE.test(quote)) ||
     /\bunmark\b/.test(quote);
-  return isPrivate
-    ? /\bprivate\b/.test(quote) && !isRelease
-    : isRelease;
+  return isPrivate ? /\bprivate\b/.test(quote) && !isRelease : isRelease;
 };
 
 /** Changing whether a thing is private is kept only when the person's own words, quoted, say so. */
@@ -1614,16 +1624,13 @@ const readWhereabouts = (
   now: number | undefined,
 ): SetWhereaboutsCommand[] => {
   const words = ` ${toComparable(captureText)} `;
-  const today =
-    now === undefined ? null : getDayIn(now, toKnownZone(timeZone));
+  const today = now === undefined ? null : getDayIn(now, toKnownZone(timeZone));
   const isSaid = (cityName: string) =>
     words.includes(` ${toComparable(cityName.split(',')[0] ?? '')} `);
   const read = items
     .filter((item) => item.kind === 'setWhereabouts')
     .flatMap((item): SetWhereaboutsCommand[] => {
-      const change = WHEREABOUTS_CHANGES.find(
-        (entry) => entry === item.change,
-      );
+      const change = WHEREABOUTS_CHANGES.find((entry) => entry === item.change);
       const quote = toText(item.quote, FACT_QUOTE_CAP);
       const alias = typeof item.whoAlias === 'string' ? item.whoAlias : '';
       const isSelf = alias.toLowerCase() === 'me';
@@ -1683,7 +1690,10 @@ const readWhereabouts = (
     });
   return [
     ...new Map(
-      read.map((command) => [`${command.whoId ?? 'me'}:${command.change}`, command]),
+      read.map((command) => [
+        `${command.whoId ?? 'me'}:${command.change}`,
+        command,
+      ]),
     ).values(),
   ].slice(0, 4);
 };
@@ -1957,6 +1967,8 @@ export function normalizeNomosReply(
     procedureVersions?: Map<string, number>;
     /** The undone steps of the open runs, by alias. */
     runSteps?: AliasBook;
+    /** The person's habits, by alias (h1, h2, …). */
+    habits?: AliasBook;
     /** The words of the turn, which a note's words must come from. */
     captureText?: string;
     /** What names each date in the context (who, label, kind), for the check that a removal is still asked once closing phrases are taken out. */
@@ -1988,6 +2000,8 @@ export function normalizeNomosReply(
   procedureDropped: ProcedureDrop[];
   runCommands: RunCommand[];
   runDropped: RunDrop[];
+  habitCommands: HabitCommand[];
+  habitDropped: HabitDrop[];
   soundsLike: NoteSoundsLikeCommand[];
   whereabouts: SetWhereaboutsCommand[];
   planDay: PlanDayCommand | null;
@@ -2096,6 +2110,17 @@ export function normalizeNomosReply(
       captureText: context.captureText,
     },
   );
+  const { commands: habitCommands, dropped: habitDropped } = readHabitCommands(
+    items,
+    {
+      habits: context.habits,
+      people: context.people,
+      reading: context.reading,
+      captureText: context.captureText,
+      timeZone: context.timeZone,
+      now: context.now,
+    },
+  );
   const soundsLike = readSoundsLike(
     items,
     context.people,
@@ -2177,6 +2202,8 @@ export function normalizeNomosReply(
     procedureDropped,
     runCommands,
     runDropped,
+    habitCommands,
+    habitDropped,
     soundsLike,
     whereabouts,
     planDay,

@@ -15,6 +15,7 @@ import {
   DELETING_COMMANDS,
   PROCEDURE_COMMAND_KINDS,
   RUN_COMMAND_KINDS,
+  HABIT_COMMAND_KINDS,
   TOPIC_COMMAND_KINDS,
 } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
@@ -91,6 +92,7 @@ const world: World = {
     ...TOPIC_COMMAND_KINDS,
     ...PROCEDURE_COMMAND_KINDS,
     ...RUN_COMMAND_KINDS,
+    ...HABIT_COMMAND_KINDS,
     CLOSE_CONVERSATION_TOOL.name,
   ],
   collections: [

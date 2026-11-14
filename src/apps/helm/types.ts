@@ -1113,7 +1113,9 @@ export interface EffectRef {
     | 'notes'
     | 'topics'
     | 'procedures'
-    | 'procedureRuns';
+    | 'procedureRuns'
+    | 'habits'
+    | 'habitDays';
   docId: string;
 }
 

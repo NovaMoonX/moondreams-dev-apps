@@ -18,6 +18,8 @@ import {
 } from './topicVersionStore.js';
 import type { PlacedTopic } from './nomos/planTopicCommands.js';
 import { MAX_CONTEXT_TOPICS } from './nomos/commands.js';
+import { planResolveHabit } from './nomos/planHabitCommands.js';
+import { habitDayRef, readHabitState, writeHabitDayIn } from './habitStore.js';
 import { NOTE_TOPICS_CAP } from './nomos/commands.js';
 import type { NoteTopicState } from './nomos/executeCommands.js';
 import { readIndexIn, writeIndexIn } from './keyDateStore.js';
@@ -294,6 +296,68 @@ export const resolveHelmQuestion = onCall(
         }
       >;
       const held = questions[questionId]?.heldCommands?.[0];
+      if (held?.kind === 'checkInChoice' || held?.kind === 'askCare') {
+        const now = Date.now();
+        const habitState = await readHabitState(
+          transaction,
+          firestore,
+          base,
+          key,
+          capture.createdAt,
+          String(profileSnap.get('timeZone') ?? 'UTC'),
+        );
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const habitResult = planResolveHabit({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          capture: {
+            status: capture.status,
+            createdAt: capture.createdAt,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          habits: habitState.habits,
+          days: habitState.days,
+          timeZone: String(profileSnap.get('timeZone') ?? 'UTC'),
+          profile: {
+            dayStartTime: String(profileSnap.get('dayStartTime') ?? '08:00'),
+            dayEndTime: String(profileSnap.get('dayEndTime') ?? '22:00'),
+          },
+          newId: () => crypto.randomUUID(),
+          seal,
+        });
+        if (habitResult.refused !== null) {
+          throw toRefusal(habitResult.refused, 'person');
+        }
+        habitResult.habit?.creates.forEach(({ id, doc }) =>
+          transaction.create(firestore.doc(`${base}/habits/${id}`), doc),
+        );
+        habitResult.habit?.updates.forEach(({ id, data }) =>
+          transaction.update(firestore.doc(`${base}/habits/${id}`), data),
+        );
+        habitResult.habit?.dayWrites.forEach((write) =>
+          writeHabitDayIn(
+            transaction,
+            habitDayRef(firestore, base, write.dayKey),
+            write,
+          ),
+        );
+        if (habitResult.execution)
+          transaction.create(executionRef, habitResult.execution);
+        transaction.update(captureRef, {
+          ...habitResult.capture,
+          sealed: seal(habitResult.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: habitResult.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
       const taskIds = (held?.taskIds ?? []).filter(
         (id): id is string => typeof id === 'string' && ID_RE.test(id),
       );

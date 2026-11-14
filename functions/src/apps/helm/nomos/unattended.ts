@@ -110,6 +110,7 @@ export const maskContextRecords = (
     | 'focusedProcedure'
     | 'focusedTopic'
     | 'runs'
+    | 'habits'
   > & { synced: SyncedCopy[] },
 ) => ({
   facts: input.facts?.map((fact) =>
@@ -205,6 +206,22 @@ export const maskContextRecords = (
           undone: [],
         }
       : run,
+  ),
+  habits: input.habits?.map((habit) =>
+    cover(mask, habit.isPrivate, 'a private habit', [
+      habit.name,
+      ...habit.windows.map((window) => window.label),
+    ])
+      ? {
+          ...habit,
+          name: 'a private habit',
+          emoji: null,
+          windows: habit.windows.map((window) => ({
+            ...window,
+            label: 'a time',
+          })),
+        }
+      : habit,
   ),
   synced: input.synced.map((copy) => maskSyncedCopy(mask, copy)),
 });

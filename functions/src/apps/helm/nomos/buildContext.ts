@@ -7,6 +7,7 @@ import {
 import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
 import type { HeardName } from './heardNames.js';
 import {
+  MAX_CONTEXT_HABITS,
   MAX_CONTEXT_PROJECTS,
   MAX_CONTEXT_TOPICS,
   MAX_HINT_NOTES,
@@ -58,6 +59,24 @@ export interface ContextSelfFact {
   value: string | null;
   statement: string;
   by: 'said' | 'inferred';
+  isPrivate?: boolean;
+}
+
+/** A habit as the model sees it: today's state, with no id and no time of day. */
+export interface ContextHabit {
+  id: string;
+  name: string;
+  emoji: string | null;
+  status: string;
+  isCare: boolean;
+  isDue: boolean;
+  /** Each window, by its label, with whether today's tick is in. */
+  windows: { label: string; isDone: boolean }[];
+  /** Counted habits: how many so far and how many a day. */
+  count: number | null;
+  timesPerDay: number | null;
+  /** Whether it is kept for someone else. */
+  isForOther: boolean;
   isPrivate?: boolean;
 }
 
@@ -192,6 +211,8 @@ export interface ContextInput {
   focusedProcedure?: ContextFocusedProcedure | null;
   /** The runs not yet finished, the open one first, at most `MAX_CONTEXT_RUNS`; steps are aliased up to `MAX_CONTEXT_RUN_STEPS` in all. */
   runs?: ContextRun[];
+  /** The person's habits as of today, at most `MAX_CONTEXT_HABITS`; each name goes through `toDataJson`. */
+  habits?: ContextHabit[];
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
   topicDocument?: 'whole' | 'outline' | null;
   /** The person's style notes, descriptions only; left out when there are none. */
@@ -283,6 +304,7 @@ export function buildContext(input: ContextInput): {
   procedures: AliasBook;
   procedureSteps: AliasBook;
   runSteps: AliasBook;
+  habits: AliasBook;
   focus: { id: string; version: number } | null;
 } {
   const aliases = createAliasBook('t');
@@ -292,6 +314,7 @@ export function buildContext(input: ContextInput): {
   const procedures = createAliasBook('pr');
   const procedureSteps = createAliasBook('ps');
   const runSteps = createAliasBook('rs');
+  const habits = createAliasBook('h');
   const partIds = new Map<string, string>();
   const parts: AliasBook = {
     add: (id) => {
@@ -565,6 +588,24 @@ export function buildContext(input: ContextInput): {
           )}</your_procedures>`,
         ]
       : []),
+    ...(input.habits?.length
+      ? [
+          `<habits>${toDataJson(
+            input.habits.slice(0, MAX_CONTEXT_HABITS).map((habit) => ({
+              habit: habits.add(habit.id),
+              name: habit.name,
+              emoji: habit.emoji,
+              status: habit.status,
+              isCare: habit.isCare,
+              isDueToday: habit.isDue,
+              windows: habit.windows,
+              count: habit.count,
+              timesPerDay: habit.timesPerDay,
+              isForSomeoneElse: habit.isForOther,
+            })),
+          )}</habits>`,
+        ]
+      : []),
     ...(openRuns.length > 0
       ? [`<open_runs>${toDataJson(openRuns)}</open_runs>`]
       : []),
@@ -615,6 +656,7 @@ export function buildContext(input: ContextInput): {
     procedures,
     procedureSteps,
     runSteps,
+    habits,
     focus: focused ? { id: focused.id, version: focused.version } : null,
   };
 }
