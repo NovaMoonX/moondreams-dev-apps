@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 import HeaderIconButton from '@/components/HeaderIconButton';
-import WorkingDots from '@/components/WorkingDots';
+import WorkingRing from '@/components/WorkingRing';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useConnections } from '@/lib/connections/useConnections';
@@ -188,17 +188,11 @@ function NewConversationButton({ uid }: { uid: string }) {
       .catch(fail);
   };
   return (
-    <Button
-      type='button'
-      variant='tertiary'
-      size='sm'
-      rounded='full'
-      className="text-muted-foreground! relative self-center before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+    <HeaderIconButton
+      icon={<MessageSquarePlus className='size-4' aria-hidden='true' />}
+      label={HELM_COPY.newConversation}
       onClick={startFresh}
-    >
-      <MessageSquarePlus className='size-4' aria-hidden='true' />
-      {HELM_COPY.newConversation}
-    </Button>
+    />
   );
 }
 
@@ -276,6 +270,7 @@ function HomeSurface({
           </div>
           {keyStatus === 'ready' && (
             <div className='flex shrink-0 items-center gap-3'>
+              {hasFreshTurns && uid && <NewConversationButton uid={uid} />}
               <HeaderIconButton
                 icon={<Search className='size-4' aria-hidden='true' />}
                 label={HELM_COPY.searchTitle}
@@ -293,15 +288,19 @@ function HomeSurface({
       </div>
       <div className='flex flex-1 flex-col gap-8 pt-4'>
         {isOpening && (
-          <p
-            className='text-muted-foreground text-center text-[15px]'
+          <div
+            className='flex flex-1 flex-col items-center justify-center gap-4 pb-16'
             role='status'
           >
-            {HELM_COPY.homeOpening}
-            <WorkingDots />
-          </p>
+            <WorkingRing isWorking className='text-primary'>
+              <AssistantMark name={name} isHero />
+            </WorkingRing>
+            <p className='text-muted-foreground text-[15px]'>
+              {HELM_COPY.homeOpening}
+            </p>
+          </div>
         )}
-        {!hasFreshTurns && !isOpening && !isWaitingOnKey && (
+        {!hasTurns && !isOpening && !isWaitingOnKey && (
           <p className='text-muted-foreground text-center text-[15px]'>
             {HELM_COPY.homeHint}
           </p>
@@ -327,7 +326,11 @@ function HomeSurface({
             freshFrom={freshFrom}
           />
         )}
-        {hasFreshTurns && uid && <NewConversationButton uid={uid} />}
+        {hasTurns && !hasFreshTurns && !isWaitingOnKey && (
+          <p className='text-muted-foreground text-center text-[15px]'>
+            {HELM_COPY.homeHint}
+          </p>
+        )}
         <div className='mt-auto flex flex-col gap-4'>
           {keyStatus === 'offline' && (
             <NeedsConnectionState
