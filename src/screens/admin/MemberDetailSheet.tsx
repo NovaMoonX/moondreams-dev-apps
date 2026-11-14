@@ -1,4 +1,16 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+
+import AppToggle from '@/components/AppToggle';
+import { useAuth } from '@hooks/useAuth';
+import { ADMIN_QUERY_KEY } from '@lib/admin/adminQueries';
+import { debugProfilesQueryOptions } from '@lib/debugProfiles/debugProfileQueries';
+import {
+  addDebugProfile,
+  removeDebugProfile,
+  toDebugProfileId,
+} from '@lib/debugProfiles/debugProfiles';
 import DetailSheet from '@/components/DetailSheet';
 import UserAvatar from '@/ui/UserAvatar';
 import { formatDate } from '@/utils/formatUtils';
@@ -34,6 +46,31 @@ function MemberDetailSheet({
   hasUsageError,
   onClose,
 }: MemberDetailSheetProps) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const debugQuery = useQuery(debugProfilesQueryOptions());
+  const [debugError, setDebugError] = useState<string | null>(null);
+  const memberEmail = member?.profile.email
+    ? toDebugProfileId(member.profile.email)
+    : null;
+  const hasDebugDetails = (debugQuery.data ?? []).some(
+    (profile) => profile.email === memberEmail,
+  );
+  const setDebugDetails = async (isOn: boolean) => {
+    if (!memberEmail || !user) return;
+    setDebugError(null);
+    try {
+      await (isOn
+        ? addDebugProfile(memberEmail, user.uid)
+        : removeDebugProfile(memberEmail));
+      await queryClient.invalidateQueries({
+        queryKey: [...ADMIN_QUERY_KEY, 'debugProfiles'],
+      });
+    } catch {
+      setDebugError("Couldn't change that just now. Try again in a moment.");
+    }
+  };
+
   const getVisitText = (lastVisitedAt: number | null) => {
     if (lastVisitedAt) return `Last visited ${formatDate(lastVisitedAt)}`;
     if (isLoading) return 'Loading…';
@@ -68,6 +105,32 @@ function MemberDetailSheet({
               </div>
             </div>
           </div>
+
+          {memberEmail ? (
+            <div className='space-y-2'>
+              <div className='flex items-center justify-between gap-3'>
+                <div>
+                  <div className='text-foreground text-sm font-medium'>
+                    Show debug details on error screens
+                  </div>
+                  <div className='text-muted-foreground text-xs'>
+                    They see what went wrong, to help track down a problem.
+                  </div>
+                </div>
+                <AppToggle
+                  checked={hasDebugDetails}
+                  disabled={debugQuery.isPending}
+                  onCheckedChange={(isOn) => void setDebugDetails(isOn)}
+                  aria-label='Show debug details on error screens'
+                />
+              </div>
+              {debugError ? (
+                <p role='alert' className='text-destructive text-xs'>
+                  {debugError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <section className='space-y-3'>
             <div className='flex items-baseline justify-between gap-3'>

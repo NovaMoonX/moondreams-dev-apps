@@ -21,6 +21,7 @@ import {
   MEMBER_SEARCH_THRESHOLD,
   SURFACE_CLASS,
 } from './constants';
+import DebugDetailsSection from './DebugDetailsSection';
 import MemberDetailSheet from './MemberDetailSheet';
 import { useAllAppUsage } from './useAllAppUsage';
 
@@ -218,6 +219,8 @@ function MembersView({
           member&apos;s last visit is their newest site visit or app open.
         </CountedNote>
       </section>
+
+      <DebugDetailsSection />
 
       <MemberDetailSheet
         member={selectedMember}
