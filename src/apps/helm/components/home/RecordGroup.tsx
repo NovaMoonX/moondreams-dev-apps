@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
@@ -74,17 +75,14 @@ function RecordGroup({ quotes }: { quotes: AnswerQuote[] }) {
         </ul>
       )}
       {live.length > FOLDED_COUNT && (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          className='w-full'
+        <ShowMoreButton
+          isOpen={isOpen}
           onClick={() => setIsOpen((open) => !open)}
         >
           {isOpen
             ? HELM_COPY.answerShowFewer
             : HELM_COPY.answerShowMore(live.length - FOLDED_COUNT)}
-        </Button>
+        </ShowMoreButton>
       )}
       {hasGone && (
         <p className='text-muted-foreground text-[13px]'>

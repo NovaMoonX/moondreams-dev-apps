@@ -10,7 +10,6 @@ interface AssistantLineProps {
   children: ReactNode;
   /** A state the assistant is in ("Reading"), drawn quieter than its words. */
   isQuiet?: boolean;
-  /** Shows animated dots after the words while the assistant is still at it. */
   isWorking?: boolean;
 }
 

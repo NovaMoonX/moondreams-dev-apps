@@ -12,6 +12,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import AppLogo from '@/components/AppLogo';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useAuth } from '@/hooks/useAuth';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
@@ -375,10 +376,13 @@ interface AnswerSourcesProps {
   canOpen: boolean;
 }
 
-/** Where a records answer came from, one row per source; a kind not built yet draws nothing. */
+/** Where a records answer came from, one row per source, the apps it read first so their freshness is never folded away; a kind not built yet draws nothing. */
 function AnswerSources({ sources, canOpen }: AnswerSourcesProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const rows = sources.flatMap((source) => {
+  const rows = [
+    ...sources.filter((source) => source.kind === 'connection'),
+    ...sources.filter((source) => source.kind !== 'connection'),
+  ].flatMap((source) => {
     if (source.kind === 'task') {
       return [
         <TaskSourceRow
@@ -434,16 +438,16 @@ function AnswerSources({ sources, canOpen }: AnswerSourcesProps) {
     >
       {isOpen ? rows : rows.slice(0, FOLDED_COUNT)}
       {rows.length > FOLDED_COUNT && (
-        <Button
-          type='button'
-          variant='tertiary'
-          className='h-auto min-h-11 w-full rounded-none border-0 py-2.5'
-          onClick={() => setIsOpen((open) => !open)}
-        >
-          {isOpen
-            ? HELM_COPY.answerShowFewer
-            : HELM_COPY.answerShowMore(rows.length - FOLDED_COUNT)}
-        </Button>
+        <div className='py-1.5'>
+          <ShowMoreButton
+            isOpen={isOpen}
+            onClick={() => setIsOpen((open) => !open)}
+          >
+            {isOpen
+              ? HELM_COPY.answerShowFewer
+              : HELM_COPY.answerShowMore(rows.length - FOLDED_COUNT)}
+          </ShowMoreButton>
+        </div>
       )}
     </div>
   );
