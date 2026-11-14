@@ -34,7 +34,7 @@ export const WAYPOINT_SHARES: SourceShares = {
           kind: 'event',
           label: 'Trip plans',
           detail:
-            'Activities, flights, drives, stays and rentals, at their local times',
+            'Activities, flights (airline, number and airports), drives, stays and rentals, at their local times',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -55,8 +55,13 @@ export const WAYPOINT_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: null,
             },
+            {
+              label: "A flight's airline, flight number and airports",
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
         },
         {
           id: 'myTasks',
@@ -96,12 +101,36 @@ export const WAYPOINT_SHARES: SourceShares = {
           ],
           scopeVersion: 1,
         },
+        {
+          id: 'tripChecklist',
+          kind: 'countSummary',
+          label: 'Your trip checklist',
+          detail: 'Your to-dos by category, what is done and what is left',
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 2,
+          reads: [
+            {
+              label: "The trip's name",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label:
+                'Each to-do assigned to you or private to you, grouped by category, done or not',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 1,
+        },
       ],
       never: [
         "other members' private to-dos",
         'contact details',
         'suggestions',
         'expense lines',
+        'booking confirmation codes',
         'receipts',
         'the album',
       ],
