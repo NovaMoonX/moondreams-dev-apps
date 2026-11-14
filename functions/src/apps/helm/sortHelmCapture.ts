@@ -260,9 +260,9 @@ const MIN_RESTART_MS = 22_000;
 const SETTLE_QUIET_MS = 1_000;
 const SETTLE_MAX_MS = 3_000;
 
-type SortMode = 'full' | 'rest';
+export type SortMode = 'full' | 'rest';
 
-interface SortResult {
+export interface SortResult {
   status: 'sorted' | 'received' | 'failed' | 'needsYou';
   executionId: string | null;
   releasedIds: string[];
@@ -295,7 +295,7 @@ const readAnswered = (stored: unknown, captureId: string) => {
     : null;
 };
 
-interface CaptureDoc {
+export interface CaptureDoc {
   status: string;
   attempts?: number;
   claimId?: string | null;
@@ -308,6 +308,8 @@ interface CaptureDoc {
   turnIndex?: number;
   turnLeadId?: string | null;
   inputMode?: string;
+  medium?: 'web' | 'mcp';
+  via?: string | null;
   attachmentIds?: string[];
   route?: Route | null;
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
@@ -3335,8 +3337,24 @@ async function sortRequest(request: CallableRequest): Promise<SortResult> {
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
   }
+  return runHelmSort({ uid, ...readInput(request.data) });
+}
+
+/** Sorts one received turn for a person: the callable's whole body, also run for a turn an outside assistant files. */
+export async function runHelmSort({
+  uid,
+  captureId,
+  requestKey,
+  mode,
+  noteIds,
+}: {
+  uid: string;
+  captureId: string;
+  requestKey: string;
+  mode: SortMode;
+  noteIds: string[];
+}): Promise<SortResult> {
   const startedAt = Date.now();
-  const { captureId, requestKey, mode, noteIds } = readInput(request.data);
   const firestore = getFirestore();
   const captureRef = firestore.doc(
     `apps/helm/users/${uid}/captures/${captureId}`,
