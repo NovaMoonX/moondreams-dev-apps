@@ -23,10 +23,14 @@ export const debugProfilesQueryOptions = () =>
 export const ownDebugProfileQueryOptions = (email: string | null) =>
   queryOptions({
     queryKey: ['debugProfiles', 'own', email] as const,
+    // A refusal (an unverified email) is a no, so it replaces an earlier remembered yes.
     queryFn: async () =>
-      (
-        await getDoc(doc(db, 'debugProfiles', toDebugProfileId(email ?? '')))
-      ).exists(),
+      getDoc(doc(db, 'debugProfiles', toDebugProfileId(email ?? '')))
+        .then((snapshot) => snapshot.exists())
+        .catch((error: { code?: string }) => {
+          if (error.code === 'permission-denied') return false;
+          throw error;
+        }),
     enabled: Boolean(email),
     staleTime: 5 * 60 * 1000,
     retry: false,

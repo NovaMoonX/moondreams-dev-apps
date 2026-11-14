@@ -173,7 +173,7 @@ service cloud.firestore {
 
     // Emails whose owners see error details. A person reads only their own entry.
     match /debugProfiles/{emailLower} {
-      allow read, create, delete: if isAdmin();
+      allow read, write: if isAdmin();
       allow get: if request.auth != null
         && request.auth.token.get('email_verified', false) == true
         && emailLower == request.auth.token.email.lower();

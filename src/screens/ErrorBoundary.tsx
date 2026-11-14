@@ -7,8 +7,8 @@ import { VersionLabel } from '@components/VersionLabel';
 import { useRestartApp } from '@hooks/useRestartApp';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 import Loading from '@ui/Loading';
-import { SITE_VERSION } from '../lib/app';
-import { useCanSeeDebugDetails } from '../lib/debugProfiles/useCanSeeDebugDetails';
+import { SITE_VERSION } from '@lib/app';
+import { useCanSeeDebugDetails } from '@lib/debugProfiles/useCanSeeDebugDetails';
 import { getRegistryAppForPath } from '../lib/app/app.registry';
 import {
   canReloadForStaleChunk,
