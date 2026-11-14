@@ -70,8 +70,15 @@ export const CLOSE_CONVERSATION_TOOL: TerminalTool = {
 const MAX_CLOSE_WORDS = 8;
 
 /** A model's close is accepted only for a turn this short; a longer turn is filed as usual. */
-export const isShortEnoughToClose = (turnText: string) =>
-  toPlainText(turnText).split(' ').filter(Boolean).length <= MAX_CLOSE_WORDS;
+/** Whether a turn may end on the model's close: short, and naming no one, no place, no date and no command, so a request said alongside "doesn't matter" is filed. */
+export const isShortEnoughToClose = (
+  turnText: string,
+  reading: CaptureReading,
+) =>
+  toPlainText(turnText).split(' ').filter(Boolean).length <= MAX_CLOSE_WORDS &&
+  [reading.people, reading.places, reading.dates, reading.commands].every(
+    (found) => found.length === 0,
+  );
 
 /** The kinds the reply may carry that change a topic; like a note, each is read from its own list and is no `NomosCommand`. */
 export const TOPIC_COMMAND_KINDS = [

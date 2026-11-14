@@ -2021,42 +2021,46 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   if (
     mode === 'full' &&
     loop.terminalName === CLOSE_CONVERSATION_TOOL.name &&
-    isShortEnoughToClose(combined.text)
+    isShortEnoughToClose(combined.text, combined.reading)
   ) {
     return writeClose({ ...claimed, joinedIds: read.ids });
   }
 
-  const reply = normalizeNomosReply(loop.terminalInput, {
-    reading: combined.reading,
-    aliases: context.aliases,
-    synced: context.synced,
-    facts: context.facts,
-    keyDates: context.keyDates,
-    topics: context.topics,
-    notes: context.notes,
-    parts: context.parts,
-    sections: context.sections,
-    topicNames: new Map(topics.map((topic) => [topic.id, topic.name])),
-    focusedTopicId,
-    topicVersions,
-    procedures: context.procedures,
-    procedureSteps: context.procedureSteps,
-    procedureNames,
-    procedureTitleByTask,
-    focusedProcedureId,
-    focusedTaskId,
-    procedureVersions,
-    runSteps: context.runSteps,
-    captureText: combined.text,
-    keyDateNames,
-    quotes,
-    alreadyMade,
-    timeZone,
-    attachments: attached.media.map((item) => ({
-      alias: item.alias,
-      kind: item.kind,
-    })),
-  });
+  const isRefusedClose = loop.terminalName === CLOSE_CONVERSATION_TOOL.name;
+  const reply = normalizeNomosReply(
+    isRefusedClose ? { commands: [] } : loop.terminalInput,
+    {
+      reading: combined.reading,
+      aliases: context.aliases,
+      synced: context.synced,
+      facts: context.facts,
+      keyDates: context.keyDates,
+      topics: context.topics,
+      notes: context.notes,
+      parts: context.parts,
+      sections: context.sections,
+      topicNames: new Map(topics.map((topic) => [topic.id, topic.name])),
+      focusedTopicId,
+      topicVersions,
+      procedures: context.procedures,
+      procedureSteps: context.procedureSteps,
+      procedureNames,
+      procedureTitleByTask,
+      focusedProcedureId,
+      focusedTaskId,
+      procedureVersions,
+      runSteps: context.runSteps,
+      captureText: combined.text,
+      keyDateNames,
+      quotes,
+      alreadyMade,
+      timeZone,
+      attachments: attached.media.map((item) => ({
+        alias: item.alias,
+        kind: item.kind,
+      })),
+    },
+  );
   reply.mediaDropped.forEach((code) =>
     logger.info('helm.media.dropped', { code }),
   );

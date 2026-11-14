@@ -346,7 +346,8 @@ export function useHelmVoice() {
       if (await closeConversation(turn.close, isSpoken)) return true;
       // A typed close that was not written keeps its words in the field; a spoken one puts what was heard there.
       if (!isSpoken) return 'kept' as const;
-      fieldWriter.current?.(text);
+      if (fieldWriter.current) fieldWriter.current(text);
+      else say(HELM_COPY.talkSendFailed);
       return true;
     }
     if (!isSpoken) {
@@ -781,14 +782,11 @@ export function useHelmVoice() {
 
   // A turn the assistant's own reading closed ("ugh, doesn't matter") gets the same close as a phrase matched here, once, and only when this tab sent it and it is still the newest turn of the open session.
   const appliedCloses = useRef(new Set<string>());
-  const hasSeenSnapshot = useRef(false);
   const applyClose = useRef(closeConversation);
   useEffect(() => {
     applyClose.current = closeConversation;
   });
   useEffect(() => {
-    const isFirst = !hasSeenSnapshot.current;
-    hasSeenSnapshot.current = true;
     const now = Date.now();
     const newest = captures.at(-1);
     const openSessionId = getOpenSessionId(captures, now);
@@ -797,7 +795,6 @@ export function useHelmVoice() {
         capture.endedConversation && !appliedCloses.current.has(capture.id),
     );
     fresh.forEach((capture) => appliedCloses.current.add(capture.id));
-    if (isFirst) return;
     fresh
       .filter(
         (capture) =>

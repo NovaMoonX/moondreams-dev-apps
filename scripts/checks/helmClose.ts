@@ -312,12 +312,28 @@ test('the model closes through a tool that carries no command', () => {
   assert.ok(!('commands' in properties));
 });
 
-test('a model close is accepted only for a short turn', () => {
-  assert.ok(isShortEnoughToClose('ugh, forget the whole thing'));
+test('a model close is accepted only for a short turn that names nothing', () => {
+  const none = {
+    people: [],
+    places: [],
+    documents: [],
+    commands: [],
+    isUrgent: false,
+    dates: [],
+    addressedAs: null,
+  };
+  assert.ok(isShortEnoughToClose('ugh, forget the whole thing', none));
   assert.ok(
     !isShortEnoughToClose(
       'add milk and eggs and bread to the list for the party on Saturday, never mind',
+      none,
     ),
+  );
+  assert.ok(
+    !isShortEnoughToClose("ugh, doesn't matter, remind me to call Dana", {
+      ...none,
+      people: [{ text: 'Dana', start: 35, end: 39 }],
+    } as unknown as typeof none),
   );
 });
 
