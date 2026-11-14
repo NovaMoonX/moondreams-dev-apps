@@ -53,6 +53,12 @@ const checkWorker = async () => {
   expect(missing.status === 404, 'worker: a missing build file is not a 404');
   expect(missing.headers.get('cache-control') === 'no-store', 'worker: a missing build file may be cached');
 
+  const revalidated = await run('/assets/a-4.js', () => new Response(null, { status: 304 }));
+  expect(revalidated.status === 304, 'worker: a revalidated build file (304) is not passed through');
+
+  const serverError = await run('/assets/a-5.js', () => respond('down', 'text/plain', 503));
+  expect(serverError.status === 503, 'worker: a server error on a build file is hidden');
+
   const page = await run('/runway', () => respond('<html>', 'text/html'));
   expect(page.headers.get('cache-control') === 'no-cache', 'worker: the page may be kept without re-checking');
 

@@ -181,6 +181,13 @@ const clearPrecache = async () => {
  */
 export async function updateToLatest(latestVersion: string) {
   isUpdatingOnRequest = true;
+  return reloadIntoLatest(latestVersion).catch((error: unknown) => {
+    isUpdatingOnRequest = false;
+    throw error;
+  });
+}
+
+async function reloadIntoLatest(latestVersion: string) {
   const previous = readUpdateAttempt();
   const isRetry =
     previous?.version === latestVersion && Date.now() - previous.at < UPDATE_RETRY_WINDOW_MS;

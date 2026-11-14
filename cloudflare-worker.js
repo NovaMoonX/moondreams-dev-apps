@@ -159,18 +159,21 @@ const isPageForFile = (url, response) =>
 async function fetchFile(request, url) {
   const response = await fetch(request);
   if (!isPageForFile(url, response)) return response;
+  await response.body?.cancel();
   return fetch(request, { cache: 'no-store' });
 }
 
 function withCachePolicy(url, response) {
   const contentType = response.headers.get('content-type') || '';
   if (url.pathname.startsWith('/assets/')) {
-    if (!response.ok || isPageForFile(url, response)) {
+    // Only a missing file becomes this 404: a revalidation's 304 and a server error pass through as they are.
+    if (response.status === 404 || isPageForFile(url, response)) {
       return new Response('Not found', {
         status: 404,
         headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain; charset=utf-8' },
       });
     }
+    if (response.status !== 200) return response;
     const result = new Response(response.body, response);
     result.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
     return result;
