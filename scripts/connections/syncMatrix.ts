@@ -19,10 +19,14 @@ import {
 } from '../../functions/src/connections/callables.ts';
 import { expireCopies } from '../../functions/src/connections/expire.ts';
 import {
+  applyCategoryChanges,
+  assertSeenScopes,
   buildNewGrant,
   readGrant,
+  readUpdateConnectionRequest,
 } from '../../functions/src/connections/grants.ts';
 import { toSyncedId } from '../../functions/src/apps/helm/connections/sink.ts';
+import { readUnseenNews } from '../../src/lib/connections/newReads.ts';
 import {
   BULK_CALENDAR,
   FIXTURE_CANCELLED_REF,
@@ -510,6 +514,98 @@ const main = async () => {
       (await t.grant()).keptCopies,
       null,
       'the grant stops counting kept copies',
+    );
+  }
+
+  {
+    const fresh = buildNewGrant(
+      {
+        readerAppId: 'helm',
+        connectorId: 'app:pinch',
+        accountId: 'site',
+        categoryIds: ['shoppingList'],
+        options: null,
+      },
+      manifest,
+      NOW,
+    );
+    assert.equal(fresh.categories.shoppingList.seenScopeVersion, 1);
+    assert.equal(readGrant({}).categories.shoppingList, undefined);
+    assert.equal(
+      readGrant({ categories: { shoppingList: { isOn: true } } }).categories
+        .shoppingList.seenScopeVersion,
+      null,
+      'a legacy grant reads its seen scope as null',
+    );
+    assert.equal(
+      applyCategoryChanges(fresh, {}, manifest, NOW, { shoppingList: 1 })
+        .shoppingList.seenScopeVersion,
+      1,
+    );
+    const request = (seenScopes: unknown) => () =>
+      readUpdateConnectionRequest({ grantId: GRANT_ID, seenScopes });
+    assert.deepEqual(request({ shoppingList: 1 })().seenScopes, {
+      shoppingList: 1,
+    });
+    assert.throws(request({ shoppingList: 1.5 }), 'a fraction is refused');
+    assert.throws(request({ shoppingList: 0 }), 'zero is refused');
+    assert.throws(request({}), 'an empty map is refused');
+    assert.throws(
+      () => assertSeenScopes(manifest, { shoppingList: 2 }),
+      'a version past the manifest is refused',
+    );
+    assert.throws(
+      () => assertSeenScopes(manifest, { nope: 1 }),
+      'an unknown category is refused',
+    );
+    const partial = {
+      ...fresh,
+      categories: { shoppingList: fresh.categories.shoppingList },
+    };
+    assert.deepEqual(
+      applyCategoryChanges(partial, {}, manifest, NOW, { useSoon: 1 }).useSoon,
+      { isOn: false, changedAt: NOW, seenScopeVersion: 1 },
+      'seeing a category the grant never held records it, still off',
+    );
+    const shipped = {
+      ...manifest,
+      categories: manifest.categories.map((category) =>
+        category.id === 'shoppingList'
+          ? {
+              ...category,
+              reads: [
+                ...category.reads,
+                { label: 'Added', sinceVersion: 2, addedOn: '2026-05-01' },
+              ],
+              scopeVersion: 2,
+            }
+          : category,
+      ),
+    };
+    const may2 = Date.parse('2026-05-02T12:00:00Z');
+    assert.deepEqual(
+      Object.keys(readUnseenNews(shipped, fresh.categories, may2)),
+      ['shoppingList'],
+      'a read shipped yesterday is new to someone who saw version 1',
+    );
+    assert.deepEqual(
+      readUnseenNews(shipped, fresh.categories, may2 + 40 * DAY),
+      {},
+      'it stops being new after the window',
+    );
+    assert.deepEqual(
+      readUnseenNews(
+        shipped,
+        applyCategoryChanges(fresh, {}, shipped, NOW, { shoppingList: 2 }),
+        may2,
+      ),
+      {},
+      'seeing it clears it',
+    );
+    assert.deepEqual(
+      readUnseenNews(manifest, {}, may2),
+      {},
+      'reads there from the start are never new',
     );
   }
 

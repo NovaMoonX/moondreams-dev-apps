@@ -244,12 +244,18 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
     }
     const now = Date.now();
     const changes = req.categories ?? {};
-    const categories = applyCategoryChanges(current, changes, manifest, now);
+    const categories = applyCategoryChanges(
+      current,
+      changes,
+      manifest,
+      now,
+      req.seenScopes,
+    );
     const turnedOff = Object.entries(changes).flatMap(([id, isOn]) =>
       isOn ? [] : [id],
     );
     transaction.update(ref, {
-      ...(req.categories ? { categories } : {}),
+      ...(req.categories || req.seenScopes ? { categories } : {}),
       ...Object.fromEntries(
         turnedOff.map((id) => [
           `categoryState.${id}`,
