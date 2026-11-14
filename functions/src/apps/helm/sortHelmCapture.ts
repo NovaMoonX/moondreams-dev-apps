@@ -1810,7 +1810,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       SYSTEM_PROMPT,
       renderWhereBlock([
         ...liveGrants.map((grant) => grant.connectorId),
-        ...siteGrants.map((grant) => grant.connectorId),
+        ...siteGrants.flatMap((grant) =>
+          grant.categories.map(({ id }) => `${grant.connectorId}/${id}`),
+        ),
       ]),
       liveGrants.length > 0 ? MAIL_PROMPT : null,
       siteGrants.length > 0 ? APP_RECORDS_PROMPT : null,

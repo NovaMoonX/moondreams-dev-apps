@@ -234,12 +234,33 @@ test('the turn reads the generated block', () => {
   );
 });
 
-test('a row whose grant is not live is left out of the prompt', () => {
+test('a live read is listed only with its grant; a synced copy always is', () => {
   const base = renderWhereBlock([]);
   assert.ok(!base.includes('search_mail'));
   assert.ok(!base.includes('search_app_records'));
   assert.ok(renderWhereBlock(['google:gmail']).includes('search_mail'));
+  assert.ok(
+    renderWhereBlock(['app:runway/transactions']).includes(
+      'search_app_records',
+    ),
+  );
+  assert.ok(
+    !renderWhereBlock(['app:runway/other']).includes('search_app_records'),
+  );
   assert.ok(base.includes('search_tasks'));
+  WHERE_THINGS_LIVE.filter(
+    (entry) => entry.grant !== null && entry.home === 'synced',
+  ).forEach((entry) =>
+    assert.ok(base.includes(`- ${entry.thing}:`), entry.thing),
+  );
+});
+
+test('the turn passes each site grant as its source and category', () => {
+  assert.ok(
+    /grant\.categories\.map\(\(\{ id \}\) => `\$\{grant\.connectorId\}\/\$\{id\}`\)/.test(
+      read('functions/src/apps/helm/sortHelmCapture.ts'),
+    ),
+  );
 });
 
 const QUESTIONS: [string, string, string][] = [
