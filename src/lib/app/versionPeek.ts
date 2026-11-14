@@ -108,7 +108,12 @@ const openPanel = () => {
         }
         updateButton.disabled = true;
         updateButton.textContent = 'Updating…';
-        void updateToLatest(remote);
+        void updateToLatest(remote).then((isReloading) => {
+          if (isReloading) return;
+          updateButton.disabled = false;
+          updateButton.textContent = 'Update to the latest';
+          status.textContent = "You're offline. Update once you're back online.";
+        });
       });
     });
 };

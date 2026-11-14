@@ -23,7 +23,10 @@ export function VersionLabel() {
   const status = getVersionStatus(SITE_VERSION, latest ?? null);
   const update = useRestartApp(
     () => setIsUpdating(true),
-    () => (latest ? updateToLatest(latest) : undefined),
+    async () => {
+      const isReloading = latest ? await updateToLatest(latest) : false;
+      if (!isReloading) setIsUpdating(false);
+    },
   );
   const canUpdate = status === 'outdated' && isOnline;
 

@@ -130,26 +130,36 @@ const writeUpdateAttempt = (version: string) => {
   }
 };
 
-// Resolves true once a newer worker controls the page, so the reload is served the new build.
+// Resolves true once a newer worker controls the page, so the reload is served the new build. A page
+// with no worker yet is only being claimed by the one it already has, which proves nothing.
 const waitForNewWorker = async () => {
-  if (!('serviceWorker' in navigator)) return false;
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return false;
   const registration = await navigator.serviceWorker.getRegistration().catch(() => undefined);
   if (!registration) return false;
 
   const took = { over: false };
+  const controller = new AbortController();
   const tookOver = new Promise<boolean>((resolve) => {
+    const timer = window.setTimeout(() => {
+      controller.abort();
+      resolve(took.over);
+    }, NEW_WORKER_WAIT_MS);
     navigator.serviceWorker.addEventListener(
       'controllerchange',
       () => {
         took.over = true;
+        window.clearTimeout(timer);
+        controller.abort();
         resolve(true);
       },
-      { once: true },
+      { signal: controller.signal },
     );
-    window.setTimeout(() => resolve(took.over), NEW_WORKER_WAIT_MS);
   });
   await registration.update().catch(() => undefined);
-  if (!registration.installing && !registration.waiting) return took.over;
+  if (!registration.installing && !registration.waiting) {
+    if (!took.over) controller.abort();
+    return took.over;
+  }
   return tookOver;
 };
 
@@ -165,7 +175,7 @@ const clearPrecache = async () => {
 /**
  * Loads the newest build when the person asks for it: the worker's own update when it has one, and
  * otherwise (or on a second try for the same version) the old build's cached files are dropped so the
- * reload comes from the network. Never runs on its own.
+ * reload comes from the network. Never runs on its own. Resolves false when the device went offline first.
  */
 export async function updateToLatest(latestVersion: string) {
   const previous = readUpdateAttempt();
@@ -180,6 +190,10 @@ export async function updateToLatest(latestVersion: string) {
     return !hasNewWorker;
   };
 
-  if (await needsFreshFiles()) await clearPrecache().catch(() => undefined);
+  const isFresh = await needsFreshFiles();
+  // The connection can drop during the wait; reloading then would land on the browser's offline page.
+  if (!navigator.onLine) return false;
+  if (isFresh) await clearPrecache().catch(() => undefined);
   window.location.reload();
+  return true;
 }
