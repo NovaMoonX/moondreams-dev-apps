@@ -32,20 +32,7 @@ function MomentsPreview({ who }: MomentsPreviewProps) {
       {isEmpty ? (
         <AddRow label={HELM_COPY.momentAdd} onClick={() => setIsAdding(true)} />
       ) : (
-        <SectionDivider
-          label={HELM_COPY.momentsHeading}
-          trailing={
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
-              onClick={() => setIsAdding(true)}
-            >
-              {HELM_COPY.momentAdd}
-            </Button>
-          }
-        />
+        <SectionDivider label={HELM_COPY.momentsHeading} />
       )}
       {newest.length === 0 ? null : (
         <ul className='helm-card divide-border divide-y overflow-hidden'>
@@ -67,6 +54,13 @@ function MomentsPreview({ who }: MomentsPreviewProps) {
               </Button>
             </li>
           ))}
+          <li>
+            <AddRow
+              label={HELM_COPY.momentAdd}
+              isInList
+              onClick={() => setIsAdding(true)}
+            />
+          </li>
         </ul>
       )}
       {hasFailed && (

@@ -293,6 +293,7 @@ export const MAX_SOUNDS_LIKE = 5;
 export const MAX_REFUSED_ALIASES = 20;
 
 export const MENTIONS_SHOWN = 10;
+export const PROJECTS_SHOWN = 3;
 
 /** Questions a turn shows at once. */
 export const QUESTIONS_PER_TURN = 3;
@@ -1735,7 +1736,6 @@ export const HELM_COPY = {
   styleAddedByYou: 'Added by you',
   styleEditedByYou: 'Edited by you',
   styleAvoidSource: 'Not in what you write',
-  styleAdd: 'Add',
   styleAddLabel: 'Add a writing note',
   styleAddTitle: 'Add a writing note',
   styleSheetTitle: 'Writing note',
@@ -1884,7 +1884,6 @@ export const HELM_COPY = {
   aliasIsNameOf: (alias: string) => `${alias} is already someone else's name.`,
   aliasIsAliasOf: (alias: string, name: string) =>
     `${name} is already called ${alias}.`,
-  aliasDone: 'Done',
   aliasIsYou: (word: string) => `${word} is already you.`,
   searchAlsoCalled: (alias: string) => `Also called ${alias}`,
   aliasNone: 'No nicknames yet.',
@@ -1995,6 +1994,10 @@ export const HELM_COPY = {
   linkedPlace: 'Place',
   photosTitle: 'Photos',
   photoAdd: 'Add a photo',
+  photoChoose: 'Choose a photo',
+  photoAdding: 'Adding the photo…',
+  photoFullShort: `Holds ${PHOTOS_PER_RECORD} photos already`,
+  photoMenuLabel: (name: string) => `Add a photo of ${name}`,
   photoFull: `This page holds up to ${PHOTOS_PER_RECORD} photos. Remove one to add another.`,
   photoAdded: 'Photo added',
   photoFailed: "That photo didn't save. Try again.",
@@ -2428,12 +2431,11 @@ export const HELM_COPY = {
   projectCreatedToast: (name: string) => `Started ${name}`,
   projectCreateFailed: "That didn't start. Try again.",
   projectRemoved: (name: string) => `Took back ${name}`,
-  whoProjectLine: (
-    emoji: string | null,
-    name: string,
-    role: 'key' | 'involved',
-  ) =>
-    `${emoji ? `${emoji} ` : ''}${name} · ${role === 'key' ? 'key person' : 'involved'}`,
+  whoProjectsTitle: 'Projects',
+  whoProjectPart: (role: 'key' | 'involved') =>
+    role === 'key' ? 'Their part: key' : 'Their part: involved',
+  showAllProjects: (count: number) => `Show all ${count} projects`,
+  showFewerProjects: 'Show fewer',
   knowledgeTitle: 'Knowledge',
   knowledgeFailed: "Your knowledge couldn't be opened.",
   knowledgeEmpty: (assistant: string) =>
