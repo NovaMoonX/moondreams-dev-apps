@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { logger } from 'firebase-functions/v2';
 
 import type {
   ModelProvider,
@@ -130,12 +131,12 @@ export function createAnthropicProvider(
           input_schema:
             tool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
         })),
+        // Not strict: the API refuses a strict schema with more than 16 nullable fields, and every answer is normalized anyway.
         ...terminals.map((tool, index) => ({
           name: tool.name,
           description: tool.description,
           input_schema:
             tool.inputSchema as Anthropic.Beta.Messages.BetaTool.InputSchema,
-          strict: true,
           ...(index === terminals.length - 1
             ? { cache_control: { type: 'ephemeral' as const } }
             : {}),
@@ -238,6 +239,16 @@ export function createAnthropicProvider(
     } catch (error) {
       if (signal?.aborted || error instanceof Anthropic.APIUserAbortError) {
         return end('aborted');
+      }
+      if (
+        error instanceof Anthropic.BadRequestError ||
+        error instanceof Anthropic.UnprocessableEntityError
+      ) {
+        logger.warn('ai.requestRejected', {
+          role,
+          status: error.status,
+          reason: error.message.slice(0, 300),
+        });
       }
       return end('error', null, getErrorCode(error));
     }
