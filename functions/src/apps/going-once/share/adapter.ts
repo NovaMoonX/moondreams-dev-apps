@@ -73,11 +73,18 @@ interface ReadItem {
   status: string | null;
   isListable: boolean;
   pickupOn: number | null;
+  askingPriceCents: number | null;
+  soldCents: number | null;
 }
 
 interface ReadSale {
   id: string;
   name: string;
+  pickupArea: string | null;
+  buyerNote: string | null;
+  paymentMethods: string[];
+  currency: string | null;
+  newInquiries: number;
   updatedAt: number | null;
   items: ReadItem[];
   isItemsFull: boolean;
@@ -94,11 +101,21 @@ const readItem = (doc: FirebaseFirestore.QueryDocumentSnapshot): ReadItem[] => {
       status,
       isListable: isListable(doc.data()),
       pickupOn: readTime(doc.get('pending.pickupOn')),
+      askingPriceCents: readTime(doc.get('askingPriceCents')),
+      soldCents: readTime(doc.get('sale.priceCents')),
     },
   ];
 };
 
-/** Items are read with only the fields the counts need, so a private one is never fetched; an available thing counts once buyers could be shown it. */
+const readPaymentMethods = (value: unknown) =>
+  Array.isArray(value)
+    ? value.flatMap((method) => {
+        const text = readText(method);
+        return text === null ? [] : [text];
+      })
+    : [];
+
+/** Items are read with only the fields the figures need, so a private one is never fetched, and inquiries are only counted by status; an available thing counts once buyers could be shown it. */
 async function readOpenSales(
   firestore: Firestore,
   uid: string,
@@ -122,13 +139,25 @@ async function readOpenSales(
             'isDraft',
             'pending.pickupOn',
             'askingPriceCents',
+            'sale.priceCents',
             'photos',
           )
           .limit(ITEM_LIMIT)
           .get()
-          .then((items): ReadSale => ({
+          .then(async (items): Promise<ReadSale> => ({
             id: doc.id,
             name,
+            pickupArea: readText(doc.get('pickupArea')),
+            buyerNote: readText(doc.get('buyerNote')),
+            paymentMethods: readPaymentMethods(doc.get('paymentMethods')),
+            currency: readText(doc.get('currency')),
+            newInquiries: (
+              await doc.ref
+                .collection('inquiries')
+                .where('status', '==', 'NEW')
+                .count()
+                .get()
+            ).data().count,
             updatedAt: readTime(doc.get('lastEditedAt')),
             items: items.docs.flatMap(readItem),
             isItemsFull: items.size < ITEM_LIMIT,
@@ -142,6 +171,20 @@ async function readOpenSales(
 const countStatus = (items: ReadItem[], status: string) =>
   items.filter((item) => item.status === status).length;
 
+const sumCents = (items: ReadItem[], pick: (item: ReadItem) => number | null) =>
+  items.reduce((total, item) => total + (pick(item) ?? 0), 0);
+
+const toSaleDetail = (sale: ReadSale) => {
+  const pay =
+    sale.paymentMethods.length > 0
+      ? `Pay by ${sale.paymentMethods.join(', ')}`
+      : null;
+  const parts = [sale.buyerNote, pay].filter(
+    (part): part is string => part !== null,
+  );
+  return parts.length > 0 ? parts.join(' · ') : null;
+};
+
 async function syncSales(
   firestore: Firestore,
   uid: string,
@@ -153,6 +196,9 @@ async function syncSales(
         sourceRef: `sales/${sale.id}`,
         kind: 'project',
         title: sale.name,
+        detail: toSaleDetail(sale),
+        placeLabel: sale.pickupArea,
+        currency: sale.currency,
         sourceUpdatedAt: sale.updatedAt,
         extra: {
           available: sale.items.filter(
@@ -160,7 +206,52 @@ async function syncSales(
           ).length,
           pending: countStatus(sale.items, 'PENDING'),
           sold: countStatus(sale.items, 'SOLD'),
+          newInquiries: sale.newInquiries,
+          collectedCents: sumCents(
+            sale.items.filter((item) => item.status === 'SOLD'),
+            (item) => item.soldCents,
+          ),
+          leftCents: sumCents(
+            sale.items.filter(
+              (item) =>
+                item.status === 'PENDING' ||
+                (item.status === 'AVAILABLE' && item.isListable),
+            ),
+            (item) => item.askingPriceCents,
+          ),
         },
+      }),
+    ),
+    isFull: isSalesFull && sales.every((sale) => sale.isItemsFull),
+  };
+}
+
+async function syncThings(
+  firestore: Firestore,
+  uid: string,
+): Promise<CategoryRead> {
+  const { sales, isSalesFull } = await readOpenSales(firestore, uid);
+  return {
+    records: sales.flatMap((sale) =>
+      sale.items.flatMap((item) => {
+        const isPending = item.status === 'PENDING';
+        if (
+          item.title === null ||
+          !(isPending || (item.status === 'AVAILABLE' && item.isListable))
+        )
+          return [];
+        return [
+          toRecord({
+            sourceRef: `sales/${sale.id}/items/${item.id}`,
+            kind: 'artifact',
+            title: item.title,
+            subtitle: sale.name,
+            amountCents: item.askingPriceCents,
+            currency: sale.currency,
+            sourceUpdatedAt: sale.updatedAt,
+            extra: { status: isPending ? 'pending' : 'available' },
+          }),
+        ];
       }),
     ),
     isFull: isSalesFull && sales.every((sale) => sale.isItemsFull),
@@ -230,6 +321,8 @@ export function createGoingOnceAdapter(
         return syncPickups(firestore, uid, req.windowStart);
       case 'sales':
         return syncSales(firestore, uid);
+      case 'things':
+        return syncThings(firestore, uid);
       default:
         throw new Error('Unknown category.');
     }

@@ -691,6 +691,7 @@ const BUYER_CONTACT = 'secret-buyer@example.test';
 const BUYER_MESSAGE = 'SECRET BUYER MESSAGE';
 const FLOOR_PRICE = 3131;
 const SALE_PRICE = 5252;
+const ORIGINAL_PRICE = 7373;
 const ITEM_NOTE = 'SECRET ITEM NOTE';
 
 const sale = (
@@ -702,7 +703,10 @@ const sale = (
   members,
   name,
   status,
-  priceCents: SALE_PRICE,
+  pickupArea: 'Ballard',
+  buyerNote: 'Bring a friend',
+  paymentMethods: ['Cash', 'Venmo'],
+  currency: 'USD',
   notesForBuyers: ITEM_NOTE,
   lastEditedAt,
 });
@@ -718,7 +722,7 @@ const saleItem = (
   askingPriceCents: 4000,
   photos: [{ id: 'photo-1', path: 'secret/photo.jpg' }],
   floorPriceCents: FLOOR_PRICE,
-  priceCents: SALE_PRICE,
+  originalPriceCents: ORIGINAL_PRICE,
   notes: ITEM_NOTE,
   pending: null,
   lastEditedAt: NOW - 5,
@@ -776,8 +780,20 @@ await Promise.all([
   fallSale
     .collection('items')
     .doc('pan')
-    .set(saleItem('Cast iron pan', 'SOLD', { pending: null })),
+    .set(
+      saleItem('Cast iron pan', 'SOLD', {
+        pending: null,
+        sale: { priceCents: SALE_PRICE, buyerName: BUYER_NAME },
+      }),
+    ),
   fallSale.collection('inquiries').doc('q1').set({
+    status: 'NEW',
+    buyerName: BUYER_NAME,
+    contact: BUYER_CONTACT,
+    message: BUYER_MESSAGE,
+  }),
+  fallSale.collection('inquiries').doc('q2').set({
+    status: 'HANDLED',
     buyerName: BUYER_NAME,
     contact: BUYER_CONTACT,
     message: BUYER_MESSAGE,
@@ -810,7 +826,7 @@ const goingOnceCtx = (uid: string) => ({
       readerAppId: 'helm',
       connectorId: 'app:going-once',
       accountId: 'site',
-      categoryIds: ['pickups', 'sales'],
+      categoryIds: ['pickups', 'sales', 'things'],
       options: null,
     },
     goingOnceAdapter.manifest,
@@ -835,11 +851,39 @@ assert.deepEqual(refs(goingOnceSalesRead), ['sales/fall']);
 assert.equal(goingOnceSalesRead[0].kind, 'project');
 assert.equal(goingOnceSalesRead[0].title, 'Fall clear-out');
 assert.equal(goingOnceSalesRead[0].sourceUpdatedAt, NOW - 7);
+assert.equal(goingOnceSalesRead[0].placeLabel, 'Ballard');
+assert.equal(
+  goingOnceSalesRead[0].detail,
+  'Bring a friend · Pay by Cash, Venmo',
+);
+assert.equal(goingOnceSalesRead[0].currency, 'USD');
 assert.deepEqual(goingOnceSalesRead[0].extra, {
   available: 2,
   pending: 3,
   sold: 1,
+  newInquiries: 1,
+  collectedCents: SALE_PRICE,
+  leftCents: 4000 * 5,
 });
+
+const things = await runGoingOnce(OWNER, 'things');
+assert.deepEqual(refs(things).sort(), [
+  'sales/fall/items/bike',
+  'sales/fall/items/desk',
+  'sales/fall/items/lamp',
+  'sales/fall/items/nodate',
+  'sales/fall/items/sofa',
+]);
+assert.ok(things.every((thing) => thing.kind === 'artifact'));
+assert.equal(
+  things.find((thing) => thing.title === 'Oak desk')?.extra.status,
+  'pending',
+);
+assert.equal(
+  things.find((thing) => thing.title === 'Gray sofa')?.amountCents,
+  4000,
+);
+assert.deepEqual(await runGoingOnce(OTHER, 'things'), []);
 
 const pickups = await runGoingOnce(OWNER, 'pickups');
 assert.deepEqual(refs(pickups), ['sales/fall/items/desk']);
@@ -857,12 +901,12 @@ assert.deepEqual(refs(await runGoingOnce(CO_SELLER, 'pickups')), [
 assert.deepEqual(await runGoingOnce(OTHER, 'sales'), []);
 assert.deepEqual(await runGoingOnce(OTHER, 'pickups'), []);
 
-const goingOnceAll = [...goingOnceSalesRead, ...pickups];
+const goingOnceAll = [...goingOnceSalesRead, ...pickups, ...things];
 assertShape(goingOnceAll);
 goingOnceAll.forEach((record) => {
   const values = flatten(record);
   assert.ok(
-    ![FLOOR_PRICE, SALE_PRICE].some((secret) => values.includes(secret)),
+    ![FLOOR_PRICE, ORIGINAL_PRICE].some((secret) => values.includes(secret)),
     record.sourceRef,
   );
   assert.ok(
