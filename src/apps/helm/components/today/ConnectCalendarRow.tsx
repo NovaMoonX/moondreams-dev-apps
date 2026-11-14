@@ -1,6 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarDays, CalendarX, ChevronRight } from 'lucide-react';
+import { CalendarX, ChevronRight } from 'lucide-react';
 
+import { GoogleCalendarMark } from '@/components/BrandMarks';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,10 +25,7 @@ function CalendarRow({ title, reason, onOpen }: CalendarRowProps) {
       className='flex h-auto min-h-14 w-full items-center justify-start gap-3 px-4 py-3 text-left'
       onClick={onOpen}
     >
-      <CalendarDays
-        className='text-muted-foreground size-5 shrink-0'
-        aria-hidden='true'
-      />
+      <GoogleCalendarMark className='size-7 shrink-0' />
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {title}
