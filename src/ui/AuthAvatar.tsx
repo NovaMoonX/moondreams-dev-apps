@@ -13,6 +13,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import AccountPanel from '@/ui/AccountPanel';
 import UserAvatar from '@/ui/UserAvatar';
 import { useAuth } from '@hooks/useAuth';
+import { useCanSeeDebugDetails } from '@lib/debugProfiles/useCanSeeDebugDetails';
 
 type AuthAvatarProps = {
   className?: string;
@@ -20,6 +21,8 @@ type AuthAvatarProps = {
 
 function AuthAvatar({ className }: AuthAvatarProps) {
   const { user, loading, signInWithGoogle, logOut, isAdmin, rememberedAccounts } = useAuth();
+  // Asked while the site still works, so an error screen reached offline or with Firestore failing already knows.
+  useCanSeeDebugDetails();
   const switchToAccount = useAccountSwitch();
   const { pathname } = useLocation();
   // Tied to the page it opened on, so any navigation (Back, a link elsewhere) closes the card.

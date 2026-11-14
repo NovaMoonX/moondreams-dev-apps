@@ -2,11 +2,13 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useRouteError } from 'react-router-dom';
 
+import CopyTextButton from '@components/CopyTextButton';
 import { VersionLabel } from '@components/VersionLabel';
-import { useAuth } from '@hooks/useAuth';
 import { useRestartApp } from '@hooks/useRestartApp';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 import Loading from '@ui/Loading';
+import { SITE_VERSION } from '@lib/app';
+import { useCanSeeDebugDetails } from '@lib/debugProfiles/useCanSeeDebugDetails';
 import { getRegistryAppForPath } from '../lib/app/app.registry';
 import {
   canReloadForStaleChunk,
@@ -23,12 +25,11 @@ function getErrorDetails(error: unknown) {
 }
 
 function ErrorScreen({ error }: { error: unknown }) {
-  const { isAdmin } = useAuth();
   const restart = useRestartApp();
   const isUpdateReady = useUpdateReady();
   const { pathname } = useLocation();
   const { message, stack } = getErrorDetails(error);
-  const showDetails = import.meta.env.DEV || isAdmin;
+  const showDetails = useCanSeeDebugDetails();
   // A screen's file missing after a deploy: the new version is loaded straight into the screen asked for.
   const [isReloading] = useState(
     () => isStaleChunkError(error) && canReloadForStaleChunk(),
@@ -65,6 +66,19 @@ function ErrorScreen({ error }: { error: unknown }) {
                 {stack}
               </pre>
             )}
+            <CopyTextButton
+              className='mt-3'
+              variant='secondary'
+              label='Copy error'
+              text={[
+                message,
+                stack,
+                `Page: ${pathname}`,
+                `Version: ${SITE_VERSION}`,
+              ]
+                .filter(Boolean)
+                .join('\n\n')}
+            />
           </div>
         )}
         {isUpdateReady && (
