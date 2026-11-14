@@ -24,6 +24,7 @@ import {
   registeredClientName,
   uidForWorkosUser,
   verifyMcpAccessToken,
+  WorkosError,
   type McpAccessClaims,
 } from './workos.js';
 
@@ -173,6 +174,14 @@ async function sealClient(
   });
 }
 
+const workosErrorFields = (error: unknown) =>
+  error instanceof WorkosError
+    ? { workosStatus: error.status, workosCode: error.code }
+    : {};
+
+// The prefix of an id ("user", "org") tells a WorkOS id from one of ours without logging the id.
+const idKindOf = (id: string) => /^[a-z]{1,12}_/.exec(id)?.[0] ?? 'unprefixed';
+
 const refuse = (
   res: Response,
   status: number,
@@ -202,7 +211,14 @@ async function serveTool(
     refuse(res, 401, -32001, 'Sign in again to continue.', challenge);
     return;
   }
-  const uid = await uidForWorkosUser(claims.workosUserId);
+  const uid = await uidForWorkosUser(claims.workosUserId).catch((error) => {
+    logger.error('mcp.identity.failed', {
+      appId: options.appId,
+      ...workosErrorFields(error),
+      idKind: idKindOf(claims.workosUserId),
+    });
+    throw error;
+  });
   if (!uid) {
     refuse(res, 403, -32002, 'This sign-in is not linked to an account.');
     return;
@@ -271,6 +287,7 @@ export function createMcpHttpHandler(options: McpHttpOptions) {
       logger.error('mcp.request.failed', {
         appId: options.appId,
         cause: error instanceof Error ? error.name : 'error',
+        ...workosErrorFields(error),
       });
       if (!res.headersSent) {
         refuse(
