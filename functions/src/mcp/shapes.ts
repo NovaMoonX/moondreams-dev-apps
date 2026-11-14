@@ -21,11 +21,16 @@ export const resourcePathOf = (resource: string) => new URL(resource).pathname;
 export const protectedResourceMetadataUrl = (resource: string) =>
   `${new URL(resource).origin}/.well-known/oauth-protected-resource${resourcePathOf(resource)}`;
 
+// Google's account linking drops a connection whose token answer has no refresh token, and the
+// sign-in service only issues one when the client asked for offline_access.
+export const MCP_SIGN_IN_SCOPES = ['openid', 'profile', 'email', 'offline_access'];
+
 export const wwwAuthenticate = (resource: string) =>
   [
     'Bearer error="unauthorized"',
     'error_description="Authorization needed"',
     `resource_metadata="${protectedResourceMetadataUrl(resource)}"`,
+    `scope="${MCP_SIGN_IN_SCOPES.join(' ')}"`,
   ].join(', ');
 
 export const protectedResourceMetadata = (
@@ -35,6 +40,7 @@ export const protectedResourceMetadata = (
   resource,
   authorization_servers: [authorizationServerOrigin],
   bearer_methods_supported: ['header'],
+  scopes_supported: MCP_SIGN_IN_SCOPES,
 });
 
 export const jsonRpcError = (code: number, message: string) => ({
