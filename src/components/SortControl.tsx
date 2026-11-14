@@ -66,7 +66,7 @@ function SortControl<T extends string>({
         isCompact
           ? "relative h-8 w-8 p-0! after:absolute after:-inset-x-1 after:inset-y-0 after:content-['']"
           : 'h-12 w-12 max-[359px]:h-10 max-[359px]:w-10',
-        isActive && 'bg-accent!',
+        isActive && (isCompact ? 'ring-primary ring-2' : 'bg-accent!'),
       )}
       onClick={isPhone ? () => setIsOpen(true) : undefined}
     >
