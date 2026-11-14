@@ -33,7 +33,7 @@ export const WAYPOINT_SHARES: SourceShares = {
           kind: 'event',
           label: 'Trip plans',
           detail:
-            'Activities, flights (airline, number and airports), drives, stays and rentals, at their local times',
+            'Activities, flights, drives, stays and rentals, at their local times',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -104,7 +104,7 @@ export const WAYPOINT_SHARES: SourceShares = {
           id: 'tripChecklist',
           kind: 'countSummary',
           label: 'Your trip checklist',
-          detail: 'Your to-dos by category, what is done and what is left',
+          detail: 'Every to-do by category, done ones included',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 2,

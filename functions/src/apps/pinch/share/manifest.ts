@@ -65,8 +65,7 @@ export const PINCH_SHARES: SourceShares = {
           id: 'pantryStock',
           kind: 'artifact',
           label: 'Pantry, fridge and freezer stock',
-          detail:
-            'Everything you have on hand, where it is and when to use it by',
+          detail: 'Everything you have on hand, not only what is near its date',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 2,
@@ -140,7 +139,7 @@ export const PINCH_SHARES: SourceShares = {
         },
       ],
       never: [
-        "Recipes' text",
+        'Recipe steps and ingredients',
         'prices and costs',
         'nutrition',
         'cooking history',

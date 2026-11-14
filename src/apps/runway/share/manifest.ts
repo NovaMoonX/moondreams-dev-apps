@@ -48,7 +48,8 @@ export const RUNWAY_SHARES: SourceShares = {
           id: 'horizon',
           kind: 'project',
           label: 'Horizon goals',
-          detail: 'Each goal: its name, target, what is set aside and its day',
+          detail:
+            'Each goal: its name, target, what is set aside, how far along and its day',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -72,7 +73,7 @@ export const RUNWAY_SHARES: SourceShares = {
           id: 'envelopes',
           kind: 'project',
           label: 'Envelopes',
-          detail: 'The name of each envelope in your plan, no amounts',
+          detail: "Each envelope's name, no amounts",
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 3,
