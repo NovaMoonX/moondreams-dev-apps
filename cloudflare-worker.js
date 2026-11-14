@@ -147,6 +147,45 @@ function withUnlistedPageHeaders(response) {
   return result;
 }
 
+// A build's files never change under one name, while the page and the worker must be re-checked on each
+// load, or a phone keeps a page pointing at files the next deploy removed. A missing file is a real 404 kept nowhere: answered
+// with the page instead, every cache stored that page under the file's name and the screen could not load until it expired.
+const NO_CACHE_PATHS = /^\/(sw\.js|firebase-messaging-sw-[^/]+\.js|manifest[^/]*\.json)$/;
+
+const isPageForFile = (url, response) =>
+  url.pathname.startsWith('/assets/') && (response.headers.get('content-type') || '').includes('text/html');
+
+// The edge may still hold a page stored under a file's name from before; one fetch past the cache gets the real file.
+async function fetchFile(request, url) {
+  const response = await fetch(request);
+  if (!isPageForFile(url, response)) return response;
+  await response.body?.cancel();
+  return fetch(request, { cache: 'no-store' });
+}
+
+function withCachePolicy(url, response) {
+  const contentType = response.headers.get('content-type') || '';
+  if (url.pathname.startsWith('/assets/')) {
+    // Only a missing file becomes this 404: a revalidation's 304 and a server error pass through as they are.
+    if (response.status === 404 || isPageForFile(url, response)) {
+      return new Response('Not found', {
+        status: 404,
+        headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+    if (response.status !== 200) return response;
+    const result = new Response(response.body, response);
+    result.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    return result;
+  }
+  if (NO_CACHE_PATHS.test(url.pathname) || contentType.includes('text/html')) {
+    const result = new Response(response.body, response);
+    result.headers.set('Cache-Control', 'no-cache');
+    return result;
+  }
+  return response;
+}
+
 function getAppMeta(url) {
   const app = APP_REGISTRY.find((entry) => url.pathname.startsWith(entry.path));
   if (!app) {
@@ -187,7 +226,7 @@ export default {
       );
 
     // Fetch the standard index.html response from Firebase Hosting
-    const fetched = await fetch(request);
+    const fetched = withCachePolicy(url, await fetchFile(request, url));
     const isUnlisted = APP_REGISTRY.some((app) =>
       (app.pages ?? []).some(({ prefix }) => url.pathname.startsWith(prefix)),
     );
