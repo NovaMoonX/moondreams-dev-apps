@@ -24,6 +24,7 @@ import type {
   ProcedureVersionSealed,
 } from '@apps/helm/types';
 import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your procedures did not open.');
@@ -110,8 +111,11 @@ async function openProcedure(
       sourceTaskId: data.sourceTaskId ?? null,
       executionId: data.executionId ?? null,
       createdAt: data.createdAt ?? 0,
+      privacy: readPrivacy(data.privacy),
       lastEditedAt: data.lastEditedAt ?? null,
       ...toBody(payload),
+      privateMark: payload.privateMark ?? null,
+      isPrivacyCleared: payload.isPrivacyCleared ?? false,
     };
   } catch {
     return null;

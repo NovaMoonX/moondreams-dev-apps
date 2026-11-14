@@ -78,6 +78,7 @@ export async function confirmCalendarRight(
         supersededById: null,
         supersededAt: null,
         disputedWithId: null,
+        privacy: 'ordinary',
         createdAt: now,
         confirmedAt: now,
         lastEditedAt: null,

@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { store } from '@/store';
 
 import { TASK_TITLE_CAP } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
@@ -23,6 +24,13 @@ import type {
   TaskSealed,
   TaskWordsChange,
 } from '@apps/helm/types';
+import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
+import {
+  readEffectivePrivacy,
+  readPersonMark,
+  readPrivateMark,
+} from '@apps/helm/utils/privacy';
+import { readRecordPrivacy } from '@apps/helm/utils/privacyParents';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
 import {
   planPhotoRelease,
@@ -45,10 +53,19 @@ const isUnavailable = (error: unknown) =>
 export async function createTask(
   uid: string,
   encryption: HelmEncryption,
-  input: { title: string; due: TaskDue | null },
+  input: { title: string; due: TaskDue | null; isPrivate?: boolean },
 ) {
   const title = toTaskTitle(input.title).slice(0, TASK_TITLE_CAP);
   if (!title) throw new Error('A task needs words.');
+  const marked = readPrivateMark({
+    current: { privateMark: null, isPrivacyCleared: false },
+    isCare: false,
+    isForOtherWho: false,
+    commandMark: null,
+    isSensitiveHealth: false,
+    words: title,
+  });
+  const facts = input.isPrivate ? readPersonMark(marked, true) : marked;
   const task: Task = {
     status: 'open',
     importance: null,
@@ -69,12 +86,18 @@ export async function createTask(
     createdBy: 'person',
     sourceCaptureId: null,
     executionId: null,
+    privacy: readEffectivePrivacy(facts),
     createdAt: Date.now(),
     lastEditedAt: null,
     completedAt: null,
     clearedAt: null,
     sealed: await sealJson<TaskSealed>(
-      { title, notes: null, steps: {} },
+      {
+        title,
+        notes: null,
+        steps: {},
+        ...(facts.privateMark && { privateMark: facts.privateMark }),
+      },
       encryption,
     ),
   };
@@ -82,12 +105,36 @@ export async function createTask(
   return { id: ref.id, write: setDoc(ref, task) };
 }
 
+const hasLinkChange = (fields: TaskPlainFields) =>
+  'projectId' in fields || 'whoIds' in fields || 'placeIds' in fields;
+
+/** A change of link carries the task's class with it, so the filing line and a job without the key agree. */
+const readLinkedPrivacy = (taskId: string, fields: TaskPlainFields) => {
+  const { helm } = store.getState();
+  const task = [...helm.openTasks.items, ...helm.projectTasks.items].find(
+    (entry) => entry.id === taskId,
+  );
+  return task
+    ? {
+        privacy: readRecordPrivacy(
+          'task',
+          { ...task, ...fields, privacy: null },
+          readParentIndex(),
+        ),
+      }
+    : {};
+};
+
 export const updateTaskFields = (
   uid: string,
   taskId: string,
   fields: TaskPlainFields,
 ) =>
-  updateDoc(doc(tasksOf(uid), taskId), { ...fields, lastEditedAt: Date.now() });
+  updateDoc(doc(tasksOf(uid), taskId), {
+    ...fields,
+    ...(hasLinkChange(fields) ? readLinkedPrivacy(taskId, fields) : {}),
+    lastEditedAt: Date.now(),
+  });
 
 /** Changes a task's words in one transaction that re-reads them first, so a change made on another device meanwhile is kept. Needs a connection. */
 export async function updateTaskWords(

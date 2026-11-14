@@ -997,12 +997,28 @@ const readLinks = (
   };
 };
 
+/** Taking a thing out of private is kept only when the person's own words, quoted, say so. */
+const isQuotedPrivateRelease = (
+  item: Record<string, unknown>,
+  captureText: string,
+) => {
+  const quote = toComparable(
+    typeof item.requestQuote === 'string' ? item.requestQuote : '',
+  );
+  return (
+    quote.split(' ').filter(Boolean).length >= 2 &&
+    ` ${toComparable(captureText)} `.includes(` ${quote} `) &&
+    /\b(private|public)\b/.test(quote)
+  );
+};
+
 const readCommand = (
   item: Record<string, unknown>,
   state: { refs: Set<string> },
   reading: CaptureReading,
   aliases: AliasBook,
   entities: Entities,
+  captureText: string,
 ): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
   if (
@@ -1019,6 +1035,14 @@ const readCommand = (
     kind === 'createNote'
   ) {
     return null;
+  }
+  if (kind === 'setPrivate') {
+    const alias = typeof item.taskAlias === 'string' ? item.taskAlias : '';
+    const subjectId = state.refs.has(alias) ? alias : aliases.idOf(alias);
+    if (!subjectId || typeof item.isPrivate !== 'boolean') return null;
+    return item.isPrivate || isQuotedPrivateRelease(item, captureText)
+      ? { kind, taskId: subjectId, isPrivate: item.isPrivate }
+      : null;
   }
   const title = toTitle(item.title);
   const due = toDue(item.dueSpanId, reading);
@@ -1912,6 +1936,7 @@ export function normalizeNomosReply(
       context.reading,
       context.aliases,
       entities,
+      context.captureText ?? '',
     );
     return command ? [command] : [];
   });

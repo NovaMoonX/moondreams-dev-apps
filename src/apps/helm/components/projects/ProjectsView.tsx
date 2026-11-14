@@ -16,6 +16,7 @@ import {
   selectFinishedProjects,
 } from '@apps/helm/store/selectors/projectSelectors';
 import type { OpenProject } from '@apps/helm/types';
+import PrivateLock from '@apps/helm/components/privacy/PrivateLock';
 
 interface ProjectsViewProps {
   onBack: () => void;
@@ -44,6 +45,7 @@ function ProjectRow({ project, isFinished, onOpen }: ProjectRowProps) {
         <span className='min-w-0 flex-1'>
           <span className='text-foreground block text-[15px] leading-[21px] break-words'>
             {project.name}
+            <PrivateLock kind='project' record={project} />
           </span>
           <span className='block'>
             {isFinished ? (

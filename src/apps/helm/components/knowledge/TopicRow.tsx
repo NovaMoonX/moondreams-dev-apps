@@ -9,6 +9,7 @@ import {
   selectSubtopicsByParent,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { OpenTopic } from '@apps/helm/types';
+import PrivateLock from '@apps/helm/components/privacy/PrivateLock';
 
 interface TopicRowProps {
   topic: OpenTopic;
@@ -46,6 +47,7 @@ function TopicRow({ topic, indent, onOpen }: TopicRowProps) {
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {topic.name}
+          <PrivateLock kind='topic' record={topic} />
         </span>
         <span className='text-muted-foreground block text-[13px]'>
           {HELM_COPY.topicCountLine(subtopics, notes)}

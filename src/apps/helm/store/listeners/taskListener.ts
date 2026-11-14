@@ -17,6 +17,7 @@ import type { SealedReader } from '@lib/security';
 
 import { OPEN_TASKS_LIMIT, PROJECT_TASKS_LIMIT } from '@apps/helm/constants';
 import type { OpenTask, Task, TaskSealed } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your tasks did not open.');
@@ -49,6 +50,7 @@ export async function openTask(
     sourceCaptureId: data.sourceCaptureId ?? null,
     executionId: data.executionId ?? null,
     createdAt: data.createdAt ?? 0,
+    privacy: readPrivacy(data.privacy),
     lastEditedAt: data.lastEditedAt ?? null,
     completedAt: data.completedAt ?? null,
     clearedAt: data.clearedAt ?? null,
@@ -61,6 +63,8 @@ export async function openTask(
       title: payload.title ?? '',
       notes: payload.notes ?? null,
       steps: payload.steps ?? {},
+      privateMark: payload.privateMark ?? null,
+      isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,
     };
   } catch {

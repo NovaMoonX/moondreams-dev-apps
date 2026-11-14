@@ -14,6 +14,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Procedures: look in <your_procedures>, then call search_procedures; change it with createProcedure or reviseProcedure.
 - The procedure that is open: look in <procedure_open>, then call search_procedures; change it with reviseProcedure.
 - Runs of a procedure: look in <open_runs>; change it with startRun or tickRun.
+- Whether a thing is private: change it with setPrivate.
 - Photos and files kept with a record: look in <attachments>; you cannot change it.
 - How the person writes: look in <your_style>; you cannot change it.
 - Helm's plan for a day: call get_calendar; you cannot change it.

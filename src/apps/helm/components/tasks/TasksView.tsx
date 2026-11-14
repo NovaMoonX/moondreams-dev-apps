@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
+import { copyToClipboard } from '@/utils/clipboardUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import NewTaskSheet from '@apps/helm/components/tasks/NewTaskSheet';
@@ -24,12 +25,16 @@ import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { useTaskTicks } from '@apps/helm/hooks/useTaskTicks';
 import type { RestoreResult } from '@apps/helm/store/actions/taskActions';
 import { selectOpenTasksById } from '@apps/helm/store/selectors/captureSelectors';
+import { selectParentIndex } from '@apps/helm/store/selectors/privacySelectors';
+import { filterPrivate } from '@apps/helm/utils/privacy';
+import { readRecordPrivacy } from '@apps/helm/utils/privacyParents';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { OpenTask, TaskActivity } from '@apps/helm/types';
 import { formatWeekdayDayUTC, getDueSortKey } from '@apps/helm/utils/taskDue';
 
 const { option } = DropdownMenuFactories;
 const NEW_TASK = 'new-task';
+const COPY_LIST = 'copy-list';
 
 interface TasksViewProps {
   onBack: () => void;
@@ -156,6 +161,34 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
     });
   };
 
+  const parentIndex = useAppSelector(selectParentIndex);
+  const copyList = async (include: boolean) => {
+    const { kept, line } = filterPrivate(
+      rows,
+      (task) => readRecordPrivacy('task', task, parentIndex) === 'private',
+      { include },
+    );
+    const isCopied = await copyToClipboard(
+      kept.map((task) => `- ${titleOf(task.id)}`).join('\n'),
+    );
+    if (!isCopied) {
+      addToast({ title: HELM_COPY.copyFailed, type: 'error' });
+      return;
+    }
+    addToast({
+      title: line ? `${HELM_COPY.listCopied} · ${line}` : HELM_COPY.listCopied,
+      type: 'success',
+      ...(line
+        ? {
+            action: {
+              label: HELM_COPY.privateIncludeThem,
+              onClick: () => void copyList(true),
+            },
+          }
+        : {}),
+    });
+  };
+
   return (
     <>
       <HelmHeader
@@ -163,9 +196,13 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
         onBack={onBack}
         onHome={onHome}
         menu={{
-          items: [option({ label: HELM_COPY.newTask, value: NEW_TASK })],
+          items: [
+            option({ label: HELM_COPY.newTask, value: NEW_TASK }),
+            option({ label: HELM_COPY.copyList, value: COPY_LIST }),
+          ],
           onItemSelect: (value) => {
             if (value === NEW_TASK) setIsNewOpen(true);
+            if (value === COPY_LIST) void copyList(false);
           },
         }}
       />

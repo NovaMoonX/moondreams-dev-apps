@@ -1,5 +1,12 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import {
+  readEffectivePrivacy,
+  readPrivateMark,
+  readSetPrivate,
+  type PrivacyFacts,
+  type PrivateParent,
+} from '../privacy.js';
+import {
   createOptionMatcher,
   toComparable,
   toDisplayCase,
@@ -119,6 +126,9 @@ export interface ExistingTask {
   whoIds: string[];
   placeIds: string[];
   sealed: Record<string, unknown>;
+  /** What the task says about being private and the parents it is filed under, read with it. */
+  privacyFacts?: PrivacyFacts;
+  privateParents?: PrivateParent[];
 }
 
 /** A who the person already has, with what the tier rule reads about it. */
@@ -615,6 +625,8 @@ export interface WritePlan {
   keyDateIndex: { byWho: ByWho; entryCount: number } | null;
   /** One line for each private detail the turn did not keep. */
   notKept: string[];
+  /** Whether a task the turn changed is private, before or after it. */
+  isPrivate: boolean;
   /** The result line of each change the turn made to a topic. */
   topicLines: string[];
   /** The result line of each procedure the turn made or changed. */
@@ -944,6 +956,7 @@ export function planWrites(input: PlanInput): WritePlan {
 
   const patch = (id: string, data: Record<string, unknown>) =>
     patches.set(id, { ...patches.get(id), ...data });
+  const privacyLines: string[] = [];
 
   input.commands.forEach((command) => {
     if (effects.length + drafts.size >= MAX_EFFECTS) return;
@@ -965,6 +978,66 @@ export function planWrites(input: PlanInput): WritePlan {
       return;
     }
     const draft = drafts.get(command.taskId);
+    if (command.kind === 'setPrivate') {
+      const settled = draft ? null : working.get(command.taskId);
+      if (!settled) return;
+      const facts = settled.privacyFacts ?? {
+        privateMark: null,
+        isPrivacyCleared: false,
+      };
+      const parents = settled.privateParents ?? [];
+      const outcome = readSetPrivate({
+        current: facts,
+        isPrivate: command.isPrivate,
+        parents,
+      });
+      if (outcome.kind === 'refused') {
+        privacyLines.push(outcome.line);
+        return;
+      }
+      if (outcome.kind === 'unchanged') return;
+      const privacy = readEffectivePrivacy(
+        outcome.facts,
+        parents.map((parent) => parent.facts),
+      );
+      const before = readEffectivePrivacy(
+        facts,
+        parents.map((parent) => parent.facts),
+      );
+      record(
+        command.taskId,
+        'update',
+        {
+          'sealed.title': settled.title,
+          privacy,
+          'sealed.privateMark': outcome.facts.privateMark,
+          'sealed.isPrivacyCleared': outcome.facts.isPrivacyCleared,
+        },
+        {
+          'sealed.title': settled.title,
+          privacy: before,
+          'sealed.privateMark': facts.privateMark,
+          'sealed.isPrivacyCleared': facts.isPrivacyCleared,
+        },
+      );
+      const sealed = {
+        ...settled.sealed,
+        privateMark: outcome.facts.privateMark,
+        isPrivacyCleared: outcome.facts.isPrivacyCleared,
+      };
+      patch(command.taskId, {
+        privacy,
+        sealed: seal(sealed),
+        lastEditedAt: now,
+      });
+      working.set(command.taskId, {
+        ...settled,
+        sealed,
+        privacyFacts: outcome.facts,
+      });
+      counts.updated += 1;
+      return;
+    }
     if (draft) {
       if (command.kind === 'completeTask') draft.status = 'done';
       else {
@@ -1713,6 +1786,7 @@ export function planWrites(input: PlanInput): WritePlan {
     );
   const notKept = [
     ...new Set([
+      ...privacyLines,
       ...factSteps.notKept,
       ...keyDatePlan.notKept,
       ...projectPlan.notKept,
@@ -1725,6 +1799,14 @@ export function planWrites(input: PlanInput): WritePlan {
 
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
+    const facts = readPrivateMark({
+      current: { privateMark: null, isPrivacyCleared: false },
+      isCare: false,
+      isForOtherWho: false,
+      commandMark: null,
+      isSensitiveHealth: false,
+      words: draft.title,
+    });
     record(
       draft.id,
       'create',
@@ -1741,6 +1823,7 @@ export function planWrites(input: PlanInput): WritePlan {
     return {
       id: draft.id,
       data: {
+        privacy: readEffectivePrivacy(facts),
         status: draft.status,
         importance: null,
         isUrgent: draft.isUrgent,
@@ -1764,7 +1847,12 @@ export function planWrites(input: PlanInput): WritePlan {
         lastEditedAt: null,
         completedAt: isDone ? now : null,
         clearedAt: null,
-        sealed: seal({ title: draft.title, notes: null, steps: {} }),
+        sealed: seal({
+          title: draft.title,
+          notes: null,
+          steps: {},
+          ...(facts.privateMark && { privateMark: facts.privateMark }),
+        }),
       },
     };
   });
@@ -2214,6 +2302,23 @@ export function planWrites(input: PlanInput): WritePlan {
         ? { byWho: keyDatePlan.byWho, entryCount: keyDatePlan.entryCount }
         : null,
     notKept: [...notKept, ...knowledge.notKept],
+    isPrivate:
+      creates.some((made) => made.data.privacy === 'private') ||
+      input.commands.some(
+        (command) =>
+          command.kind !== 'createTask' &&
+          [existing.get(command.taskId), working.get(command.taskId)].some(
+            (task) =>
+              task !== undefined &&
+              readEffectivePrivacy(
+                task.privacyFacts ?? {
+                  privateMark: null,
+                  isPrivacyCleared: false,
+                },
+                (task.privateParents ?? []).map((parent) => parent.facts),
+              ) === 'private',
+          ),
+      ),
     topicLines: topicPlan.topicLines,
     procedureLines: procedurePlan.lines,
     runLines: runPlan.lines,
@@ -2467,6 +2572,7 @@ export function buildExecution(
   return {
     captureId: input.captureId,
     actor: 'nomos',
+    privacy: plan.isPrivate ? 'private' : 'ordinary',
     category:
       plan.factCreates.length +
         plan.factConfirms.length +

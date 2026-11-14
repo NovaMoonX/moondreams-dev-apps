@@ -6,6 +6,7 @@ import SourceRing from '@apps/helm/components/who/SourceRing';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenFact } from '@apps/helm/types';
 import { getDisputePartner, getFactLine } from '@apps/helm/utils/factLines';
+import PrivateLock from '@apps/helm/components/privacy/PrivateLock';
 
 interface FactRowProps {
   fact: OpenFact;
@@ -48,6 +49,7 @@ function FactRow({ fact, assistant, now, subject, onOpen }: FactRowProps) {
         <span className='block'>
           <span className='text-foreground line-clamp-3 text-[15px] leading-[21px] text-pretty break-words'>
             {fact.statement}
+            <PrivateLock kind='fact' record={fact} />
           </span>
         </span>
         <span className='text-muted-foreground block text-[13px] break-words'>

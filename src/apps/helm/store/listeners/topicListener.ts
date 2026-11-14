@@ -23,6 +23,7 @@ import type {
   TopicVersion,
   TopicVersionSealed,
 } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your topics did not open.');
@@ -121,12 +122,15 @@ async function openTopic(
       createdBy: data.createdBy ?? 'person',
       executionId: data.executionId ?? null,
       createdAt: data.createdAt ?? 0,
+      privacy: readPrivacy(data.privacy),
       lastEditedAt: data.lastEditedAt ?? null,
       lastWrittenAt: data.lastWrittenAt ?? null,
       name: toText(payload.name) ?? '',
       emoji: toText(payload.emoji),
       overview: toText(payload.overview),
       sections: toSections(payload.sections),
+      privateMark: payload.privateMark ?? null,
+      isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,
     };
   } catch {

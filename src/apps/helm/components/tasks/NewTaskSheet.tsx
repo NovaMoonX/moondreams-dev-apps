@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import AppToggle from '@/components/AppToggle';
 import DateInput from '@/components/DateInput';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -36,6 +37,7 @@ function NewTaskForm({
   const fieldId = useId();
   const [title, setTitle] = useState('');
   const [day, setDay] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [isTouched, setIsTouched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isMissing = title.trim() === '';
@@ -59,6 +61,7 @@ function NewTaskForm({
       const { id, write } = await createTask(user.uid, encryption, {
         title,
         due: date === undefined ? null : { kind: 'day', date },
+        isPrivate,
       });
       write.catch((error: unknown) => {
         console.error('Helm task was not saved', error);
@@ -96,6 +99,21 @@ function NewTaskForm({
           placeholder={HELM_COPY.noDay}
           value={day}
           onChange={(event) => change(title, event.target.value)}
+        />
+      </div>
+      <div className='flex items-center gap-3'>
+        <div className='min-w-0 flex-1'>
+          <p className='text-foreground text-[15px] leading-[21px]'>
+            {HELM_COPY.privateNewTitle}
+          </p>
+          <p className='text-muted-foreground text-[13px]'>
+            {HELM_COPY.privateNewSubtitle}
+          </p>
+        </div>
+        <AppToggle
+          checked={isPrivate}
+          onCheckedChange={setIsPrivate}
+          aria-label={HELM_COPY.privateNewTitle}
         />
       </div>
       <ModalFooterActions

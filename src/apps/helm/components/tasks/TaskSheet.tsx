@@ -82,6 +82,7 @@ import {
 } from '@apps/helm/utils/planInput';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 interface TaskSheetProps {
   /** The live task, or a copy held while it is done. Null keeps the sheet closed. */
@@ -741,6 +742,7 @@ function TaskSheet({
             onOpenWaits={() => go('waits')}
           />
         )}
+        <PrivateRow kind='task' record={task} title={titleOf} />
       </div>
     );
   };

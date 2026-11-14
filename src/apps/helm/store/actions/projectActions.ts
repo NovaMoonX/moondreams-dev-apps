@@ -26,6 +26,7 @@ import {
 } from '@apps/helm/constants';
 import { readWhoTier } from '@apps/helm/engine/whoTier';
 import { openJson, sealJson } from '@apps/helm/security';
+import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
   Project,
@@ -81,6 +82,7 @@ export async function createProject(
     mediaIds: [],
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     finishedAt: null,
@@ -307,6 +309,7 @@ async function raiseWho(
       momentCount: 0,
       createdBy: 'person',
       executionId: null,
+      privacy: 'ordinary',
       createdAt: now,
       lastEditedAt: null,
       sealed: await sealJson<WhoSealed>(
@@ -442,6 +445,7 @@ const relink = (uid: string, projectId: string, ids: string[]) =>
 
 /** Deletes a project and sets its tasks' project to none, in transaction-sized chunks. Each chunk re-reads its tasks, so one edited meanwhile keeps its other changes; Undo puts the project back and links the same tasks again if they still have none. Needs a connection. */
 export async function deleteProject(uid: string, projectId: string) {
+  await keepInheritedPrivate(uid, 'project', projectId);
   const ref = doc(projectsOf(uid), projectId);
   const found = await getDocs(
     query(tasksOf(uid), where('projectId', '==', projectId)),

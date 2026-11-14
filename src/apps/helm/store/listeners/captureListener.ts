@@ -31,6 +31,7 @@ import {
   normalizeReading,
 } from '@apps/helm/utils/captureReading';
 import { groupSessions } from '@apps/helm/utils/sessions';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const EARLIER_FETCH_LIMIT = 200;
 const UNSEEN_LIMIT = 200;
@@ -190,6 +191,9 @@ async function openCapture(
     placeIds: toIds(data.placeIds),
     planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,
     createdAt: data.createdAt ?? 0,
+    privacy: readPrivacy(data.privacy),
+    touchesPrivate: data.touchesPrivate ?? null,
+    presence: data.presence ?? null,
     sortedAt: data.sortedAt ?? null,
     screen: toScreen(data.screen ?? null),
   } as const;

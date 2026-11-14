@@ -18,6 +18,7 @@ import type { OpenExecution } from '@apps/helm/types';
 import { selectProcedureById } from '@apps/helm/store/selectors/procedureSelectors';
 import { selectOpenRunById } from '@apps/helm/store/selectors/runSelectors';
 import type { ResultLine } from '@apps/helm/utils/resultLines';
+import { PrivateLockMark } from '@apps/helm/components/privacy/PrivateLock';
 
 interface ResultRowsProps {
   execution: OpenExecution;
@@ -103,6 +104,7 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
               )}
             >
               {line.title}
+              {line.isPrivate && <PrivateLockMark />}
             </p>
           );
           const detailLine = note && (

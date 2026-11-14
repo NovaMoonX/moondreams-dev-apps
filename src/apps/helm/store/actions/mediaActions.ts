@@ -600,6 +600,7 @@ export async function keepLetGoMedia(
     undoneByExecutionId: null,
     questionRef: null,
     errorCode: null,
+    privacy: 'ordinary',
     createdAt: now,
     decidedAt: now,
     finishedAt: now,

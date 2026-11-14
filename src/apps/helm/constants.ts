@@ -491,6 +491,33 @@ const mediaWordOf = (kind: MediaKind) => MEDIA_WORDS[kind].word;
 export const HOME_COMPOSER_ID = 'home-composer';
 
 export const HELM_COPY = {
+  copyList: 'Copy list',
+  listCopied: 'Copied the list',
+  copyFailed: "Couldn't copy that",
+  privateRowTitle: 'Private',
+  privateRowSubtitle: 'Never named on your lock screen, in a share or a copy',
+  privateLockLabel: 'Private',
+  privateMarkedHealth: "Marked private because it's about health",
+  privateMarkedCare: "Marked private because it's about someone's care",
+  privateChange: 'Change',
+  privateFromParent: (name: string) => `Private because ${name} is private`,
+  privateOpenParent: (name: string) => `Open ${name}`,
+  privateClearTitle: 'Make this not private?',
+  privateClearMessage: (title: string, name: string, kind: 'health' | 'care') =>
+    `\u201c${title}\u201d is about ${kind === 'health' ? 'health' : "someone's care"}. Its name could then show in a share or a copy, and on your lock screen if you turn that on. ${name} won't mark it private again.`,
+  privateKeep: 'Keep it private',
+  privateClearAction: 'Make it not private',
+  privateNeedsConnection: 'Changing this needs a connection.',
+  privateFailed: "That didn't save. Try the switch again.",
+  privateNewTitle: 'Keep this private',
+  privateNewSubtitle: 'Never named outside the app',
+  privateNowSaid: (title: string) =>
+    `${title} is private now. Its name won't show outside the app.`,
+  privateUndo: 'Undo',
+  privateLeftOut: (count: number) =>
+    `${count} private ${count === 1 ? 'thing' : 'things'} left out`,
+  privateIncludeThem: 'Include them',
+  privateThing: 'a private thing',
   homeHint: 'Tap to talk, or type',
   talk: 'Talk',
   talkListening: 'Listening',

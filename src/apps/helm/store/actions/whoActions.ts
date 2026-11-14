@@ -28,6 +28,7 @@ import {
   removeMediaOf,
   type PhotoOwner,
 } from '@apps/helm/store/actions/mediaActions';
+import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
   HelmEncryption,
   HelmProfile,
@@ -454,8 +455,10 @@ export async function forgetWithPhotos(
   };
 }
 
-export const forgetWho = (uid: string, whoId: string) =>
-  forgetWithPhotos(uid, 'who', whoId);
+export const forgetWho = async (uid: string, whoId: string) => {
+  await keepInheritedPrivate(uid, 'who', whoId);
+  return forgetWithPhotos(uid, 'who', whoId);
+};
 
 /** Makes the person's own who once; the transaction keeps two tabs from making two. */
 export async function ensureSelfWho(
@@ -494,6 +497,7 @@ export async function ensureSelfWho(
     momentCount: 0,
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: now,
     lastEditedAt: null,
     sealed,

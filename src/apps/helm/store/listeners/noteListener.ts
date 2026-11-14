@@ -13,6 +13,7 @@ import type { SealedReader } from '@lib/security';
 
 import { NOTES_LIMIT } from '@apps/helm/constants';
 import type { Note, NoteSealed, NoteSource, OpenNote } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your notes did not open.');
@@ -54,9 +55,12 @@ async function openNote(
       createdBy: data.createdBy ?? 'person',
       executionId: data.executionId ?? null,
       createdAt: data.createdAt ?? 0,
+      privacy: readPrivacy(data.privacy),
       lastEditedAt: data.lastEditedAt ?? null,
       title: toText(payload.title) ?? '',
       body: toText(payload.body) ?? '',
+      privateMark: payload.privateMark ?? null,
+      isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,
     };
   } catch {

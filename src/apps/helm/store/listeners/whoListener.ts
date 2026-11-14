@@ -12,6 +12,7 @@ import type { SealedReader } from '@lib/security';
 
 import { WHO_LIMIT } from '@apps/helm/constants';
 import type { OpenWho, Who, WhoSealed } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your people did not open.');
@@ -46,6 +47,7 @@ async function openWho(
     createdBy: data.createdBy ?? 'nomos',
     executionId: data.executionId ?? null,
     createdAt: data.createdAt ?? 0,
+    privacy: readPrivacy(data.privacy),
     lastEditedAt: data.lastEditedAt ?? null,
   } as const;
   const empty = {
@@ -71,6 +73,8 @@ async function openWho(
       notes: toText(payload.notes),
       species: toText(payload.species),
       organizationKind: toText(payload.organizationKind),
+      privateMark: payload.privateMark ?? null,
+      isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,
     };
   } catch {

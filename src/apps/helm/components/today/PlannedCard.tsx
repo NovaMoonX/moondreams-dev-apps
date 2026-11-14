@@ -5,6 +5,7 @@ import { ChevronRight, TriangleAlert } from 'lucide-react';
 import TickMark from '@/components/TickMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenTask } from '@apps/helm/types';
+import PrivateLock from '@apps/helm/components/privacy/PrivateLock';
 
 interface PlannedCardProps {
   task: OpenTask;
@@ -68,6 +69,7 @@ function PlannedCard({
               )}
             >
               {title}
+              <PrivateLock kind='task' record={task} />
             </span>
             {timeLine && (
               <span className='text-muted-foreground block text-[13px] break-words'>

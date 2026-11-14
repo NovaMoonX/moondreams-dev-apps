@@ -428,6 +428,7 @@ const asOpen = (
     previous: Record<string, unknown> | null;
   }[],
 ): OpenExecution => ({
+  privacy: 'ordinary',
   id: 'exec-1',
   said: null,
   captureId: 'c1',

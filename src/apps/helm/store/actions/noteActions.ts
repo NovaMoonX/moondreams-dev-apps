@@ -99,6 +99,7 @@ export async function createNote(
     projectIds: [],
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     sealed: await sealJson<NoteSealed>(
@@ -390,6 +391,7 @@ export async function saveAnswerAsNote(
     projectIds: [],
     createdBy: 'person',
     executionId: null,
+    privacy: 'ordinary',
     createdAt: Date.now(),
     lastEditedAt: null,
     sealed: await sealJson<NoteSealed>(

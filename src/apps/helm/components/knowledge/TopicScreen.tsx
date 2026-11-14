@@ -50,6 +50,7 @@ import {
   moveRefusal,
   pathOf,
 } from '@apps/helm/utils/topicTree';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 const { option } = DropdownMenuFactories;
 
@@ -522,6 +523,9 @@ function TopicScreen({
               </section>
             )}
           </>
+        )}
+        {topic && !topic.isUnreadable && (
+          <PrivateRow kind='topic' record={topic} title={topic.name} />
         )}
       </main>
       <NoteSheet noteId={openNoteId} onClose={() => setOpenNoteId(null)} />

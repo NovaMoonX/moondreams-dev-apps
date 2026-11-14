@@ -9,6 +9,7 @@ import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenTask } from '@apps/helm/types';
 import { formatTaskDue, isOverdue } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
+import PrivateLock from '@apps/helm/components/privacy/PrivateLock';
 
 interface TaskRowProps {
   task: OpenTask;
@@ -106,6 +107,7 @@ function TaskRow({
             )}
           >
             {title}
+            <PrivateLock kind='task' record={task} />
           </span>
           {(dayPart || otherParts.length > 0) && (
             <span className='text-muted-foreground block text-[13px] break-words'>

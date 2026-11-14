@@ -125,6 +125,7 @@
     "check:helm-trust": "tsx scripts/checks/helmTrust.ts",
     "check:helm-delete": "tsx scripts/checks/helmDelete.ts",
     "check:helm-copy": "tsx scripts/checks/helmCopy.ts",
+    "check:helm-private": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPrivate.ts",
     "check:yearly-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/yearlyDates.ts",
     "check:server-copies": "tsx scripts/checks/serverCopies.ts",
     "connections:vendor": "tsx scripts/checks/serverCopies.ts --write",

@@ -10,6 +10,14 @@ import {
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
 import {
+  isUnattendedTurn,
+  maskPrivateNames,
+  readPrivacyFacts,
+  type PrivacyFacts,
+  type PrivateParent,
+} from './privacy.js';
+import { toContextTask, type MaskedName } from './nomos/unattended.js';
+import {
   HttpsError,
   onCall,
   type CallableRequest,
@@ -313,6 +321,11 @@ interface CaptureDoc {
   inputMode?: string;
   attachmentIds?: string[];
   route?: Route | null;
+  presence?: {
+    startedByWake?: boolean;
+    isHidden?: boolean;
+    isUntouched?: boolean;
+  } | null;
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
@@ -327,6 +340,8 @@ interface TaskDoc {
   isUrgent: boolean;
   whoIds?: string[];
   placeIds?: string[];
+  projectId?: string | null;
+  privacy?: string | null;
   createdAt: number;
   sealed: SealedPayload;
 }
@@ -1136,6 +1151,7 @@ async function readScreenTasks(
   base: string,
   key: HelmKey,
   refs: ScreenRefs | null,
+  mask: { isOn: boolean; timeZone: string; names: MaskedName[] },
 ) {
   const ids = refs
     ? [
@@ -1157,7 +1173,12 @@ async function readScreenTasks(
         ? [
             [
               snapshot.id,
-              { id: snapshot.id, title: words.title, due: task.due },
+              toContextTask(
+                snapshot.id,
+                task,
+                { title: words.title, sealed: words.sealed },
+                mask,
+              ),
             ],
           ]
         : [];
@@ -1502,6 +1523,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         };
 
   const profileRead = firestore.doc(base).get();
+  const screenMaskNames: MaskedName[] = [];
   const [profile, openTasks, alreadyMade, screen, earlierTurns, synced, style] =
     await Promise.all([
       profileRead,
@@ -1514,7 +1536,21 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       mode === 'rest'
         ? readAlreadyMade(firestore, base, key, capture.executionIds ?? [])
         : Promise.resolve(undefined),
-      readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen)),
+      profileRead.then((snapshot) =>
+        readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen), {
+          isOn: isUnattendedTurn(
+            capture.presence?.startedByWake === true,
+            capture.presence
+              ? {
+                  isHidden: capture.presence.isHidden === true,
+                  isUntouched: capture.presence.isUntouched === true,
+                }
+              : null,
+          ),
+          timeZone: (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
+          names: screenMaskNames,
+        }),
+      ),
       readEarlierTurns(firestore, base, key, capture),
       profileRead.then((snapshot) =>
         mode === 'rest'
@@ -1531,6 +1567,20 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ),
       mode === 'rest' ? null : readStyleNotes(firestore, base, key),
     ]);
+  const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
+  const unattendedMask = {
+    isOn: isUnattendedTurn(
+      capture.presence?.startedByWake === true,
+      capture.presence
+        ? {
+            isHidden: capture.presence.isHidden === true,
+            isUntouched: capture.presence.isUntouched === true,
+          }
+        : null,
+    ),
+    timeZone,
+    names: [] as MaskedName[],
+  };
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
     if (!words?.title) {
@@ -1538,10 +1588,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       return [];
     }
     return [
-      { id: doc.id, title: words.title, due: (doc.data() as TaskDoc).due },
+      toContextTask(
+        doc.id,
+        doc.data() as TaskDoc,
+        { title: words.title, sealed: words.sealed },
+        unattendedMask,
+      ),
     ];
   });
-  const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
   const assistantName =
     readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
 
@@ -2086,7 +2140,20 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     logger.info('helm.procedure.dropped', { code }),
   );
   reply.runDropped.forEach((code) => logger.info('helm.run.dropped', { code }));
-  const answer = mode === 'full' ? reply.answer : null;
+  const maskedNames = [...unattendedMask.names, ...screenMaskNames];
+  const hide = (text: string | null) =>
+    text === null || maskedNames.length === 0
+      ? text
+      : maskPrivateNames(text, maskedNames);
+  const answer =
+    mode === 'full' && reply.answer
+      ? {
+          ...reply.answer,
+          fromRecordsText: hide(reply.answer.fromRecordsText),
+          generalText: hide(reply.answer.generalText),
+          generalSpoken: hide(reply.answer.generalSpoken),
+        }
+      : null;
   const commands = reply.commands.filter(
     (command) => decide(command) === 'automatic',
   );
@@ -2135,7 +2202,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       reply.runDropped,
       commands.length < reply.commands.length,
     )
-      ? reply.replyLine
+      ? hide(reply.replyLine)
       : null,
     mentions: reply.mentions,
     places: reply.places,
@@ -2634,6 +2701,60 @@ async function writeResult(
     };
     const sortedJoined = readSnaps.filter(isStillJoined);
     const releasedJoined = lateSnaps.filter(isStillJoined);
+    const privateTargets = new Set(
+      commands.flatMap((command) =>
+        command.kind === 'setPrivate' ? [command.taskId] : [],
+      ),
+    );
+    const parentSnaps = new Map(
+      await Promise.all(
+        targetSnaps.flatMap((snapshot) => {
+          const task = snapshot.data() as TaskDoc | undefined;
+          if (!task || !privateTargets.has(snapshot.id)) return [];
+          return [
+            ...(task.projectId ? [['projects', task.projectId]] : []),
+            ...(task.whoIds ?? []).map((id) => ['who', id]),
+            ...(task.placeIds ?? []).map((id) => ['places', id]),
+          ]
+            .filter(([, id]) => ID_RE.test(id))
+            .map(async ([collection, id]) => {
+              const parent = await transaction.get(
+                firestore.doc(
+                  `${base}/${collection}/${id}` as `${string}/${string}`,
+                ),
+              );
+              return [`${collection}/${id}` as string, parent] as [
+                string,
+                typeof parent,
+              ];
+            });
+        }),
+      ),
+    );
+    const readParents = (task: TaskDoc): PrivateParent[] =>
+      [
+        ...(task.projectId ? [`projects/${task.projectId}`] : []),
+        ...(task.whoIds ?? []).map((id) => `who/${id}`),
+        ...(task.placeIds ?? []).map((id) => `places/${id}`),
+      ].flatMap((path) => {
+        const parent = parentSnaps.get(path);
+        const data = parent?.data() as
+          (Partial<PrivacyFacts> & { sealed: SealedPayload }) | undefined;
+        if (!parent || !data) return [];
+        const opened = openTitle(key, data.sealed)?.sealed;
+        const name = typeof opened?.name === 'string' ? opened.name : '';
+        return [
+          {
+            id: parent.id,
+            name,
+            facts: readPrivacyFacts({
+              privateMark: (opened?.privateMark ??
+                null) as PrivacyFacts['privateMark'],
+              isPrivacyCleared: opened?.isPrivacyCleared === true,
+            }),
+          },
+        ];
+      });
     const existing = new Map<string, ExistingTask>(
       targetSnaps.flatMap((snapshot): [string, ExistingTask][] => {
         const task = snapshot.data() as TaskDoc | undefined;
@@ -2654,6 +2775,12 @@ async function writeResult(
               whoIds: task.whoIds ?? [],
               placeIds: task.placeIds ?? [],
               sealed: words.sealed,
+              privacyFacts: readPrivacyFacts({
+                privateMark: (words.sealed.privateMark ??
+                  null) as PrivacyFacts['privateMark'],
+                isPrivacyCleared: words.sealed.isPrivacyCleared === true,
+              }),
+              privateParents: readParents(task),
             },
           ],
         ];
@@ -3247,6 +3374,7 @@ async function writeResult(
           ...new Set([...(capture.placeIds ?? []), ...plan.linkedPlaceIds]),
         ],
       }),
+      ...(plan.isPrivate && { touchesPrivate: true }),
       status: settled.status,
       sortedAt: now,
       executionIds: settled.executionIds,

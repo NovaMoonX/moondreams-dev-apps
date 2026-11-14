@@ -20,6 +20,7 @@ import {
   countOnlyFacts,
   ForgetPartialError,
 } from '@apps/helm/store/actions/whoActions';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 const { option } = DropdownMenuFactories;
 
@@ -220,6 +221,9 @@ function PlaceDetail({
               />
             </section>
           </>
+        )}
+        {place && !place.isUnreadable && (
+          <PrivateRow kind='place' record={place} title={place.name} />
         )}
       </main>
       {place && !place.isUnreadable && (

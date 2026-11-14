@@ -143,6 +143,13 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/utils/privacy.ts',
+    dest: 'functions/src/apps/helm/privacy.ts',
+    importRewrites: {
+      '@/utils/optionMatchUtils': '../../vendor/optionMatchUtils.js',
+    },
+  },
+  {
     src: 'src/lib/speech/speechText.ts',
     dest: 'functions/src/vendor/speechText.ts',
     importRewrites: {},

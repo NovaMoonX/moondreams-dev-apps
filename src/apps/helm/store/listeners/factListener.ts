@@ -14,6 +14,7 @@ import type { SealedReader } from '@lib/security';
 
 import { FACTS_LIMIT } from '@apps/helm/constants';
 import type { Fact, FactSealed, OpenFact } from '@apps/helm/types';
+import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your facts did not open.');
@@ -50,12 +51,15 @@ async function openFact(
         supersededAt: data.supersededAt ?? null,
         disputedWithId: data.disputedWithId ?? null,
         createdAt: data.createdAt ?? 0,
+        privacy: readPrivacy(data.privacy),
         confirmedAt: data.confirmedAt ?? null,
         lastEditedAt: data.lastEditedAt ?? null,
         statement: payload.statement,
         quote: typeof payload.quote === 'string' ? payload.quote : null,
         topic: typeof payload.topic === 'string' ? payload.topic : null,
         value: typeof payload.value === 'string' ? payload.value : null,
+        privateMark: payload.privateMark ?? null,
+        isPrivacyCleared: payload.isPrivacyCleared ?? false,
       },
     ];
   } catch {

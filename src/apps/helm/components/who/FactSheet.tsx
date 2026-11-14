@@ -30,6 +30,7 @@ import {
   getFactSource,
   toFactDay,
 } from '@apps/helm/utils/factLines';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
 interface FactSheetProps {
   factId: string | null;
@@ -326,6 +327,7 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
             {getFactSource(shown, assistant, now)}
           </p>
           <KeptMediaSection record={{ kind: 'fact', id: shown.id }} />
+          <PrivateRow kind='fact' record={shown} title={shown.statement} />
           {partner && (
             <p className='text-muted-foreground text-[13px] break-words'>
               {HELM_COPY.factDisagrees(partner.statement)}

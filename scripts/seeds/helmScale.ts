@@ -734,6 +734,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     async (entry: { id: string; whoId: string; words: KeyDateSealed }) => ({
       id: entry.id,
       keyDate: {
+        privacy: 'ordinary',
         whoId: entry.whoId,
         shape,
         source: 'person',
@@ -817,6 +818,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       const isDone = index % 10 === 9;
       const finishedAt = isDone ? now - between(10, 300) * DAY_MS : null;
       const project: Project = {
+        privacy: 'ordinary',
         targetDate: isDone ? null : dayStart(now + between(5, 365) * DAY_MS),
         status: isDone ? 'finished' : 'active',
         milestoneState: {
@@ -868,6 +870,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     const hasProject = index % 2 === 0;
     const createdAt = now - between(1, 700) * DAY_MS;
     const task: Task = {
+      privacy: 'ordinary',
       status: isDone ? 'done' : 'open',
       importance: (['must', 'should', 'could', null] as const)[index % 4],
       isUrgent: index % 17 === 0,
@@ -910,6 +913,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     const isConfirmed = index % 2 === 0;
     const createdAt = now - between(1, 700) * DAY_MS;
     const fact: Fact = {
+      privacy: 'ordinary',
       status: isConfirmed ? 'confirmed' : 'inferred',
       stated: isConfirmed ? 'personSaid' : 'nomosInferred',
       kind: (['world', 'preference', 'favorite', 'identity'] as const)[
@@ -989,6 +993,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       }));
       const writtenAt = now - between(1, 300) * DAY_MS;
       const topic: Topic = {
+        privacy: 'ordinary',
         parentId: spec.parentId,
         depth: spec.depth,
         projectIds: [],
@@ -1038,6 +1043,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       index % 20 === 19 ? null : topicSpecs[index % topicSpecs.length].id;
     const subject = NOTE_SUBJECTS[(index * 5 + Math.floor(index / 14)) % 14];
     const note: Note = {
+      privacy: 'ordinary',
       topicIds: topicId ? [topicId] : [],
       source: 'typed',
       isFromGeneralAnswer: false,
@@ -1094,6 +1100,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       };
       const madeAt = now - between(30, 700) * DAY_MS;
       const procedure: Procedure = {
+        privacy: 'ordinary',
         stepState,
         groupOrder: groups.map((group) => group.id),
         version: 1,
@@ -1191,6 +1198,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       nameOf(between(1, WHO_COUNT - 1)).split(' ')[0],
     );
     const capture: Capture = {
+      privacy: 'ordinary',
+      touchesPrivate: null,
+      presence: null,
       inputMode: 'typed',
       sttProvider: null,
       interruptedCaptureId: null,

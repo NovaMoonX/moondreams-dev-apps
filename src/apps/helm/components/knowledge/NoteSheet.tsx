@@ -29,6 +29,8 @@ import {
   selectNoteById,
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
+import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
+import { filterPrivateOwnPage } from '@apps/helm/utils/privacy';
 
 interface NoteSheetProps {
   /** The note to show, read live from the store; null keeps the sheet closed. A note that is gone closes it and calls `onClose`. */
@@ -154,6 +156,10 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
       ]
     : [];
 
+  const ownPage = note
+    ? filterPrivateOwnPage(note, (entry) => entry.privacy === 'private')
+    : null;
+
   return (
     <>
       <DetailSheet
@@ -176,7 +182,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
                     <CopyTextButton
                       variant='secondary'
                       label={HELM_COPY.noteCopy}
-                      text={[note.title, note.body]
+                      text={[ownPage?.title, ownPage?.body]
                         .filter(Boolean)
                         .join('\n\n')}
                     />
@@ -218,6 +224,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
                 <LinkedText text={note.body} className='text-[15px]' />
               ))}
             <KeptMediaSection record={{ kind: 'note', id: note.id }} />
+            <PrivateRow kind='note' record={note} title={note.title} />
             <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
               <p className='text-muted-foreground min-w-0 text-[13px]'>
                 {origin.join(' · ')}

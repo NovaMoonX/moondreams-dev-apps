@@ -120,6 +120,7 @@ export async function createProcedure(
     sourceCaptureId: null,
     sourceTaskId,
     executionId: null,
+    privacy: 'ordinary',
     createdAt: now,
     lastEditedAt: now,
     sealed: await sealJson<ProcedureSealed>(parts.body, encryption),
