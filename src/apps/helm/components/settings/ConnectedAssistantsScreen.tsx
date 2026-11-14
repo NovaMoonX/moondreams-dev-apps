@@ -1,10 +1,10 @@
 import { useState } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
-import { Bot, ChevronRight, Download, MessagesSquare } from 'lucide-react';
+import { Bot, ChevronRight, Download } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import { ClaudeMark, GeminiMark } from '@/components/BrandMarks';
+import { ChatGptMark, ClaudeMark, GeminiMark } from '@/components/BrandMarks';
 import CopyTextButton from '@/components/CopyTextButton';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
@@ -186,7 +186,7 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
               </div>
               <div className='flex flex-col gap-1'>
                 <h3 className='flex items-center gap-2 text-[15px] font-medium'>
-                  <MessagesSquare className='size-5' aria-hidden='true' />
+                  <ChatGptMark className='size-5' />
                   {HELM_COPY.assistantsChatGptHeading}
                 </h3>
                 <ol className='text-muted-foreground list-decimal pl-5 text-[15px] text-pretty'>
