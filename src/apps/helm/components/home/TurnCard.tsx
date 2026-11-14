@@ -99,7 +99,7 @@ function TurnCard({
   const isOffline = useNetworkStatus() === 'offline';
   const isReading =
     isCallOut ||
-    (isRetrying && !isOffline) ||
+    (isRetrying && !isOffline && !capture.hasPendingWrites) ||
     capture.status === 'interpreting';
   const isSorted = capture.status === 'sorted' && !isReading;
   const heldLine =

@@ -221,7 +221,6 @@ function Composer({
   const shownDrop =
     lastDrop && readKeys.includes(lastDrop.key) ? lastDrop : null;
   const stopKeepingInView = useRef<(() => void) | null>(null);
-  const closeAfterMenu = useRef<(() => void) | null>(null);
   const press = useRef<{ isDown: boolean; pendingBlur: (() => void) | null }>({
     isDown: false,
     pendingBlur: null,
@@ -435,21 +434,21 @@ function Composer({
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
+    // The recording row replaces the field, and a field removed while focused gets no blur.
     void recorder.start().then((isStarted) => {
-      if (isStarted) attachments.say(null);
+      if (!isStarted) return;
+      attachments.say(null);
+      setIsFocused(false);
+      setIsShorthandOpen(false);
+      stopKeepingInView.current?.();
+      stopKeepingInView.current = null;
+      onFocusChange(false);
     });
   };
 
   const chooseAttachment = (value: string) => {
-    const close = closeAfterMenu.current;
-    closeAfterMenu.current = null;
-    if (value === RECORD) {
-      close?.();
-      startRecording();
-      return;
-    }
-    root.current?.querySelector('textarea')?.focus({ preventScroll: true });
-    if (value === CHOOSE_FILE) openFileChooser(fileInput.current);
+    if (value === RECORD) startRecording();
+    else if (value === CHOOSE_FILE) openFileChooser(fileInput.current);
     else
       openFileChooser(
         value === TAKE_PHOTO ? cameraInput.current : libraryInput.current,
@@ -509,7 +508,7 @@ function Composer({
         </div>
       )}
       <div className='flex items-end gap-1'>
-        {showsActions && !(isOutbox && !isReady) && (
+        {showsActions && !isRecording && !(isOutbox && !isReady) && (
           <EllipsisDropdown
             variant='tertiary'
             placement='top'
@@ -548,7 +547,7 @@ function Composer({
             onItemSelect={chooseAttachment}
           />
         )}
-        {showsActions && canType && (
+        {showsActions && canType && !isRecording && (
           <Button
             type='button'
             variant='tertiary'
@@ -573,7 +572,9 @@ function Composer({
               aria-hidden='true'
             />
             <span className='flex min-w-0 flex-1 items-baseline gap-1.5 text-[15px]'>
-              <span className='whitespace-nowrap'>{HELM_COPY.recording}</span>
+              <span className='min-w-0 truncate max-[359px]:sr-only'>
+                {HELM_COPY.recording}
+              </span>
               <span className='shrink-0 tabular-nums'>
                 {formatClock(recorder.elapsedMs)}
               </span>
@@ -582,7 +583,7 @@ function Composer({
               type='button'
               variant='tertiary'
               size='sm'
-              className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
+              className="relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
               onClick={recorder.cancel}
             >
               {HELM_COPY.recordCancel}
@@ -592,7 +593,7 @@ function Composer({
               variant='secondary'
               size='sm'
               rounded='full'
-              className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
+              className="relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
               onClick={recorder.stop}
             >
               {HELM_COPY.recordStop}
@@ -621,7 +622,6 @@ function Composer({
               }}
               onKeyDown={handleKeyDown}
               onFocus={(event) => {
-                closeAfterMenu.current = null;
                 onFocusChange(true);
                 setIsFocused(true);
                 setIsShorthandOpen(true);
@@ -648,32 +648,8 @@ function Composer({
                 };
                 const finish = () => {
                   if (document.activeElement === field) return;
-                  // Focus moves into the attach menu while it is open; the card stays put until the menu is done.
+                  // The attach menu takes focus while open and hands it back to the field when it closes.
                   if (root.current?.querySelector('[aria-expanded="true"]')) {
-                    closeAfterMenu.current = close;
-                    const closeOnOutsidePress = (pointer: PointerEvent) => {
-                      const target = pointer.target;
-                      if (
-                        target instanceof Element &&
-                        (root.current?.contains(target) ||
-                          target.closest('[role="dialog"], [role="menu"]'))
-                      ) {
-                        return;
-                      }
-                      document.removeEventListener(
-                        'pointerdown',
-                        closeOnOutsidePress,
-                        true,
-                      );
-                      const pending = closeAfterMenu.current;
-                      closeAfterMenu.current = null;
-                      pending?.();
-                    };
-                    document.addEventListener(
-                      'pointerdown',
-                      closeOnOutsidePress,
-                      true,
-                    );
                     return;
                   }
                   close();
