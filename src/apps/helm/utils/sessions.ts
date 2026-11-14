@@ -69,8 +69,13 @@ export function groupTurns(turns: OpenCapture[]): TurnGroup[] {
 export const getJoinedOf = (lead: OpenCapture, captures: OpenCapture[]) =>
   groupTurns(captures).find((group) => group.lead.id === lead.id)?.joined ?? [];
 
-/** The moment the conversation last started fresh: the person's New conversation, or today's midnight in their zone while Start each day fresh is on, whichever is later; 0 when neither. A turn before it never carries into the next. */
-export function getFreshFrom(
+/** The moment the person last tapped New conversation, 0 when never. A turn before it never carries into the next; midnight never ends a conversation. */
+export const getFreshFrom = (
+  profile: Pick<HelmProfile, 'conversationFreshAt'> | null,
+) => profile?.conversationFreshAt ?? 0;
+
+/** Where home's thread starts: the last fresh start, or today's midnight while Start each day fresh is on, whichever is later. Only what home shows; a chat open across midnight stays on screen. */
+export function getHomeFrom(
   profile: Pick<
     HelmProfile,
     'conversationFreshAt' | 'isDailyFreshOn' | 'timeZone'
@@ -85,7 +90,7 @@ export function getFreshFrom(
         profile.timeZone,
       )
     : 0;
-  return Math.max(profile.conversationFreshAt ?? 0, dayStart);
+  return Math.max(getFreshFrom(profile), dayStart);
 }
 
 /** The session still open: the last turn's, while it is under the idle gap and came after the conversation last started fresh. */

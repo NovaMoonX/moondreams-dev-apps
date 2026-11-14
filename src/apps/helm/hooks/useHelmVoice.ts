@@ -318,7 +318,7 @@ export function useHelmVoice() {
     const sessionId = getOpenSessionId(
       all,
       now,
-      getFreshFrom(state.helm.profile, now),
+      getFreshFrom(state.helm.profile),
     );
     const latest = all
       .filter((capture) => capture.sessionId === sessionId)
@@ -540,7 +540,7 @@ export function useHelmVoice() {
     const sessionId = getOpenSessionId(
       all,
       now,
-      getFreshFrom(state.helm.profile, now),
+      getFreshFrom(state.helm.profile),
     );
     const isTurnPending =
       waiting.current.size > 0 ||

@@ -493,7 +493,8 @@ export const HELM_COPY = {
   homeOpening: 'Opening your conversation',
   newConversation: 'New conversation',
   dailyFreshTitle: 'Start each day fresh',
-  dailyFreshDescription: `Your first message after midnight starts a new conversation, even if you were mid-chat. Without it, a chat ends only after ${SESSION_IDLE_MS / 60_000} minutes with no messages.`,
+  dailyFreshDescription:
+    "Home starts each day clear. Earlier days stay under Show earlier.",
   dailyFreshFailed: "Couldn't save that. Check your connection.",
   newConversationStarted: 'New conversation. Earlier turns are under Earlier.',
   newConversationFailed:

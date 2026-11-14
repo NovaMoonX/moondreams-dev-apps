@@ -8,23 +8,25 @@ import { SESSION_IDLE_MS } from '@apps/helm/constants';
 import type { OpenCapture } from '@apps/helm/types';
 import {
   getFreshFrom,
+  getHomeFrom,
   getOpenSessionId,
   groupSessions,
 } from '@apps/helm/utils/sessions';
 
-/** Every loaded session, oldest first, which one is still in progress (a run of turns with no gap over `SESSION_IDLE_MS`, since the conversation last started fresh), if any, and when it last started fresh. */
+/** Every loaded session, oldest first, which one is still in progress (a run of turns with no gap over `SESSION_IDLE_MS`, since the conversation last started fresh), if any, when it last started fresh, and where home's thread starts. */
 export function useSession() {
   const captures = useAppSelector(selectAllCaptures);
   const profile = useAppSelector((state) => state.helm.profile);
   const now = useNow(30_000);
 
   const sessions = useMemo(() => groupSessions(captures), [captures]);
-  const freshFrom = getFreshFrom(profile, now);
+  const freshFrom = getFreshFrom(profile);
   const openSessionId = useMemo(
     () => getOpenSessionId(captures, now, freshFrom),
     [captures, now, freshFrom],
   );
-  return { sessions, openSessionId, freshFrom };
+  const homeFrom = getHomeFrom(profile, now);
+  return { sessions, openSessionId, freshFrom, homeFrom };
 }
 
 type SentTurn = {
@@ -86,7 +88,7 @@ export function getNextTurn() {
   if (
     last === null ||
     now - last.createdAt >= SESSION_IDLE_MS ||
-    last.createdAt < getFreshFrom(state.helm.profile, now)
+    last.createdAt < getFreshFrom(state.helm.profile)
   ) {
     return {
       sessionId: generateUuid(),

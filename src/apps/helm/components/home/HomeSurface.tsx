@@ -216,12 +216,13 @@ function HomeSurface({
   // Words typed while waiting carry over to the field once the key is here.
   const [typedWaiting, setTypedWaiting] = useState('');
   const outbox = useOutboxEntries(uid);
-  const { sessions, openSessionId, freshFrom } = useSession();
+  const { sessions, openSessionId, homeFrom } = useSession();
   const { isLoaded: isCapturesLoaded, isFailed: isCapturesFailed } =
     useAppSelector((state) => state.helm.recentCaptures);
   const hasTurns = sessions.length > 0;
   const hasFreshTurns = sessions.some(
-    (session) => session.startedAt >= freshFrom,
+    (session) =>
+      session.startedAt >= homeFrom || session.sessionId === openSessionId,
   );
   const isWaitingOnKey = keyStatus === 'offline' || keyStatus === 'failed';
   // Until the first page of turns is read the thread is empty, which would otherwise read as no conversation yet.
@@ -312,13 +313,13 @@ function HomeSurface({
         )}
         {hasTurns && (
           <ConversationThread
-            key={freshFrom}
+            key={homeFrom}
             sessions={sessions}
             openSessionId={openSessionId}
             scroll='window'
             loadsEarlier
             foldsBefore={todayStart}
-            freshFrom={freshFrom}
+            freshFrom={homeFrom}
           />
         )}
         {!hasFreshTurns && !isOpening && !isWaitingOnKey && (

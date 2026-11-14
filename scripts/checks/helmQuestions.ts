@@ -34,6 +34,7 @@ import {
 } from '../../src/apps/helm/utils/heldCaptures.ts';
 import {
   getFreshFrom,
+  getHomeFrom,
   getOpenSessionId,
 } from '../../src/apps/helm/utils/sessions.ts';
 import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
@@ -1015,7 +1016,7 @@ test('a dismissed question leaves Needs you and is listed as dismissed (a status
   assert.equal(toHeldKind(failed(9)), null);
 });
 
-test('a new conversation or a new day (when turned on) ends the open session', () => {
+test('only New conversation ends the open session; a new day (when on) only clears home', () => {
   const zone = 'America/Los_Angeles';
   const now = Date.UTC(2026, 10, 14, 17);
   const midnight = Date.UTC(2026, 10, 14, 8);
@@ -1023,11 +1024,14 @@ test('a new conversation or a new day (when turned on) ends the open session', (
     conversationFreshAt: number | null,
     isDailyFreshOn: boolean,
   ) => ({ conversationFreshAt, isDailyFreshOn, timeZone: zone });
-  assert.equal(getFreshFrom(null, now), 0);
-  assert.equal(getFreshFrom(profile(null, false), now), 0);
-  assert.equal(getFreshFrom(profile(null, true), now), midnight);
-  assert.equal(getFreshFrom(profile(now - 1000, true), now), now - 1000);
-  assert.equal(getFreshFrom(profile(midnight - 5, true), now), midnight);
+  assert.equal(getFreshFrom(null), 0);
+  assert.equal(getFreshFrom(profile(null, true)), 0);
+  assert.equal(getFreshFrom(profile(now - 1000, true)), now - 1000);
+  assert.equal(getHomeFrom(null, now), 0);
+  assert.equal(getHomeFrom(profile(null, false), now), 0);
+  assert.equal(getHomeFrom(profile(null, true), now), midnight);
+  assert.equal(getHomeFrom(profile(now - 1000, true), now), now - 1000);
+  assert.equal(getHomeFrom(profile(midnight - 5, true), now), midnight);
   const turn = (createdAt: number) =>
     ({ sessionId: 's1', createdAt }) as unknown as OpenCapture;
   assert.equal(getOpenSessionId([turn(now - 60_000)], now, 0), 's1');

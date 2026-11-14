@@ -28,7 +28,7 @@ interface ConversationThreadProps {
   loadsEarlier: boolean;
   /** Sessions that started before this moment fold behind one "Earlier" row, except the open one and the newest. */
   foldsBefore?: number | null;
-  /** Sessions that started before the conversation last started fresh fold too, the newest included. */
+  /** Sessions that started before this moment fold too, the newest included (a fresh start, or today's midnight with Start each day fresh on). */
   freshFrom?: number;
 }
 
