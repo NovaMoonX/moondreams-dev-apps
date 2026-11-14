@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 
@@ -362,9 +364,22 @@ const askYesNo = async (question: string, isDefaultYes: boolean) => {
 
 const gcloudLogin = { isReady: false, hasFailed: false };
 
+const isGcloudInstalled = () => {
+  try {
+    execFileSync('gcloud', ['--version'], { stdio: 'ignore', timeout: 20_000 });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const ensureGcloudLogin = () => {
   if (gcloudLogin.isReady) return true;
   if (gcloudLogin.hasFailed) return false;
+  if (!isGcloudInstalled()) {
+    gcloudLogin.hasFailed = true;
+    return false;
+  }
   const works = () => {
     try {
       execFileSync('gcloud', ['auth', 'print-access-token'], {
@@ -397,6 +412,8 @@ const ensureGcloudLogin = () => {
 const readCommandOutput = (command: string, args: string[]) => {
   try {
     const value = execFileSync(command, args, {
+      cwd: tmpdir(),
+      env: { ...process.env, DEBUG: undefined },
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 30_000,
@@ -408,9 +425,7 @@ const readCommandOutput = (command: string, args: string[]) => {
 };
 
 const fetchFromFirebase = (key: string) =>
-  readCommandOutput('npx', [
-    '--no-install',
-    'firebase',
+  readCommandOutput(resolve('node_modules/.bin/firebase'), [
     'functions:secrets:access',
     key,
     '--project',
@@ -466,11 +481,11 @@ const getKeys = async (service: FixtureService) => {
       return storeKeys(service, fetched);
     }
     console.log(
-      `Couldn't fetch ${keys.join(' and ')} automatically (sign in with firebase login --reauth, or gcloud auth login). Run this, then paste the result below:`,
+      `Couldn't fetch ${keys.join(' and ')} automatically (the secret may not exist, or you may need firebase login --reauth). Run this, paste the result below, then clear your terminal:`,
     );
     keys.forEach((key) =>
       console.log(
-        `  firebase functions:secrets:access ${key} --project ${PROJECT}`,
+        `  npx firebase functions:secrets:access ${key} --project ${PROJECT}`,
       ),
     );
   } else {
