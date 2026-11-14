@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 
 import {
   createListeningState,
@@ -26,7 +27,10 @@ import {
 import { createSpeechGate } from '../../src/lib/speech/voice/bargeIn.ts';
 import { createDeepgramAura } from '../../functions/src/voice/providers/deepgramAura.ts';
 import { createGeminiTts } from '../../functions/src/voice/providers/geminiTts.ts';
-import { createGoogleTts } from '../../functions/src/voice/providers/googleTts.ts';
+import {
+  createGoogleTts,
+  type SynthesisCall,
+} from '../../functions/src/voice/providers/googleTts.ts';
 import { grantDeepgramToken } from '../../functions/src/voice/providers/deepgram.ts';
 import { pcmToWav } from '../../functions/src/voice/providers/pcm.ts';
 import type { TtsProvider } from '../../functions/src/voice/providers/types.ts';
@@ -1288,54 +1292,112 @@ assert.ok(
   'an event carrying an error ends the stream with an error',
 );
 
-const google = record(() =>
-  Response.json({ audioContent: toBase64([9, 8, 7]) }),
-);
-const googleSpeech = await createGoogleTts({
-  getAccessToken: async () => 'token-1',
-  projectId: 'a-project',
-  fetchImpl: google.fetchImpl,
-}).speak(speakInput);
+const fakeGoogleCall = () => {
+  const events = new EventEmitter();
+  const state = { writes: [] as unknown[], isEnded: false, cancels: 0 };
+  const call = {
+    write: (request: unknown) => state.writes.push(request),
+    end: () => {
+      state.isEnded = true;
+    },
+    cancel: () => {
+      state.cancels += 1;
+    },
+    on: (event: string, listener: (...args: never[]) => void) =>
+      events.on(event, listener),
+  } as unknown as SynthesisCall;
+  return { call, state, emit: events.emit.bind(events) };
+};
+const googleFrom = (call: SynthesisCall) =>
+  createGoogleTts({
+    projectId: 'a-project',
+    client: { streamingSynthesize: () => call },
+  });
+const googleCall = fakeGoogleCall();
+const googleSpeech = await googleFrom(googleCall.call).speak({
+  ...speakInput,
+  speed: 1.1,
+});
 assert.equal(
-  google.calls[0].url,
-  'https://texttospeech.googleapis.com/v1/text:synthesize',
-  'Google synthesizes through the REST endpoint',
+  googleSpeech.contentType,
+  'audio/L16; rate=24000; channels=1',
+  'Google streams raw 24 kHz 16-bit mono PCM',
 );
 assert.deepEqual(
+  [googleCall.state.writes, googleCall.state.isEnded],
   [
-    google.calls[0].headers.Authorization,
-    google.calls[0].headers['x-goog-user-project'],
+    [
+      {
+        streamingConfig: {
+          voice: { languageCode: 'en-US', name: 'voice-a' },
+          streamingAudioConfig: {
+            audioEncoding: 'PCM',
+            sampleRateHertz: 24_000,
+            speakingRate: 1.1,
+          },
+        },
+      },
+      { input: { text: 'Hello there.' } },
+    ],
+    true,
   ],
-  ['Bearer token-1', 'a-project'],
-  'Google is sent a bearer token and the project to bill',
+  'Google is sent the voice, rate and PCM encoding, then the text, then the write side ends',
 );
+const googleReader = googleSpeech.stream.getReader();
+googleCall.emit('data', { audioContent: new Uint8Array([1, 2, 3]) });
 assert.deepEqual(
-  google.calls[0].body,
-  {
-    input: { text: 'Hello there.' },
-    voice: { languageCode: 'en-US', name: 'voice-a' },
-    audioConfig: { audioEncoding: 'MP3' },
-  },
-  'Google is sent the text, the voice and the encoding',
+  [...((await googleReader.read()).value ?? [])],
+  [1, 2],
+  'Google audio reaches the stream before the clip is finished, whole samples only',
 );
+googleCall.emit('data', { audioContent: new Uint8Array([4, 5]) });
 assert.deepEqual(
-  await readAll(googleSpeech.stream),
-  [9, 8, 7],
-  'Google audio comes back as the bytes of its base64',
+  [...((await googleReader.read()).value ?? [])],
+  [3, 4],
+  'Google carries an odd byte to the next response',
 );
+googleCall.emit('end');
+assert.ok((await googleReader.read()).done, 'Google ends when the call ends');
 
+const abortedCall = fakeGoogleCall();
+const aborter = new AbortController();
+const abortedSpeech = await googleFrom(abortedCall.call).speak({
+  ...speakInput,
+  signal: aborter.signal,
+});
+aborter.abort();
 assert.ok(
-  await rejects(() =>
-    createGoogleTts({
-      getAccessToken: async () => 'token-1',
-      projectId: 'a-project',
-      fetchImpl: record(() => Response.json({})).fetchImpl,
-    }).speak(speakInput),
-  ),
-  'Google without audio content is an error',
+  abortedCall.state.cancels === 1 &&
+    (await rejects(() => abortedSpeech.stream.getReader().read())),
+  'an abort cancels the Google call and fails the stream',
 );
 
-const unreadBodies = { deepgram: false, gemini: false, google: false };
+const googleStatuses: [number, number][] = [
+  [16, 401],
+  [7, 403],
+  [8, 429],
+  [14, 503],
+  [3, 400],
+  [13, 500],
+];
+for (const [code, status] of googleStatuses) {
+  const failing = fakeGoogleCall();
+  const failingRead = (await googleFrom(failing.call).speak(speakInput)).stream
+    .getReader()
+    .read()
+    .then(
+      () => null,
+      (caught: Error) => caught.message,
+    );
+  failing.emit('error', { code });
+  assert.equal(
+    await failingRead,
+    `googleTts answered ${status}`,
+    `gRPC code ${code} is answered as ${status}`,
+  );
+}
+
+const unreadBodies = { deepgram: false, gemini: false };
 const failingBody = (key: keyof typeof unreadBodies) =>
   record(
     () =>
@@ -1360,16 +1422,9 @@ await createDeepgramAura({
 await createGeminiTts({ apiKey, fetchImpl: failingBody('gemini') })
   .speak(speakInput)
   .catch(() => undefined);
-await createGoogleTts({
-  getAccessToken: async () => 'token-1',
-  projectId: 'a-project',
-  fetchImpl: failingBody('google'),
-})
-  .speak(speakInput)
-  .catch(() => undefined);
 assert.deepEqual(
   unreadBodies,
-  { deepgram: true, gemini: true, google: true },
+  { deepgram: true, gemini: true },
   'a non-ok answer releases its body without reading it',
 );
 
@@ -1395,17 +1450,29 @@ const providers: [TtsProviderId, TtsProvider][] = [
   [
     'googleTts',
     createGoogleTts({
-      getAccessToken: async () => apiKey,
       projectId: 'a-project',
-      fetchImpl: record(
-        () => new Response('bad key sk-test-key-123', { status: 401 }),
-      ).fetchImpl,
+      client: {
+        streamingSynthesize: () => {
+          const failing = fakeGoogleCall();
+          queueMicrotask(() =>
+            failing.emit('error', { code: 16, message: apiKey }),
+          );
+          return failing.call;
+        },
+      },
     }),
   ],
 ];
 for (const [id, provider] of providers) {
   const error = await provider.speak(speakInput).then(
-    () => null,
+    (speech) =>
+      speech.stream
+        .getReader()
+        .read()
+        .then(
+          () => null,
+          (caught: Error) => caught,
+        ),
     (caught: Error) => caught,
   );
   assert.ok(
@@ -1511,6 +1578,9 @@ const listenLimits = {
   mintsPerDay: 300,
   spokenCharsPerDay: 30_000,
   voices: { googleTts: 'g', deepgramAura: 'd', geminiTts: 'm' },
+  voiceNames: ['A'],
+  defaultVoice: 'A',
+  speedRange: { min: 0.8, max: 1.2 },
 };
 const worstCase = listenCostMicros(VOICE_UTTERANCE_MS);
 const emptyUsage: ListenUsage = {
@@ -1828,5 +1898,34 @@ const longZone = read({ body: { ...speechBody, timeZone: 'x'.repeat(65) } });
 assert.ok(
   longZone.ok && longZone.timeZone === 'UTC',
   'a bad time zone is read as UTC',
+);
+const voiceRead = (over: Record<string, unknown>) => {
+  const result = read({ body: { ...speechBody, ...over } });
+  return result.ok ? [result.voiceName, result.speed] : null;
+};
+assert.deepEqual(
+  voiceRead({}),
+  ['Aoede', 1],
+  'no voice or speed is the app default at normal speed',
+);
+assert.deepEqual(
+  voiceRead({ voiceId: 'Puck', speed: 1.2 }),
+  ['Puck', 1.2],
+  'a listed voice and a speed at the edge of the range are kept',
+);
+assert.deepEqual(
+  voiceRead({ voiceId: 'Not-A-Voice', speed: 0.8 }),
+  ['Aoede', 0.8],
+  'an unknown voice falls back to Aoede without refusing the request',
+);
+assert.deepEqual(
+  [1.5, 0.79, 'fast', null, NaN].map((speed) => voiceRead({ speed })?.[1]),
+  [1, 1, 1, 1, 1],
+  'a speed outside the range or not a number becomes 1',
+);
+assert.equal(
+  voiceRead({ speed: 0.876 })?.[1],
+  0.88,
+  'a speed is rounded to two decimals',
 );
 console.log('speechShared: voice provider checks passed');

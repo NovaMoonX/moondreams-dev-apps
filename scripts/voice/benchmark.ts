@@ -285,10 +285,11 @@ const speakOnce = async (
   text: string,
   voiceId: string,
   delivery?: string,
+  speed?: number,
   attempt = 0,
 ): Promise<{ firstByteMs: number; totalMs: number; audio: Uint8Array }> => {
   try {
-    return await speakTimed(provider, text, voiceId, delivery);
+    return await speakTimed(provider, text, voiceId, delivery, speed);
   } catch (error) {
     const status = statusOf(error);
     const wait = RETRY_WAITS_MS[attempt];
@@ -299,7 +300,7 @@ const speakOnce = async (
       `\r\x1b[K  ${provider.id} answered ${status}; waiting ${wait / 1000} s and trying again…`,
     );
     await new Promise((resolve) => setTimeout(resolve, wait));
-    return speakOnce(provider, text, voiceId, delivery, attempt + 1);
+    return speakOnce(provider, text, voiceId, delivery, speed, attempt + 1);
   }
 };
 
@@ -308,6 +309,7 @@ const speakTimed = async (
   text: string,
   voiceId: string,
   delivery?: string,
+  speed?: number,
 ) => {
   const startedAt = performance.now();
   const { stream } = await provider.speak({
@@ -315,6 +317,7 @@ const speakTimed = async (
     voiceId,
     format: 'mp3',
     delivery,
+    ...(speed === undefined ? {} : { speed }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   const reader = stream.getReader();
@@ -379,7 +382,7 @@ const toSample = (
   timing: { firstByteMs: number; totalMs: number },
   audio: Uint8Array,
 ): { sample: Sample; bytes: Uint8Array; extension: string } => {
-  const isPcm = providerId === 'geminiTts';
+  const isPcm = providerId === 'geminiTts' || providerId === 'googleTts';
   const audioSeconds = isPcm ? audio.length / (GEMINI_SAMPLE_RATE * 2) : null;
   return {
     bytes: isPcm ? pcmToWav(audio, GEMINI_SAMPLE_RATE) : audio,
@@ -553,14 +556,7 @@ const buildProviders = async (): Promise<
         }
       : {
           id: 'googleTts',
-          provider: createGoogleTts({
-            projectId: PROJECT,
-            getAccessToken: async () => {
-              const token = await googleAuth.getAccessToken();
-              if (!token) throw new Error('No Google access token');
-              return token;
-            },
-          }),
+          provider: createGoogleTts({ projectId: PROJECT }),
           skipped: null,
         },
   ];

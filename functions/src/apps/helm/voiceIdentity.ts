@@ -6,3 +6,41 @@ export const HELM_VOICE_IDS: Record<TtsProviderId, string> = {
   deepgramAura: 'aura-2-thalia-en',
   geminiTts: 'Achird',
 };
+
+/** The Chirp 3 HD voices a person may pick, by bare name. */
+export const HELM_VOICE_NAMES = [
+  'Achernar',
+  'Achird',
+  'Algenib',
+  'Algieba',
+  'Alnilam',
+  'Aoede',
+  'Autonoe',
+  'Callirrhoe',
+  'Charon',
+  'Despina',
+  'Enceladus',
+  'Erinome',
+  'Fenrir',
+  'Gacrux',
+  'Iapetus',
+  'Kore',
+  'Laomedeia',
+  'Leda',
+  'Orus',
+  'Pulcherrima',
+  'Puck',
+  'Rasalgethi',
+  'Sadachbia',
+  'Sadaltager',
+  'Schedar',
+  'Sulafat',
+  'Umbriel',
+  'Vindemiatrix',
+  'Zephyr',
+  'Zubenelgenubi',
+] as const;
+
+export const HELM_DEFAULT_VOICE = 'Aoede';
+
+export const HELM_SPEED_RANGE = { min: 0.8, max: 1.2 };

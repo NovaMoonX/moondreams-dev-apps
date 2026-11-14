@@ -5,13 +5,11 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { onRequest } from 'firebase-functions/v2/https';
-import { GoogleAuth } from 'google-auth-library';
 
 import { createOptionalSecretReader } from '../imageSearch/optionalSecret.js';
 import { createDeepgramAura } from './providers/deepgramAura.js';
 import { createGeminiTts } from './providers/geminiTts.js';
 import { createGoogleTts } from './providers/googleTts.js';
-import { pcmToWav } from './providers/pcm.js';
 import type { TtsProvider } from './providers/types.js';
 import { releaseSpeech, reserveSpeech } from './usage.js';
 import { VOICE_APPS } from './voiceApps.js';
@@ -34,6 +32,8 @@ export type SpeechRequest =
       text: string;
       priority: SpeechPriority;
       timeZone: string;
+      voiceName: string;
+      speed: number;
     }
   | { ok: false; status: number; error: string };
 
@@ -76,10 +76,8 @@ export function readSpeechRequest({
     );
   if (!isAllowed) return refuse(403, 'origin');
 
-  const { appId, text, priority, timeZone } = (body ?? {}) as Record<
-    string,
-    unknown
-  >;
+  const { appId, text, priority, timeZone, voiceId, speed } = (body ??
+    {}) as Record<string, unknown>;
   if (typeof appId !== 'string' || !Object.hasOwn(VOICE_APPS, appId)) {
     return refuse(400, 'app');
   }
@@ -89,6 +87,7 @@ export function readSpeechRequest({
   if (typeof priority !== 'string' || !PRIORITIES.includes(priority)) {
     return refuse(400, 'priority');
   }
+  const { voiceNames, defaultVoice, speedRange } = VOICE_APPS[appId];
   return {
     ok: true,
     appId,
@@ -96,13 +95,21 @@ export function readSpeechRequest({
     priority: priority as SpeechPriority,
     timeZone:
       typeof timeZone === 'string' && timeZone.length <= 64 ? timeZone : 'UTC',
+    voiceName:
+      typeof voiceId === 'string' && voiceNames.includes(voiceId)
+        ? voiceId
+        : defaultVoice,
+    speed:
+      typeof speed === 'number' &&
+      Number.isFinite(speed) &&
+      speed >= speedRange.min &&
+      speed <= speedRange.max
+        ? Math.round(speed * 100) / 100
+        : 1,
   };
 }
 
 const secretReader = createOptionalSecretReader({ fetch: globalThis.fetch });
-const googleAuth = new GoogleAuth({
-  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-});
 const keyState = { isMissingLogged: false };
 
 const SECRET_NAMES = {
@@ -110,20 +117,18 @@ const SECRET_NAMES = {
   geminiTts: 'GEMINI_API_KEY',
 } as const;
 
+// One client keeps its gRPC channel open across requests.
+const kept: { googleTts: TtsProvider | null } = { googleTts: null };
+
 const getProvider = async (
   id: typeof VOICE_PROVIDER_DEFAULT | keyof typeof SECRET_NAMES,
 ): Promise<TtsProvider | null> => {
   if (id === 'googleTts') {
-    return isEmulator()
-      ? null
-      : createGoogleTts({
-          projectId: process.env.GCLOUD_PROJECT ?? '',
-          getAccessToken: async () => {
-            const token = await googleAuth.getAccessToken();
-            if (!token) throw new Error('No Google access token');
-            return token;
-          },
-        });
+    if (isEmulator()) return null;
+    kept.googleTts ??= createGoogleTts({
+      projectId: process.env.GCLOUD_PROJECT ?? '',
+    });
+    return kept.googleTts;
   }
   if (isForcedFixture(id === 'deepgramAura' ? 'deepgram' : 'gemini')) {
     return null;
@@ -137,6 +142,8 @@ const getProvider = async (
     ? createDeepgramAura({ apiKey })
     : createGeminiTts({ apiKey });
 };
+
+const TONE_CHUNKS = 4;
 
 const makeTone = () => {
   const count = Math.round(TONE_RATE * 0.6);
@@ -154,7 +161,10 @@ const makeTone = () => {
       true,
     ),
   );
-  return pcmToWav(pcm, TONE_RATE);
+  const size = Math.ceil(count / TONE_CHUNKS) * 2;
+  return Array.from({ length: TONE_CHUNKS }, (_, index) =>
+    pcm.slice(index * size, (index + 1) * size),
+  ).filter((chunk) => chunk.length > 0);
 };
 
 const toStatus = (error: unknown) =>
@@ -207,7 +217,7 @@ export const streamSpeech = onRequest(
           .catch(() => false)));
     if (!isAppCheckOk) return fail(401, 'app-check');
 
-    const { appId, text, timeZone } = request;
+    const { appId, text, timeZone, voiceName, speed } = request;
     const limits = VOICE_APPS[appId];
     const providerId = VOICE_PROVIDER_DEFAULT;
     const provider = await getProvider(providerId);
@@ -254,9 +264,11 @@ export const streamSpeech = onRequest(
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Access-Control-Expose-Headers', 'X-Voice-Provider');
     if (provider === null) {
-      res.setHeader('Content-Type', 'audio/wav');
+      res.setHeader('Content-Type', `audio/L16; rate=${TONE_RATE}; channels=1`);
       res.setHeader('X-Voice-Provider', 'emulator');
-      res.status(200).end(Buffer.from(makeTone()));
+      res.status(200);
+      makeTone().forEach((chunk) => res.write(chunk));
+      res.end();
       return;
     }
 
@@ -273,8 +285,12 @@ export const streamSpeech = onRequest(
     const speech = await provider
       .speak({
         text,
-        voiceId: limits.voices[providerId],
+        voiceId:
+          providerId === 'googleTts'
+            ? `en-US-Chirp3-HD-${voiceName}`
+            : limits.voices[providerId],
         format: 'mp3',
+        speed,
         signal,
       })
       .catch(async (error: unknown) => {
@@ -302,6 +318,12 @@ export const streamSpeech = onRequest(
       return fail(502, 'unavailable');
     }
 
+    logger.info('voice.speechStarted', {
+      event: 'voice.speechStarted',
+      providerId,
+      voiceName,
+      speed,
+    });
     res.status(200);
     res.setHeader('Content-Type', speech.contentType);
     res.setHeader('X-Voice-Provider', providerId);

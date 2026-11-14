@@ -14,6 +14,8 @@ export interface TtsProvider {
     voiceId: string;
     format: TtsFormat;
     signal?: AbortSignal;
+    /** Speaking rate, 1 is normal; a provider with no rate control ignores it. */
+    speed?: number;
     /** How to say it ("Say this in a calm, even voice"); only a provider that reads instructions uses it. */
     delivery?: string;
   }): Promise<TtsSpeech>;
