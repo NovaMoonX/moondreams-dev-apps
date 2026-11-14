@@ -140,9 +140,8 @@ import {
 import {
   ALREADY_ANSWERED_LINE,
   ASK_DEFERRED_LINE,
-  NOTHING_CHANGED_LINE,
-  ANSWER_KEPT_LINE,
-  claimsWork,
+  answerQuietLine,
+  ownLineStands,
   buildPhotosNotOpenedLine,
   buildFileNotReadLine,
 } from './nomos/summaries.js';
@@ -2097,18 +2096,17 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
     asks: mode === 'full' ? reply.asks : [],
     answerTurn,
-    replyLine:
-      [
-        reply.mediaDropped,
-        reply.askDropped,
-        reply.noteDropped,
-        reply.topicDropped,
-        reply.procedureDropped,
-        reply.runDropped,
-      ].some((dropped) => dropped.length > 0) ||
-      commands.length < reply.commands.length
-        ? null
-        : reply.replyLine,
+    replyLine: ownLineStands(
+      reply.mediaDropped,
+      reply.askDropped,
+      reply.noteDropped,
+      reply.topicDropped,
+      reply.procedureDropped,
+      reply.runDropped,
+      commands.length < reply.commands.length,
+    )
+      ? reply.replyLine
+      : null,
     mentions: reply.mentions,
     places: reply.places,
     assistantName,
@@ -3058,18 +3056,19 @@ async function writeResult(
           { ...plan, questions },
           {
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
-            said:
-              plan.notKept.length === 0 &&
-              plan.questions.length === 0 &&
-              questions.length === 0 &&
-              plan.lines.length === 0 &&
-              noted.refused.length === 0 &&
-              liveRefused.length === 0 &&
-              !askPlan.isDeferred &&
-              !hasMore &&
-              !homeRefusal
-                ? replyLine
-                : null,
+            said: ownLineStands(
+              plan.notKept,
+              plan.questions,
+              questions,
+              plan.lines,
+              noted.refused,
+              liveRefused,
+              askPlan.isDeferred,
+              hasMore,
+              Boolean(homeRefusal),
+            )
+              ? replyLine
+              : null,
             questionRef: answerTurn?.ref ?? null,
             commands,
             captureId: captureRef.id,
@@ -3131,13 +3130,13 @@ async function writeResult(
               ? null
               : plan.notKept.length > 0
                 ? plan.notKept.join('. ')
-                : answerTurn && commands.length > 0
-                  ? NOTHING_CHANGED_LINE
-                  : answerTurn && turn?.kind === 'apply'
-                    ? ((replyLine && !claimsWork(replyLine)
-                        ? replyLine
-                        : null) ?? ANSWER_KEPT_LINE)
-                    : null));
+                : answerTurn
+                  ? answerQuietLine({
+                      commandCount: commands.length,
+                      isApply: turn?.kind === 'apply',
+                      replyLine,
+                    })
+                  : null));
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,

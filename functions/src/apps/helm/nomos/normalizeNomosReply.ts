@@ -224,6 +224,11 @@ const toText = (value: unknown, cap: number) =>
     ? cutAtWord(value.replace(/\s+/g, ' ').trim(), cap) || null
     : null;
 
+const readNumbers = (text: string) =>
+  (text.match(/\d(?:[\d,.:]*\d)?/g) ?? []).map((number) =>
+    number.replace(/,/g, ''),
+  );
+
 /** The model's own line about the turn, refused (so code's line stands) when it speaks as "I", falls back on a template, runs long, carries a link or markup, or names a number the person never said. */
 export const readReplyLine = (value: unknown, saidText = '') => {
   if (typeof value !== 'string') return null;
@@ -232,12 +237,10 @@ export const readReplyLine = (value: unknown, saidText = '') => {
   if (/\b(i|i'm|i've|i'll|i'd|me|my)\b|^got it\b/i.test(line)) return null;
   if (/:\/\/|www\.|[*_#`[\]<>]/.test(line)) return null;
   // A count ("Added 2 things") is the line's own; an amount, a time or a date must be the person's.
-  const numbers = (line.match(/[$€£]?\d[\d,.:]*/g) ?? []).filter(
-    (number) => !/^\d$/.test(number),
-  );
-  return numbers.every((number) =>
-    saidText.includes(number.replace(/^[$€£]/, '')),
-  )
+  const said = new Set(readNumbers(saidText));
+  return readNumbers(line)
+    .filter((number) => !/^\d$/.test(number))
+    .every((number) => said.has(number))
     ? line
     : null;
 };

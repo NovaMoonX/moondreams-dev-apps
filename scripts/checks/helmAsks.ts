@@ -18,8 +18,10 @@ import {
   readReplyLine,
 } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import {
+  answerQuietLine,
   buildSpokenQuestion,
-  claimsWork,
+  isPlainAcknowledgement,
+  ownLineStands,
 } from '../../functions/src/apps/helm/nomos/summaries.ts';
 
 const READING: CaptureReading = {
@@ -89,9 +91,42 @@ test("an answered question's reply is the model's own line, never first person o
     'Added 2 things to the list.',
   );
   assert.equal(readReplyLine('Added it for Nov 21.', 'on saturday'), null);
-  assert.equal(claimsWork('Added both to the list.'), true);
-  assert.equal(claimsWork('Dropped it.'), false);
-  assert.equal(claimsWork('Left it as it is.'), false);
+  assert.equal(
+    readReplyLine('Moved it to 3:30.', 'move it to 3:30'),
+    'Moved it to 3:30.',
+  );
+  assert.equal(readReplyLine('Added 2.', 'add both'), 'Added 2.');
+  assert.equal(readReplyLine('Paid $20.', 'paid 20 for it'), 'Paid $20.');
+  assert.equal(readReplyLine('Paid $20.', 'paid 120 for it'), null);
+  assert.equal(isPlainAcknowledgement('Dropped it.'), true);
+  assert.equal(isPlainAcknowledgement('Left it as it is.'), true);
+  assert.equal(isPlainAcknowledgement('Added both to the list.'), false);
+  assert.equal(
+    isPlainAcknowledgement('Snow chains are on the list now.'),
+    false,
+  );
+  assert.equal(isPlainAcknowledgement('Dropped it and added the rest.'), false);
+});
+
+test("an answer that filed nothing never claims work, and the assistant's line stands only when nothing was left over", () => {
+  const quiet = (commandCount: number, replyLine: string | null) =>
+    answerQuietLine({ commandCount, isApply: true, replyLine });
+  assert.equal(quiet(0, 'Dropped it.'), 'Dropped it.');
+  assert.equal(quiet(0, 'Snow chains are on the list now.'), 'Noted.');
+  assert.equal(quiet(0, 'Tasks made for each.'), 'Noted.');
+  assert.equal(quiet(0, null), 'Noted.');
+  assert.equal(quiet(2, 'Dropped it.'), 'Nothing changed.');
+  assert.equal(
+    answerQuietLine({
+      commandCount: 0,
+      isApply: false,
+      replyLine: 'Dropped it.',
+    }),
+    null,
+  );
+  assert.equal(ownLineStands([], [], false, false), true);
+  assert.equal(ownLineStands([], ['a dropped photo'], false), false);
+  assert.equal(ownLineStands([], [], true), false);
 });
 
 test('a seventh pickOne option is cut', () => {

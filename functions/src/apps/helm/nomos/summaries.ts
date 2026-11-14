@@ -716,10 +716,33 @@ export const NOTHING_CHANGED_LINE = 'Nothing changed.';
 export const ANSWER_KEPT_LINE = 'Noted.';
 
 const WORK_WORDS =
-  /^(added|made|moved|saved|linked|set|created|booked|sent|scheduled|put|filed|kept|marked|ticked|done|both|all)\b/i;
+  /\b(added|adding|made|moved|saved|linked|set|created|booked|sent|scheduled|put|filed|kept|marked|ticked|done|on the|in the|now)\b/i;
 
-/** Whether a line says something was done, which an answer that filed nothing can't truthfully say. */
-export const claimsWork = (line: string) => WORK_WORDS.test(line.trim());
+const ACK_START =
+  /^(dropped|dropping|left|leaving|skipped|skipping|no change|nothing|noted|okay|ok|understood|all right|fine|sure|not adding|won't)\b/i;
+
+/** Whether a line only acknowledges, the one kind of line an answer that filed nothing can truthfully say. */
+export const isPlainAcknowledgement = (line: string) =>
+  ACK_START.test(line.trim()) && !WORK_WORDS.test(line);
+
+/** The quiet line of an answer turn whose reply wrote nothing to show: never a claim of work when no command ran. */
+export const answerQuietLine = (input: {
+  commandCount: number;
+  isApply: boolean;
+  replyLine: string | null;
+}) => {
+  if (input.commandCount > 0) return NOTHING_CHANGED_LINE;
+  if (!input.isApply) return null;
+  return input.replyLine && isPlainAcknowledgement(input.replyLine)
+    ? input.replyLine
+    : ANSWER_KEPT_LINE;
+};
+
+/** Whether the model's own line may stand: nothing was dropped, held, refused, deferred or left to say in code's words. */
+export const ownLineStands = (...reasons: (readonly unknown[] | boolean)[]) =>
+  reasons.every((reason) =>
+    typeof reason === 'boolean' ? !reason : reason.length === 0,
+  );
 
 /** The sealed half of a model-written question: no held commands, and no answer until one is given. */
 export const buildAskedQuestion = (ask: AskCommand) => ({
