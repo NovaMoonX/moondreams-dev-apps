@@ -9,6 +9,8 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import FormSheet from '@/components/FormSheet';
 import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { MultiPillGroup } from '@/components/PillGroup';
+import SectionDivider from '@/components/SectionDivider';
 import {
   grantConnection,
   readConnectorOptions,
@@ -27,7 +29,8 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { setShiftCalendarIds } from '@apps/helm/store/actions/settingsActions';
 
 export interface CalendarPickerTarget {
-  accountId: string;
+  /** Null while the trip back from Google is still finishing, so the sheet is already up when the person lands. */
+  accountId: string | null;
   /** Connecting stages everything until Connect; editing a live grant applies on Save. */
   mode: 'connect' | 'edit';
 }
@@ -80,7 +83,11 @@ function PickerForm({
   const calendars = useQuery({
     queryKey: ['helm', 'calendarOptions', accountId],
     queryFn: () =>
-      readConnectorOptions({ connectorId: CONNECTOR_ID, accountId }),
+      readConnectorOptions({
+        connectorId: CONNECTOR_ID,
+        accountId: accountId ?? '',
+      }),
+    enabled: accountId !== null,
     retry: false,
     gcTime: 0,
     refetchOnWindowFocus: false,
@@ -100,7 +107,14 @@ function PickerForm({
     (shiftEdits[option.id] ?? shiftIds.includes(shiftKey(option)));
   const calendarIds = options.filter(isTicked).map((option) => option.id);
   const isNoneTicked = calendarIds.length === 0;
-  const firstShiftId = options.find(isShift)?.id ?? null;
+  const ordered = [...options].sort(
+    (a, b) =>
+      Number(b.isPrimary) - Number(a.isPrimary) ||
+      Number(b.isOnByDefault) - Number(a.isOnByDefault),
+  );
+  const mine = ordered.filter((option) => option.isOnByDefault);
+  const others = ordered.filter((option) => !option.isOnByDefault);
+  const ticked = ordered.filter(isTicked);
   const isDirty =
     mode === 'edit' &&
     isReady &&
@@ -124,7 +138,8 @@ function PickerForm({
 
   const save = async () => {
     setIsTouched(true);
-    if (!isReady || isNoneTicked || isSaving || !user) return;
+    if (!isReady || isNoneTicked || isSaving || !user || accountId === null)
+      return;
     setIsSaving(true);
     setFailure(null);
     try {
@@ -173,6 +188,35 @@ function PickerForm({
       ? HELM_COPY.calendarPickerConnect
       : HELM_COPY.calendarPickerSave;
 
+  const renderRow = (option: ConnectorOption) => (
+    <li key={option.id}>
+      <label className='flex min-h-14 items-center gap-3 py-2'>
+        <AppCheckbox
+          aria-label={option.name}
+          checked={isTicked(option)}
+          onCheckedChange={(isOn) =>
+            setTickEdits((edits) => ({ ...edits, [option.id]: isOn }))
+          }
+        />
+        <span
+          aria-hidden='true'
+          className='bg-muted-foreground border-border size-3 shrink-0 rounded-full border'
+          style={option.colour ? { backgroundColor: option.colour } : undefined}
+        />
+        <span className='min-w-0 flex-1'>
+          <span className='text-foreground block text-[15px] [overflow-wrap:anywhere]'>
+            {option.isPrimary ? HELM_COPY.calendarPickerMain : option.name}
+          </span>
+          {option.isPrimary && option.name !== HELM_COPY.calendarPickerMain && (
+            <span className='text-muted-foreground block text-[13px] [overflow-wrap:anywhere]'>
+              {option.name}
+            </span>
+          )}
+        </span>
+      </label>
+    </li>
+  );
+
   return (
     <div className='flex flex-col gap-4'>
       <p className='text-muted-foreground text-[15px] text-pretty'>
@@ -180,9 +224,11 @@ function PickerForm({
       </p>
       {!hasFailed && !isReady && (
         <p className='text-muted-foreground text-[13px]' role='status'>
-          {isGrantPending && isKnown
-            ? HELM_COPY.connectionGone
-            : HELM_COPY.calendarPickerLoading}
+          {accountId === null
+            ? HELM_COPY.calendarPickerFinishing
+            : isGrantPending && isKnown
+              ? HELM_COPY.connectionGone
+              : HELM_COPY.calendarPickerLoading}
         </p>
       )}
       {hasFailed && (
@@ -206,62 +252,53 @@ function PickerForm({
         </p>
       )}
       {isReady && options.length > 0 && (
-        <ul className='divide-border flex flex-col divide-y'>
-          {options.map((option) => (
-            <li key={option.id} className='py-1'>
-              <label className='flex min-h-12 items-center gap-3 py-2'>
-                <AppCheckbox
-                  aria-label={option.name}
-                  checked={isTicked(option)}
-                  onCheckedChange={(isOn) =>
-                    setTickEdits((edits) => ({ ...edits, [option.id]: isOn }))
-                  }
-                />
-                <span
-                  aria-hidden='true'
-                  className='bg-muted-foreground border-border size-3 shrink-0 rounded-full border'
-                  style={
-                    option.colour
-                      ? { backgroundColor: option.colour }
-                      : undefined
-                  }
-                />
-                <span className='min-w-0 flex-1'>
-                  <span className='text-foreground block text-[15px] break-words'>
-                    {option.name}
-                  </span>
-                  {option.isPrimary && (
-                    <span className='text-muted-foreground block text-[13px]'>
-                      {HELM_COPY.calendarPickerMain}
-                    </span>
-                  )}
-                </span>
-              </label>
-              {isTicked(option) && (
-                <label className='flex min-h-10 items-center gap-3 pl-14'>
-                  <AppCheckbox
-                    aria-label={`${HELM_COPY.calendarPickerShifts}: ${option.name}`}
-                    checked={isShift(option)}
-                    onCheckedChange={(isOn) =>
-                      setShiftEdits((edits) => ({
-                        ...edits,
-                        [option.id]: isOn,
-                      }))
-                    }
-                  />
-                  <span className='text-muted-foreground text-[13px]'>
-                    {HELM_COPY.calendarPickerShifts}
-                  </span>
-                </label>
-              )}
-              {option.id === firstShiftId && (
-                <p className='text-muted-foreground pb-2 pl-14 text-[13px] text-pretty'>
-                  {HELM_COPY.calendarPickerShiftsHint}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className='flex flex-col gap-2'>
+          {mine.length > 0 && (
+            <ul className='divide-border flex flex-col divide-y'>
+              {mine.map(renderRow)}
+            </ul>
+          )}
+          {others.length > 0 && (
+            <>
+              <SectionDivider
+                label={HELM_COPY.calendarPickerOthers}
+                className='pt-2'
+              />
+              <ul className='divide-border flex flex-col divide-y'>
+                {others.map(renderRow)}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+      {isReady && ticked.length > 0 && (
+        <div className='flex flex-col gap-3'>
+          <SectionDivider label={HELM_COPY.calendarPickerShiftsTitle} />
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.calendarPickerShiftsHint}
+          </p>
+          <MultiPillGroup
+            label={HELM_COPY.calendarPickerShiftsTitle}
+            showAll
+            options={ticked.map((option) => ({
+              value: option.id,
+              label: option.isPrimary
+                ? HELM_COPY.calendarPickerMain
+                : option.name,
+            }))}
+            values={ticked.filter(isShift).map((option) => option.id)}
+            onChange={(values) =>
+              setShiftEdits(
+                Object.fromEntries(
+                  ticked.map((option) => [
+                    option.id,
+                    values.includes(option.id),
+                  ]),
+                ),
+              )
+            }
+          />
+        </div>
       )}
       {isTouched && isNoneTicked && options.length > 0 && (
         <p className='text-destructive text-sm' role='alert'>
@@ -321,7 +358,7 @@ function CalendarPicker({
   const closeRef = useRef<(() => void) | null>(null);
 
   const dismiss = () => {
-    if (target?.mode === 'connect')
+    if (target?.mode === 'connect' && target.accountId !== null)
       releaseUnusedAccount({ accountId: target.accountId }).catch(
         (error: unknown) =>
           console.error('Helm unused account was not released', error),

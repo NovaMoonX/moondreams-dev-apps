@@ -1042,12 +1042,14 @@ export const HELM_COPY = {
   calendarPickerLead: (name: string) =>
     `Pick the calendars ${name} plans around. Holidays and subscriptions start off.`,
   calendarPickerLoading: 'Opening your calendars',
+  calendarPickerFinishing: 'Finishing up with Google',
   calendarPickerFailed: "Couldn't load your calendars.",
   calendarPickerEmpty: "This account doesn't have a calendar to read.",
   calendarPickerMain: 'Main calendar',
-  calendarPickerShifts: 'These are my shifts',
+  calendarPickerOthers: 'Holidays and shared',
+  calendarPickerShiftsTitle: 'Work shifts',
   calendarPickerShiftsHint:
-    'The day after a late shift stays free of suggestions.',
+    'Tap any calendar that holds your shifts. The day after a late shift stays free of suggestions.',
   calendarPickerConnect: 'Connect',
   calendarPickerSave: 'Save',
   calendarPickerTickOne: 'Tick at least one calendar',
