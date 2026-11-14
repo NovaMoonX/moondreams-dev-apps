@@ -308,6 +308,7 @@ function HomeSurface({
             maxLines={10}
             screen={null}
             onFocusChange={onComposerFocusChange}
+            showsVoiceNotice={isComposing}
             isReady={keyStatus === 'ready'}
             isOutbox={canSaveOffline}
             heldText={typedWaiting}

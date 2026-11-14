@@ -10,7 +10,11 @@ import {
   type ListeningEvent,
 } from '@/lib/speech/listeningMode';
 import {
+  needsMicrophoneAsk,
+  peekMicrophonePermission,
   readMicrophonePermission,
+  rememberRecognitionRefused,
+  wasMicrophoneGranted,
   watchMicrophonePermission,
 } from '@/lib/speech/microphonePermission';
 import { readWakePhrase } from '@/lib/speech/speechText';
@@ -70,6 +74,8 @@ interface VoiceConversationOptions {
   onNothingHeard?: (isAsked: boolean) => void;
   /** The model on the device couldn't start or died while listening; `isAsked` is as for `onNothingHeard`. Without it this counts as nothing heard. */
   onDeviceListenFailed?: (isAsked: boolean) => void;
+  /** A tapped listen ended on a lasting failure (the microphone refused, recognition off). */
+  onUnavailable?: (reason: VoiceUnavailableReason) => void;
   /** The opt-in natural voice is downloaded and ready (`useNaturalVoice().isReady`). */
   isNaturalVoiceReady?: boolean;
   /** The opt-in recognition model is downloaded (`useOnDeviceRecognition().isOn`): it listens whenever the cloud doesn't, waits for the wake phrase and hears a barge-in, all on the device. */
@@ -101,6 +107,7 @@ interface VoiceConversationOptions {
 
 export type VoiceListeningRoute = 'cloud' | 'device';
 
+const LISTEN_SHOW_DELAY_MS = 400;
 const QUIET_MS = 8000;
 const CONVERSATION_IDLE_MS = 10 * 60 * 1000;
 const FIRST_LINE_FIRST_BYTE_MS = 4000;
@@ -140,6 +147,7 @@ export function useVoiceConversation({
   onUtterance,
   onNothingHeard,
   onDeviceListenFailed,
+  onUnavailable,
   isNaturalVoiceReady = false,
   isOnDeviceReady = false,
   quietMs = QUIET_MS,
@@ -151,6 +159,7 @@ export function useVoiceConversation({
   wake = null,
 }: VoiceConversationOptions) {
   const [isListening, setIsListening] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -181,6 +190,7 @@ export function useVoiceConversation({
     onUtterance,
     onNothingHeard,
     onDeviceListenFailed,
+    onUnavailable,
     isNaturalVoiceReady,
     canHearOnDevice,
     quietMs,
@@ -212,6 +222,7 @@ export function useVoiceConversation({
     cancelListening: null as (() => void) | null,
     quietId: 0,
     holdId: 0,
+    showId: 0,
     followUpId: 0,
     isFollowUp: false,
     isUnasked: false,
@@ -226,6 +237,7 @@ export function useVoiceConversation({
       onUtterance,
       onNothingHeard,
       onDeviceListenFailed,
+      onUnavailable,
       isNaturalVoiceReady,
       canHearOnDevice,
       quietMs,
@@ -304,6 +316,9 @@ export function useVoiceConversation({
   };
 
   const clearTimers = () => {
+    window.clearTimeout(run.current.showId);
+    run.current.showId = 0;
+    setIsStarting(false);
     window.clearTimeout(run.current.quietId);
     window.clearTimeout(run.current.holdId);
     run.current.quietId = 0;
@@ -429,14 +444,23 @@ export function useVoiceConversation({
   const handleError = (code: SttErrorCode) => {
     run.current.isCancelled = true;
     const isLasting = BLOCKED.includes(code) || code === 'language';
-    if (code === 'denied' || code === 'no-microphone')
-      setReason('no-permission');
-    else if (code === 'service' || code === 'language')
-      setReason('no-recognition');
+    const isAsked = !run.current.isUnasked;
+    const isMicrophoneAllowed =
+      peekMicrophonePermission() === 'granted' || wasMicrophoneGranted();
+    if (code === 'denied' && !isMicrophoneAllowed) rememberRecognitionRefused();
+    const lasting: VoiceUnavailableReason | null =
+      (code === 'denied' && !isMicrophoneAllowed) || code === 'no-microphone'
+        ? 'no-permission'
+        : code === 'denied' || code === 'service' || code === 'language'
+          ? 'no-recognition'
+          : null;
+    if (lasting !== null) setReason(lasting);
     run.current.stopListening?.();
     handleFinal('');
-    if (isLasting) return;
-    const isAsked = !run.current.isUnasked;
+    if (isLasting) {
+      if (lasting !== null && isAsked) latest.current.onUnavailable?.(lasting);
+      return;
+    }
     if (
       run.current.heardBy === 'on-device' &&
       latest.current.onDeviceListenFailed
@@ -459,6 +483,9 @@ export function useVoiceConversation({
       onPartial: handlePartial,
       onFinal: handleFinal,
       onSpeechStart: () => {
+        window.clearTimeout(run.current.showId);
+        setIsStarting(false);
+        setIsListening(true);
         isMicGranted.current = true;
         setReason(null);
       },
@@ -500,7 +527,20 @@ export function useVoiceConversation({
       hasCloud: cloud !== null,
       isOnDeviceReady: latest.current.canHearOnDevice,
     });
-    setIsListening(true);
+    // Until the microphone is known to be allowed, a refusal can come back at once: showing Listening only after a moment keeps it from flashing.
+    const isKnownAllowed =
+      peekMicrophonePermission() === 'granted' ||
+      wasMicrophoneGranted() ||
+      isMicGranted.current;
+    if (isKnownAllowed) setIsListening(true);
+    else {
+      window.clearTimeout(run.current.showId);
+      setIsStarting(true);
+      run.current.showId = window.setTimeout(() => {
+        setIsStarting(false);
+        setIsListening(true);
+      }, LISTEN_SHOW_DELAY_MS);
+    }
     setIsThinking(false);
     setHeard('');
     if (choice !== 'onDevice') armQuiet();
@@ -649,7 +689,7 @@ export function useVoiceConversation({
         if (permission !== 'unknown') {
           isMicGranted.current = permission === 'granted';
         }
-        if (permission === 'denied') setReason('no-permission');
+        if (needsMicrophoneAsk(permission)) setReason('no-permission');
         else
           setReason((current) =>
             current === 'no-permission' ? null : current,
@@ -677,6 +717,7 @@ export function useVoiceConversation({
       run.current.isCancelled = true;
       window.clearTimeout(run.current.quietId);
       window.clearTimeout(run.current.holdId);
+      window.clearTimeout(run.current.showId);
       run.current.cancelListening?.();
       pauseOnHide.current();
       queueRef.current?.clear();
@@ -812,6 +853,8 @@ export function useVoiceConversation({
     isFollowUpOpen,
     /** Listening has started but the model on the device is still getting ready, so nothing is being heard yet. */
     isPreparing,
+    /** A tapped listen is under way but not yet shown as listening, while a refusal could still come back at once. */
+    isStarting,
     stop,
     cancel,
     speak,
