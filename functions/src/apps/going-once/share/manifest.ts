@@ -8,6 +8,8 @@ export const GOING_ONCE_SHARES: SourceShares = {
       id: 'app:going-once',
       kind: 'firstPartyApp',
       contractVersion: 1,
+      about:
+        "Going Once is the person's app for selling their belongings: a sale holds things for sale, each marked available, pending or sold, and buyers collect what they bought.",
       transformVersion: 1,
       categories: [
         {
@@ -15,6 +17,8 @@ export const GOING_ONCE_SHARES: SourceShares = {
           kind: 'event',
           label: 'Pickups',
           detail: 'The thing and the day',
+          meaning:
+            "Things a buyer has agreed to buy and will collect on a set day, each from one of the person's sales.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -34,6 +38,8 @@ export const GOING_ONCE_SHARES: SourceShares = {
           kind: 'project',
           label: 'Your sales',
           detail: 'Each sale and how many are available, pending and sold',
+          meaning:
+            "The person's open sales, each a group of things they are letting go of, with how many are still available, pending or sold.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -71,6 +77,8 @@ export const GOING_ONCE_SHARES: SourceShares = {
           id: 'things',
           kind: 'artifact',
           label: 'Your things',
+          meaning:
+            'The belongings the person has put up for sale, each with its asking price.',
           detail: "What's for sale and its asking price",
           mode: 'sync',
           isOnAtConnect: true,

@@ -32,6 +32,8 @@ import {
   setFactsFailed,
   setStyle,
   setStyleFailed,
+  setAssistants,
+  setAssistantsFailed,
   setKeyDateIndex,
   setKeyDateIndexFailed,
   setKeyStatus,
@@ -89,6 +91,7 @@ import { startTopicsListener } from '@apps/helm/store/listeners/topicListener';
 import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
 import { startPlanDaysListener } from '@apps/helm/store/listeners/planDayListener';
+import { startAssistantsListener } from '@apps/helm/store/listeners/assistantListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import {
   startOpenTasksListener,
@@ -220,6 +223,14 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
           dispatch(setProfile({ uid, profile }));
         },
         (error) => console.error('Helm profile listener failed', error),
+      ),
+      startAssistantsListener(
+        uid,
+        (assistants) => dispatch(setAssistants(assistants)),
+        (error) => {
+          console.error('Helm connected assistants listener failed', error);
+          dispatch(setAssistantsFailed());
+        },
       ),
     );
     return () => {

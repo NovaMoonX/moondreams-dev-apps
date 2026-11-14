@@ -13,6 +13,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useAppSelector } from '@/store';
 import {
   ASSISTANT_TONES,
   DEFAULT_ASSISTANT_NAME,
@@ -45,6 +46,8 @@ function AssistantForm({
   const fieldId = useId();
   const savedName = useAssistantName();
   const savedTone = useAssistantTone();
+  const assistants = useAppSelector((state) => state.helm.assistants.items);
+  const hasClaude = assistants.some((entry) => entry.name === 'Claude');
   const [text, setText] = useState(
     savedName === DEFAULT_ASSISTANT_NAME ? '' : savedName,
   );
@@ -78,9 +81,22 @@ function AssistantForm({
   return (
     <div className='space-y-5'>
       <div className='space-y-1.5'>
-        <label htmlFor={`${fieldId}-name`} className='text-sm font-medium'>
-          {HELM_COPY.assistantNameLabel}
-        </label>
+        <div className='flex min-h-7 items-center justify-between gap-3'>
+          <label htmlFor={`${fieldId}-name`} className='text-sm font-medium'>
+            {HELM_COPY.assistantNameLabel}
+          </label>
+          {text !== '' && nextName !== DEFAULT_ASSISTANT_NAME && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className='relative -mr-2 after:absolute after:inset-x-0 after:-inset-y-1.5'
+              onClick={() => change('', tone)}
+            >
+              {HELM_COPY.assistantUseDefault(DEFAULT_ASSISTANT_NAME)}
+            </Button>
+          )}
+        </div>
         <Input
           id={`${fieldId}-name`}
           variant='outline'
@@ -92,20 +108,14 @@ function AssistantForm({
           onChange={(event) => change(event.target.value, tone)}
         />
         {isNameValid && (
-          <p className='text-muted-foreground text-[13px] text-pretty'>
-            {HELM_COPY.assistantNameHint}
-          </p>
-        )}
-        {text !== '' && (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className='-ml-2'
-            onClick={() => change('', tone)}
+          <p
+            className='text-muted-foreground text-[13px] text-pretty'
+            role='status'
           >
-            {HELM_COPY.assistantUseDefault(DEFAULT_ASSISTANT_NAME)}
-          </Button>
+            {assistants.length > 0 && nextName !== savedName
+              ? HELM_COPY.assistantRenameConnected(nextName, hasClaude)
+              : HELM_COPY.assistantNameHint}
+          </p>
         )}
       </div>
       <div className='space-y-2'>

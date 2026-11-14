@@ -908,6 +908,74 @@ export const HELM_COPY = {
   connectedAppsFailed:
     "Your connections didn't open. Close this page and open it again.",
   connectedAppsLoading: 'Opening your connections',
+  assistantsRowTitle: 'Connected assistants',
+  assistantsRowNone: 'Claude, Gemini and others',
+  assistantsRowCount: (count: number) => `${count} connected`,
+  assistantsLead: (app: string) =>
+    `Claude, Gemini or another assistant can read your ${app} and, if you let it, add to it. What it reads goes to that company and is handled under its own terms.`,
+  assistantsFailed:
+    "Your assistants didn't open. Close this page and open it again.",
+  assistantsLoading: 'Opening your assistants',
+  assistantsListHeading: 'Connected',
+  assistantLastUsed: (when: string) => `Last used ${when}`,
+  assistantNeverUsed: 'Not used yet',
+  assistantReads: 'Can look up your tasks, calendar, topics and procedures',
+  assistantReadScopeLabels: {
+    mail: 'Read Gmail',
+    drive: 'Read Google Drive',
+    apps: 'Read your apps',
+  },
+  assistantReadScopeHint: (
+    scope: 'mail' | 'drive' | 'apps',
+    name: string,
+    app: string,
+    { isOn, canWrite }: { isOn: boolean; canWrite: boolean },
+  ) =>
+    ({
+      mail: isOn
+        ? `${name} can search and read your email when you ask. ${canWrite ? 'A message from someone else could try to steer what it adds.' : 'Emails come from other people, so read them with care.'}`
+        : `${name} can't see your email.`,
+      drive: isOn
+        ? `${name} can search and read your Drive files when you ask. ${canWrite ? 'A file from someone else could try to steer what it adds.' : 'Files can come from other people, so read them with care.'}`
+        : `${name} can't see your Drive files.`,
+      apps: isOn
+        ? `${name} can look up what your apps share with ${app}, including copies ${app} keeps after an app is disconnected.`
+        : `${name} can't see what your apps share.`,
+    })[scope],
+  assistantWrites: (app: string) => `Add things to ${app}`,
+  assistantWritesHint: (canWrite: boolean) =>
+    canWrite
+      ? 'Asks questions and adds tasks and notes. Undo anything in Activity.'
+      : 'It can look things up, nothing more.',
+  assistantPrivacy: (name: string) =>
+    `What ${name} reads goes to the company behind it, under its own terms.`,
+  assistantConnectedOn: (date: string) => `Connected ${date}`,
+  assistantDisconnect: 'Disconnect',
+  assistantDisconnectTitle: (name: string) => `Disconnect ${name}?`,
+  assistantDisconnectBody: (name: string, app: string) =>
+    `${name} stops reading and adding to your ${app} right away. What it already added stays, and you can still undo it in Activity.`,
+  assistantUpdateFailed: "That didn't save. Try again.",
+  assistantDisconnectFailed: "That didn't disconnect. Try again.",
+  assistantDisconnected: (name: string) => `Disconnected ${name}`,
+  assistantFrom: (name: string) => `From ${name}`,
+  assistantsConnectHeading: 'Connect an assistant',
+  assistantsAddressLabel: (app: string) => `Your ${app}'s address`,
+  assistantsAddress: 'https://apps.moondreams.dev/mcp/helm',
+  assistantsCopyAddress: 'Copy address',
+  assistantsClaudeHeading: 'Claude',
+  assistantsClaudeSteps: (name: string) => [
+    'Open Customize, then Connectors.',
+    'Tap Add, then Add custom connector.',
+    `Name it ${name}, paste the address and tap Connect. The free plan can add one connector.`,
+  ],
+  assistantsGeminiHeading: 'Gemini',
+  assistantsGeminiSteps: [
+    "Go to gemini.google.com (it works in your phone's browser too).",
+    'Open Settings, then Connected Apps, then Add a custom app.',
+    'Paste the address. Gemini needs its Keep Activity setting on, and asks you to confirm each change it makes.',
+  ],
+  assistantsAfterConnect: (name: string) =>
+    `Once it connects, it shows up here. Try "ask ${name} what is on my list today".`,
   connectSheetTitle: 'Connect an app',
   connectQuestion: (name: string, app: string) => `Let ${name} read ${app}?`,
   connectStartsTicked: (labels: string, count: number) =>
@@ -1516,9 +1584,12 @@ export const HELM_COPY = {
   assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
   assistantNameLabel: 'Name',
   assistantNameHint:
-    'Up to 16 letters, numbers, spaces, hyphens or apostrophes. With Hey on in Voice service, it is also the name you say.',
-  assistantNameError: 'Letters, numbers, spaces, hyphens or apostrophes only.',
-  assistantUseDefault: (name: string) => `Use the default name (${name})`,
+    "With Hey on in Voice service, it's also the name you say.",
+  assistantRenameConnected: (name: string, hasClaude: boolean) =>
+    `Connected assistants use ${name} from their next chat.${hasClaude ? ' Rename the connector in Claude to match.' : ''}`,
+  assistantNameError:
+    'Up to 16 letters, numbers, spaces, hyphens or apostrophes.',
+  assistantUseDefault: (name: string) => `Use ${name}`,
   assistantToneLabel: 'How it answers',
   assistantToneHint:
     'Shapes its written answers. Names, dates and what it files never change.',

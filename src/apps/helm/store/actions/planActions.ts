@@ -121,6 +121,7 @@ export async function generatePlan(
     const execution: Execution = {
       captureId: null,
       actor: 'nomos',
+      via: null,
       category: 'plan',
       autonomyLevel: 1,
       state: 'proposed',
@@ -282,6 +283,7 @@ export async function setCurrentPlace(
   const execution: Execution = {
     captureId: null,
     actor: 'person',
+    via: null,
     category: 'organize',
     autonomyLevel: 1,
     state: 'succeeded',

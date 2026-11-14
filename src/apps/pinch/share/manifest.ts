@@ -7,6 +7,8 @@ export const PINCH_SHARES: SourceShares = {
       id: 'app:pinch',
       kind: 'firstPartyApp',
       contractVersion: 1,
+      about:
+        "Pinch is the person's kitchen planner: their recipes, the meals they plan on a calendar, their shopping list and the food they have on hand.",
       transformVersion: 1,
       categories: [
         {
@@ -14,6 +16,8 @@ export const PINCH_SHARES: SourceShares = {
           kind: 'event',
           label: 'Planned meals',
           detail: 'The meal, day and slot',
+          meaning:
+            'Meals the person plans to cook or eat, each on a day in a slot such as breakfast, lunch or dinner.',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -32,6 +36,8 @@ export const PINCH_SHARES: SourceShares = {
           kind: 'task',
           label: 'Shopping list',
           detail: "What's still to buy",
+          meaning:
+            'Ingredients the person still needs to buy, with how much of each.',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -46,6 +52,8 @@ export const PINCH_SHARES: SourceShares = {
           kind: 'task',
           label: 'Food to use soon',
           detail: 'What in the fridge, freezer or pantry is near its date',
+          meaning:
+            "Food in the person's fridge, freezer or pantry that is close to its date and should be used soon.",
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -64,6 +72,8 @@ export const PINCH_SHARES: SourceShares = {
           id: 'pantryStock',
           kind: 'artifact',
           label: 'Pantry, fridge and freezer stock',
+          meaning:
+            'All the food the person has on hand in their pantry, fridge and freezer.',
           detail: 'Everything you have on hand, not only what is near its date',
           mode: 'sync',
           isOnAtConnect: false,
@@ -91,6 +101,8 @@ export const PINCH_SHARES: SourceShares = {
           id: 'recipes',
           kind: 'artifact',
           label: 'Recipes',
+          meaning:
+            "The person's saved recipes, each with how many it serves, how long it takes and what kind of dish it is.",
           detail: 'Each recipe with its servings, time and kind of dish',
           mode: 'sync',
           isOnAtConnect: true,
@@ -118,6 +130,8 @@ export const PINCH_SHARES: SourceShares = {
           id: 'savedMeals',
           kind: 'artifact',
           label: 'Saved meals',
+          meaning:
+            'Meals the person saved to plan again, each a plate of recipes or foods eaten together.',
           detail: 'Each saved meal and what is on its plate',
           mode: 'sync',
           isOnAtConnect: true,

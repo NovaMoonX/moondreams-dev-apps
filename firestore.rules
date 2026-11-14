@@ -1196,6 +1196,11 @@ service cloud.firestore {
       allow read: if isUser(uid);
     }
 
+    // The assistants a person connected over MCP: only they read the list; the callables and the MCP server write it. `mcpServer/` has no match: server only.
+    match /mcpClients/{uid}/clients/{clientKey} {
+      allow read: if isUser(uid);
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if isUser(userId);

@@ -262,9 +262,9 @@ const MIN_RESTART_MS = 22_000;
 const SETTLE_QUIET_MS = 1_000;
 const SETTLE_MAX_MS = 3_000;
 
-type SortMode = 'full' | 'rest';
+export type SortMode = 'full' | 'rest';
 
-interface SortResult {
+export interface SortResult {
   status: 'sorted' | 'received' | 'failed' | 'needsYou';
   executionId: string | null;
   releasedIds: string[];
@@ -297,7 +297,7 @@ const readAnswered = (stored: unknown, captureId: string) => {
     : null;
 };
 
-interface CaptureDoc {
+export interface CaptureDoc {
   status: string;
   attempts?: number;
   claimId?: string | null;
@@ -310,6 +310,8 @@ interface CaptureDoc {
   turnIndex?: number;
   turnLeadId?: string | null;
   inputMode?: string;
+  medium?: 'web' | 'mcp';
+  via?: string | null;
   attachmentIds?: string[];
   route?: Route | null;
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
@@ -373,7 +375,7 @@ const readApiKey = () => {
   }
 };
 
-const readLiveGrants = (firestore: Firestore, uid: string) =>
+export const readLiveGrants = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listLiveGrants }) => listLiveGrants(firestore, uid, 'helm'))
     .catch((error): LiveGrant[] => {
@@ -383,7 +385,7 @@ const readLiveGrants = (firestore: Firestore, uid: string) =>
       return [];
     });
 
-const readSiteGrants = (firestore: Firestore, uid: string) =>
+export const readSiteGrants = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listSiteLiveGrants }) =>
       listSiteLiveGrants(firestore, uid, 'helm'),
@@ -395,7 +397,7 @@ const readSiteGrants = (firestore: Firestore, uid: string) =>
       return [];
     });
 
-const readOffCategories = (firestore: Firestore, uid: string) =>
+export const readOffCategories = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listSiteOffCategories }) =>
       listSiteOffCategories(firestore, uid, 'helm'),
@@ -1557,7 +1559,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
 
   const readJoined = async (): Promise<
-    JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean }
+    JoinedRead & {
+      messages: JoinedMessage[];
+      isSpoken: boolean;
+      isOutside: boolean;
+    }
   > => {
     const lead = (await claimed.captureRef.get()).data() as
       CaptureDoc | undefined;
@@ -1596,6 +1602,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ids: mode === 'rest' ? [] : joined.map((snapshot) => snapshot.id),
       joinedCount: listed.length,
       messages: [leadMessage, ...messages],
+      isOutside: lead?.medium === 'mcp',
       // A turn is spoken when any of its messages was, so a spoken message joined behind a typed one still hears its reply.
       isSpoken:
         lead?.inputMode === 'voice' ||
@@ -1606,7 +1613,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   };
 
   const run = async (
-    read: JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean },
+    read: JoinedRead & {
+      messages: JoinedMessage[];
+      isSpoken: boolean;
+      isOutside: boolean;
+    },
     signal: AbortSignal,
     isRestart: boolean,
   ) => {
@@ -1807,8 +1818,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             isNamedIn(combined.text, procedure.title),
         ));
     const provider = pickProvider(combined.text, combined.reading);
-    const isAsking = mode !== 'rest' && isQuestion(combined.text.trim());
-    const [liveGrants, siteGrants, offCategories] = isAsking
+    // An outside assistant's answer leaves Helm, and the person granted mail, documents and app records to Helm alone.
+    const isLiveReadOffered =
+      mode !== 'rest' && !read.isOutside && isQuestion(combined.text.trim());
+    const [liveGrants, siteGrants, offCategories] = isLiveReadOffered
       ? await Promise.all([
           readLiveGrants(firestore, uid),
           readSiteGrants(firestore, uid),
@@ -3070,9 +3083,9 @@ async function writeResult(
         });
       }
       if (home) transaction.update(firestore.doc(base), home.data);
-      transaction.create(
-        executionRef,
-        buildExecution(
+      transaction.create(executionRef, {
+        via: capture.via ?? null,
+        ...buildExecution(
           { ...plan, questions },
           {
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
@@ -3099,7 +3112,7 @@ async function writeResult(
             timeZone,
           },
         ),
-      );
+      });
     }
     plan.mediaLetGo.forEach(({ id, data }) =>
       transaction.update(firestore.doc(`${base}/media/${id}`), data),
@@ -3125,9 +3138,9 @@ async function writeResult(
           })
         : null;
       if (factWrite) transaction.create(factRef, factWrite.data);
-      transaction.create(
-        answerExecutionRef,
-        buildAnswerExecution({
+      transaction.create(answerExecutionRef, {
+        via: capture?.via ?? null,
+        ...buildAnswerExecution({
           captureId: captureRef.id,
           answer: reply.answer,
           spoken: spokenLine,
@@ -3136,7 +3149,7 @@ async function writeResult(
           fact: factWrite,
           notDone: [...noted.refused, ...liveRefused],
         }),
-      );
+      });
     }
     const quietLine = isStale
       ? ALREADY_ANSWERED_LINE
@@ -3355,8 +3368,24 @@ async function sortRequest(request: CallableRequest): Promise<SortResult> {
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
   }
+  return runHelmSort({ uid, ...readInput(request.data) });
+}
+
+/** Sorts one received turn for a person: the callable's whole body, also run for a turn an outside assistant files. */
+export async function runHelmSort({
+  uid,
+  captureId,
+  requestKey,
+  mode,
+  noteIds,
+}: {
+  uid: string;
+  captureId: string;
+  requestKey: string;
+  mode: SortMode;
+  noteIds: string[];
+}): Promise<SortResult> {
   const startedAt = Date.now();
-  const { captureId, requestKey, mode, noteIds } = readInput(request.data);
   const firestore = getFirestore();
   const captureRef = firestore.doc(
     `apps/helm/users/${uid}/captures/${captureId}`,

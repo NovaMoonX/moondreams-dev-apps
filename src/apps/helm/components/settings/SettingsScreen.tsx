@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import {
+  Bot,
   Eye,
   History,
   Link2,
@@ -19,6 +20,7 @@ import {
 import { signOutEverywhere } from '@/lib/security/trustedBrowsers';
 import ColoursSection from '@apps/helm/components/settings/ColoursSection';
 import SettingsSection from '@apps/helm/components/settings/SettingsSection';
+import GatesClosedNote from '@/components/GatesClosedNote';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
 import NewBadge from '@/components/NewBadge';
 import SettingsRow from '@/components/SettingsRow';
@@ -31,6 +33,7 @@ import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useNow } from '@/hooks/useNow';
 import { hasUnseenNews } from '@/lib/connections/connectionNews';
 import { useConnections } from '@/lib/connections/useConnections';
@@ -50,6 +53,7 @@ interface SettingsScreenProps {
   onBack: () => void;
   onOpenActivity: () => void;
   onOpenConnectedApps: () => void;
+  onOpenAssistants: () => void;
   onOpenSeesYou: () => void;
 }
 
@@ -58,6 +62,7 @@ function SettingsScreen({
   onBack,
   onOpenActivity,
   onOpenConnectedApps,
+  onOpenAssistants,
   onOpenSeesYou,
 }: SettingsScreenProps) {
   const { user, logOut } = useAuth();
@@ -76,6 +81,10 @@ function SettingsScreen({
   const keptCount = allGrants.reduce(
     (total, grant) => total + (grant.keptCopies?.count ?? 0),
     0,
+  );
+  const isAssistantsOpen = useIsGateOpen('helm', 'helm-assistants');
+  const assistantCount = useAppSelector(
+    (state) => state.helm.assistants.items.length,
   );
   const now = useNow(60_000);
   const newestOkAt = grants.reduce<number | null>((newest, grant) => {
@@ -150,6 +159,19 @@ function SettingsScreen({
             onClick={onOpenConnectedApps}
             hasChevron
           />
+          {isAssistantsOpen && (
+            <SettingsRow
+              icon={<Bot className='size-5' aria-hidden='true' />}
+              title={HELM_COPY.assistantsRowTitle}
+              description={
+                assistantCount > 0
+                  ? HELM_COPY.assistantsRowCount(assistantCount)
+                  : HELM_COPY.assistantsRowNone
+              }
+              onClick={onOpenAssistants}
+              hasChevron
+            />
+          )}
           <ShiftCalendars onOpenConnectedApps={onOpenConnectedApps} />
         </SettingsSection>
         <SettingsSection title={HELM_COPY.settingsVoice}>
@@ -213,6 +235,7 @@ function SettingsScreen({
           />
           <DeleteHelmData connectionCount={grants.length} />
         </SettingsSection>
+        <GatesClosedNote appId='helm' />
       </main>
       <AssistantNameToneSheet
         isOpen={isAssistantOpen}

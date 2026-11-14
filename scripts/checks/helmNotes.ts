@@ -429,6 +429,7 @@ const asOpen = (
 ): OpenExecution => ({
   id: 'exec-1',
   said: null,
+  via: null,
   captureId: 'c1',
   actor: 'nomos',
   category: 'remember',
