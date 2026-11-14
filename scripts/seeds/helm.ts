@@ -4597,7 +4597,7 @@ async function buildPeople(input: {
     dateOf('seed-date-dana-birthday', 'seed-who-dana', {
       kind: 'birthday',
       label: null,
-      year: null,
+      year: 1992,
       daysAhead: 2,
     }),
     dateOf('seed-date-miso-gotcha', 'seed-who-miso', {

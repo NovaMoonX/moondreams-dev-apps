@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { Trash2 } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -190,20 +191,20 @@ function WhoKinForm({ who, onClose, requestClose, onDirtyChange }: FormProps) {
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.kinHelp}
       </p>
+      {who.kin && (
+        <Button
+          type='button'
+          variant='tertiary'
+          className='text-destructive! w-full'
+          onClick={() => void write(null)}
+          disabled={isSaving}
+        >
+          <Trash2 className='size-4' aria-hidden='true' />
+          {HELM_COPY.kinRemove}
+        </Button>
+      )}
       <ModalFooterActions
         note={note}
-        leftActions={
-          who.kin && (
-            <Button
-              type='button'
-              variant='tertiary'
-              onClick={() => void write(null)}
-              disabled={isSaving}
-            >
-              {HELM_COPY.kinRemove}
-            </Button>
-          )
-        }
         cancelAction={
           <Button
             type='button'

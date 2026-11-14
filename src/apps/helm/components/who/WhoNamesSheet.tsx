@@ -30,6 +30,7 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
   const [note, setNote] = useState<string | null>(null);
   const [isWriting, setIsWriting] = useState(false);
   const people = useAppSelector((state) => state.helm.who.items);
+  const selfWhoId = useAppSelector((state) => state.helm.profile?.selfWhoId);
   const others = people.filter(
     (entry) => entry.id !== who.id && !entry.isUnreadable,
   );
@@ -65,6 +66,13 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
     return false;
   };
 
+  const selfWho = people.find((entry) => entry.id === selfWhoId);
+  const selfWord = selfWho
+    ? [...selfWho.name.split(/\s+/), ...selfWho.aliases].find(
+        (word) => toComparable(word) === toComparable(text),
+      )
+    : undefined;
+
   const takenBy = (alias: string) =>
     others.find((other) =>
       [other.name, ...other.aliases].some(
@@ -85,6 +93,10 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
     }
     if (who.aliases.length >= MAX_ALIASES) {
       setNote(HELM_COPY.aliasFull(MAX_ALIASES));
+      return;
+    }
+    if (selfWord && who.id !== selfWhoId) {
+      setNote(HELM_COPY.aliasIsYou(alias));
       return;
     }
     const other = takenBy(alias);
@@ -177,15 +189,19 @@ function WhoNamesSheet({ isOpen, onClose, who }: WhoNamesSheetProps) {
               type='submit'
               variant='secondary'
               size='sm'
+              className="relative after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
               loading={isWriting}
               disabled={text.trim() === ''}
             >
               {HELM_COPY.aliasAdd}
             </Button>
           </div>
-          <p className='text-muted-foreground text-[13px] text-pretty'>
-            {note ?? HELM_COPY.aliasHelp}
-          </p>
+          {(note ??
+            (who.aliases.length === 0 ? HELM_COPY.aliasHelp : null)) && (
+            <p className='text-muted-foreground text-[13px] text-pretty'>
+              {note ?? HELM_COPY.aliasHelp}
+            </p>
+          )}
         </form>
         <div className='flex justify-end'>
           <Button type='button' onClick={onClose}>

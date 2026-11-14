@@ -36,6 +36,8 @@ import { getWhoLine } from '@apps/helm/utils/whoGroups';
 export interface SearchWhen {
   timeZone: string;
   now: number;
+  /** What was typed, so a person found through a nickname says which one. */
+  query?: string;
 }
 
 /** Every date row in one style: "Nov 13", "Nov 17, 2015", "Jun 2020", "2015". */
@@ -218,15 +220,29 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
 
   const people = who.map<SearchEntry>((entry, index) => ({
     id: entry.id,
-    describe: () => ({
-      title: entry.name,
-      line:
-        getWhoLine(entry, {
-          you: HELM_COPY.youLabel,
-          pet: HELM_COPY.petKindFallback,
-          organization: HELM_COPY.organizationKindFallback,
-        }) || HELM_COPY.whoKindPerson,
-    }),
+    describe: (when) => {
+      const words = toComparable(when?.query ?? '')
+        .split(' ')
+        .filter(Boolean);
+      const isNamed = words.every((word) =>
+        whoTexts[index].titleText.includes(word),
+      );
+      const alias = isNamed
+        ? undefined
+        : entry.aliases.find((name) =>
+            words.some((word) => toComparable(name).includes(word)),
+          );
+      return {
+        title: entry.name,
+        line: alias
+          ? HELM_COPY.searchAlsoCalled(alias)
+          : getWhoLine(entry, {
+              you: HELM_COPY.youLabel,
+              pet: HELM_COPY.petKindFallback,
+              organization: HELM_COPY.organizationKindFallback,
+            }) || HELM_COPY.whoKindPerson,
+      };
+    },
     ...whoTexts[index],
     target: { kind: 'view', view: 'who', id: entry.id },
     mark: { kind: 'who', who: entry },
