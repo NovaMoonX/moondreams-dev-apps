@@ -2,10 +2,15 @@ import { useState, type ReactNode } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Contact, FolderOpen, Mail } from 'lucide-react';
+import { Contact } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
-import { GoogleCalendarMark } from '@/components/BrandMarks';
+import {
+  GmailMark,
+  GoogleCalendarMark,
+  GoogleDriveMark,
+  GoogleMark,
+} from '@/components/BrandMarks';
 import ConnectedSourcesList from '@/components/ConnectedSourcesList';
 import SectionHeader from '@/components/SectionHeader';
 import { grantConnection } from '@/lib/connections/connectionCalls';
@@ -60,13 +65,8 @@ const serviceLogo = (icon: ReactNode) => (
   </span>
 );
 
-const googleLogo = (
-  <span
-    className={join(LOGO, 'bg-muted flex shrink-0 items-center justify-center')}
-  >
-    <GoogleCalendarMark className='size-8' />
-  </span>
-);
+const BRAND = 'size-8';
+const googleLogo = serviceLogo(<GoogleMark className='size-7' />);
 
 const ICON = 'text-muted-foreground size-5';
 
@@ -76,17 +76,17 @@ const GOOGLE_SERVICES: Record<
 > = {
   'google:calendar': {
     name: HELM_COPY.googleCalendarName,
-    logo: googleLogo,
+    logo: serviceLogo(<GoogleCalendarMark className={BRAND} />),
     order: 0,
   },
   'google:gmail': {
     name: HELM_COPY.googleGmailName,
-    logo: serviceLogo(<Mail className={ICON} aria-hidden='true' />),
+    logo: serviceLogo(<GmailMark className={BRAND} />),
     order: 1,
   },
   'google:drive': {
     name: HELM_COPY.googleDriveRowName,
-    logo: serviceLogo(<FolderOpen className={ICON} aria-hidden='true' />),
+    logo: serviceLogo(<GoogleDriveMark className={BRAND} />),
     order: 2,
   },
   'google:contacts': {
