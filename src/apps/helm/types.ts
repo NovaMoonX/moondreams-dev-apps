@@ -81,7 +81,7 @@ export interface HelmProfile {
   styleLearnedThroughAt: number | null;
   /** When the person last started a new conversation; turns before it never carry into the next. Null until then, and on a profile from before. */
   conversationFreshAt: number | null;
-  /** Each day's first turn starts a new conversation, and earlier days fold away on home. */
+  /** Home folds sessions from before today under Show earlier, unless one is still open; never ends a conversation. */
   isDailyFreshOn: boolean;
   createdAt: number;
   lastEditedAt: number | null;

@@ -216,7 +216,7 @@ function HomeSurface({
   // Words typed while waiting carry over to the field once the key is here.
   const [typedWaiting, setTypedWaiting] = useState('');
   const outbox = useOutboxEntries(uid);
-  const { sessions, openSessionId, homeFrom } = useSession();
+  const { sessions, openSessionId, freshFrom, homeFrom } = useSession();
   const { isLoaded: isCapturesLoaded, isFailed: isCapturesFailed } =
     useAppSelector((state) => state.helm.recentCaptures);
   const hasTurns = sessions.length > 0;
@@ -313,7 +313,7 @@ function HomeSurface({
         )}
         {hasTurns && (
           <ConversationThread
-            key={homeFrom}
+            key={freshFrom}
             sessions={sessions}
             openSessionId={openSessionId}
             scroll='window'

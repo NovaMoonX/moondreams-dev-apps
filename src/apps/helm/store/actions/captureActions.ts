@@ -282,7 +282,7 @@ export const dismissQuestion = (
   isLastOpen: boolean,
 ) => {
   const now = Date.now();
-  const capture = selectAllCaptures(store.getState()).find(
+  const capture = selectEveryCapture(store.getState()).find(
     (entry) => entry.id === captureId,
   );
   // Not a transaction: a server write adding a question to this turn in the same instant is a rare race, accepted.

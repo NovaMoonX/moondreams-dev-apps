@@ -499,7 +499,7 @@ export const HELM_COPY = {
   dailyFreshDescription:
     "Home starts each day clear. Earlier days stay under Show earlier.",
   dailyFreshFailed: "Couldn't save that. Check your connection.",
-  newConversationStarted: 'New conversation. Earlier turns are under Earlier.',
+  newConversationStarted: 'New conversation. Earlier turns are under Show earlier.',
   newConversationFailed:
     "Couldn't start a new conversation. Check your connection.",
   talk: 'Talk',
