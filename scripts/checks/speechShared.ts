@@ -402,7 +402,25 @@ assert.deepEqual(
   { kind: 'finish', position: 'end', rest: 'eggs and milk' },
   'a finish after content leaves the content',
 );
+assert.deepEqual(
+  readClose('add milk. thank you'),
+  { kind: 'finish', position: 'end', rest: 'add milk' },
+  'a finish after a sentence break',
+);
+assert.deepEqual(
+  readClose('thanks, Zoë', ['Zoe']),
+  finishWhole,
+  'an accent in a name',
+);
+assert.deepEqual(
+  readClose("thanks, D'Arcy", ['darcy']),
+  finishWhole,
+  'an apostrophe in a name',
+);
 [
+  'tell Sam thank you',
+  'mark the laundry all done',
+  'the movie is all done',
   'remind me to cancel',
   'tell him to stop',
   'stop suggesting that',

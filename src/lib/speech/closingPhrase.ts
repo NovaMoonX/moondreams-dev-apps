@@ -64,6 +64,7 @@ const CUES = [
   'on second thought',
   'scratch that',
 ];
+const ANYWHERE_FINISH = ["that's all", "that's it", "that's everything"];
 const MAX_END_WORDS = 2;
 const GAP = '[\\s,.!?;:-]+';
 const TAIL = '[\\s,.!?;:\\u2026-]*';
@@ -85,22 +86,41 @@ const toAlternation = (phrases: readonly string[]) =>
     .map(toWordsPattern)
     .join('|');
 
+const foldChar = (char: string) => {
+  const base = char.normalize('NFD').replace(/\p{M}/gu, '');
+  return base.length === char.length ? base : char;
+};
+
+/** Same length as the text, so a match index in it is an index in the person's own words. */
+const fold = (text: string) => Array.from(text, foldChar).join('');
+
+const toNamePattern = (name: string) =>
+  Array.from(
+    fold(name)
+      .toLowerCase()
+      .replace(/['’\s]+/g, (gap) => (/\s/.test(gap) ? ' ' : '')),
+  )
+    .map((char) => (char === ' ' ? GAP : `${escapeRegExp(char)}['’]?`))
+    .join('');
+
 const countWords = (phrase: string) => toPlainText(phrase).split(' ').length;
 
 const clean = (text: string) => text.replace(/[\s,;:-]+$/, '').trim();
 
 /**
- * Reads whether the words end a conversation. The phrase may follow up to two fillers ("oh", "okay", "no") and be followed by a name in `extra` ("thanks, Robin"); it is the whole turn, or closes words before it: a dismiss phrase of two or more words after a retraction ("actually", "wait", "scratch that") or a sentence break, a finish phrase after anything. A one-word phrase ("cancel", "stop", "thanks") counts only as the whole turn, so "remind me to cancel" is a request. Null otherwise.
+ * Reads whether the words end a conversation. The phrase may follow up to two fillers ("oh", "okay", "no") and be followed by a name in `extra` ("thanks, Robin"); it is the whole turn, or closes words before it: a dismiss phrase of two or more words after a retraction ("actually", "wait", "scratch that") or a sentence break, a finish phrase after a sentence break, a comma or a retraction, except "that's all", "that's it" and "that's everything", which may follow anything ("tell Sam thank you" is a request). Accents and apostrophes in a name never matter. A one-word phrase ("cancel", "stop", "thanks") counts only as the whole turn, so "remind me to cancel" is a request. Null otherwise.
  */
 export const readClosingPhrase = (
   text: string,
   { extra = [] }: { extra?: readonly string[] } = {},
 ): ClosingRead | null => {
-  const trimmed = text.trim();
-  if (trimmed === '') return null;
-  const names = extra.map(toPlainText).filter((name) => name !== '');
-  const namePart =
-    names.length > 0 ? `(?:${GAP}(?:${toAlternation(names)}))?` : '';
+  const original = text.trim();
+  if (original === '') return null;
+  const trimmed = fold(original);
+  const names = extra
+    .map((name) => toNamePattern(name.trim()))
+    .filter((name) => name !== '');
+  const namePart = names.length > 0 ? `(?:${GAP}(?:${names.join('|')}))?` : '';
   const filler = `(?:(?:${FILLERS.join('|')})${GAP}){0,${MAX_END_WORDS}}`;
   const all = [...CLOSING_PHRASES.dismiss, ...CLOSING_PHRASES.finish];
   const isMatch = (pattern: string) => new RegExp(pattern, 'i').exec(trimmed);
@@ -124,15 +144,28 @@ export const readClosingPhrase = (
     )})${namePart}${TAIL}$`,
   );
   if (dismissEnd && clean(dismissEnd[1]) !== '') {
-    return { kind: 'dismiss', position: 'end', rest: clean(dismissEnd[1]) };
+    return {
+      kind: 'dismiss',
+      position: 'end',
+      rest: clean(original.slice(0, dismissEnd[1].length)),
+    };
   }
-  const finishEnd = isMatch(
-    `^(.+?)${GAP}(?:${toAlternation(
-      CLOSING_PHRASES.finish.filter((phrase) => countWords(phrase) > 1),
-    )})${namePart}${TAIL}$`,
+  const multiWord = CLOSING_PHRASES.finish.filter(
+    (phrase) => countWords(phrase) > 1,
   );
+  const finishEnd =
+    isMatch(
+      `^(.+?)(?:[.!?;,]+\\s*|${GAP}(?:${toAlternation(CUES)})${GAP})(?:${toAlternation(multiWord)})${namePart}${TAIL}$`,
+    ) ??
+    isMatch(
+      `^(.+?)${GAP}(?:${toAlternation(ANYWHERE_FINISH)})${namePart}${TAIL}$`,
+    );
   return finishEnd && clean(finishEnd[1]) !== ''
-    ? { kind: 'finish', position: 'end', rest: clean(finishEnd[1]) }
+    ? {
+        kind: 'finish',
+        position: 'end',
+        rest: clean(original.slice(0, finishEnd[1].length)),
+      }
     : null;
 };
 

@@ -346,12 +346,19 @@ function Composer({
     if (!canSend || !user) return;
     const { uid } = user;
     const sent = text;
-    if (!hasPhotos && (await voice.handleTyped(sent, screen))) {
-      changeText('');
-      setDismissed([]);
-      setFixedDays({});
-      setLastDrop(null);
-      return;
+    if (attachments.items.length === 0 && !hasPhotos) {
+      setIsSending(true);
+      const took = await voice
+        .handleTyped(sent, screen)
+        .finally(() => setIsSending(false));
+      if (took === 'kept') return;
+      if (took) {
+        changeText('');
+        setDismissed([]);
+        setFixedDays({});
+        setLastDrop(null);
+        return;
+      }
     }
     const attachmentIds = attachments.mediaIds;
     const sentChips = attachments.items;

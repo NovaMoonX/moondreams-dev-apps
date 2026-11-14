@@ -101,6 +101,7 @@ import {
 } from './nomos/buildContext.js';
 import {
   CLOSE_CONVERSATION_TOOL,
+  isShortEnoughToClose,
   FILE_RESULTS_TOOL,
   MENTION_KINDS,
   toReading,
@@ -2017,7 +2018,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     );
   }
 
-  if (mode === 'full' && loop.terminalName === CLOSE_CONVERSATION_TOOL.name) {
+  if (
+    mode === 'full' &&
+    loop.terminalName === CLOSE_CONVERSATION_TOOL.name &&
+    isShortEnoughToClose(combined.text)
+  ) {
     return writeClose({ ...claimed, joinedIds: read.ids });
   }
 

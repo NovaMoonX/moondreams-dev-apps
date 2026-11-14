@@ -41,6 +41,7 @@ import {
 } from '@apps/helm/store/selectors/captureSelectors';
 import {
   canMakeTaskAsWritten,
+  isLeft,
   toTaskTitle,
 } from '@apps/helm/utils/heldCaptures';
 import { rankNotes } from '@apps/helm/utils/noteSearch';
@@ -98,6 +99,11 @@ export const rankStoredNotes = (text: string) => {
     topics.items,
   );
 };
+
+const sentHere = new Set<string>();
+
+/** Whether this tab wrote the turn, so a reaction to it (a close) never runs on a turn another device sent. */
+export const wasSentHere = (captureId: string) => sentHere.has(captureId);
 
 /** Seals what the person typed or said and starts writing it as a received turn; the write is handed back unawaited. The words are never edited afterwards. */
 export async function sendCapture(
@@ -188,6 +194,7 @@ export async function sendCapture(
     () => sortCapture(reference.id, 'full', turn.noteIds ?? []),
     () => undefined,
   );
+  sentHere.add(reference.id);
   return { write, id: reference.id };
 }
 
@@ -296,11 +303,20 @@ export function closeQuestions(
 }
 
 /** Undo of a close: the dropped questions stand again. */
-export function reopenQuestions(uid: string, left: QuestionRef[]) {
+export function reopenQuestions(
+  uid: string,
+  left: QuestionRef[],
+  skipped: QuestionRef[] = [],
+) {
   const batch = writeBatch(db);
   left.forEach(({ captureId, questionId }) =>
     batch.update(doc(capturesOf(uid), captureId), {
       [`questionState.${questionId}.leftAt`]: null,
+    }),
+  );
+  skipped.forEach(({ captureId, questionId }) =>
+    batch.update(doc(capturesOf(uid), captureId), {
+      [`questionState.${questionId}.skippedAt`]: null,
     }),
   );
   return batch.commit();
@@ -353,7 +369,9 @@ export async function retryCapture(
   // A new reading settles the turn afresh, so the question it leaves behind is closed.
   const closedQuestions = Object.fromEntries(
     Object.entries(capture.questionState)
-      .filter(([, question]) => question.answeredAt === null)
+      .filter(
+        ([, question]) => question.answeredAt === null && !isLeft(question),
+      )
       .map(([id]) => [`questionState.${id}.answeredAt`, now]),
   );
   const joined = selectAllCaptures(store.getState()).filter(
@@ -465,7 +483,7 @@ export async function makeTaskAsWritten(
     ),
   };
   const openQuestionIds = Object.entries(current.questionState)
-    .filter(([, question]) => question.answeredAt === null)
+    .filter(([, question]) => question.answeredAt === null && !isLeft(question))
     .map(([id]) => id);
   const questionFields = (answeredAt: number | null) =>
     Object.fromEntries(

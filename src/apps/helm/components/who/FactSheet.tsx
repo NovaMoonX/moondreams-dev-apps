@@ -23,7 +23,7 @@ import {
 } from '@apps/helm/store/actions/memoryActions';
 import { selectHeldItems } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenFact } from '@apps/helm/types';
-import { getOpenQuestions } from '@apps/helm/utils/heldCaptures';
+import { getOpenQuestions, isLeft } from '@apps/helm/utils/heldCaptures';
 import {
   getDisputePartner,
   getFactQuote,
@@ -142,7 +142,10 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
     const isLastOpen = !Object.entries(
       held.needsYou.find((item) => item.capture.id === captureId)?.capture
         .questionState ?? {},
-    ).some(([id, state]) => id !== entry.id && state.answeredAt === null);
+    ).some(
+      ([id, state]) =>
+        id !== entry.id && state.answeredAt === null && !isLeft(state),
+    );
     closeQuestion(user.uid, captureId, entry.id, isLastOpen).catch(
       (error: unknown) =>
         console.error('Helm settled question was not closed', error),

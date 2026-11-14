@@ -1,6 +1,7 @@
 import type { TerminalTool } from '../../../ai/modelProvider.js';
 import type { QuoteEntry } from './aliases.js';
 import type { SyncedCopy } from '../syncedCopies.js';
+import { toPlainText } from '../../../vendor/speechText.js';
 import { SENSITIVE_CATEGORIES } from './sensitive.js';
 import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
 import type { ModelChange } from '../topicWrite.js';
@@ -65,6 +66,12 @@ export const CLOSE_CONVERSATION_TOOL: TerminalTool = {
     },
   },
 };
+
+const MAX_CLOSE_WORDS = 8;
+
+/** A model's close is accepted only for a turn this short; a longer turn is filed as usual. */
+export const isShortEnoughToClose = (turnText: string) =>
+  toPlainText(turnText).split(' ').filter(Boolean).length <= MAX_CLOSE_WORDS;
 
 /** The kinds the reply may carry that change a topic; like a note, each is read from its own list and is no `NomosCommand`. */
 export const TOPIC_COMMAND_KINDS = [

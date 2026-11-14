@@ -50,6 +50,7 @@ import {
   type QuestionRef,
   rankStoredNotes,
   sendCapture,
+  wasSentHere,
   skipQuestion,
 } from '@apps/helm/store/actions/captureActions';
 import { VIEW_KINDS } from '@apps/helm/screen/views';
@@ -123,6 +124,7 @@ export function useHelmVoice() {
   const [needsMicrophone, setNeedsMicrophone] = useState(false);
   const [closed, setClosed] = useState<{
     left: QuestionRef[];
+    skipped: QuestionRef[];
     words: string[];
     hasDropped: boolean;
   } | null>(null);
@@ -189,6 +191,7 @@ export function useHelmVoice() {
     isOnDeviceReady: onDevice.isOn,
     identity: voiceIdentity,
     endPhrases: END_PHRASES,
+    readsClose: true,
     conversationIdleMs: SESSION_IDLE_MS,
     onUtterance: (text, heardBy) => {
       void handleUtterance(text, heardBy.sttProvider);
@@ -340,7 +343,10 @@ export function useHelmVoice() {
       return true;
     }
     if (turn.kind === 'close') {
-      await closeConversation(turn.close, isSpoken);
+      if (await closeConversation(turn.close, isSpoken)) return true;
+      // A typed close that was not written keeps its words in the field; a spoken one puts what was heard there.
+      if (!isSpoken) return 'kept' as const;
+      fieldWriter.current?.(text);
       return true;
     }
     if (!isSpoken) {
@@ -383,24 +389,34 @@ export function useHelmVoice() {
       } catch (error) {
         console.error('Helm close was not written', error);
         say(HELM_COPY.heldActionFailed);
-        return;
+        return false;
       }
     }
-    setClosed({
-      left: effects.left,
-      words: effects.dropWords,
-      hasDropped: effects.hasDropped,
-    });
+    const canPutWordsBack = fieldWriter.current !== null;
+    const words = canPutWordsBack ? effects.dropWords : [];
+    // A close that arrives while the last one's line is still showing joins it, so Undo takes back both.
+    setClosed((previous) => ({
+      left: [...(previous?.left ?? []), ...effects.left],
+      skipped: [...(previous?.skipped ?? []), ...effects.skipped],
+      words: [...(previous?.words ?? []), ...words],
+      hasDropped:
+        (previous?.hasDropped ?? false) ||
+        effects.left.length > 0 ||
+        words.length > 0,
+    }));
     window.clearTimeout(closedId.current);
     closedId.current = window.setTimeout(() => setClosed(null), CLOSED_MS);
+    return true;
   }
 
   async function undoClose() {
     if (!closed) return;
-    const { left, words } = closed;
+    const { left, skipped, words } = closed;
     window.clearTimeout(closedId.current);
     try {
-      if (uid && left.length > 0) await reopenQuestions(uid, left);
+      if (uid && left.length + skipped.length > 0) {
+        await reopenQuestions(uid, left, skipped);
+      }
       if (words.length > 0) fieldWriter.current?.(words.join(' '));
       setClosed(null);
     } catch (error) {
@@ -763,30 +779,43 @@ export function useHelmVoice() {
     onSettled.current();
   }, [captures, executionsById, failedIds, uid]);
 
-  // A turn the assistant's own reading closed ("ugh, doesn't matter") gets the same close as a phrase matched here, once, while it is fresh.
+  // A turn the assistant's own reading closed ("ugh, doesn't matter") gets the same close as a phrase matched here, once, and only when this tab sent it and it is still the newest turn of the open session.
   const appliedCloses = useRef(new Set<string>());
+  const hasSeenSnapshot = useRef(false);
   const applyClose = useRef(closeConversation);
   useEffect(() => {
     applyClose.current = closeConversation;
   });
   useEffect(() => {
+    const isFirst = !hasSeenSnapshot.current;
+    hasSeenSnapshot.current = true;
+    const now = Date.now();
+    const newest = captures.at(-1);
+    const openSessionId = getOpenSessionId(captures, now);
     const fresh = captures.filter(
       (capture) =>
-        capture.endedConversation &&
-        capture.sortedAt !== null &&
-        Date.now() - capture.sortedAt < CLOSE_FRESH_MS &&
-        !appliedCloses.current.has(capture.id),
+        capture.endedConversation && !appliedCloses.current.has(capture.id),
     );
     fresh.forEach((capture) => appliedCloses.current.add(capture.id));
-    fresh.forEach((capture) =>
-      queueMicrotask(
-        () =>
-          void applyClose.current(
-            { kind: 'dismiss', position: 'whole', rest: '' },
-            capture.inputMode === 'voice',
-          ),
-      ),
-    );
+    if (isFirst) return;
+    fresh
+      .filter(
+        (capture) =>
+          capture.sortedAt !== null &&
+          now - capture.sortedAt < CLOSE_FRESH_MS &&
+          wasSentHere(capture.id) &&
+          capture.id === newest?.id &&
+          capture.sessionId === openSessionId,
+      )
+      .forEach((capture) =>
+        queueMicrotask(
+          () =>
+            void applyClose.current(
+              { kind: 'dismiss', position: 'whole', rest: '' },
+              capture.inputMode === 'voice',
+            ),
+        ),
+      );
   }, [captures]);
 
   useEffect(

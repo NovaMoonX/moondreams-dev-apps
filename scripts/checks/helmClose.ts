@@ -4,6 +4,7 @@ import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts'
 import {
   CLOSE_CONVERSATION_TOOL,
   DELETING_COMMANDS as SERVER_DELETING_COMMANDS,
+  isShortEnoughToClose,
   type CaptureReading,
 } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
@@ -116,6 +117,41 @@ test('a phrase after a retraction closes the words before it', () => {
   const finish = readClosingPhrase("Buy stamps, that's all");
   assert.equal(finish?.kind, 'finish');
   assert.equal(finish?.rest, 'Buy stamps');
+});
+
+test('a finish phrase closes words only after a break, or when it is that is all', () => {
+  [
+    'tell Sam thank you',
+    'mark the laundry all done',
+    'the movie is all done',
+    'add milk thank you',
+  ].forEach((said) => assert.equal(readClosingPhrase(said), null, said));
+  assert.deepEqual(readClosingPhrase("add milk that's all"), {
+    kind: 'finish',
+    position: 'end',
+    rest: 'add milk',
+  });
+  assert.equal(readClosingPhrase('add milk. thank you')?.rest, 'add milk');
+  assert.equal(readClosingPhrase('add milk, thank you')?.rest, 'add milk');
+});
+
+test('a name with an accent or an apostrophe is still a name', () => {
+  assert.equal(
+    readClosingPhrase('thanks, Zoë', { extra: ['Zoe'] })?.position,
+    'whole',
+  );
+  assert.equal(
+    readClosingPhrase("thanks, D'Arcy", { extra: ['darcy'] })?.position,
+    'whole',
+  );
+  assert.equal(
+    readClosingPhrase('thanks, Zoe', { extra: ['Zoë'] })?.position,
+    'whole',
+  );
+  const read = readClosingPhrase("Café Ünï list. Thank you, D'Arcy", {
+    extra: ['darcy'],
+  });
+  assert.equal(read?.rest, 'Café Ünï list');
 });
 
 test('a question answer beats a close, and a close ends an unanswered one', () => {
@@ -274,6 +310,15 @@ test('the model closes through a tool that carries no command', () => {
   ).properties;
   assert.deepEqual(Object.keys(properties), ['kind']);
   assert.ok(!('commands' in properties));
+});
+
+test('a model close is accepted only for a short turn', () => {
+  assert.ok(isShortEnoughToClose('ugh, forget the whole thing'));
+  assert.ok(
+    !isShortEnoughToClose(
+      'add milk and eggs and bread to the list for the party on Saturday, never mind',
+    ),
+  );
 });
 
 test('the device and the server agree on which commands delete', () => {

@@ -17,7 +17,7 @@ export interface HeldItem {
 }
 
 /** A question dropped by a closing phrase is no longer open; a turn made before the field has none. */
-const isLeft = (state: { leftAt?: number | null }) =>
+export const isLeft = (state: { leftAt?: number | null }) =>
   (state.leftAt ?? null) !== null;
 
 const hasOpenQuestion = (capture: OpenCapture, kinds: string[]) =>

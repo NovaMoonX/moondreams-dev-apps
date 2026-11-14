@@ -67,6 +67,8 @@ interface VoiceConversationOptions {
   endPhrases: string[];
   /** Gets the finished utterance, never empty, with any end phrase taken off, and which listener heard it ('deepgram', 'on-device' or 'browser'). */
   onUtterance: (text: string, heardBy: { sttProvider: string }) => void;
+  /** The app reads a turn that is only an end phrase as a close (and calls `closeByPhrase`); without it that turn ends the conversation and is not handed over. */
+  readsClose?: boolean;
   /** Listening ended with nothing heard (not a cancel). `isAsked` is false when the listen started without a tap (the person's voice opened it after a reply or over a line), where saying so would be a fault the person didn't earn. */
   onNothingHeard?: (isAsked: boolean) => void;
   /** The model on the device couldn't start or died while listening; `isAsked` is as for `onNothingHeard`. Without it this counts as nothing heard. */
@@ -139,6 +141,7 @@ export function useVoiceConversation({
   identity,
   endPhrases,
   onUtterance,
+  readsClose = false,
   onNothingHeard,
   onDeviceListenFailed,
   isNaturalVoiceReady = false,
@@ -180,6 +183,7 @@ export function useVoiceConversation({
     identity,
     endPhrases,
     onUtterance,
+    readsClose,
     onNothingHeard,
     onDeviceListenFailed,
     isNaturalVoiceReady,
@@ -225,6 +229,7 @@ export function useVoiceConversation({
       identity,
       endPhrases,
       onUtterance,
+      readsClose,
       onNothingHeard,
       onDeviceListenFailed,
       isNaturalVoiceReady,
@@ -366,8 +371,9 @@ export function useVoiceConversation({
     const said = (pattern ? text.replace(pattern, '') : text).trim();
     const isEnded = pattern?.test(text) ?? false;
     if (isEnded) endConversation();
-    // An end phrase that is the whole turn goes to the app as it was said, so it can read it as a close.
-    const handed = said === '' && isEnded ? text.trim() : said;
+    // An end phrase that is the whole turn goes to the app as it was said only when the app reads closes itself.
+    const handed =
+      said === '' && isEnded && latest.current.readsClose ? text.trim() : said;
     if (handed === '') return false;
     setIsThinking(true);
     latest.current.onUtterance(handed, { sttProvider });
@@ -379,9 +385,7 @@ export function useVoiceConversation({
     send({ type: 'CLOSE_HEARD' });
     endFollowUp();
     closeGate();
-    getQueue().clear();
-    endConversation();
-    setIsThinking(false);
+    stop();
     setHeard('');
     playListeningSound('close');
   };
