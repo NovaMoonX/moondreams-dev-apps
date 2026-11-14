@@ -6,20 +6,20 @@ Three cloud voices are compared with the site's natural voice before any cloud v
 
 Each is spoken after `toSpokenText`, as the site will.
 
-| # | Kind | Tone | Reply |
-| --- | --- | --- | --- |
-| 1 | got-it | Composed | Got it. Call Dana, Friday. |
-| 2 | got-it | Warm | Got it. Call Dana on Friday, and I'll keep it handy. |
-| 3 | answer | Composed | Your cake tasting is today at 3:00 PM at Sweet Layer Bakery. |
-| 4 | answer | Warm | Your cake tasting is today at 3:00 PM at Sweet Layer Bakery. Hope it's a good one. |
-| 5 | general | Composed | This isn't from your records, and it may be out of date. A frosted cake keeps about three days in the fridge. |
-| 6 | general | Warm | This isn't from your records, and it may be out of date. A frosted cake usually keeps about three days in the fridge, covered. |
-| 7 | caution | Composed | Biscuit's next flea treatment is due Saturday. For anything about the dose, check with the vet first. |
-| 8 | caution | Warm | Biscuit's next flea treatment is due Saturday. If you're unsure about the dose, a quick word with the vet first is worth it. |
-| 9 | question | Composed | Do you mean Dana Lee or Dana Ortiz? |
-| 10 | question | Warm | Just to be sure, do you mean Dana Lee or Dana Ortiz? |
-| 11 | summary | Composed | This week you have four things. Tuesday, the dentist at 9:30 AM. Wednesday, renew the car registration. Thursday, Mia's recital at 6:00 PM at Lincoln Hall. Friday, call Dana about the lease. |
-| 12 | summary | Warm | Here's your week. Tuesday, the dentist at 9:30 AM. Wednesday, renew the car registration. Thursday, Mia's recital at 6:00 PM at Lincoln Hall, which should be lovely. Friday, call Dana about the lease. That's everything so far. |
+| #   | Kind     | Tone     | Reply                                                                                                                                                                                                                              |
+| --- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | got-it   | Composed | Got it. Call Dana on Friday.                                                                                                                                                                                                       |
+| 2   | got-it   | Warm     | Got it. Call Dana on Friday, and I'll keep it handy.                                                                                                                                                                               |
+| 3   | answer   | Composed | Your cake tasting is today at 3:00 PM at Sweet Layer Bakery.                                                                                                                                                                       |
+| 4   | answer   | Warm     | Your cake tasting is today at 3:00 PM at Sweet Layer Bakery. Hope it's a good one.                                                                                                                                                 |
+| 5   | general  | Composed | This isn't from your records, and it may be out of date. A frosted cake keeps about three days in the fridge.                                                                                                                      |
+| 6   | general  | Warm     | This isn't from your records, and it may be out of date. A frosted cake usually keeps about three days in the fridge, covered.                                                                                                     |
+| 7   | caution  | Composed | Biscuit's next flea treatment is due Saturday. For anything about the dose, check with the vet first.                                                                                                                              |
+| 8   | caution  | Warm     | Biscuit's next flea treatment is due Saturday. If you're unsure about the dose, a quick word with the vet first is worth it.                                                                                                       |
+| 9   | question | Composed | Do you mean Dana Lee or Dana Ortiz?                                                                                                                                                                                                |
+| 10  | question | Warm     | Just to be sure, do you mean Dana Lee or Dana Ortiz?                                                                                                                                                                               |
+| 11  | summary  | Composed | This week you have four things. Tuesday, the dentist at 9:30 AM. Wednesday, renew the car registration. Thursday, Mia's recital at 6:00 PM at Lincoln Hall. Friday, call Dana about the lease.                                     |
+| 12  | summary  | Warm     | Here's your week. Tuesday, the dentist at 9:30 AM. Wednesday, renew the car registration. Thursday, Mia's recital at 6:00 PM at Lincoln Hall, which should be lovely. Friday, call Dana about the lease. That's everything so far. |
 
 ## How to run it
 
@@ -43,7 +43,21 @@ Then:
 npm run voice:benchmark
 ```
 
-A voice whose key is missing is skipped with one line. Each voice makes one untimed warm-up call first (connection and token setup stay out of the medians), then the run renders each reply five times, keeps the first audio, writes `voice-benchmark/` (ignored by git) and this page's table, then opens the listening page. `-- --no-open` skips the page; `-- --fixture` makes tones with made-up timings to try the page without keys (it writes no docs and refuses to replace a real run unless you add `-- --force`). A run is built in `voice-benchmark/.next/` and swapped in only when it finishes, so a crash or Ctrl-C leaves the previous run. The "Stream cut" column is the time for the response stream to close after an abort on this machine, not when the audio goes quiet; it is n/a when the stream had already ended. A failed voice does not stop its provider's other voices; only a 401 or 403 does.
+To run one provider again and keep the others' last readings (Gemini after it was throttled). Their readings of a reply whose words have changed since are left out, and the table above stays as it was when a provider has no earlier run to keep:
+
+```
+npm run voice:benchmark -- --only geminiTts
+```
+
+To hear every one of the 30 voices Chirp 3 HD and Gemini share, each reading four replies once (no timings, nothing written here), on a page of its own:
+
+```
+npm run voice:listen
+```
+
+A provider that answers 429, 500 or 503 is waited on (20, 40, then 80 seconds) and asked again; a failure that outlasts the waits is named in the table ("3 failed: geminiTts answered 429"). A 429 that never clears usually means the key's daily allowance is spent: a key from a project with billing on lifts it. Gemini is asked for each reply's tone ("Say this in a calm, even, composed voice" or "…warm, relaxed, unhurried…"); the other providers take no instructions. `-- --runs 3` changes how many times each reply is read (1 to 20).
+
+A voice whose key is missing is skipped with one line. Each voice makes one untimed warm-up call first (connection and token setup stay out of the medians), then the run renders each reply five times, keeps the first audio, writes `voice-benchmark/` (ignored by git) and this page's table, then opens the listening page. `-- --no-open` skips the page; `-- --fixture` makes tones with made-up timings to try the page without keys (it writes no docs and refuses to replace a real run unless you add `-- --force`). A run is built in `voice-benchmark/.next/` and swapped in only when it finishes, so a crash or Ctrl-C leaves the previous run. The "Stream cut" column is the time for the response stream to close after an abort on this machine, not when the audio goes quiet; it is n/a when the stream had already ended. A failed voice does not stop its provider's other voices; a 401 or 403, or a 429, 500 or 503 that outlasts the retry waits, does.
 
 ## Results
 
@@ -63,11 +77,11 @@ Read on 2026-11-09 from the providers' docs (search results; the pages could not
 
 ## Data use
 
-All of this is from the providers' docs (search results, 2026-11-09), unverified until the first real run. Still unverified: the model id `gemini-3.8-flash-lite-tts`, the voice ids, Chirp 3 HD with `OGG_OPUS`, Gemini's PCM at 24 kHz, the 2027 Gemini price rise, the `mip_opt_out` default, Gemini on Vertex, and both key checks' 200 answers.
+All of this is from the providers' docs (search results, 2026-11-09), unverified until the first real run. Still unverified: the model id `gemini-3.8-flash-lite-tts`, the voice ids, Chirp 3 HD streaming as 24 kHz PCM, Gemini's PCM at 24 kHz, the 2027 Gemini price rise, the `mip_opt_out` default, Gemini on Vertex, and both key checks' 200 answers.
 
 - Deepgram: the requests send `mip_opt_out=true`, said in the docs to be on `/v1/speak` and on by default otherwise (unverified), so what is sent is not used to improve their models.
 - Gemini: use a key from a project with billing on. The paid tier is not used to improve Google's products; the free tier may be. The model is said to be on Vertex AI at the `global` location (unverified).
-- Google Cloud TTS: stateless and not logged under Google Cloud's terms. Streaming is gRPC only, so the REST call returns the whole clip.
+- Google Cloud TTS: stateless and not logged under Google Cloud's terms. The site streams it over gRPC (`streamingSynthesize`) as raw 24 kHz PCM, so audio plays while it is still being made; the benchmark's own reading uses the same stream.
 
 ## The pick
 

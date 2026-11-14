@@ -26,17 +26,23 @@ An app that doesn't use the router always uses browser recognition.
 
 | Way | What it is | Needs | Costs |
 |---|---|---|---|
-| **Cloud voice** | A server-chosen provider (Google Chirp 3 HD by default), streamed through the site's `streamSpeech` | Online, under the allowance | Paid, capped |
+| **Cloud voice** | A server-chosen provider (Google Chirp 3 HD by default), streamed through the site's `streamSpeech` as raw 16-bit PCM (`audio/L16; rate=24000; channels=1`) and played as it arrives | Online, under the allowance | Paid, capped |
 | **Natural voice** | Piper, a nicer voice that runs on the device | The person downloads it once (about 90 MB) | Free |
 | **System voice** | The browser's `speechSynthesis` | Nothing | Free |
 
 Every text goes through `toSpokenText` first ("1/2 tsp" becomes "half a teaspoon").
 
+**Streaming playback.** The server streams the provider's audio as it is made. `cloudTts` waits for the first byte (2.5 seconds), then times the gaps between chunks; `pcmStream.ts` schedules each chunk on the shared `AudioContext` with a 200 ms prebuffer, so a reply starts speaking before it is fully made, and the speaking state begins at the first sound, not at the request. Waits are bounded by the clock, never only by the end of playback.
+
+**The speech source's voice.** `createSpeechSource` sends the app's `voiceId` and `speed` (from its `readVoice`, or per call) with each request. The server checks the voice against the app's allowed names (otherwise its default) and the speed against 0.8 to 1.2 (otherwise 1), so a bad value never fails a reply.
+
 ### Which way speaks
 
 - **A confirmation** (priority `ack`, such as "Got it, moved to Friday"): the device, always, so it starts at once and costs nothing. The natural voice if downloaded, else the system voice.
 - **A reply or a long summary:** the cloud voice when online and under the allowance, otherwise the device.
-- **A slow cloud voice** (no first byte in 2.5 seconds) or a provider error: that reply is spoken on the device.
+- **A slow cloud voice** (no first byte in 2.5 seconds), a gap between chunks that runs too long before any sound, or a provider error: that reply is spoken on the device. Once sound has played, it never switches part-way.
+- **The voice is latched per conversation.** The first cloud line fixes the voice and speed for the conversation, so a settings change applies to the next one. Once a line falls back to the device, the rest of that conversation stays on the device voice (no flip-flopping between two voices); an end phrase, a stop or the idle gap ends the conversation and clears both.
+- **A sample outside a conversation** (a voice picker's play button) is `playSpeechSample`: one line in the cloud voice, never the device voice, reporting played, stopped or failed.
 - **Apps that don't use the router** read aloud with `readAloud`: the natural voice when it is ready, else the system voice.
 
 ## Every environment, side by side
@@ -113,7 +119,7 @@ A snapshot of the code, written to find the source. It does not define the proce
 
 | App | Listening | Speaking |
 |---|---|---|
-| Helm | Cloud, on-device model, browser (conversation voice) | Cloud voice, system voice (no natural-voice choice offered) |
+| Helm | Cloud, on-device model, browser (conversation voice) | Cloud voice (a chosen voice and speed), system voice (no natural-voice choice offered) |
 | Pinch (cooking mode) | Browser (command voice) | Natural voice if the person turned it on, else system voice |
 
 Where each is wired: Helm in `src/apps/helm/hooks/useHelmVoice.ts` and `components/voice/VoiceSettings.tsx`; Pinch in `src/apps/pinch/hooks/useCookVoice.ts`. Helm's build log is `src/apps/helm/TECHNICAL.md` section 20.

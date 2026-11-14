@@ -51,6 +51,8 @@ export async function ensureHelmProfile(uid: string) {
       calendarOfferFoldedAt: null,
       hasSeenAiNotice: false,
       voiceMode: 'cloudWhenOnline',
+      voiceId: null,
+      voiceSpeed: null,
       isWakeWordOn: false,
       isHandsFreeOn: true,
       hasSeenVoiceNotice: null,
@@ -67,6 +69,18 @@ export async function ensureHelmProfile(uid: string) {
 export const setVoiceMode = (uid: string, voiceMode: VoiceMode) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     voiceMode,
+    lastEditedAt: Date.now(),
+  });
+
+export const setHelmVoiceId = (uid: string, voiceId: string | null) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    voiceId,
+    lastEditedAt: Date.now(),
+  });
+
+export const setHelmVoiceSpeed = (uid: string, voiceSpeed: number | null) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    voiceSpeed,
     lastEditedAt: Date.now(),
   });
 
