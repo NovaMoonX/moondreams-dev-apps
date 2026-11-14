@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useQuery } from '@tanstack/react-query';
 
@@ -11,6 +11,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   finishGoogleConnection,
   grantConnection,
+  releaseUnusedAccount,
   startGoogleConnection,
 } from '@/lib/connections/connectionCalls';
 import type { FinishGoogleConnectionResult } from '@/lib/connections/contract';
@@ -90,10 +91,17 @@ const toIntroTitle = (connectorId: GoogleConnectorId, isReconnect: boolean) => {
     : HELM_COPY.googleConnectTitle;
 };
 
-const keepConnector = (connectorId: GoogleConnectorId | null) => {
+const RECONNECT_KEY = 'helm-google-reconnect';
+
+const keepConnector = (
+  connectorId: GoogleConnectorId | null,
+  isReconnect = false,
+) => {
   try {
     if (connectorId === null) sessionStorage.removeItem(CONNECTOR_KEY);
     else sessionStorage.setItem(CONNECTOR_KEY, connectorId);
+    if (isReconnect) sessionStorage.setItem(RECONNECT_KEY, '1');
+    else sessionStorage.removeItem(RECONNECT_KEY);
   } catch {
     // Private browsing can refuse storage; a return then falls back to the calendar.
   }
@@ -109,6 +117,14 @@ const readKeptConnector = (): GoogleConnectorId => {
       : 'google:calendar';
   } catch {
     return 'google:calendar';
+  }
+};
+
+const readKeptReconnect = () => {
+  try {
+    return sessionStorage.getItem(RECONNECT_KEY) === '1';
+  } catch {
+    return false;
   }
 };
 
@@ -133,7 +149,7 @@ const connectGoogle = async ({
     accountId,
     isAnotherAccount,
   });
-  keepConnector(connectorId);
+  keepConnector(connectorId, accountId !== null);
   const result = await requestGoogleAuthCode({ authUrl, state });
   if (result !== 'redirected') keepConnector(null);
   return typeof result === 'string' ? result : finishGoogleConnection(result);
@@ -242,6 +258,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     readGoogleAuthReturn(window.location.search),
   );
   const [returnedConnector] = useState(readKeptConnector);
+  const [isReturnedReconnect] = useState(readKeptReconnect);
   const [intro, setIntro] = useState<Intro | null>(() =>
     returned && 'error' in returned && !isPopupPage()
       ? {
@@ -255,7 +272,16 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
         }
       : null,
   );
-  const [picker, setPicker] = useState<CalendarPickerTarget | null>(null);
+  const [picker, setPicker] = useState<CalendarPickerTarget | null>(() =>
+    returned &&
+    'code' in returned &&
+    !isPopupPage() &&
+    returnedConnector === 'google:calendar' &&
+    !isReturnedReconnect
+      ? { accountId: null, mode: 'connect' }
+      : null,
+  );
+  const isAwaitingReturnRef = useRef(picker !== null);
   const [contactsAccountId, setContactsAccountId] = useState<string | null>(
     null,
   );
@@ -310,8 +336,14 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     setIsContactsOpen(true);
   };
 
-  const handleFinished = (finished: FinishGoogleConnectionResult) => {
+  const handleFinished = (
+    finished: FinishGoogleConnectionResult,
+    isReturn = false,
+  ) => {
     setIntro(null);
+    const wasDismissed = isReturn && !isAwaitingReturnRef.current;
+    isAwaitingReturnRef.current = false;
+    if (isReturn) setPicker((open) => (open?.accountId === null ? null : open));
     const hasGrant = grants.some(
       (grant) =>
         grant.connectorId === finished.connectorId &&
@@ -357,11 +389,20 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
+    if (wasDismissed) {
+      releaseUnusedAccount({ accountId: finished.accountId }).catch(
+        (error: unknown) =>
+          console.error('Helm unused account was not released', error),
+      );
+      return;
+    }
     setPicker({ accountId: finished.accountId, mode: 'connect' });
   };
 
   const onReturnFailed = (error: unknown) => {
     console.error('Helm Google connection did not finish', error);
+    isAwaitingReturnRef.current = false;
+    setPicker(null);
     setIntro({
       connectorId: returnedConnector,
       accountId: null,
@@ -398,7 +439,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
       try {
         if (kept !== null && kept !== returned.state)
           throw new Error('Google sign-in state did not match');
-        handleFinished(await finishGoogleConnection(returned));
+        handleFinished(await finishGoogleConnection(returned), true);
       } catch (error) {
         onReturnFailed(error);
       }
@@ -430,11 +471,17 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
                 : null
             }
             onClose={() => setIntro(null)}
-            onFinished={handleFinished}
+            onFinished={(finished) => handleFinished(finished)}
           />
         )}
       </FormSheet>
-      <CalendarPicker target={picker} onClose={() => setPicker(null)} />
+      <CalendarPicker
+        target={picker?.accountId === null && !loading && !user ? null : picker}
+        onClose={() => {
+          isAwaitingReturnRef.current = false;
+          setPicker(null);
+        }}
+      />
       {isContactsOpen && (
         <ContactsPicker
           accountId={contactsAccountId}

@@ -27,3 +27,29 @@ export function ClaudeMark({ className = 'size-4' }: BrandMarkProps) {
     </svg>
   );
 }
+
+/** The Google Calendar tile, for an offer or row that connects it. */
+export function GoogleCalendarMark({ className = 'size-5' }: BrandMarkProps) {
+  return (
+    <svg viewBox='0 0 24 24' aria-hidden='true' className={className}>
+      <path d='M5 3h14v3.5H5z' fill='#4285F4' />
+      <path d='M5 3a2 2 0 0 0-2 2v12.5h3.5v-11H5z' fill='#1967D2' />
+      <path d='M17.5 6.5H21V5a2 2 0 0 0-2-2h-1.5z' fill='#1967D2' />
+      <path d='M17.5 6.5H21v10.5h-3.5z' fill='#FBBC04' />
+      <path d='M3 17.5V19a2 2 0 0 0 2 2h12.5v-3.5z' fill='#34A853' />
+      <path d='M17.5 21 21 17.5h-3.5z' fill='#EA4335' />
+      <path d='M6.5 6.5h11v11h-11z' fill='#fff' />
+      <text
+        x='12'
+        y='15.6'
+        textAnchor='middle'
+        fontFamily='Arial, Helvetica, sans-serif'
+        fontSize='7.6'
+        fontWeight='700'
+        fill='#4285F4'
+      >
+        31
+      </text>
+    </svg>
+  );
+}

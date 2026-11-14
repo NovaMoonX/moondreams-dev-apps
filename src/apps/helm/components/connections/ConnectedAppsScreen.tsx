@@ -1,9 +1,9 @@
 import { useState } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CalendarDays } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
+import { GoogleCalendarMark } from '@/components/BrandMarks';
 import ConnectedSourcesList from '@/components/ConnectedSourcesList';
 import SectionHeader from '@/components/SectionHeader';
 import {
@@ -43,12 +43,9 @@ const GOOGLE_ADD_ID = 'google-add';
 
 const googleLogo = (
   <span
-    className={join(
-      LOGO,
-      'bg-muted text-muted-foreground flex shrink-0 items-center justify-center',
-    )}
+    className={join(LOGO, 'bg-muted flex shrink-0 items-center justify-center')}
   >
-    <CalendarDays className='size-5' aria-hidden='true' />
+    <GoogleCalendarMark className='size-6' />
   </span>
 );
 
