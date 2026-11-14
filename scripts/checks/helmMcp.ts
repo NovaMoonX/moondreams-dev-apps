@@ -323,6 +323,16 @@ assert.ok(
     !onButEmpty.includes('turn on'),
 );
 assert.match(external, /`Tells \$\{name\}/);
+// An outside assistant is told the connection is text only, and to send the person to Helm for a photo or file.
+assert.match(
+  external,
+  /This connection takes text only: it can't receive photos, files/,
+);
+assert.match(external, /they can add it in Helm itself/);
+assert.match(
+  external,
+  /Text only: it can't carry a photo, file or other media/,
+);
 assert.match(external, /`Asks \$\{name\}/);
 
 console.log('check:helm-mcp passed');

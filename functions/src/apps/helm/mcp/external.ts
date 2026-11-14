@@ -413,6 +413,7 @@ const instructionsFor = (
     canWrite
       ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools: tell_helm passes on something for ${name} to file or do, ask_helm asks ${name} a question, and the search tools look things up directly.`
       : `When they say "ask ${name}" or mention Helm, look things up with the search tools. This connection can't add anything, since the person turned that off in Helm; when they ask ${name} to add or change something, say so.`,
+    `This connection takes text only: it can't receive photos, files, voice notes or any other media, and nothing is attached to what reaches ${name}. When the person shares one and wants it in Helm, say that this connection can't take it, and that they can add it in Helm itself; if it holds words they want kept, you may pass those on as text, saying so.`,
     sourcesBriefFor(name, sources, access),
   ]
     .filter((line) => line !== '')
@@ -483,7 +484,7 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   server.registerTool(
     'tell_helm',
     {
-      description: `Tells ${name}, the person's assistant in Helm, something in their own words, as if they had typed it to ${name}: Helm files it for them, making tasks, key dates, notes and records, and says what it did. Call it when the person says "tell ${name}" or wants ${name} or Helm to remember or do something (add a task, note a date, save what they learned). Do not use it for a question: use ask_helm. The person can undo everything it does in Helm.`,
+      description: `Tells ${name}, the person's assistant in Helm, something in their own words, as if they had typed it to ${name}: Helm files it for them, making tasks, key dates, notes and records, and says what it did. Call it when the person says "tell ${name}" or wants ${name} or Helm to remember or do something (add a task, note a date, save what they learned). Do not use it for a question: use ask_helm. Text only: it can't carry a photo, file or other media, so when the person wants one in Helm, tell them to add it in Helm itself. The person can undo everything it does in Helm.`,
       inputSchema: tellShape,
       annotations: {
         readOnlyHint: false,
