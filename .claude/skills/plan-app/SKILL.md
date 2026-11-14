@@ -1,6 +1,6 @@
 ---
 name: plan-app
-description: Plan a new app (or a large new area of an existing one) for the Moondreams Dev Apps repo, with product, design and technical worked out together as a team would, ending in PRODUCT.md, README.md, a UX canvas with UX.md, TECHNICAL.md and ISSUES.md turned into board issues. Use when the owner brings an app idea or runs /plan-app.
+description: Plan a new app (or a large new area of an existing one) for the Moondreams Dev Apps repo, with product, design and technical worked out together as a team would, ending in PRODUCT.md, README.md, a UX canvas with UX.md, TECHNICAL.md, NOMOS.md (how the app works with Nomos) and ISSUES.md turned into board issues. Use when the owner brings an app idea or runs /plan-app.
 ---
 
 # Plan an app
@@ -14,8 +14,9 @@ You are the planning lead: a senior product manager and architect who runs three
 | UX canvas + `UX.md` | design | Phone boards (a Design artifact) and what a picture can't carry. |
 | `TECHNICAL.md` | technical | Data, state, rules, backend surface, architecture. |
 | `ISSUES.md` | technical | The roadmap, which becomes GitHub issues on board 3. |
+| `NOMOS.md` | technical | How the app works with Nomos, Helm's assistant: what the person can ask it, what the app shares with it, what it could do there later. Its own page so the owner finds it in one tap. |
 
-The rules for each file live in `references/` and are binding: `product.md`, `design.md`, `technical.md`, `issues.md`. Where one of them disagrees with `CLAUDE.md` or `docs/conventions/`, the conventions win, and you fix the reference in the same PR.
+The rules for each file live in `references/` and are binding: `product.md`, `design.md`, `technical.md`, `issues.md`, `nomos.md`. Where one of them disagrees with `CLAUDE.md` or `docs/conventions/`, the conventions win, and you fix the reference in the same PR.
 
 ## The team works at the same time
 
@@ -31,6 +32,7 @@ Each **round**:
 3. **Reconcile.** You answer every cross-track "needs" yourself where the conventions, the existing apps or the idea decide it, and log the answer. Two tracks that disagree get one decision from you, logged with the reason; only a disagreement that turns on what the owner wants goes to the owner.
 4. **Round brief to the owner.** One screen, also saved as `planning/<id>/ROUND.md`:
    - **Settled this round**: one line each, at most eight; link the doc section for each.
+   - **Nomos**: one line on what `NOMOS.md` changed this round (or "unchanged"), linked to its published page, every round from round 1 (owner: Nomos is what keeps the apps glued together, so it is never an afterthought).
    - **Your decisions** (asked through `AskUserQuestion`, recommendation first; four per call, so several calls when there are more): what the question is in plain words, what each answer changes. There is no cap: the goal is a properly planned app, so raise every question that passes the test under "Which questions reach the owner", and none that doesn't (owner, Helm round 5: "rather than having a limit, the planners should know which questions should be raised").
    - **Where the team disagreed** and what you decided.
    - **Next round** covers: one line.
@@ -56,7 +58,7 @@ The design track owns the canvas (see `references/design.md` for its structure a
 ## Finishing
 
 When the owner approves the last round:
-1. Open a docs PR that adds `src/apps/<id>/` with `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md`, `ISSUES.md` and the canvas spec (`canvas.md`, which the issues cite for tokens and example data), and the app's rules file (`.claude/rules/<id>.md`) if the plan settles its look. Drop the `<!-- round N -->` markers.
+1. Open a docs PR that adds `src/apps/<id>/` with `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md`, `ISSUES.md`, `NOMOS.md` and the canvas spec (`canvas.md`, which the issues cite for tokens and example data), and the app's rules file (`.claude/rules/<id>.md`) if the plan settles its look. Drop the `<!-- round N -->` markers.
 2. Create the issues by giving the docs PR the `create-issues` label: `create-app-issues.yml` runs `scripts/createGithubIssues.ts` for each `ISSUES.md` the PR changes, puts them on board 3 and comments the `Issue N → #123` list on the PR (`references/issues.md` "Creating the issues"). Nobody runs the script by hand.
 3. Any repo-wide convention the planning surfaced goes into the narrowest `docs/conventions/` file in the docs PR (`docs/conventions/pipeline.md` "The pipeline improves itself" decides one app or shared, and whether to change or propose); this app's schema and screens stay in its `TECHNICAL.md`.
 4. Hand off: the app is ready for `/build-app-mvp`. The docs are committed, so the build can start in a fresh session or carry on here once the idle compaction has shrunk the planning context (`pipeline.md` "Compaction is automatic"); never ask the owner to `/compact` (owner, Going Once).
