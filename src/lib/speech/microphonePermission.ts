@@ -102,7 +102,20 @@ export const needsMicrophoneAsk = (state: MicrophonePermission) =>
   state === 'denied' || (state === 'prompt' && wasRecognitionRefused());
 
 export type MicrophoneRequestResult =
-  'granted' | 'denied' | 'no-microphone' | 'unavailable';
+  'granted' | 'denied' | 'system-denied' | 'no-microphone' | 'unavailable';
+
+const isChromium = () =>
+  typeof navigator !== 'undefined' &&
+  /Chrome\//.test(navigator.userAgent) &&
+  !/iPad|iPhone|iPod/.test(navigator.userAgent);
+
+const readsPrompt = async () => {
+  try {
+    return (await queryMicrophone()).state === 'prompt';
+  } catch {
+    return false;
+  }
+};
 
 /** Whether this page can ask for the microphone directly (a secure page in a browser with `getUserMedia`). */
 export const canRequestMicrophone = () =>
@@ -125,6 +138,16 @@ export const requestMicrophone = async (): Promise<MicrophoneRequestResult> => {
   } catch (error) {
     recordSpeechEvent(`getUserMedia refused: ${describeThrown(error)}`);
     const name = error instanceof DOMException ? error.name : '';
+    // In Chromium a refusal that leaves the site at "prompt" without being dismissed came from the device keeping the microphone from the browser.
+    if (
+      name === 'NotAllowedError' &&
+      isChromium() &&
+      !/dismiss/i.test(error instanceof Error ? error.message : '') &&
+      (await readsPrompt())
+    ) {
+      setState('prompt');
+      return 'system-denied';
+    }
     if (name === 'NotAllowedError' || name === 'SecurityError') {
       setState('denied');
       return 'denied';
@@ -173,8 +196,8 @@ export const getMicrophoneHowTo = (
       'Come back and tap Try again.',
     ],
     'android-app': [
-      'Press and hold this app’s icon, tap App info, then Permissions (or Site settings) › Microphone › Allow.',
-      `Not there? In Chrome, tap ⋮ › Settings › Site settings › Microphone, find ${host} and choose Allow.`,
+      `Open Chrome, tap ⋮ › Settings › Site settings › Microphone, find ${host} and choose Allow.`,
+      'Not listed? Your phone may be keeping the microphone from Chrome: open your phone’s Settings › Apps › Chrome › Permissions › Microphone and choose Allow.',
       'Come back and tap Try again.',
     ],
     'android-browser': [
@@ -189,4 +212,24 @@ export const getMicrophoneHowTo = (
     ],
   };
   return howTo[device];
+};
+
+/** How to let the browser itself use the microphone when the phone or computer keeps it from the browser (the site's own setting is not the problem). */
+export const getSystemMicrophoneHowTo = (
+  device: MicrophoneDevice,
+): string[] => {
+  if (device === 'android-app' || device === 'android-browser')
+    return [
+      'Open your phone’s Settings › Apps › Chrome (or the browser you installed this app from) › Permissions › Microphone and choose Allow.',
+      'If your phone has a Microphone access tile in Quick Settings, make sure it’s on.',
+      `Already allowed? In your browser, tap ⋮ › Settings › Site settings › Microphone, find ${window.location.host} and choose Allow.`,
+      'Come back and tap Try again.',
+    ];
+  if (device === 'computer')
+    return [
+      'Open your computer’s privacy settings (on a Mac, System Settings › Privacy & Security › Microphone) and turn the microphone on for your browser.',
+      `Already on? Click the icon left of the address bar and set Microphone to Allow for ${window.location.host}.`,
+      'Quit and reopen the browser, then click Try again.',
+    ];
+  return getMicrophoneHowTo(device, window.location.host);
 };
