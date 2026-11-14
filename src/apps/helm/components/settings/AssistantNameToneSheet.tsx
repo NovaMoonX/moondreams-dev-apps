@@ -85,7 +85,7 @@ function AssistantForm({
           <label htmlFor={`${fieldId}-name`} className='text-sm font-medium'>
             {HELM_COPY.assistantNameLabel}
           </label>
-          {text !== '' && (
+          {text !== '' && nextName !== DEFAULT_ASSISTANT_NAME && (
             <Button
               type='button'
               variant='tertiary'
