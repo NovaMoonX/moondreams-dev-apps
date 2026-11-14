@@ -1,14 +1,50 @@
+import { describeThrown, recordSpeechEvent } from './speechDiagnostics';
+
 type MicrophonePermission = PermissionState | 'unknown';
 
 const watched = {
   state: 'unknown' as MicrophonePermission,
   isStarted: false,
+  wasGranted: false,
   listeners: new Set<(state: MicrophonePermission) => void>(),
 };
 
+const REFUSED_KEY = 'speech:recognition-refused';
+
+/** Remembers on this device that recognition was refused before the microphone was ever allowed (an installed app can refuse without prompting). Cleared once the permission reads granted. */
+export const rememberRecognitionRefused = () => {
+  if (watched.wasGranted) return;
+  try {
+    window.localStorage.setItem(REFUSED_KEY, 'true');
+  } catch {
+    // Without storage the refusal is found again on the next tap.
+  }
+};
+
+const forgetRecognitionRefused = () => {
+  try {
+    window.localStorage.removeItem(REFUSED_KEY);
+  } catch {
+    // Storage is unavailable, so nothing was kept.
+  }
+};
+
+const wasRecognitionRefused = () => {
+  try {
+    return window.localStorage.getItem(REFUSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
 const setState = (state: MicrophonePermission) => {
+  if (state === 'granted') {
+    watched.wasGranted = true;
+    forgetRecognitionRefused();
+  }
   if (state === watched.state) return;
   watched.state = state;
+  recordSpeechEvent(`Microphone permission: ${state}`);
   watched.listeners.forEach((listener) => listener(state));
 };
 
@@ -58,6 +94,13 @@ export const watchMicrophonePermission = (
   };
 };
 
+/** Whether the microphone was allowed at some point in this visit, so a later refusal of recognition is about the speech service (Siri or Dictation off), not the microphone. */
+export const wasMicrophoneGranted = () => watched.wasGranted;
+
+/** Whether listening should not start from a tap: the microphone is refused, or it hasn't been asked for on a device where recognition was refused without asking. The way in is `requestMicrophone`. */
+export const needsMicrophoneAsk = (state: MicrophonePermission) =>
+  state === 'denied' || (state === 'prompt' && wasRecognitionRefused());
+
 export type MicrophoneRequestResult =
   'granted' | 'denied' | 'no-microphone' | 'unavailable';
 
@@ -76,9 +119,11 @@ export const requestMicrophone = async (): Promise<MicrophoneRequestResult> => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stream.getTracks().forEach((track) => track.stop());
+    recordSpeechEvent('getUserMedia: allowed');
     setState('granted');
     return 'granted';
   } catch (error) {
+    recordSpeechEvent(`getUserMedia refused: ${describeThrown(error)}`);
     const name = error instanceof DOMException ? error.name : '';
     if (name === 'NotAllowedError' || name === 'SecurityError') {
       setState('denied');

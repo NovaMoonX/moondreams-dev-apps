@@ -1,15 +1,14 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useRouteError } from 'react-router-dom';
 
-import CopyTextButton from '@components/CopyTextButton';
+import DebugDetails from '@components/DebugDetails';
 import { VersionLabel } from '@components/VersionLabel';
 import { useRestartApp } from '@hooks/useRestartApp';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 import Loading from '@ui/Loading';
-import { SITE_VERSION } from '@lib/app';
 import { useCanSeeDebugDetails } from '@lib/debugProfiles/useCanSeeDebugDetails';
 import { getRegistryAppForPath } from '../lib/app/app.registry';
 import {
@@ -90,15 +89,6 @@ function ErrorScreen({ error }: { error: unknown }) {
 
   const appName =
     pathname === '/' ? 'Home' : (getRegistryAppForPath(pathname)?.name ?? null);
-  const copyText = [
-    message,
-    fileCheck,
-    stack,
-    `Page: ${pathname}`,
-    `Version: ${SITE_VERSION}`,
-  ]
-    .filter(Boolean)
-    .join('\n\n');
 
   return (
     <div className='page flex items-center justify-center px-4 py-12'>
@@ -136,45 +126,13 @@ function ErrorScreen({ error }: { error: unknown }) {
           </Link>
         </div>
 
-        {showDetails && (
-          <section className='border-border bg-muted/50 mt-6 rounded-xl border text-left'>
-            <div className='border-border flex items-center justify-between gap-2 border-b py-1.5 pr-1.5 pl-3'>
-              <h2 className='text-muted-foreground text-xs font-medium'>
-                Error details
-              </h2>
-              <CopyTextButton
-                isIconOnly
-                variant='tertiary'
-                label='Copy error'
-                text={copyText}
-              />
-            </div>
-            <div className='space-y-2 p-3'>
-              <p className='text-foreground font-mono text-xs leading-relaxed wrap-break-word'>
-                {message}
-              </p>
-              {fileCheck && (
-                <p className='text-muted-foreground font-mono text-xs leading-relaxed wrap-break-word'>
-                  {fileCheck}
-                </p>
-              )}
-              {stack && (
-                <details className='group'>
-                  <summary className='text-muted-foreground flex cursor-pointer list-none items-center gap-1 text-xs [&::-webkit-details-marker]:hidden'>
-                    <ChevronRight
-                      className='size-3.5 transition-transform group-open:rotate-90'
-                      aria-hidden='true'
-                    />
-                    Stack trace
-                  </summary>
-                  <pre className='text-muted-foreground mt-2 max-h-48 overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap'>
-                    {stack}
-                  </pre>
-                </details>
-              )}
-            </div>
-          </section>
-        )}
+        <DebugDetails
+          message={message}
+          facts={fileCheck ? [fileCheck] : []}
+          trace={stack ? { label: 'Stack trace', text: stack } : null}
+          isOpen
+          className='mt-6'
+        />
 
         <p className='text-muted-foreground/70 mt-6 text-center text-xs'>
           <VersionLabel />
