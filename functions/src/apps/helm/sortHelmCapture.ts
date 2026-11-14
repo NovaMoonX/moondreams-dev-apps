@@ -1928,6 +1928,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         firestore,
         liveGrants,
         siteGrants,
+        offCategories,
         quotes,
         searched,
         topicRead: isOtherTopicNamed
@@ -2391,14 +2392,14 @@ async function writeResult(
     : null;
   const { commands, refused: settledRefused } = settleLiveTurn(
     input.commands,
-    searched.entries().length,
+    searched.liveCount(),
   );
   const liveRefused =
-    searched.entries().length > 0 && requestedPlanDay
+    searched.liveCount() > 0 && requestedPlanDay
       ? [...settledRefused, 'live-turn-command']
       : settledRefused;
   const planDayKey =
-    searched.entries().length === 0 && requestedPlanDay
+    searched.liveCount() === 0 && requestedPlanDay
       ? new Date(requestedPlanDay.date.date).toISOString().slice(0, 10)
       : null;
   const aboutId = remember[0]?.about?.id ?? null;
