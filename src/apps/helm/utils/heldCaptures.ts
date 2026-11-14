@@ -70,10 +70,15 @@ export const getAnsweredQuestions = (capture: OpenCapture) =>
 /** A dispute between two facts is never let go: the record would stay disputed with nothing left to settle it. */
 export const isDismissable = (kind: string) => kind !== 'whichIsTrue';
 
-/** The questions the person let go without answering, oldest first. */
+const STATUS_KINDS = ['couldNotRead', 'moreToSort'];
+
+/** The questions the person let go without answering, oldest first; a status the code reported (couldn't read, more to sort) is left out, since its wording would no longer be true. */
 export const getDismissedQuestions = (capture: OpenCapture) =>
   Object.entries(capture.questionState)
-    .filter(([, state]) => state.dismissedAt !== null)
+    .filter(
+      ([, state]) =>
+        state.dismissedAt !== null && !STATUS_KINDS.includes(state.kind),
+    )
     .sort(([, a], [, b]) => a.askedAt - b.askedAt)
     .flatMap(([id]) => {
       const question = capture.questions[id];

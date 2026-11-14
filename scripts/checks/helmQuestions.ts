@@ -980,15 +980,15 @@ test('a whole reply that lets a question go dismisses it; a sentence, an option 
   assert.equal(isDismissable('asked'), true);
 });
 
-test('a dismissed question leaves Needs you and is listed as dismissed; a cleared failed turn leaves too', () => {
-  const capture = (dismissedAt: number | null) =>
+test('a dismissed question leaves Needs you and is listed as dismissed (a status note is not); a cleared failed turn leaves too', () => {
+  const capture = (dismissedAt: number | null, kind = 'groupTopics') =>
     ({
       status: dismissedAt === null ? 'needsYou' : 'sorted',
       dismissedAt: null,
       questions: { q1: GROUP_QUESTION },
       questionState: {
         q1: {
-          kind: 'groupTopics',
+          kind,
           shape: 'yesNo',
           askedAt: 1,
           answeredAt: dismissedAt,
@@ -1004,6 +1004,7 @@ test('a dismissed question leaves Needs you and is listed as dismissed; a cleare
     ['q1'],
   );
   assert.deepEqual(getDismissedQuestions(capture(null)), []);
+  assert.deepEqual(getDismissedQuestions(capture(5, 'moreToSort')), []);
   const failed = (dismissedAt: number | null) =>
     ({
       status: 'failed',

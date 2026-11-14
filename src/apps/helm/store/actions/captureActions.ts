@@ -281,11 +281,15 @@ export const dismissQuestion = (
   isLastOpen: boolean,
 ) => {
   const now = Date.now();
+  const capture = selectAllCaptures(store.getState()).find(
+    (entry) => entry.id === captureId,
+  );
   // Not a transaction: a server write adding a question to this turn in the same instant is a rare race, accepted.
   return updateDoc(doc(capturesOf(uid), captureId), {
     [`questionState.${questionId}.answeredAt`]: now,
     [`questionState.${questionId}.dismissedAt`]: now,
     ...(isLastOpen && { status: 'sorted' }),
+    ...(capture?.seenAt === null && { seenAt: now }),
   });
 };
 
@@ -299,9 +303,15 @@ export const canClearFromNeedsYou = (capture: OpenCapture) =>
 /** Clears every turn in Needs you at once (a dispute between facts stays): each open question is let go as `dismissQuestion` does, and a turn that couldn't be sorted is marked cleared. In batches under Firestore's write limit. */
 export async function clearNeedsYou(uid: string, captures: OpenCapture[]) {
   const now = Date.now();
+  // A cleared turn counts as seen, or it would drop straight into the new-since-you-looked list.
+  const seen = (capture: OpenCapture) =>
+    capture.seenAt === null ? { seenAt: now } : {};
   const writes = captures.filter(canClearFromNeedsYou).map((capture) => {
     if (capture.status === 'failed') {
-      return { id: capture.id, fields: { dismissedAt: now } };
+      return {
+        id: capture.id,
+        fields: { dismissedAt: now, ...seen(capture) },
+      };
     }
     const open = Object.entries(capture.questionState).filter(
       ([, state]) => state.answeredAt === null,
@@ -317,6 +327,7 @@ export async function clearNeedsYou(uid: string, captures: OpenCapture[]) {
           ]),
         ),
         ...(letGo.length === open.length && { status: 'sorted' }),
+        ...seen(capture),
       },
     };
   });

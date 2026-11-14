@@ -32,7 +32,7 @@ const toPlainWords = (text: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-/** Whether the whole reply lets the question go ("never mind", "forget it"), unless it names one of the question's own options. */
+/** Whether the whole reply lets the question go ("dismiss it"), unless it names one of the question's own options. */
 const isDismissReply = (text: string, question: HelmQuestion) => {
   const words = toPlainWords(text);
   return (
