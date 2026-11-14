@@ -10,6 +10,7 @@ import { readConnectorAppId } from '@/lib/connections/contract';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import HabitLine from '@apps/helm/components/today/HabitLine';
 import CalendarFailedLine from '@apps/helm/components/today/CalendarFailedLine';
 import FeedGroup from '@apps/helm/components/today/FeedGroup';
 import PlannedCard from '@apps/helm/components/today/PlannedCard';
@@ -19,6 +20,13 @@ import SyncedCard from '@apps/helm/components/today/SyncedCard';
 import SyncedSheet from '@apps/helm/components/today/SyncedSheet';
 import type { SuggestionTarget } from '@apps/helm/components/today/SuggestionSheet';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useHabitChecks } from '@apps/helm/hooks/useHabitChecks';
+import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
+import {
+  readHabitLineAt,
+  readHabitLines,
+  type HabitLine as HabitLineModel,
+} from '@apps/helm/utils/habitToday';
 import {
   getCurrentPlaceEndsAt,
   readCurrentPlace,
@@ -67,14 +75,16 @@ interface DayPlanProps {
   onTick: (task: OpenTask) => void;
   onUndoTick: (taskId: string) => void;
   onSelectDay: (dayKey: string) => void;
+  onOpenHabit: (habitId: string) => void;
 }
 
 type Entry =
   | { kind: 'event'; at: number; record: SyncedRecord }
   | { kind: 'slot'; at: number; id: string; slot: PlanSlot; task: OpenTask }
-  | { kind: 'gap'; at: number; startAt: number; endAt: number };
+  | { kind: 'gap'; at: number; startAt: number; endAt: number }
+  | { kind: 'habit'; at: number; line: HabitLineModel };
 
-const ORDER = { event: 0, slot: 1, gap: 2 } as const;
+const ORDER = { event: 0, habit: 1, slot: 2, gap: 3 } as const;
 
 const getSummary = (
   events: number,
@@ -102,6 +112,7 @@ function DayPlan({
   onTick,
   onUndoTick,
   onSelectDay,
+  onOpenHabit,
 }: DayPlanProps) {
   const assistantName = useAssistantName();
   const { nameOf, categoryLabelOf } = useSourceAppName();
@@ -119,6 +130,13 @@ function DayPlan({
   const { timeZone, todayKey, now, profile } = sources;
   const day = sources.planDays[dayKey];
   const isToday = dayKey === todayKey;
+  const habitClock = useHabitClock();
+  const habits = useAppSelector((state) => state.helm.habits.items);
+  const habitDays = useAppSelector((state) => state.helm.habitDays.byId);
+  const habitChecks = useHabitChecks(user?.uid ?? null, habitClock.timeZone);
+  const habitLines = isToday
+    ? readHabitLines(habits, habitDays, habitClock)
+    : [];
 
   const records = useMemo(
     () => getTodayRecords(stored, grants),
@@ -201,6 +219,11 @@ function DayPlan({
         : [{ kind: 'slot' as const, at: slot.startAt, id, slot, task }],
     ),
     ...gaps.map((gap) => ({ kind: 'gap' as const, at: gap.startAt, ...gap })),
+    ...habitLines.map((line) => ({
+      kind: 'habit' as const,
+      at: readHabitLineAt(line),
+      line,
+    })),
   ].sort((a, b) => a.at - b.at || ORDER[a.kind] - ORDER[b.kind]);
   const untimedKept = kept.filter(({ slot }) => slot.startAt === null);
   const untimedSuggested = suggested.filter(
@@ -426,6 +449,20 @@ function DayPlan({
             }
             if (entry.kind === 'slot') {
               return renderSlot(entry.id, entry.slot, entry.task);
+            }
+            if (entry.kind === 'habit') {
+              return (
+                <HabitLine
+                  key={entry.line.id}
+                  line={entry.line}
+                  timeZone={habitClock.timeZone}
+                  onCheck={habitChecks.check}
+                  onUndoCheck={habitChecks.undoCheck}
+                  onTally={habitChecks.tally}
+                  onUndoTally={habitChecks.undoTally}
+                  onOpen={onOpenHabit}
+                />
+              );
             }
             return (
               <p

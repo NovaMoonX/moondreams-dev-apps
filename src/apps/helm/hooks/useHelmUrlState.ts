@@ -24,6 +24,8 @@ const URL_VIEWS = [
   'place',
   'projects',
   'project',
+  'habits',
+  'habit',
   'knowledge',
   'topic',
   'procedures',
@@ -119,6 +121,7 @@ export function useHelmUrlState() {
         next === 'who' ||
         next === 'place' ||
         next === 'project' ||
+        next === 'habit' ||
         next === 'topic' ||
         next === 'procedure' ||
         next === 'run'
