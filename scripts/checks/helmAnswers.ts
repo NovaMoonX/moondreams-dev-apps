@@ -5,6 +5,7 @@ import {
   createQuoteBook,
   createSearchedLog,
   createSyncedBook,
+  STORED_ACCOUNT_ID,
   TURNED_OFF_FAILURE,
   type SearchedEntry,
 } from '../../functions/src/apps/helm/nomos/aliases.ts';
@@ -2229,7 +2230,8 @@ const tests: [string, () => void | Promise<void>][] = [
       );
       const [entry] = searched.entries();
       assert.equal(entry.connectorId, 'app:a-list');
-      assert.equal(entry.label, 'your A-List watchlist');
+      assert.equal(entry.label, 'A-List (Your watchlist)');
+      assert.equal(entry.accountId, STORED_ACCOUNT_ID);
       assert.equal(entry.failed, TURNED_OFF_FAILURE);
       assert.equal(
         searched.liveCount(),
@@ -2260,18 +2262,34 @@ const tests: [string, () => void | Promise<void>][] = [
       const off =
         "Your watchlist isn't being read; turn it on in Connected apps.";
       assert.equal(answer(off, searched.entries()), off);
-      const looked = createSearchedLog();
-      looked.record({
-        connectorId: 'app:a-list',
-        accountId: 'site',
-        label: 'your A-List records',
-        found: 6,
-        failure: null,
-        isStored: true,
-      });
-      const none =
-        'None of the six on your watchlist come out in the next month.';
-      assert.equal(answer(none, looked.entries()), none);
+      const worded = (await search?.run({
+        app: 'A-List',
+        query: 'Dune',
+      } as never)) as { turnedOff?: string };
+      assert.equal(
+        worded.turnedOff,
+        undefined,
+        'a search by words names no switched-off category',
+      );
+      const looked = (found: number) => {
+        const log = createSearchedLog();
+        log.record({
+          connectorId: 'app:a-list',
+          accountId: STORED_ACCOUNT_ID,
+          label: 'your A-List records',
+          found,
+          failure: null,
+          isStored: true,
+        });
+        return log;
+      };
+      const none = 'Nothing on your watchlist comes out in the next month.';
+      assert.equal(answer(none, looked(0).entries()), none);
+      assert.equal(
+        answer(none, looked(6).entries()),
+        null,
+        'a look that found records rests only an answer that cites them',
+      );
       assert.equal(
         answer(none, []),
         null,
@@ -2285,12 +2303,26 @@ const tests: [string, () => void | Promise<void>][] = [
         found: 0,
         failure: 'Something went wrong reaching it',
       });
+      failed.record({
+        connectorId: 'app:runway',
+        accountId: STORED_ACCOUNT_ID,
+        label: 'your Runway records',
+        found: 0,
+        failure: null,
+        isStored: true,
+      });
+      const live = failed.entries().find((item) => item.accountId === 'site');
+      assert.equal(
+        live?.failed,
+        'Something went wrong reaching it',
+        'a stored look never turns a failed live look into a success',
+      );
+      assert.equal(failed.liveCount(), 1);
       assert.equal(
         answer(none, failed.entries()),
         null,
-        'a failed look rests nothing',
+        'an app whose live look failed rests nothing, whatever a stored look found',
       );
-      assert.equal(failed.liveCount(), 1);
     },
   ],
 ];

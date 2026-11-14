@@ -137,11 +137,20 @@ export function buildAnswer(
       index,
   );
   const hasRecordsText = !!command.fromRecordsText;
-  // A look in an app that came back, or found the thing switched off, is what a "none of them" or "it isn't read" answer rests on.
+  // An app look that found nothing, or found the thing switched off, is what a "nothing matched" or "it isn't read" answer rests on.
+  const isFailedApp = (connectorId: string) =>
+    searched.some(
+      (entry) =>
+        entry.connectorId === connectorId &&
+        entry.failed !== null &&
+        entry.failed !== TURNED_OFF_FAILURE,
+    );
   const hasAppLook = searched.some(
     (entry) =>
       readConnectorAppId(entry.connectorId) !== null &&
-      (entry.failed === null || entry.failed === TURNED_OFF_FAILURE),
+      !isFailedApp(entry.connectorId) &&
+      ((entry.found === 0 && entry.failed === null) ||
+        entry.failed === TURNED_OFF_FAILURE),
   );
   const fromRecords =
     command.fromRecordsText &&

@@ -9,6 +9,7 @@ import {
   type QuoteBook,
   type SearchedLog,
   type SyncedBook,
+  STORED_ACCOUNT_ID,
   TURNED_OFF_FAILURE,
 } from '../nomos/aliases.js';
 import { describeDue } from '../nomos/buildContext.js';
@@ -439,7 +440,7 @@ export function buildHelmTools(scope: HelmToolScope) {
     name: 'search_synced',
     audience: 'nomos',
     description:
-      "Finds records the person's connected apps and calendars share, by words in their title, or lists them by app and/or kind without any words (their clinics, a sale's counts): events, tasks, places, projects, ratings and more. A record from one of their own apps also carries its place, amount, detail and details (a place's phone and address, a sale's counts, money collected and left, a thing for sale's asking price and status; search kind artifact for things for sale and a movie watchlist, whose status is its priority). It looks through at most 300 records, so finding nothing does not prove a record is absent. Upcoming ones come first; a record marked noLongerUpdated is a kept copy from a connection that has ended. Give words, an app or a kind.",
+      "Finds records the person's connected apps and calendars share, by words in their title, or lists them by app and/or kind without any words (their clinics, a sale's counts): events, tasks, places, projects, ratings and more. A record from one of their own apps also carries its place, amount, detail and details (a place's phone and address, a sale's counts, money collected and left, a thing for sale's asking price and status; search kind artifact for things for sale and a movie watchlist, whose status is its priority). It looks through at most 300 records, so finding nothing does not prove a record is absent. Upcoming ones come first; a record marked noLongerUpdated is a kept copy from a connection that has ended. An answer that none of them fits (none come out soon) still cites the records it looked at. Give words, an app or a kind.",
     shape: searchSyncedShape,
     run: async ({ query, app, kind }) => {
       const words = toWords(query ?? '');
@@ -485,8 +486,9 @@ export function buildHelmTools(scope: HelmToolScope) {
           return isUpcoming(x) ? x - y : y - x;
         })
         .slice(0, MAX_RESULTS);
+      // Only a look by kind, or a plain list of the app, can say a switched-off category is why nothing came back.
       const turnedOff =
-        connectorId === null
+        connectorId === null || (words.length > 0 && kindName === null)
           ? []
           : (scope.offCategories ?? [])
               .filter((grant) => grant.connectorId === connectorId)
@@ -494,19 +496,16 @@ export function buildHelmTools(scope: HelmToolScope) {
               .filter(
                 (category) => kindName === null || category.kind === kindName,
               );
+      const isOff = found.length === 0 && turnedOff.length > 0;
       if (connectorId !== null) {
         searched.record({
           connectorId,
-          accountId: SITE_ACCOUNT_ID,
-          label:
-            found.length === 0 && turnedOff.length > 0
-              ? `your ${connectorLabel(connectorId)} ${turnedOff.map((category) => category.label.replace(/^your /i, '').toLowerCase()).join(', ')}`
-              : `your ${connectorLabel(connectorId)} records`,
+          accountId: STORED_ACCOUNT_ID,
+          label: isOff
+            ? `${connectorLabel(connectorId)} (${turnedOff.map((category) => category.label).join(', ')})`
+            : `your ${connectorLabel(connectorId)} records`,
           found: found.length,
-          failure:
-            found.length === 0 && turnedOff.length > 0
-              ? TURNED_OFF_FAILURE
-              : null,
+          failure: isOff ? TURNED_OFF_FAILURE : null,
           isStored: true,
         });
       }

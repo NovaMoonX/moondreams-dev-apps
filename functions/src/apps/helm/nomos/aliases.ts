@@ -146,6 +146,9 @@ export function createQuoteBook(): QuoteBook {
 /** The failure a look in a switched-off category records; an answer that says so may stand without a source. */
 export const TURNED_OFF_FAILURE = `It's turned off in Connected apps`;
 
+/** The account a look through stored copies is logged under, so it never merges with, or masks, a live look at the same app. */
+export const STORED_ACCOUNT_ID = 'stored';
+
 export interface SearchedEntry {
   connectorId: string;
   accountId: string;
