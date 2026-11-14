@@ -56,6 +56,7 @@ import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
 import { createCloudTts } from '../../src/lib/speech/voice/cloudTts.ts';
 import {
   createSpeechSource,
+  isOtherVoice,
   type SpeechSource,
 } from '../../src/lib/speech/voice/speechSource.ts';
 import {
@@ -753,8 +754,8 @@ console.log('speechShared: on-device recognition checks passed');
   );
   const ends = hook.match(/endConversation\(\)/g) ?? [];
   assert.ok(
-    ends.length === 3,
-    'a conversation ends on an end phrase, a stop and the idle gap',
+    ends.length === 4,
+    'a conversation ends on an end phrase, a stop, the idle gap and a newly picked voice',
   );
   assert.match(
     hook,
@@ -768,8 +769,32 @@ console.log('speechShared: on-device recognition checks passed');
   );
   assert.match(
     hook,
-    /run\.current\.voice \?\?= cloud\.readVoice\(\)/,
-    'the voice is read once and kept for the conversation',
+    /run\.current\.voice \?\?= wanted;/,
+    'the voice is kept for the conversation',
+  );
+  assert.match(
+    hook,
+    /if \(isOtherVoice\(run\.current\.voice, wanted\)\) endConversation\(\);/,
+    'a voice or speed picked mid-conversation starts it afresh, so the pick is heard on the next line',
+  );
+  const aoede = { voiceId: 'Aoede', speed: 1 };
+  assert.equal(isOtherVoice(null, aoede), false, 'no voice held yet');
+  assert.equal(isOtherVoice(aoede, null), false, 'an app with no saved voice');
+  assert.equal(isOtherVoice(aoede, { ...aoede }), false, 'the same pick');
+  assert.equal(
+    isOtherVoice(aoede, { voiceId: 'Charon', speed: 1 }),
+    true,
+    'a new voice',
+  );
+  assert.equal(
+    isOtherVoice(aoede, { voiceId: 'Aoede', speed: 1.1 }),
+    true,
+    'a new speed',
+  );
+  assert.equal(
+    isOtherVoice(aoede, { voiceId: null, speed: null }),
+    true,
+    'a cleared pick goes back to the default',
   );
   assert.match(
     hook,

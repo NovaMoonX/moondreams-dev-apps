@@ -41,7 +41,7 @@ Every text goes through `toSpokenText` first ("1/2 tsp" becomes "half a teaspoon
 - **A confirmation** (priority `ack`, such as "Got it, moved to Friday"): the device, always, so it starts at once and costs nothing. The natural voice if downloaded, else the system voice.
 - **A reply or a long summary:** the cloud voice when online and under the allowance, otherwise the device.
 - **A slow cloud voice** (no first byte in 2.5 seconds), a gap between chunks that runs too long before any sound, or a provider error: that reply is spoken on the device. Once sound has played, it never switches part-way.
-- **The voice is latched per conversation.** The first cloud line fixes the voice and speed for the conversation, so a settings change applies to the next one. Once a line falls back to the device, the rest of that conversation stays on the device voice (no flip-flopping between two voices); an end phrase, a stop or the idle gap ends the conversation and clears both.
+- **The voice is latched per conversation.** The first cloud line fixes the voice and speed for the conversation. Once a line falls back to the device, the rest of that conversation stays on the device voice (no flip-flopping between two voices). An end phrase, a stop, the idle gap or a newly picked voice or speed ends the conversation and clears both, so a pick is heard on the very next line.
 - **A sample outside a conversation** (a voice picker's play button) is `playSpeechSample`: one line in the cloud voice, never the device voice, reporting played, stopped or failed.
 - **Apps that don't use the router** read aloud with `readAloud`: the natural voice when it is ready, else the system voice.
 
