@@ -551,11 +551,13 @@ export const HELM_COPY = {
   dictateDone: 'Done speaking',
   dictationShowAll: 'Show all',
   dictationShowLess: 'Show less',
+  answerShowMore: (count: number) => `Show ${count} more`,
+  answerShowFewer: 'Show fewer',
   sendFailed: "That didn't send. Your words are still here.",
   savedAsWritten: 'Saved as written',
-  reading: 'Reading…',
+  reading: 'Reading',
   readingSeveral: (count: number) =>
-    `Reading ${['both', 'all three', 'all four', 'all five', 'all six', 'all seven', 'all eight', 'all nine', 'all ten'][count - 2] ?? 'them all'}…`,
+    `Reading ${['both', 'all three', 'all four', 'all five', 'all six', 'all seven', 'all eight', 'all nine', 'all ten'][count - 2] ?? 'them all'}`,
   keepTyping:
     'Keep typing: anything you send before the reply joins this turn.',
   resultLabel: 'What was done',

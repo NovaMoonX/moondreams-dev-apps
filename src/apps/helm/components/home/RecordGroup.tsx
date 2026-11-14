@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -8,13 +10,17 @@ import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import type { AnswerQuote } from '@apps/helm/types';
 import { formatQuoteDay } from '@apps/helm/utils/quoteDay';
 
+const FOLDED_COUNT = 3;
+
 /** The records an answer read from one app: its name, a row per record, and one way into the app. */
 function RecordGroup({ quotes }: { quotes: AnswerQuote[] }) {
   const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
   const { nameOf } = useSourceAppName();
   const live = quotes.filter(
     (quote) => quote.deletedAt === null && quote.record !== null,
   );
+  const shown = isOpen ? live : live.slice(0, FOLDED_COUNT);
   const hasGone = live.length < quotes.length;
   const route =
     live
@@ -45,7 +51,7 @@ function RecordGroup({ quotes }: { quotes: AnswerQuote[] }) {
       )}
       {live.length > 0 && (
         <ul className='flex flex-col gap-2.5'>
-          {live.map(({ id, record, at }) => (
+          {shown.map(({ id, record, at }) => (
             <li key={id} className='flex items-baseline justify-between gap-3'>
               <span className='min-w-0'>
                 <span className='block text-[15px] leading-[21px] break-words'>
@@ -66,6 +72,19 @@ function RecordGroup({ quotes }: { quotes: AnswerQuote[] }) {
             </li>
           ))}
         </ul>
+      )}
+      {live.length > FOLDED_COUNT && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          className='w-full'
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          {isOpen
+            ? HELM_COPY.answerShowFewer
+            : HELM_COPY.answerShowMore(live.length - FOLDED_COUNT)}
+        </Button>
       )}
       {hasGone && (
         <p className='text-muted-foreground text-[13px]'>

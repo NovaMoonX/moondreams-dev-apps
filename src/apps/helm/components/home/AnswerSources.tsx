@@ -46,6 +46,8 @@ type SyncedSource = Extract<SourceRef, { kind: 'synced' }>;
 type ConnectionSource = Extract<SourceRef, { kind: 'connection' }>;
 type NoteSource = Extract<SourceRef, { kind: 'note' }>;
 
+const FOLDED_COUNT = 3;
+
 const ROW =
   'flex h-auto min-h-12 w-full items-center justify-start gap-3 rounded-none border-0 px-0! py-2.5! text-left';
 
@@ -375,6 +377,7 @@ interface AnswerSourcesProps {
 
 /** Where a records answer came from, one row per source; a kind not built yet draws nothing. */
 function AnswerSources({ sources, canOpen }: AnswerSourcesProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const rows = sources.flatMap((source) => {
     if (source.kind === 'task') {
       return [
@@ -429,7 +432,19 @@ function AnswerSources({ sources, canOpen }: AnswerSourcesProps) {
       aria-label={HELM_COPY.answerSourcesLabel}
       className='divide-border border-border flex flex-col divide-y border-t'
     >
-      {rows}
+      {isOpen ? rows : rows.slice(0, FOLDED_COUNT)}
+      {rows.length > FOLDED_COUNT && (
+        <Button
+          type='button'
+          variant='tertiary'
+          className='h-auto min-h-11 w-full rounded-none border-0 py-2.5'
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          {isOpen
+            ? HELM_COPY.answerShowFewer
+            : HELM_COPY.answerShowMore(rows.length - FOLDED_COUNT)}
+        </Button>
+      )}
     </div>
   );
 }
