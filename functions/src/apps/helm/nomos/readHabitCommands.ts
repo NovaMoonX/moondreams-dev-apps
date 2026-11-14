@@ -26,7 +26,12 @@ import {
   type UpdateHabitCommand,
 } from './commands.js';
 import { habitDayKey } from './habitDay.js';
-import { hasCheckInWord, hasHabitCue, mentionsHabit } from './route.js';
+import {
+  hasCheckInWord,
+  hasHabitCue,
+  isQuestion,
+  mentionsHabit,
+} from './route.js';
 
 export type HabitDrop =
   'habit-unknown' | 'habit-unasked' | 'habit-extra' | 'habit-shape';
@@ -312,6 +317,7 @@ export const readHabitCommands = (
         ].slice(0, MAX_HABIT_CANDIDATES);
         if (named.length === 0) return drop('habit-unknown');
         const text = context.captureText ?? '';
+        if (isQuestion(text.trim())) return drop('habit-unasked');
         if (
           !hasCheckInWord(text) &&
           !saysSkip &&

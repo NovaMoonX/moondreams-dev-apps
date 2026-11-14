@@ -199,15 +199,25 @@ test('the tick lands in the open window, else the nearest earlier unticked one, 
       ? result.effect.windowId
       : result.kind;
   assert.equal(landed(on('09:45')), 'm');
-  assert.equal(landed(on('21:00', day({ m: {} }))), 'e');
+  assert.equal(landed(on('21:00', day({ m: { status: 'done' } }))), 'e');
   assert.equal(landed(on('15:00')), 'm');
-  assert.equal(landed(on('15:00', day({ m: {} }))), 'e');
+  assert.equal(landed(on('15:00', day({ m: { status: 'done' } }))), 'e');
   assert.equal(landed(on('06:30')), 'm');
   assert.equal(landed(on('04:00')), 'm');
-  assert.equal(landed(on('04:00', day({ m: {} }))), 'e');
+  assert.equal(landed(on('04:00', day({ m: { status: 'done' } }))), 'e');
   assert.equal(landed(on('09:00', day(), 'e')), 'e');
-  assert.equal(landed(on('21:00', day({ m: {}, e: {} }))), 'alreadyDone');
-  assert.equal(landed(on('09:00', day({ m: {} }), 'm')), 'alreadyDone');
+  assert.equal(
+    landed(on('21:00', day({ m: { status: 'done' }, e: { status: 'done' } }))),
+    'alreadyDone',
+  );
+  assert.equal(
+    landed(on('09:00', day({ m: { status: 'done' } }), 'm')),
+    'alreadyDone',
+  );
+  assert.equal(
+    landed(on('09:00', day({ m: { status: 'skipped' } }), 'm')),
+    'm',
+  );
 });
 
 test('the result line says what was ticked, and a late-night tick counts for the evening before', () => {
@@ -227,7 +237,7 @@ test('the result line says what was ticked, and a late-night tick counts for the
     'e',
     at('2026-11-08', '21:00'),
     LA,
-    day({ m: {} }),
+    day({ m: { status: 'done' } }),
   );
   assert.equal(
     evening.kind === 'write' && evening.line,
@@ -238,7 +248,7 @@ test('the result line says what was ticked, and a late-night tick counts for the
     null,
     at('2026-11-09', '01:30'),
     LA,
-    day({ m: {} }),
+    day({ m: { status: 'done' } }),
   );
   assert.equal(late.kind, 'write');
   assert.deepEqual(late.kind === 'write' && late.effect, {

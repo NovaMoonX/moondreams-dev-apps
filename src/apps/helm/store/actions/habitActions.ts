@@ -9,6 +9,8 @@ import {
 
 import { db } from '@lib/firebase/config';
 
+import { store } from '@/store';
+
 import { generateUuid } from '@/utils';
 import { HABIT_NAME_MAX, HABIT_NOTES_MAX } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
@@ -247,21 +249,21 @@ export function setHabitStatus(
   };
   return {
     written: updateDoc(ref, { ...fields, lastEditedAt: now }),
-    /** Puts the earlier state back only while the habit is still as this change left it; 'kept' when something wrote its status or history since. */
-    undo: () =>
-      runTransaction(db, async (transaction): Promise<'undone' | 'kept'> => {
-        const snapshot = await transaction.get(ref);
-        const live = snapshot.data() as Habit | undefined;
-        if (
-          !live ||
-          live.status !== fields.status ||
-          live.history.length !== fields.history.length
-        ) {
-          return 'kept';
-        }
-        transaction.update(ref, { ...before, lastEditedAt: Date.now() });
-        return 'undone';
-      }),
+    /** Puts the earlier state back only while the habit, as the store shows it, is still as this change left it; 'kept' when something wrote its status or history since. A plain write, so it queues offline. */
+    undo: async (): Promise<'undone' | 'kept'> => {
+      const live = store
+        .getState()
+        .helm.habits.items.find((item) => item.id === habit.id);
+      if (
+        !live ||
+        live.status !== fields.status ||
+        live.history.length !== fields.history.length
+      ) {
+        return 'kept';
+      }
+      await updateDoc(ref, { ...before, lastEditedAt: Date.now() });
+      return 'undone';
+    },
   };
 }
 

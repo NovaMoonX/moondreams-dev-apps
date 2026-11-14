@@ -361,7 +361,8 @@ export function resolveCheckIn(
           : `${count} of ${habit.timesPerDay} ${lowerName(habit.name)}`,
     };
   }
-  const isTicked = (id: string) => checks[id] !== undefined;
+  const isTicked = (id: string) =>
+    (checks[id] as { status?: string } | undefined)?.status === 'done';
   const hasWindows = Object.keys(habit.windowState).length > 0;
   const target = !hasWindows
     ? 'day'

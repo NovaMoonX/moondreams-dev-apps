@@ -63,7 +63,7 @@ Next (Core MVP):
 - [ ] Encrypted from day one; Trust this browser; Activity with Undo; search
 
 Later:
-- [ ] Habits (pills, water, a parent's doses): a quiet line on Today at its time, ticked by a tap or a word ("took my pills", no need to say which), a note kept as you said it, read as "11 of 13 this week", never a streak
+- [x] Habits (pills, water, a parent's doses): a quiet line on Today at its time, ticked by a tap or a word ("took my pills", no need to say which), a note kept as you said it, read as "11 of 13 this week", never a streak
 - [ ] Forming a habit: reminders you turn on while it builds, coming whether or not you open Helm, fading as it holds (Building, Holding) and stopping once it's formed; a week later Helm offers to take it off Today, keeping its weeks and a moment. The lock screen shows "Your evening habit is up" unless you choose to show a habit's name
 - [ ] What matters most: say it in your own words ("the wedding matters most, then work", "Italian can wait") and Helm keeps the order, with no cap, asking "which comes first?" when too much is tied at the top
 - [ ] Goals: a project about becoming, with its why (your words kept, tidied only on your yes), milestones and a small regular step kept as a habit

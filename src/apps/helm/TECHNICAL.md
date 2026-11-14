@@ -731,7 +731,7 @@ interface DayAimsSealed {
 - **One document per day, not per aim**, like `HabitDay`: Today and the strip read the same 7 to 14 days by id range; the card reads one. Readable fields are only what the server needs without the key: the day key, `state`, `windDownState`, `lookAt` and `rolledAt`. The aims, their order, the results and the reasons are one sealed payload, rewritten whole by the device in a transaction when online; the server opens it only in the cases below. `reason` is one of the fixed struggle signals (section 28, "Learning from what is said"); a said reason keeps its verbatim span id only, never a copy of the words.
 - **Readers default what an older document lacks**: `windDownState` `'waiting'`, `rolledAt` and `lookAt` null, `windDown` `{}`. A day with no aims says nothing and gets no document.
 
-### `Habit` and `HabitDay` (habits and their check-ins) [Next]
+### `Habit` and `HabitDay` (habits and their check-ins)
 
 
 A habit is something the person (or someone they care for) does again and again at times of their day, where a missed time simply passes: "pills, morning and evening", "water, through the day", "practise piano four times a week". It is not a task: it is never overdue, never piles up, never enters the planner's ranking or the open-task counts, and has no `status: 'done'`. Section 28 draws the line against Issue 70's repeating tasks, and describes a habit's life, its reminders and importance.

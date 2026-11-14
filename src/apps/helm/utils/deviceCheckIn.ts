@@ -132,9 +132,8 @@ export async function takeDeviceCheckIn(
     };
   }
   if (resolution.kind !== 'write') return { kind: 'none' };
-  const isPrivate =
-    helm.habits.items.find((item) => item.id === habit.id)?.privacy ===
-    'private';
+  const record = helm.habits.items.find((item) => item.id === habit.id);
+  const isPrivate = record?.privacy === 'private' || record?.isCare === true;
   const encryption = await getHelmEncryption(uid).catch(() => null);
   const written = await writeDeviceCheckIn(uid, resolution.effect, {
     summary: resolution.line,
