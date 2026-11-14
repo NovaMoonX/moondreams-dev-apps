@@ -192,7 +192,7 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                   {HELM_COPY.assistantsChatGptHeading}
                 </h3>
                 <ol className='text-muted-foreground list-decimal pl-5 text-[15px] text-pretty'>
-                  {HELM_COPY.assistantsChatGptSteps(helmAppName).map((step) => (
+                  {HELM_COPY.assistantsChatGptSteps(name).map((step) => (
                     <li key={step}>{step}</li>
                   ))}
                 </ol>

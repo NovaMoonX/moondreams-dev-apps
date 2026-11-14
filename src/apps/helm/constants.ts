@@ -976,9 +976,9 @@ export const HELM_COPY = {
   assistantsDownloadIcon: 'Download icon',
   assistantsIconFailed: "The icon didn't download. Try again.",
   assistantsChatGptHeading: 'ChatGPT',
-  assistantsChatGptSteps: (app: string) => [
+  assistantsChatGptSteps: (name: string) => [
     'Open Plugins, tap Add, then Add custom MCP server.',
-    `Add the icon, name it ${app}, paste the description and the address, and leave Authentication on OAuth.`,
+    `Add the icon, name it ${name}, paste the description and the address, and leave Authentication on OAuth.`,
     'Tick I understand and want to continue, tap Create as a plugin, then sign in.',
   ],
   assistantsGeminiHeading: 'Gemini',
