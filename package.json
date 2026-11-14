@@ -13,6 +13,7 @@
     "lan:trust": "tsx scripts/lan.ts trust",
     "lan:untrust": "tsx scripts/lan.ts untrust",
     "lan:list": "tsx scripts/lan.ts list",
+    "icon:get": "NODE_USE_ENV_PROXY=1 NODE_NO_WARNINGS=1 tsx scripts/iconGet.ts",
     "preemulators": "npm --prefix functions run build",
     "emulators": "firebase emulators:start --only auth,firestore,database,functions,storage",
     "preemulators:lan": "npm --prefix functions run build",
@@ -195,6 +196,9 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@faker-js/faker": "^10.6.0",
+    "@iconify/types": "^2.0.0",
+    "@iconify/utils": "^3.1.7",
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
