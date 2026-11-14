@@ -485,6 +485,9 @@ const MEDIA_WORDS: Record<
 
 const mediaWordOf = (kind: MediaKind) => MEDIA_WORDS[kind].word;
 
+/** The home composer's name for the voice, so a field elsewhere being spoken into can clear home's dock and box away. */
+export const HOME_COMPOSER_ID = 'home-composer';
+
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
   talk: 'Talk',
@@ -543,6 +546,11 @@ export const HELM_COPY = {
   todayFirstRun: (name: string) =>
     `Nothing is planned for today yet. Once you have told ${name} about a task or an event, it appears here.`,
   send: 'Send',
+  dictate: 'Speak your message',
+  dictateAnswer: 'Speak your answer',
+  dictateDone: 'Done speaking',
+  dictationShowAll: 'Show all',
+  dictationShowLess: 'Show less',
   sendFailed: "That didn't send. Your words are still here.",
   savedAsWritten: 'Saved as written',
   reading: 'Reading…',
@@ -1739,8 +1747,8 @@ export const HELM_COPY = {
   placeHomeLine: 'Your home',
   placeTasksEmpty: 'No open tasks here.',
   questionNeedsConnection: 'Answering needs a connection.',
-  questionSkip: 'Skip',
-  questionSkipped: "Skipped. It's waiting in Needs you.",
+  questionSkip: 'Answer later',
+  questionSkipped: "Saved for later. It's waiting in Needs you.",
   questionAnswered: 'Done.',
   factKept: (statement: string) => `Kept “${statement}”`,
   factKeptNeither: 'Saved what’s true now',

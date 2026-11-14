@@ -22,7 +22,7 @@ interface VoiceStatusProps {
   screen?: ScreenContext | null;
 }
 
-function VoiceNotice() {
+export function VoiceNotice() {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <>
@@ -69,6 +69,7 @@ function VoiceStatus({
   const isIdle = voice.state === 'idle';
   const isWorking = voice.state === 'thinking' || voice.state === 'speaking';
   const showsPhoneLine = isIdle && voice.showsPhoneLine;
+  if (voice.isDictating) return null;
   if (
     text === '' &&
     !(hasControls && isIdle) &&
