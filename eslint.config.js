@@ -24,6 +24,11 @@ export default defineConfig([
         {
           paths: [
             {
+              name: 'rrule',
+              message:
+                "'rrule' is the check:repeat-rule oracle only: nothing under src/ or functions/ imports it. Use '@/utils/repeatRule'.",
+            },
+            {
               name: '@moondreamsdev/dreamer-ui/components',
               importNames: ['Callout'],
               message:
@@ -53,7 +58,7 @@ export default defineConfig([
         },
         {
           selector:
-            "CallExpression[callee.property.name=/^(replaceState|pushState)$/] > ObjectExpression > Property > Literal[value=true]",
+            'CallExpression[callee.property.name=/^(replaceState|pushState)$/] > ObjectExpression > Property > Literal[value=true]',
           message:
             "Mark a Back step with markHistoryStep/isHistoryStep ('@/hooks/useBackHistory'): history.state outlives a reload, so a `true` mark from an earlier load pops onto the old page and loads the app again.",
         },
@@ -66,6 +71,10 @@ export default defineConfig([
   },
   {
     files: ['src/components/Drawer.tsx'],
+    rules: { 'no-restricted-imports': 'off' },
+  },
+  {
+    files: ['scripts/checks/repeatRule.ts'],
     rules: { 'no-restricted-imports': 'off' },
   },
   {

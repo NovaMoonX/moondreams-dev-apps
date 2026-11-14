@@ -88,6 +88,7 @@ jobs:
       - run: npm ci --prefix functions
       - run: npm run check:helm-sort
       - run: npm run check:helm-name-hints
+      - run: npm run check:repeat-rule
       - run: npm run check:helm-private
       - run: npm run check:helm-kin
       - run: npm run check:helm-screen
