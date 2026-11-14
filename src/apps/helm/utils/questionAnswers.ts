@@ -71,6 +71,9 @@ export function matchSpokenAnswer(
   });
   if (read === null || read.kind === 'skip') return read;
   const { value } = read;
+  if (value.shape === 'pickSeveral') {
+    return { kind: 'answer', value: { ...value, otherText: null } };
+  }
   if (value.shape !== 'pickRecord') return { kind: 'answer', value };
   const option = question.options.find((entry) => entry.id === value.optionId);
   // A new name can't be heard as an option, so the words go on as a turn.
@@ -118,7 +121,12 @@ export function describeAnswer(
   if (value.shape === 'pickSeveral') {
     return value.optionIds.includes('none')
       ? HELM_COPY.answerNone
-      : HELM_COPY.answerPicked(joinLabels(value.optionIds.map(labelOf)));
+      : HELM_COPY.answerPicked(
+          joinLabels([
+            ...value.optionIds.map(labelOf),
+            ...(value.otherText ? [value.otherText] : []),
+          ]),
+        );
   }
   if (value.shape === 'freeText') return value.text;
   if (value.shape === 'number') {

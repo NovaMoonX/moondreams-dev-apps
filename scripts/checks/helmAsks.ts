@@ -426,6 +426,7 @@ test('a bad structured answer falls back to the words', () => {
     { shape: 'pickSeveral', optionIds: ['o9'] },
     { shape: 'pickSeveral', optionIds: [] },
     { shape: 'pickSeveral', optionIds: ['none', 'o1'] },
+    { shape: 'pickSeveral', optionIds: ['o1'], otherText: 'fish' },
     { shape: 'yesNo', optionId: 'yes', otherText: null },
     null,
   ].forEach((value) => {
