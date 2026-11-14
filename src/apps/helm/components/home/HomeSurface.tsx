@@ -33,7 +33,6 @@ import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
 interface HomeSurfaceProps {
   composerRef: Ref<HTMLTextAreaElement>;
-  /** The field is in use and the dock has given way, so nothing below the composer is covered. */
   isComposing: boolean;
   onComposerFocusChange: (isFocused: boolean) => void;
   onOpenSettings: () => void;

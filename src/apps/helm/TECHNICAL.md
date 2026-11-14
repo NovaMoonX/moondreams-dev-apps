@@ -98,7 +98,7 @@ interface HelmProfile {
   busyAllDayEventRefs: string[];       // synced ids of all-day events the person said block the day
   calendarOfferFoldedAt: number | null;
   hasSeenAiNotice: boolean;            // the first-capture AI line was shown
-  hasSeenVoiceNotice: boolean | null;  // deprecated: where speech goes is a help icon while listening; written null
+  hasSeenVoiceNotice: boolean | null; // deprecated: where speech goes is a help icon while listening; written null
   voiceMode: VoiceMode;                // round 6: default 'cloudWhenOnline'
   isWakeWordOn: boolean;               // round 6: "Hey {name}" while Helm is open on screen; default false (PRODUCT.md: off until turned on)
   isHandsFreeOn: boolean;              // round 6: the mic reopens for a follow-up after a spoken reply; default true
