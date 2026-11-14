@@ -13,7 +13,7 @@ const SWITCH = 'LOCAL_FIXTURES';
 
 interface ServiceInfo {
   apps: string;
-  appIds: string[] | 'all';
+  appIds: string[];
   keys: string[];
   // Bound secrets reach the emulator from production; run-time keys only from the two local files.
   isBound: boolean;
@@ -31,24 +31,24 @@ const SERVICES: Record<FixtureService, ServiceInfo> = {
       'npm run ai:anthropic-secret, or add ANTHROPIC_API_KEY=... to functions/.secret.local',
   },
   deepgram: {
-    apps: 'voice in every app (listening and Aura speech)',
-    appIds: 'all',
+    apps: 'voice in Helm and Pinch (listening and Aura speech)',
+    appIds: ['helm', 'pinch'],
     keys: ['DEEPGRAM_API_KEY'],
     isBound: false,
     setup:
       'add DEEPGRAM_API_KEY=... to functions/.env.local (read at run time, so production is not used locally)',
   },
   'google-tts': {
-    apps: 'voice in every app (default speech voice)',
-    appIds: 'all',
+    apps: 'voice in Helm and Pinch (default speech voice)',
+    appIds: ['helm', 'pinch'],
     keys: [],
     isBound: false,
     setup: 'not available: the emulator never calls Google speech',
     note: 'fixtures (always in the emulator)',
   },
   gemini: {
-    apps: 'voice (Gemini speech)',
-    appIds: 'all',
+    apps: 'voice in Helm and Pinch (Gemini speech)',
+    appIds: ['helm', 'pinch'],
     keys: ['GEMINI_API_KEY'],
     isBound: false,
     setup:
@@ -209,7 +209,7 @@ const showStatus = (appId?: string) => {
   }
   const shown = FIXTURE_SERVICES.filter((service) => {
     const { appIds } = SERVICES[service];
-    return !appId || appIds === 'all' || appIds.includes(appId);
+    return !appId || appIds.includes(appId);
   });
   const width = Math.max(...shown.map((service) => service.length));
   shown.forEach((service) =>
@@ -249,17 +249,109 @@ const setMode = (mode: string, target: string) => {
   console.log(RESTART);
 };
 
-const [mode, target] = process.argv.slice(2);
+
+const readSecret = (prompt: string) =>
+  new Promise<string>((resolve) => {
+    const typed: string[] = [];
+    process.stdout.write(prompt);
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    const onData = (chunk: string) =>
+      [...chunk].forEach((char) => {
+        if (char === '\u0003') {
+          process.stdout.write('\n');
+          process.exit(130);
+        }
+        if (char === '\r' || char === '\n') {
+          process.stdin.setRawMode(false);
+          process.stdin.pause();
+          process.stdin.off('data', onData);
+          process.stdout.write('\n');
+          resolve(typed.join('').trim());
+          return;
+        }
+        if (char === '\u007f') typed.pop();
+        else if (char >= ' ') typed.push(char);
+      });
+    process.stdin.on('data', onData);
+  });
+
+const saveValue = (file: string, key: string, value: string) => {
+  const lines = readLines(file);
+  const kept = lines.length > 0 && lines[lines.length - 1] === '' ? lines.slice(0, -1) : lines;
+  const others = kept.filter((line) => !new RegExp(`^\\s*${key}\\s*=`).test(line));
+  writeFileSync(file, `${[...others, `${key}=${value}`].join('\n')}\n`);
+};
+
+const isIgnoredByGit = (file: string) => {
+  try {
+    execFileSync('git', ['check-ignore', '-q', file], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const readValuesInOrder = (prompts: string[]) =>
+  prompts.reduce<Promise<string[]>>(async (done, prompt) => {
+    const soFar = await done;
+    if (soFar.length < prompts.indexOf(prompt)) return soFar;
+    const value = await readSecret(prompt);
+    return value ? [...soFar, value] : soFar;
+  }, Promise.resolve([]));
+
+/** Offers to save a key for each service this app uses that has none locally. Never prints a key; writes only git-ignored files. */
+const askForKeys = async (appId: string, isRunning: boolean) => {
+  const forced = readForced();
+  const isGcloudReady = isSignedInToGcloud();
+  const missing = FIXTURE_SERVICES.filter(
+    (service) =>
+      SERVICES[service].appIds.includes(appId) &&
+      SERVICES[service].keys.length > 0 &&
+      !isForced(forced, service) &&
+      describeService(service, forced, isGcloudReady).startsWith('fixtures'),
+  );
+  if (missing.length === 0) return;
+  if (!process.stdin.isTTY) {
+    console.log(`No keys saved for ${missing.join(', ')}: not an interactive terminal (see npm run local:services).`);
+    return;
+  }
+  console.log(
+    `\n${missing.join(', ')}: no key here, so fixtures are used. Paste a key to use the real service, or press Enter to keep fixtures.\n(To stop being asked: npm run local:services -- fixtures <service>)`,
+  );
+  const saved = await missing.reduce<Promise<string[]>>(async (done, service) => {
+    const soFar = await done;
+    const { keys, isBound } = SERVICES[service];
+    const file = isBound ? SECRET_FILE : ENV_FILE;
+    const values = await readValuesInOrder(keys.map((key) => `${service}: ${key} (hidden) > `));
+    if (values.length < keys.length) return soFar;
+    if (!isIgnoredByGit(file)) {
+      console.log(`${file} is not git-ignored, so nothing was written. Fix .gitignore first.`);
+      return soFar;
+    }
+    keys.forEach((key, index) => saveValue(file, key, values[index]));
+    console.log(`Saved ${keys.join(' and ')} to ${file}.`);
+    return [...soFar, service];
+  }, Promise.resolve([]));
+  if (saved.length > 0 && isRunning) {
+    console.log(`The running emulators read keys when they start. ${RESTART}`);
+  }
+};
+
+const [mode, target, extra] = process.argv.slice(2);
 
 if (!mode) {
   showStatus();
 } else if (mode === 'for' && target) {
   showStatus(target);
+} else if (mode === 'keys' && target) {
+  await askForKeys(target, extra === '--running');
 } else if ((mode === 'fixtures' || mode === 'real') && target) {
   setMode(mode, target);
 } else {
   console.error(
-    'Usage: npm run local:services [-- for <app> | fixtures|real <service|all>]',
+    'Usage: npm run local:services [-- for <app> | keys <app> | fixtures|real <service|all>]',
   );
   process.exitCode = 1;
 }
