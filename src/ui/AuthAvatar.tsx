@@ -13,16 +13,23 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import AccountPanel from '@/ui/AccountPanel';
 import UserAvatar from '@/ui/UserAvatar';
 import { useAuth } from '@hooks/useAuth';
-import { useCanSeeDebugDetails } from '@lib/debugProfiles/useCanSeeDebugDetails';
+import { useIsDebugListed } from '@lib/debugProfiles/useCanSeeDebugDetails';
 
 type AuthAvatarProps = {
   className?: string;
 };
 
 function AuthAvatar({ className }: AuthAvatarProps) {
-  const { user, loading, signInWithGoogle, logOut, isAdmin, rememberedAccounts } = useAuth();
+  const {
+    user,
+    loading,
+    signInWithGoogle,
+    logOut,
+    isAdmin,
+    rememberedAccounts,
+  } = useAuth();
   // Asked while the site still works, so an error screen reached offline or with Firestore failing already knows.
-  useCanSeeDebugDetails();
+  const isDebugListed = useIsDebugListed();
   const switchToAccount = useAccountSwitch();
   const { pathname } = useLocation();
   // Tied to the page it opened on, so any navigation (Back, a link elsewhere) closes the card.
@@ -30,11 +37,14 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   const isOpen = openPath === pathname;
   const setIsOpen = (next: boolean | ((open: boolean) => boolean)) =>
     setOpenPath((current) => {
-      const nextOpen = typeof next === 'function' ? next(current === pathname) : next;
+      const nextOpen =
+        typeof next === 'function' ? next(current === pathname) : next;
       return nextOpen ? pathname : null;
     });
   const isPhone = useMediaQuery().isBelow('sm');
-  const { dialogId, onDialogClose } = useSheetHistory(isOpen && isPhone, () => setIsOpen(false));
+  const { dialogId, onDialogClose } = useSheetHistory(isOpen && isPhone, () =>
+    setIsOpen(false),
+  );
   const navigate = useNavigate();
   const isAwayFromHome = pathname !== '/';
 
@@ -81,7 +91,9 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   }
 
   const displayName = user.displayName ?? user.email ?? 'User';
-  const otherAccounts = rememberedAccounts.filter((account) => account.uid !== user.uid);
+  const otherAccounts = rememberedAccounts.filter(
+    (account) => account.uid !== user.uid,
+  );
   const close = () => setIsOpen(false);
   const goTo = (path: string) => {
     close();
@@ -91,6 +103,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   const panelProps = {
     user,
     isAdmin,
+    isDebugListed,
     otherAccounts,
     onSwitch: (account: RememberedAccount | null) => {
       close();
@@ -108,7 +121,9 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     <Button
       variant='base'
       size='sm'
-      aria-label='Your account'
+      aria-label={
+        isDebugListed ? 'Your account, debug details are on' : 'Your account'
+      }
       aria-expanded={isOpen}
       className={join(
         "gap-2 max-sm:relative max-sm:min-w-0 max-sm:px-0 max-sm:after:absolute max-sm:after:-inset-1.5 max-sm:after:content-['']",
@@ -116,7 +131,15 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       )}
       onClick={() => setIsOpen((open) => !open)}
     >
-      <UserAvatar user={user} size='sm' />
+      <span
+        className={join(
+          'relative inline-flex rounded-full',
+          isDebugListed &&
+            'ring-offset-background ring-2 ring-amber-600 ring-offset-2 dark:ring-amber-300',
+        )}
+      >
+        <UserAvatar user={user} size='sm' />
+      </span>
       <span className='hidden sm:inline'>{displayName}</span>
       {isPhone ? null : <ChevronDown className='h-4 w-4' />}
     </Button>
@@ -130,7 +153,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
           size='sm'
           aria-label='Home'
           title='Home'
-          className="relative max-sm:hidden after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+          className="relative after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] max-sm:hidden"
           onClick={() => navigate('/')}
         >
           <House className='h-4 w-4' />
@@ -139,8 +162,16 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       {isPhone ? (
         <>
           {trigger}
-          <Drawer id={dialogId} isOpen={isOpen} onClose={onDialogClose} title='Account' showCloseButton>
-            <div className='pb-4'>{isOpen && <AccountPanel {...panelProps} />}</div>
+          <Drawer
+            id={dialogId}
+            isOpen={isOpen}
+            onClose={onDialogClose}
+            title='Account'
+            showCloseButton
+          >
+            <div className='pb-4'>
+              {isOpen && <AccountPanel {...panelProps} />}
+            </div>
           </Drawer>
         </>
       ) : (
