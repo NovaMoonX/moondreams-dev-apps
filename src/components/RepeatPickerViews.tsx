@@ -262,7 +262,7 @@ export function PresetsView({
           onClick={onCustom}
           className='text-foreground! h-auto min-h-[52px] w-full justify-between rounded-none px-3! text-[15px] font-medium'
         >
-          <span>Custom…</span>
+          <span className='flex-1 text-left'>Custom…</span>
           <ChevronRight
             className='text-muted-foreground size-4'
             aria-hidden='true'
@@ -408,7 +408,11 @@ export function CustomView({
       {freq === 'weekly' && (
         <div className='flex flex-col gap-2'>
           <p className={LABEL_CLASS}>On</p>
-          <div role='group' aria-label='On' className='grid grid-cols-7 gap-1'>
+          <div
+            role='group'
+            aria-label='On'
+            className='flex justify-between sm:justify-start sm:gap-2'
+          >
             {order.map(({ key, name, letter }) => {
               const isPicked = parts.weekdays.includes(key);
               return (
@@ -421,7 +425,7 @@ export function CustomView({
                   aria-pressed={isPicked}
                   onClick={() => toggleDay(key)}
                   className={join(
-                    "relative mx-auto aspect-square size-9 min-w-0 p-0 before:absolute before:-inset-1 before:content-[''] min-[360px]:size-10",
+                    "relative aspect-square size-9 min-w-0 p-0 before:absolute before:-inset-1 before:content-[''] min-[360px]:size-10",
                     !isPicked &&
                       'border-border bg-card text-foreground! border',
                   )}

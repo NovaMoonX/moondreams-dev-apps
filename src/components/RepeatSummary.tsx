@@ -43,11 +43,11 @@ function RepeatSummary({
       className={join('bg-muted rounded-[14px] px-3.5 py-3', className)}
       aria-live='polite'
     >
-      <p className='text-foreground text-[15px]'>
+      <p className='text-foreground text-[15px] text-pretty'>
         {describeRepeat(rule, startsOn, { time, timeFormat })}
       </p>
       {dates.length > 0 && (
-        <p className='text-muted-foreground mt-1 text-[13px]'>
+        <p className='text-muted-foreground mt-1 text-[13px] text-pretty'>
           Next:{' '}
           {dates.map((key, index) => (
             <span key={key}>

@@ -21,7 +21,7 @@ function RepeatPicker({ picker }: RepeatPickerProps) {
         aria-label={`${label}: ${fieldText}`}
         className='bg-card border-border text-foreground! h-12 w-full justify-between rounded-[10px] border px-3! text-[15px] font-normal'
       >
-        <span className='truncate'>{fieldText}</span>
+        <span className='min-w-0 flex-1 truncate text-left'>{fieldText}</span>
         <ChevronRight
           className='text-muted-foreground size-4 shrink-0'
           aria-hidden='true'
