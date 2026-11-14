@@ -4812,7 +4812,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         voiceMode: 'cloudWhenOnline',
         isWakeWordOn: false,
         isHandsFreeOn: true,
-        hasSeenVoiceNotice: false,
+        hasSeenVoiceNotice: null,
         selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
         currentPlace: null,
         styleLearnedThroughAt:

@@ -1152,6 +1152,7 @@ export const HELM_COPY = {
   voiceDone: 'Done',
   voiceModeFailed: "Couldn't change that. Try again.",
   voiceOnPhone: 'Listening with this browser for the rest of today.',
+  voiceNoticeTitle: 'Where your speech goes',
   voiceNotice:
     "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound or use it to train its models. You can change this in Settings.",
   settingsYourData: 'Your data',

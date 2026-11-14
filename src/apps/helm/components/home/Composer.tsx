@@ -15,6 +15,7 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ArrowUp,
   AtSign,
@@ -484,8 +485,20 @@ function Composer({
           )}
         </div>
       )}
-      {isShorthandOpen && canType && showsActions && (
-        <ShorthandRow onInsert={insertShorthand} />
+      {canType && showsActions && (
+        <div
+          inert={!isShorthandOpen}
+          className={join(
+            'grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none',
+            isShorthandOpen
+              ? 'grid-rows-[1fr] opacity-100'
+              : 'grid-rows-[0fr] opacity-0',
+          )}
+        >
+          <div className='min-h-0 overflow-hidden'>
+            <ShorthandRow onInsert={insertShorthand} />
+          </div>
+        </div>
       )}
       <div className='flex items-end gap-1'>
         {showsActions && !(isOutbox && !isReady) && (

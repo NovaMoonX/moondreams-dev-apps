@@ -127,6 +127,7 @@ function HelmApp() {
         {isHome && (
           <HomeSurface
             composerRef={composerRef}
+            isComposing={isComposing}
             onComposerFocusChange={setIsComposing}
             onOpenSettings={() => showView('settings')}
             onOpenSearch={() => showView('search')}

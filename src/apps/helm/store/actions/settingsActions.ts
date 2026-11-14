@@ -53,7 +53,7 @@ export async function ensureHelmProfile(uid: string) {
       voiceMode: 'cloudWhenOnline',
       isWakeWordOn: false,
       isHandsFreeOn: true,
-      hasSeenVoiceNotice: false,
+      hasSeenVoiceNotice: null,
       selfWhoId: null,
       currentPlace: null,
       styleLearnedThroughAt: null,

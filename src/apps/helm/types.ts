@@ -67,8 +67,8 @@ export interface HelmProfile {
   isWakeWordOn: boolean;
   /** After a spoken reply, listening stays open for a few seconds so the person can answer without a tap. */
   isHandsFreeOn: boolean;
-  /** The line saying who hears what was shown. */
-  hasSeenVoiceNotice: boolean;
+  /** @deprecated Where speech goes is a help icon while listening, open any time; nothing is marked seen. */
+  hasSeenVoiceNotice: boolean | null;
   /** The person's own who, made on first open; null on a profile from before people. */
   selfWhoId: string | null;
   /** Where the person said they are, holding for a few hours from when they said it; never the device's location. */
