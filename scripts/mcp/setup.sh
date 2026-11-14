@@ -49,6 +49,9 @@ pause "   Press Enter when they're added. "
 
 CURRENT="the AuthKit domain"
 echo
+if secret_saved WORKOS_AUTHKIT_DOMAIN; then
+  echo "4. ✓ WORKOS_AUTHKIT_DOMAIN is already saved in Firebase, so this step is skipped."
+else
 echo "4. Open Domains in the left menu and copy the AuthKit domain (it ends in authkit.app, or is your own custom domain)."
 domain=""
 until [[ -n "$domain" ]]; do
@@ -66,12 +69,16 @@ DOMAIN="$domain" node -e '
     console.error("✗ That is not the AuthKit domain: its issuer differs. Copy the domain from Domains again.");
     process.exit(1);
   }
+  if (!m.registration_endpoint) {
+    console.error("⚠ AuthKit offers no client registration yet, so Gemini cannot connect. Check Dynamic Client Registration is on in step 2.");
+  }
 ' <<<"$metadata"
 echo "✓ AuthKit answers at $domain"
 
 CURRENT="saving WORKOS_AUTHKIT_DOMAIN"
 printf %s "$domain" | firebase functions:secrets:set WORKOS_AUTHKIT_DOMAIN --project "$PROJECT" --data-file=- >/dev/null
 echo "✓ WORKOS_AUTHKIT_DOMAIN saved in Firebase"
+fi
 
 CURRENT="the API key"
 echo
@@ -83,7 +90,7 @@ else
   read -rs key || true
   echo
   key=${key//[[:space:]]/}
-  [[ "$key" == sk_* ]] || { echo "✗ That doesn't look like a secret key (they start with sk_). Nothing was saved." >&2; exit 1; }
+  [[ "$key" == sk_live_* ]] || { echo "✗ That isn't a Production secret key (those start with sk_live_). Switch to Production in step 1 and copy it again. Nothing was saved." >&2; exit 1; }
   # Listing one user reads only. The key goes to curl's stdin as a header file, never argv.
   status=$(printf 'Authorization: Bearer %s\n' "$key" \
     | curl -s -o /dev/null -w '%{http_code}' --max-time 15 -H @- "https://api.workos.com/user_management/users?limit=1") || true

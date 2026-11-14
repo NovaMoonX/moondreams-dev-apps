@@ -42,10 +42,8 @@ export type ClientStanding =
   | { kind: 'revoked' }
   | { kind: 'ok'; clearRevoked: boolean; touchLastUsed: boolean };
 
-/**
- * A disconnect clears only on a reconnect: a token issued after it and a sign-in through our page after it.
- * A refresh alone can't undo a disconnect whose provider-side revocation failed.
- */
+// A disconnect clears only on a reconnect: a token issued after it and a sign-in through our page after it.
+// A refresh alone can't undo a disconnect whose provider-side revocation failed.
 export const clientStanding = (
   stored: StoredClient,
   issuedAtSeconds: number,

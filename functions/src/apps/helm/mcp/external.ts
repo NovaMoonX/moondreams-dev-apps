@@ -192,15 +192,26 @@ async function describeTurn({
 }
 
 const ALREADY_EXISTS = 6;
+// Hosting cuts a function off at 60 seconds, so a slow sort answers "still reading" and the device finishes it.
+const SORT_ANSWER_MS = 45 * 1000;
+const STILL_READING: SortResult = {
+  status: 'received',
+  executionId: null,
+  releasedIds: [],
+  hasAnswer: false,
+  spoken: null,
+};
 const RETRY_WINDOW_MS = 2 * 60 * 1000;
 const ALREADY_FILED_TEXT =
-  'Helm already has these words from a moment ago, so they were not filed twice. What it did is in Helm\'s Activity.';
+  "Helm already has these words from a moment ago, so they were not filed twice. What it did is in Helm's Activity.";
 
 /** The same words from the same assistant within two minutes are one turn, so a retried call never files them twice. */
 const retryKeyFor = (ctx: McpRequestContext, words: string, now: number) =>
   `mcp_${createHash('sha256')
     .update(
-      [ctx.uid, ctx.clientKey, words, Math.floor(now / RETRY_WINDOW_MS)].join('|'),
+      [ctx.uid, ctx.clientKey, words, Math.floor(now / RETRY_WINDOW_MS)].join(
+        '|',
+      ),
     )
     .digest('hex')
     .slice(0, 28)}`;
@@ -220,75 +231,80 @@ async function fileTurn({
   const reference = firestore
     .collection(`apps/helm/users/${ctx.uid}/captures`)
     .doc(retryKeyFor(ctx, words, createdAt));
-  const isNew = await reference.create({
-    inputMode: 'typed',
-    sttProvider: null,
-    interruptedCaptureId: null,
-    answersQuestion: null,
-    ttsProvider: null,
-    arrivedVia: 'direct',
-    medium: 'mcp',
-    via: ctx.clientName,
-    sessionId: randomUUID(),
-    turnIndex: 0,
-    route: null,
-    status: 'received',
-    heldReason: null,
-    claimId: null,
-    claimedAt: null,
-    attempts: 0,
-    lastErrorCode: null,
-    questionState: {},
-    executionIds: [],
-    turnLeadId: null,
-    joinedCaptureIds: [],
-    attachmentIds: [],
-    seenAt: null,
-    quotedSourceKeys: [],
-    answerSavedNoteId: null,
-    whoIds: [],
-    placeIds: [],
-    planDayKey: null,
-    createdAt,
-    sortedAt: null,
-    screen: null,
-    sealed: sealForHelm(key, {
-      text: words,
-      reading: {
-        people: [],
-        places: [],
-        documents: [],
-        commands: [],
-        isUrgent: false,
-        dates: [],
-        addressedAs: null,
+  const isNew = await reference
+    .create({
+      inputMode: 'typed',
+      sttProvider: null,
+      interruptedCaptureId: null,
+      answersQuestion: null,
+      ttsProvider: null,
+      arrivedVia: 'direct',
+      medium: 'mcp',
+      via: ctx.clientName,
+      sessionId: randomUUID(),
+      turnIndex: 0,
+      route: null,
+      status: 'received',
+      heldReason: null,
+      claimId: null,
+      claimedAt: null,
+      attempts: 0,
+      lastErrorCode: null,
+      questionState: {},
+      executionIds: [],
+      turnLeadId: null,
+      joinedCaptureIds: [],
+      attachmentIds: [],
+      seenAt: null,
+      quotedSourceKeys: [],
+      answerSavedNoteId: null,
+      whoIds: [],
+      placeIds: [],
+      planDayKey: null,
+      createdAt,
+      sortedAt: null,
+      screen: null,
+      sealed: sealForHelm(key, {
+        text: words,
+        reading: {
+          people: [],
+          places: [],
+          documents: [],
+          commands: [],
+          isUrgent: false,
+          dates: [],
+          addressedAs: null,
+        },
+        answer: null,
+        questionAnswer: null,
+      }),
+    })
+    .then(
+      () => true,
+      (error: unknown) => {
+        if ((error as { code?: unknown }).code === ALREADY_EXISTS) return false;
+        throw error;
       },
-      answer: null,
-      questionAnswer: null,
-    }),
-  }).then(
-    () => true,
-    (error: unknown) => {
-      if ((error as { code?: unknown }).code === ALREADY_EXISTS) return false;
-      throw error;
-    },
-  );
+    );
   if (!isNew) return ALREADY_FILED_TEXT;
-  const result = await runHelmSort({
-    uid: ctx.uid,
-    captureId: reference.id,
-    requestKey: randomUUID(),
-    mode: 'full',
-    noteIds: [],
-  }).catch(
-    (): SortResult => ({
-      status: 'failed',
-      executionId: null,
-      releasedIds: [],
-      hasAnswer: false,
-      spoken: null,
+  const result = await Promise.race([
+    runHelmSort({
+      uid: ctx.uid,
+      captureId: reference.id,
+      requestKey: randomUUID(),
+      mode: 'full',
+      noteIds: [],
     }),
-  );
+    new Promise<SortResult>((resolve) =>
+      setTimeout(() => resolve(STILL_READING), SORT_ANSWER_MS),
+    ),
+  ]).catch((): SortResult => ({
+    status: 'failed',
+    executionId: null,
+    releasedIds: [],
+    hasAnswer: false,
+    spoken: null,
+  }));
   return describeTurn({
     firestore,
     uid: ctx.uid,
@@ -385,7 +401,7 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
 export const helmMcp = onRequest(
   {
     region: 'us-central1',
-    timeoutSeconds: 120,
+    timeoutSeconds: 60,
     secrets: [
       HELM_MASTER_KEYS,
       ANTHROPIC_API_KEY,

@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { Response } from 'express';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import type { Request } from 'firebase-functions/v2/https';
@@ -22,6 +23,25 @@ import {
   verifyMcpAccessToken,
   type McpAccessClaims,
 } from './workos.js';
+
+const ACCOUNT_CHECK_MS = 5 * 60 * 1000;
+const accountChecks = new Map<string, { isActive: boolean; at: number }>();
+
+/** A deleted or disabled account loses its assistants within five minutes, whatever WorkOS still issues. */
+const isAccountActive = async (uid: string) => {
+  const cached = accountChecks.get(uid);
+  if (cached && Date.now() - cached.at < ACCOUNT_CHECK_MS)
+    return cached.isActive;
+  const isActive = await getAuth()
+    .getUser(uid)
+    .then((user) => !user.disabled)
+    .catch((error: { code?: string }) => {
+      if (error.code === 'auth/user-not-found') return false;
+      throw error;
+    });
+  accountChecks.set(uid, { isActive, at: Date.now() });
+  return isActive;
+};
 
 export interface McpRequestContext {
   uid: string;
@@ -173,6 +193,10 @@ async function serveTool(
     refuse(res, 403, -32002, 'This sign-in is not linked to an account.');
     return;
   }
+  if (!(await isAccountActive(uid))) {
+    refuse(res, 403, -32002, 'This account is closed or turned off.');
+    return;
+  }
   const context = await sealClient(options.appId, uid, claims);
   if (context === 'revoked') {
     refuse(
@@ -220,7 +244,7 @@ export function createMcpHttpHandler(options: McpHttpOptions) {
         res.json(body);
         return;
       }
-      if (req.path !== resourcePath) {
+      if (req.path.replace(/\/$/, '') !== resourcePath) {
         res.status(404).json({ error: 'Not found.' });
         return;
       }

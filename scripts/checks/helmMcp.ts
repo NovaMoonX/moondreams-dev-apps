@@ -63,9 +63,24 @@ const failures = tools.flatMap((tool) => [
 ]);
 assert.deepEqual(failures, []);
 
-assert.ok(
-  tools.some((tool) => tool.audience !== 'nomos'),
-  'no tool is offered to outside assistants',
+// Every tool an outside assistant gets is named here on purpose. get_calendar is the one that reads other apps'
+// copies: event titles and times only, which an assistant needs to answer "what's on Friday".
+const OUTSIDE_TOOLS = [
+  'connection_status',
+  'get_calendar',
+  'get_topic',
+  'list_connections',
+  'list_topics',
+  'search_procedures',
+  'search_tasks',
+];
+assert.deepEqual(
+  tools
+    .filter((tool) => tool.audience !== 'nomos')
+    .map((tool) => tool.name)
+    .sort(),
+  OUTSIDE_TOOLS,
+  'the tools offered to outside assistants changed: review the new one and name it in OUTSIDE_TOOLS',
 );
 
 // A tool in buildTools only reads; tell_helm is the one external tool that files, and lives in external.ts.

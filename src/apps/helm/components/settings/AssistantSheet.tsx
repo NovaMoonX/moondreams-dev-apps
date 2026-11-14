@@ -85,7 +85,7 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
                 {HELM_COPY.assistantWrites(helmAppName)}
               </p>
               <p className='text-muted-foreground text-[13px] text-pretty'>
-                {HELM_COPY.assistantWritesHint(helmAppName)}
+                {HELM_COPY.assistantWritesHint(assistant.canWrite)}
               </p>
             </div>
             <AppToggle
@@ -94,6 +94,9 @@ function AssistantSheet({ assistant, onClose }: AssistantSheetProps) {
               onCheckedChange={(checked) => void setCanWrite(checked)}
             />
           </div>
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.assistantPrivacy(assistant.name)}
+          </p>
           <p className='text-muted-foreground text-[13px]'>
             {HELM_COPY.assistantConnectedOn(formatDate(assistant.firstSeenAt))}
           </p>

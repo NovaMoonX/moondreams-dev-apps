@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '@hooks/useAuth';
 import { completeMcpSignIn } from '@lib/mcp/mcpCalls';
@@ -13,6 +13,10 @@ const COPY = {
   signInTitle: 'Connect your assistant',
   signInMessage:
     'Sign in first, and your assistant will pick up right where it left off.',
+  confirmTitle: 'Connect an assistant?',
+  confirm:
+    'Claude, Gemini or another assistant is asking to read your apps as you. Continue only if you started this from your assistant just now.',
+  continue: 'Continue',
   working: 'Connecting your assistant…',
   workingHint: 'One moment, then you will be sent back to it.',
   missingTitle: 'This link is missing something',
@@ -29,7 +33,7 @@ const COPY = {
   home: 'Go home',
 } as const;
 
-type Outcome = 'working' | 'unverified' | 'retry' | 'restart';
+type Outcome = 'confirm' | 'working' | 'unverified' | 'retry' | 'restart';
 
 const RETRYABLE = [
   'functions/unavailable',
@@ -80,11 +84,14 @@ function Notice({
   );
 }
 
-const HomeLink = () => (
-  <Link to='/'>
-    <Button variant='tertiary'>{COPY.home}</Button>
-  </Link>
-);
+function HomeLink() {
+  const navigate = useNavigate();
+  return (
+    <Button variant='secondary' onClick={() => navigate('/')}>
+      {COPY.home}
+    </Button>
+  );
+}
 
 /** Where an assistant's sign-in passes through: signs the person in, then sends them back to the assistant. */
 function ConnectAssistant() {
@@ -92,9 +99,7 @@ function ConnectAssistant() {
   const location = useLocation();
   const [params] = useSearchParams();
   const externalAuthId = params.get('external_auth_id');
-  const [outcome, setOutcome] = useState<Outcome>('working');
-  const [attempt, setAttempt] = useState(0);
-  const started = useRef<string | null>(null);
+  const [outcome, setOutcome] = useState<Outcome>('confirm');
   const isUnverified = user !== null && !user.emailVerified;
 
   useEffect(() => {
@@ -102,19 +107,16 @@ function ConnectAssistant() {
     savePostLoginRedirect(location.pathname + location.search);
   }, [loading, user, externalAuthId, location.pathname, location.search]);
 
-  useEffect(() => {
-    const key = `${externalAuthId}:${attempt}`;
-    if (!user || isUnverified || !externalAuthId || started.current === key) {
-      return;
-    }
-    started.current = key;
-    completeMcpSignIn(externalAuthId)
+  // A link can be sent by someone else, so the person confirms before their account is attached to an assistant.
+  const connect = (authId: string) => {
+    setOutcome('working');
+    completeMcpSignIn(authId)
       .then((redirectUri) => window.location.assign(redirectUri))
       .catch((error: unknown) => {
         console.error('Assistant sign-in did not finish', error);
         setOutcome(toOutcome(error));
       });
-  }, [user, isUnverified, externalAuthId, attempt]);
+  };
 
   if (loading) return <Loading />;
 
@@ -150,15 +152,19 @@ function ConnectAssistant() {
         message={outcome === 'retry' ? COPY.failedRetry : COPY.failedRestart}
       >
         {outcome === 'retry' && (
-          <Button
-            onClick={() => {
-              setOutcome('working');
-              setAttempt((count) => count + 1);
-            }}
-          >
+          <Button onClick={() => connect(externalAuthId)}>
             {COPY.tryAgain}
           </Button>
         )}
+        <HomeLink />
+      </Notice>
+    );
+  }
+
+  if (outcome === 'confirm') {
+    return (
+      <Notice title={COPY.confirmTitle} message={COPY.confirm}>
+        <Button onClick={() => connect(externalAuthId)}>{COPY.continue}</Button>
         <HomeLink />
       </Notice>
     );

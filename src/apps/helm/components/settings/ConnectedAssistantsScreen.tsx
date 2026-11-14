@@ -117,18 +117,25 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                 <h3 className='text-[15px] font-medium'>
                   {HELM_COPY.assistantsClaudeHeading}
                 </h3>
-                <p className='text-muted-foreground text-[15px] text-pretty'>
-                  {HELM_COPY.assistantsClaudeSteps}
-                </p>
+                <ol className='text-muted-foreground list-decimal pl-5 text-[15px] text-pretty'>
+                  {HELM_COPY.assistantsClaudeSteps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
               </div>
               <div className='flex flex-col gap-1'>
                 <h3 className='text-[15px] font-medium'>
                   {HELM_COPY.assistantsGeminiHeading}
                 </h3>
-                <p className='text-muted-foreground text-[15px] text-pretty'>
-                  {HELM_COPY.assistantsGeminiSteps}
-                </p>
+                <ol className='text-muted-foreground list-decimal pl-5 text-[15px] text-pretty'>
+                  {HELM_COPY.assistantsGeminiSteps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
               </div>
+              <p className='text-muted-foreground text-[13px] text-pretty'>
+                {HELM_COPY.assistantsAfterConnect}
+              </p>
             </div>
           </section>
         )}

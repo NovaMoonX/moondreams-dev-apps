@@ -919,13 +919,17 @@ export const HELM_COPY = {
   assistantNeverUsed: 'Not used yet',
   assistantReads: (app: string) => `Can read your ${app}`,
   assistantWrites: (app: string) => `Can add things to ${app}`,
-  assistantWritesHint: (app: string) =>
-    `Off, it can look things up. On, it can also ask ${app} questions and add tasks and notes, which you can undo in Activity.`,
+  assistantWritesHint: (canWrite: boolean) =>
+    canWrite
+      ? 'It can also ask questions and add tasks and notes. You can undo what it adds in Activity.'
+      : 'It can look things up, nothing more.',
+  assistantPrivacy: (name: string) =>
+    `What ${name} reads goes to the company behind it, under its own terms.`,
   assistantConnectedOn: (date: string) => `Connected ${date}`,
   assistantDisconnect: 'Disconnect',
   assistantDisconnectTitle: (name: string) => `Disconnect ${name}?`,
   assistantDisconnectBody: (name: string, app: string) =>
-    `${name} stops reading your ${app} right away. You can connect it again whenever you like.`,
+    `${name} stops reading and adding to your ${app} right away. What it already added stays, and you can still undo it in Activity.`,
   assistantUpdateFailed: "That didn't save. Try again.",
   assistantDisconnectFailed: "That didn't disconnect. Try again.",
   assistantDisconnected: (name: string) => `Disconnected ${name}`,
@@ -935,11 +939,19 @@ export const HELM_COPY = {
   assistantsAddress: 'https://apps.moondreams.dev/mcp/helm',
   assistantsCopyAddress: 'Copy address',
   assistantsClaudeHeading: 'Claude',
-  assistantsClaudeSteps:
-    'Open Customize, then Connectors, then Add, then Add custom connector. Paste the address and tap Connect. The free plan can add one connector.',
+  assistantsClaudeSteps: [
+    'Open Customize, then Connectors.',
+    'Tap Add, then Add custom connector.',
+    'Paste the address and tap Connect. The free plan can add one connector.',
+  ],
   assistantsGeminiHeading: 'Gemini',
-  assistantsGeminiSteps:
-    "On gemini.google.com (the website, which also opens in your phone's browser), open Settings, then Connected Apps, then Add a custom app, and paste the address. Keep Activity needs to be on, and Gemini asks you to confirm each change it makes.",
+  assistantsGeminiSteps: [
+    "Go to gemini.google.com (it works in your phone's browser too).",
+    'Open Settings, then Connected Apps, then Add a custom app.',
+    'Paste the address. Gemini needs its Keep Activity setting on, and asks you to confirm each change it makes.',
+  ],
+  assistantsAfterConnect:
+    'Once it connects, it shows up here. Try asking it what is on your list today.',
   connectSheetTitle: 'Connect an app',
   connectQuestion: (name: string, app: string) => `Let ${name} read ${app}?`,
   connectStartsTicked: (labels: string, count: number) =>

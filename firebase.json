@@ -14,6 +14,10 @@
         "function": { "functionId": "helmMcp", "region": "us-central1" }
       },
       {
+        "source": "/mcp/helm/",
+        "function": { "functionId": "helmMcp", "region": "us-central1" }
+      },
+      {
         "source": "/.well-known/oauth-protected-resource/mcp/helm",
         "function": { "functionId": "helmMcp", "region": "us-central1" }
       },

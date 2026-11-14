@@ -57,6 +57,8 @@ export async function verifyMcpAccessToken(
   const { payload } = await jwtVerify(token, jwksFor(origin), {
     issuer: origin,
     audience: resource,
+    algorithms: ['RS256'],
+    requiredClaims: ['exp', 'iat', 'sub'],
   });
   if (payload.sub_profile === 'ai_agent') {
     throw new Error('agent-token');

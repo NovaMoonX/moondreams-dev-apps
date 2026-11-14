@@ -83,12 +83,12 @@ export const completeMcpSignIn = onCall(
       );
     }
     try {
-      await getFirestore().doc(signInPathFor(uid)).set({ at: Date.now() });
       const redirectUri = await completeExternalAuth(externalAuthId, {
         uid,
         email,
         name: typeof token?.name === 'string' && token.name ? token.name : null,
       });
+      await getFirestore().doc(signInPathFor(uid)).set({ at: Date.now() });
       return { redirectUri };
     } catch (error) {
       logger.warn('mcp.signIn.failed', { code: failureCode(error) });
