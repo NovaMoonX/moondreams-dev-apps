@@ -346,10 +346,9 @@ const askShape = {
 const instructionsFor = (name: string, canWrite: boolean) =>
   [
     `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
-    `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools.`,
     canWrite
-      ? `tell_helm passes on something for ${name} to file or do, ask_helm asks ${name} a question, and the search tools look things up directly.`
-      : `The search tools look things up; this connection can't add anything, since the person turned that off in Helm.`,
+      ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools: tell_helm passes on something for ${name} to file or do, ask_helm asks ${name} a question, and the search tools look things up directly.`
+      : `When they say "ask ${name}" or mention Helm, look things up with the search tools. This connection can't add anything, since the person turned that off in Helm; when they ask ${name} to add or change something, say so.`,
   ].join(' ');
 
 const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {

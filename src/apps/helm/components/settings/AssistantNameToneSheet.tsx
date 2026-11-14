@@ -46,9 +46,8 @@ function AssistantForm({
   const fieldId = useId();
   const savedName = useAssistantName();
   const savedTone = useAssistantTone();
-  const hasAssistants = useAppSelector(
-    (state) => state.helm.assistants.items.length > 0,
-  );
+  const assistants = useAppSelector((state) => state.helm.assistants.items);
+  const hasClaude = assistants.some((entry) => entry.name === 'Claude');
   const [text, setText] = useState(
     savedName === DEFAULT_ASSISTANT_NAME ? '' : savedName,
   );
@@ -100,12 +99,12 @@ function AssistantForm({
             {HELM_COPY.assistantNameHint}
           </p>
         )}
-        {isNameValid && hasAssistants && nextName !== savedName && (
+        {isNameValid && assistants.length > 0 && nextName !== savedName && (
           <p
             className='text-muted-foreground text-[13px] text-pretty'
             role='status'
           >
-            {HELM_COPY.assistantRenameConnected(nextName)}
+            {HELM_COPY.assistantRenameConnected(nextName, hasClaude)}
           </p>
         )}
         {text !== '' && (
