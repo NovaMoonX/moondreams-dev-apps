@@ -25,6 +25,10 @@ export const HEALTH_WORDS = [
   'treatment',
 ] as const;
 
+/** A dose written the way a label or a person says it ("20 mg", "2 tablets"). */
+export const DOSE_PATTERN =
+  /\b\d+(?:\.\d+)?\s*(?:mg|mcg|µg|g|ml|iu|units?|tabs?|tablets?|pills?|caps?|capsules?|puffs?|drops?)\b/i;
+
 const healthMatcher = createOptionMatcher<string>({
   foldPlurals: true,
   typos: false,

@@ -77,6 +77,8 @@ interface VoiceConversationOptions {
   isNaturalVoiceReady?: boolean;
   /** The opt-in recognition model is downloaded (`useOnDeviceRecognition().isOn`): it listens whenever the cloud doesn't, waits for the wake phrase and hears a barge-in, all on the device. */
   isOnDeviceReady?: boolean;
+  /** Read at the start of each listen, never sent mid-stream. */
+  getNameHints?: () => string[];
   /** Silence this long ends the utterance. */
   quietMs?: number;
   /** The cloud turned this device away for the rest of the local day; called once per day. */
@@ -153,6 +155,7 @@ export function useVoiceConversation({
   onCloudHeld,
   onBargeIn,
   wake = null,
+  getNameHints,
 }: VoiceConversationOptions) {
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
@@ -196,6 +199,7 @@ export function useVoiceConversation({
     onCloudHeld,
     onBargeIn,
     wake,
+    getNameHints,
     reason,
   });
   const gateHandler = useRef<
@@ -242,6 +246,7 @@ export function useVoiceConversation({
       onCloudHeld,
       onBargeIn,
       wake,
+      getNameHints,
       reason,
     };
   });
@@ -499,6 +504,7 @@ export function useVoiceConversation({
         handleError('unavailable');
       });
     };
+    const nameHints = latest.current.getNameHints?.() ?? null;
     const startDevice = (source: FrameSource | null) => {
       if (latest.current.canHearOnDevice) {
         window.clearTimeout(run.current.quietId);
@@ -508,7 +514,7 @@ export function useVoiceConversation({
       }
       armQuiet();
       source?.stop();
-      startAdapter(createBrowserStt({ lang: latest.current.lang }));
+      startAdapter(createBrowserStt({ lang: latest.current.lang, nameHints }));
     };
     const cloud = latest.current.cloudListening;
     const today = toLocalDateInputValue(Date.now());
@@ -529,6 +535,7 @@ export function useVoiceConversation({
         createDeepgramStt({
           lang: latest.current.lang,
           source: options.source ?? null,
+          keyterms: nameHints,
           getToken: cloud.tokenSource.getToken,
           onUnavailable: (heldReason) => {
             if (run.current.isCancelled || run.current.mode.phase === 'OFF') {

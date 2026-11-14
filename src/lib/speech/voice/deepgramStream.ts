@@ -27,6 +27,8 @@ interface DeepgramSttOptions {
   onUnavailable: (reason: CloudHeldReason | null) => void;
   /** A minted stream has ended, after `ms` open (0 when it never opened). */
   onClosed: (mintId: string, ms: number) => void;
+  /** Set once when the stream connects, never changed mid-stream. */
+  keyterms?: string[] | null;
 }
 
 interface Heard {
@@ -58,8 +60,12 @@ const readHeard = (data: unknown): Heard | null => {
   }
 };
 
-const toListenUrl = (model: string, lang: string) =>
-  `${LISTEN_URL}?${new URLSearchParams({
+export const toListenUrl = (
+  model: string,
+  lang: string,
+  keyterms: string[] | null,
+) => {
+  const params = new URLSearchParams({
     model,
     language: lang,
     encoding: 'linear16',
@@ -69,7 +75,12 @@ const toListenUrl = (model: string, lang: string) =>
     smart_format: 'true',
     endpointing: '300',
     mip_opt_out: 'true',
-  }).toString()}`;
+  });
+  if (model.startsWith('nova-3')) {
+    keyterms?.forEach((term) => params.append('keyterm', term));
+  }
+  return `${LISTEN_URL}?${params.toString()}`;
+};
 
 /** Listens by streaming the microphone to Deepgram with a token minted for this stream. Nothing said while the socket opens is lost. `stop` (or a minute, or a page that goes to the background) delivers what was heard once, finished phrases and the one still being said. */
 export const createDeepgramStt = ({
@@ -79,6 +90,7 @@ export const createDeepgramStt = ({
   source = null,
   onUnavailable,
   onClosed,
+  keyterms = null,
 }: DeepgramSttOptions): SttAdapter => {
   const run = {
     stop: null as (() => void) | null,
@@ -259,7 +271,7 @@ export const createDeepgramStt = ({
       }
 
       state.mintId = answer.mintId;
-      const socket = new WebSocket(toListenUrl(answer.model, lang), [
+      const socket = new WebSocket(toListenUrl(answer.model, lang, keyterms), [
         'bearer',
         answer.token,
       ]);

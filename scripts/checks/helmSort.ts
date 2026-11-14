@@ -51,6 +51,22 @@ import {
   planSetCurrentPlace,
 } from '../../functions/src/apps/helm/nomos/currentPlace.ts';
 
+import {
+  type KnownWhoState,
+  type PeopleInput,
+} from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import {
+  isSpanOf,
+  mergeSoundsLike,
+  readHeardNames,
+  toContextHeard,
+} from '../../functions/src/apps/helm/nomos/heardNames.ts';
+import { readPrivacyFacts } from '../../functions/src/apps/helm/privacy.ts';
+import { planSoundsLike } from '../../functions/src/apps/helm/nomos/planSoundsLike.ts';
+import type { MentionRead } from '../../functions/src/apps/helm/nomos/commands.ts';
+import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
+import type { EffectRef, OpenExecution } from '../../src/apps/helm/types.ts';
+
 const UID = 'uid-Zk3p9QwXr7LmNb2VcT5yHd8AeFg1';
 const CAPTURE_ID = 'capture-Qm4Xr8Zk2LpVb7NcTy3HdA5eFg9';
 const TASK_IDS = [
@@ -1805,6 +1821,505 @@ test('prices count cache reads and writes', () => {
     }),
     Math.ceil((2 + 10 + 0.2 + 2.5) * 10_000),
   );
+});
+
+const HEARD_UNSURE = (extra: Record<string, unknown>) => ({
+  heard: 'Shivon',
+  said: 'Siobhan',
+  recordId: null,
+  candidateIds: [],
+  ...extra,
+});
+
+test('heardNames is read defensively: bad shapes give null, lengths and ids are capped', () => {
+  assert.equal(readHeardNames(undefined), null);
+  assert.equal(readHeardNames('Shivon'), null);
+  assert.equal(readHeardNames([{ said: 'Siobhan' }, 7, null]), null);
+  const read = readHeardNames([
+    HEARD_UNSURE({
+      heard: 'x'.repeat(200),
+      recordId: 'bad id!',
+      candidateIds: ['kelly', 'kelly', 'doyle', 'third', 5],
+    }),
+    ...Array.from({ length: 20 }, () => HEARD_UNSURE({})),
+  ]);
+  assert.equal(read?.length, 10);
+  assert.equal(read?.[0].heard.length, 60);
+  assert.equal(read?.[0].recordId, null);
+  assert.deepEqual(read?.[0].candidateIds, ['kelly', 'doyle']);
+});
+
+const SIOBHANS = [
+  {
+    id: 'who-kelly',
+    name: 'Siobhan Kelly',
+    alsoCalled: [],
+    relation: null,
+    kin: null,
+  },
+  {
+    id: 'who-doyle',
+    name: 'Siobhan Doyle',
+    alsoCalled: [],
+    relation: null,
+    kin: null,
+  },
+];
+const heardContext = (
+  heardNames: ReturnType<typeof readHeardNames>,
+  isUnattended = false,
+) =>
+  buildContext({
+    text: 'Call Siobhan Friday',
+    reading: READING,
+    createdAt: 0,
+    timeZone: 'UTC',
+    tasks: [],
+    people: SIOBHANS,
+    heardNames: toContextHeard(
+      heardNames ?? [],
+      new Set(SIOBHANS.map((person) => person.id)),
+      isUnattended,
+    ),
+  });
+
+test('heardNames reaches the context as aliases, never an id', () => {
+  const { message, people } = heardContext(
+    readHeardNames([
+      HEARD_UNSURE({
+        recordId: 'who-kelly',
+        candidateIds: ['who-kelly', 'who-doyle'],
+      }),
+    ]),
+  );
+  assert.ok(message.includes('<heard_names>'));
+  assert.ok(message.includes('"swappedTo":"Siobhan"'));
+  assert.ok(message.includes('"couldBeEither":["w1","w2"]'));
+  assert.ok(!message.includes('who-kelly') && !message.includes('who-doyle'));
+  assert.equal(people.idOf('w1'), 'who-kelly');
+});
+
+test('a private person is withheld from heardNames on an unattended turn, never named or matched', () => {
+  const entries = readHeardNames([
+    HEARD_UNSURE({
+      heard: 'Shivon',
+      said: 'Siobhan Kelly',
+      recordId: 'who-private',
+    }),
+    HEARD_UNSURE({ heard: 'Nieve', said: 'Niamh', recordId: 'who-kelly' }),
+  ]);
+  const unattended = heardContext(entries, true).message;
+  assert.ok(
+    !unattended.includes('Shivon') && !unattended.includes('who-private'),
+  );
+  assert.ok(unattended.includes('Nieve'));
+  const attended = heardContext(entries, false).message;
+  assert.ok(attended.includes('Shivon'));
+  assert.ok(!attended.includes('who-private'));
+  assert.ok(!heardContext(null).message.includes('<heard_names>'));
+});
+
+const knownWho = (id: string, name: string): KnownWhoState => ({
+  id,
+  kind: 'person',
+  name,
+  aliases: [],
+  lastMentionedAt: null,
+  tier: 'passing',
+  tierSetBy: 'nomos',
+  mentionDayKeys: [],
+  taskLinkCount: 0,
+  yearlyDateCount: 0,
+  momentCount: 0,
+  hasRole: false,
+});
+const siobhanMention: MentionRead = {
+  ref: '$w1',
+  name: 'Shivon',
+  kind: 'person',
+  relation: null,
+  species: null,
+  organizationKind: null,
+};
+const EMPTY_READING: CaptureReading = {
+  ...READING,
+  people: [],
+  dates: [],
+};
+const planHeard = (
+  heardNames: ReturnType<typeof readHeardNames>,
+  isUnattended = false,
+  name = 'Shivon',
+  privateIds: string[] = [],
+) => {
+  const people: PeopleInput = {
+    mentions: [{ ...siobhanMention, name }],
+    places: [],
+    known: [
+      knownWho('who-kelly', 'Siobhan Kelly'),
+      knownWho('who-doyle', 'Siobhan Doyle'),
+    ].map((who) =>
+      privateIds.includes(who.id)
+        ? {
+            ...who,
+            privacyFacts: readPrivacyFacts({
+              privateMark: 'person',
+              isPrivacyCleared: false,
+            }),
+          }
+        : who,
+    ),
+    knownPlaces: [],
+    assistantName: null,
+    assistantNames: [],
+    dayKey: '2026-11-10',
+    capturedAt: 4000,
+    heardNames: heardNames ?? undefined,
+  };
+  return planWrites({
+    isUnattended,
+    commands: normalizeNomosReply(
+      {
+        commands: [create('Call Siobhan', { whoRefs: ['$w1'] })],
+        mentions: [{ ...siobhanMention, name }],
+      },
+      { reading: EMPTY_READING, aliases: createAliasBook('t') },
+    ).commands,
+    existing: new Map(),
+    captureId: 'c1',
+    executionId: 'e1',
+    now: 5000,
+    seal,
+    newId: createIdCounter(),
+    people,
+  });
+};
+
+test('two near names the device could not tell apart become the code-built "Which Siobhan" question', () => {
+  const result = planHeard(
+    readHeardNames([
+      HEARD_UNSURE({ candidateIds: ['who-kelly', 'who-doyle'] }),
+    ]),
+  );
+  assert.equal(result.whoCreates.length, 0);
+  assert.equal(result.questions.length, 1);
+  const question = result.questions[0].sealed as {
+    kind: string;
+    prompt: string;
+    options: { id: string; label: string }[];
+    heldCommands: { kind: string }[];
+  };
+  assert.equal(question.kind, 'whichPerson');
+  assert.equal(
+    question.prompt,
+    'Which Shivon: Siobhan Kelly or Siobhan Doyle?',
+  );
+  assert.deepEqual(
+    question.options.map((option) => option.id),
+    ['who-kelly', 'who-doyle', 'new', 'none'],
+  );
+  assert.equal(question.options[2].label, 'Someone else');
+  assert.equal(question.heldCommands[0].kind, 'linkWho');
+  assert.deepEqual(result.creates[0].data.whoIds, []);
+});
+
+test('the question names the surnames when the heard word is the shared first name', () => {
+  const result = planHeard(
+    readHeardNames([
+      HEARD_UNSURE({
+        heard: 'Siobhan',
+        said: null,
+        candidateIds: ['who-kelly', 'who-doyle'],
+      }),
+    ]),
+    false,
+    'Siobhan',
+  );
+  const question = result.questions[0].sealed as { prompt: string };
+  assert.equal(question.prompt, 'Which Siobhan: Kelly or Doyle?');
+});
+
+test('one fit, or ids the person does not have, never ask which', () => {
+  assert.equal(
+    planHeard(readHeardNames([HEARD_UNSURE({ candidateIds: ['who-kelly'] })]))
+      .questions.length,
+    0,
+  );
+  assert.equal(
+    planHeard(
+      readHeardNames([HEARD_UNSURE({ candidateIds: ['who-kelly', 'gone'] })]),
+    ).questions.length,
+    0,
+  );
+});
+
+test('on an unattended turn a private candidate is "a private person" in the question, and a person watching sees the name', () => {
+  const heard = readHeardNames([
+    HEARD_UNSURE({ candidateIds: ['who-kelly', 'who-doyle'] }),
+  ]);
+  const options = (isUnattended: boolean) =>
+    (
+      planHeard(heard, isUnattended, 'Shivon', ['who-doyle']).questions[0]
+        .sealed as { options: { label: string }[] }
+    ).options.map((option) => option.label);
+  assert.deepEqual(options(true).slice(0, 2), [
+    'Siobhan Kelly',
+    'a private person',
+  ]);
+  assert.deepEqual(options(false).slice(0, 2), [
+    'Siobhan Kelly',
+    'Siobhan Doyle',
+  ]);
+});
+
+test('on an unattended turn a tie whose candidates are both private is not asked', () => {
+  const heard = readHeardNames([
+    HEARD_UNSURE({ candidateIds: ['who-kelly', 'who-doyle'] }),
+  ]);
+  const both = ['who-kelly', 'who-doyle'];
+  assert.equal(planHeard(heard, true, 'Shivon', both).questions.length, 0);
+  assert.equal(planHeard(heard, false, 'Shivon', both).questions.length, 1);
+});
+
+test('a heard tie that names a record the context leaves out is dropped on an unattended turn', () => {
+  const entries = readHeardNames([
+    HEARD_UNSURE({ candidateIds: ['who-kelly', 'who-private'] }),
+  ]) as NonNullable<ReturnType<typeof readHeardNames>>;
+  const visible = new Set(['who-kelly', 'who-doyle']);
+  assert.equal(toContextHeard(entries, visible, true).length, 0);
+  assert.equal(toContextHeard(entries, visible, false).length, 1);
+});
+
+const PREVIOUS = { text: 'Call Shivon on Friday', heard: ['Siobhan'] };
+const correction = (extra: Record<string, unknown> = {}) => ({
+  kind: 'noteSoundsLike',
+  whoAlias: 'w1',
+  heardSpan: 'Shivon',
+  ...extra,
+});
+const peopleBook = () => {
+  const book = createAliasBook('w');
+  book.add('who-kelly');
+  return book;
+};
+const soundsLike = (commands: unknown[], previous = PREVIOUS) =>
+  normalizeNomosReply(
+    { commands },
+    {
+      reading: READING,
+      aliases: createAliasBook('t'),
+      people: peopleBook(),
+      previousTurn: previous,
+    },
+  ).soundsLike;
+
+test('noteSoundsLike is kept for words the previous turn held or the device heard there', () => {
+  assert.deepEqual(soundsLike([correction()]), [
+    { kind: 'noteSoundsLike', whoId: 'who-kelly', heardSpan: 'Shivon' },
+  ]);
+  assert.equal(soundsLike([correction({ heardSpan: 'siobhan' })]).length, 1);
+});
+
+test('noteSoundsLike is refused for a span the previous turn never held, an unknown person or no previous turn', () => {
+  assert.equal(soundsLike([correction({ heardSpan: 'Zander' })]).length, 0);
+  assert.equal(soundsLike([correction({ heardSpan: 'Shiv' })]).length, 0);
+  assert.equal(soundsLike([correction({ whoAlias: 'w9' })]).length, 0);
+  assert.equal(soundsLike([correction({ whoAlias: null })]).length, 0);
+  assert.equal(soundsLike([correction({ heardSpan: null })]).length, 0);
+  const noPrevious = normalizeNomosReply(
+    { commands: [correction()] },
+    { reading: READING, aliases: createAliasBook('t'), people: peopleBook() },
+  );
+  assert.equal(noPrevious.soundsLike.length, 0);
+  assert.ok(isSpanOf('Shivon', 'Call, Shivon!'));
+  assert.ok(!isSpanOf('Shiv', 'Call Shivon'));
+});
+
+const OPENED_WHO = {
+  name: 'Siobhan Kelly',
+  aliases: ['Vonnie'],
+  soundsLike: null as string[] | null,
+  privateMark: null,
+  isPrivacyCleared: false,
+};
+const planKept = (
+  heardSpan: string,
+  who: Record<string, unknown> | null = OPENED_WHO,
+  isUnattended = false,
+) =>
+  planSoundsLike({
+    commands: [{ kind: 'noteSoundsLike', whoId: 'who-kelly', heardSpan }],
+    whos: new Map([['who-kelly', who]]),
+    earlierTasks: new Map([
+      [
+        'task-1',
+        {
+          title: 'Call Shivon',
+          whoIds: ['who-doyle'],
+          status: 'open' as const,
+        },
+      ],
+      [
+        'task-2',
+        {
+          title: 'Buy milk',
+          whoIds: ['who-other'],
+          status: 'open' as const,
+        },
+      ],
+      ['task-3', { title: 'Wave', whoIds: [], status: 'open' as const }],
+    ]),
+    heardNames: [
+      {
+        heard: 'Shivon',
+        said: 'Siobhan Doyle',
+        recordId: 'who-doyle',
+        candidateIds: ['who-doyle'],
+      },
+    ],
+    people: [
+      { id: 'who-kelly', names: ['Siobhan Kelly', 'Vonnie'] },
+      { id: 'who-doyle', names: ['Siobhan Doyle'] },
+      { id: 'who-other', names: ['Maeve Byrne', 'Mae'] },
+    ],
+    now: 9000,
+    isUnattended,
+    seal,
+  });
+
+test('a kept correction writes soundsLike, links the earlier task and says what was kept', () => {
+  const kept = planKept('Shivon');
+  assert.equal(kept.whoRewrites.length, 1);
+  assert.deepEqual(kept.effects[0], {
+    written: { 'sealed.soundsLike': ['Shivon'] },
+    previous: { 'sealed.soundsLike': null },
+  });
+  assert.equal(kept.taskUpdates.length, 1);
+  assert.equal(kept.taskUpdates[0].id, 'task-1');
+  assert.deepEqual(kept.taskUpdates[0].data.whoIds, ['who-kelly']);
+  assert.deepEqual(kept.lines, ['Kept “Shivon” as how Siobhan Kelly sounds']);
+  assert.ok(!/\b(I|my|me|Helm|Nomos)\b/.test(kept.lines[0]));
+  assert.equal(kept.effectRefs.length, kept.effects.length);
+});
+
+test('a correction is refused for a missing person, a duplicate, the name itself and a full list', () => {
+  assert.equal(planKept('Shivon', null).effects.length, 0);
+  assert.equal(
+    planKept('Shivon', { ...OPENED_WHO, soundsLike: ['shivon'] }).effects
+      .length,
+    0,
+  );
+  assert.equal(planKept('siobhan kelly').effects.length, 0);
+  assert.equal(planKept('Vonnie').effects.length, 0);
+  assert.equal(planKept('x'.repeat(41)).effects.length, 0);
+  assert.equal(
+    planKept('Sixth', {
+      ...OPENED_WHO,
+      soundsLike: ['One', 'Two', 'Three', 'Four', 'Five'],
+    }).effects.length,
+    0,
+  );
+  assert.deepEqual(mergeSoundsLike(['One'], 'Two', ['Name']), ['One', 'Two']);
+});
+
+test('a task linked to someone else, or to no one, stays untouched when a heard form is kept', () => {
+  const kept = planKept('Shivon');
+  assert.ok(!kept.taskUpdates.some((update) => update.id !== 'task-1'));
+  assert.equal(
+    kept.effectRefs.filter((ref) => ref.collection === 'tasks').length,
+    1,
+  );
+});
+
+test("a heard form that is another person's name word or alias, a stop word or one letter is refused", () => {
+  assert.equal(planKept('Maeve').effects.length, 0);
+  assert.equal(planKept('mae').effects.length, 0);
+  assert.equal(planKept('Doyle').effects.length, 0);
+  assert.equal(planKept('Byrne').effects.length, 0);
+  assert.equal(planKept('The').effects.length, 0);
+  assert.equal(planKept('J').effects.length, 0);
+  assert.equal(mergeSoundsLike(null, 'Zoë', ['Zoe']), null);
+  assert.equal(mergeSoundsLike(null, 'Noor', ['Nur'], ['Noor Ali']), null);
+  assert.deepEqual(mergeSoundsLike(null, 'Noor', ['Nur'], ['Ali']), ['Noor']);
+});
+
+test('a private person is "a private person" in the line on an unattended turn', () => {
+  const kept = planKept(
+    'Shivon',
+    { ...OPENED_WHO, privateMark: 'person' },
+    true,
+  );
+  assert.deepEqual(kept.lines, [
+    'Kept “Shivon” as how a private person sounds',
+  ]);
+  assert.equal(kept.isPrivate, true);
+  assert.ok(
+    planKept('Shivon', {
+      ...OPENED_WHO,
+      privateMark: 'person',
+    }).lines[0].includes('Siobhan Kelly'),
+  );
+});
+
+test('Undo takes the heard form and the earlier link back', () => {
+  const kept = planKept('Shivon');
+  const original = {
+    id: 'exec-1',
+    privacy: 'ordinary',
+    said: null,
+    captureId: 'turn-2',
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: kept.effectRefs as EffectRef[],
+    linkedWhoIds: ['who-kelly'],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: 9000,
+    decidedAt: 9000,
+    finishedAt: 9000,
+    summary: kept.lines[0],
+    effects: kept.effects,
+    undoReport: null,
+    spoken: null,
+    goneIds: null,
+    lines: [],
+    isUnreadable: false,
+  } as unknown as OpenExecution;
+  const result = planUndo({
+    original,
+    targets: new Map([
+      [
+        'who-kelly',
+        {
+          docId: 'who-kelly',
+          data: { lastEditedAt: 9000 },
+          opened: { ...OPENED_WHO, soundsLike: ['Shivon'] } as never,
+        },
+      ],
+      [
+        'task-1',
+        {
+          docId: 'task-1',
+          data: { whoIds: ['who-kelly'], lastEditedAt: 9000 },
+          opened: { title: 'Call Shivon', notes: null, steps: {} } as never,
+        },
+      ],
+    ]),
+    undoExecutionId: 'undo-1',
+    now: 9500,
+    usedIds: new Set(),
+  });
+  assert.equal(result.kind, 'write');
+  const writes = JSON.stringify(result);
+  assert.ok(
+    writes.includes('sealed.soundsLike') || writes.includes('soundsLike'),
+  );
+  assert.ok(writes.includes('"whoIds":["who-doyle"]'));
 });
 
 const failures: string[] = [];

@@ -289,6 +289,7 @@ export const MEDIA_LIMIT = 2_000;
 export const PHOTOS_PER_RECORD = 12;
 /** Mentions a who's page lists before "Show all". */
 export const MAX_ALIASES = 10;
+export const MAX_SOUNDS_LIKE = 5;
 export const MAX_REFUSED_ALIASES = 20;
 
 export const MENTIONS_SHOWN = 10;
@@ -531,6 +532,13 @@ export const HELM_COPY = {
   talkSendLabel: 'Send what you said',
   talkListeningHint: 'Listening…',
   talkGettingReady: 'Getting ready…',
+  heardAsTitle: (heard: string) => `Heard “${heard}”`,
+  heardAsShownAs: (name: string) =>
+    `Shown as ${name}, a name you've told your assistant.`,
+  heardAsUse: 'Use what I said',
+  heardAsKeep: (name: string) => `Keep ${name}`,
+  heardAsTapLabel: (name: string, heard: string) =>
+    `${name}, heard as ${heard}. Tap to see what was heard.`,
   talkListenFailed: "Couldn't start listening on this phone. Try again.",
   talkNeedsConnection:
     'Talk needs a connection on this phone. Turn on Hear me offline to talk without one.',
@@ -1879,6 +1887,11 @@ export const HELM_COPY = {
   aliasIsYou: (word: string) => `${word} is already you.`,
   searchAlsoCalled: (alias: string) => `Also called ${alias}`,
   aliasNone: 'No nicknames yet.',
+  soundsLikeTitle: 'Also heard as',
+  soundsLikeHelp:
+    'Ways your voice came out that were really this name. They help the right name come up, and are never searched or tagged.',
+  soundsLikeRemove: (heard: string) => `Remove ${heard}`,
+  soundsLikeRemovedToast: (heard: string) => `Removed ${heard}`,
   kinTitle: (name: string) => `Family · ${name}`,
   kinKindField: 'How you are related',
   kinNotSet: 'Not set',

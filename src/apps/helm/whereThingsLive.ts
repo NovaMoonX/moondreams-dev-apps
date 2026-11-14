@@ -156,7 +156,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     home: 'who',
     contextBlock: '<people>',
     writer: 'actions/whoActions',
-    taps: ['updateWho', 'forgetWho'],
+    taps: ['updateWho', 'forgetWho', 'setWhoSoundsLike'],
     deleteTakes: ['keyDates', 'facts'],
   }),
   row({
@@ -295,6 +295,13 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     contextBlock: '<earlier_turns>',
     writer: 'actions/captureActions',
     taps: ['sendCapture', 'deleteCapture'],
+  }),
+  row({
+    thing: 'Names the microphone heard and what they matched',
+    home: 'captures',
+    contextBlock: '<heard_names>',
+    writer: 'actions/captureActions',
+    taps: ['sendCapture'],
   }),
   row({
     thing: 'A question Helm asked and the answer',

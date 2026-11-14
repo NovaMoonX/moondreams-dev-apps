@@ -5,6 +5,7 @@ import {
 import { withoutClosingPhrases } from '../../../vendor/closingPhrase.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { normalizeKin } from './kin.js';
+import { isSpanOf, SOUNDS_LIKE_CAP } from './heardNames.js';
 import { KIN_KINDS } from './kinKinds.js';
 import { ASK_WORDS } from './summaries.js';
 import {
@@ -52,6 +53,8 @@ import {
   type ProcedureCommand,
   MAX_TICKS_PER_TURN,
   RUN_COMMAND_KINDS,
+  SOUNDS_LIKE_COMMAND_KINDS,
+  type NoteSoundsLikeCommand,
   type RunCommand,
   MAX_PARENT_CHILDREN,
   MAX_TOPIC_ADD_CHARS,
@@ -1544,6 +1547,34 @@ const readProcedureCommands = (
     );
 };
 
+const readSoundsLike = (
+  items: Record<string, unknown>[],
+  people: AliasBook | undefined,
+  previous: { text: string; heard: string[] } | undefined,
+): NoteSoundsLikeCommand[] =>
+  items
+    .filter((item) =>
+      (SOUNDS_LIKE_COMMAND_KINDS as readonly unknown[]).includes(item.kind),
+    )
+    .flatMap((item): NoteSoundsLikeCommand[] => {
+      const whoId =
+        typeof item.whoAlias === 'string'
+          ? (people?.idOf(item.whoAlias) ?? null)
+          : null;
+      const heardSpan = toText(item.heardSpan, SOUNDS_LIKE_CAP);
+      const isHeard =
+        !!previous &&
+        !!heardSpan &&
+        (isSpanOf(heardSpan, previous.text) ||
+          previous.heard.some(
+            (heard) => toComparable(heard) === toComparable(heardSpan),
+          ));
+      return whoId && heardSpan && isHeard
+        ? [{ kind: 'noteSoundsLike', whoId, heardSpan }]
+        : [];
+    })
+    .slice(0, 1);
+
 export type RunDrop =
   | 'run-start-unasked'
   | 'run-start-unknown'
@@ -1824,6 +1855,7 @@ export function normalizeNomosReply(
     timeZone?: string;
     /** The photos and files the turn sent, by alias. */
     attachments?: { alias: string; kind: string }[];
+    previousTurn?: { text: string; heard: string[] };
   },
 ): {
   media: MediaDecision[];
@@ -1843,6 +1875,7 @@ export function normalizeNomosReply(
   procedureDropped: ProcedureDrop[];
   runCommands: RunCommand[];
   runDropped: RunDrop[];
+  soundsLike: NoteSoundsLikeCommand[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -1949,6 +1982,11 @@ export function normalizeNomosReply(
       captureText: context.captureText,
     },
   );
+  const soundsLike = readSoundsLike(
+    items,
+    context.people,
+    context.previousTurn,
+  );
   const projects = readProjects(
     items,
     entities,
@@ -2017,6 +2055,7 @@ export function normalizeNomosReply(
     procedureDropped,
     runCommands,
     runDropped,
+    soundsLike,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

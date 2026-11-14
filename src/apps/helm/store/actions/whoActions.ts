@@ -29,7 +29,7 @@ import {
   type PhotoOwner,
 } from '@apps/helm/store/actions/mediaActions';
 import { toComparable } from '@/utils/optionMatchUtils';
-import { MAX_ALIASES } from '@apps/helm/constants';
+import { MAX_ALIASES, MAX_SOUNDS_LIKE } from '@apps/helm/constants';
 import { normalizeKin } from '@apps/helm/engine/kin';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type {
@@ -170,6 +170,27 @@ export const setWhoAliases = (
       aliases: [...aliases, change.add],
       refusedAliases: kept.length > 0 ? kept : null,
     };
+  });
+
+export type SoundsLikeChange = { add: string } | { remove: string };
+
+/** Removes a heard form from a who's list, or restores it for Undo. */
+export const setWhoSoundsLike = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  change: SoundsLikeChange,
+): Promise<EditResult> =>
+  rewriteWhoWords<never>(uid, encryption, whoId, (opened) => {
+    const heard = Array.isArray(opened.soundsLike) ? opened.soundsLike : [];
+    const next =
+      'remove' in change
+        ? heard.filter((entry) => !isSameName(entry, change.remove))
+        : heard.some((entry) => isSameName(entry, change.add)) ||
+            heard.length >= MAX_SOUNDS_LIKE
+          ? heard
+          : [...heard, change.add];
+    return { soundsLike: next.length > 0 ? next : null };
   });
 
 export type KinResult = EditResult | 'changed';

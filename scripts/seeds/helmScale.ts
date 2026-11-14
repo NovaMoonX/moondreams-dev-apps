@@ -1269,6 +1269,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         },
         answer: null,
         questionAnswer: null,
+        heardNames: null,
       }),
     };
     return { id: `scale-turn-${pad(index, 3)}`, capture };

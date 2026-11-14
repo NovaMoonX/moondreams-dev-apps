@@ -11,8 +11,16 @@ const toErrorCode = (error: SpeechCommandsError): SttErrorCode =>
 /** Whether the browser can listen on this page. */
 export const canUseBrowserStt = canUseSpeechCommands;
 
+const refused = { arePhrasesRefused: false };
+
 /** Listens with the browser's speech recognition (Chrome sends this audio to its vendor's servers). `stop` delivers what was heard, finished phrases and the one still being said, once; a page that goes to the background stops the same way. */
-export const createBrowserStt = ({ lang }: { lang: string }): SttAdapter => {
+export const createBrowserStt = ({
+  lang,
+  nameHints = null,
+}: {
+  lang: string;
+  nameHints?: string[] | null;
+}): SttAdapter => {
   const run = { stop: null as (() => void) | null };
   return {
     id: 'browser',
@@ -54,6 +62,10 @@ export const createBrowserStt = ({ lang }: { lang: string }): SttAdapter => {
       listener.setOptions({
         lang,
         speechLang: lang,
+        phrases: refused.arePhrasesRefused ? null : nameHints,
+        onPhrasesRefused: () => {
+          refused.arePhrasesRefused = true;
+        },
         onFinalTranscript: (alternatives) => {
           heard.finals = [...heard.finals, alternatives[0]];
           heard.interim = '';

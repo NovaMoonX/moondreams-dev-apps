@@ -21,6 +21,7 @@ import { EARLIER_SESSIONS_PAGE } from '@apps/helm/constants';
 import type {
   Capture,
   CaptureSealed,
+  HeardName,
   HelmQuestion,
   OpenCapture,
   ScreenContext,
@@ -92,6 +93,29 @@ const toRecordKinds = (value: unknown): HelmQuestion['recordKinds'] =>
         (kind): kind is 'who' | 'place' => kind === 'who' || kind === 'place',
       )
     : [];
+
+const toIdList = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((id): id is string => typeof id === 'string')
+    : [];
+
+const normalizeHeardNames = (value: unknown): HeardName[] | null => {
+  const found = (Array.isArray(value) ? value : []).flatMap(
+    (entry: Partial<HeardName> | null) =>
+      typeof entry?.heard === 'string'
+        ? [
+            {
+              heard: entry.heard,
+              said: typeof entry.said === 'string' ? entry.said : null,
+              recordId:
+                typeof entry.recordId === 'string' ? entry.recordId : null,
+              candidateIds: toIdList(entry.candidateIds).slice(0, 2),
+            },
+          ]
+        : [],
+  );
+  return found.length > 0 ? found : null;
+};
 
 /** Opens the questions a turn asked, in the shape the cards draw, filling what an older one lacks; one that is not shaped like the contract is left out. */
 const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
@@ -208,6 +232,7 @@ async function openCapture(
       text: payload.text ?? '',
       reading: normalizeReading(payload.reading),
       answer: normalizeAnswer(payload.answer),
+      heardNames: normalizeHeardNames(payload.heardNames),
       questions: toQuestions(payload.questions),
       line:
         typeof payload.spoken?.text === 'string' ? payload.spoken.text : null,
@@ -220,6 +245,7 @@ async function openCapture(
       text: '',
       reading: EMPTY_READING,
       answer: null,
+      heardNames: null,
       questions: {},
       line: null,
       isUnreadable: true,
