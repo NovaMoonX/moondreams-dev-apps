@@ -1421,11 +1421,13 @@ test('a loop that hits its limit ends as a failed reading, after one ask', async
 });
 
 test('an extra terminal tool ends the loop and is named; the main one is named too', async () => {
-  const toolsSeen: { name: string }[][] = [];
+  const toolsSeen: { name: string; strict?: boolean }[][] = [];
   const answerWith = (name: string, input: unknown) => ({
     beta: {
       messages: {
-        create: async (params: { tools: { name: string }[] }) => {
+        create: async (params: {
+          tools: { name: string; strict?: boolean }[];
+        }) => {
           toolsSeen.push(params.tools);
           return {
             stop_reason: 'tool_use',
@@ -1469,6 +1471,10 @@ test('an extra terminal tool ends the loop and is named; the main one is named t
   assert.deepEqual(
     toolsSeen[0].map((tool) => tool.name),
     ['file_results', 'hand_over'],
+  );
+  assert.ok(
+    toolsSeen[0].every((tool) => tool.strict !== true),
+    'no terminal tool is strict: the API refuses file_results as a strict schema',
   );
   const filed = await loopWith('file_results', { commands: [] });
   assert.equal(filed.terminalName, 'file_results');
