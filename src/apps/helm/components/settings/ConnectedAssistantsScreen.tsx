@@ -161,6 +161,7 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                   <Button
                     type='button'
                     variant='secondary'
+                    className='gap-1.5'
                     onClick={downloadIcon}
                     aria-label={`${HELM_COPY.assistantsDownloadIcon} (${HELM_COPY.assistantsIconLabel})`}
                   >
