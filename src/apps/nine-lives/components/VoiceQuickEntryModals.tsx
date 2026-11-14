@@ -2,6 +2,7 @@ import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { LoaderCircle, Mic, Square } from 'lucide-react';
 
 import MicrophoneAccess from '@/components/MicrophoneAccess';
+import SpeechDebugDetails from '@/components/SpeechDebugDetails';
 import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import { canRequestMicrophone } from '@/lib/speech/microphonePermission';
 
@@ -21,6 +22,7 @@ function VoiceQuickEntryModals({
   uid,
   isModalOpen,
   isListening,
+  isStarting,
   isExtracting,
   transcript,
   error,
@@ -62,10 +64,12 @@ function VoiceQuickEntryModals({
           Speak a symptom, weight, expense, or other note. Your words will be turned into a draft for review.
         </p>
         <div className='bg-muted/40 min-h-24 rounded-md p-3 text-sm'>
-          {transcript || (isListening ? 'Listening…' : 'Your transcript will appear here.')}
+          {transcript ||
+            (isListening ? 'Listening…' : isStarting ? 'Starting…' : 'Your transcript will appear here.')}
         </div>
         {needsMicrophone && <MicrophoneAccess onAllowed={clearError} />}
         {shownError && !needsMicrophone && <p className='text-sm text-red-500'>{shownError}</p>}
+        {shownError && !needsMicrophone && <SpeechDebugDetails message={shownError} />}
         <div className='flex justify-end gap-2'>
           <Button type='button' variant='secondary' onClick={handleClose} disabled={isExtracting}>
             Cancel
@@ -74,7 +78,7 @@ function VoiceQuickEntryModals({
             <Button type='button' onClick={handleTrigger}>
               <Square className='h-4 w-4' /> Stop and review
             </Button>
-          ) : isRetryInNotice ? null : (
+          ) : isRetryInNotice || isStarting ? null : (
             <Button type='button' onClick={handleTrigger} disabled={isExtracting}>
               {isExtracting ? <LoaderCircle className='h-4 w-4 animate-spin' /> : <Mic className='h-4 w-4' />}
               {isExtracting ? 'Reading note…' : 'Try again'}

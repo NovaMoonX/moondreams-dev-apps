@@ -182,6 +182,18 @@ export function useHelmVoice() {
       endDictation();
       if (isAsked) showNote(HELM_COPY.talkListenFailed);
     },
+    onUnavailable: (reason) => {
+      interruptedCaptureId.current = null;
+      endDictation();
+      const isMicrophone = reason === 'no-permission';
+      showNotice(
+        isMicrophone
+          ? HELM_COPY.talkNeedsMicrophone
+          : HELM_COPY.talkNeedsRecognition,
+        false,
+        isMicrophone,
+      );
+    },
     onCloudHeld: () => setShowsPhoneLine(true),
     onBargeIn: () => {
       interruptedCaptureId.current = speakingCaptureId.current;
@@ -655,9 +667,9 @@ export function useHelmVoice() {
     const wasShown = isSurfaceShown.current;
     isSurfaceShown.current = isShown;
     if (isShown || !wasShown) return;
-    const { state } = voice;
+    const { state, isStarting } = voice;
     queueMicrotask(() => {
-      if (state === 'listening') {
+      if (state === 'listening' || isStarting) {
         interruptedCaptureId.current = null;
         endDictation();
         voice.cancel();
@@ -682,8 +694,8 @@ export function useHelmVoice() {
       }
       return startListening(page);
     }
-    if (voice.state !== 'idle') {
-      if (voice.state !== 'listening') {
+    if (voice.state !== 'idle' || voice.isStarting) {
+      if (voice.state !== 'listening' && !voice.isStarting) {
         waiting.current.clear();
         stopCount.current += 1;
       }
@@ -730,11 +742,12 @@ export function useHelmVoice() {
   }
 
   const dictate = (write: (text: string) => void, owner: string) => {
-    if (dictation.current !== null && voice.state === 'listening') {
+    const isHearing = voice.state === 'listening' || voice.isStarting;
+    if (dictation.current !== null && isHearing) {
       voice.stop();
       return 'stopped' as const;
     }
-    if (voice.state !== 'idle') return 'blocked' as const;
+    if (voice.state !== 'idle' || voice.isStarting) return 'blocked' as const;
     const result = talk(null);
     if (result === 'started') {
       dictation.current = write;
