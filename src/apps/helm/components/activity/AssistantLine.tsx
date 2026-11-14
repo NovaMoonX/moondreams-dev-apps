@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import WorkingDots from '@/components/WorkingDots';
+import WorkingRing from '@/components/WorkingRing';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
@@ -22,7 +22,9 @@ function AssistantLine({
   const name = useAssistantName();
   return (
     <div className='flex max-w-full items-start gap-2'>
-      <AssistantMark name={name} className='mt-px' />
+      <WorkingRing isWorking={isWorking} className='text-primary mt-px'>
+        <AssistantMark name={name} />
+      </WorkingRing>
       <p
         className={join(
           'min-w-0 text-[15px] leading-[21px] break-words',
@@ -30,7 +32,6 @@ function AssistantLine({
         )}
       >
         {children}
-        {isWorking && <WorkingDots />}
       </p>
     </div>
   );

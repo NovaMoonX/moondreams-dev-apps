@@ -78,6 +78,10 @@ export interface HelmProfile {
   currentPlace: { placeId: string; saidAt: number } | null;
   /** The createdAt of the newest typed capture the style learner has read; null until it has run, and on a profile from before it. */
   styleLearnedThroughAt: number | null;
+  /** When the person last started a new conversation; turns before it never carry into the next. Null until then, and on a profile from before. */
+  conversationFreshAt: number | null;
+  /** Each day's first turn starts a new conversation, and earlier days fold away on home. */
+  isDailyFreshOn: boolean;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -147,6 +151,8 @@ export interface QuestionState {
   askedAt: number;
   answeredAt: number | null;
   skippedAt: number | null;
+  /** The person let the question go without answering; `answeredAt` is set with it so it stops waiting. Null on one from before. */
+  dismissedAt: number | null;
 }
 
 /** One choice of a question; `new` and `none` carry no ref. */
@@ -298,6 +304,8 @@ export interface Capture {
   /** The photos sent with the turn, in pick order, at most 5; empty on a turn with none and on one made before photos. */
   attachmentIds: string[];
   seenAt: number | null;
+  /** A turn that couldn't be sorted, cleared from Needs you by the person; null on every other turn and on one from before. */
+  dismissedAt: number | null;
   /** `"{connectorId}|{accountId}"` of each connection an answer quoted; empty on a turn that quoted none and on one made before quotes. */
   quotedSourceKeys: string[];
   /** The note made from this turn's general answer by Save to my knowledge; null until then. */

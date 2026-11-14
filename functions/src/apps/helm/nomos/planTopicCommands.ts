@@ -647,6 +647,7 @@ const createParent = (
               askedAt: input.now,
               answeredAt: null,
               skippedAt: null,
+              dismissedAt: null,
             },
             sealed: buildGroupQuestion({
               name: command.name,

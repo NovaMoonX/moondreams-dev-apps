@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
@@ -16,6 +16,8 @@ import TurnCard from '@apps/helm/components/home/TurnCard';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
+  canClearFromNeedsYou,
+  clearNeedsYou,
   markAllSeen,
   markCaptureSeen,
 } from '@apps/helm/store/actions/captureActions';
@@ -37,6 +39,7 @@ interface InboxViewProps {
 function InboxView({ onBack, onHome }: InboxViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { confirm } = useActionModal();
   const name = useAssistantName();
   const unseen = useAppSelector(selectNewSinceLooked);
   const held = useAppSelector(selectHeldItems);
@@ -65,6 +68,34 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
     markCaptureSeen(user.uid, capture.id).catch(reportFailure);
   };
 
+  const clearable = held.needsYou
+    .map((item) => item.capture)
+    .filter(canClearFromNeedsYou);
+
+  const clearAll = async () => {
+    if (!user) return;
+    const isConfirmed = await confirm({
+      title: HELM_COPY.clearNeedsYouTitle(
+        clearable.length,
+        held.needsYou.length,
+      ),
+      message: HELM_COPY.clearNeedsYouBody(
+        held.needsYou.some(({ capture }) =>
+          Object.values(capture.questionState).some(
+            (state) =>
+              state.answeredAt === null && state.kind === 'whichIsTrue',
+          ),
+        ),
+      ),
+      confirmText: HELM_COPY.clearNeedsYou,
+    });
+    if (!isConfirmed) return;
+    clearNeedsYou(user.uid, clearable).catch((error: unknown) => {
+      console.error('Helm Needs you was not cleared', error);
+      addToast({ title: HELM_COPY.heldActionFailed, type: 'error' });
+    });
+  };
+
   const markEverythingSeen = () => {
     if (!user) return;
     markAllSeen(
@@ -84,6 +115,20 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.waitingCheckFailed}
           </p>
+        )}
+        {clearable.length >= 2 && (
+          <div className='flex justify-end'>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              rounded='full'
+              className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+              onClick={() => void clearAll()}
+            >
+              {HELM_COPY.clearNeedsYou}
+            </Button>
+          </div>
         )}
         {held.needsYou.length > 0 && (
           <ul className='helm-card divide-border divide-y overflow-hidden'>

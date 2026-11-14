@@ -27,9 +27,15 @@ import {
 import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
+  getDismissedQuestions,
   hasOpenChoice,
+  isDismissable,
   toHeldKind,
 } from '../../src/apps/helm/utils/heldCaptures.ts';
+import {
+  getFreshFrom,
+  getOpenSessionId,
+} from '../../src/apps/helm/utils/sessions.ts';
 import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
 import { toQuestionChoice } from '../../src/apps/helm/utils/questionChoice.ts';
 import type {
@@ -357,6 +363,7 @@ const resolveInput = (
         askedAt: 4000,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
     },
   },
@@ -516,6 +523,7 @@ test('answering one of two questions leaves the capture needing you', () => {
     askedAt: 4000,
     answeredAt: null,
     skippedAt: null,
+    dismissedAt: null,
   };
   assert.equal(planned(input).capture.status, 'needsYou');
 });
@@ -613,6 +621,7 @@ const settleInput = (
         askedAt: 4000,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
     },
   },
@@ -936,12 +945,94 @@ test('an open grouping question keeps its turn in Needs you, and answered it doe
           askedAt: 1,
           answeredAt,
           skippedAt: null,
+          dismissedAt: null,
         },
       },
     }) as unknown as OpenCapture;
   assert.equal(hasOpenChoice(capture(null)), true);
   assert.equal(toHeldKind(capture(null)), 'question');
   assert.equal(hasOpenChoice(capture(5)), false);
+});
+
+test('a whole reply that lets a question go dismisses it; a sentence, an option named so, or a dispute does not', () => {
+  const read = (text: string, question = GROUP_QUESTION) =>
+    matchSpokenAnswer(text, question, { now: 0, timeZone: 'UTC' })?.kind ??
+    null;
+  assert.equal(read('Dismiss.'), 'dismiss');
+  assert.equal(read('dismiss this question'), 'dismiss');
+  assert.notEqual(read('never mind'), 'dismiss');
+  assert.notEqual(read('dismiss the meeting with Sam'), 'dismiss');
+  assert.notEqual(
+    read('dismiss it', {
+      ...GROUP_QUESTION,
+      options: [
+        ...GROUP_QUESTION.options,
+        { id: 'o9', label: 'Dismiss it', detail: null, ref: null },
+      ],
+    }),
+    'dismiss',
+  );
+  assert.notEqual(
+    read('dismiss', { ...GROUP_QUESTION, kind: 'whichIsTrue' }),
+    'dismiss',
+  );
+  assert.equal(isDismissable('whichIsTrue'), false);
+  assert.equal(isDismissable('asked'), true);
+});
+
+test('a dismissed question leaves Needs you and is listed as dismissed (a status note is not); a cleared failed turn leaves too', () => {
+  const capture = (dismissedAt: number | null, kind = 'groupTopics') =>
+    ({
+      status: dismissedAt === null ? 'needsYou' : 'sorted',
+      dismissedAt: null,
+      questions: { q1: GROUP_QUESTION },
+      questionState: {
+        q1: {
+          kind,
+          shape: 'yesNo',
+          askedAt: 1,
+          answeredAt: dismissedAt,
+          skippedAt: 2,
+          dismissedAt,
+        },
+      },
+    }) as unknown as OpenCapture;
+  assert.equal(toHeldKind(capture(null)), 'question');
+  assert.equal(toHeldKind(capture(5)), null);
+  assert.deepEqual(
+    getDismissedQuestions(capture(5)).map((entry) => entry.id),
+    ['q1'],
+  );
+  assert.deepEqual(getDismissedQuestions(capture(null)), []);
+  assert.deepEqual(getDismissedQuestions(capture(5, 'moreToSort')), []);
+  const failed = (dismissedAt: number | null) =>
+    ({
+      status: 'failed',
+      dismissedAt,
+      questionState: {},
+    }) as unknown as OpenCapture;
+  assert.equal(toHeldKind(failed(null)), 'failed');
+  assert.equal(toHeldKind(failed(9)), null);
+});
+
+test('a new conversation or a new day (when turned on) ends the open session', () => {
+  const zone = 'America/Los_Angeles';
+  const now = Date.UTC(2026, 10, 14, 17);
+  const midnight = Date.UTC(2026, 10, 14, 8);
+  const profile = (
+    conversationFreshAt: number | null,
+    isDailyFreshOn: boolean,
+  ) => ({ conversationFreshAt, isDailyFreshOn, timeZone: zone });
+  assert.equal(getFreshFrom(null, now), 0);
+  assert.equal(getFreshFrom(profile(null, false), now), 0);
+  assert.equal(getFreshFrom(profile(null, true), now), midnight);
+  assert.equal(getFreshFrom(profile(now - 1000, true), now), now - 1000);
+  assert.equal(getFreshFrom(profile(midnight - 5, true), now), midnight);
+  const turn = (createdAt: number) =>
+    ({ sessionId: 's1', createdAt }) as unknown as OpenCapture;
+  assert.equal(getOpenSessionId([turn(now - 60_000)], now, 0), 's1');
+  assert.equal(getOpenSessionId([turn(now - 60_000)], now, now - 30_000), null);
+  assert.equal(getOpenSessionId([turn(now - 60_000)], now, midnight), 's1');
 });
 
 const failures: string[] = [];

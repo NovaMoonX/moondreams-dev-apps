@@ -173,13 +173,19 @@ async function openCapture(
     claimedAt: data.claimedAt ?? null,
     attempts: data.attempts ?? 0,
     lastErrorCode: data.lastErrorCode ?? null,
-    questionState: data.questionState ?? {},
+    questionState: Object.fromEntries(
+      Object.entries(data.questionState ?? {}).map(([id, state]) => [
+        id,
+        { ...state, dismissedAt: state.dismissedAt ?? null },
+      ]),
+    ),
     hasPendingWrites: isMetadataTracked && entry.metadata.hasPendingWrites,
     executionIds: data.executionIds ?? [],
     turnLeadId: toLeadId(data.turnLeadId),
     joinedCaptureIds: toIds(data.joinedCaptureIds),
     attachmentIds: toIds(data.attachmentIds),
     seenAt: data.seenAt ?? null,
+    dismissedAt: data.dismissedAt ?? null,
     quotedSourceKeys: toIds(data.quotedSourceKeys),
     answerSavedNoteId:
       typeof data.answerSavedNoteId === 'string'

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
 import {
   Bot,
   Eye,
@@ -8,6 +10,7 @@ import {
   Mic,
   Sparkles,
   Sun,
+  Sunrise,
   UserRound,
 } from 'lucide-react';
 
@@ -20,6 +23,7 @@ import {
 import { signOutEverywhere } from '@/lib/security/trustedBrowsers';
 import ColoursSection from '@apps/helm/components/settings/ColoursSection';
 import SettingsSection from '@apps/helm/components/settings/SettingsSection';
+import AppToggle from '@/components/AppToggle';
 import GatesClosedNote from '@/components/GatesClosedNote';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
 import NewBadge from '@/components/NewBadge';
@@ -42,6 +46,7 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { formatClockTime } from '@/utils/formatUtils';
+import { setDailyFreshOn } from '@apps/helm/store/actions/settingsActions';
 import { helmAppName, helmTrustStore } from '@apps/helm/queries/helmKeyQueries';
 import {
   formatUpdatedAt,
@@ -55,6 +60,36 @@ interface SettingsScreenProps {
   onOpenConnectedApps: () => void;
   onOpenAssistants: () => void;
   onOpenSeesYou: () => void;
+}
+
+/** A switch that starts each day's first turn as a new conversation; it writes at once and touches only itself. */
+function DailyFreshRow() {
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const isOn = useAppSelector(
+    (state) => state.helm.profile?.isDailyFreshOn ?? false,
+  );
+  const change = (checked: boolean) => {
+    if (!user) return;
+    setDailyFreshOn(user.uid, checked).catch((error: unknown) => {
+      console.error('Helm daily fresh start was not saved', error);
+      addToast({ title: HELM_COPY.dailyFreshFailed, type: 'error' });
+    });
+  };
+  return (
+    <SettingsRow
+      icon={<Sunrise className='size-5' aria-hidden='true' />}
+      title={HELM_COPY.dailyFreshTitle}
+      description={isOn ? HELM_COPY.dailyFreshOn : HELM_COPY.dailyFreshOff}
+      control={
+        <AppToggle
+          aria-label={HELM_COPY.dailyFreshTitle}
+          checked={isOn}
+          onCheckedChange={change}
+        />
+      }
+    />
+  );
 }
 
 /** A utility screen: Back to Home, its title and its groups, with no ask bar. */
@@ -118,6 +153,7 @@ function SettingsScreen({
             onClick={() => setIsAssistantOpen(true)}
             hasChevron
           />
+          <DailyFreshRow />
         </SettingsSection>
         <ColoursSection />
         <SettingsSection title={HELM_COPY.settingsPlanning}>

@@ -275,6 +275,7 @@ async function fileTurn({
       attachmentIds: [],
       seenAt: null,
       quotedSourceKeys: [],
+      dismissedAt: null,
       answerSavedNoteId: null,
       whoIds: [],
       placeIds: [],
