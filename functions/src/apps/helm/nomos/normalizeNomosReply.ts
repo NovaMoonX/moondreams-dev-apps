@@ -55,6 +55,10 @@ import {
   RUN_COMMAND_KINDS,
   SOUNDS_LIKE_COMMAND_KINDS,
   type NoteSoundsLikeCommand,
+  type SetWhereaboutsCommand,
+  WHEREABOUTS_CHANGES,
+  WHEREABOUTS_CITY_CAP,
+  WHEREABOUTS_LABEL_CAP,
   type RunCommand,
   MAX_PARENT_CHILDREN,
   MAX_TOPIC_ADD_CHARS,
@@ -1067,6 +1071,7 @@ const readCommand = (
     kind === 'remember' ||
     kind === 'planDay' ||
     kind === 'setCurrentPlace' ||
+    kind === 'setWhereabouts' ||
     kind === 'noteFact' ||
     kind === 'setKeyDate' ||
     kind === 'removeKeyDate' ||
@@ -1575,6 +1580,114 @@ const readSoundsLike = (
     })
     .slice(0, 1);
 
+const toDateSpanDay = (
+  value: unknown,
+  reading: CaptureReading,
+  timeZone: string,
+) => {
+  if (value === null || value === undefined) return null;
+  const span =
+    typeof value === 'string'
+      ? reading.dates.find((entry) => entry.id === value)
+      : undefined;
+  if (!span || span.precision) throw new NomosReplyError('badDate');
+  return span.due.kind === 'day'
+    ? span.due.date
+    : getDayIn(span.due.at, toKnownZone(timeZone));
+};
+
+/** A place or a person the person said, by the id the reading gave it, as the words of an away label. */
+const toTokenWords = (value: unknown, reading: CaptureReading) =>
+  typeof value === 'string'
+    ? ([...reading.places, ...reading.people].find(
+        (token) => token.id === value,
+      )?.text ?? null)
+    : null;
+
+/** At most one where-someone-is change per who: the words must be quoted, an away needs a city and a first day from the reading's dates, and only the person themself can be back. */
+const readWhereabouts = (
+  items: Record<string, unknown>[],
+  people: AliasBook | undefined,
+  reading: CaptureReading,
+  captureText: string,
+  timeZone: string,
+  now: number | undefined,
+): SetWhereaboutsCommand[] => {
+  const words = ` ${toComparable(captureText)} `;
+  const today =
+    now === undefined ? null : getDayIn(now, toKnownZone(timeZone));
+  const isSaid = (cityName: string) =>
+    words.includes(` ${toComparable(cityName.split(',')[0] ?? '')} `);
+  const read = items
+    .filter((item) => item.kind === 'setWhereabouts')
+    .flatMap((item): SetWhereaboutsCommand[] => {
+      const change = WHEREABOUTS_CHANGES.find(
+        (entry) => entry === item.change,
+      );
+      const quote = toText(item.quote, FACT_QUOTE_CAP);
+      const alias = typeof item.whoAlias === 'string' ? item.whoAlias : '';
+      const isSelf = alias.toLowerCase() === 'me';
+      const whoId = isSelf ? null : (people?.idOf(alias) ?? null);
+      if (!change || !quote || (!isSelf && !whoId)) return [];
+      if (!words.includes(` ${toComparable(quote)} `)) return [];
+      if (change === 'back') {
+        return isSelf
+          ? [
+              {
+                kind: 'setWhereabouts',
+                whoId,
+                change,
+                cityName: null,
+                from: null,
+                to: null,
+                label: null,
+                quote,
+              },
+            ]
+          : [];
+      }
+      const cityName = toText(item.cityName, WHEREABOUTS_CITY_CAP);
+      if (!cityName || !isSaid(cityName)) return [];
+      if (change === 'home') {
+        return [
+          {
+            kind: 'setWhereabouts',
+            whoId,
+            change,
+            cityName,
+            from: null,
+            to: null,
+            label: null,
+            quote,
+          },
+        ];
+      }
+      const from = toDateSpanDay(item.fromSpanId, reading, timeZone);
+      const to = toDateSpanDay(item.toSpanId, reading, timeZone) ?? from;
+      if (from === null || to === null || to < from) return [];
+      if (today !== null && to < today) return [];
+      if ((to - from) / DAY_MS > 366) return [];
+      const label = toTokenWords(item.labelSpanId, reading);
+      return [
+        {
+          kind: 'setWhereabouts',
+          whoId,
+          change,
+          cityName,
+          from,
+          to,
+          label: label ? label.slice(0, WHEREABOUTS_LABEL_CAP) : null,
+          quote,
+        },
+      ];
+    });
+  return [
+    ...new Map(
+      read.map((command) => [`${command.whoId ?? 'me'}:${command.change}`, command]),
+    ).values(),
+  ].slice(0, 4);
+};
+
 export type RunDrop =
   | 'run-start-unasked'
   | 'run-start-unknown'
@@ -1876,6 +1989,7 @@ export function normalizeNomosReply(
   runCommands: RunCommand[];
   runDropped: RunDrop[];
   soundsLike: NoteSoundsLikeCommand[];
+  whereabouts: SetWhereaboutsCommand[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -1987,6 +2101,14 @@ export function normalizeNomosReply(
     context.people,
     context.previousTurn,
   );
+  const whereabouts = readWhereabouts(
+    items,
+    context.people,
+    context.reading,
+    context.captureText ?? '',
+    context.timeZone ?? 'UTC',
+    context.now,
+  );
   const projects = readProjects(
     items,
     entities,
@@ -2056,6 +2178,7 @@ export function normalizeNomosReply(
     runCommands,
     runDropped,
     soundsLike,
+    whereabouts,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

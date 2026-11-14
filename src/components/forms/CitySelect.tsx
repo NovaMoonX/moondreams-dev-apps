@@ -13,6 +13,8 @@ interface CitySelectProps {
   value: City | null;
   onChange: (city: City | null) => void;
   disabled?: boolean;
+  /** The form can't save without a city, so a failed search never suggests adding one later. */
+  isRequired?: boolean;
 }
 
 const MIN_QUERY_LENGTH = 2;
@@ -21,7 +23,7 @@ const STATUS_KEY = '__status';
 
 const getCityKey = (city: City) => `${city.latitude},${city.longitude}`;
 
-function CitySelect({ value, onChange, disabled = false }: CitySelectProps) {
+function CitySelect({ value, onChange, disabled = false, isRequired = false }: CitySelectProps) {
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query.trim(), DEBOUNCE_MS.autocomplete);
   const { data: results = [], isFetching, isError } = useQuery({
@@ -39,7 +41,9 @@ function CitySelect({ value, onChange, disabled = false }: CitySelectProps) {
   const status = isSearching
     ? 'Searching…'
     : isError
-      ? 'Couldn’t search just now. You can add a city later.'
+      ? isRequired
+        ? 'Couldn’t search just now. Try again in a moment.'
+        : 'Couldn’t search just now. You can add a city later.'
       : trimmedQuery.length >= MIN_QUERY_LENGTH && results.length === 0
         ? 'No city found'
         : trimmedQuery.length < MIN_QUERY_LENGTH && !value

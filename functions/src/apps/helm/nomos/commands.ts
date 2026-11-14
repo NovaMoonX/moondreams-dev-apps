@@ -41,6 +41,7 @@ export const COMMAND_KINDS = [
   'remember',
   'planDay',
   'setCurrentPlace',
+  'setWhereabouts',
   'noteFact',
   'setKeyDate',
   'removeKeyDate',
@@ -533,6 +534,24 @@ export interface SetCurrentPlaceCommand {
   place: 'home';
 }
 
+export const WHEREABOUTS_CHANGES = ['home', 'away', 'back'] as const;
+
+export const WHEREABOUTS_CITY_CAP = 60;
+export const WHEREABOUTS_LABEL_CAP = 60;
+
+/** Where someone lives, or where they will be for some days, or that the person is back: a who (null is the person themself), a city name code looks up, and dates taken from the reading's date spans. */
+export interface SetWhereaboutsCommand {
+  kind: 'setWhereabouts';
+  whoId: string | null;
+  change: (typeof WHEREABOUTS_CHANGES)[number];
+  cityName: string | null;
+  /** Date-only, inclusive; away only. */
+  from: number | null;
+  to: number | null;
+  label: string | null;
+  quote: string;
+}
+
 /** The model's answer to a question, every source alias already resolved; the guards decide what of it is kept. */
 export interface AnswerCommand {
   scope: AnswerScope;
@@ -683,6 +702,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'whoRefs',
             'placeRefs',
             'place',
+            'change',
+            'cityName',
+            'fromSpanId',
+            'toSpanId',
+            'labelSpanId',
             'shape',
             'prompt',
             'options',
@@ -848,6 +872,28 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               description:
                 'setCurrentPlace: home, when the person says they are home or just got home; null for every other kind.',
             },
+            change: {
+              type: ['string', 'null'],
+              enum: [...WHEREABOUTS_CHANGES, null],
+              description:
+                'setWhereabouts: home for where someone lives ("Priya lives in Leavenworth"), away for where someone will be or is for some days ("I\'m in Lisbon Dec 2 to 9"), back when the person says they are back home from being away; null for every other kind.',
+            },
+            cityName: nullable(
+              'string',
+              `setWhereabouts home and away: the city as said, without the state or country unless said, at most ${WHEREABOUTS_CITY_CAP} characters; null for back and every other kind.`,
+            ),
+            fromSpanId: nullable(
+              'string',
+              'setWhereabouts away: the id of the date span in the reading that gives the first day. Never write a date yourself.',
+            ),
+            toSpanId: nullable(
+              'string',
+              'setWhereabouts away: the id of the date span that gives the last day; null for a single day.',
+            ),
+            labelSpanId: nullable(
+              'string',
+              'setWhereabouts away: the id of a place or person token in the reading that says where in the city the person is staying ("my sister\'s"); null when none.',
+            ),
             shape: {
               type: ['string', 'null'],
               enum: [...ASK_SHAPES, null],
@@ -920,7 +966,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             quote: nullable(
               'string',
-              `noteFact: the person's exact words from the capture that say it, at most ${FACT_QUOTE_CAP} characters; null when none.`,
+              `noteFact and setWhereabouts: the person's exact words from the capture that say it, at most ${FACT_QUOTE_CAP} characters; null when none.`,
             ),
             isStated: nullable(
               'boolean',
@@ -1126,13 +1172,24 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             whoAlias: nullable(
               'string',
-              'noteSoundsLike: the alias (w1, w2, …) from <people> of the person the spelled name belongs to; null otherwise.',
+              'noteSoundsLike: the alias (w1, w2, …) from <people> of the person the spelled name belongs to; null otherwise. setWhereabouts: the alias from <people> of who it is about, or "me" for the person talking.',
             ),
             heardSpan: nullable(
               'string',
               'noteSoundsLike: the words as they were written in the turn before, which the person is correcting ("Shivon"), copied exactly; null otherwise.',
             ),
           },
+        },
+      },
+      offerAbility: {
+        type: ['object', 'null'],
+        description:
+          'Only when an answer about what is near the person or where they are would be better with a finer location than <abilities> allows, or they ask to use where they are: the level that would help. null otherwise; this never changes any setting.',
+        additionalProperties: false,
+        required: ['ability', 'level'],
+        properties: {
+          ability: { type: 'string', enum: ['location'] },
+          level: { type: 'string', enum: ['city', 'precise'] },
         },
       },
       replyLine: nullable(

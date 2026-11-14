@@ -19,6 +19,7 @@ import FactsSection from '@apps/helm/components/who/FactsSection';
 import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
 import MomentsPreview from '@apps/helm/components/who/MomentsPreview';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
+import WhereCard from '@apps/helm/components/where/WhereCard';
 import WhoEditSheet from '@apps/helm/components/who/WhoEditSheet';
 import WhoNamesCard from '@apps/helm/components/who/WhoNamesCard';
 import PhotoHeader from '@apps/helm/components/media/PhotoHeader';
@@ -364,6 +365,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
               photoIds={who.mediaIds}
               mainId={who.photoMediaId}
             />
+            <WhereCard who={who} />
             <KeyDatesList who={who} />
             <MomentsPreview who={who} />
             <FactsSection

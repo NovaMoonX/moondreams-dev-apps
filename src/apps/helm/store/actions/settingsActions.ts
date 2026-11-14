@@ -23,11 +23,17 @@ import {
   DEFAULT_DAY_START_TIME,
   DEFAULT_PLAN_FILL_PERCENT,
 } from '@apps/helm/constants';
+import { keepCurrentAway, MAX_ZONE_SPANS } from '@apps/helm/engine/whereabouts';
+import { setWhoNearNow } from '@apps/helm/store/actions/whoActions';
 import type {
+  AbilityDecline,
   AssistantTone,
+  HelmEncryption,
   HelmProfile,
   HelmTheme,
+  PhoneLocation,
   VoiceMode,
+  ZoneSpan,
 } from '@apps/helm/types';
 
 /** Creates the profile on first open, with this device's zone, and leaves an existing one alone, so two tabs opening together make one. */
@@ -59,6 +65,9 @@ export async function ensureHelmProfile(uid: string) {
       selfWhoId: null,
       currentPlace: null,
       styleLearnedThroughAt: null,
+      phoneLocation: 'off',
+      zoneSpans: [],
+      abilityOffers: [],
       createdAt: Date.now(),
       lastEditedAt: null,
     };
@@ -145,6 +154,89 @@ export const setHelmTheme = (uid: string, theme: HelmTheme) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     theme,
     lastEditedAt: Date.now(),
+  });
+
+export type PhoneLocationResult =
+  'saved' | 'offline' | 'missing' | 'unreadable';
+
+/** Writes how much of this phone's location may be used. Turning it down clears what was read first, so a failed clear leaves the setting as it was: City only drops the point, Off drops the reading. */
+export async function setPhoneLocation(
+  uid: string,
+  encryption: HelmEncryption,
+  next: PhoneLocation,
+): Promise<PhoneLocationResult> {
+  if (!navigator.onLine) return 'offline';
+  const profile = store.getState().helm.profile;
+  const selfWhoId = profile?.selfWhoId ?? null;
+  const self = store
+    .getState()
+    .helm.who.items.find(
+      (entry) => entry.id === selfWhoId && !entry.isUnreadable,
+    );
+  const nearNow = self?.nearNow ?? null;
+  if (selfWhoId && nearNow && next !== 'precise') {
+    const cleared = await setWhoNearNow(
+      uid,
+      encryption,
+      selfWhoId,
+      next === 'city' ? { ...nearNow, point: null } : null,
+    );
+    if (cleared !== 'saved') return cleared;
+  }
+  await updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    phoneLocation: next,
+    lastEditedAt: Date.now(),
+  });
+  return 'saved';
+}
+
+/** Forgets the last place the phone read. */
+export async function forgetNearNow(
+  uid: string,
+  encryption: HelmEncryption,
+): Promise<PhoneLocationResult> {
+  const selfWhoId = store.getState().helm.profile?.selfWhoId ?? null;
+  return selfWhoId ? setWhoNearNow(uid, encryption, selfWhoId, null) : 'saved';
+}
+
+/** Stamps a Not now on a location offer so it waits 4 weeks. */
+export const declineAbilityOffer = (
+  uid: string,
+  decline: Omit<AbilityDecline, 'declinedAt'>,
+) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    abilityOffers: arrayUnion({ ...decline, declinedAt: Date.now() }),
+    lastEditedAt: Date.now(),
+  });
+
+/** Adds the chosen away span's clock, dropping ended spans and keeping the newest 10. */
+export const addZoneSpan = (uid: string, span: ZoneSpan, todayKey: string) =>
+  runTransaction(db, async (transaction) => {
+    const ref = doc(db, 'apps', 'helm', 'users', uid);
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const current = (snapshot.data() as HelmProfile).zoneSpans ?? [];
+    transaction.update(ref, {
+      zoneSpans: [
+        ...keepCurrentAway(current, todayKey).filter(
+          (entry) => entry.awayId !== span.awayId,
+        ),
+        span,
+      ].slice(-MAX_ZONE_SPANS),
+      lastEditedAt: Date.now(),
+    });
+  });
+
+export const removeZoneSpan = (uid: string, awayId: string) =>
+  runTransaction(db, async (transaction) => {
+    const ref = doc(db, 'apps', 'helm', 'users', uid);
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const current = (snapshot.data() as HelmProfile).zoneSpans ?? [];
+    transaction.update(ref, {
+      zoneSpans: current.filter((entry) => entry.awayId !== awayId),
+      lastEditedAt: Date.now(),
+    });
   });
 
 const DELETE_TIMEOUT_MS = 310_000;

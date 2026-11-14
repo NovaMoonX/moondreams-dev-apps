@@ -78,6 +78,43 @@ const CHUNK = 250;
 
 const TASK_COUNT = 600;
 const WHO_COUNT = 2_000;
+
+const HOME_CITIES = [
+  [
+    'Seattle',
+    'Washington',
+    'United States',
+    47.606,
+    -122.332,
+    'America/Los_Angeles',
+  ],
+  [
+    'Portland',
+    'Oregon',
+    'United States',
+    45.523,
+    -122.676,
+    'America/Los_Angeles',
+  ],
+  [
+    'Leavenworth',
+    'Washington',
+    'United States',
+    47.596,
+    -120.661,
+    'America/Los_Angeles',
+  ],
+  ['Denver', 'Colorado', 'United States', 39.739, -104.99, 'America/Denver'],
+  ['Chicago', 'Illinois', 'United States', 41.878, -87.63, 'America/Chicago'],
+  ['Lisbon', null, 'Portugal', 38.722, -9.139, 'Europe/Lisbon'],
+].map(([name, region, country, latitude, longitude, timezone]) => ({
+  name: name as string,
+  region: region as string | null,
+  country: country as string | null,
+  latitude: latitude as number,
+  longitude: longitude as number,
+  timezone: timezone as string,
+}));
 const YEARLY_PER_WHO = 2;
 const MOMENT_TOTAL = 16_000;
 const MOMENTS_FOR_ONE_WHO = 500;
@@ -721,6 +758,22 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             organizationKind:
               kind === 'organization' ? ORG_KINDS[index % 8] : null,
             ...(isPrivateWho(index) && { privateMark: 'person' as const }),
+            home: HOME_CITIES[index % HOME_CITIES.length],
+            homeSource: index % 2 === 0 ? 'page' : 'said',
+            away:
+              index % 20 === 3
+                ? [
+                    {
+                      id: `scale-away-${pad(index)}`,
+                      city: HOME_CITIES[(index + 1) % HOME_CITIES.length],
+                      from: dayStart(now) + (index % 7) * DAY_MS,
+                      to: dayStart(now) + ((index % 7) + 3) * DAY_MS,
+                      label: null,
+                      source: 'said',
+                      zoneOffered: false,
+                    },
+                  ]
+                : null,
           }),
         ),
       ),
@@ -1226,6 +1279,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       privacy: 'ordinary',
       touchesPrivate: null,
       presence: null,
+      abilities: null,
       inputMode: 'typed',
       sttProvider: null,
       interruptedCaptureId: null,

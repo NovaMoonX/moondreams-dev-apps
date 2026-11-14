@@ -1318,6 +1318,8 @@ export function planUndo(input: {
       spoken: null,
       goneIds,
       lines: null,
+      abilityOffer: null,
+      awayZoneOffer: null,
     },
     takenBack: [
       ...records,

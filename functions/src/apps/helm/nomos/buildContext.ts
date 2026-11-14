@@ -196,6 +196,15 @@ export interface ContextInput {
   topicDocument?: 'whole' | 'outline' | null;
   /** The person's style notes, descriptions only; left out when there are none. */
   style?: { traits: string[]; avoid: string[] } | null;
+  /** Where the person is today and on any day the turn names, and where the people it names live, as names only. */
+  whereabouts?: Record<string, unknown> | null;
+  /** What this phone lets the assistant read of where it is. */
+  abilities?: {
+    location: {
+      setting: 'off' | 'city' | 'precise';
+      permission: 'granted' | 'prompt' | 'denied' | 'unsupported';
+    };
+  } | null;
 }
 
 export interface ContextFocusedTopic {
@@ -576,6 +585,12 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(input.style
       ? [`<your_style>${toDataJson(input.style)}</your_style>`]
+      : []),
+    ...(input.whereabouts
+      ? [`<whereabouts>${toDataJson(input.whereabouts)}</whereabouts>`]
+      : []),
+    ...(input.abilities
+      ? [`<abilities>${toDataJson(input.abilities)}</abilities>`]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]

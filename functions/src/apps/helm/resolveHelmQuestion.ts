@@ -1,3 +1,4 @@
+import { toAwayIds, toTurnZone } from './nomos/planWhereabouts.js';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -218,6 +219,14 @@ const readInput = (data: unknown) => {
     text: note,
     newName: typedName,
   };
+};
+
+const openWords = (key: Parameters<typeof openForHelm>[0], sealed: unknown) => {
+  try {
+    return openForHelm(key, sealed as SealedPayload) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 };
 
 export const resolveHelmQuestion = onCall(
@@ -483,6 +492,14 @@ export const resolveHelmQuestion = onCall(
           return [[snap.id, fact]];
         }),
       );
+      const selfWhoId = profileSnap.get('selfWhoId') as
+        string | null | undefined;
+      const selfSnap = selfWhoId
+        ? await transaction.get(firestore.doc(`${base}/who/${selfWhoId}`))
+        : null;
+      const selfAwayIds = selfSnap?.exists
+        ? toAwayIds(openWords(key, selfSnap.get('sealed')))
+        : null;
       const executionRef = firestore.collection(`${base}/executions`).doc();
       const result = planResolve({
         captureId,
@@ -491,7 +508,7 @@ export const resolveHelmQuestion = onCall(
         optionIds,
         by,
         now: Date.now(),
-        timeZone: (profileSnap.data()?.timeZone as string | undefined) ?? 'UTC',
+        timeZone: toTurnZone(profileSnap.data(), Date.now(), selfAwayIds),
         executionId: executionRef.id,
         capture: {
           status: capture.status,

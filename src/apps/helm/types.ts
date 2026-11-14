@@ -1,3 +1,5 @@
+import type { City } from '@/lib/cities/types';
+import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
@@ -79,8 +81,47 @@ export interface HelmProfile {
   currentPlace: { placeId: string; saidAt: number } | null;
   /** The createdAt of the newest typed capture the style learner has read; null until it has run, and on a profile from before it. */
   styleLearnedThroughAt: number | null;
+  /** How much of this phone's location the assistant may use; only the chosen precision is ever stored. */
+  phoneLocation: PhoneLocation;
+  /** Away spans whose days follow the away city's clock (date-only, inclusive, at most 10). */
+  zoneSpans: ZoneSpan[];
+  /** When the person said Not now to an ability offer, so it waits 4 weeks. */
+  abilityOffers: AbilityDecline[];
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+export type PhoneLocation = 'off' | 'city' | 'precise';
+
+export interface ZoneSpan {
+  zone: string;
+  from: number;
+  to: number;
+  awayId: string;
+}
+
+export interface AbilityDecline {
+  ability: 'location';
+  level: 'city' | 'precise';
+  declinedAt: number;
+}
+
+/** Somewhere else for a while: date-only `from` and `to`, both inclusive. */
+export interface AwaySpan {
+  id: string;
+  city: City;
+  from: number;
+  to: number;
+  label: string | null;
+  source: 'said' | 'page';
+  zoneOffered: boolean;
+}
+
+export interface NearNow {
+  city: string;
+  at: number;
+  /** Only at Precise, rounded to 3 decimals. */
+  point: { lat: number; lng: number } | null;
 }
 
 export type StyleScope = 'general' | 'occasion' | 'audience';
@@ -327,7 +368,21 @@ export interface Capture {
     isHidden: boolean;
     isUntouched: boolean;
   } | null;
+  /** This phone's location setting and the browser's permission when the turn was sent; null on a turn made before the field. */
+  abilities: {
+    location: { setting: PhoneLocation; permission: LocationPermission };
+  } | null;
   sealed: Sealed;
+}
+
+export type LocationPermission =
+  'granted' | 'prompt' | 'denied' | 'unsupported';
+
+/** A location offer under an answer: a button to turn it on, or the line on how to allow it in the browser. */
+export interface AbilityOffer {
+  ability: 'location';
+  level: 'city' | 'precise';
+  mode: 'offer' | 'settingsLine';
 }
 
 export type SourceRef =
@@ -546,6 +601,13 @@ export interface WhoSealed {
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
   isPrivacyCleared: boolean | null;
+  /** Where they live. Null when unknown, and in a payload sealed before the field. */
+  home: City | null;
+  homeSource: 'said' | 'page' | null;
+  /** At most 5; spans that ended before today are dropped on the next write. */
+  away: AwaySpan[] | null;
+  /** Self only, with phone location on; lapses after 6 hours. */
+  nearNow: NearNow | null;
 }
 
 /** A who after its words are opened; one that would not open keeps `isUnreadable` and an empty name. */
@@ -1097,6 +1159,10 @@ export interface ExecutionSealed {
   goneIds: string[] | null;
   /** Result rows that touch no record (a note already kept); null on executions that said none. */
   lines: ResultNoteLine[] | null;
+  /** An answer's phone-location offer; null on executions that made none and on anything made before offers. */
+  abilityOffer: AbilityOffer | null;
+  /** The offer to follow an away city's clock; null like the offer above. */
+  awayZoneOffer: AwayZoneOffer | null;
 }
 
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */
@@ -1109,6 +1175,8 @@ export interface OpenExecution extends Omit<Execution, 'sealed'> {
   spoken: string | null;
   goneIds: string[] | null;
   lines: ResultNoteLine[];
+  abilityOffer: AbilityOffer | null;
+  awayZoneOffer: AwayZoneOffer | null;
   isUnreadable: boolean;
 }
 

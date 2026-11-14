@@ -2984,6 +2984,7 @@ export function buildExecution(
     messageCount?: number;
     inputMode?: string;
     timeZone?: string;
+    offers?: Record<string, unknown>;
   },
 ): Record<string, unknown> {
   const created = plan.effectRefs.flatMap((ref, index) => {
@@ -3055,6 +3056,9 @@ export function buildExecution(
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
+      abilityOffer: null,
+      awayZoneOffer: null,
+      ...input.offers,
       summary: [
         summarize(plan.counts, input.messageCount),
         ...plan.kinLines,
@@ -3119,6 +3123,7 @@ const withQuestion = (ack: string | null, question: string | null) =>
 
 /** An answer writes only the capture's sealed answer, so it has no effects and nothing to undo, unless it noted one fact: then that fact is its one effect and Undo deletes it. A refused fact is recorded as not done. */
 export function buildAnswerExecution(input: {
+  offers?: Record<string, unknown>;
   captureId: string;
   answer: CaptureAnswer;
   spoken: string | null;
@@ -3144,6 +3149,9 @@ export function buildAnswerExecution(input: {
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
+      abilityOffer: null,
+      awayZoneOffer: null,
+      ...input.offers,
       summary: input.fact
         ? `${summarizeAnswer(input.answer)} ${input.fact.note}`
         : summarizeAnswer(input.answer),

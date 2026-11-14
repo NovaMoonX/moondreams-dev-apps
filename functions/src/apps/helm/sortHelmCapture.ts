@@ -4,6 +4,7 @@ import {
   getFirestore,
   type DocumentReference,
   type Firestore,
+  type DocumentSnapshot,
   type QueryDocumentSnapshot,
   type Transaction,
 } from 'firebase-admin/firestore';
@@ -148,6 +149,7 @@ import {
   type PlanDayCommand,
   type RememberCommand,
   type SetCurrentPlaceCommand,
+  type SetWhereaboutsCommand,
   type TaskDue,
   DEFAULT_ASSISTANT_NAME,
 } from './nomos/commands.js';
@@ -211,6 +213,21 @@ import {
   type HeardName,
 } from './nomos/heardNames.js';
 import { planSoundsLike, type EarlierTask } from './nomos/planSoundsLike.js';
+import {
+  decideAbilityOffer,
+  describeWhereabouts,
+  isNamedText,
+  planWhereabouts,
+  readCaptureAbilities,
+  readWhereProfile,
+  toAwayIds,
+  toTurnZone,
+  readWhoWhere,
+  tripsFromCopies,
+  WHERE_NOT_WITH_NAME_LINE,
+  type ResolvedWhereabouts,
+} from './nomos/planWhereabouts.js';
+import { geocodeCity } from './nomos/geocodeCity.js';
 import {
   isNamedIn,
   normalizeNomosReply,
@@ -303,7 +320,15 @@ interface SortResult {
   releasedIds: string[];
   hasAnswer: boolean;
   spoken: string | null;
+  /** The location offer an answer with no Execution may carry, kept only when code allows it; an Execution holds its own. */
+  abilityOffer: {
+    ability: 'location';
+    level: 'city' | 'precise';
+    mode: 'offer' | 'settingsLine';
+  } | null;
 }
+
+const NO_OFFERS = { abilityOffer: null } as const;
 
 const toResult = (
   status: SortResult['status'],
@@ -313,7 +338,8 @@ const toResult = (
     hasAnswer: false,
     spoken: null,
   },
-): SortResult => ({ status, executionId, releasedIds, ...answer });
+  offers: Pick<SortResult, 'abilityOffer'> = NO_OFFERS,
+): SortResult => ({ status, executionId, releasedIds, ...answer, ...offers });
 
 const readAnswered = (stored: unknown, captureId: string) => {
   const answered = readStoredResult<Partial<SortResult> & SortResult>(
@@ -326,6 +352,7 @@ const readAnswered = (stored: unknown, captureId: string) => {
         releasedIds: answered.releasedIds ?? [],
         hasAnswer: answered.hasAnswer ?? false,
         spoken: answered.spoken ?? null,
+        abilityOffer: answered.abilityOffer ?? null,
       }
     : null;
 };
@@ -354,6 +381,7 @@ interface CaptureDoc {
   answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
+  abilities?: unknown;
   interruptedCaptureId: string | null;
   createdAt: number;
   sealed: SealedPayload;
@@ -1056,6 +1084,64 @@ async function readContextPeople(
   }
 }
 
+/** Where the person is today and on a day the turn names, and where the people it names live; names only. A failed read gives none, so a turn never waits on it. */
+async function readContextWhereabouts(input: {
+  firestore: Firestore;
+  base: string;
+  key: HelmKey;
+  selfWhoId: string | null;
+  text: string;
+  dates: CaptureReading['dates'];
+  people: ContextPerson[];
+  profile: ReturnType<typeof readWhereProfile>;
+  at: number;
+  timeZone: string;
+  trips: ReturnType<typeof tripsFromCopies>;
+}) {
+  try {
+    const named = input.people.filter((person) =>
+      isNamedText(input.text, [person.name, ...person.alsoCalled]),
+    );
+    const refs = [
+      ...(input.selfWhoId ? [input.selfWhoId] : []),
+      ...named.map((person) => person.id),
+    ].map((id) => input.firestore.doc(`${input.base}/who/${id}`));
+    const snaps = refs.length > 0 ? await input.firestore.getAll(...refs) : [];
+    const whereOf = (snapshot: DocumentSnapshot | undefined) =>
+      readWhoWhere(
+        snapshot?.exists ? openSealed(input.key, snapshot.get('sealed')) : null,
+      );
+    const dayKeyOf = (at: number) =>
+      new Date(getDayIn(at, toKnownZone(input.timeZone)))
+        .toISOString()
+        .slice(0, 10);
+    const todayKey = dayKeyOf(input.at);
+    return describeWhereabouts({
+      todayKey,
+      namedDayKeys: input.dates.flatMap((span) =>
+        span.precision
+          ? []
+          : [
+              span.due.kind === 'day'
+                ? new Date(span.due.date).toISOString().slice(0, 10)
+                : dayKeyOf(span.due.at),
+            ],
+      ),
+      self: whereOf(input.selfWhoId ? snaps[0] : undefined),
+      trips: input.trips,
+      named: named.map((person, index) => ({
+        name: person.name,
+        where: whereOf(snaps[index + (input.selfWhoId ? 1 : 0)]),
+      })),
+    });
+  } catch (error) {
+    logger.warn('helm.sort.whereaboutsUnread', {
+      cause: error instanceof Error ? error.name : 'error',
+    });
+    return null;
+  }
+}
+
 const escapeRegExp = (text: string) =>
   text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -1642,6 +1728,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureCommands: [],
       runCommands: [],
       soundsLike: [],
+      whereabouts: [],
+      offerAbility: null,
+      abilities: null,
       previousTaskIds: [],
       previousHeard: [],
       knownNames: [],
@@ -1708,6 +1797,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         };
 
   const profileRead = firestore.doc(base).get();
+  const awayIdsRead = profileRead
+    .then(async (snapshot) => {
+      const selfId = snapshot.get('selfWhoId') as string | null | undefined;
+      if (!selfId) return null;
+      const self = await firestore.doc(`${base}/who/${selfId}`).get();
+      return self.exists
+        ? toAwayIds(openSealed(key, self.get('sealed')))
+        : null;
+    })
+    .catch(() => null);
   const earlyMask = {
     isOn: isUnattendedTurn(
       capture.presence?.startedByWake === true,
@@ -1747,14 +1846,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           earlyMask,
         )
       : Promise.resolve(undefined),
-    profileRead.then((snapshot) =>
+    Promise.all([profileRead, awayIdsRead]).then(([snapshot, awayIds]) =>
       readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen), {
         ...earlyMask,
-        timeZone: (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
+        timeZone: toTurnZone(snapshot.data(), capture.createdAt, awayIds),
       }),
     ),
     readEarlierTurns(firestore, base, key, capture, earlyMask),
-    profileRead.then((snapshot) =>
+    Promise.all([profileRead, awayIdsRead]).then(([snapshot, awayIds]) =>
       mode === 'rest'
         ? []
         : readContextSynced(
@@ -1763,7 +1862,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             key,
             capture.createdAt,
             toKnownZone(
-              (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
+              toTurnZone(snapshot.data(), capture.createdAt, awayIds),
             ),
           ),
     ),
@@ -1772,7 +1871,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ? null
       : readPreviousTurn(firestore, base, key, capture).catch(() => null),
   ]);
-  const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
+  const timeZone = toTurnZone(
+    profile.data(),
+    capture.createdAt,
+    await awayIdsRead,
+  );
   const unattendedMask = { ...earlyMask, timeZone };
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
@@ -1997,6 +2100,35 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ...synced,
       ...trips.filter((trip) => !synced.some((copy) => copy.id === trip.id)),
     ];
+    const placeTrips =
+      mode === 'rest'
+        ? []
+        : procedureRecords.length > 0
+          ? trips
+          : await readSyncedTrips(firestore, uid, key, {
+              firstDay: getLocalDay(capture.createdAt, toKnownZone(timeZone)),
+              limit: MAX_CONTEXT_TRIPS,
+            }).catch((): Awaited<ReturnType<typeof readSyncedTrips>> => []);
+    const contextWhereabouts =
+      mode === 'rest'
+        ? null
+        : await readContextWhereabouts({
+            firestore,
+            base,
+            key,
+            selfWhoId,
+            text: combined.text,
+            dates: combined.reading.dates,
+            people: contextPeople,
+            profile: readWhereProfile(profile.data()),
+            at: capture.createdAt,
+            timeZone,
+            trips: tripsFromCopies(
+              [...synced, ...placeTrips].filter(
+                (copy) => copy.kind === 'trip' || copy.category === 'trips',
+              ),
+            ),
+          });
     const contextProcedures: ContextProcedure[] = procedureRecords.map(
       (procedure) => ({
         id: procedure.id,
@@ -2066,6 +2198,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       projects: masked.projects,
       topics: masked.topics,
       style,
+      whereabouts: contextWhereabouts,
+      abilities: readCaptureAbilities(capture.abilities),
       notes: masked.notes,
       focusedTopic: masked.focusedTopic,
       topicDocument,
@@ -2477,6 +2611,15 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     procedureCommands: mode === 'full' ? reply.procedureCommands : [],
     runCommands: mode === 'full' ? reply.runCommands : [],
     soundsLike: mode === 'full' ? reply.soundsLike : [],
+    whereabouts: mode === 'full' ? reply.whereabouts : [],
+    offerAbility:
+      mode === 'full'
+        ? readOfferAbility(
+            (loop.terminalInput as { offerAbility?: unknown } | null)
+              ?.offerAbility,
+          )
+        : null,
+    abilities: readCaptureAbilities(claimed.capture.abilities),
     previousTaskIds: previousTurn?.taskIds ?? [],
     previousHeard: previousTurn?.heard ?? [],
     knownNames,
@@ -2560,6 +2703,16 @@ const toMessageContent = (
         ),
       ];
 
+const readOfferAbility = (
+  value: unknown,
+): { ability: 'location'; level: 'city' | 'precise' } | null => {
+  const offer = value as { ability?: unknown; level?: unknown } | null;
+  return offer?.ability === 'location' &&
+    (offer.level === 'city' || offer.level === 'precise')
+    ? { ability: 'location', level: offer.level }
+    : null;
+};
+
 const TITLE_SHOWN_CHARS = 80;
 
 /** The title each existing task or fact a keep names shows under, read in the transaction; one that is gone or won't open has none, so a keep on it is let go. */
@@ -2622,6 +2775,9 @@ async function writeResult(
     procedureCommands: ProcedureCommand[];
     runCommands: RunCommand[];
     soundsLike: NoteSoundsLikeCommand[];
+    whereabouts: SetWhereaboutsCommand[];
+    offerAbility: { ability: 'location'; level: 'city' | 'precise' } | null;
+    abilities: ReturnType<typeof readCaptureAbilities>;
     previousTaskIds: string[];
     previousHeard: HeardName[];
     knownNames: { id: string; names: string[] }[];
@@ -2665,6 +2821,9 @@ async function writeResult(
     procedureCommands,
     runCommands,
     soundsLike,
+    whereabouts,
+    offerAbility,
+    abilities,
     previousTaskIds,
     previousHeard,
     knownNames,
@@ -2756,6 +2915,12 @@ async function writeResult(
       now: Date.now(),
     },
     requestedTopicCommands,
+  );
+  const resolvedWhere: ResolvedWhereabouts[] = await Promise.all(
+    whereabouts.map(async (command) => ({
+      command,
+      city: command.cityName ? await geocodeCity(command.cityName) : null,
+    })),
   );
   const touchedTopicIds = [
     ...new Set([
@@ -2853,7 +3018,11 @@ async function writeResult(
               .limit(1),
           )
         : Promise.resolve(null),
-      requestedHome || noteFacts.length > 0 || keyDates.length > 0
+      requestedHome ||
+      noteFacts.length > 0 ||
+      keyDates.length > 0 ||
+      whereabouts.length > 0 ||
+      offerAbility !== null
         ? transaction.get(firestore.doc(base))
         : Promise.resolve(null),
       notes.length > 0
@@ -3388,22 +3557,80 @@ async function writeResult(
       isUnattended: input.isUnattended === true,
       seal,
     });
+    const soundsIds = new Set(soundsPlan.whoRewrites.map(({ id }) => id));
+    const isSoundsTarget = ({ command }: ResolvedWhereabouts) =>
+      soundsIds.has(command.whoId ?? selfWhoId ?? '');
+    const keptWhere = isStale
+      ? []
+      : resolvedWhere.filter((r) => !isSoundsTarget(r));
+    const heldWhere = isStale ? [] : resolvedWhere.filter(isSoundsTarget);
+    const whereWhoIds = [
+      ...new Set(
+        keptWhere.flatMap(({ command }) => command.whoId ?? selfWhoId ?? []),
+      ),
+    ];
+    const whereWhoSnaps = await Promise.all(
+      whereWhoIds.map((id) =>
+        transaction.get(firestore.doc(`${base}/who/${id}`)),
+      ),
+    );
+    const whereProfile = readWhereProfile(profileSnap?.data());
+    const wherePlan = planWhereabouts({
+      commands: keptWhere,
+      selfWhoId,
+      whos: new Map(
+        whereWhoSnaps.map(
+          (snapshot): [string, Record<string, unknown> | null] => [
+            snapshot.id,
+            snapshot.exists ? openSealed(key, snapshot.get('sealed')) : null,
+          ],
+        ),
+      ),
+      profile: whereProfile,
+      todayKey: new Date(getDayIn(capture.createdAt, toKnownZone(timeZone)))
+        .toISOString()
+        .slice(0, 10),
+      now,
+      isUnattended: input.isUnattended === true,
+      newId: () => crypto.randomUUID(),
+      seal,
+    });
+    const abilityOffer = isStale
+      ? null
+      : decideAbilityOffer({
+          asked: offerAbility,
+          device: abilities?.location ?? null,
+          profile: whereProfile,
+          now,
+        });
     const withHome = {
       ...written,
       effectRefs: [
         ...written.effectRefs,
         ...(home ? [home.ref] : []),
         ...soundsPlan.effectRefs,
+        ...wherePlan.effectRefs,
       ],
       effects: [
         ...written.effects,
         ...(home ? [home.effect] : []),
         ...soundsPlan.effects,
+        ...wherePlan.effects,
+      ],
+      notKept: [
+        ...written.notKept,
+        ...wherePlan.notKept,
+        ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
       linkedWhoIds: [
-        ...new Set([...written.linkedWhoIds, ...soundsPlan.linkedWhoIds]),
+        ...new Set([
+          ...written.linkedWhoIds,
+          ...soundsPlan.linkedWhoIds,
+          ...wherePlan.linkedWhoIds,
+        ]),
       ],
-      isPrivate: written.isPrivate || soundsPlan.isPrivate,
+      isPrivate:
+        written.isPrivate || soundsPlan.isPrivate || wherePlan.isPrivate,
     };
     const plan = sentMedia
       ? {
@@ -3480,7 +3707,11 @@ async function writeResult(
         transaction.create(firestore.doc(`${base}/who/${id}`), data),
       );
       [
-        ...[...plan.whoUpdates, ...soundsPlan.whoRewrites]
+        ...[
+          ...plan.whoUpdates,
+          ...soundsPlan.whoRewrites,
+          ...wherePlan.whoRewrites,
+        ]
           .reduce(
             (merged, { id, data }) =>
               merged.set(id, { ...merged.get(id), ...data }),
@@ -3615,7 +3846,7 @@ async function writeResult(
         buildExecution(
           { ...plan, questions },
           {
-            extraLines: soundsPlan.lines,
+            extraLines: [...soundsPlan.lines, ...wherePlan.lines],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
               plan.notKept,
@@ -3638,6 +3869,7 @@ async function writeResult(
             messageCount,
             inputMode: isSpoken ? 'voice' : capture.inputMode,
             timeZone,
+            offers: { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
           },
         ),
       );
@@ -3669,6 +3901,7 @@ async function writeResult(
       transaction.create(
         answerExecutionRef,
         buildAnswerExecution({
+          offers: { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
           captureId: captureRef.id,
           answer: reply.answer,
           spoken: spokenLine,
@@ -3711,6 +3944,8 @@ async function writeResult(
           procedureCommands.length +
           runCommands.length +
           soundsPlan.lines.length +
+          wherePlan.lines.length +
+          wherePlan.notKept.length +
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,
@@ -3794,14 +4029,18 @@ async function writeResult(
       lastErrorCode: null,
       seenAt: null,
     });
+    const resultExecutionId = isFiling
+      ? executionRef.id
+      : (answerExecutionRef?.id ?? null);
     const sorted = toResult(
       settled.status,
-      isFiling ? executionRef.id : (answerExecutionRef?.id ?? null),
+      resultExecutionId,
       releasedJoined.map((snapshot) => snapshot.id),
       {
         hasAnswer: reply !== null,
         spoken: isSpoken ? (spokenLine ?? quietLine) : null,
       },
+      { abilityOffer: resultExecutionId === null ? abilityOffer : null },
     );
     transaction.set(requestRef, {
       result: sorted,

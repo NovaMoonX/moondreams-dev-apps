@@ -42,6 +42,7 @@ import {
   getDueDay,
   readCapture,
 } from '../../src/apps/helm/utils/captureReading.ts';
+import type { City } from '../../src/lib/cities/types.ts';
 import type {
   Capture,
   CaptureSealed,
@@ -467,6 +468,8 @@ async function buildUndone(input: {
       spoken: null,
       goneIds: null,
       lines: [],
+      abilityOffer: null,
+      awayZoneOffer: null,
       isUnreadable: false,
     },
     targets: new Map(
@@ -555,6 +558,8 @@ async function buildMove(input: {
         spoken: null,
         goneIds: null,
         lines: [],
+        abilityOffer: null,
+        awayZoneOffer: null,
       },
       input.encryption,
     ),
@@ -595,6 +600,7 @@ async function buildBackToBack(input: {
         privacy: 'ordinary',
         touchesPrivate: null,
         presence: null,
+        abilities: null,
         inputMode: 'typed',
         sttProvider: null,
         interruptedCaptureId: null,
@@ -721,6 +727,8 @@ async function buildBackToBack(input: {
         spoken: null,
         goneIds: null,
         lines: [],
+        abilityOffer: null,
+        awayZoneOffer: null,
       },
       encryption,
     ),
@@ -945,6 +953,7 @@ async function buildGmailTurn(input: {
     privacy: 'ordinary',
     touchesPrivate: null,
     presence: null,
+    abilities: null,
     inputMode: 'typed',
     sttProvider: null,
     interruptedCaptureId: null,
@@ -1026,6 +1035,8 @@ async function buildGmailTurn(input: {
         spoken: null,
         goneIds: null,
         lines: [],
+        abilityOffer: null,
+        awayZoneOffer: null,
       },
       encryption,
     ),
@@ -1091,6 +1102,7 @@ async function buildAnswerTurns(input: {
         privacy: 'ordinary',
         touchesPrivate: null,
         presence: null,
+        abilities: null,
         inputMode: 'typed',
         sttProvider: null,
         interruptedCaptureId: null,
@@ -1166,6 +1178,8 @@ async function buildAnswerTurns(input: {
             spoken: null,
             goneIds: null,
             lines: [],
+            abilityOffer: null,
+            awayZoneOffer: null,
           },
           encryption,
         ),
@@ -1432,6 +1446,10 @@ export const wordsOf = (
   organizationKind: null,
   privateMark: null,
   isPrivacyCleared: false,
+  home: null,
+  homeSource: null,
+  away: null,
+  nearNow: null,
   ...extra,
 });
 
@@ -1764,6 +1782,7 @@ async function buildNoteTurn(input: {
     privacy: 'ordinary',
     touchesPrivate: null,
     presence: null,
+    abilities: null,
     inputMode: 'typed',
     sttProvider: null,
     interruptedCaptureId: null,
@@ -1852,6 +1871,8 @@ async function buildNoteTurn(input: {
         spoken: null,
         goneIds: null,
         lines: [],
+        abilityOffer: null,
+        awayZoneOffer: null,
       },
       encryption,
     ),
@@ -2449,6 +2470,7 @@ async function buildKnowledge(input: {
     privacy: 'ordinary',
     touchesPrivate: null,
     presence: null,
+    abilities: null,
     ...tyreBase,
     status: 'sorted',
     questionState: {},
@@ -2511,6 +2533,8 @@ async function buildKnowledge(input: {
         spoken: null,
         goneIds: null,
         lines: [],
+        abilityOffer: null,
+        awayZoneOffer: null,
       },
       encryption,
     ),
@@ -2523,6 +2547,7 @@ async function buildKnowledge(input: {
     privacy: 'ordinary',
     touchesPrivate: null,
     presence: null,
+    abilities: null,
     ...groupBase,
     status: 'needsYou',
     questionState: {
@@ -3086,6 +3111,7 @@ async function buildPhotoTurns(input: {
       privacy: 'ordinary',
       touchesPrivate: null,
       presence: null,
+      abilities: null,
       inputMode: 'typed',
       sttProvider: null,
       interruptedCaptureId: null,
@@ -3276,6 +3302,8 @@ async function buildPhotoTurns(input: {
         spoken: null,
         goneIds: null,
         lines: [],
+        abilityOffer: null,
+        awayZoneOffer: null,
       },
       encryption,
     ),
@@ -3388,6 +3416,7 @@ async function buildFileTurns(input: {
       privacy: 'ordinary',
       touchesPrivate: null,
       presence: null,
+      abilities: null,
       inputMode: 'typed',
       sttProvider: null,
       interruptedCaptureId: null,
@@ -3625,6 +3654,8 @@ async function buildFileTurns(input: {
       spoken: fields.spoken,
       goneIds: null,
       lines: fields.lines ?? [],
+      abilityOffer: null,
+      awayZoneOffer: null,
     }),
   });
   const taskEffect = (title: string, due: TaskDue | null) => ({
@@ -3823,6 +3854,31 @@ async function buildPeople(input: {
   const names = {
     self: displayName.includes('@') || !displayName ? 'Me' : displayName,
   };
+  const awayDay = Math.floor(now / DAY_MS) * DAY_MS;
+  const seattle: City = {
+    name: 'Seattle',
+    region: 'Washington',
+    country: 'United States',
+    latitude: 47.606,
+    longitude: -122.332,
+    timezone: 'America/Los_Angeles',
+  };
+  const portland: City = {
+    name: 'Portland',
+    region: 'Oregon',
+    country: 'United States',
+    latitude: 45.523,
+    longitude: -122.676,
+    timezone: 'America/Los_Angeles',
+  };
+  const leavenworth: City = {
+    name: 'Leavenworth',
+    region: 'Washington',
+    country: 'United States',
+    latitude: 47.596,
+    longitude: -120.661,
+    timezone: 'America/Los_Angeles',
+  };
   const who: { id: string; who: Who }[] = [
     {
       id: 'self',
@@ -3835,7 +3891,23 @@ async function buildPeople(input: {
           createdBy: 'person',
         },
         madeAt,
-        await seal(wordsOf(names.self)),
+        await seal(
+          wordsOf(names.self, {
+            home: seattle,
+            homeSource: 'page',
+            away: [
+              {
+                id: 'seed-away-portland',
+                city: portland,
+                from: awayDay - DAY_MS,
+                to: awayDay + DAY_MS,
+                label: null,
+                source: 'said',
+                zoneOffered: false,
+              },
+            ],
+          }),
+        ),
       ),
     },
     {
@@ -3854,6 +3926,8 @@ async function buildPeople(input: {
           wordsOf('Sam Rivera', {
             relation: 'work friend',
             email: 'sam.rivera@example.com',
+            home: leavenworth,
+            homeSource: 'said',
           }),
         ),
       ),
@@ -3885,7 +3959,11 @@ async function buildPeople(input: {
             createdBy: 'person',
           },
           now - DAY_MS,
-          await seal(wordsOf('Priya Raman', { email: 'priya@example.com' })),
+          await seal(wordsOf('Priya Raman', {
+              email: 'priya@example.com',
+              home: leavenworth,
+              homeSource: 'said',
+            })),
         ),
         importedFrom: {
           connectorId: 'google:contacts',
@@ -4078,6 +4156,7 @@ async function buildPeople(input: {
     privacy: 'ordinary',
     touchesPrivate: null,
     presence: null,
+    abilities: null,
     inputMode: 'typed',
     sttProvider: null,
     interruptedCaptureId: null,
@@ -4164,6 +4243,7 @@ async function buildPeople(input: {
     privacy: 'ordinary',
     touchesPrivate: null,
     presence: null,
+    abilities: null,
     inputMode: 'typed',
     sttProvider: null,
     interruptedCaptureId: null,
@@ -4232,6 +4312,7 @@ async function buildPeople(input: {
     privacy: 'ordinary',
     touchesPrivate: null,
     presence: null,
+    abilities: null,
     inputMode: 'typed',
     sttProvider: null,
     interruptedCaptureId: null,
@@ -4998,6 +5079,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             privacy: 'ordinary',
             touchesPrivate: null,
             presence: null,
+            abilities: null,
             inputMode: spoken === undefined ? 'typed' : 'voice',
             sttProvider: spoken === undefined ? null : 'browser',
             interruptedCaptureId: null,
@@ -5115,6 +5197,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                     spoken: spoken ?? null,
                     goneIds: null,
                     lines: [],
+                    abilityOffer: null,
+                    awayZoneOffer: null,
                   },
                   encryption,
                 ),

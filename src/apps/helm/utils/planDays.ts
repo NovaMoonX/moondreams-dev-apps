@@ -1,6 +1,7 @@
 import { getDateTimeFormat, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { DAY_MS } from '@apps/helm/constants';
-import type { PlanDay, PlanSlot } from '@apps/helm/types';
+import { readZoneFor } from '@apps/helm/engine/whereabouts';
+import type { PlanDay, PlanSlot, ZoneSpan } from '@apps/helm/types';
 import { getDueDay } from '@apps/helm/utils/captureReading';
 
 /** Days kept loaded: a day more than the strip holds on each side, since the listener's window is fixed when it starts. */
@@ -20,6 +21,30 @@ export const toDayKey = (at: number, timeZone: string) =>
   new Date(getDueDay({ kind: 'moment', at }, timeZone))
     .toISOString()
     .slice(0, 10);
+
+/** The zone today's clock follows: a chosen away span's when today's date in home time falls in one, else home's. `awayIds` are the self's current away spans, so a span that ended or was undone stops counting. */
+export const readTodayZone = (
+  now: number,
+  profile: { timeZone: string; zoneSpans: ZoneSpan[] },
+  awayIds: string[] | null = null,
+) => readZoneFor(toDayKey(now, profile.timeZone), profile, awayIds);
+
+/** The ids of the away spans a who has, or null when the who is not read yet. */
+export const readAwayIds = (who: { away?: { id: string }[] | null } | null) =>
+  who ? (who.away ?? []).map((span) => span.id) : null;
+
+/** The self's away span ids as one string, so a selector returns a value that stays equal between renders; null with no readable self. */
+export const toAwayKey = (
+  items: { isSelf: boolean; isUnreadable: boolean; away: { id: string }[] | null }[],
+) => {
+  const ids = readAwayIds(
+    items.find((entry) => entry.isSelf && !entry.isUnreadable) ?? null,
+  );
+  return ids ? ids.join('|') : null;
+};
+
+export const fromAwayKey = (key: string | null) =>
+  key === null ? null : key.split('|').filter(Boolean);
 
 export const shiftDayKey = (key: string, days: number) =>
   new Date(Date.parse(key) + days * DAY_MS).toISOString().slice(0, 10);

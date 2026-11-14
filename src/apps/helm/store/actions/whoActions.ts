@@ -32,8 +32,12 @@ import { toComparable } from '@/utils/optionMatchUtils';
 import { MAX_ALIASES, MAX_SOUNDS_LIKE } from '@apps/helm/constants';
 import { normalizeKin } from '@apps/helm/engine/kin';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
+import type { City } from '@/lib/cities/types';
+import { keepCurrentAway, MAX_AWAY_SPANS } from '@apps/helm/engine/whereabouts';
 import type {
+  AwaySpan,
   HelmEncryption,
+  NearNow,
   HelmProfile,
   Sealed,
   Who,
@@ -135,6 +139,70 @@ async function rewriteWhoWords<Refusal extends string = never>(
     throw error;
   }
 }
+
+export type WhereChange =
+  | { kind: 'home'; city: City | null }
+  | { kind: 'save'; span: AwaySpan }
+  | { kind: 'remove'; id: string }
+  | { kind: 'back'; id: string; todayKey: string };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const nextAway = (
+  away: AwaySpan[],
+  change: Exclude<WhereChange, { kind: 'home' }>,
+  todayKey: string,
+): AwaySpan[] => {
+  if (change.kind === 'remove') {
+    return away.filter((span) => span.id !== change.id);
+  }
+  if (change.kind === 'back') {
+    const yesterday = Date.parse(todayKey) - DAY_MS;
+    return away.flatMap((span) =>
+      span.id !== change.id
+        ? [span]
+        : span.from > yesterday
+          ? []
+          : [{ ...span, to: yesterday }],
+    );
+  }
+  return away.some((span) => span.id === change.span.id)
+    ? away.map((span) => (span.id === change.span.id ? change.span : span))
+    : [...away, change.span];
+};
+
+/** Sets or clears a who's home, or adds, changes, removes or ends early one away span, on the list opened inside the transaction; spans that ended before today are dropped in the same write. */
+export const setWhoWhere = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  todayKey: string,
+  change: WhereChange,
+): Promise<EditResult | 'full'> =>
+  rewriteWhoWords<'full'>(uid, encryption, whoId, (opened) => {
+    if (change.kind === 'home') {
+      return {
+        home: change.city,
+        homeSource: change.city ? 'page' : null,
+      };
+    }
+    const away = keepCurrentAway(
+      Array.isArray(opened.away) ? opened.away : [],
+      todayKey,
+    );
+    const next = nextAway(away, change, todayKey);
+    if (next.length > MAX_AWAY_SPANS) return 'full';
+    return { away: next.length > 0 ? next : null };
+  });
+
+/** Sets the self's last phone reading, or clears it. */
+export const setWhoNearNow = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  nearNow: NearNow | null,
+): Promise<EditResult> =>
+  rewriteWhoWords<never>(uid, encryption, whoId, () => ({ nearNow }));
 
 export type AliasChange = { add: string } | { remove: string };
 export type AliasResult = EditResult | 'full' | 'duplicate';
@@ -598,6 +666,10 @@ export async function ensureSelfWho(
       organizationKind: null,
       privateMark: null,
       isPrivacyCleared: false,
+      home: null,
+      homeSource: null,
+      away: null,
+      nearNow: null,
     },
     encryption,
   );

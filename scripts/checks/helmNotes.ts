@@ -452,6 +452,8 @@ const asOpen = (
   spoken: null,
   goneIds: null,
   lines: [],
+  abilityOffer: null,
+  awayZoneOffer: null,
   isUnreadable: false,
 });
 
