@@ -12,6 +12,7 @@ idea ─▶ plan-app ─▶ issues ─▶ orchestrate ─▶ push ─▶ pr-gate
 | Step | Owner file | Who runs it | Model | Skipped when |
 |---|---|---|---|---|
 | Plan an app | `.claude/skills/plan-app/SKILL.md` | the session, with `product-planner`, `design-planner`, `tech-planner` per round | session (Opus) + opus planners | never for a new app |
+| Gap hunting | `plan-app` step 5, `.claude/agents/gap-hunter.md`, `plan-app/references/gaps.md` | the lead spawns it before the owner's review round, and on any later round that adds a feature | opus, read-only | plans with no owner review round |
 | Create issues | `scripts/createGithubIssues.ts`, run by `create-app-issues.yml` when the docs PR gets the `create-issues` label | the session adds the label; nobody runs the script | – | the roadmap already has issues (re-run is safe) |
 | Put issues on the board | `.github/workflows/issue-to-board.yml` (`scripts/board`, `check:board`) | the workflow, when an issue is opened or given an app label; a manual run sweeps every open issue | none | the issue has no `<App name> (App)` label, or two |
 | Large or multi-issue work | `.claude/skills/orchestrate/SKILL.md` | the session, delegating build chunks and checks | session + sonnet `implementer` + haiku `validator` | a few tool calls, or a change that needs the conversation's context |

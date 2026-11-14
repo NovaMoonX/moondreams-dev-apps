@@ -112,6 +112,8 @@ const ghEnv = (args: string[]) =>
 const gh = (args: string[]) => {
   const output = execFileSync('gh', args, {
     encoding: 'utf8',
+    // The repo's issue list with bodies passes the 1 MB default and fails with ENOBUFS.
+    maxBuffer: 256 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'inherit'],
     env: ghEnv(args),
   });

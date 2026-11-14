@@ -13,6 +13,7 @@ The repo's subagents live in `.claude/agents/`, one file each, with their model 
 | `pr-syncer` | haiku | merges and pushes clean syncs | orchestrate | Runs `prs:sync` over a run's PR pairs; reports conflicts, never resolves them. |
 | `stack-pr-reviewer` | sonnet | yes | build-app-mvp | Reviews, fixes and syncs one size S stacked PR. |
 | `product-planner`, `design-planner`, `tech-planner` | opus | drafts only | plan-app | The three planning tracks, drafted in parallel each round. |
+| `gap-hunter` | opus | no | plan-app | Walks every feature of a plan's drafts through `plan-app/references/gaps.md` before the owner's review; returns the gaps and any lens missing. |
 
 A brief may override an agent's model when the owner asks (`model` on the Agent call); otherwise the frontmatter decides. Reviewers are read-only: before spawning the product and design reviewers, the orchestrator has the emulators, the seeded data (Alex full, Jamie empty, Taylor scale) and a dev server running on a **frozen worktree at the head commit** (fixes made meanwhile must not move what they read; a "before" build on a second port for comparisons). Agents never reset or reseed data and never edit repo files unless the table says they edit.
 

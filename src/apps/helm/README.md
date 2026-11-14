@@ -1,6 +1,6 @@
 # Helm 🧭
 
-Helm is a private companion for one person's whole life, and you mostly talk to it. Keeping track is the hard part: who said what, who matters for what, what you prefer, what you worked out last time, what fits today. Open Helm and speak (or type) to its assistant, Nomos unless you rename it; it answers briefly in a natural voice and keeps what you said as tasks, people, pets, places, preferences, procedures and living notes, each saying where it came from, with Undo. It is on every screen and knows what is in view. It reads Google Calendar, Gmail, Drive and the site's other apps if you connect them, but never changes them, never speaks first, and keeps everything you tell it encrypted. One person per account, nothing shared.
+Helm is a private companion for one person's whole life, and you mostly talk to it. Keeping track is the hard part: who said what, who matters for what, what you prefer, what you worked out last time, what fits today. Open Helm and speak (or type) to its assistant, Nomos unless you rename it; it answers briefly in a natural voice and keeps what you said as tasks, people, pets, places, preferences, procedures and living notes, each saying where it came from, with Undo. It is on every screen and knows what is in view. It reads Google Calendar, Gmail, Drive and the site's other apps if you connect them, but never changes them, never speaks first (later, the one exception is a habit reminder you turn on), and keeps everything you tell it encrypted. One person per account, nothing shared.
 
 ## How it works
 
@@ -49,7 +49,7 @@ Built:
 - Runway's Transactions, off until you switch it on: ask "what did I spend at Costco in the last 30 days?" and the answer gives the total and the rows as a short list, with one link into Runway; Helm looks the purchases up only when you ask and keeps just the few rows an answer quotes.
 
 Next (Core MVP):
-- [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase
+- [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase, and "never mind" or "forget it" closing the conversation and the microphone, and the names of your people and places heard right, even odd ones
 - [ ] The assistant on every screen, knowing what is in view
 - [x] Questions in several shapes (pick one or several, yes or no, a few words, a date, a person, a number), answered by tap or voice or skipped
 - [x] Photos, PDFs, voice notes and Markdown files, kept on the right record or let go
@@ -62,6 +62,19 @@ Next (Core MVP):
 - [ ] Encrypted from day one; Trust this browser; Activity with Undo; search
 
 Later:
+- [ ] Habits (pills, water, a parent's doses): a quiet line on Today at its time, ticked by a tap or a word ("took my pills", no need to say which), a note kept as you said it, read as "11 of 13 this week", never a streak
+- [ ] Forming a habit: reminders you turn on while it builds, coming whether or not you open Helm, fading as it holds (Building, Holding) and stopping once it's formed; a week later Helm offers to take it off Today, keeping its weeks and a moment. The lock screen shows "Your evening habit is up" unless you choose to show a habit's name
+- [ ] What matters most: say it in your own words ("the wedding matters most, then work", "Italian can wait") and Helm keeps the order, with no cap, asking "which comes first?" when too much is tied at the top
+- [ ] Goals: a project about becoming, with its why (your words kept, tidied only on your yes), milestones and a small regular step kept as a habit
+- [ ] What Helm learns about when things work, from your ticks and from how you say things went, both ways ("too tired tonight" three times gets a new time or a smaller version offered; "that felt easy" keeps the time and may grow it); it always answers what you said, then acts or says it's noted, and keeps what it learned on every device, shown under "What I've noticed" with its evidence: it changes only what it planned itself, asks about what you set, never moves anything about health, and waits before asking again after a no; on from the start, with a switch
+- [ ] Pause or hold off: one line, with its reasons, only when two different reasons agree or a deadline won't fit; it reads what matters most, advises, never blocks, and never touches health or care
+- [ ] Private things: anything about a medicine, a dose, a treatment or someone's care is private on its own, and you can make anything else private ("keep this private") or undo that; a private thing never shows on your lock screen, in a copy or in an export unless you turn that on for that one thing, and every reminder names nothing until you choose
+- [ ] Talk on any page: speak on home, through "Ask about this" or after "Hey [name]" and the answer is spoken there; type and it's written
+- [ ] Repeating tasks for things that fall due (clean the car every 3 weeks), procedures on a schedule, and scheduled actions the assistant does for you at a set time, each repeating the way a calendar event does (every other Tuesday, the last Friday of the month, until March)
+- [ ] "Could I drive to Leavenworth Sunday after I land?" (for the friend's wedding you officiate) answered with what must be done first, reading each connected app as you see it there (Going Once's drafts and buyers' questions too), where you and your people are, and how each meeting happens; questions saved to learn later and brought back on a quiet evening with a picture and two videos; research offered ahead of a dated plan like a move, quick or thorough, within a monthly allowance ($2 a person)
+- [ ] Hands-free first: every question answered aloud, listening after it asks, talk over it any time
+- [ ] "How Nomos sees you" grows to how you talk and what works for you, each line citing where it came from; give the assistant a personality (blunt, kind, brief…) and say how honest it may be
+- [ ] Your phone's location only if you choose (Off, City only or Precise), and one Google Calendar kept in step both ways
 - [ ] Drafting in your style, video, app cards (a Pinch recipe card), a life timeline and milestones from the moments Helm keeps, writes to other apps
 - [ ] A browser extension and other ways to reach the assistant, orders, Apple contacts and sign-in
 
@@ -70,6 +83,8 @@ Later:
 `npm run helm:setup` does every production setup step Helm needs, in order: both keyrings and their canaries, the Anthropic, Google OAuth, Deepgram and (optionally) Gemini secrets, Google Text-to-Speech, the alerts and a test alert, then offers to copy each keyring to the clipboard for your password manager. It skips what is already done, never prints a secret, and is safe to re-run. The alerts need the merge deployed first, so run `npm run helm:setup -- --after-deploy` after it; `npm run helm:setup -- --dry` prints the plan without changing anything. The few clicks only a browser can do (spend caps, the Google consent screen) are shown as they come up.
 
 ## Docs
+
+The words task, repeating task, habit, procedure and scheduled action each mean one thing; PRODUCT.md "Words We Use" says which.
 
 - [PRODUCT.md](PRODUCT.md): the full product doc (who it is for, how each part works in detail, build plan)
 - [UX.md](UX.md): screens and journeys
