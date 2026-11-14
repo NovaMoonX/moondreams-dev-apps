@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { RotateCw } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
 import { formatTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
@@ -95,9 +96,10 @@ function TurnCard({
   );
   const { addToast } = useToast();
   const [isRetrying, setIsRetrying] = useState(false);
+  const isOffline = useNetworkStatus() === 'offline';
   const isReading =
     isCallOut ||
-    (isRetrying && !capture.hasPendingWrites) ||
+    (isRetrying && !isOffline) ||
     capture.status === 'interpreting';
   const isSorted = capture.status === 'sorted' && !isReading;
   const heldLine =

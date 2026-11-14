@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -10,8 +10,8 @@
 }
 
 @utility page {
-  /* Use the available layout width instead of the viewport width, which can include the scrollbar on mobile browsers. */
-  @apply w-full max-w-full px-4 pt-16 pb-12;
+	/* Use the available layout width instead of the viewport width, which can include the scrollbar on mobile browsers. */
+  @apply w-full max-w-full px-4 pb-12 pt-16;
   min-height: calc(100dvh - var(--site-banner-inset, 0px));
 }
 
@@ -122,8 +122,7 @@ html[data-subview-open] .sticky-app-bar {
   top: 0;
 }
 
-html[data-subview-open][data-site-banner='true']
-  .sticky-app-bar:not([data-subview-overlay] *) {
+html[data-subview-open][data-site-banner='true'] .sticky-app-bar:not([data-subview-overlay] *) {
   top: 2.25rem;
 }
 
@@ -131,8 +130,7 @@ html[data-subview-open] .sticky-day-bar {
   top: calc(3.75rem - 1px);
 }
 
-html[data-subview-open][data-site-banner='true']
-  .sticky-day-bar:not([data-subview-overlay] *) {
+html[data-subview-open][data-site-banner='true'] .sticky-day-bar:not([data-subview-overlay] *) {
   top: calc(2.25rem + 3.75rem - 1px);
 }
 
@@ -143,8 +141,7 @@ html[data-subview-open][data-site-banner='true']
   box-shadow: var(
     --subview-shadow,
     0 1px 2px color-mix(in oklab, var(--color-foreground) 8%, transparent),
-    0 12px 32px -12px
-      color-mix(in oklab, var(--color-foreground) 28%, transparent)
+    0 12px 32px -12px color-mix(in oklab, var(--color-foreground) 28%, transparent)
   );
 }
 
@@ -249,20 +246,20 @@ html[data-site-banner='true'] .subview-backdrop {
 }
 
 @theme app {
-  --color-background: var(--color-white);
-  --color-foreground: var(--color-zinc-950);
+	--color-background: var(--color-white);
+	--color-foreground: var(--color-zinc-950);
 }
 
 /* Override the variables to create a dark theme */
 .dark {
-  --color-background: var(--color-zinc-950);
-  --color-foreground: var(--color-zinc-50);
-  /* Tells the browser to render native widgets (date/time picker icons, file input button) with dark chrome instead of their light default. */
-  color-scheme: dark;
+	--color-background: var(--color-zinc-950);
+	--color-foreground: var(--color-zinc-50);
+	/* Tells the browser to render native widgets (date/time picker icons, file input button) with dark chrome instead of their light default. */
+	color-scheme: dark;
 }
 
 #root {
-  @apply bg-background text-foreground min-h-dvh w-full max-w-full;
+  @apply min-h-dvh w-full max-w-full bg-background text-foreground;
   padding-top: var(--site-banner-inset, 0px);
   transition: padding-top 300ms cubic-bezier(0, 0, 0.2, 1);
 }
@@ -285,7 +282,7 @@ body {
 }
 
 html {
-  @apply bg-background;
+	@apply bg-background;
   max-width: 100%;
   overflow-x: hidden;
 }
@@ -299,14 +296,10 @@ html {
    also use role=dialog but stay mounted while hidden, so only match the
    fixed full-screen overlays, and not a drawer/panel mid close-animation. */
 html:has(
-  [role='dialog'][aria-modal='true'].fixed:not([data-drawer-open='false']):not(
-      [data-panel-open='false']
-    )
-),
+    [role='dialog'][aria-modal='true'].fixed:not([data-drawer-open='false']):not([data-panel-open='false'])
+  ),
 html:has(
-    [role='dialog'][aria-modal='true'].fixed:not(
-        [data-drawer-open='false']
-      ):not([data-panel-open='false'])
+    [role='dialog'][aria-modal='true'].fixed:not([data-drawer-open='false']):not([data-panel-open='false'])
   )
   > body {
   overflow: hidden;
@@ -382,10 +375,7 @@ html[data-installed-app] *::-webkit-scrollbar {
 @layer components {
   .app-checkbox {
     --_accent: var(--checkbox-accent, var(--color-primary));
-    --_accent-foreground: var(
-      --checkbox-accent-foreground,
-      var(--color-primary-foreground)
-    );
+    --_accent-foreground: var(--checkbox-accent-foreground, var(--color-primary-foreground));
     position: relative;
     display: inline-flex;
     flex: none;
@@ -393,8 +383,7 @@ html[data-installed-app] *::-webkit-scrollbar {
     justify-content: center;
     width: var(--checkbox-size);
     height: var(--checkbox-size);
-    border: var(--checkbox-border-width) solid
-      var(--checkbox-ring, var(--color-muted-foreground));
+    border: var(--checkbox-border-width) solid var(--checkbox-ring, var(--color-muted-foreground));
     border-radius: var(--checkbox-radius);
     background-color: transparent;
     color: transparent;
@@ -405,9 +394,7 @@ html[data-installed-app] *::-webkit-scrollbar {
   .app-checkbox::after {
     content: '';
     position: absolute;
-    inset: calc(
-      (var(--checkbox-size) - 2 * var(--checkbox-border-width) - 2.5rem) / 2
-    );
+    inset: calc((var(--checkbox-size) - 2 * var(--checkbox-border-width) - 2.5rem) / 2);
   }
 
   .app-checkbox svg {
@@ -423,22 +410,11 @@ html[data-installed-app] *::-webkit-scrollbar {
     border-color: var(--_accent);
     background-color: var(--_accent);
     color: var(--_accent-foreground);
-    background-color: color-mix(
-      in oklab,
-      var(--_accent) calc(var(--checkbox-filled) * 100%),
-      transparent
-    );
-    color: color-mix(
-      in oklab,
-      var(--_accent-foreground) calc(var(--checkbox-filled) * 100%),
-      var(--_accent)
-    );
+    background-color: color-mix(in oklab, var(--_accent) calc(var(--checkbox-filled) * 100%), transparent);
+    color: color-mix(in oklab, var(--_accent-foreground) calc(var(--checkbox-filled) * 100%), var(--_accent));
   }
 
-  .app-checkbox[data-variant='mark']:is(
-      [aria-checked='true'],
-      [aria-checked='mixed']
-    ) {
+  .app-checkbox[data-variant='mark']:is([aria-checked='true'], [aria-checked='mixed']) {
     border-color: transparent;
     background-color: transparent;
     color: var(--_accent);
@@ -503,16 +479,15 @@ html[data-installed-app] *::-webkit-scrollbar {
 }
 
 /* Smooth height transitions for when keyboard appears on mobile */
-html,
-body {
+html, body {
   transition: height 0.3s ease;
 }
 
 /* The browser's native file-picker button keeps its own light background/text
    regardless of `color-scheme`, so style it explicitly to match the theme
    (same tokens as a secondary Button). */
-input[type='file']::file-selector-button,
-input[type='file']::-webkit-file-upload-button {
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
   background: var(--color-secondary);
   color: var(--color-secondary-foreground);
   border: none;
@@ -523,23 +498,23 @@ input[type='file']::-webkit-file-upload-button {
   cursor: pointer;
 }
 
-input[type='file']:disabled::file-selector-button,
-input[type='file']:disabled::-webkit-file-upload-button {
+input[type="file"]:disabled::file-selector-button,
+input[type="file"]:disabled::-webkit-file-upload-button {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-[role='dialog']:focus,
-[role='dialog'] [tabindex='-1']:focus {
+[role="dialog"]:focus,
+[role="dialog"] [tabindex="-1"]:focus {
   outline: none;
 }
 
 /* Dreamer UI styles */
-@import '@moondreamsdev/dreamer-ui/styles'; /* non-TailwindCSS styles */
+@import "@moondreamsdev/dreamer-ui/styles"; /* non-TailwindCSS styles */
 @import './dreamer-ui.css'; /* customizable, theme styles */
 
 /* for TailwindCSS styles in library to be processed */
-@source '../node_modules/@moondreamsdev/dreamer-ui/dist/**/*.{js,jsx,ts,tsx}';
+@source "../node_modules/@moondreamsdev/dreamer-ui/dist/**/*.{js,jsx,ts,tsx}";
 
 /* A link-variant button is a short label: it never wraps inside a row, card or drawer. */
 button[class*='underline-offset-4'] {
@@ -576,10 +551,10 @@ button[class*='transition-all'] {
 }
 
 /* An empty date input draws its own "mm/dd/yyyy" segments; they stay hidden until a date is picked or the field has focus. `data-empty` comes from `lib/app/emptyDateInputs`. */
-input[type='date'][data-empty]:not(:focus) {
+input[type="date"][data-empty]:not(:focus) {
   color: transparent;
 }
-input[type='date'][data-empty]:not(:focus)::-webkit-datetime-edit {
+input[type="date"][data-empty]:not(:focus)::-webkit-datetime-edit {
   opacity: 0;
 }
 
