@@ -25,7 +25,7 @@ The rest of the conventions live in `docs/conventions/`, one file per topic, so 
 | `firestore.rules`, `storage.rules`, indexes | `firestore-rules.md` |
 | `functions/` | `cloud-functions.md` |
 | Sharing, exports, copies, public pages, pushes, previews | `security-privacy.md` |
-| Another app's data, sharing between apps, a connected Google service | `connections.md` |
+| Another app's data, sharing between apps, Nomos, a connected Google service, or any change to what an app stores | `connections.md` |
 | Checking your work (typecheck, browser, timezones, docs) | `validation.md` |
 | Review agents, hooks, skills, the PR flow | `pipeline.md`, `agents.md` |
 | Reviewing as an agent | technical: `code.md`, `data-contracts.md`, `state-data.md`, `firestore-rules.md`, `cloud-functions.md`, `security-privacy.md`, `validation.md`; product: `product.md`, `design-ux.md`; design: `design-ux.md`, `forms-crud.md`, `app-look.md` |
