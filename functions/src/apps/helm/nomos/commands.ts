@@ -1006,7 +1006,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun and setPrivate (when isPrivate is false): the words of the capture that ask for it, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun and setPrivate: the words of the capture that ask for it, copied exactly.',
             ),
             topicChanges: {
               type: ['array', 'null'],

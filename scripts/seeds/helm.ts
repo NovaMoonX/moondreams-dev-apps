@@ -1717,7 +1717,7 @@ async function buildProjects(input: {
     taskOf('seed-task-medicine', 'Take the morning medicine', {
       projectId: null,
       privacy: 'private',
-      due: { kind: 'moment', at: today + 8 * 60 * MINUTE_MS },
+      due: { kind: 'moment', at: zonedDateTimeToEpoch(new Date(today).toISOString().slice(0, 10), '08:00', 'America/Los_Angeles') },
       createdAt: now - 2 * DAY_MS,
     }),
     taskOf('seed-task-move-1', 'Change the address', {

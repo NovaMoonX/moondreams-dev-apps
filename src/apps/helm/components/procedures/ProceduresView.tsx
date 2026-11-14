@@ -16,7 +16,7 @@ import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { selectProcedures } from '@apps/helm/store/selectors/procedureSelectors';
 import type { OpenProcedure } from '@apps/helm/types';
 import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
-import PrivateLock from '@apps/helm/components/privacy/PrivateLock';
+import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 
 const { option } = DropdownMenuFactories;
 
@@ -47,10 +47,13 @@ function ProcedureRow({
       onClick={() => onOpen(procedure.id)}
     >
       <span className='min-w-0 flex-1'>
-        <span className='text-foreground block text-[15px] leading-[21px] break-words'>
+        <PrivateTitle
+          kind='procedure'
+          record={procedure}
+          className='text-foreground text-[15px] leading-[21px]'
+        >
           {procedure.title || HELM_COPY.procedureUntitled}
-          <PrivateLock kind='procedure' record={procedure} />
-        </span>
+        </PrivateTitle>
         <span className='text-muted-foreground block text-[13px]'>
           {[
             HELM_COPY.procedureStepCount(countSteps(groupSteps(procedure))),

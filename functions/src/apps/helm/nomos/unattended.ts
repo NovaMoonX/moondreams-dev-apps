@@ -12,51 +12,55 @@ export interface MaskedName {
 const WINDOW_AFTERNOON_FROM = 12;
 const WINDOW_EVENING_FROM = 17;
 
-/** A task as the model sees it: its words, or, on an unattended turn, only a label built from its time of day, never its name. */
+const readWindow = (due: TaskDue | null, timeZone: string) => {
+  if (due?.kind !== 'moment') return null;
+  const hour = Number(
+    new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      hourCycle: 'h23',
+      timeZone,
+    }).format(new Date(due.at)),
+  );
+  return hour < WINDOW_AFTERNOON_FROM
+    ? 'morning'
+    : hour < WINDOW_EVENING_FROM
+      ? 'afternoon'
+      : 'evening';
+};
+
+/** A task's name as the model sees it: its words, or, on an unattended turn, only a label built from its time of day, never its name; the name joins the words the reply is masked with. */
+export const toTaskLabel = (
+  task: { privacy?: string | null; due: TaskDue | null },
+  title: string,
+  mask: { isOn: boolean; timeZone: string; names: MaskedName[] },
+) => {
+  if (!mask.isOn || task.privacy !== 'private') return title;
+  const label = readMaskedLabel({
+    windowLabel: readWindow(task.due, mask.timeZone),
+  });
+  mask.names.push({ name: title, label });
+  return label;
+};
+
+/** A task as the model sees it, named by `toTaskLabel`. */
 export const toContextTask = (
   id: string,
   task: { privacy?: string | null; due: TaskDue | null },
-  words: { title: string; sealed: Record<string, unknown> },
+  words: { title: string },
   mask: { isOn: boolean; timeZone: string; names: MaskedName[] },
-): ContextTask => {
-  if (!mask.isOn || task.privacy !== 'private') {
-    return { id, title: words.title, due: task.due };
-  }
-  const at = task.due?.kind === 'moment' ? new Date(task.due.at) : null;
-  const hour = at
-    ? Number(
-        new Intl.DateTimeFormat('en-US', {
-          hour: 'numeric',
-          hourCycle: 'h23',
-          timeZone: mask.timeZone,
-        }).format(at),
-      )
-    : null;
-  const label = readMaskedLabel({
-    mark: words.sealed.privateMark === 'health' ? 'health' : null,
-    windowLabel:
-      hour === null
-        ? null
-        : hour < WINDOW_AFTERNOON_FROM
-          ? 'morning'
-          : hour < WINDOW_EVENING_FROM
-            ? 'afternoon'
-            : 'evening',
-    timeLabel: at
-      ? new Intl.DateTimeFormat('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          timeZone: mask.timeZone,
-        }).format(at)
-      : null,
-  });
-  mask.names.push({ name: words.title, label });
-  return { id, title: label, due: task.due };
+): ContextTask => ({
+  id,
+  title: toTaskLabel(task, words.title, mask),
+  due: task.due,
+});
+
+export type Mask = {
+  isOn: boolean;
+  names: MaskedName[];
+  quoted?: MaskedName[];
 };
 
-type Mask = { isOn: boolean; names: MaskedName[]; quoted?: MaskedName[] };
-
-const cover = (
+export const cover = (
   mask: Mask,
   isPrivate: boolean | undefined,
   label: string,
@@ -70,6 +74,25 @@ const cover = (
   });
   return mask.isOn;
 };
+
+/** A synced copy as the model sees it: its words, or on an unattended turn a label. */
+export const maskSyncedCopy = (mask: Mask, copy: SyncedCopy): SyncedCopy =>
+  cover(mask, copy.isPrivate, 'a private item', [
+    copy.title,
+    copy.subtitle,
+    copy.detail,
+    copy.placeLabel,
+  ])
+    ? {
+        ...copy,
+        title: 'a private item',
+        subtitle: null,
+        detail: null,
+        placeLabel: null,
+        amountCents: null,
+        extra: {},
+      }
+    : copy;
 
 /** Every private record that would reach the model on an unattended turn, replaced by a label made by code; the words it covers join the names the reply is masked with. */
 export const maskContextRecords = (
@@ -131,7 +154,9 @@ export const maskContextRecords = (
   topics: input.topics?.map((topic) =>
     cover(mask, topic.isPrivate, 'a private topic', [topic.name])
       ? { ...topic, name: 'a private topic', path: 'a private topic' }
-      : topic,
+      : mask.isOn && topic.maskedPath
+        ? { ...topic, path: topic.maskedPath }
+        : topic,
   ),
   notes: input.notes?.map((note) =>
     cover(mask, note.isPrivate, 'a private note', [note.title, note.body])
@@ -181,22 +206,5 @@ export const maskContextRecords = (
         }
       : run,
   ),
-  synced: input.synced.map((copy) =>
-    cover(mask, copy.isPrivate, 'a private item', [
-      copy.title,
-      copy.subtitle,
-      copy.detail,
-      copy.placeLabel,
-    ])
-      ? {
-          ...copy,
-          title: 'a private item',
-          subtitle: null,
-          detail: null,
-          placeLabel: null,
-          amountCents: null,
-          extra: {},
-        }
-      : copy,
-  ),
+  synced: input.synced.map((copy) => maskSyncedCopy(mask, copy)),
 });

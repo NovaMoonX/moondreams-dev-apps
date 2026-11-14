@@ -24,9 +24,11 @@ import {
 import {
   PRIVATE_COLLECTIONS,
   buildParentIndex,
+  isLinkedTo,
   parentsOf,
   planCascade,
   planKeepOnLeaving,
+  withParentFacts,
   type Child,
   type ParentIndex,
   type ParentKind,
@@ -35,6 +37,7 @@ import {
 } from '@apps/helm/utils/privacyParents';
 
 const BATCH_SIZE = 450;
+const KEEP_CONCURRENCY = 10;
 
 const collectionOf = (uid: string, kind: PrivateKind) =>
   collection(db, 'apps', 'helm', 'users', uid, PRIVATE_COLLECTIONS[kind]);
@@ -112,7 +115,8 @@ async function readLinkedChildren(
   parentKind: ParentKind,
   parentId: string,
 ): Promise<Child[]> {
-  const loaded = new Set(readChildren().map((child) => child.record.id));
+  const loadedChildren = readChildren();
+  const loaded = new Set(loadedChildren.map((child) => child.record.id));
   const found = await Promise.all(
     CHILD_KINDS.flatMap((kind) => {
       const link = LINK_FIELDS[kind][parentKind];
@@ -162,11 +166,16 @@ async function readLinkedChildren(
       ];
     }),
   );
-  return [...readChildren(), ...found.flat(2)];
+  return [
+    ...loadedChildren.filter((child) =>
+      isLinkedTo(child.kind, child.record, parentKind, parentId),
+    ),
+    ...found.flat(2),
+  ];
 }
 
 export type PrivacyWrite =
-  | { kind: 'saved'; previous: PrivacyFacts }
+  | { kind: 'saved'; previous: PrivacyFacts; next: PrivacyFacts }
   | { kind: 'offline' | 'missing' | 'unreadable' };
 
 /** Re-reads the record, changes only its own mark and its class in one transaction, so a change made on another device meanwhile is kept. Needs a connection. */
@@ -201,24 +210,35 @@ export async function writePrivacy(
       ),
       privacy: readEffectivePrivacy(next, parentFacts),
     });
-    return { kind: 'saved', previous };
+    return { kind: 'saved', previous, next };
   });
 }
 
-/** Rewrites the class of every child whose parents or mark now give another one, in batches of 450. */
-export async function rewriteChildren(
-  uid: string,
-  parent?: { kind: ParentKind; id: string; encryption: HelmEncryption },
-) {
-  const children = parent
-    ? await readLinkedChildren(uid, parent.encryption, parent.kind, parent.id)
-    : readChildren();
-  const updates = planCascade(children, readParentIndex());
+interface CascadeParent {
+  kind: ParentKind;
+  id: string;
+  encryption: HelmEncryption;
+  /** The parent's facts as the write that triggered the cascade left them. */
+  facts: PrivacyFacts;
+}
+
+/** Rewrites the class of every child filed under a parent whose facts just changed, in batches of 450; answers how many batches did not save. */
+export async function rewriteChildren(uid: string, parent: CascadeParent) {
+  const children = await readLinkedChildren(
+    uid,
+    parent.encryption,
+    parent.kind,
+    parent.id,
+  );
+  const updates = planCascade(
+    children,
+    withParentFacts(readParentIndex(), parent.kind, parent.id, parent.facts),
+  );
   const chunks = Array.from(
     { length: Math.ceil(updates.length / BATCH_SIZE) },
     (_, index) => updates.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE),
   );
-  await Promise.all(
+  const outcomes = await Promise.allSettled(
     chunks.map((chunk) => {
       const batch = writeBatch(db);
       chunk.forEach((update) =>
@@ -229,15 +249,26 @@ export async function rewriteChildren(
       return batch.commit();
     }),
   );
+  return outcomes.filter((outcome) => outcome.status === 'rejected').length;
 }
 
-const toParent = (kind: PrivateKind, id: string, encryption: HelmEncryption) =>
+const toParent = (
+  kind: PrivateKind,
+  id: string,
+  encryption: HelmEncryption,
+  facts: PrivacyFacts,
+) =>
   kind === 'project' || kind === 'who' || kind === 'place'
-    ? { kind, id, encryption }
-    : undefined;
+    ? { kind, id, encryption, facts }
+    : null;
 
 export type SetPrivateResult =
-  | { kind: 'saved'; undo: () => Promise<void> }
+  | {
+      kind: 'saved';
+      undo: () => Promise<void>;
+      /** Some children's class did not follow; they catch up the next time the switch is touched. */
+      isCascadeIncomplete: boolean;
+    }
   | { kind: 'unchanged' }
   | { kind: 'refused'; line: string }
   | { kind: 'offline' | 'missing' | 'unreadable' };
@@ -271,10 +302,14 @@ export async function setPrivate(
     parentFacts,
   );
   if (written.kind !== 'saved') return written;
-  const parent = toParent(kind, id, encryption);
-  await rewriteChildren(uid, parent);
+  const cascade = async (facts: PrivacyFacts) => {
+    const parent = toParent(kind, id, encryption, facts);
+    return parent ? (await rewriteChildren(uid, parent)) > 0 : false;
+  };
+  const isCascadeIncomplete = await cascade(written.next);
   return {
     kind: 'saved',
+    isCascadeIncomplete,
     undo: async () => {
       await writePrivacy(
         uid,
@@ -284,12 +319,20 @@ export async function setPrivate(
         () => written.previous,
         parentFacts,
       );
-      await rewriteChildren(uid, parent);
+      await cascade(written.previous);
     },
   };
 }
 
-/** Before a private project, person or place goes, each child that was private only through it takes its own mark. */
+/** Thrown when a child that is private only through a parent about to go could not be given its own mark: the parent stays. */
+export class KeepPrivateError extends Error {
+  constructor() {
+    super('Some private things could not be kept private.');
+    this.name = 'KeepPrivateError';
+  }
+}
+
+/** Before a private project, person or place goes, each child that was private only through it takes its own mark; every one must be saved, or the delete is refused. */
 export async function keepInheritedPrivate(
   uid: string,
   parentKind: ParentKind,
@@ -303,17 +346,28 @@ export async function keepInheritedPrivate(
     await readLinkedChildren(uid, encryption, parentKind, parentId),
     index,
   );
-  if (kept.length === 0) return;
-  await Promise.all(
-    kept.map((child) =>
-      writePrivacy(
-        uid,
-        encryption,
-        child.kind,
-        child.id,
-        (facts) => readPersonMark(facts, true),
-        [],
-      ),
-    ),
+  const chunks = Array.from(
+    { length: Math.ceil(kept.length / KEEP_CONCURRENCY) },
+    (_, at) => kept.slice(at * KEEP_CONCURRENCY, (at + 1) * KEEP_CONCURRENCY),
   );
+  const isAllSaved = await chunks.reduce(async (before, chunk) => {
+    if (!(await before)) return false;
+    const results = await Promise.all(
+      chunk.map((child) =>
+        writePrivacy(
+          uid,
+          encryption,
+          child.kind,
+          child.id,
+          (facts) => readPersonMark(facts, true),
+          [],
+        ).then(
+          (written) => written.kind === 'saved' || written.kind === 'missing',
+          () => false,
+        ),
+      ),
+    );
+    return results.every(Boolean);
+  }, Promise.resolve(true));
+  if (!isAllSaved) throw new KeepPrivateError();
 }

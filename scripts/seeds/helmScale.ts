@@ -688,6 +688,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       }),
     ),
   );
+  const isPrivateWho = (index: number) => index > 0 && index % 40 === 7;
+  const isPrivateProject = (index: number) => index % 10 === 4;
   const whoDocs = await mapChunked(range(WHO_COUNT), async (index) => {
     const kind = whoKindOf(index);
     const name = nameOf(index);
@@ -718,9 +720,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             species: kind === 'pet' ? SPECIES[index % 4] : null,
             organizationKind:
               kind === 'organization' ? ORG_KINDS[index % 8] : null,
+            ...(isPrivateWho(index) && { privateMark: 'person' as const }),
           }),
         ),
       ),
+      ...(isPrivateWho(index) && { privacy: 'private' as const }),
       yearlyDateCount: YEARLY_PER_WHO,
       momentCount: momentsOf(index),
       photoMediaId: photoIds[0] ?? null,
@@ -819,7 +823,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       const isDone = index % 10 === 9;
       const finishedAt = isDone ? now - between(10, 300) * DAY_MS : null;
       const project: Project = {
-        privacy: 'ordinary',
+        privacy: isPrivateProject(index) ? 'private' : 'ordinary',
         targetDate: isDone ? null : dayStart(now + between(5, 365) * DAY_MS),
         status: isDone ? 'finished' : 'active',
         milestoneState: {
@@ -850,7 +854,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             'm-2': { title: 'Final stage' },
           },
           roleNotes: {},
-          privateMark: null,
+          privateMark: isPrivateProject(index) ? 'person' : null,
           isPrivacyCleared: false,
         }),
       };
@@ -872,8 +876,14 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           : { kind: 'day', date: dueDay };
     const hasProject = index % 2 === 0;
     const createdAt = now - between(1, 700) * DAY_MS;
+    const projectAt = (index / 2) % PROJECT_COUNT;
+    const whoAt = index % 6 === 0 ? between(1, WHO_COUNT - 1) : null;
     const task: Task = {
-      privacy: 'ordinary',
+      privacy:
+        (hasProject && isPrivateProject(projectAt)) ||
+        (whoAt !== null && isPrivateWho(whoAt))
+          ? 'private'
+          : 'ordinary',
       status: isDone ? 'done' : 'open',
       importance: (['must', 'should', 'could', null] as const)[index % 4],
       isUrgent: index % 17 === 0,
@@ -883,9 +893,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       context: (['atHome', 'out', 'atComputer', 'onPhone', null] as const)[
         index % 5
       ],
-      projectId: hasProject ? projectIds[(index / 2) % PROJECT_COUNT] : null,
+      projectId: hasProject ? projectIds[projectAt] : null,
       milestoneId: hasProject && index % 4 === 0 ? 'm-1' : null,
-      whoIds: index % 6 === 0 ? [whoIdOf(between(1, WHO_COUNT - 1))] : [],
+      whoIds: whoAt === null ? [] : [whoIdOf(whoAt)],
       placeIds: [],
       notUntil: null,
       waitsOnTaskIds: [],
@@ -918,7 +928,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     const isConfirmed = index % 2 === 0;
     const createdAt = now - between(1, 700) * DAY_MS;
     const fact: Fact = {
-      privacy: 'ordinary',
+      privacy: isPrivateWho(whoIndex) ? 'private' : 'ordinary',
       status: isConfirmed ? 'confirmed' : 'inferred',
       stated: isConfirmed ? 'personSaid' : 'nomosInferred',
       kind: (['world', 'preference', 'favorite', 'identity'] as const)[

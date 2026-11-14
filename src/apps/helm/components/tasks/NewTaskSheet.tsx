@@ -3,7 +3,6 @@ import { useId, useState } from 'react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import AppToggle from '@/components/AppToggle';
 import DateInput from '@/components/DateInput';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -11,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { HELM_COPY, TASK_TITLE_CAP } from '@apps/helm/constants';
+import PrivateSwitchLine from '@apps/helm/components/privacy/PrivateSwitchLine';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { createTask } from '@apps/helm/store/actions/taskActions';
 
@@ -101,21 +101,7 @@ function NewTaskForm({
           onChange={(event) => change(title, event.target.value)}
         />
       </div>
-      <div className='flex items-center gap-3'>
-        <div className='min-w-0 flex-1'>
-          <p className='text-foreground text-[15px] leading-[21px]'>
-            {HELM_COPY.privateNewTitle}
-          </p>
-          <p className='text-muted-foreground text-[13px]'>
-            {HELM_COPY.privateNewSubtitle}
-          </p>
-        </div>
-        <AppToggle
-          checked={isPrivate}
-          onCheckedChange={setIsPrivate}
-          aria-label={HELM_COPY.privateNewTitle}
-        />
-      </div>
+      <PrivateSwitchLine checked={isPrivate} onCheckedChange={setIsPrivate} />
       <ModalFooterActions
         note={isTouched && isMissing ? HELM_COPY.taskTitleMissing : null}
         cancelAction={

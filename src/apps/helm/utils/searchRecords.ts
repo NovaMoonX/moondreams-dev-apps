@@ -327,10 +327,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
         bodyText: year === null ? '' : String(year),
         target: owner.target,
         mark: null,
-        privacy: {
-          kind: 'fact',
-          record: { id, subjectIds: [owner.who.id] },
-        },
+        privacy: { kind: 'who', record: owner.who },
         tier: 0,
         recency: 0,
       }),
@@ -363,10 +360,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
             bodyText: String(moment.year),
             target: owner.target,
             mark: null,
-            privacy: {
-              kind: 'fact',
-              record: { id: moment.id, subjectIds: [owner.who.id] },
-            },
+            privacy: { kind: 'who', record: owner.who },
             tier: 1,
             recency: moment.year,
           }

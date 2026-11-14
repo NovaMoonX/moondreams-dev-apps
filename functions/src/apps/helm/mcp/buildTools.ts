@@ -11,6 +11,12 @@ import {
   type SyncedBook,
 } from '../nomos/aliases.js';
 import { describeDue } from '../nomos/buildContext.js';
+import {
+  cover,
+  maskSyncedCopy,
+  toTaskLabel,
+  type Mask,
+} from '../nomos/unattended.js';
 import type { TaskDue } from '../nomos/commands.js';
 import { openForHelm, type HelmKey } from '../helmKey.js';
 import { openLiveTopic } from '../topicVersionStore.js';
@@ -93,6 +99,8 @@ export interface HelmToolScope {
   quotes?: QuoteBook;
   searched?: SearchedLog;
   live?: LiveReads;
+  /** The turn's mask: while nobody is looking, a private record is returned as a label and its words join `names`. */
+  mask?: Mask & { timeZone: string };
   /** Offers `get_topic`; each topic it reads has its version written into `versions`. */
   topicRead?: {
     topics: AliasBook;
@@ -326,6 +334,7 @@ export function buildHelmTools(scope: HelmToolScope) {
             const data = doc.data() as {
               status: string;
               due: TaskDue | null;
+              privacy?: string | null;
               createdAt: number;
               sealed: SealedPayload;
             };
@@ -346,7 +355,7 @@ export function buildHelmTools(scope: HelmToolScope) {
         .slice(0, MAX_RESULTS)
         .map(({ id, title, data }) => ({
           alias: scope.aliases.add(id),
-          title,
+          title: scope.mask ? toTaskLabel(data, title, scope.mask) : title,
           status: data.status,
           due: describeDue(data.due),
         }));
@@ -358,7 +367,10 @@ export function buildHelmTools(scope: HelmToolScope) {
   const timeZone = toKnownZone(scope.timeZone ?? 'UTC');
   const toResult = (copy: SyncedCopy) => ({
     alias: synced.add(copy),
-    ...toSyncedView(copy, timeZone),
+    ...toSyncedView(
+      scope.mask ? maskSyncedCopy(scope.mask, copy) : copy,
+      timeZone,
+    ),
   });
 
   const getCalendar: HelmTool<typeof getCalendarShape> = {
@@ -942,6 +954,20 @@ export function buildHelmTools(scope: HelmToolScope) {
       const topic = data ? openLiveTopic(scope.key, id, data) : null;
       if (!topic) return { error: 'That topic could not be read.' };
       topicRead.versions.set(id, topic.version);
+      const isHidden =
+        scope.mask !== undefined &&
+        cover(scope.mask, data?.privacy === 'private', 'a private topic', [
+          topic.name,
+          ...topic.sections.flatMap((section) => section.heading ?? []),
+        ]);
+      if (isHidden) {
+        return {
+          topic: topicAlias,
+          name: 'a private topic',
+          version: topic.version,
+          sections: [],
+        };
+      }
       return {
         topic: topicAlias,
         name: topic.name,
@@ -989,7 +1015,28 @@ export function buildHelmTools(scope: HelmToolScope) {
               ].join(' '),
             ).filter((word) => wanted.has(word)),
           ).size;
-          return score > 0 ? [{ procedure, blocks, score }] : [];
+          return score > 0
+            ? [
+                {
+                  procedure,
+                  blocks,
+                  score,
+                  isHidden:
+                    scope.mask !== undefined &&
+                    cover(
+                      scope.mask,
+                      doc.data().privacy === 'private',
+                      'a private procedure',
+                      [
+                        procedure.title,
+                        ...blocks.flatMap((block) =>
+                          block.steps.map((step) => step.text),
+                        ),
+                      ],
+                    ),
+                },
+              ]
+            : [];
         })
         .sort((a, b) => b.score - a.score)
         .slice(0, MAX_PROCEDURE_RESULTS);
@@ -1000,21 +1047,25 @@ export function buildHelmTools(scope: HelmToolScope) {
           step: (id: string) => string;
         },
       ) => ({
-        procedures: list.map(({ procedure, blocks }) => ({
+        procedures: list.map(({ procedure, blocks, isHidden }) => ({
           procedure: alias.procedure(procedure.id),
-          title: procedure.title,
+          title: isHidden ? 'a private procedure' : procedure.title,
           version: procedure.version,
-          groups: blocks.flatMap((block) =>
-            block.name === null ? [] : [block.name],
-          ),
-          steps: blocks.flatMap((block) =>
-            block.steps.map((step) => ({
-              step: alias.step(step.id),
-              text: step.text,
-              detail: step.detail,
-              group: block.name,
-            })),
-          ),
+          groups: isHidden
+            ? []
+            : blocks.flatMap((block) =>
+                block.name === null ? [] : [block.name],
+              ),
+          steps: isHidden
+            ? []
+            : blocks.flatMap((block) =>
+                block.steps.map((step) => ({
+                  step: alias.step(step.id),
+                  text: step.text,
+                  detail: step.detail,
+                  group: block.name,
+                })),
+              ),
         })),
       });
       const sizeOf = (count: number) =>

@@ -997,8 +997,8 @@ const readLinks = (
   };
 };
 
-/** Taking a thing out of private is kept only when the person's own words, quoted, say so. */
-const isQuotedPrivateRelease = (
+/** Changing whether a thing is private is kept only when the person's own words, quoted, say so. */
+const isQuotedPrivateChange = (
   item: Record<string, unknown>,
   captureText: string,
 ) => {
@@ -1040,7 +1040,7 @@ const readCommand = (
     const alias = typeof item.taskAlias === 'string' ? item.taskAlias : '';
     const subjectId = state.refs.has(alias) ? alias : aliases.idOf(alias);
     if (!subjectId || typeof item.isPrivate !== 'boolean') return null;
-    return item.isPrivate || isQuotedPrivateRelease(item, captureText)
+    return isQuotedPrivateChange(item, captureText)
       ? { kind, taskId: subjectId, isPrivate: item.isPrivate }
       : null;
   }

@@ -135,6 +135,12 @@ export const readInheritedFrom = (parents: readonly PrivateParent[]) =>
 export const buildInheritedLine = (name: string) =>
   `It's private because ${name} is private. Change it on ${name}'s page?`;
 
+export const buildOnItsPageLine = () =>
+  'It was marked private because of what it is about, so change that on its own page.';
+
+export const buildUnattendedReleaseLine = () =>
+  'Nothing is made not private while the screen is out of sight. Change it once you are looking.';
+
 export type SetPrivateOutcome =
   | { kind: 'applied'; facts: PrivacyFacts }
   | { kind: 'unchanged' }
@@ -145,11 +151,17 @@ export const readSetPrivate = (input: {
   current: PrivacyFacts;
   isPrivate: boolean;
   parents: readonly PrivateParent[];
+  /** Set for words said to the assistant: a release is never made while nobody is looking, and a mark code set is only cleared on its page. */
+  byTurn?: { isUnattended: boolean };
 }): SetPrivateOutcome => {
   const inherited = readInheritedFrom(input.parents);
   if (!input.isPrivate && inherited)
     return { kind: 'refused', line: buildInheritedLine(inherited.name) };
   if (input.isPrivate === hasOwn(input.current)) return { kind: 'unchanged' };
+  if (!input.isPrivate && input.byTurn?.isUnattended)
+    return { kind: 'refused', line: buildUnattendedReleaseLine() };
+  if (!input.isPrivate && input.byTurn && needsClearConfirm(input.current))
+    return { kind: 'refused', line: buildOnItsPageLine() };
   return {
     kind: 'applied',
     facts: readPersonMark(input.current, input.isPrivate),
@@ -198,20 +210,13 @@ export const isUnattendedTurn = (
   presence !== undefined &&
   (presence.isHidden || presence.isUntouched);
 
-const PRIVATE_THING = 'a private thing';
+const PRIVATE_TASK = 'a private task';
 
-/** What a private thing is called to a model, and aloud, while nobody is looking; built by code from its window and time, never its name. */
-export const readMaskedLabel = (input: {
-  mark: PrivateMark | null;
-  windowLabel: string | null;
-  timeLabel: string | null;
-}) => {
-  if (input.mark === 'health' && input.windowLabel)
-    return `your ${input.windowLabel} medicine`;
-  return input.timeLabel
-    ? `${PRIVATE_THING} at ${input.timeLabel}`
-    : PRIVATE_THING;
-};
+/** What a private task is called to a model, and aloud, while nobody is looking; built by code from its time of day, never its name or what it seems to be about. */
+export const readMaskedLabel = (input: { windowLabel: string | null }) =>
+  input.windowLabel
+    ? `${PRIVATE_TASK} this ${input.windowLabel}`
+    : PRIVATE_TASK;
 
 const escapeRegExp = (text: string) =>
   text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
