@@ -10,6 +10,7 @@ import {
   type RefObject,
 } from 'react';
 
+import MicrophoneAccess from '@/components/MicrophoneAccess';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { NaturalVoiceOption } from '@/components/NaturalVoiceOption';
 import { PillGroup } from '@/components/PillGroup';
@@ -39,7 +40,7 @@ const STOP_TEXT: Record<VoiceStop, { line: string; detail: string | null }> = {
   denied: {
     line: 'The microphone is blocked.',
     detail:
-      'Your browser blocked the microphone. Allow it in the browser’s settings for this site, then tap Turn on.',
+      'Your browser blocked the microphone. Allow it below, then tap Turn on.',
   },
   service: {
     line: 'Your browser’s speech service is off.',
@@ -378,7 +379,10 @@ function CookVoiceSheet({
     {
       label: 'Tips and notes',
       rows: [
-        ['ingredients for this step', 'Opens what this step uses, and reads it'],
+        [
+          'ingredients for this step',
+          'Opens what this step uses, and reads it',
+        ],
         ['note from last time', 'Opens it on the first step, and reads it'],
         ['show me the tips', 'Opens this step’s tips on screen'],
         ['show my notes', 'Opens your notes for this step'],
@@ -440,6 +444,7 @@ function CookVoiceSheet({
             Last time: {lastStop}
           </p>
         )}
+        {voice.error === 'denied' && <MicrophoneAccess />}
         <ListenRows voice={voice} selected={selected} onChoose={voice.choose} />
         <p className='text-muted-foreground text-xs'>
           {LISTEN_NOTES[selected]}
@@ -732,6 +737,7 @@ export function CookVoiceExplainer({
             Last time: {lastStop}
           </p>
         )}
+        {voice.error === 'denied' && <MicrophoneAccess />}
         <p>
           Your browser asks first, its speech service hears you, and Pinch keeps
           nothing.

@@ -177,6 +177,13 @@ Every script here passes `--project=moondreams-dev-apps` to `gcloud` itself, so 
 
 The project's consent screen (Google Cloud console, Google Auth Platform, Audience) is in **Testing**. It is one screen for the whole project, so it blocks every app's Google sign-in for anyone not listed as a test user and expires refresh tokens after 7 days. Click "Publish app", then "Confirm", so it says "In production". An "unverified app" screen with Advanced then Continue is expected until Google verifies the scopes; the rules and the verification plan are in `docs/conventions/connections.md` ("Google's consent screen is one for the whole project").
 
+### Voice in Pinch or Helm says the microphone is blocked, and the installed app's settings have no microphone
+
+- **Symptom:** on a phone, the installed app (added to the Home Screen) never asked for the microphone, Pinch's cooking voice and Helm's talk said it was blocked, and the app's own settings listed no microphone to switch on.
+- **Cause:** Pinch started the browser's speech recognition without first asking for the microphone through `getUserMedia`. In an installed app that can fail as "not allowed" without a prompt, so the phone never records a request. Every app shares one site (`apps.moondreams.dev`), so one refusal blocks the microphone for all of them. Helm also reported "the browser's speech service is off" as a blocked microphone.
+- **Fix:** `useSpeechCommands` asks through `getUserMedia` before its first start whenever the permission isn't already granted, so a refusal is a real one. The notice is `MicrophoneAccess`, with Allow microphone and the device's own steps. On Android an installed app's microphone lives in Chrome, not in the app: Chrome › Settings › Site settings › Microphone. On an iPhone it is Settings › Apps › Safari › Microphone.
+- **Telling it apart:** `navigator.permissions.query({ name: 'microphone' })` reads `denied` for a real refusal and `prompt` when nothing was ever asked. Pinch's "speech service is off" is Siri or Dictation turned off on an iPhone, not the microphone.
+
 ### No offline strip on a plane's Wi-Fi, and Runway won't open there
 
 - **Symptom:** on in-flight Wi-Fi with no internet behind it, the site showed no "You're offline" strip, and opening Runway showed "Your plan cannot be opened right now".

@@ -7,6 +7,11 @@ import {
   playListeningSound,
   type ListeningCue,
 } from '@/lib/speech/listeningSound';
+import {
+  canRequestMicrophone,
+  peekMicrophonePermission,
+  requestMicrophone,
+} from '@/lib/speech/microphonePermission';
 import { readAloud } from '@/lib/speech/readAloud';
 import { primeSpeech } from '@/utils/speechUtils';
 
@@ -156,7 +161,9 @@ export const createSpeechListener = (
       { length: event.results.length },
       (_, index) => index,
     )
-      .filter((index) => index >= event.resultIndex && !event.results[index].isFinal)
+      .filter(
+        (index) => index >= event.resultIndex && !event.results[index].isFinal,
+      )
       .map((index) => event.results[index][0].transcript.trim())
       .join(' ');
     if (interim !== '') state.options?.onInterimTranscript?.(interim);
@@ -317,7 +324,17 @@ export const createSpeechListener = (
       if (state.canSpeak) primeSpeech();
       setStatus('starting');
       armIdle();
-      beginSession();
+      if (peekMicrophonePermission() === 'granted' || !canRequestMicrophone()) {
+        beginSession();
+        return;
+      }
+      // Recognition alone can fail in an installed app without ever asking, so the microphone is asked for first.
+      void requestMicrophone().then((answer) => {
+        if (!state.isWanted) return;
+        if (answer === 'denied') return halt('denied');
+        if (answer === 'no-microphone') return halt('no-microphone');
+        beginSession();
+      });
     },
     stop: () => {
       state.isWanted = false;

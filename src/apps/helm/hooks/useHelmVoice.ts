@@ -720,6 +720,8 @@ export function useHelmVoice() {
     notice,
     showsPhoneLine,
     hasNoticeDoor,
+    /** The notice is about a blocked microphone, so the screen offers the way to allow it. */
+    needsMicrophone: notice === HELM_COPY.talkNeedsMicrophone,
     openVoiceSettings,
     clearNotice: () => {
       setNotice(null);

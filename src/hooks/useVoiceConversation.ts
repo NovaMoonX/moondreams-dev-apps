@@ -9,7 +9,10 @@ import {
   reduceListening,
   type ListeningEvent,
 } from '@/lib/speech/listeningMode';
-import { readMicrophonePermission } from '@/lib/speech/microphonePermission';
+import {
+  readMicrophonePermission,
+  watchMicrophonePermission,
+} from '@/lib/speech/microphonePermission';
 import { readWakePhrase } from '@/lib/speech/speechText';
 import { isOnDeviceLang } from '@/lib/speech/onDevice/config';
 import {
@@ -426,8 +429,10 @@ export function useVoiceConversation({
   const handleError = (code: SttErrorCode) => {
     run.current.isCancelled = true;
     const isLasting = BLOCKED.includes(code) || code === 'language';
-    if (BLOCKED.includes(code)) setReason('no-permission');
-    else if (code === 'language') setReason('no-recognition');
+    if (code === 'denied' || code === 'no-microphone')
+      setReason('no-permission');
+    else if (code === 'service' || code === 'language')
+      setReason('no-recognition');
     run.current.stopListening?.();
     handleFinal('');
     if (isLasting) return;
@@ -653,7 +658,10 @@ export function useVoiceConversation({
       .catch(() => undefined);
   };
 
-  useEffect(checkPermission, []);
+  useEffect(() => {
+    checkPermission();
+    return watchMicrophonePermission(checkPermission);
+  }, []);
   useOnTabReturn(checkPermission);
 
   useEffect(() => {

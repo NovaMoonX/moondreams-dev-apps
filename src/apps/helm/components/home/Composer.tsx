@@ -29,6 +29,7 @@ import {
 
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import LockedButton from '@/components/LockedButton';
+import MicrophoneAccess from '@/components/MicrophoneAccess';
 import { useAuth } from '@/hooks/useAuth';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
@@ -496,6 +497,12 @@ function Composer({
           role='status'
         >
           <p>{voice.notice}</p>
+          {voice.needsMicrophone && (
+            <MicrophoneAccess
+              onAllowed={voice.clearNotice}
+              className='mt-1.5 w-full'
+            />
+          )}
           {voice.hasNoticeDoor && (
             <Button
               type='button'
@@ -731,6 +738,7 @@ function Composer({
               : HELM_COPY.recordNoMicrophone}
           </p>
         )}
+        {recorder.state === 'refused' && <MicrophoneAccess />}
         <AttachmentChips
           items={attachments.items}
           onRemove={attachments.remove}
