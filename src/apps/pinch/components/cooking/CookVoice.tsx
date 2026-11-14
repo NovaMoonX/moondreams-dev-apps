@@ -354,10 +354,12 @@ function CookVoiceSheet({
   useFocusOnOpen(voice.isSheetOpen, doneRef);
   const permission = useMicrophonePermission();
   const isBlocked = voice.error === 'denied' && permission !== 'granted';
-  const lastStop =
-    voice.error === null || voice.error === 'denied'
-      ? null
-      : STOP_TEXT[voice.error].detail;
+  const getLastStop = () => {
+    if (voice.error === null) return null;
+    if (voice.error !== 'denied') return STOP_TEXT[voice.error].detail;
+    return permission === 'granted' ? STOP_TEXT.service.detail : null;
+  };
+  const lastStop = getLastStop();
   const selected: ListenChoice = voice.phase === 'LOCKED' ? 'LOCK' : voice.mode;
   const wakeRows: [string, string][] =
     voice.mode === 'WAKE'
@@ -616,7 +618,7 @@ export function CookVoiceLine({ className, ...props }: CookVoiceLineProps) {
   const sheet = <CookVoiceSheet {...props} />;
   const shownStop =
     voice.shownError === 'denied' && permission === 'granted'
-      ? null
+      ? 'service'
       : voice.shownError;
 
   if (!voice.isOn) {
@@ -722,10 +724,12 @@ export function CookVoiceExplainer({
   );
   const permission = useMicrophonePermission();
   const isBlocked = voice.error === 'denied' && permission !== 'granted';
-  const lastStop =
-    voice.error === null || voice.error === 'denied'
-      ? null
-      : STOP_TEXT[voice.error].detail;
+  const getLastStop = () => {
+    if (voice.error === null) return null;
+    if (voice.error !== 'denied') return STOP_TEXT[voice.error].detail;
+    return permission === 'granted' ? STOP_TEXT.service.detail : null;
+  };
+  const lastStop = getLastStop();
 
   return (
     <Modal

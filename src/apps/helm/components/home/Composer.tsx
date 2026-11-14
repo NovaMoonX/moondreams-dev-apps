@@ -493,33 +493,34 @@ function Composer({
       }}
     >
       {topSlot && <div className='flex px-1'>{topSlot}</div>}
-      {voice.notice !== null &&
-        !(voice.needsMicrophone && microphone === 'granted') && (
-          <div
-            className='text-muted-foreground flex flex-col items-start gap-0.5 px-1 text-[13px]'
-            role='status'
-          >
-            {voice.needsMicrophone ? (
-              <MicrophoneAccess
-                onAllowed={voice.clearNotice}
-                className='w-full'
-              />
-            ) : (
-              <p>{voice.notice}</p>
-            )}
-            {voice.hasNoticeDoor && (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                className="text-primary relative -ml-2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-                onClick={() => void voice.openVoiceSettings()}
-              >
-                {HELM_COPY.talkOpenVoiceSettings}
-              </Button>
-            )}
-          </div>
-        )}
+      {voice.notice !== null && (
+        <div
+          className='text-muted-foreground flex flex-col items-start gap-0.5 px-1 text-[13px]'
+          role='status'
+        >
+          {voice.needsMicrophone && microphone === 'granted' ? (
+            <p>{HELM_COPY.talkNeedsRecognition}</p>
+          ) : voice.needsMicrophone ? (
+            <MicrophoneAccess
+              onAllowed={voice.clearNotice}
+              className='w-full'
+            />
+          ) : (
+            <p>{voice.notice}</p>
+          )}
+          {voice.hasNoticeDoor && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="text-primary relative -ml-2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+              onClick={() => void voice.openVoiceSettings()}
+            >
+              {HELM_COPY.talkOpenVoiceSettings}
+            </Button>
+          )}
+        </div>
+      )}
       {canType && showsActions && (
         <div
           inert={!isShorthandOpen}
