@@ -537,10 +537,14 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 {newReads.length > 0 && (
                   <InlineNotice
                     tone='info'
-                    title={HELM_COPY.connectionNewReadsTitle}
+                    title={
+                      isOn
+                        ? HELM_COPY.connectionNewReadsTitle
+                        : HELM_COPY.connectionNewReadsOffTitle
+                    }
                     className='mt-1 border-0!'
                   >
-                    <ul className='list-disc pl-5 text-[13px]'>
+                    <ul className='list-disc pl-5 text-[13px] text-pretty'>
                       {newReads.map((read) => (
                         <li key={read.label}>{read.label}</li>
                       ))}

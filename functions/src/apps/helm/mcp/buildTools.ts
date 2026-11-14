@@ -389,7 +389,7 @@ export function buildHelmTools(scope: HelmToolScope) {
   const searchSynced: HelmTool<typeof searchSyncedShape> = {
     name: 'search_synced',
     description:
-      "Finds records the person's connected apps and calendars share, by words in their title, or lists them by app and/or kind without any words (their clinics, a sale's counts): events, tasks, places, projects, ratings and more. A record from one of their own apps also carries its place, amount, detail and details (a place's phone and address, a sale's counts). It looks through at most 300 records, so finding nothing does not prove a record is absent. Upcoming ones come first; a record marked noLongerUpdated is a kept copy from a connection that has ended. Give words, an app or a kind.",
+      "Finds records the person's connected apps and calendars share, by words in their title, or lists them by app and/or kind without any words (their clinics, a sale's counts): events, tasks, places, projects, ratings and more. A record from one of their own apps also carries its place, amount, detail and details (a place's phone and address, a sale's counts, money collected and left, a thing for sale's asking price and status; search kind artifact for things for sale). It looks through at most 300 records, so finding nothing does not prove a record is absent. Upcoming ones come first; a record marked noLongerUpdated is a kept copy from a connection that has ended. Give words, an app or a kind.",
     shape: searchSyncedShape,
     run: async ({ query, app, kind }) => {
       const words = toWords(query ?? '');
