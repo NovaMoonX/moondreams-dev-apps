@@ -12,7 +12,7 @@ interface TalkNoticeProps {
   className?: string;
 }
 
-/** Why Talk can't listen, where the person tapped it: the way to allow a blocked microphone, or the line that says what else stops it, with the voice settings door when it has one. Draws nothing while there is no notice. */
+/** Why Talk can't listen, shown where it was tapped. */
 function TalkNotice({ className }: TalkNoticeProps) {
   const voice = useHelmVoiceContext();
   const microphone = useMicrophonePermission();

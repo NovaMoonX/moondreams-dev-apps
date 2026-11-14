@@ -30,7 +30,6 @@ function VoiceControl() {
           variant='primary'
           aria-label={label}
           className="relative size-[68px] min-w-[68px] rounded-full! p-0 before:absolute before:-inset-1 before:content-['']"
-          // A blocked tap shows why above the dock; it never moves the person into typing.
           onClick={() => voice.talk(null)}
         >
           {isStop ? (

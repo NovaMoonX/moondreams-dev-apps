@@ -74,7 +74,7 @@ interface VoiceConversationOptions {
   onNothingHeard?: (isAsked: boolean) => void;
   /** The model on the device couldn't start or died while listening; `isAsked` is as for `onNothingHeard`. Without it this counts as nothing heard. */
   onDeviceListenFailed?: (isAsked: boolean) => void;
-  /** A tapped listen ended on a lasting failure (the microphone refused, recognition off), so the screen says why at once rather than on the next tap. */
+  /** A tapped listen ended on a lasting failure (the microphone refused, recognition off). */
   onUnavailable?: (reason: VoiceUnavailableReason) => void;
   /** The opt-in natural voice is downloaded and ready (`useNaturalVoice().isReady`). */
   isNaturalVoiceReady?: boolean;

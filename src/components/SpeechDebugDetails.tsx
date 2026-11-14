@@ -38,7 +38,7 @@ function SpeechFacts({ message, className }: SpeechDebugDetailsProps) {
   );
 }
 
-/** Debug details for a failure to listen: the microphone permission, the device, what the browser offers and the last things it said, kept current as it says more. Only debug viewers see it. */
+/** `DebugDetails` for a failure to listen. Debug viewers only. */
 function SpeechDebugDetails(props: SpeechDebugDetailsProps) {
   const canSee = useCanSeeDebugDetails();
   if (!canSee) return null;

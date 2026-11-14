@@ -17,7 +17,7 @@ interface DebugDetailsProps {
   className?: string;
 }
 
-/** What went wrong, for the people who can see it (local builds, the admin and listed debug emails), with Copy so it can be passed on from a phone with no console. Draws nothing for anyone else. */
+/** What went wrong, with Copy error. Debug viewers only: local builds, the admin and listed debug emails. */
 function DebugDetails({
   message,
   facts = [],

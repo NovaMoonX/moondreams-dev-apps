@@ -11,13 +11,13 @@ const watched = {
 
 const REFUSED_KEY = 'speech:recognition-refused';
 
-/** Remembers that speech recognition was refused here before the browser was asked for the microphone, as an installed app can do without ever prompting, so the next tap asks for the microphone first instead of failing again. */
+/** Remembers on this device that recognition was refused before the microphone was ever allowed (an installed app can refuse without prompting). Cleared once the permission reads granted. */
 export const rememberRecognitionRefused = () => {
   if (watched.wasGranted) return;
   try {
     window.localStorage.setItem(REFUSED_KEY, 'true');
   } catch {
-    // Without storage the next tap fails once more and shows the same notice.
+    // Without storage the refusal is found again on the next tap.
   }
 };
 
@@ -25,7 +25,7 @@ const forgetRecognitionRefused = () => {
   try {
     window.localStorage.removeItem(REFUSED_KEY);
   } catch {
-    // Nothing was kept.
+    // Storage is unavailable, so nothing was kept.
   }
 };
 

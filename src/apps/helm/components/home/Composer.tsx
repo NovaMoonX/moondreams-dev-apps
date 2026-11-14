@@ -125,7 +125,6 @@ interface ComposerProps {
   draftKey?: string;
   /** Sits at the card's top-left, above the field. */
   topSlot?: ReactNode;
-  /** Whether a Talk notice shows in this card; home's shows it only while typing, since the dock shows it otherwise. */
   showsVoiceNotice?: boolean;
 }
 
