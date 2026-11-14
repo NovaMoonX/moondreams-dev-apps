@@ -129,30 +129,50 @@ export async function completeExternalAuth(
   return redirectUri;
 }
 
-/** Our uid for a WorkOS user (their `external_id`, set when sign-in completed), cached for a day. `null` when WorkOS has none. */
-export async function uidForWorkosUser(
-  workosUserId: string,
-): Promise<string | null> {
+/** Who a token's subject is: our uid and WorkOS's own user id. */
+export interface WorkosIdentity {
+  uid: string;
+  workosUserId: string;
+}
+
+// A token from a sign-in completed through our own page carries our uid (WorkOS's `external_id`) as its subject;
+// one from a WorkOS-hosted sign-in carries WorkOS's `user_…` id. Either way the other id comes from WorkOS.
+const isWorkosUserId = (id: string) => /^user_[0-9A-Z]{26}$/.test(id);
+
+/** Our uid and WorkOS's user id for a token's subject, cached for a day. `null` when WorkOS has no link between them. */
+export async function identityForSubject(
+  subject: string,
+): Promise<WorkosIdentity | null> {
   const ref = getFirestore().doc(
-    `mcpServer/identities/users/${encodeURIComponent(workosUserId)}`,
+    `mcpServer/identities/users/${encodeURIComponent(subject)}`,
   );
   const cached = (await ref.get()).data();
   if (
     cached &&
     typeof cached.uid === 'string' &&
+    typeof cached.workosUserId === 'string' &&
     typeof cached.cachedAt === 'number' &&
     Date.now() - cached.cachedAt < IDENTITY_TTL_MS
   ) {
-    return cached.uid;
+    return { uid: cached.uid, workosUserId: cached.workosUserId };
   }
   const body = await workosFetch(
-    `/user_management/users/${encodeURIComponent(workosUserId)}`,
+    isWorkosUserId(subject)
+      ? `/user_management/users/${encodeURIComponent(subject)}`
+      : `/user_management/users/external_id/${encodeURIComponent(subject)}`,
     { method: 'GET' },
-  );
+  ).catch((error: unknown) => {
+    if (error instanceof WorkosError && error.status === 404) return null;
+    throw error;
+  });
   const uid = readField(body, 'external_id');
-  if (typeof uid !== 'string' || !uid) return null;
-  await ref.set({ uid, cachedAt: Date.now() });
-  return uid;
+  const workosUserId = readField(body, 'id');
+  if (typeof uid !== 'string' || !uid || typeof workosUserId !== 'string') {
+    return null;
+  }
+  if (!isWorkosUserId(subject) && uid !== subject) return null;
+  await ref.set({ uid, workosUserId, cachedAt: Date.now() });
+  return { uid, workosUserId };
 }
 
 /** Removes the person's authorization of one client, so it can't refresh. A client already gone counts as done. */
