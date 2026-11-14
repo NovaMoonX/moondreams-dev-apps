@@ -958,22 +958,22 @@ test('a whole reply that lets a question go dismisses it; a sentence, an option 
   const read = (text: string, question = GROUP_QUESTION) =>
     matchSpokenAnswer(text, question, { now: 0, timeZone: 'UTC' })?.kind ??
     null;
-  assert.equal(read('never mind'), 'dismiss');
-  assert.equal(read('Forget it.'), 'dismiss');
-  assert.equal(read('it doesn’t matter'), 'dismiss');
-  assert.notEqual(read('never mind the milk, call mom'), 'dismiss');
+  assert.equal(read('Dismiss.'), 'dismiss');
+  assert.equal(read('dismiss this question'), 'dismiss');
+  assert.notEqual(read('never mind'), 'dismiss');
+  assert.notEqual(read('dismiss the meeting with Sam'), 'dismiss');
   assert.notEqual(
-    read('forget it', {
+    read('dismiss it', {
       ...GROUP_QUESTION,
       options: [
         ...GROUP_QUESTION.options,
-        { id: 'o9', label: 'Forget it', detail: null, ref: null },
+        { id: 'o9', label: 'Dismiss it', detail: null, ref: null },
       ],
     }),
     'dismiss',
   );
   assert.notEqual(
-    read('never mind', { ...GROUP_QUESTION, kind: 'whichIsTrue' }),
+    read('dismiss', { ...GROUP_QUESTION, kind: 'whichIsTrue' }),
     'dismiss',
   );
   assert.equal(isDismissable('whichIsTrue'), false);

@@ -14,20 +14,14 @@ export type SpokenAnswer =
   | { kind: 'dismiss' }
   | { kind: 'answer'; value: QuestionAnswerValue };
 
+// "Never mind" and "forget it" are left to closing the conversation, which skips the question instead.
 const DISMISS_PHRASES = [
-  'never mind',
-  'nevermind',
-  'forget it',
-  'forget about it',
-  'forget that',
   'dismiss',
   'dismiss it',
   'dismiss that',
   'dismiss this',
-  "it doesn't matter",
-  "doesn't matter",
-  'it does not matter',
-  "don't worry about it",
+  'dismiss the question',
+  'dismiss this question',
 ];
 
 const toPlainWords = (text: string) =>
