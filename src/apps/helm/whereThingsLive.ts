@@ -283,6 +283,36 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     taps: ['setCurrentPlace', 'generatePlan'],
   }),
   row({
+    thing: 'Where someone lives',
+    home: 'who',
+    writer: 'actions/whoActions',
+    taps: ['updateWho'],
+  }),
+  row({
+    thing: 'Where someone will be away',
+    home: 'who',
+    writer: 'actions/whoActions',
+    taps: ['updateWho'],
+  }),
+  row({
+    thing: "The phone's last city, and its point at Precise",
+    home: 'who',
+    writer: 'actions/whoActions',
+    taps: ['updateWho'],
+  }),
+  row({
+    thing: 'The time zone a stretch of days follows',
+    home: 'profile',
+    classes: ['readable'],
+    writer: 'actions/settingsActions',
+  }),
+  row({
+    thing: 'Phone location and the offers put off',
+    home: 'profile',
+    classes: ['readable'],
+    writer: 'actions/settingsActions',
+  }),
+  row({
     thing: 'Settings, the name and the way Helm talks',
     home: 'profile',
     classes: ['readable'],

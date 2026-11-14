@@ -42,6 +42,7 @@ import {
   getDueDay,
   readCapture,
 } from '../../src/apps/helm/utils/captureReading.ts';
+import type { City } from '../../src/lib/cities/types.ts';
 import type {
   Capture,
   CaptureSealed,
@@ -1432,6 +1433,10 @@ export const wordsOf = (
   organizationKind: null,
   privateMark: null,
   isPrivacyCleared: false,
+  home: null,
+  homeSource: null,
+  away: null,
+  nearNow: null,
   ...extra,
 });
 
@@ -3823,6 +3828,31 @@ async function buildPeople(input: {
   const names = {
     self: displayName.includes('@') || !displayName ? 'Me' : displayName,
   };
+  const awayDay = Math.floor(now / DAY_MS) * DAY_MS;
+  const seattle: City = {
+    name: 'Seattle',
+    region: 'Washington',
+    country: 'United States',
+    latitude: 47.606,
+    longitude: -122.332,
+    timezone: 'America/Los_Angeles',
+  };
+  const portland: City = {
+    name: 'Portland',
+    region: 'Oregon',
+    country: 'United States',
+    latitude: 45.523,
+    longitude: -122.676,
+    timezone: 'America/Los_Angeles',
+  };
+  const leavenworth: City = {
+    name: 'Leavenworth',
+    region: 'Washington',
+    country: 'United States',
+    latitude: 47.596,
+    longitude: -120.661,
+    timezone: 'America/Los_Angeles',
+  };
   const who: { id: string; who: Who }[] = [
     {
       id: 'self',
@@ -3835,7 +3865,23 @@ async function buildPeople(input: {
           createdBy: 'person',
         },
         madeAt,
-        await seal(wordsOf(names.self)),
+        await seal(
+          wordsOf(names.self, {
+            home: seattle,
+            homeSource: 'page',
+            away: [
+              {
+                id: 'seed-away-portland',
+                city: portland,
+                from: awayDay - DAY_MS,
+                to: awayDay + DAY_MS,
+                label: null,
+                source: 'said',
+                zoneOffered: false,
+              },
+            ],
+          }),
+        ),
       ),
     },
     {
@@ -3854,6 +3900,8 @@ async function buildPeople(input: {
           wordsOf('Sam Rivera', {
             relation: 'work friend',
             email: 'sam.rivera@example.com',
+            home: leavenworth,
+            homeSource: 'said',
           }),
         ),
       ),
@@ -3885,7 +3933,11 @@ async function buildPeople(input: {
             createdBy: 'person',
           },
           now - DAY_MS,
-          await seal(wordsOf('Priya Raman', { email: 'priya@example.com' })),
+          await seal(wordsOf('Priya Raman', {
+              email: 'priya@example.com',
+              home: leavenworth,
+              homeSource: 'said',
+            })),
         ),
         importedFrom: {
           connectorId: 'google:contacts',
