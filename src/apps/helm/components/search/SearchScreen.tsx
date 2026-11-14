@@ -83,8 +83,9 @@ function SearchScreen({
     () => ({
       timeZone: profileZone ?? getDeviceTimeZone() ?? 'UTC',
       now: Math.floor(now / 60_000) * 60_000,
+      query,
     }),
-    [profileZone, now],
+    [profileZone, now, query],
   );
   const who = useAppSelector((state) => state.helm.who.items);
   const places = useAppSelector((state) => state.helm.places.items);

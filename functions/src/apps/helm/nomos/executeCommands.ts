@@ -869,12 +869,20 @@ const shownName = (who: KnownWhoState, isUnattended: boolean) =>
 
 const toKinWho = (who: KnownWhoState) => ({ id: who.id, kin: who.kin ?? null });
 
-/** A proposed nickname is asked about only when the model linked it to someone who is there, who hasn't been told No to it, and it is not already a name of anyone. */
+/** A proposed nickname is asked about only when the model linked it to someone who is there, who hasn't been told No to it, and it is not a word of the person's own name or nicknames. */
 const isProposalOpen = (mention: MentionRead, people: PeopleInput) => {
   const proposed = people.known.find((who) => who.id === mention.proposedWhoId);
   const comparable = mention.name.trim().toLowerCase();
+  const self = people.known.find((who) => who.id === people.selfWhoId);
+  const isSelfWord =
+    self !== undefined &&
+    self.id !== proposed?.id &&
+    [...self.name.split(/\s+/), ...(self.aliases ?? [])].some(
+      (word) => word.trim().toLowerCase() === comparable,
+    );
   return (
     proposed !== undefined &&
+    !isSelfWord &&
     !(proposed.refusedAliases ?? []).some(
       (refused) => refused.trim().toLowerCase() === comparable,
     )

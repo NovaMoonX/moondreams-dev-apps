@@ -1885,6 +1885,8 @@ export const HELM_COPY = {
   aliasIsAliasOf: (alias: string, name: string) =>
     `${name} is already called ${alias}.`,
   aliasDone: 'Done',
+  aliasIsYou: (word: string) => `${word} is already you.`,
+  searchAlsoCalled: (alias: string) => `Also called ${alias}`,
   aliasNone: 'No nicknames yet.',
   soundsLikeTitle: 'Also heard as',
   soundsLikeHelp:
@@ -1901,11 +1903,10 @@ export const HELM_COPY = {
   kinOrderOldest: 'Oldest',
   kinOrderYoungest: 'Youngest',
   kinOrderTwin: 'Twin',
-  kinHelp:
-    'The line under the name stays in your words. This is how “my younger brother” finds them.',
+  kinHelp: 'Used to find them when you say “my sister” or “my grandpa”.',
   kinSavedToast: (name: string) => `Saved how ${name} is related`,
   kinClearedToast: (name: string) => `Cleared how ${name} is related`,
-  kinRemove: 'Remove',
+  kinRemove: 'Remove family word',
   kinChanged: 'This changed somewhere else. Close this and open it again.',
   kinUndoStale: 'This changed since, so it was left as it is.',
   kinDerived: (name: string, years: number, side: 'older' | 'younger') =>
