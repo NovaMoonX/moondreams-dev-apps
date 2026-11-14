@@ -24,7 +24,10 @@ import {
 import { GOOGLE_CONTACTS_MANIFEST } from '@/lib/connections/google/contactsManifest';
 import { GOOGLE_DRIVE_MANIFEST } from '@/lib/connections/google/driveManifest';
 import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
-import { readOpenedNews } from '@/lib/connections/connectionNews';
+import {
+  forgetOpenedNews,
+  readOpenedNews,
+} from '@/lib/connections/connectionNews';
 import { readUnseenNews } from '@/lib/connections/newReads';
 import { getConnectorManifest } from '@/lib/connections/sources';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
@@ -215,9 +218,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           console.error('Helm connection was not updated', error),
         );
       }
+      if (isOn) forgetOpenedNews(grant.id, categoryId);
     } catch (error) {
       console.error('Helm connection did not change', error);
       setPending((current) => without(current, categoryId));
+      setSeenNow((current) => without(current, categoryId));
       setFailures((current) => ({
         ...current,
         [categoryId]: failureLine(
@@ -237,6 +242,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         grantId: grant.id,
         seenScopes: { [categoryId]: scopeVersion },
       });
+      forgetOpenedNews(grant.id, categoryId);
     } catch (error) {
       console.error('Helm connection scope was not marked seen', error);
       setSeenNow((current) => without(current, categoryId));

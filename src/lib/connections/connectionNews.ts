@@ -13,12 +13,23 @@ export const hasUnseenNews = (grant: ConnectionGrantWithId, now: number) =>
     ),
   ).length > 0;
 
-const openedNews = new Map<string, Record<string, unknown[]>>();
+const openedNews = new Map<string, ReturnType<typeof readUnseenNews>>();
 
-/** What was new on a connection when the person tapped into it, kept for the page that opens, since that tap marks it seen before the page's own listener loads. */
+/** What was new on a connection when the person tapped into it, since that tap marks it seen before the page's listener loads. */
 export const readOpenedNews = (grantId: string) =>
-  (openedNews.get(grantId) as ReturnType<typeof readUnseenNews> | undefined) ??
-  null;
+  openedNews.get(grantId) ?? null;
+
+/** Drops one category from what a tap handed over, once the person has seen it on the page. */
+export const forgetOpenedNews = (grantId: string, categoryId: string) => {
+  const news = openedNews.get(grantId);
+  if (news === undefined) return;
+  openedNews.set(
+    grantId,
+    Object.fromEntries(
+      Object.entries(news).filter(([id]) => id !== categoryId),
+    ),
+  );
+};
 
 /** Records that the person has now seen what is new on these connections; opening one counts as seeing it. */
 export const markNewsSeen = (grants: ConnectionGrantWithId[], now: number) =>
