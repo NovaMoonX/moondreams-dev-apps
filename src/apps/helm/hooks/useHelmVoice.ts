@@ -706,6 +706,8 @@ export function useHelmVoice() {
   };
 
   function startListening(page: ScreenContext | null) {
+    // A listen that ended on an error never says so, so each new one starts as a turn.
+    endDictation();
     screen.current = page;
     setNotice(null);
     setHasNoticeDoor(false);
@@ -715,17 +717,17 @@ export function useHelmVoice() {
     return 'started' as const;
   }
 
-  /** Listens for words that go into the open text box through `write`; tapped again while listening, it keeps what was heard so far. */
   const dictate = (write: (text: string) => void) => {
-    if (dictation.current !== null) {
+    if (dictation.current !== null && voice.state === 'listening') {
       voice.stop();
       return 'stopped' as const;
     }
     if (voice.state !== 'idle') return 'blocked' as const;
-    dictation.current = write;
-    setIsDictating(true);
     const result = talk(null);
-    if (result !== 'started') endDictation();
+    if (result === 'started') {
+      dictation.current = write;
+      setIsDictating(true);
+    }
     return result;
   };
 

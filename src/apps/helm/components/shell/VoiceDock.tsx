@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Keyboard, LayoutGrid, X } from 'lucide-react';
 
 import VoiceControl from '@apps/helm/components/voice/VoiceControl';
@@ -47,7 +48,10 @@ function VoiceDock({ onBrowse, onTalkBlocked, onType }: VoiceDockProps) {
     <nav
       ref={nav}
       aria-label='Talk, type or browse'
-      className='helm-dock-in from-background pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[calc(100%-2.5rem)] to-transparent px-4 pt-10 pb-[max(1rem,env(safe-area-inset-bottom))]'
+      className={join(
+        'helm-dock-in from-background pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[calc(100%-2.5rem)] to-transparent px-4 pt-10 pb-[max(1rem,env(safe-area-inset-bottom))]',
+        voice.isDictating && 'invisible',
+      )}
     >
       <div className='pointer-events-auto mx-auto flex max-w-xl flex-col gap-4'>
         <VoiceStatus />

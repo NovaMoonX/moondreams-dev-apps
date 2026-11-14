@@ -97,7 +97,6 @@ const parseDraft = (stored: unknown) =>
 interface ComposerProps {
   /** Lets the dock's Type and Talk put the cursor here. */
   fieldRef: RefObject<HTMLTextAreaElement | null>;
-  /** How far the field grows before it scrolls: 10 lines on home, 6 over a page. */
   maxLines?: number;
   onFocusChange: (isFocused: boolean) => void;
   /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft and the words typed while waiting. */
@@ -118,7 +117,7 @@ interface ComposerProps {
   topSlot?: ReactNode;
 }
 
-/** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter sends and Shift+Enter starts a new line. */
+/** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter starts a new line and Shift+Enter sends. */
 function Composer({
   fieldRef,
   maxLines = 6,
@@ -176,14 +175,15 @@ function Composer({
   const canTakePhoto = useCanTakePhoto();
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
+  const appendWords = (words: string) => {
+    setText((current) =>
+      current.trim().length > 0 ? `${current.trimEnd()} ${words}` : words,
+    );
+    setTypedAt(Date.now());
+  };
   const attachments = useTurnAttachments({
     timeZone,
-    onTranscript: (words) => {
-      setText((current) =>
-        current.trim().length > 0 ? `${current.trimEnd()} ${words}` : words,
-      );
-      setTypedAt(Date.now());
-    },
+    onTranscript: (words) => appendWords(words),
   });
   const recorder = useAudioRecorder({
     maxMs: MAX_VOICE_NOTE_MS,
@@ -462,12 +462,6 @@ function Composer({
   const canType = isReady || isOutbox;
   useGrowingTextarea(fieldRef, text, maxLines);
   const isDictating = voice.isDictating && voice.state === 'listening';
-  const writeDictation = (words: string) => {
-    setText((current) =>
-      current.trim().length > 0 ? `${current.trimEnd()} ${words}` : words,
-    );
-    setTypedAt(Date.now());
-  };
   const showsActions = waitingPlaceholder === null;
 
   return (
@@ -687,7 +681,7 @@ function Composer({
                 'size-10 min-h-0 min-w-10 shrink-0 p-0',
                 isDictating && 'bg-primary/12! ring-primary/40 ring-2',
               )}
-              onClick={() => voice.dictate(writeDictation)}
+              onClick={() => voice.dictate(appendWords)}
             >
               <Mic
                 className={join('size-5', isDictating && 'text-primary')}
@@ -732,12 +726,23 @@ function Composer({
             role='status'
             aria-live='polite'
           >
-            <p className='text-muted-foreground line-clamp-2 text-[13px] break-words'>
-              {voice.heard ||
-                (voice.isPreparing
-                  ? HELM_COPY.talkGettingReady
-                  : HELM_COPY.talkListeningHint)}
-            </p>
+            <div className='flex w-full items-start gap-2'>
+              <p className='text-muted-foreground line-clamp-2 min-w-0 flex-1 py-1 text-[13px] break-words'>
+                {voice.heard ||
+                  (voice.isPreparing
+                    ? HELM_COPY.talkGettingReady
+                    : HELM_COPY.talkListeningHint)}
+              </p>
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className="relative -mr-1 shrink-0 text-[13px] before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+                onClick={voice.cancel}
+              >
+                {HELM_COPY.talkCancel}
+              </Button>
+            </div>
             {voice.listeningRoute === 'cloud' && (
               <div className='-ml-3'>
                 <VoiceNotice />
