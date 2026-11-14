@@ -13,6 +13,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useAppSelector } from '@/store';
 import {
   ASSISTANT_TONES,
   DEFAULT_ASSISTANT_NAME,
@@ -45,6 +46,9 @@ function AssistantForm({
   const fieldId = useId();
   const savedName = useAssistantName();
   const savedTone = useAssistantTone();
+  const hasAssistants = useAppSelector(
+    (state) => state.helm.assistants.items.length > 0,
+  );
   const [text, setText] = useState(
     savedName === DEFAULT_ASSISTANT_NAME ? '' : savedName,
   );
@@ -94,6 +98,14 @@ function AssistantForm({
         {isNameValid && (
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.assistantNameHint}
+          </p>
+        )}
+        {isNameValid && hasAssistants && nextName !== savedName && (
+          <p
+            className='text-muted-foreground text-[13px] text-pretty'
+            role='status'
+          >
+            {HELM_COPY.assistantRenameConnected(nextName)}
           </p>
         )}
         {text !== '' && (

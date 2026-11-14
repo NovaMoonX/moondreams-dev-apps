@@ -18,7 +18,9 @@ import {
   unwrapHelmKey,
   type HelmKey,
 } from '../helmKey.js';
+import { readAssistantName } from '../assistantName.js';
 import { readDates, readIsUrgent } from '../dateReading.js';
+import { DEFAULT_ASSISTANT_NAME } from '../nomos/commands.js';
 import { toKnownZone } from '../syncedCopies.js';
 import { createAliasBook, createSealedAliasBook } from '../nomos/aliases.js';
 import { readMadeTitles } from '../nomos/buildContext.js';
@@ -340,6 +342,16 @@ const askShape = {
     ),
 };
 
+/** What an assistant is told when it connects: the person calls their Helm assistant by the name they chose, so that name routes here. */
+const instructionsFor = (name: string, canWrite: boolean) =>
+  [
+    `This connection is ${name}, the person's own assistant in their Helm app (the name is theirs, and they may change it).`,
+    `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools.`,
+    canWrite
+      ? `tell_helm passes on something for ${name} to file or do, ask_helm asks ${name} a question, and the search tools look things up directly.`
+      : `The search tools look things up; this connection can't add anything, since the person turned that off in Helm.`,
+  ].join(' ');
+
 const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   const firestore = getFirestore();
   if (!(await isGateOpenForUid(ctx.uid, GATE_APP_ID, GATE_ID, 'off'))) {
@@ -352,6 +364,8 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   ).catch(() => null);
   if (!key) return refuseAll(NO_KEY_TEXT);
   const profile = await firestore.doc(`apps/helm/users/${ctx.uid}`).get();
+  const name =
+    readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
   const tools = buildHelmTools({
     uid: ctx.uid,
     key,
@@ -370,14 +384,16 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
       names: new Map(),
     },
   });
-  const server = new McpServer({ name: 'helm', version: '1.0.0' });
+  const server = new McpServer(
+    { name: 'helm', version: '1.0.0' },
+    { instructions: instructionsFor(name, ctx.canWrite) },
+  );
   registerHelmTools(server, tools, 'external');
   if (!ctx.canWrite) return server;
   server.registerTool(
     'tell_helm',
     {
-      description:
-        "Tells Helm something in the person's own words, as if they had typed it to their assistant: Helm files it for them, making tasks, key dates, notes and records, and says what it did. Call it when the person wants Helm to remember or do something (add a task, note a date, save what they learned). Do not use it for a question: use ask_helm. The person can undo everything it does in Helm.",
+      description: `Tells ${name}, the person's assistant in Helm, something in their own words, as if they had typed it to ${name}: Helm files it for them, making tasks, key dates, notes and records, and says what it did. Call it when the person says "tell ${name}" or wants ${name} or Helm to remember or do something (add a task, note a date, save what they learned). Do not use it for a question: use ask_helm. The person can undo everything it does in Helm.`,
       inputSchema: tellShape,
       annotations: {
         readOnlyHint: false,
@@ -390,8 +406,7 @@ const buildServer = async (ctx: McpRequestContext): Promise<McpServer> => {
   server.registerTool(
     'ask_helm',
     {
-      description:
-        'Asks Helm a question about the person\'s own life, in their words, and returns its answer with the records it rests on and, apart, anything it added from general knowledge (labelled "Not from your records"). Call it for a question that needs more than a quick lookup: dates, people, plans, what they decided or noted. For a plain lookup of tasks, topics, procedures or calendar days, the search tools are quicker. The question shows in Helm\'s Activity like a typed one.',
+      description: `Asks ${name}, the person's assistant in Helm, a question about their own life, in their words, and returns its answer with the records it rests on and, apart, anything it added from general knowledge (labelled "Not from your records"). Call it when the person says "ask ${name}", or for a question that needs more than a quick lookup: dates, people, plans, what they decided or noted. For a plain lookup of tasks, topics, procedures or calendar days, the search tools are quicker. The question shows in Helm's Activity like a typed one.`,
       inputSchema: askShape,
       annotations: {
         readOnlyHint: false,

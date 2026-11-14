@@ -939,10 +939,10 @@ export const HELM_COPY = {
   assistantsAddress: 'https://apps.moondreams.dev/mcp/helm',
   assistantsCopyAddress: 'Copy address',
   assistantsClaudeHeading: 'Claude',
-  assistantsClaudeSteps: [
+  assistantsClaudeSteps: (name: string) => [
     'Open Customize, then Connectors.',
     'Tap Add, then Add custom connector.',
-    'Paste the address and tap Connect. The free plan can add one connector.',
+    `Name it ${name}, paste the address and tap Connect. The free plan can add one connector.`,
   ],
   assistantsGeminiHeading: 'Gemini',
   assistantsGeminiSteps: [
@@ -950,8 +950,8 @@ export const HELM_COPY = {
     'Open Settings, then Connected Apps, then Add a custom app.',
     'Paste the address. Gemini needs its Keep Activity setting on, and asks you to confirm each change it makes.',
   ],
-  assistantsAfterConnect:
-    'Once it connects, it shows up here. Try asking it what is on your list today.',
+  assistantsAfterConnect: (name: string) =>
+    `Once it connects, it shows up here. Try "ask ${name} what is on my list today".`,
   connectSheetTitle: 'Connect an app',
   connectQuestion: (name: string, app: string) => `Let ${name} read ${app}?`,
   connectStartsTicked: (labels: string, count: number) =>
@@ -1557,6 +1557,8 @@ export const HELM_COPY = {
   assistantNameLabel: 'Name',
   assistantNameHint:
     'Up to 16 letters, numbers, spaces, hyphens or apostrophes. With Hey on in Voice service, it is also the name you say.',
+  assistantRenameConnected: (name: string) =>
+    `Your connected assistants call it ${name} from their next new chat; a chat already open keeps the old name. Claude's connector keeps the label you gave it until you rename it there.`,
   assistantNameError: 'Letters, numbers, spaces, hyphens or apostrophes only.',
   assistantUseDefault: (name: string) => `Use the default name (${name})`,
   assistantToneLabel: 'How it answers',

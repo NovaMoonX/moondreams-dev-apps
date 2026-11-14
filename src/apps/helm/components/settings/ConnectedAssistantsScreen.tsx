@@ -8,6 +8,7 @@ import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
 import { formatDateShort } from '@/utils/formatUtils';
+import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import AssistantSheet from '@apps/helm/components/settings/AssistantSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -32,6 +33,7 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
     (state) => state.helm.assistants,
   );
   const now = useNow(60_000);
+  const name = useAssistantName();
   const [openKey, setOpenKey] = useState<string | null>(null);
   const open = items.find((entry) => entry.clientKey === openKey) ?? null;
 
@@ -118,7 +120,7 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                   {HELM_COPY.assistantsClaudeHeading}
                 </h3>
                 <ol className='text-muted-foreground list-decimal pl-5 text-[15px] text-pretty'>
-                  {HELM_COPY.assistantsClaudeSteps.map((step) => (
+                  {HELM_COPY.assistantsClaudeSteps(name).map((step) => (
                     <li key={step}>{step}</li>
                   ))}
                 </ol>
@@ -134,7 +136,7 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                 </ol>
               </div>
               <p className='text-muted-foreground text-[13px] text-pretty'>
-                {HELM_COPY.assistantsAfterConnect}
+                {HELM_COPY.assistantsAfterConnect(name)}
               </p>
             </div>
           </section>

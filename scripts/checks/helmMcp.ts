@@ -164,8 +164,6 @@ assert.equal(readDates('no date here', READ_OPTIONS).length, 0);
 assert.equal(readIsUrgent('! renew passport'), true);
 assert.equal(readIsUrgent('urgent: renew passport'), false);
 
-console.log('check:helm-mcp passed');
-
 // An outside assistant's question never reads mail, documents or app records: its answer leaves Helm.
 const sortSource = readFileSync(
   new URL('../../functions/src/apps/helm/sortHelmCapture.ts', import.meta.url),
@@ -173,3 +171,14 @@ const sortSource = readFileSync(
 );
 assert.match(sortSource, /isOutside: lead\?\.medium === 'mcp'/);
 assert.match(sortSource, /mode !== 'rest' && !read\.isOutside && isQuestion/);
+
+// An outside assistant hears the person's own name for their assistant, read through the shared reader, so "tell {Name}" routes here.
+assert.match(
+  external,
+  /readAssistantName\(profile\.data\(\)\?\.assistantName\) \?\?\s+DEFAULT_ASSISTANT_NAME/,
+);
+assert.match(external, /instructions: instructionsFor\(name, ctx\.canWrite\)/);
+assert.match(external, /`Tells \$\{name\}/);
+assert.match(external, /`Asks \$\{name\}/);
+
+console.log('check:helm-mcp passed');
