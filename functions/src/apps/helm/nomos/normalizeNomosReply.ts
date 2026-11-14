@@ -24,6 +24,7 @@ import {
   type AskCommand,
   type AskOption,
   ANSWER_SPOKEN_CAP,
+  REPLY_LINE_CAP,
   DIFFERS_SAYS_CAP,
   ANSWER_TEXT_CAP,
   COMMAND_KINDS,
@@ -222,6 +223,27 @@ const toText = (value: unknown, cap: number) =>
   typeof value === 'string'
     ? cutAtWord(value.replace(/\s+/g, ' ').trim(), cap) || null
     : null;
+
+const readNumbers = (text: string) =>
+  (text.match(/\d(?:[\d,.:]*\d)?/g) ?? []).map((number) =>
+    number.replace(/,/g, ''),
+  );
+
+/** The model's own line about the turn, refused (so code's line stands) when it speaks as "I", falls back on a template, runs long, carries a link or markup, or names a number the person never said. */
+export const readReplyLine = (value: unknown, saidText = '') => {
+  if (typeof value !== 'string') return null;
+  const line = value.replace(/\s+/g, ' ').trim();
+  if (line === '' || line.length > REPLY_LINE_CAP) return null;
+  if (/\b(i|i'm|i've|i'll|i'd|me|my)\b|^got it\b/i.test(line)) return null;
+  if (/:\/\/|www\.|[*_#`[\]<>]/.test(line)) return null;
+  // A count ("Added 2 things") is the line's own; an amount, a time or a date must be the person's.
+  const said = new Set(readNumbers(saidText));
+  return readNumbers(line)
+    .filter((number) => !/^\d$/.test(number))
+    .every((number) => said.has(number))
+    ? line
+    : null;
+};
 
 const toCutText = (value: unknown, cap: number) => {
   const whole = toText(value, Number.MAX_SAFE_INTEGER);
@@ -1729,6 +1751,7 @@ export function normalizeNomosReply(
   mediaDropped: MediaDrop[];
   commands: NomosCommand[];
   hasMore: boolean;
+  replyLine: string | null;
   answer: AnswerCommand | null;
   remember: RememberCommand[];
   noteFacts: NoteFactCommand[];
@@ -1896,6 +1919,7 @@ export function normalizeNomosReply(
     mediaDropped,
     commands: kept,
     hasMore: fresh.length > MAX_COMMANDS,
+    replyLine: readReplyLine(raw.replyLine, context.captureText ?? ''),
     answer,
     remember,
     noteFacts,

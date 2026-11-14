@@ -11,7 +11,7 @@ interface AnsweredQuestionProps {
   answer: QuestionAnswer;
 }
 
-/** The line a question keeps once it is answered ("You picked Snow chains and Sunscreen"); the answer turn's own card follows in the thread. */
+/** The line a question keeps once it is answered: a question answered as a turn keeps its own words, since the answer follows as the person's message; any other says what was picked ("You picked Snow chains and Sunscreen"). */
 function AnsweredQuestion({ question, answer }: AnsweredQuestionProps) {
   const who = useAppSelector(selectWhoById);
   const places = useAppSelector(selectPlacesById);
@@ -23,7 +23,9 @@ function AnsweredQuestion({ question, answer }: AnsweredQuestionProps) {
       : null;
   return (
     <p className='text-muted-foreground pl-[30px] text-[13px] text-pretty break-words'>
-      {describeYourAnswer(question, answer, recordName)}
+      {question.builtBy === 'model'
+        ? question.prompt
+        : describeYourAnswer(question, answer, recordName)}
     </p>
   );
 }

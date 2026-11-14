@@ -70,6 +70,7 @@ const execution = (
   overrides: Partial<OpenExecution> = {},
 ): OpenExecution => ({
   id: 'exec-1',
+  said: null,
   captureId: 'turn-1',
   actor: 'nomos',
   category: 'organize',

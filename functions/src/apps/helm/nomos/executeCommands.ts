@@ -2413,6 +2413,8 @@ export function buildExecution(
   input: Pick<PlanInput, 'captureId' | 'now' | 'seal'> & {
     /** The line saying the person is home, added to the summary and the spoken reply. */
     homeLine?: string | null;
+    /** The model's own line about the turn, already checked; the summary stays code's. */
+    said?: string | null;
     questionRef?: { captureId: string; questionId: string } | null;
     commands: NomosCommand[];
     messageCount?: number;
@@ -2431,7 +2433,7 @@ export function buildExecution(
         ]
       : [];
   });
-  const { homeLine = null } = input;
+  const { homeLine = null, said = null } = input;
   const ack = buildSpokenAck({
     inputMode: input.inputMode,
     counts: plan.counts,
@@ -2452,6 +2454,11 @@ export function buildExecution(
   const isVoice = input.inputMode === 'voice';
   const spokenNote = isVoice ? plan.spokenNote : null;
   const spokenKept = isVoice && plan.lines.length > 0 ? NOTE_KEPT_SPOKEN : null;
+  // Lines only code knows to say (home, a project, a note's name, a duplicate) keep code's summary.
+  const own =
+    said && !homeLine && !projectLine && !plan.spokenNote && !plan.lines.length
+      ? said
+      : null;
   return {
     captureId: input.captureId,
     actor: 'nomos',
@@ -2510,15 +2517,18 @@ export function buildExecution(
       ]
         .filter(Boolean)
         .join('. '),
+      said: own,
       commands: input.commands,
       effects: plan.effects,
       lines: plan.lines,
       undoReport: null,
       goneIds: null,
       spoken: withQuestion(
-        [ack, spokenProject, spokenNote, spokenKept, spokenHome]
-          .filter(Boolean)
-          .join(' ') || null,
+        (own && isVoice
+          ? own
+          : [ack, spokenProject, spokenNote, spokenKept, spokenHome]
+              .filter(Boolean)
+              .join(' ')) || null,
         plan.questions[0]?.spoken ?? null,
       ),
     }),
@@ -2563,6 +2573,7 @@ export function buildAnswerExecution(input: {
       notDone: input.notDone ?? [],
       undoReport: null,
       goneIds: null,
+      said: null,
       lines: null,
       spoken: input.spoken,
     }),
