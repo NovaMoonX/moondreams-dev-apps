@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, Lock } from 'lucide-react';
+import { AudioLines, ChevronRight, Lock } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import DetailSheet from '@/components/DetailSheet';
@@ -326,6 +326,40 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
         }
       >
         <div className='flex flex-col gap-5'>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='stripped'
+            className='border-border bg-card h-auto min-h-14 items-center justify-start gap-3 rounded-[14px] border px-4 py-3 text-left font-normal'
+            onClick={() => setIsPickerOpen(true)}
+          >
+            <span
+              aria-hidden='true'
+              className='bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full'
+            >
+              <AudioLines className='size-5' />
+            </span>
+            <span className='flex min-w-0 flex-1 flex-col text-pretty'>
+              <span className='text-foreground text-[15px] leading-[21px] font-medium'>
+                {HELM_COPY.voicePickerRowTitle}
+              </span>
+              <span className='text-muted-foreground text-[15px] leading-[21px]'>
+                {isDeviceOnly
+                  ? HELM_COPY.voicePickerRowDeviceOnly
+                  : HELM_COPY.voicePickerSummary(
+                      chosenVoice.name,
+                      toFeelLabel(chosenVoice.feel),
+                      HELM_COPY.voicePickerPace[
+                        toHelmVoiceSpeed(profile?.voiceSpeed ?? null)
+                      ] ?? null,
+                    )}
+              </span>
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-5 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
           <SwitchRow
             title={HELM_COPY.voiceDeviceOnlyTitle}
             description={
@@ -351,34 +385,6 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
             checked={isDeviceOnly}
             onChange={change}
           />
-          <Button
-            type='button'
-            variant='tertiary'
-            size='stripped'
-            className='h-auto min-h-10 items-start justify-start gap-3 rounded-xl p-0 text-left font-normal'
-            onClick={() => setIsPickerOpen(true)}
-          >
-            <span className='flex min-w-0 flex-1 flex-col text-pretty'>
-              <span className='text-foreground text-[15px] leading-[21px] font-medium'>
-                {HELM_COPY.voicePickerRowTitle}
-              </span>
-              <span className='text-muted-foreground text-[15px] leading-[21px]'>
-                {isDeviceOnly
-                  ? HELM_COPY.voicePickerRowDeviceOnly
-                  : HELM_COPY.voicePickerSummary(
-                      chosenVoice.name,
-                      toFeelLabel(chosenVoice.feel),
-                      HELM_COPY.voicePickerPace[
-                        toHelmVoiceSpeed(profile?.voiceSpeed ?? null)
-                      ] ?? null,
-                    )}
-              </span>
-            </span>
-            <ChevronRight
-              className='text-muted-foreground mt-0.5 size-5 shrink-0'
-              aria-hidden='true'
-            />
-          </Button>
           <SwitchRow
             title={HELM_COPY.voiceHandsFreeTitle}
             description={

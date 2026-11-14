@@ -38,7 +38,7 @@ interface VoicePickerProps {
   onClose: () => void;
 }
 
-type Sample = { key: string; phase: 'starting' | 'playing' };
+type SamplePhase = 'starting' | 'playing';
 
 const SPEED_LABELS: Record<number, string> = {
   0.8: HELM_COPY.voicePickerSlower,
@@ -57,7 +57,7 @@ const GENDERS = [
   { value: 'male', label: HELM_COPY.voicePickerMen },
 ] as const;
 
-/** The full page that picks the assistant's cloud voice and its speed; a tap on a row saves it and plays a sample. */
+/** The full page that picks the assistant's cloud voice and its speed; the card at the top plays a sample of the current choice, and picking a voice or speed plays it again. */
 function VoicePicker({ onClose }: VoicePickerProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -70,7 +70,7 @@ function VoicePicker({ onClose }: VoicePickerProps) {
   const [gender, setGender] = useState<HelmVoiceGender>(savedVoice.gender);
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [pendingSpeed, setPendingSpeed] = useState<number | null>(null);
-  const [sample, setSample] = useState<Sample | null>(null);
+  const [phase, setPhase] = useState<SamplePhase | null>(null);
   const [source] = useState(createHelmSpeechSource);
   const playing = useRef<{ stop: () => void } | null>(null);
   const chosen = pendingName ?? savedVoice.name;
@@ -78,6 +78,14 @@ function VoicePicker({ onClose }: VoicePickerProps) {
   const chosenRow = useRef<HTMLLIElement | null>(null);
   const isLockedAtOpen = useRef(isLocked);
   const chosenVoice = findHelmVoice(chosen);
+  const SampleIcon =
+    phase === 'starting' ? Loader2 : phase === 'playing' ? Square : Play;
+  const sampleLabel =
+    phase === 'starting'
+      ? HELM_COPY.voicePickerStarting
+      : phase === 'playing'
+        ? HELM_COPY.voicePickerStop
+        : HELM_COPY.voicePickerPlay;
 
   useEffect(() => {
     const row = chosenRow.current;
@@ -97,34 +105,35 @@ function VoicePicker({ onClose }: VoicePickerProps) {
   const stopSample = () => {
     playing.current?.stop();
     playing.current = null;
-    setSample(null);
+    setPhase(null);
   };
 
-  const play = (key: string, voiceId: string, voiceSpeed: number) => {
+  // A sample is always the current choice: picking a voice or a speed restarts it with the new one.
+  const play = (voiceId: string, voiceSpeed: number) => {
     stopSample();
-    setSample({ key, phase: 'starting' });
+    setPhase('starting');
     const current = playSpeechSample({
       source,
       text: HELM_COPY.voicePickerSampleLine,
       voice: { voiceId, speed: voiceSpeed },
       onStart: () => {
-        if (playing.current === current) setSample({ key, phase: 'playing' });
+        if (playing.current === current) setPhase('playing');
       },
     });
     playing.current = current;
     void current.done.then((result) => {
       if (playing.current !== current) return;
       playing.current = null;
-      setSample(null);
+      setPhase(null);
       if (result === 'failed') {
         addToast({ title: HELM_COPY.voicePickerSampleFailed, type: 'info' });
       }
     });
   };
 
-  const toggleSample = (voice: HelmVoice) => {
-    if (sample?.key === voice.name) stopSample();
-    else play(voice.name, voice.name, speed);
+  const toggleSample = () => {
+    if (phase !== null) stopSample();
+    else play(chosen, speed);
   };
 
   const fail = (error: unknown) => {
@@ -133,7 +142,7 @@ function VoicePicker({ onClose }: VoicePickerProps) {
   };
 
   const select = (voice: HelmVoice) => {
-    if (!isLocked) play(voice.name, voice.name, speed);
+    if (!isLocked) play(voice.name, speed);
     if (!user || voice.name === chosen) return;
     setPendingName(voice.name);
     setHelmVoiceId(user.uid, voice.name)
@@ -145,11 +154,9 @@ function VoicePicker({ onClose }: VoicePickerProps) {
     if (!user) return;
     const next = Number(value);
     unlockAudio();
+    if (!isLocked) play(chosen, next);
     setPendingSpeed(next);
     setHelmVoiceSpeed(user.uid, next)
-      .then(() => {
-        if (!isLocked) play('speed', chosen, next);
-      })
       .catch(fail)
       .finally(() => setPendingSpeed(null));
   };
@@ -183,35 +190,58 @@ function VoicePicker({ onClose }: VoicePickerProps) {
             {HELM_COPY.voicePickerOffline}
           </InlineNotice>
         )}
-        <div className='flex flex-col gap-2'>
-          <SegmentedControl
-            label={HELM_COPY.voicePickerGenderLabel}
-            options={GENDERS}
-            value={gender}
-            onChange={setGender}
-          />
-          <p className='text-muted-foreground text-[13px] leading-[18px]'>
-            {HELM_COPY.voicePickerChosen(
-              HELM_COPY.voicePickerSummary(
+        <section className='border-border bg-card flex flex-col gap-4 rounded-[14px] border p-4'>
+          <div className='flex min-w-0 flex-col'>
+            <p className='text-muted-foreground text-[13px] leading-[18px]'>
+              {HELM_COPY.voicePickerChosenLabel}
+            </p>
+            <p className='text-foreground text-[15px] leading-[21px] font-medium'>
+              {HELM_COPY.voicePickerSummary(
                 chosenVoice.name,
                 toFeelLabel(chosenVoice.feel),
                 HELM_COPY.voicePickerPace[speed] ?? null,
-              ),
-            )}
-          </p>
-        </div>
-        <section className='flex flex-col gap-3'>
-          <SectionDivider label={HELM_COPY.voicePickerSpeed} />
-          <div className='px-3'>
-            <NotchedSlider
-              label={HELM_COPY.voicePickerSpeed}
-              options={SPEED_OPTIONS}
-              value={String(speed)}
-              onChange={changeSpeed}
-              className='w-full'
-            />
+              )}
+            </p>
           </div>
+          <div className='flex flex-col gap-2'>
+            <p className='text-foreground text-[13px] leading-[18px] font-medium'>
+              {HELM_COPY.voicePickerSpeed}
+            </p>
+            <div className='px-3'>
+              <NotchedSlider
+                label={HELM_COPY.voicePickerSpeed}
+                options={SPEED_OPTIONS}
+                value={String(speed)}
+                onChange={changeSpeed}
+                className='w-full'
+              />
+            </div>
+          </div>
+          {!isLocked && (
+            <Button
+              type='button'
+              variant='secondary'
+              aria-live='polite'
+              className='w-full gap-2'
+              onClick={toggleSample}
+            >
+              <SampleIcon
+                className={join(
+                  'size-4',
+                  phase === 'starting' && 'animate-spin',
+                )}
+                aria-hidden='true'
+              />
+              {sampleLabel}
+            </Button>
+          )}
         </section>
+        <SegmentedControl
+          label={HELM_COPY.voicePickerGenderLabel}
+          options={GENDERS}
+          value={gender}
+          onChange={setGender}
+        />
         {HELM_VOICE_GROUPS.map((group) => (
           <section key={group} className='flex flex-col gap-1'>
             <SectionDivider label={HELM_COPY.voicePickerGroups[group]} />
@@ -220,19 +250,6 @@ function VoicePicker({ onClose }: VoicePickerProps) {
                 (voice) => voice.gender === gender && voice.group === group,
               ).map((voice) => {
                 const isChosen = voice.name === chosen;
-                const phase = sample?.key === voice.name ? sample.phase : null;
-                const playLabel =
-                  phase === 'starting'
-                    ? HELM_COPY.voicePickerStarting(voice.name)
-                    : phase === 'playing'
-                      ? HELM_COPY.voicePickerStop(voice.name)
-                      : HELM_COPY.voicePickerPlay(voice.name);
-                const PlayIcon =
-                  phase === 'starting'
-                    ? Loader2
-                    : phase === 'playing'
-                      ? Square
-                      : Play;
                 return (
                   <li
                     key={voice.name}
@@ -267,25 +284,6 @@ function VoicePicker({ onClose }: VoicePickerProps) {
                         </span>
                       </span>
                     </Button>
-                    {!isLocked && (
-                      <Button
-                        type='button'
-                        variant='tertiary'
-                        size='icon'
-                        rounded='full'
-                        aria-label={playLabel}
-                        className="relative shrink-0 before:absolute before:-inset-2 before:content-['']"
-                        onClick={() => toggleSample(voice)}
-                      >
-                        <PlayIcon
-                          className={join(
-                            'size-4',
-                            phase === 'starting' && 'animate-spin',
-                          )}
-                          aria-hidden='true'
-                        />
-                      </Button>
-                    )}
                   </li>
                 );
               })}
