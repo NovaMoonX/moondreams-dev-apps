@@ -17,7 +17,10 @@ import {
   normalizeNomosReply,
   readReplyLine,
 } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
-import { buildSpokenQuestion } from '../../functions/src/apps/helm/nomos/summaries.ts';
+import {
+  buildSpokenQuestion,
+  claimsWork,
+} from '../../functions/src/apps/helm/nomos/summaries.ts';
 
 const READING: CaptureReading = {
   people: [],
@@ -73,7 +76,22 @@ test("an answered question's reply is the model's own line, never first person o
   assert.equal(readReplyLine('Got it: Picked Drop it.'), null);
   assert.equal(readReplyLine(''), null);
   assert.equal(readReplyLine(null), null);
-  assert.ok((readReplyLine('word '.repeat(40)) ?? '').length <= 80);
+  assert.equal(readReplyLine('word '.repeat(40)), null);
+  assert.equal(readReplyLine('Sent it to https://example.com.'), null);
+  assert.equal(readReplyLine('Added **both**.'), null);
+  assert.equal(readReplyLine('Paid $500 for it.', 'pay the vet'), null);
+  assert.equal(
+    readReplyLine('Added it for the 3 nights.', 'we stay 3 nights'),
+    'Added it for the 3 nights.',
+  );
+  assert.equal(
+    readReplyLine('Added 2 things to the list.'),
+    'Added 2 things to the list.',
+  );
+  assert.equal(readReplyLine('Added it for Nov 21.', 'on saturday'), null);
+  assert.equal(claimsWork('Added both to the list.'), true);
+  assert.equal(claimsWork('Dropped it.'), false);
+  assert.equal(claimsWork('Left it as it is.'), false);
 });
 
 test('a seventh pickOne option is cut', () => {

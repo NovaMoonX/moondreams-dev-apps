@@ -224,11 +224,22 @@ const toText = (value: unknown, cap: number) =>
     ? cutAtWord(value.replace(/\s+/g, ' ').trim(), cap) || null
     : null;
 
-/** The model's line for an answered question, refused when it speaks as "I" or falls back on a template, so code's own line stands. */
-export const readReplyLine = (value: unknown) => {
-  const line = toText(value, REPLY_LINE_CAP);
-  if (line === null) return null;
-  return /\b(i|i'm|i've|i'll|me|my)\b|^got it\b/i.test(line) ? null : line;
+/** The model's own line about the turn, refused (so code's line stands) when it speaks as "I", falls back on a template, runs long, carries a link or markup, or names a number the person never said. */
+export const readReplyLine = (value: unknown, saidText = '') => {
+  if (typeof value !== 'string') return null;
+  const line = value.replace(/\s+/g, ' ').trim();
+  if (line === '' || line.length > REPLY_LINE_CAP) return null;
+  if (/\b(i|i'm|i've|i'll|i'd|me|my)\b|^got it\b/i.test(line)) return null;
+  if (/:\/\/|www\.|[*_#`[\]<>]/.test(line)) return null;
+  // A count ("Added 2 things") is the line's own; an amount, a time or a date must be the person's.
+  const numbers = (line.match(/[$€£]?\d[\d,.:]*/g) ?? []).filter(
+    (number) => !/^\d$/.test(number),
+  );
+  return numbers.every((number) =>
+    saidText.includes(number.replace(/^[$€£]/, '')),
+  )
+    ? line
+    : null;
 };
 
 const toCutText = (value: unknown, cap: number) => {
@@ -1905,7 +1916,7 @@ export function normalizeNomosReply(
     mediaDropped,
     commands: kept,
     hasMore: fresh.length > MAX_COMMANDS,
-    replyLine: readReplyLine(raw.replyLine),
+    replyLine: readReplyLine(raw.replyLine, context.captureText ?? ''),
     answer,
     remember,
     noteFacts,

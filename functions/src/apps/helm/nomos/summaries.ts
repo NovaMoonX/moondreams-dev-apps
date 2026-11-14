@@ -713,7 +713,13 @@ export const ALREADY_ANSWERED_LINE = 'That was already answered.';
 
 export const NOTHING_CHANGED_LINE = 'Nothing changed.';
 
-export const buildAnswerKeptLine = (words: string) => `Got it: ${words}.`;
+export const ANSWER_KEPT_LINE = 'Noted.';
+
+const WORK_WORDS =
+  /^(added|made|moved|saved|linked|set|created|booked|sent|scheduled|put|filed|kept|marked|ticked|done|both|all)\b/i;
+
+/** Whether a line says something was done, which an answer that filed nothing can't truthfully say. */
+export const claimsWork = (line: string) => WORK_WORDS.test(line.trim());
 
 /** The sealed half of a model-written question: no held commands, and no answer until one is given. */
 export const buildAskedQuestion = (ask: AskCommand) => ({

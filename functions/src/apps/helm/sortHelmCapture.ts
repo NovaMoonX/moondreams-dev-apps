@@ -141,7 +141,8 @@ import {
   ALREADY_ANSWERED_LINE,
   ASK_DEFERRED_LINE,
   NOTHING_CHANGED_LINE,
-  buildAnswerKeptLine,
+  ANSWER_KEPT_LINE,
+  claimsWork,
   buildPhotosNotOpenedLine,
   buildFileNotReadLine,
 } from './nomos/summaries.js';
@@ -2096,7 +2097,18 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
     asks: mode === 'full' ? reply.asks : [],
     answerTurn,
-    replyLine: reply.replyLine,
+    replyLine:
+      [
+        reply.mediaDropped,
+        reply.askDropped,
+        reply.noteDropped,
+        reply.topicDropped,
+        reply.procedureDropped,
+        reply.runDropped,
+      ].some((dropped) => dropped.length > 0) ||
+      commands.length < reply.commands.length
+        ? null
+        : reply.replyLine,
     mentions: reply.mentions,
     places: reply.places,
     assistantName,
@@ -3047,7 +3059,15 @@ async function writeResult(
           {
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said:
-              plan.notKept.length === 0 && !hasMore && !homeRefusal
+              plan.notKept.length === 0 &&
+              plan.questions.length === 0 &&
+              questions.length === 0 &&
+              plan.lines.length === 0 &&
+              noted.refused.length === 0 &&
+              liveRefused.length === 0 &&
+              !askPlan.isDeferred &&
+              !hasMore &&
+              !homeRefusal
                 ? replyLine
                 : null,
             questionRef: answerTurn?.ref ?? null,
@@ -3111,12 +3131,13 @@ async function writeResult(
               ? null
               : plan.notKept.length > 0
                 ? plan.notKept.join('. ')
-                : answerTurn && (commands.length > 0 || turn?.kind === 'apply')
-                  ? (replyLine ??
-                    (commands.length > 0
-                      ? NOTHING_CHANGED_LINE
-                      : buildAnswerKeptLine(answerTurn.words)))
-                  : null));
+                : answerTurn && commands.length > 0
+                  ? NOTHING_CHANGED_LINE
+                  : answerTurn && turn?.kind === 'apply'
+                    ? ((replyLine && !claimsWork(replyLine)
+                        ? replyLine
+                        : null) ?? ANSWER_KEPT_LINE)
+                    : null));
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,

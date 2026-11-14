@@ -1059,7 +1059,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
       },
       replyLine: nullable(
         'string',
-        `What you say back about this turn, at most ${REPLY_LINE_CAP} characters, the way a person would reply ("Added it for Friday.", "Dropped it.", "Both are on the packing list now."): what became of what was said, in your voice and the person's style, past tense, with no "I", "me" or "my", never "Got it", never a template and never the person's words repeated back. Only what this reply really does. Always a line when commands holds anything other than answer or ask, and for an answer to your question; null only when the turn only answers a question or only asks one.`,
+        `What you say back about this turn, at most ${REPLY_LINE_CAP} characters, the way a person would reply ("Added it for Friday.", "Dropped it.", "Both are on the packing list now."): what became of what was said, in your voice and the person's style, past tense, with no "I", "me" or "my", never "Got it", never a template and never the person's words repeated back. Only what this reply really does. Always a line when commands holds anything other than answer or ask, and when the capture is the person's reply to your question (<answered_question>); null only when your reply is only an answer command or only asks.`,
       ),
       mentions: {
         type: 'array',

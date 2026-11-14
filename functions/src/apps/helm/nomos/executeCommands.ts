@@ -2454,6 +2454,11 @@ export function buildExecution(
   const isVoice = input.inputMode === 'voice';
   const spokenNote = isVoice ? plan.spokenNote : null;
   const spokenKept = isVoice && plan.lines.length > 0 ? NOTE_KEPT_SPOKEN : null;
+  // Lines only code knows to say (home, a project, a note's name, a duplicate) keep code's summary.
+  const own =
+    said && !homeLine && !projectLine && !plan.spokenNote && !plan.lines.length
+      ? said
+      : null;
   return {
     captureId: input.captureId,
     actor: 'nomos',
@@ -2512,15 +2517,15 @@ export function buildExecution(
       ]
         .filter(Boolean)
         .join('. '),
-      said,
+      said: own,
       commands: input.commands,
       effects: plan.effects,
       lines: plan.lines,
       undoReport: null,
       goneIds: null,
       spoken: withQuestion(
-        (said && isVoice
-          ? said
+        (own && isVoice
+          ? own
           : [ack, spokenProject, spokenNote, spokenKept, spokenHome]
               .filter(Boolean)
               .join(' ')) || null,

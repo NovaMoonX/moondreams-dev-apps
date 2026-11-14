@@ -459,6 +459,7 @@ async function buildUndone(input: {
       ...execution,
       id: executionId,
       summary: summarize(effects.length),
+      said: null,
       effects,
       undoReport: null,
       spoken: null,
@@ -530,6 +531,7 @@ async function buildMove(input: {
     sealed: await sealJson<ExecutionSealed>(
       {
         summary: 'Updated a task',
+        said: null,
         commands: [
           {
             kind: 'updateTask',
@@ -691,6 +693,7 @@ async function buildBackToBack(input: {
     sealed: await sealJson<ExecutionSealed>(
       {
         summary: BACK_TO_BACK.summary,
+        said: null,
         commands: BACK_TO_BACK.tasks.map((title) => ({
           kind: 'createTask',
           title,
@@ -990,6 +993,7 @@ async function buildGmailTurn(input: {
     sealed: await sealJson<ExecutionSealed>(
       {
         summary: toAnswerSummary(answer),
+        said: null,
         commands: [],
         effects: [
           {
@@ -1130,6 +1134,7 @@ async function buildAnswerTurns(input: {
         sealed: await sealJson<ExecutionSealed>(
           {
             summary: toAnswerSummary(answer),
+            said: null,
             commands: [],
             effects: [],
             undoReport: null,
@@ -1771,6 +1776,7 @@ async function buildNoteTurn(input: {
     sealed: await sealJson<ExecutionSealed>(
       {
         summary: 'Saved a note',
+        said: null,
         commands: [],
         effects: [
           { written: { 'sealed.title': line }, previous: null },
@@ -2414,6 +2420,7 @@ async function buildKnowledge(input: {
     sealed: await sealJson<ExecutionSealed>(
       {
         summary: tyreLine,
+        said: null,
         commands: [],
         effects: [
           {
@@ -3157,6 +3164,7 @@ async function buildPhotoTurns(input: {
     sealed: await sealJson<ExecutionSealed>(
       {
         summary: `Made a task and kept the photo on ${title}`,
+        said: null,
         commands: [{ kind: 'createTask', title, due: null }],
         effects: [
           {
@@ -3521,6 +3529,7 @@ async function buildFileTurns(input: {
     finishedAt: at,
     sealed: await seal<ExecutionSealed>({
       summary: fields.summary,
+      said: null,
       commands: fields.commands,
       effects: fields.effects,
       undoReport: null,
@@ -4971,6 +4980,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                 sealed: await sealJson<ExecutionSealed>(
                   {
                     summary: summarize(sortedTasks.length),
+                    said: null,
                     commands: sortedTasks.map(({ title, due }) => ({
                       kind: 'createTask',
                       title,
