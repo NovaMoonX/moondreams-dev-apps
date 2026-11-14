@@ -1,12 +1,18 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Contact, FolderOpen, Mail } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import { GoogleCalendarMark } from '@/components/BrandMarks';
 import ConnectedSourcesList from '@/components/ConnectedSourcesList';
 import SectionHeader from '@/components/SectionHeader';
+import { grantConnection } from '@/lib/connections/connectionCalls';
 import { hasUnseenNews, markNewsSeen } from '@/lib/connections/connectionNews';
+import type { ConnectorManifest } from '@/lib/connections/contract';
+import { GOOGLE_DRIVE_MANIFEST } from '@/lib/connections/google/driveManifest';
+import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
 import {
   isOutsideAccount,
   readConnectorAppId,
@@ -17,6 +23,7 @@ import {
 } from '@/lib/connections/sources';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -42,6 +49,16 @@ interface ConnectedAppsScreenProps {
 
 const LOGO = 'size-10 rounded-[10px]';
 const GOOGLE_ADD_ID = 'google-add';
+const GMAIL_ADD_ID = 'google:gmail';
+const DRIVE_ADD_ID = 'google:drive';
+
+const serviceLogo = (icon: ReactNode) => (
+  <span
+    className={join(LOGO, 'bg-muted flex shrink-0 items-center justify-center')}
+  >
+    {icon}
+  </span>
+);
 
 const googleLogo = (
   <span
@@ -50,6 +67,58 @@ const googleLogo = (
     <GoogleCalendarMark className='size-6' />
   </span>
 );
+
+const ICON = 'text-muted-foreground size-5';
+
+const GOOGLE_SERVICES: Record<
+  string,
+  { name: string; logo: ReactNode; order: number }
+> = {
+  'google:calendar': {
+    name: HELM_COPY.googleCalendarName,
+    logo: googleLogo,
+    order: 0,
+  },
+  'google:gmail': {
+    name: HELM_COPY.googleGmailName,
+    logo: serviceLogo(<Mail className={ICON} aria-hidden='true' />),
+    order: 1,
+  },
+  'google:drive': {
+    name: HELM_COPY.googleDriveRowName,
+    logo: serviceLogo(<FolderOpen className={ICON} aria-hidden='true' />),
+    order: 2,
+  },
+  'google:contacts': {
+    name: HELM_COPY.contactsRowTitle,
+    logo: serviceLogo(<Contact className={ICON} aria-hidden='true' />),
+    order: 3,
+  },
+};
+
+const scopeOf = (manifest: ConnectorManifest, categoryId: string) =>
+  manifest.connect.kind === 'oauth'
+    ? (manifest.connect.scopesByCategory[categoryId]?.[0] ?? '')
+    : '';
+
+const MAIL_AND_DRIVE = [
+  {
+    id: GMAIL_ADD_ID,
+    connectorId: 'google:gmail' as const,
+    manifest: GOOGLE_GMAIL_MANIFEST,
+    categoryId: 'mail',
+    failed: HELM_COPY.gmailFailed,
+    hint: HELM_COPY.gmailAddHint,
+  },
+  {
+    id: DRIVE_ADD_ID,
+    connectorId: 'google:drive' as const,
+    manifest: GOOGLE_DRIVE_MANIFEST,
+    categoryId: 'documents',
+    failed: HELM_COPY.driveFailed,
+    hint: HELM_COPY.driveAddHint,
+  },
+];
 
 /** A utility screen: the apps the assistant reads, and the ones it could. */
 function ConnectedAppsScreen({
@@ -63,6 +132,8 @@ function ConnectedAppsScreen({
   const { user } = useAuth();
   const { accounts } = useConnectionAccounts(user?.uid ?? null);
   const { begin } = useGoogleConnect();
+  const { addToast } = useToast();
+  const isGoogleReadOpen = useIsGateOpen('helm', 'google-mail-and-drive');
   const {
     grants: everyGrant,
     isKnown,
@@ -91,6 +162,7 @@ function ConnectedAppsScreen({
       : [];
   });
   const [openKeptId, setOpenKeptId] = useState<string | null>(null);
+  const [busyServices, setBusyServices] = useState<string[]>([]);
   const [connecting, setConnecting] = useState<{
     id: string;
     name: string;
@@ -132,44 +204,41 @@ function ConnectedAppsScreen({
         .map((grant) => grant.accountId),
     ),
   ];
-  const googleConnected = googleAccountIds
-    .map((accountId) => {
-      const own = grants.filter((grant) => grant.accountId === accountId);
-      const lead =
-        own.find((grant) => grant.connectorId === 'google:calendar') ?? own[0];
-      const account = accounts.find((entry) => entry.id === accountId);
+  const hasManyAccounts = googleAccountIds.length > 1;
+  const googleConnected = grants
+    .filter((grant) => isOutsideAccount(grant.accountId))
+    .map((grant) => {
+      const account = accounts.find((entry) => entry.id === grant.accountId);
+      const service = GOOGLE_SERVICES[grant.connectorId];
       const isTrouble =
-        own.some((grant) => grant.status !== 'live') ||
-        account?.status === 'needsReconnect';
-      const newestOkAt = own.reduce<number | null>((newest, grant) => {
-        const at = getNewestOkAt(grant);
-        return at !== null && (newest === null || at > newest) ? at : newest;
-      }, null);
-      const readLine = own
-        .flatMap((grant) =>
-          (getConnectorManifest(grant.connectorId)?.categories ?? [])
-            .filter((category) => grant.categories[category.id]?.isOn)
-            .map((category) => category.label),
-        )
-        .join(', ');
+        grant.status !== 'live' || account?.status === 'needsReconnect';
+      const newestOkAt = getNewestOkAt(grant);
+      const readLine =
+        (getConnectorManifest(grant.connectorId)?.categories ?? [])
+          .filter((category) => grant.categories[category.id]?.isOn)
+          .map((category) => category.label)
+          .join(', ') || HELM_COPY.connectedNothingOn;
+      const statusLine = isTrouble
+        ? HELM_COPY.connectedStopped
+        : newestOkAt === null || !isStale(newestOkAt, now)
+          ? readLine
+          : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`;
       return {
-        id: lead.id,
-        appName: account
-          ? HELM_COPY.googleAccountTitle(account.email, account.label)
-          : HELM_COPY.googleCalendarName,
-        logo: googleLogo,
-        meta: isTrouble
-          ? HELM_COPY.connectedStopped
-          : newestOkAt === null || readLine === '' || !isStale(newestOkAt, now)
-            ? readLine || HELM_COPY.connectedNothingOn
-            : `${readLine} · ${HELM_COPY.syncedStale(formatUpdatedAt(newestOkAt, now))}`,
+        id: grant.id,
+        appName: service?.name ?? HELM_COPY.googleCalendarName,
+        logo: service?.logo ?? googleLogo,
+        meta:
+          hasManyAccounts && account
+            ? HELM_COPY.googleServiceMeta(account.email, statusLine)
+            : statusLine,
         isTrouble,
-        covers: own,
+        covers: [grant],
+        order: `${account?.email ?? grant.accountId} ${service?.order ?? 0}`,
       };
     })
-    .sort((a, b) => a.appName.localeCompare(b.appName));
+    .sort((a, b) => a.order.localeCompare(b.order));
   const connectedRows = [...googleConnected, ...connected];
-  const hasGoogleAccount = googleConnected.length > 0;
+  const hasGoogleAccount = googleAccountIds.length > 0;
 
   const openConnection = (id: string) => {
     const covers = connectedRows.find((row) => row.id === id)?.covers ?? [];
@@ -190,6 +259,61 @@ function ConnectedAppsScreen({
         (getSourceManifest(app.id)?.categories.length ?? 0) > 0,
     )
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  const mailAndDriveRows = MAIL_AND_DRIVE.filter(
+    (service) =>
+      isGoogleReadOpen &&
+      !grants.some((grant) => grant.connectorId === service.connectorId),
+  );
+
+  const connectMailOrDrive = async (
+    service: (typeof MAIL_AND_DRIVE)[number],
+  ) => {
+    if (busyServices.includes(service.id)) return;
+    const scope = scopeOf(service.manifest, service.categoryId);
+    const candidates = accounts.filter((entry) =>
+      googleAccountIds.includes(entry.id),
+    );
+    const live = candidates.filter(
+      (entry) => entry.status !== 'needsReconnect',
+    );
+    const account =
+      live.find((entry) => entry.grantedScopes.includes(scope)) ??
+      live[0] ??
+      candidates[0];
+    if (
+      !account ||
+      account.status === 'needsReconnect' ||
+      !account.grantedScopes.includes(scope)
+    ) {
+      begin({
+        accountId: account?.id ?? null,
+        connectorId: service.connectorId,
+      });
+      return;
+    }
+    setBusyServices((ids) => [...ids, service.id]);
+    try {
+      await grantConnection({
+        readerAppId: 'helm',
+        connectorId: service.connectorId,
+        accountId: account.id,
+        categoryIds: [service.categoryId],
+        options: null,
+      });
+      addToast({
+        title: HELM_COPY.googleServiceConnected(
+          GOOGLE_SERVICES[service.connectorId]?.name ?? '',
+        ),
+        type: 'success',
+      });
+    } catch (failure) {
+      console.error('Helm could not connect a Google service', failure);
+      addToast({ title: service.failed, type: 'error' });
+    } finally {
+      setBusyServices((ids) => ids.filter((id) => id !== service.id));
+    }
+  };
 
   return (
     <>
@@ -283,6 +407,13 @@ function ConnectedAppsScreen({
                       : HELM_COPY.googleAddAccountHint(name),
                     isTrouble: false,
                   },
+                  ...mailAndDriveRows.map((service) => ({
+                    id: service.id,
+                    logo: GOOGLE_SERVICES[service.connectorId]?.logo,
+                    title: GOOGLE_SERVICES[service.connectorId]?.name ?? '',
+                    meta: service.hint(name),
+                    isTrouble: false,
+                  })),
                   ...available.map((app) => ({
                     id: app.id,
                     logo: <AppLogo appId={app.id} className={LOGO} />,
@@ -291,11 +422,15 @@ function ConnectedAppsScreen({
                     isTrouble: false,
                   })),
                 ]}
-                onOpen={(id) =>
-                  id === GOOGLE_ADD_ID
+                onOpen={(id) => {
+                  const service = mailAndDriveRows.find(
+                    (entry) => entry.id === id,
+                  );
+                  if (service) return void connectMailOrDrive(service);
+                  return id === GOOGLE_ADD_ID
                     ? begin({ isAnotherAccount: hasGoogleAccount })
-                    : setConnecting({ id, name: nameOf(id) })
-                }
+                    : setConnecting({ id, name: nameOf(id) });
+                }}
               />
             </div>
           </section>

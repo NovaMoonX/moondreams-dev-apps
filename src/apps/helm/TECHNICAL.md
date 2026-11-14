@@ -1549,6 +1549,7 @@ interface ConnectionGrant {            // connections/{uid}/grants/{readerAppId}
 
 - One site OAuth client (`GOOGLE_OAUTH_CLIENT`). Each account is keyed by its Google `sub`, so a personal and a work account are two accounts, each with its own grants and switches. "Add another Google account" passes `prompt=select_account`.
 - Each service is its own consent on its own tap, with `include_granted_scopes=true`: Calendar asks `calendar.readonly`, Gmail later asks only `gmail.readonly`, Drive only `drive.readonly` (plus `openid email` to know the account). `finishGoogleConnection` refuses when the requested scope wasn't granted ("Helm needs permission to … Nothing was connected.").
+- Connected apps lists each Google grant as its own row (one grant is one service of one account; the lead-grant grouping is gone), and Gmail and Drive without a live grant appear under Not connected while `google-mail-and-drive` is open, started with `grantConnection` when the account already holds the scope and `begin({ accountId, connectorId })` otherwise.
 
 ### Tokens
 

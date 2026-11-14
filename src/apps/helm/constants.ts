@@ -942,6 +942,13 @@ export const HELM_COPY = {
         ? `${name} can look up what your apps share with ${app}, including copies ${app} keeps after an app is disconnected.`
         : `${name} can't see what your apps share.`,
     })[scope],
+  assistantNeedsSource: (scope: 'mail' | 'drive' | 'apps') =>
+    ({
+      mail: 'Connect Gmail first.',
+      drive: 'Connect Google Drive first.',
+      apps: 'Connect an app first.',
+    })[scope],
+  assistantOpenConnectedApps: 'Open Connected apps',
   assistantWrites: (app: string) => `Add things to ${app}`,
   assistantWritesHint: (canWrite: boolean) =>
     canWrite
@@ -1042,6 +1049,11 @@ export const HELM_COPY = {
   syncedCouldNot: "Couldn't update just now.",
   syncedNowFailed: "That didn't update. Try again.",
   googleCalendarName: 'Google Calendar',
+  googleDriveRowName: 'Google Drive',
+  googleServiceMeta: (email: string, reads: string) => `${email} · ${reads}`,
+  gmailAddHint: (name: string) => `Let ${name} search your email when you ask.`,
+  driveAddHint: (name: string) =>
+    `Let ${name} search your Docs and PDFs when you ask.`,
   googleAddAccount: 'Add a Google account',
   googleAddAccountHint: (name: string) =>
     `Start with Calendar, so ${name} can plan around your events.`,
@@ -1059,6 +1071,7 @@ export const HELM_COPY = {
   googleContinue: 'Continue to Google',
   googleTryAgain: 'Try again',
   googleReconnected: 'Reconnected',
+  googleServiceConnected: (service: string) => `${service} connected`,
   googleNeedsPermission: (name: string) =>
     `${name} needs permission to see your events to plan around them. Nothing was connected.`,
   googleConnectFailed: "That didn't connect. Try again.",
