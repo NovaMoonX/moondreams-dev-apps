@@ -1348,7 +1348,7 @@ export const HELM_COPY = {
   activityTitle: 'Activity',
   outsideTitle: 'From your assistants',
   outsideUnnamed: 'an assistant',
-  outsideRowHint: 'What your assistants asked',
+  outsideRowHint: 'What they asked',
   outsideLead: 'What your assistants asked or told you, kept apart from home.',
   outsideEmpty:
     'Nothing yet. Questions and notes from your assistants will gather here.',

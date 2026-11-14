@@ -156,7 +156,7 @@ interface Capture {
   answerSavedNoteId: string | null;
   quotedSourceKeys: string[];          // round 5: "{connectorId}|{accountId}" of every quote and synced source
   planDayKey: string | null; planTaskIds: string[];
-  seenAt: number | null; // a turn typed on home arrives seen (its card is in front of the person); whatever later lands a result the person hasn't seen sets it back to null
+  seenAt: number | null; // a turn typed on home arrives seen (its card is in front of the person); whatever later lands a result the person hasn't seen sets it back to null, except an outside assistant's turn (`medium: 'mcp'`), which is filed seen and stays seen, since home never shows it
   createdAt: number;                   // when it was said: the "now" its reading and its sorting use
   sortedAt: number | null;
   sealed: Sealed;

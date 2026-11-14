@@ -3319,7 +3319,11 @@ async function writeResult(
       claimedAt: null,
       heldReason: null,
       lastErrorCode: null,
-      seenAt: null,
+      // Home never shows an outside turn, so it stays seen and out of home's unseen window.
+      seenAt:
+        captureSnap.get('medium') === 'mcp'
+          ? ((captureSnap.get('seenAt') as number | null) ?? Date.now())
+          : null,
     });
     const sorted = toResult(
       settled.status,

@@ -12,7 +12,6 @@ import {
 import { sortCapture, isSorting } from '@apps/helm/queries/nomosMutations';
 import { rankStoredNotes } from '@apps/helm/store/actions/captureActions';
 import type { OpenCapture } from '@apps/helm/types';
-import { isOutsideTurn } from '@apps/helm/utils/outsideTurns';
 
 const isUtcDayOver = (heldAt: number, now: number) =>
   Math.floor(now / DAY_MS) > Math.floor(heldAt / DAY_MS);
@@ -64,12 +63,7 @@ function createSweep() {
   const sweepNext = async (tried: Set<string>): Promise<void> => {
     if (!isActive()) return;
     const now = Date.now();
-    // The server reads an outside turn under that assistant's switches; the device never sorts one.
-    const waiting = store
-      .getState()
-      .helm.waitingCaptures.captures.filter(
-        (capture) => !isOutsideTurn(capture),
-      );
+    const waiting = store.getState().helm.waitingCaptures.captures;
     const next = waiting
       .filter(
         (capture) =>
@@ -135,7 +129,7 @@ export function useCaptureSweep(uid: string | null) {
   const receivedCount = useAppSelector(
     (state) =>
       state.helm.waitingCaptures.captures.filter(
-        (capture) => capture.status === 'received' && !isOutsideTurn(capture),
+        (capture) => capture.status === 'received',
       ).length,
   );
   const sweep = useRef<ReturnType<typeof createSweep> | null>(null);

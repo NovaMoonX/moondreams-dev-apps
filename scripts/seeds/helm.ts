@@ -1227,7 +1227,7 @@ async function buildAnswerTurns(input: {
     const createdAt =
       order < 2
         ? now - (20 - order * 6) * MINUTE_MS
-        : now - DAY_MS - 3 * HOUR_MS;
+        : now - DAY_MS - 3 * 60 * MINUTE_MS;
     const captureId = `seed-turn-outside-${order + 1}`;
     const executionId = `seed-execution-outside-${order + 1}`;
     return {

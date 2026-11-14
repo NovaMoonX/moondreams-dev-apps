@@ -103,7 +103,7 @@ function OutsideScreen({
     <>
       <main className='flex flex-1 flex-col gap-6'>
         <HelmHeader
-          backLabel={HELM_COPY.settingsTitle}
+          backLabel={HELM_COPY.backGeneric}
           onBack={onBack}
           onHome={onBack}
           showsHome={false}
