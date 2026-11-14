@@ -8,14 +8,22 @@ import {
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { CalendarDays, ChevronRight, Search, Settings2 } from 'lucide-react';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import {
+  CalendarDays,
+  ChevronRight,
+  MessageSquarePlus,
+  Search,
+  Settings2,
+} from 'lucide-react';
 
 import HeaderIconButton from '@/components/HeaderIconButton';
+import WorkingDots from '@/components/WorkingDots';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useConnections } from '@/lib/connections/useConnections';
 import { getDeviceTimeZone, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
-import { useAppDispatch, useAppSelector } from '@/store';
+import { store, useAppDispatch, useAppSelector } from '@/store';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
@@ -32,6 +40,7 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { useSession } from '@apps/helm/hooks/useSession';
 import { hasLapsedTrust } from '@apps/helm/queries/helmKeyQueries';
+import { setConversationFreshAt } from '@apps/helm/store/actions/settingsActions';
 import { retryKey, type KeyStatus } from '@apps/helm/store/helmSlice';
 import { selectHeldItems } from '@apps/helm/store/selectors/captureSelectors';
 import { formatClock, getDayNoon, toDayKey } from '@apps/helm/utils/planDays';
@@ -155,6 +164,44 @@ function QuietLines({ now }: { now: number }) {
   );
 }
 
+/** Starts the next turn as a new conversation, so nothing said before it carries over; what was said folds behind Earlier and anything waiting stays in Needs you. */
+function NewConversationButton({ uid }: { uid: string }) {
+  const { addToast } = useToast();
+  const startFresh = () => {
+    const previous = store.getState().helm.profile?.conversationFreshAt ?? null;
+    const fail = (error: unknown) => {
+      console.error('Helm conversation did not start fresh', error);
+      addToast({ title: HELM_COPY.newConversationFailed, type: 'error' });
+    };
+    setConversationFreshAt(uid, Date.now())
+      .then(() =>
+        addToast({
+          title: HELM_COPY.newConversationStarted,
+          type: 'info',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () =>
+              void setConversationFreshAt(uid, previous).catch(fail),
+          },
+        }),
+      )
+      .catch(fail);
+  };
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='sm'
+      rounded='full'
+      className="text-muted-foreground! relative self-center before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
+      onClick={startFresh}
+    >
+      <MessageSquarePlus className='size-4' aria-hidden='true' />
+      {HELM_COPY.newConversation}
+    </Button>
+  );
+}
+
 function HomeSurface({
   composerRef,
   isComposing,
@@ -175,10 +222,17 @@ function HomeSurface({
   // Words typed while waiting carry over to the field once the key is here.
   const [typedWaiting, setTypedWaiting] = useState('');
   const outbox = useOutboxEntries(uid);
-  const { sessions, openSessionId } = useSession();
+  const { sessions, openSessionId, freshFrom } = useSession();
   const { isLoaded: isCapturesLoaded, isFailed: isCapturesFailed } =
     useAppSelector((state) => state.helm.recentCaptures);
   const hasTurns = sessions.length > 0;
+  const hasFreshTurns = sessions.some(
+    (session) => session.startedAt >= freshFrom,
+  );
+  const isWaitingOnKey = keyStatus === 'offline' || keyStatus === 'failed';
+  // Until the first page of turns is read the thread is empty, which would otherwise read as no conversation yet.
+  const isOpening =
+    !hasTurns && !isCapturesLoaded && !isCapturesFailed && !isWaitingOnKey;
   const voice = useHelmVoiceContext();
   const now = useNow(60_000);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
@@ -238,7 +292,16 @@ function HomeSurface({
         {keyStatus === 'ready' && <QuietLines now={now} />}
       </div>
       <div className='flex flex-1 flex-col gap-8 pt-4'>
-        {!hasTurns && keyStatus !== 'offline' && keyStatus !== 'failed' && (
+        {isOpening && (
+          <p
+            className='text-muted-foreground text-center text-[15px]'
+            role='status'
+          >
+            {HELM_COPY.homeOpening}
+            <WorkingDots />
+          </p>
+        )}
+        {!hasFreshTurns && !isOpening && !isWaitingOnKey && (
           <p className='text-muted-foreground text-center text-[15px]'>
             {HELM_COPY.homeHint}
           </p>
@@ -255,13 +318,16 @@ function HomeSurface({
         )}
         {hasTurns && (
           <ConversationThread
+            key={freshFrom}
             sessions={sessions}
             openSessionId={openSessionId}
             scroll='window'
             loadsEarlier
             foldsBefore={todayStart}
+            freshFrom={freshFrom}
           />
         )}
+        {hasFreshTurns && uid && <NewConversationButton uid={uid} />}
         <div className='mt-auto flex flex-col gap-4'>
           {keyStatus === 'offline' && (
             <NeedsConnectionState

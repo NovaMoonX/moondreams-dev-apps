@@ -490,6 +490,16 @@ export const HOME_COMPOSER_ID = 'home-composer';
 
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
+  homeOpening: 'Opening your conversation',
+  newConversation: 'New conversation',
+  dailyFreshTitle: 'Start each day fresh',
+  dailyFreshOn:
+    "Each day's first message starts a new conversation. Earlier days fold under Earlier, and anything still waiting stays in Needs you.",
+  dailyFreshOff: `A conversation carries on until it has been quiet for ${SESSION_IDLE_MS / 60_000} minutes, even past midnight.`,
+  dailyFreshFailed: "Couldn't save that. Check your connection.",
+  newConversationStarted: 'New conversation. Earlier turns are under Earlier.',
+  newConversationFailed:
+    "Couldn't start a new conversation. Check your connection.",
   talk: 'Talk',
   talkListening: 'Listening',
   talkSendLabel: 'Send what you said',
@@ -587,6 +597,17 @@ export const HELM_COPY = {
   inboxNewSince: 'New since you looked',
   inboxEmpty: 'Nothing new since you looked.',
   markAllSeen: 'Mark all seen',
+  clearNeedsYou: 'Clear all',
+  clearNeedsYouTitle: (count: number) => `Clear all ${count} from Needs you?`,
+  clearNeedsYouBody: (keepsDisputes: boolean) =>
+    [
+      'Each question is dismissed unanswered and each turn that couldn’t be sorted leaves this list. What you said stays in your conversation.',
+      keepsDisputes
+        ? 'A question about which of two facts is true stays, since it still needs settling.'
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' '),
   seenFailed: "That couldn't be marked seen. Try again.",
   shorthandLabel: 'Shorthand',
   shorthandPerson: '@ Person',
@@ -1826,6 +1847,9 @@ export const HELM_COPY = {
   questionNeedsConnection: 'Answering needs a connection.',
   questionSkip: 'Answer later',
   questionSkipped: "Saved for later. It's waiting in Needs you.",
+  questionDismiss: 'Dismiss',
+  questionDismissed: 'Dismissed.',
+  questionDismissedLine: (prompt: string) => `${prompt} · Dismissed`,
   questionAnswered: 'Done.',
   factKept: (statement: string) => `Kept “${statement}”`,
   factKeptNeither: 'Saved what’s true now',

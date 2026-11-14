@@ -28,6 +28,8 @@ interface ConversationThreadProps {
   loadsEarlier: boolean;
   /** Sessions that started before this moment fold behind one "Earlier" row, except the open one and the newest. */
   foldsBefore?: number | null;
+  /** Sessions that started before the conversation last started fresh fold too, the newest included. */
+  freshFrom?: number;
 }
 
 /** Mounts when scrolled near and brings in the next page of earlier sessions. */
@@ -76,6 +78,7 @@ function ConversationThread({
   scroll,
   loadsEarlier,
   foldsBefore = null,
+  freshFrom = 0,
 }: ConversationThreadProps) {
   const { user } = useAuth();
   const [isUnfolded, setIsUnfolded] = useState(false);
@@ -123,9 +126,9 @@ function ConversationThread({
   const lastSessionId = sessions.at(-1)?.sessionId;
   const isFolded = (session: Session) =>
     foldsBefore !== null &&
-    session.startedAt < foldsBefore &&
     session.sessionId !== openSessionId &&
-    session.sessionId !== lastSessionId;
+    (session.startedAt < freshFrom ||
+      (session.startedAt < foldsBefore && session.sessionId !== lastSessionId));
   const foldedSessions = sessions.filter(isFolded);
   const foldedCount = foldedSessions.reduce(
     (sum, session) => sum + groupTurns(session.turns).length,

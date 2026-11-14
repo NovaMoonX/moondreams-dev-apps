@@ -360,6 +360,7 @@ const resolveInput = (extra: Partial<ResolveInput> = {}): ResolveInput => ({
         askedAt: 4000,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
     },
   },

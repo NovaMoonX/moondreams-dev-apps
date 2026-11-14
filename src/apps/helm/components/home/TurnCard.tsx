@@ -29,6 +29,7 @@ import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelector
 import type { OpenCapture } from '@apps/helm/types';
 import {
   getAnsweredQuestions,
+  getDismissedQuestions,
   getHomeHeldLine,
   getOpenQuestions,
   toHeldKind,
@@ -126,6 +127,7 @@ function TurnCard({
     ...openQuestions.filter((entry) => entry.skippedAt !== null),
   ].slice(0, QUESTIONS_PER_TURN);
   const answered = capture.isUnreadable ? [] : getAnsweredQuestions(capture);
+  const dismissed = capture.isUnreadable ? [] : getDismissedQuestions(capture);
   const planLine = getPlanLine();
   const lastMessage = joined.at(-1) ?? capture;
   const hasCard = hasResults && executions.length > 0;
@@ -297,6 +299,14 @@ function TurnCard({
           question={entry.question}
           answer={entry.answer}
         />
+      ))}
+      {dismissed.map((entry) => (
+        <p
+          key={entry.id}
+          className='text-muted-foreground pl-[30px] text-[13px] text-pretty break-words'
+        >
+          {HELM_COPY.questionDismissedLine(entry.question.prompt)}
+        </p>
       ))}
       {questions.length > 0 && (
         <div className='mt-2 flex w-full flex-col items-start gap-8'>

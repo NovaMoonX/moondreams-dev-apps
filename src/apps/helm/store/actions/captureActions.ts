@@ -44,6 +44,7 @@ import {
   toTaskTitle,
 } from '@apps/helm/utils/heldCaptures';
 import { rankNotes } from '@apps/helm/utils/noteSearch';
+import { isDismissable } from '@apps/helm/utils/heldCaptures';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
@@ -168,6 +169,7 @@ export async function sendCapture(
     attachmentIds,
     seenAt: createdAt,
     quotedSourceKeys: [],
+    dismissedAt: null,
     answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
@@ -270,6 +272,67 @@ export const skipQuestion = (
   updateDoc(doc(capturesOf(uid), captureId), {
     [`questionState.${questionId}.skippedAt`]: Date.now(),
   });
+
+/** Lets one question go without an answer: it stops waiting, and the turn is sorted once none is left open. Touches only its own fields. */
+export const dismissQuestion = (
+  uid: string,
+  captureId: string,
+  questionId: string,
+  isLastOpen: boolean,
+) => {
+  const now = Date.now();
+  return updateDoc(doc(capturesOf(uid), captureId), {
+    [`questionState.${questionId}.answeredAt`]: now,
+    [`questionState.${questionId}.dismissedAt`]: now,
+    ...(isLastOpen && { status: 'sorted' }),
+  });
+};
+
+/** Whether Clear all can take anything off this turn: it couldn't be sorted, or it asks something that can be let go. */
+export const canClearFromNeedsYou = (capture: OpenCapture) =>
+  capture.status === 'failed' ||
+  Object.values(capture.questionState).some(
+    (state) => state.answeredAt === null && isDismissable(state.kind),
+  );
+
+/** Clears every turn in Needs you at once (a dispute between facts stays): each open question is let go as `dismissQuestion` does, and a turn that couldn't be sorted is marked cleared. In batches under Firestore's write limit. */
+export async function clearNeedsYou(uid: string, captures: OpenCapture[]) {
+  const now = Date.now();
+  const writes = captures.filter(canClearFromNeedsYou).map((capture) => {
+    if (capture.status === 'failed') {
+      return { id: capture.id, fields: { dismissedAt: now } };
+    }
+    const open = Object.entries(capture.questionState).filter(
+      ([, state]) => state.answeredAt === null,
+    );
+    const letGo = open.filter(([, state]) => isDismissable(state.kind));
+    return {
+      id: capture.id,
+      fields: {
+        ...Object.fromEntries(
+          letGo.flatMap(([id]) => [
+            [`questionState.${id}.answeredAt`, now],
+            [`questionState.${id}.dismissedAt`, now],
+          ]),
+        ),
+        ...(letGo.length === open.length && { status: 'sorted' }),
+      },
+    };
+  });
+  const chunks = Array.from(
+    { length: Math.ceil(writes.length / BATCH_LIMIT) },
+    (_, index) => writes.slice(index * BATCH_LIMIT, (index + 1) * BATCH_LIMIT),
+  );
+  await Promise.all(
+    chunks.map((entries) => {
+      const batch = writeBatch(db);
+      entries.forEach(({ id, fields }) =>
+        batch.update(doc(capturesOf(uid), id), fields),
+      );
+      return batch.commit();
+    }),
+  );
+}
 
 /** Marks a question answered without running anything, because what it asked was settled another way; touches only its own fields, and the turn is sorted once none is left open. */
 export const closeQuestion = (

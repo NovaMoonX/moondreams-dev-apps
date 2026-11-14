@@ -7,9 +7,45 @@ import { parseNaturalDate } from '@/utils/naturalDateUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { HelmQuestion, QuestionAnswerValue } from '@apps/helm/types';
 import { getClockOf, getDueDay } from '@apps/helm/utils/captureReading';
+import { isDismissable } from '@apps/helm/utils/heldCaptures';
 
 export type SpokenAnswer =
-  { kind: 'skip' } | { kind: 'answer'; value: QuestionAnswerValue };
+  | { kind: 'skip' }
+  | { kind: 'dismiss' }
+  | { kind: 'answer'; value: QuestionAnswerValue };
+
+const DISMISS_PHRASES = [
+  'never mind',
+  'nevermind',
+  'forget it',
+  'forget about it',
+  'forget that',
+  'dismiss',
+  'dismiss it',
+  'dismiss that',
+  'dismiss this',
+  "it doesn't matter",
+  "doesn't matter",
+  'it does not matter',
+  "don't worry about it",
+];
+
+const toPlainWords = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[’]/g, "'")
+    .replace(/[^a-z'\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/** Whether the whole reply lets the question go ("never mind", "forget it"), unless it names one of the question's own options. */
+const isDismissReply = (text: string, question: HelmQuestion) => {
+  const words = toPlainWords(text);
+  return (
+    DISMISS_PHRASES.includes(words) &&
+    !question.options.some((option) => toPlainWords(option.label) === words)
+  );
+};
 
 const NEW_NAMES = ['someone new', 'new', 'a new one', 'new one', 'new person'];
 const NONE_NAMES = ["don't link anyone", "don't link"];
@@ -60,12 +96,15 @@ const toDateReader =
         };
   };
 
-/** What a spoken answer says to an open question, as the value a tap would have written: an option, several, yes or no, words, a number, a day or time, a person or place, or Skip. A reply that is not clearly one of them is `null`, so it goes on as a turn. */
+/** What a spoken answer says to an open question, as the value a tap would have written: an option, several, yes or no, words, a number, a day or time, a person or place, Skip, or a whole reply that lets it go (Dismiss, never for a dispute between facts). A reply that is not clearly one of them is `null`, so it goes on as a turn. */
 export function matchSpokenAnswer(
   text: string,
   question: HelmQuestion,
   context: { now: number; timeZone: string },
 ): SpokenAnswer | null {
+  if (isDismissable(question.kind) && isDismissReply(text, question)) {
+    return { kind: 'dismiss' };
+  }
   const read = readSpokenAnswer(toSpokenQuestion(question), text, {
     readDate: toDateReader(context),
   });

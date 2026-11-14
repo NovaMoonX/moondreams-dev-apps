@@ -44,6 +44,7 @@ import {
   markCaptureSpoken,
   rankStoredNotes,
   sendCapture,
+  dismissQuestion,
   skipQuestion,
 } from '@apps/helm/store/actions/captureActions';
 import { VIEW_KINDS } from '@apps/helm/screen/views';
@@ -74,7 +75,7 @@ import {
   buildAskAgainLine,
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
-import { getOpenSessionId } from '@apps/helm/utils/sessions';
+import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
 import { isUndoPhrase, toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
@@ -302,7 +303,11 @@ export function useHelmVoice() {
   ) {
     const state = store.getState();
     const all = selectAllCaptures(state);
-    const sessionId = getOpenSessionId(all, now);
+    const sessionId = getOpenSessionId(
+      all,
+      now,
+      getFreshFrom(state.helm.profile, now),
+    );
     const latest = all
       .filter((capture) => capture.sessionId === sessionId)
       .reverse()
@@ -324,6 +329,29 @@ export function useHelmVoice() {
       now,
       timeZone: state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
     });
+    if (answer?.kind === 'dismiss') {
+      try {
+        await dismissQuestion(
+          uid,
+          asked.captureId,
+          asked.id,
+          latest !== undefined &&
+            getOpenQuestions(latest).every((entry) => entry.id === asked.id),
+        );
+        say(
+          [
+            HELM_COPY.questionDismissed,
+            sayNextQuestion(asked.captureId, asked.id),
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+      } catch (error) {
+        console.error('Helm question was not dismissed by voice', error);
+        say(HELM_COPY.heldActionFailed);
+      }
+      return true;
+    }
     if (answer?.kind === 'skip') {
       try {
         await skipQuestion(uid, asked.captureId, asked.id);
@@ -496,7 +524,12 @@ export function useHelmVoice() {
   async function undoLatest() {
     const state = store.getState();
     const all = selectAllCaptures(state);
-    const sessionId = getOpenSessionId(all, Date.now());
+    const now = Date.now();
+    const sessionId = getOpenSessionId(
+      all,
+      now,
+      getFreshFrom(state.helm.profile, now),
+    );
     const isTurnPending =
       waiting.current.size > 0 ||
       all.some(
