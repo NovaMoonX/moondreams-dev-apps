@@ -5,7 +5,9 @@ import { Bot, ChevronRight, Download } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { ChatGptMark, ClaudeMark, GeminiMark } from '@/components/BrandMarks';
-import CopyTextButton from '@/components/CopyTextButton';
+import CopyTextButton, {
+  COMPACT_BUTTON_CLASS,
+} from '@/components/CopyTextButton';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
@@ -140,6 +142,7 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                   text={HELM_COPY.assistantsAddress}
                   label={HELM_COPY.assistantsCopyAddress}
                   variant='secondary'
+                  isCompact
                   className='self-start'
                 />
               </div>
@@ -155,15 +158,16 @@ function ConnectedAssistantsScreen({ onBack }: ConnectedAssistantsScreenProps) {
                     text={HELM_COPY.assistantsDescription(helmAppName)}
                     label={HELM_COPY.assistantsCopyDescription}
                     variant='secondary'
+                    isCompact
                   />
                   <Button
                     type='button'
                     variant='secondary'
-                    className='gap-1.5'
+                    className={COMPACT_BUTTON_CLASS}
                     onClick={downloadIcon}
                     aria-label={`${HELM_COPY.assistantsDownloadIcon} (${HELM_COPY.assistantsIconLabel})`}
                   >
-                    <Download className='size-4' aria-hidden='true' />
+                    <Download className='size-3.5' aria-hidden='true' />
                     {HELM_COPY.assistantsDownloadIcon}
                   </Button>
                 </div>
