@@ -1,5 +1,8 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { RotateCw } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
@@ -19,6 +22,7 @@ import { isSorting, subscribeSorting } from '@apps/helm/queries/nomosMutations';
 import {
   loadExecutionsById,
   markCaptureSeen,
+  retryCapture,
 } from '@apps/helm/store/actions/captureActions';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenCapture } from '@apps/helm/types';
@@ -26,6 +30,7 @@ import {
   getAnsweredQuestions,
   getHomeHeldLine,
   getOpenQuestions,
+  toHeldKind,
 } from '@apps/helm/utils/heldCaptures';
 import { formatDayName, toDayKey } from '@apps/helm/utils/planDays';
 
@@ -88,7 +93,10 @@ function TurnCard({
   const isCallOut = useSyncExternalStore(subscribeSorting, () =>
     isSorting(capture.id),
   );
-  const isReading = isCallOut || capture.status === 'interpreting';
+  const { addToast } = useToast();
+  const [isRetrying, setIsRetrying] = useState(false);
+  const isReading =
+    isCallOut || isRetrying || capture.status === 'interpreting';
   const isSorted = capture.status === 'sorted' && !isReading;
   const heldLine =
     isReading || isSorted || capture.isUnreadable
@@ -136,6 +144,21 @@ function TurnCard({
     : hasNothingShown
       ? capture.line
       : null;
+  const heldKind = toHeldKind(capture);
+  const canRetry =
+    heldLine !== null && (heldKind === 'failed' || heldKind === 'couldNotRead');
+  const retry = async () => {
+    if (!user) return;
+    setIsRetrying(true);
+    try {
+      await retryCapture(user.uid, capture);
+    } catch (error) {
+      console.error('Helm turn was not read again', error);
+      addToast({ title: HELM_COPY.heldActionFailed, type: 'error' });
+    } finally {
+      setIsRetrying(false);
+    }
+  };
   const hasLost =
     hasResults && missingKey.split(',').some((id) => failedIds.includes(id));
   function getPlanLine() {
@@ -288,8 +311,23 @@ function TurnCard({
           {HELM_COPY.questionMore(openQuestions.length - questions.length)}
         </p>
       )}
-      {heldLine !== null && (
+      {heldLine !== null && !canRetry && (
         <p className='text-muted-foreground text-[13px]'>{heldLine}</p>
+      )}
+      {canRetry && (
+        <div className='flex items-center gap-1'>
+          <p className='text-muted-foreground text-[13px]'>{heldLine}</p>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='relative -mr-2 gap-1 text-[13px] before:absolute before:inset-x-0 before:-inset-y-2 before:content-[""]'
+            onClick={() => void retry()}
+          >
+            <RotateCw className='size-3.5' aria-hidden='true' />
+            {HELM_COPY.tryReadingAgain}
+          </Button>
+        </div>
       )}
     </article>
   );

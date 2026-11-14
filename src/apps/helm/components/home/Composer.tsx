@@ -489,13 +489,13 @@ function Composer({
         <div
           inert={!isShorthandOpen}
           className={join(
-            'grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none',
+            'grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out motion-reduce:transition-none',
             isShorthandOpen
               ? 'grid-rows-[1fr] opacity-100'
-              : 'grid-rows-[0fr] opacity-0',
+              : '-mb-1 grid-rows-[0fr] opacity-0',
           )}
         >
-          <div className='min-h-0 overflow-hidden'>
+          <div className='-mx-2 min-h-0 overflow-hidden'>
             <ShorthandRow onInsert={insertShorthand} />
           </div>
         </div>
