@@ -2443,7 +2443,7 @@ export const HELM_COPY = {
     bedtime: 'Bedtime',
   },
   habitPauseTitle: (name: string) => `Pause ${name}`,
-  habitPauseHint: "Off Today until a day you pick. Paused days don't count.",
+  habitPauseHint: "It's off from today, and paused days don't count against it.",
   habitPauseQuickLabel: 'How long',
   habitPauseWeek: 'A week',
   habitPauseTwoWeeks: 'Two weeks',

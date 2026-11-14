@@ -105,6 +105,7 @@ function HabitsView({ onBack, onHome, onOpenHabit }: HabitsViewProps) {
       { ...habit, status: 'active' },
       days,
       clock.dayKey,
+      clock.timeZone,
     );
     return readWeekFigure(habit, week, clock.dayKey);
   };

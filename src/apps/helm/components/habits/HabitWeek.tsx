@@ -12,16 +12,14 @@ interface HabitWeekProps {
   clock: { now: number; dayKey: string; timeZone: string };
 }
 
-type ShownCell = WeekCell | 'skipped';
-
-const CELL_STATE: Record<ShownCell, string> = {
+const CELL_STATE: Record<WeekCell, string> = {
   done: HELM_COPY.habitWeekDone,
   open: HELM_COPY.habitWeekOpen,
   later: HELM_COPY.habitWeekLater,
   skipped: HELM_COPY.habitWeekSkipped,
 };
 
-function Cell({ cell }: { cell: ShownCell }) {
+function Cell({ cell }: { cell: WeekCell }) {
   if (cell === 'later') {
     return (
       <span
@@ -57,6 +55,7 @@ function HabitWeek({ habit, days, clock }: HabitWeekProps) {
     { ...habit, status: 'active' },
     days,
     clock.dayKey,
+    clock.timeZone,
   );
   const weekDays = readWeekDays(habit, days, clock);
 
@@ -72,9 +71,7 @@ function HabitWeek({ habit, days, clock }: HabitWeekProps) {
             ? HELM_COPY.habitWeekOff
             : day.count !== null
               ? `${day.count}${day.isReached ? `, ${HELM_COPY.habitWeekReached}` : ''}`
-              : (day.cells as ShownCell[])
-                  .map((cell) => CELL_STATE[cell])
-                  .join(', ');
+              : day.cells.map((cell) => CELL_STATE[cell]).join(', ');
           return (
             <li
               key={day.key}
@@ -108,7 +105,7 @@ function HabitWeek({ habit, days, clock }: HabitWeekProps) {
                     {day.count}
                   </span>
                 ) : (
-                  (day.cells as ShownCell[]).map((cell, index) => (
+                  day.cells.map((cell, index) => (
                     <Cell key={index} cell={cell} />
                   ))
                 )}
