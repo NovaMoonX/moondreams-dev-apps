@@ -55,7 +55,7 @@ if ! gcloud logging metrics describe connections_keys_ok --project="$PROJECT" >/
     --description="Daily connections key check passed" --log-filter='jsonPayload.event="connections.keys.ok"' >/dev/null
   echo "✓ Created the connections_keys_ok metric."
 fi
-# An absence condition only watches a series that exists, so the check runs once now to start it.
+# Missing data counts as firing, so the check runs once now to give the policy a count to see.
 JOB="$(gcloud scheduler jobs list --location=us-central1 --project="$PROJECT" --format='value(name)' | grep verifyConnectionKeys | head -n1 || true)"
 if [[ -n "$JOB" ]]; then
   gcloud scheduler jobs run "$JOB" --location=us-central1 --project="$PROJECT" >/dev/null && echo "✓ Ran the key check once."
@@ -83,7 +83,7 @@ cat > "$WORK/heartbeat.json" <<JSON
 }
 JSON
 create_policy "Connections: key check heartbeat missing" "$WORK/heartbeat.json" || {
-  echo "✗ Google refused the daily heartbeat condition. Option (b) under Runway's \"Alert B\" in functions/README.md is the next to try." >&2
+  echo "✗ Google refused the daily heartbeat condition (its reason is printed above). See \"Alert B\" in functions/README.md." >&2
   exit 1
 }
 

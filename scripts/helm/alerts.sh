@@ -55,7 +55,7 @@ if ! gcloud logging metrics describe helm_keys_ok --project="$PROJECT" >/dev/nul
     --description="Daily Helm key check passed" --log-filter='jsonPayload.event="helm.keys.ok"' >/dev/null
   echo "✓ Created the helm_keys_ok metric."
 fi
-# An absence condition only watches a series that exists, so the check runs once now to start it.
+# Missing data counts as firing, so the check runs once now to give the policy a count to see.
 JOB="$(gcloud scheduler jobs list --location=us-central1 --project="$PROJECT" --format='value(name)' | grep verifyHelmKeys | head -n1 || true)"
 if [[ -n "$JOB" ]]; then
   gcloud scheduler jobs run "$JOB" --location=us-central1 --project="$PROJECT" >/dev/null && echo "✓ Ran the key check once."
@@ -83,7 +83,7 @@ cat > "$WORK/heartbeat.json" <<JSON
 }
 JSON
 create_policy "Helm: key check heartbeat missing" "$WORK/heartbeat.json" || {
-  echo "✗ Google refused the daily heartbeat condition. Option (b) under Runway's \"Alert B\" in functions/README.md is the next to try." >&2
+  echo "✗ Google refused the daily heartbeat condition (its reason is printed above). See \"Alert B\" in functions/README.md." >&2
   exit 1
 }
 
