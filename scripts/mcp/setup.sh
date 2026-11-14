@@ -43,8 +43,16 @@ save_secret() {
   sed 's/^/     /' <<<"$output" >&2
   return 1
 }
-confirmed_step() { cat "$PROGRESS_FILE" 2>/dev/null || echo 0; }
-remember_step() { mkdir -p "$(dirname "$PROGRESS_FILE")"; echo "$1" >"$PROGRESS_FILE"; }
+confirmed_step() {
+  local step
+  step=$(cat "$PROGRESS_FILE" 2>/dev/null || true)
+  [[ "$step" =~ ^[0-9]+$ ]] && echo "$step" || echo 0
+}
+remember_step() {
+  (( $1 > $(confirmed_step) )) || return 0
+  mkdir -p "$(dirname "$PROGRESS_FILE")"
+  echo "$1" >"$PROGRESS_FILE"
+}
 # A step before the starting point is skipped; a saved secret is asked about again only when the person chose to start at or before its step.
 start_step() {
   CURRENT_STEP=$1
@@ -79,7 +87,9 @@ source scripts/lib/firebaseLogin.sh; require_firebase_login
 [[ "${1:-}" == "--restart" ]] && rm -f "$PROGRESS_FILE"
 START=${from:-$(( $(confirmed_step) + 1 ))}
 echo "Assistant sign-in runs on WorkOS AuthKit (free up to 1 million monthly users)."
-if (( START > 1 )); then
+if (( START > LAST_STEP )); then
+  echo "Every step was done on an earlier run; checking the saved secrets. To redo a step: npm run mcp:setup -- --from <step>"
+elif (( START > 1 )); then
   echo "Picking up at step $START. To start over: npm run mcp:setup -- --restart   To go to a step: npm run mcp:setup -- --from <step>"
 fi
 
