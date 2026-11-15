@@ -2398,9 +2398,9 @@ export const HELM_COPY = {
   habitMedicineHelp: (assistant: string) =>
     `${assistant} will say it each time you tick it, so a wrong tick is caught at once.`,
   habitMedicineField: 'Medicine',
-  habitMedicinePlaceholder: 'The medicine\'s name',
+  habitMedicinePlaceholder: 'Name',
   habitDoseField: 'Dose (optional)',
-  habitDosePlaceholder: 'For example 25 mg',
+  habitDosePlaceholder: 'Dose',
   habitMedicineSave: 'Save',
   habitMedicineNotNow: 'Not now',
   habitMedicineFailed: "That didn't save. Try again.",
