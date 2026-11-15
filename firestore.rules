@@ -268,6 +268,14 @@ service cloud.firestore {
         && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places', 'keyDates', 'meta', 'projects', 'notes', 'topics'];
     }
 
+    // A day's written summary is made by the server; the owner reads it and may only mark it stale so the next open rewrites it.
+    match /apps/helm/users/{uid}/daySummaries/{dayKey} {
+      allow read: if isHelmOwner(uid);
+      allow update: if isHelmOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['staleAt'])
+        && (request.resource.data.staleAt == null || request.resource.data.staleAt is int);
+    }
+
     // A topic's versions are history: the owner reads, adds and trims them, and nobody rewrites one.
     match /apps/helm/users/{uid}/topics/{topicId}/versions/{version} {
       allow read, create, delete: if isHelmOwner(uid);

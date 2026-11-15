@@ -66,6 +66,8 @@ import type {
   Who,
   WhoSealed,
   ScreenContext,
+  HelmDaySummary,
+  HelmDaySummarySealed,
   HelmEncryption,
   PlanDaySealed,
   PlanSlot,
@@ -1401,7 +1403,39 @@ async function buildPlanDays(input: {
       },
     ),
   ]);
-  return { days, task: { id: 'seed-task-plan-done', task: doneTask } };
+  const summarySealed: HelmDaySummarySealed = {
+    text: "A steady day on the wedding. Priya's party RSVP went out, the florist call got a task, and two questions about the guest list were answered.",
+    line: 'Sent 9 messages · added 2 tasks, finished 1 task, answered 2 questions',
+    counts: {
+      messages: 9,
+      tasksAdded: 2,
+      keyDatesAdded: 0,
+      notesAdded: 1,
+      factsAdded: 0,
+      peopleAdded: 0,
+      placesAdded: 0,
+      tasksDone: 1,
+      planned: 1,
+      answered: 2,
+      dismissed: 0,
+    },
+  };
+  const summary: { id: string; doc: HelmDaySummary } = {
+    id: yesterdayKey,
+    doc: {
+      dayKey: yesterdayKey,
+      status: 'written',
+      attempts: 1,
+      writtenAt: at(yesterdayKey, '23:59') + 5 * MINUTE_MS,
+      staleAt: null,
+      sealed: await sealJson<HelmDaySummarySealed>(summarySealed, encryption),
+    },
+  };
+  return {
+    days,
+    summary,
+    task: { id: 'seed-task-plan-done', task: doneTask },
+  };
 }
 
 export const toWho = (
@@ -5374,6 +5408,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             batch.set(person.collection('planDays').doc(entry.id), entry.day),
           );
           batch.set(
+            person.collection('daySummaries').doc(planDays.summary.id),
+            planDays.summary.doc,
+          );
+          batch.set(
             person.collection('tasks').doc(planDays.task.id),
             planDays.task.task,
           );
@@ -5677,7 +5715,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           answerTurns.notes.length +
           (gmailTurn ? 3 : 0) +
           (noteTurn ? 3 : 0) +
-          (planDays ? planDays.days.length + 1 : 0);
+          (planDays ? planDays.days.length + 2 : 0);
         return (
           backToBackCount +
           turns.reduce(

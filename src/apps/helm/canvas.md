@@ -176,7 +176,7 @@ Footer note 13 muted: "The other is kept as what it was until today."
 
 **C4 Rest day (nurse).** Tabs Today · Inbox. EventCard at top, past and muted: "Night shift · ended 7:30 AM · Shifts · St. Luke's". Muted card: "Nothing planned after a night shift. Tell {Name} if you want something today." `SectionDivider` "Due soon": "Renew nursing license" · "Due Mon, Nov 30". No suggestions.
 
-**C5 Yesterday (owner, Sat 7 selected).** Muted note under the strip: "Yesterday, as it was." EventCard "Venue walk-through" (snapshot). Soft TickMark rows: "Send RSVP for Priya's party". `SectionDivider` "Not done" with trailing "Bring to today" (outline small): "Book hair trial" unticked. Nothing editable.
+**C5 Yesterday (owner, Sat 7 selected).** The day's summary card under the strip (`DaySummaryCard`). EventCard "Venue walk-through" (snapshot). Soft TickMark rows: "Send RSVP for Priya's party". `SectionDivider` "Not done" with trailing "Bring to today" (outline small): "Book hair trial" unticked. Nothing editable.
 
 **C6 A full day (owner, Wed 11 selected).** Top thin rows: calendar mark "All day · Maya in Portland · Personal". Timeline packed: 9:00 AM "Sprint planning" Work · 10:30 AM "Design review · Tentative" Work · 12:00 PM "Vendor call" meta "12:00 PM · 3:00 PM in New York · Work" · 1:00 PM "Lunch with Priya" · 2:00–6:00 PM "Offsite workshop". Muted line after: "Your day is full. Nothing suggested." No Free lines (gaps under 45m).
 
