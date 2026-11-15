@@ -1729,6 +1729,7 @@ export interface HelmDayCounts {
   placesAdded: number;
   habitsStarted: number;
   habitChecksDone: number;
+  connectionsAdded: number;
   tasksDone: number;
   planned: number;
   answered: number;

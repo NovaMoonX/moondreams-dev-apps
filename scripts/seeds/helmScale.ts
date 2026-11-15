@@ -1808,6 +1808,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       placesAdded: 0,
       habitsStarted: index % 17 === 0 ? 1 : 0,
       habitChecksDone: index % 4,
+      connectionsAdded: index % 19 === 0 ? 1 : 0,
       tasksDone: (index + 1) % 3,
       planned: index % 2,
       answered: index % 3 === 0 ? 2 : 0,

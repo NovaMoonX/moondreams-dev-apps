@@ -1716,6 +1716,8 @@ export const HELM_COPY = {
     `${count} habit ${count === 1 ? 'check-in' : 'check-ins'}`,
   daySummaryHabitsStarted: (count: number) =>
     `${count} ${count === 1 ? 'habit' : 'habits'} started`,
+  daySummaryConnectionsAdded: (count: number) =>
+    `${count} ${count === 1 ? 'connection' : 'connections'} added`,
   daySummaryTasksDone: (count: number) =>
     `${count} ${count === 1 ? 'task' : 'tasks'} finished`,
   daySummaryPlanned: (count: number) =>
