@@ -1,3 +1,4 @@
+import { setDucked } from '@/lib/speech/voice/duckBus';
 import type { SpeechPriority, TtsAdapter } from '@/lib/speech/voice/types';
 
 export interface SpeakResult {
@@ -127,8 +128,14 @@ export const createPlaybackQueue = ({
     clear: () => {
       cancelWaiting(() => false);
       stopPlaying();
+      setDucked(false);
       play();
     },
+    /** Turns the playing line down without stopping it (cloud voice lines only; the device voices can't be turned down). */
+    duck: () => setDucked(true),
+    unduck: () => setDucked(false),
+    /** The words of the line playing now; null when none is. */
+    getPlayingText: () => state.playing?.line.text ?? null,
     isActive: () => state.playing !== null || state.waiting.length > 0,
     /** True while the line playing goes through the page's audio, so the microphone's echo cancellation can tell it from the person. */
     isPlayingThroughWebAudio: () =>

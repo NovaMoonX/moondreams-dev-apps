@@ -5,6 +5,8 @@ export const A_LIST_SHARES: SourceShares = {
   shares: [
     {
       id: 'app:a-list',
+      about:
+        "A-List is the person's movie app: films they plan to see in theaters, the showtimes they picked, their theaters and the films they've seen and rated.",
       kind: 'firstPartyApp',
       contractVersion: 1,
       transformVersion: 1,
@@ -13,7 +15,10 @@ export const A_LIST_SHARES: SourceShares = {
           id: 'plannedShowings',
           kind: 'event',
           label: 'Planned showings',
-          detail: 'The movie, time and theater',
+          meaning:
+            'Movies the person has planned to see in a theater, each with the showtime and theater they picked and whether they have a ticket.',
+          detail:
+            'The movie, time, length and age rating, theater and whether you have a ticket',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -29,13 +34,25 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: null,
             },
+            {
+              label: 'Whether you have a ticket yet',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: "The movie's running time and age rating",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 3,
         },
         {
           id: 'savedTheaters',
           kind: 'place',
           label: 'Saved theaters',
+          meaning:
+            'The theaters the person goes to, saved with their address so they can pick one for a showing.',
           detail: 'Each theater and its address',
           mode: 'sync',
           isOnAtConnect: true,
@@ -51,7 +68,9 @@ export const A_LIST_SHARES: SourceShares = {
           id: 'seenMovies',
           kind: 'knowledge',
           label: 'Movies you have seen',
-          detail: 'The title and your rating',
+          meaning:
+            'Movies the person has already watched, with the day, the theater, the star rating they gave if any and their movie-watching goals.',
+          detail: 'The title, the day, the theater, your star rating and your goals',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -61,9 +80,61 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: null,
             },
-            { label: 'Your rating', sinceVersion: 1, addedOn: null },
+            { label: 'Your star rating', sinceVersion: 1, addedOn: null },
+            {
+              label: 'The day you saw it',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+            {
+              label:
+                'Your weekly and monthly movie goals and how far along you are',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'The theater where you saw it',
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: "The movie's running time and age rating",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 3,
+        },
+        {
+          id: 'watchlist',
+          kind: 'artifact',
+          label: 'Your watchlist',
+          meaning:
+            "Movies the person wants to see but hasn't planned yet, each with how much they want to see it and its release date.",
+          detail:
+            'Each movie you want to see, its priority, release date, length and age rating',
+          mode: 'sync',
+          isOnAtConnect: true,
+          addedInVersion: 2,
+          reads: [
+            {
+              label: 'Each movie on your watchlist',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            { label: 'Its priority', sinceVersion: 1, addedOn: '2026-11-14' },
+            {
+              label: 'Its release date',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'Its running time and age rating',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 2,
         },
       ],
       never: ['what you paid', 'savings', 'membership', 'share links'],

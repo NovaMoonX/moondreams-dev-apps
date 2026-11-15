@@ -174,6 +174,17 @@ export const HAND_OVER_TOOL: TerminalTool = {
   },
 };
 
+export const REPEAT_TOOL: TerminalTool = {
+  name: 'repeat_last_reply',
+  description:
+    'Call this instead of file_results when the person\'s whole turn only asks to hear your last reply again, in any wording ("what was that", "come again", "say that once more"). Never call it when the turn also asks for, names or changes anything.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {},
+  },
+};
+
 type RunRole = 'quick' | 'interpret';
 
 /** Runs a turn on its route; a quick run may hand the turn over once, and the full run it starts is never offered the hand-over. Each run reserves its own allowance first; a hand-over cut short by an abort reserves nothing more and comes back marked aborted, so the caller restarts the turn. */

@@ -7,6 +7,10 @@ import type {
   FrameSource,
   SttAdapter,
 } from '@/lib/speech/voice/types';
+import {
+  describeThrown,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 import type { VoiceTokenAnswer } from '@/lib/speech/voice/voiceToken';
 
 const LISTEN_URL = 'wss://api.deepgram.com/v1/listen';
@@ -107,6 +111,9 @@ export const createDeepgramStt = ({
               },
             })
             .catch((error: unknown) => {
+              recordSpeechEvent(
+                `Cloud listening, getUserMedia refused: ${describeThrown(error)}`,
+              );
               const name = error instanceof DOMException ? error.name : '';
               if (name === 'NotAllowedError' || name === 'SecurityError') {
                 options.onError('denied');

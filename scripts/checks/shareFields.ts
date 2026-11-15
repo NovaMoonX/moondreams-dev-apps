@@ -203,9 +203,15 @@ const appIds = SOURCE_SHARES.filter(
 for (const appId of appIds) await checkApp(appId);
 
 /** Every category says what it reads, and its scopeVersion is the newest read's, so a new read always raises it and the reader shows it as new. */
-const checkReads = (manifest: ConnectorManifest) =>
+const checkReads = (manifest: ConnectorManifest) => {
+  const isBadText = (text: string) =>
+    text.trim().length === 0 || text.length > 240;
+  if (isBadText(manifest.about))
+    problems.push(`${manifest.id} — about must be 1 to 240 characters`);
   manifest.categories.forEach((category) => {
     const where = `${manifest.id} ${category.id}`;
+    if (isBadText(category.meaning))
+      problems.push(`${where} — meaning must be 1 to 240 characters`);
     if (category.reads.length === 0)
       problems.push(`${where} — reads is empty: say what the category reads`);
     category.reads
@@ -232,6 +238,7 @@ const checkReads = (manifest: ConnectorManifest) =>
         `${where} — scopeVersion is ${category.scopeVersion} but the newest read is since ${newest}: a new read raises scopeVersion to its sinceVersion`,
       );
   });
+};
 
 [
   ...SOURCE_SHARES.flatMap(({ shares }) => shares),

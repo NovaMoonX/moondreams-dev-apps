@@ -5,6 +5,8 @@ export const GOOGLE_CALENDAR_MANIFEST: ConnectorManifest = {
   id: 'google:calendar',
   kind: 'oauth',
   contractVersion: 1,
+  about:
+    "Google Calendar, the person's Google calendars, connected through their Google account.",
   transformVersion: 1,
   categories: [
     {
@@ -12,6 +14,8 @@ export const GOOGLE_CALENDAR_MANIFEST: ConnectorManifest = {
       kind: 'event',
       label: 'Events',
       detail: "Each event's title, time and calendar.",
+      meaning:
+        "Events on the person's Google calendars, with their time, calendar, and whether the person is free or busy.",
       mode: 'sync',
       isOnAtConnect: true,
       addedInVersion: 1,

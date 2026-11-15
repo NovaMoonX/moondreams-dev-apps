@@ -6,6 +6,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   getRegistryAppForPath,
   rememberAppLocation,
+  stampAppOpened,
   SITE_VERSION,
 } from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
@@ -76,6 +77,12 @@ function LocationSync() {
       rememberAppLocation(user.uid, location.pathname, location.search);
     }
   }, [user, location.pathname, location.search]);
+
+  const uid = user?.uid ?? null;
+  const openAppId = getRegistryAppForPath(location.pathname)?.id ?? null;
+  useEffect(() => {
+    if (uid && openAppId) stampAppOpened(uid, openAppId);
+  }, [uid, openAppId]);
 
   // The hub's manifest (index.html) is the only one, so the site installs as a single app; each app only gets its own tab icon and title.
   useEffect(() => {
