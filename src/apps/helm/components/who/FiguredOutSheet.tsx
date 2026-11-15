@@ -201,7 +201,7 @@ function Body({ who, otherId, onClose, onDirtyChange }: BodyProps) {
   if (isFixing)
     return (
       <div className='space-y-4'>
-        <div className='space-y-1.5'>
+        <div className='space-y-1.5 max-sm:min-h-80'>
           <span className='block text-sm font-medium break-words'>
             {HELM_COPY.connectionFamilyField(other.name, ownName)}
           </span>
@@ -216,7 +216,7 @@ function Body({ who, otherId, onClose, onDirtyChange }: BodyProps) {
           />
         </div>
         <ModalFooterActions
-          note={note}
+          note={note ?? (choice === null ? HELM_COPY.figuredFixPick : null)}
           cancelAction={
             <Button
               type='button'
@@ -245,7 +245,8 @@ function Body({ who, otherId, onClose, onDirtyChange }: BodyProps) {
     <div className='space-y-6'>
       <div className='-mt-1 space-y-1'>
         <p className='text-muted-foreground text-[15px] text-pretty break-words'>
-          {HELM_COPY.figuredSideLine(toSideLine('family', side, ownName))}
+          {toSideLine('family', side, ownName)}{' '}
+          <span className='whitespace-nowrap'>{HELM_COPY.figuredSuffix}</span>
         </p>
         <p className='text-muted-foreground text-[13px] text-pretty break-words'>
           {toBecauseLine(link, selfId ?? null, nameOf)}

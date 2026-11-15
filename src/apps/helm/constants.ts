@@ -2041,7 +2041,8 @@ export const HELM_COPY = {
   connectionSince: (date: string) => `Since ${date}`,
   connectionSinceInline: (date: string) => `since ${date}`,
   figuredOut: 'Figured out',
-  figuredSideLine: (line: string) => `${line} · Figured out`,
+  figuredSuffix: '· Figured out',
+  figuredFixPick: "Pick how they're related.",
   figuredBecause: {
     siblings: (first: string | null, second: string | null) =>
       `Because ${first ?? 'you'} and ${second ?? 'you'} are both your siblings`,
@@ -2069,8 +2070,6 @@ export const HELM_COPY = {
   figuredUndone: 'Put back as it was.',
   figuredUndoChanged: 'It was changed since, so it was left as it is.',
   figuredMore: (count: number) => `Show ${count} more figured out`,
-  figuredNote:
-    "Figured out from what you've told me. Tap one to confirm or correct it.",
   figuredDuplicate: 'You already linked these two meanwhile.',
   figuredGone: "That link isn't worked out any more.",
   contactAddPhone: 'Add a phone',

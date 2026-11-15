@@ -11,6 +11,7 @@ import AddRow from '@apps/helm/components/who/AddRow';
 import ConnectionSheet, {
   type ConnectionTarget,
 } from '@apps/helm/components/who/ConnectionSheet';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import FiguredOutSheet from '@apps/helm/components/who/FiguredOutSheet';
 import WhoMark from '@apps/helm/components/who/WhoMark';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -124,9 +125,10 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
                   {shownName(other)}
                 </PrivateTitle>
                 <span className='text-muted-foreground block text-[13px] break-words'>
-                  {HELM_COPY.figuredSideLine(
-                    toSideLine('family', side, who.isSelf ? null : who.name),
-                  )}
+                  {toSideLine('family', side, who.isSelf ? null : who.name)}{' '}
+                  <span className='whitespace-nowrap'>
+                    {HELM_COPY.figuredSuffix}
+                  </span>
                 </span>
               </span>
               <ChevronRight
@@ -145,19 +147,9 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
         </li>
       </ul>
       {hiddenCount > 0 && (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          onClick={() => setIsShowingAllFigured(true)}
-        >
+        <ShowMoreButton onClick={() => setIsShowingAllFigured(true)}>
           {HELM_COPY.figuredMore(hiddenCount)}
-        </Button>
-      )}
-      {shownFigured.length > 0 && (
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.figuredNote}
-        </p>
+        </ShowMoreButton>
       )}
       <ConnectionSheet
         isOpen={target !== null}
