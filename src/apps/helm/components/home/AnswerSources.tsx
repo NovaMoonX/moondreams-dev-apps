@@ -12,6 +12,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import AppLogo from '@/components/AppLogo';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useAuth } from '@/hooks/useAuth';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
@@ -45,6 +46,8 @@ import { pathOf } from '@apps/helm/utils/topicTree';
 type SyncedSource = Extract<SourceRef, { kind: 'synced' }>;
 type ConnectionSource = Extract<SourceRef, { kind: 'connection' }>;
 type NoteSource = Extract<SourceRef, { kind: 'note' }>;
+
+const FOLDED_COUNT = 3;
 
 const ROW =
   'flex h-auto min-h-12 w-full items-center justify-start gap-3 rounded-none border-0 px-0! py-2.5! text-left';
@@ -373,9 +376,13 @@ interface AnswerSourcesProps {
   canOpen: boolean;
 }
 
-/** Where a records answer came from, one row per source; a kind not built yet draws nothing. */
+/** Where a records answer came from, one row per source, the apps it read first so their freshness is never folded away; a kind not built yet draws nothing. */
 function AnswerSources({ sources, canOpen }: AnswerSourcesProps) {
-  const rows = sources.flatMap((source) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const rows = [
+    ...sources.filter((source) => source.kind === 'connection'),
+    ...sources.filter((source) => source.kind !== 'connection'),
+  ].flatMap((source) => {
     if (source.kind === 'task') {
       return [
         <TaskSourceRow
@@ -429,7 +436,19 @@ function AnswerSources({ sources, canOpen }: AnswerSourcesProps) {
       aria-label={HELM_COPY.answerSourcesLabel}
       className='divide-border border-border flex flex-col divide-y border-t'
     >
-      {rows}
+      {isOpen ? rows : rows.slice(0, FOLDED_COUNT)}
+      {rows.length > FOLDED_COUNT && (
+        <div className='py-1.5'>
+          <ShowMoreButton
+            isOpen={isOpen}
+            onClick={() => setIsOpen((open) => !open)}
+          >
+            {isOpen
+              ? HELM_COPY.answerShowFewer
+              : HELM_COPY.answerShowMore(rows.length - FOLDED_COUNT)}
+          </ShowMoreButton>
+        </div>
+      )}
     </div>
   );
 }

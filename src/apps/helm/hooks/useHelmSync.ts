@@ -32,6 +32,8 @@ import {
   setFactsFailed,
   setStyle,
   setStyleFailed,
+  setAssistants,
+  setAssistantsFailed,
   setKeyDateIndex,
   setKeyDateIndexFailed,
   setKeyStatus,
@@ -72,8 +74,11 @@ import {
   setUnseenCapturesFailed,
   setWaitingCaptures,
   setWaitingCapturesFailed,
+  setOutsideCaptures,
+  setOutsideCapturesFailed,
 } from '@apps/helm/store/helmSlice';
 import {
+  startOutsideCapturesListener,
   startRecentCapturesListener,
   startUnseenCapturesListener,
   startWaitingCapturesListener,
@@ -98,6 +103,7 @@ import {
 import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
 import { startPlanDaysListener } from '@apps/helm/store/listeners/planDayListener';
+import { startAssistantsListener } from '@apps/helm/store/listeners/assistantListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import {
   startOpenTasksListener,
@@ -231,6 +237,14 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
         },
         (error) => console.error('Helm profile listener failed', error),
       ),
+      startAssistantsListener(
+        uid,
+        (assistants) => dispatch(setAssistants(assistants)),
+        (error) => {
+          console.error('Helm connected assistants listener failed', error);
+          dispatch(setAssistantsFailed());
+        },
+      ),
     );
     return () => {
       isCurrent = false;
@@ -341,6 +355,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm waiting turns listener failed', error);
               dispatch(setWaitingCapturesFailed());
+            },
+          ),
+          startOutsideCapturesListener(
+            uid,
+            read,
+            (captures) => dispatch(setOutsideCaptures(captures)),
+            (error) => {
+              console.error('Helm outside turns listener failed', error);
+              dispatch(setOutsideCapturesFailed());
             },
           ),
           startOpenTasksListener(

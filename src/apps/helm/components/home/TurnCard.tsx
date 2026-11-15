@@ -29,8 +29,8 @@ import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelector
 import type { OpenCapture } from '@apps/helm/types';
 import {
   getAnsweredQuestions,
+  getDismissedQuestions,
   getHomeHeldLine,
-  getLeftQuestions,
   getOpenQuestions,
   toHeldKind,
 } from '@apps/helm/utils/heldCaptures';
@@ -126,8 +126,8 @@ function TurnCard({
     ...unskipped,
     ...openQuestions.filter((entry) => entry.skippedAt !== null),
   ].slice(0, QUESTIONS_PER_TURN);
-  const leftIds = capture.isUnreadable ? [] : getLeftQuestions(capture);
   const answered = capture.isUnreadable ? [] : getAnsweredQuestions(capture);
+  const dismissed = capture.isUnreadable ? [] : getDismissedQuestions(capture);
   const planLine = getPlanLine();
   const lastMessage = joined.at(-1) ?? capture;
   const hasCard = hasResults && executions.length > 0;
@@ -144,8 +144,7 @@ function TurnCard({
     !capture.answer &&
     !capture.planDayKey &&
     heldLine === null &&
-    openQuestions.length === 0 &&
-    leftIds.length === 0;
+    openQuestions.length === 0;
   const quietLine = isQuietAnswer
     ? (capture.line ?? HELM_COPY.answerNoted)
     : hasNothingShown
@@ -237,7 +236,7 @@ function TurnCard({
       )}
       {isReading && !capture.isUnreadable && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine isQuiet>
+          <AssistantLine isQuiet isWorking>
             {joined.length > 0
               ? HELM_COPY.readingSeveral(joined.length + 1)
               : HELM_COPY.reading}
@@ -259,6 +258,7 @@ function TurnCard({
               isOnHome={isOnHome}
               isSeen={capture.seenAt !== null}
               showsNotice={showsNotice}
+              canReplay={showsOutcome && isOnHome}
             />
           ))}
         </div>
@@ -272,12 +272,16 @@ function TurnCard({
       )}
       {planLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine>{planLine}</AssistantLine>
+          <AssistantLine
+            speakText={showsOutcome && isOnHome ? planLine : undefined}
+          >{planLine}</AssistantLine>
         </div>
       )}
       {quietLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine>{quietLine}</AssistantLine>
+          <AssistantLine
+            speakText={showsOutcome && isOnHome ? quietLine : undefined}
+          >{quietLine}</AssistantLine>
         </div>
       )}
       {capture.answer && !capture.isUnreadable && (
@@ -301,6 +305,14 @@ function TurnCard({
           answer={entry.answer}
         />
       ))}
+      {dismissed.map((entry) => (
+        <p
+          key={entry.id}
+          className='text-muted-foreground pl-[30px] text-[13px] text-pretty break-words'
+        >
+          {HELM_COPY.questionDismissedLine(entry.question.prompt)}
+        </p>
+      ))}
       {questions.length > 0 && (
         <div className='mt-2 flex w-full flex-col items-start gap-8'>
           {questions.map((entry) => (
@@ -313,14 +325,6 @@ function TurnCard({
           ))}
         </div>
       )}
-      {leftIds.map((id) => (
-        <p
-          key={id}
-          className='text-muted-foreground self-start pl-[30px] text-left text-[13px] text-pretty'
-        >
-          {HELM_COPY.questionLeft}
-        </p>
-      ))}
       {openQuestions.length > questions.length && (
         <p className='text-muted-foreground pl-[30px] text-[13px] text-pretty'>
           {HELM_COPY.questionMore(openQuestions.length - questions.length)}
