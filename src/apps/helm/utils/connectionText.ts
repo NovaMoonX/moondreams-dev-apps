@@ -4,7 +4,6 @@ import {
   CONNECTION_STATUSES,
   reverseRelation,
   type ConnectionSide,
-  type Gender,
   type InferredLink,
 } from '@apps/helm/engine/connections';
 import type { ConnectionKind, ConnectionRelation } from '@apps/helm/types';
@@ -71,17 +70,16 @@ export const STATUS_OPTIONS = CONNECTION_STATUSES.map((status) => ({
   label: HELM_COPY.connectionStatuses[status],
 }));
 
-/** What the other person is to `whoId` in a figured-out link; `otherGender` words the answer when `whoId` is the first of the pair. */
+/** What the other person is to `whoId` in a figured-out link. */
 export const toFiguredSide = (
   link: InferredLink,
   whoId: string,
-  otherGender: Gender,
 ): ConnectionSide => {
   const isFirst = link.firstId === whoId;
   const relation = isFirst
     ? link.relationOfFirstToSecond === null
       ? null
-      : reverseRelation(link.relationOfFirstToSecond, otherGender)
+      : reverseRelation(link.relationOfFirstToSecond, link.genders.second)
     : link.relationOfFirstToSecond;
   return {
     otherId: isFirst ? link.secondId : link.firstId,
@@ -92,13 +90,12 @@ export const toFiguredSide = (
   };
 };
 
-/** "Because Joan is your mother and Ruth is Joan's sister": the owner reads as "you". */
 export const toBecauseLine = (
   link: InferredLink,
   selfId: string | null,
   nameOf: (id: string) => string,
 ) => {
-  const display = (id: string) => (id === selfId ? 'you' : nameOf(id));
+  const display = (id: string) => (id === selfId ? null : nameOf(id));
   const [first, second] = link.chain;
   const parent = [first.fromId, first.toId].find(
     (id) => id === second?.fromId || id === second?.toId,
@@ -118,7 +115,6 @@ export const toBecauseLine = (
     link.chain.map((step) =>
       HELM_COPY.figuredBecause.step(
         display(step.fromId),
-        step.fromId === selfId,
         step.toId === selfId ? null : nameOf(step.toId),
         toRelationWord(step.relation),
       ),

@@ -54,9 +54,14 @@ async function createConnection(
   input: NewConnection,
   source: ConnectionSource,
   isTaken: (existing: Connection) => boolean,
-): Promise<Exclude<ConnectionResult, 'unreadable'>> {
-  if (!navigator.onLine) return 'offline';
-  if (input.firstId === input.secondId) return 'missing';
+): Promise<{
+  result: Exclude<ConnectionResult, 'unreadable'>;
+  createdAt: number;
+}> {
+  const now = Date.now();
+  if (!navigator.onLine) return { result: 'offline', createdAt: now };
+  if (input.firstId === input.secondId)
+    return { result: 'missing', createdAt: now };
   const record = buildConnection(
     input.firstId,
     input.secondId,
@@ -82,7 +87,6 @@ async function createConnection(
     },
     encryption,
   );
-  const now = Date.now();
   const connection: Connection = {
     whoIds: record.whoIds,
     kind: record.kind,
@@ -94,29 +98,35 @@ async function createConnection(
     sealed,
   };
   try {
-    return await runTransaction(db, async (transaction) => {
-      const [existing, ...whos] = await Promise.all([
-        transaction.get(ref),
-        ...whoRefs.map((whoRef) => transaction.get(whoRef)),
-      ]);
-      if (whos.some((who) => !who.exists())) return 'missing';
-      if (existing.exists() && isTaken(existing.data() as Connection))
-        return 'duplicate';
-      transaction.set(ref, connection);
-      return 'saved';
-    });
+    const result = await runTransaction(
+      db,
+      async (transaction): Promise<'saved' | 'missing' | 'duplicate'> => {
+        const [existing, ...whos] = await Promise.all([
+          transaction.get(ref),
+          ...whoRefs.map((whoRef) => transaction.get(whoRef)),
+        ]);
+        if (whos.some((who) => !who.exists())) return 'missing';
+        if (existing.exists() && isTaken(existing.data() as Connection))
+          return 'duplicate';
+        transaction.set(ref, connection);
+        return 'saved';
+      },
+    );
+    return { result, createdAt: now };
   } catch (error) {
-    if (isUnavailable(error)) return 'offline';
+    if (isUnavailable(error)) return { result: 'offline', createdAt: now };
     throw error;
   }
 }
 
 /** An existing pair and kind is refused as `duplicate` inside the transaction; a refused proposal is replaced. Needs a connection. */
-export const addConnection = (
+export const addConnection = async (
   uid: string,
   encryption: HelmEncryption,
   input: NewConnection,
-) => createConnection(uid, encryption, input, 'page', isShownConnection);
+) =>
+  (await createConnection(uid, encryption, input, 'page', isShownConnection))
+    .result;
 
 /** The person's answer to a figured-out link: `confirmed` keeps the words, `refused` seals the ones they turned down. Written only when the pair has no family document yet, so it is `duplicate` when one was made meanwhile. Needs a connection. */
 export const settleFamilyLink = (
@@ -251,6 +261,28 @@ export async function removeConnection(
     if (!snapshot.exists()) return null;
     transaction.delete(ref);
     return { id, data: snapshot.data() };
+  });
+}
+
+/** Removes the answer `settleFamilyLink` wrote only while it is still that document: not edited, not made again. */
+export async function undoSettledFamilyLink(
+  uid: string,
+  id: string,
+  createdAt: number,
+): Promise<'undone' | 'changed'> {
+  const ref = doc(connectionsOf(uid), id);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const current = snapshot.exists() ? (snapshot.data() as Connection) : null;
+    if (
+      !current ||
+      current.createdAt !== createdAt ||
+      current.lastEditedAt !== null ||
+      (current.source !== 'confirmed' && current.source !== 'refused')
+    )
+      return 'changed';
+    transaction.delete(ref);
+    return 'undone';
   });
 }
 

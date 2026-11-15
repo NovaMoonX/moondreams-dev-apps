@@ -15,7 +15,6 @@ import type { ByWho } from '../keyDateIndex.js';
 import { normalizeKin, type KinBirthday } from './kin.js';
 import { KIN_KINDS, type WhoKin } from './kinKinds.js';
 import {
-  genderOf,
   inferFamilyLinks,
   isShownConnection,
   reverseRelation,
@@ -23,7 +22,6 @@ import {
   type ConnectionRelation,
   type ConnectionSource,
   type CoupleStatus,
-  type Gender,
   type InferredLink,
 } from './connections.js';
 
@@ -112,7 +110,6 @@ const toConnectionWords = (
   connections: ContextConnection[],
   figuredOut: InferredLink[],
   names: Map<string, string>,
-  genders: Map<string, Gender>,
 ) => {
   const lines = [
     ...connections
@@ -120,7 +117,7 @@ const toConnectionWords = (
       .flatMap((connection) => toConnectionText(connection, whoId, names)),
     ...figuredOut
       .filter((link) => [link.firstId, link.secondId].includes(whoId))
-      .flatMap((link) => toFiguredText(link, whoId, names, genders)),
+      .flatMap((link) => toFiguredText(link, whoId, names)),
   ].slice(0, MAX_CONTEXT_CONNECTIONS);
   return lines.length > 0 ? { connections: lines } : {};
 };
@@ -192,12 +189,10 @@ const toConnectionText = (
   return [word ? `${other} is their ${word}` : `${other} is family`];
 };
 
-/** A link worked out, not told: marked so an answer that rests on it can say so. */
 const toFiguredText = (
   link: InferredLink,
   whoId: string,
   names: Map<string, string>,
-  genders: Map<string, Gender>,
 ) => {
   const isFirst = link.firstId === whoId;
   const otherId = isFirst ? link.secondId : link.firstId;
@@ -206,10 +201,7 @@ const toFiguredText = (
   const relation = isFirst
     ? link.relationOfFirstToSecond === null
       ? null
-      : reverseRelation(
-          link.relationOfFirstToSecond,
-          genders.get(otherId) ?? null,
-        )
+      : reverseRelation(link.relationOfFirstToSecond, link.genders.second)
     : link.relationOfFirstToSecond;
   const word = toRelationText(relation);
   return [
@@ -239,9 +231,6 @@ export function toContextPeople(
   );
   const kinById = new Map(
     records.map((record) => [record.id, normalizeKin(record.words.kin)]),
-  );
-  const genders = new Map(
-    [...kinById].map(([id, kin]) => [id, genderOf({ kin })]),
   );
   const figuredOut = inferFamilyLinks({
     selfId: records.find((record) => record.isSelf)?.id ?? null,
@@ -281,13 +270,7 @@ export function toContextPeople(
       relation: record.words.relation,
       kin: kin ? toKinText(kin) : null,
       ...toContactWords(record),
-      ...toConnectionWords(
-        record.id,
-        shownConnections,
-        figuredOut,
-        linkable,
-        genders,
-      ),
+      ...toConnectionWords(record.id, shownConnections, figuredOut, linkable),
     }));
 }
 

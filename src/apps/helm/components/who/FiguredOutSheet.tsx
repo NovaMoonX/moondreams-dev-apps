@@ -13,15 +13,14 @@ import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
-  genderOf,
   toConnectionId,
   type ConnectionGenders,
   type InferredLink,
 } from '@apps/helm/engine/connections';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
-  removeConnection,
   settleFamilyLink,
+  undoSettledFamilyLink,
   type ConnectionResult,
 } from '@apps/helm/store/actions/connectionActions';
 import { selectFiguredOutByWho } from '@apps/helm/store/selectors/connectionSelectors';
@@ -54,12 +53,13 @@ interface BodyProps {
   who: OpenWho;
   otherId: string;
   onClose: () => void;
-  requestClose: () => void;
   onDirtyChange: (isDirty: boolean) => void;
 }
 
-const toGenders = (...people: OpenWho[]): ConnectionGenders =>
-  Object.fromEntries(people.map((person) => [person.id, genderOf(person)]));
+const toGenders = (link: InferredLink): ConnectionGenders => ({
+  [link.firstId]: link.genders.first,
+  [link.secondId]: link.genders.second,
+});
 
 const toNote = (result: Exclude<ConnectionResult, 'saved' | 'unreadable'>) =>
   result === 'offline'
@@ -68,13 +68,7 @@ const toNote = (result: Exclude<ConnectionResult, 'saved' | 'unreadable'>) =>
       ? HELM_COPY.connectionLinkGone
       : HELM_COPY.figuredDuplicate;
 
-function Body({
-  who,
-  otherId,
-  onClose,
-  requestClose,
-  onDirtyChange,
-}: BodyProps) {
+function Body({ who, otherId, onClose, onDirtyChange }: BodyProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const people = useAppSelector((state) => state.helm.who.items);
@@ -84,6 +78,12 @@ function Body({
   const [choice, setChoice] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const backToFirstView = () => {
+    setIsFixing(false);
+    setChoice(null);
+    setNote(null);
+    onDirtyChange(false);
+  };
   const other = people.find((entry) => entry.id === otherId) ?? null;
   const link = figuredOut
     .get(who.id)
@@ -97,7 +97,7 @@ function Body({
     );
 
   const ownName = who.isSelf ? null : who.name;
-  const side = toFiguredSide(link, who.id, genderOf(other));
+  const side = toFiguredSide(link, who.id);
   const nameOf = (id: string) =>
     people.find((entry) => entry.id === id)?.name ?? '';
 
@@ -111,13 +111,17 @@ function Body({
     setNote(null);
     try {
       const encryption = await getHelmEncryption(user.uid);
-      const result = await settleFamilyLink(user.uid, encryption, {
-        firstId: next.firstId,
-        secondId: next.secondId,
-        relationOfFirstToSecond: next.relationOfFirstToSecond,
-        genders: toGenders(who, other),
-        source,
-      });
+      const { result, createdAt } = await settleFamilyLink(
+        user.uid,
+        encryption,
+        {
+          firstId: next.firstId,
+          secondId: next.secondId,
+          relationOfFirstToSecond: next.relationOfFirstToSecond,
+          genders: toGenders(link),
+          source,
+        },
+      );
       if (result === 'saved') {
         onDirtyChange(false);
         onClose();
@@ -127,15 +131,17 @@ function Body({
           action: {
             label: HELM_COPY.undo,
             onClick: () =>
-              void removeConnection(
+              void undoSettledFamilyLink(
                 user.uid,
                 toConnectionId(next.firstId, next.secondId, 'family'),
+                createdAt,
               ).then(
-                (removed) =>
+                (undone) =>
                   addToast({
-                    title: removed
-                      ? HELM_COPY.figuredUndone
-                      : HELM_COPY.connectionLinkGone,
+                    title:
+                      undone === 'undone'
+                        ? HELM_COPY.figuredUndone
+                        : HELM_COPY.figuredUndoChanged,
                     type: 'info',
                   }),
                 (error: unknown) => {
@@ -197,7 +203,7 @@ function Body({
       <div className='space-y-4'>
         <div className='space-y-1.5'>
           <span className='block text-sm font-medium break-words'>
-            {HELM_COPY.connectionFamilyField(other.name, who.name)}
+            {HELM_COPY.connectionFamilyField(other.name, ownName)}
           </span>
           <Select
             options={WRONG_OPTIONS}
@@ -216,7 +222,7 @@ function Body({
               type='button'
               variant='tertiary'
               disabled={isBusy}
-              onClick={requestClose}
+              onClick={backToFirstView}
             >
               {HELM_COPY.editCancel}
             </Button>
@@ -296,7 +302,6 @@ function FiguredOutSheet({
           who={who}
           otherId={otherId}
           onClose={close}
-          requestClose={requestClose}
           onDirtyChange={setIsDirty}
         />
       )}

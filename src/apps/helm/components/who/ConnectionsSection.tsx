@@ -14,17 +14,15 @@ import ConnectionSheet, {
 import FiguredOutSheet from '@apps/helm/components/who/FiguredOutSheet';
 import WhoMark from '@apps/helm/components/who/WhoMark';
 import { HELM_COPY } from '@apps/helm/constants';
-import {
-  CONNECTION_KINDS,
-  genderOf,
-  readFromSide,
-} from '@apps/helm/engine/connections';
+import { CONNECTION_KINDS, readFromSide } from '@apps/helm/engine/connections';
 import {
   selectFiguredOutByWho,
   selectShownConnections,
 } from '@apps/helm/store/selectors/connectionSelectors';
 import type { OpenWho } from '@apps/helm/types';
 import { toFiguredSide, toSideLine } from '@apps/helm/utils/connectionText';
+
+const FIGURED_SHOWN = 5;
 
 const shownName = (other: OpenWho) =>
   other.isUnreadable ? HELM_COPY.unreadable : other.name;
@@ -37,6 +35,7 @@ interface ConnectionsSectionProps {
 function ConnectionsSection({ who }: ConnectionsSectionProps) {
   const [target, setTarget] = useState<ConnectionTarget | null>(null);
   const [figuredOtherId, setFiguredOtherId] = useState<string | null>(null);
+  const [isShowingAllFigured, setIsShowingAllFigured] = useState(false);
   const figuredOut = useAppSelector(selectFiguredOutByWho);
   const connections = useAppSelector(selectShownConnections);
   const people = useAppSelector((state) => state.helm.who.items);
@@ -60,11 +59,13 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
         (entry) =>
           entry.id === (link.firstId === who.id ? link.secondId : link.firstId),
       );
-      return other
-        ? [{ link, other, side: toFiguredSide(link, who.id, genderOf(other)) }]
-        : [];
+      return other ? [{ link, other, side: toFiguredSide(link, who.id) }] : [];
     })
     .sort((a, b) => a.other.name.localeCompare(b.other.name));
+  const shownFigured = isShowingAllFigured
+    ? figuredRows
+    : figuredRows.slice(0, FIGURED_SHOWN);
+  const hiddenCount = figuredRows.length - shownFigured.length;
 
   return (
     <section className='space-y-3'>
@@ -105,7 +106,7 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
             </Button>
           </li>
         ))}
-        {figuredRows.map(({ link, side, other }) => (
+        {shownFigured.map(({ link, side, other }) => (
           <li key={`${link.firstId}_${link.secondId}`}>
             <Button
               type='button'
@@ -143,6 +144,21 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
           />
         </li>
       </ul>
+      {hiddenCount > 0 && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          onClick={() => setIsShowingAllFigured(true)}
+        >
+          {HELM_COPY.figuredMore(hiddenCount)}
+        </Button>
+      )}
+      {shownFigured.length > 0 && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.figuredNote}
+        </p>
+      )}
       <ConnectionSheet
         isOpen={target !== null}
         onClose={() => setTarget(null)}

@@ -1,9 +1,9 @@
-// Family links worked out from what is stored: each rule, nothing for friends or work, a stored link or a refusal always wins, dating and past couples imply nothing, private people and pets are left out, and 200 people with 400 connections take well under 50 ms.
 import assert from 'node:assert/strict';
 
 import * as server from '../../functions/src/apps/helm/nomos/connections.ts';
 import type { KinKind } from '../../src/apps/helm/engine/kinKinds.ts';
 import {
+  impliedConnections,
   inferFamilyLinks,
   type ConnectionKind,
   type ConnectionRelation,
@@ -63,7 +63,6 @@ const brief = (links: ReturnType<typeof run>) =>
 
 const me = who('me');
 
-// Two of the owner's siblings are siblings of each other.
 const siblings = run([me, who('maya', 'sister'), who('eli', 'brother')]);
 assert.deepEqual(brief(siblings), [['maya', 'eli', 'sister', 'siblings']]);
 assert.deepEqual(siblings[0].chain, [
@@ -79,7 +78,6 @@ assert.equal(
   'a stored sibling word counts like the family word on the person',
 );
 
-// Two people with the same stored parent are siblings.
 const sameParent = run(
   [me, who('joan', 'mother'), who('eli')],
   [link(['eli', 'joan'], 'family', 'son', 'mother')],
@@ -87,7 +85,6 @@ const sameParent = run(
 assert.deepEqual(brief(sameParent), [['me', 'eli', 'sibling', 'sameParent']]);
 assert.equal(sameParent[0].chain.length, 2);
 
-// A parent's sibling is an aunt or uncle, with their own gender; an unknown gender has no word.
 assert.deepEqual(
   brief(
     run(
@@ -116,7 +113,6 @@ assert.equal(
   'a stored aunt or uncle needs nothing worked out',
 );
 
-// A stored word is its person's own: a stored sister is a woman, so her niece's word for her is aunt.
 assert.deepEqual(
   brief(
     run(
@@ -127,7 +123,6 @@ assert.deepEqual(
   [['ruth', 'me', 'aunt', 'auntUncle']],
 );
 
-// A worked-out aunt (a parent's stored sister) and an aunt's child (a cousin), the cousin's chain running through the aunt.
 const family = [me, who('joan', 'mother'), who('ruth'), who('lee')];
 const familyLinks = [
   link(['joan', 'ruth'], 'family', 'sister', 'sister'),
@@ -154,7 +149,6 @@ assert.deepEqual(
   ['mother', 'sister', 'son'],
 );
 
-// A stored aunt's child is a cousin (one step through the aunt).
 const storedAunt = run(
   [me, who('ruth', 'aunt'), who('lee')],
   [link(['lee', 'ruth'], 'family', 'son', 'mother')],
@@ -162,7 +156,6 @@ const storedAunt = run(
 assert.deepEqual(brief(storedAunt), [['lee', 'me', 'cousin', 'cousin']]);
 assert.equal(storedAunt[0].chain.length, 2);
 
-// A parent's parent is a grandparent.
 const grandparent = run(
   [me, who('joan', 'mother'), who('ada')],
   [link(['ada', 'joan'], 'family', 'mother', 'daughter')],
@@ -178,7 +171,6 @@ assert.deepEqual(
   ],
 );
 
-// A sibling's spouse is a sibling-in-law; dating, engaged and past couples imply nothing.
 const eliWed = (status: CoupleStatus | null) =>
   run(
     [me, who('eli', 'brother'), who('sam')],
@@ -201,7 +193,6 @@ assert.equal(
   'a refused couple implies nothing',
 );
 
-// A parent's spouse who is not a parent is a stepparent.
 const step = run(
   [me, who('joan', 'mother'), who('sam')],
   [couple(['joan', 'sam'], 'married')],
@@ -224,7 +215,6 @@ assert.equal(
   'a dating partner is no stepparent',
 );
 
-// Friends and work never imply anything.
 assert.equal(
   run(
     [me, who('joan', 'mother'), who('pat'), who('eli', 'brother')],
@@ -237,7 +227,6 @@ assert.equal(
   'friends and work imply nothing',
 );
 
-// A stored link, a couple or a refusal beats an inference.
 const trio = [me, who('maya', 'sister'), who('eli', 'brother')];
 assert.equal(
   run(trio, [link(['eli', 'maya'], 'family', 'brother', 'sister')]).length,
@@ -268,7 +257,6 @@ assert.equal(
   'a friend link does not stop a family one',
 );
 
-// The owner and someone who already has a family word is never worked out.
 assert.equal(
   run(
     [me, who('joan', 'mother'), who('ada', 'grandmother')],
@@ -277,7 +265,6 @@ assert.equal(
   0,
 );
 
-// Private people, pets and organizations are left out, as their facts are.
 const withPrivate = (id: string) =>
   [me, who('maya', 'sister'), who('eli', 'brother')].map((entry) =>
     entry.id === id ? { ...entry, isPrivate: true } : entry,
@@ -297,7 +284,6 @@ assert.equal(
   'nothing is worked out through a private person',
 );
 
-// One result per pair, no one with themself, no owner, nothing when no one is the owner.
 const crowded = run(
   [me, who('joan', 'mother'), who('eli', 'brother')],
   [link(['eli', 'joan'], 'family', 'son', 'mother')],
@@ -317,7 +303,6 @@ assert.equal(
   'without an owner a family word means nothing',
 );
 
-// The server's copy works out the same.
 assert.deepEqual(
   server.inferFamilyLinks({
     selfId: 'me',
@@ -327,7 +312,6 @@ assert.deepEqual(
   worked,
 );
 
-// 200 people and 400 connections in well under 50 ms.
 const crowd = Array.from({ length: 200 }, (_, index) =>
   who(
     `p${index}`,
@@ -360,5 +344,46 @@ const large = inferFamilyLinks({
 const took = performance.now() - started;
 assert.ok(took < 50, `inference took ${took.toFixed(1)} ms for 200 people`);
 assert.ok(large.length >= 0);
+
+const children = Array.from({ length: 200 }, (_, index) =>
+  who(`c${index}`, null),
+);
+const parentOfMany = Array.from({ length: 200 }, (_, index) =>
+  link(
+    ['p', `c${index}`].sort() as [string, string],
+    'family',
+    'parent',
+    'child',
+  ),
+);
+const manyStarted = performance.now();
+const manyChildren = inferFamilyLinks({
+  selfId: 'me',
+  people: [who('me'), who('p'), ...children],
+  connections: parentOfMany,
+});
+const manyTook = performance.now() - manyStarted;
+assert.ok(
+  manyTook < 50,
+  `one parent with 200 children took ${manyTook.toFixed(1)} ms`,
+);
+assert.equal(manyChildren.length, 0);
+
+const sisterAndBrother = impliedConnections({
+  selfId: null,
+  people: [who('a', 'sister'), who('b', 'brother')],
+  connections: [],
+  touchedIds: ['a'],
+});
+assert.deepEqual(
+  sisterAndBrother.map((entry) => [
+    entry.firstId,
+    entry.secondId,
+    entry.relationOfFirstToSecond,
+  ]),
+  [['a', 'b', 'sister']],
+);
+
+assert.deepEqual(siblings[0].genders, { first: 'female', second: 'male' });
 
 console.log('Helm family links: all checks passed');

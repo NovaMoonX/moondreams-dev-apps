@@ -1970,8 +1970,8 @@ export const HELM_COPY = {
     friend: 'Friends',
     work: 'Work',
   },
-  connectionFamilyField: (other: string, name: string) =>
-    `${other} is ${name}'s…`,
+  connectionFamilyField: (other: string, name: string | null) =>
+    `${other} is ${name === null ? 'your' : `${name}'s`}…`,
   connectionFamilyNotSure: 'Family, not sure how',
   connectionStatusField: 'Where they are',
   connectionStatuses: {
@@ -2043,17 +2043,16 @@ export const HELM_COPY = {
   figuredOut: 'Figured out',
   figuredSideLine: (line: string) => `${line} · Figured out`,
   figuredBecause: {
-    siblings: (first: string, second: string) =>
-      `Because ${first} and ${second} are both your siblings`,
-    sameParent: (parent: string, first: string, second: string) =>
-      `Because ${parent} is a parent of both ${first} and ${second}`,
-    step: (
-      subject: string,
-      isYou: boolean,
-      owner: string | null,
-      word: string | null,
+    siblings: (first: string | null, second: string | null) =>
+      `Because ${first ?? 'you'} and ${second ?? 'you'} are both your siblings`,
+    sameParent: (
+      parent: string | null,
+      first: string | null,
+      second: string | null,
     ) =>
-      `${subject} ${isYou ? 'are' : 'is'} ${owner === null ? 'your' : `${owner}'s`} ${word ?? 'family'}`,
+      `Because ${parent ?? 'you'} ${parent === null ? 'are' : 'is'} a parent of both ${first ?? 'you'} and ${second ?? 'you'}`,
+    step: (subject: string | null, owner: string | null, word: string | null) =>
+      `${subject ?? 'you'} ${subject === null ? 'are' : 'is'} ${owner === null ? 'your' : `${owner}'s`} ${word ?? 'family'}`,
     steps: (steps: string[]) =>
       `Because ${steps.length > 1 ? `${steps.slice(0, -1).join(', ')} and ${steps[steps.length - 1]}` : steps.join('')}`,
   },
@@ -2068,6 +2067,10 @@ export const HELM_COPY = {
   figuredRefusedToast: (other: string, name: string | null) =>
     `Noted: ${other} and ${name ?? 'you'} aren't family`,
   figuredUndone: 'Put back as it was.',
+  figuredUndoChanged: 'It was changed since, so it was left as it is.',
+  figuredMore: (count: number) => `Show ${count} more figured out`,
+  figuredNote:
+    "Figured out from what you've told me. Tap one to confirm or correct it.",
   figuredDuplicate: 'You already linked these two meanwhile.',
   figuredGone: "That link isn't worked out any more.",
   contactAddPhone: 'Add a phone',

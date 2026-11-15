@@ -204,16 +204,13 @@ export const readFromSide = (
 export const isShownConnection = (connection: { source: ConnectionSource }) =>
   connection.source !== 'refused';
 
-/** A private one, a pet or an organization is never part of an inference. */
 export interface InferPerson {
   id: string;
-  /** What this person is to the owner. */
   kin: { kind: KinKind; order?: unknown } | null;
   isPrivate: boolean;
   isPerson: boolean;
 }
 
-/** A refusal is kept so it is never asked or worked out again. */
 export interface InferConnectionState {
   whoIds: [string, string];
   kind: ConnectionKind;
@@ -221,11 +218,9 @@ export interface InferConnectionState {
   fromFirst: ConnectionRelation | null;
   fromSecond: ConnectionRelation | null;
   status: CoupleStatus | null;
-  /** Its sealed words could not be opened. */
   isUnreadable: boolean;
 }
 
-/** `fromId` is `relation` to `toId`. */
 export interface ChainStep {
   fromId: string;
   toId: string;
@@ -244,12 +239,16 @@ export type InferredBecause =
 export interface InferredLink {
   firstId: string;
   secondId: string;
+  genders: { first: Gender; second: Gender };
   /** Null when the list has no word for it (an aunt or uncle of unknown gender), shown as "family". */
   relationOfFirstToSecond: KinKind | null;
-  /** The stored facts it was worked out from, one to three. */
   chain: ChainStep[];
   because: InferredBecause;
 }
+
+type WorkedLink = Omit<InferredLink, 'genders'>;
+
+const MAX_SIBLING_GROUP = 30;
 
 type Role = 'parent' | 'child' | 'sibling' | 'auntUncle' | 'nibling' | 'spouse';
 
@@ -289,7 +288,6 @@ const isKinRelation = (
 ): relation is KinKind =>
   relation !== null && relation !== 'friend' && relation !== 'coworker';
 
-/** A couple that is past, dating or engaged says nothing about the family around it. */
 const isSettledCouple = (connection: InferConnectionState) =>
   connection.kind === 'couple' &&
   connection.source !== 'refused' &&
@@ -316,11 +314,7 @@ const toStoredFacts = (connection: InferConnectionState): ChainStep[] => {
   ];
 };
 
-/**
- * The family links the stored ones make likely, each with the facts it came from: the owner's siblings are siblings of each other, as are two children of one parent; a parent's sibling is an aunt or uncle and their child a cousin; a parent's parent is a grandparent; a sibling's spouse a sibling-in-law; a parent's spouse who is not a parent a stepparent.
- * A gendered word comes from the person's own family word, or the gendered word a stored link says they are (a sister is a woman).
- * Never for a pair with a family or couple document (a refusal included), a private person, a pet or an organization, or the owner and someone who already has a family word; nothing for friends or work.
- */
+/** Family links the stored ones make likely, each with the facts it came from; never for a decided or refused pair, a private person, a pet or an organization. */
 export const inferFamilyLinks = (input: {
   selfId: string | null;
   people: InferPerson[];
@@ -344,12 +338,12 @@ export const inferFamilyLinks = (input: {
       return gender ? [[step.fromId, gender]] : [];
     }),
   );
+  const genderFor = (id: string): Gender =>
+    genderOf({ kin: person.get(id)?.kin ?? null }) ??
+    statedGender.get(id) ??
+    null;
   const formFor = (forms: Forms, id: string) =>
-    forms[
-      genderOf({ kin: person.get(id)?.kin ?? null }) ??
-        statedGender.get(id) ??
-        'neutral'
-    ];
+    forms[genderFor(id) ?? 'neutral'];
   const withRole = (roles: Role[]) =>
     facts.flatMap((step) => {
       const role = ROLE_OF.get(step.relation);
@@ -390,7 +384,7 @@ export const inferFamilyLinks = (input: {
       )
       .map((connection) => pairKey(...connection.whoIds)),
   );
-  const isAllowed = (link: InferredLink) =>
+  const isAllowed = (link: WorkedLink) =>
     link.firstId !== link.secondId &&
     isOpen(link.firstId) &&
     isOpen(link.secondId) &&
@@ -400,7 +394,7 @@ export const inferFamilyLinks = (input: {
       [link.firstId, link.secondId].includes(selfId) &&
       person.get(link.firstId === selfId ? link.secondId : link.firstId)?.kin
     );
-  const dedupe = (links: InferredLink[]) => [
+  const dedupe = (links: WorkedLink[]) => [
     ...links
       .filter(isAllowed)
       .reduce(
@@ -408,7 +402,7 @@ export const inferFamilyLinks = (input: {
           byPair.has(pairKey(link.firstId, link.secondId))
             ? byPair
             : byPair.set(pairKey(link.firstId, link.secondId), link),
-        new Map<string, InferredLink>(),
+        new Map<string, WorkedLink>(),
       )
       .values(),
   ];
@@ -421,7 +415,7 @@ export const inferFamilyLinks = (input: {
     );
   const siblings = pairsOf(
     selfId === null ? [] : entriesOf(siblingsOf, selfId),
-  ).map(([[a, aStep], [b, bStep]]): InferredLink => ({
+  ).map(([[a, aStep], [b, bStep]]): WorkedLink => ({
     firstId: a,
     secondId: b,
     relationOfFirstToSecond: formFor(SIBLING, a),
@@ -429,15 +423,17 @@ export const inferFamilyLinks = (input: {
     because: 'siblings',
   }));
   const sameParent = [...childrenOf.keys()].flatMap((parent) =>
-    pairsOf(entriesOf(childrenOf, parent)).map(
-      ([[a, aStep], [b, bStep]]): InferredLink => ({
-        firstId: a,
-        secondId: b,
-        relationOfFirstToSecond: formFor(SIBLING, a),
-        chain: [aStep, bStep],
-        because: 'sameParent',
-      }),
-    ),
+    (childrenOf.get(parent)?.size ?? 0) > MAX_SIBLING_GROUP
+      ? []
+      : pairsOf(entriesOf(childrenOf, parent)).map(
+          ([[a, aStep], [b, bStep]]): WorkedLink => ({
+            firstId: a,
+            secondId: b,
+            relationOfFirstToSecond: formFor(SIBLING, a),
+            chain: [aStep, bStep],
+            because: 'sameParent',
+          }),
+        ),
   );
   const auntsAndUncles = dedupe([
     ...siblings,
@@ -449,7 +445,7 @@ export const inferFamilyLinks = (input: {
             ([relative]) =>
               relative !== child && !parentsOf.get(child)?.has(relative),
           )
-          .map(([relative, relativeStep]): InferredLink => ({
+          .map(([relative, relativeStep]): WorkedLink => ({
             firstId: relative,
             secondId: child,
             relationOfFirstToSecond: formFor(AUNT_UNCLE, relative),
@@ -478,7 +474,7 @@ export const inferFamilyLinks = (input: {
   const cousins = knownAunts.flatMap(({ aunt, nibling, chain }) =>
     entriesOf(childrenOf, aunt)
       .filter(([kid]) => kid !== nibling && !siblingsOf.get(nibling)?.has(kid))
-      .map(([kid, kidStep]): InferredLink => ({
+      .map(([kid, kidStep]): WorkedLink => ({
         firstId: kid,
         secondId: nibling,
         relationOfFirstToSecond: 'cousin',
@@ -489,7 +485,7 @@ export const inferFamilyLinks = (input: {
   const grandparents = [...parentsOf.keys()].flatMap((child) =>
     entriesOf(parentsOf, child).flatMap(([parent, parentStep]) =>
       entriesOf(parentsOf, parent).map(
-        ([grandparent, grandStep]): InferredLink => ({
+        ([grandparent, grandStep]): WorkedLink => ({
           firstId: grandparent,
           secondId: child,
           relationOfFirstToSecond: formFor(GRANDPARENT, grandparent),
@@ -505,7 +501,7 @@ export const inferFamilyLinks = (input: {
         .filter(
           ([spouse]) => spouse !== owner && !siblingsOf.get(owner)?.has(spouse),
         )
-        .map(([spouse, spouseStep]): InferredLink => ({
+        .map(([spouse, spouseStep]): WorkedLink => ({
           firstId: spouse,
           secondId: owner,
           relationOfFirstToSecond: formFor(SIBLING_IN_LAW, spouse),
@@ -523,7 +519,7 @@ export const inferFamilyLinks = (input: {
             !parentsOf.get(child)?.has(spouse) &&
             !siblingsOf.get(child)?.has(spouse),
         )
-        .map(([spouse, spouseStep]): InferredLink => ({
+        .map(([spouse, spouseStep]): WorkedLink => ({
           firstId: spouse,
           secondId: child,
           relationOfFirstToSecond: formFor(STEPPARENT, spouse),
@@ -538,7 +534,13 @@ export const inferFamilyLinks = (input: {
     ...grandparents,
     ...inLaws,
     ...stepparents,
-  ]);
+  ]).map((link): InferredLink => ({
+    ...link,
+    genders: {
+      first: genderFor(link.firstId),
+      second: genderFor(link.secondId),
+    },
+  }));
 };
 
 export type ImpliedPerson = InferPerson;
@@ -551,7 +553,6 @@ export interface ImpliedLink {
   because: 'siblings' | 'parentsPartner' | 'siblingsPartner';
 }
 
-/** What a turn's own words make likely, so it is asked: the owner's siblings, a parent's spouse, a sibling's spouse. Only for `touchedIds`. */
 export interface ImpliedConnectionState {
   whoIds: [string, string];
   kind: ConnectionKind;
@@ -566,6 +567,9 @@ const ASKED_BECAUSE: InferredBecause[] = [
   'siblingsPartner',
 ];
 
+// Stands in for an owner who is not known, so siblings still imply each other; never returned.
+const NO_OWNER_ID = '\u0000owner';
+
 export const impliedConnections = (input: {
   selfId: string | null;
   people: ImpliedPerson[];
@@ -573,9 +577,13 @@ export const impliedConnections = (input: {
   touchedIds: string[];
 }): ImpliedLink[] => {
   const touched = new Set(input.touchedIds);
+  const selfId = input.selfId ?? NO_OWNER_ID;
   return inferFamilyLinks({
-    selfId: input.selfId,
-    people: input.people,
+    selfId,
+    people: [
+      ...input.people,
+      { id: NO_OWNER_ID, kin: null, isPrivate: false, isPerson: true },
+    ],
     connections: input.connections.map((connection) => ({
       ...connection,
       fromFirst: null,
@@ -583,6 +591,8 @@ export const impliedConnections = (input: {
     })),
   }).flatMap((link): ImpliedLink[] =>
     link.relationOfFirstToSecond !== null &&
+    link.firstId !== NO_OWNER_ID &&
+    link.secondId !== NO_OWNER_ID &&
     (ASKED_BECAUSE as string[]).includes(link.because) &&
     (touched.has(link.firstId) || touched.has(link.secondId))
       ? [
