@@ -103,6 +103,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/lib/speech/soundAlike.ts',
+    dest: 'functions/src/vendor/soundAlike.ts',
+    importRewrites: { '@/utils/optionMatchUtils': './optionMatchUtils.js' },
+  },
+  {
     src: 'src/utils/optionMatchUtils.ts',
     dest: 'functions/src/vendor/optionMatchUtils.ts',
     importRewrites: { '@/utils/stringUtils': './stringUtils.js' },
@@ -143,6 +148,21 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/utils/naturalDateUtils.ts',
+    dest: 'functions/src/apps/helm/naturalDate.ts',
+    importRewrites: {
+      '@/utils/timezoneUtils': '../../notifications/zonedTime.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/utils/dateReading.ts',
+    dest: 'functions/src/apps/helm/dateReading.ts',
+    importRewrites: {
+      '@/utils/naturalDateUtils': './naturalDate.js',
+      '@apps/helm/types': './nomos/commands.js',
+    },
+  },
+  {
     src: 'src/apps/helm/utils/mediaCaps.ts',
     dest: 'functions/src/apps/helm/media/mediaCaps.ts',
     importRewrites: {},
@@ -162,7 +182,7 @@ const COPIES: Copy[] = [
   {
     src: 'src/lib/speech/speechText.ts',
     dest: 'functions/src/vendor/speechText.ts',
-    importRewrites: {},
+    importRewrites: { './soundAlike': './soundAlike.js' },
   },
   {
     src: 'src/lib/speech/closingPhrase.ts',

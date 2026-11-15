@@ -5,6 +5,7 @@
   },
   "include": [
     "./lan.ts",
+    "./iconGet.ts",
     "./localServices.ts",
     "./fbDeploySmart.ts",
     "./fbInvoker.ts",

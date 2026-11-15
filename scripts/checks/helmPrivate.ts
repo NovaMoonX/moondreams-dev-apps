@@ -494,6 +494,7 @@ test('the Undo of that turn restores the class and the mark through the same Und
       id: 'exec-1',
       privacy: 'private',
       said: null,
+      via: null,
       captureId: 'turn-1',
       actor: 'nomos',
       category: 'organize',
@@ -1114,6 +1115,52 @@ test('a tool result on an unattended turn names a private task by its time of da
   ]);
   const attended = await run({ ...UNATTENDED(), isOn: false });
   assert.ok(attended.includes('Metoprolol refill'));
+});
+
+test('list_topics, as an outside assistant reads it with the mask always on, labels a private topic and never returns its name', async () => {
+  const doc = (id: string, name: string, privacy: string) => ({
+    id,
+    data: () => ({
+      privacy,
+      version: 1,
+      depth: 1,
+      sealed: sealForHelm(HELM_KEY, { name, sections: [] }),
+    }),
+  });
+  const run = async (mask: ReturnType<typeof UNATTENDED>) => {
+    const tools = buildHelmTools({
+      uid: 'u1',
+      key: HELM_KEY,
+      aliases: createAliasBook('t'),
+      timeZone: 'UTC',
+      firestore: {
+        collection: () => ({
+          limit: () => ({
+            get: async () => ({
+              docs: [
+                doc('a', 'Mom medication plan', 'private'),
+                doc('b', 'Packing list', 'ordinary'),
+              ],
+            }),
+          }),
+        }),
+      } as never,
+      topicRead: {
+        topics: createAliasBook('tp'),
+        sections: createAliasBook('s'),
+        versions: new Map(),
+      },
+      mask,
+    });
+    const found = (await tools
+      .find((tool) => tool.name === 'list_topics')
+      ?.run({} as never)) as { topics: { name: string }[] };
+    return found.topics.map((topic) => topic.name);
+  };
+  const masked = await run(UNATTENDED());
+  assert.deepEqual(masked, ['a private topic', 'Packing list']);
+  const attended = await run({ ...UNATTENDED(), isOn: false });
+  assert.ok(attended.includes('Mom medication plan'));
 });
 
 test('earlier turns and already-made lines that touch something private are labelled, and their words join the mask', async () => {

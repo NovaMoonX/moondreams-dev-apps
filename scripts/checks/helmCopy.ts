@@ -57,9 +57,20 @@ const copiers = listFiles('src/apps/helm')
   .filter((path) =>
     /\b(copyToClipboard|CopyTextButton)\b/.test(readFileSync(path, 'utf8')),
   );
-const unfiltered = copiers.filter(
-  (path) => !readFileSync(path, 'utf8').includes('filterPrivate'),
-);
+// A file whose every copy is the app's own fixed words (an address, a description to paste) holds no record to filter.
+const copiesOnlyFixedWords = (source: string) => {
+  const copied = [
+    ...source.matchAll(/\btext=\{\s*([^}]*)\}/g),
+    ...source.matchAll(/\bcopyToClipboard\(\s*([^,)]*)/g),
+  ].map((match) => match[1].trim());
+  return (
+    copied.length > 0 && copied.every((value) => value.startsWith('HELM_COPY.'))
+  );
+};
+const unfiltered = copiers.filter((path) => {
+  const source = readFileSync(path, 'utf8');
+  return !source.includes('filterPrivate') && !copiesOnlyFixedWords(source);
+});
 unfiltered.forEach((path) =>
   problems.push(
     `${path} copies text without filterPrivate; private things are left out of a copy unless this copy includes them`,
