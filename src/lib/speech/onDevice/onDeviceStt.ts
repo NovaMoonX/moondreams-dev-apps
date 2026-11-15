@@ -38,8 +38,8 @@ const toErrorCode = (error: unknown): SttErrorCode => {
 
 /**
  * Opens the microphone as a frame source. Echo cancellation keeps a line the page plays from being heard as the person,
- * but on Android it also puts the phone in call mode, which pauses or muffles music, so a listener that runs while
- * nothing plays opens without it.
+ * but on Android it also puts the phone in call mode, which pauses or muffles music, so the wake listener (which runs
+ * while nothing plays, and hands this microphone to its turn) opens without it.
  */
 const openMicrophone = async ({
   isEchoCancelled,
@@ -210,7 +210,8 @@ export const createOnDeviceStt = ({
 
 /**
  * Listens for wake phrases with the downloaded model, on this device only: each finished phrase (a pause ends one) goes to
- * `onPhrase`. `close` releases the model and microphone; `handOver` releases only the model and returns the open microphone.
+ * `onPhrase`. `close` releases the model and microphone; `handOver` releases only the model and returns the open
+ * microphone, which has no echo cancellation.
  */
 export const listenOnDevice = ({
   onPhrase,
