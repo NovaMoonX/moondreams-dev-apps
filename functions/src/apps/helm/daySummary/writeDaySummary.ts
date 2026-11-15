@@ -37,6 +37,7 @@ import {
   getDayBounds,
   isEmptyDay,
   isWaitingOnBatch,
+  PENDING_BATCH,
   readDaySummary,
   toDayLine,
   SUMMARY_MAX_ATTEMPTS,
@@ -203,8 +204,7 @@ export type DaySummaryPreparation =
       key: HelmKey;
     };
 
-/** Stands in for the batch id from the night run's claim until its batch is sent, so a live writer leaves the day alone meanwhile. */
-export const PENDING_BATCH = 'pending';
+export { PENDING_BATCH } from './countDay.js';
 
 /** Counts the day and writes it at once as `counted` (or `empty`); when a sentence is still wanted and `isAsking`, reserves one quick call (counting the attempt) and returns the request. `isForBatch` marks the claim as waiting on a batch. A spent allowance leaves `counted` and says `busy`; a summary waiting on its batch says `busy`. */
 export async function prepareDaySummary(

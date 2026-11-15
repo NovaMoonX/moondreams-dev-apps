@@ -440,6 +440,21 @@ assert.equal(
 );
 assert.equal(SUMMARY_BATCH_WAIT_MS, 6 * 60 * MINUTE);
 assert.equal(
+  isWaitingOnBatch(waiting(sentAt, 'pending'), sentAt + 14 * MINUTE),
+  true,
+  'a claim waiting to be sent holds the day',
+);
+assert.equal(
+  isWaitingOnBatch(waiting(sentAt, 'pending'), sentAt + 16 * MINUTE),
+  false,
+  'a claim whose run died frees the day for the next run',
+);
+assert.match(
+  readFileSync('src/apps/helm/hooks/useDaySummary.ts', 'utf8'),
+  /SUMMARY_PENDING_WAIT_MS = 15 \* 60 \* 1000/,
+  'the device waits the same 15 minutes on a pending claim',
+);
+assert.equal(
   isWaitingOnBatch(waiting(sentAt), sentAt + SUMMARY_BATCH_WAIT_MS - 1),
   true,
 );
@@ -498,6 +513,7 @@ assert.deepEqual(
 [
   ['another batch', { ...waitingDoc, batchId: 'b2' }],
   ['cleared by a live write', { ...waitingDoc, batchId: null }],
+  ['still pending', { ...waitingDoc, batchId: 'pending' }],
   ['marked stale', { ...waitingDoc, staleAt: 5 }],
   ['already written', { ...waitingDoc, status: 'written' }],
   ['gone', null],

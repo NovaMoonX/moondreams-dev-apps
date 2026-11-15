@@ -125,15 +125,24 @@ export async function submitDaySummaryBatch(
   );
   if (!submitted) return 0;
   const { batchId, ids } = submitted;
-  await firestore.doc(`${BATCHES}/${batchId}`).set({
-    createdAt: now,
-    requests: Object.fromEntries(
-      Object.entries(ids).map(([customId, { uid, dayKey, reservedAt }]) => [
-        customId,
-        { uid, dayKey, reservedAt },
-      ]),
-    ),
-  });
+  const batchRef = firestore.doc(`${BATCHES}/${batchId}`);
+  await batchRef
+    .set({
+      createdAt: now,
+      requests: Object.fromEntries(
+        Object.entries(ids).map(([customId, { uid, dayKey, reservedAt }]) => [
+          customId,
+          { uid, dayKey, reservedAt },
+        ]),
+      ),
+    })
+    .catch((error: unknown) => {
+      logger.error('helm.daySummary.batchNotRecorded', {
+        batchId,
+        count: queued.length,
+      });
+      throw error;
+    });
   const marks = await Promise.allSettled(
     Object.values(ids).map(({ uid, dayKey }) => {
       const ref = firestore.doc(
