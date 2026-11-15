@@ -1504,7 +1504,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
 
   // A year of day summaries: mostly written, some only counted, some empty.
   const summaryKeys = range(365).map((index) =>
-    new Date(now - (index + 1) * DAY_MS).toISOString().slice(0, 10),
+    new Date(now - (index + 1) * DAY_MS).toLocaleDateString('en-CA', {
+      timeZone: OWNER_TIME_ZONE,
+    }),
   );
   const summaryDocs = await mapChunked(summaryKeys, async (dayKey, index) => {
     const status: HelmDaySummary['status'] =
@@ -1523,7 +1525,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       answered: index % 3 === 0 ? 2 : 0,
       dismissed: index % 9 === 0 ? 1 : 0,
     };
-    const line = `${messages} messages · added ${counts.tasksAdded} tasks, finished ${counts.tasksDone}`;
+    const tasks = (count: number) =>
+      `${count} ${count === 1 ? 'task' : 'tasks'}`;
+    const line = `${messages} messages · added ${tasks(counts.tasksAdded)}, finished ${tasks(counts.tasksDone)}`;
     const value: HelmDaySummary = {
       dayKey,
       status,
@@ -1536,7 +1540,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           : await seal<HelmDaySummarySealed>({
               text:
                 status === 'written'
-                  ? `A day of small things sorted: ${counts.tasksAdded} tasks came in and ${counts.tasksDone} were finished.`
+                  ? `A day of small things sorted: ${tasks(counts.tasksAdded)} came in and ${tasks(counts.tasksDone)} finished.`
                   : line,
               line,
               counts,

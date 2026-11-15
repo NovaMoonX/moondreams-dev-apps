@@ -361,6 +361,8 @@ async function markDaySummaryStale(uid: string, executionId: string) {
     if (typeof createdAt !== 'number') return;
     const dayKey = toDayKey(createdAt, timeZone);
     if (dayKey >= toDayKey(Date.now(), timeZone)) return;
+    if (dayKey < toDayKey(Date.now() - 30 * 24 * 60 * 60 * 1000, timeZone))
+      return;
     await updateDoc(doc(userOf(uid), 'daySummaries', dayKey), {
       staleAt: Date.now(),
     });

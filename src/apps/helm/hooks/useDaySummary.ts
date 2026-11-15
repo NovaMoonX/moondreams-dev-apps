@@ -5,8 +5,10 @@ import { httpsCallable } from 'firebase/functions';
 
 import { db, functions } from '@lib/firebase/config';
 import { useAppSelector } from '@/store';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { openJson } from '@apps/helm/security';
+import { toDayKey } from '@apps/helm/utils/planDays';
 import type { HelmDaySummary, HelmDaySummarySealed } from '@apps/helm/types';
 
 /** A day's summary with its sealed words opened. */
@@ -16,20 +18,30 @@ export interface OpenDaySummary {
   counts: HelmDaySummarySealed['counts'];
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const writeHelmDaySummaryCallable = httpsCallable<
   { dayKey: string },
   { status: string }
 >(functions, 'writeHelmDaySummary');
 
-/** "uid|dayKey|staleAt" marks already asked this session, so a render, a snapshot or a reopened day never calls twice. */
+/** "uid|dayKey|staleAt" marks the server answered this session, and those in flight, so a render, a snapshot or a reopened day never calls twice; a failure clears its mark so the next snapshot or reconnect asks again. */
 const asked = new Set<string>();
+const inFlight = new Set<string>();
+
+/** The server writes no summary further back than this, so the device never asks for one. */
+const DAYS_BACK = 30;
+
+const isInWindow = (dayKey: string) =>
+  dayKey >=
+  toDayKey(Date.now() - DAYS_BACK * DAY_MS, getDeviceTimeZone() ?? 'UTC');
 
 const isDue = (data: Partial<HelmDaySummary> | null) =>
   data === null ||
   typeof data.staleAt === 'number' ||
   (data.status === 'counted' && (data.attempts ?? 0) < 3);
 
-/** The summary of a past day, read live while it is shown; a missing, stale or only-counted one is asked of the server once per session, quietly. `undefined` until read, `null` when there is none to show. */
+/** The summary of a past day, read live while it is shown. A one-document subscription only the past day's card reads, keyed on the day, so it lives with that card rather than in the store; a reconnect resubscribes so a day first opened offline is asked for then; a missing, stale or only-counted one is asked of the server once per session, quietly. `undefined` until read, `null` when there is none to show. */
 export function useDaySummary(uid: string | null, dayKey: string) {
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const [read, setRead] = useState<{
@@ -38,6 +50,13 @@ export function useDaySummary(uid: string | null, dayKey: string) {
   } | null>(null);
   const key = `${uid ?? ''}|${dayKey}`;
   const isReady = uid !== null && keyStatus === 'ready';
+  const [onlineAt, setOnlineAt] = useState(0);
+
+  useEffect(() => {
+    const onOnline = () => setOnlineAt(Date.now());
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, []);
 
   useEffect(() => {
     if (!uid || !isReady) return;
@@ -50,11 +69,20 @@ export function useDaySummary(uid: string | null, dayKey: string) {
           ? (snapshot.data() as Partial<HelmDaySummary>)
           : null;
         const mark = `${key}|${data?.staleAt ?? ''}`;
-        if (isDue(data) && navigator.onLine && !asked.has(mark)) {
-          asked.add(mark);
-          writeHelmDaySummaryCallable({ dayKey }).catch((error: unknown) =>
-            console.warn('Helm day summary was not written', error),
-          );
+        if (
+          isDue(data) &&
+          isInWindow(dayKey) &&
+          navigator.onLine &&
+          !asked.has(mark) &&
+          !inFlight.has(mark)
+        ) {
+          inFlight.add(mark);
+          writeHelmDaySummaryCallable({ dayKey })
+            .then(() => asked.add(mark))
+            .catch((error: unknown) =>
+              console.warn('Helm day summary was not written', error),
+            )
+            .finally(() => inFlight.delete(mark));
         }
         sequence.latest += 1;
         const current = sequence.latest;
@@ -91,7 +119,7 @@ export function useDaySummary(uid: string | null, dayKey: string) {
       isCurrent = false;
       stop();
     };
-  }, [uid, isReady, dayKey, key]);
+  }, [uid, isReady, dayKey, key, onlineAt]);
 
   return read?.key === key ? read.summary : undefined;
 }
