@@ -18,7 +18,7 @@ const TOKENS: Record<keyof MapColours, string> = {
   background: '--color-card',
 };
 
-/** The theme's colours as they are now, read from the page so light and dark both draw right. */
+/** The theme's colours as they are now. */
 export const readMapColours = (): MapColours => {
   const style = getComputedStyle(document.documentElement);
   return Object.fromEntries(
@@ -34,17 +34,16 @@ const toDisc = (initial: string, isPrivate: boolean, colours: MapColours) => {
     ? `<rect x="14" y="19" width="12" height="9" rx="2" fill="${colours.mutedForeground}"/><path d="M16.5 19v-3a3.5 3.5 0 0 1 7 0v3" fill="none" stroke="${colours.mutedForeground}" stroke-width="2"/>`
     : `<text x="20" y="26.5" text-anchor="middle" font-size="18" font-weight="500" font-family="sans-serif" fill="${colours.mutedForeground}">${initial.replace(/[<>&"]/g, '')}</text>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="${colours.muted}"/>${mark}</svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 40 40"><rect width="40" height="40" fill="${colours.muted}"/>${mark}</svg>`,
   )}`;
 };
 
-/** Family solid, a couple double, friends dotted, work dashed; a figured-out line lighter and a past couple fainter. */
 export const buildMapStyle = (colours: MapColours): StylesheetJson => [
   {
     selector: 'node',
     style: {
-      width: 36,
-      height: 36,
+      width: 44,
+      height: 44,
       shape: 'ellipse',
       'background-color': colours.muted,
       'background-fit': 'cover',
@@ -56,17 +55,21 @@ export const buildMapStyle = (colours: MapColours): StylesheetJson => [
       'border-color': colours.border,
       label: 'data(label)',
       color: colours.foreground,
-      'font-size': 10,
+      'font-size': 12,
       'text-valign': 'bottom',
       'text-margin-y': 4,
       'text-wrap': 'ellipsis',
-      'text-max-width': '72px',
-      'min-zoomed-font-size': 7,
+      'text-max-width': '84px',
+      'text-background-color': colours.background,
+      'text-background-opacity': 1,
+      'text-background-padding': '2px',
+      'text-background-shape': 'roundrectangle',
+      'min-zoomed-font-size': 8,
     },
   },
   {
     selector: 'node[?isOwner]',
-    style: { width: 54, height: 54, 'border-color': colours.primary },
+    style: { width: 60, height: 60, 'border-color': colours.primary },
   },
   {
     selector: 'node:selected',

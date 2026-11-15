@@ -55,7 +55,11 @@ function CircleMapCard({
               isGrouped
               hasChevron
               icon={<Plus className='size-4' aria-hidden='true' />}
-              label={HELM_COPY.mapAddConnection}
+              label={
+                card?.isOwner
+                  ? HELM_COPY.mapAddForYou
+                  : HELM_COPY.mapAddConnection
+              }
               onClick={onAddConnection}
             />
           )}

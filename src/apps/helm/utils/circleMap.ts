@@ -15,10 +15,54 @@ export type MapFilter = 'close' | 'family' | 'everyone';
 /** More people than this and the map opens on Close only. */
 export const MAP_CROWDED_FROM = 30;
 
+/** How many readable people the crowded default counts: not passing, not the owner. */
+export const countMapPeople = (
+  people: readonly MapWho[],
+  selfId: string | null,
+): number =>
+  people.filter(
+    (who) =>
+      who.kind === 'person' &&
+      !who.isUnreadable &&
+      who.tier !== 'passing' &&
+      !who.isSelf &&
+      who.id !== selfId,
+  ).length;
+
 export const OWNER_FALLBACK_ID = 'owner';
 
-const OWNER_LEVEL = 10;
-const TIER_LEVEL = { close: 3, regular: 2, passing: 1 } as const;
+const OWNER_LEVEL = 1_000_000;
+const TIER_ORDER = { close: 0, regular: 1, passing: 2 } as const;
+
+const ringCapacity = (ring: number) => 8 + 6 * ring;
+
+/** Levels for the shown people, each ring on its own level below the owner: tiers close then regular, pets and organizations last, the most linked first so they sit near the middle. */
+const toRingLevels = (
+  people: readonly MapWho[],
+  degreeOf: (id: string) => number,
+): Map<string, number> =>
+  new Map(
+    [...people]
+      .sort(
+        (a, b) =>
+          Number(a.kind !== 'person') - Number(b.kind !== 'person') ||
+          TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
+          degreeOf(b.id) - degreeOf(a.id) ||
+          a.name.localeCompare(b.name),
+      )
+      .reduce<{ ring: number; filled: number; entries: [string, number][] }>(
+        (state, who) => {
+          const isFull = state.filled >= ringCapacity(state.ring);
+          const ring = isFull ? state.ring + 1 : state.ring;
+          return {
+            ring,
+            filled: isFull ? 1 : state.filled + 1,
+            entries: [...state.entries, [who.id, OWNER_LEVEL - 1 - ring]],
+          };
+        },
+        { ring: 0, filled: 0, entries: [] },
+      ).entries,
+  );
 
 type MapWho = Pick<
   OpenWho,
@@ -53,6 +97,25 @@ interface MapLink {
 }
 
 const toLinks = (input: MapInput): MapLink[] => {
+  const saved = [
+    ...new Map(
+      input.connections.map((connection) => {
+        const id = `${connection.whoIds[0]}_${connection.whoIds[1]}_${connection.kind}`;
+        return [
+          id,
+          {
+            id,
+            source: connection.whoIds[0],
+            target: connection.whoIds[1],
+            kind: connection.kind,
+            isFigured: false,
+            isPast:
+              connection.kind === 'couple' && isPastStatus(connection.status),
+          },
+        ] as const;
+      }),
+    ).values(),
+  ];
   const figured = [
     ...new Map(
       [...input.figuredOut.values()]
@@ -61,14 +124,7 @@ const toLinks = (input: MapInput): MapLink[] => {
     ).values(),
   ];
   return [
-    ...input.connections.map((connection) => ({
-      id: `${connection.whoIds[0]}_${connection.whoIds[1]}_${connection.kind}`,
-      source: connection.whoIds[0],
-      target: connection.whoIds[1],
-      kind: connection.kind,
-      isFigured: false,
-      isPast: connection.kind === 'couple' && isPastStatus(connection.status),
-    })),
+    ...saved,
     ...figured.map((link) => ({
       id: `${link.firstId}_${link.secondId}_figured`,
       source: link.firstId,
@@ -94,10 +150,7 @@ const hidesName = (input: MapInput, id: string, ownerId: string) =>
 const initialOf = (name: string) =>
   Array.from(name.trim())[0]?.toUpperCase() ?? '';
 
-/**
- * The circle as network elements: the owner in the middle, people by closeness, pets and organizations only when linked to someone shown, passing people never.
- * A private person's name, initial and photo stay out while `isMasked`.
- */
+/** The circle as network elements; a private person's name, initial and photo stay out while `isMasked`. */
 export const toCircleElements = (
   input: MapInput & {
     filter: MapFilter;
@@ -137,7 +190,7 @@ export const toCircleElements = (
   const shownIds = new Set([...chosenIds, ...linked.map((who) => who.id)]);
   const owner = readable.find((who) => who.id === ownerId);
 
-  const toNode = (who: MapWho): ElementDefinition => {
+  const toNode = (who: MapWho, level: number): ElementDefinition => {
     const isOwner = who.id === ownerId;
     const isHidden = hidesName(input, who.id, ownerId);
     return {
@@ -152,7 +205,7 @@ export const toCircleElements = (
         initial: isHidden ? '' : initialOf(who.name),
         isOwner,
         isPrivate: isHidden,
-        level: isOwner ? OWNER_LEVEL : TIER_LEVEL[who.tier],
+        level: isOwner ? OWNER_LEVEL : level,
         photo:
           isHidden || who.photoMediaId === null
             ? null
@@ -161,25 +214,6 @@ export const toCircleElements = (
     };
   };
 
-  const nodes = [
-    owner
-      ? toNode(owner)
-      : {
-          group: 'nodes' as const,
-          data: {
-            id: ownerId,
-            label: HELM_COPY.mapYou,
-            initial: initialOf(HELM_COPY.mapYou),
-            isOwner: true,
-            isPrivate: false,
-            level: OWNER_LEVEL,
-            photo: null,
-          },
-        },
-    ...readable
-      .filter((who) => who.id !== ownerId && shownIds.has(who.id))
-      .map(toNode),
-  ];
   const edges = links
     .filter(
       (link) =>
@@ -198,11 +232,65 @@ export const toCircleElements = (
         isPast: link.isPast,
       },
     }));
+  const degrees = edges.flatMap((edge) => [
+    String(edge.data.source),
+    String(edge.data.target),
+  ]);
+  const levels = toRingLevels(
+    readable.filter((who) => who.id !== ownerId && shownIds.has(who.id)),
+    (id) => degrees.filter((end) => end === id).length,
+  );
+  const nodes = [
+    owner
+      ? toNode(owner, OWNER_LEVEL)
+      : {
+          group: 'nodes' as const,
+          data: {
+            id: ownerId,
+            label: HELM_COPY.mapYou,
+            initial: initialOf(HELM_COPY.mapYou),
+            isOwner: true,
+            isPrivate: false,
+            level: OWNER_LEVEL,
+            photo: null,
+          },
+        },
+    ...readable
+      .filter((who) => who.id !== ownerId && shownIds.has(who.id))
+      .map((who) => toNode(who, levels.get(who.id) ?? OWNER_LEVEL - 1)),
+  ];
   return [...nodes, ...edges];
 };
 
+/** Which nodes (with their tier level) and edges are drawn, so a tier change counts as a different set. */
+export const toElementSignature = (
+  elements: readonly ElementDefinition[],
+): string =>
+  elements
+    .map((element) =>
+      element.group === 'nodes'
+        ? `${String(element.data.id)}:${String(element.data.level)}`
+        : String(element.data.id),
+    )
+    .sort()
+    .join('|');
+
+/** True while the canvas must be covered: nobody is looking and a private person is on it. */
+export const isMapCovered = (input: {
+  isMasked: boolean;
+  privateIds: ReadonlySet<string>;
+  elements: readonly ElementDefinition[];
+}): boolean =>
+  input.isMasked &&
+  input.elements.some(
+    (element) =>
+      element.group === 'nodes' &&
+      input.privateIds.has(String(element.data.id)),
+  );
+
 export interface MapCard {
   title: string;
+  isOwner: boolean;
   /** What they are to the owner; empty when there is no link or the name is hidden. */
   line: string;
   /** How many saved connections they have; null when hidden. */
@@ -215,7 +303,12 @@ export const toCircleCard = (input: MapInput & { id: string }): MapCard => {
   const who = input.people.find((entry) => entry.id === input.id);
   const isOwner = input.id === ownerId;
   if (hidesName(input, input.id, ownerId)) {
-    return { title: HELM_COPY.mapPrivateName, line: '', count: null };
+    return {
+      title: HELM_COPY.mapPrivateName,
+      isOwner: false,
+      line: '',
+      count: null,
+    };
   }
   const own = input.connections
     .filter(
@@ -241,6 +334,7 @@ export const toCircleCard = (input: MapInput & { id: string }): MapCard => {
           : '';
   return {
     title: isOwner ? HELM_COPY.mapYou : (who?.name ?? ''),
+    isOwner,
     line,
     count: input.connections.filter((connection) =>
       connection.whoIds.includes(input.id),

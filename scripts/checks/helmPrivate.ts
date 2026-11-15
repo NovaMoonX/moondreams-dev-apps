@@ -32,6 +32,7 @@ import {
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
+  isMapCovered,
   toCircleCard,
   toCircleElements,
 } from '../../src/apps/helm/utils/circleMap.ts';
@@ -1558,6 +1559,60 @@ test("a private person's name, initial and photo never reach the map's elements 
   assert.ok(
     shown.includes('Zelda Quartermain') && shown.includes('secret-face'),
   );
+  const elementsOf = (isMasked: boolean, filter: 'close' | 'everyone') =>
+    toCircleElements({ ...base, isMasked, filter, photoUrls });
+  assert.ok(
+    isMapCovered({
+      isMasked: true,
+      privateIds: base.privateIds,
+      elements: elementsOf(true, 'everyone'),
+    }),
+  );
+  assert.ok(
+    !isMapCovered({
+      isMasked: false,
+      privateIds: base.privateIds,
+      elements: elementsOf(false, 'everyone'),
+    }),
+  );
+  assert.ok(
+    !isMapCovered({
+      isMasked: true,
+      privateIds: new Set<string>(),
+      elements: elementsOf(true, 'everyone'),
+    }),
+  );
+});
+
+test('two identical connections draw one line', () => {
+  const who = (id: string) => ({
+    id,
+    kind: 'person' as const,
+    name: id.toUpperCase(),
+    tier: 'close' as const,
+    isSelf: id === 'me',
+    isUnreadable: false,
+    photoMediaId: null,
+  });
+  const link = {
+    whoIds: ['a', 'me'] as [string, string],
+    kind: 'friend' as const,
+    fromFirst: null,
+    fromSecond: null,
+    status: null,
+    since: null,
+  };
+  const edges = toCircleElements({
+    people: [who('me'), who('a')],
+    connections: [link, { ...link }],
+    figuredOut: new Map(),
+    selfId: 'me',
+    privateIds: new Set<string>(),
+    isMasked: false,
+    filter: 'everyone',
+    photoUrls: {},
+  }).filter((element) => element.group === 'edges');
+  assert.equal(edges.length, 1);
 });
 
 test('passing people never reach the map, and a pet appears only when linked', () => {
@@ -1604,6 +1659,53 @@ test('passing people never reach the map, and a pet appears only when linked', (
     'me',
     'miso',
   ]);
+});
+
+test('a crowd is packed into rings within capacity with the owner alone on top', () => {
+  const who = (id: string, name: string) => ({
+    id,
+    kind: 'person' as const,
+    name,
+    tier: 'close' as const,
+    isSelf: id === 'me',
+    isUnreadable: false,
+    photoMediaId: null,
+  });
+  const nodes = toCircleElements({
+    people: [
+      who('me', 'Riley'),
+      ...Array.from({ length: 100 }, (_, i) => who(`p${i}`, `P${i}`)),
+    ],
+    connections: [],
+    figuredOut: new Map(),
+    selfId: 'me',
+    privateIds: new Set<string>(),
+    isMasked: false,
+    filter: 'close',
+    photoUrls: {},
+  }).filter((element) => element.group === 'nodes');
+  const levels = nodes.map((element) => Number(element.data.level));
+  const top = Math.max(...levels);
+  assert.equal(levels.filter((level) => level === top).length, 1);
+  assert.equal(nodes.find((n) => n.data.level === top)?.data.id, 'me');
+  const sizes = [
+    ...levels
+      .filter((level) => level !== top)
+      .reduce(
+        (counts, level) => counts.set(level, (counts.get(level) ?? 0) + 1),
+        new Map<number, number>(),
+      )
+      .entries(),
+  ]
+    .sort((a, b) => b[0] - a[0])
+    .map(([, size]) => size);
+  sizes.forEach((size, index) => {
+    assert.ok(size <= 8 + 6 * index);
+  });
+  assert.equal(
+    sizes.reduce((sum, size) => sum + size, 0),
+    100,
+  );
 });
 
 const failures = (

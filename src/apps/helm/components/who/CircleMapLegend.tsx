@@ -110,7 +110,6 @@ function LineSample({
   );
 }
 
-/** What each line on the map means, and the one place the layout is put back. */
 function CircleMapLegend({
   isOpen,
   onClose,

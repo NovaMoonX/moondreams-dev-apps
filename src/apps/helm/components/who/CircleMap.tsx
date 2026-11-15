@@ -8,8 +8,9 @@ import {
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import type { Core } from 'cytoscape';
-import { Info } from 'lucide-react';
+import { Info, Lock } from 'lucide-react';
 
 import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,15 +27,19 @@ import {
 import { selectParentIndex } from '@apps/helm/store/selectors/privacySelectors';
 import type { OpenMedia } from '@apps/helm/types';
 import {
+  countMapPeople,
+  isMapCovered,
   MAP_CROWDED_FROM,
   toCircleCard,
   toCircleElements,
+  toElementSignature,
   type MapFilter,
 } from '@apps/helm/utils/circleMap';
 import {
-  clearMapPositions,
-  readMapPositions,
-  writeMapPositions,
+  clearMapLayouts,
+  readMapLayouts,
+  writeMapLayouts,
+  type MapLayouts,
   type MapPositions,
 } from '@apps/helm/utils/circleMapPositions';
 import {
@@ -107,24 +112,27 @@ interface PhotoLoaderProps {
   onUrl: (id: string, url: string | null) => void;
 }
 
-/** Opens one photo's thumbnail and hands the URL to the map; draws nothing. */
 function PhotoLoader({ media, onUrl }: PhotoLoaderProps) {
   const { url } = useMediaUrl(media, 'thumb');
   useEffect(() => {
     onUrl(media.id, url);
+    return () => onUrl(media.id, null);
   }, [media.id, url, onUrl]);
   return null;
 }
 
-const arrange = (cy: Core, saved: MapPositions) => {
+const FIT_PADDING = 12;
+const MAX_FIT_ZOOM = 1.25;
+
+const arrange = (cy: Core, saved: MapPositions, isFitNeeded: boolean) => {
+  const view = { zoom: cy.zoom(), pan: cy.pan() };
   cy.layout({
     name: 'concentric',
     concentric: (node) => node.data('level') as number,
     levelWidth: () => 1,
     minNodeSpacing: 24,
     animate: false,
-    fit: true,
-    padding: 28,
+    fit: false,
   }).run();
   cy.batch(() => {
     cy.nodes().forEach((node) => {
@@ -132,13 +140,21 @@ const arrange = (cy: Core, saved: MapPositions) => {
       if (point) node.position(point);
     });
   });
+  if (!isFitNeeded) {
+    cy.viewport(view);
+    return;
+  }
+  cy.fit(undefined, FIT_PADDING);
+  if (cy.zoom() > MAX_FIT_ZOOM) {
+    cy.zoom(MAX_FIT_ZOOM);
+    cy.center();
+  }
 };
 
 interface CircleMapProps {
   onOpenWho: (whoId: string) => void;
 }
 
-/** The owner's circle as a network: the owner in the middle, each person a circle, a line per link. Cytoscape loads only when this opens. */
 function CircleMap({ onOpenWho }: CircleMapProps) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
@@ -172,9 +188,12 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
   const [addForId, setAddForId] = useState<string | null>(null);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
-  const stored = useRef<MapPositions>({});
+  const stored = useRef<MapLayouts>({});
+  const isFitNeeded = useRef(true);
+  const drawnSignature = useRef<string | null>(null);
   const filter =
-    chosenFilter ?? (people.length > MAP_CROWDED_FROM ? 'close' : 'everyone');
+    chosenFilter ??
+    (countMapPeople(people, selfId) > MAP_CROWDED_FROM ? 'close' : 'everyone');
 
   const privateIds = useMemo(
     () =>
@@ -195,29 +214,52 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
     () => toCircleElements({ ...base, filter, photoUrls }),
     [base, filter, photoUrls],
   );
+  const isSelectedShown =
+    selectedId !== null &&
+    elements.some(
+      (element) => element.group === 'nodes' && element.data.id === selectedId,
+    );
   const card = useMemo(
     () =>
-      selectedId === null ? null : toCircleCard({ ...base, id: selectedId }),
-    [base, selectedId],
+      selectedId === null || !isSelectedShown
+        ? null
+        : toCircleCard({ ...base, id: selectedId }),
+    [base, selectedId, isSelectedShown],
   );
-  const selected = people.find((who) => who.id === selectedId) ?? null;
+  const selected = isSelectedShown
+    ? (people.find((who) => who.id === selectedId) ?? null)
+    : null;
   const addFor = people.find((who) => who.id === addForId) ?? null;
+  const mediaById = useMemo(
+    () => new Map(media.map((entry) => [entry.id, entry])),
+    [media],
+  );
   const loaders = useMemo(() => {
     const shown = new Set(elements.map((element) => element.data.id));
     return people.flatMap((who) => {
       const photo =
         who.photoMediaId === null || !shown.has(who.id)
           ? undefined
-          : media.find(
-              (entry) =>
-                entry.id === who.photoMediaId &&
-                entry.status === 'kept' &&
-                !entry.isUnreadable,
-            );
-      return photo && !(isMasked && privateIds.has(who.id)) ? [photo] : [];
+          : mediaById.get(who.photoMediaId);
+      return photo &&
+        photo.status === 'kept' &&
+        !photo.isUnreadable &&
+        !(isMasked && privateIds.has(who.id))
+        ? [photo]
+        : [];
     });
-  }, [elements, people, media, isMasked, privateIds]);
+  }, [elements, people, mediaById, isMasked, privateIds]);
   const hasLinks = elements.some((element) => element.group === 'edges');
+  const isCovered = isMapCovered({ isMasked, privateIds, elements });
+  const hasLinksAnywhere = useMemo(
+    () =>
+      toCircleElements({
+        ...base,
+        filter: 'everyone',
+        photoUrls: NO_PHOTOS,
+      }).some((element) => element.group === 'edges'),
+    [base],
+  );
 
   useEffect(() => {
     let isCancelled = false;
@@ -225,12 +267,14 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
     import('cytoscape')
       .then(({ default: cytoscape }) => {
         if (isCancelled || !container.current) return;
-        stored.current = uid ? readMapPositions(uid) : {};
+        stored.current = uid ? readMapLayouts(uid) : {};
+        isFitNeeded.current = true;
+        drawnSignature.current = null;
         made = cytoscape({
           container: container.current,
           elements: [],
           style: buildMapStyle(readMapColours()),
-          minZoom: 0.2,
+          minZoom: 0.05,
           maxZoom: 3,
           wheelSensitivity: 0.25,
           boxSelectionEnabled: false,
@@ -255,18 +299,12 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
 
   useEffect(() => {
     if (!cy) return;
-    const isSame =
-      cy.elements().length === elements.length &&
-      elements.every((element) =>
-        cy.getElementById(String(element.data.id)).nonempty(),
-      );
-    if (isSame) {
+    const signature = `${filter}#${toElementSignature(elements)}`;
+    if (signature === drawnSignature.current) {
       cy.batch(() => {
-        elements
-          .filter((element) => element.group === 'nodes')
-          .forEach((element) => {
-            cy.getElementById(String(element.data.id)).data(element.data);
-          });
+        elements.forEach((element) => {
+          cy.getElementById(String(element.data.id)).data(element.data);
+        });
       });
       return;
     }
@@ -274,8 +312,10 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
       cy.elements().remove();
       cy.add(elements);
     });
-    arrange(cy, stored.current);
-  }, [cy, elements]);
+    drawnSignature.current = signature;
+    arrange(cy, stored.current[filter] ?? {}, isFitNeeded.current);
+    isFitNeeded.current = false;
+  }, [cy, elements, filter]);
 
   useEffect(() => {
     if (!cy) return;
@@ -288,9 +328,12 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
       const point = event.target.position();
       stored.current = {
         ...stored.current,
-        [event.target.id() as string]: { x: point.x, y: point.y },
+        [filter]: {
+          ...stored.current[filter],
+          [event.target.id() as string]: { x: point.x, y: point.y },
+        },
       };
-      if (uid) writeMapPositions(uid, stored.current);
+      if (uid) writeMapLayouts(uid, stored.current);
     });
     const box = container.current;
     const observer = box && new ResizeObserver(() => cy.resize());
@@ -299,7 +342,7 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
       observer?.disconnect();
       cy.removeAllListeners();
     };
-  }, [cy, uid]);
+  }, [cy, uid, filter]);
 
   const handleCloseCard = () => {
     cy?.elements(':selected').unselect();
@@ -307,9 +350,9 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
   };
 
   const handleReset = () => {
-    if (uid) clearMapPositions(uid);
+    if (uid) clearMapLayouts(uid);
     stored.current = {};
-    if (cy) arrange(cy, {});
+    if (cy) arrange(cy, {}, true);
     setIsLegendOpen(false);
     addToast({ title: HELM_COPY.mapResetDone, type: 'success' });
   };
@@ -322,35 +365,48 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
         options={FILTER_OPTIONS}
         value={filter}
         onChange={(value) => {
+          isFitNeeded.current = true;
           setChosenFilter(value);
           handleCloseCard();
         }}
       />
+      <p className='text-muted-foreground text-[13px] text-pretty'>
+        {HELM_COPY.mapHint}
+      </p>
       <div className='helm-card relative overflow-hidden'>
         <div
           ref={container}
           data-no-swipe
           role='img'
           aria-label={HELM_COPY.mapLabel}
-          className='h-[calc(100dvh-20rem)] min-h-80 w-full touch-none'
+          className={join(
+            'h-[calc(100svh-26.5rem)] min-h-64 w-full touch-none',
+            isCovered && 'invisible',
+          )}
         />
+        {isCovered && (
+          <div className='bg-card text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-[13px]'>
+            <Lock className='size-5' aria-hidden='true' />
+            <p>{HELM_COPY.mapCovered}</p>
+          </div>
+        )}
         <Button
           type='button'
           variant='tertiary'
           aria-label={HELM_COPY.mapLegendOpen}
           onClick={() => setIsLegendOpen(true)}
-          className='absolute top-1 right-1 size-10 min-w-0 p-0'
+          className='border-border bg-card absolute top-1 right-1 size-10 min-w-0 rounded-full border p-0 [&_svg]:size-5'
         >
-          <Info className='size-5' aria-hidden='true' />
+          <Info className='size-5 shrink-0' aria-hidden='true' />
         </Button>
         {(cy === null || !hasLinks || isFailed) && (
-          <p className='text-muted-foreground pointer-events-none absolute inset-x-4 bottom-4 text-center text-[13px] text-pretty'>
+          <p className='text-muted-foreground pointer-events-none absolute top-4 right-14 left-4 text-left text-[13px] text-pretty'>
             {isFailed
               ? HELM_COPY.mapFailed
               : cy === null
                 ? HELM_COPY.mapLoading
-                : people.length === 0
-                  ? HELM_COPY.mapEmpty
+                : filter !== 'everyone' && hasLinksAnywhere
+                  ? HELM_COPY.mapNoLinksFiltered
                   : HELM_COPY.mapNoLinks}
           </p>
         )}
@@ -377,7 +433,7 @@ function CircleMap({ onOpenWho }: CircleMapProps) {
         onReset={handleReset}
         colours={colours}
       />
-      {addFor && (
+      {addFor && !(isMasked && privateIds.has(addFor.id)) && (
         <ConnectionSheet
           isOpen
           onClose={() => setAddForId(null)}
