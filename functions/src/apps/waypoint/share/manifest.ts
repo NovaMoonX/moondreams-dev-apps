@@ -40,7 +40,7 @@ export const WAYPOINT_SHARES: SourceShares = {
           detail:
             'Activities, flights, drives, stays and rentals, at their local times',
           meaning:
-            "The plans on the person's trips, such as flights, stays and activities, each with its day, time and place.",
+            "The plans on the person's trips, such as flights, stays and activities, each with its day, time and place, plus each journey's number and stops, an activity's hours and a rental's return place.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -66,8 +66,24 @@ export const WAYPOINT_SHARES: SourceShares = {
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
+            {
+              label:
+                "A plan's street address, arrive-by time and opening hours",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: "A train's or ferry's operator, number and stops",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: "A rental's vehicle and where to return it",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'myTasks',

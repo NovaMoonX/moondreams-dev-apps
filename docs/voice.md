@@ -10,7 +10,7 @@ How any app on the site listens to a person and talks back. Listening and speaki
 | **On-device model** | sherpa-onnx, a small streaming English model run in a Web Worker | The person downloads it once (about 57 MB) | Free | Nowhere. It never leaves the phone. |
 | **Browser recognition** | The browser's own Web Speech API | A browser that has one | Free | Chrome sends it to Google. Firefox has none. |
 
-Waiting for a wake phrase ("Hey" plus the assistant's name) is never done by the cloud: the on-device model if it's downloaded, else the browser's. No audio goes to the cloud before the phrase or a tap.
+Waiting for a wake phrase ("Hey" plus the assistant's name, or a name that sounds like it) is never done by the cloud: the on-device model if it's downloaded, else the browser's. No audio goes to the cloud before the phrase or a tap.
 
 ### Which way listens (apps that offer all three)
 
@@ -63,19 +63,19 @@ Every text goes through `toSpokenText` first ("1/2 tsp" becomes "half a teaspoon
 - **Command voice:** say one of a fixed set of phrases and the screen does it ("next step", "start a timer"). `useSpeechCommands` owns the recognizer, its wake window and its restarts; the app supplies the phrases.
 - **Conversation voice:** say anything to an assistant that answers. `useVoiceConversation` runs the router, the playback queue and the follow-up window; the app supplies its end phrases, identity and what an utterance becomes.
 
-Both stand on the same base: `createSpeechListener` (browser recognition), `listeningMode` (closed, waiting for a phrase, a command window, kept open, and their clocks), `readWakePhrase` and `readAloud`. Conversation voice adds the router, the cloud, the on-device model and the queue.
+Both stand on the same base: `createSpeechListener` (browser recognition), `listeningMode` (closed, waiting for a phrase, a command window, kept open, and their clocks), `readWakePhrase` (which also takes loose names: after "Hey", one or two words that `soundsLike` the name wake it) and `readAloud`. Conversation voice adds the router, the cloud, the on-device model and the queue.
 
 ### One conversation turn
 
 1. The person taps the mic or says the wake phrase. The phrase does not send anything: the listener that heard it (the browser's, kept running, or the on-device model's open microphone, handed over with the rest of that breath as its first words) carries on as the turn's listener, so what follows the phrase is part of the turn like any other.
-2. The microphone opens with echo cancellation and noise suppression.
+2. The microphone opens with echo cancellation and noise suppression, and the device cleans background noise out of it with RNNoise before the speech gate, the cloud and the on-device model hear it (the browser's own recognition hears the raw stream; a device-local switch turns the cleaning off).
 3. Words appear as they are heard.
-4. The turn ends on a tap, an end phrase such as "that's all" (held 0.9 s so "that's all I need" keeps going), or when the heard words stop changing: 1.8 seconds, or 3.5 when they end on a word that says more is coming ("and", "um", "the"; `getSettleMs` in `turnEnd.ts`). Before anything is heard, 8 seconds of quiet ends it. Empty or repeated partials never restart the wait, and an error mid-turn sends the words heard so far.
+4. The turn ends on a tap, an end phrase such as "that's all" (held 0.9 s so "that's all I need" keeps going), or a pause after the words stop changing: about 1.5 seconds, 2.5 seconds when the words end on a connector, a filler or a comma (`readTurnEndDelay`), and 8 seconds only while nothing has been heard. Empty or repeated partials never restart the wait, and an error mid-turn sends the words heard so far.
 5. The text goes to the assistant like a typed message.
 6. A confirmation is spoken as soon as the work is filed, then the answer.
 7. An 8-second follow-up window lets the person reply without tapping again.
 
-Talking over a reply stops it and starts a new turn (barge-in). A fixed phrase such as "undo that" is matched on the device and never goes to the assistant. Mute lasts for the sitting only. A confirmation and a reply never overlap, and a newer turn cuts the older one's audio.
+Talking over a reply starts a new turn (barge-in), but only once it is sure: the gate is strict, the playing line ducks (the cloud voice only; the natural and system voices cannot) while a hidden listen must hear at least two words that are not the line's own within 1.5 seconds (the line's own words are its written text and its spoken form, `toSpokenText`, since the echo is what was played: "350°F" comes back as "350 degrees Fahrenheit"; numbers never count), and then the line stops and the listen carries on; otherwise the listen is dropped silently and the line returns to full volume. A fixed phrase such as "undo that" or "say that again" is matched on the device and never goes to the assistant as a turn. **Every voice command accepts loose, natural phrasing on the device** (leading fillers and politeness, several wordings: `isRepeatRequest` in `@/lib/speech/repeatRequest` is the reference, and it never fires on a sentence that merely contains the words), **and what the phone's matching cannot place goes to the assistant to decide**, which may answer with an outcome that leaves no turn behind (a repeat deletes its own turn on the server and the device replays the last line; the cloud audio is cached per voice and text, so a replay makes no new request, and nothing enters the history). Never make the person say an exact phrase. Capture setup that loads files lazily (the noise-cleaning model) is capped in time and a failure is remembered for the page's life, so a listen never hangs on it and never retries a path that already failed. A line replayed from a tap (a speaker button) goes through the conversation's `repeat(text)`, at its current turn, never a fresh `Date.now()` turn key, which would cancel a reply still on its way; a replay that can't play (muted, mid-turn) says why, and a per-line replay control sits on the newest reply only. Mute lasts for the sitting only. A confirmation and a reply never overlap, and a newer turn cuts the older one's audio.
 
 ## The allowances
 

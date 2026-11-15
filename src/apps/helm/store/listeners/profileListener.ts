@@ -11,6 +11,7 @@ import type { HelmProfile } from '@apps/helm/types';
 /** A profile written before a field existed reads that field as its default, never as missing. */
 const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   assistantName: data.assistantName ?? null,
+  assistantNameVariants: data.assistantNameVariants ?? null,
   assistantTone: data.assistantTone ?? null,
   theme: data.theme ?? null,
   timeZone: data.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -30,6 +31,8 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   selfWhoId: data.selfWhoId ?? null,
   currentPlace: data.currentPlace ?? null,
   styleLearnedThroughAt: data.styleLearnedThroughAt ?? null,
+  conversationFreshAt: data.conversationFreshAt ?? null,
+  isDailyFreshOn: data.isDailyFreshOn ?? false,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,
 });

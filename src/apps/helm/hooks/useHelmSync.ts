@@ -70,8 +70,11 @@ import {
   setUnseenCapturesFailed,
   setWaitingCaptures,
   setWaitingCapturesFailed,
+  setOutsideCaptures,
+  setOutsideCapturesFailed,
 } from '@apps/helm/store/helmSlice';
 import {
+  startOutsideCapturesListener,
   startRecentCapturesListener,
   startUnseenCapturesListener,
   startWaitingCapturesListener,
@@ -312,6 +315,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm waiting turns listener failed', error);
               dispatch(setWaitingCapturesFailed());
+            },
+          ),
+          startOutsideCapturesListener(
+            uid,
+            read,
+            (captures) => dispatch(setOutsideCaptures(captures)),
+            (error) => {
+              console.error('Helm outside turns listener failed', error);
+              dispatch(setOutsideCapturesFailed());
             },
           ),
           startOpenTasksListener(

@@ -14,7 +14,7 @@ import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { loadCaptureWords } from '@apps/helm/store/actions/activityActions';
 import {
-  selectAllCaptures,
+  selectEveryCapture,
   selectExecutionsById,
 } from '@apps/helm/store/selectors/captureSelectors';
 import {
@@ -35,7 +35,7 @@ interface ExecutionSheetProps {
 /** The words an execution was made from and the answer it gave; empty when they are gone or won't open. */
 function useCaptureTexts(captureId: string | null) {
   const { user } = useAuth();
-  const captures = useAppSelector(selectAllCaptures);
+  const captures = useAppSelector(selectEveryCapture);
   const stored = captures.find((capture) => capture.id === captureId);
   const [fetched, setFetched] = useState<{
     id: string;
@@ -73,7 +73,7 @@ function useCaptureTexts(captureId: string | null) {
 
 /** The question an execution's effect came from and the answer kept with it; null when the turn that asked it is not loaded or the question was not answered. */
 function useAskedQuestion(execution: OpenExecution) {
-  const captures = useAppSelector(selectAllCaptures);
+  const captures = useAppSelector(selectEveryCapture);
   const who = useAppSelector(selectWhoById);
   const places = useAppSelector(selectPlacesById);
   const ref = execution.questionRef;

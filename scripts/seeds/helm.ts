@@ -66,6 +66,8 @@ import type {
   Who,
   WhoSealed,
   ScreenContext,
+  HelmDaySummary,
+  HelmDaySummarySealed,
   HelmEncryption,
   PlanDaySealed,
   PlanSlot,
@@ -391,6 +393,7 @@ const toHeldFields = (
           askedAt: turnTime + SORT_DELAY_MS,
           answeredAt: null,
           skippedAt: null,
+          dismissedAt: null,
         },
       },
     };
@@ -592,6 +595,7 @@ async function buildBackToBack(input: {
         arrivedVia: 'direct',
         medium: 'web',
         via: null,
+        outsideReadScopes: null,
         sessionId: `seed-${uid}-today`,
         turnIndex: turnIndexFrom + order,
         route: order === 0 ? 'quick' : null,
@@ -608,6 +612,7 @@ async function buildBackToBack(input: {
         attachmentIds: [],
         seenAt: createdAt,
         quotedSourceKeys: [],
+        dismissedAt: null,
         answerSavedNoteId: null,
         whoIds: [],
         placeIds: [],
@@ -935,6 +940,7 @@ async function buildGmailTurn(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: `seed-${uid}-answers`,
     turnIndex: 6,
     route: 'quick',
@@ -951,6 +957,7 @@ async function buildGmailTurn(input: {
     attachmentIds: [],
     seenAt: createdAt + MINUTE_MS,
     quotedSourceKeys: [`google:gmail|${GOOGLE_ACCOUNT_ID}`],
+    dismissedAt: null,
     answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
@@ -1075,6 +1082,7 @@ async function buildAnswerTurns(input: {
         arrivedVia: 'direct',
         medium: 'web',
         via: null,
+        outsideReadScopes: null,
         sessionId: `seed-${uid}-answers`,
         turnIndex: order,
         route: 'quick',
@@ -1091,6 +1099,7 @@ async function buildAnswerTurns(input: {
         attachmentIds: [],
         seenAt: createdAt + MINUTE_MS,
         quotedSourceKeys: [],
+        dismissedAt: null,
         answerSavedNoteId:
           answer.question === SAVED_ANSWER_QUESTION
             ? SAVED_ANSWER_NOTE_ID
@@ -1219,7 +1228,40 @@ async function buildAnswerTurns(input: {
       return { id: entry.id, task };
     }),
   );
-  return { turns, tasks, notes };
+  // Three answered questions copied as an outside assistant's turns: two from Claude in one sitting, one from Gemini the day before.
+  const outsideTurns = turns.slice(0, 3).map((turn, order) => {
+    const createdAt =
+      order < 2
+        ? now - (20 - order * 6) * MINUTE_MS
+        : now - DAY_MS - 3 * 60 * MINUTE_MS;
+    const captureId = `seed-turn-outside-${order + 1}`;
+    const executionId = `seed-execution-outside-${order + 1}`;
+    return {
+      captureId,
+      executionId,
+      capture: {
+        ...turn.capture,
+        medium: 'mcp' as const,
+        via: order < 2 ? 'Claude' : 'Gemini',
+        outsideReadScopes: order === 0 ? ['apps' as const] : [],
+        sessionId: `seed-${uid}-outside-${order + 1}`,
+        turnIndex: 0,
+        executionIds: [executionId],
+        answerSavedNoteId: null,
+        seenAt: createdAt,
+        createdAt,
+        sortedAt: createdAt + SORT_DELAY_MS,
+      },
+      execution: {
+        ...turn.execution,
+        captureId,
+        createdAt: createdAt + SORT_DELAY_MS,
+        decidedAt: createdAt + SORT_DELAY_MS,
+        finishedAt: createdAt + SORT_DELAY_MS,
+      },
+    };
+  });
+  return { turns: [...turns, ...outsideTurns], tasks, notes };
 }
 
 /** Alex's plan days: yesterday as it was (one event, one kept task done that day and one not) and today (one kept slot and one suggestion), with the done task they need. */
@@ -1361,7 +1403,41 @@ async function buildPlanDays(input: {
       },
     ),
   ]);
-  return { days, task: { id: 'seed-task-plan-done', task: doneTask } };
+  const summarySealed: HelmDaySummarySealed = {
+    text: "A steady day on the wedding. Priya's party RSVP went out, the florist call got a task, and two questions about the guest list were answered.",
+    line: 'Sent 9 messages · added 2 tasks, finished 1 task, answered 2 questions',
+    counts: {
+      messages: 9,
+      tasksAdded: 2,
+      keyDatesAdded: 0,
+      notesAdded: 1,
+      factsAdded: 0,
+      peopleAdded: 0,
+      placesAdded: 0,
+      tasksDone: 1,
+      planned: 1,
+      answered: 2,
+      dismissed: 0,
+    },
+  };
+  const summary: { id: string; doc: HelmDaySummary } = {
+    id: yesterdayKey,
+    doc: {
+      dayKey: yesterdayKey,
+      status: 'written',
+      attempts: 1,
+      writtenAt: at(yesterdayKey, '23:59') + 5 * MINUTE_MS,
+      staleAt: null,
+      batchId: null,
+      batchedAt: null,
+      sealed: await sealJson<HelmDaySummarySealed>(summarySealed, encryption),
+    },
+  };
+  return {
+    days,
+    summary,
+    task: { id: 'seed-task-plan-done', task: doneTask },
+  };
 }
 
 export const toWho = (
@@ -1715,6 +1791,7 @@ async function buildNoteTurn(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: `seed-${uid}-answers`,
     turnIndex: 7,
     route: 'full',
@@ -1731,6 +1808,7 @@ async function buildNoteTurn(input: {
     attachmentIds: [],
     seenAt: createdAt + MINUTE_MS,
     quotedSourceKeys: [],
+    dismissedAt: null,
     answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
@@ -2357,6 +2435,7 @@ async function buildKnowledge(input: {
     arrivedVia: 'direct' as const,
     medium: 'web' as const,
     via: null,
+    outsideReadScopes: null,
     sessionId: `seed-${uid}-growth`,
     turnIndex,
     route: 'full' as const,
@@ -2369,6 +2448,7 @@ async function buildKnowledge(input: {
     joinedCaptureIds: [],
     attachmentIds: [],
     quotedSourceKeys: [],
+    dismissedAt: null,
     answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
@@ -2466,6 +2546,7 @@ async function buildKnowledge(input: {
         askedAt: groupBase.sortedAt,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
     },
     executionIds: [],
@@ -3019,6 +3100,7 @@ async function buildPhotoTurns(input: {
       arrivedVia: 'direct',
       medium: 'web',
       via: null,
+      outsideReadScopes: null,
       sessionId,
       turnIndex: index,
       route: 'full',
@@ -3033,6 +3115,7 @@ async function buildPhotoTurns(input: {
       joinedCaptureIds: [],
       seenAt: createdAt + MINUTE_MS,
       quotedSourceKeys: [],
+      dismissedAt: null,
       answerSavedNoteId: null,
       whoIds: [],
       placeIds: [],
@@ -3317,6 +3400,7 @@ async function buildFileTurns(input: {
       arrivedVia: 'direct',
       medium: 'web',
       via: null,
+      outsideReadScopes: null,
       sessionId,
       turnIndex: index,
       route: 'full',
@@ -3331,6 +3415,7 @@ async function buildFileTurns(input: {
       joinedCaptureIds: [],
       seenAt: createdAt + MINUTE_MS,
       quotedSourceKeys: [],
+      dismissedAt: null,
       answerSavedNoteId: null,
       whoIds: [],
       placeIds: [],
@@ -3995,6 +4080,7 @@ async function buildPeople(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: 'seed-alex-question',
     turnIndex: 0,
     route: 'quick',
@@ -4011,6 +4097,7 @@ async function buildPeople(input: {
         askedAt: questionAt + SORT_DELAY_MS,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
     },
     executionIds: [],
@@ -4019,6 +4106,7 @@ async function buildPeople(input: {
     attachmentIds: [],
     seenAt: null,
     quotedSourceKeys: [],
+    dismissedAt: null,
     answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
@@ -4078,6 +4166,7 @@ async function buildPeople(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: 'seed-alex-asked',
     turnIndex: 0,
     route: 'quick',
@@ -4094,6 +4183,7 @@ async function buildPeople(input: {
         askedAt: askedAt + SORT_DELAY_MS,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
       'seed-question-asked-nights': {
         kind: 'asked',
@@ -4101,6 +4191,7 @@ async function buildPeople(input: {
         askedAt: askedAt + SORT_DELAY_MS + 1,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
     },
     executionIds: [],
@@ -4109,6 +4200,7 @@ async function buildPeople(input: {
     attachmentIds: [],
     seenAt: null,
     quotedSourceKeys: [],
+    dismissedAt: null,
     answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
@@ -4142,6 +4234,7 @@ async function buildPeople(input: {
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: 'seed-alex-who',
     turnIndex: 0,
     route: 'quick',
@@ -4158,6 +4251,7 @@ async function buildPeople(input: {
     attachmentIds: [],
     seenAt: turnAt + MINUTE_MS,
     quotedSourceKeys: [],
+    dismissedAt: null,
     answerSavedNoteId: null,
     whoIds: ['seed-who-sam-patel'],
     placeIds: [],
@@ -4234,6 +4328,7 @@ async function buildPeople(input: {
         askedAt: newPriceAt + SORT_DELAY_MS,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
     },
     seenAt: null,
@@ -4707,6 +4802,7 @@ async function buildPeople(input: {
         askedAt: clashAt + SORT_DELAY_MS,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
     },
     seenAt: null,
@@ -4835,6 +4931,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         batch.set(users.doc(user.uid), {
           timeZone,
           assistantName,
+          assistantNameVariants:
+            assistantName === 'Juniper' ? ['juniper', 'june per'] : null,
           assistantTone,
           theme,
           dayStartTime: DEFAULT_DAY_START_TIME,
@@ -4855,6 +4953,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           currentPlace: null,
           styleLearnedThroughAt:
             user.uid === FIXTURE_USERS.partnerOne.uid ? context.now : null,
+          conversationFreshAt: null,
+          isDailyFreshOn: false,
           createdAt,
           lastEditedAt: null,
         });
@@ -4915,6 +5015,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               arrivedVia: 'direct',
               medium: 'web',
               via: null,
+              outsideReadScopes: null,
               sessionId: `seed-${user.uid}-${turn.session}`,
               turnIndex: ALL_TURNS.filter(
                 (entry) => entry.session === turn.session,
@@ -4933,6 +5034,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               attachmentIds: [],
               seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
               quotedSourceKeys: [],
+              dismissedAt: null,
               answerSavedNoteId: null,
               whoIds: [],
               placeIds: [],
@@ -5308,6 +5410,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             batch.set(person.collection('planDays').doc(entry.id), entry.day),
           );
           batch.set(
+            person.collection('daySummaries').doc(planDays.summary.id),
+            planDays.summary.doc,
+          );
+          batch.set(
             person.collection('tasks').doc(planDays.task.id),
             planDays.task.task,
           );
@@ -5611,7 +5717,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           answerTurns.notes.length +
           (gmailTurn ? 3 : 0) +
           (noteTurn ? 3 : 0) +
-          (planDays ? planDays.days.length + 1 : 0);
+          (planDays ? planDays.days.length + 2 : 0);
         return (
           backToBackCount +
           turns.reduce(

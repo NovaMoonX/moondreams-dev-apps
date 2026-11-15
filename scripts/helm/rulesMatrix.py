@@ -215,6 +215,21 @@ def main():
         admin([rm(f'{path}/planDays/new-' + a)])
     check('planDays create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/planDays/d', plan)]), False)
 
+    # A day's summary is written by the server: the owner reads it and may only set staleAt.
+    summary = dict(dayKey='2030-01-01', status='written', attempts=1, writtenAt=NOW, staleAt=None, batchId=None, batchedAt=None, sealed=SEAL)
+    sk = f'{path}/daySummaries/2030-01-01'
+    for a, tok in actors.items():
+        admin([put(sk, summary)])
+        check(f'daySummaries read [{a}]', get(sk, tok), a == 'o')
+        check(f'daySummaries list [{a}]', get(f'{path}/daySummaries', tok), a == 'o')
+        check(f'daySummaries create [{a}]', commit(tok, [put_new(sk + '-new-' + a, summary)]), False)
+        check(f'daySummaries update staleAt [{a}]', commit(tok, [put(sk, dict(summary, staleAt=NOW))]), a == 'o')
+        check(f'daySummaries update status [{a}]', commit(tok, [put(sk, dict(summary, status='counted'))]), False)
+        check(f'daySummaries update sealed [{a}]', commit(tok, [put(sk, dict(summary, sealed=dict(SEAL, value='y')))]), False)
+        check(f'daySummaries delete [{a}]', commit(tok, [rm(sk)]), False)
+        admin([rm(sk + '-new-' + a)])
+    check('daySummaries read at another uid [o]', get(f'apps/helm/users/{x_uid}/daySummaries/d', o_tok), False)
+
     # A who, a place, a project, a note and a topic are the owner's alone, like a task.
     whoDoc = dict(kind='person', tier='passing', tierSetBy='nomos', isSelf=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     placeDoc = dict(isHome=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)

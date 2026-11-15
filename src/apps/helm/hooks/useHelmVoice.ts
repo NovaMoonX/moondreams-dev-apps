@@ -13,7 +13,11 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
-import { useVoiceConversation } from '@/hooks/useVoiceConversation';
+import {
+  useVoiceConversation,
+  type VoiceRepeat,
+} from '@/hooks/useVoiceConversation';
+import { isRepeatRequest } from '@/lib/speech/repeatRequest';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
 import {
   createVoiceTokenSource,
@@ -23,7 +27,10 @@ import {
 import { store, useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { END_PHRASES, HELM_COPY, SESSION_IDLE_MS } from '@apps/helm/constants';
-import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import {
+  useAssistantName,
+  useAssistantNameVariants,
+} from '@apps/helm/hooks/useAssistantName';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
   clearSentTurn,
@@ -44,6 +51,7 @@ import {
   markCaptureSpoken,
   rankStoredNotes,
   sendCapture,
+  dismissQuestion,
   skipQuestion,
 } from '@apps/helm/store/actions/captureActions';
 import { VIEW_KINDS } from '@apps/helm/screen/views';
@@ -74,7 +82,7 @@ import {
   buildAskAgainLine,
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
-import { getOpenSessionId } from '@apps/helm/utils/sessions';
+import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
 import { isUndoPhrase, toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
@@ -103,6 +111,7 @@ export function useHelmVoice() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const name = useAssistantName();
+  const nameVariants = useAssistantNameVariants();
   const voiceIdentity = useMemo(() => toVoiceIdentity(name), [name]);
   const uid = user?.uid ?? null;
   const [note, setNote] = useState<string | null>(null);
@@ -203,7 +212,8 @@ export function useHelmVoice() {
         isWakeWordOn &&
         keyStatus === 'ready' &&
         (isHomeView || topScreen !== null),
-      spellings: toWakeSpellings(name),
+      spellings: toWakeSpellings(name, nameVariants),
+      looseNames: [name],
       onWake: wakeUp,
     },
     cloudListening: {
@@ -232,6 +242,12 @@ export function useHelmVoice() {
     setNotice(text);
     setHasNoticeDoor(hasDoor);
     setNeedsMicrophone(isMicrophone);
+  }
+
+  function sayRepeatRefusal(outcome: VoiceRepeat) {
+    if (outcome === 'none') say(HELM_COPY.nothingToRepeat);
+    if (outcome === 'muted') showNote(HELM_COPY.replayMuted);
+    if (outcome === 'busy') showNote(HELM_COPY.replayBusy);
   }
 
   function say(line: string) {
@@ -266,6 +282,11 @@ export function useHelmVoice() {
       write(text);
       return;
     }
+    if (isRepeatRequest(text)) {
+      voice.settle();
+      sayRepeatRefusal(voice.repeat());
+      return;
+    }
     if (isUndoPhrase(text)) {
       await undoLatest();
       return;
@@ -296,7 +317,11 @@ export function useHelmVoice() {
   ) {
     const state = store.getState();
     const all = selectAllCaptures(state);
-    const sessionId = getOpenSessionId(all, now);
+    const sessionId = getOpenSessionId(
+      all,
+      now,
+      getFreshFrom(state.helm.profile),
+    );
     const latest = all
       .filter((capture) => capture.sessionId === sessionId)
       .reverse()
@@ -318,6 +343,29 @@ export function useHelmVoice() {
       now,
       timeZone: state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
     });
+    if (answer?.kind === 'dismiss') {
+      try {
+        await dismissQuestion(
+          uid,
+          asked.captureId,
+          asked.id,
+          latest !== undefined &&
+            getOpenQuestions(latest).every((entry) => entry.id === asked.id),
+        );
+        say(
+          [
+            HELM_COPY.questionDismissed,
+            sayNextQuestion(asked.captureId, asked.id),
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+      } catch (error) {
+        console.error('Helm question was not dismissed by voice', error);
+        say(HELM_COPY.heldActionFailed);
+      }
+      return true;
+    }
     if (answer?.kind === 'skip') {
       try {
         await skipQuestion(uid, asked.captureId, asked.id);
@@ -479,6 +527,12 @@ export function useHelmVoice() {
           sttProvider,
           interruptedCaptureId: interrupted,
         },
+        onRepeat: (captureId) => {
+          waiting.current.delete(captureId);
+          clearSentTurn(uid, captureId);
+          voice.settle();
+          sayRepeatRefusal(voice.repeat());
+        },
       });
       recordSentTurn(uid, turn, id);
       trackSent(uid, id, turn.leadId ?? id, write, stopsAtSend);
@@ -490,7 +544,12 @@ export function useHelmVoice() {
   async function undoLatest() {
     const state = store.getState();
     const all = selectAllCaptures(state);
-    const sessionId = getOpenSessionId(all, Date.now());
+    const now = Date.now();
+    const sessionId = getOpenSessionId(
+      all,
+      now,
+      getFreshFrom(state.helm.profile),
+    );
     const isTurnPending =
       waiting.current.size > 0 ||
       all.some(
@@ -735,6 +794,8 @@ export function useHelmVoice() {
     },
     talk,
     setSurfaceShown,
+    /** Plays a line the person tapped again, or says why it can't right now. */
+    replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),
   };
 }
 

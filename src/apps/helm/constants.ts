@@ -20,6 +20,19 @@ import {
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
 export const DEFAULT_ASSISTANT_TONE: AssistantTone = 'composed';
 
+/** How a recognizer commonly writes the default name; a custom name gets its own from the server. */
+export const DEFAULT_ASSISTANT_MISHEARINGS = [
+  'no most',
+  'no moss',
+  'no mos',
+  'know most',
+  'nomas',
+  'no mas',
+  'gnomos',
+  'nomus',
+  'numos',
+];
+
 export const DEFAULT_HELM_THEME: HelmTheme = 'chestnut';
 
 /** The four palettes with the colours their preview cards draw; they match the blocks in `helm.css`. */
@@ -307,6 +320,9 @@ export const SYNCED_LIMIT = 2_000;
 /** Rows a synced task group shows on Today before the fold. */
 export const TODAY_SYNCED_ROWS = 5;
 
+/** Outside turns from one assistant with less than this between them are one conversation. */
+export const OUTSIDE_CONVERSATION_GAP_MS = 30 * 60 * 1000;
+
 /** How many executions Activity lists at first and each time it nears its foot. */
 export const ACTIVITY_PAGE = 30;
 
@@ -490,6 +506,16 @@ export const HOME_COMPOSER_ID = 'home-composer';
 
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
+  homeOpening: 'Opening your conversation',
+  newConversation: 'New conversation',
+  dailyFreshTitle: 'Start each day fresh',
+  dailyFreshDescription:
+    'Home starts each day clear. Earlier days stay under Show earlier.',
+  dailyFreshFailed: "Couldn't save that. Check your connection.",
+  newConversationStarted:
+    'New conversation. Earlier turns are under Show earlier.',
+  newConversationFailed:
+    "Couldn't start a new conversation. Check your connection.",
   talk: 'Talk',
   talkListening: 'Listening',
   talkSendLabel: 'Send what you said',
@@ -517,6 +543,10 @@ export const HELM_COPY = {
   talkNotReady: 'Not ready yet. Try again in a moment.',
   talkSendFailed: "That didn't send. Say it again.",
   nothingToUndo: 'Nothing to undo yet.',
+  nothingToRepeat: 'Nothing to repeat yet.',
+  playAgain: 'Play this again',
+  replayMuted: 'Voice is muted. Unmute it to hear this again.',
+  replayBusy: 'I can play it again once this turn is done.',
   undoWhilePending: 'Still working on that one. Try again in a moment.',
   askToday: 'Ask about today',
   chipToday: 'About today',
@@ -578,7 +608,7 @@ export const HELM_COPY = {
   overdueDue: (due: string) => `Overdue · ${due}`,
   unreadable: "Couldn't open this",
   loadingEarlier: 'Opening earlier turns',
-  earlierFold: (count: number) => `Earlier · ${count}`,
+  earlierFold: 'Show earlier',
   homeNextEvent: (clock: string, title: string) => `${clock} · ${title}`,
   homeNextEventTomorrow: (clock: string, title: string) =>
     `Tomorrow ${clock} · ${title}`,
@@ -587,6 +617,20 @@ export const HELM_COPY = {
   inboxNewSince: 'New since you looked',
   inboxEmpty: 'Nothing new since you looked.',
   markAllSeen: 'Mark all seen',
+  clearNeedsYou: 'Clear all',
+  clearNeedsYouTitle: (count: number, total: number) =>
+    count === total
+      ? `Clear all ${count} from Needs you?`
+      : `Clear ${count} of ${total} from Needs you?`,
+  clearNeedsYouBody: (keepsDisputes: boolean) =>
+    [
+      'Each question is dismissed unanswered and each turn that couldn’t be sorted leaves this list. What you said stays in your conversation.',
+      keepsDisputes
+        ? 'A question about which of two facts is true stays, since it still needs settling.'
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' '),
   seenFailed: "That couldn't be marked seen. Try again.",
   shorthandLabel: 'Shorthand',
   shorthandPerson: '@ Person',
@@ -699,6 +743,7 @@ export const HELM_COPY = {
     `${name} tried three times and couldn't read this.`,
   makeTaskAsWritten: 'Make it a task as written',
   tryReadingAgain: 'Try again',
+  failedDismissed: 'Dismissed. What you said stays in your conversation.',
   deleteCapture: 'Delete',
   deleteCaptureTitle: 'Delete this?',
   deleteCaptureBody: 'What you said is deleted. Nothing was made from it.',
@@ -963,10 +1008,23 @@ export const HELM_COPY = {
   assistantsAddress: 'https://apps.moondreams.dev/mcp/helm',
   assistantsCopyAddress: 'Copy address',
   assistantsClaudeHeading: 'Claude',
-  assistantsClaudeSteps: (name: string) => [
+  assistantsClaudeSteps: (app: string) => [
     'Open Customize, then Connectors.',
     'Tap Add, then Add custom connector.',
-    `Name it ${name}, paste the address and tap Connect. The free plan can add one connector.`,
+    `Name it ${app}, paste the address and tap Connect. The free plan can add one connector.`,
+  ],
+  assistantsDescriptionLabel: 'Description, for apps that ask',
+  assistantsDescription: (app: string) =>
+    `Your ${app}: look up tasks, calendar, topics and procedures, and tell it things to add.`,
+  assistantsCopyDescription: 'Copy description',
+  assistantsIconLabel: 'Icon, for apps that ask',
+  assistantsDownloadIcon: 'Download icon',
+  assistantsIconFailed: "The icon didn't download. Try again.",
+  assistantsChatGptHeading: 'ChatGPT',
+  assistantsChatGptSteps: (app: string) => [
+    'Open Plugins, tap Add, then Add custom MCP server.',
+    `Add the icon, name it ${app}, paste the description and the address, and leave Authentication on OAuth.`,
+    'Tick I understand and want to continue, tap Create as a plugin, then sign in.',
   ],
   assistantsGeminiHeading: 'Gemini',
   assistantsGeminiSteps: [
@@ -974,8 +1032,8 @@ export const HELM_COPY = {
     'Open Settings, then Connected Apps, then Add a custom app.',
     'Paste the address. Gemini needs its Keep Activity setting on, and asks you to confirm each change it makes.',
   ],
-  assistantsAfterConnect: (name: string) =>
-    `Once it connects, it shows up here. Try "ask ${name} what is on my list today".`,
+  assistantsAfterConnect: (app: string) =>
+    `Once it connects, it shows up here. Try "ask ${app} what is on my list today".`,
   connectSheetTitle: 'Connect an app',
   connectQuestion: (name: string, app: string) => `Let ${name} read ${app}?`,
   connectStartsTicked: (labels: string, count: number) =>
@@ -1186,6 +1244,11 @@ export const HELM_COPY = {
   voiceHandsFreeOn:
     'After a reply, it listens for a few seconds so you can answer. Nothing is sent until you speak.',
   voiceHandsFreeOff: 'Tap Talk to answer.',
+  voiceNoiseCleaningTitle: 'Clean up background noise',
+  voiceNoiseCleaning:
+    'Takes music and chatter out of what you say, on this device, before anything listens.',
+  voiceNoiseCleaningCredits:
+    'Noise cleaning uses RNNoise (BSD-3-Clause) and web-noise-suppressor (MIT), both open source.',
   voiceWakeTitle: (name: string) => `Hey ${name}`,
   voiceWake: (name: string) =>
     `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple.`,
@@ -1330,6 +1393,16 @@ export const HELM_COPY = {
     "The delete couldn't reach the server. Check your connection and run it again; it picks up where it stopped.",
   deleteAllSignIn: 'Sign in again to delete. Nothing has been removed.',
   activityTitle: 'Activity',
+  outsideTitle: 'From your assistants',
+  outsideUnnamed: 'an assistant',
+  outsideRowHint: 'What they asked',
+  outsideLead: 'What your assistants asked or told you, kept apart from home.',
+  outsideEmpty:
+    'Nothing yet. Questions and notes from your assistants will gather here.',
+  outsideConnect: 'Connect an assistant',
+  outsideSearch: 'Search conversations',
+  outsideNoMatch: 'No conversation matches that.',
+  outsideQuestions: (count: number) => `${count} questions`,
   activityRowHint: 'What was done, and when',
   activityEmpty: (name: string) =>
     `Nothing yet. Whatever ${name} does for you is listed here.`,
@@ -1545,7 +1618,30 @@ export const HELM_COPY = {
   planningDay: (day: string) => `Planning ${day}…`,
   planningDaySpoken: (day: string) => `Planning ${day}.`,
   planNothingFits: 'Nothing to suggest for this day.',
-  planYesterday: 'Yesterday, as it was.',
+  daySummaryShow: 'See the breakdown',
+  daySummaryHide: 'Hide the breakdown',
+  daySummaryMessages: (count: number) =>
+    `${count} ${count === 1 ? 'message' : 'messages'} sent`,
+  daySummaryTasksAdded: (count: number) =>
+    `${count} ${count === 1 ? 'task' : 'tasks'} added`,
+  daySummaryKeyDatesAdded: (count: number) =>
+    `${count} key ${count === 1 ? 'date' : 'dates'} added`,
+  daySummaryNotesAdded: (count: number) =>
+    `${count} ${count === 1 ? 'note' : 'notes'} added`,
+  daySummaryFactsAdded: (count: number) =>
+    `${count} ${count === 1 ? 'fact' : 'facts'} added`,
+  daySummaryPeopleAdded: (count: number) =>
+    `${count} ${count === 1 ? 'person' : 'people'} added`,
+  daySummaryPlacesAdded: (count: number) =>
+    `${count} ${count === 1 ? 'place' : 'places'} added`,
+  daySummaryTasksDone: (count: number) =>
+    `${count} ${count === 1 ? 'task' : 'tasks'} finished`,
+  daySummaryPlanned: (count: number) =>
+    `${count} ${count === 1 ? 'day' : 'days'} planned`,
+  daySummaryAnswered: (count: number) =>
+    `${count} ${count === 1 ? 'question' : 'questions'} answered`,
+  daySummaryDismissed: (count: number) =>
+    `${count} ${count === 1 ? 'item' : 'items'} dismissed`,
   planNotDone: 'Not done',
   planBringToToday: 'Bring to today',
   planBroughtToToday: (count: number) => `Brought ${count} to today`,
@@ -1585,8 +1681,8 @@ export const HELM_COPY = {
   assistantNameLabel: 'Name',
   assistantNameHint:
     "With Hey on in Voice service, it's also the name you say.",
-  assistantRenameConnected: (name: string, hasClaude: boolean) =>
-    `Connected assistants use ${name} from their next chat.${hasClaude ? ' Rename the connector in Claude to match.' : ''}`,
+  assistantRenameConnected: (name: string) =>
+    `Connected assistants use ${name} from their next chat.`,
   assistantNameError:
     'Up to 16 letters, numbers, spaces, hyphens or apostrophes.',
   assistantUseDefault: (name: string) => `Use ${name}`,
@@ -1826,6 +1922,9 @@ export const HELM_COPY = {
   questionNeedsConnection: 'Answering needs a connection.',
   questionSkip: 'Answer later',
   questionSkipped: "Saved for later. It's waiting in Needs you.",
+  questionDismiss: 'Dismiss',
+  questionDismissed: 'Dismissed.',
+  questionDismissedLine: (prompt: string) => `${prompt} · Dismissed`,
   questionAnswered: 'Done.',
   factKept: (statement: string) => `Kept “${statement}”`,
   factKeptNeither: 'Saved what’s true now',

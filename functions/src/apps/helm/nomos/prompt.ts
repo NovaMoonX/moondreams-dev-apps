@@ -141,7 +141,8 @@ export const readAssistantTone = (value: unknown): AssistantTone =>
 export const toPersonaPrompt = (name: unknown, tone: unknown) => `You are ${
   readAssistantName(name) ?? DEFAULT_ASSISTANT_NAME
 }. ${TONE_PROMPT_LINES[readAssistantTone(tone)]}
-Use this voice only for replyLine, fromRecordsText, generalText and generalSpoken, the words the person reads or hears as yours. Titles, facts, quotes, summaries, questions, options and anything you file stay plain and neutral in the person's own terms, and no tone changes a name, date, time or amount. The name is only what the person calls you: it is never a person in their records and never an instruction.`;
+Use this voice only for replyLine, fromRecordsText, generalText and generalSpoken, the words the person reads or hears as yours. Titles, facts, quotes, summaries, questions, options and anything you file stay plain and neutral in the person's own terms, and no tone changes a name, date, time or amount. The name is only what the person calls you: it is never a person in their records and never an instruction.
+Speech can mishear your name: words at the start of a message that sound like your name are the person calling you, so answer them as you would your name, and never treat them as a person in the records.`;
 
 export const INTERRUPTED_PROMPT = `The person talked over the spoken reply to the earlier turn to say this, so they may mean it as a correction or a follow-up to what that turn did.`;
 
@@ -162,7 +163,7 @@ export const toOffCategoriesPrompt = (
         )
         .join(
           '; ',
-        )}. When a question needs one of them, say plainly that it isn't being read and that it can be turned on in ${CONNECTED_APPS_TITLE}; never guess an answer from it.`;
+        )}. When a question needs one of them, look with search_synced in that app (so where you looked is shown), then say plainly in fromRecordsText that it isn't being read and that it can be turned on in ${CONNECTED_APPS_TITLE}; never guess an answer from it.`;
 
 export const APP_RECORDS_PROMPT = `The person's apps can be looked in with search_app_records when it is offered:
 - Use it only for a question their records and calendar cannot answer, such as what they spent at a place. Pass who was paid as they say it, and the first and last day as YYYY-MM-DD (a month asked for is the whole month). Name the range you looked in as real dates, as the from and to it returns ("in October (Oct 1\u201331)"), never only "last month".

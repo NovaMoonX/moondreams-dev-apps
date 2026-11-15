@@ -25,6 +25,9 @@ import type {
   CaptureSealed,
   Fact,
   FactSealed,
+  HelmDayCounts,
+  HelmDaySummary,
+  HelmDaySummarySealed,
   HelmEncryption,
   KeyDate,
   KeyDateIndexEntry,
@@ -614,6 +617,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     value: {
       timeZone: OWNER_TIME_ZONE,
       assistantName: null,
+      assistantNameVariants: null,
       assistantTone: null,
       theme: null,
       dayStartTime: DEFAULT_DAY_START_TIME,
@@ -630,6 +634,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       selfWhoId: 'self',
       currentPlace: null,
       styleLearnedThroughAt: null,
+      conversationFreshAt: null,
+      isDailyFreshOn: false,
       createdAt,
       lastEditedAt: null,
     },
@@ -1199,6 +1205,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       arrivedVia: 'direct',
       medium: 'web',
       via: null,
+      outsideReadScopes: null,
       sessionId: `scale-session-${pad(session, 2)}`,
       turnIndex: inSession,
       route: 'quick',
@@ -1215,6 +1222,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       attachmentIds: [],
       seenAt: at + MINUTE_MS,
       quotedSourceKeys: [],
+      dismissedAt: null,
       answerSavedNoteId: null,
       whoIds: [],
       placeIds: [],
@@ -1240,6 +1248,46 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     return { id: `scale-turn-${pad(index, 3)}`, capture };
   });
   turnDocs.forEach((entry) =>
+    put('captures', `captures/${entry.id}`, entry.capture),
+  );
+
+  // Outside turns: 240 questions from three assistants, four to a sitting, so the outside view groups 60 conversations.
+  const OUTSIDE_VIAS = ['Claude', 'Gemini', 'ChatGPT'];
+  const outsideDocs = await mapChunked(range(240), async (index) => {
+    const sitting = Math.floor(index / 4);
+    const at =
+      now - sitting * 3 * HOUR_MS - (3 - (index % 4)) * 5 * MINUTE_MS - HOUR_MS;
+    const capture: Capture = {
+      ...turnDocs[index % turnDocs.length].capture,
+      medium: 'mcp',
+      via: OUTSIDE_VIAS[sitting % OUTSIDE_VIAS.length],
+      outsideReadScopes: index % 2 === 0 ? ['apps'] : [],
+      sessionId: `scale-outside-${pad(index, 3)}`,
+      turnIndex: 0,
+      seenAt: at,
+      createdAt: at,
+      sortedAt: at + 4_000,
+      sealed: await seal<CaptureSealed>({
+        text: pick(TURN_TEXTS).replace(
+          '%s',
+          nameOf(between(1, WHO_COUNT - 1)).split(' ')[0],
+        ),
+        reading: {
+          people: [],
+          places: [],
+          documents: [],
+          commands: [],
+          isUrgent: false,
+          dates: [],
+          addressedAs: null,
+        },
+        answer: null,
+        questionAnswer: null,
+      }),
+    };
+    return { id: `scale-outside-${pad(index, 3)}`, capture };
+  });
+  outsideDocs.forEach((entry) =>
     put('captures', `captures/${entry.id}`, entry.capture),
   );
 
@@ -1453,6 +1501,58 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     });
   });
   counts.grants = sources.length;
+
+  // A year of day summaries: mostly written, some only counted, some empty.
+  const summaryKeys = range(365).map((index) =>
+    new Date(now - (index + 1) * DAY_MS).toLocaleDateString('en-CA', {
+      timeZone: OWNER_TIME_ZONE,
+    }),
+  );
+  const summaryDocs = await mapChunked(summaryKeys, async (dayKey, index) => {
+    const status: HelmDaySummary['status'] =
+      index % 10 === 3 ? 'empty' : index % 10 === 6 ? 'counted' : 'written';
+    const messages = 3 + ((index * 7) % 14);
+    const counts: HelmDayCounts = {
+      messages,
+      tasksAdded: index % 4,
+      keyDatesAdded: index % 11 === 0 ? 1 : 0,
+      notesAdded: index % 5 === 0 ? 1 : 0,
+      factsAdded: index % 3,
+      peopleAdded: index % 13 === 0 ? 1 : 0,
+      placesAdded: 0,
+      tasksDone: (index + 1) % 3,
+      planned: index % 2,
+      answered: index % 3 === 0 ? 2 : 0,
+      dismissed: index % 9 === 0 ? 1 : 0,
+    };
+    const tasks = (count: number) =>
+      `${count} ${count === 1 ? 'task' : 'tasks'}`;
+    const line = `Sent ${messages} messages · added ${tasks(counts.tasksAdded)}, finished ${tasks(counts.tasksDone)}`;
+    const value: HelmDaySummary = {
+      dayKey,
+      status,
+      attempts: status === 'counted' ? 3 : 1,
+      writtenAt: Date.parse(dayKey) + DAY_MS + 5 * MINUTE_MS,
+      staleAt: null,
+      batchId: null,
+      batchedAt: null,
+      sealed:
+        status === 'empty'
+          ? null
+          : await seal<HelmDaySummarySealed>({
+              text:
+                status === 'written'
+                  ? `A day of small things sorted: ${tasks(counts.tasksAdded)} came in and ${tasks(counts.tasksDone)} finished.`
+                  : line,
+              line,
+              counts,
+            }),
+    };
+    return { dayKey, value };
+  });
+  summaryDocs.forEach((entry) =>
+    put('daySummaries', `daySummaries/${entry.dayKey}`, entry.value),
+  );
 
   // The emulator commits one batch at a time, so the batches are written one after another once everything is built.
   await Array.from(

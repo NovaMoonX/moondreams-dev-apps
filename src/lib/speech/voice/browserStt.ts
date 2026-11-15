@@ -17,6 +17,7 @@ export interface BrowserSttAdoption {
   listener: ReturnType<typeof createSpeechListener>;
   heard: { text: string; isFinal: boolean };
   spellings: readonly string[];
+  looseNames: readonly string[];
 }
 
 /** Listens with the browser's speech recognition (Chrome sends this audio to its vendor's servers). `stop` delivers what was heard, finished phrases and the one still being said, once; a page that goes to the background stops the same way. An `adopt`ed listener is already running: it carries on as this listener, with no restart, and the phrase it heard first is left out of the words. */
@@ -58,14 +59,15 @@ export const createBrowserStt = ({
       const phraseWords = adopt
         ? toWords(adopt.heard.text).length -
           toWords(
-            readWakePhrase(adopt.heard.text, adopt.spellings)?.rests[0] ?? '',
+            readWakePhrase(adopt.heard.text, adopt.spellings, adopt.looseNames)
+              ?.rests[0] ?? '',
           ).length
         : 0;
       const read = () => {
         const text = [...heard.finals, heard.interim].join(' ').trim();
         if (!adopt) return text;
         return (
-          readWakePhrase(text, adopt.spellings)?.rests[0] ??
+          readWakePhrase(text, adopt.spellings, adopt.looseNames)?.rests[0] ??
           toWords(text).slice(phraseWords).join(' ')
         );
       };

@@ -36,7 +36,7 @@ import {
 import { loadEarlierCaptures } from '@apps/helm/store/listeners/captureListener';
 import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
 import {
-  selectAllCaptures,
+  selectEveryCapture,
   selectExecutionsById,
 } from '@apps/helm/store/selectors/captureSelectors';
 import {
@@ -44,6 +44,7 @@ import {
   toTaskTitle,
 } from '@apps/helm/utils/heldCaptures';
 import { rankNotes } from '@apps/helm/utils/noteSearch';
+import { isDismissable } from '@apps/helm/utils/heldCaptures';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
@@ -120,6 +121,8 @@ export async function sendCapture(
     attachmentIds?: string[];
     /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
+    /** Called with the turn's id when the server found the words only asked to hear the last reply again; the turn is then gone and leaves nothing in the history. */
+    onRepeat?: (captureId: string) => void;
   },
 ) {
   const text = turn.text.trim();
@@ -152,6 +155,7 @@ export async function sendCapture(
     arrivedVia: 'direct',
     medium: 'web',
     via: null,
+    outsideReadScopes: null,
     sessionId: turn.sessionId,
     turnIndex: turn.turnIndex,
     route: null,
@@ -168,6 +172,7 @@ export async function sendCapture(
     attachmentIds,
     seenAt: createdAt,
     quotedSourceKeys: [],
+    dismissedAt: null,
     answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
@@ -186,7 +191,14 @@ export async function sendCapture(
       : setDoc(reference, capture);
   // Once the write is acknowledged the server reads the turn; offline that happens when the device is back.
   void write.then(
-    () => sortCapture(reference.id, 'full', turn.noteIds ?? []),
+    async () => {
+      const { kind } = await sortCapture(
+        reference.id,
+        'full',
+        turn.noteIds ?? [],
+      );
+      if (kind === 'repeat') turn.onRepeat?.(reference.id);
+    },
     () => undefined,
   );
   return { write, id: reference.id };
@@ -271,6 +283,79 @@ export const skipQuestion = (
     [`questionState.${questionId}.skippedAt`]: Date.now(),
   });
 
+/** Lets one question go without an answer: it stops waiting, and the turn is sorted once none is left open. Touches only its own fields. */
+export const dismissQuestion = (
+  uid: string,
+  captureId: string,
+  questionId: string,
+  isLastOpen: boolean,
+) => {
+  const now = Date.now();
+  const capture = selectEveryCapture(store.getState()).find(
+    (entry) => entry.id === captureId,
+  );
+  // Not a transaction: a server write adding a question to this turn in the same instant is a rare race, accepted.
+  return updateDoc(doc(capturesOf(uid), captureId), {
+    [`questionState.${questionId}.answeredAt`]: now,
+    [`questionState.${questionId}.dismissedAt`]: now,
+    ...(isLastOpen && { status: 'sorted' }),
+    ...(capture?.seenAt === null && { seenAt: now }),
+  });
+};
+
+/** Whether Clear all can take anything off this turn: it couldn't be sorted, or it asks something that can be let go. */
+export const canClearFromNeedsYou = (capture: OpenCapture) =>
+  capture.status === 'failed' ||
+  Object.values(capture.questionState).some(
+    (state) => state.answeredAt === null && isDismissable(state.kind),
+  );
+
+/** Clears every turn in Needs you at once (a dispute between facts stays): each open question is let go as `dismissQuestion` does, and a turn that couldn't be sorted is marked cleared. In batches under Firestore's write limit. */
+export async function clearNeedsYou(uid: string, captures: OpenCapture[]) {
+  const now = Date.now();
+  // A cleared turn counts as seen, or it would drop straight into the new-since-you-looked list.
+  const seen = (capture: OpenCapture) =>
+    capture.seenAt === null ? { seenAt: now } : {};
+  const writes = captures.filter(canClearFromNeedsYou).map((capture) => {
+    if (capture.status === 'failed') {
+      return {
+        id: capture.id,
+        fields: { dismissedAt: now, ...seen(capture) },
+      };
+    }
+    const open = Object.entries(capture.questionState).filter(
+      ([, state]) => state.answeredAt === null,
+    );
+    const letGo = open.filter(([, state]) => isDismissable(state.kind));
+    return {
+      id: capture.id,
+      fields: {
+        ...Object.fromEntries(
+          letGo.flatMap(([id]) => [
+            [`questionState.${id}.answeredAt`, now],
+            [`questionState.${id}.dismissedAt`, now],
+          ]),
+        ),
+        ...(letGo.length === open.length && { status: 'sorted' }),
+        ...seen(capture),
+      },
+    };
+  });
+  const chunks = Array.from(
+    { length: Math.ceil(writes.length / BATCH_LIMIT) },
+    (_, index) => writes.slice(index * BATCH_LIMIT, (index + 1) * BATCH_LIMIT),
+  );
+  await Promise.all(
+    chunks.map((entries) => {
+      const batch = writeBatch(db);
+      entries.forEach(({ id, fields }) =>
+        batch.update(doc(capturesOf(uid), id), fields),
+      );
+      return batch.commit();
+    }),
+  );
+}
+
 /** Marks a question answered without running anything, because what it asked was settled another way; touches only its own fields, and the turn is sorted once none is left open. */
 export const closeQuestion = (
   uid: string,
@@ -321,7 +406,7 @@ export async function retryCapture(
       .filter(([, question]) => question.answeredAt === null)
       .map(([id]) => [`questionState.${id}.answeredAt`, now]),
   );
-  const joined = selectAllCaptures(store.getState()).filter(
+  const joined = selectEveryCapture(store.getState()).filter(
     (entry) =>
       entry.turnLeadId === capture.id &&
       capture.joinedCaptureIds.includes(entry.id) &&
@@ -333,6 +418,7 @@ export async function retryCapture(
     attempts: 0,
     lastErrorCode: null,
     heldReason: null,
+    dismissedAt: null,
     ...closedQuestions,
   });
   joined.forEach((entry) =>
@@ -362,7 +448,7 @@ const photosToLetGo = (ids: string[]) => {
 
 /** Deletes a turn; the photos it carried are let go with it, due in 24 hours. */
 export function deleteCapture(uid: string, captureId: string) {
-  const capture = selectAllCaptures(store.getState()).find(
+  const capture = selectEveryCapture(store.getState()).find(
     (entry) => entry.id === captureId,
   );
   const batch = writeBatch(db);
@@ -390,7 +476,7 @@ export async function makeTaskAsWritten(
   if (!canMakeTaskAsWritten(current, isSorting(capture.id), Date.now())) {
     throw new Error('This turn is being read.');
   }
-  const joined = selectAllCaptures(store.getState()).filter(
+  const joined = selectEveryCapture(store.getState()).filter(
     (entry) =>
       entry.turnLeadId === current.id &&
       current.joinedCaptureIds.includes(entry.id),

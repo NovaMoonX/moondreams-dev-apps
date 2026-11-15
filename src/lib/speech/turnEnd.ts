@@ -1,29 +1,77 @@
+import { toSpokenText } from '@/lib/speech/spokenText';
 import { toPlainText } from '@/lib/speech/speechText';
 
-/** How long the heard words may stay unchanged before the turn ends. */
-export const SETTLE_MS = 1800;
-/** The same, when the words end on one that says more is coming. */
-export const LONG_SETTLE_MS = 3500;
+export const TURN_END_COMPLETE_MS = 1500;
+export const TURN_END_UNFINISHED_MS = 2500;
+export const BARGE_MIN_NEW_WORDS = 2;
 
-const CONTINUING = new Set([
+const TRAILING_WORDS = new Set([
   'and',
+  'or',
+  'but',
+  'so',
+  'because',
+  'cause',
   'um',
   'uh',
+  'umm',
+  'uhh',
   'er',
-  'so',
-  'but',
-  'or',
-  'then',
-  'like',
-  'because',
-  'with',
-  'to',
+  'hmm',
   'the',
   'a',
+  'an',
+  'to',
+  'with',
+  'if',
+  'of',
+  'for',
+  'at',
+  'my',
+  'your',
+  'our',
+  'is',
+  'are',
+  'was',
+  'also',
+  'plus',
+  'when',
+  'while',
+  'which',
+  'who',
+  'where',
+  'how',
+  'from',
+  'about',
+  'into',
 ]);
 
-/** How long to wait with no new words after `text` before treating the turn as finished. */
-export const getSettleMs = (text: string) =>
-  CONTINUING.has(toPlainText(text).split(' ').pop() ?? '')
-    ? LONG_SETTLE_MS
-    : SETTLE_MS;
+const wordsOf = (text: string) =>
+  toPlainText(text)
+    .split(' ')
+    .filter((word) => word !== '');
+
+/** How long to wait in silence before sending what was heard: short when it sounds finished, long when it ends on a connector, a filler or a comma. English only. */
+export const readTurnEndDelay = (text: string) => {
+  if (/,\s*$/.test(text)) return TURN_END_UNFINISHED_MS;
+  const last = wordsOf(text).pop() ?? '';
+  return TRAILING_WORDS.has(last)
+    ? TURN_END_UNFINISHED_MS
+    : TURN_END_COMPLETE_MS;
+};
+
+/** True when both readings have the same words, whatever the punctuation or capitals. */
+export const hasSameWords = (a: string, b: string) =>
+  wordsOf(a).join(' ') === wordsOf(b).join(' ');
+
+/** True when `heard` holds at least two words the playing line doesn't contain, written or as spoken: the person talking over it, not its echo. Numbers never count, since a recognizer writes them either way. */
+export const isBargeConfirmed = (heard: string, playing: string) => {
+  const own = new Set([
+    ...wordsOf(playing),
+    ...wordsOf(toSpokenText(playing)),
+  ]);
+  return (
+    wordsOf(heard).filter((word) => !own.has(word) && !/^\d+$/.test(word))
+      .length >= BARGE_MIN_NEW_WORDS
+  );
+};
