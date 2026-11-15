@@ -225,20 +225,30 @@ export async function writeHelmDaySummary(
       .where(field, '>=', dayStart)
       .where(field, '<', dayEnd);
   const dayMidnight = Date.parse(`${dayKey}T00:00:00Z`);
-  const [created, dismissed, executionSnap, taskSnap, habitSnap, habitDaySnap] =
-    await Promise.all([
-      range('createdAt', 'captures').get(),
-      range('dismissedAt', 'captures').get(),
-      range('createdAt', 'executions').get(),
-      range('completedAt', 'tasks').select('completedAt').get(),
-      range('createdAt', 'habits').select('createdAt').get(),
-      firestore
-        .collection(`${base}/habitDays`)
-        .where('date', '>=', dayMidnight - DAY_MS)
-        .where('date', '<=', dayMidnight + DAY_MS)
-        .select('entries')
-        .get(),
-    ]);
+  const [
+    created,
+    dismissed,
+    executionSnap,
+    taskSnap,
+    habitSnap,
+    connectionSnap,
+    habitDaySnap,
+  ] = await Promise.all([
+    range('createdAt', 'captures').get(),
+    range('dismissedAt', 'captures').get(),
+    range('createdAt', 'executions').get(),
+    range('completedAt', 'tasks').select('completedAt').get(),
+    range('createdAt', 'habits').select('createdAt').get(),
+    range('createdAt', 'connections')
+      .select('createdAt', 'source', 'executionId')
+      .get(),
+    firestore
+      .collection(`${base}/habitDays`)
+      .where('date', '>=', dayMidnight - DAY_MS)
+      .where('date', '<=', dayMidnight + DAY_MS)
+      .select('entries')
+      .get(),
+  ]);
   const captureDocs = new Map(
     [...created.docs, ...dismissed.docs].map((doc) => [doc.id, doc.data()]),
   );
@@ -296,6 +306,12 @@ export async function writeHelmDaySummary(
     habits: habitSnap.docs.map((doc) => ({
       createdAt: Number(doc.get('createdAt')),
     })),
+    connections: connectionSnap.docs
+      .filter((doc) => doc.get('source') !== 'refused')
+      .map((doc) => ({
+        createdAt: Number(doc.get('createdAt')),
+        isOutside: outsideExecutionIds.has(String(doc.get('executionId'))),
+      })),
     habitChecks: habitDaySnap.docs.flatMap((doc) =>
       toHabitChecks(doc.get('entries'), outsideExecutionIds),
     ),
