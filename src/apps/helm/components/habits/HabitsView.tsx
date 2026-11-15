@@ -5,7 +5,7 @@ import { CalendarCheck, ChevronRight } from 'lucide-react';
 
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import HabitQuestionFlow from '@apps/helm/components/habits/HabitQuestionFlow';
 import { useHabitWhoName } from '@apps/helm/components/habits/useHabitWhoName';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
@@ -17,6 +17,7 @@ import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
   readWeekFigure,
+  selectFormedHabits,
   selectKeptHabits,
   selectStoppedHabits,
 } from '@apps/helm/store/selectors/habitSelectors';
@@ -79,6 +80,8 @@ function HabitsView({ onBack, onHome, onOpenHabit }: HabitsViewProps) {
   const days = useAppSelector((state) => state.helm.habitDays.byId);
   const kept = useAppSelector(selectKeptHabits);
   const stopped = useAppSelector(selectStoppedHabits);
+  const formed = useAppSelector(selectFormedHabits);
+  const [isFormedOpen, setIsFormedOpen] = useState(false);
   const [isStoppedOpen, setIsStoppedOpen] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
 
@@ -89,6 +92,9 @@ function HabitsView({ onBack, onHome, onOpenHabit }: HabitsViewProps) {
   });
 
   const readLine = (habit: OpenHabit) => {
+    if (habit.status === 'retired' && habit.retiredAt !== null) {
+      return HELM_COPY.habitsFormedOn(formatDateShort(habit.retiredAt));
+    }
     if (habit.status === 'ended' && habit.endedAt !== null) {
       return HELM_COPY.habitsStoppedOn(formatDateShortUTC(habit.endedAt));
     }
@@ -124,14 +130,17 @@ function HabitsView({ onBack, onHome, onOpenHabit }: HabitsViewProps) {
             {HELM_COPY.habitsFailed}
           </p>
         )}
-        {isLoaded && kept.length === 0 && stopped.length === 0 && (
-          <>
-            <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
-              {HELM_COPY.habitsEmpty}
-            </p>
-            <AddRow label={HELM_COPY.habitsAdd} onClick={start} />
-          </>
-        )}
+        {isLoaded &&
+          kept.length === 0 &&
+          stopped.length === 0 &&
+          formed.length === 0 && (
+            <>
+              <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
+                {HELM_COPY.habitsEmpty}
+              </p>
+              <AddRow label={HELM_COPY.habitsAdd} onClick={start} />
+            </>
+          )}
         {kept.length > 0 && (
           <ul className='helm-card divide-border divide-y overflow-hidden'>
             {kept.map((habit) => (
@@ -147,6 +156,29 @@ function HabitsView({ onBack, onHome, onOpenHabit }: HabitsViewProps) {
               <AddRow label={HELM_COPY.habitsAdd} onClick={start} isInList />
             </li>
           </ul>
+        )}
+        {formed.length > 0 && (
+          <section className='space-y-3'>
+            <ShowMoreButton
+              isOpen={isFormedOpen}
+              onClick={() => setIsFormedOpen((isOpen) => !isOpen)}
+            >
+              {HELM_COPY.habitsFormedFold(formed.length)}
+            </ShowMoreButton>
+            {isFormedOpen && (
+              <ul className='helm-card divide-border divide-y overflow-hidden'>
+                {formed.map((habit) => (
+                  <li key={habit.id}>
+                    <HabitRow
+                      habit={habit}
+                      line={readLine(habit)}
+                      onOpen={onOpenHabit}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
         {stopped.length > 0 && (
           <section className='space-y-3'>

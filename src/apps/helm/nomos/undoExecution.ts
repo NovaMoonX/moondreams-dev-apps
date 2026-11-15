@@ -31,6 +31,7 @@ import { buildProcedureVersionDoc } from '@apps/helm/store/actions/procedureActi
 import { buildVersionDoc } from '@apps/helm/store/actions/topicActions';
 import { HELM_COPY } from '@apps/helm/constants';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
+import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import {
   planReopen,
   planUndo,
@@ -608,6 +609,13 @@ export async function undoExecution(
           plan.undoSealed,
           encryption,
         );
+        if (
+          [...plan.deletes, ...plan.updates].some(
+            ({ collection: from }) => from === 'habits',
+          )
+        ) {
+          markRemindersChanged(transaction, uid, Date.now());
+        }
         plan.deletes.forEach(({ docId, collection: from }) => {
           transaction.delete(docOf({ docId, collection: from }));
           // A topic made from a file is deleted at the version the import wrote, and a procedure at its first, so their version records go with them.

@@ -5,8 +5,10 @@ import { db } from '@lib/firebase/config';
 import { EMPTY_READING } from '@apps/helm/utils/captureReading';
 import { sealJson } from '@apps/helm/security';
 import { store } from '@/store';
+import { notifyRemindersBack } from '@apps/helm/utils/remindersBackNotice';
 import {
   isMissingDay,
+  markHabitDay,
   untallyHabit,
   untickHabit,
 } from '@apps/helm/store/actions/habitDayWrites';
@@ -189,6 +191,7 @@ export async function writeDeviceCheckIn(
       { merge: true },
     );
   }
+  const isBack = markHabitDay(batch, uid, effect.dayKey, effect.habitId, true);
   if (input.encryption) {
     const path =
       effect.kind === 'tick'
@@ -242,7 +245,9 @@ export async function writeDeviceCheckIn(
     recorded: input.encryption
       ? { captureId: captureRef.id, executionId: executionRef.id }
       : null,
-    committed: batch.commit(),
+    committed: batch.commit().then(() => {
+      if (isBack) notifyRemindersBack();
+    }),
     undo: () =>
       effect.kind === 'tick'
         ? untickHabit(
