@@ -101,6 +101,13 @@ export const createSpeechGate = ({
   return { push };
 };
 
+/** Talking over a playing line has to be well above the room, since the line's own echo and the room are in the signal. */
+export const BARGE_IN_GATE: SpeechGateOptions = {
+  floorMargin: 6,
+  minEnergy: 0.02,
+  triggerMs: 250,
+};
+
 interface SpeechGateHandle {
   close: () => void;
 }
@@ -117,9 +124,11 @@ const FRAME_MS = (320 / PCM_SAMPLE_RATE) * 1000;
 export const openSpeechGate = ({
   onSpeech,
   onUnavailable,
+  gate: gateOptions,
 }: {
   onSpeech: (source: FrameSource) => void;
   onUnavailable?: () => void;
+  gate?: SpeechGateOptions;
 }): SpeechGateHandle => {
   const state = {
     isClosed: false,
@@ -129,7 +138,7 @@ export const openSpeechGate = ({
     subscriber: null as ((frame: ArrayBuffer) => void) | null,
     waiting: [] as ArrayBuffer[],
   };
-  const gate = createSpeechGate({ frameMs: FRAME_MS });
+  const gate = createSpeechGate({ frameMs: FRAME_MS, ...gateOptions });
 
   const release = () => {
     state.subscriber = null;

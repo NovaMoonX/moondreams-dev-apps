@@ -1,3 +1,4 @@
+import { soundsLike } from '@/lib/speech/soundAlike';
 import { getDateTimeFormat, zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { readDates, readIsUrgent } from '@apps/helm/utils/dateReading';
 import type {
@@ -66,10 +67,14 @@ const extendRun = (
   return extendRun(text, from + next[0].length, isStopped);
 };
 
+const LEADING_WORDS_RE = /^\s*(\p{L}[\p{L}'’-]*(?:\s+\p{L}[\p{L}'’-]*)?)\s*,/u;
+
 const readAddressedAs = (text: string, assistantName: string): Token | null => {
   const name = assistantName.trim();
   if (!name) return null;
-  const match = new RegExp(`^\\s*(${escapeRegExp(name)})\\s*,`, 'i').exec(text);
+  const exact = new RegExp(`^\\s*(${escapeRegExp(name)})\\s*,`, 'i').exec(text);
+  const heard = LEADING_WORDS_RE.exec(text);
+  const match = exact ?? (heard && soundsLike(heard[1], name) ? heard : null);
   if (!match) return null;
   const start = match[0].indexOf(match[1]);
   return {

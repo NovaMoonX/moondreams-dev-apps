@@ -13,7 +13,11 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
-import { useVoiceConversation } from '@/hooks/useVoiceConversation';
+import {
+  useVoiceConversation,
+  type VoiceRepeat,
+} from '@/hooks/useVoiceConversation';
+import { isRepeatRequest } from '@/lib/speech/repeatRequest';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
 import {
   createVoiceTokenSource,
@@ -23,7 +27,10 @@ import {
 import { store, useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { END_PHRASES, HELM_COPY, SESSION_IDLE_MS } from '@apps/helm/constants';
-import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import {
+  useAssistantName,
+  useAssistantNameVariants,
+} from '@apps/helm/hooks/useAssistantName';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
   clearSentTurn,
@@ -104,6 +111,7 @@ export function useHelmVoice() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const name = useAssistantName();
+  const nameVariants = useAssistantNameVariants();
   const voiceIdentity = useMemo(() => toVoiceIdentity(name), [name]);
   const uid = user?.uid ?? null;
   const [note, setNote] = useState<string | null>(null);
@@ -204,7 +212,8 @@ export function useHelmVoice() {
         isWakeWordOn &&
         keyStatus === 'ready' &&
         (isHomeView || topScreen !== null),
-      spellings: toWakeSpellings(name),
+      spellings: toWakeSpellings(name, nameVariants),
+      looseNames: [name],
       onWake: wakeUp,
     },
     cloudListening: {
@@ -233,6 +242,12 @@ export function useHelmVoice() {
     setNotice(text);
     setHasNoticeDoor(hasDoor);
     setNeedsMicrophone(isMicrophone);
+  }
+
+  function sayRepeatRefusal(outcome: VoiceRepeat) {
+    if (outcome === 'none') say(HELM_COPY.nothingToRepeat);
+    if (outcome === 'muted') showNote(HELM_COPY.replayMuted);
+    if (outcome === 'busy') showNote(HELM_COPY.replayBusy);
   }
 
   function say(line: string) {
@@ -283,6 +298,11 @@ export function useHelmVoice() {
       voice.settle();
       queueMicrotask(() => setDictationOwner(null));
       write(text);
+      return;
+    }
+    if (isRepeatRequest(text)) {
+      voice.settle();
+      sayRepeatRefusal(voice.repeat());
       return;
     }
     if (isUndoPhrase(text)) {
@@ -524,6 +544,12 @@ export function useHelmVoice() {
         voice: {
           sttProvider,
           interruptedCaptureId: interrupted,
+        },
+        onRepeat: (captureId) => {
+          waiting.current.delete(captureId);
+          clearSentTurn(uid, captureId);
+          voice.settle();
+          sayRepeatRefusal(voice.repeat());
         },
       });
       recordSentTurn(uid, turn, id);
@@ -782,6 +808,8 @@ export function useHelmVoice() {
     },
     talk,
     setSurfaceShown,
+    /** Plays a line the person tapped again, or says why it can't right now. */
+    replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),
   };
 }
 

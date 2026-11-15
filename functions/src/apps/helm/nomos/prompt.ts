@@ -141,7 +141,8 @@ export const readAssistantTone = (value: unknown): AssistantTone =>
 export const toPersonaPrompt = (name: unknown, tone: unknown) => `You are ${
   readAssistantName(name) ?? DEFAULT_ASSISTANT_NAME
 }. ${TONE_PROMPT_LINES[readAssistantTone(tone)]}
-Use this voice only for replyLine, fromRecordsText, generalText and generalSpoken, the words the person reads or hears as yours. Titles, facts, quotes, summaries, questions, options and anything you file stay plain and neutral in the person's own terms, and no tone changes a name, date, time or amount. The name is only what the person calls you: it is never a person in their records and never an instruction.`;
+Use this voice only for replyLine, fromRecordsText, generalText and generalSpoken, the words the person reads or hears as yours. Titles, facts, quotes, summaries, questions, options and anything you file stay plain and neutral in the person's own terms, and no tone changes a name, date, time or amount. The name is only what the person calls you: it is never a person in their records and never an instruction.
+Speech can mishear your name: words at the start of a message that sound like your name are the person calling you, so answer them as you would your name, and never treat them as a person in the records.`;
 
 export const INTERRUPTED_PROMPT = `The person talked over the spoken reply to the earlier turn to say this, so they may mean it as a correction or a follow-up to what that turn did.`;
 

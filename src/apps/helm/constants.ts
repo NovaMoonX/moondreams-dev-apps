@@ -20,6 +20,19 @@ import {
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
 export const DEFAULT_ASSISTANT_TONE: AssistantTone = 'composed';
 
+/** How a recognizer commonly writes the default name; a custom name gets its own from the server. */
+export const DEFAULT_ASSISTANT_MISHEARINGS = [
+  'no most',
+  'no moss',
+  'no mos',
+  'know most',
+  'nomas',
+  'no mas',
+  'gnomos',
+  'nomus',
+  'numos',
+];
+
 export const DEFAULT_HELM_THEME: HelmTheme = 'chestnut';
 
 /** The four palettes with the colours their preview cards draw; they match the blocks in `helm.css`. */
@@ -497,9 +510,10 @@ export const HELM_COPY = {
   newConversation: 'New conversation',
   dailyFreshTitle: 'Start each day fresh',
   dailyFreshDescription:
-    "Home starts each day clear. Earlier days stay under Show earlier.",
+    'Home starts each day clear. Earlier days stay under Show earlier.',
   dailyFreshFailed: "Couldn't save that. Check your connection.",
-  newConversationStarted: 'New conversation. Earlier turns are under Show earlier.',
+  newConversationStarted:
+    'New conversation. Earlier turns are under Show earlier.',
   newConversationFailed:
     "Couldn't start a new conversation. Check your connection.",
   talk: 'Talk',
@@ -529,6 +543,10 @@ export const HELM_COPY = {
   talkNotReady: 'Not ready yet. Try again in a moment.',
   talkSendFailed: "That didn't send. Say it again.",
   nothingToUndo: 'Nothing to undo yet.',
+  nothingToRepeat: 'Nothing to repeat yet.',
+  playAgain: 'Play this again',
+  replayMuted: 'Voice is muted. Unmute it to hear this again.',
+  replayBusy: 'I can play it again once this turn is done.',
   undoWhilePending: 'Still working on that one. Try again in a moment.',
   askToday: 'Ask about today',
   chipToday: 'About today',
@@ -1239,6 +1257,11 @@ export const HELM_COPY = {
   voiceHandsFreeOn:
     'After a reply, it listens for a few seconds so you can answer. Nothing is sent until you speak.',
   voiceHandsFreeOff: 'Tap Talk to answer.',
+  voiceNoiseCleaningTitle: 'Clean up background noise',
+  voiceNoiseCleaning:
+    'Takes music and chatter out of what you say, on this device, before anything listens.',
+  voiceNoiseCleaningCredits:
+    'Noise cleaning uses RNNoise (BSD-3-Clause) and web-noise-suppressor (MIT), both open source.',
   voiceWakeTitle: (name: string) => `Hey ${name}`,
   voiceWake: (name: string) =>
     `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple.`,

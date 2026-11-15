@@ -118,7 +118,7 @@ const MEAL_FIELDS = {
   id: 'notUseful',
   name: 'shared',
   items: 'shared',
-  isFavorite: 'notUseful',
+  isFavorite: 'shared',
   categories: 'notUseful',
   createdAt: 'notUseful',
   updatedAt: 'shared',
@@ -203,16 +203,16 @@ const SHOPPING_ITEM_FIELDS = {
 
 const IDEA_FIELDS = {
   id: 'notUseful',
-  kind: 'notUseful',
-  title: 'notUseful',
+  kind: 'shared',
+  title: 'shared',
   note: 'never',
   url: 'notUseful',
-  siteName: 'notUseful',
+  siteName: 'shared',
   imageUrl: 'notUseful',
   photoPath: 'notUseful',
-  recipeId: 'notUseful',
+  recipeId: 'filter',
   createdAt: 'notUseful',
-  updatedAt: 'notUseful',
+  updatedAt: 'shared',
 } satisfies Record<keyof Idea, ShareDecision>;
 
 const COOK_FIELDS = {
@@ -331,7 +331,7 @@ const RECIPE_FIELDS = {
   categories: 'shared',
   links: 'never',
   isArchived: 'filter',
-  isFavorite: 'notUseful',
+  isFavorite: 'shared',
   createdAt: 'notUseful',
   updatedAt: 'shared',
 } satisfies Record<keyof Recipe, ShareDecision>;

@@ -256,30 +256,92 @@ const toItemRecords = (item: Item, windowStart: number): SharedRecord[] => {
   ];
 };
 
-const readFlightDetail = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
-  if (doc.get('eventDetails.transitType') !== 'FLIGHT') return null;
-  const flight = [
-    readText(doc.get('eventDetails.transitDetails.airline')),
-    readText(doc.get('eventDetails.transitDetails.flightNumber')),
-  ]
-    .flatMap((part) => (part === null ? [] : [clip(part, NAME_CHARS)]))
+const TRANSIT_FIELD_NAMES: Record<
+  string,
+  { name: string[]; from: string; to: string }
+> = {
+  FLIGHT: {
+    name: ['airline', 'flightNumber'],
+    from: 'departureAirportCode',
+    to: 'arrivalAirportCode',
+  },
+  TRAIN: {
+    name: ['operator', 'trainNumber'],
+    from: 'departureStation',
+    to: 'arrivalStation',
+  },
+  FERRY: { name: ['operator'], from: 'departurePort', to: 'arrivalPort' },
+};
+
+const TRANSIT_DETAIL_FIELDS = Object.values(TRANSIT_FIELD_NAMES).flatMap(
+  (fields) =>
+    [...fields.name, fields.from, fields.to].map(
+      (name) => `eventDetails.transitDetails.${name}`,
+    ),
+);
+
+const readTransitDetail = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+  const type = readText(doc.get('eventDetails.transitType'));
+  if (type === null || !Object.hasOwn(TRANSIT_FIELD_NAMES, type)) return null;
+  const fields = TRANSIT_FIELD_NAMES[type];
+  const read = (name: string) =>
+    readText(doc.get(`eventDetails.transitDetails.${name}`));
+  const carrier = fields.name
+    .flatMap((name) => {
+      const part = read(name);
+      return part === null ? [] : [clip(part, NAME_CHARS)];
+    })
     .join(' ');
-  const from = readText(
-    doc.get('eventDetails.transitDetails.departureAirportCode'),
-  );
-  const to = readText(
-    doc.get('eventDetails.transitDetails.arrivalAirportCode'),
-  );
+  const from = read(fields.from);
+  const to = read(fields.to);
   const route =
     from !== null && to !== null
-      ? `${clip(from, 8)} → ${clip(to, 8)}`
+      ? `${clip(from, NAME_CHARS)} → ${clip(to, NAME_CHARS)}`
       : from !== null
-        ? `from ${clip(from, 8)}`
+        ? `from ${clip(from, NAME_CHARS)}`
         : to !== null
-          ? `to ${clip(to, 8)}`
+          ? `to ${clip(to, NAME_CHARS)}`
           : '';
-  const detail = [flight, route].filter((part) => part !== '').join(' · ');
+  const detail = [carrier, route].filter((part) => part !== '').join(' · ');
   return detail === '' ? null : clip(detail, DETAIL_CHARS);
+};
+
+const readTimeText = (value: unknown) => {
+  const text = readText(value);
+  return text !== null && TIME_PATTERN.test(text) ? text : null;
+};
+
+/** Trip-relative clock times stay words; they are never turned into instants. */
+const readArriveBy = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+  const time = readTimeText(doc.get('arriveByTime'));
+  if (time === null) return null;
+  const note = readText(doc.get('arriveByNote'));
+  return note === null
+    ? `Arrive by ${time}`
+    : `Arrive by ${time} (${clip(note, NAME_CHARS)})`;
+};
+
+const readOpenHours = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+  const open = readTimeText(doc.get('venueOpenTime'));
+  const close = readTimeText(doc.get('venueCloseTime'));
+  if (open !== null && close !== null) return `Open ${open}–${close}`;
+  if (open !== null) return `Opens ${open}`;
+  return close === null ? null : `Closes ${close}`;
+};
+
+const joinDetail = (parts: (string | null)[]) => {
+  const kept = parts.filter((part): part is string => part !== null);
+  return kept.length === 0 ? null : clip(kept.join(' · '), DETAIL_CHARS);
+};
+
+const readEventDetail = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+  const address = readText(doc.get('address'));
+  return joinDetail([
+    readTransitDetail(doc),
+    readArriveBy(doc),
+    readOpenHours(doc),
+    address,
+  ]);
 };
 
 const readEventSubtitle = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
@@ -302,10 +364,12 @@ async function readEvents(trip: Trip, uid: string) {
         'eventType',
         'customTypeLabel',
         'eventDetails.transitType',
-        'eventDetails.transitDetails.airline',
-        'eventDetails.transitDetails.flightNumber',
-        'eventDetails.transitDetails.departureAirportCode',
-        'eventDetails.transitDetails.arrivalAirportCode',
+        ...TRANSIT_DETAIL_FIELDS,
+        'address',
+        'arriveByTime',
+        'arriveByNote',
+        'venueOpenTime',
+        'venueCloseTime',
         'title',
         'dayIndex',
         'endDayIndex',
@@ -342,7 +406,7 @@ async function readEvents(trip: Trip, uid: string) {
         sourceRef: `trips/${trip.id}/events/${doc.id}`,
         title,
         subtitle: readEventSubtitle(doc),
-        detail: readFlightDetail(doc),
+        detail: readEventDetail(doc),
         start: trip.isRelative
           ? toMoment(trip, dayIndex, readText(doc.get('startTime')), zone)
           : toInstant(doc.get('startAt')),
@@ -412,6 +476,15 @@ async function readStays(trip: Trip) {
   return { items, isFull };
 }
 
+const readRentalDetail = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+  const vehicle = readText(doc.get('vehicle'));
+  const returnAddress = readText(doc.get('returnAddress'));
+  return joinDetail([
+    vehicle === null ? null : clip(vehicle, NAME_CHARS),
+    returnAddress === null ? null : `Return to ${returnAddress}`,
+  ]);
+};
+
 async function readRentals(trip: Trip) {
   const { docs, isFull } = await readDocs(
     trip.ref
@@ -419,6 +492,8 @@ async function readRentals(trip: Trip) {
       .select(
         'name',
         'pickupAddress',
+        'returnAddress',
+        'vehicle',
         'pickupDayIndex',
         'pickupTime',
         'returnDayIndex',
@@ -436,6 +511,7 @@ async function readRentals(trip: Trip) {
         sourceRef: `trips/${trip.id}/rentals/${doc.id}`,
         title,
         subtitle: 'Rental car',
+        detail: readRentalDetail(doc),
         start: toMoment(
           trip,
           readNumber(doc.get('pickupDayIndex')),
