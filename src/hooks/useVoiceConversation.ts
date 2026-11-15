@@ -624,7 +624,11 @@ export function useVoiceConversation({
           source: options.source ?? null,
           getToken: cloud.tokenSource.getToken,
           onUnavailable: (heldReason) => {
-            if (run.current.isCancelled || run.current.mode.phase === 'OFF') {
+            if (
+              !isCurrent() ||
+              run.current.isCancelled ||
+              run.current.mode.phase === 'OFF'
+            ) {
               return;
             }
             if (heldReason !== null) {
