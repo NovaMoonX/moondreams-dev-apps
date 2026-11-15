@@ -61,6 +61,11 @@ export const GOING_ONCE_SHARES: SourceShares = {
               addedOn: '2026-11-14',
             },
             {
+              label: 'The days buyers can pick up',
+              sinceVersion: 3,
+              addedOn: '2026-11-15',
+            },
+            {
               label: 'How many messages are waiting on you',
               sinceVersion: 2,
               addedOn: '2026-11-14',
@@ -71,7 +76,7 @@ export const GOING_ONCE_SHARES: SourceShares = {
               addedOn: '2026-11-14',
             },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'things',
