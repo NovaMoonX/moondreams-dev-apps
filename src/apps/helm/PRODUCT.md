@@ -1332,7 +1332,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] Writes to other apps, each asked for and approved one by one: add to Pinch's list, tick a Waypoint task, put a task on Google Calendar
 - [ ] Other site apps as readers through the same grants, and a Stop sharing list inside each source app
 - [x] Several labelled phones and emails per person, with a primary (How Your People Connect, In Detail) (Issue 131)
-- [ ] Connections between any two people, with a couple's status, said or added on a page
+- [x] Connections between any two people, with a couple's status, said or added on a page (How Your People Connect, In Detail) (Issue 132)
 - [ ] Family links worked out from what you said, marked "Figured out", confirmed or corrected in a tap
 - [ ] The map of your circle, and the assistant answering who is who
 - [ ] Google Contacts kept in step; merge two people who turned out to be one; groups and households as who records
