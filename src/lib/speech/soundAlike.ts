@@ -28,7 +28,7 @@ const getEditDistance = (a: string, b: string) =>
 
 /**
  * Whether a recognizer's words could be a spoken name: spaces ignored, so "row an" sounds like "Rowan". The sounds must
- * start alike and differ by at most one edit per four letters of the name; anything under three letters never matches.
+ * start alike and differ by at most one edit per four letters of the name and per three sounds; anything under three letters never matches.
  */
 export const soundsLike = (heard: string, name: string) => {
   const heardLetters = toLetters(heard);
@@ -41,6 +41,10 @@ export const soundsLike = (heard: string, name: string) => {
   if (heardKey === '' || nameKey === '') return false;
   return (
     heardKey[0] === nameKey[0] &&
-    getEditDistance(heardKey, nameKey) <= Math.floor(nameLetters.length / 4)
+    getEditDistance(heardKey, nameKey) <=
+      Math.min(
+        Math.floor(nameLetters.length / 4),
+        Math.floor(nameKey.length / 3),
+      )
   );
 };
