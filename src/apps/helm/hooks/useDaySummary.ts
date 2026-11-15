@@ -25,7 +25,7 @@ const writeHelmDaySummaryCallable = httpsCallable<
   { status: string }
 >(functions, 'writeHelmDaySummary');
 
-/** "uid|dayKey|staleAt" marks the server answered this session, and those in flight, so a render, a snapshot or a reopened day never calls twice; a failure clears its mark so the next snapshot or reconnect asks again. */
+/** "uid|dayKey|staleAt" marks the server answered this session, and those in flight, so a render, a snapshot or a reopened day never calls twice; a failure or a busy answer clears its mark so the next snapshot or reconnect asks again. */
 const asked = new Set<string>();
 const inFlight = new Set<string>();
 
@@ -78,7 +78,9 @@ export function useDaySummary(uid: string | null, dayKey: string) {
         ) {
           inFlight.add(mark);
           writeHelmDaySummaryCallable({ dayKey })
-            .then(() => asked.add(mark))
+            .then(({ data }) => {
+              if (data.status !== 'busy') asked.add(mark);
+            })
             .catch((error: unknown) =>
               console.warn('Helm day summary was not written', error),
             )

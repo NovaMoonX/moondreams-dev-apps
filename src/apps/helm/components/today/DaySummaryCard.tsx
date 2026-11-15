@@ -39,19 +39,12 @@ function DaySummaryCard({ dayKey }: DaySummaryCardProps) {
   );
 
   return (
-    <section className='helm-card space-y-2 p-4'>
+    <section className='bg-muted/60 space-y-2 rounded-[14px] p-4'>
       <p className='text-foreground text-[15px] leading-[22px] text-pretty'>
         {summary.text}
       </p>
       {rows.length > 0 && (
         <>
-          {isOpen && (
-            <ul className='text-muted-foreground space-y-1 text-[14px]'>
-              {rows.map((row) => (
-                <li key={row}>{row}</li>
-              ))}
-            </ul>
-          )}
           <Button
             type='button'
             variant='tertiary'
@@ -66,6 +59,13 @@ function DaySummaryCard({ dayKey }: DaySummaryCardProps) {
               aria-hidden='true'
             />
           </Button>
+          {isOpen && (
+            <ul className='text-muted-foreground space-y-1 text-[14px]'>
+              {rows.map((row) => (
+                <li key={row}>{row}</li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </section>
