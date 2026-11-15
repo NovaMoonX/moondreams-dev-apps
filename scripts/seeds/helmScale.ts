@@ -1534,6 +1534,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       attempts: status === 'counted' ? 3 : 1,
       writtenAt: Date.parse(dayKey) + DAY_MS + 5 * MINUTE_MS,
       staleAt: null,
+      batchId: null,
+      batchedAt: null,
       sealed:
         status === 'empty'
           ? null
