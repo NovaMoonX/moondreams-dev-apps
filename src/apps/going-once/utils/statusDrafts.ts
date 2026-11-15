@@ -41,12 +41,19 @@ const buyerDayFormatter = new Intl.DateTimeFormat(undefined, {
   timeZone: 'UTC',
 });
 
-/** The pickup days the buyer said work, when any are still ahead, else today and the next six days; each valued as a date input's text. */
+/** The pickup days the buyer said work when any are still ahead, else the sale's own, else today and the next six days; each valued as a date input's text. */
 export const getDayOptions = (
   now: number,
   buyerDays: number[] | null = null,
+  saleDays: number[] = [],
+  timeZone: string | null = null,
 ): PillOption<string>[] => {
-  const upcoming = getUpcomingDays(buyerDays ?? [], now).slice(0, DAYS_SHOWN);
+  const buyerUpcoming = getUpcomingDays(buyerDays ?? [], now, timeZone);
+  const upcoming = (
+    buyerUpcoming.length > 0
+      ? buyerUpcoming
+      : getUpcomingDays(saleDays, now, timeZone)
+  ).slice(0, DAYS_SHOWN);
   if (upcoming.length > 0)
     return upcoming.map((day) => ({
       value: toDateInputValue(day),

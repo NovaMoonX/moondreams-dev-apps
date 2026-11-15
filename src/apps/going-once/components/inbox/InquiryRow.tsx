@@ -35,7 +35,7 @@ function InquiryRow({
   const line = [
     handledBy === null ? null : `Handled by ${handledBy}`,
     inquiry.contactClearedAt === null ? thing : null,
-    describeBuyerDays(inquiry),
+    describeBuyerDays(inquiry, true),
     formatSentAt(
       isNew ? inquiry.lastSentAt : (inquiry.handledAt ?? inquiry.lastSentAt),
       now,

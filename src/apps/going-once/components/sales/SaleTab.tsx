@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Trash2 } from 'lucide-react';
+import { CalendarDays, Trash2 } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import SectionDivider from '@/components/SectionDivider';
@@ -172,6 +172,16 @@ function SaleTab({
       )}
 
       <LinkCard sale={sale} isSeller={isSeller} />
+
+      {isSeller && !isFinished && upcomingDays.length === 0 && (
+        <ActionRow
+          icon={<CalendarDays className='size-4' aria-hidden='true' />}
+          label='Add your pickup days'
+          subtitle='Buyers then say which days work when they ask'
+          hasChevron
+          onClick={() => setIsEditingDays(true)}
+        />
+      )}
 
       {!isFinished && <PushSwitch saleId={sale.id} uid={uid} />}
 

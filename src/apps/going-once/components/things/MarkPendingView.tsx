@@ -11,10 +11,12 @@ import {
   fromDateInputValue,
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
+import { useAppSelector } from '@/store';
 import StatusViewFooter from '@apps/going-once/components/things/StatusViewFooter';
 import { MAX_BUYER_NAME_LENGTH } from '@apps/going-once/constants';
 import { useStatusWrite } from '@apps/going-once/hooks/useStatusWrite';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
+import { selectSaleById } from '@apps/going-once/store/selectors';
 import type { Inquiry, Item } from '@apps/going-once/types';
 import { getAskerPills } from '@apps/going-once/utils/inquiries';
 import { getItemName } from '@apps/going-once/utils/listing';
@@ -68,7 +70,17 @@ function MarkPendingView({
   const isChange = mode === 'CHANGE';
   const heldFor =
     inquiries.find((inquiry) => inquiry.id === draft.inquiryId) ?? null;
-  const listedDays = getDayOptions(now, heldFor?.pickupDays ?? null);
+  const sale = useAppSelector((state) => selectSaleById(state, item.saleId));
+  const listDays = (inquiry: Inquiry | null) =>
+    getDayOptions(
+      now,
+      inquiry?.pickupDays ?? null,
+      sale?.pickupDays ?? [],
+      sale?.timeZone ?? null,
+    );
+  const listedDays = listDays(heldFor);
+  const anotherDayNote =
+    heldFor?.needsAnotherDay === true ? heldFor.anotherDayNote : null;
   const dayOptions = [...listedDays, { value: OTHER_DAY, label: 'Other day' }];
   const today = toLocalDateInputValue(now);
   const isOtherDay =
@@ -147,12 +159,18 @@ function MarkPendingView({
     }
     if (pills.find((pill) => pill.id === id) === picked) return;
     const inquiry = inquiries.find((asked) => asked.id === id) ?? null;
-    const hasDays = getUpcomingDays(inquiry?.pickupDays ?? [], now).length > 0;
+    const hasDays =
+      getUpcomingDays(inquiry?.pickupDays ?? [], now, sale?.timeZone ?? null)
+        .length > 0;
+    const isDayKept =
+      draft.day === '' ||
+      listDays(inquiry).some((option) => option.value === draft.day);
     onDraft({
       ...draft,
       inquiryId: id,
       name: inquiry?.name ?? draft.name,
       isDayShown: draft.isDayShown || hasDays,
+      ...(isDayKept ? {} : { day: '', isOtherDay: false }),
     });
   };
 
@@ -208,6 +226,13 @@ function MarkPendingView({
       {draft.isDayShown ? (
         <div className='space-y-3'>
           <p className='text-muted-foreground text-sm'>Pickup day (optional)</p>
+          {heldFor?.needsAnotherDay === true && (
+            <p className='text-sm text-pretty break-words'>
+              {anotherDayNote === null || anotherDayNote === ''
+                ? 'None of your pickup days work for them.'
+                : `None of your pickup days work for them. They could come: ${anotherDayNote}`}
+            </p>
+          )}
           <PillGroup
             label='Pickup day'
             options={dayOptions}

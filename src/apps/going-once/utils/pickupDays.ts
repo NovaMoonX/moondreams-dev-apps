@@ -1,5 +1,6 @@
 import {
   formatDayRuns,
+  toDayRuns,
   getLocalToday,
   normalizeDays,
 } from '@/utils/dayRunUtils';
@@ -20,13 +21,16 @@ export const getUpcomingDays = (
   return normalizeDays(days).filter((day) => day >= today);
 };
 
-/** What a buyer said about days, for a quiet line: "Can do Nov 29, Dec 15–17" or "Needs another day"; `null` when they weren't asked. */
+/** What a buyer said about days, for a quiet line: "Can do Nov 29, Dec 15–17" or "Needs another day"; `null` when they weren't asked. Short, several separate days are counted ("Can do 4 days"). */
 export const describeBuyerDays = (
   inquiry: Pick<Inquiry, 'pickupDays' | 'needsAnotherDay'>,
+  isShort = false,
 ): string | null => {
   if (inquiry.needsAnotherDay) return 'Needs another day';
   if (inquiry.pickupDays === null || inquiry.pickupDays.length === 0)
     return null;
+  if (isShort && toDayRuns(inquiry.pickupDays).length > 1)
+    return `Can do ${inquiry.pickupDays.length} days`;
   return `Can do ${formatDayRuns(inquiry.pickupDays)}`;
 };
 

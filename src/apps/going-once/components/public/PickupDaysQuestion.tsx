@@ -1,4 +1,4 @@
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Input } from '@moondreamsdev/dreamer-ui/components';
 
 import Pill from '@/components/Pill';
 import { formatDayRun, toDayRuns } from '@/utils/dayRunUtils';
@@ -68,23 +68,19 @@ function PickupDaysQuestion({
       )}
       {runs.map((run) => (
         <div key={run[0]} className='space-y-2'>
-          {run.length > 1 ? (
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className="text-muted-foreground relative h-auto min-h-0 px-0! py-0 text-xs font-medium after:absolute after:inset-x-0 after:-inset-y-3 after:content-['']"
-              aria-label={`${run.every((day) => picked.has(day)) ? 'Unpick' : 'Pick'} every day from ${formatDayRun(run)}`}
-              onClick={() => toggleRun(run)}
-            >
-              {formatDayRun(run)}
-            </Button>
-          ) : (
-            <p className='text-muted-foreground text-xs font-medium'>
-              {formatDayRun(run)}
-            </p>
-          )}
+          <p className='text-muted-foreground text-xs font-medium'>
+            {formatDayRun(run)}
+          </p>
           <div className='flex flex-wrap gap-2'>
+            {run.length > 1 && (
+              <Pill
+                isSelected={run.every((day) => picked.has(day))}
+                ariaLabel={`All of ${formatDayRun(run)}`}
+                onClick={() => toggleRun(run)}
+              >
+                All {run.length} days
+              </Pill>
+            )}
             {run.map((day) => (
               <Pill
                 key={day}
