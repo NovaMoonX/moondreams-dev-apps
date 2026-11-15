@@ -212,7 +212,7 @@ export const updateHabitWords = (
     },
     fields: {
       forWhoId: words.forWhoId,
-      medicineAskedAt: words.medicine
+      medicineAskedAt: toMedicine(words.medicine ?? null)
         ? (current.medicineAskedAt ?? Date.now())
         : current.medicineAskedAt,
     },

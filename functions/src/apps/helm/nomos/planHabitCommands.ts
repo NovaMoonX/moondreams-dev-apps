@@ -1064,7 +1064,22 @@ const planMedicine = (
 };
 
 const FILLER = /^(?:it'?s|it is|that'?s|that is|the|my|a|an|called|named)\s+/i;
-const SKIPS = /^(?:skip|no|nope|not now|never ?mind|later|i don'?t know)\W*$/i;
+const SKIPS =
+  /^(?:skip|no|nope|yes|yeah|yep|ok|okay|sure|cancel|stop|none|nothing|n\/a|not sure|no idea|not now|never ?mind|later|maybe|dunno|(?:i )?forgot|(?:i )?don'?t know|(?:i )?dont know)\W*$/i;
+const NAME_WORDS_MAX = 4;
+
+/** Whether the question is "Which medicine is it?", whose answer is read by code alone and never by the model. */
+export const isMedicineQuestion = (
+  asked: { opened: Record<string, unknown> } | null,
+  questionId: string,
+) => {
+  const questions = asked?.opened.questions;
+  return (
+    isRecord(questions) &&
+    isRecord(questions[questionId]) &&
+    questions[questionId].kind === 'whichMedicine'
+  );
+};
 
 /** The medicine and dose an answer to "Which medicine is it?" says ("metoprolol 25 mg"); null for a skip, so nothing is written and the question is not asked again. */
 export const readMedicineAnswer = (
@@ -1090,7 +1105,9 @@ export const readMedicineAnswer = (
     .trim()
     .replace(FILLER, '')
     .replace(/[\s.,!]+$/, '');
-  return name ? { kind: 'setMedicine', habitId, name, dose } : null;
+  return name && name.split(' ').length <= NAME_WORDS_MAX
+    ? { kind: 'setMedicine', habitId, name, dose }
+    : null;
 };
 
 const planOne = (acc: Acc, command: HabitCommand, input: HabitPlanInput) => {

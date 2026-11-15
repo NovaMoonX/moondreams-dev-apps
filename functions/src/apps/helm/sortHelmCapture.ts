@@ -9,6 +9,7 @@ import {
 import {
   buildHowWasItQuestion,
   planHabitCommands,
+  isMedicineQuestion,
   readMedicineAnswer,
   toPlannedQuestion,
 } from './nomos/planHabitCommands.js';
@@ -1730,7 +1731,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         now: Date.now(),
       })
     : null;
-  if (answerTurn && answeredPlan?.kind === 'stale') {
+  const isMedicineAnswer =
+    answerTurn !== null &&
+    isMedicineQuestion(askedBefore, answerTurn.ref.questionId);
+  if (answerTurn && (answeredPlan?.kind === 'stale' || isMedicineAnswer)) {
     return writeResult({
       ...claimed,
       key,

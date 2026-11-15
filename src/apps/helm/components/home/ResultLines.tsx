@@ -20,6 +20,7 @@ import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenExecution } from '@apps/helm/types';
+import { shownExecutionLine } from '@apps/helm/utils/activity';
 import { readLastTouchAt, subscribeTouch } from '@apps/helm/utils/presence';
 import { readMadeEntities } from '@apps/helm/utils/resultLines';
 
@@ -97,12 +98,16 @@ function ResultLines({
   const card = useRef<HTMLDivElement>(null);
   const lines = useResultLines(execution);
   const { undo } = useUndoOf(execution);
-  const lastTouchAt = useSyncExternalStore(subscribeTouch, readLastTouchAt);
-  // A tick written on this device while nobody was looking keeps its masked line until the first touch after it.
-  const line =
-    execution.actor === 'person' && lastTouchAt > execution.createdAt
-      ? toSentence(execution.summary)
-      : (execution.said ?? toSentence(execution.summary));
+  // Re-renders only when the first touch after the turn lands, and only for a turn that has a masked line.
+  useSyncExternalStore(
+    subscribeTouch,
+    () => execution.said !== null && readLastTouchAt() > execution.createdAt,
+  );
+  const line = toSentence(
+    execution.actor === 'person'
+      ? shownExecutionLine(execution, readLastTouchAt())
+      : (execution.said ?? execution.summary),
+  );
   const isUndone = execution.undoneByExecutionId !== null;
   const hasFoot = canUndo(execution) || isUndone;
 

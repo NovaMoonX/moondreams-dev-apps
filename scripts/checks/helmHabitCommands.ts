@@ -11,6 +11,7 @@ import {
   planHabitAnswer,
   planHabitCommands,
   planResolveHabit,
+  isMedicineQuestion,
   readMedicineAnswer,
   type HabitPlanInput,
 } from '../../functions/src/apps/helm/nomos/planHabitCommands.ts';
@@ -339,6 +340,47 @@ assert.deepEqual(medicineRead, {
 });
 assert.equal(readMedicineAnswer(medicineAsked, 'q1', 'skip'), null);
 assert.equal(readMedicineAnswer(medicineAsked, 'nope', 'metoprolol'), null);
+assert.equal(isMedicineQuestion(medicineAsked, 'q1'), true);
+assert.equal(isMedicineQuestion(medicineAsked, 'nope'), false);
+assert.equal(
+  isMedicineQuestion(
+    { opened: { questions: { q1: { kind: 'whichHabit' } } } },
+    'q1',
+  ),
+  false,
+);
+[
+  'yes',
+  'Yeah',
+  'yep',
+  'ok',
+  'okay',
+  'sure',
+  'cancel',
+  'stop',
+  'none',
+  'nothing',
+  'n/a',
+  'not sure',
+  'no idea',
+  "don't know",
+  'dont know',
+  'dunno',
+  'forgot',
+  'I forgot',
+  'maybe',
+  'remind me to call the pharmacy tomorrow morning',
+].forEach((words) =>
+  assert.equal(readMedicineAnswer(medicineAsked, 'q1', words), null, words),
+);
+assert.equal(
+  readMedicineAnswer(medicineAsked, 'q1', 'metoprolol 25 mg')?.name,
+  'metoprolol',
+);
+assert.equal(
+  readMedicineAnswer(medicineAsked, 'q1', "it's lisinopril")?.name,
+  'lisinopril',
+);
 const saved = plan(medicineRead ? [medicineRead] : [], {
   habits: [habit({ ...evening, isCare: true, privacy: 'private' })],
 });

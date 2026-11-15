@@ -22,7 +22,8 @@ import {
   selectWhoById,
 } from '@apps/helm/store/selectors/whoSelectors';
 import type { CaptureAnswer, OpenExecution } from '@apps/helm/types';
-import { getActivityLine } from '@apps/helm/utils/activity';
+import { getActivityLine, shownExecutionLine } from '@apps/helm/utils/activity';
+import { readLastTouchAt } from '@apps/helm/utils/presence';
 import { describeYourAnswer } from '@apps/helm/utils/questionAnswers';
 import { getJoinedOf } from '@apps/helm/utils/sessions';
 
@@ -148,7 +149,8 @@ function SheetFoot({ execution }: { execution: OpenExecution }) {
     return (
       <div className='px-6 pt-2 pb-6'>
         <p className='text-muted-foreground text-[13px] text-pretty'>
-          {execution.undoReport ?? execution.summary}
+          {execution.undoReport ??
+            shownExecutionLine(execution, readLastTouchAt())}
         </p>
       </div>
     );

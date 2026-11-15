@@ -1,5 +1,6 @@
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenExecution } from '@apps/helm/types';
+import { readLastTouchAt } from '@apps/helm/utils/presence';
 
 export interface ActivityDay {
   dayStart: number;
@@ -33,13 +34,25 @@ export const isShownInActivity = (execution: OpenExecution) =>
 
 const withoutPeriod = (text: string) => text.replace(/[.!]+$/, '');
 
-/** One line for a row: what was done, as the summary the execution sealed. */
+/** The one reader of an execution's line: a tick made while nobody was looking keeps its masked line until the first touch after it, and no surface reads `summary` directly. */
+export const shownExecutionLine = (
+  execution: Pick<OpenExecution, 'actor' | 'said' | 'summary' | 'createdAt'>,
+  lastTouchAt: number,
+) =>
+  execution.actor === 'person' &&
+  execution.said !== null &&
+  lastTouchAt <= execution.createdAt
+    ? execution.said
+    : execution.summary;
+
+/** One line for a row: what was done, as the line the execution shows. */
 export function getActivityLine(execution: OpenExecution) {
   if (execution.isUnreadable) return HELM_COPY.unreadable;
-  if (!execution.summary) return HELM_COPY.activityMadeChange;
+  const line = shownExecutionLine(execution, readLastTouchAt());
+  if (!line) return HELM_COPY.activityMadeChange;
   return execution.category === 'undo'
-    ? HELM_COPY.youTookBack(withoutPeriod(execution.summary))
-    : withoutPeriod(execution.summary);
+    ? HELM_COPY.youTookBack(withoutPeriod(line))
+    : withoutPeriod(line);
 }
 
 const toTitle = (execution: OpenExecution) =>

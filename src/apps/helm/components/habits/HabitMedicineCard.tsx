@@ -23,7 +23,12 @@ function HabitMedicineCard({ habit }: { habit: OpenHabit }) {
   const [name, setName] = useState('');
   const [dose, setDose] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  if (habit.medicine !== null || habit.medicineAskedAt !== null) return null;
+  if (
+    habit.isUnreadable ||
+    habit.medicine !== null ||
+    habit.medicineAskedAt !== null
+  )
+    return null;
 
   const answer = async (medicine: OpenHabit['medicine']) => {
     if (!user || isSaving) return;
