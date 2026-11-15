@@ -35,6 +35,8 @@ export interface CategoryManifest {
   label: string;
   /** What it holds, in one line. */
   detail: string;
+  /** What this category is in the person's life, in one sentence for an assistant that has never seen the app, using the app's own words for it; never shown in the app. */
+  meaning: string;
   mode: 'sync' | 'live';
   isOnAtConnect: boolean;
   /** A category added after people connected starts off and shows as new once. */
@@ -43,11 +45,15 @@ export interface CategoryManifest {
   reads: { label: string; sinceVersion: number; addedOn: string | null }[];
   /** Starts at 1; bumped whenever `reads` gains an entry. */
   scopeVersion: number;
+  /** How many days back a sync reads and keeps what has ended, when longer than the usual window, for records whose past is the point. */
+  historyDays?: number;
 }
 
 export interface ConnectorManifest {
   id: ConnectorId;
   kind: 'firstPartyApp' | 'oauth' | 'apiKey';
+  /** What the source is, in one or two sentences for an assistant that has never seen it; never shown in the app. */
+  about: string;
   contractVersion: typeof CONTRACT_VERSION;
   /** Bumped whenever the adapter's output shape changes. */
   transformVersion: number;
@@ -114,17 +120,24 @@ export const SHARED_RECORD_KEYS: (keyof SharedRecord)[] = [
 export const EXTRA_KEYS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
-  event: ['calendarId', 'isTentative', 'isFree', 'sameEventKey'],
+  event: ['calendarId', 'isTentative', 'isFree', 'sameEventKey', 'hasTicket'],
   task: [],
-  project: ['available', 'pending', 'sold'],
+  project: [
+    'available',
+    'pending',
+    'sold',
+    'newInquiries',
+    'collectedCents',
+    'leftCents',
+  ],
   knowledge: ['rating'],
-  artifact: [],
+  artifact: ['status'],
   scenario: [],
   trip: [],
   pet: [],
   moneySummary: ['nextIncomeAt', 'dueBeforeIncomeCents'],
   transaction: ['category'],
-  countSummary: ['items', 'revealed', 'notYetRevealed'],
+  countSummary: ['items', 'revealed', 'notYetRevealed', 'revealsWaiting'],
 };
 
 export type GrantStatus = 'live' | 'needsReconnect' | 'noAccess' | 'ended';
