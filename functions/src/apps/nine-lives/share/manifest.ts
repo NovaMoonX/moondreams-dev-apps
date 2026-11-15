@@ -6,6 +6,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
   shares: [
     {
       id: 'app:nine-lives',
+      about:
+        "Nine Lives is the person's cat care app: their cats, vet visits and clinics, vaccines and preventives, and each cat's health conditions.",
       kind: 'firstPartyApp',
       contractVersion: 1,
       transformVersion: 1,
@@ -14,18 +16,29 @@ export const NINE_LIVES_SHARES: SourceShares = {
           id: 'cats',
           kind: 'pet',
           label: 'Your cats',
-          detail: "Each cat's name",
+          meaning:
+            "The cats in the person's household, with each one's birth date, breed and food.",
+          detail: "Each cat's name, birth date, breed and food",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
-          reads: [{ label: "Each cat's name", sinceVersion: 1, addedOn: null }],
-          scopeVersion: 1,
+          reads: [
+            { label: "Each cat's name", sinceVersion: 1, addedOn: null },
+            {
+              label: "Each cat's birth date, breed and food",
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 2,
         },
         {
           id: 'vetVisits',
           kind: 'event',
           label: 'Vet visits',
-          detail: 'Upcoming visits: the cats, the clinic and the time',
+          meaning:
+            "The person's cats' vet appointments, upcoming and past, with the clinic, the time and the reason.",
+          detail: 'Upcoming and past visits: the cats, the clinic and the time',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -37,14 +50,28 @@ export const NINE_LIVES_SHARES: SourceShares = {
             },
             { label: "The clinic's name", sinceVersion: 1, addedOn: null },
             { label: 'The date and time', sinceVersion: 1, addedOn: null },
+            {
+              label: 'Visits from the past year',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: "The doctor's name",
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
+          historyDays: 365,
         },
         {
           id: 'dueCare',
           kind: 'task',
           label: 'Vaccines and preventives due',
-          detail: 'What is next due for each cat, and the day',
+          detail:
+            'What is next due for each cat, the day and when it was last given',
+          meaning:
+            "The next vaccine or preventive each of the person's cats is due for, and the day it is due.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -55,14 +82,21 @@ export const NINE_LIVES_SHARES: SourceShares = {
               addedOn: null,
             },
             { label: 'The day it is due', sinceVersion: 1, addedOn: null },
+            {
+              label: 'When the last dose was given',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
         },
         {
           id: 'clinics',
           kind: 'place',
           label: 'Vet clinics',
-          detail: 'Name, phone and address',
+          meaning:
+            'The vet clinics the person uses, with their phone number, address, doctors and whether one is open 24 hours for emergencies.',
+          detail: 'Name, phone, address, doctors and 24-hour emergency care',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -73,13 +107,25 @@ export const NINE_LIVES_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: null,
             },
+            {
+              label: 'Its doctors',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'Whether it is open 24 hours for emergencies',
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 3,
         },
         {
           id: 'conditions',
           kind: 'knowledge',
           label: 'Health conditions',
+          meaning:
+            'Health problems the person tracks for each cat, and whether each is active, ongoing or resolved.',
           detail: "Each cat's conditions and whether they are active",
           mode: 'sync',
           isOnAtConnect: false,
@@ -98,10 +144,43 @@ export const NINE_LIVES_SHARES: SourceShares = {
           ],
           scopeVersion: 1,
         },
+        {
+          id: 'symptoms',
+          kind: 'knowledge',
+          label: 'Symptoms',
+          meaning:
+            'Symptoms the person noted for each cat in the past six months, with when each was first noticed and how severe it was.',
+          detail:
+            "Each cat's symptoms from the past six months: what was noticed, when and how severe",
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 2,
+          reads: [
+            {
+              label:
+                "Each symptom's description, quick tags and the cat it is for",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'When it was first noticed and how severe it was',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'Symptoms first noticed in the past six months',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 1,
+          historyDays: 180,
+        },
       ],
       never: [
         'uploaded records and documents',
-        'expenses',
+        'expenses and vet costs',
+        'microchip and insurance details',
         'weights',
         'litter logs',
       ],

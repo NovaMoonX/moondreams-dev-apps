@@ -62,6 +62,7 @@ import { detachDevicePush, releaseDevicePush } from '@/lib/notifications/deviceP
 import { enablePushNotifications } from '@/lib/notifications/enablePushNotifications';
 import { clearViewerSessions } from '@/utils/viewerSessionUtils';
 import { clearFormDrafts } from '@lib/app/formDrafts';
+import { clearRememberedDebugAnswer } from '@lib/debugProfiles/debugProfiles';
 import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
 import { setCurrentUser } from '@/store/slices/userSlice';
@@ -155,6 +156,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (previousUserId) {
           clearViewerSessions(previousUserId);
           clearFormDrafts(previousUserId);
+          clearRememberedDebugAnswer(previousUserId);
         }
         clearAppResume();
       }

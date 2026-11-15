@@ -43,6 +43,7 @@ interface Opened {
   id: string;
   date: number;
   sealed: Record<string, unknown>;
+  isWaiting: boolean;
 }
 
 const payeeMatcher = createOptionMatcher<string>();
@@ -102,6 +103,9 @@ export const readRange = (args: unknown, now: number) => {
 
 const readPayeeFilter = (args: unknown) => readText(asObject(args)?.payee);
 
+const readCategoryFilter = (args: unknown) =>
+  readText(asObject(args)?.category);
+
 const readPayee = (sealed: Record<string, unknown>) =>
   readText(sealed.label) ?? readText(sealed.merchant);
 
@@ -131,7 +135,14 @@ const isCounted = (sealed: Record<string, unknown>, needsHome: boolean) => {
 const readLines = (sealed: Record<string, unknown>) =>
   (Array.isArray(sealed.lines) ? sealed.lines : []).flatMap((line) => {
     const one = asObject(line);
-    return one === null ? [] : [{ envelopeId: readText(one.envelopeId) }];
+    return one === null
+      ? []
+      : [
+          {
+            envelopeId: readText(one.envelopeId),
+            cents: Number.isSafeInteger(one.cents) ? (one.cents as number) : 0,
+          },
+        ];
   });
 
 const envelopeNames = async (
@@ -195,7 +206,7 @@ const readCurrency = async (
   );
 };
 
-/** The person's purchases in a range of days, newest first, each with only its day, payee, amount and category; the total covers every match, not only the rows returned. */
+/** The person's purchases in a range of days, newest first, each with only its day, payee, amount and category; the total covers every match, not only the rows returned, and under an envelope filter counts only the matching lines' share. */
 export async function readTransactions(
   firestore: Firestore,
   keyring: Keyring,
@@ -205,6 +216,7 @@ export async function readTransactions(
 ): Promise<TransactionRead> {
   const { from, to } = readRange(args, now);
   const payee = readPayeeFilter(args);
+  const category = readCategoryFilter(args);
   const empty: TransactionRead = {
     rows: [],
     matchedCount: 0,
@@ -233,7 +245,7 @@ export async function readTransactions(
         const fields = openWithKey(planKey.key, sealed);
         const needsHome = doc.get('needsHome') === true;
         return isCounted(fields, needsHome)
-          ? { id: doc.id, date, sealed: fields }
+          ? { id: doc.id, date, sealed: fields, isWaiting: needsHome }
           : null;
       } catch {
         return 'unreadable';
@@ -248,22 +260,21 @@ export async function readTransactions(
   ).length;
   if (unreadable > 0)
     logger.warn('runway.share.transactionsUnreadable', { count: unreadable });
-  const matched = opened.filter(({ sealed }) => {
+  const byPayee = opened.filter(({ sealed }) => {
     if (payee === null) return true;
     const names = [readText(sealed.label), readText(sealed.merchant)].filter(
       (name): name is string => name !== null,
     );
     return isPayeeMatch(payee, names);
   });
-  const shown = matched.slice(0, ROW_LIMIT);
   const envelopeIds = [
     ...new Set(
-      shown.flatMap(({ sealed }) => {
-        const lines = readLines(sealed);
-        return lines.length === 1 && lines[0].envelopeId !== null
-          ? [lines[0].envelopeId]
-          : [];
-      }),
+      (category === null ? byPayee.slice(0, ROW_LIMIT) : byPayee).flatMap(
+        ({ sealed }) =>
+          readLines(sealed).flatMap((line) =>
+            line.envelopeId === null ? [] : [line.envelopeId],
+          ),
+      ),
     ),
   ];
   const [names, currency] = await Promise.all([
@@ -280,6 +291,33 @@ export async function readTransactions(
     if (!only || only.envelopeId === null) return FREE_TO_SPEND;
     return names.get(only.envelopeId) ?? FREE_TO_SPEND;
   };
+  const wanted = category === null ? null : toComparable(category);
+  const isLeftOut = ({ sealed, isWaiting }: Opened) =>
+    !isWaiting &&
+    asObject(sealed.billRef) === null &&
+    readLines(sealed).length === 0;
+  const isCategoryMatch = (sealed: Record<string, unknown>) =>
+    wanted === null ||
+    toComparable(toCategory(sealed)) === wanted ||
+    readLines(sealed).some(({ envelopeId }) => {
+      const name = envelopeId === null ? undefined : names.get(envelopeId);
+      return toComparable(name ?? FREE_TO_SPEND) === wanted;
+    });
+  const toShare = (sealed: Record<string, unknown>) => {
+    const whole = sealed.amountCents as number;
+    const lines = readLines(sealed);
+    if (wanted === null || lines.length === 0) return whole;
+    if (toComparable(toCategory(sealed)) === wanted) return whole;
+    return lines.reduce((sum, { envelopeId, cents }) => {
+      const name = envelopeId === null ? undefined : names.get(envelopeId);
+      return toComparable(name ?? FREE_TO_SPEND) === wanted ? sum + cents : sum;
+    }, 0);
+  };
+  const matched = byPayee.filter(
+    (one) =>
+      wanted === null || (!isLeftOut(one) && isCategoryMatch(one.sealed)),
+  );
+  const shown = matched.slice(0, ROW_LIMIT);
   return {
     rows: shown.map(({ id, date, sealed }) => ({
       id,
@@ -289,10 +327,7 @@ export async function readTransactions(
       category: toCategory(sealed),
     })),
     matchedCount: matched.length,
-    totalCents: matched.reduce(
-      (sum, { sealed }) => sum + (sealed.amountCents as number),
-      0,
-    ),
+    totalCents: matched.reduce((sum, { sealed }) => sum + toShare(sealed), 0),
     currency,
     isPartial: snapshot.size > SCAN_LIMIT || unreadable > 0,
     from: toDayText(from),

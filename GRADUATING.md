@@ -139,7 +139,13 @@ Each phase ends in something that can ship and be rolled back.
 - After phase 6 with option A: point the domain back and restore the route; data never moved.
 - After phase 6 with option B: the old project still has the data from the freeze; export what changed since in the new project and import it, or accept losing that window. This is why the old data stays untouched for weeks.
 
+## Each app's own list
+
+What only one app needs when it leaves (an outside listing, a URL other services know, a sign-in provider's settings) lives in that app's `TECHNICAL.md` under "When <App> graduates", written down the day it is learned, so the graduation issue copies this checklist and that list together. An app with nothing of its own yet has no such section.
+
 ## Checklist to copy into the graduation issue
+
+- [ ] The app's own "When <App> graduates" list copied in, if it has one
 
 - [ ] Name, domain, option A or B decided; people told
 - [ ] Dependency grep run; each shared file decided

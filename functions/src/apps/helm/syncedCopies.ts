@@ -149,17 +149,24 @@ const toExtra = (kind: string, value: unknown) => {
 const SHOWN_EXTRAS: Record<SharedKind, string[]> = {
   person: [],
   place: ['phone', 'address'],
-  event: ['isTentative', 'isFree'],
+  event: ['isTentative', 'isFree', 'hasTicket'],
   task: [],
-  project: ['available', 'pending', 'sold'],
+  project: [
+    'available',
+    'pending',
+    'sold',
+    'newInquiries',
+    'collectedCents',
+    'leftCents',
+  ],
   knowledge: ['rating'],
-  artifact: [],
+  artifact: ['status'],
   scenario: [],
   trip: [],
   pet: [],
   moneySummary: ['nextIncomeAt', 'dueBeforeIncomeCents'],
   transaction: ['category'],
-  countSummary: ['items', 'revealed', 'notYetRevealed'],
+  countSummary: ['items', 'revealed', 'notYetRevealed', 'revealsWaiting'],
 };
 
 /** Opens one synced copy; one that won't open or holds no title is left out. */
@@ -381,38 +388,48 @@ export async function readSyncedStanding(
     .slice(0, MAX_CONTEXT_STANDING);
 }
 
-/** The shared money and standing summaries, then today's and tomorrow's events and the week's tasks the context offers; a summary is one line, so it goes first. */
+/** The shared money and standing summaries, then today's and tomorrow's events and the week's tasks the context offers (a summary is one line, so it goes first), and what a narrowing held back. */
 export async function readContextSynced(
   firestore: Firestore,
   uid: string,
   key: HelmKey,
   at: number,
   timeZone: string,
+  narrow?: <T extends SyncedCopy>(copies: T[]) => T[],
 ) {
   const firstDay = getLocalDay(at, timeZone);
+  // A narrowed read (an outside turn) reads past the cap and filters first, so what it may see is never crowded out.
+  const limit = narrow ? MAX_CONTEXT_SYNCED * 4 : MAX_CONTEXT_SYNCED;
+  const keep = narrow ?? (<T>(copies: T[]) => copies);
   const [events, tasks, money, standing] = await Promise.all([
     readSyncedEvents(firestore, uid, key, {
       firstDay,
       days: CONTEXT_EVENT_DAYS,
       timeZone,
-      limit: MAX_CONTEXT_SYNCED,
+      limit,
     }),
     readSyncedTasks(firestore, uid, key, {
       firstDay,
       days: CONTEXT_TASK_DAYS,
-      limit: MAX_CONTEXT_SYNCED,
+      limit,
     }),
     readSyncedMoney(firestore, uid, key),
     readSyncedStanding(firestore, uid, key),
   ]);
-  const summaries = [...money, ...standing].slice(0, MAX_CONTEXT_SYNCED);
-  return [
+  const everyRead = [...money, ...standing, ...events, ...tasks];
+  const summaries = keep([...money, ...standing]).slice(0, MAX_CONTEXT_SYNCED);
+  const copies = [
     ...summaries,
-    ...[...events, ...tasks].slice(
+    ...keep([...events, ...tasks]).slice(
       0,
       Math.max(0, MAX_CONTEXT_SYNCED - summaries.length),
     ),
   ];
+  const kept = new Set(keep(everyRead));
+  return {
+    copies,
+    heldBack: everyRead.filter((copy) => !kept.has(copy)),
+  };
 }
 
 /** Trips still ahead or under way, starting within 90 days, soonest first; still connected. A trip is a synced copy of kind `trip`. */
