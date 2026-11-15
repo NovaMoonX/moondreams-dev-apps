@@ -22,6 +22,7 @@ import {
   type ConnectionRelation,
   type ConnectionSource,
   type CoupleStatus,
+  type ImpliedConnectionState,
   type InferredLink,
 } from './connections.js';
 
@@ -212,7 +213,12 @@ const toFiguredText = (
 /** The people the model is shown to link a name to: never the self, and on an unattended turn never a private one; those with another name or a family word first, then the most recently named. */
 export function toContextPeople(
   records: PersonRecord[],
-  options: { isUnattended: boolean; connections?: ContextConnection[] },
+  options: {
+    isUnattended: boolean;
+    connections?: ContextConnection[];
+    unreadableConnections?: ImpliedConnectionState[];
+    selfWhoId?: string | null;
+  },
 ): ContextPerson[] {
   const linkable = new Map(
     records
@@ -233,17 +239,26 @@ export function toContextPeople(
     records.map((record) => [record.id, normalizeKin(record.words.kin)]),
   );
   const figuredOut = inferFamilyLinks({
-    selfId: records.find((record) => record.isSelf)?.id ?? null,
+    selfId:
+      records.find((record) => record.isSelf)?.id ?? options.selfWhoId ?? null,
     people: records.map((record) => ({
       id: record.id,
       kin: kinById.get(record.id) ?? null,
       isPrivate: record.isPrivate,
       isPerson: record.kind === 'person',
     })),
-    connections: (options.connections ?? []).map((connection) => ({
-      ...connection,
-      isUnreadable: false,
-    })),
+    connections: [
+      ...(options.connections ?? []).map((connection) => ({
+        ...connection,
+        isUnreadable: false,
+      })),
+      ...(options.unreadableConnections ?? []).map((connection) => ({
+        ...connection,
+        fromFirst: null,
+        fromSecond: null,
+        isUnreadable: true,
+      })),
+    ],
   });
   return records
     .filter(

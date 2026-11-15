@@ -85,9 +85,12 @@ function Body({ who, otherId, onClose, onDirtyChange }: BodyProps) {
     onDirtyChange(false);
   };
   const other = people.find((entry) => entry.id === otherId) ?? null;
-  const link = figuredOut
-    .get(who.id)
-    ?.find((entry) => [entry.firstId, entry.secondId].includes(otherId));
+  const findLink = () =>
+    figuredOut
+      .get(who.id)
+      ?.find((entry) => [entry.firstId, entry.secondId].includes(otherId));
+  const [heldLink] = useState(findLink);
+  const link = findLink() ?? (isBusy ? heldLink : undefined);
 
   if (!link || !other)
     return (

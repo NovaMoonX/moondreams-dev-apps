@@ -1114,6 +1114,7 @@ async function readContextPeople(
   base: string,
   key: HelmKey,
   isUnattended: boolean,
+  selfWhoId: string | null,
 ): Promise<ContextPerson[]> {
   try {
     const [snap, connectionSnap] = await Promise.all([
@@ -1133,7 +1134,12 @@ async function readContextPeople(
       snap.docs.flatMap((doc) => toPersonRecord(key, doc) ?? []),
       {
         isUnattended,
+        selfWhoId,
         connections: readContextConnections(key, connectionSnap?.docs ?? []),
+        unreadableConnections: readConnectionStates(
+          key,
+          connectionSnap?.docs ?? [],
+        ).filter((state) => state.isUnreadable),
       },
     );
   } catch (error) {
@@ -2209,7 +2215,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const contextPeople =
       mode === 'rest'
         ? []
-        : await readContextPeople(firestore, base, key, unattendedMask.isOn);
+        : await readContextPeople(
+            firestore,
+            base,
+            key,
+            unattendedMask.isOn,
+            selfWhoId,
+          );
     const { keyDates: contextKeyDates, upcoming } =
       mode === 'rest'
         ? { keyDates: [], upcoming: [] }

@@ -384,6 +384,17 @@ assert.deepEqual(
   [['a', 'b', 'sister']],
 );
 
+const ownerNotListed = impliedConnections({
+  selfId: 'me',
+  people: [who('a', 'sister'), who('b', 'brother')],
+  connections: [],
+  touchedIds: ['a'],
+});
+assert.deepEqual(
+  ownerNotListed.map((entry) => [entry.firstId, entry.secondId]),
+  [['a', 'b']],
+);
+
 assert.deepEqual(siblings[0].genders, { first: 'female', second: 'male' });
 
 console.log('Helm family links: all checks passed');

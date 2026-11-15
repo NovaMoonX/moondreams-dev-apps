@@ -322,7 +322,14 @@ export const inferFamilyLinks = (input: {
   connections: InferConnectionState[];
 }): InferredLink[] => {
   const { selfId } = input;
-  const person = new Map(input.people.map((entry) => [entry.id, entry]));
+  const person = new Map(
+    [
+      ...input.people,
+      ...(selfId !== null && !input.people.some((entry) => entry.id === selfId)
+        ? [{ id: selfId, kin: null, isPrivate: false, isPerson: true }]
+        : []),
+    ].map((entry) => [entry.id, entry]),
+  );
   const isOpen = (id: string) =>
     person.get(id)?.isPerson === true && person.get(id)?.isPrivate === false;
   const facts = [
@@ -581,10 +588,7 @@ export const impliedConnections = (input: {
   const selfId = input.selfId ?? NO_OWNER_ID;
   return inferFamilyLinks({
     selfId,
-    people: [
-      ...input.people,
-      { id: NO_OWNER_ID, kin: null, isPrivate: false, isPerson: true },
-    ],
+    people: input.people,
     connections: input.connections.map((connection) => ({
       ...connection,
       fromFirst: null,
