@@ -25,6 +25,9 @@ import type {
   CaptureSealed,
   Fact,
   FactSealed,
+  HelmDayCounts,
+  HelmDaySummary,
+  HelmDaySummarySealed,
   HelmEncryption,
   KeyDate,
   KeyDateIndexEntry,
@@ -1497,6 +1500,52 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     });
   });
   counts.grants = sources.length;
+
+  // A year of day summaries: mostly written, some only counted, some empty.
+  const summaryKeys = range(365).map((index) =>
+    new Date(now - (index + 1) * DAY_MS).toISOString().slice(0, 10),
+  );
+  const summaryDocs = await mapChunked(summaryKeys, async (dayKey, index) => {
+    const status: HelmDaySummary['status'] =
+      index % 10 === 3 ? 'empty' : index % 10 === 6 ? 'counted' : 'written';
+    const messages = 3 + ((index * 7) % 14);
+    const counts: HelmDayCounts = {
+      messages,
+      tasksAdded: index % 4,
+      keyDatesAdded: index % 11 === 0 ? 1 : 0,
+      notesAdded: index % 5 === 0 ? 1 : 0,
+      factsAdded: index % 3,
+      peopleAdded: index % 13 === 0 ? 1 : 0,
+      placesAdded: 0,
+      tasksDone: (index + 1) % 3,
+      planned: index % 2,
+      answered: index % 3 === 0 ? 2 : 0,
+      dismissed: index % 9 === 0 ? 1 : 0,
+    };
+    const line = `${messages} messages · added ${counts.tasksAdded} tasks, finished ${counts.tasksDone}`;
+    const value: HelmDaySummary = {
+      dayKey,
+      status,
+      attempts: status === 'counted' ? 3 : 1,
+      writtenAt: Date.parse(dayKey) + DAY_MS + 5 * MINUTE_MS,
+      staleAt: null,
+      sealed:
+        status === 'empty'
+          ? null
+          : await seal<HelmDaySummarySealed>({
+              text:
+                status === 'written'
+                  ? `A day of small things sorted: ${counts.tasksAdded} tasks came in and ${counts.tasksDone} were finished.`
+                  : line,
+              line,
+              counts,
+            }),
+    };
+    return { dayKey, value };
+  });
+  summaryDocs.forEach((entry) =>
+    put('daySummaries', `daySummaries/${entry.dayKey}`, entry.value),
+  );
 
   // The emulator commits one batch at a time, so the batches are written one after another once everything is built.
   await Array.from(

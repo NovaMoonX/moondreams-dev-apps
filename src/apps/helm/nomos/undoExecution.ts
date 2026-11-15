@@ -6,6 +6,7 @@ import {
   getDocs,
   limit,
   query,
+  updateDoc,
   increment,
   runTransaction,
   type Transaction,
@@ -15,6 +16,7 @@ import {
 import { db } from '@lib/firebase/config';
 import { deleteFile } from '@lib/firebase/storage';
 import { createSealedReader } from '@lib/security';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 
 import { openJson, sealJson } from '@apps/helm/security';
 import {
@@ -27,6 +29,7 @@ import {
   type IndexEntry,
 } from '@apps/helm/utils/keyDateIndex';
 import { getMediaObjectPaths } from '@apps/helm/utils/mediaPath';
+import { toDayKey } from '@apps/helm/utils/planDays';
 import { buildProcedureVersionDoc } from '@apps/helm/store/actions/procedureActions';
 import { buildVersionDoc } from '@apps/helm/store/actions/topicActions';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -341,6 +344,30 @@ const isUnavailable = (error: unknown) =>
   typeof error === 'object' &&
   error !== null &&
   (error as { code?: unknown }).code === 'unavailable';
+
+/** Marks the past day the taken-back execution belongs to, so its summary is written again when that day next opens. Best effort: a missing summary or a failure never touches the undo. */
+async function markDaySummaryStale(uid: string, executionId: string) {
+  try {
+    const [executionSnap, profileSnap] = await Promise.all([
+      getDoc(doc(userOf(uid), 'executions', executionId)),
+      getDoc(userOf(uid)),
+    ]);
+    const createdAt = (executionSnap.data() as { createdAt?: unknown })
+      ?.createdAt;
+    const zone = (profileSnap.data() as { timeZone?: unknown } | undefined)
+      ?.timeZone;
+    const timeZone =
+      typeof zone === 'string' ? zone : (getDeviceTimeZone() ?? 'UTC');
+    if (typeof createdAt !== 'number') return;
+    const dayKey = toDayKey(createdAt, timeZone);
+    if (dayKey >= toDayKey(Date.now(), timeZone)) return;
+    await updateDoc(doc(userOf(uid), 'daySummaries', dayKey), {
+      staleAt: Date.now(),
+    });
+  } catch {
+    // The summary is missing or out of reach; the undo stands.
+  }
+}
 
 const toMediaKind = (value: unknown): MediaKind =>
   value === 'pdf' || value === 'voiceNote' || value === 'markdown'
@@ -678,6 +705,7 @@ export async function undoExecution(
       },
     );
     if (result.kind === 'done') {
+      void markDaySummaryStale(uid, executionId);
       const deleted = await Promise.allSettled(
         result.objectPaths.map((path) => deleteFile(path)),
       );
