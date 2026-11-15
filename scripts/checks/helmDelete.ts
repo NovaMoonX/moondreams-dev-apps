@@ -22,6 +22,7 @@ const body = server.slice(at(server, 'async (request) =>'));
 const steps = [
   'isSignInRecent(',
   "endReaderGrants({ uid, readerAppId: 'helm' })",
+  'deleteReminderQueue(firestore, uid)',
   'deleteUserCollections(',
   'deleteMedia(uid)',
   'voiceUsagePath(uid)',
@@ -31,7 +32,7 @@ const steps = [
 assert.deepEqual(
   steps,
   [...steps].sort((a, b) => a - b),
-  'the guard, grants, user collections, media, voice usage, server tree and then the profile run in that order',
+  'the guard, grants, the reminder queue, user collections, media, voice usage, server tree and then the profile run in that order',
 );
 
 const tree = server.slice(

@@ -9,6 +9,7 @@ import { getMessaging, type Messaging } from 'firebase-admin/messaging';
 import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
+import { helmReminderSendHook } from '../apps/helm/reminders/sendHook.js';
 import { pruneFinishedReminders } from './pruneReminders.js';
 import {
   APP_ORIGIN,
@@ -43,6 +44,31 @@ const APP_PATHS: Record<string, string> = {
   'a-list': '/a-list',
   pinch: '/pinch',
 };
+
+export interface ReminderSendHook {
+  /** The words to push at the second of sending, or null when the reminder is no longer wanted. */
+  prepare(
+    firestore: Firestore,
+    reminder: DocumentData,
+    now: number,
+  ): Promise<{ title: string; body: string } | null>;
+  /** Records that the push went out. */
+  settle(
+    firestore: Firestore,
+    reminder: DocumentData,
+    sentAt: number,
+  ): Promise<void>;
+}
+
+/** An app whose reminders depend on what happened since they were planned checks them here before they go. */
+export const REMINDER_SEND_HOOKS: Record<string, ReminderSendHook> = {
+  helm: helmReminderSendHook,
+};
+
+const hookFor = (appId: unknown): ReminderSendHook | null =>
+  typeof appId === 'string' && Object.hasOwn(REMINDER_SEND_HOOKS, appId)
+    ? REMINDER_SEND_HOOKS[appId]
+    : null;
 
 /**
  * The absolute URL a tapped reminder opens: its own `link`, else the trip or app it belongs
@@ -115,15 +141,61 @@ async function settleStaleReminder(
   await ref.update({ status: 'expired' });
 }
 
+/** What to push: the app's hook words, the stored words when there is no hook or it failed, null when the hook says it is not needed. */
+async function prepareWords(
+  firestore: Firestore,
+  reminder: DocumentData,
+  now: number,
+): Promise<{ title: string; body: string } | null> {
+  const hook = hookFor(reminder.appId);
+  const stored = { title: reminder.title as string, body: reminder.body as string };
+
+  if (!hook) {
+    return stored;
+  }
+
+  try {
+    return await hook.prepare(firestore, reminder, now);
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    logger.error(`${reminder.appId}.reminders.checkFailed`, {
+      code: typeof code === 'string' || typeof code === 'number' ? code : 'unknown',
+    });
+    return stored;
+  }
+}
+
+async function settleSent(
+  firestore: Firestore,
+  reminder: DocumentData,
+  sentAt: number,
+): Promise<void> {
+  const hook = hookFor(reminder.appId);
+
+  if (!hook) {
+    return;
+  }
+
+  try {
+    await hook.settle(firestore, reminder, sentAt);
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code;
+    logger.error(`${reminder.appId}.reminders.settleFailed`, {
+      code: typeof code === 'string' || typeof code === 'number' ? code : 'unknown',
+    });
+  }
+}
+
 async function deliverReminder(
   firestore: Firestore,
   messaging: Messaging,
   ref: DocumentReference<DocumentData>,
   reminder: DocumentData,
+  words: { title: string; body: string },
+  clock: () => number,
 ): Promise<void> {
   await sendPushToUsers(firestore, messaging, normalizeUids(reminder.targetUids), {
-    title: reminder.title,
-    body: reminder.body,
+    ...words,
     url: resolveReminderLink(reminder),
   });
 
@@ -136,11 +208,92 @@ async function deliverReminder(
     await ref.update({
       scheduledFor: nextOccurrence.getTime(),
       claimedAt: null,
-      lastSentAt: Date.now(),
+      lastSentAt: clock(),
     });
   } else {
-    await ref.update({ status: 'sent', lastSentAt: Date.now() });
+    await ref.update({ status: 'sent', lastSentAt: clock() });
   }
+
+  await settleSent(firestore, reminder, clock());
+}
+
+/** One sending pass as of `now`: what `sendScheduledReminders` runs every minute, callable with a fixed clock and a fake `messaging`. */
+export async function runScheduledReminders(
+  firestore: Firestore,
+  messaging: Messaging,
+  now: number,
+): Promise<void> {
+  const startedAt = Date.now();
+  const clock = () => now + (Date.now() - startedAt);
+  const windowEnd = now + POLL_INTERVAL_MS;
+  const staleBefore = now - STALE_AFTER_MS;
+
+  // Housekeeping runs beside the sending and never holds it up or fails it.
+  const pruning = pruneFinishedReminders(firestore, now)
+    .then((count) => {
+      if (count > 0) {
+        logger.info('Pruned finished reminders', { count });
+      }
+    })
+    .catch((error) => logger.error('Pruning finished reminders failed', error));
+
+  // Looks ahead to everything due within this poll window, not just what's
+  // already due, then waits out each one's exact remaining delay before
+  // sending — this keeps delivery accurate to the second rather than
+  // batching it to 5-minute boundaries, without a separate task queue.
+  const dueRemindersSnapshot = await firestore
+    .collection('reminders')
+    .where('status', '==', 'pending')
+    .where('scheduledFor', '<=', windowEnd)
+    .get();
+
+  if (dueRemindersSnapshot.empty) {
+    await pruning;
+    return;
+  }
+
+  const staleDocs = dueRemindersSnapshot.docs.filter(
+    (reminderDoc) => (reminderDoc.get('scheduledFor') as number) < staleBefore,
+  );
+  const upcomingDocs = dueRemindersSnapshot.docs.filter(
+    (reminderDoc) => (reminderDoc.get('scheduledFor') as number) >= staleBefore,
+  );
+
+  if (staleDocs.length > 0) {
+    logger.info('Settling overdue reminders without sending', { count: staleDocs.length });
+  }
+
+  await Promise.all([
+    ...staleDocs.map((reminderDoc) => settleStaleReminder(reminderDoc.ref, reminderDoc.data(), now)),
+    ...upcomingDocs.map(async (reminderDoc) => {
+      const claimed = await claimReminder(firestore, reminderDoc.ref);
+
+      if (!claimed) {
+        return;
+      }
+
+      const delayMs = Math.max(0, (claimed.scheduledFor as number) - clock());
+
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        // A reminder cancelled while this run waited for its time must not go out.
+        if ((await reminderDoc.ref.get()).get('status') !== 'pending') {
+          return;
+        }
+      }
+
+      const words = await prepareWords(firestore, claimed, clock());
+
+      if (!words) {
+        await reminderDoc.ref.update({ status: 'cancelled' });
+        logger.info('reminders.notNeeded', { appId: claimed.appId });
+        return;
+      }
+
+      await deliverReminder(firestore, messaging, reminderDoc.ref, claimed, words, clock);
+    }),
+    pruning,
+  ]);
 }
 
 export const sendScheduledReminders = onSchedule(
@@ -149,70 +302,7 @@ export const sendScheduledReminders = onSchedule(
     timeoutSeconds: POLL_INTERVAL_MS / 1000 + 60,
   },
   async () => {
-    const firestore = getFirestore();
-    const messaging = getMessaging();
-    const now = Date.now();
-    const windowEnd = now + POLL_INTERVAL_MS;
-    const staleBefore = now - STALE_AFTER_MS;
-
-    // Housekeeping runs beside the sending and never holds it up or fails it.
-    const pruning = pruneFinishedReminders(firestore, now)
-      .then((count) => {
-        if (count > 0) {
-          logger.info('Pruned finished reminders', { count });
-        }
-      })
-      .catch((error) => logger.error('Pruning finished reminders failed', error));
-
-    // Looks ahead to everything due within this poll window, not just what's
-    // already due, then waits out each one's exact remaining delay before
-    // sending — this keeps delivery accurate to the second rather than
-    // batching it to 5-minute boundaries, without a separate task queue.
-    const dueRemindersSnapshot = await firestore
-      .collection('reminders')
-      .where('status', '==', 'pending')
-      .where('scheduledFor', '<=', windowEnd)
-      .get();
-
-    if (dueRemindersSnapshot.empty) {
-      await pruning;
-      return;
-    }
-
-    const staleDocs = dueRemindersSnapshot.docs.filter(
-      (reminderDoc) => (reminderDoc.get('scheduledFor') as number) < staleBefore,
-    );
-    const upcomingDocs = dueRemindersSnapshot.docs.filter(
-      (reminderDoc) => (reminderDoc.get('scheduledFor') as number) >= staleBefore,
-    );
-
-    if (staleDocs.length > 0) {
-      logger.info('Settling overdue reminders without sending', { count: staleDocs.length });
-    }
-
-    await Promise.all([
-      ...staleDocs.map((reminderDoc) => settleStaleReminder(reminderDoc.ref, reminderDoc.data(), now)),
-      ...upcomingDocs.map(async (reminderDoc) => {
-        const claimed = await claimReminder(firestore, reminderDoc.ref);
-
-        if (!claimed) {
-          return;
-        }
-
-        const delayMs = Math.max(0, (claimed.scheduledFor as number) - Date.now());
-
-        if (delayMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-          // A reminder cancelled while this run waited for its time must not go out.
-          if ((await reminderDoc.ref.get()).get('status') !== 'pending') {
-            return;
-          }
-        }
-
-        await deliverReminder(firestore, messaging, reminderDoc.ref, claimed);
-      }),
-      pruning,
-    ]);
+    await runScheduledReminders(getFirestore(), getMessaging(), Date.now());
   },
 );
 

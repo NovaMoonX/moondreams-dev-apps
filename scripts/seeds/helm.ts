@@ -1856,6 +1856,16 @@ export const toHabitDay = (
 
 const HABIT_ZONE = 'America/Los_Angeles';
 
+/** Adaptive reminders already on, so a fresh emulator plans them within minutes (`npm run helm:reminders-tick`). */
+const seedReminder = (turnedOnAt: number): Habit['reminder'] => ({
+  isOn: true,
+  pace: 'adaptive',
+  anyTimeAt: null,
+  allowQuietHours: false,
+  turnedOnAt,
+  easedAt: null,
+});
+
 /** Alex's habits for the week that holds today: 💊 Pills (morning and evening, health: 10 of 12 Monday to Saturday when today is a Sunday, the morning ticked today, so "11 of 13"), 💧 Water (6 a day, 4 of 6 days), 🎸 Guitar (3 times a week) and Mom's metoprolol (a care habit, private) and 🧘 Stretch (a morning window left unticked today, so "Window ended" shows once it has passed). */
 async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
   const { now, encryption } = input;
@@ -1904,6 +1914,7 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
         windowState: {
           e: { start: '19:00', end: '22:00', order: 0, part: 'evening', editedAt: null },
         },
+        reminder: seedReminder(createdAt),
         startsOn,
         createdAt,
       },
@@ -1939,6 +1950,7 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
         windowState: {
           m: { start: '06:00', end: '09:00', order: 0, part: 'morning', editedAt: null },
         },
+        reminder: seedReminder(createdAt),
         startsOn,
         createdAt,
       },
@@ -5459,7 +5471,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         calendarOfferFoldedAt: null,
         quietHours: null,
         remindersPausedAt: null,
-        habitRemindersChangedAt: null,
+        habitRemindersChangedAt:
+          user.uid === FIXTURE_USERS.partnerOne.uid ? context.now : null,
         habitRemindersIdleAt: null,
         hasSeenAiNotice: false,
         voiceMode: 'cloudWhenOnline',

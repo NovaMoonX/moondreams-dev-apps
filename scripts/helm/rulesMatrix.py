@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, and one value's shape (a profile's theme is absent, null or a palette Helm ships; its voice name is absent, null or at most 32 characters, and its speed absent, null or 0.8 to 1.2): only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client. A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client (the reminder planner's queue included). A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -425,13 +425,19 @@ def main():
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09'):
+    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}'):
         admin([put(p, {'x': 1})])
         label = p.split("/")[0] if p.startswith('voice') else p.split("/")[-2]
         for a, tok in actors.items():
             check(f'{label} read [{a}]', get(p, tok), False)
             check(f'{label} create [{a}]', commit(tok, [put_new(p + '-new', {'x': 2})]), False)
             check(f'{label} write [{a}]', commit(tok, [put(p, {'x': 2})]), False)
+
+    # The reminder planner's queue is Admin SDK only: not even its owner reads it, lists the collection or queries it by lookAt.
+    for a, tok in actors.items():
+        check(f'reminderQueue list [{a}]', get('apps/helm/reminderQueue', tok), False)
+        check(f'reminderQueue create at own uid [{a}]', commit(tok, [put_new(f'apps/helm/reminderQueue/{uid}-own', {'lookAt': NOW})]), False)
+        check(f'reminderQueue delete [{a}]', commit(tok, [rm(f'apps/helm/reminderQueue/{uid}')]), False)
 
     if STORAGE_HOST:
         storage_cases(o_tok, x_tok, uid, x_uid, actors)

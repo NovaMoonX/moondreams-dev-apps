@@ -38,6 +38,7 @@ export { mintVoiceToken } from './voice/mintVoiceToken.js';
 export { signOutEverywhere } from './auth/signOutEverywhere.js';
 export { streamSpeech } from './voice/streamSpeech.js';
 export { deleteHelmData } from './apps/helm/deleteHelmData.js';
+export { planHelmReminders } from './apps/helm/reminders/planHelmReminders.js';
 export { deleteRunwayPlan } from './apps/runway/deleteRunwayPlan.js';
 export { createRunwayLinkSession } from './apps/runway/createRunwayLinkSession.js';
 export { exchangeRunwayLink } from './apps/runway/exchangeRunwayLink.js';

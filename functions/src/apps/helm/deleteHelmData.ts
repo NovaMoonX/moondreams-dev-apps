@@ -14,6 +14,7 @@ import { endReaderGrants } from '../../connections/endReaderGrants.js';
 import { READER_SINKS } from '../../connections/registry.js';
 import { GOOGLE_SECRETS } from '../../connections/tokens.js';
 import { dropBoxKeyPath, wrappedKeyPath } from './helmKey.js';
+import { deleteReminderQueue } from './reminders/reminderQueue.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -108,6 +109,8 @@ export const deleteHelmData = onCall(
     const firestore = getFirestore();
     try {
       const grants = await endReaderGrants({ uid, readerAppId: 'helm' });
+      // The queue lies outside the person's tree, so it goes first, with the reminders it still holds.
+      await deleteReminderQueue(firestore, uid);
       const collections = await deleteUserCollections(firestore, uid);
       const files = await deleteMedia(uid);
       const usage = await deleteTree(
