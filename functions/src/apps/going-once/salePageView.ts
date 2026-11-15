@@ -11,6 +11,8 @@ export const SALE_PAGE_LIMITS = {
   MAX_PAYMENT_METHOD_LENGTH: 30,
   MAX_STORE_URL_LENGTH: 2000,
   MAX_PAGE_THINGS: 300,
+  MAX_PICKUP_DAYS: 60,
+  MAX_ANOTHER_DAY_NOTE_LENGTH: 120,
 } as const;
 
 export const PUBLIC_CONDITIONS = [
@@ -55,6 +57,8 @@ export interface PublicSale {
   pickupArea: string | null;
   buyerNote: string | null;
   paymentMethods: string[];
+  /** Date-only days (UTC midnight) that have not passed in the sale's zone. */
+  pickupDays: number[];
 }
 
 /** One photo's two copies, as Storage paths. */
@@ -231,8 +235,49 @@ const toCondition = (value: unknown): PublicCondition | null =>
 const toStatus = (value: unknown): PublicStatus | null =>
   PUBLIC_STATUSES.find((status) => status === value) ?? null;
 
-/** Copies the sale's public fields by name; null when it has no name to show. */
-export function toPublicSale(raw: unknown): PublicSale | null {
+/** Whole-number days, sorted, unique and capped. */
+export const toPickupDays = (value: unknown): number[] =>
+  Array.isArray(value)
+    ? Array.from(
+        new Set(
+          value.filter((day: unknown): day is number =>
+            Number.isSafeInteger(day),
+          ),
+        ),
+      )
+        .sort((a, b) => a - b)
+        .slice(0, SALE_PAGE_LIMITS.MAX_PICKUP_DAYS)
+    : [];
+
+/** Today's date in the zone (UTC when it is missing or invalid) as a UTC-midnight value. */
+export function toZonedToday(timeZone: unknown, now: number): number {
+  const read = (zone: string | undefined) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+    }).formatToParts(now);
+    const part = (type: string) =>
+      Number(parts.find((entry) => entry.type === type)?.value);
+    return Date.UTC(part('year'), part('month') - 1, part('day'));
+  };
+  try {
+    return read(typeof timeZone === 'string' ? timeZone : undefined);
+  } catch {
+    return read('UTC');
+  }
+}
+
+/** The sale's pickup days that have not passed. */
+export const toOpenPickupDays = (sale: unknown, now: number): number[] => {
+  const today = toZonedToday(isRecord(sale) ? sale.timeZone : null, now);
+  return toPickupDays(isRecord(sale) ? sale.pickupDays : null).filter(
+    (day) => day >= today,
+  );
+};
+
+const copySale = (raw: unknown, pickupDays: number[]): PublicSale | null => {
   if (!isRecord(raw)) {
     return null;
   }
@@ -251,8 +296,13 @@ export function toPublicSale(raw: unknown): PublicSale | null {
           SALE_PAGE_LIMITS.MAX_BUYER_NOTE_LENGTH,
         ),
         paymentMethods: toPaymentMethods(raw.paymentMethods),
+        pickupDays,
       };
-}
+};
+
+/** Copies the sale's public fields by name; null when it has no name to show. */
+export const toPublicSale = (raw: unknown, now: number): PublicSale | null =>
+  copySale(raw, toOpenPickupDays(raw, now));
 
 /**
  * Copies a stored thing's public fields by name into a new object; null when it is not showing (not Available or Pending, not listable) or its id is not a plain key.
@@ -344,7 +394,7 @@ export function sealPage(
     return NOT_FOUND_RESULT;
   }
 
-  const sale = toPublicSale(page.sale);
+  const sale = copySale(page.sale, toPickupDays(page.sale.pickupDays));
   if (sale === null) {
     return NOT_FOUND_RESULT;
   }
@@ -397,8 +447,9 @@ export function toSalePage(
   items: unknown[],
   isMember: boolean,
   listing: CopyListing | null = null,
+  now: number = Date.now(),
 ): SalePageResult {
-  const publicSale = toPublicSale(sale);
+  const publicSale = toPublicSale(sale, now);
   if (publicSale === null) {
     return NOT_FOUND_RESULT;
   }
