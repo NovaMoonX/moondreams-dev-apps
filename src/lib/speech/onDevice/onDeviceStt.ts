@@ -37,9 +37,9 @@ const toErrorCode = (error: unknown): SttErrorCode => {
 };
 
 /**
- * Opens the microphone as a frame source. Echo cancellation keeps a line the page plays from being heard as the person,
- * but on Android it also puts the phone in call mode, which pauses or muffles music, so the wake listener (which runs
- * while nothing plays, and hands this microphone to its turn) opens without it.
+ * Echo cancellation keeps a line the page plays from being heard as the person, but on Android it also puts the phone
+ * in call mode, which pauses or muffles music, so the wake listener (which runs while nothing plays, and hands this
+ * microphone to its turn) opens without it.
  */
 const openMicrophone = async ({
   isEchoCancelled,
