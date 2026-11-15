@@ -1614,10 +1614,12 @@ export const HELM_COPY = {
     `${count} ${count === 1 ? 'place' : 'places'} added`,
   daySummaryTasksDone: (count: number) =>
     `${count} ${count === 1 ? 'task' : 'tasks'} finished`,
-  daySummaryPlanned: (count: number) => `${count} planned`,
+  daySummaryPlanned: (count: number) =>
+    `${count} ${count === 1 ? 'day' : 'days'} planned`,
   daySummaryAnswered: (count: number) =>
     `${count} ${count === 1 ? 'question' : 'questions'} answered`,
-  daySummaryDismissed: (count: number) => `${count} dismissed`,
+  daySummaryDismissed: (count: number) =>
+    `${count} ${count === 1 ? 'item' : 'items'} dismissed`,
   planNotDone: 'Not done',
   planBringToToday: 'Bring to today',
   planBroughtToToday: (count: number) => `Brought ${count} to today`,

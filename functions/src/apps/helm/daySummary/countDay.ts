@@ -199,7 +199,7 @@ export const toDayLine = (counts: HelmDayCounts) => {
     },
     {
       size: counts.planned,
-      text: `made ${plural(counts.planned, 'plan', 'plans')}`,
+      text: `planned ${plural(counts.planned, 'day', 'days')}`,
     },
     {
       size: counts.answered,

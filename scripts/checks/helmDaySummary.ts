@@ -205,7 +205,7 @@ assert.equal(
       dismissed: 1,
     }),
   ),
-  '5 messages · answered 4 questions, made 3 plans, finished 2 tasks and more',
+  '5 messages · answered 4 questions, planned 3 days, finished 2 tasks and more',
   'biggest first, three and then and more',
 );
 assert.equal(
