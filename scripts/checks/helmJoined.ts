@@ -11,6 +11,10 @@ import {
   type JoinedRead,
 } from '../../functions/src/apps/helm/nomos/joinedTurn.ts';
 import { groupTurns } from '../../src/apps/helm/utils/sessions.ts';
+import {
+  groupOutsideConversations,
+  isOutsideTurn,
+} from '../../src/apps/helm/utils/outsideTurns.ts';
 import { toHeldItems } from '../../src/apps/helm/utils/heldCaptures.ts';
 import type { OpenCapture } from '../../src/apps/helm/types.ts';
 import { summarize } from '../../functions/src/apps/helm/nomos/summaries.ts';
@@ -337,6 +341,37 @@ test('a joined message is not its own held row while its lead waits, and is once
     failed.waiting.map((item) => item.capture.id),
     ['m2'],
   );
+});
+
+test('outside turns group by assistant with a gap under 30 minutes', () => {
+  const MIN = 60_000;
+  const outside = (id: string, via: string, at: number) =>
+    turn(id, 'sorted', {
+      medium: 'mcp',
+      via,
+      createdAt: at * MIN,
+      turnIndex: 0,
+    });
+  const web = turn('w1', 'sorted', { medium: 'web', createdAt: 5 * MIN });
+  const all = [
+    outside('a1', 'Claude', 0),
+    outside('a2', 'Claude', 20),
+    outside('a3', 'Claude', 49),
+    outside('a4', 'Claude', 120),
+    outside('g1', 'Gemini', 10),
+    web,
+  ];
+  const groups = groupOutsideConversations(all, 30 * MIN);
+  assert.deepEqual(
+    groups.map((group) => [group.via, group.turns.map((entry) => entry.id)]),
+    [
+      ['Claude', ['a4']],
+      ['Claude', ['a1', 'a2', 'a3']],
+      ['Gemini', ['g1']],
+    ],
+  );
+  assert.equal(isOutsideTurn(web), false);
+  assert.equal(groupOutsideConversations([web], 30 * MIN).length, 0);
 });
 
 const failures: string[] = [];

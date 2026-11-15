@@ -7,6 +7,13 @@ import {
   playListeningSound,
   type ListeningCue,
 } from '@/lib/speech/listeningSound';
+import {
+  needsMicrophoneAsk,
+  peekMicrophonePermission,
+  rememberRecognitionRefused,
+  wasMicrophoneGranted,
+} from '@/lib/speech/microphonePermission';
+import { recordSpeechEvent } from '@/lib/speech/speechDiagnostics';
 import { readAloud } from '@/lib/speech/readAloud';
 import { primeSpeech } from '@/utils/speechUtils';
 
@@ -198,7 +205,16 @@ export const createSpeechListener = (
   const handleError = (event: SpeechRecognitionErrorEvent) => {
     const session = state.session;
     if (session === null) return;
-    if (event.error === 'not-allowed') return halt('denied');
+    recordSpeechEvent(
+      `Recognition error: ${event.error}${event.message ? ` (${event.message})` : ''}`,
+    );
+    if (event.error === 'not-allowed') {
+      // With the microphone already allowed, the refusal is the speech service's.
+      if (peekMicrophonePermission() === 'granted' || wasMicrophoneGranted())
+        return halt('service');
+      rememberRecognitionRefused();
+      return halt('denied');
+    }
     if (event.error === 'service-not-allowed') return halt('service');
     if (event.error === 'audio-capture') return halt('no-microphone');
     if (event.error === 'language-not-supported') return halt('language');
@@ -309,6 +325,12 @@ export const createSpeechListener = (
     },
     start: () => {
       if (state.isWanted || getRecognitionConstructor() === null) return;
+      // Starting would only flash on and off: the screen shows the way to allow the microphone instead.
+      if (needsMicrophoneAsk(peekMicrophonePermission())) {
+        recordSpeechEvent('Not started: the microphone has to be allowed first');
+        halt('denied');
+        return;
+      }
       setError(null);
       state.isWanted = true;
       state.failures = 0;

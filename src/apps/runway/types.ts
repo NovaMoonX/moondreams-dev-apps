@@ -113,8 +113,16 @@ export interface ShareSummary {
   nextIncomeOn: string | null;
   /** Every bill due before that day at the Want dial, overdue ones included. */
   dueBeforeIncomeCents: Cents;
-  /** Upcoming only: due today or later. */
-  bills: { name: string; amountCents: Cents; dueOn: string }[];
+  /** Unpaid ones due today or later (all within 30 days, else the next one within a year), and those paid this month. A summary an older phone wrote lacks the last four. */
+  bills: {
+    name: string;
+    amountCents: Cents;
+    dueOn: string;
+    repeats: string;
+    endsOn: string | null;
+    endsAfter: number | null;
+    paidOn: string | null;
+  }[];
   horizon: {
     name: string;
     targetCents: Cents;

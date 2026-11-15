@@ -29,12 +29,8 @@ import {
 } from '@lib/types/appCatalog';
 
 import { type AppDraft } from './appDraft';
-import {
-  AVAILABLE_USERS_PREVIEW,
-  CARD_CLASS,
-  DISABLED_CLASS,
-  SURFACE_CLASS,
-} from './constants';
+import UserPicker from './UserPicker';
+import { CARD_CLASS, DISABLED_CLASS, SURFACE_CLASS } from './constants';
 
 interface AppSettingsTabProps {
   app: AppMetadata;
@@ -86,8 +82,6 @@ function AppSettingsTab({
     onDraftChange({
       allowedUsers: typeof next === 'function' ? next(allowedUsers) : next,
     });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchError, setSearchError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const { confirm } = useActionModal();
 
@@ -121,34 +115,6 @@ function AppSettingsTab({
     [allowedUsers, users],
   );
 
-  const availableUsers = useMemo(
-    () =>
-      users.filter((profile) => {
-        const normalizedSearch = searchTerm.trim().toLowerCase();
-        const matchesSearch =
-          normalizedSearch.length === 0 ||
-          profile.displayName?.toLowerCase().includes(normalizedSearch) ||
-          profile.email?.toLowerCase().includes(normalizedSearch) ||
-          profile.uid.toLowerCase().includes(normalizedSearch);
-
-        const isGranted = allowedUsers.some(
-          (value) =>
-            value.toLowerCase() === profile.uid.toLowerCase() ||
-            value.toLowerCase() === profile.email?.toLowerCase(),
-        );
-
-        return matchesSearch && !isGranted;
-      }),
-    [allowedUsers, searchTerm, users],
-  );
-
-  const trimmedSearchTerm = searchTerm.trim();
-  const shownUsers = trimmedSearchTerm
-    ? availableUsers
-    : availableUsers.slice(0, AVAILABLE_USERS_PREVIEW);
-  const hasNoSearchResults =
-    trimmedSearchTerm.length > 0 && availableUsers.length === 0;
-
   const addUserToAccessList = (value: string) => {
     if (!isRestricted) {
       return;
@@ -163,40 +129,6 @@ function AppSettingsTab({
       const uniqueValues = new Set([...current, trimmedValue]);
       return Array.from(uniqueValues);
     });
-  };
-
-  const addSearchTermToAccessList = () => {
-    if (!isRestricted) {
-      return;
-    }
-
-    const trimmedValue = searchTerm.trim();
-
-    if (!trimmedValue) {
-      setSearchError('Enter an email address to add.');
-      return;
-    }
-
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailPattern.test(trimmedValue)) {
-      setSearchError('Enter a valid email address.');
-      return;
-    }
-
-    const normalizedValue = trimmedValue.toLowerCase();
-    const alreadyExists = allowedUsers.some(
-      (value) => value.trim().toLowerCase() === normalizedValue,
-    );
-
-    if (alreadyExists) {
-      setSearchTerm('');
-      setSearchError('');
-      return;
-    }
-
-    setAllowedUsers((current) => [...current, trimmedValue]);
-    setSearchTerm('');
-    setSearchError('');
   };
 
   const removeUserFromAccessList = (value: string) => {
@@ -463,97 +395,14 @@ function AppSettingsTab({
             )}
           </div>
 
-          <div>
-            <div className='text-foreground mb-2 text-sm font-medium'>
-              Available users
-            </div>
-            <div className='mb-3'>
-              <Input
-                className='placeholder:text-muted-foreground disabled:placeholder:text-muted-foreground disabled:opacity-100'
-                value={searchTerm}
-                onChange={(event) => {
-                  setSearchTerm(event.target.value);
-                  if (searchError) {
-                    setSearchError('');
-                  }
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && hasNoSearchResults) {
-                    event.preventDefault();
-                    addSearchTermToAccessList();
-                  }
-                }}
-                placeholder={
-                  hasNoSearchResults
-                    ? 'No match — add this email'
-                    : 'Search users by name or email'
-                }
-                disabled={!isRestricted}
-              />
-            </div>
-
-            {hasNoSearchResults ? (
-              <div className='border-border mb-3 flex items-center justify-between gap-2 rounded-lg border border-dashed p-2'>
-                <span className='text-muted-foreground text-xs'>
-                  No matching users found. Add this email instead.
-                </span>
-                <Button
-                  variant='secondary'
-                  size='sm'
-                  onClick={addSearchTermToAccessList}
-                  disabled={!isRestricted}
-                >
-                  Add email
-                </Button>
-              </div>
-            ) : null}
-
-            {searchError ? (
-              <p className='text-destructive mb-3 text-xs'>{searchError}</p>
-            ) : null}
-
-            <div className='divide-border divide-y'>
-              {availableUsers.length === 0 && !hasNoSearchResults ? (
-                <span className='text-muted-foreground text-sm'>
-                  No matching users found.
-                </span>
-              ) : (
-                shownUsers.map((profile) => (
-                  <div
-                    key={profile.uid}
-                    className='flex items-center justify-between gap-3 py-2'
-                  >
-                    <div className='flex min-w-0 items-center gap-3'>
-                      <UserAvatar user={profile} size='sm' />
-                      <div className='min-w-0'>
-                        <div className='text-foreground truncate text-sm'>
-                          {profile.displayName ?? profile.email}
-                        </div>
-                        <div className='text-muted-foreground truncate text-xs'>
-                          {profile.email}
-                        </div>
-                      </div>
-                    </div>
-                    <Button
-                      variant='secondary'
-                      size='sm'
-                      className={DISABLED_CLASS}
-                      onClick={() => addUserToAccessList(profile.uid)}
-                      disabled={!isRestricted}
-                    >
-                      Grant
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-            {shownUsers.length < availableUsers.length ? (
-              <p className='text-muted-foreground pt-2 text-xs'>
-                Showing {shownUsers.length} of {availableUsers.length}. Search
-                to find the rest.
-              </p>
-            ) : null}
-          </div>
+          <UserPicker
+            users={users}
+            takenValues={allowedUsers}
+            isDisabled={!isRestricted}
+            pickLabel='Grant'
+            onPickUser={(profile) => addUserToAccessList(profile.uid)}
+            onAddEmail={(email) => addUserToAccessList(email)}
+          />
         </div>
       </section>
 

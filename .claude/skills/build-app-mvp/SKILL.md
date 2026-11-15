@@ -29,7 +29,7 @@ Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: scre
 
 ## Inputs
 
-- **Docs:** `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md` and `ISSUES.md`, attached or already committed by `plan-app`.
+- **Docs:** `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md`, `NOMOS.md` and `ISSUES.md`, attached or already committed by `plan-app`.
 - **App id:** the kebab-case folder name under `src/apps/`. Take it from the docs, or derive it from the app name.
 - **Label:** `<App Name> (App)`, using the app's real display name with its punctuation, e.g. `A-List (App)`.
 - **Project board:** https://github.com/users/NovaMoonX/projects/3 (number 3, status "Ready"), unless the user says otherwise.
@@ -57,7 +57,7 @@ Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: scre
 
 ## Phase 0: Intake and docs PR
 
-1. Create `src/apps/<id>/` with the attached `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md` and `ISSUES.md` (skip what `plan-app` already committed), following the existing apps' doc layout.
+1. Create `src/apps/<id>/` with the attached `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md`, `NOMOS.md` and `ISSUES.md` (skip what `plan-app` already committed), following the existing apps' doc layout.
    - Keep PRODUCT.md's "Build Plan" checklist; each MVP PR ticks its own line there and in the README's Status list.
 2. Read all four docs fully. Note:
    - the MVP issue list and dependencies;
@@ -166,7 +166,7 @@ Start this once every MVP PR is merged up and reviewed.
    - Note anything bigger as a follow-up in the overview comment instead of widening scope.
    - Re-validate as in Phase 2, including re-driving each flow you touched.
 6. **Keep the conventions current while you fix.** Both agents' rule candidates feed `docs/conventions/` (design rules in `design-ux.md` or `app-look.md`, product rules in `product.md`, one app's rules in its rules file), folded into the nearest bullet, never appended, per `pr-wrap-up` §5. When the owner says a review agent should have caught something, that agent's file in `.claude/agents/` is amended too (`docs/conventions/agents.md`).
-7. **Update `src/apps/<id>/PRODUCT.md` and its short `README.md`** to match what was actually built. Also update the root README and `functions/README.md` if they're affected.
+7. **Update `src/apps/<id>/PRODUCT.md`, its short `README.md` and `NOMOS.md`** to match what was actually built. Also update the root README and `functions/README.md` if they're affected.
 8. **Label the polish PR `patch`**, commit, push, and open the polish PR with the top MVP branch as its base. Run the same review as the MVP PRs.
 9. **Post the overview comment on the polish PR**, built from `references/overview-comment.md`. It replaces any per-PR "what's left" notes. Before posting, build the app's `<app>:setup` script that bundles every setup step (the reference says how), and check every privacy or vendor-terms line yourself against the vendor's own pages (if the network blocks them, fix the environment with the environment tools rather than asking the owner).
 10. **Merge it yourself once the owner says the setup is done.** The owner never chooses how a stack merges. Copy every lower PR's `Resolves` line into the polish PR's body, merge `main` into the polish branch, retarget it to `main`, and merge it once through the merge lock (`orchestrate` "Merging a run's PRs", squash like every other PR), then close the lower PRs with a one-line comment pointing at the polish PR and delete their branches. One deploy, and no half-built app in production.
