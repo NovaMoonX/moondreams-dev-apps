@@ -280,7 +280,15 @@ const removed = run(
 assert.deepEqual(removed.deletes, ['dana_sam_couple']);
 assert.deepEqual(removed.lines, ['Removed the link between Dana and Sam']);
 assert.equal(
-  run([{ ...(removed as never), kind: 'disconnect' } as never]).deletes.length,
+  run([
+    {
+      kind: 'disconnect',
+      firstWhoId: 'dana',
+      secondWhoId: 'sam',
+      connectionKind: null,
+      requestQuote: 'Dana and Sam broke up',
+    },
+  ]).deletes.length,
   0,
 );
 

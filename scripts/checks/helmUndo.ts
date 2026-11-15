@@ -18,6 +18,7 @@ import type {
   ExecutionEffect,
   HabitDaySealed,
   HabitSealed,
+  KeyDateSealed,
   OpenExecution,
   ProcedureSealed,
   RunSealed,
@@ -890,8 +891,8 @@ test('a removed date is written back under its id, with its words', () => {
   assert.equal(result.creates.length, 1);
   assert.equal(result.creates[0].docId, 'k1');
   assert.equal(result.creates[0].fields.whoId, 'w1');
-  assert.equal(result.creates[0].seal.year, 1960);
-  assert.equal(result.creates[0].seal.month, 6);
+  assert.equal((result.creates[0].seal as KeyDateSealed).year, 1960);
+  assert.equal((result.creates[0].seal as KeyDateSealed).month, 6);
   assert.deepEqual(
     result.undoExecution.effectRefs.map((ref) => ref.op),
     ['update'],
@@ -1005,8 +1006,8 @@ test('a removed moment is written back as a moment with its precision', () => {
   ]);
   const result = asWrite(plan(removed, [dateTarget('k1', null)]));
   assert.equal(result.creates[0].fields.shape, 'moment');
-  assert.equal(result.creates[0].seal.precision, 'month');
-  assert.equal(result.creates[0].seal.year, 2015);
+  assert.equal((result.creates[0].seal as KeyDateSealed).precision, 'month');
+  assert.equal((result.creates[0].seal as KeyDateSealed).year, 2015);
 });
 
 const projectSealed = (
