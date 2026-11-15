@@ -115,6 +115,7 @@
     "check:helm-procedures": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmProcedures.ts",
     "check:helm-runs": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRuns.ts",
     "check:helm-style": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmStyle.ts",
+    "check:helm-day-summary": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmDaySummary.ts",
     "check:helm-procedure-steps": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmProcedureSteps.ts",
     "voice:benchmark": "tsx scripts/voice/benchmark.ts",
     "voice:listen": "tsx scripts/voice/benchmark.ts --all-voices",
