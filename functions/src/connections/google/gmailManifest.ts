@@ -5,6 +5,8 @@ export const GOOGLE_GMAIL_MANIFEST: ConnectorManifest = {
   id: 'google:gmail',
   kind: 'oauth',
   contractVersion: 1,
+  about:
+    "Gmail, the person's Google mail account, connected through their Google account.",
   transformVersion: 1,
   categories: [
     {
@@ -12,6 +14,8 @@ export const GOOGLE_GMAIL_MANIFEST: ConnectorManifest = {
       kind: 'knowledge',
       label: 'Mail',
       detail: 'Searched when you ask. Only what an answer quotes is kept.',
+      meaning:
+        "Email messages in the person's Gmail that match a search the assistant makes, with the subject, sender and a short snippet.",
       mode: 'live',
       isOnAtConnect: true,
       addedInVersion: 1,

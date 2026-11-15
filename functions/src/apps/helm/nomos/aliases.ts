@@ -1,3 +1,5 @@
+import { gcmDecrypt, gcmEncrypt } from '../../../appKeys/gcm.js';
+import type { HelmKey } from '../helmKey.js';
 import type { SyncedCopy } from '../syncedCopies.js';
 
 export interface AliasBook {
@@ -19,6 +21,38 @@ export function createAliasBook(prefix: string): AliasBook {
       return alias;
     },
     idOf: (alias) => byAlias.get(alias) ?? null,
+  };
+}
+
+const NONCE_BYTES = 12;
+
+/** Aliases that carry the id itself, sealed under the person's key with the uid and prefix as AAD, so a later request opens them with no stored map and no id is ever shown. */
+export function createSealedAliasBook(
+  prefix: string,
+  uid: string,
+  key: HelmKey,
+): AliasBook {
+  const aad = Buffer.from(`${uid}|${prefix}`);
+  return {
+    add: (id) => {
+      const { ciphertext, nonce } = gcmEncrypt(key.key, Buffer.from(id), aad);
+      return `${prefix}${Buffer.concat([Buffer.from(nonce, 'base64'), Buffer.from(ciphertext, 'base64')]).toString('base64url')}`;
+    },
+    idOf: (alias) => {
+      if (!alias.startsWith(prefix)) return null;
+      try {
+        const bytes = Buffer.from(alias.slice(prefix.length), 'base64url');
+        if (bytes.length <= NONCE_BYTES) return null;
+        return gcmDecrypt(
+          key.key,
+          bytes.subarray(NONCE_BYTES).toString('base64'),
+          bytes.subarray(0, NONCE_BYTES).toString('base64'),
+          aad,
+        ).toString('utf8');
+      } catch {
+        return null;
+      }
+    },
   };
 }
 
@@ -109,6 +143,12 @@ export function createQuoteBook(): QuoteBook {
   };
 }
 
+/** The failure a look in a switched-off category records; an answer that says so may stand without a source. */
+export const TURNED_OFF_FAILURE = `It's turned off in Connected apps`;
+
+/** The account a look through stored copies is logged under, so it never merges with, or masks, a live look at the same app. */
+export const STORED_ACCOUNT_ID = 'stored';
+
 export interface SearchedEntry {
   connectorId: string;
   accountId: string;
@@ -125,8 +165,12 @@ export interface SearchedLog {
     label: string;
     found: number;
     failure: string | null;
+    /** A look through stored copies, shown with the answer but never counted as a live read. */
+    isStored?: boolean;
   }) => void;
   entries: () => SearchedEntry[];
+  /** How many accounts had a live call (mail, documents, an app's live records). */
+  liveCount: () => number;
 }
 
 /** Every live call of one answer, merged to one entry per account: results summed, the latest time, and a failure kept only while no call to it succeeded. */
@@ -141,10 +185,11 @@ export function createSearchedLog(now: () => number = Date.now): SearchedLog {
       found: number;
       successes: number;
       failure: string | null;
+      isLive: boolean;
     }
   >();
   return {
-    record: ({ connectorId, accountId, label, found, failure }) => {
+    record: ({ connectorId, accountId, label, found, failure, isStored }) => {
       const key = `${connectorId}|${accountId}`;
       const previous = byAccount.get(key);
       byAccount.set(key, {
@@ -155,8 +200,11 @@ export function createSearchedLog(now: () => number = Date.now): SearchedLog {
         found: (previous?.found ?? 0) + found,
         successes: (previous?.successes ?? 0) + (failure === null ? 1 : 0),
         failure: failure ?? previous?.failure ?? null,
+        isLive: (previous?.isLive ?? false) || isStored !== true,
       });
     },
+    liveCount: () =>
+      [...byAccount.values()].filter((entry) => entry.isLive).length,
     entries: () =>
       [...byAccount.values()].map(
         ({ connectorId, accountId, label, at, found, successes, failure }) => ({

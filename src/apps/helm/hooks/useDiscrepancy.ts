@@ -14,10 +14,14 @@ export function useCopyTimeZone() {
   const profile = useAppSelector((state) => state.helm.profile);
   const awayKey = useAppSelector((state) => toAwayKey(state.helm.who.items));
   const now = useNow(60_000);
-  return readTodayZone(now, {
-    timeZone: profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
-    zoneSpans: profile?.zoneSpans ?? [],
-  }, fromAwayKey(awayKey));
+  return readTodayZone(
+    now,
+    {
+      timeZone: profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
+      zoneSpans: profile?.zoneSpans ?? [],
+    },
+    fromAwayKey(awayKey),
+  );
 }
 
 /** The unanswered disagreement between an email's fact and this copy, or null. */

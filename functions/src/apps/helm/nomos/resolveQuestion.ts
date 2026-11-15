@@ -261,7 +261,7 @@ function closeStale(
     [questionId]: { ...capture.questionState[questionId], answeredAt: now },
   };
   const isOpen = Object.values(questionState).some(
-    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+    (entry) => entry.answeredAt === null,
   );
   return {
     taskUpdates: [],
@@ -509,7 +509,7 @@ function planSettle(
     [questionId]: { ...state, answeredAt: now },
   };
   const isOpen = Object.values(questionState).some(
-    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+    (entry) => entry.answeredAt === null,
   );
   return {
     refused: null,
@@ -674,7 +674,7 @@ function planSettleKeyDate(
     [questionId]: { ...state, answeredAt: now },
   };
   const isOpen = Object.values(questionState).some(
-    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+    (entry) => entry.answeredAt === null,
   );
   return {
     refused: null,
@@ -827,7 +827,7 @@ function planFileNote(
     [questionId]: { ...state, answeredAt: now },
   };
   const isOpen = Object.values(questionState).some(
-    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+    (entry) => entry.answeredAt === null,
   );
   return {
     refused: null,
@@ -944,7 +944,7 @@ function planGroup(
     [questionId]: { ...state, answeredAt: now },
   };
   const isOpen = Object.values(questionState).some(
-    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+    (entry) => entry.answeredAt === null,
   );
   return {
     refused: null,
@@ -1161,7 +1161,7 @@ function planSettleKin(
     [questionId]: { ...state, answeredAt: now },
   };
   const isOpen = Object.values(questionState).some(
-    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+    (entry) => entry.answeredAt === null,
   );
   return {
     refused: null,
@@ -1235,7 +1235,6 @@ export function planResolve(
   const question = oldQuestions[questionId];
   if (!state || !isRecord(question)) return { refused: 'unknown' };
   if (state.answeredAt !== null) return { refused: 'answered' };
-  if ((state.leftAt ?? null) !== null) return { refused: 'gone' };
   const options = Array.isArray(question.options)
     ? question.options.filter(isOption)
     : [];
@@ -1570,7 +1569,7 @@ export function planResolve(
     [questionId]: { ...state, answeredAt: now },
   };
   const isOpen = Object.values(questionState).some(
-    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+    (entry) => entry.answeredAt === null,
   );
   return {
     refused: null,

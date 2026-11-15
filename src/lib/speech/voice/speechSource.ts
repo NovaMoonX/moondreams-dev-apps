@@ -99,3 +99,75 @@ export const withSpeechVoice = (
   fetchSpeech: (text, priority, signal) =>
     source.fetchSpeech(text, priority, signal, voice),
 });
+
+interface CachedSpeech {
+  chunks: Uint8Array[];
+  provider: string;
+  contentType: string;
+}
+
+/** The last few lines' audio, kept for the session so a replay costs no request. */
+export const createSpeechCache = (limit = 10) => {
+  const lines = new Map<string, CachedSpeech>();
+  return {
+    get: (key: string) => lines.get(key),
+    set: (key: string, speech: CachedSpeech) => {
+      lines.delete(key);
+      lines.set(key, speech);
+      [...lines.keys()]
+        .slice(0, Math.max(0, lines.size - limit))
+        .forEach((oldest) => lines.delete(oldest));
+    },
+  };
+};
+
+const toStream = (chunks: Uint8Array[]) =>
+  new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      chunks.forEach((chunk) => controller.enqueue(chunk));
+      controller.close();
+    },
+  });
+
+/** A source that answers a line it has already fetched from `cache` (by voice and text) and keeps each answer it reads to the end. */
+export const withSpeechCache = (
+  source: SpeechSource,
+  cache: ReturnType<typeof createSpeechCache>,
+  voiceKey: string,
+): SpeechSource => ({
+  fetchSpeech: async (text, priority, signal, voice) => {
+    const key = `${voiceKey}|${text}`;
+    const hit = cache.get(key);
+    if (hit) {
+      return {
+        status: 'ready',
+        body: toStream(hit.chunks),
+        provider: hit.provider,
+        contentType: hit.contentType,
+      };
+    }
+    const answer = await source.fetchSpeech(text, priority, signal, voice);
+    if (answer.status !== 'ready') return answer;
+    const chunks: Uint8Array[] = [];
+    return {
+      ...answer,
+      body: answer.body.pipeThrough(
+        new TransformStream<Uint8Array, Uint8Array>({
+          transform: (chunk, controller) => {
+            chunks.push(chunk);
+            controller.enqueue(chunk);
+          },
+          flush: () => {
+            if (chunks.length > 0) {
+              cache.set(key, {
+                chunks,
+                provider: answer.provider,
+                contentType: answer.contentType,
+              });
+            }
+          },
+        }),
+      ),
+    };
+  },
+});
