@@ -196,9 +196,8 @@ export const createOnDeviceStt = ({
 };
 
 /**
- * Listens continuously with the downloaded model, on this device only, and hands over each finished phrase (a pause
- * ends one). For waiting on a wake phrase: nothing is sent anywhere. `onUnavailable` runs when the microphone or the
- * model can't start; `close` releases both.
+ * Listens for wake phrases with the downloaded model, on this device only: each finished phrase (a pause ends one) goes to
+ * `onPhrase`. `close` releases the model and microphone; `handOver` releases only the model and returns the open microphone.
  */
 export const listenOnDevice = ({
   onPhrase,
@@ -218,6 +217,17 @@ export const listenOnDevice = ({
     state.recognition = null;
     state.microphone?.stop();
     state.microphone = null;
+  };
+  const handOver = (): FrameSource | null => {
+    const { microphone } = state;
+    if (microphone === null) return null;
+    state.isClosed = true;
+    state.recognition?.close();
+    state.recognition = null;
+    state.microphone = null;
+    const buffered: ArrayBuffer[] = [];
+    microphone.subscribe((frame) => buffered.push(frame));
+    return { ...microphone, preRoll: buffered };
   };
   loadRecognizer()
     .then(() => (state.isClosed ? null : openMicrophone()))
@@ -245,5 +255,5 @@ export const listenOnDevice = ({
       close();
       onUnavailable(toErrorCode(error));
     });
-  return { close };
+  return { close, handOver };
 };

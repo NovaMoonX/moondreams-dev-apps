@@ -67,10 +67,10 @@ Both stand on the same base: `createSpeechListener` (browser recognition), `list
 
 ### One conversation turn
 
-1. The person taps the mic or says the wake phrase.
+1. The person taps the mic or says the wake phrase. The phrase does not send anything: the listener that heard it (the browser's, kept running, or the on-device model's open microphone, handed over with the rest of that breath as its first words) carries on as the turn's listener, so what follows the phrase is part of the turn like any other.
 2. The microphone opens with echo cancellation and noise suppression, and the device cleans background noise out of it with RNNoise before the speech gate, the cloud and the on-device model hear it (the browser's own recognition hears the raw stream; a device-local switch turns the cleaning off).
 3. Words appear as they are heard.
-4. The turn ends on a tap, an end phrase such as "that's all", or a pause after the words stop changing: about 0.9 seconds, 2.5 seconds when the words end on a connector, a filler or a comma (`readTurnEndDelay`), and 8 seconds only while nothing has been heard.
+4. The turn ends on a tap, an end phrase such as "that's all" (held 0.9 s so "that's all I need" keeps going), or a pause after the words stop changing: about 1.5 seconds, 2.5 seconds when the words end on a connector, a filler or a comma (`readTurnEndDelay`), and 8 seconds only while nothing has been heard. Empty or repeated partials never restart the wait, and an error mid-turn sends the words heard so far.
 5. The text goes to the assistant like a typed message.
 6. A confirmation is spoken as soon as the work is filed, then the answer.
 7. An 8-second follow-up window lets the person reply without tapping again.

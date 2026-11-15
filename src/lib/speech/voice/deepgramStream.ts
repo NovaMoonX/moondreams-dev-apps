@@ -146,6 +146,7 @@ export const createDeepgramStt = ({
         finals: [] as string[],
         interim: '',
         isHeard: false,
+        lastText: '',
         openId: 0,
         closeId: 0,
         keepAliveId: 0,
@@ -305,7 +306,10 @@ export const createDeepgramStt = ({
         } else state.interim = heard.text;
         if (!state.isHeard) options.onSpeechStart();
         state.isHeard = true;
-        options.onPartial(read());
+        const text = read();
+        if (text === state.lastText) return;
+        state.lastText = text;
+        options.onPartial(text);
       };
     },
     stop: () => {
