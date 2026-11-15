@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
 import {
@@ -7,6 +8,9 @@ import {
   getSummaryDay,
   isStillSorting,
   isSummaryDue,
+  isSummaryMissing,
+  isWaitingOnBatch,
+  SUMMARY_BATCH_WAIT_MS,
   readDaySummary,
   toDayLine,
   toEffectTitles,
@@ -14,6 +18,20 @@ import {
   type DayExecution,
   type HelmDayCounts,
 } from '../../functions/src/apps/helm/daySummary/countDay.ts';
+import {
+  settleBatchResult,
+  submitSummaryBatch,
+  type QueuedSummary,
+} from '../../functions/src/apps/helm/daySummary/daySummaryBatch.ts';
+import type {
+  BatchProvider,
+  BatchResult,
+} from '../../functions/src/ai/batch.ts';
+import {
+  BATCH_PRICE_RATIO,
+  EMPTY_USAGE,
+  getUsageCost,
+} from '../../functions/src/ai/models.ts';
 
 const NY = 'America/New_York';
 const MINUTE = 60_000;
@@ -248,6 +266,7 @@ assert.equal(readDaySummary(undefined, day), null);
 
 // When the night run may write a day.
 const nightStart = zonedDateTimeToEpoch('2026-11-10', '00:00', NY);
+const NO_BATCH = { batchId: null, batchedAt: null };
 const due = (patch: Partial<Parameters<typeof isSummaryDue>[0]>) =>
   isSummaryDue({
     now: nightStart + 20 * MINUTE,
@@ -282,7 +301,12 @@ assert.equal(
 const triedLongAgo = nightStart - 3 * 60 * MINUTE;
 assert.equal(
   due({
-    existing: { status: 'counted', attempts: 2, writtenAt: triedLongAgo },
+    existing: {
+      status: 'counted',
+      attempts: 2,
+      writtenAt: triedLongAgo,
+      ...NO_BATCH,
+    },
   }),
   true,
 );
@@ -292,6 +316,7 @@ assert.equal(
       status: 'counted',
       attempts: 1,
       writtenAt: nightStart + 20 * MINUTE - 30 * MINUTE,
+      ...NO_BATCH,
     },
   }),
   false,
@@ -299,19 +324,36 @@ assert.equal(
 );
 assert.equal(
   due({
-    existing: { status: 'counted', attempts: 3, writtenAt: triedLongAgo },
+    existing: {
+      status: 'counted',
+      attempts: 3,
+      writtenAt: triedLongAgo,
+      ...NO_BATCH,
+    },
   }),
   false,
   'attempts cap',
 );
 assert.equal(
   due({
-    existing: { status: 'written', attempts: 1, writtenAt: triedLongAgo },
+    existing: {
+      status: 'written',
+      attempts: 1,
+      writtenAt: triedLongAgo,
+      ...NO_BATCH,
+    },
   }),
   false,
 );
 assert.equal(
-  due({ existing: { status: 'empty', attempts: 0, writtenAt: triedLongAgo } }),
+  due({
+    existing: {
+      status: 'empty',
+      attempts: 0,
+      writtenAt: triedLongAgo,
+      ...NO_BATCH,
+    },
+  }),
   false,
 );
 assert.equal(
@@ -371,6 +413,158 @@ assert.deepEqual(
     ],
   ),
   ['Call the florist', 'Book the venue', 'Priya', 'Pike Place Market'],
+);
+
+// A summary waiting on its batch is not missing, and the wait is six hours on both sides.
+const sentAt = nightStart;
+const waiting = (batchedAt: number | null, batchId: string | null = 'b1') => ({
+  status: 'counted',
+  attempts: 1,
+  writtenAt: sentAt,
+  batchId,
+  batchedAt,
+});
+assert.equal(
+  isSummaryMissing(waiting(sentAt), sentAt + 3 * 60 * MINUTE),
+  false,
+  'counted with a batch is not missing, even past the retry gap',
+);
+assert.equal(
+  isSummaryMissing(waiting(sentAt, null), sentAt + 3 * 60 * MINUTE),
+  true,
+);
+assert.equal(
+  isSummaryMissing(waiting(sentAt), sentAt + 7 * 60 * MINUTE),
+  true,
+  'a batch silent for six hours no longer holds a later night run back',
+);
+assert.equal(SUMMARY_BATCH_WAIT_MS, 6 * 60 * MINUTE);
+assert.equal(
+  isWaitingOnBatch(waiting(sentAt, 'pending'), sentAt + 14 * MINUTE),
+  true,
+  'a claim waiting to be sent holds the day',
+);
+assert.equal(
+  isWaitingOnBatch(waiting(sentAt, 'pending'), sentAt + 16 * MINUTE),
+  false,
+  'a claim whose run died frees the day for the next run',
+);
+assert.match(
+  readFileSync('src/apps/helm/hooks/useDaySummary.ts', 'utf8'),
+  /SUMMARY_PENDING_WAIT_MS = 15 \* 60 \* 1000/,
+  'the device waits the same 15 minutes on a pending claim',
+);
+assert.equal(
+  isWaitingOnBatch(waiting(sentAt), sentAt + SUMMARY_BATCH_WAIT_MS - 1),
+  true,
+);
+assert.equal(
+  isWaitingOnBatch(waiting(sentAt), sentAt + SUMMARY_BATCH_WAIT_MS),
+  false,
+  'after six hours the open writes it live',
+);
+assert.equal(isWaitingOnBatch(waiting(null), sentAt), false);
+const deviceWait = readFileSync(
+  new URL('../../src/apps/helm/hooks/useDaySummary.ts', import.meta.url),
+  'utf8',
+).match(/SUMMARY_BATCH_WAIT_MS = ([\d* ]+);/);
+assert.equal(
+  deviceWait && new Function(`return ${deviceWait[1]}`)(),
+  SUMMARY_BATCH_WAIT_MS,
+  'the device waits as long as the server',
+);
+
+// A batch result changes only the summary still waiting on that batch.
+const result = (patch: Partial<BatchResult>): BatchResult => ({
+  customId: 'r0',
+  outcome: 'succeeded',
+  output: { summary: good },
+  usage: EMPTY_USAGE,
+  ...patch,
+});
+const waitingDoc = { status: 'counted', batchId: 'b1', staleAt: null };
+const settle = (
+  patch: Partial<BatchResult>,
+  doc: Parameters<typeof settleBatchResult>[0]['doc'] = waitingDoc,
+) =>
+  settleBatchResult({ result: result(patch), batchId: 'b1', doc, counts: day });
+assert.deepEqual(settle({}), { kind: 'written', text: good });
+assert.deepEqual(settle({ output: { summary: 'I did it.' } }), {
+  kind: 'retry',
+});
+assert.deepEqual(settle({ output: null }), { kind: 'retry' });
+['errored', 'expired', 'canceled'].forEach((outcome) =>
+  assert.deepEqual(
+    settle({ outcome: outcome as BatchResult['outcome'], output: null }),
+    { kind: 'retry' },
+    outcome,
+  ),
+);
+assert.deepEqual(
+  settleBatchResult({
+    result: result({}),
+    batchId: 'b1',
+    doc: waitingDoc,
+    counts: null,
+  }),
+  { kind: 'retry' },
+  'sealed words that will not open',
+);
+[
+  ['another batch', { ...waitingDoc, batchId: 'b2' }],
+  ['cleared by a live write', { ...waitingDoc, batchId: null }],
+  ['still pending', { ...waitingDoc, batchId: 'pending' }],
+  ['marked stale', { ...waitingDoc, staleAt: 5 }],
+  ['already written', { ...waitingDoc, status: 'written' }],
+  ['gone', null],
+].forEach(([name, doc]) =>
+  assert.deepEqual(
+    settle({}, doc as Parameters<typeof settleBatchResult>[0]['doc']),
+    { kind: 'dropped' },
+    String(name),
+  ),
+);
+
+// A failed submit gives every reservation back; a good one numbers the requests.
+const queued: QueuedSummary[] = [0, 1, 2].map((index) => ({
+  uid: `u${index}`,
+  dayKey: '2026-11-09',
+  reservedAt: index,
+  request: { system: 's', message: `m${index}` },
+}));
+const sent: { customId: string; message: string; system: string }[] = [];
+const provider = (fails: boolean): BatchProvider => ({
+  submit: (requests) => {
+    if (fails) return Promise.reject(new Error('down'));
+    sent.push(...requests);
+    return Promise.resolve('b1');
+  },
+  collect: () => Promise.resolve(null),
+});
+const released: string[] = [];
+const release = (entry: QueuedSummary) => {
+  released.push(entry.uid);
+  return Promise.resolve();
+};
+assert.equal(await submitSummaryBatch(provider(true), queued, release), null);
+assert.deepEqual(released, ['u0', 'u1', 'u2'], 'every reservation released');
+released.length = 0;
+const submitted = await submitSummaryBatch(provider(false), queued, release);
+assert.equal(submitted?.batchId, 'b1');
+assert.deepEqual(released, [], 'a good submit keeps its reservations');
+assert.deepEqual(
+  sent.map((request) => request.customId),
+  ['r0', 'r1', 'r2'],
+);
+assert.equal(submitted?.ids.r1.uid, 'u1', 'matched by custom id, not order');
+assert.equal(await submitSummaryBatch(provider(false), [], release), null);
+
+// A batched call costs half.
+const usage = { ...EMPTY_USAGE, inputTokens: 1_000_000, outputTokens: 100_000 };
+assert.equal(BATCH_PRICE_RATIO, 0.5);
+assert.equal(
+  getUsageCost('daySummary', usage, { isBatch: true }),
+  getUsageCost('daySummary', usage) / 2,
 );
 
 console.log('helm day summary: ok');
