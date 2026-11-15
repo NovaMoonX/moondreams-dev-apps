@@ -1674,7 +1674,7 @@ The growth area is Issues 101–130, written out in full and in build order: the
 "Never mind", "forget it", "that's all" and their kin close the conversation, typed or spoken, matched on the device with no model call: what was pending is dropped, what was done keeps its Undo, and spoken, the microphone is released with a soft falling chime. A phrase that answers the open question is its answer, and no closing phrase ever deletes anything.
 ### CRUD & Entry-Point Requirements
 - [ ] **Update:** a close drops what was pending ("Okay, left it · Undo"); Undo restores it.
-- [ ] **Read:** a typed close folds the question card to "Left it".
+- [ ] **Read:** a typed close folds the question card to "Dismissed" and shows the quiet "Okay, left it" line with Undo.
 ### Success Criteria
 - [ ] "Never mind", "forget it", "cancel", "stop", "that's all", "thanks", "I'm done", "nothing", "no thanks", "leave it" and close variants, as the whole turn or (for a dismiss phrase after "actually", or a finish phrase after content) its end, close the conversation typed or spoken, matched on the device by the shared `readClosingPhrase` with no model call and offline; "remind me to cancel" and "stop suggesting that" are requests; "ugh, doesn't matter" closes through the model's `closeConversation`, which can carry no command (`check:helm-close`, `check:pinch-voice`).
 - [ ] A phrase that answers the open question is its answer ("nothing" = None of these, "no thanks" = No); "cancel it" with a page in view and nothing pending goes as a turn about that page; "stop" while it talks stops the voice and closes only when nothing is pending (`check:helm-close`).

@@ -160,7 +160,7 @@ const COPIES: Copy[] = [
   {
     src: 'src/lib/speech/speechText.ts',
     dest: 'functions/src/vendor/speechText.ts',
-    importRewrites: {},
+    importRewrites: { './soundAlike': './soundAlike.js' },
   },
   {
     src: 'src/lib/speech/closingPhrase.ts',
