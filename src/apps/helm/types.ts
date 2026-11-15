@@ -1199,6 +1199,42 @@ export interface PlanDay {
   isUnreadable: boolean;
 }
 
+/** What happened on one day, counted by code; each item counts on the day it happened, in the profile's zone. */
+export interface HelmDayCounts {
+  messages: number;
+  tasksAdded: number;
+  keyDatesAdded: number;
+  notesAdded: number;
+  factsAdded: number;
+  peopleAdded: number;
+  placesAdded: number;
+  tasksDone: number;
+  planned: number;
+  answered: number;
+  dismissed: number;
+}
+
+export interface HelmDaySummarySealed {
+  /** The written sentence when there is one, otherwise the code line. */
+  text: string;
+  /** The code line, always kept. */
+  line: string;
+  counts: HelmDayCounts;
+}
+
+/** One past day's summary; its id is "YYYY-MM-DD" in the profile's zone. Written by the server; the device only marks it stale. */
+export interface HelmDaySummary {
+  dayKey: string;
+  /** 'empty': nothing happened. 'counted': the code line only. 'written': the sentence. */
+  status: 'empty' | 'counted' | 'written';
+  /** Writing attempts so far; the night run stops at 3. */
+  attempts: number;
+  writtenAt: number;
+  /** Set when something from that day is undone; the next open rewrites it. */
+  staleAt: number | null;
+  sealed: Sealed | null;
+}
+
 /** An outside assistant the person connected to Helm (`mcpClients/{uid}/clients/{clientKey}`); written only by the server. */
 export interface ConnectedAssistant {
   appId: 'helm';

@@ -59,6 +59,7 @@ All times are millisecond numbers. **Date-only** values (a due day, a "not until
 | `apps/helm/users/{uid}/style/{styleId}` | Learned writing style, general and per occasion or audience | MVP |
 | `apps/helm/users/{uid}/executions/{executionId}` | Activity: every assistant change, decision and undo | MVP |
 | `apps/helm/users/{uid}/planDays/{dayKey}` | Helm's slots and the calendar snapshot for one local day | MVP |
+| `apps/helm/users/{uid}/daySummaries/{dayKey}` | A past day's counts and written summary, **written only by Functions** (the device may set `staleAt`) | MVP |
 | `apps/helm/users/{uid}/synced/{syncedId}` | Sealed copies of what connected sources share (section 19), **written only by Functions** | MVP |
 | `apps/helm/server/{uid}/keys/data`, `…/keys/dropBox` | The wrapped data key and drop-box private key, **Admin SDK only, no rule matches** | MVP |
 | `apps/helm/server/{uid}/aiUsage/{dayKey}` | Per-person reasoning call counts, **Admin SDK only** | MVP |
@@ -682,6 +683,22 @@ interface PlanDaySealed {
 ```
 
 The snapshot is rewritten whenever that day's plan is generated or re-run and whenever Today shows the day with a newer calendar read, and never once the day is past. Done-ness is not stored on a slot: a past day shows a task done when its `completedAt` falls inside that day.
+
+### `HelmDaySummary` [MVP]
+
+```ts
+interface HelmDaySummary {             // id = dayKey = "YYYY-MM-DD" in profile.timeZone
+  dayKey: string;
+  status: 'empty' | 'counted' | 'written'; // counted: the code line only; empty: nothing happened (no AI call)
+  attempts: number;                    // AI attempts; the night run stops at 3
+  writtenAt: number;
+  staleAt: number | null;              // set by the device when something from that day is undone
+  sealed: Sealed | null;               // HelmDaySummarySealed; null when empty
+}
+interface HelmDaySummarySealed { text: string; line: string; counts: HelmDayCounts } // text = sentence, line = code line
+```
+
+Code counts each item on the day it happened in the profile's zone (a conversation past midnight splits; outside-assistant turns and undone work don't count), so a day with no activity is `empty` and never reaches the model. The callable `writeHelmDaySummary({ dayKey })` writes the `counted` document first, then the sentence in the person's tone, and refuses today, a future day or one more than 30 days back. A job every 30 minutes looks at each person whose local time is between 00:15 and 06:00 and writes yesterday once its conversation has been quiet for 10 minutes (a turn stuck in sorting for over an hour no longer holds it back); a `counted` day is retried no sooner than 2 hours later, at most 3 times, and a run stops starting people after 7 minutes, leaving them to the next. Both writers claim the day in a transaction: a day counted under 2 minutes ago by the other writer, or one marked stale since counting began, answers `busy` instead of a second call. The callable has no quiet check, so a day opened in its first minutes after midnight can miss a turn still being sorted; that turn's execution counts on the next day. The device listens to the one document only while a past day is shown (`useDaySummary`), opens it with `openJson`, and asks the callable once per answer per day when the document is missing, stale, or `counted` with fewer than 3 attempts and within 30 days; a failure clears the mark, so the next snapshot or a reconnect asks again. Undoing an execution from an earlier day sets `staleAt` (best effort, outside the undo's transaction), so the next open rewrites it. Owner reads; the owner may update only `staleAt`.
 
 ### `SyncedRecord` and server-only documents [MVP]
 

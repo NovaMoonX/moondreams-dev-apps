@@ -1618,7 +1618,30 @@ export const HELM_COPY = {
   planningDay: (day: string) => `Planning ${day}…`,
   planningDaySpoken: (day: string) => `Planning ${day}.`,
   planNothingFits: 'Nothing to suggest for this day.',
-  planYesterday: 'Yesterday, as it was.',
+  daySummaryShow: 'See the breakdown',
+  daySummaryHide: 'Hide the breakdown',
+  daySummaryMessages: (count: number) =>
+    `${count} ${count === 1 ? 'message' : 'messages'} sent`,
+  daySummaryTasksAdded: (count: number) =>
+    `${count} ${count === 1 ? 'task' : 'tasks'} added`,
+  daySummaryKeyDatesAdded: (count: number) =>
+    `${count} key ${count === 1 ? 'date' : 'dates'} added`,
+  daySummaryNotesAdded: (count: number) =>
+    `${count} ${count === 1 ? 'note' : 'notes'} added`,
+  daySummaryFactsAdded: (count: number) =>
+    `${count} ${count === 1 ? 'fact' : 'facts'} added`,
+  daySummaryPeopleAdded: (count: number) =>
+    `${count} ${count === 1 ? 'person' : 'people'} added`,
+  daySummaryPlacesAdded: (count: number) =>
+    `${count} ${count === 1 ? 'place' : 'places'} added`,
+  daySummaryTasksDone: (count: number) =>
+    `${count} ${count === 1 ? 'task' : 'tasks'} finished`,
+  daySummaryPlanned: (count: number) =>
+    `${count} ${count === 1 ? 'day' : 'days'} planned`,
+  daySummaryAnswered: (count: number) =>
+    `${count} ${count === 1 ? 'question' : 'questions'} answered`,
+  daySummaryDismissed: (count: number) =>
+    `${count} ${count === 1 ? 'item' : 'items'} dismissed`,
   planNotDone: 'Not done',
   planBringToToday: 'Bring to today',
   planBroughtToToday: (count: number) => `Brought ${count} to today`,
