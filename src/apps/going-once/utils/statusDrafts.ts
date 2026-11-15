@@ -4,6 +4,7 @@ import {
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
 import { centsToInputValue } from '@/utils/moneyUtils';
+import { getUpcomingDays } from '@apps/going-once/utils/pickupDays';
 import { MAX_BUYER_NAME_LENGTH } from '@apps/going-once/constants';
 import type {
   Inquiry,
@@ -33,8 +34,24 @@ export interface SoldDraft {
   soldOn: string;
 }
 
-/** Today and the next six days as pills, each valued as a local date input's text. */
-export const getDayOptions = (now: number): PillOption<string>[] => {
+const buyerDayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** The pickup days the buyer said work, when any are still ahead, else today and the next six days; each valued as a date input's text. */
+export const getDayOptions = (
+  now: number,
+  buyerDays: number[] | null = null,
+): PillOption<string>[] => {
+  const upcoming = getUpcomingDays(buyerDays ?? [], now).slice(0, DAYS_SHOWN);
+  if (upcoming.length > 0)
+    return upcoming.map((day) => ({
+      value: toDateInputValue(day),
+      label: buyerDayFormatter.format(new Date(day)),
+    }));
   const today = new Date(now);
   return Array.from({ length: DAYS_SHOWN }, (_, offset) => {
     const day = new Date(
@@ -68,14 +85,17 @@ export function getHoldDraft(
   };
 }
 
-/** Mark pending opens empty, or with the name of the inquiry it is held for. */
+/** Mark pending opens empty, or with the name of the inquiry it is held for and, when that buyer named days, its pickup day open on them. */
 export const getHoldStart = (
-  inquiry: Pick<Inquiry, 'id' | 'name'> | null,
+  inquiry: Pick<Inquiry, 'id' | 'name' | 'pickupDays'> | null,
   now: number,
 ): HoldDraft => ({
   ...getHoldDraft(null, now),
   inquiryId: inquiry?.name ? inquiry.id : null,
   name: inquiry?.name?.trim().slice(0, MAX_BUYER_NAME_LENGTH) ?? '',
+  isDayShown:
+    inquiry?.name != null &&
+    getUpcomingDays(inquiry.pickupDays ?? [], now).length > 0,
 });
 
 /** Mark sold opens on the asking price, paid today, no method. */

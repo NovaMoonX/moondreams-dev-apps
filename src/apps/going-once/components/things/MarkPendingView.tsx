@@ -18,6 +18,7 @@ import { changeStatus } from '@apps/going-once/store/actions/statusActions';
 import type { Inquiry, Item } from '@apps/going-once/types';
 import { getAskerPills } from '@apps/going-once/utils/inquiries';
 import { getItemName } from '@apps/going-once/utils/listing';
+import { getUpcomingDays } from '@apps/going-once/utils/pickupDays';
 import { describeMovedOn } from '@apps/going-once/utils/status';
 import {
   getDayOptions,
@@ -65,12 +66,16 @@ function MarkPendingView({
   const { isBusy, refusal, write } = useStatusWrite();
   const [areAskersExpanded, setAreAskersExpanded] = useState(false);
   const isChange = mode === 'CHANGE';
-  const dayOptions = [
-    ...getDayOptions(now),
-    { value: OTHER_DAY, label: 'Other day' },
-  ];
+  const heldFor =
+    inquiries.find((inquiry) => inquiry.id === draft.inquiryId) ?? null;
+  const listedDays = getDayOptions(now, heldFor?.pickupDays ?? null);
+  const dayOptions = [...listedDays, { value: OTHER_DAY, label: 'Other day' }];
   const today = toLocalDateInputValue(now);
-  const pickedDay = draft.isOtherDay ? OTHER_DAY : draft.day;
+  const isOtherDay =
+    draft.isOtherDay ||
+    (draft.day !== '' &&
+      !listedDays.some((option) => option.value === draft.day));
+  const pickedDay = isOtherDay ? OTHER_DAY : draft.day;
   const lockedNote =
     refusal ??
     (isBusy
@@ -141,10 +146,13 @@ function MarkPendingView({
       return;
     }
     if (pills.find((pill) => pill.id === id) === picked) return;
+    const inquiry = inquiries.find((asked) => asked.id === id) ?? null;
+    const hasDays = getUpcomingDays(inquiry?.pickupDays ?? [], now).length > 0;
     onDraft({
       ...draft,
       inquiryId: id,
-      name: inquiries.find((inquiry) => inquiry.id === id)?.name ?? draft.name,
+      name: inquiry?.name ?? draft.name,
+      isDayShown: draft.isDayShown || hasDays,
     });
   };
 
@@ -206,7 +214,7 @@ function MarkPendingView({
             value={pickedDay === '' ? null : pickedDay}
             onChange={pickDay}
           />
-          {draft.isOtherDay && (
+          {isOtherDay && (
             <DateInput
               variant='outline'
               aria-label='Pickup day'
