@@ -37,6 +37,7 @@ const readManifest = () => {
 const manifest = readManifest();
 
 const LIST_LIMIT = 20;
+const BILL_LIMIT = 30;
 const NAME_LIMIT = 120;
 const DAY_MS = 86_400_000;
 
@@ -81,7 +82,15 @@ interface Summary {
   freeToSpendCents: number;
   nextIncomeAt: number | null;
   dueBeforeIncomeCents: number;
-  bills: { name: string; amountCents: number; dueAt: number }[];
+  bills: {
+    name: string;
+    amountCents: number;
+    dueAt: number;
+    repeats: string | null;
+    endsAt: number | null;
+    endsAfter: number | null;
+    paidAt: number | null;
+  }[];
   horizon: {
     name: string;
     targetCents: number;
@@ -113,8 +122,12 @@ const readDay = (value: unknown) => {
     : null;
 };
 
-const readList = <T>(value: unknown, read: (entry: unknown) => T | null) =>
-  (Array.isArray(value) ? value : []).slice(0, LIST_LIMIT).flatMap((entry) => {
+const readList = <T>(
+  value: unknown,
+  read: (entry: unknown) => T | null,
+  limit = LIST_LIMIT,
+) =>
+  (Array.isArray(value) ? value : []).slice(0, limit).flatMap((entry) => {
     const one = read(entry);
     return one === null ? [] : [one];
   });
@@ -124,12 +137,22 @@ const readBill = (entry: unknown, today: number) => {
   const name = readName(bill?.name);
   const amountCents = readCents(bill?.amountCents);
   const dueAt = readDay(bill?.dueOn);
+  const paidAt = readDay(bill?.paidOn);
+  const endsAfter = readCents(bill?.endsAfter);
   return name === null ||
     amountCents === null ||
     dueAt === null ||
-    dueAt < today
+    (paidAt === null && dueAt < today)
     ? null
-    : { name, amountCents, dueAt };
+    : {
+        name,
+        amountCents,
+        dueAt,
+        repeats: readName(bill?.repeats)?.slice(0, 40) ?? null,
+        endsAt: readDay(bill?.endsOn),
+        endsAfter: endsAfter !== null && endsAfter > 0 ? endsAfter : null,
+        paidAt,
+      };
 };
 
 const readGoal = (entry: unknown) => {
@@ -142,7 +165,7 @@ const readGoal = (entry: unknown) => {
     : { name, targetCents, setAsideCents, targetAt: readDay(goal?.targetOn) };
 };
 
-/** Every field checked by type; null when the totals themselves are malformed, and a malformed list entry or a bill already past is dropped. */
+/** Every field checked by type; null when the totals themselves are malformed, and a malformed list entry or an unpaid bill already past is dropped. */
 const readSummary = (
   opened: Record<string, unknown>,
   today: number,
@@ -167,7 +190,11 @@ const readSummary = (
     freeToSpendCents,
     nextIncomeAt: readDay(opened.nextIncomeOn),
     dueBeforeIncomeCents,
-    bills: readList(opened.bills, (entry) => readBill(entry, today)),
+    bills: readList(
+      opened.bills,
+      (entry) => readBill(entry, today),
+      BILL_LIMIT,
+    ),
     horizon: readList(opened.horizon, readGoal),
   };
 };
@@ -238,6 +265,13 @@ async function readStoredSummary(
 
 const formatDay = (at: number) => new Date(at).toISOString().slice(0, 10);
 
+const DAY_WORDS = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
 const readDetail = (summary: Summary) => {
   if (summary.nextIncomeAt === null) return 'No income day is coming up';
   const day = formatDay(summary.nextIncomeAt);
@@ -254,6 +288,24 @@ const toRef = (prefix: string, keys: string[], index: number) =>
     )
     .digest('hex')
     .slice(0, 16)}`;
+
+const readGoalDetail = (goal: Summary['horizon'][number], currency: string) =>
+  `${formatMoney(goal.setAsideCents, currency)} set aside of ${formatMoney(goal.targetCents, currency)}`;
+
+const readBillDetail = (bill: Summary['bills'][number]) =>
+  [
+    bill.paidAt !== null
+      ? `Paid on ${DAY_WORDS.format(bill.paidAt)} (due ${DAY_WORDS.format(bill.dueAt)})`
+      : null,
+    bill.repeats,
+    bill.endsAt !== null
+      ? `ends ${DAY_WORDS.format(bill.endsAt)}`
+      : bill.endsAfter !== null
+        ? `ends after ${bill.endsAfter} payments`
+        : null,
+  ]
+    .filter((part) => part !== null)
+    .join(', ') || null;
 
 const toRecords = (category: string, summary: Summary): SharedRecord[] => {
   const billKeys = summary.bills.map(
@@ -285,9 +337,10 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
           sourceRef: toRef('bills', billKeys, index),
           kind: 'task',
           title: bill.name,
+          detail: readBillDetail(bill),
           amountCents: bill.amountCents,
           currency: summary.currency,
-          dueAt: bill.dueAt,
+          dueAt: bill.paidAt === null ? bill.dueAt : null,
           isAllDay: true,
           sourceUpdatedAt: summary.computedAt,
         }),
@@ -298,7 +351,7 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
           sourceRef: toRef('horizon', goalKeys, index),
           kind: 'project',
           title: goal.name,
-          detail: `${formatMoney(goal.setAsideCents, summary.currency)} set aside of ${formatMoney(goal.targetCents, summary.currency)}`,
+          detail: readGoalDetail(goal, summary.currency),
           amountCents: goal.targetCents,
           currency: summary.currency,
           dueAt: goal.targetAt,
@@ -310,6 +363,99 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
       throw new Error('Unknown category.');
   }
 };
+
+const ENVELOPE_LIMIT = 100;
+// Archived and ended envelopes stay in the collection, so the read is sized apart from what is sent.
+const ENVELOPE_READ_LIMIT = 500;
+const ENVELOPE_CHUNK = 30;
+
+type StoredEnvelopes =
+  | { kind: 'unknown' }
+  | {
+      kind: 'envelopes';
+      envelopes: { id: string; name: string }[];
+      isFull: boolean;
+    };
+
+const warnEnvelopesUnreadable = (reason: 'key' | 'names', count: number) =>
+  logger.warn('runway.share.envelopesUnreadable', { reason, count });
+
+async function readStoredEnvelopes(
+  firestore: Firestore,
+  keyring: Keyring,
+  uid: string,
+  today: number,
+): Promise<StoredEnvelopes> {
+  const planKey = await unwrapPlanKey(firestore, keyring, uid).catch(
+    () => null,
+  );
+  if (planKey === null) {
+    warnEnvelopesUnreadable('key', 1);
+    return { kind: 'unknown' };
+  }
+  const items = await firestore
+    .collection(`apps/runway/plans/${uid}/items`)
+    .where('kind', '==', 'envelope')
+    .limit(ENVELOPE_READ_LIMIT)
+    .get();
+  const allLive = items.docs.filter((doc) => {
+    const endedAt = readDay(doc.get('endedAt'));
+    return (
+      doc.get('archivedAt') == null && (endedAt === null || endedAt >= today)
+    );
+  });
+  const live = allLive.slice(0, ENVELOPE_LIMIT);
+  const snapshots = await Promise.all(
+    Array.from(
+      { length: Math.ceil(live.length / ENVELOPE_CHUNK) },
+      (_, index) =>
+        firestore
+          .collection(`apps/runway/plans/${uid}/versions`)
+          .where(
+            'itemId',
+            'in',
+            live
+              .slice(index * ENVELOPE_CHUNK, (index + 1) * ENVELOPE_CHUNK)
+              .map((doc) => doc.id),
+          )
+          .get(),
+    ),
+  );
+  const newest = snapshots
+    .flatMap((snapshot) => snapshot.docs)
+    .filter((doc) => doc.get('kind') === 'envelope')
+    .sort(
+      (a, b) =>
+        (b.get('createdAt') as number) - (a.get('createdAt') as number) ||
+        b.id.localeCompare(a.id),
+    );
+  const names = newest.reduce((found, doc) => {
+    const itemId = doc.get('itemId') as string;
+    const sealed = doc.get('sealed');
+    if (found.has(itemId) || !isSealed(sealed)) return found;
+    try {
+      const name = readName(openWithKey(planKey.key, sealed).name);
+      return name === null ? found : found.set(itemId, name);
+    } catch {
+      return found;
+    }
+  }, new Map<string, string>());
+  const unnamed = live.filter((doc) => !names.has(doc.id)).length;
+  if (unnamed > 0) warnEnvelopesUnreadable('names', unnamed);
+  return {
+    kind: 'envelopes',
+    envelopes: live
+      .flatMap((doc) => {
+        const name = names.get(doc.id);
+        return name === undefined ? [] : [{ id: doc.id, name }];
+      })
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)),
+    isFull:
+      unnamed === 0 &&
+      items.size < ENVELOPE_READ_LIMIT &&
+      allLive.length <= ENVELOPE_LIMIT,
+  };
+}
 
 const toTransactionRef = (id: string) =>
   `purchases/${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
@@ -349,6 +495,32 @@ export function createRunwayAdapter(
     syncPage: async (ctx, req): Promise<SyncPageResult> => {
       if (!manifest.categories.some(({ id }) => id === req.category))
         throw new Error('Unknown category.');
+      if (req.category === 'envelopes') {
+        const envelopes = await readStoredEnvelopes(
+          deps.firestore(),
+          deps.keyring(),
+          ctx.uid,
+          Math.floor(deps.now() / DAY_MS) * DAY_MS,
+        );
+        return {
+          records:
+            envelopes.kind === 'envelopes'
+              ? envelopes.envelopes.map(({ id, name }) =>
+                  toRecord({
+                    sourceRef: `envelopes/${createHash('sha256').update(id).digest('hex').slice(0, 16)}`,
+                    kind: 'artifact',
+                    title: name,
+                    detail: 'An envelope in the plan',
+                  }),
+                )
+              : [],
+          isFull: envelopes.kind === 'envelopes' && envelopes.isFull,
+          deletedRefs: [],
+          cursor: null,
+          isDone: true,
+          resumeState: null,
+        };
+      }
       const stored = await readStoredSummary(
         deps.firestore(),
         deps.keyring(),

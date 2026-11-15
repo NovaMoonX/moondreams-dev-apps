@@ -29,6 +29,8 @@ interface ResultLinesProps {
   isOnHome: boolean;
   isSeen: boolean;
   showsNotice: boolean;
+  /** Only the newest reply on home offers to be played again. */
+  canReplay: boolean;
 }
 
 const toSentence = (summary: string) =>
@@ -91,6 +93,7 @@ function ResultLines({
   isOnHome,
   isSeen,
   showsNotice,
+  canReplay,
 }: ResultLinesProps) {
   const { user } = useAuth();
   const card = useRef<HTMLDivElement>(null);
@@ -119,7 +122,13 @@ function ResultLines({
       ) : (
         <>
           {execution.summary && execution.category !== 'answer' && (
-            <AssistantLine>
+            <AssistantLine
+              speakText={
+                canReplay
+                  ? (execution.said ?? toSentence(execution.summary))
+                  : undefined
+              }
+            >
               {execution.said ?? toSentence(execution.summary)}
             </AssistantLine>
           )}

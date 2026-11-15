@@ -216,13 +216,7 @@ export function planAnswerTurn(input: {
     unknown
   >;
   const question = oldQuestions[questionId];
-  if (
-    !asked ||
-    !state ||
-    state.answeredAt !== null ||
-    (state.leftAt ?? null) !== null ||
-    !isOpenAsk(question)
-  ) {
+  if (!asked || !state || state.answeredAt !== null || !isOpenAsk(question)) {
     return { kind: 'stale' };
   }
   const value = checkQuestionAnswer(question, input.value) ?? {
@@ -234,7 +228,7 @@ export function planAnswerTurn(input: {
     [questionId]: { ...state, answeredAt: now },
   };
   const isOpen = Object.values(questionState).some(
-    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+    (entry) => entry.answeredAt === null,
   );
   return {
     kind: 'apply',

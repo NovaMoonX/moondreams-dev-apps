@@ -9,6 +9,7 @@ import TickMark from '@/components/TickMark';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import DaySummaryCard from '@apps/helm/components/today/DaySummaryCard';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useFetchedTasks } from '@apps/helm/hooks/useFetchedTasks';
 import { bringToToday } from '@apps/helm/store/actions/planActions';
@@ -88,9 +89,7 @@ function PastDay({ dayKey, sources }: PastDayProps) {
 
   return (
     <>
-      <p className='text-muted-foreground text-[15px]'>
-        {HELM_COPY.planYesterday}
-      </p>
+      <DaySummaryCard key={dayKey} dayKey={dayKey} />
       {events.map((event) => (
         <div
           key={event.eventRef}

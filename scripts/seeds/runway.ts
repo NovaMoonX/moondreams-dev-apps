@@ -199,6 +199,10 @@ export function buildSampleShareSummary(now: number): ShareSummary {
     name: 'Rent',
     amountCents: 125_000,
     dueOn: day(firstOfNextMonth),
+    repeats: 'Monthly',
+    endsOn: null,
+    endsAfter: null,
+    paidOn: null,
   };
   const isRentSoon = firstOfNextMonth - today <= 30 * DAY_MS;
   return {

@@ -20,8 +20,10 @@ export type HelmView =
   | 'tasks'
   | 'settings'
   | 'activity'
+  | 'outside'
   | 'connectedApps'
   | 'connection'
+  | 'assistants'
   | 'people'
   | 'who'
   | 'place'
@@ -51,6 +53,8 @@ export type HelmTheme = 'chestnut' | 'plum' | 'teal' | 'indigo';
 export interface HelmProfile {
   /** The person's own name for the assistant; null reads as the default. Always read through readAssistantName. */
   assistantName: string | null;
+  /** Ways a speech recognizer may write the assistant's name, made by the server after a rename; null when none were made. */
+  assistantNameVariants: string[] | null;
   /** How the assistant's answers sound; null reads as composed. */
   assistantTone: AssistantTone | null;
   /** The colour theme; null reads as chestnut. */
@@ -92,6 +96,10 @@ export interface HelmProfile {
   zoneSpans: ZoneSpan[];
   /** When the person said Not now to an ability offer, so it waits 4 weeks. */
   abilityOffers: AbilityDecline[];
+  /** When the person last started a new conversation; turns before it never carry into the next. Null until then, and on a profile from before. */
+  conversationFreshAt: number | null;
+  /** Home folds sessions from before today under Show earlier, unless one is still open; never ends a conversation. */
+  isDailyFreshOn: boolean;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -197,8 +205,8 @@ export interface QuestionState {
   askedAt: number;
   answeredAt: number | null;
   skippedAt: number | null;
-  /** When a closing phrase dropped the question; it can't be answered late. Null while it stands, and on a question made before closing phrases (read as null). */
-  leftAt: number | null;
+  /** The person let the question go without answering; `answeredAt` is set with it so it stops waiting. Null on one from before. */
+  dismissedAt: number | null;
 }
 
 /** One choice of a question; `new` and `none` carry no ref. */
@@ -331,7 +339,12 @@ export interface Capture {
   ttsProvider: string | null;
   /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
   arrivedVia: 'direct' | 'dropBox';
-  medium: 'web';
+  /** 'mcp' for a turn an outside assistant (Claude, Gemini) sent; 'web' for every turn typed or spoken in Helm. */
+  medium: 'web' | 'mcp';
+  /** The outside assistant's name on an 'mcp' turn; null on every web turn and on every turn made before the field. */
+  via: string | null;
+  /** The read switches the outside assistant had on when it asked, which bound what its answer may read; null on every web turn and on every turn made before the field. Only the server writes it. */
+  outsideReadScopes: ('mail' | 'drive' | 'apps')[] | null;
   sessionId: string;
   turnIndex: number;
   route: CaptureRoute | null;
@@ -350,6 +363,8 @@ export interface Capture {
   /** The photos sent with the turn, in pick order, at most 5; empty on a turn with none and on one made before photos. */
   attachmentIds: string[];
   seenAt: number | null;
+  /** A turn that couldn't be sorted, cleared from Needs you by the person; null on every other turn and on one from before. */
+  dismissedAt: number | null;
   /** `"{connectorId}|{accountId}"` of each connection an answer quoted; empty on a turn that quoted none and on one made before quotes. */
   quotedSourceKeys: string[];
   /** The note made from this turn's general answer by Save to my knowledge; null until then. */
@@ -1129,6 +1144,8 @@ export interface ExecutionEffect {
 export interface Execution {
   captureId: string | null;
   actor: 'nomos' | 'person';
+  /** The outside assistant whose turn this was (Claude, Gemini); null for the person's own. */
+  via: string | null;
   category: ActionCategory;
   autonomyLevel: AutonomyLevel;
   state: ExecutionState;
@@ -1634,4 +1651,60 @@ export interface PatternSealed {
   statement: string;
   evidenceLine: string;
   reasonLine: string | null;
+}
+
+/** What happened on one day, counted by code; each item counts on the day it happened, in the profile's zone. */
+export interface HelmDayCounts {
+  messages: number;
+  tasksAdded: number;
+  keyDatesAdded: number;
+  notesAdded: number;
+  factsAdded: number;
+  peopleAdded: number;
+  placesAdded: number;
+  habitsStarted: number;
+  habitChecksDone: number;
+  tasksDone: number;
+  planned: number;
+  answered: number;
+  dismissed: number;
+}
+
+export interface HelmDaySummarySealed {
+  /** The written sentence when there is one, otherwise the code line. */
+  text: string;
+  /** The code line, always kept. */
+  line: string;
+  counts: HelmDayCounts;
+}
+
+/** One past day's summary; its id is "YYYY-MM-DD" in the profile's zone. Written by the server; the device only marks it stale. */
+export interface HelmDaySummary {
+  dayKey: string;
+  /** 'empty': nothing happened. 'counted': the code line only. 'written': the sentence. */
+  status: 'empty' | 'counted' | 'written';
+  /** Writing attempts so far; the night run stops at 3. */
+  attempts: number;
+  writtenAt: number;
+  /** Set when something from that day is undone; the next open rewrites it. */
+  staleAt: number | null;
+  sealed: Sealed | null;
+}
+
+/** An outside assistant the person connected to Helm (`mcpClients/{uid}/clients/{clientKey}`); written only by the server. */
+export interface ConnectedAssistant {
+  appId: 'helm';
+  clientId: string;
+  name: string;
+  workosUserId: string;
+  firstSeenAt: number;
+  lastUsedAt: number;
+  canWrite: boolean;
+  /** The kinds of source it may read (`mail`, `drive`, `apps`); each is off until the person turns it on. */
+  readScopes: string[];
+  revokedAt: number | null;
+}
+
+export interface OpenConnectedAssistant extends ConnectedAssistant {
+  clientKey: string;
 }

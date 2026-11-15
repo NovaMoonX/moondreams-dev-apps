@@ -5,14 +5,13 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Keyboard, LayoutGrid, X } from 'lucide-react';
 
 import VoiceControl from '@apps/helm/components/voice/VoiceControl';
+import TalkNotice from '@apps/helm/components/voice/TalkNotice';
 import VoiceStatus from '@apps/helm/components/voice/VoiceStatus';
 import { HELM_COPY, HOME_COMPOSER_ID } from '@apps/helm/constants';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 
 interface VoiceDockProps {
   onBrowse: () => void;
-  /** Talking isn't possible (no recognition or no microphone): the person types. */
-  onTalkBlocked: () => void;
   onType: () => void;
 }
 
@@ -20,7 +19,7 @@ const SIDE_BUTTON =
   "relative size-12 min-w-12 rounded-full! p-0 before:absolute before:-inset-1 before:content-['']";
 
 /** Home's dock: Browse, Talk and Type, fixed at the foot on a fade from the page colour. It is on home only. */
-function VoiceDock({ onBrowse, onTalkBlocked, onType }: VoiceDockProps) {
+function VoiceDock({ onBrowse, onType }: VoiceDockProps) {
   const voice = useHelmVoiceContext();
   const isListening = voice.state === 'listening';
   const isDictatingElsewhere =
@@ -56,6 +55,7 @@ function VoiceDock({ onBrowse, onTalkBlocked, onType }: VoiceDockProps) {
       )}
     >
       <div className='pointer-events-auto mx-auto flex max-w-xl flex-col gap-4'>
+        <TalkNotice />
         <VoiceStatus />
         <div className='flex items-end justify-center gap-7'>
           <div className='flex w-14 flex-col items-center gap-1'>
@@ -76,7 +76,7 @@ function VoiceDock({ onBrowse, onTalkBlocked, onType }: VoiceDockProps) {
               {isListening ? HELM_COPY.talkCancel : 'Browse'}
             </span>
           </div>
-          <VoiceControl onBlocked={onTalkBlocked} />
+          <VoiceControl />
           <div className='flex w-14 flex-col items-center gap-1'>
             <Button
               type='button'
