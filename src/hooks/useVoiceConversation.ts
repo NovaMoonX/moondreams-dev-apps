@@ -761,7 +761,7 @@ export function useVoiceConversation({
   useEffect(() => {
     gateHandler.current = handleGate;
     wakeHandler.current = ({ source, seed, adopt }) =>
-      listen({ source, seed, adopt });
+      run.current.pending === null && listen({ source, seed, adopt });
   });
 
   /** Opens a short window after a spoken answer in which speaking starts a listen without a tap; silence closes it with no sound and nothing sent. False when it can't open now (a line still waiting or playing, muted, already listening, the page hidden). */
