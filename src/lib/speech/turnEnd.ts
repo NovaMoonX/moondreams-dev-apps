@@ -1,3 +1,4 @@
+import { toSpokenText } from '@/lib/speech/spokenText';
 import { toPlainText } from '@/lib/speech/speechText';
 
 export const TURN_END_COMPLETE_MS = 900;
@@ -17,19 +18,14 @@ const TRAILING_WORDS = new Set([
   'uhh',
   'er',
   'hmm',
-  'like',
-  'then',
   'the',
   'a',
   'an',
   'to',
   'with',
   'if',
-  'that',
   'of',
   'for',
-  'in',
-  'on',
   'at',
   'my',
   'your',
@@ -43,7 +39,6 @@ const TRAILING_WORDS = new Set([
   'while',
   'which',
   'who',
-  'what',
   'where',
   'how',
   'from',
@@ -69,11 +64,14 @@ export const readTurnEndDelay = (text: string) => {
 export const hasSameWords = (a: string, b: string) =>
   wordsOf(a).join(' ') === wordsOf(b).join(' ');
 
-/** True when `heard` holds at least two words the playing line doesn't contain: the person talking over it, not its echo. */
+/** True when `heard` holds at least two words the playing line doesn't contain, written or as spoken: the person talking over it, not its echo. Numbers never count, since a recognizer writes them either way. */
 export const isBargeConfirmed = (heard: string, playing: string) => {
-  const own = new Set(wordsOf(playing));
+  const own = new Set([
+    ...wordsOf(playing),
+    ...wordsOf(toSpokenText(playing)),
+  ]);
   return (
-    wordsOf(heard).filter((word) => !own.has(word)).length >=
-    BARGE_MIN_NEW_WORDS
+    wordsOf(heard).filter((word) => !own.has(word) && !/^\d+$/.test(word))
+      .length >= BARGE_MIN_NEW_WORDS
   );
 };

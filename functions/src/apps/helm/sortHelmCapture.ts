@@ -1932,7 +1932,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       !read.isOutside &&
       read.messages.length === 1 &&
       answerTurn === null &&
-      attached.media.length + attached.voiceIds.length === 0;
+      attached.media.length + attached.voiceIds.length === 0 &&
+      Date.now() - capture.createdAt < REPEAT_FRESH_MS;
     const runOn = async (role: 'quick' | 'interpret', canHandOver: boolean) => {
       const mcp = await createHelmMcpServer({
         uid,
@@ -2110,13 +2111,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     focusedProcedureId,
     focusedTaskId,
   } = result;
-  if (
-    loop.endedBy === 'terminal' &&
-    loop.terminalName === REPEAT_TOOL.name &&
-    read.messages.length === 1 &&
-    read.joinedCount === 0
-  ) {
-    return dropRepeatTurn(claimed);
+  if (loop.endedBy === 'terminal' && loop.terminalName === REPEAT_TOOL.name) {
+    if (read.messages.length === 1 && read.joinedCount === 0) {
+      return dropRepeatTurn(claimed);
+    }
+    throw toFailure('modelError');
   }
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
@@ -2321,6 +2320,9 @@ const readMediaTitles = async (
 };
 
 /** A spoken turn that only asked to hear the last reply again is deleted, with its answer stored so a retried call gets the same outcome; the device replays the reply and nothing is left in the history. */
+/** A replay only makes sense while the person is still listening; an older turn swept later files normally. */
+const REPEAT_FRESH_MS = 2 * 60 * 1000;
+
 async function dropRepeatTurn(claimed: Claimed): Promise<SortResult> {
   const result: SortResult = {
     ...toResult('sorted'),

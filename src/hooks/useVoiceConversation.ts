@@ -396,10 +396,13 @@ export function useVoiceConversation({
     run.current.cancelListening?.();
   };
 
+  const toPlayedText = (pendingText: string) =>
+    [pendingText, queueRef.current?.getPlayingText() ?? ''].join(' ');
+
   const handlePartial = (text: string) => {
     const { pending } = run.current;
     if (pending) {
-      if (!isBargeConfirmed(text, pending.text)) return;
+      if (!isBargeConfirmed(text, toPlayedText(pending.text))) return;
       confirmBarge();
     }
     setHeard(text);
@@ -418,7 +421,7 @@ export function useVoiceConversation({
     if (
       run.current.pending &&
       !run.current.isCancelled &&
-      isBargeConfirmed(text, run.current.pending.text)
+      isBargeConfirmed(text, toPlayedText(run.current.pending.text))
     ) {
       confirmBarge();
     }

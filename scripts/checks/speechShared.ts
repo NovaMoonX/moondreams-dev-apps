@@ -2495,6 +2495,13 @@ console.log('speechShared: voice provider checks passed');
 {
   assert.equal(readTurnEndDelay('Add milk to the list'), TURN_END_COMPLETE_MS);
   assert.equal(readTurnEndDelay('What is on today?'), TURN_END_COMPLETE_MS);
+  ['Turn the oven on', 'Put it in', 'Read that'].forEach((text) =>
+    assert.equal(
+      readTurnEndDelay(text),
+      TURN_END_COMPLETE_MS,
+      `"${text}" is a finished command`,
+    ),
+  );
   [
     'Add milk and',
     'Remind me to',
@@ -2534,6 +2541,14 @@ console.log('speechShared: voice provider checks passed');
     false,
     'one new word is not enough',
   );
+  assert.equal(
+    isBargeConfirmed(
+      'bake at 350 degrees fahrenheit for 10 to 12 minutes',
+      'Bake at 350°F for 10–12 minutes',
+    ),
+    false,
+    'the spoken form of a line echoing back never confirms',
+  );
   const fetched = { count: 0 };
   const source: SpeechSource = {
     fetchSpeech: async (): Promise<SpeechFetch> => {
@@ -2558,12 +2573,11 @@ console.log('speechShared: voice provider checks passed');
     assert.equal(answer.status, 'ready');
     if (answer.status !== 'ready') return [];
     const reader = answer.body.getReader();
-    const chunks: number[] = [];
-    for (;;) {
+    const readFrom = async (read: number[]): Promise<number[]> => {
       const next = await reader.read();
-      if (next.done) return chunks;
-      chunks.push(...next.value);
-    }
+      return next.done ? read : readFrom([...read, ...next.value]);
+    };
+    return readFrom([]);
   };
   const signal = new AbortController().signal;
   assert.deepEqual(

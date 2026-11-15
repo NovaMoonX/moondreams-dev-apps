@@ -163,6 +163,7 @@ export const setAssistantNameAndTone = (
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     assistantName,
     assistantTone,
+    ...(isRenamed ? { assistantNameVariants: null } : {}),
     lastEditedAt: Date.now(),
   }).then(() => {
     if (!isRenamed) return;

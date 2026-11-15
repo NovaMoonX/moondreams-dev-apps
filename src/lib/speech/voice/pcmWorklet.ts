@@ -77,7 +77,17 @@ const openCapture = async ({
         ),
       ),
     ]);
-    const cleaner = isCleaned ? await createNoiseNode(context) : null;
+    const cleaner = isCleaned
+      ? await Promise.race([
+          createNoiseNode(context),
+          new Promise<never>((_, reject) =>
+            window.setTimeout(
+              () => reject(new Error('Noise cleaning did not load')),
+              CLEANING_WAIT_MS,
+            ),
+          ),
+        ])
+      : null;
     const source = context.createMediaStreamSource(stream);
     const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
       numberOfInputs: 1,
@@ -111,6 +121,9 @@ const openCapture = async ({
   }
 };
 
+const CLEANING_WAIT_MS = 3000;
+const cleaning = { hasFailed: false };
+
 /** Turns a microphone stream into 16 kHz mono 16-bit little-endian frames of about 20 ms, cleaned of background noise first unless the person turned that off or it can't load (then the raw stream is used). */
 export const startPcmCapture = async ({
   stream,
@@ -119,11 +132,12 @@ export const startPcmCapture = async ({
   stream: MediaStream;
   onFrame: (frame: ArrayBuffer) => void;
 }): Promise<{ stop: () => void }> => {
-  if (isNoiseCleaningOn()) {
+  if (isNoiseCleaningOn() && !cleaning.hasFailed) {
     try {
       return await openCapture({ stream, onFrame, isCleaned: true });
     } catch (error) {
-      console.warn('Noise cleaning is off for this listen', error);
+      cleaning.hasFailed = true;
+      console.warn('Noise cleaning is off until the page reloads', error);
     }
   }
   return openCapture({ stream, onFrame, isCleaned: false });
