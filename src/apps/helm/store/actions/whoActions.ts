@@ -30,12 +30,22 @@ import {
 } from '@apps/helm/store/actions/mediaActions';
 import { toComparable } from '@/utils/optionMatchUtils';
 import { MAX_ALIASES, MAX_SOUNDS_LIKE } from '@apps/helm/constants';
+import {
+  addContactPoint,
+  changeContactPoint,
+  makePrimaryContactPoint,
+  readContactPoints,
+  removeContactPoint,
+  type ContactRefusal,
+} from '@apps/helm/engine/contactPoints';
 import { normalizeKin } from '@apps/helm/engine/kin';
 import { keepInheritedPrivate } from '@apps/helm/store/actions/privacyActions';
 import type { City } from '@/lib/cities/types';
 import { keepCurrentAway, MAX_AWAY_SPANS } from '@apps/helm/engine/whereabouts';
 import type {
   AwaySpan,
+  ContactKind,
+  ContactPoint,
   HelmEncryption,
   NearNow,
   HelmProfile,
@@ -65,8 +75,8 @@ export interface WhoEdit {
   relation: string | null;
   species: string | null;
   organizationKind: string | null;
-  phone: string | null;
-  email: string | null;
+  phones: ContactPoint[];
+  emails: ContactPoint[];
 }
 
 /** Changes a who's name, kind and contact details in one transaction that re-reads it, so notes and anything changed on another device meanwhile are kept. Needs a connection. */
@@ -91,7 +101,13 @@ export async function updateWho(
         if (!opened) return 'unreadable';
         const { kind, ...words } = edit;
         const sealed = await sealJson<WhoSealed>(
-          { ...opened, ...words, ...(kind === 'person' ? {} : { kin: null }) },
+          {
+            ...opened,
+            ...words,
+            phone: null,
+            email: null,
+            ...(kind === 'person' ? {} : { kin: null }),
+          },
           encryption,
         );
         transaction.update(ref, { sealed, kind, lastEditedAt: Date.now() });
@@ -203,6 +219,42 @@ export const setWhoNearNow = (
   nearNow: NearNow | null,
 ): Promise<EditResult> =>
   rewriteWhoWords<never>(uid, encryption, whoId, () => ({ nearNow }));
+
+export type ContactChange =
+  | { kind: 'add'; id: string; value: string; label: string }
+  | { kind: 'change'; id: string; value: string; label: string }
+  | { kind: 'remove'; id: string }
+  | { kind: 'primary'; id: string }
+  | { kind: 'restore'; point: ContactPoint };
+
+/** Adds, changes, removes, makes primary or puts back one phone or email on the list opened inside the transaction, so an entry added elsewhere meanwhile is kept; the cap and repeats are re-checked on that fresh list, and the old single `phone` or `email` is written null. */
+export const setWhoContacts = (
+  uid: string,
+  encryption: HelmEncryption,
+  whoId: string,
+  kind: ContactKind,
+  change: ContactChange,
+): Promise<EditResult | ContactRefusal> =>
+  rewriteWhoWords<ContactRefusal>(uid, encryption, whoId, (opened) => {
+    const points = readContactPoints(kind, opened);
+    const next = ((): { points: ContactPoint[] } | ContactRefusal => {
+      if (change.kind === 'add') return addContactPoint(kind, points, change);
+      if (change.kind === 'change')
+        return changeContactPoint(kind, points, change.id, change);
+      if (change.kind === 'remove')
+        return { points: removeContactPoint(points, change.id) };
+      if (change.kind === 'primary')
+        return { points: makePrimaryContactPoint(points, change.id) };
+      const restored = addContactPoint(kind, points, change.point);
+      return typeof restored === 'string' || !change.point.isPrimary
+        ? restored
+        : { points: makePrimaryContactPoint(restored.points, change.point.id) };
+    })();
+    if (typeof next === 'string') return next;
+    return kind === 'phone'
+      ? { phones: next.points, phone: null }
+      : { emails: next.points, email: null };
+  });
 
 export type AliasChange = { add: string } | { remove: string };
 export type AliasResult = EditResult | 'full' | 'duplicate';
@@ -659,6 +711,8 @@ export async function ensureSelfWho(
       soundsLike: null,
       refusedAliases: null,
       relation: null,
+      phones: [],
+      emails: [],
       phone: null,
       email: null,
       notes: null,

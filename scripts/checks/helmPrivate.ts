@@ -18,6 +18,11 @@ import {
   readAlreadyMade,
   readEarlierTurns,
 } from '../../functions/src/apps/helm/sortHelmCapture.ts';
+import { planContactPoints } from '../../functions/src/apps/helm/nomos/planContactPoints.ts';
+import {
+  toContextPeople,
+  toPersonRecord,
+} from '../../functions/src/apps/helm/nomos/contextPeople.ts';
 import { buildContext } from '../../functions/src/apps/helm/nomos/buildContext.ts';
 import {
   maskContextRecords,
@@ -1317,6 +1322,97 @@ test('a care habit is private by its own flag, a habit for another who or under 
     null,
     'an ordinary habit is not marked',
   );
+});
+
+test("a private person's numbers and addresses never reach the context, and an ordinary person's come primary first with labels", () => {
+  const doc = (name: string, extra: Record<string, unknown>) => ({
+    id: name.toLowerCase(),
+    get: (field: string) =>
+      ({
+        sealed: sealForHelm(HELM_KEY, {
+          name,
+          aliases: [],
+          kin: null,
+          relation: null,
+          privateMark: null,
+          isPrivacyCleared: false,
+          phones: [
+            { id: 'a', value: '555 0100', label: 'Home', isPrimary: false },
+            { id: 'b', value: '555 0142', label: 'Work', isPrimary: true },
+          ],
+          emails: [],
+          phone: null,
+          email: 'legacy@example.com',
+          ...extra,
+        }),
+        lastMentionedAt: 5,
+        isSelf: false,
+        privacy: 'ordinary',
+      })[field],
+  });
+  const records = [
+    doc('Secret', { privateMark: 'health' }),
+    doc('Open', {}),
+  ].flatMap((entry) => toPersonRecord(HELM_KEY, entry) ?? []);
+  const shown = toContextPeople(records, { isUnattended: false });
+  const secret = shown.find((person) => person.name === 'Secret');
+  assert.ok(secret, 'an attended turn still lists the private person');
+  assert.equal(secret.phones, undefined);
+  assert.equal(secret.emails, undefined);
+  assert.ok(!JSON.stringify(secret).includes('555'));
+  assert.ok(!JSON.stringify(secret).includes('legacy@example.com'));
+  const open = shown.find((person) => person.name === 'Open');
+  assert.deepEqual(
+    open?.phones?.map((entry) => [entry.value, entry.label, entry.isPrimary]),
+    [
+      ['555 0142', 'Work', true],
+      ['555 0100', 'Home', false],
+    ],
+  );
+  assert.equal(
+    open?.emails,
+    undefined,
+    'the lists win over the old single email',
+  );
+  assert.ok(
+    !JSON.stringify(toContextPeople(records, { isUnattended: true })).includes(
+      'Secret',
+    ),
+  );
+});
+
+test('a number said for a private person is rewritten as a private turn, with the name masked and the value out of the line', () => {
+  const opened = (extra: Record<string, unknown>) => ({
+    name: 'Ann Lee',
+    phone: null,
+    isPrivacyCleared: false,
+    privateMark: null,
+    ...extra,
+  });
+  const command = {
+    kind: 'addContactPoint' as const,
+    whoId: 'w1',
+    contactKind: 'phone' as const,
+    value: '555-0142',
+    label: 'work',
+  };
+  const run = (extra: Record<string, unknown>, isUnattended: boolean) =>
+    planContactPoints({
+      commands: [command],
+      whos: new Map([['w1', opened(extra)]]),
+      skipWhoIds: new Set(),
+      newId: () => 'c1',
+      now: 1,
+      isUnattended,
+      seal: seal as never,
+    });
+  const ordinary = run({}, true);
+  assert.equal(ordinary.isPrivate, false);
+  assert.deepEqual(ordinary.lines, ['Added Ann Lee\u2019s work phone number']);
+  const hidden = run({ privateMark: 'health' }, true);
+  assert.equal(hidden.isPrivate, true);
+  assert.ok(!JSON.stringify(hidden.lines).includes('Ann'));
+  assert.ok(!JSON.stringify(hidden.lines).includes('555'));
 });
 
 const failures = (

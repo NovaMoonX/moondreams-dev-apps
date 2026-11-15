@@ -1331,7 +1331,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] A life timeline and milestones for you and the people in it, drawn from the moments the MVP already keeps (a move, a new job, a pet's adoption), with a goal's reached milestones and finished goals offered to it once (O)
 - [ ] Writes to other apps, each asked for and approved one by one: add to Pinch's list, tick a Waypoint task, put a task on Google Calendar
 - [ ] Other site apps as readers through the same grants, and a Stop sharing list inside each source app
-- [ ] Several labelled phones and emails per person, with a primary (How Your People Connect, In Detail)
+- [x] Several labelled phones and emails per person, with a primary (How Your People Connect, In Detail) (Issue 131)
 - [ ] Connections between any two people, with a couple's status, said or added on a page
 - [ ] Family links worked out from what you said, marked "Figured out", confirmed or corrected in a tap
 - [ ] The map of your circle, and the assistant answering who is who

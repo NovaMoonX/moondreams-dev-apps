@@ -6,6 +6,11 @@ import {
 } from '../privacy.js';
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { MAX_CONTEXT_PEOPLE, type ContextPerson } from './buildContext.js';
+import {
+  readContactPoints,
+  sortPrimaryFirst,
+  type ContactPoint,
+} from './contactPoints.js';
 import type { ByWho } from '../keyDateIndex.js';
 import { normalizeKin, type KinBirthday } from './kin.js';
 import { KIN_KINDS, type WhoKin } from './kinKinds.js';
@@ -20,6 +25,8 @@ export interface PersonRecord {
     aliases: string[];
     relation: string | null;
     kin: unknown;
+    phones: ContactPoint[];
+    emails: ContactPoint[];
   };
 }
 
@@ -55,6 +62,8 @@ export const toPersonRecord = (
         aliases: isStringList(words.aliases) ? words.aliases : [],
         relation: typeof words.relation === 'string' ? words.relation : null,
         kin: words.kin,
+        phones: readContactPoints('phone', words),
+        emails: readContactPoints('email', words),
       },
     };
   } catch {
@@ -70,6 +79,27 @@ export const toKinText = (kin: WhoKin) =>
   ]
     .filter(Boolean)
     .join(' ');
+
+/** The most labelled numbers or addresses of one kind a person's context line carries, the primary always first. */
+export const MAX_CONTEXT_CONTACTS = 4;
+
+const toContextContacts = (points: ContactPoint[]) =>
+  sortPrimaryFirst(points)
+    .slice(0, MAX_CONTEXT_CONTACTS)
+    .map(({ value, label, isPrimary }) => ({ value, label, isPrimary }));
+
+/** What reaching a person is read as: nothing for a private person, whose numbers and addresses never leave the device in a turn. */
+const toContactWords = (record: PersonRecord) =>
+  record.isPrivate
+    ? {}
+    : {
+        ...(record.words.phones.length > 0 && {
+          phones: toContextContacts(record.words.phones),
+        }),
+        ...(record.words.emails.length > 0 && {
+          emails: toContextContacts(record.words.emails),
+        }),
+      };
 
 /** The people the model is shown to link a name to: never the self, and on an unattended turn never a private one; those with another name or a family word first, then the most recently named. */
 export function toContextPeople(
@@ -100,6 +130,7 @@ export function toContextPeople(
       alsoCalled: record.words.aliases,
       relation: record.words.relation,
       kin: kin ? toKinText(kin) : null,
+      ...toContactWords(record),
     }));
 }
 

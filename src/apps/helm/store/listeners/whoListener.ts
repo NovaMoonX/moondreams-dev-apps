@@ -14,6 +14,7 @@ import type { SealedReader } from '@lib/security';
 import { toComparable } from '@/utils/optionMatchUtils';
 import { WHO_LIMIT } from '@apps/helm/constants';
 import { normalizeKin } from '@apps/helm/engine/kin';
+import { readContactPoints } from '@apps/helm/engine/contactPoints';
 import type { OpenWho, Who, WhoSealed } from '@apps/helm/types';
 import { readPrivacy } from '@apps/helm/utils/privacy';
 
@@ -67,6 +68,8 @@ async function openWho(
     soundsLike: null,
     refusedAliases: null,
     relation: null,
+    phones: [],
+    emails: [],
     phone: null,
     email: null,
     notes: null,
@@ -90,8 +93,10 @@ async function openWho(
         ? toTexts(payload.refusedAliases)
         : null,
       relation: toText(payload.relation),
-      phone: toText(payload.phone),
-      email: toText(payload.email),
+      phones: readContactPoints('phone', payload),
+      emails: readContactPoints('email', payload),
+      phone: null,
+      email: null,
       notes: toText(payload.notes),
       species: toText(payload.species),
       organizationKind: toText(payload.organizationKind),

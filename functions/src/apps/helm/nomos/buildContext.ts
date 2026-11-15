@@ -47,6 +47,15 @@ export interface ContextPerson {
   relation: string | null;
   /** The family word and its order as the person says it ("younger brother"). */
   kin: string | null;
+  /** Numbers and addresses, the primary first, each with its label; left out for a private person and when there are none. */
+  phones?: ContextContact[];
+  emails?: ContextContact[];
+}
+
+export interface ContextContact {
+  value: string;
+  label: string;
+  isPrimary: boolean;
 }
 
 export const MAX_CONTEXT_PEOPLE = 60;

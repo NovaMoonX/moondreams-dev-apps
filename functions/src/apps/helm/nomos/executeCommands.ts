@@ -802,6 +802,8 @@ export const buildWhoDoc = (input: {
     soundsLike: null,
     refusedAliases: null,
     relation: input.mention.relation,
+    phones: [],
+    emails: [],
     phone: null,
     email: null,
     notes: null,

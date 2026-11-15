@@ -32,6 +32,7 @@ import {
   writeIndexIn,
   type IndexState,
 } from './keyDateStore.js';
+import { readContactPoints } from './nomos/contactPoints.js';
 import { openForHelm, sealForHelm, unwrapHelmKey } from './helmKey.js';
 import {
   buildImportExecution,
@@ -151,8 +152,8 @@ const toExisting = (
             (entry): entry is string => typeof entry === 'string',
           )
         : [],
-      email: text(words.email),
-      phone: text(words.phone),
+      emails: readContactPoints('email', words),
+      phones: readContactPoints('phone', words),
       photoMediaId: text(data.photoMediaId),
       mediaIds: Array.isArray(data.mediaIds)
         ? data.mediaIds.filter(

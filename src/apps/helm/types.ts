@@ -2,6 +2,7 @@ import type { City } from '@/lib/cities/types';
 import type { Cadence, Weekday } from '@/utils/cadenceUtils';
 import type { DayPart } from '@apps/helm/engine/habitDay';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
+import type { ContactPoint } from '@apps/helm/engine/contactPoints';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
@@ -582,6 +583,10 @@ export interface Who {
 }
 
 export type { KinKind, KinOrder, WhoKin } from '@apps/helm/engine/kinKinds';
+export type {
+  ContactKind,
+  ContactPoint,
+} from '@apps/helm/engine/contactPoints';
 
 export interface WhoSealed {
   name: string;
@@ -595,7 +600,12 @@ export interface WhoSealed {
   refusedAliases: string[] | null;
   /** "my sister", "our vet clinic". */
   relation: string | null;
+  /** At most 10, exactly one primary when any; absent in a payload sealed before the lists, which `phone` then stands for. */
+  phones: ContactPoint[];
+  emails: ContactPoint[];
+  /** @deprecated Read as the primary of `phones`, labelled Other; written null. */
   phone: string | null;
+  /** @deprecated Read as the primary of `emails`, labelled Other; written null. */
   email: string | null;
   notes: string | null;
   /** Pets only ("Cat"). */

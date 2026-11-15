@@ -345,7 +345,9 @@ interface Who {
 interface WhoSealed {
   name: string; aliases: string[];
   relation: string | null;             // "my sister", "our vet clinic", "Mum's cat"
-  phone: string | null; email: string | null; notes: string | null;
+  phones: ContactPoint[]; emails: ContactPoint[]; // Issue 131: at most 10 each, exactly one isPrimary when any; ContactPoint = { id; value (as typed: an email is compared lower-cased, a phone by its last 10 digits); label: 'Mobile' | 'Home' | 'Work' | 'Other' | the person's own word (≤20 characters); isPrimary }
+  phone: string | null; email: string | null; // @deprecated by phones/emails, written null; a payload that has only these reads as one primary entry each labelled Other (readContactPoints), so no migration job
+  notes: string | null;
   species: string | null;              // pets only ("cat"); free text written with toDisplayCase
   organizationKind: string | null;     // organizations only ("bakery", "employer")
   home: City | null;                   // where they live, from CitySelect (`@/lib/cities`: name, region, country, coordinates, zone); the self who's is the person's; null in a payload sealed before the field
@@ -363,6 +365,8 @@ interface Place {
   sealed: Sealed;                      // { name, aliases, address, notes }; never coordinates
 }
 ```
+
+**Several phones and emails (issue 131).** `engine/contactPoints.ts` is the one place the lists are made: `readContactPoints` (a list wins over the old single value, even when empty), `addContactPoint` (the first of a kind is primary; a repeat by digits or by lower-cased address is refused `duplicate`, an 11th `full`, nothing comparable `empty`), `changeContactPoint`, `removeContactPoint` (removing the primary makes the next one primary), `makePrimaryContactPoint`, `toContactLabel` and `pickContactPoint` ("text Dana" is the primary, "Dana's work email" the entry labelled Work). The server uses a vendored copy (`nomos/contactPoints.ts`, `connections:vendor`). Every write goes through `rewriteWhoWords` (`setWhoContacts`: add, change, remove, primary, restore for Undo) or the edit sheet's `updateWho`, re-reading the lists inside the transaction, and writes `phone`/`email` null. The context's `<people>` line carries `phones` and `emails` (primary first, at most 4 each, each `{ value, label, isPrimary }`) and nothing at all for a private who. A turn's `addContactPoint` command ("Dana's work number is 555-0142": `whoAlias`, `contactKind`, `contactValue`, `contactLabel`; at most 3 a turn, read by `readContactPoints` in the normalizer) is planned by `planContactPoints` as one rewrite per who with an effect whose `previous` holds the old `phones` and `phone` (Undo restores both); a repeat, a full list or a who another part of the turn already rewrites is a `notKept` line, and the execution's line leaves the value out. The Google Contacts import keeps up to 10 numbers and addresses with Google's `formattedType` as the label (`ContactEntry`), matches an existing who by any of its numbers or addresses, adds only entries the who lacks and never brought in before (`importedFields` keeps a keyed mark per entry, `phone.<hash>` / `email.<hash>`, so one the person removed stays removed), and never changes the who's own primary. Checks: `check:helm-who-contacts`, `check:helm-contact-import`, `check:helm-private`.
 
 ### `KeyDate` (dates that come back, and moments) [MVP]
 

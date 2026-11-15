@@ -7,6 +7,7 @@ import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
 import type { ModelChange } from '../topicWrite.js';
 import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
 import { KIN_KINDS, KIN_ORDERS, type WhoKin } from './kinKinds.js';
+import { CONTACT_LABEL_CAP, CONTACT_VALUE_CAP } from './contactPoints.js';
 import type { Cadence } from '../../../vendor/cadenceUtils.js';
 import type { DayPart } from './habitDay.js';
 
@@ -112,6 +113,9 @@ export const RUN_COMMAND_KINDS = ['startRun', 'tickRun'] as const;
 
 /** A spelled correction of a heard name; read from its own list and is no `NomosCommand`. */
 export const SOUNDS_LIKE_COMMAND_KINDS = ['noteSoundsLike'] as const;
+
+/** A phone number or email the person says for someone they have; read from its own list and is no `NomosCommand`. */
+export const CONTACT_COMMAND_KINDS = ['addContactPoint'] as const;
 
 export const RUN_STEPS_MAX = 80;
 export const RUN_EXTRA_MAX = 20;
@@ -634,6 +638,16 @@ export interface NoteSoundsLikeCommand {
   heardSpan: string;
 }
 
+/** A number or address said for a person, with the word the person used for it. */
+export interface AddContactPointCommand {
+  kind: 'addContactPoint';
+  whoId: string;
+  contactKind: 'phone' | 'email';
+  value: string;
+  /** Null when none was said; the plan files it as Other. */
+  label: string | null;
+}
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -865,6 +879,9 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'runStepAliases',
             'whoAlias',
             'heardSpan',
+            'contactKind',
+            'contactValue',
+            'contactLabel',
             'habitAlias',
             'cadence',
             'windows',
@@ -886,6 +903,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
                 ...RUN_COMMAND_KINDS,
                 ...HABIT_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
+                ...CONTACT_COMMAND_KINDS,
                 'answer',
                 'ask',
               ],
@@ -1300,6 +1318,20 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             heardSpan: nullable(
               'string',
               'noteSoundsLike: the words as they were written in the turn before, which the person is correcting ("Shivon"), copied exactly; null otherwise.',
+            ),
+            contactKind: {
+              type: ['string', 'null'],
+              enum: ['phone', 'email', null],
+              description:
+                'addContactPoint: phone or email; null otherwise. The person is whoAlias.',
+            },
+            contactValue: nullable(
+              'string',
+              `addContactPoint: the number or address exactly as said, at most ${CONTACT_VALUE_CAP} characters; null otherwise.`,
+            ),
+            contactLabel: nullable(
+              'string',
+              `addContactPoint: the word the person used for it ("work", "mobile", "home"), at most ${CONTACT_LABEL_CAP} characters; null when none was said.`,
             ),
             habitAlias: nullable(
               'string',

@@ -160,6 +160,7 @@ import {
   type TopicCommand,
   type ProcedureCommand,
   type NoteSoundsLikeCommand,
+  type AddContactPointCommand,
   type RunCommand,
   type PlaceRead,
   type PlanDayCommand,
@@ -228,6 +229,7 @@ import {
   toContextHeard,
   type HeardName,
 } from './nomos/heardNames.js';
+import { planContactPoints } from './nomos/planContactPoints.js';
 import { planSoundsLike, type EarlierTask } from './nomos/planSoundsLike.js';
 import {
   decideAbilityOffer,
@@ -1750,6 +1752,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       runCommands: [],
       habitCommands: [],
       soundsLike: [],
+      contactPoints: [],
       whereabouts: [],
       offerAbility: null,
       abilities: null,
@@ -2669,6 +2672,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           )
         : [],
     soundsLike: mode === 'full' ? reply.soundsLike : [],
+    contactPoints: mode === 'full' ? reply.contactPoints : [],
     whereabouts: mode === 'full' ? reply.whereabouts : [],
     offerAbility:
       mode === 'full'
@@ -2835,6 +2839,7 @@ async function writeResult(
     runCommands: RunCommand[];
     habitCommands: HabitCommand[];
     soundsLike: NoteSoundsLikeCommand[];
+    contactPoints: AddContactPointCommand[];
     whereabouts: SetWhereaboutsCommand[];
     offerAbility: { ability: 'location'; level: 'city' | 'precise' } | null;
     abilities: ReturnType<typeof readCaptureAbilities>;
@@ -2882,6 +2887,7 @@ async function writeResult(
     runCommands,
     habitCommands,
     soundsLike,
+    contactPoints,
     whereabouts,
     offerAbility,
     abilities,
@@ -3656,6 +3662,31 @@ async function writeResult(
       newId: () => crypto.randomUUID(),
       seal,
     });
+    const keptContacts = isStale ? [] : contactPoints;
+    const contactWhoSnaps = await Promise.all(
+      [...new Set(keptContacts.map((command) => command.whoId))].map((id) =>
+        transaction.get(firestore.doc(`${base}/who/${id}`)),
+      ),
+    );
+    const contactPlan = planContactPoints({
+      commands: keptContacts,
+      whos: new Map(
+        contactWhoSnaps.map(
+          (snapshot): [string, Record<string, unknown> | null] => [
+            snapshot.id,
+            snapshot.exists ? openSealed(key, snapshot.get('sealed')) : null,
+          ],
+        ),
+      ),
+      skipWhoIds: new Set([
+        ...soundsIds,
+        ...wherePlan.whoRewrites.map(({ id }) => id),
+      ]),
+      newId: () => crypto.randomUUID(),
+      now,
+      isUnattended: input.isUnattended === true,
+      seal,
+    });
     const medicineCommand =
       answerTurn && turn?.kind === 'apply'
         ? readMedicineAnswer(
@@ -3710,7 +3741,8 @@ async function writeResult(
         MAX_EFFECTS -
           written.effects.length -
           soundsPlan.effects.length -
-          wherePlan.effects.length,
+          wherePlan.effects.length -
+          contactPlan.effects.length,
       ),
     });
     const abilityOffer = isStale
@@ -3728,6 +3760,7 @@ async function writeResult(
         ...(home ? [home.ref] : []),
         ...soundsPlan.effectRefs,
         ...wherePlan.effectRefs,
+        ...contactPlan.effectRefs,
         ...habitPlan.effectRefs,
       ],
       effects: [
@@ -3735,11 +3768,13 @@ async function writeResult(
         ...(home ? [home.effect] : []),
         ...soundsPlan.effects,
         ...wherePlan.effects,
+        ...contactPlan.effects,
         ...habitPlan.effects,
       ],
       notKept: [
         ...written.notKept,
         ...wherePlan.notKept,
+        ...contactPlan.notKept,
         ...habitPlan.notKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
@@ -3748,12 +3783,14 @@ async function writeResult(
           ...written.linkedWhoIds,
           ...soundsPlan.linkedWhoIds,
           ...wherePlan.linkedWhoIds,
+          ...contactPlan.linkedWhoIds,
         ]),
       ],
       isPrivate:
         written.isPrivate ||
         soundsPlan.isPrivate ||
         wherePlan.isPrivate ||
+        contactPlan.isPrivate ||
         habitPlan.isPrivate,
     };
     const plan = sentMedia
@@ -3865,6 +3902,7 @@ async function writeResult(
           ...plan.whoUpdates,
           ...soundsPlan.whoRewrites,
           ...wherePlan.whoRewrites,
+          ...contactPlan.whoRewrites,
         ]
           .reduce(
             (merged, { id, data }) =>
@@ -4016,6 +4054,7 @@ async function writeResult(
             extraLines: [
               ...soundsPlan.lines,
               ...wherePlan.lines,
+              ...contactPlan.lines,
               ...habitPlan.lines,
             ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
@@ -4120,6 +4159,8 @@ async function writeResult(
           habitPlan.notKept.length +
           wherePlan.lines.length +
           wherePlan.notKept.length +
+          contactPlan.lines.length +
+          contactPlan.notKept.length +
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,

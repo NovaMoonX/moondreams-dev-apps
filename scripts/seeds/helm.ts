@@ -1444,6 +1444,8 @@ export const wordsOf = (
   soundsLike: null,
   refusedAliases: null,
   relation: null,
+  phones: [],
+  emails: [],
   phone: null,
   email: null,
   notes: null,

@@ -669,6 +669,8 @@ interface FixtureContact {
   name: string | null;
   emails: string[];
   phones: string[];
+  /** The labels Google gives the phones, in order; a phone without one has none. */
+  phoneTypes?: string[];
   hasPhoto: boolean;
   birthday?: { month: number; day: number; year?: number };
 }
@@ -684,7 +686,8 @@ const CONTACTS_BY_EMAIL: Record<string, FixtureContact[]> = {
       id: 'c1000000001',
       name: 'Dana Whitfield',
       emails: ['dana.whitfield@example.com'],
-      phones: ['+1 415 555 0142'],
+      phones: ['+1 415 555 0142', '+1 415 555 0188'],
+      phoneTypes: ['mobile', 'work'],
       hasPhoto: true,
       birthday: { month: 6, day: 3 },
     },
@@ -768,7 +771,16 @@ const toPerson = (contact: FixtureContact) => ({
     value,
     metadata: { primary: true },
   })),
-  phoneNumbers: contact.phones.map((value) => ({ value })),
+  phoneNumbers: contact.phones.map((value, index) => {
+    const type = contact.phoneTypes?.[index];
+    return type
+      ? {
+          value,
+          type,
+          formattedType: `${type.charAt(0).toUpperCase()}${type.slice(1)}`,
+        }
+      : { value };
+  }),
   ...(contact.birthday && {
     birthdays: [{ date: contact.birthday, metadata: { primary: true } }],
   }),

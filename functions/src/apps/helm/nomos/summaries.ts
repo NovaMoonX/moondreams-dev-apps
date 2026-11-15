@@ -634,6 +634,18 @@ export const buildHeardPrompt = (name: string, labels: string[]) => {
 export const buildSoundsLikeLine = (heard: string, name: string) =>
   `Kept \u201c${heard}\u201d as how ${name} sounds`;
 
+/** The execution line of a number or address said for a person: "Added Dana's work phone number". The value itself stays out of the line. */
+export const buildContactLine = (input: {
+  name: string;
+  kind: 'phone' | 'email';
+  label: string | null;
+}) => {
+  const what = input.kind === 'phone' ? 'phone number' : 'email address';
+  return input.label === null || input.label.toLowerCase() === 'other'
+    ? `Added ${input.kind === 'phone' ? 'a' : 'an'} ${what} for ${input.name}`
+    : `Added ${input.name}\u2019s ${input.label.toLowerCase()} ${what}`;
+};
+
 export const WHICH_IS_TRUE_WORDS = {
   prompt: 'Which is true now?',
   noneLabel: 'Neither',

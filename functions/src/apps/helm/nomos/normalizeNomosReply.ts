@@ -5,6 +5,11 @@ import {
 import { withoutClosingPhrases } from '../../../vendor/closingPhrase.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { normalizeKin } from './kin.js';
+import {
+  CONTACT_VALUE_CAP,
+  toContactKey,
+  toContactLabel,
+} from './contactPoints.js';
 import { isSpanOf, SOUNDS_LIKE_CAP } from './heardNames.js';
 import { KIN_KINDS } from './kinKinds.js';
 import { ASK_WORDS } from './summaries.js';
@@ -55,6 +60,8 @@ import {
   MAX_TICKS_PER_TURN,
   RUN_COMMAND_KINDS,
   SOUNDS_LIKE_COMMAND_KINDS,
+  CONTACT_COMMAND_KINDS,
+  type AddContactPointCommand,
   type NoteSoundsLikeCommand,
   type SetWhereaboutsCommand,
   WHEREABOUTS_CHANGES,
@@ -1590,6 +1597,44 @@ const readSoundsLike = (
     })
     .slice(0, 1);
 
+const MAX_CONTACTS_PER_TURN = 3;
+
+const readContactPoints = (
+  items: Record<string, unknown>[],
+  people: AliasBook | undefined,
+): AddContactPointCommand[] =>
+  items
+    .filter((item) =>
+      (CONTACT_COMMAND_KINDS as readonly unknown[]).includes(item.kind),
+    )
+    .flatMap((item): AddContactPointCommand[] => {
+      const whoId =
+        typeof item.whoAlias === 'string'
+          ? (people?.idOf(item.whoAlias) ?? null)
+          : null;
+      const contactKind =
+        item.contactKind === 'phone' || item.contactKind === 'email'
+          ? item.contactKind
+          : null;
+      const value = toText(item.contactValue, CONTACT_VALUE_CAP);
+      return whoId && contactKind && value && toContactKey(contactKind, value)
+        ? [
+            {
+              kind: 'addContactPoint',
+              whoId,
+              contactKind,
+              value,
+              label:
+                typeof item.contactLabel === 'string' &&
+                item.contactLabel.trim() !== ''
+                  ? toContactLabel(item.contactLabel)
+                  : null,
+            },
+          ]
+        : [];
+    })
+    .slice(0, MAX_CONTACTS_PER_TURN);
+
 const toDateSpanDay = (
   value: unknown,
   reading: CaptureReading,
@@ -2005,6 +2050,7 @@ export function normalizeNomosReply(
   habitCommands: HabitCommand[];
   habitDropped: HabitDrop[];
   soundsLike: NoteSoundsLikeCommand[];
+  contactPoints: AddContactPointCommand[];
   whereabouts: SetWhereaboutsCommand[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
@@ -2129,6 +2175,7 @@ export function normalizeNomosReply(
     context.people,
     context.previousTurn,
   );
+  const contactPoints = readContactPoints(items, context.people);
   const whereabouts = readWhereabouts(
     items,
     context.people,
@@ -2208,6 +2255,7 @@ export function normalizeNomosReply(
     habitCommands,
     habitDropped,
     soundsLike,
+    contactPoints,
     whereabouts,
     planDay,
     setCurrentPlace: items.some(
