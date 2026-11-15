@@ -99,33 +99,6 @@ function DaysPicker({ days, onChange, minDay, maxDays }: DaysPickerProps) {
         value={mode}
         onChange={changeMode}
       />
-      <Calendar
-        mode='single'
-        size='auto'
-        className='mx-auto w-full max-w-sm'
-        initialDate={toCellDate(days.find((day) => day >= minDay) ?? minDay)}
-        minDate={toCellDate(minDay)}
-        customStyles={CALENDAR_STYLES}
-        onDateSelect={tap}
-        renderCell={(date, _isSelected, isDisabled, isToday) => {
-          const day = toDay(date);
-          const isPicked = picked.has(day);
-          return (
-            <span
-              className={join(
-                'flex h-9 w-full items-center justify-center rounded-full',
-                isPicked && 'bg-primary text-primary-foreground font-semibold',
-                day === anchor &&
-                  'font-semibold shadow-[inset_0_0_0_2px_var(--color-primary)]',
-                isToday && !isPicked && 'font-semibold',
-                isDisabled && 'opacity-40',
-              )}
-            >
-              {date.getDate()}
-            </span>
-          );
-        }}
-      />
       <div className='flex min-h-10 items-center gap-2'>
         <p
           className={join(
@@ -154,6 +127,33 @@ function DaysPicker({ days, onChange, minDay, maxDays }: DaysPickerProps) {
           </Button>
         )}
       </div>
+      <Calendar
+        mode='single'
+        size='auto'
+        className='mx-auto w-full max-w-sm'
+        initialDate={toCellDate(days.find((day) => day >= minDay) ?? minDay)}
+        minDate={toCellDate(minDay)}
+        customStyles={CALENDAR_STYLES}
+        onDateSelect={tap}
+        renderCell={(date, _isSelected, isDisabled, isToday) => {
+          const day = toDay(date);
+          const isPicked = picked.has(day);
+          return (
+            <span
+              className={join(
+                'mx-auto flex size-9 items-center justify-center rounded-full',
+                isPicked && 'bg-primary text-primary-foreground font-semibold',
+                day === anchor &&
+                  'font-semibold shadow-[inset_0_0_0_2px_var(--color-primary)]',
+                isToday && !isPicked && 'font-semibold',
+                isDisabled && 'opacity-40',
+              )}
+            >
+              {date.getDate()}
+            </span>
+          );
+        }}
+      />
     </div>
   );
 }

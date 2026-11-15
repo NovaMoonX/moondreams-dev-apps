@@ -79,6 +79,9 @@ function MarkPendingView({
       sale?.timeZone ?? null,
     );
   const listedDays = listDays(heldFor);
+  const hasBuyerDays =
+    getUpcomingDays(heldFor?.pickupDays ?? [], now, sale?.timeZone ?? null)
+      .length > 0;
   const anotherDayNote =
     heldFor?.needsAnotherDay === true ? heldFor.anotherDayNote : null;
   const dayOptions = [...listedDays, { value: OTHER_DAY, label: 'Other day' }];
@@ -225,7 +228,11 @@ function MarkPendingView({
       </div>
       {draft.isDayShown ? (
         <div className='space-y-3'>
-          <p className='text-muted-foreground text-sm'>Pickup day (optional)</p>
+          <p className='text-muted-foreground text-sm'>
+            {hasBuyerDays
+              ? `Pickup day (optional): the days ${heldFor?.name ?? 'they'} said work`
+              : 'Pickup day (optional)'}
+          </p>
           {heldFor?.needsAnotherDay === true && (
             <p className='text-sm text-pretty break-words'>
               {anotherDayNote === null || anotherDayNote === ''

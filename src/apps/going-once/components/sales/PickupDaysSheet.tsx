@@ -84,8 +84,7 @@ function PickupDaysSheet({
     <FormSheet isOpen onClose={requestClose} title='Pickup days'>
       <div className='space-y-3 pb-4'>
         <p className='text-muted-foreground text-sm text-pretty'>
-          The days you can hand things over. Buyers see them and pick the ones
-          that work when they ask about something.
+          Buyers pick the ones that work when they ask.
         </p>
         <DaysPicker
           days={draft}

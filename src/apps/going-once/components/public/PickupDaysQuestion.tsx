@@ -10,6 +10,10 @@ const chipFormatter = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
+// Each 28px pill reaches 40px with a pseudo-element; rows sit 12px apart so the areas never overlap.
+const PILL_HIT =
+  "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
+
 const formatChip = (day: number) =>
   `${chipFormatter.format(new Date(day))} ${new Date(day).getUTCDate()}`;
 
@@ -51,7 +55,7 @@ function PickupDaysQuestion({
   };
 
   return (
-    <div className='space-y-3'>
+    <div className='space-y-4'>
       <div className='space-y-1'>
         <p className='font-medium'>Which days work for you?</p>
         <p className='text-muted-foreground text-sm text-pretty'>
@@ -60,6 +64,7 @@ function PickupDaysQuestion({
       </div>
       {openDays.length > 1 && (
         <Pill
+          className={PILL_HIT}
           isSelected={isAll}
           onClick={() => pickDays(isAll ? [] : openDays)}
         >
@@ -71,9 +76,10 @@ function PickupDaysQuestion({
           <p className='text-muted-foreground text-xs font-medium'>
             {formatDayRun(run)}
           </p>
-          <div className='flex flex-wrap gap-2'>
+          <div className='flex flex-wrap gap-x-2 gap-y-3'>
             {run.length > 1 && (
               <Pill
+                className={PILL_HIT}
                 isSelected={run.every((day) => picked.has(day))}
                 ariaLabel={`All of ${formatDayRun(run)}`}
                 onClick={() => toggleRun(run)}
@@ -83,6 +89,7 @@ function PickupDaysQuestion({
             )}
             {run.map((day) => (
               <Pill
+                className={PILL_HIT}
                 key={day}
                 isSelected={picked.has(day)}
                 ariaLabel={formatDayRun([day])}
@@ -95,6 +102,7 @@ function PickupDaysQuestion({
         </div>
       ))}
       <Pill
+        className={PILL_HIT}
         isSelected={answer.needsAnotherDay}
         onClick={() =>
           onChange({
