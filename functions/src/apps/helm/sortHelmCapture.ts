@@ -248,6 +248,7 @@ import {
   type PlanWho,
   type StoredConnection,
 } from './nomos/planConnections.js';
+import { toKinCallNames } from './nomos/readConnectionCommands.js';
 import { impliedConnections, type ImpliedPerson } from './nomos/connections.js';
 import {
   readConnectionStates,
@@ -1887,13 +1888,6 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     throw new SortFailure('unreadable');
   }
   const answersQuestion = readAnswersQuestion(capture);
-  const answerTurn: AnswerTurn | null = answersQuestion
-    ? {
-        ref: answersQuestion,
-        value: opened.questionAnswer ?? null,
-        words: leadText,
-      }
-    : null;
   const askedBefore = answersQuestion
     ? toAskedCapture(
         key,
@@ -1904,6 +1898,24 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         ).data() as CaptureDoc | undefined,
       )
     : null;
+  const isUnreadConnectionAnswer =
+    answersQuestion !== null &&
+    isConnectionQuestion(askedBefore, answersQuestion.questionId) &&
+    readConnectionAnswer(
+      askedBefore,
+      answersQuestion.questionId,
+      opened.questionAnswer ?? null,
+      leadText,
+    ) === null;
+  // A yes-or-no question whose answer doesn't read as one stays open, and the words go to the model as an ordinary turn.
+  const answerTurn: AnswerTurn | null =
+    answersQuestion && !isUnreadConnectionAnswer
+      ? {
+          ref: answersQuestion,
+          value: opened.questionAnswer ?? null,
+          words: leadText,
+        }
+      : null;
   const answeredPlan = answerTurn
     ? planAnswerTurn({
         asked: askedBefore,
@@ -2676,6 +2688,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       knownNames: contextPeople.map((person) => ({
         id: person.id,
         names: [person.name, ...person.alsoCalled],
+        kinNames: toKinCallNames(person.kin),
       })),
       keyDateNames: new Map(
         contextKeyDates.map((date) => [
@@ -2753,7 +2766,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       facts: context.facts,
       people: context.people,
       personNames: new Map(
-        knownNames.map((person) => [person.id, person.names]),
+        knownNames.map((person) => [
+          person.id,
+          [...person.names, ...(person.kinNames ?? [])],
+        ]),
       ),
       keyDates: context.keyDates,
       topics: context.topics,
@@ -3039,7 +3055,7 @@ async function writeResult(
     abilities: ReturnType<typeof readCaptureAbilities>;
     previousTaskIds: string[];
     previousHeard: HeardName[];
-    knownNames: { id: string; names: string[] }[];
+    knownNames: { id: string; names: string[]; kinNames?: string[] }[];
     heardNames: HeardName[];
     topics: OpenTopicRecord[];
     hinted: HintedNote[];

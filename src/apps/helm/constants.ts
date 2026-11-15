@@ -2005,35 +2005,38 @@ export const HELM_COPY = {
   connectionChangedToast: (line: string) => `Now: ${line}`,
   connectionLinkGone: 'This link is gone.',
   connectionSideLine: {
-    family: (name: string, word: string | null) =>
-      `${name}'s ${word ?? 'family'}`,
-    friend: (name: string) => `${name}'s friend`,
-    work: (name: string) => `Works with ${name}`,
+    family: (name: string | null, word: string | null) =>
+      name === null
+        ? `Your ${word ?? 'family'}`
+        : `${name}'s ${word ?? 'family'}`,
+    friend: (name: string | null) =>
+      name === null ? 'Your friend' : `${name}'s friend`,
+    work: (name: string | null) => `Works with ${name ?? 'you'}`,
     couple: {
-      partner: (name: string) => `Partner of ${name}`,
-      dating: (name: string) => `Dating ${name}`,
-      engaged: (name: string) => `Engaged to ${name}`,
-      married: (name: string) => `Married to ${name}`,
-      separated: (name: string) => `Separated from ${name}`,
-      divorced: (name: string) => `Divorced from ${name}`,
-      widowed: (name: string) => `Was married to ${name}`,
+      partner: (name: string | null) => `Partner of ${name ?? 'you'}`,
+      dating: (name: string | null) => `Dating ${name ?? 'you'}`,
+      engaged: (name: string | null) => `Engaged to ${name ?? 'you'}`,
+      married: (name: string | null) => `Married to ${name ?? 'you'}`,
+      separated: (name: string | null) => `Separated from ${name ?? 'you'}`,
+      divorced: (name: string | null) => `Divorced from ${name ?? 'you'}`,
+      widowed: (name: string | null) => `Was married to ${name ?? 'you'}`,
     },
   },
   connectionLine: {
-    family: (other: string, name: string, word: string | null) =>
+    family: (other: string, name: string | null, word: string | null) =>
       word === null
-        ? `${other} and ${name} are family.`
-        : `${other} is ${name}'s ${word}.`,
-    friend: (other: string, name: string) =>
-      `${other} and ${name} are friends.`,
-    work: (other: string, name: string) =>
-      `${other} and ${name} work together.`,
-    couple: (other: string, name: string, status: string | null) =>
+        ? `${other} and ${name ?? 'you'} are family.`
+        : `${other} is ${name === null ? 'your' : `${name}'s`} ${word}.`,
+    friend: (other: string, name: string | null) =>
+      `${other} and ${name ?? 'you'} are friends.`,
+    work: (other: string, name: string | null) =>
+      `${other} and ${name ?? 'you'} work together.`,
+    couple: (other: string, name: string | null, status: string | null) =>
       status === null
-        ? `${other} and ${name} are a couple.`
+        ? `${other} and ${name ?? 'you'} are a couple.`
         : status === 'widowed'
-          ? `${other} and ${name} were married.`
-          : `${other} and ${name} are ${status}.`,
+          ? `${other} and ${name ?? 'you'} were married.`
+          : `${other} and ${name ?? 'you'} are ${status}.`,
   },
   connectionSince: (date: string) => `Since ${date}`,
   connectionSinceInline: (date: string) => `since ${date}`,

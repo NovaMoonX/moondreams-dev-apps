@@ -14,11 +14,11 @@ export const toRelationWord = (relation: ConnectionRelation | null) => {
   return KIN_KINDS.find((entry) => entry.kind === relation)?.written ?? null;
 };
 
-/** What the other person is, from `name`'s side: "Dana's mother", "Married to Dana · since June 20, 2019". */
+/** What the other person is, from `name`'s side: "Dana's mother", "Married to Dana · since June 20, 2019"; a null name is the person themself ("Your mother"). */
 export const toSideLine = (
   kind: ConnectionKind,
   side: ConnectionSide,
-  name: string,
+  name: string | null,
 ) => {
   const line =
     kind === 'family'
@@ -38,7 +38,7 @@ export const toConnectionSentence = (
   kind: ConnectionKind,
   side: ConnectionSide,
   other: string,
-  name: string,
+  name: string | null,
 ) => {
   const line =
     kind === 'family'

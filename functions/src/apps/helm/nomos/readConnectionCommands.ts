@@ -12,6 +12,7 @@ import {
   type ConnectionRelation,
 } from './connections.js';
 import { toKinKind } from './kin.js';
+import { KIN_KINDS, type KinKind } from './kinKinds.js';
 import { isQuestion } from './route.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 
@@ -47,6 +48,27 @@ const isNamedIn = (
         const comparable = toComparable(name);
         return comparable !== '' && words.includes(` ${comparable} `);
       });
+
+const CASUAL_KIN: Partial<Record<KinKind, string[]>> = {
+  mother: ['mom', 'mum', 'mommy', 'mama', 'ma'],
+  father: ['dad', 'daddy', 'papa', 'pa'],
+  grandmother: ['grandma', 'granny', 'nana'],
+  grandfather: ['grandpa', 'granddad'],
+  stepmother: ['stepmom', 'stepmum'],
+  stepfather: ['stepdad'],
+};
+
+/** How the person calls someone by their family word ("my mother", "my mom"), from the context's family text such as "older sister". */
+export const toKinCallNames = (kinText: string | null): string[] => {
+  const text = ` ${(kinText ?? '').trim().toLowerCase()}`;
+  const entry = [...KIN_KINDS]
+    .sort((a, b) => b.spoken.length - a.spoken.length)
+    .find((known) => text.endsWith(` ${known.spoken}`));
+  if (!entry) return [];
+  return [entry.spoken, ...(CASUAL_KIN[entry.kind] ?? [])].map(
+    (word) => `my ${word}`,
+  );
+};
 
 const toRelation = (value: unknown): ConnectionRelation | null =>
   value === 'friend' || value === 'coworker' ? value : toKinKind(value);

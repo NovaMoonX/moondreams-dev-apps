@@ -123,7 +123,7 @@ function AddBody({
       isPast: false,
     },
     other?.name ?? '',
-    who.name,
+    who.isSelf ? null : who.name,
   );
 
   const toNote = (result: Exclude<ConnectionResult, 'saved' | 'unreadable'>) =>
@@ -344,7 +344,7 @@ function RowBody({
               toSideLine(
                 connection.kind,
                 { ...side, status, since: nextSince },
-                who.name,
+                who.isSelf ? null : who.name,
               ),
             ),
             type: 'info',
@@ -477,7 +477,7 @@ function RowBody({
   return (
     <div className='space-y-6'>
       <p className='text-muted-foreground -mt-1 text-[15px] text-pretty break-words'>
-        {toSideLine(connection.kind, side, who.name)}
+        {toSideLine(connection.kind, side, who.isSelf ? null : who.name)}
       </p>
       {note && <p className='text-destructive text-sm'>{note}</p>}
       {(connection.kind === 'family' || connection.kind === 'couple') && (

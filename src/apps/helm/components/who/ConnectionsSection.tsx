@@ -70,7 +70,11 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
                   {shownName(other)}
                 </PrivateTitle>
                 <span className='text-muted-foreground block text-[13px] break-words'>
-                  {toSideLine(connection.kind, side, who.name)}
+                  {toSideLine(
+                    connection.kind,
+                    side,
+                    who.isSelf ? null : who.name,
+                  )}
                 </span>
               </span>
               <ChevronRight

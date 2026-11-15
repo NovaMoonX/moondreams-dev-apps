@@ -719,8 +719,10 @@ export const planConnectionAnswer = (input: {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-const YES_WORDS = /^(?:yes|yeah|yep|yup|sure|ok|okay|correct|right)\W*$/i;
-const NO_WORDS = /^(?:no|nope|nah)\W*$/i;
+const YES_WORDS =
+  /^(?:yes|yeah|yep|yup|sure|ok|okay|correct|right|that's right)\b(?:\W+(?:he|she|they)\W+(?:is|are)\b)?\W*$/i;
+const NO_WORDS =
+  /^(?:no|nope|nah)\b(?:\W+(?:(?:he|she|they)(?:'s|'re|\s+is|\s+are)\s+not|(?:he|she|they)\s+(?:isn't|aren't)|not really))?\W*$/i;
 
 export const isConnectionQuestion = (
   asked: { opened: Record<string, unknown> } | null,
@@ -734,7 +736,7 @@ export const isConnectionQuestion = (
   );
 };
 
-/** The held link and Yes or No from a tapped option or a plain yes or no in words; null for anything else, so the question stays open. */
+/** The held link and Yes or No from a tapped option or a yes or no in words ("yes he is", "no she isn't"); null for anything else, which keeps the question open and sends the words to the model. */
 export const readConnectionAnswer = (
   asked: { opened: Record<string, unknown> } | null,
   questionId: string,

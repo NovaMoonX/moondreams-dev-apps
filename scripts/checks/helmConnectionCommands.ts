@@ -11,6 +11,7 @@ import {
   type AskedCapture,
 } from '../../functions/src/apps/helm/nomos/answerTurn.ts';
 import { planImpliedQuestions } from '../../functions/src/apps/helm/sortHelmCapture.ts';
+import { toKinCallNames } from '../../functions/src/apps/helm/nomos/readConnectionCommands.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import {
   buildImpliedQuestion,
@@ -159,6 +160,41 @@ assert.equal(
   0,
   'an update that changes nothing is dropped',
 );
+
+// A person called only by their family word ("my mom") counts as named.
+assert.deepEqual(toKinCallNames('older sister'), ['my sister']);
+assert.ok(toKinCallNames('mother').includes('my mom'));
+assert.deepEqual(toKinCallNames('sister in law'), ['my sister in law']);
+assert.deepEqual(toKinCallNames(null), []);
+const byKin = normalizeNomosReply(
+  {
+    commands: [
+      {
+        kind: 'connect',
+        whoAlias: dana,
+        otherWhoAlias: sam,
+        connectionKind: 'couple',
+        connectionRelation: null,
+        coupleStatus: 'married',
+        dateSpanId: null,
+        requestQuote: 'My mom and Sam got married',
+      },
+    ],
+  },
+  {
+    tasks: [],
+    people,
+    personNames: new Map([
+      ['dana', ['Joan', ...toKinCallNames('mother')]],
+      ['sam', ['Sam']],
+    ]),
+    reading: { dates: [], people: [], places: [], tags: [], urgent: [] },
+    captureText: 'My mom and Sam got married',
+    timeZone: 'UTC',
+    now: 1,
+  } as never,
+).connectionCommands;
+assert.equal(byKin.length, 1, 'a family word names the person');
 
 // One command stands for a pair whichever way round and whatever kind (the last said wins), and both people are named in the words.
 const replyMany = (items: Record<string, unknown>[], captureText: string) =>
@@ -819,6 +855,19 @@ assert.equal(
   readConnectionAnswer(asked, 'q1', null, 'maybe so'),
   null,
   'anything but a yes or no settles nothing',
+);
+assert.equal(
+  readConnectionAnswer(asked, 'q1', null, 'yes he is')?.optionId,
+  'yes',
+);
+assert.equal(
+  readConnectionAnswer(asked, 'q1', null, "No, she isn't")?.optionId,
+  'no',
+);
+assert.equal(
+  readConnectionAnswer(asked, 'q1', null, "no, he's my cousin"),
+  null,
+  'a correction goes to the model with the question still open',
 );
 assert.equal(readConnectionAnswer(null, 'q1', null, 'yes'), null);
 const typedYes = readConnectionAnswer(asked, 'q1', null, 'yes');
