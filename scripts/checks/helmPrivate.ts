@@ -30,6 +30,10 @@ import {
   type MaskedName,
 } from '../../functions/src/apps/helm/nomos/unattended.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import {
+  answerShowName,
+  planNameRequest,
+} from '../../src/apps/helm/utils/lockScreenName.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
   isMapCovered,
@@ -1706,6 +1710,51 @@ test('a crowd is packed into rings within capacity with the owner alone on top',
     sizes.reduce((sum, size) => sum + size, 0),
     100,
   );
+});
+
+const NAME_CONTEXT = { now: Date.UTC(2026, 10, 9, 12), timeZone: 'UTC' };
+const NAMED_HABIT = { name: 'Pills', lockScreenName: null };
+
+test('asking to show a habit name on the lock screen speaks the warning and writes nothing', () => {
+  const turn = planNameRequest(NAMED_HABIT, true);
+  assert.equal(turn.kind, 'ask');
+  assert.ok(turn.line.includes("isn't sealed"));
+  assert.ok(turn.line.includes('Google'));
+  assert.ok(turn.line.endsWith('Show it?'));
+});
+
+test('only a clear yes writes the name; a no, Skip or anything else does not', () => {
+  const read = (words: string) =>
+    answerShowName(NAMED_HABIT, words, NAME_CONTEXT);
+  ['yes', 'yes please', 'yeah'].forEach((words) => {
+    const turn = read(words);
+    assert.equal(turn.kind, 'write', words);
+    if (turn.kind === 'write') assert.equal(turn.lockScreenName, 'Pills');
+  });
+  ['no', 'no thanks', 'skip'].forEach((words) =>
+    assert.equal(read(words).kind, 'kept', words),
+  );
+  assert.equal(read('what is the weather like').kind, 'again');
+});
+
+test('a name longer than the cap is cut when it is written', () => {
+  const turn = answerShowName(
+    { name: 'x'.repeat(80), lockScreenName: null },
+    'yes',
+    NAME_CONTEXT,
+  );
+  assert.equal(turn.kind, 'write');
+  if (turn.kind === 'write') assert.equal(turn.lockScreenName?.length, 60);
+});
+
+test('hiding a shown name by voice is one step and writes null', () => {
+  const turn = planNameRequest(
+    { name: 'Pills', lockScreenName: 'Pills' },
+    false,
+  );
+  assert.equal(turn.kind, 'write');
+  if (turn.kind === 'write') assert.equal(turn.lockScreenName, null);
+  assert.equal(planNameRequest(NAMED_HABIT, false).kind, 'kept');
 });
 
 const failures = (

@@ -234,6 +234,8 @@ export const CONNECTIONS_LIMIT = 5_000;
 export const HABITS_LIMIT = 230;
 export const HABITS_ACTIVE_MAX = 30;
 export const HABIT_NAME_MAX = 60;
+/** The plain-text copy of a habit's name a lock screen may show. */
+export const LOCK_SCREEN_NAME_MAX = HABIT_NAME_MAX;
 export const HABIT_LABEL_MAX = 30;
 export const HABIT_NOTES_MAX = 500;
 export const MEDICINE_NAME_MAX = 60;
@@ -3389,6 +3391,152 @@ export const HELM_COPY = {
   zoneOfferOn: (city: string, days: string) => `Using ${city} time ${days}`,
   zoneOfferUndo: 'Undo',
   zoneOfferLater: 'Okay, home time stays.',
+  stageBuilding: 'Building',
+  stageHolding: 'Holding',
+  stageFormed: 'Formed',
+  stageAgain: 'again',
+  stageLabel: (stage: string) =>
+    ({
+      building: 'Building',
+      buildingAgain: 'Building',
+      holding: 'Holding',
+      formed: 'Formed',
+    })[stage] ?? 'Building',
+  stageSince: (stage: string, date: string) =>
+    ({
+      building: `Building since ${date}`,
+      buildingAgain: `Building again since ${date}`,
+      holding: `Holding since ${date}`,
+      formed: `Formed since ${date}`,
+    })[stage] ?? `Building since ${date}`,
+  stageHelp:
+    "This app looks at whole weeks. A week counts when you kept it every time but once at most. Three weeks in a row: holding. Most weeks for about two and a half months, lately before any reminder: formed. Two weeks that don't count: building again. Weeks you paused, and days you didn't open the app, don't count either way. It's a rule of thumb from your own ticks, not a science of habits.",
+  stageHelpLabel: 'How a habit’s stage is worked out',
+  stageTold: (day: string, stage: string) =>
+    ({
+      holding: `Since ${day}: Holding, kept each of the last 3 weeks`,
+      formed: `Since ${day}: Formed, kept nearly every week for ten weeks`,
+      buildingAgain: `Since ${day}: Building again, 2 weeks in a row didn't count`,
+      building: `Since ${day}: Building`,
+    })[stage] ?? `Since ${day}: Building`,
+  stageToldSummary: (name: string, line: string) => `${name}. ${line}`,
+  remindersRowTitle: 'Reminders',
+  remindersRowOff: 'Off',
+  remindersPaceLine: (pace: string, isCare: boolean, name: boolean) =>
+    `${
+      pace === 'late'
+        ? "Only if you're late"
+        : pace === 'start'
+          ? isCare
+            ? 'At the start, and they stay on'
+            : 'At the start of its time'
+          : 'While it builds, fewer as it holds'
+    }${name ? ' · name shown' : ''}`,
+  remindersNext: (time: string) => `Next reminder ${time}`,
+  remindersStartsSoon: 'Starts within a few minutes',
+  remindersNoneToday: 'No more reminders today',
+  remindersFormedQuiet: "No reminders: it's holding on its own",
+  remindersAgainLine: 'Reminders come at the start again',
+  remindersMore: 'Change pace, quiet hours or the lock screen',
+  remindersTurnOnFailed: "Reminders didn't change. Try again.",
+  remindersNeedsConnection: 'Changing reminders needs a connection.',
+  remindersOnToast: (name: string) => `Reminders on for ${name}`,
+  remindersOffToast: (name: string) => `Reminders off for ${name}`,
+  remindersPushIcon: '🔔',
+  remindersPushTitle: 'Allow reminders on this phone',
+  remindersPushModalTitle: (name: string) => `Reminders while ${name} builds`,
+  remindersPushBody: (assistant: string) =>
+    `${assistant} sends a reminder at its time, unless you've already ticked it. As it sticks they get fewer, and once it's formed they stop. Change it any time on the habit's page.`,
+  remindersPushPrivacy: (assistant: string) =>
+    `${assistant}'s server knows when your habit's times are and whether you ticked them, never what the habit is called. The reminder says “Time for your evening habit”.`,
+  remindersPushDone: (assistant: string) =>
+    `Done. ${assistant} will send the first one at its time. It can take a few minutes to start.`,
+  remindersSheetTitle: (name: string) => `Reminders · ${name}`,
+  remindersPaceTitle: 'When it reminds you',
+  remindersPaceAdaptive: 'As it builds',
+  remindersPaceAdaptiveHelp:
+    'At its start while it builds, fewer once it holds',
+  remindersPaceStart: 'At the start',
+  remindersPaceStartHelp: 'At the start of its time, every time',
+  remindersPaceLate: "Only if I'm late",
+  remindersPaceLateHelp: 'Once, near the end of its time, if it is still open',
+  remindersEaseTitle: 'Fewer reminders?',
+  remindersEaseHelp: "Only if you're late",
+  remindersQuietTitle: 'Allow during quiet hours',
+  remindersQuietHelp:
+    'Off: a time inside your quiet hours is moved to just after, or skipped.',
+  remindersSheetSaveFailed: "That didn't save. Try again.",
+  remindersPaceToast: (name: string) => `Reminders for ${name} changed`,
+  remindersQuietToast: (name: string) => `Quiet hours for ${name} changed`,
+  remindersSheetDone: 'Done',
+  lockScreenNameSection: 'On the lock screen',
+  lockScreenNameTitle: 'Show its name on the lock screen',
+  lockScreenNameOff: (words: string) => `Off: “${words}”.`,
+  lockScreenNameOffWords: 'Time for your evening habit',
+  lockScreenNameWarning:
+    "A name shown here isn't sealed like the rest of your things. A readable copy is kept so the reminder can show it, it passes through Google's push service (Apple's on an iPhone), and anyone who picks up your phone can read it.",
+  lockScreenNameOn: (name: string) => `On: “${name}”.`,
+  lockScreenNamePrivate: (name: string) =>
+    `${name} is private, so this asks once more.`,
+  lockScreenNameConfirmTitle: 'Show its name on the lock screen?',
+  lockScreenNameConfirmAction: 'Show it',
+  lockScreenNameConfirmKeep: 'Keep it hidden',
+  lockScreenNameFailed: "That didn't change. Try again.",
+  lockScreenNameShownToast: (name: string) =>
+    `${name} will show on the lock screen`,
+  lockScreenNameHiddenToast: (name: string) =>
+    `${name} is hidden again, and its readable copy is gone.`,
+  lockScreenNameAsk: (warning: string) => `${warning} Show it?`,
+  lockScreenNameVoiceShown: (name: string) =>
+    `Done. ${name} will show on the lock screen.`,
+  lockScreenNameVoiceHidden: (name: string) =>
+    `Done. ${name} is hidden on the lock screen again.`,
+  lockScreenNameVoiceKept: 'Okay, it stays hidden.',
+  settingsOnItsOwn: (name: string) => `${name} on its own`,
+  habitRemindersTitle: 'Habit reminders',
+  habitRemindersOnFor: (count: number) =>
+    count === 0
+      ? 'Off for every habit'
+      : `On for ${count} ${count === 1 ? 'habit' : 'habits'}`,
+  habitRemindersPauseAll: 'Pause all habit reminders',
+  habitRemindersPauseAllHelp: 'Nothing is sent until you turn this off.',
+  habitRemindersQuietTitle: 'Quiet hours',
+  habitRemindersQuietHelp:
+    "Reminders wait outside these hours. Leave them off to use your day's hours.",
+  habitRemindersQuietFrom: 'From',
+  habitRemindersQuietTo: 'Until',
+  habitRemindersFoot:
+    'At most 6 a day; ones close together come as one. Whether this browser shows notifications at all is set in your browser.',
+  habitRemindersEmpty:
+    'No habit has reminders on yet. Turn them on from a habit’s page.',
+  habitRemindersBackOn: 'Reminders are back on',
+  habitRemindersBackDismiss: 'Dismiss',
+  habitRemindersSaveFailed: "That didn't save. Try again.",
+  habitOfferTitle: 'Remind me while it builds',
+  habitOfferAction: 'Turn on',
+  habitFormedTitle: (name: string) =>
+    `${name} seems to be part of your day now`,
+  habitFormedAsk: 'Take it off Today?',
+  habitFormedEvidence: (count: number, since: string) =>
+    `Kept ${count} ${count === 1 ? 'time' : 'times'} since ${since}.`,
+  habitFormedTake: 'Take it off Today',
+  habitFormedKeep: 'Keep it on Today',
+  habitFormedKeepReminding: 'Keep reminding me',
+  habitFormedKeepRemindingDone: 'Reminders stay on, only if you are late.',
+  habitFormedTakenOffToast: (name: string, count: number, since: string) =>
+    `${name} is off Today. Kept ${count} ${count === 1 ? 'time' : 'times'} since ${since}.`,
+  habitFormedKept: 'Okay, it stays on Today.',
+  habitFormedFailed: "That didn't change. Try again.",
+  habitFormedRetiredLine: (date: string) => `Formed · off Today since ${date}`,
+  habitMenuBringBack: 'Bring it back to Today',
+  habitBroughtBackToast: (name: string) =>
+    `${name} is back on Today as Formed. Reminders stay off.`,
+  habitWhatItLeft: 'What it left',
+  habitLeftCount: (count: number) =>
+    `${count} ${count === 1 ? 'time' : 'times'}`,
+  habitLeftRange: (from: string, to: string) => `kept, ${from} to ${to}`,
+  habitsFormedFold: (count: number) => `Formed · ${count}`,
+  habitsFormedOn: (date: string) => `Formed · off Today since ${date}`,
 } as const;
 
 export const PLANNER_COPY = {

@@ -4,7 +4,7 @@ import {
   doc,
   runTransaction,
   setDoc,
-  updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -14,20 +14,24 @@ import { store } from '@/store';
 import { generateUuid } from '@/utils';
 import {
   HABIT_NAME_MAX,
+  LOCK_SCREEN_NAME_MAX,
   HABIT_NOTES_MAX,
   MEDICINE_DOSE_MAX,
   MEDICINE_NAME_MAX,
 } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
+import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import { readParentIndex } from '@apps/helm/store/actions/privacyActions';
 import type {
   Habit,
   HabitEventKind,
   HabitHistoryEvent,
+  HabitReminder,
   HabitSealed,
   HabitStatus,
   HelmEncryption,
   OpenHabit,
+  ReminderPace,
   Sealed,
 } from '@apps/helm/types';
 import type { fromWhenDraft } from '@apps/helm/utils/habitDraft';
@@ -50,11 +54,15 @@ const isUnavailable = (error: unknown) =>
 
 export type HabitEditResult = 'saved' | 'offline' | 'missing' | 'unreadable';
 
-const event = (kind: HabitEventKind, at: number): HabitHistoryEvent => ({
+const event = (
+  kind: HabitEventKind,
+  at: number,
+  pace: ReminderPace | null = null,
+): HabitHistoryEvent => ({
   kind,
   at,
   by: 'person',
-  pace: null,
+  pace,
   stage: null,
 });
 
@@ -62,7 +70,8 @@ const addEvent = (
   history: readonly HabitHistoryEvent[],
   kind: HabitEventKind,
   at: number,
-) => [...history, event(kind, at)].slice(-HISTORY_MAX);
+  pace: ReminderPace | null = null,
+) => [...history, event(kind, at, pace)].slice(-HISTORY_MAX);
 
 export interface NewHabit {
   name: string;
@@ -98,7 +107,7 @@ export async function createHabit(
     pausedUntil: null,
     reminder: null,
     lockScreenName: null,
-    stage: input.isCare ? null : 'building',
+    stage: input.isCare && input.forWhoId !== null ? null : 'building',
     stageAt: now,
     stageWeek: null,
     rejudgeFrom: null,
@@ -146,6 +155,8 @@ async function editHabit(
   ) => {
     sealed: HabitSealed;
     fields: Partial<Habit>;
+    /** True when something a reminder depends on changed: the profile is stamped in the same transaction. */
+    isReminderChange?: boolean;
   },
 ): Promise<HabitEditResult> {
   if (!navigator.onLine) return 'offline';
@@ -161,11 +172,13 @@ async function editHabit(
       ).catch(() => null);
       if (!opened) return 'unreadable';
       const next = change(opened, current);
+      const now = Date.now();
       transaction.update(ref, {
         ...next.fields,
         sealed: await sealJson<HabitSealed>(next.sealed, encryption),
-        lastEditedAt: Date.now(),
+        lastEditedAt: now,
       });
+      if (next.isReminderChange) markRemindersChanged(transaction, uid, now);
       return 'saved';
     });
   } catch (error) {
@@ -212,6 +225,10 @@ export const updateHabitWords = (
     },
     fields: {
       forWhoId: words.forWhoId,
+      lockScreenName:
+        current.lockScreenName === null
+          ? null
+          : words.name.trim().slice(0, LOCK_SCREEN_NAME_MAX),
       medicineAskedAt: toMedicine(words.medicine ?? null)
         ? (current.medicineAskedAt ?? Date.now())
         : current.medicineAskedAt,
@@ -236,27 +253,76 @@ export const updateHabitWhen = (
   habitId: string,
   when: ReturnType<typeof fromWhenDraft>,
 ) =>
-  editHabit(uid, encryption, habitId, (opened) => ({
+  editHabit(uid, encryption, habitId, (opened, current) => ({
     sealed: { ...opened, windows: when.windows },
     fields: {
       cadence: when.cadence,
       windowState: when.windowState,
       timesPerDay: when.timesPerDay,
+      ...(JSON.stringify(current.cadence) === JSON.stringify(when.cadence)
+        ? {}
+        : { history: addEvent(current.history, 'restarted', Date.now()) }),
     },
+    isReminderChange: true,
   }));
 
-type StatusFields = Pick<
+type ChangedFields = Pick<
   Habit,
-  'status' | 'pausedUntil' | 'pausedAt' | 'endedAt' | 'history'
+  | 'status'
+  | 'pausedUntil'
+  | 'pausedAt'
+  | 'endedAt'
+  | 'history'
+  | 'reminder'
+  | 'lockScreenName'
+  | 'stage'
+  | 'retiredAt'
+  | 'formedSummary'
 >;
 
-const readStatusFields = (habit: OpenHabit): StatusFields => ({
+const readBefore = (habit: OpenHabit): ChangedFields => ({
   status: habit.status,
   pausedUntil: habit.pausedUntil,
   pausedAt: habit.pausedAt,
   endedAt: habit.endedAt,
   history: habit.history,
+  reminder: habit.reminder,
+  lockScreenName: habit.lockScreenName,
+  stage: habit.stage,
+  retiredAt: habit.retiredAt,
+  formedSummary: habit.formedSummary,
 });
+
+/** Writes fields on one habit with the reminder stamp in the same batch, and hands back an Undo that writes the earlier fields (and stamps again) only while the habit, as the store shows it, still carries this change's last history entry; 'kept' when something wrote to it since. Plain writes, so both queue offline. */
+function changeHabit(
+  uid: string,
+  habit: OpenHabit,
+  fields: Partial<ChangedFields> & Pick<ChangedFields, 'history'>,
+  now: number,
+) {
+  const ref = doc(habitsOf(uid), habit.id);
+  const before = readBefore(habit);
+  const batch = writeBatch(db);
+  batch.update(ref, { ...fields, lastEditedAt: now });
+  markRemindersChanged(batch, uid, now);
+  return {
+    written: batch.commit(),
+    undo: async (): Promise<'undone' | 'kept'> => {
+      const live = store
+        .getState()
+        .helm.habits.items.find((item) => item.id === habit.id);
+      if (!live || live.history.length !== fields.history.length) {
+        return 'kept';
+      }
+      const undoNow = Date.now();
+      const undoBatch = writeBatch(db);
+      undoBatch.update(ref, { ...before, lastEditedAt: undoNow });
+      markRemindersChanged(undoBatch, uid, undoNow);
+      await undoBatch.commit();
+      return 'undone';
+    },
+  };
+}
 
 const eventFor = (
   from: HabitStatus,
@@ -268,7 +334,7 @@ const eventFor = (
   return from === 'ended' ? 'restarted' : undefined;
 };
 
-/** Pauses, stops or brings a habit back; its earlier state is kept so Undo can write it. Its ticks and weeks are never touched. */
+/** Pauses, stops or brings a habit back; its earlier state is kept so Undo can write it. Its ticks and weeks are never touched, and stopping it takes its name off the lock screen. */
 export function setHabitStatus(
   uid: string,
   habit: OpenHabit,
@@ -277,33 +343,148 @@ export function setHabitStatus(
 ) {
   const now = Date.now();
   const kind = eventFor(habit.status, next);
-  const ref = doc(habitsOf(uid), habit.id);
-  const before = readStatusFields(habit);
-  const fields: StatusFields = {
-    status: next,
-    pausedUntil: next === 'paused' ? pausedUntil : null,
-    pausedAt: next === 'paused' ? now : null,
-    endedAt: next === 'ended' ? now : null,
-    history: kind ? addEvent(habit.history, kind, now) : habit.history,
-  };
-  return {
-    written: updateDoc(ref, { ...fields, lastEditedAt: now }),
-    /** Puts the earlier state back only while the habit, as the store shows it, is still as this change left it; 'kept' when something wrote its status or history since. A plain write, so it queues offline. */
-    undo: async (): Promise<'undone' | 'kept'> => {
-      const live = store
-        .getState()
-        .helm.habits.items.find((item) => item.id === habit.id);
-      if (
-        !live ||
-        live.status !== fields.status ||
-        live.history.length !== fields.history.length
-      ) {
-        return 'kept';
-      }
-      await updateDoc(ref, { ...before, lastEditedAt: Date.now() });
-      return 'undone';
+  return changeHabit(
+    uid,
+    habit,
+    {
+      status: next,
+      pausedUntil: next === 'paused' ? pausedUntil : null,
+      pausedAt: next === 'paused' ? now : null,
+      endedAt: next === 'ended' ? now : null,
+      history: kind ? addEvent(habit.history, kind, now) : habit.history,
+      ...(next === 'ended' ? { lockScreenName: null } : {}),
     },
+    now,
+  );
+}
+
+export type ReminderChange =
+  | { kind: 'on'; pace: ReminderPace }
+  | { kind: 'off' }
+  | { kind: 'pace'; pace: ReminderPace; isEase?: boolean }
+  | { kind: 'quietHours'; isAllowed: boolean };
+
+const turnedOn = (pace: ReminderPace, now: number): HabitReminder => ({
+  isOn: true,
+  pace,
+  anyTimeAt: null,
+  allowQuietHours: false,
+  turnedOnAt: now,
+  easedAt: null,
+});
+
+/** What a reminder change writes on the habit. Turning off also takes the name off the lock screen, since nothing is sent to show it on. */
+const toReminderFields = (
+  habit: OpenHabit,
+  change: ReminderChange,
+  now: number,
+): Pick<ChangedFields, 'history' | 'reminder'> &
+  Partial<Pick<ChangedFields, 'lockScreenName'>> => {
+  const current = habit.reminder;
+  if (change.kind === 'on') {
+    return {
+      reminder: turnedOn(change.pace, now),
+      history: addEvent(habit.history, 'reminderOn', now, change.pace),
+    };
+  }
+  if (!current) {
+    return { reminder: current, history: habit.history };
+  }
+  if (change.kind === 'off') {
+    return {
+      reminder: { ...current, isOn: false },
+      history: addEvent(habit.history, 'reminderOff', now),
+      lockScreenName: null,
+    };
+  }
+  if (change.kind === 'quietHours') {
+    return {
+      reminder: { ...current, allowQuietHours: change.isAllowed },
+      history: habit.history,
+    };
+  }
+  return {
+    reminder: {
+      ...current,
+      pace: change.pace,
+      easedAt: change.isEase ? now : current.easedAt,
+    },
+    history: addEvent(habit.history, 'reminderPace', now, change.pace),
   };
+};
+
+/** Turns a habit's reminder on or off or changes its pace, in the one batch that stamps the profile. */
+export const setHabitReminder = (
+  uid: string,
+  habit: OpenHabit,
+  change: ReminderChange,
+) => {
+  const now = Date.now();
+  return changeHabit(uid, habit, toReminderFields(habit, change, now), now);
+};
+
+/** Shows the habit's name on the lock screen (a plain-text copy, kept unsealed) or hides it; each is a history entry. Rename and ending keep it in step elsewhere. */
+export const setLockScreenName = (
+  uid: string,
+  habit: OpenHabit,
+  isShown: boolean,
+) => {
+  const now = Date.now();
+  return changeHabit(
+    uid,
+    habit,
+    {
+      lockScreenName: isShown
+        ? habit.name.slice(0, LOCK_SCREEN_NAME_MAX)
+        : null,
+      history: addEvent(
+        habit.history,
+        isShown ? 'nameShown' : 'nameHidden',
+        now,
+      ),
+    },
+    now,
+  );
+};
+
+/** Lets a formed habit go: off Today, its weeks and count kept, its reminders and lock-screen name ended in the same batch. */
+export function retireHabit(
+  uid: string,
+  habit: OpenHabit,
+  formedSummary: NonNullable<Habit['formedSummary']>,
+) {
+  const now = Date.now();
+  return changeHabit(
+    uid,
+    habit,
+    {
+      status: 'retired',
+      retiredAt: now,
+      formedSummary,
+      reminder: habit.reminder ? { ...habit.reminder, isOn: false } : null,
+      lockScreenName: null,
+      history: addEvent(habit.history, 'retired', now),
+    },
+    now,
+  );
+}
+
+/** Puts a retired habit back on Today as Formed, with its reminders off. */
+export function bringHabitBack(uid: string, habit: OpenHabit) {
+  const now = Date.now();
+  return changeHabit(
+    uid,
+    habit,
+    {
+      status: 'active',
+      stage: 'formed',
+      retiredAt: null,
+      formedSummary: null,
+      reminder: habit.reminder ? { ...habit.reminder, isOn: false } : null,
+      history: addEvent(habit.history, 'broughtBack', now),
+    },
+    now,
+  );
 }
 
 /** "This is medicine or care": on makes the habit care and private; off clears both and stops code marking it again. A habit kept for someone the person looks after stays care. Needs a connection. */
@@ -334,9 +515,14 @@ export async function setHabitCare(
       fields: {
         isCare: next.isCare === true,
         privacy: readEffectivePrivacy(next, parents),
-        stage: isCare ? null : (habit.stage ?? 'building'),
+        stage: habit.forWhoId !== null ? null : (habit.stage ?? 'building'),
         careAskedAt: isCare ? Date.now() : habit.careAskedAt,
+        reminder:
+          habit.reminder && isCare && habit.reminder.pace === 'adaptive'
+            ? { ...habit.reminder, pace: 'start' }
+            : habit.reminder,
       },
+      isReminderChange: true,
     };
   });
   return {

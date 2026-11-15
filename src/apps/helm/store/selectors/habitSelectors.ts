@@ -28,6 +28,13 @@ export const selectStoppedHabits = createSelector([selectHabits], (habits) =>
     .sort((left, right) => (right.endedAt ?? 0) - (left.endedAt ?? 0)),
 );
 
+/** Habits let go once formed, the latest first; their pages stay readable. */
+export const selectFormedHabits = createSelector([selectHabits], (habits) =>
+  habits
+    .filter((habit) => !habit.isUnreadable && habit.status === 'retired')
+    .sort((left, right) => (right.retiredAt ?? 0) - (left.retiredAt ?? 0)),
+);
+
 export const selectHabitById = createSelector(
   [selectHabits],
   (habits): Map<string, OpenHabit> =>
@@ -35,9 +42,7 @@ export const selectHabitById = createSelector(
 );
 
 export const selectHasHabits = (state: RootState) =>
-  state.helm.habits.items.some(
-    (habit) => habit.status !== 'retired' && !habit.isUnreadable,
-  );
+  state.helm.habits.items.some((habit) => !habit.isUnreadable);
 
 /** The week's figure for a habit: "N of M this week", or when nothing has been due yet, the day it starts. */
 export const readWeekFigure = (

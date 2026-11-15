@@ -18,6 +18,7 @@ import {
   HELM_DRAFT_PREFIX,
   openJson,
 } from '@apps/helm/security';
+import { useHabitJudgement } from '@apps/helm/hooks/useHabitJudgement';
 import { useStyleLearning } from '@apps/helm/queries/styleLearning';
 import {
   ensureHelmProfile,
@@ -248,6 +249,7 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
   useConnectionsRefresh(uid);
   useSelfWho(uid, displayName);
   useKeyDateRepair(uid);
+  useHabitJudgement(uid);
   useStyleLearning(uid);
 
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);

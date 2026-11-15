@@ -14,6 +14,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
+import {
+  dismissRemindersBack,
+  useRemindersBack,
+} from '@apps/helm/utils/remindersBackNotice';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import ConnectCalendarRow from '@apps/helm/components/today/ConnectCalendarRow';
@@ -86,6 +90,7 @@ function TodayView({
     byId: activityById,
   } = useAppSelector((state) => selectTaskActivity(state, nowMinute));
   const tasksById = useAppSelector(selectOpenTasksById);
+  const isRemindersBack = useRemindersBack();
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const { held, tick, undoTick, forget } = useTaskTicks(user?.uid ?? null);
@@ -195,6 +200,15 @@ function TodayView({
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.todayFirstRun(assistantName)}
           </p>
+        )}
+        {isToday && isRemindersBack && (
+          <InlineNotice
+            tone='success'
+            onDismiss={dismissRemindersBack}
+            dismissLabel={HELM_COPY.habitRemindersBackDismiss}
+          >
+            {HELM_COPY.habitRemindersBackOn}
+          </InlineNotice>
         )}
         {isToday && (
           <KeyDatesLine onOpenWho={onOpenWho} onOpenComingUp={onOpenComingUp} />

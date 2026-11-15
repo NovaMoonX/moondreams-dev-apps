@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import {
+  Bell,
   Eye,
   History,
   Link2,
@@ -29,10 +30,12 @@ import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
 import DeleteHelmData from '@apps/helm/components/settings/DeleteHelmData';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import PhoneLocationSheet from '@apps/helm/components/settings/PhoneLocationSheet';
+import HabitRemindersList from '@apps/helm/components/settings/HabitRemindersList';
 import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
+import { countHabitsReminding } from '@apps/helm/store/selectors/habitReminderSelectors';
 import { useNow } from '@/hooks/useNow';
 import { hasUnseenNews } from '@/lib/connections/connectionNews';
 import { useConnections } from '@/lib/connections/useConnections';
@@ -70,6 +73,10 @@ function SettingsScreen({
   const { isVoiceSheetRequested, closeSheet } = useHelmUrlState();
   const [isVoiceOpen, setIsVoiceOpen] = useState(isVoiceSheetRequested);
   const [isDayOpen, setIsDayOpen] = useState(false);
+  const [isRemindersOpen, setIsRemindersOpen] = useState(false);
+  const remindingCount = useAppSelector((state) =>
+    countHabitsReminding(state.helm.habits.items),
+  );
   const [isLocationOpen, setIsLocationOpen] = useState(false);
   const { grants: allGrants, isKnown } = useConnections({
     readerAppId: 'helm',
@@ -136,6 +143,15 @@ function SettingsScreen({
                 : undefined
             }
             onClick={() => setIsDayOpen(true)}
+            hasChevron
+          />
+        </SettingsSection>
+        <SettingsSection title={HELM_COPY.settingsOnItsOwn(assistant)}>
+          <SettingsRow
+            icon={<Bell className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.habitRemindersTitle}
+            description={HELM_COPY.habitRemindersOnFor(remindingCount)}
+            onClick={() => setIsRemindersOpen(true)}
             hasChevron
           />
         </SettingsSection>
@@ -233,6 +249,10 @@ function SettingsScreen({
       <PhoneLocationSheet
         isOpen={isLocationOpen}
         onClose={() => setIsLocationOpen(false)}
+      />
+      <HabitRemindersList
+        isOpen={isRemindersOpen}
+        onClose={() => setIsRemindersOpen(false)}
       />
       <YourDaySheet isOpen={isDayOpen} onClose={() => setIsDayOpen(false)} />
       <VoiceSettings

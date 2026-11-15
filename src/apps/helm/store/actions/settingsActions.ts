@@ -15,6 +15,7 @@ import {
   clearHelmKey,
   helmTrustStore,
 } from '@apps/helm/queries/helmKeyQueries';
+import { remindersStamp } from '@apps/helm/store/actions/markRemindersChanged';
 import { forgetOutboxSecrets } from '@apps/helm/store/actions/outboxActions';
 import { clearHelm } from '@apps/helm/store/helmSlice';
 import { keepDeletedNote } from '@apps/helm/utils/deletedNote';
@@ -140,6 +141,26 @@ export const setDayWindow = (
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     dayStartTime,
     dayEndTime,
+    ...remindersStamp(Date.now()),
+    lastEditedAt: Date.now(),
+  });
+
+/** Quiet hours for habit reminders ("HH:mm" in the person's zone); null means outside Your day. */
+export const setQuietHours = (
+  uid: string,
+  quietHours: { start: string; end: string } | null,
+) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    quietHours,
+    ...remindersStamp(Date.now()),
+    lastEditedAt: Date.now(),
+  });
+
+/** "Pause all habit reminders": stamped when paused, null when they are turned back on. */
+export const setRemindersPaused = (uid: string, isPaused: boolean) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    remindersPausedAt: isPaused ? Date.now() : null,
+    ...remindersStamp(Date.now()),
     lastEditedAt: Date.now(),
   });
 
@@ -227,6 +248,7 @@ export const addZoneSpan = (uid: string, span: ZoneSpan, todayKey: string) =>
         ),
         span,
       ].slice(-MAX_ZONE_SPANS),
+      ...remindersStamp(Date.now()),
       lastEditedAt: Date.now(),
     });
   });
@@ -239,6 +261,7 @@ export const removeZoneSpan = (uid: string, awayId: string) =>
     const current = (snapshot.data() as HelmProfile).zoneSpans ?? [];
     transaction.update(ref, {
       zoneSpans: current.filter((entry) => entry.awayId !== awayId),
+      ...remindersStamp(Date.now()),
       lastEditedAt: Date.now(),
     });
   });

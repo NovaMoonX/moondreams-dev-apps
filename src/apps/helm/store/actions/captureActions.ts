@@ -49,6 +49,8 @@ import { readTypedHeardNames } from '@apps/helm/utils/spokenNames';
 import { rankNotes } from '@apps/helm/utils/noteSearch';
 import { readLocationPermission } from '@apps/helm/utils/phoneLocation';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
+import { clearRemindersIdle } from '@apps/helm/store/actions/markRemindersChanged';
+import { notifyRemindersBack } from '@apps/helm/utils/remindersBackNotice';
 import type {
   Capture,
   CaptureReading,
@@ -215,6 +217,10 @@ export async function sendCapture(
     () => sortCapture(reference.id, 'full', turn.noteIds ?? []),
     () => undefined,
   );
+  const idleBatch = writeBatch(db);
+  if (clearRemindersIdle(idleBatch, uid, Date.now())) {
+    void idleBatch.commit().then(notifyRemindersBack, () => undefined);
+  }
   sentHere.add(reference.id);
   return { write, id: reference.id };
 }

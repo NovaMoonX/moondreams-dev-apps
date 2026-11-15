@@ -25,6 +25,7 @@ export function startRemindersListener(
       id,
       ...(data as Omit<Reminder, 'id'>),
       lastSentAt: (data.lastSentAt as number | undefined) ?? null,
+      subjectRefs: (data.subjectRefs as string[] | undefined) ?? null,
     }),
     onData: onChange,
   });
