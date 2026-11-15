@@ -19,7 +19,11 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { copyToClipboard } from '@/utils/clipboardUtils';
-import { toDialableNumber, toMailtoUrl } from '@/utils/contactUtils';
+import {
+  toDialableNumber,
+  toMailtoUrl,
+  toTextableNumber,
+} from '@/utils/contactUtils';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 import { generateUuid } from '@/utils/idUtils';
 import ContactLabelPicker from '@apps/helm/components/who/ContactLabelPicker';
@@ -213,7 +217,7 @@ function ContactPointBody({
                 isGrouped
                 icon={<MessageSquare />}
                 label={HELM_COPY.contactText}
-                onClick={() => open(`sms:${toDialableNumber(point.value)}`)}
+                onClick={() => open(`sms:${toTextableNumber(point.value)}`)}
               />
             </>
           )}

@@ -90,6 +90,7 @@ function ContactListField({ kind, points, onChange }: ContactListFieldProps) {
               type='button'
               variant='tertiary'
               size='sm'
+              className='self-start !px-0'
               onClick={() =>
                 onChange(makePrimaryContactPoint(points, point.id))
               }

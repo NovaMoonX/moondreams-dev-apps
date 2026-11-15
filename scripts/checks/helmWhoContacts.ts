@@ -23,7 +23,11 @@ import {
 import type { AddContactPointCommand } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
-import { toDialableNumber, toMailtoUrl } from '../../src/utils/contactUtils.ts';
+import {
+  toDialableNumber,
+  toMailtoUrl,
+  toTextableNumber,
+} from '../../src/utils/contactUtils.ts';
 import { planContactPoints } from '../../functions/src/apps/helm/nomos/planContactPoints.ts';
 
 const point = (
@@ -388,8 +392,14 @@ assert.equal(toDialableNumber('415-555-0142 x12'), '4155550142,12');
 assert.equal(toDialableNumber('415 555 0142,7'), '4155550142,7');
 assert.equal(
   toMailtoUrl('a+b@example.com?x=1'),
-  'mailto:a%2Bb%40example.com%3Fx%3D1',
+  'mailto:a%2Bb@example.com%3Fx%3D1',
 );
+assert.equal(toMailtoUrl('a@x.com, b@x.com'), 'mailto:a@x.com,%20b@x.com');
+assert.equal(toDialableNumber('555.123.4567 ext. 9'), '5551234567,9');
+assert.equal(toDialableNumber('Box 5'), '5');
+assert.equal(toDialableNumber('Max 555-1234'), '5551234');
+assert.equal(toDialableNumber(''), '');
+assert.equal(toTextableNumber('(415) 555-0177 ext 204'), '4155550177');
 
 // A primary asked for with an id the list lost leaves it as it was, one primary kept.
 const held = [point('a', 'a@x.com', 'Home', true), point('b', 'b@x.com')];

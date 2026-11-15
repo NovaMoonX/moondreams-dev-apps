@@ -23,7 +23,7 @@ interface Target {
   pointId: string | null;
 }
 
-/** "How to reach": a person's phones then emails, each primary first with its label, one line a row; every action is in the row's sheet. */
+/** "How to reach": a person's phones then emails, each primary first, its number or address on one line and its label under it; every action is in the row's sheet. */
 function ContactRowsSection({ who }: ContactRowsSectionProps) {
   const [target, setTarget] = useState<Target | null>(null);
   const rows = [
@@ -63,17 +63,21 @@ function ContactRowsSection({ who }: ContactRowsSectionProps) {
                   aria-hidden='true'
                 />
               )}
-              <span className='text-foreground min-w-0 flex-1 truncate text-[15px]'>
-                {row.value}
-              </span>
-              <span className='text-muted-foreground max-w-24 shrink truncate text-[13px]'>
-                {row.label}
-              </span>
-              {row.isPrimary && (
-                <span className='bg-accent text-accent-foreground shrink-0 rounded-full px-2 py-0.5 text-[11px]'>
-                  {HELM_COPY.contactPrimary}
+              <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
+                <span className='text-foreground truncate text-[15px]'>
+                  {row.value}
                 </span>
-              )}
+                <span className='flex min-w-0 items-center gap-2'>
+                  <span className='text-muted-foreground min-w-0 truncate text-[13px]'>
+                    {row.label}
+                  </span>
+                  {row.isPrimary && (
+                    <span className='bg-accent text-accent-foreground shrink-0 rounded-full px-2 py-0.5 text-[11px]'>
+                      {HELM_COPY.contactPrimary}
+                    </span>
+                  )}
+                </span>
+              </span>
               <ChevronRight
                 className='text-muted-foreground size-4 shrink-0'
                 aria-hidden='true'
