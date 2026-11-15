@@ -25,7 +25,7 @@ import { describeMovedOn } from '@apps/going-once/utils/status';
 import {
   getDayOptions,
   getHoldDraft,
-  isDraftChanged,
+  isHoldChanged,
   OTHER_DAY,
   type HoldDraft,
 } from '@apps/going-once/utils/statusDrafts';
@@ -122,7 +122,7 @@ function MarkPendingView({
       : []),
   ];
   const isUnchanged =
-    isChange && !isDraftChanged(draft, getHoldDraft(item.pending));
+    isChange && !isHoldChanged(draft, getHoldDraft(item.pending));
 
   const save = async () => {
     const buyerName = draft.name.trim() === '' ? null : draft.name.trim();
@@ -254,7 +254,11 @@ function MarkPendingView({
               min={today}
               value={draft.day}
               onChange={(event) =>
-                onDraft({ ...draft, day: event.target.value })
+                onDraft({
+                  ...draft,
+                  isOtherDay: true,
+                  day: event.target.value,
+                })
               }
             />
           )}

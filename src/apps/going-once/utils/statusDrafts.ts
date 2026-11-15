@@ -114,3 +114,12 @@ export const getSoldDraft = (
 /** Whether the person has changed anything since the view opened. */
 export const isDraftChanged = <T extends object>(draft: T, initial: T) =>
   JSON.stringify(draft) !== JSON.stringify(initial);
+
+const settleHold = (draft: HoldDraft): HoldDraft => ({
+  ...draft,
+  isOtherDay: draft.day === '' ? draft.isOtherDay : false,
+});
+
+/** Whether a hold draft differs from where it started; once a day is set, whether it came from Other day doesn't count. */
+export const isHoldChanged = (draft: HoldDraft, initial: HoldDraft) =>
+  isDraftChanged(settleHold(draft), settleHold(initial));
