@@ -34,15 +34,17 @@ export function readCloseEffects(session: {
   captures: OpenCapture[];
   isFiled: (capture: OpenCapture) => boolean;
 }): CloseEffects {
-  const open = session.captures.flatMap((capture) =>
-    Object.keys(capture.questionState)
-      .filter((id) => isOpen(capture, id))
-      .map((id) => ({
-        ref: { captureId: capture.id, questionId: id },
-        isFiled: session.isFiled(capture),
-        isDismissable: isDismissable(capture.questionState[id].kind),
-      })),
-  );
+  const open = session.captures
+    .filter((capture) => capture.status === 'needsYou')
+    .flatMap((capture) =>
+      Object.keys(capture.questionState)
+        .filter((id) => isOpen(capture, id))
+        .map((id) => ({
+          ref: { captureId: capture.id, questionId: id },
+          isFiled: session.isFiled(capture),
+          isDismissable: isDismissable(capture.questionState[id].kind),
+        })),
+    );
   const left = open
     .filter((entry) => !entry.isFiled && entry.isDismissable)
     .map((entry) => entry.ref);
