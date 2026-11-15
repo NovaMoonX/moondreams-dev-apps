@@ -163,9 +163,7 @@ export const createSpeechListener = (
       { length: event.results.length },
       (_, index) => index,
     )
-      .filter(
-        (index) => index >= event.resultIndex && !event.results[index].isFinal,
-      )
+      .filter((index) => index >= event.resultIndex && !event.results[index].isFinal)
       .map((index) => event.results[index][0].transcript.trim())
       .join(' ');
     if (interim !== '') state.options?.onInterimTranscript?.(interim);
@@ -325,14 +323,12 @@ export const createSpeechListener = (
     setOptions: (options: ListenerOptions) => {
       state.options = options;
     },
-    /** `isFromTap: false` for a start no tap caused (a wake listener, a follow-up): readying the browser's voice is only for a tap. */
+    /** `isFromTap: false` for a start no tap caused (a wake listener): readying the browser's voice is only for a tap. */
     start: ({ isFromTap = true }: { isFromTap?: boolean } = {}) => {
       if (state.isWanted || getRecognitionConstructor() === null) return;
       // Starting would only flash on and off: the screen shows the way to allow the microphone instead.
       if (needsMicrophoneAsk(peekMicrophonePermission())) {
-        recordSpeechEvent(
-          'Not started: the microphone has to be allowed first',
-        );
+        recordSpeechEvent('Not started: the microphone has to be allowed first');
         halt('denied');
         return;
       }

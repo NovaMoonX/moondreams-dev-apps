@@ -53,11 +53,21 @@ export const createBrowserStt = ({
           () => undefined,
           () => undefined,
         );
+      const toWords = (text: string) => text.split(/\s+/).filter(Boolean);
+      // When a revision no longer reads as the phrase ("hey no moss"), as many words as the phrase took are dropped instead.
+      const phraseWords = adopt
+        ? toWords(adopt.heard.text).length -
+          toWords(
+            readWakePhrase(adopt.heard.text, adopt.spellings)?.rests[0] ?? '',
+          ).length
+        : 0;
       const read = () => {
         const text = [...heard.finals, heard.interim].join(' ').trim();
-        return adopt
-          ? (readWakePhrase(text, adopt.spellings)?.rests[0] ?? text)
-          : text;
+        if (!adopt) return text;
+        return (
+          readWakePhrase(text, adopt.spellings)?.rests[0] ??
+          toWords(text).slice(phraseWords).join(' ')
+        );
       };
       const hear = () => {
         if (read() === '') return;

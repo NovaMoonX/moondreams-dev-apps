@@ -236,9 +236,8 @@ export function useVoiceConversation({
     followUpId: 0,
     isFollowUp: false,
     isUnasked: false,
-    isFollowUpListen: false,
     heardText: '',
-    initialQuietMs: QUIET_MS,
+    listenId: 0,
     gate: null as { close: () => void } | null,
   });
 
@@ -356,19 +355,12 @@ export function useVoiceConversation({
     run.current.stopListening?.();
   };
 
-  const cancel = () => {
-    if (run.current.mode.phase === 'OFF') return;
-    run.current.isCancelled = true;
-    clearTimers();
-    run.current.cancelListening?.();
-  };
-
   const armQuiet = () => {
     window.clearTimeout(run.current.quietId);
-    const { heardText, initialQuietMs } = run.current;
+    const { heardText } = run.current;
     run.current.quietId = window.setTimeout(
       finish,
-      heardText === '' ? initialQuietMs : getSettleMs(heardText),
+      heardText === '' ? latest.current.quietMs : getSettleMs(heardText),
     );
   };
 
@@ -390,10 +382,8 @@ export function useVoiceConversation({
     clearTimers();
     run.current.stopListening = null;
     run.current.cancelListening = null;
-    run.current.isFollowUpListen = false;
     run.current.heardText = '';
     send({ type: 'STOP' });
-    setIsFollowUpOpen(false);
     setIsListening(false);
     setListeningRoute(null);
     setIsPreparing(false);
@@ -425,7 +415,6 @@ export function useVoiceConversation({
   };
 
   const endFollowUp = (isDeferred = false) => {
-    if (run.current.isFollowUpListen) cancel();
     if (!run.current.isFollowUp) return;
     run.current.isFollowUp = false;
     window.clearTimeout(run.current.followUpId);
@@ -516,8 +505,6 @@ export function useVoiceConversation({
       isUnasked?: boolean;
       /** A running browser listener that heard the wake phrase and carries on as this listen's. */
       adopt?: BrowserSttAdoption | null;
-      /** Listens with the browser's recognition for a follow-up: this long to start speaking, nothing said when none does. */
-      followUpMs?: number;
     } = {},
   ) => {
     if (reason !== null) return false;
@@ -528,13 +515,13 @@ export function useVoiceConversation({
     getQueue().clear();
     send({ type: 'TAP_MIC' });
     run.current.isCancelled = false;
-    const { followUpMs, seed = '', adopt = null } = options;
-    run.current.isUnasked =
-      followUpMs !== undefined || options.isUnasked === true;
-    run.current.isFollowUpListen = followUpMs !== undefined;
-    run.current.initialQuietMs = followUpMs ?? latest.current.quietMs;
+    const { seed = '', adopt = null } = options;
+    run.current.isUnasked = options.isUnasked === true;
     run.current.heardText = '';
-    if (followUpMs !== undefined) setIsFollowUpOpen(true);
+    run.current.listenId += 1;
+    const listenId = run.current.listenId;
+    // A listener stopped for an earlier listen can still report late; only this listen's own callbacks count.
+    const isCurrent = () => run.current.listenId === listenId;
     // The phrase reader gives the seed in plain lower case, and the model on the device capitalises only its first word.
     const withSeed = (text: string) =>
       seed === ''
@@ -548,11 +535,14 @@ export function useVoiceConversation({
             .filter((part) => part !== '')
             .join(' ');
     const callbacks = {
-      onPartial: (text: string) => handlePartial(withSeed(text)),
-      onFinal: (text: string) => handleFinal(withSeed(text)),
+      onPartial: (text: string) => {
+        if (isCurrent()) handlePartial(withSeed(text));
+      },
+      onFinal: (text: string) => {
+        if (isCurrent()) handleFinal(withSeed(text));
+      },
       onSpeechStart: () => {
-        run.current.isFollowUpListen = false;
-        setIsFollowUpOpen(false);
+        if (!isCurrent()) return;
         window.clearTimeout(run.current.showId);
         setIsStarting(false);
         setIsListening(true);
@@ -560,10 +550,13 @@ export function useVoiceConversation({
         setReason(null);
       },
       onListening: () => {
+        if (!isCurrent()) return;
         setIsPreparing(false);
         armQuiet();
       },
-      onError: handleError,
+      onError: (code: SttErrorCode) => {
+        if (isCurrent()) handleError(code);
+      },
       preRoll: null,
     };
     const startAdapter = (adapter: SttAdapter) => {
@@ -573,7 +566,7 @@ export function useVoiceConversation({
       setListeningRoute(adapter.route === 'cloud' ? 'cloud' : 'device');
       adapter.start(callbacks).catch((error: unknown) => {
         console.error('Voice listening did not start', error);
-        handleError('unavailable');
+        if (isCurrent()) handleError('unavailable');
       });
     };
     const startDevice = (source: FrameSource | null) => {
@@ -678,16 +671,6 @@ export function useVoiceConversation({
       return false;
     }
     closeGate();
-    const cloud = latest.current.cloudListening;
-    const pick = pickListener({
-      isOnline: navigator.onLine,
-      isCloudAllowed: cloud?.isAllowed ?? false,
-      isCloudHeld: run.current.heldDay === toLocalDateInputValue(Date.now()),
-      hasCloud: cloud !== null,
-      isOnDeviceReady: latest.current.canHearOnDevice,
-    });
-    // Only the browser's recognition can't take frames from a gate, so it listens at once instead.
-    if (pick === 'browser') return listen({ followUpMs: FOLLOW_UP_MS });
     send({ type: 'TAP_MIC' });
     run.current.isFollowUp = true;
     run.current.stopListening = () => endFollowUp();
@@ -716,6 +699,13 @@ export function useVoiceConversation({
     getQueue().clear();
     setIsThinking(false);
     endConversation();
+  };
+
+  const cancel = () => {
+    if (run.current.mode.phase === 'OFF') return;
+    run.current.isCancelled = true;
+    clearTimers();
+    run.current.cancelListening?.();
   };
 
   const speak = (
