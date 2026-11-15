@@ -13,7 +13,14 @@ import {
   isSummaryMissing,
 } from './countDay.js';
 import {
+  collectDaySummaryBatches,
+  submitDaySummaryBatch,
+  type QueuedSummary,
+} from './daySummaryBatch.js';
+import {
+  pickDaySummaryBatchProvider,
   pickDaySummaryProvider,
+  prepareDaySummary,
   writeHelmDaySummary,
   type DaySummaryResult,
 } from './writeDaySummary.js';
@@ -64,6 +71,14 @@ export async function runDaySummaries(
                 status: String(existing.get('status')),
                 attempts: Number(existing.get('attempts') ?? 0),
                 writtenAt: Number(existing.get('writtenAt') ?? 0),
+                batchId:
+                  typeof existing.get('batchId') === 'string'
+                    ? (existing.get('batchId') as string)
+                    : null,
+                batchedAt:
+                  typeof existing.get('batchedAt') === 'number'
+                    ? (existing.get('batchedAt') as number)
+                    : null,
               }
             : null,
           now,
@@ -146,9 +161,48 @@ export const runHelmDaySummaries = onSchedule(
     const firestore = getFirestore();
     const keyring = loadKeyringOrFail();
     const provider = pickDaySummaryProvider();
-    const run = await runDaySummaries(firestore, (uid, dayKey, now) =>
-      writeHelmDaySummary(firestore, provider, keyring, uid, dayKey, now),
+    const batchProvider = pickDaySummaryBatchProvider();
+    if (!batchProvider) {
+      const run = await runDaySummaries(firestore, (uid, dayKey, now) =>
+        writeHelmDaySummary(firestore, provider, keyring, uid, dayKey, now),
+      );
+      logger.info('helm.daySummary.run', run);
+      return;
+    }
+    await collectDaySummaryBatches(
+      firestore,
+      batchProvider,
+      keyring,
+      Date.now(),
     );
-    logger.info('helm.daySummary.run', run);
+    const queued: QueuedSummary[] = [];
+    const run = await runDaySummaries(firestore, async (uid, dayKey, now) => {
+      const prepared = await prepareDaySummary(
+        firestore,
+        keyring,
+        uid,
+        dayKey,
+        now,
+        true,
+      );
+      if (!('request' in prepared)) return prepared.status;
+      queued.push({
+        uid,
+        dayKey,
+        reservedAt: prepared.reservedAt,
+        request: prepared.request,
+      });
+      return 'counted';
+    });
+    const batched = await submitDaySummaryBatch(
+      firestore,
+      batchProvider,
+      queued,
+      Date.now(),
+    ).catch(() => {
+      logger.error('helm.daySummary.batchNotRecorded');
+      return 0;
+    });
+    logger.info('helm.daySummary.run', { ...run, batched });
   },
 );

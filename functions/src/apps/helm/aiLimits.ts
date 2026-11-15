@@ -74,6 +74,27 @@ export async function reserveAiCall(
   return held;
 }
 
+/** Gives back one call counted on the day of `reservedAt` that never ran or never answered, never below zero. */
+export const releaseAiCall = (
+  firestore: Firestore,
+  uid: string,
+  reservedAt: number,
+  route: AiRoute,
+) => {
+  const usageRef = firestore.doc(usagePath(uid, getDayKey(reservedAt)));
+  return firestore.runTransaction(async (transaction) => {
+    const usage = (
+      (await transaction.get(usageRef)).data() as UsageDoc | undefined
+    )?.[route];
+    if (!usage || usage.day <= 0) return;
+    transaction.set(
+      usageRef,
+      { [route]: { ...usage, day: usage.day - 1 } },
+      { merge: true },
+    );
+  });
+};
+
 export async function recordAiSpend(
   firestore: Firestore,
   now: number,

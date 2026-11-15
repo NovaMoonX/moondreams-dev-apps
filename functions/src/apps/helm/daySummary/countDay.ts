@@ -16,6 +16,8 @@ export const SUMMARY_RETRY_MS = 2 * 60 * MINUTE_MS;
 /** A turn still marked as being sorted after this long has stalled, and no longer holds the night run back. */
 export const SUMMARY_STALLED_MS = 60 * MINUTE_MS;
 export const SUMMARY_MAX_CHARS = 220;
+/** A summary waiting on its batch is left alone this long; after it, opening the day writes it live. Same value on the device. */
+export const SUMMARY_BATCH_WAIT_MS = 6 * 60 * MINUTE_MS;
 
 export interface HelmDayCounts {
   messages: number;
@@ -246,6 +248,8 @@ export interface SummaryExisting {
   status: string;
   attempts: number;
   writtenAt: number;
+  batchId: string | null;
+  batchedAt: number | null;
 }
 
 export interface SummaryDueInput {
@@ -269,12 +273,22 @@ export const getSummaryDay = (now: number, timeZone: string) => {
   };
 };
 
+/** Counted and sent to a batch recently enough that its result is still expected. */
+export const isWaitingOnBatch = (
+  existing: Pick<SummaryExisting, 'batchId' | 'batchedAt'>,
+  now: number,
+) =>
+  existing.batchId !== null &&
+  existing.batchedAt !== null &&
+  now - existing.batchedAt < SUMMARY_BATCH_WAIT_MS;
+
 export const isSummaryMissing = (
   existing: SummaryExisting | null,
   now: number,
 ) =>
   existing === null ||
   (existing.status === 'counted' &&
+    existing.batchId === null &&
     existing.attempts < SUMMARY_MAX_ATTEMPTS &&
     now - existing.writtenAt >= SUMMARY_RETRY_MS);
 
