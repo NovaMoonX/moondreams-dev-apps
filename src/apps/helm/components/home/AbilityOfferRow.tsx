@@ -47,11 +47,13 @@ function AbilityOfferRow({ offer }: AbilityOfferRowProps) {
       <p className={quietClass}>{HELM_COPY.abilityOfferOn(offer.level)}</p>
     );
   }
-  if (declines?.some(
+  if (
+    declines?.some(
       (entry) =>
         entry.level === offer.level &&
         now - entry.declinedAt < ABILITY_OFFER_WAIT_MS,
-    )) {
+    )
+  ) {
     return <p className={quietClass}>{HELM_COPY.abilityOfferLater}</p>;
   }
 

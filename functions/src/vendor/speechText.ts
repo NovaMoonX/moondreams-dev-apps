@@ -1,4 +1,6 @@
 // Generated from src/lib/speech/speechText.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
+import { soundsLike } from './soundAlike.js';
+
 /** Lower case, accents and punctuation off, apostrophes dropped and spaces single: what spoken phrases are compared as. */
 export const toPlainText = (text: string) =>
   text
@@ -36,30 +38,62 @@ const withoutFillers = (text: string) => {
   );
 };
 
+const MAX_LOOSE_WORDS = 2;
+
+/** What follows "hey" and one or two words that sound like a name, or null. */
+const readLooseRest = (text: string, looseNames: readonly string[]) => {
+  const [first, ...words] = text.split(' ');
+  if (first !== 'hey') return null;
+  const count = Array.from(
+    { length: MAX_LOOSE_WORDS },
+    (_, index) => index + 1,
+  ).find(
+    (length) =>
+      words.length >= length &&
+      looseNames.some((name) =>
+        soundsLike(words.slice(0, length).join(''), name),
+      ),
+  );
+  return count === undefined ? null : words.slice(count).join(' ');
+};
+
 /** What follows a wake phrase at the start of one guess ("" when nothing does), or null when the guess does not start with it. */
-const readRest = (guess: string, spellings: readonly string[]) => {
-  const found = withoutFillers(toPlainText(guess)).flatMap((text) =>
+const readRest = (
+  guess: string,
+  spellings: readonly string[],
+  looseNames: readonly string[],
+) => {
+  const texts = withoutFillers(toPlainText(guess));
+  const found = texts.flatMap((text) =>
     spellings
       .filter(
         (candidate) => text === candidate || text.startsWith(`${candidate} `),
       )
       .map((candidate) => text.slice(candidate.length).trim()),
   );
-  return found[0] ?? null;
+  return (
+    found[0] ??
+    texts
+      .map((text) => readLooseRest(text, looseNames))
+      .find((rest) => rest !== null) ??
+    null
+  );
 };
 
 /**
  * Looks for a wake phrase at the start of what a recognizer heard. `spellings` are the ways it writes the phrase, in
  * `toPlainText` form, kept in one constant by the caller; up to two fillers ("okay", "um") may come before it. Any guess
  * can wake, and what follows keeps its guess's rank (null where that guess lacks the phrase), so a lower-ranked guess's
- * command can be told apart from the top one. Null when no guess has the phrase.
+ * command can be told apart from the top one. When the exact spellings fail, "hey" and one or two words that sound like
+ * one of `looseNames` also wake it ("hey row an" for "Rowan"). Null when no guess has the phrase.
  */
 export const readWakePhrase = (
   alternatives: string | string[],
   spellings: readonly string[],
+  looseNames: readonly string[] = [],
 ): { rests: (string | null)[] } | null => {
   const guesses =
     typeof alternatives === 'string' ? [alternatives] : alternatives;
-  const rests = guesses.map((guess) => readRest(guess, spellings));
+  const rests = guesses.map((guess) => readRest(guess, spellings, looseNames));
   return rests.some((rest) => rest !== null) ? { rests } : null;
 };
