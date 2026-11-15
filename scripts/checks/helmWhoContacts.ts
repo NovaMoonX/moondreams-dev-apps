@@ -8,10 +8,13 @@ import {
 import {
   addContactPoint,
   changeContactPoint,
+  applyContactDiff,
   CONTACT_LABEL_CAP,
+  diffContactPoints,
   makePrimaryContactPoint,
   MAX_CONTACT_POINTS,
   pickContactPoint,
+  restoreContactPoint,
   removeContactPoint,
   toContactKey,
   toContactLabel,
@@ -20,6 +23,7 @@ import {
 import type { AddContactPointCommand } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
+import { toDialableNumber, toMailtoUrl } from '../../src/utils/contactUtils.ts';
 import { planContactPoints } from '../../functions/src/apps/helm/nomos/planContactPoints.ts';
 
 const point = (
@@ -376,5 +380,85 @@ assert.equal(
   'a value with no digits is dropped',
 );
 assert.equal(reply({ contactKind: 'fax' }).contactPoints.length, 0);
+
+// Dialling: an extension is a pause then its digits, never glued onto the number; a mailto address is escaped.
+assert.equal(toDialableNumber('(415) 555-0142'), '4155550142');
+assert.equal(toDialableNumber('+1 415 555 0142 ext 204'), '+14155550142,204');
+assert.equal(toDialableNumber('415-555-0142 x12'), '4155550142,12');
+assert.equal(toDialableNumber('415 555 0142,7'), '4155550142,7');
+assert.equal(
+  toMailtoUrl('a+b@example.com?x=1'),
+  'mailto:a%2Bb%40example.com%3Fx%3D1',
+);
+
+// A primary asked for with an id the list lost leaves it as it was, one primary kept.
+const held = [point('a', 'a@x.com', 'Home', true), point('b', 'b@x.com')];
+assert.deepEqual(makePrimaryContactPoint(held, 'gone'), held);
+
+// Undo puts a removed entry back at its old place, and a primary stays primary.
+const three = [
+  point('a', 'a@x.com', 'Home', true),
+  point('b', 'b@x.com'),
+  point('c', 'c@x.com'),
+];
+const restored = restoreContactPoint(
+  'email',
+  removeContactPoint(three, 'b'),
+  three[1] as ContactPoint,
+  1,
+);
+assert.deepEqual(
+  (restored as { points: ContactPoint[] }).points.map((entry) => entry.id),
+  ['a', 'b', 'c'],
+);
+assert.equal(
+  restoreContactPoint('email', three, point('z', 'B@X.com'), 0),
+  'duplicate',
+  'a restore is refused like an add',
+);
+
+// The edit sheet sends a difference, applied to a fresh list so another device's entry survives.
+const loaded = [point('a', 'a@x.com', 'Home', true), point('b', 'b@x.com')];
+const edited = [
+  point('a', 'a@x.com', 'Work', false),
+  point('c', 'c@x.com', 'Home', true),
+];
+const diff = diffContactPoints(loaded, edited);
+assert.deepEqual(
+  [diff.added.map((e) => e.id), diff.changed.map((e) => e.id), diff.removedIds],
+  [['c'], ['a'], ['b']],
+);
+const fresh = [...loaded, point('d', 'd@x.com')];
+const applied = applyContactDiff('email', fresh, diff) as {
+  points: ContactPoint[];
+};
+assert.deepEqual(
+  applied.points.map((entry) => entry.id),
+  ['a', 'd', 'c'],
+  'an entry added elsewhere meanwhile is kept',
+);
+assert.deepEqual(primaries(applied.points), ['c']);
+assert.equal(
+  applyContactDiff('email', [...fresh, point('e', 'c@x.com')], diff),
+  'duplicate',
+  'the duplicate check runs on the fresh list',
+);
+
+// An entry with no id is kept under a made one.
+assert.deepEqual(
+  toContactPoints('phone', [{ value: '415 555 0100', label: 'Work' }]).map(
+    (entry) => entry.id,
+  ),
+  ['legacy-phone-0'],
+);
+
+// A phone from the model needs 7 digits.
+const shortPhone = plan([said({ value: '555-01' })], {
+  name: 'Dana',
+  phone: null,
+  email: null,
+});
+assert.equal(shortPhone.whoRewrites.length, 0, 'a short number writes nothing');
+assert.equal(shortPhone.notKept.length, 1, 'a short number is a notKept line');
 
 console.log('Helm who contacts: all checks passed');

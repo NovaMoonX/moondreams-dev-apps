@@ -12,7 +12,9 @@ import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 import ContactListField from '@apps/helm/components/who/ContactListField';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
+  diffContactPoints,
   ensureOnePrimary,
+  MAX_CONTACT_POINTS,
   toContactKey,
   toContactLabel,
   type ContactKind,
@@ -121,11 +123,23 @@ function WhoEditForm({
           species: kind === 'pet' ? toNullable(species) : null,
           organizationKind:
             kind === 'organization' ? toNullable(organizationKind) : null,
-          ...kept,
+          phones: diffContactPoints(who.phones, kept.phones),
+          emails: diffContactPoints(who.emails, kept.emails),
         },
       );
       if (result === 'saved') {
         onClose();
+        return;
+      }
+      if (typeof result === 'object') {
+        setContactNote(
+          result.refusal === 'full'
+            ? HELM_COPY.contactFull(MAX_CONTACT_POINTS)
+            : result.refusal === 'duplicate'
+              ? HELM_COPY.contactDuplicate(result.kind)
+              : HELM_COPY.contactEmpty(result.kind),
+        );
+        setIsSaving(false);
         return;
       }
       addToast({

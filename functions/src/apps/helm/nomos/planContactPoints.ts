@@ -1,7 +1,11 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { isPrivateInEffect, readPrivacyFacts } from '../privacy.js';
 import type { AddContactPointCommand } from './commands.js';
-import { addContactPoint, readContactPoints } from './contactPoints.js';
+import {
+  addContactPoint,
+  readContactPoints,
+  toPhoneKey,
+} from './contactPoints.js';
 import { toPrivateMark } from './contextPeople.js';
 import type { Effect, EffectRef } from './executeCommands.js';
 import { buildContactLine } from './summaries.js';
@@ -62,6 +66,17 @@ export function planContactPoints(input: {
       };
     const settled = commands.reduce(
       (acc, command) => {
+        if (
+          command.contactKind === 'phone' &&
+          toPhoneKey(command.value) === null
+        )
+          return {
+            ...acc,
+            notKept: [
+              ...acc.notKept,
+              `That number for ${shown} looked too short`,
+            ],
+          };
         const added = addContactPoint(
           command.contactKind,
           acc[command.contactKind],

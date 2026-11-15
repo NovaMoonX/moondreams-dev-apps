@@ -12,7 +12,6 @@ import {
   type ContactKind,
 } from '@apps/helm/engine/contactPoints';
 import type { OpenWho } from '@apps/helm/types';
-import { isPrivateInEffect, readPrivacyFacts } from '@apps/helm/utils/privacy';
 
 interface ContactRowsSectionProps {
   who: OpenWho;
@@ -104,7 +103,7 @@ function ContactRowsSection({ who }: ContactRowsSectionProps) {
         kind={kind}
         point={point}
         isMissing={target?.pointId != null && point === null}
-        isPrivate={isPrivateInEffect(readPrivacyFacts(who))}
+        points={points}
       />
     </section>
   );

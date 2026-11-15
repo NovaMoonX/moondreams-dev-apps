@@ -601,8 +601,9 @@ export interface WhoSealed {
   /** "my sister", "our vet clinic". */
   relation: string | null;
   /** At most 10, exactly one primary when any; absent in a payload sealed before the lists, which `phone` then stands for. */
-  phones: ContactPoint[];
-  emails: ContactPoint[];
+  /** Absent on a payload sealed before the lists: read only through `readContactPoints`. */
+  phones?: ContactPoint[] | null;
+  emails?: ContactPoint[] | null;
   /** @deprecated Read as the primary of `phones`, labelled Other; written null. */
   phone: string | null;
   /** @deprecated Read as the primary of `emails`, labelled Other; written null. */
@@ -626,7 +627,13 @@ export interface WhoSealed {
 }
 
 /** A who after its words are opened; one that would not open keeps `isUnreadable` and an empty name. */
-export interface OpenWho extends Omit<Who, 'sealed'>, WhoSealed {
+export interface OpenWho
+  extends
+    Omit<Who, 'sealed' | 'phones' | 'emails'>,
+    Omit<WhoSealed, 'phones' | 'emails'> {
+  /** Always the lists, filled by `readContactPoints` when the who is opened. */
+  phones: ContactPoint[];
+  emails: ContactPoint[];
   id: string;
   isUnreadable: boolean;
 }

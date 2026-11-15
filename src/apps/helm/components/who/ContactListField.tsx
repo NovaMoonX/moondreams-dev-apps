@@ -6,6 +6,7 @@ import ContactLabelPicker from '@apps/helm/components/who/ContactLabelPicker';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
   MAX_CONTACT_POINTS,
+  defaultLabelFor,
   ensureOnePrimary,
   makePrimaryContactPoint,
   type ContactKind,
@@ -110,7 +111,7 @@ function ContactListField({ kind, points, onChange }: ContactListFieldProps) {
               {
                 id: generateUuid(),
                 value: '',
-                label: isPhone(kind) ? 'Mobile' : 'Home',
+                label: defaultLabelFor(kind),
                 isPrimary: points.length === 0,
               },
             ])

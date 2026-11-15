@@ -152,6 +152,7 @@ const planContacts = (input: {
         const mark = `${kind}.${input.digest(kind, key).slice(0, 16)}`;
         if (
           input.importedFields[mark] !== undefined ||
+          input.importedFields[kind] === input.digest(kind, entry.value) ||
           state.points.some((point) => toContactKey(kind, point.value) === key)
         )
           return {

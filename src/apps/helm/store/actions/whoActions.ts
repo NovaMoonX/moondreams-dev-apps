@@ -32,10 +32,13 @@ import { toComparable } from '@/utils/optionMatchUtils';
 import { MAX_ALIASES, MAX_SOUNDS_LIKE } from '@apps/helm/constants';
 import {
   addContactPoint,
+  applyContactDiff,
   changeContactPoint,
+  type ContactListDiff,
   makePrimaryContactPoint,
   readContactPoints,
   removeContactPoint,
+  restoreContactPoint,
   type ContactRefusal,
 } from '@apps/helm/engine/contactPoints';
 import { normalizeKin } from '@apps/helm/engine/kin';
@@ -68,6 +71,12 @@ const isUnavailable = (error: unknown) =>
 
 export type EditResult = 'saved' | 'offline' | 'missing' | 'unreadable';
 
+/** A list the edit sheet could not save, and which one. */
+export interface ContactEditRefusal {
+  refusal: ContactRefusal;
+  kind: ContactKind;
+}
+
 /** The fields a person edits on a who's edit sheet: its sealed words and its kind. Its other names and its family word have their own sheets. */
 export interface WhoEdit {
   name: string;
@@ -75,23 +84,23 @@ export interface WhoEdit {
   relation: string | null;
   species: string | null;
   organizationKind: string | null;
-  phones: ContactPoint[];
-  emails: ContactPoint[];
+  phones: ContactListDiff;
+  emails: ContactListDiff;
 }
 
-/** Changes a who's name, kind and contact details in one transaction that re-reads it, so notes and anything changed on another device meanwhile are kept. Needs a connection. */
+/** Changes a who's name, kind and contact details in one transaction that re-reads it, so notes and anything changed on another device meanwhile are kept. The phones and emails arrive as the difference from what the sheet opened with and are applied to the lists read inside the transaction, with the duplicate and cap checks re-run. Needs a connection. */
 export async function updateWho(
   uid: string,
   encryption: HelmEncryption,
   whoId: string,
   edit: WhoEdit,
-): Promise<EditResult> {
+): Promise<EditResult | ContactEditRefusal> {
   if (!navigator.onLine) return 'offline';
   const ref = doc(userOf(uid), 'who', whoId);
   try {
     return await runTransaction(
       db,
-      async (transaction): Promise<EditResult> => {
+      async (transaction): Promise<EditResult | ContactEditRefusal> => {
         const snapshot = await transaction.get(ref);
         if (!snapshot.exists()) return 'missing';
         const opened = await openJson<WhoSealed>(
@@ -99,11 +108,27 @@ export async function updateWho(
           encryption,
         ).catch(() => null);
         if (!opened) return 'unreadable';
-        const { kind, ...words } = edit;
+        const { kind, phones: phoneDiff, emails: emailDiff, ...words } = edit;
+        const phones = applyContactDiff(
+          'phone',
+          readContactPoints('phone', opened),
+          phoneDiff,
+        );
+        if (typeof phones === 'string')
+          return { refusal: phones, kind: 'phone' };
+        const emails = applyContactDiff(
+          'email',
+          readContactPoints('email', opened),
+          emailDiff,
+        );
+        if (typeof emails === 'string')
+          return { refusal: emails, kind: 'email' };
         const sealed = await sealJson<WhoSealed>(
           {
             ...opened,
             ...words,
+            phones: phones.points,
+            emails: emails.points,
             phone: null,
             email: null,
             ...(kind === 'person' ? {} : { kin: null }),
@@ -225,7 +250,22 @@ export type ContactChange =
   | { kind: 'change'; id: string; value: string; label: string }
   | { kind: 'remove'; id: string }
   | { kind: 'primary'; id: string }
-  | { kind: 'restore'; point: ContactPoint };
+  | { kind: 'restore'; point: ContactPoint; index: number };
+
+const applyContactChange = (
+  kind: ContactKind,
+  points: ContactPoint[],
+  change: ContactChange,
+): { points: ContactPoint[] } | ContactRefusal => {
+  if (change.kind === 'add') return addContactPoint(kind, points, change);
+  if (change.kind === 'change')
+    return changeContactPoint(kind, points, change.id, change);
+  if (change.kind === 'remove')
+    return { points: removeContactPoint(points, change.id) };
+  if (change.kind === 'primary')
+    return { points: makePrimaryContactPoint(points, change.id) };
+  return restoreContactPoint(kind, points, change.point, change.index);
+};
 
 /** Adds, changes, removes, makes primary or puts back one phone or email on the list opened inside the transaction, so an entry added elsewhere meanwhile is kept; the cap and repeats are re-checked on that fresh list, and the old single `phone` or `email` is written null. */
 export const setWhoContacts = (
@@ -237,19 +277,7 @@ export const setWhoContacts = (
 ): Promise<EditResult | ContactRefusal> =>
   rewriteWhoWords<ContactRefusal>(uid, encryption, whoId, (opened) => {
     const points = readContactPoints(kind, opened);
-    const next = ((): { points: ContactPoint[] } | ContactRefusal => {
-      if (change.kind === 'add') return addContactPoint(kind, points, change);
-      if (change.kind === 'change')
-        return changeContactPoint(kind, points, change.id, change);
-      if (change.kind === 'remove')
-        return { points: removeContactPoint(points, change.id) };
-      if (change.kind === 'primary')
-        return { points: makePrimaryContactPoint(points, change.id) };
-      const restored = addContactPoint(kind, points, change.point);
-      return typeof restored === 'string' || !change.point.isPrimary
-        ? restored
-        : { points: makePrimaryContactPoint(restored.points, change.point.id) };
-    })();
+    const next = applyContactChange(kind, points, change);
     if (typeof next === 'string') return next;
     return kind === 'phone'
       ? { phones: next.points, phone: null }

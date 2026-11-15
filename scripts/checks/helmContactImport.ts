@@ -260,6 +260,23 @@ assert.equal(
   null,
   'an address the person removed after it was brought in stays removed',
 );
+const removedLegacy = planContactUpdate({
+  contact: changedAtGoogle,
+  who: {
+    ...imported,
+    importedFields: {
+      ...imported.importedFields,
+      email: digest('email', 'priya.new@example.com'),
+    },
+  },
+  digest,
+  newId,
+});
+assert.equal(
+  removedLegacy?.contacts?.emails ?? null,
+  null,
+  'an address the old single-field mark covers and the person removed stays removed',
+);
 const editedPrimary = planContactUpdate({
   contact: changedAtGoogle,
   who: { ...imported, emails: [point('mine@example.com', 'Home')] },

@@ -19,11 +19,13 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { toDialableNumber, toMailtoUrl } from '@/utils/contactUtils';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 import { generateUuid } from '@/utils/idUtils';
 import ContactLabelPicker from '@apps/helm/components/who/ContactLabelPicker';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
+  defaultLabelFor,
   MAX_CONTACT_POINTS,
   type ContactKind,
   type ContactPoint,
@@ -42,18 +44,15 @@ interface ContactPointSheetProps {
   kind: ContactKind;
   /** The entry the sheet is for; null while adding one. */
   point: ContactPoint | null;
+  /** The kind's whole list in its stored order, for where an Undo puts an entry back. */
+  points: ContactPoint[];
   isMissing: boolean;
-  isPrivate: boolean;
 }
 
 interface BodyProps extends Omit<ContactPointSheetProps, 'isOpen'> {
   requestClose: () => void;
   onDirtyChange: (isDirty: boolean) => void;
 }
-
-const DEFAULT_LABEL = { phone: 'Mobile', email: 'Home' } as const;
-
-const toDialable = (value: string) => value.replace(/[^\d+]/g, '');
 
 const open = (url: string) => window.open(url, '_self');
 
@@ -62,8 +61,8 @@ function ContactPointBody({
   whoId,
   kind,
   point,
+  points,
   isMissing,
-  isPrivate,
   requestClose,
   onDirtyChange,
 }: BodyProps) {
@@ -71,12 +70,24 @@ function ContactPointBody({
   const { addToast } = useToast();
   const [isEditing, setIsEditing] = useState(point === null);
   const [value, setValue] = useState(point?.value ?? '');
-  const [label, setLabel] = useState(
-    point?.label ??
-      (kind === 'phone' ? DEFAULT_LABEL.phone : DEFAULT_LABEL.email),
-  );
+  const [label, setLabel] = useState(point?.label ?? defaultLabelFor(kind));
   const [note, setNote] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+
+  const toNote = (
+    result: Exclude<Awaited<ReturnType<typeof setWhoContacts>>, 'saved'>,
+  ) =>
+    result === 'offline'
+      ? HELM_COPY.editNeedsConnection
+      : result === 'missing'
+        ? HELM_COPY.editGone
+        : result === 'unreadable'
+          ? HELM_COPY.editUnreadable
+          : result === 'duplicate'
+            ? HELM_COPY.contactDuplicate(kind)
+            : result === 'full'
+              ? HELM_COPY.contactFull(MAX_CONTACT_POINTS)
+              : HELM_COPY.contactEmpty(kind);
 
   const write = async (change: ContactChange) => {
     if (!user) return false;
@@ -91,19 +102,7 @@ function ContactPointBody({
         change,
       );
       if (result === 'saved') return true;
-      setNote(
-        result === 'offline'
-          ? HELM_COPY.editNeedsConnection
-          : result === 'missing'
-            ? HELM_COPY.editGone
-            : result === 'unreadable'
-              ? HELM_COPY.editUnreadable
-              : result === 'duplicate'
-                ? HELM_COPY.contactDuplicate(kind)
-                : result === 'full'
-                  ? HELM_COPY.contactFull(MAX_CONTACT_POINTS)
-                  : HELM_COPY.contactEmpty(kind),
-      );
+      setNote(toNote(result));
     } catch (error) {
       console.error('Helm contact was not saved', error);
       setNote(HELM_COPY.editFailed);
@@ -128,9 +127,10 @@ function ContactPointBody({
 
   const copy = async () => {
     if (!point) return;
-    const page = filterPrivateOwnPage(point, () => isPrivate);
+    // check:helm-copy requires the filter in a copying file; a tap on the entry's own sheet always copies.
+    const own = filterPrivateOwnPage(point, () => false) ?? point;
     addToast({
-      title: (await copyToClipboard(page?.value ?? point.value))
+      title: (await copyToClipboard(own.value))
         ? HELM_COPY.contactCopied
         : HELM_COPY.contactCopyFailed,
       type: 'info',
@@ -147,8 +147,27 @@ function ContactPointBody({
     onClose();
   };
 
+  const undoRemove = async (removed: ContactPoint, index: number) => {
+    if (!user) return;
+    try {
+      const result = await setWhoContacts(
+        user.uid,
+        await getHelmEncryption(user.uid),
+        whoId,
+        kind,
+        { kind: 'restore', point: removed, index },
+      );
+      if (result !== 'saved')
+        addToast({ title: toNote(result), type: 'error' });
+    } catch (error) {
+      console.error('Helm contact was not restored', error);
+      addToast({ title: HELM_COPY.editFailed, type: 'error' });
+    }
+  };
+
   const remove = async () => {
     if (!point || isBusy) return;
+    const index = points.findIndex((entry) => entry.id === point.id);
     if (!(await write({ kind: 'remove', id: point.id }))) return;
     onClose();
     addToast({
@@ -156,12 +175,7 @@ function ContactPointBody({
       type: 'info',
       action: {
         label: HELM_COPY.undo,
-        onClick: () =>
-          void write({ kind: 'restore', point }).then(
-            (isBack) =>
-              isBack ||
-              addToast({ title: HELM_COPY.editFailed, type: 'error' }),
-          ),
+        onClick: () => void undoRemove(point, index),
       },
     });
   };
@@ -193,13 +207,13 @@ function ContactPointBody({
                 isGrouped
                 icon={<Phone />}
                 label={HELM_COPY.contactCall}
-                onClick={() => open(`tel:${toDialable(point.value)}`)}
+                onClick={() => open(`tel:${toDialableNumber(point.value)}`)}
               />
               <ActionRow
                 isGrouped
                 icon={<MessageSquare />}
                 label={HELM_COPY.contactText}
-                onClick={() => open(`sms:${toDialable(point.value)}`)}
+                onClick={() => open(`sms:${toDialableNumber(point.value)}`)}
               />
             </>
           )}
@@ -208,7 +222,7 @@ function ContactPointBody({
               isGrouped
               icon={<Mail />}
               label={HELM_COPY.contactWriteEmail}
-              onClick={() => open(`mailto:${point.value}`)}
+              onClick={() => open(toMailtoUrl(point.value))}
             />
           )}
           <ActionRow
@@ -292,7 +306,17 @@ function ContactPointBody({
             type='button'
             variant='tertiary'
             disabled={isBusy}
-            onClick={point ? () => setIsEditing(false) : requestClose}
+            onClick={
+              point
+                ? () => {
+                    setValue(point.value);
+                    setLabel(point.label);
+                    setNote(null);
+                    onDirtyChange(false);
+                    setIsEditing(false);
+                  }
+                : requestClose
+            }
           >
             {HELM_COPY.editCancel}
           </Button>

@@ -15,6 +15,10 @@ export const CONTACT_VALUE_CAP = 254;
 export const CONTACT_LABELS = ['Mobile', 'Home', 'Work', 'Other'] as const;
 export const OTHER_LABEL = 'Other';
 
+/** The label a new entry starts with. */
+export const defaultLabelFor = (kind: ContactKind) =>
+  kind === 'phone' ? 'Mobile' : 'Home';
+
 /** The words a payload sealed before the lists holds, and the lists that replace them. */
 export interface ContactWords {
   phones?: unknown;
@@ -78,19 +82,19 @@ export const toContactPoints = (
 ): ContactPoint[] => {
   const seen = new Set<string>();
   const points = (Array.isArray(value) ? value : []).flatMap(
-    (entry: unknown): ContactPoint[] => {
+    (entry: unknown, index): ContactPoint[] => {
       if (!isRecord(entry)) return [];
       const text =
         typeof entry.value === 'string'
           ? squash(entry.value).slice(0, CONTACT_VALUE_CAP)
           : '';
       const key = toContactKey(kind, text);
-      if (key === null || seen.has(key) || typeof entry.id !== 'string')
-        return [];
+      if (key === null || seen.has(key)) return [];
       seen.add(key);
       return [
         {
-          id: entry.id,
+          id:
+            typeof entry.id === 'string' ? entry.id : `legacy-${kind}-${index}`,
           value: text,
           label: toContactLabel(entry.label),
           isPrimary: entry.isPrimary === true,
@@ -179,8 +183,101 @@ export const changeContactPoint = (
 export const removeContactPoint = (points: ContactPoint[], id: string) =>
   ensureOnePrimary(points.filter((point) => point.id !== id));
 
+/** Makes one entry primary; an id the list no longer holds leaves it as it was. */
 export const makePrimaryContactPoint = (points: ContactPoint[], id: string) =>
-  points.map((point) => ({ ...point, isPrimary: point.id === id }));
+  points.some((point) => point.id === id)
+    ? points.map((point) => ({ ...point, isPrimary: point.id === id }))
+    : ensureOnePrimary(points);
+
+/** Puts a removed entry back at its old place, refused like an add; a primary stays primary. */
+export const restoreContactPoint = (
+  kind: ContactKind,
+  points: ContactPoint[],
+  entry: ContactPoint,
+  index: number,
+): { points: ContactPoint[] } | ContactRefusal => {
+  const added = addContactPoint(kind, points, entry);
+  if (typeof added === 'string') return added;
+  const without = added.points.filter((point) => point.id !== entry.id);
+  const at = Math.max(0, Math.min(index, without.length));
+  const restored = [
+    ...without.slice(0, at),
+    added.points.find((point) => point.id === entry.id) as ContactPoint,
+    ...without.slice(at),
+  ];
+  return {
+    points: entry.isPrimary
+      ? makePrimaryContactPoint(restored, entry.id)
+      : restored,
+  };
+};
+
+/** What the edit sheet changed in one list: its adds, changes and removals by id, and the entry the person made primary. */
+export interface ContactListDiff {
+  added: ContactPoint[];
+  changed: ContactPoint[];
+  removedIds: string[];
+  primaryId: string | null;
+}
+
+/** The difference between a list as it was loaded and as the person left it. */
+export const diffContactPoints = (
+  before: ContactPoint[],
+  after: ContactPoint[],
+): ContactListDiff => {
+  const was = new Map(before.map((point) => [point.id, point]));
+  const now = new Set(after.map((point) => point.id));
+  const primaryNow = after.find((point) => point.isPrimary)?.id ?? null;
+  return {
+    added: after.filter((point) => !was.has(point.id)),
+    changed: after.filter((point) => {
+      const old = was.get(point.id);
+      return (
+        old !== undefined &&
+        (old.value !== point.value || old.label !== point.label)
+      );
+    }),
+    removedIds: before.filter((point) => !now.has(point.id)).map((p) => p.id),
+    primaryId:
+      primaryNow !== null &&
+      primaryNow !== before.find((point) => point.isPrimary)?.id
+        ? primaryNow
+        : null,
+  };
+};
+
+/** A diff applied to a fresh list: removals, changes and adds in turn with the duplicate and cap checks re-run; an entry removed elsewhere meanwhile is not brought back by a change. */
+export const applyContactDiff = (
+  kind: ContactKind,
+  points: ContactPoint[],
+  diff: ContactListDiff,
+): { points: ContactPoint[] } | ContactRefusal => {
+  const removed = diff.removedIds.reduce(removeContactPoint, points);
+  const changed = diff.changed.reduce<
+    { points: ContactPoint[] } | ContactRefusal
+  >(
+    (result, entry) =>
+      typeof result === 'string' ||
+      !result.points.some((point) => point.id === entry.id)
+        ? result
+        : changeContactPoint(kind, result.points, entry.id, entry),
+    { points: removed },
+  );
+  const added = diff.added.reduce<{ points: ContactPoint[] } | ContactRefusal>(
+    (result, entry) =>
+      typeof result === 'string'
+        ? result
+        : addContactPoint(kind, result.points, entry),
+    changed,
+  );
+  if (typeof added === 'string') return added;
+  return {
+    points:
+      diff.primaryId === null
+        ? added.points
+        : makePrimaryContactPoint(added.points, diff.primaryId),
+  };
+};
 
 /** The entry labelled as asked ("work"), else the primary. */
 export const pickContactPoint = (

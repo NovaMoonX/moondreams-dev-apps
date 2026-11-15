@@ -2246,7 +2246,7 @@ A person or organization holds several phone numbers and emails, each labelled, 
 
 ### Issue 132: Connections between people, and a couple's status
 
-**Prerequisites:** 131
+**Prerequisites:** 131, 44 (moments, for "got engaged"), 104 (family words, for the reading from each side)
 **Target PR Size:** ~1,200 lines (L)
 **Context:** `PRODUCT.md` "How Your People Connect, In Detail" (bullets 2, 3 and 7); `.claude/rules/helm.md`; `docs/conventions/data-contracts.md`.
 ### Description
@@ -2257,7 +2257,7 @@ Any two who records can be linked: family (parent, child, sibling, grandparent, 
 - [ ] **Update:** a connection's sheet: change what they are, a couple's status and since date; "Dana and Sam got engaged" changes the status and keeps a moment on both pages.
 - [ ] **Delete:** Remove on the sheet with Undo; forgetting a who removes their connections and the confirm names how many.
 ### Success Criteria
-- [ ] `apps/helm/users/{uid}/connections/{id}` holds `whoIds` (two ids, sorted), the kind and, sealed, the relation from each side, the status and since date, `source` (`said`, `page`) and the usual `createdBy`, `executionId` and timestamps; every field `T | null`; a duplicate pair-and-kind is refused (`check:helm-connections`).
+- [ ] `apps/helm/users/{uid}/connections/{id}` holds `whoIds` (two ids, sorted), the kind and, sealed, the relation from each side, the status and since date, `source` (`said`, `page`, `confirmed`) and the usual `createdBy`, `executionId` and timestamps; every field `T | null`; a duplicate pair-and-kind is refused (`check:helm-connections`).
 - [ ] The reading from each side is one pure function (Maya is Eli's sister ⇒ Eli is Maya's brother or sibling, by Eli's known gender words or "sibling"), shared by the page, the server and the checks (`check:helm-connections`).
 - [ ] The server gets `connect`, `updateConnection` and `disconnect` commands; a turn that names two people and how they relate makes the link; one that only implies it ("Dana's husband Sam called") proposes it once and never again after No; each is undoable (`check:helm-connection-commands`).
 - [ ] The people context lists each person's connections so "Who is Eli's wife?" and "How do I know Priya?" are answered; a private who's connections follow Private Things (`check:helm-private`).
@@ -2271,7 +2271,7 @@ Any two who records can be linked: family (parent, child, sibling, grandparent, 
 **Target PR Size:** ~700 lines (L)
 **Context:** `PRODUCT.md` "How Your People Connect, In Detail" (bullet 4); `engine/kinKinds.ts`.
 ### Description
-From the owner's own family words (`kin`) and the connections set, a pure engine works out the family links that follow (siblings through a shared parent or both being the owner's siblings, aunts and uncles, cousins, grandparents, in-laws, step-parents) and shows them as "Figured out" on the pages and the map. One tap confirms one (it becomes a stored connection with `source: 'confirmed'`) or corrects it (stored as a refusal that is never worked out again). Inferred links are computed when read, never stored.
+From the owner's own family words (`kin`) and the connections set, a pure engine works out the family links that follow (siblings through a shared parent or both being the owner's siblings, aunts and uncles, cousins, grandparents, in-laws, step-parents) and shows them as "Figured out" on the pages and the map. One tap confirms one (it becomes a stored connection with `source: 'confirmed'`) or corrects it (stored as a refusal in the same `connections` collection, `source: 'refused'` with the pair and the relation it refused, so it is never worked out again and needs no new rule). Inferred links are computed when read, never stored.
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** Confirm on a figured-out link makes it a connection.
 - [ ] **Read:** figured-out links on each page, quieter, with "Figured out"; the assistant says when an answer rests on one.
@@ -2279,7 +2279,7 @@ From the owner's own family words (`kin`) and the connections set, a pure engine
 - [ ] **Delete:** Undo on Confirm or Not right.
 ### Success Criteria
 - [ ] `inferFamilyLinks(selfId, people, connections, refusals)` is pure, in the engine, vendored to the server, and covers: two of the owner's siblings are siblings; a parent's sibling is an aunt or uncle and their child a cousin; a parent's parent a grandparent; a sibling's spouse an in-law; a parent's spouse who isn't a parent a step-parent; nothing for friends or work (`check:helm-family-links`).
-- [ ] A stored connection or a refusal always beats an inferred one; a refusal is kept sealed with the pair and relation and never inferred again (`check:helm-family-links`).
+- [ ] A stored connection or a refusal always beats an inferred one; a refusal is a `connections` record with `source: 'refused'`, kept sealed with the pair and relation, never shown as a connection and never inferred again; "Not right" with the right relation writes the right connection and the refusal together in one batch (`check:helm-family-links`).
 - [ ] Each inferred link carries the chain it came from, shown on its sheet ("Because Maya and Eli are both your siblings"); the server answers with the same function and says the link was worked out.
 - [ ] It runs in under 50 ms on the scale seed (200 people, 400 connections).
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
@@ -2302,7 +2302,8 @@ People → Map draws the owner's circle as a network with Cytoscape.js (MIT), lo
 - [ ] Line styles: family solid, couple double, friends dotted, work dashed, figured out lighter, past couples faint; a legend sheet explains them; colours are the theme's tokens in light and dark.
 - [ ] Touch: pinch to zoom, drag to pan, tap a person for their card; a drag that starts on a person moves only that person; checked in the emulated phone at 320 and 390.
 - [ ] Pets and organizations show only when linked; Passing people never show; private people show with initials only when the screen is masked.
-- [ ] Positions dragged are kept in localStorage per uid and cleared by Reset layout and by "Remove from this device".
+- [ ] Positions dragged are kept in localStorage per uid and cleared by Reset layout and by "Remove from this device" (its list of what it clears names them).
+- [ ] Masking on the map is covered by `check:helm-private`: a private person's name and photo never reach the map's nodes or card while the screen is masked.
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
 - [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 

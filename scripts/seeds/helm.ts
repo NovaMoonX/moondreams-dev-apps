@@ -1444,8 +1444,6 @@ export const wordsOf = (
   soundsLike: null,
   refusedAliases: null,
   relation: null,
-  phones: [],
-  emails: [],
   phone: null,
   email: null,
   notes: null,
@@ -4145,6 +4143,7 @@ async function buildPeople(input: {
         await seal(
           wordsOf('Sam Rivera', {
             relation: 'work friend',
+            phone: '(206) 555-0147',
             email: 'sam.rivera@example.com',
             home: leavenworth,
             homeSource: 'said',
@@ -4164,7 +4163,27 @@ async function buildPeople(input: {
           lastMentionedAt: now - 3 * DAY_MS,
         },
         madeAt,
-        await seal(wordsOf('Dana', { aliases: ['Dani'], kin: { kind: 'sister', order: 'younger' }, soundsLike: ['Donna'] })),
+        await seal(
+          wordsOf('Dana', {
+            aliases: ['Dani'],
+            kin: { kind: 'sister', order: 'younger' },
+            soundsLike: ['Donna'],
+            phones: [
+              { id: 'seed-phone-dana-1', value: '(415) 555-0142', label: 'Mobile', isPrimary: true },
+              { id: 'seed-phone-dana-2', value: '(415) 555-0177 ext 204', label: 'Work', isPrimary: false },
+              { id: 'seed-phone-dana-3', value: '+1 206 555 0111', label: 'Flower shop counter', isPrimary: false },
+            ],
+            emails: [
+              { id: 'seed-email-dana-1', value: 'dana@example.com', label: 'Home', isPrimary: true },
+              {
+                id: 'seed-email-dana-2',
+                value: 'dana.orders.and.consultations@bloomandbranchfloraldesign.example.com',
+                label: 'Work',
+                isPrimary: false,
+              },
+            ],
+          }),
+        ),
       ),
     },
     {

@@ -81,7 +81,7 @@ export const toKinText = (kin: WhoKin) =>
     .join(' ');
 
 /** The most labelled numbers or addresses of one kind a person's context line carries, the primary always first. */
-export const MAX_CONTEXT_CONTACTS = 4;
+export const MAX_CONTEXT_CONTACTS = 2;
 
 const toContextContacts = (points: ContactPoint[]) =>
   sortPrimaryFirst(points)
