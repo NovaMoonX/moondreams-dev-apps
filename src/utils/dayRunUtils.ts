@@ -37,7 +37,7 @@ export const toDayRuns = (days: readonly number[]): number[][] =>
 
 const formatDay = (day: number) => {
   const date = new Date(day);
-  return `${monthFormatter.format(date)} ${date.getUTCDate()}`;
+  return `${monthFormatter.format(date)}\u00a0${date.getUTCDate()}`;
 };
 
 /** One run of days in a few characters: "Dec 2", "Nov 28–30", "Nov 30–Dec 2". */

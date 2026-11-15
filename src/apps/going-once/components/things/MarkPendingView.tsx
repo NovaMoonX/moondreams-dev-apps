@@ -87,9 +87,9 @@ function MarkPendingView({
   const dayOptions = [...listedDays, { value: OTHER_DAY, label: 'Other day' }];
   const today = toLocalDateInputValue(now);
   const isOtherDay =
-    draft.isOtherDay ||
-    (draft.day !== '' &&
-      !listedDays.some((option) => option.value === draft.day));
+    draft.day === ''
+      ? draft.isOtherDay
+      : !listedDays.some((option) => option.value === draft.day);
   const pickedDay = isOtherDay ? OTHER_DAY : draft.day;
   const lockedNote =
     refusal ??
@@ -122,7 +122,7 @@ function MarkPendingView({
       : []),
   ];
   const isUnchanged =
-    isChange && !isDraftChanged(draft, getHoldDraft(item.pending, now));
+    isChange && !isDraftChanged(draft, getHoldDraft(item.pending));
 
   const save = async () => {
     const buyerName = draft.name.trim() === '' ? null : draft.name.trim();
@@ -167,6 +167,7 @@ function MarkPendingView({
         .length > 0;
     const isDayKept =
       draft.day === '' ||
+      isOtherDay ||
       listDays(inquiry).some((option) => option.value === draft.day);
     onDraft({
       ...draft,
@@ -179,7 +180,7 @@ function MarkPendingView({
 
   const pickDay = (value: string) => {
     if (value === OTHER_DAY) {
-      onDraft({ ...draft, isOtherDay: true });
+      onDraft({ ...draft, isOtherDay: true, day: isOtherDay ? draft.day : '' });
       return;
     }
     onDraft({ ...draft, isOtherDay: false, day: value });
@@ -226,6 +227,13 @@ function MarkPendingView({
           }
         />
       </div>
+      {heldFor?.needsAnotherDay === true && (
+        <p className='text-sm text-pretty break-words'>
+          {anotherDayNote === null || anotherDayNote === ''
+            ? 'None of your pickup days work for them.'
+            : `None of your pickup days work for them. They could come: ${anotherDayNote}`}
+        </p>
+      )}
       {draft.isDayShown ? (
         <div className='space-y-3'>
           <p className='text-muted-foreground text-sm'>
@@ -233,13 +241,6 @@ function MarkPendingView({
               ? `Pickup day (optional): the days ${heldFor?.name ?? 'they'} said work`
               : 'Pickup day (optional)'}
           </p>
-          {heldFor?.needsAnotherDay === true && (
-            <p className='text-sm text-pretty break-words'>
-              {anotherDayNote === null || anotherDayNote === ''
-                ? 'None of your pickup days work for them.'
-                : `None of your pickup days work for them. They could come: ${anotherDayNote}`}
-            </p>
-          )}
           <PillGroup
             label='Pickup day'
             options={dayOptions}

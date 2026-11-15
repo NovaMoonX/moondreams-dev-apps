@@ -52,7 +52,7 @@ function DaysPicker({ days, onChange, minDay, maxDays }: DaysPickerProps) {
   const add = (more: number[]) => {
     const next = normalizeDays([...days, ...more]);
     setIsFull(next.length > maxDays);
-    onChange(next.slice(0, maxDays));
+    if (next.length <= maxDays) onChange(next);
   };
 
   const tap = (date: Date) => {

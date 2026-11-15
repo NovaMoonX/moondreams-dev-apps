@@ -17,6 +17,16 @@ const PILL_HIT =
 const formatChip = (day: number) =>
   `${chipFormatter.format(new Date(day))} ${new Date(day).getUTCDate()}`;
 
+const singleChipFormatter = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+const formatSingleChip = (day: number) =>
+  singleChipFormatter.format(new Date(day));
+
 interface PickupDaysQuestionProps {
   /** The sale's days that haven't passed. */
   openDays: number[];
@@ -30,7 +40,15 @@ function PickupDaysQuestion({
   answer,
   onChange,
 }: PickupDaysQuestionProps) {
-  const runs = toDayRuns(openDays);
+  // Neighbouring one-day runs share a row, so lone days don't each take a line.
+  const groups = toDayRuns(openDays).reduce<
+    { isStretch: boolean; days: number[] }[]
+  >((kept, run) => {
+    const last = kept.at(-1);
+    if (run.length === 1 && last !== undefined && !last.isStretch)
+      return [...kept.slice(0, -1), { ...last, days: [...last.days, ...run] }];
+    return [...kept, { isStretch: run.length > 1, days: run }];
+  }, []);
   const picked = new Set(answer.days);
   const isAll = openDays.every((day) => picked.has(day));
   const pickDays = (days: number[]) =>
@@ -71,13 +89,15 @@ function PickupDaysQuestion({
           All of them
         </Pill>
       )}
-      {runs.map((run) => (
+      {groups.map(({ isStretch, days: run }) => (
         <div key={run[0]} className='space-y-2'>
-          <p className='text-muted-foreground text-xs font-medium'>
-            {formatDayRun(run)}
-          </p>
+          {isStretch && (
+            <p className='text-muted-foreground text-xs font-medium'>
+              {formatDayRun(run)}
+            </p>
+          )}
           <div className='flex flex-wrap gap-x-2 gap-y-3'>
-            {run.length > 1 && (
+            {isStretch && (
               <Pill
                 className={PILL_HIT}
                 isSelected={run.every((day) => picked.has(day))}
@@ -95,7 +115,7 @@ function PickupDaysQuestion({
                 ariaLabel={formatDayRun([day])}
                 onClick={() => toggleDay(day)}
               >
-                {formatChip(day)}
+                {isStretch ? formatChip(day) : formatSingleChip(day)}
               </Pill>
             ))}
           </div>

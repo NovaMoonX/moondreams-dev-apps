@@ -77,27 +77,23 @@ export const getDayOptions = (
 };
 
 /** The hold as it stands (empty for a new one), so a changed hold opens with its name and day filled in. */
-export function getHoldDraft(
-  pending: ItemPendingRecord | null,
-  now: number,
-): HoldDraft {
+export function getHoldDraft(pending: ItemPendingRecord | null): HoldDraft {
   const day = pending?.pickupOn ? toDateInputValue(pending.pickupOn) : '';
   return {
     inquiryId: pending?.inquiryId ?? null,
     name: pending?.buyerName ?? '',
     isDayShown: day !== '',
     day,
-    isOtherDay:
-      day !== '' && !getDayOptions(now).some((option) => option.value === day),
+    isOtherDay: false,
   };
 }
 
-/** Mark pending opens empty, or with the name of the inquiry it is held for and, when that buyer named days, its pickup day open on them. */
+/** Mark pending opens empty, or with the name of the inquiry it is held for and, when that buyer named days still ahead, the pickup day question open. */
 export const getHoldStart = (
   inquiry: Pick<Inquiry, 'id' | 'name' | 'pickupDays'> | null,
   now: number,
 ): HoldDraft => ({
-  ...getHoldDraft(null, now),
+  ...getHoldDraft(null),
   inquiryId: inquiry?.name ? inquiry.id : null,
   name: inquiry?.name?.trim().slice(0, MAX_BUYER_NAME_LENGTH) ?? '',
   isDayShown:
