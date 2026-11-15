@@ -30,7 +30,7 @@ const callables = exported
   .map(({ name }) => name);
 
 // An HTTPS endpoint called with no Google identity. Each one checks its caller itself (a provider's signature, a signed-in token) and answers 401 to anything else.
-const PUBLIC_WEBHOOKS = ['runwayPlaidWebhook', 'streamSpeech'];
+const PUBLIC_WEBHOOKS = ['runwayPlaidWebhook', 'streamSpeech', 'helmMcp'];
 const webhooks = PUBLIC_WEBHOOKS.map((name) => {
   const source = exported.find((entry) => entry.name === name);
   const isRequest =

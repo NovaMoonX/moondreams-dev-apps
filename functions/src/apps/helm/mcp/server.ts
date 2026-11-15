@@ -28,13 +28,41 @@ const fitResult = (result: unknown, cap: number): string => {
   return fit(list.length - 1);
 };
 
-/** A server and its client, joined in process for one call: Anthropic sees the tool definitions and results, never an endpoint or a credential. */
-export async function createHelmMcpServer(scope: HelmToolScope) {
-  const server = new McpServer({ name: 'helm', version: '1.0.0' });
-  buildHelmTools(scope).forEach((tool) => {
+/** The tools an audience is offered, plus any named in extraTools. */
+export const offeredHelmTools = (
+  tools: ReturnType<typeof buildHelmTools>,
+  audience: 'nomos' | 'external',
+  extraTools: string[] = [],
+) =>
+  tools.filter(
+    (tool) =>
+      tool.audience === 'both' ||
+      tool.audience === audience ||
+      extraTools.includes(tool.name),
+  );
+
+/** Registers the tools an audience is offered; every one only reads and none reaches beyond the person's own records. */
+export function registerHelmTools(
+  server: McpServer,
+  tools: ReturnType<typeof buildHelmTools>,
+  audience: 'nomos' | 'external',
+  extraTools: string[] = [],
+) {
+  offeredHelmTools(tools, audience, extraTools).forEach((tool) => {
     server.registerTool(
       tool.name,
-      { description: tool.description, inputSchema: tool.shape },
+      {
+        description:
+          audience === 'external'
+            ? (tool.externalDescription ?? tool.description)
+            : tool.description,
+        inputSchema: tool.shape,
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          openWorldHint: false,
+        },
+      },
       async (input: Record<string, unknown>) => {
         const result = await tool.run(input as never);
         return {
@@ -48,6 +76,12 @@ export async function createHelmMcpServer(scope: HelmToolScope) {
       },
     );
   });
+}
+
+/** A server and its client, joined in process for one call: Anthropic sees the tool definitions and results, never an endpoint or a credential. */
+export async function createHelmMcpServer(scope: HelmToolScope) {
+  const server = new McpServer({ name: 'helm', version: '1.0.0' });
+  registerHelmTools(server, buildHelmTools(scope), 'nomos');
   const client = new Client({ name: 'helm-nomos', version: '1.0.0' });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(serverSide), client.connect(clientSide)]);

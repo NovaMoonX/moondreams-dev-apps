@@ -1036,9 +1036,7 @@ const isQuoteOfDirection = (quote: string, isPrivate: boolean) => {
     /\bpublic\b/.test(quote) ||
     (/\bprivate\b/.test(quote) && RELEASE_PHRASE.test(quote)) ||
     /\bunmark\b/.test(quote);
-  return isPrivate
-    ? /\bprivate\b/.test(quote) && !isRelease
-    : isRelease;
+  return isPrivate ? /\bprivate\b/.test(quote) && !isRelease : isRelease;
 };
 
 /** Changing whether a thing is private is kept only when the person's own words, quoted, say so. */
@@ -1614,16 +1612,13 @@ const readWhereabouts = (
   now: number | undefined,
 ): SetWhereaboutsCommand[] => {
   const words = ` ${toComparable(captureText)} `;
-  const today =
-    now === undefined ? null : getDayIn(now, toKnownZone(timeZone));
+  const today = now === undefined ? null : getDayIn(now, toKnownZone(timeZone));
   const isSaid = (cityName: string) =>
     words.includes(` ${toComparable(cityName.split(',')[0] ?? '')} `);
   const read = items
     .filter((item) => item.kind === 'setWhereabouts')
     .flatMap((item): SetWhereaboutsCommand[] => {
-      const change = WHEREABOUTS_CHANGES.find(
-        (entry) => entry === item.change,
-      );
+      const change = WHEREABOUTS_CHANGES.find((entry) => entry === item.change);
       const quote = toText(item.quote, FACT_QUOTE_CAP);
       const alias = typeof item.whoAlias === 'string' ? item.whoAlias : '';
       const isSelf = alias.toLowerCase() === 'me';
@@ -1683,7 +1678,10 @@ const readWhereabouts = (
     });
   return [
     ...new Map(
-      read.map((command) => [`${command.whoId ?? 'me'}:${command.change}`, command]),
+      read.map((command) => [
+        `${command.whoId ?? 'me'}:${command.change}`,
+        command,
+      ]),
     ).values(),
   ].slice(0, 4);
 };

@@ -704,7 +704,7 @@ const resolveInput = (
         askedAt: 4000,
         answeredAt: null,
         skippedAt: null,
-        leftAt: null,
+        dismissedAt: null,
       },
     },
   },

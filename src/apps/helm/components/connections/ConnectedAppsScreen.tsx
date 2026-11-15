@@ -47,7 +47,7 @@ const googleLogo = (
   <span
     className={join(LOGO, 'bg-muted flex shrink-0 items-center justify-center')}
   >
-    <GoogleCalendarMark className='size-6' />
+    <GoogleCalendarMark className='size-8' />
   </span>
 );
 

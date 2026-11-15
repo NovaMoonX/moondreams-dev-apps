@@ -14,9 +14,13 @@ export function useTodayKey() {
   const profile = useAppSelector((state) => state.helm.profile);
   const awayKey = useAppSelector((state) => toAwayKey(state.helm.who.items));
   const homeZone = profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
-  const zone = readTodayZone(now, {
-    timeZone: homeZone,
-    zoneSpans: profile?.zoneSpans ?? [],
-  }, fromAwayKey(awayKey));
+  const zone = readTodayZone(
+    now,
+    {
+      timeZone: homeZone,
+      zoneSpans: profile?.zoneSpans ?? [],
+    },
+    fromAwayKey(awayKey),
+  );
   return toDayKey(now, zone);
 }

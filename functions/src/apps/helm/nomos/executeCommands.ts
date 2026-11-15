@@ -2457,7 +2457,7 @@ export function planWrites(input: PlanInput): WritePlan {
               askedAt: now,
               answeredAt: null,
               skippedAt: null,
-              leftAt: null,
+              dismissedAt: null,
             },
             sealed: buildWhichIsTrueQuestion({ older: before, newer }),
             spoken: buildSpokenWhichIsTrue(before.statement, newer.statement),
@@ -2473,7 +2473,7 @@ export function planWrites(input: PlanInput): WritePlan {
         askedAt: now,
         answeredAt: null,
         skippedAt: null,
-        leftAt: null,
+        dismissedAt: null,
       },
       sealed,
       spoken,
@@ -2519,7 +2519,7 @@ export function planWrites(input: PlanInput): WritePlan {
               askedAt: now,
               answeredAt: null,
               skippedAt: null,
-              leftAt: null,
+              dismissedAt: null,
             },
             sealed: buildTopicQuestion({ noteId, title, candidates }),
             spoken: buildSpokenWhichTopic(
@@ -2734,7 +2734,7 @@ function buildPickQuestions(input: {
       askedAt: now,
       answeredAt: null,
       skippedAt: null,
-      leftAt: null,
+      dismissedAt: null,
     },
     sealed,
     spoken,
@@ -2962,7 +2962,7 @@ export function planAsks(input: {
           askedAt: input.now,
           answeredAt: null,
           skippedAt: null,
-          leftAt: null,
+          dismissedAt: null,
         },
         sealed,
         spoken: buildSpokenQuestion(sealed),
@@ -3173,8 +3173,7 @@ export interface QuestionStateEntry {
   askedAt: number;
   answeredAt: number | null;
   skippedAt: number | null;
-  /** Set when a closing phrase dropped the question; null while it stands. */
-  leftAt: number | null;
+  dismissedAt: number | null;
 }
 
 interface SettleInput {
@@ -3234,7 +3233,7 @@ const asked = (kind: CodeQuestionKind, id: string, now: number) => ({
       askedAt: now,
       answeredAt: null,
       skippedAt: null,
-      leftAt: null,
+      dismissedAt: null,
     },
   },
   sealed: { [id]: buildCodeQuestion(kind) },
