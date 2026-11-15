@@ -12,6 +12,7 @@ import {
 } from '@apps/going-once/constants';
 import type { AppDispatch } from '@/store';
 import { normalizePaymentMethods } from '@apps/going-once/utils/paymentMethods';
+import { normalizePickupDays } from '@apps/going-once/utils/pickupDays';
 import { removeSale, upsertSale } from '@apps/going-once/store';
 import type {
   FinishAction,
@@ -50,6 +51,7 @@ export function startSale(
     buyerNote:
       toTrimmedOrNull(buyerNote)?.slice(0, MAX_BUYER_NOTE_LENGTH) ?? null,
     paymentMethods: normalizePaymentMethods(paymentMethods),
+    pickupDays: [],
     currency: 'USD',
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
     ownerUid: uid,
@@ -102,6 +104,17 @@ export function updateSalePaymentMethods(
 ): Promise<void> {
   return updateDoc(doc(db, 'apps', 'going-once', 'sales', saleId), {
     paymentMethods: normalizePaymentMethods(paymentMethods),
+    lastEditedAt: Date.now(),
+  });
+}
+
+/** Writes the sale's pickup days and when they were edited, and nothing else. */
+export function updateSalePickupDays(
+  saleId: string,
+  pickupDays: number[],
+): Promise<void> {
+  return updateDoc(doc(db, 'apps', 'going-once', 'sales', saleId), {
+    pickupDays: normalizePickupDays(pickupDays),
     lastEditedAt: Date.now(),
   });
 }

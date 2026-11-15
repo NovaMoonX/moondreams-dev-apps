@@ -17,6 +17,9 @@ import {
   isListable,
   isRecord,
   isSafeId,
+  SALE_PAGE_LIMITS,
+  toOpenPickupDays,
+  toPickupDays,
 } from './salePageView.js';
 
 export type SaleInterestResult =
@@ -24,13 +27,13 @@ export type SaleInterestResult =
   | {
       status: 'not_found' | 'not_available' | 'busy' | 'full' | 'slow_down';
     }
-  | { status: 'invalid'; field: 'name' | 'contact' | 'message' };
+  | { status: 'invalid'; field: 'name' | 'contact' | 'message' | 'days' };
 
 const refuse = (
   status: 'not_found' | 'not_available' | 'busy' | 'full' | 'slow_down',
 ): SaleInterestResult => ({ status });
 const invalidField = (
-  field: 'name' | 'contact' | 'message',
+  field: 'name' | 'contact' | 'message' | 'days',
 ): SaleInterestResult => ({ status: 'invalid', field });
 
 const MAX_TRACKED_SENDERS = 5000;
@@ -61,12 +64,45 @@ const toText = (value: unknown, max: number) =>
     ? value.trim().replace(/\s+/g, ' ').slice(0, max)
     : null;
 
+interface AskedDays {
+  pickupDays: unknown;
+  needsAnotherDay: unknown;
+  anotherDayNote: unknown;
+}
+
+/** What a buyer's answer to the sale's open days is filed as, or null when a sale that asks days got none. */
+function readPickupAnswer(openDays: number[], asked: AskedDays) {
+  if (openDays.length === 0) {
+    return { pickupDays: null, needsAnotherDay: false, anotherDayNote: null };
+  }
+
+  if (asked.needsAnotherDay === true) {
+    const note = toText(
+      asked.anotherDayNote,
+      SALE_PAGE_LIMITS.MAX_ANOTHER_DAY_NOTE_LENGTH,
+    );
+    return {
+      pickupDays: [],
+      needsAnotherDay: true,
+      anotherDayNote: note === '' ? null : note,
+    };
+  }
+
+  const chosen = toPickupDays(asked.pickupDays).filter((day) =>
+    openDays.includes(day),
+  );
+  return chosen.length === 0
+    ? null
+    : { pickupDays: chosen, needsAnotherDay: false, anotherDayNote: null };
+}
+
 async function send(
   linkId: string,
   itemId: string,
   name: string,
   contact: NonNullable<ReturnType<typeof readContact>>,
   message: string | null,
+  asked: AskedDays,
   now: number,
 ): Promise<SaleInterestResult> {
   const link = await linkRef(linkId).get();
@@ -82,6 +118,11 @@ async function send(
     sale.get('status') === FINISHED_SALE_STATUS
   ) {
     return refuse('not_found');
+  }
+
+  const answer = readPickupAnswer(toOpenPickupDays(sale.data(), now), asked);
+  if (answer === null) {
+    return invalidField('days');
   }
 
   const firestore = getFirestore();
@@ -121,7 +162,7 @@ async function send(
         return false;
       }
       if (now - lastSentAt < INQUIRY_LIMITS.RESEND_GAP_MS) {
-        transaction.update(inquiry, { name, message });
+        transaction.update(inquiry, { name, message, ...answer });
         return false;
       }
       transaction.update(inquiry, {
@@ -136,6 +177,7 @@ async function send(
         sendCount: sendCount + 1,
         lastSentAt: now,
         contactClearedAt: null,
+        ...answer,
       });
       return false;
     }
@@ -163,6 +205,7 @@ async function send(
       createdAt: now,
       lastSentAt: now,
       contactClearedAt: null,
+      ...answer,
     });
     return false;
   });
@@ -228,6 +271,11 @@ export const submitSaleInterest = onCall(
       name,
       contact,
       message === '' ? null : message,
+      {
+        pickupDays: data.pickupDays,
+        needsAnotherDay: data.needsAnotherDay,
+        anotherDayNote: data.anotherDayNote,
+      },
       now,
     );
   },

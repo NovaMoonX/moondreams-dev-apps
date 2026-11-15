@@ -260,33 +260,15 @@ export function useHelmVoice() {
     });
   }
 
-  /** The phrase was heard: it starts what a Talk tap starts, from the page in front, or sends the words that came with it. */
-  function wakeUp(rest: string | null, heardBy: { sttProvider: string }) {
+  /** The phrase was heard: readies the page in front as a Talk tap does and says whether a turn may start; the voice hook then keeps listening to the same breath. */
+  function wakeUp() {
     if (!voice.isAvailable) return false;
-    endDictation();
     const page = isHomeView
       ? null
       : (selectTopScreen(store.getState())?.context ?? null);
-    const isStarted =
-      rest === null
-        ? talk(page) === 'started'
-        : sendHeard(rest, page, heardBy.sttProvider);
-    if (isStarted && page !== null && !isAskRequested) void openAsk();
-    return isStarted;
-  }
-
-  function sendHeard(
-    text: string,
-    page: ScreenContext | null,
-    sttProvider: string,
-  ) {
-    screen.current = page;
-    setNotice(null);
-    setHasNoticeDoor(false);
-    setNeedsMicrophone(false);
-    setShowsPhoneLine(false);
-    interruptedCaptureId.current = null;
-    return voice.submit(text, sttProvider);
+    prepareListening(page);
+    if (page !== null && !isAskRequested) void openAsk();
+    return true;
   }
 
   async function handleUtterance(text: string, sttProvider: string) {
@@ -754,7 +736,7 @@ export function useHelmVoice() {
     return startListening(page);
   };
 
-  function startListening(page: ScreenContext | null) {
+  function prepareListening(page: ScreenContext | null) {
     // A listen that ended on an error never says so, so each new one starts as a turn.
     endDictation();
     screen.current = page;
@@ -763,6 +745,10 @@ export function useHelmVoice() {
     setNeedsMicrophone(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
+  }
+
+  function startListening(page: ScreenContext | null) {
+    prepareListening(page);
     voice.listen();
     return 'started' as const;
   }

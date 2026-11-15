@@ -406,12 +406,12 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
               onDevice.isOn
                 ? HELM_COPY.voiceWakeOffline(name)
                 : canListenForPhrase
-                  ? HELM_COPY.voiceWake(name)
+                  ? HELM_COPY.voiceWake(name, onDevice.block === null)
                   : HELM_COPY.voiceWakeLocked
             }
             alternatives={[
               HELM_COPY.voiceWakeOffline(name),
-              HELM_COPY.voiceWake(name),
+              HELM_COPY.voiceWake(name, true),
               HELM_COPY.voiceWakeLocked,
             ]}
             checked={canListenForPhrase && isWakeWordOn}

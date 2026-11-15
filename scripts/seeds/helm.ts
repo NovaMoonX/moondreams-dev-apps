@@ -1428,6 +1428,8 @@ async function buildPlanDays(input: {
       attempts: 1,
       writtenAt: at(yesterdayKey, '23:59') + 5 * MINUTE_MS,
       staleAt: null,
+      batchId: null,
+      batchedAt: null,
       sealed: await sealJson<HelmDaySummarySealed>(summarySealed, encryption),
     },
   };

@@ -1232,6 +1232,9 @@ export interface HelmDaySummary {
   writtenAt: number;
   /** Set when something from that day is undone; the next open rewrites it. */
   staleAt: number | null;
+  /** The batch this `counted` summary is waiting on; the server writes it, the device only reads it. */
+  batchId: string | null;
+  batchedAt: number | null;
   sealed: Sealed | null;
 }
 

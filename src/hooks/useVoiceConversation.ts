@@ -32,6 +32,7 @@ import { BARGE_IN_GATE, openSpeechGate } from '@/lib/speech/voice/bargeIn';
 import {
   canUseBrowserStt,
   createBrowserStt,
+  type BrowserSttAdoption,
 } from '@/lib/speech/voice/browserStt';
 import { createDeepgramStt } from '@/lib/speech/voice/deepgramStream';
 import { createCloudTts } from '@/lib/speech/voice/cloudTts';
@@ -87,7 +88,7 @@ interface VoiceConversationOptions {
   isNaturalVoiceReady?: boolean;
   /** The opt-in recognition model is downloaded (`useOnDeviceRecognition().isOn`): it listens whenever the cloud doesn't, waits for the wake phrase and hears a barge-in, all on the device. */
   isOnDeviceReady?: boolean;
-  /** Silence this long ends the utterance. */
+  /** Silence this long before anything is heard ends the listen; once words are heard, the turn ends when they stop changing (`getSettleMs`). */
   quietMs?: number;
   /** The cloud turned this device away for the rest of the local day; called once per day. */
   onCloudHeld?: (reason: CloudHeldReason) => void;
@@ -104,13 +105,13 @@ interface VoiceConversationOptions {
   conversationIdleMs?: number;
   /** The person started talking over a line that was playing; the line is already stopped and listening is starting. */
   onBargeIn?: () => void;
-  /** Waits for a phrase on the device (the downloaded model, else the browser's own recognition) while nothing else is going on and the page is visible; Null never does. `onWake` gets the words said after the phrase in the same breath, null when there were none, with which listener heard them, and says whether it started something. */
+  /** Waits for a phrase on the device (the downloaded model, else the browser's own recognition) while nothing else is going on and the page is visible; Null never does. `onWake` says whether the phrase may start a turn (the app readies its screen); the same listener, and the words said after the phrase, then carry on as that turn's listening. */
   wake?: {
     isOn: boolean;
     spellings: readonly string[];
     /** Names that also wake when the words after "hey" sound like one, for a recognizer that mishears them. */
     looseNames?: readonly string[];
-    onWake: (rest: string | null, heardBy: { sttProvider: string }) => boolean;
+    onWake: () => boolean;
   } | null;
 }
 
@@ -218,6 +219,14 @@ export function useVoiceConversation({
   const gateHandler = useRef<
     ((source: FrameSource, isBargeIn: boolean) => void) | null
   >(null);
+  const wakeHandler = useRef<
+    | ((handoff: {
+        source: FrameSource | null;
+        seed: string;
+        adopt: BrowserSttAdoption | null;
+      }) => boolean)
+    | null
+  >(null);
   const pauseOnHide = useRef<() => void>(() => undefined);
   const isMicGranted = useRef(false);
   const run = useRef({
@@ -238,6 +247,7 @@ export function useVoiceConversation({
     followUpId: 0,
     isFollowUp: false,
     isUnasked: false,
+    listenId: 0,
     gate: null as { close: () => void } | null,
     heardWords: '',
     pending: null as { text: string; timerId: number } | null,
@@ -364,7 +374,7 @@ export function useVoiceConversation({
     run.current.stopListening?.();
   };
 
-  const armQuiet = (heardText = '') => {
+  const armQuiet = (heardText = run.current.heardWords) => {
     if (run.current.pending) return;
     window.clearTimeout(run.current.quietId);
     run.current.quietId = window.setTimeout(
@@ -408,7 +418,9 @@ export function useVoiceConversation({
       confirmBarge();
     }
     setHeard(text);
-    if (hasSameWords(text, run.current.heardWords)) return;
+    if (text.trim() === '' || hasSameWords(text, run.current.heardWords)) {
+      return;
+    }
     run.current.heardWords = text;
     armQuiet(text);
     window.clearTimeout(run.current.holdId);
@@ -417,6 +429,18 @@ export function useVoiceConversation({
     if (pattern?.test(text)) {
       run.current.holdId = window.setTimeout(finish, END_PHRASE_HOLD_MS);
     }
+  };
+
+  const endListen = () => {
+    run.current.heardWords = '';
+    clearTimers();
+    run.current.stopListening = null;
+    run.current.cancelListening = null;
+    send({ type: 'STOP' });
+    setIsListening(false);
+    setListeningRoute(null);
+    setIsPreparing(false);
+    setHeard('');
   };
 
   const handleFinal = (text: string) => {
@@ -434,15 +458,7 @@ export function useVoiceConversation({
       run.current.isCancelled = true;
       queueRef.current?.unduck();
     }
-    run.current.heardWords = '';
-    clearTimers();
-    run.current.stopListening = null;
-    run.current.cancelListening = null;
-    send({ type: 'STOP' });
-    setIsListening(false);
-    setListeningRoute(null);
-    setIsPreparing(false);
-    setHeard('');
+    endListen();
     if (wasPending) defer(syncBargeGate);
     if (run.current.isCancelled) return;
     if (!submit(text, run.current.heardBy)) {
@@ -518,8 +534,9 @@ export function useVoiceConversation({
     }
   };
 
-  // A refusal or an unsupported language stays (until the permission changes); any other failure ends this attempt only, said as nothing heard.
+  // A refusal or an unsupported language stays (until the permission changes); any other failure ends this attempt only. Words already heard are kept and sent, so a hiccup never costs the person what they said.
   const handleError = (code: SttErrorCode) => {
+    const said = run.current.heardWords;
     run.current.isCancelled = true;
     const isLasting = BLOCKED.includes(code) || code === 'language';
     const isAsked = !run.current.isUnasked;
@@ -537,10 +554,12 @@ export function useVoiceConversation({
     run.current.stopListening?.();
     handleFinal('');
     if (wasPending) return;
+    const isKept = said !== '' && submit(said, run.current.heardBy);
     if (isLasting) {
       if (lasting !== null && isAsked) latest.current.onUnavailable?.(lasting);
       return;
     }
+    if (isKept) return;
     if (
       run.current.heardBy === 'on-device' &&
       latest.current.onDeviceListenFailed
@@ -550,7 +569,17 @@ export function useVoiceConversation({
   };
 
   const listen = (
-    options: { source?: FrameSource | null; pendingText?: string } = {},
+    options: {
+      source?: FrameSource | null;
+      /** Words already heard (what came with the wake phrase); shown at once and put before what the listener hears. */
+      seed?: string;
+      /** The person's voice opened this listen (a follow-up, a barge-in), so silence or a failure is not reported as theirs. */
+      isUnasked?: boolean;
+      /** A running browser listener that heard the wake phrase and carries on as this listen's. */
+      adopt?: BrowserSttAdoption | null;
+      /** The line this listen started over; it is only ducked until the person's words are confirmed as theirs. */
+      pendingText?: string;
+    } = {},
   ) => {
     if (reason !== null) return false;
     if (run.current.pending) {
@@ -572,12 +601,34 @@ export function useVoiceConversation({
     }
     send({ type: 'TAP_MIC' });
     run.current.isCancelled = false;
+    const { seed = '', adopt = null } = options;
+    run.current.isUnasked = options.isUnasked === true;
     run.current.heardWords = '';
-    run.current.isUnasked = (options.source ?? null) !== null;
+    run.current.listenId += 1;
+    const listenId = run.current.listenId;
+    // A listener stopped for an earlier listen can still report late; only this listen's own callbacks count.
+    const isCurrent = () => run.current.listenId === listenId;
+    // The phrase reader gives the seed in plain lower case, and the model on the device capitalises only its first word.
+    const withSeed = (text: string) =>
+      seed === ''
+        ? text
+        : [
+            seed.charAt(0).toUpperCase() + seed.slice(1),
+            run.current.heardBy === 'on-device' && !/^I\b/.test(text)
+              ? text.charAt(0).toLowerCase() + text.slice(1)
+              : text,
+          ]
+            .filter((part) => part !== '')
+            .join(' ');
     const callbacks = {
-      onPartial: handlePartial,
-      onFinal: handleFinal,
+      onPartial: (text: string) => {
+        if (isCurrent()) handlePartial(withSeed(text));
+      },
+      onFinal: (text: string) => {
+        if (isCurrent()) handleFinal(withSeed(text));
+      },
       onSpeechStart: () => {
+        if (!isCurrent()) return;
         window.clearTimeout(run.current.showId);
         setIsStarting(false);
         if (!run.current.pending) setIsListening(true);
@@ -585,10 +636,13 @@ export function useVoiceConversation({
         setReason(null);
       },
       onListening: () => {
+        if (!isCurrent()) return;
         setIsPreparing(false);
         armQuiet();
       },
-      onError: handleError,
+      onError: (code: SttErrorCode) => {
+        if (isCurrent()) handleError(code);
+      },
       preRoll: null,
     };
     const startAdapter = (adapter: SttAdapter) => {
@@ -598,19 +652,26 @@ export function useVoiceConversation({
       setListeningRoute(adapter.route === 'cloud' ? 'cloud' : 'device');
       adapter.start(callbacks).catch((error: unknown) => {
         console.error('Voice listening did not start', error);
-        handleError('unavailable');
+        if (isCurrent()) handleError('unavailable');
       });
     };
     const startDevice = (source: FrameSource | null) => {
       if (latest.current.canHearOnDevice) {
-        window.clearTimeout(run.current.quietId);
+        if (run.current.heardWords === '') {
+          window.clearTimeout(run.current.quietId);
+        }
         setIsPreparing(source === null && pendingText === undefined);
         startAdapter(createOnDeviceStt({ source }));
         return;
       }
       armQuiet();
       source?.stop();
-      startAdapter(createBrowserStt({ lang: latest.current.lang }));
+      startAdapter(
+        createBrowserStt({
+          lang: latest.current.lang,
+          isFromTap: !run.current.isUnasked,
+        }),
+      );
     };
     const cloud = latest.current.cloudListening;
     const today = toLocalDateInputValue(Date.now());
@@ -641,15 +702,22 @@ export function useVoiceConversation({
       setIsThinking(false);
       setHeard('');
     }
+    if (seed !== '') handlePartial(withSeed(''));
     if (choice !== 'onDevice') armQuiet();
-    if (choice === 'cloud' && cloud) {
+    if (adopt) {
+      startAdapter(createBrowserStt({ lang: latest.current.lang, adopt }));
+    } else if (choice === 'cloud' && cloud) {
       startAdapter(
         createDeepgramStt({
           lang: latest.current.lang,
           source: options.source ?? null,
           getToken: cloud.tokenSource.getToken,
           onUnavailable: (heldReason) => {
-            if (run.current.isCancelled || run.current.mode.phase === 'OFF') {
+            if (
+              !isCurrent() ||
+              run.current.isCancelled ||
+              run.current.mode.phase === 'OFF'
+            ) {
               return;
             }
             if (heldReason !== null) {
@@ -679,7 +747,11 @@ export function useVoiceConversation({
     if (!canListen && run.current.isFollowUp) endFollowUp();
     if (
       !canListen ||
-      !listen({ source, ...(isOverLine && { pendingText: playingText }) })
+      !listen({
+        source,
+        isUnasked: true,
+        ...(isOverLine && { pendingText: playingText }),
+      })
     ) {
       source.stop();
       if (isOverLine) queueRef.current?.unduck();
@@ -688,6 +760,8 @@ export function useVoiceConversation({
 
   useEffect(() => {
     gateHandler.current = handleGate;
+    wakeHandler.current = ({ source, seed, adopt }) =>
+      run.current.pending === null && listen({ source, seed, adopt });
   });
 
   /** Opens a short window after a spoken answer in which speaking starts a listen without a tap; silence closes it with no sound and nothing sent. False when it can't open now (a line still waiting or playing, muted, already listening, the page hidden). */
@@ -875,7 +949,7 @@ export function useVoiceConversation({
   useEffect(() => {
     if (!isWakeActive || wakeListener !== 'onDevice') return;
     const session = {
-      current: null as { close: () => void } | null,
+      current: null as ReturnType<typeof listenOnDevice> | null,
       startId: 0,
       retries: 0,
     };
@@ -890,13 +964,19 @@ export function useVoiceConversation({
           );
           if (phrase === null) return;
           session.retries = 0;
-          session.current?.close();
+          if (!(latest.current.wake?.onWake() ?? false)) return;
+          const source = session.current?.handOver() ?? null;
+          if (source === null) return;
           session.current = null;
           const isStarted =
-            latest.current.wake?.onWake(phrase.rests[0] || null, {
-              sttProvider: 'on-device',
+            wakeHandler.current?.({
+              source,
+              seed: phrase.rests[0] ?? '',
+              adopt: null,
             }) ?? false;
-          if (!isStarted) open();
+          if (isStarted) return;
+          source.stop();
+          open();
         },
         onUnavailable: (code) => {
           session.current = null;
@@ -929,30 +1009,43 @@ export function useVoiceConversation({
 
   useEffect(() => {
     if (!isWakeActive || wakeListener !== 'browser') return;
+    const session = { isHandedOver: false };
     const listener = createSpeechListener(
       () => undefined,
       () => undefined,
     );
+    const hear = (text: string, isFinal: boolean) => {
+      const spellings = latest.current.wake?.spellings ?? [];
+      const looseNames = latest.current.wake?.looseNames ?? [];
+      if (
+        session.isHandedOver ||
+        readWakePhrase(text, spellings, looseNames) === null
+      ) {
+        return;
+      }
+      if (!(latest.current.wake?.onWake() ?? false)) return;
+      session.isHandedOver =
+        wakeHandler.current?.({
+          source: null,
+          seed: '',
+          adopt: { listener, heard: { text, isFinal }, spellings, looseNames },
+        }) ?? false;
+    };
     listener.setOptions({
       lang,
       speechLang: lang,
       onHalt: (error) => {
         if (error === 'denied' || error === 'no-microphone') checkPermission();
       },
+      onInterimTranscript: (text) => hear(text, false),
       onFinalTranscript: (alternatives) => {
-        const phrase = readWakePhrase(
-          alternatives,
-          latest.current.wake?.spellings ?? [],
-          latest.current.wake?.looseNames ?? [],
+        const spellings = latest.current.wake?.spellings ?? [];
+        const looseNames = latest.current.wake?.looseNames ?? [];
+        const guess = alternatives.find(
+          (entry) => readWakePhrase(entry, spellings, looseNames) !== null,
         );
-        if (phrase === null) return false;
-        const rest =
-          phrase.rests.find((entry) => entry !== null && entry !== '') ?? null;
-        listener.stop();
-        const isStarted =
-          latest.current.wake?.onWake(rest, { sttProvider: 'browser' }) ??
-          false;
-        if (!isStarted) listener.start();
+        if (guess === undefined) return false;
+        hear(guess, true);
         return true;
       },
     });
@@ -962,11 +1055,14 @@ export function useVoiceConversation({
         : listener.resume();
     document.addEventListener('visibilitychange', handleVisibility);
     // A follow-up window opens a moment after the last line ends; waiting keeps the phrase listener from starting and stopping in that gap.
-    const startId = window.setTimeout(listener.start, WAKE_SETTLE_MS);
+    const startId = window.setTimeout(
+      () => listener.start({ isFromTap: false }),
+      WAKE_SETTLE_MS,
+    );
     return () => {
       window.clearTimeout(startId);
       document.removeEventListener('visibilitychange', handleVisibility);
-      listener.teardown();
+      if (!session.isHandedOver) listener.teardown();
     };
   }, [isWakeActive, wakeListener, wakeSpellings, lang]);
 
