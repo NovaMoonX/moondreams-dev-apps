@@ -227,7 +227,7 @@ export function readHabitStatusOn<Status extends string>(
 }
 
 /** The days a habit was paused: each pause up to the event that ended it (a resume by hand included), then the current one up to its end date. */
-const readPauseSpans = (habit: HabitScheduleLike, timeZone: string) => {
+export const readPauseSpans = (habit: HabitScheduleLike, timeZone: string) => {
   const events = [...(habit.history ?? [])].sort(
     (first, second) => first.at - second.at,
   );

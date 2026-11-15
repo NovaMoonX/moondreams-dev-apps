@@ -99,6 +99,14 @@ export interface HelmProfile {
   zoneSpans: ZoneSpan[];
   /** When the person said Not now to an ability offer, so it waits 4 weeks. */
   abilityOffers: AbilityDecline[];
+  /** Floating "HH:mm" in the profile's zone, readable so the server plans around it; null is outside Your day. */
+  quietHours: { start: string; end: string } | null;
+  /** Pause all habit reminders since this instant; null is not paused. */
+  remindersPausedAt: number | null;
+  /** Stamped by any change a reminder depends on, so the server re-plans within minutes. */
+  habitRemindersChangedAt: number | null;
+  /** Set by the planner when it stopped for a long idle spell; cleared by the device on the next check-in. */
+  habitRemindersIdleAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
 }

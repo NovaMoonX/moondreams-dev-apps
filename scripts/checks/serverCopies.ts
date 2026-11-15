@@ -209,6 +209,25 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/helm/engine/habitLife.ts',
+    dest: 'functions/src/apps/helm/nomos/habitLife.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+      '@apps/helm/engine/habitDay': './habitDay.js',
+    },
+  },
+  {
+    src: 'src/apps/helm/engine/habitReminders.ts',
+    dest: 'functions/src/apps/helm/nomos/habitReminders.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+      '@apps/helm/engine/habitDay': './habitDay.js',
+      '@apps/helm/engine/habitLife': './habitLife.js',
+    },
+  },
+  {
     src: 'src/apps/helm/engine/checkInMatch.ts',
     dest: 'functions/src/apps/helm/nomos/checkInMatch.ts',
     importRewrites: {

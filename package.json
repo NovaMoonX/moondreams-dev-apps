@@ -110,6 +110,7 @@
     "check:helm-match-entities": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmMatchEntities.ts",
     "check:helm-whereabouts": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhereabouts.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhereabouts.ts",
     "check:helm-habits": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts",
+    "check:helm-reminders": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmReminders.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmReminders.ts",
     "check:helm-habit-commands": "TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabitCommands.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabitCommands.ts",
     "check:helm-checkin-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmCheckinMatch.ts",
     "check:helm-where": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhere.ts",

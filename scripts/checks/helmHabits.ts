@@ -8,6 +8,7 @@ import {
   countDueDays,
   isDueOn,
   nextDueOn,
+  shiftDayKeyBy,
   type Cadence,
 } from '../../src/utils/cadenceUtils.ts';
 import { zonedDateTimeToEpoch } from '../../src/utils/timezoneUtils.ts';
@@ -27,6 +28,16 @@ import {
   type HabitDayLike,
   type HabitScheduleLike,
 } from '../../src/apps/helm/engine/habitDay.ts';
+import {
+  HABIT_LIFE,
+  judgeHabitWeek,
+  readHabitStage,
+  readKeptWeeks,
+  readRejudgeFrom,
+  rejudgeHabit,
+  type LifeDay,
+  type LifeHabit,
+} from '../../src/apps/helm/engine/habitLife.ts';
 import {
   buildCheckPatch,
   buildTallyPatch,
@@ -603,6 +614,265 @@ test('parts of the day follow Your day, a fixed table until it was set, and a sa
     start: '08:00',
     end: '09:00',
   });
+});
+
+const FIRST_MONDAY = '2026-01-05';
+const weekStart = (week: number) => shiftDayKeyBy(FIRST_MONDAY, 7 * week);
+
+const lifeHabit = (extra: Partial<LifeHabit> = {}): LifeHabit => ({
+  id: 'h',
+  status: 'active',
+  cadence: { kind: 'everyDay' },
+  windowState: {},
+  timesPerDay: null,
+  startsOn: utc(2026, 1, 5),
+  endsOn: null,
+  isCare: false,
+  forWhoId: null,
+  stage: 'building',
+  stageAt: 0,
+  stageWeek: null,
+  rejudgeFrom: null,
+  formedAt: null,
+  ...extra,
+});
+
+/** A kept week has every day done; an unkept week has three done and four known misses. */
+const lifeDays = (
+  weeks: ('kept' | 'unkept')[],
+  remindedWeeks: number[] = [],
+): Record<string, LifeDay> =>
+  Object.fromEntries(
+    weeks.flatMap((state, week) =>
+      Array.from({ length: 7 }, (_, day): [string, LifeDay] => {
+        const key = shiftDayKeyBy(weekStart(week), day);
+        const isDone = state === 'kept' || day < 3;
+        const doneAt = at(key, '12:00', LA);
+        return [
+          key,
+          {
+            isInUse: true,
+            entries: {
+              h: {
+                checks: isDone ? { day: { status: 'done', at: doneAt } } : {},
+                count: 0,
+                reminded: remindedWeeks.includes(week)
+                  ? { day: doneAt - 1000 }
+                  : {},
+              },
+            },
+          },
+        ];
+      }),
+    ),
+  );
+
+const stageAfter = (
+  weeks: ('kept' | 'unkept')[],
+  extra: Partial<LifeHabit> = {},
+  remindedWeeks: number[] = [],
+) => {
+  const habit = lifeHabit(extra);
+  return readHabitStage(
+    habit,
+    readKeptWeeks(
+      habit,
+      lifeDays(weeks, remindedWeeks),
+      weekStart(weeks.length),
+      LA,
+    ),
+  );
+};
+
+const K = 'kept' as const;
+const U = 'unkept' as const;
+
+test('a habit builds for 3 kept weeks, then holds', () => {
+  assert.equal(HABIT_LIFE.holdingKeptRun, 3);
+  assert.equal(stageAfter([]), 'building');
+  assert.equal(stageAfter([K, K]), 'building');
+  assert.equal(stageAfter([K, K, K]), 'holding');
+  assert.equal(stageAfter([K, K, U, K, K]), 'building');
+  assert.equal(stageAfter([K, K, U, K, K, K]), 'holding');
+});
+
+test('two unkept weeks in a row send a holding habit back to building again, and 3 kept weeks hold it', () => {
+  assert.equal(stageAfter([K, K, K, U]), 'holding');
+  assert.equal(stageAfter([K, K, K, U, K, U]), 'holding');
+  assert.equal(stageAfter([K, K, K, U, U]), 'buildingAgain');
+  assert.equal(stageAfter([K, K, K, U, U, K, K]), 'buildingAgain');
+  assert.equal(stageAfter([K, K, K, U, U, K, K, K]), 'holding');
+});
+
+test('formed needs 8 of 10 weeks kept, the last 4 unreminded, and 10 weeks since the start', () => {
+  const tenKept = Array.from({ length: 10 }, () => K);
+  assert.equal(stageAfter(tenKept.slice(0, 9)), 'holding');
+  assert.equal(stageAfter(tenKept), 'formed');
+  assert.equal(stageAfter(tenKept, {}, [7]), 'holding');
+  assert.equal(stageAfter(tenKept, {}, [5]), 'formed');
+  assert.equal(stageAfter([K, U, K, K, U, K, K, K, K, K]), 'formed');
+  assert.equal(stageAfter([K, U, K, U, U, K, K, K, K, K]), 'holding');
+  assert.equal(stageAfter([K, K, K, K, U, U, K, K, K, K]), 'formed');
+  assert.equal(stageAfter([...tenKept, U]), 'formed');
+  assert.equal(stageAfter([...tenKept, U, U]), 'buildingAgain');
+});
+
+test('a restart or a window change begins the stage again', () => {
+  const kept = Array.from({ length: 12 }, () => K);
+  const restarted = lifeHabit({
+    history: [{ kind: 'restarted', at: at(weekStart(10), '09:00', LA) }],
+  });
+  assert.equal(
+    readHabitStage(
+      restarted,
+      readKeptWeeks(restarted, lifeDays(kept), weekStart(12), LA),
+    ),
+    'building',
+  );
+  const edited = lifeHabit({
+    windowState: {
+      w: {
+        start: '08:00',
+        end: '09:00',
+        order: 0,
+        editedAt: at(weekStart(10), '09:00', LA),
+      },
+    },
+  });
+  assert.equal(
+    readKeptWeeks(edited, lifeDays(kept), weekStart(12), LA).length,
+    2,
+  );
+});
+
+test("a health habit stops at holding and a carer's habit has no stage", () => {
+  const kept = Array.from({ length: 12 }, () => K);
+  assert.equal(stageAfter(kept, { isCare: true }), 'holding');
+  assert.equal(stageAfter(kept, { isCare: true, forWhoId: 'w' }), null);
+  assert.equal(
+    judgeHabitWeek(
+      lifeHabit({ forWhoId: 'w' }),
+      lifeDays(kept),
+      weekStart(2),
+      LA,
+    ),
+    null,
+  );
+});
+
+test('a sparse or paused week is skipped, and a times-a-week week is kept when its count is met', () => {
+  const sparse = lifeHabit({
+    cadence: { kind: 'onWeekdays', weekdays: [1, 3] },
+  });
+  assert.equal(
+    readKeptWeeks(sparse, lifeDays([K]), weekStart(1), LA)[0].state,
+    'skipped',
+  );
+  const paused = lifeHabit({
+    pausedAt: at(weekStart(0), '10:00', LA),
+    pausedUntil: Date.UTC(2026, 0, 8),
+  });
+  assert.equal(
+    readKeptWeeks(paused, lifeDays([K]), weekStart(1), LA)[0].state,
+    'skipped',
+  );
+  const weekly = lifeHabit({ cadence: { kind: 'timesPerWeek', count: 4 } });
+  assert.deepEqual(
+    readKeptWeeks(weekly, lifeDays([K, U]), weekStart(2), LA).map(
+      (week) => week.state,
+    ),
+    ['kept', 'unkept'],
+  );
+});
+
+test('a late tick into a judged week re-judges Building to Holding once', () => {
+  const judged = judgeHabitWeek(
+    lifeHabit({ stageWeek: null }),
+    lifeDays([K, K, U]),
+    weekStart(2),
+    LA,
+  );
+  assert.ok(judged);
+  assert.equal(judged.stage, 'building');
+  assert.equal(judged.isStageChange, false);
+  assert.equal(judged.stageWeek, weekStart(2));
+  const stored = lifeHabit({ stageWeek: weekStart(2), stage: 'building' });
+  assert.equal(
+    judgeHabitWeek(stored, lifeDays([K, K, U]), weekStart(2), LA),
+    null,
+  );
+  const rejudgeFrom = readRejudgeFrom(
+    null,
+    shiftDayKeyBy(weekStart(2), 5),
+    stored.stageWeek,
+  );
+  assert.equal(rejudgeFrom, weekStart(2));
+  const after = lifeDays([K, K, K]);
+  const patch = rejudgeHabit({ ...stored, rejudgeFrom }, after, LA);
+  assert.ok(patch);
+  assert.equal(patch.stage, 'holding');
+  assert.equal(patch.isStageChange, true);
+  assert.equal(patch.rejudgeFrom, null);
+  assert.equal(patch.stageWeek, weekStart(2));
+  assert.equal(patch.event?.kind, 'stage');
+  assert.equal(patch.event?.by, 'nomos');
+  assert.equal(patch.event?.stage, 'holding');
+  const settled = {
+    ...stored,
+    stage: patch.stage,
+    stageAt: patch.stageAt,
+    rejudgeFrom: null,
+  };
+  assert.equal(rejudgeHabit(settled, after, LA), null);
+  const again = rejudgeHabit({ ...settled, rejudgeFrom }, after, LA);
+  assert.ok(again);
+  assert.equal(again.isStageChange, false);
+  assert.equal(again.event, null);
+});
+
+test('an offline tick synced into a judged week sets the earlier week, and a week not yet judged sets nothing', () => {
+  const inWeek = (week: number) => shiftDayKeyBy(weekStart(week), 2);
+  assert.equal(readRejudgeFrom(null, inWeek(1), weekStart(2)), weekStart(1));
+  assert.equal(
+    readRejudgeFrom(weekStart(2), inWeek(1), weekStart(2)),
+    weekStart(1),
+  );
+  assert.equal(
+    readRejudgeFrom(weekStart(1), inWeek(2), weekStart(2)),
+    weekStart(1),
+  );
+  assert.equal(readRejudgeFrom(null, inWeek(3), weekStart(2)), null);
+  assert.equal(readRejudgeFrom(null, inWeek(3), null), null);
+  const stored = lifeHabit({
+    stage: 'building',
+    stageWeek: weekStart(2),
+    rejudgeFrom: weekStart(1),
+  });
+  assert.equal(rejudgeHabit(stored, lifeDays([K, K, K]), LA)?.stage, 'holding');
+});
+
+test('a tick older than 16 weeks re-judges nothing and still clears the mark', () => {
+  const stored = lifeHabit({
+    stage: 'holding',
+    stageWeek: weekStart(30),
+    rejudgeFrom: weekStart(5),
+  });
+  const patch = rejudgeHabit(stored, lifeDays([U, U, U]), LA);
+  assert.ok(patch);
+  assert.equal(patch.stage, 'holding');
+  assert.equal(patch.isStageChange, false);
+  assert.equal(patch.rejudgeFrom, null);
+});
+
+test('a stage change is dated the Monday after the judged week', () => {
+  const patch = judgeHabitWeek(
+    lifeHabit({ stageWeek: weekStart(1), stage: 'building' }),
+    lifeDays([K, K, K]),
+    weekStart(2),
+    LA,
+  );
+  assert.equal(patch?.stage, 'holding');
+  assert.equal(patch?.stageAt, at(weekStart(3), '03:00', LA));
 });
 
 const failures = tests.flatMap(([name, run]) => {
