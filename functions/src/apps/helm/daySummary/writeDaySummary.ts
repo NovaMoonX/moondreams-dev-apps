@@ -204,8 +204,6 @@ export type DaySummaryPreparation =
       key: HelmKey;
     };
 
-export { PENDING_BATCH } from './countDay.js';
-
 /** Counts the day and writes it at once as `counted` (or `empty`); when a sentence is still wanted and `isAsking`, reserves one quick call (counting the attempt) and returns the request. `isForBatch` marks the claim as waiting on a batch. A spent allowance leaves `counted` and says `busy`; a summary waiting on its batch says `busy`. */
 export async function prepareDaySummary(
   firestore: Firestore,

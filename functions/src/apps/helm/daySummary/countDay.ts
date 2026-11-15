@@ -273,11 +273,11 @@ export const getSummaryDay = (now: number, timeZone: string) => {
   };
 };
 
-/** Counted and sent to a batch recently enough that its result is still expected. */
 /** The night run's claim before its batch is sent; it outlives one run so a run that dies after claiming frees the day for the next. */
 export const PENDING_BATCH = 'pending';
 export const SUMMARY_PENDING_WAIT_MS = 15 * 60 * 1000;
 
+/** Counted and sent to a batch recently enough that its result is still expected. */
 export const isWaitingOnBatch = (
   existing: Pick<SummaryExisting, 'batchId' | 'batchedAt'>,
   now: number,
