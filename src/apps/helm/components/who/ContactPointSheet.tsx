@@ -296,6 +296,7 @@ function ContactPointBody({
           {HELM_COPY.contactLabelField}
         </span>
         <ContactLabelPicker
+          kind={kind}
           label={label}
           onChange={(next) => {
             setLabel(next);

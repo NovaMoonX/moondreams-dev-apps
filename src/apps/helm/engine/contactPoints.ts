@@ -14,6 +14,12 @@ export const CONTACT_VALUE_CAP = 254;
 export const CONTACT_LABELS = ['Mobile', 'Home', 'Work', 'Other'] as const;
 export const OTHER_LABEL = 'Other';
 
+/** The ready-made labels a kind offers: an email has no Mobile. */
+export const contactLabelsFor = (kind: ContactKind): readonly string[] =>
+  kind === 'phone'
+    ? CONTACT_LABELS
+    : CONTACT_LABELS.filter((entry) => entry !== 'Mobile');
+
 /** The label a new entry starts with. */
 export const defaultLabelFor = (kind: ContactKind) =>
   kind === 'phone' ? 'Mobile' : 'Home';

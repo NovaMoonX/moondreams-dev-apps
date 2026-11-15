@@ -78,6 +78,7 @@ function ContactListField({ kind, points, onChange }: ContactListFieldProps) {
             </Button>
           </div>
           <ContactLabelPicker
+            kind={kind}
             label={point.label}
             onChange={(label) => update(point.id, { label })}
           />

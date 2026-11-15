@@ -10,6 +10,7 @@ import {
   changeContactPoint,
   applyContactDiff,
   CONTACT_LABEL_CAP,
+  contactLabelsFor,
   diffContactPoints,
   makePrimaryContactPoint,
   MAX_CONTACT_POINTS,
@@ -399,6 +400,8 @@ assert.equal(toDialableNumber('555.123.4567 ext. 9'), '5551234567,9');
 assert.equal(toDialableNumber('Box 5'), '5');
 assert.equal(toDialableNumber('Max 555-1234'), '5551234');
 assert.equal(toDialableNumber(''), '');
+assert.deepEqual([...contactLabelsFor('email')], ['Home', 'Work', 'Other']);
+assert.deepEqual([...contactLabelsFor('phone')], ['Mobile', 'Home', 'Work', 'Other']);
 assert.equal(toTextableNumber('(415) 555-0177 ext 204'), '4155550177');
 
 // A primary asked for with an id the list lost leaves it as it was, one primary kept.
