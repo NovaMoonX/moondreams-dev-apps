@@ -20,6 +20,7 @@ import { readDaySummary, type HelmDayCounts } from './countDay.js';
 import {
   BATCH_ANSWER_LINE,
   BATCH_MAX_TOKENS,
+  PENDING_BATCH,
   SUBMIT_DAY_SUMMARY_TOOL,
   type PreparedDaySummary,
 } from './writeDaySummary.js';
@@ -115,7 +116,11 @@ export async function submitDaySummaryBatch(
       releaseAiCall(firestore, entry.uid, entry.reservedAt, 'quick'),
       firestore
         .doc(`apps/helm/users/${entry.uid}/daySummaries/${entry.dayKey}`)
-        .update({ attempts: FieldValue.increment(-1) }),
+        .update({
+          attempts: FieldValue.increment(-1),
+          batchId: null,
+          batchedAt: null,
+        }),
     ]),
   );
   if (!submitted) return 0;
@@ -129,18 +134,26 @@ export async function submitDaySummaryBatch(
       ]),
     ),
   });
-  await Promise.all(
+  const marks = await Promise.allSettled(
     Object.values(ids).map(({ uid, dayKey }) => {
       const ref = firestore.doc(
         `apps/helm/users/${uid}/daySummaries/${dayKey}`,
       );
       return firestore.runTransaction(async (transaction) => {
         const latest = await transaction.get(ref);
-        if (latest.get('status') !== 'counted' || latest.get('batchId')) return;
+        if (
+          latest.get('status') !== 'counted' ||
+          latest.get('batchId') !== PENDING_BATCH
+        )
+          return;
         transaction.update(ref, { batchId, batchedAt: now });
       });
     }),
   );
+  const unmarked = marks.filter((mark) => mark.status === 'rejected').length;
+  if (unmarked > 0) {
+    logger.warn('helm.daySummary.batchMarkFailed', { batchId, unmarked });
+  }
   return queued.length;
 }
 
@@ -159,6 +172,8 @@ const openPayload = (key: HelmKey, sealed: unknown) => {
 
 /** A batch ends within 24 hours, so one still open after this is never coming back. */
 const BATCH_GIVE_UP_MS = 26 * 60 * 60 * 1000;
+/** Entries that still fail to settle this long after submit are dropped with their batch. */
+const BATCH_FORGET_MS = 48 * 60 * 60 * 1000;
 
 const EXPIRED = (customId: string): BatchResult => ({
   customId,
@@ -167,7 +182,7 @@ const EXPIRED = (customId: string): BatchResult => ({
   usage: EMPTY_USAGE,
 });
 
-/** Writes the results of every ended batch until `deadline`; one still running is left. A result is matched by its custom id, a request that came back with no result counts as expired, and a batch past 26 hours is settled as expired and forgotten. Each entry leaves the batch document in the transaction that settles it, so a rerun never pays or releases twice. */
+/** Writes the results of every ended batch until `deadline`; one still running is left. A result is matched by its custom id, a request that came back with no result counts as expired, and a batch past 26 hours is settled as expired; its document goes once every entry is settled, or after 48 hours. Each entry leaves the batch document in the transaction that settles it, so a rerun never pays or releases twice. */
 export async function collectDaySummaryBatches(
   firestore: Firestore,
   provider: BatchProvider,
@@ -245,7 +260,14 @@ export async function collectDaySummaryBatches(
     });
     if (!settlement) return;
     if (isUnanswered) {
-      await releaseAiCall(firestore, entry.uid, entry.reservedAt, 'quick');
+      await releaseAiCall(
+        firestore,
+        entry.uid,
+        entry.reservedAt,
+        'quick',
+      ).catch(() =>
+        logger.warn('helm.daySummary.releaseFailed', { batchId, customId }),
+      );
     }
     const cost = getUsageCost('daySummary', result.usage, { isBatch: true });
     if (cost > 0) {
@@ -288,7 +310,8 @@ export async function collectDaySummaryBatches(
       },
       Promise.resolve(0),
     );
-    if (left === 0 || isAbandoned) {
+    const isForgotten = now - Number(data.createdAt ?? 0) > BATCH_FORGET_MS;
+    if (left === 0 || isForgotten) {
       await firestore.doc(`${BATCHES}/${batchId}`).delete();
     }
   };

@@ -436,7 +436,7 @@ assert.equal(
 assert.equal(
   isSummaryMissing(waiting(sentAt), sentAt + 7 * 60 * MINUTE),
   true,
-  'a batch silent for six hours no longer holds the night run back',
+  'a batch silent for six hours no longer holds a later night run back',
 );
 assert.equal(SUMMARY_BATCH_WAIT_MS, 6 * 60 * MINUTE);
 assert.equal(

@@ -74,7 +74,7 @@ export async function reserveAiCall(
   return held;
 }
 
-/** Gives back one call counted on the day of `reservedAt` that never ran or never answered, never below zero. */
+/** Gives back one call of the day's count on the day of `reservedAt` (the 10-minute window keeps it) that never ran or never answered, never below zero. */
 export const releaseAiCall = (
   firestore: Firestore,
   uid: string,

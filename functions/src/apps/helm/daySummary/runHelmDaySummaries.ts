@@ -190,6 +190,7 @@ export const runHelmDaySummaries = onSchedule(
           dayKey,
           now,
           true,
+          true,
         );
         if (!('request' in prepared)) return prepared.status;
         queued.push({

@@ -200,9 +200,13 @@ export type DaySummaryPreparation =
       counts: HelmDayCounts;
       line: string;
       reservedAt: number;
+      key: HelmKey;
     };
 
-/** Counts the day and writes it at once as `counted` (or `empty`); when a sentence is still wanted and `isAsking`, reserves one quick call (counting the attempt) and returns the request. A spent allowance leaves `counted` and says `busy`; a summary waiting on its batch says `busy`. */
+/** Stands in for the batch id from the night run's claim until its batch is sent, so a live writer leaves the day alone meanwhile. */
+export const PENDING_BATCH = 'pending';
+
+/** Counts the day and writes it at once as `counted` (or `empty`); when a sentence is still wanted and `isAsking`, reserves one quick call (counting the attempt) and returns the request. `isForBatch` marks the claim as waiting on a batch. A spent allowance leaves `counted` and says `busy`; a summary waiting on its batch says `busy`. */
 export async function prepareDaySummary(
   firestore: Firestore,
   keyring: Keyring,
@@ -210,6 +214,7 @@ export async function prepareDaySummary(
   dayKey: string,
   now: number,
   isAsking: boolean,
+  isForBatch = false,
 ): Promise<DaySummaryPreparation> {
   const base = `apps/helm/users/${uid}`;
   const summaryRef = firestore.doc(`${base}/daySummaries/${dayKey}`);
@@ -326,8 +331,8 @@ export async function prepareDaySummary(
         attempts,
         writtenAt: now,
         staleAt: null,
-        batchId: null,
-        batchedAt: null,
+        batchId: isForBatch && !isEmpty ? PENDING_BATCH : null,
+        batchedAt: isForBatch && !isEmpty ? now : null,
         sealed: isEmpty ? null : sealForHelm(key, { text: line, line, counts }),
       });
       return isEmpty ? 'empty' : 'generate';
@@ -337,13 +342,17 @@ export async function prepareDaySummary(
   if (!isAsking) return { status: 'counted' };
 
   const held = await reserveAiCall(firestore, uid, now, 'quick');
-  if (held) return { status: 'busy' };
+  if (held) {
+    if (isForBatch) await summaryRef.update({ batchId: null, batchedAt: null });
+    return { status: 'busy' };
+  }
   await summaryRef.update({ attempts: FieldValue.increment(1) });
   const style = await readStyle(firestore, base, key);
   return {
     counts,
     line,
     reservedAt: now,
+    key,
     request: {
       system: [
         DAY_SUMMARY_PROMPT,
@@ -406,7 +415,7 @@ export async function writeHelmDaySummary(
     })) as { summary?: unknown } | null;
     const text = readDaySummary(reply?.summary, prepared.counts);
     if (!text) return 'counted';
-    const key = await unwrapHelmKey(firestore, keyring, uid);
+    const { key } = prepared;
     await firestore
       .doc(`apps/helm/users/${uid}/daySummaries/${dayKey}`)
       .update({
