@@ -617,6 +617,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     value: {
       timeZone: OWNER_TIME_ZONE,
       assistantName: null,
+      assistantNameVariants: null,
       assistantTone: null,
       theme: null,
       dayStartTime: DEFAULT_DAY_START_TIME,
