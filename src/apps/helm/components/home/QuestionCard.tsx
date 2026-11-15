@@ -5,7 +5,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps';
@@ -23,13 +23,21 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
-import { skipQuestion } from '@apps/helm/store/actions/captureActions';
+import {
+  dismissQuestion,
+  skipQuestion,
+} from '@apps/helm/store/actions/captureActions';
 import {
   isAnswerInFlight,
   sendQuestionAnswer,
 } from '@apps/helm/store/actions/questionActions';
 import type { QuestionAnswerValue, QuestionShape } from '@apps/helm/types';
-import type { OpenQuestion } from '@apps/helm/utils/heldCaptures';
+import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  getOpenQuestions,
+  isDismissable,
+  type OpenQuestion,
+} from '@apps/helm/utils/heldCaptures';
 
 interface QuestionCardProps {
   captureId: string;
@@ -60,7 +68,7 @@ const OWN_PRIMARY: QuestionShape[] = [
   'freeText',
 ];
 
-/** One open question in the shape that fits it, with Skip. A code-built question (which person or place) is answered on the server and needs a connection; one the assistant wrote is answered as a turn, which waits offline like any other. */
+/** One open question in the shape that fits it, with Answer later and Dismiss (which still shows once it waits in Needs you). A code-built question (which person or place) is answered on the server and needs a connection; one the assistant wrote is answered as a turn, which waits offline like any other. */
 function QuestionCard({
   captureId,
   item,
@@ -97,14 +105,6 @@ function QuestionCard({
   const isSkipped = skippedAt !== null;
   const isModelWritten = question.builtBy === 'model';
   const Part = PARTS[question.shape];
-
-  if (isSkipped && !isInSheet) {
-    return (
-      <p className='text-muted-foreground self-start pl-[30px] text-left text-[13px] text-pretty'>
-        {HELM_COPY.questionSkipped}
-      </p>
-    );
-  }
 
   const answerAsTurn = async (
     value: QuestionAnswerValue,
@@ -237,6 +237,63 @@ function QuestionCard({
     </Button>
   );
 
+  const dismiss = () => {
+    if (!user) return;
+    const capture = selectAllCaptures(store.getState()).find(
+      (entry) => entry.id === captureId,
+    );
+    const isLastOpen =
+      capture !== undefined &&
+      getOpenQuestions(capture).every((entry) => entry.id === id);
+    dismissQuestion(user.uid, captureId, id, isLastOpen).catch(
+      (error: unknown) => {
+        console.error('Helm question was not dismissed', error);
+        setNote(HELM_COPY.heldActionFailed);
+      },
+    );
+  };
+
+  const dismissButton = (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='sm'
+      className={join(QUIET_CLASS, 'text-muted-foreground!')}
+      disabled={isWorking}
+      onClick={dismiss}
+    >
+      {HELM_COPY.questionDismiss}
+    </Button>
+  );
+
+  const canDismiss = isDismissable(question.kind);
+
+  const quietActions = (
+    <>
+      {!isSkipped && skipButton}
+      {canDismiss && dismissButton}
+    </>
+  );
+
+  if (isSkipped && !isInSheet) {
+    return (
+      <div className='flex flex-wrap items-center gap-x-3 gap-y-1 self-start pl-[30px]'>
+        <p className='text-muted-foreground text-left text-[13px] text-pretty'>
+          {HELM_COPY.questionSkipped}
+        </p>
+        {canDismiss && dismissButton}
+        {note && (
+          <p
+            className='text-muted-foreground w-full text-[13px] text-pretty'
+            role='status'
+          >
+            {note}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   const message =
     isOffline && !isModelWritten ? HELM_COPY.questionNeedsConnection : note;
 
@@ -285,12 +342,12 @@ function QuestionCard({
             <Part
               question={question}
               isBusy={isWorking}
-              skip={isSkipped ? null : skipButton}
+              skip={quietActions}
               onAnswer={answer}
             />
-            {!isSkipped && !OWN_PRIMARY.includes(question.shape) && (
+            {!OWN_PRIMARY.includes(question.shape) && (
               <div className='flex flex-wrap items-center gap-x-3 gap-y-3'>
-                {skipButton}
+                {quietActions}
               </div>
             )}
           </>
