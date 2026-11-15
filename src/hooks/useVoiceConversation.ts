@@ -115,6 +115,8 @@ interface VoiceConversationOptions {
 }
 
 export type VoiceListeningRoute = 'cloud' | 'device';
+/** What a repeat did: played, or why it could not. */
+export type VoiceRepeat = 'played' | 'none' | 'muted' | 'busy';
 
 const LISTEN_SHOW_DELAY_MS = 400;
 const QUIET_MS = 8000;
@@ -790,19 +792,19 @@ export function useVoiceConversation({
     return spoken;
   };
 
-  /** Says the last reply or summary again (its audio is kept, so it costs no request); false when nothing has been said or it can't play now. */
-  const repeat = () => {
+  /** Says the last reply or summary again, or a line the person tapped (kept audio costs no request), at the current turn so a reply on its way still plays; says why when it can't. */
+  const repeat = (text?: string): VoiceRepeat => {
+    endFollowUp(true);
     const { lastLine } = run.current;
-    if (lastLine === null || latest.current.isMuted) return false;
+    const line = text ?? lastLine?.text ?? null;
+    if (line === null) return 'none';
+    if (latest.current.isMuted) return 'muted';
     if (run.current.mode.phase !== 'OFF' && run.current.pending === null) {
-      return false;
+      return 'busy';
     }
-    run.current.voice ??= lastLine.voice;
-    void speak(lastLine.text, {
-      priority: 'reply',
-      turnKey: run.current.turnKey,
-    });
-    return true;
+    if (lastLine !== null) run.current.voice ??= lastLine.voice;
+    void speak(line, { priority: 'reply', turnKey: run.current.turnKey });
+    return 'played';
   };
 
   const setMuted = (isOn: boolean) => {

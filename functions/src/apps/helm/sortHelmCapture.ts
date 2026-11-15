@@ -2319,23 +2319,41 @@ const readMediaTitles = async (
   );
 };
 
-/** A spoken turn that only asked to hear the last reply again is deleted, with its answer stored so a retried call gets the same outcome; the device replays the reply and nothing is left in the history. */
 /** A replay only makes sense while the person is still listening; an older turn swept later files normally. */
 const REPEAT_FRESH_MS = 2 * 60 * 1000;
 
+/** A spoken turn that only asked to hear the last reply again is deleted, with its answer stored so a retried call gets the same outcome; the device replays the reply and nothing is left in the history. */
 async function dropRepeatTurn(claimed: Claimed): Promise<SortResult> {
   const result: SortResult = {
     ...toResult('sorted'),
     isRepeat: true,
   };
-  const batch = claimed.firestore.batch();
-  batch.set(claimed.requestRef, {
-    result,
-    captureId: claimed.captureRef.id,
-    createdAt: Date.now(),
-  });
-  batch.delete(claimed.captureRef);
-  await batch.commit();
+  const outcome = await claimed.firestore.runTransaction(
+    async (transaction) => {
+      const snapshot = await transaction.get(claimed.captureRef);
+      const capture = snapshot.data() as CaptureDoc | undefined;
+      if (
+        !capture ||
+        capture.claimId !== claimed.claimId ||
+        capture.status !== 'interpreting'
+      ) {
+        return 'leaseLost' as const;
+      }
+      if ((capture.joinedCaptureIds ?? []).length > 0) return 'joined' as const;
+      transaction.set(claimed.requestRef, {
+        result,
+        captureId: claimed.captureRef.id,
+        createdAt: Date.now(),
+      });
+      transaction.delete(claimed.captureRef);
+      return 'dropped' as const;
+    },
+  );
+  if (outcome === 'joined') throw toFailure('modelError');
+  if (outcome === 'leaseLost') {
+    logger.info('helm.sort.leaseLost');
+    return toResult('received');
+  }
   logger.info('helm.sort.repeat');
   return result;
 }

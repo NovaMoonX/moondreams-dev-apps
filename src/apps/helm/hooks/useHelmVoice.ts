@@ -13,7 +13,10 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
-import { useVoiceConversation } from '@/hooks/useVoiceConversation';
+import {
+  useVoiceConversation,
+  type VoiceRepeat,
+} from '@/hooks/useVoiceConversation';
 import { isRepeatRequest } from '@/lib/speech/repeatRequest';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
 import {
@@ -241,6 +244,12 @@ export function useHelmVoice() {
     setNeedsMicrophone(isMicrophone);
   }
 
+  function sayRepeatRefusal(outcome: VoiceRepeat) {
+    if (outcome === 'none') say(HELM_COPY.nothingToRepeat);
+    if (outcome === 'muted') showNote(HELM_COPY.replayMuted);
+    if (outcome === 'busy') showNote(HELM_COPY.replayBusy);
+  }
+
   function say(line: string) {
     voice.settle();
     showNote(line);
@@ -293,7 +302,7 @@ export function useHelmVoice() {
     }
     if (isRepeatRequest(text)) {
       voice.settle();
-      if (!voice.repeat()) say(HELM_COPY.nothingToRepeat);
+      sayRepeatRefusal(voice.repeat());
       return;
     }
     if (isUndoPhrase(text)) {
@@ -538,8 +547,9 @@ export function useHelmVoice() {
         },
         onRepeat: (captureId) => {
           waiting.current.delete(captureId);
+          clearSentTurn(uid, captureId);
           voice.settle();
-          if (!voice.repeat()) say(HELM_COPY.nothingToRepeat);
+          sayRepeatRefusal(voice.repeat());
         },
       });
       recordSentTurn(uid, turn, id);
@@ -798,6 +808,8 @@ export function useHelmVoice() {
     },
     talk,
     setSurfaceShown,
+    /** Plays a line the person tapped again, or says why it can't right now. */
+    replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),
   };
 }
 

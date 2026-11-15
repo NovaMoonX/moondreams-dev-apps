@@ -545,6 +545,8 @@ export const HELM_COPY = {
   nothingToUndo: 'Nothing to undo yet.',
   nothingToRepeat: 'Nothing to repeat yet.',
   playAgain: 'Play this again',
+  replayMuted: 'Voice is muted. Unmute it to hear this again.',
+  replayBusy: 'I can play it again once this turn is done.',
   undoWhilePending: 'Still working on that one. Try again in a moment.',
   askToday: 'Ask about today',
   chipToday: 'About today',
@@ -1244,7 +1246,9 @@ export const HELM_COPY = {
   voiceHandsFreeOff: 'Tap Talk to answer.',
   voiceNoiseCleaningTitle: 'Clean up background noise',
   voiceNoiseCleaning:
-    'Takes music and chatter out of what you say, on this device. Works with cloud listening and offline listening.',
+    'Takes music and chatter out of what you say, on this device, before anything listens.',
+  voiceNoiseCleaningCredits:
+    'Noise cleaning uses RNNoise (BSD-3-Clause) and web-noise-suppressor (MIT), both open source.',
   voiceWakeTitle: (name: string) => `Hey ${name}`,
   voiceWake: (name: string) =>
     `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple.`,

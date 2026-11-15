@@ -82,7 +82,7 @@ const openCapture = async ({
           createNoiseNode(context),
           new Promise<never>((_, reject) =>
             window.setTimeout(
-              () => reject(new Error('Noise cleaning did not load')),
+              () => reject(new Error(CLEANING_TIMEOUT)),
               CLEANING_WAIT_MS,
             ),
           ),
@@ -122,6 +122,7 @@ const openCapture = async ({
 };
 
 const CLEANING_WAIT_MS = 3000;
+const CLEANING_TIMEOUT = 'Noise cleaning did not load in time';
 const cleaning = { hasFailed: false };
 
 /** Turns a microphone stream into 16 kHz mono 16-bit little-endian frames of about 20 ms, cleaned of background noise first unless the person turned that off or it can't load (then the raw stream is used). */
@@ -136,8 +137,10 @@ export const startPcmCapture = async ({
     try {
       return await openCapture({ stream, onFrame, isCleaned: true });
     } catch (error) {
-      cleaning.hasFailed = true;
-      console.warn('Noise cleaning is off until the page reloads', error);
+      cleaning.hasFailed = !(
+        error instanceof Error && error.message === CLEANING_TIMEOUT
+      );
+      console.warn('Noise cleaning is off for this listen', error);
     }
   }
   return openCapture({ stream, onFrame, isCleaned: false });

@@ -300,7 +300,7 @@ function QuestionCard({
   return (
     <div className='flex w-full flex-col items-start gap-2'>
       {!isPromptHidden && (
-        <AssistantLine speakText={question.prompt}>
+        <AssistantLine>
           {question.prompt}
         </AssistantLine>
       )}

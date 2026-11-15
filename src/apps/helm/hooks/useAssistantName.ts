@@ -12,7 +12,7 @@ export function useAssistantNameVariants() {
   return useMemo(() => (joined === '' ? [] : joined.split('\n')), [joined]);
 }
 
-/** The assistant's name:the person's own when it passes the name pattern, else the default. */
+/** The assistant's name: the person's own when it passes the name pattern, else the default. */
 export function useAssistantName() {
   return useAppSelector(
     (state) =>

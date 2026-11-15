@@ -418,15 +418,26 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
             isLocked={!canListenForPhrase}
             onChange={(isOn) => changeSwitch(setWakeWordOn, isOn)}
           />
-          <SwitchRow
-            title={HELM_COPY.voiceNoiseCleaningTitle}
-            description={HELM_COPY.voiceNoiseCleaning}
-            checked={isCleaningOn}
-            onChange={(isOn) => {
-              setNoiseCleaningOn(isOn);
-              setIsCleaningOn(isOn);
-            }}
-          />
+          <div>
+            <SwitchRow
+              title={HELM_COPY.voiceNoiseCleaningTitle}
+              description={HELM_COPY.voiceNoiseCleaning}
+              checked={isCleaningOn}
+              onChange={(isOn) => {
+                setNoiseCleaningOn(isOn);
+                setIsCleaningOn(isOn);
+              }}
+            />
+            <p className='text-muted-foreground mt-1 text-[13px] leading-[18px]'>
+              <HelpTip
+                title={HELM_COPY.voiceOfflineLicencesTitle}
+                linkLabel={HELM_COPY.voiceOfflineLicences}
+                className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+              >
+                {HELM_COPY.voiceNoiseCleaningCredits}
+              </HelpTip>
+            </p>
+          </div>
           <OfflineListeningRow onDevice={onDevice} name={name} />
         </div>
       </DetailSheet>

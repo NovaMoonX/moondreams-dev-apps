@@ -28,9 +28,7 @@ function PlayAgainButton({ text }: { text: string }) {
       size='sm'
       aria-label={HELM_COPY.playAgain}
       className='text-muted-foreground relative -my-1 shrink-0 before:absolute before:-inset-2 before:content-[""]'
-      onClick={() =>
-        void voice.speak(text, { priority: 'reply', turnKey: Date.now() })
-      }
+      onClick={() => voice.replay(text)}
     >
       <Volume2 className='size-4' aria-hidden='true' />
     </Button>
@@ -52,7 +50,7 @@ function AssistantLine({
       </WorkingRing>
       <p
         className={join(
-          'min-w-0 text-[15px] leading-[21px] break-words',
+          'min-w-0 flex-1 text-[15px] leading-[21px] break-words',
           isQuiet && 'text-muted-foreground',
         )}
       >

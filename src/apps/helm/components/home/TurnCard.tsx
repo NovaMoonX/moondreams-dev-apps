@@ -258,6 +258,7 @@ function TurnCard({
               isOnHome={isOnHome}
               isSeen={capture.seenAt !== null}
               showsNotice={showsNotice}
+              canReplay={showsOutcome && isOnHome}
             />
           ))}
         </div>
@@ -271,12 +272,16 @@ function TurnCard({
       )}
       {planLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine speakText={planLine}>{planLine}</AssistantLine>
+          <AssistantLine
+            speakText={showsOutcome && isOnHome ? planLine : undefined}
+          >{planLine}</AssistantLine>
         </div>
       )}
       {quietLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine speakText={quietLine}>{quietLine}</AssistantLine>
+          <AssistantLine
+            speakText={showsOutcome && isOnHome ? quietLine : undefined}
+          >{quietLine}</AssistantLine>
         </div>
       )}
       {capture.answer && !capture.isUnreadable && (
