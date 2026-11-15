@@ -19,12 +19,29 @@ import {
   NATURAL_VOICE_CONFIG_URL,
   NATURAL_VOICE_MODEL_URL,
 } from '../../src/lib/speech/naturalVoice/config.ts';
+import { isRepeatRequest } from '../../src/lib/speech/repeatRequest.ts';
 import { splitSentences } from '../../src/lib/speech/naturalVoice/sentences.ts';
+import { soundsLike } from '../../src/lib/speech/soundAlike.ts';
 import {
   readWakePhrase,
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
-import { createSpeechGate } from '../../src/lib/speech/voice/bargeIn.ts';
+import {
+  BARGE_IN_GATE,
+  createSpeechGate,
+} from '../../src/lib/speech/voice/bargeIn.ts';
+import {
+  createSpeechCache,
+  withSpeechCache,
+  type SpeechFetch,
+} from '../../src/lib/speech/voice/speechSource.ts';
+import {
+  hasSameWords,
+  isBargeConfirmed,
+  readTurnEndDelay,
+  TURN_END_COMPLETE_MS,
+  TURN_END_UNFINISHED_MS,
+} from '../../src/lib/speech/turnEnd.ts';
 import { createDeepgramAura } from '../../functions/src/voice/providers/deepgramAura.ts';
 import { createGeminiTts } from '../../functions/src/voice/providers/geminiTts.ts';
 import {
@@ -168,6 +185,25 @@ assert.equal(
   'a part of the phrase is not the phrase',
 );
 assert.equal(toPlainText('Chef’s  Knife!'), 'chefs knife', 'plain text');
+
+const loose = (heard: string) => readWakePhrase(heard, [], ['Nomos'])?.rests[0];
+['hey no most', 'hey nomas', 'hey gnomos', 'hey no moss', "hey nomo's"].forEach(
+  (heard) =>
+    assert.equal(loose(heard), '', `"${heard}" sounds like the name and wakes`),
+);
+['hey no', 'hey mom', 'hey nobody', 'hey norm', 'hey moms', 'no most'].forEach(
+  (heard) => assert.equal(loose(heard), undefined, `"${heard}" does not wake`),
+);
+assert.equal(
+  loose('um hey no most what is on today'),
+  'what is on today',
+  'a loose name keeps what follows it',
+);
+assert.equal(
+  soundsLike('no', 'Nomos'),
+  false,
+  'under three letters never matches',
+);
 
 const lockMs = 15 * 60_000;
 const reduce = (
@@ -518,6 +554,24 @@ console.log('speechShared: all checks passed');
     ]).some((read) => read.isTriggered),
     'with 20 ms frames a hum after a microphone still starting never triggers it',
   );
+  const bargeRun = (amplitude: number) => {
+    const gate = createSpeechGate({ frameMs: 20, ...BARGE_IN_GATE });
+    return Array.from({ length: 80 }, (_, index) =>
+      gate.push(
+        Int16Array.from({ length: 320 }, (_, offset) =>
+          Math.round(
+            (index < 30 ? room : voiced(amplitude))(index * 320 + offset) *
+              32767,
+          ),
+        ),
+      ),
+    ).some((read) => read.isTriggered);
+  };
+  assert.ok(
+    !bargeRun(0.015),
+    'a voice only a little above the room does not open the barge-in gate',
+  );
+  assert.ok(bargeRun(0.3), 'a clear voice over a line opens the barge-in gate');
   console.log('speechShared: speech gate checks passed');
 }
 
@@ -612,6 +666,48 @@ assert.equal(
   'no voice for the language',
 );
 assert.equal(pick([], 'en-US'), null, 'no voices at all');
+
+[
+  'repeat that',
+  'Repeat',
+  'Say that again.',
+  'say it again',
+  'one more time',
+  'come again?',
+  'What was that?',
+  'what did you say',
+  "I didn't catch that",
+  "didn't catch that",
+  'I missed that',
+  'Pardon?',
+  'Sorry?',
+  'huh?',
+  'again?',
+  'what?',
+  'sorry, could you please say that again',
+  'Hey, can you repeat that',
+  'would you say it again please',
+].forEach((said) =>
+  assert.equal(isRepeatRequest(said), true, `"${said}" asks to hear it again`),
+);
+[
+  'what did you say to Mom',
+  'repeat the dentist reminder every week',
+  'say hi again to Dana',
+  'what time is the dentist',
+  'remind me again on Friday',
+  'sorry I missed that meeting',
+  'again and again',
+  '',
+  '   ',
+  'sorry',
+].forEach((said) =>
+  assert.equal(
+    isRepeatRequest(said),
+    false,
+    `"${said}" is not a request to repeat`,
+  ),
+);
 console.log('speechShared: voice ranking checks passed');
 
 const SPOKEN: [string, string][] = [
@@ -2395,3 +2491,108 @@ assert.equal(
   'a speed is rounded to two decimals',
 );
 console.log('speechShared: voice provider checks passed');
+
+{
+  assert.equal(readTurnEndDelay('Add milk to the list'), TURN_END_COMPLETE_MS);
+  assert.equal(readTurnEndDelay('What is on today?'), TURN_END_COMPLETE_MS);
+  ['Turn the oven on', 'Put it in', 'Read that'].forEach((text) =>
+    assert.equal(
+      readTurnEndDelay(text),
+      TURN_END_COMPLETE_MS,
+      `"${text}" is a finished command`,
+    ),
+  );
+  [
+    'Add milk and',
+    'Remind me to',
+    'I was thinking, um',
+    'Add milk,',
+    'So ',
+  ].forEach((text) =>
+    assert.equal(
+      readTurnEndDelay(text),
+      TURN_END_UNFINISHED_MS,
+      `"${text}" sounds unfinished`,
+    ),
+  );
+  assert.ok(
+    hasSameWords('Add milk.', 'add  Milk'),
+    'punctuation is not a new word',
+  );
+  assert.ok(
+    !hasSameWords('add milk', 'add milk and'),
+    'a new word is a change',
+  );
+  assert.equal(
+    isBargeConfirmed('wait stop', 'Here is what is on your list today'),
+    true,
+    'two words the line lacks confirm a person',
+  );
+  assert.equal(
+    isBargeConfirmed(
+      'what is on your list',
+      'Here is what is on your list today',
+    ),
+    false,
+    'the line echoing back never confirms',
+  );
+  assert.equal(
+    isBargeConfirmed('stop', 'Here is your list'),
+    false,
+    'one new word is not enough',
+  );
+  assert.equal(
+    isBargeConfirmed(
+      'bake at 350 degrees fahrenheit for 10 to 12 minutes',
+      'Bake at 350°F for 10–12 minutes',
+    ),
+    false,
+    'the spoken form of a line echoing back never confirms',
+  );
+  const fetched = { count: 0 };
+  const source: SpeechSource = {
+    fetchSpeech: async (): Promise<SpeechFetch> => {
+      fetched.count += 1;
+      return {
+        status: 'ready',
+        body: new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            controller.enqueue(new Uint8Array([1, 2]));
+            controller.enqueue(new Uint8Array([3]));
+            controller.close();
+          },
+        }),
+        provider: 'p',
+        contentType: 'audio/L16',
+      };
+    },
+  };
+  const cache = createSpeechCache(2);
+  const cached = withSpeechCache(source, cache, 'v');
+  const readAll = async (answer: SpeechFetch) => {
+    assert.equal(answer.status, 'ready');
+    if (answer.status !== 'ready') return [];
+    const reader = answer.body.getReader();
+    const readFrom = async (read: number[]): Promise<number[]> => {
+      const next = await reader.read();
+      return next.done ? read : readFrom([...read, ...next.value]);
+    };
+    return readFrom([]);
+  };
+  const signal = new AbortController().signal;
+  assert.deepEqual(
+    await readAll(await cached.fetchSpeech('one', 'reply', signal)),
+    [1, 2, 3],
+  );
+  assert.deepEqual(
+    await readAll(await cached.fetchSpeech('one', 'reply', signal)),
+    [1, 2, 3],
+    'a replay gets the same audio',
+  );
+  assert.equal(fetched.count, 1, 'a replayed line costs no new request');
+  await readAll(await cached.fetchSpeech('two', 'reply', signal));
+  await readAll(await cached.fetchSpeech('three', 'reply', signal));
+  await readAll(await cached.fetchSpeech('one', 'reply', signal));
+  assert.equal(fetched.count, 4, 'the oldest line is dropped past the limit');
+  console.log('speechShared: turn end, barge-in and replay checks passed');
+}

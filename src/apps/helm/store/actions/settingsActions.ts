@@ -40,6 +40,7 @@ export async function ensureHelmProfile(uid: string) {
 
     const profile: HelmProfile = {
       assistantName: null,
+      assistantNameVariants: null,
       assistantTone: null,
       theme: null,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -148,15 +149,27 @@ export const setDayWindow = (
     lastEditedAt: Date.now(),
   });
 
+const learnAssistantNameCallable = httpsCallable<
+  Record<string, never>,
+  { count: number }
+>(functions, 'learnHelmAssistantName');
+
 export const setAssistantNameAndTone = (
   uid: string,
   assistantName: string | null,
   assistantTone: AssistantTone,
+  isRenamed = false,
 ) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     assistantName,
     assistantTone,
+    ...(isRenamed ? { assistantNameVariants: null } : {}),
     lastEditedAt: Date.now(),
+  }).then(() => {
+    if (!isRenamed) return;
+    learnAssistantNameCallable({}).catch((error) =>
+      console.error('Helm assistant name variants were not learned', error),
+    );
   });
 
 export const setHelmTheme = (uid: string, theme: HelmTheme) =>

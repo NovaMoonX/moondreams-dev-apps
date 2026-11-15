@@ -70,6 +70,7 @@ function AssistantForm({
       user.uid,
       nextName === DEFAULT_ASSISTANT_NAME ? null : nextName,
       tone,
+      nextName !== savedName,
     ).catch((error) => {
       console.error('Helm assistant name and tone were not saved', error);
       addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });

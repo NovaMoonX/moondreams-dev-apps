@@ -200,6 +200,7 @@ import type { PlacedTopic } from './nomos/planTopicCommands.js';
 import { decide } from './nomos/policy.js';
 import {
   HAND_OVER_TOOL,
+  REPEAT_TOOL,
   hasReviseCue,
   hasProcedureCue,
   hasProcedureReviseCue,
@@ -209,6 +210,7 @@ import {
   type Route,
 } from './nomos/route.js';
 import { readAssistantName } from './assistantName.js';
+import { readNameVariants } from './assistantNameVariants.js';
 import { toStyleNotes, toStyleWords } from './styleLearner.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
@@ -275,6 +277,7 @@ export interface SortResult {
   releasedIds: string[];
   hasAnswer: boolean;
   spoken: string | null;
+  isRepeat?: boolean;
 }
 
 const toResult = (
@@ -630,6 +633,7 @@ async function readPeople(
     places: PlaceRead[];
     assistantName: string | null;
     calledAs: string | null;
+    assistantNameVariants: string[];
     timeZone: string;
     capturedAt: number;
   },
@@ -638,6 +642,7 @@ async function readPeople(
   const assistantNames = [
     input.assistantName,
     input.calledAs,
+    ...input.assistantNameVariants,
     DEFAULT_ASSISTANT_NAME,
   ].filter((name) => name !== null);
   if (mentions.length === 0 && places.length === 0) return undefined;
@@ -1480,6 +1485,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       places: [],
       assistantName: null,
       calledAs: null,
+      assistantNameVariants: [],
       searched: createSearchedLog(),
       hasMore: false,
       base,
@@ -1585,6 +1591,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
   const assistantName =
     readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
+  const assistantNameVariants = readNameVariants(
+    profile.data()?.assistantNameVariants,
+  );
 
   const readJoined = async (): Promise<
     JoinedRead & {
@@ -1917,6 +1926,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     ]
       .filter((part) => part !== null)
       .join('\n\n');
+    const canRepeat =
+      mode === 'full' &&
+      read.isSpoken &&
+      !read.isOutside &&
+      read.messages.length === 1 &&
+      answerTurn === null &&
+      attached.media.length + attached.voiceIds.length === 0 &&
+      Date.now() - capture.createdAt < REPEAT_FRESH_MS;
     const runOn = async (role: 'quick' | 'interpret', canHandOver: boolean) => {
       const mcp = await createHelmMcpServer({
         uid,
@@ -1960,7 +1977,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           ],
           mcpClient: mcp.client,
           terminalTool: FILE_RESULTS_TOOL,
-          extraTerminalTools: canHandOver ? [HAND_OVER_TOOL] : [],
+          extraTerminalTools: [
+            ...(canHandOver ? [HAND_OVER_TOOL] : []),
+            ...(canRepeat ? [REPEAT_TOOL] : []),
+          ],
           limits: {
             ...LOOP_LIMITS,
             maxMillis: Math.min(maxMillis, timeLeft()),
@@ -2091,6 +2111,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     focusedProcedureId,
     focusedTaskId,
   } = result;
+  if (loop.endedBy === 'terminal' && loop.terminalName === REPEAT_TOOL.name) {
+    if (read.messages.length === 1 && read.joinedCount === 0) {
+      return dropRepeatTurn(claimed);
+    }
+    throw toFailure('modelError');
+  }
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
       loop.endedBy === 'error'
@@ -2204,6 +2230,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     places: reply.places,
     assistantName,
     calledAs: combined.reading.addressedAs?.text ?? null,
+    assistantNameVariants,
     searched,
     hasMore: reply.hasMore,
     base,
@@ -2292,6 +2319,45 @@ const readMediaTitles = async (
   );
 };
 
+/** A replay only makes sense while the person is still listening; an older turn swept later files normally. */
+const REPEAT_FRESH_MS = 2 * 60 * 1000;
+
+/** A spoken turn that only asked to hear the last reply again is deleted, with its answer stored so a retried call gets the same outcome; the device replays the reply and nothing is left in the history. */
+async function dropRepeatTurn(claimed: Claimed): Promise<SortResult> {
+  const result: SortResult = {
+    ...toResult('sorted'),
+    isRepeat: true,
+  };
+  const outcome = await claimed.firestore.runTransaction(
+    async (transaction) => {
+      const snapshot = await transaction.get(claimed.captureRef);
+      const capture = snapshot.data() as CaptureDoc | undefined;
+      if (
+        !capture ||
+        capture.claimId !== claimed.claimId ||
+        capture.status !== 'interpreting'
+      ) {
+        return 'leaseLost' as const;
+      }
+      if ((capture.joinedCaptureIds ?? []).length > 0) return 'joined' as const;
+      transaction.set(claimed.requestRef, {
+        result,
+        captureId: claimed.captureRef.id,
+        createdAt: Date.now(),
+      });
+      transaction.delete(claimed.captureRef);
+      return 'dropped' as const;
+    },
+  );
+  if (outcome === 'joined') throw toFailure('modelError');
+  if (outcome === 'leaseLost') {
+    logger.info('helm.sort.leaseLost');
+    return toResult('received');
+  }
+  logger.info('helm.sort.repeat');
+  return result;
+}
+
 async function writeResult(
   input: Claimed & {
     key: HelmKey;
@@ -2317,6 +2383,7 @@ async function writeResult(
     places: PlaceRead[];
     assistantName: string | null;
     calledAs: string | null;
+    assistantNameVariants: string[];
     searched: SearchedLog;
     hasMore: boolean;
     base: string;
@@ -2355,6 +2422,7 @@ async function writeResult(
     places,
     assistantName,
     calledAs,
+    assistantNameVariants,
     searched,
     hasMore,
     base,
@@ -2630,6 +2698,7 @@ async function writeResult(
             places,
             assistantName,
             calledAs,
+            assistantNameVariants,
             timeZone,
             capturedAt: capture.createdAt,
           })
