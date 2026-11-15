@@ -32,6 +32,10 @@ import {
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
+  toCircleCard,
+  toCircleElements,
+} from '../../src/apps/helm/utils/circleMap.ts';
+import {
   buildInheritedLine,
   buildOnItsPageLine,
   buildUnattendedReleaseLine,
@@ -1490,6 +1494,116 @@ test('a number said for a private person is rewritten as a private turn, with th
   assert.equal(hidden.isPrivate, true);
   assert.ok(!JSON.stringify(hidden.lines).includes('Ann'));
   assert.ok(!JSON.stringify(hidden.lines).includes('555'));
+});
+
+test("a private person's name, initial and photo never reach the map's elements or card while masked", () => {
+  const who = (id: string, name: string, photoMediaId: string | null) => ({
+    id,
+    kind: 'person' as const,
+    name,
+    tier: 'close' as const,
+    isSelf: id === 'me',
+    isUnreadable: false,
+    photoMediaId,
+  });
+  const people = [
+    who('me', 'Riley', null),
+    who('secret', 'Zelda Quartermain', 'photo-secret'),
+    who('open', 'Dana', 'photo-open'),
+  ];
+  const connections = ['secret', 'open'].map((id) => ({
+    whoIds: ['me', id].sort() as [string, string],
+    kind: 'friend' as const,
+    fromFirst: null,
+    fromSecond: null,
+    status: null,
+    since: null,
+  }));
+  const base = {
+    people,
+    connections,
+    figuredOut: new Map(),
+    selfId: 'me',
+    privateIds: new Set(['secret']),
+  };
+  const photoUrls = {
+    'photo-secret': 'blob:secret-face',
+    'photo-open': 'blob:dana-face',
+  };
+  const masked = JSON.stringify(
+    toCircleElements({
+      ...base,
+      isMasked: true,
+      filter: 'everyone',
+      photoUrls,
+    }),
+  );
+  assert.ok(!masked.includes('Zelda') && !masked.includes('Quartermain'));
+  assert.ok(!masked.includes('secret-face'));
+  assert.ok(!masked.includes('"initial":"Z"'));
+  assert.ok(masked.includes('Private'));
+  assert.ok(masked.includes('Dana') && masked.includes('dana-face'));
+  const card = JSON.stringify(
+    toCircleCard({ ...base, isMasked: true, id: 'secret' }),
+  );
+  assert.ok(!card.includes('Zelda') && !card.includes('friend'));
+  const shown = JSON.stringify(
+    toCircleElements({
+      ...base,
+      isMasked: false,
+      filter: 'everyone',
+      photoUrls,
+    }),
+  );
+  assert.ok(
+    shown.includes('Zelda Quartermain') && shown.includes('secret-face'),
+  );
+});
+
+test('passing people never reach the map, and a pet appears only when linked', () => {
+  const who = (
+    id: string,
+    kind: 'person' | 'pet',
+    tier: 'close' | 'passing',
+  ) => ({
+    id,
+    kind,
+    name: id.toUpperCase(),
+    tier,
+    isSelf: id === 'me',
+    isUnreadable: false,
+    photoMediaId: null,
+  });
+  const link = (a: string, b: string) => ({
+    whoIds: [a, b].sort() as [string, string],
+    kind: 'friend' as const,
+    fromFirst: null,
+    fromSecond: null,
+    status: null,
+    since: null,
+  });
+  const ids = (connections: ReturnType<typeof link>[]) =>
+    toCircleElements({
+      people: [
+        who('me', 'person', 'close'),
+        who('gone', 'person', 'passing'),
+        who('miso', 'pet', 'passing'),
+        who('rex', 'pet', 'passing'),
+      ],
+      connections,
+      figuredOut: new Map(),
+      selfId: 'me',
+      privateIds: new Set<string>(),
+      isMasked: false,
+      filter: 'everyone',
+      photoUrls: {},
+    })
+      .filter((element) => element.group === 'nodes')
+      .map((element) => element.data.id);
+  assert.deepEqual(ids([link('gone', 'me'), link('me', 'miso')]), [
+    'me',
+    'miso',
+  ]);
 });
 
 const failures = (

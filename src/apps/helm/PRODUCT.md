@@ -1334,7 +1334,8 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Several labelled phones and emails per person, with a primary (How Your People Connect, In Detail) (Issue 131)
 - [x] Connections between any two people, with a couple's status, said or added on a page (How Your People Connect, In Detail) (Issue 132)
 - [x] Family links worked out from what you said, marked "Figured out", confirmed or corrected in a tap (How Your People Connect, In Detail) (Issue 133)
-- [ ] The map of your circle, and the assistant answering who is who
+- [x] The map of your circle: People → Map, with Close only, Family and Everyone (How Your People Connect, In Detail) (Issue 134)
+- [ ] The assistant answering who is who
 - [ ] Google Contacts kept in step; merge two people who turned out to be one; groups and households as who records
 - [ ] A choice of voices for the assistant
 - [ ] More documents: briefings, research notes, interview questions and plans, each refined in conversation; research on request (`/research`); export to Google Docs
