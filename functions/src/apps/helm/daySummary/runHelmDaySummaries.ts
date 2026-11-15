@@ -32,6 +32,8 @@ if (getApps().length === 0) {
 const BATCH_SIZE = 5;
 /** A run stops starting new people after this, leaving them to the next run inside the 540 s limit. */
 const RUN_BUDGET_MS = 420_000;
+/** Collecting stops this long before the budget ends, so the night's new days still get their turn. */
+const COLLECT_SHARE_MS = 180_000;
 
 export type WriteSummary = (
   uid: string,
@@ -51,13 +53,13 @@ export async function runDaySummaries(
   firestore: Firestore,
   write: WriteSummary,
   now = Date.now(),
+  deadline = Date.now() + RUN_BUDGET_MS,
 ): Promise<SummaryRun> {
   const profiles = await firestore
     .collection('apps/helm/users')
     .select('timeZone')
     .get();
   const run: SummaryRun = { checked: 0, written: 0, failed: 0, deferred: 0 };
-  const startedAt = Date.now();
   const handle = async (uid: string, dayKey: string, timeZone: string) => {
     try {
       const base = `apps/helm/users/${uid}`;
@@ -135,7 +137,7 @@ export async function runDaySummaries(
   ).reduce(
     (previous, batch) =>
       previous.then(() => {
-        if (Date.now() - startedAt > RUN_BUDGET_MS) {
+        if (Date.now() > deadline) {
           run.deferred += batch.length;
           return null;
         }
@@ -169,31 +171,38 @@ export const runHelmDaySummaries = onSchedule(
       logger.info('helm.daySummary.run', run);
       return;
     }
+    const deadline = Date.now() + RUN_BUDGET_MS;
     await collectDaySummaryBatches(
       firestore,
       batchProvider,
       keyring,
       Date.now(),
+      deadline - COLLECT_SHARE_MS,
     );
     const queued: QueuedSummary[] = [];
-    const run = await runDaySummaries(firestore, async (uid, dayKey, now) => {
-      const prepared = await prepareDaySummary(
-        firestore,
-        keyring,
-        uid,
-        dayKey,
-        now,
-        true,
-      );
-      if (!('request' in prepared)) return prepared.status;
-      queued.push({
-        uid,
-        dayKey,
-        reservedAt: prepared.reservedAt,
-        request: prepared.request,
-      });
-      return 'counted';
-    });
+    const run = await runDaySummaries(
+      firestore,
+      async (uid, dayKey, now) => {
+        const prepared = await prepareDaySummary(
+          firestore,
+          keyring,
+          uid,
+          dayKey,
+          now,
+          true,
+        );
+        if (!('request' in prepared)) return prepared.status;
+        queued.push({
+          uid,
+          dayKey,
+          reservedAt: prepared.reservedAt,
+          request: prepared.request,
+        });
+        return 'counted';
+      },
+      Date.now(),
+      deadline,
+    );
     const batched = await submitDaySummaryBatch(
       firestore,
       batchProvider,

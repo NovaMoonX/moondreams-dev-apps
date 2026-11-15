@@ -288,7 +288,7 @@ export const isSummaryMissing = (
 ) =>
   existing === null ||
   (existing.status === 'counted' &&
-    existing.batchId === null &&
+    !isWaitingOnBatch(existing, now) &&
     existing.attempts < SUMMARY_MAX_ATTEMPTS &&
     now - existing.writtenAt >= SUMMARY_RETRY_MS);
 

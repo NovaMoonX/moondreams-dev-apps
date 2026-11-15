@@ -111,7 +111,12 @@ export async function submitDaySummaryBatch(
   now: number,
 ) {
   const submitted = await submitSummaryBatch(provider, queued, (entry) =>
-    releaseAiCall(firestore, entry.uid, entry.reservedAt, 'quick'),
+    Promise.all([
+      releaseAiCall(firestore, entry.uid, entry.reservedAt, 'quick'),
+      firestore
+        .doc(`apps/helm/users/${entry.uid}/daySummaries/${entry.dayKey}`)
+        .update({ attempts: FieldValue.increment(-1) }),
+    ]),
   );
   if (!submitted) return 0;
   const { batchId, ids } = submitted;
@@ -152,12 +157,23 @@ const openPayload = (key: HelmKey, sealed: unknown) => {
   }
 };
 
-/** Writes the results of every ended batch; one still running is left. A result is matched by its custom id, and a request that came back with no result counts as expired. */
+/** A batch ends within 24 hours, so one still open after this is never coming back. */
+const BATCH_GIVE_UP_MS = 26 * 60 * 60 * 1000;
+
+const EXPIRED = (customId: string): BatchResult => ({
+  customId,
+  outcome: 'expired',
+  output: null,
+  usage: EMPTY_USAGE,
+});
+
+/** Writes the results of every ended batch until `deadline`; one still running is left. A result is matched by its custom id, a request that came back with no result counts as expired, and a batch past 26 hours is settled as expired and forgotten. Each entry leaves the batch document in the transaction that settles it, so a rerun never pays or releases twice. */
 export async function collectDaySummaryBatches(
   firestore: Firestore,
   provider: BatchProvider,
   keyring: Keyring,
   now: number,
+  deadline: number,
 ) {
   const open = await firestore.collection(BATCHES).get();
   const keys = new Map<string, Promise<HelmKey>>();
@@ -169,15 +185,22 @@ export async function collectDaySummaryBatches(
 
   const settleOne = async (
     batchId: string,
+    customId: string,
     entry: BatchEntry,
     result: BatchResult,
   ) => {
     const ref = firestore.doc(
       `apps/helm/users/${entry.uid}/daySummaries/${entry.dayKey}`,
     );
+    const batchRef = firestore.doc(`${BATCHES}/${batchId}`);
     const key = await keyFor(entry.uid);
+    const isUnanswered = result.outcome !== 'succeeded';
     const settlement = await firestore.runTransaction(async (transaction) => {
-      const latest = await transaction.get(ref);
+      const [latest, batch] = await Promise.all([
+        transaction.get(ref),
+        transaction.get(batchRef),
+      ]);
+      if (!batch.get(`requests.${customId}`)) return null;
       const payload = latest.exists
         ? openPayload(key, latest.get('sealed'))
         : null;
@@ -209,11 +232,19 @@ export async function collectDaySummaryBatches(
         });
       }
       if (next.kind === 'retry') {
-        transaction.update(ref, { batchId: null, batchedAt: null });
+        transaction.update(ref, {
+          batchId: null,
+          batchedAt: null,
+          ...(isUnanswered ? { attempts: FieldValue.increment(-1) } : {}),
+        });
       }
+      transaction.update(batchRef, {
+        [`requests.${customId}`]: FieldValue.delete(),
+      });
       return next;
     });
-    if (settlement.kind === 'retry' && result.outcome !== 'succeeded') {
+    if (!settlement) return;
+    if (isUnanswered) {
       await releaseAiCall(firestore, entry.uid, entry.reservedAt, 'quick');
     }
     const cost = getUsageCost('daySummary', result.usage, { isBatch: true });
@@ -222,47 +253,50 @@ export async function collectDaySummaryBatches(
         logger.error('helm.ai.spendNotRecorded'),
       );
     }
-    return settlement.kind;
   };
 
   const collectOne = async (batchId: string, data: Record<string, unknown>) => {
-    const results = await provider.collect(batchId);
-    if (!results) return;
+    const isAbandoned = now - Number(data.createdAt ?? 0) > BATCH_GIVE_UP_MS;
+    const results = await provider.collect(batchId).catch((error: unknown) => {
+      if (isAbandoned) return [];
+      throw error;
+    });
+    if (!results && !isAbandoned) return;
     const entries = (data.requests ?? {}) as Record<string, BatchEntry>;
-    const batchRef = firestore.doc(`${BATCHES}/${batchId}`);
-    const byId = new Map(results.map((result) => [result.customId, result]));
+    const byId = new Map(
+      (results ?? []).map((result) => [result.customId, result]),
+    );
     const left = await Object.entries(entries).reduce(
       async (previous, [customId, entry]) => {
         const count = await previous;
+        if (Date.now() > deadline) return count + 1;
         try {
           await settleOne(
             batchId,
+            customId,
             entry,
-            byId.get(customId) ?? {
-              customId,
-              outcome: 'expired',
-              output: null,
-              usage: EMPTY_USAGE,
-            },
+            byId.get(customId) ?? EXPIRED(customId),
           );
-          await batchRef.update({
-            [`requests.${customId}`]: FieldValue.delete(),
-          });
           return count;
         } catch {
-          logger.warn('helm.daySummary.batchResultFailed');
+          logger.warn('helm.daySummary.batchResultFailed', {
+            batchId,
+            customId,
+          });
           return count + 1;
         }
       },
       Promise.resolve(0),
     );
-    if (left === 0) await batchRef.delete();
+    if (left === 0 || isAbandoned) {
+      await firestore.doc(`${BATCHES}/${batchId}`).delete();
+    }
   };
 
   await Promise.all(
     open.docs.map((doc) =>
       collectOne(doc.id, doc.data()).catch(() =>
-        logger.warn('helm.daySummary.batchCollectFailed'),
+        logger.warn('helm.daySummary.batchCollectFailed', { batchId: doc.id }),
       ),
     ),
   );
