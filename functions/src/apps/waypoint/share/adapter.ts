@@ -331,16 +331,16 @@ const readOpenHours = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
 
 const joinDetail = (parts: (string | null)[]) => {
   const kept = parts.filter((part): part is string => part !== null);
-  return kept.length === 0 ? null : kept.join(' · ');
+  return kept.length === 0 ? null : clip(kept.join(' · '), DETAIL_CHARS);
 };
 
 const readEventDetail = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
   const address = readText(doc.get('address'));
   return joinDetail([
     readTransitDetail(doc),
-    address === null ? null : clip(address, DETAIL_CHARS),
     readArriveBy(doc),
     readOpenHours(doc),
+    address,
   ]);
 };
 
@@ -481,9 +481,7 @@ const readRentalDetail = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
   const returnAddress = readText(doc.get('returnAddress'));
   return joinDetail([
     vehicle === null ? null : clip(vehicle, NAME_CHARS),
-    returnAddress === null
-      ? null
-      : `Return to ${clip(returnAddress, DETAIL_CHARS)}`,
+    returnAddress === null ? null : `Return to ${returnAddress}`,
   ]);
 };
 

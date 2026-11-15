@@ -28,6 +28,7 @@ const UPCOMING_LOOKBACK_DAYS = 30;
 const PAST_VISIT_LIMIT = 50;
 const DOCTOR_LIMIT = 10;
 const DOC_LIMIT = 500;
+const DETAIL_CLIP = 120;
 const SYMPTOM_CLIP = 160;
 const SYMPTOM_TAG_LIMIT = 8;
 
@@ -354,7 +355,7 @@ const syncVisits = (firestore: Firestore, uid: string, windowStart: number) =>
         return [];
       const reason = readText(doc.get('reason')) ?? '';
       const label =
-        REASON_LABELS[reason] ??
+        (Object.hasOwn(REASON_LABELS, reason) ? REASON_LABELS[reason] : null) ??
         readText(doc.get('customReasonLabel')) ??
         'Visit';
       const clinicId = readText(doc.get('clinicId'));
@@ -510,7 +511,9 @@ const syncConditions = (firestore: Firestore, uid: string) =>
             kind: 'knowledge',
             title: name,
             subtitle: catName,
-            detail: CONDITION_STATUS_LABELS[status] ?? null,
+            detail: Object.hasOwn(CONDITION_STATUS_LABELS, status)
+              ? CONDITION_STATUS_LABELS[status]
+              : null,
             sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
           }),
         ];
@@ -521,49 +524,43 @@ const syncConditions = (firestore: Firestore, uid: string) =>
 
 const syncSymptoms = (firestore: Firestore, uid: string, windowStart: number) =>
   inEveryHousehold(firestore, uid, async (household) => {
-    const symptomFields = [
-      'catId',
-      'description',
-      'quickTags',
-      'firstNoticedAt',
-      'severity',
-      'resolvedAt',
-      'lastEditedAt',
-    ];
-    const symptoms = household.ref.collection('symptoms');
-    const [catRead, recentRead, unresolvedRead] = await Promise.all([
+    const [catRead, symptomRead] = await Promise.all([
       readCatNames(household),
       readDocs(
-        symptoms
+        household.ref
+          .collection('symptoms')
           .where('firstNoticedAt', '>=', windowStart)
-          .select(...symptomFields),
-      ),
-      readDocs(
-        symptoms.where('resolvedAt', '==', null).select(...symptomFields),
+          .select(
+            'catId',
+            'description',
+            'quickTags',
+            'firstNoticedAt',
+            'severity',
+            'lastEditedAt',
+          ),
       ),
     ]);
     const catNames = new Map(catRead.cats.map((cat) => [cat.id, cat.name]));
-    const docs = [
-      ...new Map(
-        [...recentRead.docs, ...unresolvedRead.docs].map((doc) => [
-          doc.id,
-          doc,
-        ]),
-      ).values(),
-    ];
     return {
-      records: docs.flatMap((doc) => {
+      records: symptomRead.docs.flatMap((doc) => {
         const catId = readText(doc.get('catId'));
         const catName = catId === null ? undefined : catNames.get(catId);
         const description = readText(doc.get('description'));
         const noticedAt = readTime(doc.get('firstNoticedAt'));
         if (catName === undefined || noticedAt === null) return [];
-        const resolvedAt = readTime(doc.get('resolvedAt'));
         const tags = readIds(doc.get('quickTags'))
           .filter((tag) => tag !== 'other')
           .map(toTagLabel)
           .slice(0, SYMPTOM_TAG_LIMIT);
-        const severity = SEVERITY_LABELS[readText(doc.get('severity')) ?? ''];
+        const severityKey = readText(doc.get('severity')) ?? '';
+        const severity = Object.hasOwn(SEVERITY_LABELS, severityKey)
+          ? SEVERITY_LABELS[severityKey]
+          : null;
+        const detail = joinLines([
+          severity,
+          `First noticed ${formatDay(noticedAt)}`,
+          tags.length === 0 ? null : tags.join(', '),
+        ]);
         return [
           toRecord({
             sourceRef: `households/${household.id}/symptoms/${doc.id}`,
@@ -573,19 +570,12 @@ const syncSymptoms = (firestore: Firestore, uid: string, windowStart: number) =>
               SYMPTOM_CLIP,
             ),
             subtitle: catName,
-            detail: joinLines([
-              tags.length === 0 ? null : tags.join(', '),
-              severity ?? null,
-              `First noticed ${formatDay(noticedAt)}`,
-              resolvedAt === null
-                ? 'Not resolved'
-                : `Resolved ${formatDay(resolvedAt)}`,
-            ]),
+            detail: detail === null ? null : clipTo(detail, DETAIL_CLIP),
             sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
           }),
         ];
       }),
-      isFull: catRead.isFull && recentRead.isFull && unresolvedRead.isFull,
+      isFull: catRead.isFull && symptomRead.isFull,
     };
   });
 

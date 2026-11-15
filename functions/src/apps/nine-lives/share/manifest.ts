@@ -149,9 +149,9 @@ export const NINE_LIVES_SHARES: SourceShares = {
           kind: 'knowledge',
           label: 'Symptoms',
           meaning:
-            'Symptoms the person notes for each cat, with when they were first noticed, how severe they were and whether they have cleared up.',
+            'Symptoms the person noted for each cat in the past six months, with when each was first noticed and how severe it was.',
           detail:
-            "Each cat's symptoms: what was noticed, when, how severe and whether resolved",
+            "Each cat's symptoms from the past six months: what was noticed, when and how severe",
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 2,
@@ -168,13 +168,7 @@ export const NINE_LIVES_SHARES: SourceShares = {
               addedOn: '2026-11-14',
             },
             {
-              label: 'Whether and when it was resolved',
-              sinceVersion: 1,
-              addedOn: '2026-11-14',
-            },
-            {
-              label:
-                'Symptoms from the past six months, and any not yet resolved',
+              label: 'Symptoms first noticed in the past six months',
               sinceVersion: 1,
               addedOn: '2026-11-14',
             },

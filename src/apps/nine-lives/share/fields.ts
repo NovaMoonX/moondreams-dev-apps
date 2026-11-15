@@ -401,7 +401,7 @@ const SYMPTOM_FIELDS = {
   severity: 'shared',
   linkedVisitIds: 'notUseful',
   linkedConditionId: 'notUseful',
-  resolvedAt: 'shared',
+  resolvedAt: 'notUseful',
   createdBy: 'notUseful',
   createdAt: 'notUseful',
   lastEditedAt: 'shared',

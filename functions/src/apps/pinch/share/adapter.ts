@@ -646,9 +646,30 @@ async function syncIdeas(
     .select('title', 'kind', 'siteName', 'recipeId', 'updatedAt')
     .limit(IDEA_LIMIT)
     .get();
+  const recipeIds = Array.from(
+    new Set(
+      snapshot.docs.flatMap((doc) => {
+        const recipeId = readText(doc.get('recipeId'));
+        return recipeId === null ? [] : [recipeId];
+      }),
+    ),
+  );
+  const recipes = await readNames(
+    firestore,
+    uid,
+    'recipes',
+    recipeIds,
+    'isArchived',
+  );
+  const isMadeIntoRecipe = (recipeId: string | null) => {
+    if (recipeId === null) return false;
+    const recipe = recipes.get(recipeId);
+    return recipe?.exists === true && recipe.get('isArchived') !== true;
+  };
   const records = snapshot.docs.flatMap((doc) => {
     const title = readText(doc.get('title'));
-    if (title === null || readText(doc.get('recipeId')) !== null) return [];
+    if (title === null || isMadeIntoRecipe(readText(doc.get('recipeId'))))
+      return [];
     const kind = readText(doc.get('kind')) ?? '';
     return [
       toRecord({

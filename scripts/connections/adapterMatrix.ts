@@ -324,8 +324,20 @@ const seedOther = () =>
     kitchen(OWNER, 'ideas/i-made').set({
       kind: 'LINK',
       title: 'Already a recipe',
-      recipeId: 'r-made',
+      recipeId: 'r1',
       updatedAt: NOW - 7.5,
+    }),
+    kitchen(OWNER, 'ideas/i-archived-recipe').set({
+      kind: 'TEXT',
+      title: 'Stew idea again',
+      recipeId: 'r-archived',
+      updatedAt: NOW - 7.6,
+    }),
+    kitchen(OWNER, 'ideas/i-deleted-recipe').set({
+      kind: 'TEXT',
+      title: 'Lost recipe idea',
+      recipeId: 'r-deleted',
+      updatedAt: NOW - 7.7,
     }),
     kitchen(OWNER, 'ideas/i-untitled').set({
       kind: 'PHOTO',
@@ -420,6 +432,10 @@ const assertShape = (records: SharedRecord[]) =>
         EXTRA_KEYS[record.kind].includes(key),
         `${record.sourceRef} extra ${key}`,
       ),
+    );
+    assert.ok(
+      record.detail === null || record.detail.length <= 120,
+      `${record.sourceRef} detail over 120 characters`,
     );
   });
 
@@ -569,7 +585,12 @@ assert.equal(
 assert.equal(savedOf('meals/m-empty')?.detail, null);
 
 const ideas = await run(OWNER, 'ideas');
-assert.deepEqual(refs(ideas), ['ideas/i-link', 'ideas/i-text']);
+assert.deepEqual(refs(ideas), [
+  'ideas/i-archived-recipe',
+  'ideas/i-deleted-recipe',
+  'ideas/i-link',
+  'ideas/i-text',
+]);
 assert.ok(ideas.every((entry) => entry.kind === 'artifact'));
 assert.equal(ideas[0].title, 'Crispy Gnocchi');
 assert.equal(ideas[0].detail, 'Saved link · Food Blog');
@@ -1606,7 +1627,6 @@ assert.equal(careConditions[0].detail, 'Ongoing');
 const careSymptoms = await runNineLives(OWNER, 'symptoms');
 assert.deepEqual(refs(careSymptoms).sort(), [
   'households/home/symptoms/limp',
-  'households/home/symptoms/old-open',
   'households/home/symptoms/vomit',
 ]);
 assert.ok(careSymptoms.every((record) => record.kind === 'knowledge'));
@@ -1616,14 +1636,13 @@ assert.equal(symptomOf('limp')?.title, 'Limping on the back left leg');
 assert.equal(symptomOf('limp')?.subtitle, 'Mochi');
 assert.equal(
   symptomOf('limp')?.detail,
-  `Lethargy, Custom tag · Moderate · First noticed ${new Date(TODAY - 10 * DAY).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })} · Not resolved`,
+  `Moderate · First noticed ${new Date(TODAY - 10 * DAY).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })} · Lethargy, Custom tag`,
 );
 assert.equal(symptomOf('vomit')?.title.length, 160);
 assert.match(
   symptomOf('vomit')?.detail ?? '',
-  /^Vomiting · Mild · .* · Resolved /,
+  /^Mild · First noticed .* · Vomiting$/,
 );
-assert.equal(symptomOf('old-open')?.detail?.endsWith('Not resolved'), true);
 
 const careCategories = [
   'cats',
@@ -2333,7 +2352,7 @@ assert.equal(
 );
 assert.equal(
   planBy('trips/nyc/events/dinner-before')?.detail,
-  '12 Pike St · Arrive by 18:30 (bring tickets) · Open 09:00–17:00',
+  'Arrive by 18:30 (bring tickets) · Open 09:00–17:00 · 12 Pike St',
 );
 
 assert.equal(
