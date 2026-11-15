@@ -8,6 +8,8 @@ export const WORTH_THE_WAIT_SHARES: SourceShares = {
       id: 'app:worth-the-wait',
       kind: 'firstPartyApp',
       contractVersion: 1,
+      about:
+        'Worth the Wait is a private space two people share for thoughts, hopes and questions they are saving to explore together when both are ready.',
       transformVersion: 1,
       categories: [
         {
@@ -16,6 +18,8 @@ export const WORTH_THE_WAIT_SHARES: SourceShares = {
           label: 'Box counts',
           detail:
             "Each box's name, how many things are in it and how many are revealed",
+          meaning:
+            "A box holds the thoughts and wishes the two people keep hidden from each other until both agree to reveal it; this is each box's name, how many things it holds and how many are revealed or still waiting.",
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -35,14 +39,24 @@ export const WORTH_THE_WAIT_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: null,
             },
+            {
+              label: "Each box's description",
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'Whether a reveal is waiting on you',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
         },
       ],
       never: [
         'anything an item says',
         'who added an item',
-        'when anything was added or revealed',
+        'when an item was added or revealed',
         'the invite code',
       ],
       capabilities: { read: true, write: false, backgroundSync: true },

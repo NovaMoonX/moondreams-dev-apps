@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Mic } from 'lucide-react';
 
 import InlineNotice from '@/components/InlineNotice';
+import SpeechDebugDetails from '@/components/SpeechDebugDetails';
 import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import {
   NOTICE_ACTION_CLASSES,
@@ -13,6 +14,7 @@ import {
 import {
   detectMicrophoneDevice,
   getMicrophoneHowTo,
+  getSystemMicrophoneHowTo,
   requestMicrophone,
   watchMicrophonePermission,
   type MicrophoneRequestResult,
@@ -27,6 +29,44 @@ interface MicrophoneAccessProps {
 const RESULT_LINES: Partial<Record<MicrophoneRequestResult, string>> = {
   'no-microphone': 'No microphone was found on this device.',
   unavailable: 'This browser can’t use a microphone here.',
+};
+
+const describeAsk = (
+  permission: string,
+  result: MicrophoneRequestResult | null,
+) => {
+  if (result === null) return 'Not asked for the microphone yet';
+  if (result === 'system-denied')
+    return `Refused by the device, while the browser reads "${permission}"`;
+  if (result === 'denied' && permission !== 'denied')
+    return `Refused when asked, while the browser reads "${permission}"`;
+  return `Last ask for the microphone: ${result}`;
+};
+
+const getTitle = (
+  isSystemBlocked: boolean,
+  isBlocked: boolean,
+  isPhone: boolean,
+) => {
+  if (isSystemBlocked)
+    return isPhone
+      ? 'Your phone may be keeping the microphone from your browser'
+      : 'Your computer may be keeping the microphone from your browser';
+  return isBlocked
+    ? 'The microphone is blocked'
+    : 'The microphone isn’t on yet';
+};
+
+const getBody = (
+  isSystemBlocked: boolean,
+  isBlocked: boolean,
+  isPhone: boolean,
+) => {
+  if (isSystemBlocked)
+    return `Your browser said no without asking you, which usually means the microphone is off for the browser itself. Turn it on in your ${isPhone ? 'phone’s' : 'computer’s'} settings.`;
+  return isBlocked
+    ? 'Your browser said no for this site, so it has to be allowed in its settings.'
+    : 'Allow it below when your browser asks.';
 };
 
 /** The way out of a blocked microphone: an Allow microphone button that asks the browser properly and, once the browser refuses, how to allow it on this device behind one tap. Clears itself once the permission is granted. */
@@ -50,8 +90,12 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
 
   if (permission === 'granted') return null;
 
+  // An installed app on Android can refuse without a prompt and still read "prompt", so a refused ask counts as blocked.
+  const isSystemBlocked = result === 'system-denied';
   const isBlocked =
-    permission === 'denied' || (result === 'denied' && permission !== 'prompt');
+    permission === 'denied' || result === 'denied' || isSystemBlocked;
+  const device = detectMicrophoneDevice();
+  const isPhone = device !== 'computer';
   const tone = isBlocked ? 'warning' : 'info';
   const canAsk = result !== 'unavailable';
 
@@ -65,24 +109,18 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
   return (
     <InlineNotice
       tone={tone}
-      title={
-        isBlocked ? 'The microphone is blocked' : 'The microphone isn’t on yet'
-      }
+      title={getTitle(isSystemBlocked, isBlocked, isPhone)}
       className={className}
     >
-      <p>
-        {isBlocked
-          ? 'Your browser said no for this site, so it has to be allowed in its settings.'
-          : 'Tap below and allow it when your browser asks.'}
-      </p>
+      <p>{getBody(isSystemBlocked, isBlocked, isPhone)}</p>
       {result !== null && RESULT_LINES[result] && (
         <p className='mt-2'>{RESULT_LINES[result]}</p>
       )}
       {isBlocked && isHowToOpen && (
         <ol className='mt-2 list-decimal space-y-1 pl-4'>
-          {getMicrophoneHowTo(
-            detectMicrophoneDevice(),
-            window.location.host,
+          {(isSystemBlocked
+            ? getSystemMicrophoneHowTo(device)
+            : getMicrophoneHowTo(device, window.location.host)
           ).map((step) => (
             <li key={step}>{step}</li>
           ))}
@@ -118,6 +156,10 @@ function MicrophoneAccess({ onAllowed, className }: MicrophoneAccessProps) {
           </Button>
         )}
       </div>
+      <SpeechDebugDetails
+        message={describeAsk(permission, result)}
+        className='mt-3'
+      />
     </InlineNotice>
   );
 }

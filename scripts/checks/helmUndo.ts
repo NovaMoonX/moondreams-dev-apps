@@ -77,6 +77,7 @@ const execution = (
   id: 'exec-1',
   privacy: 'ordinary',
   said: null,
+  via: null,
   captureId: 'turn-1',
   actor: 'nomos',
   category: 'organize',

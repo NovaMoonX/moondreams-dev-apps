@@ -14,8 +14,12 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
-import { useVoiceConversation } from '@/hooks/useVoiceConversation';
+import {
+  useVoiceConversation,
+  type VoiceRepeat,
+} from '@/hooks/useVoiceConversation';
 import type { ClosingRead } from '@/lib/speech/closingPhrase';
+import { isRepeatRequest } from '@/lib/speech/repeatRequest';
 import { toPlainText } from '@/lib/speech/speechText';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
 import {
@@ -27,7 +31,10 @@ import { store, useAppSelector } from '@/store';
 import { toComparable } from '@/utils/optionMatchUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { END_PHRASES, HELM_COPY, SESSION_IDLE_MS } from '@apps/helm/constants';
-import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import {
+  useAssistantName,
+  useAssistantNameVariants,
+} from '@apps/helm/hooks/useAssistantName';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
   clearSentTurn,
@@ -55,6 +62,7 @@ import {
   rankStoredNotes,
   sendCapture,
   wasSentHere,
+  dismissQuestion,
   skipQuestion,
 } from '@apps/helm/store/actions/captureActions';
 import { VIEW_KINDS } from '@apps/helm/screen/views';
@@ -90,7 +98,7 @@ import {
   buildAskAgainLine,
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
-import { getOpenSessionId } from '@apps/helm/utils/sessions';
+import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
 import { takeDeviceCheckIn } from '@apps/helm/utils/deviceCheckIn';
 import { isUnattendedTurn } from '@apps/helm/utils/privacy';
 import { readPresence } from '@apps/helm/utils/presence';
@@ -135,6 +143,7 @@ export function useHelmVoice() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const name = useAssistantName();
+  const nameVariants = useAssistantNameVariants();
   const voiceIdentity = useMemo(() => toVoiceIdentity(name), [name]);
   const uid = user?.uid ?? null;
   const [note, setNote] = useState<string | null>(null);
@@ -237,6 +246,18 @@ export function useHelmVoice() {
       endDictation();
       if (isAsked) showNote(HELM_COPY.talkListenFailed);
     },
+    onUnavailable: (reason) => {
+      interruptedCaptureId.current = null;
+      endDictation();
+      const isMicrophone = reason === 'no-permission';
+      showNotice(
+        isMicrophone
+          ? HELM_COPY.talkNeedsMicrophone
+          : HELM_COPY.talkNeedsRecognition,
+        false,
+        isMicrophone,
+      );
+    },
     onCloudHeld: () => setShowsPhoneLine(true),
     onBargeIn: () => {
       interruptedCaptureId.current = speakingCaptureId.current;
@@ -247,7 +268,8 @@ export function useHelmVoice() {
         isWakeWordOn &&
         keyStatus === 'ready' &&
         (isHomeView || topScreen !== null),
-      spellings: toWakeSpellings(name),
+      spellings: toWakeSpellings(name, nameVariants),
+      looseNames: [name],
       onWake: wakeUp,
     },
     cloudListening: {
@@ -286,6 +308,12 @@ export function useHelmVoice() {
     setNotice(text);
     setHasNoticeDoor(hasDoor);
     setNeedsMicrophone(isMicrophone);
+  }
+
+  function sayRepeatRefusal(outcome: VoiceRepeat) {
+    if (outcome === 'none') say(HELM_COPY.nothingToRepeat);
+    if (outcome === 'muted') showNote(HELM_COPY.replayMuted);
+    if (outcome === 'busy') showNote(HELM_COPY.replayBusy);
   }
 
   function say(line: string) {
@@ -339,6 +367,12 @@ export function useHelmVoice() {
       write(text);
       return;
     }
+    if (isRepeatRequest(text)) {
+      clearRestored();
+      voice.settle();
+      sayRepeatRefusal(voice.repeat());
+      return;
+    }
     const swapped = readSwappedWords(
       text,
       selectNameRecords(store.getState()),
@@ -379,7 +413,7 @@ export function useHelmVoice() {
       question: asked?.question ?? null,
       isPending: asked !== undefined || waiting.current.size > 0,
       hasPage: opts.hasPage,
-      extra: [toPlainText(name), ...toWakeSpellings(name)],
+      extra: [toPlainText(name), ...toWakeSpellings(name, nameVariants)],
       now,
       timeZone,
     });
@@ -628,7 +662,11 @@ export function useHelmVoice() {
   async function closeConversation(close: ClosingRead, isSpoken: boolean) {
     const state = store.getState();
     const all = selectAllCaptures(state);
-    const sessionId = getOpenSessionId(all, Date.now());
+    const sessionId = getOpenSessionId(
+      all,
+      Date.now(),
+      getFreshFrom(state.helm.profile),
+    );
     const executions = selectExecutionsById(state);
     const effects = readCloseEffects({
       unsentWords: [close.rest],
@@ -715,8 +753,13 @@ export function useHelmVoice() {
 
   /** The open question of the latest turn that can be answered by words: a spoken turn's for a spoken answer, any turn's for a typed one. */
   function findAsked(isSpoken: boolean, now: number) {
-    const all = selectAllCaptures(store.getState());
-    const sessionId = getOpenSessionId(all, now);
+    const state = store.getState();
+    const all = selectAllCaptures(state);
+    const sessionId = getOpenSessionId(
+      all,
+      now,
+      getFreshFrom(state.helm.profile),
+    );
     const latest = all
       .filter((capture) => capture.sessionId === sessionId)
       .reverse()
@@ -742,6 +785,7 @@ export function useHelmVoice() {
     isSpoken: boolean,
   ) {
     const state = store.getState();
+    const all = selectAllCaptures(state);
     const asked = findAsked(isSpoken, now);
     if (!uid || !asked) return false;
     const { question } = asked;
@@ -750,6 +794,30 @@ export function useHelmVoice() {
       now,
       timeZone: state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
     });
+    if (answer?.kind === 'dismiss') {
+      const latest = all.find((capture) => capture.id === asked.captureId);
+      try {
+        await dismissQuestion(
+          uid,
+          asked.captureId,
+          asked.id,
+          latest !== undefined &&
+            getOpenQuestions(latest).every((entry) => entry.id === asked.id),
+        );
+        say(
+          [
+            HELM_COPY.questionDismissed,
+            sayNextQuestion(asked.captureId, asked.id),
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+      } catch (error) {
+        console.error('Helm question was not dismissed by voice', error);
+        say(HELM_COPY.heldActionFailed);
+      }
+      return true;
+    }
     if (answer?.kind === 'skip') {
       try {
         await skipQuestion(uid, asked.captureId, asked.id);
@@ -919,6 +987,12 @@ export function useHelmVoice() {
           interruptedCaptureId: interrupted,
         },
         presence: { startedByWake, ...readPresence() },
+        onRepeat: (captureId) => {
+          waiting.current.delete(captureId);
+          clearSentTurn(uid, captureId);
+          voice.settle();
+          sayRepeatRefusal(voice.repeat());
+        },
       });
       recordSentTurn(uid, turn, id);
       if (isFinish) finishedIds.current.add(turn.leadId ?? id);
@@ -931,7 +1005,12 @@ export function useHelmVoice() {
   async function undoLatest() {
     const state = store.getState();
     const all = selectAllCaptures(state);
-    const sessionId = getOpenSessionId(all, Date.now());
+    const now = Date.now();
+    const sessionId = getOpenSessionId(
+      all,
+      now,
+      getFreshFrom(state.helm.profile),
+    );
     const isTurnPending =
       waiting.current.size > 0 ||
       all.some(
@@ -1066,7 +1145,11 @@ export function useHelmVoice() {
   useEffect(() => {
     const now = Date.now();
     const newest = captures.at(-1);
-    const openSessionId = getOpenSessionId(captures, now);
+    const openSessionId = getOpenSessionId(
+      captures,
+      now,
+      getFreshFrom(store.getState().helm.profile),
+    );
     const fresh = captures.filter(
       (capture) =>
         capture.endedConversation && !appliedCloses.current.has(capture.id),
@@ -1106,9 +1189,9 @@ export function useHelmVoice() {
     const wasShown = isSurfaceShown.current;
     isSurfaceShown.current = isShown;
     if (isShown || !wasShown) return;
-    const { state } = voice;
+    const { state, isStarting } = voice;
     queueMicrotask(() => {
-      if (state === 'listening') {
+      if (state === 'listening' || isStarting) {
         interruptedCaptureId.current = null;
         endDictation();
         voice.cancel();
@@ -1133,8 +1216,8 @@ export function useHelmVoice() {
       }
       return startListening(page);
     }
-    if (voice.state !== 'idle') {
-      if (voice.state !== 'listening') {
+    if (voice.state !== 'idle' || voice.isStarting) {
+      if (voice.state !== 'listening' && !voice.isStarting) {
         waiting.current.clear();
         stopCount.current += 1;
       }
@@ -1183,11 +1266,12 @@ export function useHelmVoice() {
   }
 
   const dictate = (write: (text: string) => void, owner: string) => {
-    if (dictation.current !== null && voice.state === 'listening') {
+    const isHearing = voice.state === 'listening' || voice.isStarting;
+    if (dictation.current !== null && isHearing) {
       voice.stop();
       return 'stopped' as const;
     }
-    if (voice.state !== 'idle') return 'blocked' as const;
+    if (voice.state !== 'idle' || voice.isStarting) return 'blocked' as const;
     const result = talk(null);
     if (result === 'started') {
       dictation.current = write;
@@ -1236,6 +1320,8 @@ export function useHelmVoice() {
     handleTyped,
     handleCheckIn: (text: string) => takeCheckIn(text, false),
     registerField,
+    /** Plays a line the person tapped again, or says why it can't right now. */
+    replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),
   };
 }
 

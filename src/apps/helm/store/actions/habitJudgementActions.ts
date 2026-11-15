@@ -118,6 +118,7 @@ async function toToldExecution(
   return {
     captureId: null,
     actor: 'nomos',
+    via: null,
     category: 'organize',
     autonomyLevel: 1,
     state: 'succeeded',

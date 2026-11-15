@@ -196,11 +196,6 @@ function TodayView({
             {HELM_COPY.deleteAllDone}
           </InlineNotice>
         )}
-        {isLoaded && tasks.length === 0 && held.size === 0 && (
-          <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
-            {HELM_COPY.todayFirstRun(assistantName)}
-          </p>
-        )}
         {isToday && isRemindersBack && (
           <InlineNotice
             tone='success'
@@ -210,6 +205,14 @@ function TodayView({
             {HELM_COPY.habitRemindersBackOn}
           </InlineNotice>
         )}
+        {selectedKey >= todayKey &&
+          isLoaded &&
+          tasks.length === 0 &&
+          held.size === 0 && (
+            <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
+              {HELM_COPY.todayFirstRun(assistantName)}
+            </p>
+          )}
         {isToday && (
           <KeyDatesLine onOpenWho={onOpenWho} onOpenComingUp={onOpenComingUp} />
         )}

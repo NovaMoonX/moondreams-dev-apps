@@ -1,5 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import {
+  MessagesSquare,
   BookOpen,
   CalendarCheck,
   CalendarDays,
@@ -36,8 +37,10 @@ const VIEW_ENTRIES: Record<
   comingUp: { label: HELM_COPY.comingUpTile, icon: CalendarHeart },
   settings: { label: HELM_COPY.settingsTitle, icon: Settings2 },
   activity: { label: HELM_COPY.activityTitle, icon: History },
+  outside: { label: HELM_COPY.outsideTitle, icon: MessagesSquare },
   connectedApps: { label: HELM_COPY.connectedAppsRowTitle, icon: Link2 },
   connection: { label: HELM_COPY.connectedAppsRowTitle, icon: Link2 },
+  assistants: { label: HELM_COPY.assistantsRowTitle, icon: Link2 },
   people: { label: HELM_COPY.peopleTitle, icon: Users },
   who: { label: HELM_COPY.peopleTitle, icon: Users },
   place: { label: HELM_COPY.linkedPlace, icon: MapPin },

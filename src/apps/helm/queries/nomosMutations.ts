@@ -8,13 +8,14 @@ interface SortResult {
   status: 'sorted' | 'received' | 'needsYou' | 'failed';
   executionId: string | null;
   releasedIds?: string[];
+  isRepeat?: boolean;
 }
 
 export type SortMode = 'full' | 'rest';
 
 /** `held` when the server's limit or budget turned the call away (`heldReason` says which); `notSorted` when it answered but the reading failed and left the turn as it was. */
 export interface SortOutcome {
-  kind: 'done' | 'held' | 'failed' | 'notSorted' | 'skipped';
+  kind: 'done' | 'held' | 'failed' | 'notSorted' | 'skipped' | 'repeat';
   heldReason: HeldReason | null;
 }
 
@@ -44,7 +45,7 @@ const sortHelmCaptureCallable = httpsCallable<
   SortResult
 >(functions, 'sortHelmCapture');
 
-/** Turns whose sorting call is out: the home line reads "Reading…" for them until the server's status says otherwise. */
+/** Turns whose sorting call is out: the home line reads "Reading" for them until the server's status says otherwise. */
 const inFlight = new Set<string>();
 const listeners = new Set<() => void>();
 
@@ -87,7 +88,8 @@ export async function sortCapture(
       noteIds,
     });
     unreachable.delete(captureId);
-    const { status, releasedIds } = result.data;
+    const { status, releasedIds, isRepeat } = result.data;
+    if (isRepeat) return outcome('repeat');
     void (releasedIds ?? []).reduce(
       (chain, id) => chain.then(() => sortCapture(id)),
       Promise.resolve<unknown>(undefined),

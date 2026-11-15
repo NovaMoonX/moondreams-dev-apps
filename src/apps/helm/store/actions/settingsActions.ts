@@ -47,6 +47,7 @@ export async function ensureHelmProfile(uid: string) {
 
     const profile: HelmProfile = {
       assistantName: null,
+      assistantNameVariants: null,
       assistantTone: null,
       theme: null,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -73,6 +74,8 @@ export async function ensureHelmProfile(uid: string) {
       phoneLocation: 'off',
       zoneSpans: [],
       abilityOffers: [],
+      conversationFreshAt: null,
+      isDailyFreshOn: false,
       createdAt: Date.now(),
       lastEditedAt: null,
     };
@@ -107,6 +110,22 @@ export const setWakeWordOn = (uid: string, isWakeWordOn: boolean) =>
 export const setHandsFreeOn = (uid: string, isHandsFreeOn: boolean) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     isHandsFreeOn,
+    lastEditedAt: Date.now(),
+  });
+
+export const setDailyFreshOn = (uid: string, isDailyFreshOn: boolean) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    isDailyFreshOn,
+    lastEditedAt: Date.now(),
+  });
+
+/** Starts a new conversation from now, or puts back the moment it last started fresh (`null` for never) to take that back. */
+export const setConversationFreshAt = (
+  uid: string,
+  conversationFreshAt: number | null,
+) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    conversationFreshAt,
     lastEditedAt: Date.now(),
   });
 
@@ -164,15 +183,27 @@ export const setRemindersPaused = (uid: string, isPaused: boolean) =>
     lastEditedAt: Date.now(),
   });
 
+const learnAssistantNameCallable = httpsCallable<
+  Record<string, never>,
+  { count: number }
+>(functions, 'learnHelmAssistantName');
+
 export const setAssistantNameAndTone = (
   uid: string,
   assistantName: string | null,
   assistantTone: AssistantTone,
+  isRenamed = false,
 ) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     assistantName,
     assistantTone,
+    ...(isRenamed ? { assistantNameVariants: null } : {}),
     lastEditedAt: Date.now(),
+  }).then(() => {
+    if (!isRenamed) return;
+    learnAssistantNameCallable({}).catch((error) =>
+      console.error('Helm assistant name variants were not learned', error),
+    );
   });
 
 export const setHelmTheme = (uid: string, theme: HelmTheme) =>
