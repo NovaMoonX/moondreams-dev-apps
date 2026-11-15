@@ -59,6 +59,8 @@ export async function ensureHelmProfile(uid: string) {
       selfWhoId: null,
       currentPlace: null,
       styleLearnedThroughAt: null,
+      conversationFreshAt: null,
+      isDailyFreshOn: false,
       createdAt: Date.now(),
       lastEditedAt: null,
     };
@@ -93,6 +95,22 @@ export const setWakeWordOn = (uid: string, isWakeWordOn: boolean) =>
 export const setHandsFreeOn = (uid: string, isHandsFreeOn: boolean) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     isHandsFreeOn,
+    lastEditedAt: Date.now(),
+  });
+
+export const setDailyFreshOn = (uid: string, isDailyFreshOn: boolean) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    isDailyFreshOn,
+    lastEditedAt: Date.now(),
+  });
+
+/** Starts a new conversation from now, or puts back the moment it last started fresh (`null` for never) to take that back. */
+export const setConversationFreshAt = (
+  uid: string,
+  conversationFreshAt: number | null,
+) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    conversationFreshAt,
     lastEditedAt: Date.now(),
   });
 
