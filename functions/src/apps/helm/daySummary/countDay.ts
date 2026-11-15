@@ -9,6 +9,12 @@ export const SUMMARY_START_MINUTES = 15;
 /** A person's latest turn must be this old before their day is closed. */
 export const SUMMARY_QUIET_MS = 10 * MINUTE_MS;
 export const SUMMARY_MAX_ATTEMPTS = 3;
+/** The night run looks at a closed day only until this local time; a day it missed is written when it is opened. */
+export const SUMMARY_END_MINUTES = 6 * 60;
+/** A counted day is tried again no sooner than this, so a held allowance or a missing key is not recounted every run. */
+export const SUMMARY_RETRY_MS = 2 * 60 * MINUTE_MS;
+/** A turn still marked as being sorted after this long has stalled, and no longer holds the night run back. */
+export const SUMMARY_STALLED_MS = 60 * MINUTE_MS;
 export const SUMMARY_MAX_CHARS = 220;
 
 export interface HelmDayCounts {
@@ -189,7 +195,7 @@ const toAddedClause = (counts: HelmDayCounts) => {
   };
 };
 
-/** The code-written line: the messages, then at most three kinds of thing done, biggest first, "and more" for the rest. */
+/** The code-written line: the messages sent, then at most three kinds of thing done, biggest first, "and more" for the rest. */
 export const toDayLine = (counts: HelmDayCounts) => {
   const clauses = [
     toAddedClause(counts),
@@ -217,7 +223,7 @@ export const toDayLine = (counts: HelmDayCounts) => {
   if (counts.messages === 0) {
     return `${things.charAt(0).toUpperCase()}${things.slice(1)}`;
   }
-  const messages = plural(counts.messages, 'message', 'messages');
+  const messages = `Sent ${plural(counts.messages, 'message', 'messages')}`;
   return things === '' ? messages : `${messages} · ${things}`;
 };
 
@@ -236,29 +242,49 @@ export const readDaySummary = (value: unknown, counts: HelmDayCounts) => {
     : null;
 };
 
+export interface SummaryExisting {
+  status: string;
+  attempts: number;
+  writtenAt: number;
+}
+
 export interface SummaryDueInput {
   now: number;
   timeZone: string;
-  existing: { status: string; attempts: number } | null;
+  existing: SummaryExisting | null;
   hasActiveCapture: boolean;
   latestCaptureAt: number | null;
 }
 
-/** Yesterday in the person's zone, and whether the night run may start on it (local time 00:15 or later). */
+/** Yesterday in the person's zone, and whether the night run looks at it now (local time from 00:15 to 06:00). */
 export const getSummaryDay = (now: number, timeZone: string) => {
   const zone = toKnownZone(timeZone);
   const today = toDayKeyIn(now, zone);
+  const sinceMidnight = now - zonedDateTimeToEpoch(today, '00:00', zone);
   return {
     dayKey: shiftDayKey(today, -1),
-    isStarted:
-      now - zonedDateTimeToEpoch(today, '00:00', zone) >=
-      SUMMARY_START_MINUTES * MINUTE_MS,
+    isOpen:
+      sinceMidnight >= SUMMARY_START_MINUTES * MINUTE_MS &&
+      sinceMidnight < SUMMARY_END_MINUTES * MINUTE_MS,
   };
 };
 
-export const isSummaryMissing = (existing: SummaryDueInput['existing']) =>
+export const isSummaryMissing = (
+  existing: SummaryExisting | null,
+  now: number,
+) =>
   existing === null ||
-  (existing.status === 'counted' && existing.attempts < SUMMARY_MAX_ATTEMPTS);
+  (existing.status === 'counted' &&
+    existing.attempts < SUMMARY_MAX_ATTEMPTS &&
+    now - existing.writtenAt >= SUMMARY_RETRY_MS);
+
+/** A turn is still being sorted only while it is fresh; one stuck longer has stalled. */
+export const isStillSorting = (
+  capture: { status: unknown; createdAt: number },
+  now: number,
+) =>
+  (capture.status === 'received' || capture.status === 'interpreting') &&
+  now - capture.createdAt < SUMMARY_STALLED_MS;
 
 /** No turn of the day is still being sorted, and the person's latest turn has gone quiet, so a conversation crossing midnight is finished. */
 export const isDayQuiet = (
@@ -269,6 +295,38 @@ export const isDayQuiet = (
     input.now - input.latestCaptureAt >= SUMMARY_QUIET_MS);
 
 export const isSummaryDue = (input: SummaryDueInput) =>
-  getSummaryDay(input.now, input.timeZone).isStarted &&
-  isSummaryMissing(input.existing) &&
+  getSummaryDay(input.now, input.timeZone).isOpen &&
+  isSummaryMissing(input.existing, input.now) &&
   isDayQuiet(input);
+
+const MAX_TITLE_CHARS = 80;
+
+const toTitle = (value: unknown) =>
+  typeof value === 'string' && value.trim() !== ''
+    ? value.replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE_CHARS)
+    : null;
+
+const readName = (written: Record<string, unknown>) =>
+  toTitle(
+    written['sealed.title'] ??
+      written['sealed.name'] ??
+      written.title ??
+      written.name,
+  );
+
+/** Titles of what one execution made or finished, from its opened effects and their refs. */
+export const toEffectTitles = (
+  effects: { written?: Record<string, unknown> }[],
+  refs: { op: string; collection: string }[],
+): string[] =>
+  effects.flatMap((effect, index) => {
+    const ref = refs[index];
+    const written = effect.written ?? {};
+    const isMade = ref?.op === 'create';
+    const isDone =
+      ref?.collection === 'tasks' &&
+      ref.op === 'update' &&
+      written.status === 'done';
+    const title = isMade || isDone ? readName(written) : null;
+    return title ? [title] : [];
+  });

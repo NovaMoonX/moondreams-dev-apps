@@ -1527,7 +1527,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     };
     const tasks = (count: number) =>
       `${count} ${count === 1 ? 'task' : 'tasks'}`;
-    const line = `${messages} messages · added ${tasks(counts.tasksAdded)}, finished ${tasks(counts.tasksDone)}`;
+    const line = `Sent ${messages} messages · added ${tasks(counts.tasksAdded)}, finished ${tasks(counts.tasksDone)}`;
     const value: HelmDaySummary = {
       dayKey,
       status,

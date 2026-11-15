@@ -1618,11 +1618,10 @@ export const HELM_COPY = {
   planningDay: (day: string) => `Planning ${day}…`,
   planningDaySpoken: (day: string) => `Planning ${day}.`,
   planNothingFits: 'Nothing to suggest for this day.',
-  planYesterday: 'Yesterday, as it was.',
   daySummaryShow: 'See the breakdown',
   daySummaryHide: 'Hide the breakdown',
   daySummaryMessages: (count: number) =>
-    `${count} ${count === 1 ? 'message' : 'messages'}`,
+    `${count} ${count === 1 ? 'message' : 'messages'} sent`,
   daySummaryTasksAdded: (count: number) =>
     `${count} ${count === 1 ? 'task' : 'tasks'} added`,
   daySummaryKeyDatesAdded: (count: number) =>

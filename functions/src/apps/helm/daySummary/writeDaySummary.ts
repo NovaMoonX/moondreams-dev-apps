@@ -34,7 +34,9 @@ import {
   isEmptyDay,
   readDaySummary,
   toDayLine,
+  SUMMARY_MAX_ATTEMPTS,
   SUMMARY_MAX_CHARS,
+  toEffectTitles,
   type DayCapture,
   type DayExecution,
   type HelmDayCounts,
@@ -44,9 +46,10 @@ export type DaySummaryStatus = 'empty' | 'counted' | 'written';
 export type DaySummaryResult = DaySummaryStatus | 'busy';
 
 const MAX_TITLES = 15;
-const MAX_TITLE_CHARS = 80;
 const MAX_EXTRA_CAPTURES = 300;
 const SUMMARY_LIMITS = { maxTurns: 2, maxToolCalls: 0, maxMillis: 45_000 };
+/** Another writer counted this day this recently and is still asking for its sentence. */
+const LEASE_MS = 2 * 60_000;
 
 export const SUBMIT_DAY_SUMMARY_TOOL: TerminalTool = {
   name: 'submit_day_summary',
@@ -125,36 +128,18 @@ export const pickDaySummaryProvider = (): ModelProvider | null => {
   return isRunningInEmulator() ? createDaySummaryFixtureProvider() : null;
 };
 
-const toTitle = (value: unknown) =>
-  typeof value === 'string' && value.trim() !== ''
-    ? value.replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE_CHARS)
-    : null;
-
-/** Titles of what the day's counted executions made or finished, read from their opened effects; one that will not open adds nothing. */
+/** Titles of what the day's counted executions made or finished; one that will not open adds nothing. */
 const readTitles = (key: HelmKey, docs: { data: DocumentData }[]): string[] =>
   docs
     .flatMap(({ data }) => {
       try {
         const sealed = openForHelm(key, data.sealed as SealedPayload);
-        const effects = Array.isArray(sealed.effects)
-          ? (sealed.effects as { written?: Record<string, unknown> }[])
-          : [];
-        const refs = (data.effectRefs ?? []) as {
-          op: string;
-          collection: string;
-        }[];
-        return effects.flatMap((effect, index) => {
-          const ref = refs[index];
-          const written = effect.written ?? {};
-          const isMade = ref?.op === 'create';
-          const isDone =
-            ref?.collection === 'tasks' &&
-            ref.op === 'update' &&
-            written.status === 'done';
-          const title =
-            isMade || isDone ? toTitle(written.title ?? written.name) : null;
-          return title ? [title] : [];
-        });
+        return toEffectTitles(
+          Array.isArray(sealed.effects)
+            ? (sealed.effects as { written?: Record<string, unknown> }[])
+            : [],
+          (data.effectRefs ?? []) as { op: string; collection: string }[],
+        );
       } catch {
         return [];
       }
@@ -276,25 +261,35 @@ export async function writeHelmDaySummary(
 
   const line = toDayLine(counts);
   const isEmpty = isEmptyDay(counts);
-  const settled = await firestore.runTransaction(async (transaction) => {
-    const latest = await transaction.get(summaryRef);
-    if (isClosed(latest.data()))
-      return latest.get('status') as DaySummaryStatus;
-    const attempts =
-      latest.exists && latest.get('status') !== 'written'
-        ? Number(latest.get('attempts') ?? 0)
-        : 0;
-    transaction.set(summaryRef, {
-      dayKey,
-      status: isEmpty ? 'empty' : 'counted',
-      attempts,
-      writtenAt: now,
-      staleAt: null,
-      sealed: isEmpty ? null : sealForHelm(key, { text: line, line, counts }),
-    });
-    return isEmpty ? 'empty' : 'counted';
-  });
-  if (settled !== 'counted') return settled;
+  const readStale = (value: unknown) =>
+    typeof value === 'number' ? value : null;
+  const settled = await firestore.runTransaction<DaySummaryResult | 'generate'>(
+    async (transaction) => {
+      const latest = await transaction.get(summaryRef);
+      if (isClosed(latest.data()))
+        return latest.get('status') as DaySummaryStatus;
+      if (
+        readStale(latest.get('staleAt')) !== readStale(current.get('staleAt'))
+      )
+        return 'busy';
+      const isRetry =
+        latest.get('status') === 'counted' && !latest.get('staleAt');
+      if (isRetry && now - Number(latest.get('writtenAt') ?? 0) < LEASE_MS)
+        return 'busy';
+      const attempts = isRetry ? Number(latest.get('attempts') ?? 0) : 0;
+      if (attempts >= SUMMARY_MAX_ATTEMPTS) return 'counted';
+      transaction.set(summaryRef, {
+        dayKey,
+        status: isEmpty ? 'empty' : 'counted',
+        attempts,
+        writtenAt: now,
+        staleAt: null,
+        sealed: isEmpty ? null : sealForHelm(key, { text: line, line, counts }),
+      });
+      return isEmpty ? 'empty' : 'generate';
+    },
+  );
+  if (settled !== 'generate') return settled;
   if (!provider) return 'counted';
 
   const held = await reserveAiCall(firestore, uid, now, 'quick');

@@ -93,9 +93,6 @@ function PastDay({ dayKey, sources }: PastDayProps) {
   return (
     <>
       <DaySummaryCard key={dayKey} dayKey={dayKey} />
-      <p className='text-muted-foreground text-[15px]'>
-        {HELM_COPY.planYesterday}
-      </p>
       {events.map((event) => (
         <div
           key={event.eventRef}

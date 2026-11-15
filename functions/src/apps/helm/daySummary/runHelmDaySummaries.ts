@@ -9,6 +9,7 @@ import {
   getDayBounds,
   getSummaryDay,
   isDayQuiet,
+  isStillSorting,
   isSummaryMissing,
 } from './countDay.js';
 import {
@@ -22,6 +23,8 @@ if (getApps().length === 0) {
 }
 
 const BATCH_SIZE = 5;
+/** A run stops starting new people after this, leaving them to the next run inside the 540 s limit. */
+const RUN_BUDGET_MS = 420_000;
 
 export type WriteSummary = (
   uid: string,
@@ -33,10 +36,8 @@ export interface SummaryRun {
   checked: number;
   written: number;
   failed: number;
+  deferred: number;
 }
-
-const isActive = (status: unknown) =>
-  status === 'received' || status === 'interpreting';
 
 /** Writes yesterday's summary for each person whose local day has closed and gone quiet; the writer is injected so a run can be rehearsed without a model. */
 export async function runDaySummaries(
@@ -48,11 +49,10 @@ export async function runDaySummaries(
     .collection('apps/helm/users')
     .select('timeZone')
     .get();
-  const run: SummaryRun = { checked: 0, written: 0, failed: 0 };
-  const handle = async (uid: string, timeZone: string) => {
+  const run: SummaryRun = { checked: 0, written: 0, failed: 0, deferred: 0 };
+  const startedAt = Date.now();
+  const handle = async (uid: string, dayKey: string, timeZone: string) => {
     try {
-      const { dayKey, isStarted } = getSummaryDay(now, timeZone);
-      if (!isStarted) return;
       const base = `apps/helm/users/${uid}`;
       const existing = await firestore
         .doc(`${base}/daySummaries/${dayKey}`)
@@ -63,8 +63,10 @@ export async function runDaySummaries(
             ? {
                 status: String(existing.get('status')),
                 attempts: Number(existing.get('attempts') ?? 0),
+                writtenAt: Number(existing.get('writtenAt') ?? 0),
               }
             : null,
+          now,
         )
       ) {
         return;
@@ -75,7 +77,7 @@ export async function runDaySummaries(
           .collection(`${base}/captures`)
           .where('createdAt', '>=', dayStart)
           .where('createdAt', '<', dayEnd)
-          .select('status')
+          .select('status', 'createdAt')
           .get(),
         firestore
           .collection(`${base}/captures`)
@@ -86,7 +88,15 @@ export async function runDaySummaries(
       ]);
       const isQuiet = isDayQuiet({
         now,
-        hasActiveCapture: day.docs.some((doc) => isActive(doc.get('status'))),
+        hasActiveCapture: day.docs.some((doc) =>
+          isStillSorting(
+            {
+              status: doc.get('status'),
+              createdAt: Number(doc.get('createdAt')),
+            },
+            now,
+          ),
+        ),
         latestCaptureAt: latest.empty
           ? null
           : Number(latest.docs[0].get('createdAt')),
@@ -99,18 +109,27 @@ export async function runDaySummaries(
       logger.warn('helm.daySummary.runFailed');
     }
   };
-  const people = profiles.docs.map((doc) => ({
-    uid: doc.id,
-    timeZone: (doc.get('timeZone') as string | undefined) ?? 'UTC',
-  }));
+  const people = profiles.docs.flatMap((doc) => {
+    const timeZone = (doc.get('timeZone') as string | undefined) ?? 'UTC';
+    const { dayKey, isOpen } = getSummaryDay(now, timeZone);
+    return isOpen ? [{ uid: doc.id, dayKey, timeZone }] : [];
+  });
   await Array.from(
     { length: Math.ceil(people.length / BATCH_SIZE) },
     (_, index) => people.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE),
   ).reduce(
     (previous, batch) =>
-      previous.then(() =>
-        Promise.all(batch.map((person) => handle(person.uid, person.timeZone))),
-      ),
+      previous.then(() => {
+        if (Date.now() - startedAt > RUN_BUDGET_MS) {
+          run.deferred += batch.length;
+          return null;
+        }
+        return Promise.all(
+          batch.map((person) =>
+            handle(person.uid, person.dayKey, person.timeZone),
+          ),
+        );
+      }),
     Promise.resolve<unknown>(null),
   );
   return run;

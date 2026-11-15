@@ -1405,7 +1405,7 @@ async function buildPlanDays(input: {
   ]);
   const summarySealed: HelmDaySummarySealed = {
     text: "A steady day on the wedding. Priya's party RSVP went out, the florist call got a task, and two questions about the guest list were answered.",
-    line: '9 messages · added 2 tasks, finished 1 task, answered 2 questions',
+    line: 'Sent 9 messages · added 2 tasks, finished 1 task, answered 2 questions',
     counts: {
       messages: 9,
       tasksAdded: 2,

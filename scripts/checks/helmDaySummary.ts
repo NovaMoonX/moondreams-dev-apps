@@ -5,9 +5,11 @@ import {
   countHelmDay,
   getDayBounds,
   getSummaryDay,
+  isStillSorting,
   isSummaryDue,
   readDaySummary,
   toDayLine,
+  toEffectTitles,
   type DayCapture,
   type DayExecution,
   type HelmDayCounts,
@@ -186,13 +188,13 @@ assert.equal(
       answered: 1,
     }),
   ),
-  '8 messages · added 2 tasks and a key date, finished 1 task, answered 1 question',
+  'Sent 8 messages · added 2 tasks and a key date, finished 1 task, answered 1 question',
 );
-assert.equal(toDayLine(counts({ messages: 3 })), '3 messages');
-assert.equal(toDayLine(counts({ messages: 1 })), '1 message');
+assert.equal(toDayLine(counts({ messages: 3 })), 'Sent 3 messages');
+assert.equal(toDayLine(counts({ messages: 1 })), 'Sent 1 message');
 assert.equal(
   toDayLine(counts({ messages: 1, tasksAdded: 1, answered: 1 })),
-  '1 message · added a task, answered 1 question',
+  'Sent 1 message · added a task, answered 1 question',
 );
 assert.equal(
   toDayLine(
@@ -205,7 +207,7 @@ assert.equal(
       dismissed: 1,
     }),
   ),
-  '5 messages · answered 4 questions, planned 3 days, finished 2 tasks and more',
+  'Sent 5 messages · answered 4 questions, planned 3 days, finished 2 tasks and more',
   'biggest first, three and then and more',
 );
 assert.equal(
@@ -215,7 +217,7 @@ assert.equal(
 );
 assert.equal(
   toDayLine(counts({ messages: 2, peopleAdded: 2, placesAdded: 1 })),
-  '2 messages · added 2 people and a place',
+  'Sent 2 messages · added 2 people and a place',
 );
 
 // The model's sentence.
@@ -277,18 +279,98 @@ assert.equal(
   true,
   'latest turn 10 minutes old',
 );
-assert.equal(due({ existing: { status: 'counted', attempts: 2 } }), true);
+const triedLongAgo = nightStart - 3 * 60 * MINUTE;
 assert.equal(
-  due({ existing: { status: 'counted', attempts: 3 } }),
+  due({
+    existing: { status: 'counted', attempts: 2, writtenAt: triedLongAgo },
+  }),
+  true,
+);
+assert.equal(
+  due({
+    existing: {
+      status: 'counted',
+      attempts: 1,
+      writtenAt: nightStart + 20 * MINUTE - 30 * MINUTE,
+    },
+  }),
+  false,
+  'a counted day tried within two hours waits',
+);
+assert.equal(
+  due({
+    existing: { status: 'counted', attempts: 3, writtenAt: triedLongAgo },
+  }),
   false,
   'attempts cap',
 );
-assert.equal(due({ existing: { status: 'written', attempts: 1 } }), false);
-assert.equal(due({ existing: { status: 'empty', attempts: 0 } }), false);
+assert.equal(
+  due({
+    existing: { status: 'written', attempts: 1, writtenAt: triedLongAgo },
+  }),
+  false,
+);
+assert.equal(
+  due({ existing: { status: 'empty', attempts: 0, writtenAt: triedLongAgo } }),
+  false,
+);
 assert.equal(
   due({ now: nightStart + 20 * MINUTE, timeZone: 'Asia/Tokyo' }),
+  false,
+  'Tokyo is past its night window, so the day waits to be opened',
+);
+assert.equal(due({ now: nightStart + 6 * 60 * MINUTE }), false, 'after 06:00');
+assert.equal(due({ now: nightStart + 5 * 60 * MINUTE }), true, 'before 06:00');
+
+// A turn stuck in sorting stops holding the night run back after an hour.
+const sortedAt = nightStart + 20 * MINUTE;
+assert.equal(
+  isStillSorting(
+    { status: 'received', createdAt: sortedAt - 30 * MINUTE },
+    sortedAt,
+  ),
   true,
-  'Tokyo is already well past its midnight',
+);
+assert.equal(
+  isStillSorting(
+    { status: 'interpreting', createdAt: sortedAt - 61 * MINUTE },
+    sortedAt,
+  ),
+  false,
+  'stalled',
+);
+assert.equal(
+  isStillSorting({ status: 'sorted', createdAt: sortedAt - MINUTE }, sortedAt),
+  false,
+);
+
+// Titles come from the shapes the executor really writes.
+assert.deepEqual(
+  toEffectTitles(
+    [
+      { written: { 'sealed.title': 'Call the florist', status: 'open' } },
+      {
+        written: {
+          'sealed.title': 'Book the venue',
+          status: 'done',
+          completedAt: 1,
+        },
+      },
+      { written: { 'sealed.name': 'Priya', kind: 'person', tier: 1 } },
+      { written: { 'sealed.name': 'Pike Place Market' } },
+      { written: { 'sealed.title': 'Renamed', status: 'open' } },
+      { written: { 'sealed.title': 'Gone' } },
+    ],
+    [
+      { op: 'create', collection: 'tasks' },
+      { op: 'update', collection: 'tasks' },
+      { op: 'create', collection: 'who' },
+      { op: 'create', collection: 'places' },
+      { op: 'update', collection: 'tasks' },
+      { op: 'delete', collection: 'tasks' },
+    ],
+  ),
+  ['Call the florist', 'Book the venue', 'Priya', 'Pike Place Market'],
 );
 
 console.log('helm day summary: ok');
