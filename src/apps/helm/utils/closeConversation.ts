@@ -9,12 +9,13 @@ import {
   matchSpokenAnswer,
   type SpokenAnswer,
 } from '@apps/helm/utils/questionAnswers';
+import { isDismissable } from '@apps/helm/utils/heldCaptures';
 import { isUndoPhrase } from '@apps/helm/utils/voicePhrases';
 
 export interface CloseEffects {
   /** Words that were typed or heard and not yet sent; a close drops them, and Undo puts them back in the field. */
   dropWords: string[];
-  /** Open questions about requests not yet done, and confirms waiting for a yes: they stand no longer. */
+  /** Open questions about requests not yet done, and confirms waiting for a yes: they are let go as a dismiss does, which never reaches a dispute between facts (that one stays open). */
   left: QuestionRef[];
   /** Open questions about something already filed: they wait in Needs you like a skipped one. */
   skipped: QuestionRef[];
@@ -24,11 +25,7 @@ export interface CloseEffects {
 
 const isOpen = (capture: OpenCapture, id: string) => {
   const state = capture.questionState[id];
-  return (
-    state.answeredAt === null &&
-    (state.skippedAt ?? null) === null &&
-    (state.leftAt ?? null) === null
-  );
+  return state.answeredAt === null && (state.skippedAt ?? null) === null;
 };
 
 /** What a close drops and what it keeps for the open session. Everything already done (executions and their Undo) is never listed: only questions are changed. `isFiled` says whether a turn already made something. */
@@ -43,9 +40,12 @@ export function readCloseEffects(session: {
       .map((id) => ({
         ref: { captureId: capture.id, questionId: id },
         isFiled: session.isFiled(capture),
+        isDismissable: isDismissable(capture.questionState[id].kind),
       })),
   );
-  const left = open.filter((entry) => !entry.isFiled).map((entry) => entry.ref);
+  const left = open
+    .filter((entry) => !entry.isFiled && entry.isDismissable)
+    .map((entry) => entry.ref);
   const dropWords = session.unsentWords.filter((words) => words.trim() !== '');
   return {
     dropWords,
@@ -57,7 +57,7 @@ export function readCloseEffects(session: {
 
 export type DeviceTurn =
   | { kind: 'undo' }
-  /** The words answer the open question. */
+  /** The words answer the open question, skip it or dismiss it (`dismiss` is the answer step's, not a close). */
   | { kind: 'answer'; answer: SpokenAnswer }
   /** "stop" over a line with something still waiting: the voice stops and listening goes on for the answer. */
   | { kind: 'stopVoice' }

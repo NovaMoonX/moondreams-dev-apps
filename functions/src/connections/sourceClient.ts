@@ -16,6 +16,8 @@ export interface SourceClient {
   deepLink(connectorId: string, ref: string, ctx: SourceCtx): string | null;
   /** True for a category read only when asked, which a sync never touches. */
   isLive?(connectorId: string, category: string): boolean;
+  /** Days of ended records a category keeps, when its manifest asks for more than the usual window. */
+  historyDays?(connectorId: string, category: string): number | null;
 }
 
 const getAdapter = (connectorId: string) => {
@@ -42,6 +44,14 @@ export class InProcessSourceClient implements SourceClient {
   isLive(connectorId: string, category: string) {
     return getAdapter(connectorId).manifest.categories.some(
       (entry) => entry.id === category && entry.mode === 'live',
+    );
+  }
+
+  historyDays(connectorId: string, category: string) {
+    return (
+      getAdapter(connectorId).manifest.categories.find(
+        (entry) => entry.id === category,
+      )?.historyDays ?? null
     );
   }
 }

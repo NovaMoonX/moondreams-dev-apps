@@ -71,6 +71,27 @@ interface CategoryRead {
 const readMovieTitle = (doc: FirebaseFirestore.DocumentSnapshot) =>
   readText(doc.get('movie.title'));
 
+const MINUTES_PER_HOUR = 60;
+
+const toRuntimeLabel = (minutes: number | null) => {
+  if (minutes === null || minutes <= 0) return null;
+  const whole = Math.round(minutes);
+  return `${Math.floor(whole / MINUTES_PER_HOUR)}h ${whole % MINUTES_PER_HOUR}m`;
+};
+
+/** The movie's running time and age rating in words, after any lead facts. */
+const toMovieDetail = (
+  doc: FirebaseFirestore.DocumentSnapshot,
+  ...lead: (string | null)[]
+) => {
+  const parts = [
+    ...lead,
+    toRuntimeLabel(readTime(doc.get('movie.runtimeMinutes'))),
+    readText(doc.get('movie.contentRating')),
+  ].filter((part): part is string => part !== null);
+  return parts.length === 0 ? null : parts.join(' · ');
+};
+
 async function syncPlannedShowings(
   firestore: Firestore,
   uid: string,
@@ -81,6 +102,17 @@ async function syncPlannedShowings(
     .where('status', '==', 'PLANNED')
     .where('showtimeAt', '>=', windowStart)
     .orderBy('showtimeAt')
+    .select(
+      'movie.title',
+      'movie.runtimeMinutes',
+      'movie.contentRating',
+      'showtimeAt',
+      'endsAt',
+      'theatre.name',
+      'theatre.timeZone',
+      'ticket.entryMode',
+      'lastEditedAt',
+    )
     .limit(SHOWING_LIMIT)
     .get();
   const records = snapshot.docs.flatMap((doc) => {
@@ -92,11 +124,13 @@ async function syncPlannedShowings(
         sourceRef: `viewings/${doc.id}`,
         kind: 'event',
         title,
+        detail: toMovieDetail(doc),
         startAt,
         endAt: readTime(doc.get('endsAt')),
         timeZone: readText(doc.get('theatre.timeZone')),
         placeLabel: readText(doc.get('theatre.name')),
         sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
+        extra: { hasTicket: readText(doc.get('ticket.entryMode')) !== null },
       }),
     ];
   });
@@ -140,40 +174,239 @@ async function syncSavedTheaters(
   return { records, isFull: snapshot.size < THEATER_LIMIT };
 }
 
+const DAY_MS = 86_400_000;
+const WATCHLIST_LIMIT = 200;
+/** Seen and archived movies stay in the collection, so the read is sized apart from what is sent. */
+const WATCHLIST_READ_LIMIT = 2000;
+const FRIDAY = 5;
+
+const PRIORITY_LABELS: Record<string, string> = {
+  MUST_SEE: 'Must see',
+  WANT_TO_SEE: 'Want to see',
+  IF_I_HAVE_TIME: 'If I have time',
+};
+
+const toDayKey = (at: number, timeZone: string) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at);
+
+/** A day in words, since a dated record that has ended leaves a reader's window. */
+const toDayLine = (lead: string, at: number | null, timeZone: string) =>
+  at === null
+    ? null
+    : `${lead} ${new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }).format(at)}`;
+
+const toUtcDayKey = (day: number) => new Date(day).toISOString().slice(0, 10);
+
+const readZone = (value: unknown) => {
+  const zone = readText(value);
+  if (zone === null) return 'UTC';
+  try {
+    toDayKey(0, zone);
+    return zone;
+  } catch {
+    return 'UTC';
+  }
+};
+
+const toGoalLine = (
+  label: string,
+  goal: number | null,
+  seen: number,
+  period: string,
+) => (goal === null ? null : `${label} goal ${goal}, ${seen} seen ${period}`);
+
+/** Weeks run Friday to Thursday, like the app's counters; days are read in the zone of the latest seen movie's theater, since the app does not store the person's own. */
+async function readGoals(
+  firestore: Firestore,
+  uid: string,
+  seenDocs: FirebaseFirestore.QueryDocumentSnapshot[],
+  now: number,
+  zone: string,
+): Promise<SharedRecord[]> {
+  const profile = await firestore.doc(`apps/a-list/memberships/${uid}`).get();
+  const weeklyGoal = readTime(profile.get('weeklyGoal'));
+  const monthlyGoal = readTime(profile.get('monthlyGoal'));
+  if (weeklyGoal === null && monthlyGoal === null) return [];
+  const today = toDayKey(now, zone);
+  const todayDay = Date.parse(`${today}T00:00:00Z`);
+  const sinceFriday = (new Date(todayDay).getUTCDay() - FRIDAY + 7) % 7;
+  const weekStart = toUtcDayKey(todayDay - sinceFriday * DAY_MS);
+  const weekEnd = toUtcDayKey(todayDay + (6 - sinceFriday) * DAY_MS);
+  const seenKeys = seenDocs.flatMap((doc) => {
+    const at = readTime(doc.get('showtimeAt'));
+    return at === null ? [] : [toDayKey(at, zone)];
+  });
+  const lines = [
+    toGoalLine(
+      'Weekly',
+      weeklyGoal,
+      seenKeys.filter((key) => key >= weekStart && key <= weekEnd).length,
+      'this week',
+    ),
+    toGoalLine(
+      'Monthly',
+      monthlyGoal,
+      seenKeys.filter((key) => key.startsWith(today.slice(0, 7))).length,
+      'this month',
+    ),
+  ].filter((line): line is string => line !== null);
+  return [
+    toRecord({
+      sourceRef: 'goals',
+      kind: 'knowledge',
+      title: 'Movie goals',
+      detail: lines.join(' · '),
+      sourceUpdatedAt:
+        Math.max(
+          readTime(profile.get('lastEditedAt')) ?? 0,
+          ...seenDocs.map((doc) => readTime(doc.get('lastEditedAt')) ?? 0),
+        ) || null,
+    }),
+  ];
+}
+
 async function syncSeenMovies(
   firestore: Firestore,
   uid: string,
+  now: number,
 ): Promise<CategoryRead> {
   const snapshot = await firestore
     .collection(membershipPath(uid, 'viewings'))
     .where('status', '==', 'SEEN')
     .orderBy('showtimeAt', 'desc')
+    .select(
+      'movie.title',
+      'movie.runtimeMinutes',
+      'movie.contentRating',
+      'showtimeAt',
+      'theatre.name',
+      'theatre.timeZone',
+      'rating',
+      'lastEditedAt',
+    )
     .limit(SHOWING_LIMIT)
     .get();
-  const records = snapshot.docs.flatMap((doc) => {
+  const fallbackZone = readZone(
+    snapshot.docs
+      .find((doc) => readText(doc.get('theatre.timeZone')) !== null)
+      ?.get('theatre.timeZone'),
+  );
+  const seen = snapshot.docs.flatMap((doc) => {
     const title = readMovieTitle(doc);
     const rating = readTime(doc.get('rating'));
-    if (title === null || rating === null) return [];
+    if (title === null) return [];
     return [
       toRecord({
         sourceRef: `viewings/${doc.id}`,
         kind: 'knowledge',
         title,
+        detail: toMovieDetail(
+          doc,
+          toDayLine(
+            'Seen',
+            readTime(doc.get('showtimeAt')),
+            readText(doc.get('theatre.timeZone')) === null
+              ? fallbackZone
+              : readZone(doc.get('theatre.timeZone')),
+          ),
+        ),
+        placeLabel: readText(doc.get('theatre.name')),
         sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
-        extra: { rating },
+        extra: rating === null ? {} : { rating },
       }),
     ];
   });
-  return { records, isFull: snapshot.size < SHOWING_LIMIT };
+  const goals = await readGoals(
+    firestore,
+    uid,
+    snapshot.docs,
+    now,
+    fallbackZone,
+  );
+  return {
+    records: [...goals, ...seen],
+    isFull: snapshot.size < SHOWING_LIMIT,
+  };
+}
+
+async function syncWatchlist(
+  firestore: Firestore,
+  uid: string,
+): Promise<CategoryRead> {
+  const [snapshot, seenSnapshot] = await Promise.all([
+    firestore
+      .collection(membershipPath(uid, 'watchlist'))
+      .select(
+        'movie.title',
+        'movie.releaseDate',
+        'movie.runtimeMinutes',
+        'movie.contentRating',
+        'priority',
+        'archivedAt',
+        'lastEditedAt',
+      )
+      .limit(WATCHLIST_READ_LIMIT)
+      .get(),
+    firestore
+      .collection(membershipPath(uid, 'viewings'))
+      .where('status', '==', 'SEEN')
+      .orderBy('showtimeAt', 'desc')
+      .select('movieKey')
+      .limit(WATCHLIST_READ_LIMIT)
+      .get(),
+  ]);
+  const seenKeys = new Set(
+    seenSnapshot.docs.map((doc) => readText(doc.get('movieKey'))),
+  );
+  const records = snapshot.docs.flatMap((doc) => {
+    const title = readMovieTitle(doc);
+    if (
+      title === null ||
+      readTime(doc.get('archivedAt')) !== null ||
+      seenKeys.has(doc.id)
+    )
+      return [];
+    const releaseDate = readTime(doc.get('movie.releaseDate'));
+    return [
+      toRecord({
+        sourceRef: `watchlist/${doc.id}`,
+        kind: 'artifact',
+        title,
+        detail: toMovieDetail(doc, toDayLine('Out', releaseDate, 'UTC')),
+        sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
+        extra: {
+          status: PRIORITY_LABELS[readText(doc.get('priority')) ?? ''] ?? null,
+        },
+      }),
+    ];
+  });
+  return {
+    records: records.slice(0, WATCHLIST_LIMIT),
+    isFull:
+      snapshot.size < WATCHLIST_READ_LIMIT &&
+      seenSnapshot.size < WATCHLIST_READ_LIMIT,
+  };
 }
 
 export interface AListAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
+  now: () => number;
 }
 
 const defaultDeps: AListAdapterDeps = {
   firestore: () => getFirestore(),
+  now: () => Date.now(),
   canOpen: async (uid) => {
     const user = await getAuth().getUser(uid);
     return canOpenApp(getFirestore(), 'a-list', {
@@ -198,7 +431,9 @@ export function createAListAdapter(
       case 'savedTheaters':
         return syncSavedTheaters(firestore, uid);
       case 'seenMovies':
-        return syncSeenMovies(firestore, uid);
+        return syncSeenMovies(firestore, uid, deps.now());
+      case 'watchlist':
+        return syncWatchlist(firestore, uid);
       default:
         throw new Error('Unknown category.');
     }

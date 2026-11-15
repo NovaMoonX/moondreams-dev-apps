@@ -28,7 +28,7 @@ import {
   type KeyDateInput,
 } from '@apps/helm/store/actions/keyDateActions';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
-import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
+import { selectEveryCapture } from '@apps/helm/store/selectors/captureSelectors';
 import type { KeyDateKind, MomentPrecision, OpenWho } from '@apps/helm/types';
 import {
   checkKeyDateParts,
@@ -580,7 +580,7 @@ function KeyDateSheet({
   const { user } = useAuth();
   const { addToast } = useToast();
   const { dates } = useKeyDates(who.id);
-  const captures = useAppSelector(selectAllCaptures);
+  const captures = useAppSelector(selectEveryCapture);
   const listed =
     dates.find((entry) => entry.id === openId) ??
     moments.find((entry) => entry.id === openId) ??

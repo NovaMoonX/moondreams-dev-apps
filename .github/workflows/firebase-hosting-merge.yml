@@ -102,3 +102,6 @@ jobs:
         run: |
           git tag -f worker-deployed ${{ github.sha }}
           git push -f origin refs/tags/worker-deployed
+      # A missing build file must be a 404 nothing keeps, or phones keep failing to open a screen after a deploy.
+      - name: Check the live site's serving
+        run: npm run check:serving -- --live https://apps.moondreams.dev

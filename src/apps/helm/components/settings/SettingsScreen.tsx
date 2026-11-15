@@ -1,12 +1,17 @@
 import { useState } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
 import {
+  Bot,
   Eye,
   History,
   Link2,
+  MessagesSquare,
   Mic,
   Sparkles,
   Sun,
+  Sunrise,
   UserRound,
 } from 'lucide-react';
 
@@ -19,6 +24,8 @@ import {
 import { signOutEverywhere } from '@/lib/security/trustedBrowsers';
 import ColoursSection from '@apps/helm/components/settings/ColoursSection';
 import SettingsSection from '@apps/helm/components/settings/SettingsSection';
+import AppToggle from '@/components/AppToggle';
+import GatesClosedNote from '@/components/GatesClosedNote';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
 import NewBadge from '@/components/NewBadge';
 import SettingsRow from '@/components/SettingsRow';
@@ -31,14 +38,17 @@ import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useNow } from '@/hooks/useNow';
 import { hasUnseenNews } from '@/lib/connections/connectionNews';
 import { useConnections } from '@/lib/connections/useConnections';
+import { selectHasOutsideSource } from '@apps/helm/store/selectors/captureSelectors';
 import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { formatClockTime } from '@/utils/formatUtils';
+import { setDailyFreshOn } from '@apps/helm/store/actions/settingsActions';
 import { helmAppName, helmTrustStore } from '@apps/helm/queries/helmKeyQueries';
 import {
   formatUpdatedAt,
@@ -49,15 +59,49 @@ import {
 interface SettingsScreenProps {
   onBack: () => void;
   onOpenActivity: () => void;
+  onOpenOutside: () => void;
   onOpenConnectedApps: () => void;
+  onOpenAssistants: () => void;
   onOpenSeesYou: () => void;
+}
+
+/** A switch that starts each day's first turn as a new conversation; it writes at once and touches only itself. */
+function DailyFreshRow() {
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const isOn = useAppSelector(
+    (state) => state.helm.profile?.isDailyFreshOn ?? false,
+  );
+  const change = (checked: boolean) => {
+    if (!user) return;
+    setDailyFreshOn(user.uid, checked).catch((error: unknown) => {
+      console.error('Helm daily fresh start was not saved', error);
+      addToast({ title: HELM_COPY.dailyFreshFailed, type: 'error' });
+    });
+  };
+  return (
+    <SettingsRow
+      icon={<Sunrise className='size-5' aria-hidden='true' />}
+      title={HELM_COPY.dailyFreshTitle}
+      description={HELM_COPY.dailyFreshDescription}
+      control={
+        <AppToggle
+          aria-label={HELM_COPY.dailyFreshTitle}
+          checked={isOn}
+          onCheckedChange={change}
+        />
+      }
+    />
+  );
 }
 
 /** A utility screen: Back to Home, its title and its groups, with no ask bar. */
 function SettingsScreen({
   onBack,
   onOpenActivity,
+  onOpenOutside,
   onOpenConnectedApps,
+  onOpenAssistants,
   onOpenSeesYou,
 }: SettingsScreenProps) {
   const { user, logOut } = useAuth();
@@ -77,6 +121,11 @@ function SettingsScreen({
     (total, grant) => total + (grant.keptCopies?.count ?? 0),
     0,
   );
+  const isAssistantsOpen = useIsGateOpen('helm', 'helm-assistants');
+  const assistantCount = useAppSelector(
+    (state) => state.helm.assistants.items.length,
+  );
+  const hasOutsideSource = useAppSelector(selectHasOutsideSource);
   const now = useNow(60_000);
   const newestOkAt = grants.reduce<number | null>((newest, grant) => {
     const at = getNewestOkAt(grant);
@@ -109,6 +158,7 @@ function SettingsScreen({
             onClick={() => setIsAssistantOpen(true)}
             hasChevron
           />
+          <DailyFreshRow />
         </SettingsSection>
         <ColoursSection />
         <SettingsSection title={HELM_COPY.settingsPlanning}>
@@ -150,6 +200,28 @@ function SettingsScreen({
             onClick={onOpenConnectedApps}
             hasChevron
           />
+          {isAssistantsOpen && (
+            <SettingsRow
+              icon={<Bot className='size-5' aria-hidden='true' />}
+              title={HELM_COPY.assistantsRowTitle}
+              description={
+                assistantCount > 0
+                  ? HELM_COPY.assistantsRowCount(assistantCount)
+                  : HELM_COPY.assistantsRowNone
+              }
+              onClick={onOpenAssistants}
+              hasChevron
+            />
+          )}
+          {hasOutsideSource && (
+            <SettingsRow
+              icon={<MessagesSquare className='size-5' aria-hidden='true' />}
+              title={HELM_COPY.outsideTitle}
+              description={HELM_COPY.outsideRowHint}
+              onClick={onOpenOutside}
+              hasChevron
+            />
+          )}
           <ShiftCalendars onOpenConnectedApps={onOpenConnectedApps} />
         </SettingsSection>
         <SettingsSection title={HELM_COPY.settingsVoice}>
@@ -213,6 +285,7 @@ function SettingsScreen({
           />
           <DeleteHelmData connectionCount={grants.length} />
         </SettingsSection>
+        <GatesClosedNote appId='helm' />
       </main>
       <AssistantNameToneSheet
         isOpen={isAssistantOpen}
