@@ -4051,7 +4051,7 @@ async function buildFileTurns(input: {
   };
 }
 
-/** Alex's people's connections: Dana and Sam Rivera married since 2019-06-20, Mom is Dana's mother, Dana and Priya are friends, Sam Rivera works with Priya, Priya and Sam Patel are divorced (a past couple, drawn quieter), and one refused proposal (Sam Patel as Dana's brother) that is never drawn. */
+/** Alex's people's connections: Dana and Sam Rivera married since 2019-06-20, Mom is Dana's mother, Dana and Priya are friends, Sam Rivera works with Priya, Priya and Sam Patel are divorced (a past couple, drawn quieter), one refused proposal (Sam Patel as Dana's brother) that is never drawn, and Ruth as Mom's sister with Lee as Ruth's son, which leave Alex's page with a figured-out aunt and cousin and Dana and Eli a figured-out sibling pair. */
 async function buildConnections(input: {
   now: number;
   encryption: HelmEncryption;
@@ -4060,6 +4060,7 @@ async function buildConnections(input: {
   const genders: Record<string, Gender> = {
     'seed-who-dana': 'female',
     'seed-who-mom': 'female',
+    'seed-who-ruth': 'female',
     'seed-who-sam-patel': null,
   };
   const specs: {
@@ -4114,6 +4115,24 @@ async function buildConnections(input: {
       relation: null,
       status: 'divorced',
       since: Date.UTC(2014, 8, 6),
+      source: 'page',
+    },
+    {
+      first: 'seed-who-ruth',
+      second: 'seed-who-mom',
+      kind: 'family',
+      relation: 'sister',
+      status: null,
+      since: null,
+      source: 'page',
+    },
+    {
+      first: 'seed-who-lee',
+      second: 'seed-who-ruth',
+      kind: 'family',
+      relation: 'son',
+      status: null,
+      since: null,
       source: 'page',
     },
     {
@@ -4381,6 +4400,51 @@ async function buildPeople(input: {
         },
         now - 40 * DAY_MS,
         await seal(wordsOf('Mom', { relation: 'mother', aliases: ['Mother'], kin: { kind: 'mother', order: null } })),
+      ),
+    },
+    {
+      id: 'seed-who-eli',
+      who: toWho(
+        {
+          kind: 'person',
+          tier: 'regular',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 12 * DAY_MS,
+        },
+        now - 30 * DAY_MS,
+        await seal(wordsOf('Eli', { relation: 'brother', kin: { kind: 'brother', order: 'older' } })),
+      ),
+    },
+    {
+      id: 'seed-who-ruth',
+      who: toWho(
+        {
+          kind: 'person',
+          tier: 'passing',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 20 * DAY_MS,
+        },
+        now - 30 * DAY_MS,
+        await seal(wordsOf('Aunt Ruth')),
+      ),
+    },
+    {
+      id: 'seed-who-lee',
+      who: toWho(
+        {
+          kind: 'person',
+          tier: 'passing',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 20 * DAY_MS,
+        },
+        now - 30 * DAY_MS,
+        await seal(wordsOf('Lee')),
       ),
     },
     {

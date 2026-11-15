@@ -14,6 +14,7 @@ import {
   type ConnectionGenders,
   type ConnectionKind,
   type ConnectionRelation,
+  type ConnectionSource,
   type ConnectionWords,
   type CoupleStatus,
 } from '@apps/helm/engine/connections';
@@ -47,11 +48,12 @@ export interface NewConnection {
   genders: ConnectionGenders;
 }
 
-/** An existing pair and kind is refused as `duplicate` inside the transaction; a refused proposal is replaced. Needs a connection. */
-export async function addConnection(
+async function createConnection(
   uid: string,
   encryption: HelmEncryption,
   input: NewConnection,
+  source: ConnectionSource,
+  isTaken: (existing: Connection) => boolean,
 ): Promise<Exclude<ConnectionResult, 'unreadable'>> {
   if (!navigator.onLine) return 'offline';
   if (input.firstId === input.secondId) return 'missing';
@@ -84,7 +86,7 @@ export async function addConnection(
   const connection: Connection = {
     whoIds: record.whoIds,
     kind: record.kind,
-    source: 'page',
+    source,
     createdBy: 'person',
     executionId: null,
     createdAt: now,
@@ -98,7 +100,7 @@ export async function addConnection(
         ...whoRefs.map((whoRef) => transaction.get(whoRef)),
       ]);
       if (whos.some((who) => !who.exists())) return 'missing';
-      if (existing.exists() && isShownConnection(existing.data() as Connection))
+      if (existing.exists() && isTaken(existing.data() as Connection))
         return 'duplicate';
       transaction.set(ref, connection);
       return 'saved';
@@ -108,6 +110,29 @@ export async function addConnection(
     throw error;
   }
 }
+
+/** An existing pair and kind is refused as `duplicate` inside the transaction; a refused proposal is replaced. Needs a connection. */
+export const addConnection = (
+  uid: string,
+  encryption: HelmEncryption,
+  input: NewConnection,
+) => createConnection(uid, encryption, input, 'page', isShownConnection);
+
+/** The person's answer to a figured-out link: `confirmed` keeps the words, `refused` seals the ones they turned down. Written only when the pair has no family document yet, so it is `duplicate` when one was made meanwhile. Needs a connection. */
+export const settleFamilyLink = (
+  uid: string,
+  encryption: HelmEncryption,
+  input: Omit<NewConnection, 'kind' | 'status' | 'since'> & {
+    source: 'confirmed' | 'refused';
+  },
+) =>
+  createConnection(
+    uid,
+    encryption,
+    { ...input, kind: 'family', status: null, since: null },
+    input.source,
+    () => true,
+  );
 
 export interface ConnectionChange {
   /** A family word, said as what `fromId` is to the other person; the other side is worked out again. */

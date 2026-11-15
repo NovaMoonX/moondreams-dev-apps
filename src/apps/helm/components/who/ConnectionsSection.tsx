@@ -11,12 +11,20 @@ import AddRow from '@apps/helm/components/who/AddRow';
 import ConnectionSheet, {
   type ConnectionTarget,
 } from '@apps/helm/components/who/ConnectionSheet';
+import FiguredOutSheet from '@apps/helm/components/who/FiguredOutSheet';
 import WhoMark from '@apps/helm/components/who/WhoMark';
 import { HELM_COPY } from '@apps/helm/constants';
-import { CONNECTION_KINDS, readFromSide } from '@apps/helm/engine/connections';
-import { selectShownConnections } from '@apps/helm/store/selectors/connectionSelectors';
+import {
+  CONNECTION_KINDS,
+  genderOf,
+  readFromSide,
+} from '@apps/helm/engine/connections';
+import {
+  selectFiguredOutByWho,
+  selectShownConnections,
+} from '@apps/helm/store/selectors/connectionSelectors';
 import type { OpenWho } from '@apps/helm/types';
-import { toSideLine } from '@apps/helm/utils/connectionText';
+import { toFiguredSide, toSideLine } from '@apps/helm/utils/connectionText';
 
 const shownName = (other: OpenWho) =>
   other.isUnreadable ? HELM_COPY.unreadable : other.name;
@@ -25,9 +33,11 @@ interface ConnectionsSectionProps {
   who: OpenWho;
 }
 
-/** The people this one is linked to, each with what they are to them; every action is in the row's sheet. */
+/** The people this one is linked to, each with what they are to them, then those worked out from what is stored, quieter and marked Figured out; every action is in the row's sheet. */
 function ConnectionsSection({ who }: ConnectionsSectionProps) {
   const [target, setTarget] = useState<ConnectionTarget | null>(null);
+  const [figuredOtherId, setFiguredOtherId] = useState<string | null>(null);
+  const figuredOut = useAppSelector(selectFiguredOutByWho);
   const connections = useAppSelector(selectShownConnections);
   const people = useAppSelector((state) => state.helm.who.items);
   const rows = connections
@@ -44,6 +54,17 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
           CONNECTION_KINDS.indexOf(b.connection.kind) ||
         a.other.name.localeCompare(b.other.name),
     );
+  const figuredRows = (figuredOut.get(who.id) ?? [])
+    .flatMap((link) => {
+      const other = people.find(
+        (entry) =>
+          entry.id === (link.firstId === who.id ? link.secondId : link.firstId),
+      );
+      return other
+        ? [{ link, other, side: toFiguredSide(link, who.id, genderOf(other)) }]
+        : [];
+    })
+    .sort((a, b) => a.other.name.localeCompare(b.other.name));
 
   return (
     <section className='space-y-3'>
@@ -84,6 +105,36 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
             </Button>
           </li>
         ))}
+        {figuredRows.map(({ link, side, other }) => (
+          <li key={`${link.firstId}_${link.secondId}`}>
+            <Button
+              type='button'
+              variant='tertiary'
+              className='flex h-auto min-h-16 w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-2 text-left focus-visible:-outline-offset-2'
+              onClick={() => setFiguredOtherId(other.id)}
+            >
+              <WhoMark kind={other.kind} name={shownName(other)} />
+              <span className='min-w-0 flex-1'>
+                <PrivateTitle
+                  kind='who'
+                  record={other}
+                  className='text-muted-foreground text-[15px] break-words'
+                >
+                  {shownName(other)}
+                </PrivateTitle>
+                <span className='text-muted-foreground block text-[13px] break-words'>
+                  {HELM_COPY.figuredSideLine(
+                    toSideLine('family', side, who.isSelf ? null : who.name),
+                  )}
+                </span>
+              </span>
+              <ChevronRight
+                className='text-muted-foreground size-4 shrink-0'
+                aria-hidden='true'
+              />
+            </Button>
+          </li>
+        ))}
         <li>
           <AddRow
             isInList
@@ -97,6 +148,12 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
         onClose={() => setTarget(null)}
         who={who}
         target={target}
+      />
+      <FiguredOutSheet
+        isOpen={figuredOtherId !== null}
+        onClose={() => setFiguredOtherId(null)}
+        who={who}
+        otherId={figuredOtherId}
       />
     </section>
   );

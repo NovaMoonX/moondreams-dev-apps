@@ -104,6 +104,7 @@
     "check:helm-same-thing": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSameThing.ts",
     "check:helm-connections": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmConnections.ts",
     "check:helm-connection-commands": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmConnectionCommands.ts",
+    "check:helm-family-links": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmFamilyLinks.ts",
     "check:helm-who-contacts": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhoContacts.ts",
     "check:helm-contact-import": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmContactImport.ts",
     "check:helm-match-entities": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmMatchEntities.ts",

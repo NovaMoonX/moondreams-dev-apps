@@ -6,19 +6,13 @@ import type {
   ConnectionKind,
   CoupleStatus,
 } from '@apps/helm/engine/connections';
-import { HELM_COPY, KIN_KINDS } from '@apps/helm/constants';
+import { HELM_COPY } from '@apps/helm/constants';
 import type { KinKind } from '@apps/helm/types';
-import { STATUS_OPTIONS } from '@apps/helm/utils/connectionText';
-
-const NOT_SURE = 'none';
-
-const FAMILY_OPTIONS = [
-  { value: NOT_SURE, text: HELM_COPY.connectionFamilyNotSure },
-  ...KIN_KINDS.map((entry) => ({
-    value: entry.kind,
-    text: entry.written.charAt(0).toUpperCase() + entry.written.slice(1),
-  })),
-];
+import {
+  FAMILY_OPTIONS,
+  NOT_SURE,
+  STATUS_OPTIONS,
+} from '@apps/helm/utils/connectionText';
 
 interface ConnectionFieldsProps {
   kind: ConnectionKind;

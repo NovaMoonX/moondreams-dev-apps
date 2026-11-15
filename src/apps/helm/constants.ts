@@ -2040,6 +2040,36 @@ export const HELM_COPY = {
   },
   connectionSince: (date: string) => `Since ${date}`,
   connectionSinceInline: (date: string) => `since ${date}`,
+  figuredOut: 'Figured out',
+  figuredSideLine: (line: string) => `${line} · Figured out`,
+  figuredBecause: {
+    siblings: (first: string, second: string) =>
+      `Because ${first} and ${second} are both your siblings`,
+    sameParent: (parent: string, first: string, second: string) =>
+      `Because ${parent} is a parent of both ${first} and ${second}`,
+    step: (
+      subject: string,
+      isYou: boolean,
+      owner: string | null,
+      word: string | null,
+    ) =>
+      `${subject} ${isYou ? 'are' : 'is'} ${owner === null ? 'your' : `${owner}'s`} ${word ?? 'family'}`,
+    steps: (steps: string[]) =>
+      `Because ${steps.length > 1 ? `${steps.slice(0, -1).join(', ')} and ${steps[steps.length - 1]}` : steps.join('')}`,
+  },
+  figuredConfirm: "That's right",
+  figuredConfirmSubtitle: 'Keep it as a link',
+  figuredWrong: 'Not right',
+  figuredWrongSubtitle: "Say how they're related, or that they aren't",
+  figuredNotRelated: 'Not related',
+  figuredFixLead: 'How are they related?',
+  figuredFixSave: 'Save',
+  figuredLinkedToast: (line: string) => `Linked: ${line}`,
+  figuredRefusedToast: (other: string, name: string | null) =>
+    `Noted: ${other} and ${name ?? 'you'} aren't family`,
+  figuredUndone: 'Put back as it was.',
+  figuredDuplicate: 'You already linked these two meanwhile.',
+  figuredGone: "That link isn't worked out any more.",
   contactAddPhone: 'Add a phone',
   contactAddEmail: 'Add an email',
   contactPrimary: 'Primary',
