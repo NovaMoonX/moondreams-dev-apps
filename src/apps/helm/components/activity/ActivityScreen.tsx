@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, MessagesSquare } from 'lucide-react';
 
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
@@ -22,7 +22,11 @@ import {
   showMoreActivity,
 } from '@apps/helm/store/helmSlice';
 import { startActivityListener } from '@apps/helm/store/listeners/executionListener';
-import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectEveryCapture,
+  selectExecutionsById,
+  selectHasOutsideSource,
+} from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenExecution } from '@apps/helm/types';
 import {
   getActivityLine,
@@ -35,6 +39,7 @@ import { createSealedReader } from '@lib/security';
 
 interface ActivityScreenProps {
   onBack: () => void;
+  onOpenOutside: () => void;
 }
 
 const ROW_ESTIMATED_HEIGHT = 48;
@@ -96,10 +101,12 @@ function ActivityLoader({ limit }: { limit: number }) {
 function ActivityRow({
   execution,
   undo,
+  via,
   onOpen,
 }: {
   execution: OpenExecution;
   undo: OpenExecution | null;
+  via: string | null;
   onOpen: () => void;
 }) {
   const subject = getActivitySubject(execution);
@@ -122,6 +129,11 @@ function ActivityRow({
             {subject}
           </span>
         )}
+        {via && (
+          <span className='text-muted-foreground block text-[13px]'>
+            {HELM_COPY.assistantFrom(via)}
+          </span>
+        )}
         {mark && (
           <span className='text-muted-foreground block text-[13px]'>
             {mark}
@@ -140,13 +152,24 @@ function ActivityRow({
 }
 
 /** A utility screen: every execution newest first under its day, thirty at a time. */
-function ActivityScreen({ onBack }: ActivityScreenProps) {
+function ActivityScreen({ onBack, onOpenOutside }: ActivityScreenProps) {
   const { user } = useAuth();
   const name = useAssistantName();
   const { items, isLoaded, isFailed, limit, isExhausted } = useAppSelector(
     (state) => state.helm.activity,
   );
   const byId = useAppSelector(selectExecutionsById);
+  const captures = useAppSelector(selectEveryCapture);
+  const hasOutsideSource = useAppSelector(selectHasOutsideSource);
+  const viaByCapture = useMemo(
+    () =>
+      new Map(
+        captures.flatMap((capture) =>
+          capture.via ? [[capture.id, capture.via] as const] : [],
+        ),
+      ),
+    [captures],
+  );
   const [open, setOpen] = useState<OpenExecution | null>(null);
   const days = useMemo(
     () => groupByDay(items.filter(isShownInActivity)),
@@ -166,6 +189,26 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.activityTitle}
         </h1>
+        {hasOutsideSource && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='helm-card flex h-auto w-full items-center justify-between gap-3 px-4 py-2.5 text-left'
+            onClick={onOpenOutside}
+          >
+            <MessagesSquare
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+            <span className='text-foreground min-w-0 flex-1 truncate text-[15px]'>
+              {HELM_COPY.outsideTitle}
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+        )}
         {isFailed && (
           <p className='helm-card p-4 text-[15px] text-pretty' role='alert'>
             {HELM_COPY.activityFailed}
@@ -193,6 +236,12 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
                       execution.undoneByExecutionId
                         ? (byId.get(execution.undoneByExecutionId) ?? null)
                         : null
+                    }
+                    via={
+                      execution.via ??
+                      (execution.captureId
+                        ? (viaByCapture.get(execution.captureId) ?? null)
+                        : null)
                     }
                     onOpen={() => setOpen(execution)}
                   />

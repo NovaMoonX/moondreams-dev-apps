@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -6,12 +6,22 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import AppToggle from '@/components/AppToggle';
 import InlineNotice from '@/components/InlineNotice';
 import SectionHeader from '@/components/SectionHeader';
+import SortControl from '@/components/SortControl';
+import { useAppSort } from '@/hooks/useAppSort';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { clearSignOutNote, readSignOutNote } from '@/lib/auth/signOutNote';
 import { useAppCatalog } from '@hooks/useAppCatalog';
-import { APP_DESCRIPTION, APP_TITLE, getAppResumePath } from '@lib/app';
+import {
+  APP_DESCRIPTION,
+  APP_SORT_OPTIONS,
+  APP_TITLE,
+  DEFAULT_APP_SORT,
+  getAppResumePath,
+  readAppOpenTimes,
+  sortApps,
+} from '@lib/app';
 import type { AppMetadata } from '@lib/types/appCatalog';
 import { CANVAS_CLASS, CARD_CLASS } from '@ui/siteSurface';
 
@@ -22,8 +32,18 @@ import RequestableApps from './home/RequestableApps';
 
 function Home() {
   const { user } = useAuth();
-  const { apps, requestableApps, loading, starredAppIds, setAppStarred } =
-    useAppCatalog();
+  const {
+    apps: catalogApps,
+    requestableApps,
+    loading,
+    starredAppIds,
+    setAppStarred,
+  } = useAppCatalog();
+  const [sort, setSort] = useAppSort();
+  const uid = user?.uid ?? null;
+  // Read once per visit: the list changes order only when it next appears.
+  const openedAt = useMemo(() => readAppOpenTimes(uid), [uid]);
+  const apps = sortApps(catalogApps, starredAppIds, sort, openedAt);
   const navigate = useNavigate();
   const isWide = useMediaQuery().isAtLeast('sm');
   const [isShowingDetails, setIsShowingDetails] = useLocalStoragePreference(
@@ -127,16 +147,16 @@ function Home() {
           </div>
         ) : (
           <section className='mt-10 space-y-6 text-left'>
-            {!isWide ? (
-              <SectionHeader
-                title='Your apps'
-                subtitle={
-                  isHintShown
-                    ? 'Press and hold an app to star it, or turn on Details.'
-                    : undefined
-                }
-                action={
-                  isWide ? null : (
+            <SectionHeader
+              title='Your apps'
+              subtitle={
+                isHintShown
+                  ? 'Press and hold an app to star it, or turn on Details.'
+                  : undefined
+              }
+              action={
+                <div className='flex items-center gap-3'>
+                  {isWide ? null : (
                     <div className='flex items-center gap-2'>
                       <span className='text-muted-foreground text-sm'>
                         Details
@@ -149,10 +169,18 @@ function Home() {
                         onCheckedChange={setIsShowingDetails}
                       />
                     </div>
-                  )
-                }
-              />
-            ) : null}
+                  )}
+                  <SortControl
+                    label='Sort apps'
+                    options={APP_SORT_OPTIONS}
+                    value={sort}
+                    defaultValue={DEFAULT_APP_SORT}
+                    onChange={setSort}
+                    isCompact
+                  />
+                </div>
+              }
+            />
             {groups.map((group) => (
               <div key={group.label ?? 'all'} className='space-y-3'>
                 {group.label ? (

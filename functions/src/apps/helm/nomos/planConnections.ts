@@ -821,7 +821,7 @@ export function planResolveConnection(input: {
   const question = oldQuestions[questionId];
   if (!state || !isRecord(question)) return { refused: 'unknown' };
   if (state.answeredAt !== null) return { refused: 'answered' };
-  if ((state.leftAt ?? null) !== null) return { refused: 'gone' };
+  if ((state.dismissedAt ?? null) !== null) return { refused: 'gone' };
   const held = Array.isArray(question.heldCommands)
     ? question.heldCommands.find(isRecord)
     : null;
@@ -876,7 +876,8 @@ export function planResolveConnection(input: {
     [questionId]: { ...state, answeredAt: now },
   };
   const isOpen = Object.values(questionState).some(
-    (entry) => entry.answeredAt === null && (entry.leftAt ?? null) === null,
+    (entry) =>
+      entry.answeredAt === null && (entry.dismissedAt ?? null) === null,
   );
   return {
     refused: null,

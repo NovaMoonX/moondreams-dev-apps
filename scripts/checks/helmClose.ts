@@ -67,14 +67,22 @@ const turn = (
 
 const capture = (
   id: string,
-  states: Record<string, Record<string, number | null>>,
+  states: Record<string, Record<string, number | string | null>>,
+  status = 'needsYou',
 ): OpenCapture =>
   ({
     id,
+    status,
     questionState: Object.fromEntries(
       Object.entries(states).map(([questionId, state]) => [
         questionId,
-        { answeredAt: null, skippedAt: null, leftAt: null, ...state },
+        {
+          kind: 'asked',
+          answeredAt: null,
+          skippedAt: null,
+          dismissedAt: null,
+          ...state,
+        },
       ]),
     ),
   }) as unknown as OpenCapture;
@@ -179,6 +187,15 @@ test('a typed text answers only when it is also a closing phrase', () => {
   assert.equal(turn('forget it', { isSpoken: false }).kind, 'close');
 });
 
+test("dismiss it is the answer step's when spoken, and a normal turn when typed", () => {
+  const pick = question('pickOne', ['Dana', 'Sam']);
+  const spoken = turn('dismiss it', { question: pick });
+  assert.equal(spoken.kind, 'answer');
+  assert.equal(spoken.kind === 'answer' && spoken.answer.kind, 'dismiss');
+  const typed = turn('dismiss it', { question: pick, isSpoken: false });
+  assert.equal(typed.kind, 'send');
+});
+
 test('stop is a close, or only quiets a line still waiting for an answer', () => {
   assert.equal(
     turn('stop', { isTalkedOver: true, isPending: true }).kind,
@@ -221,7 +238,7 @@ test('a close drops unsent words, leaves unfiled questions and skips filed ones'
   const filed = capture('c2', {
     q3: {},
     q4: { skippedAt: 7 },
-    q5: { leftAt: 9 },
+    q5: { answeredAt: 9, dismissedAt: 9 },
   });
   const effects = readCloseEffects({
     unsentWords: ['call Dana', '  '],
@@ -232,6 +249,29 @@ test('a close drops unsent words, leaves unfiled questions and skips filed ones'
   assert.deepEqual(effects.left, [{ captureId: 'c1', questionId: 'q1' }]);
   assert.deepEqual(effects.skipped, [{ captureId: 'c2', questionId: 'q3' }]);
   assert.equal(effects.hasDropped, true);
+});
+
+test('a close never lets go of a dispute between facts', () => {
+  const effects = readCloseEffects({
+    unsentWords: [],
+    captures: [capture('c1', { q1: { kind: 'whichIsTrue' }, q2: {} })],
+    isFiled: () => false,
+  });
+  assert.deepEqual(effects.left, [{ captureId: 'c1', questionId: 'q2' }]);
+});
+
+test('a close only touches questions on captures that need you', () => {
+  const effects = readCloseEffects({
+    unsentWords: [],
+    captures: [
+      capture('c1', { q1: {} }, 'sorted'),
+      capture('c2', { q2: {} }, 'failed'),
+      capture('c3', { q3: {} }),
+    ],
+    isFiled: (item) => item.id === 'c2',
+  });
+  assert.deepEqual(effects.left, [{ captureId: 'c3', questionId: 'q3' }]);
+  assert.deepEqual(effects.skipped, []);
 });
 
 test('a close with nothing to drop offers no Undo', () => {

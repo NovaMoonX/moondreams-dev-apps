@@ -1,5 +1,7 @@
+import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { DAY_MS, SESSION_IDLE_MS } from '@apps/helm/constants';
-import type { OpenCapture } from '@apps/helm/types';
+import type { HelmProfile, OpenCapture } from '@apps/helm/types';
+import { toDayKey } from '@apps/helm/utils/planDays';
 
 export interface Session {
   sessionId: string;
@@ -67,10 +69,42 @@ export function groupTurns(turns: OpenCapture[]): TurnGroup[] {
 export const getJoinedOf = (lead: OpenCapture, captures: OpenCapture[]) =>
   groupTurns(captures).find((group) => group.lead.id === lead.id)?.joined ?? [];
 
-/** The session still open: the last turn's, while it is under the idle gap. */
-export function getOpenSessionId(sorted: OpenCapture[], now: number) {
+/** The moment the person last tapped New conversation, 0 when never. A turn before it never carries into the next; midnight never ends a conversation. */
+export const getFreshFrom = (
+  profile: Pick<HelmProfile, 'conversationFreshAt'> | null,
+) => profile?.conversationFreshAt ?? 0;
+
+/** Where home's thread starts: the last fresh start, or today's midnight while Start each day fresh is on, whichever is later. Only what home shows; a chat open across midnight stays on screen. */
+export function getHomeFrom(
+  profile: Pick<
+    HelmProfile,
+    'conversationFreshAt' | 'isDailyFreshOn' | 'timeZone'
+  > | null,
+  now: number,
+) {
+  if (!profile) return 0;
+  const dayStart = profile.isDailyFreshOn
+    ? zonedDateTimeToEpoch(
+        toDayKey(now, profile.timeZone),
+        '00:00',
+        profile.timeZone,
+      )
+    : 0;
+  return Math.max(getFreshFrom(profile), dayStart);
+}
+
+/** The session still open: the last turn's, while it is under the idle gap and came after the conversation last started fresh. */
+export function getOpenSessionId(
+  sorted: OpenCapture[],
+  now: number,
+  freshFrom: number,
+) {
   const last = sorted.at(-1);
-  return last && now - last.createdAt < SESSION_IDLE_MS ? last.sessionId : null;
+  return last &&
+    now - last.createdAt < SESSION_IDLE_MS &&
+    last.createdAt >= freshFrom
+    ? last.sessionId
+    : null;
 }
 
 /** Sessions as runs of one calendar day (local), in order, for the day dividers. */

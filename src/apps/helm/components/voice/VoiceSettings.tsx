@@ -16,6 +16,10 @@ import {
 } from '@/hooks/useOnDeviceRecognition';
 import { useAppSelector } from '@/store';
 import { canUseBrowserStt } from '@/lib/speech/voice/browserStt';
+import {
+  isNoiseCleaningOn,
+  setNoiseCleaningOn,
+} from '@/lib/speech/voice/noiseCleaning';
 import VoicePicker from '@apps/helm/components/voice/VoicePicker';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
@@ -280,6 +284,7 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
     lang: navigator.language || 'en-US',
   });
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [isCleaningOn, setIsCleaningOn] = useState(isNoiseCleaningOn);
   const profile = useAppSelector((state) => state.helm.profile);
   const chosenVoice = findHelmVoice(profile?.voiceId ?? null);
   const canListenForPhrase = canUseBrowserStt() || onDevice.isOn;
@@ -413,6 +418,26 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
             isLocked={!canListenForPhrase}
             onChange={(isOn) => changeSwitch(setWakeWordOn, isOn)}
           />
+          <div>
+            <SwitchRow
+              title={HELM_COPY.voiceNoiseCleaningTitle}
+              description={HELM_COPY.voiceNoiseCleaning}
+              checked={isCleaningOn}
+              onChange={(isOn) => {
+                setNoiseCleaningOn(isOn);
+                setIsCleaningOn(isOn);
+              }}
+            />
+            <p className='text-muted-foreground mt-1 text-[13px] leading-[18px]'>
+              <HelpTip
+                title={HELM_COPY.voiceOfflineLicencesTitle}
+                linkLabel={HELM_COPY.voiceOfflineLicences}
+                className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+              >
+                {HELM_COPY.voiceNoiseCleaningCredits}
+              </HelpTip>
+            </p>
+          </div>
           <OfflineListeningRow onDevice={onDevice} name={name} />
         </div>
       </DetailSheet>

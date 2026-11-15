@@ -222,6 +222,11 @@ import {
   readSyncedTrips,
   toKnownZone,
 } from './syncedCopies.js';
+import { readScopesOf, type McpReadScope } from '../../mcp/shapes.js';
+import {
+  filterSourcesForOutside,
+  toHeldBackPrompt,
+} from './mcp/sourcesBrief.js';
 import { getDayIn } from './nomos/spoken.js';
 import { matchWho } from './nomos/matchEntities.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
@@ -287,6 +292,7 @@ import type { PlacedTopic } from './nomos/planTopicCommands.js';
 import { decide } from './nomos/policy.js';
 import {
   HAND_OVER_TOOL,
+  REPEAT_TOOL,
   hasReviseCue,
   isHabitTurn,
   hasProcedureCue,
@@ -297,6 +303,7 @@ import {
   type Route,
 } from './nomos/route.js';
 import { readAssistantName } from './assistantName.js';
+import { readNameVariants } from './assistantNameVariants.js';
 import { toStyleNotes, toStyleWords } from './styleLearner.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
@@ -361,9 +368,9 @@ const MIN_RESTART_MS = 22_000;
 const SETTLE_QUIET_MS = 1_000;
 const SETTLE_MAX_MS = 3_000;
 
-type SortMode = 'full' | 'rest';
+export type SortMode = 'full' | 'rest';
 
-interface SortResult {
+export interface SortResult {
   status: 'sorted' | 'received' | 'failed' | 'needsYou';
   executionId: string | null;
   releasedIds: string[];
@@ -375,6 +382,7 @@ interface SortResult {
     level: 'city' | 'precise';
     mode: 'offer' | 'settingsLine';
   } | null;
+  isRepeat?: boolean;
 }
 
 const NO_OFFERS = { abilityOffer: null } as const;
@@ -406,7 +414,7 @@ const readAnswered = (stored: unknown, captureId: string) => {
     : null;
 };
 
-interface CaptureDoc {
+export interface CaptureDoc {
   status: string;
   attempts?: number;
   claimId?: string | null;
@@ -420,6 +428,9 @@ interface CaptureDoc {
   turnIndex?: number;
   turnLeadId?: string | null;
   inputMode?: string;
+  medium?: 'web' | 'mcp';
+  via?: string | null;
+  outsideReadScopes?: unknown;
   attachmentIds?: string[];
   route?: Route | null;
   presence?: {
@@ -491,7 +502,7 @@ const readApiKey = () => {
   }
 };
 
-const readLiveGrants = (firestore: Firestore, uid: string) =>
+export const readLiveGrants = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listLiveGrants }) => listLiveGrants(firestore, uid, 'helm'))
     .catch((error): LiveGrant[] => {
@@ -501,7 +512,7 @@ const readLiveGrants = (firestore: Firestore, uid: string) =>
       return [];
     });
 
-const readSiteGrants = (firestore: Firestore, uid: string) =>
+export const readSiteGrants = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listSiteLiveGrants }) =>
       listSiteLiveGrants(firestore, uid, 'helm'),
@@ -513,7 +524,7 @@ const readSiteGrants = (firestore: Firestore, uid: string) =>
       return [];
     });
 
-const readOffCategories = (firestore: Firestore, uid: string) =>
+export const readOffCategories = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listSiteOffCategories }) =>
       listSiteOffCategories(firestore, uid, 'helm'),
@@ -756,6 +767,7 @@ async function readPeople(
     places: PlaceRead[];
     assistantName: string | null;
     calledAs: string | null;
+    assistantNameVariants: string[];
     timeZone: string;
     capturedAt: number;
     selfWhoId: string | null;
@@ -766,6 +778,7 @@ async function readPeople(
   const assistantNames = [
     input.assistantName,
     input.calledAs,
+    ...input.assistantNameVariants,
     DEFAULT_ASSISTANT_NAME,
   ].filter((name) => name !== null);
   if (mentions.length === 0 && places.length === 0) return undefined;
@@ -1212,14 +1225,22 @@ async function readContextFacts(
   key: HelmKey,
   text: string,
   selfWhoId: string | null,
+  isAppsHeldBack: boolean,
 ): Promise<{ facts: ContextFact[]; selfFacts: ContextSelfFact[] }> {
   try {
-    const factSnap = await firestore
+    const snapshot = await firestore
       .collection(`${base}/facts`)
       .where('status', 'in', ['confirmed', 'inferred'])
       .orderBy('createdAt', 'desc')
       .limit(MAX_REPEAT_FACTS_READ)
       .get();
+    // A fact learned from an app's record is held back with the record.
+    const factSnap = {
+      docs: snapshot.docs.filter((doc) => {
+        const ids: unknown = doc.get('syncedIds');
+        return !isAppsHeldBack || !isStringList(ids) || ids.length === 0;
+      }),
+    };
     const subjectIdsOf = (doc: QueryDocumentSnapshot) => {
       const ids: unknown = doc.get('subjectIds');
       return isStringList(ids) ? ids : [];
@@ -1973,6 +1994,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       places: [],
       assistantName: null,
       calledAs: null,
+      assistantNameVariants: [],
       searched: createSearchedLog(),
       hasMore: false,
       base,
@@ -2034,15 +2056,17 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     })
     .catch(() => null);
   const earlyMask = {
-    isOn: isUnattendedTurn(
-      capture.presence?.startedByWake === true,
-      capture.presence
-        ? {
-            isHidden: capture.presence.isHidden === true,
-            isUntouched: capture.presence.isUntouched === true,
-          }
-        : null,
-    ),
+    isOn:
+      capture.medium === 'mcp' ||
+      isUnattendedTurn(
+        capture.presence?.startedByWake === true,
+        capture.presence
+          ? {
+              isHidden: capture.presence.isHidden === true,
+              isUntouched: capture.presence.isUntouched === true,
+            }
+          : null,
+      ),
     names: [] as MaskedName[],
     quoted: [] as MaskedName[],
   };
@@ -2052,7 +2076,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     alreadyMade,
     screen,
     earlierTurns,
-    synced,
+    contextRead,
     style,
     previousTurn,
   ] = await Promise.all([
@@ -2081,7 +2105,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     readEarlierTurns(firestore, base, key, capture, earlyMask),
     Promise.all([profileRead, awayIdsRead]).then(([snapshot, awayIds]) =>
       mode === 'rest'
-        ? []
+        ? { copies: [], heldBack: [] }
         : readContextSynced(
             firestore,
             uid,
@@ -2090,6 +2114,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             toKnownZone(
               toTurnZone(snapshot.data(), capture.createdAt, awayIds),
             ),
+            capture.medium === 'mcp'
+              ? (copies) =>
+                  filterSourcesForOutside(
+                    readScopesOf(capture.outsideReadScopes),
+                    copies,
+                  )
+              : undefined,
           ),
     ),
     mode === 'rest' ? null : readStyleNotes(firestore, base, key),
@@ -2120,11 +2151,17 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   });
   const assistantName =
     readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
+  const assistantNameVariants = readNameVariants(
+    profile.data()?.assistantNameVariants,
+  );
 
   const readJoined = async (): Promise<
     JoinedRead & {
       messages: JoinedMessage[];
       isSpoken: boolean;
+      isOutside: boolean;
+      outsideReadScopes: McpReadScope[];
+      via: string;
       heardNames: HeardName[];
     }
   > => {
@@ -2173,6 +2210,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       joinedCount: listed.length,
       messages: [leadMessage, ...messages],
       heardNames: [...leadHeard, ...joinedHeard].slice(0, MAX_HEARD_NAMES),
+      isOutside: lead?.medium === 'mcp',
+      outsideReadScopes: readScopesOf(lead?.outsideReadScopes),
+      via: typeof lead?.via === 'string' ? lead.via : '',
       // A turn is spoken when any of its messages was, so a spoken message joined behind a typed one still hears its reply.
       isSpoken:
         lead?.inputMode === 'voice' ||
@@ -2186,6 +2226,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     read: JoinedRead & {
       messages: JoinedMessage[];
       isSpoken: boolean;
+      isOutside: boolean;
+      outsideReadScopes: McpReadScope[];
+      via: string;
       heardNames: HeardName[];
     },
     signal: AbortSignal,
@@ -2194,6 +2237,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const timeLeft = () =>
       claimed.startedAt + CALL_BUDGET_MS - Date.now() - RESTART_MARGIN_MS;
     const combined = combineMessages(read.messages);
+    const isAppsHeldBack =
+      read.isOutside && !read.outsideReadScopes.includes('apps');
     const { facts, selfFacts } =
       mode === 'rest'
         ? { facts: [], selfFacts: [] }
@@ -2203,6 +2248,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             key,
             combined.text,
             (profile.data()?.selfWhoId as string | null | undefined) ?? null,
+            isAppsHeldBack,
           );
     const selfWhoId =
       (profile.data()?.selfWhoId as string | null | undefined) ?? null;
@@ -2304,6 +2350,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       .sort(
         (a, b) => Number(b.id === screenRunId) - Number(a.id === screenRunId),
       )
+      // A run's label is a synced record's title, so it is held back with the record.
+      .map((run) =>
+        isAppsHeldBack && run.attachedTo?.kind === 'synced'
+          ? { ...run, attachedLabel: null }
+          : run,
+      )
       .map((run) => ({
         ...toContextRun(run, run.id === screenRunId),
         isPrivate:
@@ -2322,7 +2374,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             return [];
           })
         : [];
-    const contextSynced = [
+    const synced = contextRead.copies;
+    const allSynced = [
       ...synced,
       ...trips.filter((trip) => !synced.some((copy) => copy.id === trip.id)),
     ];
@@ -2377,6 +2430,17 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         sanitizeScreen(capture.screen)?.view ?? null,
         contextHabits,
       );
+    const contextSynced = read.isOutside
+      ? filterSourcesForOutside(read.outsideReadScopes, allSynced)
+      : allSynced;
+    const heldBackNames = [
+      ...new Set(
+        [
+          ...contextRead.heldBack,
+          ...allSynced.filter((copy) => !contextSynced.includes(copy)),
+        ].map((copy) => connectorLabel(copy.connectorId)),
+      ),
+    ];
     const contextProcedures: ContextProcedure[] = procedureRecords.map(
       (procedure) => ({
         id: procedure.id,
@@ -2504,8 +2568,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             isNamedIn(combined.text, procedure.title),
         ));
     const provider = pickProvider(combined.text, combined.reading);
-    const isAsking = mode !== 'rest' && isQuestion(combined.text.trim());
-    const [liveGrants, siteGrants, offCategories] = isAsking
+    // An outside assistant's answer leaves Helm, and the person granted mail, documents and app records to Helm alone.
+    const isLiveReadOffered =
+      mode !== 'rest' && !read.isOutside && isQuestion(combined.text.trim());
+    const [liveGrants, siteGrants, offCategories] = isLiveReadOffered
       ? await Promise.all([
           readLiveGrants(firestore, uid),
           readSiteGrants(firestore, uid),
@@ -2547,20 +2613,33 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       capture.interruptedCaptureId !== ''
         ? INTERRUPTED_PROMPT
         : null,
+      read.isOutside
+        ? toHeldBackPrompt(read.via, read.outsideReadScopes, heldBackNames)
+        : null,
       toPersonaPrompt(assistantName, profile.data()?.assistantTone),
     ]
       .filter((part) => part !== null)
       .join('\n\n');
+    const canRepeat =
+      mode === 'full' &&
+      read.isSpoken &&
+      !read.isOutside &&
+      read.messages.length === 1 &&
+      answerTurn === null &&
+      attached.media.length + attached.voiceIds.length === 0 &&
+      Date.now() - capture.createdAt < REPEAT_FRESH_MS;
     const runOn = async (role: 'quick' | 'interpret', canHandOver: boolean) => {
       const mcp = await createHelmMcpServer({
         uid,
         key,
         aliases: context.aliases,
         synced: context.synced,
+        outsideReadScopes: read.isOutside ? read.outsideReadScopes : null,
         timeZone,
         firestore,
         liveGrants,
         siteGrants,
+        offCategories,
         quotes,
         searched,
         mask: unattendedMask,
@@ -2596,6 +2675,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           extraTerminalTools: [
             ...(canHandOver ? [HAND_OVER_TOOL] : []),
             ...(mode === 'full' ? [CLOSE_CONVERSATION_TOOL] : []),
+            ...(canRepeat ? [REPEAT_TOOL] : []),
           ],
           limits: {
             ...LOOP_LIMITS,
@@ -2740,6 +2820,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     keyDateNames,
     knownNames,
   } = result;
+  if (loop.endedBy === 'terminal' && loop.terminalName === REPEAT_TOOL.name) {
+    if (read.messages.length === 1 && read.joinedCount === 0) {
+      return dropRepeatTurn(claimed);
+    }
+    throw toFailure('modelError');
+  }
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
       loop.endedBy === 'error'
@@ -2933,6 +3019,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     places: reply.places,
     assistantName,
     calledAs: combined.reading.addressedAs?.text ?? null,
+    assistantNameVariants,
     searched,
     hasMore: reply.hasMore,
     base,
@@ -3031,6 +3118,45 @@ const readMediaTitles = async (
   );
 };
 
+/** A replay only makes sense while the person is still listening; an older turn swept later files normally. */
+const REPEAT_FRESH_MS = 2 * 60 * 1000;
+
+/** A spoken turn that only asked to hear the last reply again is deleted, with its answer stored so a retried call gets the same outcome; the device replays the reply and nothing is left in the history. */
+async function dropRepeatTurn(claimed: Claimed): Promise<SortResult> {
+  const result: SortResult = {
+    ...toResult('sorted'),
+    isRepeat: true,
+  };
+  const outcome = await claimed.firestore.runTransaction(
+    async (transaction) => {
+      const snapshot = await transaction.get(claimed.captureRef);
+      const capture = snapshot.data() as CaptureDoc | undefined;
+      if (
+        !capture ||
+        capture.claimId !== claimed.claimId ||
+        capture.status !== 'interpreting'
+      ) {
+        return 'leaseLost' as const;
+      }
+      if ((capture.joinedCaptureIds ?? []).length > 0) return 'joined' as const;
+      transaction.set(claimed.requestRef, {
+        result,
+        captureId: claimed.captureRef.id,
+        createdAt: Date.now(),
+      });
+      transaction.delete(claimed.captureRef);
+      return 'dropped' as const;
+    },
+  );
+  if (outcome === 'joined') throw toFailure('modelError');
+  if (outcome === 'leaseLost') {
+    logger.info('helm.sort.leaseLost');
+    return toResult('received');
+  }
+  logger.info('helm.sort.repeat');
+  return result;
+}
+
 async function writeResult(
   input: Claimed & {
     key: HelmKey;
@@ -3069,6 +3195,7 @@ async function writeResult(
     places: PlaceRead[];
     assistantName: string | null;
     calledAs: string | null;
+    assistantNameVariants: string[];
     searched: SearchedLog;
     hasMore: boolean;
     base: string;
@@ -3117,6 +3244,7 @@ async function writeResult(
     places,
     assistantName,
     calledAs,
+    assistantNameVariants,
     searched,
     hasMore,
     base,
@@ -3154,14 +3282,14 @@ async function writeResult(
     : null;
   const { commands, refused: settledRefused } = settleLiveTurn(
     input.commands,
-    searched.entries().length,
+    searched.liveCount(),
   );
   const liveRefused =
-    searched.entries().length > 0 && requestedPlanDay
+    searched.liveCount() > 0 && requestedPlanDay
       ? [...settledRefused, 'live-turn-command']
       : settledRefused;
   const planDayKey =
-    searched.entries().length === 0 && requestedPlanDay
+    searched.liveCount() === 0 && requestedPlanDay
       ? new Date(requestedPlanDay.date.date).toISOString().slice(0, 10)
       : null;
   const aboutId = remember[0]?.about?.id ?? null;
@@ -3403,6 +3531,7 @@ async function writeResult(
             places,
             assistantName,
             calledAs,
+            assistantNameVariants,
             timeZone,
             capturedAt: capture.createdAt,
             selfWhoId:
@@ -4408,9 +4537,9 @@ async function writeResult(
         });
       }
       if (home) transaction.update(firestore.doc(base), home.data);
-      transaction.create(
-        executionRef,
-        buildExecution(
+      transaction.create(executionRef, {
+        via: capture.via ?? null,
+        ...buildExecution(
           { ...plan, questions },
           {
             extraLines: [
@@ -4446,7 +4575,7 @@ async function writeResult(
             offers: { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
           },
         ),
-      );
+      });
     }
     plan.mediaLetGo.forEach(({ id, data }) =>
       transaction.update(firestore.doc(`${base}/media/${id}`), data),
@@ -4472,9 +4601,9 @@ async function writeResult(
           })
         : null;
       if (factWrite) transaction.create(factRef, factWrite.data);
-      transaction.create(
-        answerExecutionRef,
-        buildAnswerExecution({
+      transaction.create(answerExecutionRef, {
+        via: capture?.via ?? null,
+        ...buildAnswerExecution({
           offers: { awayZoneOffer: wherePlan.awayZoneOffer, abilityOffer },
           captureId: captureRef.id,
           answer: reply.answer,
@@ -4484,7 +4613,7 @@ async function writeResult(
           fact: factWrite,
           notDone: [...noted.refused, ...liveRefused],
         }),
-      );
+      });
     }
     const quietLine = isStale
       ? ALREADY_ANSWERED_LINE
@@ -4605,7 +4734,11 @@ async function writeResult(
       claimedAt: null,
       heldReason: null,
       lastErrorCode: null,
-      seenAt: null,
+      // Home never shows an outside turn, so it stays seen and out of home's unseen window.
+      seenAt:
+        captureSnap.get('medium') === 'mcp'
+          ? ((captureSnap.get('seenAt') as number | null) ?? Date.now())
+          : null,
     });
     const resultExecutionId = isFiling
       ? executionRef.id
@@ -4782,8 +4915,24 @@ async function sortRequest(request: CallableRequest): Promise<SortResult> {
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
   }
+  return runHelmSort({ uid, ...readInput(request.data) });
+}
+
+/** Sorts one received turn for a person: the callable's whole body, also run for a turn an outside assistant files. */
+export async function runHelmSort({
+  uid,
+  captureId,
+  requestKey,
+  mode,
+  noteIds,
+}: {
+  uid: string;
+  captureId: string;
+  requestKey: string;
+  mode: SortMode;
+  noteIds: string[];
+}): Promise<SortResult> {
   const startedAt = Date.now();
-  const { captureId, requestKey, mode, noteIds } = readInput(request.data);
   const firestore = getFirestore();
   const captureRef = firestore.doc(
     `apps/helm/users/${uid}/captures/${captureId}`,

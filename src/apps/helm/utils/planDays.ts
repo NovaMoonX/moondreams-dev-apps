@@ -35,7 +35,11 @@ export const readAwayIds = (who: { away?: { id: string }[] | null } | null) =>
 
 /** The self's away span ids as one string, so a selector returns a value that stays equal between renders; null with no readable self. */
 export const toAwayKey = (
-  items: { isSelf: boolean; isUnreadable: boolean; away: { id: string }[] | null }[],
+  items: {
+    isSelf: boolean;
+    isUnreadable: boolean;
+    away: { id: string }[] | null;
+  }[],
 ) => {
   const ids = readAwayIds(
     items.find((entry) => entry.isSelf && !entry.isUnreadable) ?? null,
