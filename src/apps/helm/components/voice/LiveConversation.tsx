@@ -52,7 +52,7 @@ function LiveConversation() {
       aria-modal='true'
       aria-label={HELM_COPY.liveLabel(name)}
       tabIndex={-1}
-      className='bg-background fixed inset-0 z-50 flex flex-col overflow-hidden outline-none'
+      className='helm-live-screen bg-background fixed inset-0 flex flex-col overflow-hidden outline-none'
       onKeyDown={(event) => {
         if (event.key === 'Escape') voice.endLive();
       }}

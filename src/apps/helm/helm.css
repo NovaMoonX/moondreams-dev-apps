@@ -214,6 +214,11 @@ html.helm-theme .subview-backdrop:has(.helm-ask-overlay) {
   z-index: 110;
 }
 
+/* A live conversation covers the whole screen at the conversation's layer: above the site header and sheets, under toasts. */
+html.helm-theme .helm-live-screen {
+  z-index: 110;
+}
+
 /* A sheet opened from inside that conversation mounts after it, so it rises above it too. */
 html.helm-theme .subview-backdrop:has(.helm-ask-overlay) ~ .z-\[100\] {
   z-index: 120;
