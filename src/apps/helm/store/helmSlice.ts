@@ -73,6 +73,7 @@ export interface HelmState {
   /** The profile, and whether the first snapshot has arrived, so a missing profile is never mistaken for one still loading. */
   profile: HelmProfile | null;
   isProfileLoaded: boolean;
+  isProfileFailed: boolean;
   /** The uid the profile belongs to, so a person's profile never shows for another. */
   uid: string | null;
   /** Turns from yesterday on (the home surface's eager window). */
@@ -169,6 +170,7 @@ const initialState: HelmState = {
   keyRefusals: 0,
   profile: null,
   isProfileLoaded: false,
+  isProfileFailed: false,
   uid: null,
   recentCaptures: emptySet,
   unseenCaptures: emptySet,
@@ -230,6 +232,10 @@ const helmSlice = createSlice({
       state.uid = action.payload.uid;
       state.profile = action.payload.profile;
       state.isProfileLoaded = true;
+      state.isProfileFailed = false;
+    },
+    setProfileFailed: (state) => {
+      state.isProfileFailed = true;
     },
     setRecentCaptures: (state, action: PayloadAction<OpenCapture[]>) => {
       state.recentCaptures = {
@@ -581,6 +587,7 @@ export const {
   setStyleFailed,
   setAssistants,
   setAssistantsFailed,
+  setProfileFailed,
   clearHelm,
   setKeyStatus,
   retryKey,

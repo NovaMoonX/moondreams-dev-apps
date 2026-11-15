@@ -614,6 +614,10 @@ test('a stamp synced hours late is still planned, and a person whose plan failed
   const queue = await read('apps/helm/reminderQueue/' + U1);
   assert.equal(queue.lookAt, now + 15 * MINUTE);
   assert.equal(queue.leaseUntil, null);
+  assert.equal(
+    (await runHelmReminderPlanning(broken, now + 5 * MINUTE)).people,
+    0,
+  );
 });
 
 test('a change stamp is answered once, a stamp far ahead is ignored, a held person is skipped', async () => {

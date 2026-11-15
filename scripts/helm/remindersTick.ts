@@ -3,13 +3,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import type { Messaging } from 'firebase-admin/messaging';
 
-const host = process.env.FIRESTORE_EMULATOR_HOST;
-if (!host) {
-  console.error(
-    'Start the emulators first: this only runs against them (FIRESTORE_EMULATOR_HOST is not set).',
-  );
-  process.exit(1);
-}
+process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 process.env.GCLOUD_PROJECT ??= 'moondreams-dev-apps';
 if (getApps().length === 0)
   initializeApp({ projectId: process.env.GCLOUD_PROJECT });

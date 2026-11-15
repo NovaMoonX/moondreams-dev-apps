@@ -17,7 +17,7 @@ import type {
 } from '../nomos/habitReminders.js';
 
 export const HABIT_HISTORY_MAX = 30;
-export const HABITS_READ = 60;
+export const HABITS_READ = 100;
 
 export const userPath = (uid: string) => `apps/helm/users/${uid}`;
 export const queuePath = (uid: string) => `apps/helm/reminderQueue/${uid}`;
@@ -308,6 +308,7 @@ export interface QueueDoc {
   plannedAt: number;
   plannedFor: number | null;
   leaseUntil: number | null;
+  retryAt: number | null;
   dayKey: string;
   stageWeek: string | null;
   slots: Record<string, QueueSlot>;
@@ -320,6 +321,7 @@ export const readQueue = (data: DocumentData | undefined): QueueDoc => {
     plannedAt: toNumber(data?.plannedAt) ?? 0,
     plannedFor: toNumber(data?.plannedFor),
     leaseUntil: toNumber(data?.leaseUntil),
+    retryAt: toNumber(data?.retryAt),
     dayKey: toText(data?.dayKey) ?? '',
     stageWeek: toText(data?.stageWeek),
     slots: Object.fromEntries(

@@ -539,6 +539,7 @@ export async function setHabitCare(
             isCare: true,
           }
         : { privateMark: null, isPrivacyCleared: true, isCare: false };
+      const privacy = readEffectivePrivacy(next, parents);
       return {
         sealed: {
           ...opened,
@@ -547,10 +548,10 @@ export async function setHabitCare(
         },
         fields: {
           isCare: next.isCare === true,
-          privacy: readEffectivePrivacy(next, parents),
+          privacy,
           stage: habit.forWhoId !== null ? null : (habit.stage ?? 'building'),
           careAskedAt: isCare ? now : habit.careAskedAt,
-          ...(isCare && current.lockScreenName !== null
+          ...(privacy === 'private' && current.lockScreenName !== null
             ? {
                 lockScreenName: null,
                 history: addEvent(current.history, 'nameHidden', now),

@@ -35,6 +35,7 @@ import {
   setStyleFailed,
   setAssistants,
   setAssistantsFailed,
+  setProfileFailed,
   setKeyDateIndex,
   setKeyDateIndexFailed,
   setKeyStatus,
@@ -239,7 +240,10 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
           hadProfile = profile !== null;
           dispatch(setProfile({ uid, profile }));
         },
-        (error) => console.error('Helm profile listener failed', error),
+        (error) => {
+          console.error('Helm profile listener failed', error);
+          dispatch(setProfileFailed());
+        },
       ),
       startAssistantsListener(
         uid,

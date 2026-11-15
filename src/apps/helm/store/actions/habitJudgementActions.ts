@@ -169,7 +169,7 @@ const toHistory = (
   event: HabitHistoryEvent | null,
 ) => (event ? [...history, event].slice(-HISTORY_MAX) : history);
 
-/** Judges one habit in a transaction that writes only while its stored `stageWeek` is still older than the week (or its `rejudgeFrom` is still set), so two devices or the server land it once; a stage change is told in the same transaction, which also clears `untoldSince`. */
+/** Judges one habit in a transaction that writes only while its stored `stageWeek` is still older than the week (or its `rejudgeFrom` is still set), so two devices or the server land it once; a stage change is told in the same transaction, after the line for any stage the server changed that nobody was told, and `untoldSince` is cleared only when a line was written. */
 async function judgeOne(
   uid: string,
   habit: OpenHabit,
@@ -189,6 +189,20 @@ async function judgeOne(
         ? judgeHabitWeek(life, days, lastWeek, timeZone)
         : rejudgeHabit(life, days, timeZone);
     if (!patch) return;
+    const isStoredUntold = current.untoldSince != null && !!current.stage;
+    const isNewTold = patch.isStageChange && !!patch.stage;
+    if (isStoredUntold && current.stage) {
+      transaction.set(
+        doc(collection(userOf(uid), 'executions')),
+        await toToldExecution(
+          habit,
+          current.stage,
+          current.stageAt,
+          timeZone,
+          encryption,
+        ),
+      );
+    }
     transaction.update(ref, {
       stage: patch.stage,
       stageAt: patch.stageAt,
@@ -199,12 +213,12 @@ async function judgeOne(
         : {}),
       rejudgeFrom: null,
       history: toHistory(life.history as HabitHistoryEvent[], patch.event),
-      ...(patch.isStageChange ? { untoldSince: null } : {}),
+      ...(isStoredUntold || isNewTold ? { untoldSince: null } : {}),
     });
-    if (patch.isStageChange && current.reminder?.isOn) {
+    if (patch.isStageChange && current.reminder != null) {
       markRemindersChanged(transaction, uid, Date.now());
     }
-    if (patch.isStageChange && patch.stage) {
+    if (isNewTold && patch.stage) {
       transaction.set(
         doc(collection(userOf(uid), 'executions')),
         await toToldExecution(

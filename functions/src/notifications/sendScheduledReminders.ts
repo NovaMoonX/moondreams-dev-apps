@@ -186,6 +186,23 @@ async function settleSent(
   }
 }
 
+/** Writes a reminder's outcome only while it is still pending, so a cancel that landed meanwhile is not overwritten. Returns whether it was written. */
+async function updateWhilePending(
+  firestore: Firestore,
+  ref: DocumentReference<DocumentData>,
+  patch: DocumentData,
+): Promise<boolean> {
+  return firestore.runTransaction(async (transaction) => {
+    if ((await transaction.get(ref)).get('status') !== 'pending') {
+      return false;
+    }
+
+    transaction.update(ref, patch);
+
+    return true;
+  });
+}
+
 async function deliverReminder(
   firestore: Firestore,
   messaging: Messaging,
@@ -205,13 +222,13 @@ async function deliverReminder(
 
     // Stays `pending` — a yearly reminder (a birthday, an anniversary) rolls
     // forward to next year's occurrence instead of terminating at `sent`.
-    await ref.update({
+    await updateWhilePending(firestore, ref, {
       scheduledFor: nextOccurrence.getTime(),
       claimedAt: null,
       lastSentAt: clock(),
     });
   } else {
-    await ref.update({ status: 'sent', lastSentAt: clock() });
+    await updateWhilePending(firestore, ref, { status: 'sent', lastSentAt: clock() });
   }
 
   await settleSent(firestore, reminder, clock());
@@ -285,8 +302,12 @@ export async function runScheduledReminders(
       const words = await prepareWords(firestore, claimed, clock());
 
       if (!words) {
-        await reminderDoc.ref.update({ status: 'cancelled' });
+        await updateWhilePending(firestore, reminderDoc.ref, { status: 'cancelled' });
         logger.info('reminders.notNeeded', { appId: claimed.appId });
+        return;
+      }
+
+      if (hookFor(claimed.appId) && (await reminderDoc.ref.get()).get('status') !== 'pending') {
         return;
       }
 

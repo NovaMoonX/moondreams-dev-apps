@@ -2,7 +2,9 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import {
   getFirestore,
   type DocumentData,
+  type DocumentReference,
   type Firestore,
+  type Transaction,
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -57,6 +59,7 @@ const RETRY_AFTER = 15 * MINUTE;
 const CHANGED_AHEAD = 10 * MINUTE;
 const LEASE = 2 * MINUTE;
 const PEOPLE_MAX = 300;
+const DUE_RESERVED = 100;
 const AT_ONCE = 20;
 const STOP_STARTING_AFTER = 200_000;
 const WEEK = 7;
@@ -88,6 +91,12 @@ const clockTag = (at: number, timeZone: string) =>
   })
     .format(new Date(at))
     .replace(':', '');
+
+const holdsLease = async (
+  transaction: Transaction,
+  ref: DocumentReference,
+  leaseUntil: number,
+) => readQueue((await transaction.get(ref)).data()).leaseUntil === leaseUntil;
 
 const leaseQueue = (firestore: Firestore, uid: string, now: number) =>
   firestore.runTransaction(async (transaction) => {
@@ -450,6 +459,7 @@ export async function planPerson(
     plannedAt: planAt,
     plannedFor: profile.habitRemindersChangedAt,
     leaseUntil: null,
+    retryAt: null,
     dayKey,
     stageWeek: habits.some((habit) => habit.forWhoId === null)
       ? lastWeek
@@ -471,20 +481,22 @@ export async function planPerson(
   };
   const title =
     readAssistantName(profile.assistantName) ?? DEFAULT_ASSISTANT_NAME;
-  const batch = firestore.batch();
-  made.forEach(({ slot, id }) =>
-    batch.set(
-      firestore.doc(`reminders/${id}`),
-      buildReminderDoc({ id, uid, title, slot, now: planAt }),
-    ),
-  );
-  if (made.some(({ slot }) => slot.kind === 'idle'))
-    batch.update(firestore.doc(userPath(uid)), {
-      habitRemindersIdleAt: planAt,
-    });
-  batch.set(queueRef, next);
-  await batch.commit();
-  return { created: made.length, cancelled };
+  const isWritten = await firestore.runTransaction(async (transaction) => {
+    if (!(await holdsLease(transaction, queueRef, now + LEASE))) return false;
+    made.forEach(({ slot, id }) =>
+      transaction.set(
+        firestore.doc(`reminders/${id}`),
+        buildReminderDoc({ id, uid, title, slot, now: planAt }),
+      ),
+    );
+    if (made.some(({ slot }) => slot.kind === 'idle'))
+      transaction.update(firestore.doc(userPath(uid)), {
+        habitRemindersIdleAt: planAt,
+      });
+    transaction.set(queueRef, next);
+    return true;
+  });
+  return isWritten ? { created: made.length, cancelled } : null;
 }
 
 const planGroups = async (
@@ -503,9 +515,20 @@ const planGroups = async (
           who: uid.slice(0, 4),
           code: errorCode(error),
         });
+        const ref = firestore.doc(queuePath(uid));
         await firestore
-          .doc(queuePath(uid))
-          .set({ lookAt: now + RETRY_AFTER, leaseUntil: null }, { merge: true })
+          .runTransaction(async (transaction) => {
+            if (await holdsLease(transaction, ref, now + LEASE))
+              transaction.set(
+                ref,
+                {
+                  lookAt: now + RETRY_AFTER,
+                  retryAt: now + RETRY_AFTER,
+                  leaseUntil: null,
+                },
+                { merge: true },
+              );
+          })
           .catch(() => undefined);
         return 'failed' as const;
       }),
@@ -562,10 +585,16 @@ export async function runHelmReminderPlanning(
       readQueue(queues[at].data()).plannedFor !==
       doc.get('habitRemindersChangedAt'),
   );
-  const uids = [...pending.map((doc) => doc.id), ...dueIds].slice(
-    0,
-    PEOPLE_MAX,
-  );
+  const waiting = pending.filter((doc) => {
+    const retryAt = readQueue(queues[changed.indexOf(doc)].data()).retryAt;
+    return retryAt === null || retryAt <= now;
+  });
+  const uids = [
+    ...waiting
+      .slice(0, PEOPLE_MAX - Math.min(dueIds.length, DUE_RESERVED))
+      .map((doc) => doc.id),
+    ...dueIds,
+  ].slice(0, PEOPLE_MAX);
   return planGroups(
     firestore,
     Array.from({ length: Math.ceil(uids.length / AT_ONCE) }, (_, at) =>
@@ -576,7 +605,7 @@ export async function runHelmReminderPlanning(
     {
       people: uids.length,
       planned: 0,
-      skipped: changed.length - pending.length,
+      skipped: changed.length - waiting.length,
       failed: 0,
       created: 0,
       cancelled: 0,

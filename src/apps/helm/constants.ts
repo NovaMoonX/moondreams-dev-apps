@@ -3611,6 +3611,7 @@ export const HELM_COPY = {
   remindersMore: 'Pace, quiet hours, lock screen',
   remindersTurnOnFailed: "Reminders didn't change. Try again.",
   remindersNeedsConnection: 'Changing reminders needs a connection.',
+  remindersPrivateName: 'a private habit',
   remindersOnToast: (name: string) => `Reminders on for ${name}`,
   remindersOffToast: (name: string) => `Reminders off for ${name}`,
   remindersPushIcon: '🔔',
@@ -3679,6 +3680,8 @@ export const HELM_COPY = {
   habitRemindersFoot:
     'At most 6 a day; ones close together come as one. Whether this device shows notifications at all is set in your browser.',
   habitRemindersLoading: 'Opening your reminders',
+  habitRemindersLoadFailed:
+    "Your reminders didn't open. Close this page and open it again.",
   habitRemindersEmpty:
     'No habit has reminders on yet. Turn them on from a habit’s page.',
   habitRemindersBackOn: 'Reminders are back on',

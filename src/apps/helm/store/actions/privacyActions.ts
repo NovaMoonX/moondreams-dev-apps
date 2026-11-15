@@ -76,7 +76,7 @@ const readRecords = (kind: PrivateKind): PrivacyRecord[] => {
   return helm.procedures.items;
 };
 
-const CHILD_KINDS: PrivateKind[] = ['task', 'fact', 'note', 'topic'];
+const CHILD_KINDS: PrivateKind[] = ['task', 'fact', 'note', 'topic', 'habit'];
 
 const readChildren = (): Child[] =>
   CHILD_KINDS.flatMap((kind) =>
@@ -158,6 +158,15 @@ async function readLinkedChildren(
                         typeof data.projectId === 'string'
                           ? data.projectId
                           : null,
+                      forWhoId:
+                        typeof data.forWhoId === 'string'
+                          ? data.forWhoId
+                          : null,
+                      lockScreenName:
+                        typeof data.lockScreenName === 'string'
+                          ? data.lockScreenName
+                          : null,
+                      history: Array.isArray(data.history) ? data.history : [],
                       projectIds: asIds(data.projectIds),
                       whoIds: asIds(data.whoIds),
                       placeIds: asIds(data.placeIds),
@@ -270,14 +279,42 @@ export async function rewriteChildren(uid: string, parent: CascadeParent) {
     { length: Math.ceil(updates.length / BATCH_SIZE) },
     (_, index) => updates.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE),
   );
+  const now = Date.now();
   const outcomes = await Promise.allSettled(
     chunks.map((chunk) => {
       const batch = writeBatch(db);
-      chunk.forEach((update) =>
+      const hidden = chunk.flatMap((update) => {
+        const record = children.find(
+          (child) => child.record.id === update.id,
+        )?.record;
+        return update.kind === 'habit' &&
+          update.privacy === 'private' &&
+          typeof record?.lockScreenName === 'string'
+          ? [{ id: update.id, history: record.history ?? [] }]
+          : [];
+      });
+      chunk.forEach((update) => {
+        const habit = hidden.find((one) => one.id === update.id);
         batch.update(doc(collectionOf(uid, update.kind), update.id), {
           privacy: update.privacy,
-        }),
-      );
+          ...(habit
+            ? {
+                lockScreenName: null,
+                history: [
+                  ...habit.history,
+                  {
+                    kind: 'nameHidden',
+                    at: now,
+                    by: 'person',
+                    pace: null,
+                    stage: null,
+                  },
+                ].slice(-30),
+              }
+            : {}),
+        });
+      });
+      if (hidden.length > 0) markRemindersChanged(batch, uid, now);
       return batch.commit();
     }),
   );

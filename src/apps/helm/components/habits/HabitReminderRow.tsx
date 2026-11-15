@@ -14,6 +14,7 @@ import HabitReminderSheet from '@apps/helm/components/habits/HabitReminderSheet'
 import { useHabitChange } from '@apps/helm/components/habits/useHabitChange';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useIsPrivate } from '@apps/helm/hooks/useIsPrivate';
 import { setHabitReminder } from '@apps/helm/store/actions/habitActions';
 import { selectNextHabitReminder } from '@apps/helm/store/selectors/habitReminderSelectors';
 import type { OpenHabit } from '@apps/helm/types';
@@ -54,6 +55,8 @@ function HabitReminderRow({
   const [isFresh, setIsFresh] = useState(false);
   const isCare = habit.isCare || habit.forWhoId !== null;
   const isOn = habit.reminder?.isOn === true;
+  const isPrivate = useIsPrivate('habit', habit);
+  const shownName = isPrivate ? HELM_COPY.remindersPrivateName : habit.name;
 
   if (!user || (habit.status !== 'active' && habit.status !== 'paused')) {
     return null;
@@ -72,7 +75,7 @@ function HabitReminderRow({
     if (isNowOn) {
       report(
         turnOn(),
-        HELM_COPY.remindersOnToast(habit.name),
+        HELM_COPY.remindersOnToast(shownName),
         HELM_COPY.remindersTurnOnFailed,
       );
       return;
@@ -80,7 +83,7 @@ function HabitReminderRow({
     setIsFresh(false);
     report(
       setHabitReminder(user.uid, habit, { kind: 'off' }),
-      HELM_COPY.remindersOffToast(habit.name),
+      HELM_COPY.remindersOffToast(shownName),
       HELM_COPY.remindersTurnOnFailed,
     );
   };
@@ -124,7 +127,7 @@ function HabitReminderRow({
             uid={user.uid}
             icon={<Bell className='size-4' />}
             title={HELM_COPY.remindersPushTitle}
-            modalTitle={HELM_COPY.remindersPushModalTitle(habit.name)}
+            modalTitle={HELM_COPY.remindersPushModalTitle(shownName)}
             body={
               <>
                 <p>{HELM_COPY.remindersPushBody(assistantName)}</p>

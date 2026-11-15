@@ -81,6 +81,7 @@ function HabitRemindersList({
   const { user } = useAuth();
   const { addToast } = useToast();
   const profile = useAppSelector((state) => state.helm.profile);
+  const isProfileFailed = useAppSelector((state) => state.helm.isProfileFailed);
   const habits = useAppSelector(selectKeptHabits);
   const reminding = habits.filter((habit) => habit.reminder?.isOn === true);
   const quiet = profile?.quietHours ?? null;
@@ -98,7 +99,9 @@ function HabitRemindersList({
     >
       {isOpen && !profile && (
         <p className='text-muted-foreground text-[15px]'>
-          {HELM_COPY.habitRemindersLoading}
+          {isProfileFailed
+            ? HELM_COPY.habitRemindersLoadFailed
+            : HELM_COPY.habitRemindersLoading}
         </p>
       )}
       {isOpen && profile && (

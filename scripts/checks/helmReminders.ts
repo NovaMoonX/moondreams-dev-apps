@@ -195,6 +195,7 @@ test('quiet hours move a fire time to the nearest minute of the window outside t
     run({ start: '21:00', end: '23:30' }, { stage: 'holding' }),
     [at(DAY, '21:59')],
   );
+  assert.deepEqual(run({ start: '05:00', end: '09:00' }), [at(DAY, '07:30')]);
   assert.deepEqual(run({ start: '23:00', end: '23:50' }), []);
   assert.deepEqual(
     run({ start: '23:00', end: '23:50' }, {}, { allowQuietHours: true }),
