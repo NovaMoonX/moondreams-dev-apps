@@ -59,7 +59,7 @@ export interface DayExecution {
   undoneByExecutionId: string | null;
   /** Made for an outside assistant's turn. */
   isOutside: boolean;
-  effectRefs: { op: string; collection: string }[];
+  effectRefs: { op: string; collection: string; docId: string }[];
 }
 
 interface DayBounds {
@@ -122,12 +122,12 @@ export const getDayBounds = (dayKey: string, timeZone: string): DayBounds => {
 const isIn = (at: number | null, { dayStart, dayEnd }: DayBounds) =>
   at !== null && at >= dayStart && at < dayEnd;
 
-/** What happened on one day, each item counted on the day it happened; an outside assistant's turns, an undone or failed execution and an undo itself count for nothing, and a habit or connection started or a check-in removed by an undo is no longer in the records read. */
+/** What happened on one day, each item counted on the day it happened; an outside assistant's turns, habits and connections, an undone or failed execution and an undo itself count for nothing, and a habit or connection started or a check-in removed by an undo is no longer in the records read. */
 export const countHelmDay = (input: {
   captures: DayCapture[];
   executions: DayExecution[];
   tasks: { completedAt: number | null }[];
-  habits: { createdAt: number }[];
+  habits: { createdAt: number; isOutside: boolean }[];
   connections: { createdAt: number; isOutside: boolean }[];
   habitChecks: DayHabitCheck[];
   dayStart: number;
@@ -163,8 +163,9 @@ export const countHelmDay = (input: {
       (capture) =>
         capture.turnLeadId === null && isIn(capture.createdAt, bounds),
     ).length,
-    habitsStarted: input.habits.filter((habit) => isIn(habit.createdAt, bounds))
-      .length,
+    habitsStarted: input.habits.filter(
+      (habit) => !habit.isOutside && isIn(habit.createdAt, bounds),
+    ).length,
     connectionsAdded: input.connections.filter(
       (connection) =>
         !connection.isOutside && isIn(connection.createdAt, bounds),
