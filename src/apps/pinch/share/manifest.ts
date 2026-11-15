@@ -167,8 +167,8 @@ export const PINCH_SHARES: SourceShares = {
           kind: 'artifact',
           label: 'Recipe ideas',
           meaning:
-            'Recipe ideas the person saved to try later, each a saved link, photo or written idea.',
-          detail: 'Each idea you want to try and where it came from',
+            'Recipe ideas the person saved to try later, each a saved link, photo or written idea. Only the title, the kind and the site name are shared, never the note, the link itself or the photo.',
+          detail: 'Each idea you want to try and the site it came from',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 2,

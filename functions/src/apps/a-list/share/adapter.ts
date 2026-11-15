@@ -73,10 +73,11 @@ const readMovieTitle = (doc: FirebaseFirestore.DocumentSnapshot) =>
 
 const MINUTES_PER_HOUR = 60;
 
-const toRuntimeLabel = (minutes: number | null) =>
-  minutes === null || minutes <= 0
-    ? null
-    : `${Math.floor(minutes / MINUTES_PER_HOUR)}h ${Math.round(minutes % MINUTES_PER_HOUR)}m`;
+const toRuntimeLabel = (minutes: number | null) => {
+  if (minutes === null || minutes <= 0) return null;
+  const whole = Math.round(minutes);
+  return `${Math.floor(whole / MINUTES_PER_HOUR)}h ${whole % MINUTES_PER_HOUR}m`;
+};
 
 /** The movie's running time and age rating in words, after any lead facts. */
 const toMovieDetail = (

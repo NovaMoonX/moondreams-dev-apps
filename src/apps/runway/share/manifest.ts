@@ -40,7 +40,7 @@ export const RUNWAY_SHARES: SourceShares = {
           detail:
             "Each bill: its name, amount, day, how often it repeats, when it ends and whether it's paid this month",
           meaning:
-            'Bills the person pays: those falling due in the next 30 days, the next one of every other bill within a year, and those already paid this month, each with its amount, due day, how often it repeats, when it ends and the day it was paid.',
+            'Bills the person pays: what is due in the next 30 days, the next payment of each other bill within a year, and what was already paid this month, each with its amount, due day, how often it repeats, when it ends and the day it was paid.',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,

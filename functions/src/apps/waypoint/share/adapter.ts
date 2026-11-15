@@ -281,8 +281,9 @@ const TRANSIT_DETAIL_FIELDS = Object.values(TRANSIT_FIELD_NAMES).flatMap(
 );
 
 const readTransitDetail = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
-  const fields = TRANSIT_FIELD_NAMES[doc.get('eventDetails.transitType')];
-  if (fields === undefined) return null;
+  const type = readText(doc.get('eventDetails.transitType'));
+  if (type === null || !Object.hasOwn(TRANSIT_FIELD_NAMES, type)) return null;
+  const fields = TRANSIT_FIELD_NAMES[type];
   const read = (name: string) =>
     readText(doc.get(`eventDetails.transitDetails.${name}`));
   const carrier = fields.name

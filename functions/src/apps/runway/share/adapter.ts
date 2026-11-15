@@ -265,6 +265,13 @@ async function readStoredSummary(
 
 const formatDay = (at: number) => new Date(at).toISOString().slice(0, 10);
 
+const DAY_WORDS = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
 const readDetail = (summary: Summary) => {
   if (summary.nextIncomeAt === null) return 'No income day is coming up';
   const day = formatDay(summary.nextIncomeAt);
@@ -288,11 +295,11 @@ const readGoalDetail = (goal: Summary['horizon'][number], currency: string) =>
 const readBillDetail = (bill: Summary['bills'][number]) =>
   [
     bill.paidAt !== null
-      ? `Paid on ${formatDay(bill.paidAt)} (due ${formatDay(bill.dueAt)})`
+      ? `Paid on ${DAY_WORDS.format(bill.paidAt)} (due ${DAY_WORDS.format(bill.dueAt)})`
       : null,
     bill.repeats,
     bill.endsAt !== null
-      ? `ends ${formatDay(bill.endsAt)}`
+      ? `ends ${DAY_WORDS.format(bill.endsAt)}`
       : bill.endsAfter !== null
         ? `ends after ${bill.endsAfter} payments`
         : null,

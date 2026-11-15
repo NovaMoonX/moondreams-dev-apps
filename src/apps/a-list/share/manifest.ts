@@ -18,7 +18,7 @@ export const A_LIST_SHARES: SourceShares = {
           meaning:
             'Movies the person has planned to see in a theater, each with the showtime and theater they picked and whether they have a ticket.',
           detail:
-            'The movie, time, length, theater and whether you have a ticket',
+            'The movie, time, length and age rating, theater and whether you have a ticket',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -69,8 +69,8 @@ export const A_LIST_SHARES: SourceShares = {
           kind: 'knowledge',
           label: 'Movies you have seen',
           meaning:
-            'Movies the person has already watched, with the day, the theater, the rating they gave if any and their movie-watching goals.',
-          detail: 'The title, the day, the theater, your rating and your goals',
+            'Movies the person has already watched, with the day, the theater, the star rating they gave if any and their movie-watching goals.',
+          detail: 'The title, the day, the theater, your star rating and your goals',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -80,7 +80,7 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: null,
             },
-            { label: 'Your rating', sinceVersion: 1, addedOn: null },
+            { label: 'Your star rating', sinceVersion: 1, addedOn: null },
             {
               label: 'The day you saw it',
               sinceVersion: 2,
@@ -112,7 +112,7 @@ export const A_LIST_SHARES: SourceShares = {
           meaning:
             "Movies the person wants to see but hasn't planned yet, each with how much they want to see it and its release date.",
           detail:
-            'Each movie you want to see, its priority, release date and length',
+            'Each movie you want to see, its priority, release date, length and age rating',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 2,

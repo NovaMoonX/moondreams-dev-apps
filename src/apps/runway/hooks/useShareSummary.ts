@@ -91,18 +91,26 @@ export function useShareSummary(uid: string | null) {
         const chosen = unpaid.some(({ dueOn }) => dueOn <= soon)
           ? unpaid.filter(({ dueOn }) => dueOn <= soon)
           : unpaid.slice(0, 1);
-        return chosen.map(({ dueOn, totalCents }) => ({
+        return chosen.map(({ dueOn, totalCents }, rank) => ({
           ...describe(bill),
           amountCents: totalCents,
           dueOn,
           paidOn: null,
+          rank,
         }));
       })
-      .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name))
+      // Each bill's next payment is kept before any bill's later ones, so a weekly bill can't crowd out the rest.
+      .sort((a, b) => a.rank - b.rank || a.dueOn - b.dueOn)
       .slice(0, LIST_LIMIT)
-      .map(({ dueOn, ...rest }) => ({
-        ...rest,
+      .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name))
+      .map(({ name, repeats, endsOn, endsAfter, amountCents, dueOn }) => ({
+        name,
+        repeats,
+        endsOn,
+        endsAfter,
+        amountCents,
         dueOn: toDateInputValue(dueOn),
+        paidOn: null,
       }));
     const paidBills = bills
       .flatMap((bill) =>
@@ -119,7 +127,7 @@ export function useShareSummary(uid: string | null) {
             paidOn,
           })),
       )
-      .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name))
+      .sort((a, b) => b.paidOn - a.paidOn || a.name.localeCompare(b.name))
       .slice(0, PAID_LIMIT)
       .map(({ dueOn, paidOn, ...rest }) => ({
         ...rest,

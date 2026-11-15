@@ -39,7 +39,7 @@ export const WAYPOINT_SHARES: SourceShares = {
           detail:
             'Activities, flights, drives, stays and rentals, at their local times',
           meaning:
-            "The plans on the person's trips, such as flights, stays and activities, each with its day, time and place.",
+            "The plans on the person's trips, such as flights, stays and activities, each with its day, time and place, plus each journey's number and stops, an activity's hours and a rental's return place.",
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,

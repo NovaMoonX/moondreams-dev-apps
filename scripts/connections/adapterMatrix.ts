@@ -731,7 +731,7 @@ const showing = (
   movieKey: 'tmdb-1',
   movie: {
     title,
-    runtimeMinutes: 120,
+    runtimeMinutes: 119.6,
     contentRating: 'PG-13',
     posterUrl: null,
   },
@@ -2946,10 +2946,10 @@ const billDetail = (title: string) =>
   runwayBills.find((record) => record.title === title)?.detail ?? null;
 assert.equal(billDetail('Phone'), 'Every other week');
 assert.equal(billDetail('Rent'), null, 'an older summary has no schedule');
-assert.equal(billDetail('Car insurance'), 'Yearly, ends 2028-06-01');
+assert.equal(billDetail('Car insurance'), 'Yearly, ends Jun 1, 2028');
 assert.equal(
   billDetail('Gym'),
-  'Paid on 2026-11-03 (due 2026-11-02), Monthly, ends after 6 payments',
+  'Paid on Nov 3, 2026 (due Nov 2, 2026), Monthly, ends after 6 payments',
 );
 assert.equal(
   runwayBills.find((record) => record.title === 'Gym')?.dueAt,
