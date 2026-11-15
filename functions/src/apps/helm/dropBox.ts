@@ -269,6 +269,7 @@ export function buildDropBoxCapture(
     attachmentIds: [],
     seenAt: null,
     quotedSourceKeys: [],
+    dismissedAt: null,
     answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
