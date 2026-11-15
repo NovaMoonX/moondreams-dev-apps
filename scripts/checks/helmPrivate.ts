@@ -33,6 +33,8 @@ import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normali
 import {
   answerShowName,
   planNameRequest,
+  readNameRequest,
+  toNameLine,
 } from '../../src/apps/helm/utils/lockScreenName.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
@@ -1755,6 +1757,53 @@ test('hiding a shown name by voice is one step and writes null', () => {
   assert.equal(turn.kind, 'write');
   if (turn.kind === 'write') assert.equal(turn.lockScreenName, null);
   assert.equal(planNameRequest(NAMED_HABIT, false).kind, 'kept');
+});
+
+const NAME_HABITS = [
+  { id: 'a', name: 'Pills', lockScreenName: null, isPrivate: true },
+  { id: 'b', name: 'Stretch', lockScreenName: 'Stretch', isPrivate: false },
+];
+
+test('a spoken or typed lock screen name request is read as one habit and a direction', () => {
+  const show = readNameRequest(
+    "show Stretch's name on the lock screen",
+    NAME_HABITS,
+  );
+  assert.equal(show?.habit.id, 'b');
+  assert.equal(show?.isShown, true);
+  const hide = readNameRequest(
+    'hide pills name on the lockscreen',
+    NAME_HABITS,
+  );
+  assert.equal(hide?.habit.id, 'a');
+  assert.equal(hide?.isShown, false);
+  assert.equal(
+    readNameRequest('show my name on the lock screen', NAME_HABITS),
+    null,
+  );
+  assert.equal(readNameRequest('took my pills', NAME_HABITS), null);
+  assert.equal(
+    readNameRequest(
+      'show pills and stretch name on the lock screen',
+      NAME_HABITS,
+    ),
+    null,
+  );
+});
+
+test('a private habit name is never in the line said while unattended, and showing it writes nothing until a yes', () => {
+  const [pills] = NAME_HABITS;
+  const asked = planNameRequest(pills!, true);
+  assert.equal(asked.kind, 'ask');
+  assert.ok(toNameLine(asked, pills!, false).includes('Pills'));
+  const quietAsk = toNameLine(asked, pills!, true);
+  assert.ok(!quietAsk.includes('Pills'));
+  assert.ok(quietAsk.includes('Private habit'));
+  const yes = answerShowName(pills!, 'yes', NAME_CONTEXT);
+  assert.equal(yes.kind, 'write');
+  assert.ok(!toNameLine(yes, pills!, true).includes('Pills'));
+  const hide = planNameRequest({ ...pills!, lockScreenName: 'Pills' }, false);
+  assert.ok(!toNameLine(hide, pills!, true).includes('Pills'));
 });
 
 const failures = (

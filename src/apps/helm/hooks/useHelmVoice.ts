@@ -92,13 +92,22 @@ import {
 } from '@apps/helm/utils/spokenQuestion';
 import { getOpenSessionId } from '@apps/helm/utils/sessions';
 import { takeDeviceCheckIn } from '@apps/helm/utils/deviceCheckIn';
+import { isUnattendedTurn } from '@apps/helm/utils/privacy';
 import { readPresence } from '@apps/helm/utils/presence';
+import { setLockScreenName } from '@apps/helm/store/actions/habitActions';
+import {
+  answerShowName,
+  planNameRequest,
+  readNameRequest,
+  toNameLine,
+} from '@apps/helm/utils/lockScreenName';
 import { readHelmNameHints } from '@apps/helm/utils/nameHints';
 import { readSwappedWords } from '@apps/helm/utils/spokenNames';
 import { selectNameRecords } from '@apps/helm/store/selectors/nameSelectors';
 import { toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
+const NAME_ASK_MS = 60_000;
 const CLOSED_MS = 10_000;
 const CLOSE_FRESH_MS = 30_000;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
@@ -149,6 +158,7 @@ export function useHelmVoice() {
   const screen = useRef<ScreenContext | null>(null);
   const isWakeStarted = useRef(false);
   // The latest tick the device made from words, so "undo that" takes it back when nothing newer was done.
+  const nameAsk = useRef<{ habitId: string; at: number } | null>(null);
   const lastCheckIn = useRef<{ undo: () => Promise<void>; at: number } | null>(
     null,
   );
@@ -390,6 +400,7 @@ export function useHelmVoice() {
       else say(HELM_COPY.talkSendFailed);
       return true;
     }
+    if (await takeLockScreenName(text, turn, isSpoken)) return true;
     if (
       turn.kind === 'send' &&
       (await takeCheckIn(
@@ -416,6 +427,132 @@ export function useHelmVoice() {
       turn.kind === 'send' && turn.isFinish,
       opts.heardNames,
     );
+    return true;
+  }
+
+  /** "Show Pills's name on the lock screen" and "hide it", on the device before any server turn. Showing says the warning and holds a yes or no here; only a tapped Show it or a clear spoken yes writes, and anything else drops the question. Hiding is one step with Undo. A private habit's name is spoken as its masked label while nobody is looking. */
+  async function takeLockScreenName(
+    text: string,
+    turn: { kind: string; text?: string },
+    isSpoken: boolean,
+  ) {
+    if (!uid) return false;
+    const { helm } = store.getState();
+    if (helm.uid !== uid || !helm.habits.isLoaded) return false;
+    const now = Date.now();
+    const candidates = helm.habits.items.flatMap((item) =>
+      item.isUnreadable || item.status === 'retired'
+        ? []
+        : [
+            {
+              item,
+              habit: {
+                id: item.id,
+                name: item.name,
+                lockScreenName: item.lockScreenName,
+                isPrivate: item.privacy === 'private' || item.isCare === true,
+              },
+            },
+          ],
+    );
+    const isQuiet =
+      isSpoken && isUnattendedTurn(isWakeStarted.current, readPresence());
+    const show = (line: string, type: 'info' | 'success') => {
+      if (isSpoken) say(line);
+      else addToast({ title: line, type });
+    };
+    const write = (
+      entry: (typeof candidates)[number],
+      isShown: boolean,
+      line: string,
+    ) => {
+      const result = setLockScreenName(uid, entry.item, isShown);
+      result.written.catch((error: unknown) => {
+        console.error('Helm lock screen name was not changed', error);
+        addToast({ title: HELM_COPY.lockScreenNameFailed, type: 'error' });
+      });
+      if (isSpoken) say(line);
+      addToast({
+        title: line,
+        type: 'success',
+        action: {
+          label: HELM_COPY.undo,
+          onClick: () => {
+            void result.undo().catch((error: unknown) => {
+              console.error('Helm lock screen name was not taken back', error);
+              addToast({ title: HELM_COPY.habitUndoFailed, type: 'error' });
+            });
+          },
+        },
+      });
+    };
+    const pending = nameAsk.current;
+    nameAsk.current = null;
+    if (pending && now - pending.at < NAME_ASK_MS) {
+      const entry = candidates.find(
+        (item) => item.habit.id === pending.habitId,
+      );
+      if (entry) {
+        const said = turn.kind === 'send' && turn.text ? turn.text : text;
+        const answer = answerShowName(entry.habit, said, {
+          now,
+          timeZone: helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
+        });
+        if (answer.kind === 'write') {
+          write(entry, true, toNameLine(answer, entry.habit, isQuiet));
+          return true;
+        }
+        if (answer.kind === 'kept') {
+          show(answer.line, 'info');
+          return true;
+        }
+      }
+    }
+    const request = readNameRequest(
+      turn.kind === 'send' && turn.text ? turn.text : text,
+      candidates.map((entry) => entry.habit),
+    );
+    if (!request) return false;
+    const entry = candidates.find((item) => item.habit.id === request.habit.id);
+    if (!entry) return false;
+    const plan = planNameRequest(entry.habit, request.isShown);
+    const line = toNameLine(plan, entry.habit, isQuiet);
+    if (plan.kind === 'write') {
+      write(entry, false, line);
+      return true;
+    }
+    if (plan.kind !== 'ask') {
+      show(line, 'info');
+      return true;
+    }
+    nameAsk.current = { habitId: entry.habit.id, at: now };
+    if (isSpoken) say(line);
+    addToast({
+      title: line,
+      type: 'info',
+      duration: NAME_ASK_MS,
+      action: {
+        label: HELM_COPY.lockScreenNameConfirmAction,
+        onClick: () => {
+          const live = nameAsk.current;
+          if (!live || live.habitId !== entry.habit.id) return;
+          nameAsk.current = null;
+          write(
+            entry,
+            true,
+            toNameLine(
+              {
+                kind: 'write',
+                lockScreenName: entry.habit.name,
+                line: '',
+              },
+              entry.habit,
+              false,
+            ),
+          );
+        },
+      },
+    });
     return true;
   }
 

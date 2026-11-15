@@ -266,6 +266,10 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
       'updateHabitWhen',
       'setHabitStatus',
       'setHabitCare',
+      'setHabitReminder',
+      'setLockScreenName',
+      'retireHabit',
+      'bringHabitBack',
     ],
   }),
   row({
@@ -379,7 +383,13 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     home: 'profile',
     classes: ['readable'],
     writer: 'actions/settingsActions',
-    taps: ['setAssistantNameAndTone', 'setVoiceMode', 'setDayWindow'],
+    taps: [
+      'setAssistantNameAndTone',
+      'setVoiceMode',
+      'setDayWindow',
+      'setQuietHours',
+      'setRemindersPaused',
+    ],
   }),
   row({
     thing: 'Earlier turns of the conversation',

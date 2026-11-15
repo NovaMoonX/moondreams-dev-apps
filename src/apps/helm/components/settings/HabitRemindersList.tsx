@@ -1,7 +1,8 @@
 import { useId, useState } from 'react';
 
-import { Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronRight } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import DetailSheet from '@/components/DetailSheet';
@@ -19,6 +20,7 @@ import { selectKeptHabits } from '@apps/helm/store/selectors/habitSelectors';
 interface HabitRemindersListProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenHabit: (habitId: string) => void;
 }
 
 interface QuietHoursFieldsProps {
@@ -71,7 +73,11 @@ function QuietHoursFields({ start, end, onSave }: QuietHoursFieldsProps) {
 }
 
 /** Settings' habit reminders: pause them all, set quiet hours, and see which habits remind. A habit's own pace and lock-screen name are changed on its page. */
-function HabitRemindersList({ isOpen, onClose }: HabitRemindersListProps) {
+function HabitRemindersList({
+  isOpen,
+  onClose,
+  onOpenHabit,
+}: HabitRemindersListProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const profile = useAppSelector((state) => state.helm.profile);
@@ -153,23 +159,39 @@ function HabitRemindersList({ isOpen, onClose }: HabitRemindersListProps) {
           ) : (
             <ul className='helm-card divide-border divide-y overflow-hidden'>
               {reminding.map((habit) => (
-                <li key={habit.id} className='px-4 py-3'>
-                  <PrivateTitle
-                    kind='habit'
-                    record={habit}
-                    className='text-foreground text-[15px] leading-[21px]'
+                <li key={habit.id}>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    className='flex h-auto w-full items-center justify-between gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
+                    onClick={() => {
+                      onClose();
+                      onOpenHabit(habit.id);
+                    }}
                   >
-                    {habit.name}
-                  </PrivateTitle>
-                  <span className='text-muted-foreground block text-[13px]'>
-                    {habit.reminder
-                      ? HELM_COPY.remindersPaceLine(
-                          habit.reminder.pace,
-                          habit.isCare || habit.forWhoId !== null,
-                          habit.lockScreenName !== null,
-                        )
-                      : ''}
-                  </span>
+                    <span className='min-w-0 flex-1'>
+                      <PrivateTitle
+                        kind='habit'
+                        record={habit}
+                        className='text-foreground block text-[15px] leading-[21px]'
+                      >
+                        {habit.name}
+                      </PrivateTitle>
+                      <span className='text-muted-foreground block text-[13px]'>
+                        {habit.reminder
+                          ? HELM_COPY.remindersPaceLine(
+                              habit.reminder.pace,
+                              habit.isCare || habit.forWhoId !== null,
+                              habit.lockScreenName !== null,
+                            )
+                          : ''}
+                      </span>
+                    </span>
+                    <ChevronRight
+                      className='text-muted-foreground size-4 shrink-0'
+                      aria-hidden='true'
+                    />
+                  </Button>
                 </li>
               ))}
             </ul>

@@ -76,3 +76,58 @@ export function answerShowName(
   }
   return { kind: 'kept', line: HELM_COPY.lockScreenNameVoiceKept };
 }
+
+export interface NameCandidate extends NameHabit {
+  id: string;
+  isPrivate: boolean;
+}
+
+const toWords = (text: string) =>
+  ` ${text
+    .toLowerCase()
+    .replace(/[’']s\b/g, '')
+    .replace(/[’']/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()} `;
+
+const HIDE_WORDS =
+  / (hide|hidden|remove|stop showing|stop displaying|dont show|do not show|take off|take down|unshow) /;
+const SHOW_WORDS = / (show|display|put|turn on|use|add) /;
+
+/** Reads "show Pills's name on the lock screen" / "hide the name of my pills" as one habit and a direction; null unless the lock screen, a name, a verb and exactly one habit's name are all said, so anything else goes on as a normal turn. */
+export function readNameRequest(
+  text: string,
+  habits: readonly NameCandidate[],
+): { habit: NameCandidate; isShown: boolean } | null {
+  const words = toWords(text);
+  if (!/ lock ?screen /.test(words) && !/ lock screen /.test(words))
+    return null;
+  if (!/ names? /.test(words)) return null;
+  const isHide = HIDE_WORDS.test(words);
+  if (!isHide && !SHOW_WORDS.test(words)) return null;
+  const found = habits.filter((habit) => {
+    const own = toWords(habit.name).trim();
+    return own !== '' && words.includes(` ${own} `);
+  });
+  const [habit] = found;
+  return found.length === 1 && habit ? { habit, isShown: !isHide } : null;
+}
+
+/** The line to say and show for a name turn: a private or care habit's name is replaced by its masked label while nobody is looking, and the same turn's write still uses the real name. */
+export function toNameLine(
+  turn: NameTurn,
+  habit: NameCandidate,
+  isQuiet: boolean,
+): string {
+  const name =
+    isQuiet && habit.isPrivate ? HELM_COPY.habitMaskedName : habit.name;
+  if (turn.kind === 'write') {
+    return turn.lockScreenName === null
+      ? HELM_COPY.lockScreenNameVoiceHidden(name)
+      : HELM_COPY.lockScreenNameVoiceShown(name);
+  }
+  if (turn.kind === 'ask' && habit.isPrivate) {
+    return `${HELM_COPY.lockScreenNamePrivate(name)} ${turn.line}`;
+  }
+  return turn.line;
+}

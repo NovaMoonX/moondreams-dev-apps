@@ -166,6 +166,7 @@ function HelmApp() {
             onOpenActivity={() => showView('activity')}
             onOpenConnectedApps={() => showView('connectedApps')}
             onOpenSeesYou={() => showView('howNomosSeesYou')}
+            onOpenHabit={(habitId) => showView('habit', habitId)}
           />
         )}
         {!isLocked && view === 'search' && (

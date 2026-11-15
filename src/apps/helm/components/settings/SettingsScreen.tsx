@@ -56,6 +56,7 @@ interface SettingsScreenProps {
   onOpenActivity: () => void;
   onOpenConnectedApps: () => void;
   onOpenSeesYou: () => void;
+  onOpenHabit: (habitId: string) => void;
 }
 
 /** A utility screen: Back to Home, its title and its groups, with no ask bar. */
@@ -64,6 +65,7 @@ function SettingsScreen({
   onOpenActivity,
   onOpenConnectedApps,
   onOpenSeesYou,
+  onOpenHabit,
 }: SettingsScreenProps) {
   const { user, logOut } = useAuth();
   const assistant = useAssistantName();
@@ -253,6 +255,7 @@ function SettingsScreen({
       <HabitRemindersList
         isOpen={isRemindersOpen}
         onClose={() => setIsRemindersOpen(false)}
+        onOpenHabit={onOpenHabit}
       />
       <YourDaySheet isOpen={isDayOpen} onClose={() => setIsDayOpen(false)} />
       <VoiceSettings
