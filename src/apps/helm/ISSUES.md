@@ -143,7 +143,7 @@ As the person types, a chip line shows what Helm read for certain (who, places, 
 **Files:** `functions/src/ai/{modelProvider,models}.ts`, `functions/src/ai/providers/anthropic.ts`, `functions/package.json` (`@anthropic-ai/sdk`, `@modelcontextprotocol/sdk`), `functions/src/apps/helm/mcp/{server,buildTools}.ts`, `functions/src/apps/helm/{sortHelmCapture,aiLimits}.ts`, `functions/src/apps/helm/nomos/{buildContext,prompt,commands,normalizeNomosReply,policy,executeCommands,summaries}.ts`, `functions/src/index.ts`, `functions/README.md`, `firestore.indexes.json`, `scripts/ai/anthropicSecret.sh`, `package.json` (`ai:anthropic-secret`), `src/apps/helm/queries/nomosMutations.ts`, `src/apps/helm/store/listeners/{task,execution}Listener.ts`, `src/apps/helm/components/home/ResultLines.tsx`, `src/apps/helm/components/activity/AssistantLine.tsx`, `src/apps/helm/components/today/TodayView.tsx`, `src/apps/helm/types.ts`, `src/apps/helm/constants.ts`, `firestore.rules`, `scripts/helm/rulesMatrix.py`, `scripts/seeds/helm.ts`
 **Context:** `TECHNICAL.md` section 5 (flow, "Helm's MCP server and the tool loop", context, commands, provider, limits, injection, App Check), section 2 ("Task", "Execution"); the `claude-api` skill for model ids and the tool-use loop.
 ### Description
-A sent capture is read on the server by Claude and turned into tasks: "Reading…", then one past-tense line per thing made. Today lists them under "Due soon". The first capture shows the one-line AI notice.
+A sent capture is read on the server by Claude and turned into tasks: "Reading" with a ring turning around the mark, then one past-tense line per thing made. Today lists them under "Due soon". The first capture shows the one-line AI notice.
 ### Possible Approach
 1. `functions/src/ai/` general provider over the Anthropic SDK: `generateStructured` and `runToolLoop` (`tool_choice` any, prompt caching), role → model id and price in `models.ts` only, checked against the `claude-api` skill.
 2. Helm's MCP server built per call with the uid in its closure, offering only `search_tasks` and the terminal `file_results` here (later issues add tools), joined to the loop by `InMemoryTransport`.
@@ -1583,13 +1583,13 @@ An oversized sealed fixture (600 tasks, 2,000 who records with 20,000 key dates,
 
 Bodies are filled in before each starts; titles and prerequisites are settled. Round 5's Next 57, 59 and 63 moved into the MVP (16, 51, 50), and this round's Beyond 95 (on-device recognition) moved to MVP 17; "Playbooks" (Beyond) is absorbed by procedures.
 
-The growth area is Issues 101–130, written out in full and in build order: the follow-ups on built voice and people (101, 104, 105) early, among the foundations the rest stands on (102: one map of where things live; 103: private things; 106: the shared repeat rule; 107: where you and your people are), then habits and what grows from them (108–114), scheduled actions (115), the voice across the area (116, 117), thinking ahead (118–123), what widens what is already read and shown (124–127), and the day's own ritual and its move to the server (128, 129) and the nightly grouping of related things (130). Each behaviour is decided by code, and its check is named on the line (`TECHNICAL.md` section 28, the table of deciders, checks and issues). Repeating tasks (Issue 70) now sit on Issue 106.
+The growth area is Issues 101–130, written out in full and in build order: the follow-ups on built voice and people (101, 104, 105) early, among the foundations the rest stands on (102: one map of where things live; 103: private things; 106: the shared repeat rule; 107: where you and your people are), then habits and what grows from them (108–114), scheduled actions (115), the voice across the area (116, 117), thinking ahead (118–123), what widens what is already read and shown (124–127), and the day's own ritual and its move to the server (128, 129) and the nightly grouping of related things (130). Each behaviour is decided by code, and its check is named on the line (`TECHNICAL.md` section 29, the table of deciders, checks and issues). Repeating tasks (Issue 70) now sit on Issue 106.
 
 ### Issue 65: Documents the assistant drafts: briefings, research notes, interview questions and plans
 **Prerequisites:** 51. Drafted as topics whose sections cite their sources (`source: 'assistantDraft'`), refined by asking with versions; replaces round 5's artifacts and their threads.
 
 ### Issue 66: Export a topic's document to Google Docs
-**Prerequisites:** 65, 20. Adds `drive.file` by incremental consent; export through a callable on the platform's token store. A private topic or note is left out of an export unless the person taps "Include them" for that export (`filterPrivate`, section 28 "Private is a class").
+**Prerequisites:** 65, 20. Adds `drive.file` by incremental consent; export through a callable on the platform's token store. A private topic or note is left out of an export unless the person taps "Include them" for that export (`filterPrivate`, section 29 "Private is a class").
 
 ### Issue 67: Put a planned task on Google Calendar, approved one by one
 **Prerequisites:** 32, 81. The first outbound action: `calendar.events` scope, `executing` / `verificationRequired` states, an approvals queue. A proposal for a private thing shows "· Private" in the queue and, once approved, is written with Google Calendar's `visibility: 'private'`.
@@ -1601,7 +1601,7 @@ The growth area is Issues 101–130, written out in full and in build order: the
 **Prerequisites:** 31.
 
 ### Issue 70: Repeating tasks, and procedures run on a schedule
-**Prerequisites:** 8, 55, 106. When a repeating task pushes, it uses fixed words with its name switch off by default, private or not (section 28, "Private is a class"). Repeats through the shared `RepeatPicker` and `src/utils/repeatRule.ts` (built in Issue 106).
+**Prerequisites:** 8, 55, 106. When a repeating task pushes, it uses fixed words with its name switch off by default, private or not (section 29, "Private is a class"). Repeats through the shared `RepeatPicker` and `src/utils/repeatRule.ts` (built in Issue 106).
 **Success Criteria:**
 - [ ] A repeating task and a procedure's schedule repeat through the shared `RepeatPicker` and `src/utils/repeatRule.ts` (the same presets, Custom screen, words line and rule shape as scheduled actions: `rule`, `startsOn`, `skipped`, `moved`), so "the cat's flea dose on the 1st" and "every other Tuesday" mean one thing everywhere; habits keep `Cadence` (`check:repeat-rule`, `check:helm-tasks`).
 
@@ -1669,7 +1669,7 @@ The growth area is Issues 101–130, written out in full and in build order: the
 
 **Prerequisites:** 12, 16, 36
 **Target PR Size:** ~400 lines (M)
-**Context:** `TECHNICAL.md` section 20 ("Ending a conversation by saying so"), section 28 ("Hands-free, for the whole area"); `PRODUCT.md` "Speaking and Listening"; `UX.md` 1c; canvas row 23 (CE1, CE2). A follow-up on built issues 12 and 16.
+**Context:** `TECHNICAL.md` section 20 ("Ending a conversation by saying so"), section 29 ("Hands-free, for the whole area"); `PRODUCT.md` "Speaking and Listening"; `UX.md` 1c; canvas row 23 (CE1, CE2). A follow-up on built issues 12 and 16.
 ### Description
 "Never mind", "forget it", "that's all" and their kin close the conversation, typed or spoken, matched on the device with no model call: what was pending is dropped, what was done keeps its Undo, and spoken, the microphone is released with a soft falling chime. A phrase that answers the open question is its answer, and no closing phrase ever deletes anything.
 ### CRUD & Entry-Point Requirements
@@ -1689,7 +1689,7 @@ The growth area is Issues 101–130, written out in full and in build order: the
 
 **Prerequisites:** 5, 27
 **Target PR Size:** ~350 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("Where things live"), section 18 (the "Every fact has one home" bullets); `PRODUCT.md` "Use Cases This Area Must Carry" ("One home for each thing").
+**Context:** `TECHNICAL.md` section 29 ("Where things live"), section 18 (the "Every fact has one home" bullets); `PRODUCT.md` "Use Cases This Area Must Carry" ("One home for each thing").
 ### Description
 The assistant always knows where to look and where to write. `WHERE_THINGS_LIVE` (`src/apps/helm/whereThingsLive.ts`) holds one row per thing Helm keeps or reads (its home, its one writer, the derived records that cite it, the tool or context block that reads it), and the prompt's `<where_things_live>` block, the tool list, `COMMAND_WRITERS` and the delete cascades are generated from it. Rows are written for everything the MVP built; every later issue adds its own.
 ### Success Criteria
@@ -1703,7 +1703,7 @@ The assistant always knows where to look and where to write. `WHERE_THINGS_LIVE`
 
 **Prerequisites:** 7, 8, 16, 35, 40, 45, 47, 54, 102
 **Target PR Size:** ~500 lines (L)
-**Context:** `TECHNICAL.md` section 2 ("Readable versus sealed": Private), section 28 ("Private is a class, not only health"); `PRODUCT.md` "Private Things"; `UX.md` 1i, D19.
+**Context:** `TECHNICAL.md` section 2 ("Readable versus sealed": Private), section 29 ("Private is a class, not only health"); `PRODUCT.md` "Private Things"; `UX.md` 1i, D19.
 ### Description
 Health and care things are private on their own on any kind of record, and anything else is private when the person says so or turns on its Private switch; a thing filed under a private project or about a private person is private too. A private thing shows a quiet lock in lists and "· Private" on its filing line, is never named in a push, copy, export or anything written outside Helm unless turned on for that one thing or copy, and inside Helm nothing changes. Habits and their care switch join in Issue 108, the lock-screen name in Issue 110.
 ### CRUD & Entry-Point Requirements
@@ -1766,7 +1766,7 @@ The names the person has told {Name} (people, pets, organizations, places, proje
 
 **Prerequisites:** none
 **Target PR Size:** ~500 lines (L)
-**Context:** `TECHNICAL.md` section 28 ("Repeats like a calendar"); `PRODUCT.md` "Scheduled Actions"; `UX.md` 1j; canvas row 23 (RP1 to RP3).
+**Context:** `TECHNICAL.md` section 29 ("Repeats like a calendar"); `PRODUCT.md` "Scheduled Actions"; `UX.md` 1j; canvas row 23 (RP1 to RP3).
 ### Description
 One way to say how often something repeats, for every app: Google Calendar's presets worded from the first date, a Custom screen for the rest, and one words line with the next three dates. The rule is a date-only RFC 5545 RRULE body with a floating time and a zone, iterated by our own code and checked against `rrule`. Scheduled actions (Issue 115) and repeating tasks and procedures (Issue 70) sit on it; habits keep their own cadence.
 ### CRUD & Entry-Point Requirements
@@ -1785,7 +1785,7 @@ One way to say how often something repeats, for every app: Google Calendar's pre
 
 **Prerequisites:** 20, 24, 34, 103
 **Target PR Size:** ~450 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("Where the person is, and where they will be"); `PRODUCT.md` "Where You and Your People Are"; `UX.md` 1g (Where people are); canvas rows 20 (LC1, LC2) and 22 (SA4).
+**Context:** `TECHNICAL.md` section 29 ("Where the person is, and where they will be"); `PRODUCT.md` "Where You and Your People Are"; `UX.md` 1g (Where people are); canvas rows 20 (LC1, LC2) and 22 (SA4).
 ### Description
 The person and each who have a home and, now and then, somewhere else for a while, from what is said, the calendar and Waypoint trips, each with its source; "nearby" is worked out from them. The phone's location is the person's choice of Off, City only or Precise, offered only when an answer needs it. A time away in another zone offers its time and a pause of what runs at home. What exists when this lands (Today's planning, the day's turn) follows the away zone here; habits, reminders, the nightly pass and scheduled actions read the same `zoneSpans` in Issues 108, 110, 113 and 115, and each re-runs this criterion's case for itself.
 ### CRUD & Entry-Point Requirements
@@ -1804,7 +1804,7 @@ The person and each who have a home and, now and then, somewhere else for a whil
 
 **Prerequisites:** 16, 32, 36, 102, 103, 107
 **Target PR Size:** ~600 lines (L)
-**Context:** `TECHNICAL.md` section 2 ("Habit and HabitDay"), section 28 ("Habits and repeating tasks", "Time: a habit's day and its windows", "Check-ins"); `PRODUCT.md` "Habits"; `UX.md` 1g; canvas row 13 (HB1 to HB6).
+**Context:** `TECHNICAL.md` section 2 ("Habit and HabitDay"), section 29 ("Habits and repeating tasks", "Time: a habit's day and its windows", "Check-ins"); `PRODUCT.md` "Habits"; `UX.md` 1g; canvas row 13 (HB1 to HB6).
 ### Description
 Something kept up rather than finished (pills morning and evening, water through the day, Mom's doses), made by talking, ticked by a tap or a word without naming the window, with a note kept as said and now and then "How was it?". A bare line on Today at its time that follows shifts, read as "11 of 13 this week" and never as a streak. Health and care habits are private and kept exactly as said; the person can mark one as medicine or care. Habit names join the recognizer's hints, care habits and medicines never.
 ### CRUD & Entry-Point Requirements
@@ -1824,7 +1824,7 @@ Something kept up rather than finished (pills morning and evening, water through
 
 **Prerequisites:** 103, 108
 **Target PR Size:** ~200 lines (S)
-**Context:** `TECHNICAL.md` section 28 ("Check-ins"); `PRODUCT.md` "Habits"; `UX.md` 1g (HB2); canvas row 23 (MC1).
+**Context:** `TECHNICAL.md` section 29 ("Check-ins"); `PRODUCT.md` "Habits"; `UX.md` 1g (HB2); canvas row 23 (MC1).
 ### Description
 Ticking a care habit says which medicine and whose ("Done: Mom's morning metoprolol."), so a misheard tick is caught at once; an unattended wake-phrase turn says the label until the first tap. A care habit turned on without a medicine asks for it once.
 ### CRUD & Entry-Point Requirements
@@ -1839,7 +1839,7 @@ Ticking a care habit says which medicine and whose ("Done: Mom's morning metopro
 
 **Prerequisites:** 103, 108
 **Target PR Size:** ~700 lines (L)
-**Context:** `TECHNICAL.md` section 28 ("A habit's life", "Reminders: opt-in, adaptive, quiet, and kept going by the server", "Formed, and letting it go"), section 14 (`lockScreenName`); `PRODUCT.md` "Habits" ("A habit's life", "Reminders while it builds", "Taking a formed habit off Today"); `UX.md` 1g; canvas row 16 (HF1 to HF10).
+**Context:** `TECHNICAL.md` section 29 ("A habit's life", "Reminders: opt-in, adaptive, quiet, and kept going by the server", "Formed, and letting it go"), section 14 (`lockScreenName`); `PRODUCT.md` "Habits" ("A habit's life", "Reminders while it builds", "Taking a formed habit off Today"); `UX.md` 1g; canvas row 16 (HF1 to HF10).
 ### Description
 Reminders the person turns on while a habit builds, sent whether or not Helm is opened, in fixed words on the lock screen unless the person shows that habit's name, and fading as it holds (asked first on health and care). Stages judged from the ticks (Building, Holding, Formed, Building again), and a formed habit offered its way off Today a week later, leaving its weeks, its count and a moment.
 ### CRUD & Entry-Point Requirements
@@ -1859,7 +1859,7 @@ Reminders the person turns on while a habit builds, sent whether or not Helm is 
 
 **Prerequisites:** 45, 46, 108
 **Target PR Size:** ~500 lines (L)
-**Context:** `TECHNICAL.md` section 2 ("Project as a goal"), section 28 ("Goals"); `PRODUCT.md` "Goals"; `UX.md` 1g; canvas row 14 (GO1 to GO6).
+**Context:** `TECHNICAL.md` section 2 ("Project as a goal"), section 29 ("Goals"); `PRODUCT.md` "Goals"; `UX.md` 1g; canvas row 14 (GO1 to GO6).
 ### Description
 A goal is a project about becoming, with its why (the person's words kept, a tidy version on their yes, a short summary for filing), milestones and a small regular step kept as a habit. Drafted with the person when asked, read as showing up and milestones reached, set aside rather than failed.
 ### CRUD & Entry-Point Requirements
@@ -1878,7 +1878,7 @@ A goal is a project about becoming, with its why (the person's words kept, a tid
 
 **Prerequisites:** 45, 108, 111
 **Target PR Size:** ~450 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("Importance: what matters most, in the person's words"); `PRODUCT.md` "What Matters Most"; `UX.md` 1g; canvas row 18 (IM1 to IM6).
+**Context:** `TECHNICAL.md` section 29 ("Importance: what matters most, in the person's words"); `PRODUCT.md` "What Matters Most"; `UX.md` 1g; canvas row 18 (IM1 to IM6).
 ### Description
 Importance said in the person's own words and kept as one order of their projects, goals and habits, with no cap and a "which comes first?" when too much is tied at the top. Shown in How {name} sees you and on each placed thing, changed by saying it again or by hand, and used by Today and Pause or hold off. Health and care are never placed.
 ### CRUD & Entry-Point Requirements
@@ -1897,7 +1897,7 @@ Importance said in the person's own words and kept as one order of their project
 
 **Prerequisites:** 31, 102, 103, 108
 **Target PR Size:** ~700 lines (L)
-**Context:** `TECHNICAL.md` section 2 ("Pattern", "Observation, Reflection, Research and ScheduledAction"), section 5 ("What runs in a batch"), section 28 ("Learning", layers 1 to 4, "Learning from what is said", "Nothing learned lives on one device", "What Helm keeps, and for how long"); `PRODUCT.md` "What Helm Learns"; `UX.md` 1g; canvas rows 15 (LN1 to LN7) and 20 (AN1, WS1).
+**Context:** `TECHNICAL.md` section 2 ("Pattern", "Observation, Reflection, Research and ScheduledAction"), section 5 ("What runs in a batch"), section 29 ("Learning", layers 1 to 4, "Learning from what is said", "Nothing learned lives on one device", "What Helm keeps, and for how long"); `PRODUCT.md` "What Helm Learns"; `UX.md` 1g; canvas rows 15 (LN1 to LN7) and 20 (AN1, WS1).
 ### Description
 Patterns about when things work, from the person's ticks and from what they say (a fixed set of signals both ways), always answered then acted on or noted, looked at once a night in a batch, kept synced on every device and shown under "What I've noticed" with their evidence. Acted on with Undo for what Helm planned, suggested once for what the person set, never for health or care; each answer remembered under the back-off. On from the start, with a switch.
 ### CRUD & Entry-Point Requirements
@@ -1918,7 +1918,7 @@ Patterns about when things work, from the person's ticks and from what they say 
 
 **Prerequisites:** 111, 112, 113
 **Target PR Size:** ~450 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("Guardrails: pause this, or maybe don't start it now"); `PRODUCT.md` "Pause or Hold Off"; `UX.md` 1g; canvas row 17 (GR1 to GR4).
+**Context:** `TECHNICAL.md` section 29 ("Guardrails: pause this, or maybe don't start it now"); `PRODUCT.md` "Pause or Hold Off"; `UX.md` 1g; canvas row 17 (GR1 to GR4).
 ### Description
 When two different reasons agree (too many goals, what comes first going without, a busy stretch ahead) or a deadline won't fit, one dashed line suggests holding off or pausing, with its reasons, when something starts or when the person looks at it. Never about health or care, never blocking, and under the back-off.
 ### CRUD & Entry-Point Requirements
@@ -1935,7 +1935,7 @@ When two different reasons agree (too many goals, what comes first going without
 
 **Prerequisites:** 7, 102, 103, 106, 107
 **Target PR Size:** ~650 lines (L)
-**Context:** `TECHNICAL.md` section 2 ("Observation, Reflection, Research and ScheduledAction"), section 28 ("Scheduled actions", "Repeats like a calendar"); `PRODUCT.md` "Scheduled Actions"; `UX.md` 1j; canvas rows 22 (SA1 to SA4) and 23 (RP3, RP4).
+**Context:** `TECHNICAL.md` section 2 ("Observation, Reflection, Research and ScheduledAction"), section 29 ("Scheduled actions", "Repeats like a calendar"); `PRODUCT.md` "Scheduled Actions"; `UX.md` 1j; canvas rows 22 (SA1 to SA4) and 23 (RP3, RP4).
 ### Description
 Something the assistant does for the person at a set time ("put next week's groceries on the calendar every Sunday"), repeating through Issue 106's rule, listed under Scheduled with Pause, Change and End, each run told on Today and in Activity with Undo, never pushed. Until Issue 67 only Helm's own kinds run; with 67 an outbound part waits for approval each time, until Issue 93.
 ### CRUD & Entry-Point Requirements
@@ -1959,7 +1959,7 @@ Something the assistant does for the person at a set time ("put next week's groc
 
 **Prerequisites:** 16, 36, 101
 **Target PR Size:** ~400 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("Hands-free, for the whole area"); `PRODUCT.md` "Hands-Free First"; `UX.md` 1g; canvas row 20 (HV1).
+**Context:** `TECHNICAL.md` section 29 ("Hands-free, for the whole area"); `PRODUCT.md` "Hands-Free First"; `UX.md` 1g; canvas row 20 (HV1).
 ### Description
 Every question in habits, goals, learning and thinking ahead can be answered aloud: it says the question and its choices, listens again at once, can be talked over, and "Hey {Name}" answers an open question for 2 minutes after listening ends. Taps stay; nothing waits on voice.
 ### Success Criteria
@@ -1987,7 +1987,7 @@ A turn spoken on home, through "Ask about this" on any content page, or after "H
 
 **Prerequisites:** 74, 103
 **Target PR Size:** ~400 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("Research depth and live web search"); `PRODUCT.md` "Use Cases This Area Must Carry" ("Research depth and allowance"); `UX.md` 1g; canvas row 19 (RA2).
+**Context:** `TECHNICAL.md` section 29 ("Research depth and live web search"); `PRODUCT.md` "Use Cases This Area Must Carry" ("Research depth and allowance"); `UX.md` 1g; canvas row 19 (RA2).
 ### Description
 Research reads the web, quick or thorough, with a default the person sets and a question when the depth matters, within a monthly allowance per person ("About 4 thorough looks left this month"). Depth is how widely it reads, never when it arrives.
 ### CRUD & Entry-Point Requirements
@@ -2007,7 +2007,7 @@ Research reads the web, quick or thorough, with a default the person sets and a 
 
 **Prerequisites:** 49, 111, 113, 118
 **Target PR Size:** ~550 lines (L)
-**Context:** `TECHNICAL.md` section 28 ("The use cases: what the data needs", learn later); `PRODUCT.md` "Use Cases This Area Must Carry" ("Learn it later"); `UX.md` 1g; canvas row 19 (LL1 to LL3).
+**Context:** `TECHNICAL.md` section 29 ("The use cases: what the data needs", learn later); `PRODUCT.md` "Use Cases This Area Must Carry" ("Learn it later"); `UX.md` 1g; canvas row 19 (LL1 to LL3).
 ### Description
 A question saved for later and brought back on a quiet evening as a short overview with a table, a picture where one helps and up to 2 videos, labelled "Not from your records"; Keep it files it in Knowledge. Found in Knowledge › Learn later, in Search and by asking.
 ### CRUD & Entry-Point Requirements
@@ -2028,7 +2028,7 @@ A question saved for later and brought back on a quiet evening as a short overvi
 
 **Prerequisites:** 45, 65, 113, 118
 **Target PR Size:** ~350 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("Research ahead of a dated project"); `PRODUCT.md` "Use Cases This Area Must Carry" ("Research ahead of the move"); `UX.md` 1g; canvas row 19 (RA1, RA2).
+**Context:** `TECHNICAL.md` section 29 ("Research ahead of a dated project"); `PRODUCT.md` "Use Cases This Area Must Carry" ("Research ahead of the move"); `UX.md` 1g; canvas row 19 (RA1, RA2).
 ### Description
 When a project has a date, research is offered ahead of it once ("Want me to look into apartments before you start touring?"), asks a few questions first, and comes back as a topic under the project.
 ### CRUD & Entry-Point Requirements
@@ -2046,7 +2046,7 @@ When a project has a date, research is offered ahead of it once ("Want me to loo
 
 **Prerequisites:** 8, 20, 36, 68
 **Target PR Size:** ~250 lines (S)
-**Context:** `TECHNICAL.md` section 28 ("The use cases: what the data needs"); `PRODUCT.md` "Use Cases This Area Must Carry" (the questions for the couple); `UX.md` 1g; canvas row 19 (RT3).
+**Context:** `TECHNICAL.md` section 29 ("The use cases: what the data needs"); `PRODUCT.md` "Use Cases This Area Must Carry" (the questions for the couple); `UX.md` 1g; canvas row 19 (RT3).
 ### Description
 Questions for someone are a task with a step for each question, linked to the meeting, and before it "Do they feel ready?"; questions found in a Drive document are offered once as that task.
 ### CRUD & Entry-Point Requirements
@@ -2063,7 +2063,7 @@ Questions for someone are a task with a step for each question, linked to the me
 
 **Prerequisites:** 24, 32, 45, 107
 **Target PR Size:** ~350 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("The use cases: what the data needs", the road trip); `PRODUCT.md` "Use Cases This Area Must Carry" ("The road trip"); `UX.md` 1g; canvas row 19 (RT1, RT4).
+**Context:** `TECHNICAL.md` section 29 ("The use cases: what the data needs", the road trip); `PRODUCT.md` "Use Cases This Area Must Carry" ("The road trip"); `UX.md` 1g; canvas row 19 (RT1, RT4).
 ### Description
 "Could I hit the road this weekend?" answered with what must be done first, what it would move and whether it's a poor fit, across projects, the calendar and connected apps, worked out by code rather than guessed.
 ### Success Criteria
@@ -2077,7 +2077,7 @@ Questions for someone are a task with a step for each question, linked to the me
 
 **Prerequisites:** 20, 32, 107
 **Target PR Size:** ~300 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("The use cases": the gaps table); `PRODUCT.md` "How and Where a Meeting Happens"; `UX.md` 1g; canvas row 20 (MF1).
+**Context:** `TECHNICAL.md` section 29 ("The use cases": the gaps table); `PRODUCT.md` "How and Where a Meeting Happens"; `UX.md` 1g; canvas row 20 (MF1).
 ### Description
 Helm's own events carry how they meet (in person, video or phone) and where, from what the person says, and Google Calendar fills them in from its conference data and location. Used for "nearby", for what Today keeps free around an in-person meeting, and for offers like "Keep it on video, or meet at the orchard?".
 ### CRUD & Entry-Point Requirements
@@ -2094,7 +2094,7 @@ Helm's own events carry how they meet (in person, video or phone) and where, fro
 
 **Prerequisites:** 19, 21, 22, 23, 24, 25, 26
 **Target PR Size:** ~600 lines (L)
-**Context:** `TECHNICAL.md` section 19 ("What each source shares"), section 28 ("Connected apps: what Helm reads against what the person sees there"); `PRODUCT.md` "What Each Source Shares"; canvas row 19 (RT2).
+**Context:** `TECHNICAL.md` section 19 ("What each source shares"), section 29 ("Connected apps: what Helm reads against what the person sees there"); `PRODUCT.md` "What Each Source Shares"; canvas row 19 (RT2).
 ### Description
 Each connected app is read as the full state the person sees in it: Going Once's drafts, unpriced and unlisted items and buyers' questions, and the gaps the audit found in A-List, Nine Lives, Pinch, Runway, Waypoint and Worth the Wait. Every new category is off at connect and read live when a question needs it.
 ### Success Criteria
@@ -2108,7 +2108,7 @@ Each connected app is read as the full state the person sees in it: Going Once's
 
 **Prerequisites:** 41, 56, 113
 **Target PR Size:** ~350 lines (M)
-**Context:** `TECHNICAL.md` section 2 ("SeenAsLine"), section 28 ("How Nomos sees you", the profile behind it); `PRODUCT.md` "How [name] Sees You"; canvas row 20 (SY1).
+**Context:** `TECHNICAL.md` section 2 ("SeenAsLine"), section 29 ("How Nomos sees you", the profile behind it); `PRODUCT.md` "How [name] Sees You"; canvas row 20 (SY1).
 ### Description
 How {name} sees you adds how the person talks and what works for them, each line citing what it came from, corrected or removed by tap or voice.
 ### CRUD & Entry-Point Requirements
@@ -2126,7 +2126,7 @@ How {name} sees you adds how the person talks and what works for them, each line
 
 **Prerequisites:** 11, 58
 **Target PR Size:** ~350 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("Personality"); `PRODUCT.md` "Your Assistant" ("Personality"); canvas row 20 (PT1).
+**Context:** `TECHNICAL.md` section 29 ("Personality"); `PRODUCT.md` "Your Assistant" ("Personality"); canvas row 20 (PT1).
 ### Description
 Up to 5 traits the person picks or says, how honest the assistant may be, a line when two clash with a choice of which wins, and a sample of how replies will read before they keep it.
 ### CRUD & Entry-Point Requirements
@@ -2143,7 +2143,7 @@ Up to 5 traits the person picks or says, how honest the assistant may be, a line
 
 **Prerequisites:** 67, 103, 108, 123
 **Target PR Size:** ~450 lines (M)
-**Context:** `TECHNICAL.md` section 28 ("Two-way sync with one chosen Google Calendar"), section 19; `PRODUCT.md` "Use Cases This Area Must Carry" (the gaps).
+**Context:** `TECHNICAL.md` section 29 ("Two-way sync with one chosen Google Calendar"), section 19; `PRODUCT.md` "Use Cases This Area Must Carry" (the gaps).
 ### Description
 The person picks one calendar (or lets Helm make one); Helm writes its plan slots, habit windows and appointments there and reads changes back on the existing sync: a moved or deleted event moves or removes the slot, and a habit window's move is offered, never applied silently.
 ### CRUD & Entry-Point Requirements
@@ -2161,7 +2161,7 @@ The person picks one calendar (or lets Helm make one); Helm writes its plan slot
 
 **Prerequisites:** 31, 32, 108, 113, 115, 127
 **Target PR Size:** ~900 lines (L)
-**Context:** `TECHNICAL.md` section 2 ("`DayAims`"), section 11 ("Aims first, and room"), section 16 (`runHelmDayPlan`), section 28 ("Your day: aims, plan and wind down", "Two-way sync with one chosen Google Calendar"); `PRODUCT.md` "Your Day, In Detail" and "Today, In Detail"; `UX.md` 1k and the flows "Say what you want done" and "Wind down"; `docs/conventions/cloud-functions.md` ("A scheduled function for an app whose data is sealed…", "Work that must happen on time happens on the server").
+**Context:** `TECHNICAL.md` section 2 ("`DayAims`"), section 11 ("Aims first, and room"), section 16 (`runHelmDayPlan`), section 29 ("Your day: aims, plan and wind down", "Two-way sync with one chosen Google Calendar"); `PRODUCT.md` "Your Day, In Detail" and "Today, In Detail"; `UX.md` 1k and the flows "Say what you want done" and "Wind down"; `docs/conventions/cloud-functions.md` ("A scheduled function for an app whose data is sealed…", "Work that must happen on time happens on the server").
 ### Description
 One card at the top of home on the first open each day asks "What do you want to get done today?" with yesterday's unfinished things in the same card. What is said becomes tasks (or links to existing ones), planned first, with a length each, breaks and buffer, and an up-front line when they don't all fit. In the last 2 hours of the day the same place winds the day down: done, still possible tonight, won't happen today, each unfinished aim Tomorrow, Later or Drop it with an optional reason that the nightly pass learns from. The day turning over and every in-day update run on the server, not when the app happens to be open. Planned and done show in Helm's day views and, once Issue 127's calendar is chosen, on Google Calendar.
 ### CRUD & Entry-Point Requirements
@@ -2187,7 +2187,7 @@ One card at the top of home on the first open each day asks "What do you want to
 
 **Prerequisites:** 128
 **Target PR Size:** ~600 lines (M)
-**Context:** `TECHNICAL.md` section 11 ("Planner", "As built (issue 31)", "As built (issue 32)"), section 28 ("Your day: aims, plan and wind down"); `docs/conventions/cloud-functions.md` ("Work that must happen on time happens on the server").
+**Context:** `TECHNICAL.md` section 11 ("Planner", "As built (issue 31)", "As built (issue 32)"), section 29 ("Your day: aims, plan and wind down"); `docs/conventions/cloud-functions.md` ("Work that must happen on time happens on the server").
 ### Description
 Moves what Today still does on the device and could leave a gap if the app stays closed onto the server: generating a day's suggestions the first time it is opened, "Plan my day anyway", the rest-day read and the daily check's other time-bound steps. The device keeps drawing and the writes a tap makes, so a day's plan is already there when the app opens.
 ### CRUD & Entry-Point Requirements
@@ -2204,7 +2204,7 @@ Moves what Today still does on the device and could leave a gap if the app stays
 
 **Prerequisites:** 103, 113, 124, 128
 **Target PR Size:** ~700 lines (L)
-**Context:** `TECHNICAL.md` section 5 ("What runs in a batch"), section 28 ("Related things, grouped overnight"); `PRODUCT.md` "Related Things, In Detail"; `UX.md` 1l; `.claude/rules/helm.md` ("Home is the conversation", "Ask, then file"). Another session is adding what Going Once and Runway expose to Helm: when this is built, read that session's PR to see what is readable, and ask that session for any reasonable gap. This issue adds no data access, adapter or category.
+**Context:** `TECHNICAL.md` section 5 ("What runs in a batch"), section 29 ("Related things, grouped overnight"); `PRODUCT.md` "Related Things, In Detail"; `UX.md` 1l; `.claude/rules/helm.md` ("Home is the conversation", "Ask, then file"). Another session is adding what Going Once and Runway expose to Helm: when this is built, read that session's PR to see what is readable, and ask that session for any reasonable gap. This issue adds no data access, adapter or category.
 ### Description
 The nightly reflective batch also looks across the person's records and connected apps for things that belong together (a Going Once sale "Fall move out", a Runway Horizon event for moving, and Helm tasks and topics about the move) and keeps each grouping as ready context: a project or topic with its linked sources, each cited. A thing that clearly belongs to an existing project or topic is linked quietly; a new project or group, or any link below the confidence bar, is proposed on the third home card.
 ### CRUD & Entry-Point Requirements

@@ -142,12 +142,12 @@ const RENTAL_FIELDS = {
   tripId: 'notUseful',
   rentalType: 'notUseful',
   name: 'shared',
-  vehicle: 'notUseful',
+  vehicle: 'shared',
   pickupAddress: 'shared',
   pickupLatitude: 'notUseful',
   pickupLongitude: 'notUseful',
   pickupPlace: 'notUseful',
-  returnAddress: 'notUseful',
+  returnAddress: 'shared',
   returnLatitude: 'notUseful',
   returnLongitude: 'notUseful',
   returnPlace: 'notUseful',
@@ -250,13 +250,13 @@ const POINT_TO_POINT_TRANSIT_DETAILS_FIELDS = {
 const FLIGHT_TRANSIT_DETAILS_FIELDS = {
   notes: 'never',
   estimatedTravelTimeMs: 'notUseful',
-  airline: 'notUseful',
+  airline: 'shared',
   airlineIataCode: 'notUseful',
   airlineIcaoCode: 'notUseful',
-  flightNumber: 'notUseful',
+  flightNumber: 'shared',
   confirmationCode: 'never',
-  departureAirportCode: 'notUseful',
-  arrivalAirportCode: 'notUseful',
+  departureAirportCode: 'shared',
+  arrivalAirportCode: 'shared',
 } satisfies Record<keyof FlightTransitDetails, ShareDecision>;
 
 const DRIVE_TRANSIT_DETAILS_FIELDS = {
@@ -270,20 +270,20 @@ const DRIVE_TRANSIT_DETAILS_FIELDS = {
 const FERRY_TRANSIT_DETAILS_FIELDS = {
   notes: 'never',
   estimatedTravelTimeMs: 'notUseful',
-  operator: 'notUseful',
+  operator: 'shared',
   confirmationCode: 'never',
-  departurePort: 'notUseful',
-  arrivalPort: 'notUseful',
+  departurePort: 'shared',
+  arrivalPort: 'shared',
 } satisfies Record<keyof FerryTransitDetails, ShareDecision>;
 
 const TRAIN_TRANSIT_DETAILS_FIELDS = {
   notes: 'never',
   estimatedTravelTimeMs: 'notUseful',
-  operator: 'notUseful',
-  trainNumber: 'notUseful',
+  operator: 'shared',
+  trainNumber: 'shared',
   confirmationCode: 'never',
-  departureStation: 'notUseful',
-  arrivalStation: 'notUseful',
+  departureStation: 'shared',
+  arrivalStation: 'shared',
 } satisfies Record<keyof TrainTransitDetails, ShareDecision>;
 
 const BIKE_TRANSIT_DETAILS_FIELDS = {
@@ -310,7 +310,7 @@ const OTHER_TRANSIT_DETAILS_FIELDS = {
 
 const TRAVEL_EVENT_DETAILS_FIELDS = {
   transitType: 'shared',
-  transitDetails: 'never',
+  transitDetails: 'shared',
 } satisfies Record<keyof TravelEventDetails, ShareDecision>;
 
 const DINING_EVENT_DETAILS_FIELDS = {
@@ -350,17 +350,17 @@ const TIMELINE_EVENT_FIELDS = {
   timezone: 'shared',
   endTimezone: 'shared',
   locationName: 'shared',
-  address: 'notUseful',
+  address: 'shared',
   latitude: 'notUseful',
   longitude: 'notUseful',
   eventDetails: 'shared',
   notes: 'never',
   attendeeTargetType: 'filter',
   assignedMemberIds: 'filter',
-  venueOpenTime: 'notUseful',
-  venueCloseTime: 'notUseful',
-  arriveByTime: 'notUseful',
-  arriveByNote: 'notUseful',
+  venueOpenTime: 'shared',
+  venueCloseTime: 'shared',
+  arriveByTime: 'shared',
+  arriveByNote: 'shared',
   changeHistory: 'notUseful',
   place: 'notUseful',
   linkUrl: 'notUseful',
@@ -449,8 +449,8 @@ const CHECKLIST_ITEM_FIELDS = {
   id: 'notUseful',
   tripId: 'filter',
   title: 'shared',
-  category: 'notUseful',
-  customCategoryLabel: 'notUseful',
+  category: 'shared',
+  customCategoryLabel: 'shared',
   note: 'never',
   completeByDayIndex: 'shared',
   assignedToUids: 'filter',

@@ -16,8 +16,6 @@ const BUTTON =
 interface VoiceStatusProps {
   /** Draws its own Cancel, Send and Stop, for a place that has no Talk button (the conversation over a page). */
   hasControls?: boolean;
-  /** Talking isn't possible here, so the person types: needed with `hasControls`. */
-  onBlocked?: () => void;
   /** What a turn started here is asked about; null from home. */
   screen?: ScreenContext | null;
 }
@@ -50,7 +48,6 @@ export function VoiceNotice() {
 /** What the voice is doing, in words: what is heard as it is said (the newest words kept in view), the line being spoken, or the short line after an undo, with Mute while a line plays and Muted once it is on. Draws nothing while idle unless it carries the controls or the voice is muted. */
 function VoiceStatus({
   hasControls = false,
-  onBlocked,
   screen = null,
 }: VoiceStatusProps) {
   const voice = useHelmVoiceContext();
@@ -163,9 +160,7 @@ function VoiceStatus({
           type='button'
           variant='secondary'
           className={BUTTON}
-          onClick={() => {
-            if (voice.talk(screen) === 'blocked') onBlocked?.();
-          }}
+          onClick={() => voice.talk(screen)}
         >
           <Mic className='size-4' aria-hidden='true' />
           {HELM_COPY.talk}

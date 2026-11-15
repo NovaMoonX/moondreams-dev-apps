@@ -46,7 +46,11 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
 
   await Promise.all(
     fixtures.map((fixture) =>
-      upsertFixtureUser(context, fixture, fixture.uid === FIXTURE_USERS.admin.uid),
+      upsertFixtureUser(
+        context,
+        fixture,
+        fixture.uid === FIXTURE_USERS.admin.uid,
+      ),
     ),
   );
 
@@ -72,14 +76,31 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     { appId: 'nine-lives', fixture: FIXTURE_USERS.partnerOne, daysAgo: 3 },
     { appId: 'waypoint', fixture: FIXTURE_USERS.partnerTwo, daysAgo: 1 },
   ].forEach(({ appId, fixture, daysAgo }) => {
-    batch.set(context.firestore.collection('apps').doc(appId).collection('accessRequests').doc(fixture.uid), {
-      uid: fixture.uid,
-      email: fixture.email,
-      displayName: fixture.displayName,
-      requestedAt: context.now - daysAgo * 86_400_000,
-      dismissedAt: null,
-    });
+    batch.set(
+      context.firestore
+        .collection('apps')
+        .doc(appId)
+        .collection('accessRequests')
+        .doc(fixture.uid),
+      {
+        uid: fixture.uid,
+        email: fixture.email,
+        displayName: fixture.displayName,
+        requestedAt: context.now - daysAgo * 86_400_000,
+        dismissedAt: null,
+      },
+    );
   });
+
+  // A non-admin on the "Debug details" list, so their error screen shows what failed.
+  batch.set(
+    context.firestore.doc(`debugProfiles/${FIXTURE_USERS.partnerOne.email}`),
+    {
+      email: FIXTURE_USERS.partnerOne.email,
+      addedAt: context.now - 2 * 86_400_000,
+      addedBy: FIXTURE_USERS.admin.uid,
+    },
+  );
 
   APP_REGISTRY.forEach((app) => {
     const appRef = context.firestore.collection('apps').doc(app.id);
@@ -110,10 +131,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     .filter((fixture) => fixture.uid !== FIXTURE_USERS.admin.uid)
     .flatMap((fixture) =>
       fixture.apps.flatMap((appName) => {
-        const app = APP_REGISTRY.find((candidate) => candidate.name === appName);
+        const app = APP_REGISTRY.find(
+          (candidate) => candidate.name === appName,
+        );
         // Taylor opened Waypoint long ago, so the admin view shows a started-but-not-active member.
         const isLapsed =
-          fixture.uid === FIXTURE_USERS.nineLivesCaretaker.uid && app?.id === 'waypoint';
+          fixture.uid === FIXTURE_USERS.nineLivesCaretaker.uid &&
+          app?.id === 'waypoint';
         return app
           ? [
               {
@@ -129,20 +153,21 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       }),
     );
 
-  const visitedFixtures = fixtures.filter((fixture) => fixture.uid !== FIXTURE_USERS.admin.uid);
+  const visitedFixtures = fixtures.filter(
+    (fixture) => fixture.uid !== FIXTURE_USERS.admin.uid,
+  );
   visitedFixtures.forEach((fixture) => {
     batch.set(context.firestore.doc(`siteVisits/${fixture.uid}`), {
       uid: fixture.uid,
       lastVisitedAt:
-        context.now - (fixture.uid === FIXTURE_USERS.nineLivesCaretaker.uid ? 120 : 1) * DAY_MS,
+        context.now -
+        (fixture.uid === FIXTURE_USERS.nineLivesCaretaker.uid ? 120 : 1) *
+          DAY_MS,
     });
   });
 
   usageEntries.forEach(({ appId, usage }) => {
-    batch.set(
-      context.firestore.doc(`apps/${appId}/usage/${usage.uid}`),
-      usage,
-    );
+    batch.set(context.firestore.doc(`apps/${appId}/usage/${usage.uid}`), usage);
   });
 
   // One session in each state the admin's Pipeline view draws, and the PRs they drive.
@@ -176,11 +201,43 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       ],
       minutesAgo: 70,
     },
-    { sessionId: 'session_seedWorking', branch: 'claude/pinch-voice', state: 'working', raisedHands: [], phase: 'review', helpers: ['technical-reviewer', 'design-reviewer'], minutesAgo: 2 },
-    { sessionId: 'session_seedQuiet', branch: 'claude/a-list-calendar', state: 'working', raisedHands: [], minutesAgo: 95 },
-    { sessionId: 'session_seedIdle', branch: 'claude/waypoint-expenses', state: 'idle', raisedHands: [], minutesAgo: 300 },
-    { sessionId: 'session_seedDecided', branch: 'claude/nine-lives-weights', state: 'idle', raisedHands: [], minutesAgo: 120 },
-    { sessionId: 'session_seedIdleLists', branch: 'claude/pinch-grocery-sort', state: 'idle', raisedHands: [], minutesAgo: 200 },
+    {
+      sessionId: 'session_seedWorking',
+      branch: 'claude/pinch-voice',
+      state: 'working',
+      raisedHands: [],
+      phase: 'review',
+      helpers: ['technical-reviewer', 'design-reviewer'],
+      minutesAgo: 2,
+    },
+    {
+      sessionId: 'session_seedQuiet',
+      branch: 'claude/a-list-calendar',
+      state: 'working',
+      raisedHands: [],
+      minutesAgo: 95,
+    },
+    {
+      sessionId: 'session_seedIdle',
+      branch: 'claude/waypoint-expenses',
+      state: 'idle',
+      raisedHands: [],
+      minutesAgo: 300,
+    },
+    {
+      sessionId: 'session_seedDecided',
+      branch: 'claude/nine-lives-weights',
+      state: 'idle',
+      raisedHands: [],
+      minutesAgo: 120,
+    },
+    {
+      sessionId: 'session_seedIdleLists',
+      branch: 'claude/pinch-grocery-sort',
+      state: 'idle',
+      raisedHands: [],
+      minutesAgo: 200,
+    },
   ].map(({ minutesAgo, ...session }) => ({
     ...session,
     url: `https://claude.ai/code/${session.sessionId}`,
@@ -189,7 +246,10 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     updatedAt: context.now - minutesAgo * MINUTE_MS,
   }));
   pipelineSessions.forEach((session) => {
-    batch.set(context.firestore.doc(`pipelineSessions/${session.sessionId}`), session);
+    batch.set(
+      context.firestore.doc(`pipelineSessions/${session.sessionId}`),
+      session,
+    );
   });
   // Token use per session, spread over the last 30 days: Opus on the main thread, Sonnet and Haiku as helpers.
   const PHASE_MODELS = [
@@ -202,14 +262,70 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     ['conversation', 'claude-opus-5-5', 5],
   ] as const;
   const pipelineCosts = [
-    { sessionId: 'session_seedWaiting', app: null, daysAgo: [1, 0], scale: 3, contextTokens: 182000, calls: 140 },
-    { sessionId: 'session_seedWaitingTwo', app: 'pinch', daysAgo: [4, 3, 2], scale: 4, contextTokens: 215000, calls: 260 },
-    { sessionId: 'session_seedWaitingThree', app: 'waypoint', daysAgo: [9, 8], scale: 5, contextTokens: 310000, calls: 410 },
-    { sessionId: 'session_seedWorking', app: 'pinch', daysAgo: [0], scale: 2, contextTokens: 96000, calls: 75 },
-    { sessionId: 'session_seedQuiet', app: 'a-list', daysAgo: [14, 13, 12], scale: 4, contextTokens: 240000, calls: 330 },
-    { sessionId: 'session_seedIdle', app: 'waypoint', daysAgo: [20, 19], scale: 3, contextTokens: 150000, calls: 190 },
-    { sessionId: 'session_seedFinishedA', app: 'a-list', daysAgo: [27, 26], scale: 6, contextTokens: 275000, calls: 520 },
-    { sessionId: 'session_seedLongRun', app: null, daysAgo: [6, 5, 4, 3, 2, 1, 0], scale: 14, contextTokens: 540000, calls: 1900 },
+    {
+      sessionId: 'session_seedWaiting',
+      app: null,
+      daysAgo: [1, 0],
+      scale: 3,
+      contextTokens: 182000,
+      calls: 140,
+    },
+    {
+      sessionId: 'session_seedWaitingTwo',
+      app: 'pinch',
+      daysAgo: [4, 3, 2],
+      scale: 4,
+      contextTokens: 215000,
+      calls: 260,
+    },
+    {
+      sessionId: 'session_seedWaitingThree',
+      app: 'waypoint',
+      daysAgo: [9, 8],
+      scale: 5,
+      contextTokens: 310000,
+      calls: 410,
+    },
+    {
+      sessionId: 'session_seedWorking',
+      app: 'pinch',
+      daysAgo: [0],
+      scale: 2,
+      contextTokens: 96000,
+      calls: 75,
+    },
+    {
+      sessionId: 'session_seedQuiet',
+      app: 'a-list',
+      daysAgo: [14, 13, 12],
+      scale: 4,
+      contextTokens: 240000,
+      calls: 330,
+    },
+    {
+      sessionId: 'session_seedIdle',
+      app: 'waypoint',
+      daysAgo: [20, 19],
+      scale: 3,
+      contextTokens: 150000,
+      calls: 190,
+    },
+    {
+      sessionId: 'session_seedFinishedA',
+      app: 'a-list',
+      daysAgo: [27, 26],
+      scale: 6,
+      contextTokens: 275000,
+      calls: 520,
+    },
+    {
+      sessionId: 'session_seedLongRun',
+      app: null,
+      daysAgo: [6, 5, 4, 3, 2, 1, 0],
+      scale: 14,
+      contextTokens: 540000,
+      calls: 1900,
+    },
   ].map(({ daysAgo, scale, ...cost }) => ({
     ...cost,
     url: `https://claude.ai/code/${cost.sessionId}`,
@@ -234,7 +350,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   pipelineCosts.forEach((cost) => {
     batch.set(context.firestore.doc(`pipelineCost/${cost.sessionId}`), cost);
   });
-  const toInboxPr = (number: number, title: string, head: string, sessionUrl: string | null, sessionTitle: string) => ({
+  const toInboxPr = (
+    number: number,
+    title: string,
+    head: string,
+    sessionUrl: string | null,
+    sessionTitle: string,
+  ) => ({
     number,
     title,
     url: `https://github.com/NovaMoonX/moondreams-dev-apps/pull/${number}`,
@@ -244,12 +366,21 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     labels: ['minor'],
     ci: 'green',
     bodySessionUrl: sessionUrl,
-    gallery: [] as { label: string; note: string | null; images: { src: string; role: 'before' | 'after' | null }[] }[],
+    gallery: [] as {
+      label: string;
+      note: string | null;
+      images: { src: string; role: 'before' | 'after' | null }[];
+    }[],
     status: {
       sessionUrl,
       sessionTitle,
       state: 'ready when you are',
-      ownerItems: [] as { text: string; options: { label: string; images: string[] }[]; isMulti: boolean; isTask: boolean }[],
+      ownerItems: [] as {
+        text: string;
+        options: { label: string; images: string[] }[];
+        isMulti: boolean;
+        isTask: boolean;
+      }[],
       mustDo: [] as string[],
       goodToKnow: [] as string[],
       decisions: [] as string[],
@@ -258,14 +389,62 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       updatedAt: context.now - 10 * MINUTE_MS,
     },
   });
-  const runwayPr = toInboxPr(901, 'Runway: history sheet', 'claude/runway-cards', pipelineSessions[0].url, 'Runway cards');
-  const pinchPr = toInboxPr(903, 'Pinch: meal plan repeats', 'claude/pinch-meal-plan', pipelineSessions[1].url, 'Pinch meal plan');
-  const orphanPr = toInboxPr(902, 'Nine Lives: visit reminders', 'claude/nine-lives-visits', null, 'Visit reminders');
-  const remindersPr = toInboxPr(907, 'Nine Lives: reminder sounds', 'claude/nine-lives-sounds', null, 'Reminder sounds');
-  const runwayRedPr = toInboxPr(905, 'Runway: card colours', 'claude/runway-card-colours', pipelineSessions[0].url, 'Runway cards');
-  const runwayConflictPr = toInboxPr(906, 'Runway: card order', 'claude/runway-card-order', pipelineSessions[0].url, 'Runway cards');
-  const groceryPr = toInboxPr(909, 'Pinch: sort the grocery list', 'claude/pinch-grocery-sort', pipelineSessions[7].url, 'Grocery sort');
-  const pinchRunningPr = toInboxPr(904, 'Pinch: repeat the plan from a week', 'claude/pinch-meal-plan-weeks', pipelineSessions[1].url, 'Pinch meal plan');
+  const runwayPr = toInboxPr(
+    901,
+    'Runway: history sheet',
+    'claude/runway-cards',
+    pipelineSessions[0].url,
+    'Runway cards',
+  );
+  const pinchPr = toInboxPr(
+    903,
+    'Pinch: meal plan repeats',
+    'claude/pinch-meal-plan',
+    pipelineSessions[1].url,
+    'Pinch meal plan',
+  );
+  const orphanPr = toInboxPr(
+    902,
+    'Nine Lives: visit reminders',
+    'claude/nine-lives-visits',
+    null,
+    'Visit reminders',
+  );
+  const remindersPr = toInboxPr(
+    907,
+    'Nine Lives: reminder sounds',
+    'claude/nine-lives-sounds',
+    null,
+    'Reminder sounds',
+  );
+  const runwayRedPr = toInboxPr(
+    905,
+    'Runway: card colours',
+    'claude/runway-card-colours',
+    pipelineSessions[0].url,
+    'Runway cards',
+  );
+  const runwayConflictPr = toInboxPr(
+    906,
+    'Runway: card order',
+    'claude/runway-card-order',
+    pipelineSessions[0].url,
+    'Runway cards',
+  );
+  const groceryPr = toInboxPr(
+    909,
+    'Pinch: sort the grocery list',
+    'claude/pinch-grocery-sort',
+    pipelineSessions[7].url,
+    'Grocery sort',
+  );
+  const pinchRunningPr = toInboxPr(
+    904,
+    'Pinch: repeat the plan from a week',
+    'claude/pinch-meal-plan-weeks',
+    pipelineSessions[1].url,
+    'Pinch meal plan',
+  );
   batch.delete(context.firestore.doc('pipeline/answered'));
   batch.delete(context.firestore.doc('pipeline/settled'));
   batch.set(context.firestore.doc('pipeline/inbox'), {
@@ -278,8 +457,14 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
             {
               text: "History's header: A or B?",
               options: [
-                { label: 'A, Back on the title line', images: ['https://placehold.co/390x844.png?text=A'] },
-                { label: 'B, Back above the title', images: ['https://placehold.co/390x844.png?text=B'] },
+                {
+                  label: 'A, Back on the title line',
+                  images: ['https://placehold.co/390x844.png?text=A'],
+                },
+                {
+                  label: 'B, Back above the title',
+                  images: ['https://placehold.co/390x844.png?text=B'],
+                },
               ],
               isMulti: false,
               isTask: false,
@@ -301,14 +486,16 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
               isTask: false,
             },
           ],
-          mustDo: ['Create the `RUNWAY_KEY` secret in production before the merge'],
+          mustDo: [
+            'Create the `RUNWAY_KEY` secret in production before the merge',
+          ],
           goodToKnow: [
             'The undo sheet was only checked at 390px.',
             "History keeps 90 days; older moves aren't shown.",
           ],
           decisions: [
             'History keeps 90 days of moves (other option: keep every move)',
-            'Undo is on the move\'s sheet, not on the row (other option: an Undo chip on each row)',
+            "Undo is on the move's sheet, not on the row (other option: an Undo chip on each row)",
           ],
           followUps: ['Show the history count on the goal cards too'],
           screenshots: ['https://placehold.co/390x844.png?text=History'],
@@ -318,24 +505,43 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
             label: '1 · Open a card',
             note: null,
             images: [
-              { src: 'https://placehold.co/390x844.png?text=Card+before', role: 'before' as const },
-              { src: 'https://placehold.co/390x844.png?text=Card+after', role: 'after' as const },
+              {
+                src: 'https://placehold.co/390x844.png?text=Card+before',
+                role: 'before' as const,
+              },
+              {
+                src: 'https://placehold.co/390x844.png?text=Card+after',
+                role: 'after' as const,
+              },
             ],
           },
           {
-            label: '2 · History opens, every move this card saw in the last 90 days with what it changed',
+            label:
+              '2 · History opens, every move this card saw in the last 90 days with what it changed',
             note: 'Moves older than 90 days drop off; the count on the card covers the same window.',
-            images: [{ src: 'https://placehold.co/390x844.png?text=History', role: null }],
+            images: [
+              {
+                src: 'https://placehold.co/390x844.png?text=History',
+                role: null,
+              },
+            ],
           },
           {
             label: '3 · Undo a move',
             note: null,
-            images: [{ src: 'https://placehold.co/390x844.png?text=Undo', role: null }],
+            images: [
+              { src: 'https://placehold.co/390x844.png?text=Undo', role: null },
+            ],
           },
           {
             label: '4 · Undone',
             note: null,
-            images: [{ src: 'https://placehold.co/390x844.png?text=Undone', role: null }],
+            images: [
+              {
+                src: 'https://placehold.co/390x844.png?text=Undone',
+                role: null,
+              },
+            ],
           },
         ],
       },
@@ -343,7 +549,14 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         ...orphanPr,
         status: {
           ...orphanPr.status,
-          ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [], isMulti: false, isTask: false }],
+          ownerItems: [
+            {
+              text: 'Should a reminder repeat after a missed visit?',
+              options: [],
+              isMulti: false,
+              isTask: false,
+            },
+          ],
         },
       },
       pinchPr,
@@ -365,7 +578,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         status: {
           ...remindersPr.status,
           ownerItems: [
-            { text: 'Try the reminder sound on a phone', options: [], isMulti: false, isTask: true, settled: 'done' },
+            {
+              text: 'Try the reminder sound on a phone',
+              options: [],
+              isMulti: false,
+              isTask: true,
+              settled: 'done',
+            },
           ],
         },
       },
@@ -381,7 +600,10 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
           "The chart starts at the first weigh-in, not at birth (other option: start at the cat's birthday)",
           "Weights show in pounds with one decimal (other option: follow the phone's units)",
         ],
-        followUps: ['Let a vet visit add a weigh-in', 'Show a gentle note when the weight drops 10% in a month'],
+        followUps: [
+          'Let a vet visit add a weigh-in',
+          'Show a gentle note when the weight drops 10% in a month',
+        ],
       },
     ],
     updatedAt: context.now - 4 * MINUTE_MS,
@@ -406,7 +628,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     ...EMPTY_SEED_RESULT,
     authUsers: fixtures.length,
     firestoreDocuments:
-      fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length + pipelineSessions.length + pipelineCosts.length + 1,
+      fixtures.length +
+      APP_REGISTRY.length +
+      usageEntries.length +
+      visitedFixtures.length +
+      pipelineSessions.length +
+      pipelineCosts.length +
+      1,
     realtimePaths: fixtures.length,
   };
 

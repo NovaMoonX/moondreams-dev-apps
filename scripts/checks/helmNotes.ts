@@ -360,6 +360,7 @@ const resolveInput = (extra: Partial<ResolveInput> = {}): ResolveInput => ({
         askedAt: 4000,
         answeredAt: null,
         skippedAt: null,
+        dismissedAt: null,
       },
     },
   },
@@ -429,6 +430,7 @@ const asOpen = (
 ): OpenExecution => ({
   id: 'exec-1',
   said: null,
+  via: null,
   captureId: 'c1',
   actor: 'nomos',
   category: 'remember',

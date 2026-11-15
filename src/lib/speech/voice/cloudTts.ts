@@ -1,5 +1,6 @@
 import { getAudioContext } from '@/lib/speech/audioContext';
 import { toSpokenText } from '@/lib/speech/spokenText';
+import { getDuckBus } from '@/lib/speech/voice/duckBus';
 import {
   createPcmSink,
   parsePcmFormat,
@@ -39,7 +40,19 @@ const webAudioPlayer: CloudPlayer = {
     if (context === null) throw new Error('Audio is not available');
     await resumeContext(context);
     if (context.state !== 'running') throw new Error('Audio could not start');
-    return createPcmSink({ context, sampleRate: format.sampleRate, onStart });
+    return createPcmSink({
+      context: {
+        get currentTime() {
+          return context.currentTime;
+        },
+        destination: getDuckBus(context),
+        createBuffer: (channels, length, rate) =>
+          context.createBuffer(channels, length, rate),
+        createBufferSource: () => context.createBufferSource(),
+      },
+      sampleRate: format.sampleRate,
+      onStart,
+    });
   },
   decode: async (bytes) => {
     const context = getAudioContext();
@@ -60,7 +73,7 @@ const webAudioPlayer: CloudPlayer = {
       }
       const node = context.createBufferSource();
       node.buffer = audio;
-      node.connect(context.destination);
+      node.connect(getDuckBus(context));
       const finish = () => {
         signal.removeEventListener('abort', abort);
         resolve();

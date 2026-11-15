@@ -18,10 +18,12 @@ import {
 } from '@apps/helm/queries/nomosMutations';
 import {
   deleteCapture,
+  clearNeedsYou,
   loadExecutionsById,
   makeTaskAsWritten,
   retryCapture,
   sortRestOfCapture,
+  canClearFromNeedsYou,
 } from '@apps/helm/store/actions/captureActions';
 import {
   selectAllCaptures,
@@ -138,6 +140,15 @@ function HeldCaptureCard({ item, onClose }: HeldCaptureCardProps) {
     onClose();
   };
 
+  const dismiss = () => {
+    if (!user || !item) return;
+    clearNeedsYou(user.uid, [item.capture]).then(
+      () => addToast({ title: HELM_COPY.failedDismissed, type: 'success' }),
+      reportFailure,
+    );
+    onClose();
+  };
+
   const sortRest = async () => {
     if (!item) return;
     const { kind, heldReason } = await sortRestOfCapture(item.capture.id);
@@ -222,9 +233,26 @@ function HeldCaptureCard({ item, onClose }: HeldCaptureCardProps) {
             ),
           )}
           {(item.kind === 'failed' || item.kind === 'couldNotRead') && (
-            <Button type='button' variant='secondary' size='sm' onClick={retry}>
-              {HELM_COPY.tryReadingAgain}
-            </Button>
+            <div className='flex flex-wrap gap-2'>
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                onClick={retry}
+              >
+                {HELM_COPY.tryReadingAgain}
+              </Button>
+              {canClearFromNeedsYou(item.capture) && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  onClick={dismiss}
+                >
+                  {HELM_COPY.questionDismiss}
+                </Button>
+              )}
+            </div>
           )}
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {getReasonLine(item, name, isUnreachableHere)}

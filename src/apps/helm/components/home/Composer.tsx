@@ -34,7 +34,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
-import { useMicrophonePermission } from '@/hooks/useMicrophonePermission';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { readFormDraft, writeFormDraft } from '@lib/app/formDrafts';
 import { formatClock } from '@/utils/durationUtils';
@@ -51,6 +50,7 @@ import AttachmentChips from '@apps/helm/components/home/AttachmentChips';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
+import TalkNotice from '@apps/helm/components/voice/TalkNotice';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
   DictateButton,
@@ -125,6 +125,7 @@ interface ComposerProps {
   draftKey?: string;
   /** Sits at the card's top-left, above the field. */
   topSlot?: ReactNode;
+  showsVoiceNotice?: boolean;
 }
 
 /** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter starts a new line and Shift+Enter sends. */
@@ -141,6 +142,7 @@ function Composer({
   screen,
   draftKey = HOME_DRAFT_KEY,
   topSlot,
+  showsVoiceNotice = true,
 }: ComposerProps) {
   const name = useAssistantName();
   const voice = useHelmVoiceContext();
@@ -196,7 +198,6 @@ function Composer({
     timeZone,
     onTranscript: (words) => appendWords(words),
   });
-  const microphone = useMicrophonePermission();
   const recorder = useAudioRecorder({
     maxMs: MAX_VOICE_NOTE_MS,
     onDone: (recording) => {
@@ -493,34 +494,7 @@ function Composer({
       }}
     >
       {topSlot && <div className='flex px-1'>{topSlot}</div>}
-      {voice.notice !== null && (
-        <div
-          className='text-muted-foreground flex flex-col items-start gap-0.5 px-1 text-[13px]'
-          role='status'
-        >
-          {voice.needsMicrophone && microphone === 'granted' ? (
-            <p>{HELM_COPY.talkNeedsRecognition}</p>
-          ) : voice.needsMicrophone ? (
-            <MicrophoneAccess
-              onAllowed={voice.clearNotice}
-              className='w-full'
-            />
-          ) : (
-            <p>{voice.notice}</p>
-          )}
-          {voice.hasNoticeDoor && (
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className="text-primary relative -ml-2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-              onClick={() => void voice.openVoiceSettings()}
-            >
-              {HELM_COPY.talkOpenVoiceSettings}
-            </Button>
-          )}
-        </div>
-      )}
+      {showsVoiceNotice && <TalkNotice className='px-1' />}
       {canType && showsActions && (
         <div
           inert={!isShorthandOpen}

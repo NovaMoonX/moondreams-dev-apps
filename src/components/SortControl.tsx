@@ -30,9 +30,11 @@ interface SortControlProps<T extends string> {
   ) => readonly [PillOption<SortOrder>, PillOption<SortOrder>] | null;
   order?: SortOrder;
   onOrderChange?: (order: SortOrder) => void;
+  /** A 32px button for a header's action slot, its target widened to 40px. */
+  isCompact?: boolean;
 }
 
-/** A sort icon button beside a search field: a drawer of large options on phones, a dropdown from `sm` up. */
+/** A sort icon button beside a search field (or `isCompact` in a header): a drawer of large options on phones, a dropdown from `sm` up. */
 function SortControl<T extends string>({
   label,
   options,
@@ -42,6 +44,7 @@ function SortControl<T extends string>({
   getOrderOptions,
   order = 'natural',
   onOrderChange,
+  isCompact = false,
 }: SortControlProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
@@ -58,10 +61,16 @@ function SortControl<T extends string>({
       variant='secondary'
       rounded='full'
       aria-label={`${label}, by ${options.find((choice) => choice.value === value)?.label ?? ''}`}
-      className={join('h-12 w-12 shrink-0 p-0 max-[359px]:h-10 max-[359px]:w-10', isActive && 'bg-accent!')}
+      className={join(
+        'shrink-0 p-0',
+        isCompact
+          ? "relative h-8 w-8 p-0! after:absolute after:-inset-x-1 after:inset-y-0 after:content-['']"
+          : 'h-12 w-12 max-[359px]:h-10 max-[359px]:w-10',
+        isActive && (isCompact ? 'ring-primary ring-2' : 'bg-accent!'),
+      )}
       onClick={isPhone ? () => setIsOpen(true) : undefined}
     >
-      <ArrowUpDown className='h-5 w-5' />
+      <ArrowUpDown className={isCompact ? 'h-4 w-4' : 'h-5 w-5'} />
     </Button>
   );
 

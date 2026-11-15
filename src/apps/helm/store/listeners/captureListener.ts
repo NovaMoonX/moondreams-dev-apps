@@ -35,6 +35,7 @@ import { groupSessions } from '@apps/helm/utils/sessions';
 const EARLIER_FETCH_LIMIT = 200;
 const UNSEEN_LIMIT = 200;
 const WAITING_LIMIT = 200;
+const OUTSIDE_LIMIT = 200;
 
 const capturesOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'captures');
@@ -162,7 +163,14 @@ async function openCapture(
     answersQuestion: data.answersQuestion ?? null,
     ttsProvider: data.ttsProvider ?? null,
     arrivedVia: data.arrivedVia === 'dropBox' ? 'dropBox' : 'direct',
-    medium: data.medium ?? 'web',
+    medium: data.medium === 'mcp' ? 'mcp' : 'web',
+    via: typeof data.via === 'string' ? data.via : null,
+    outsideReadScopes: Array.isArray(data.outsideReadScopes)
+      ? data.outsideReadScopes.filter(
+          (scope): scope is 'mail' | 'drive' | 'apps' =>
+            scope === 'mail' || scope === 'drive' || scope === 'apps',
+        )
+      : null,
     sessionId: data.sessionId ?? entry.id,
     turnIndex: data.turnIndex ?? 0,
     route: data.route ?? null,
@@ -172,13 +180,19 @@ async function openCapture(
     claimedAt: data.claimedAt ?? null,
     attempts: data.attempts ?? 0,
     lastErrorCode: data.lastErrorCode ?? null,
-    questionState: data.questionState ?? {},
+    questionState: Object.fromEntries(
+      Object.entries(data.questionState ?? {}).map(([id, state]) => [
+        id,
+        { ...state, dismissedAt: state.dismissedAt ?? null },
+      ]),
+    ),
     hasPendingWrites: isMetadataTracked && entry.metadata.hasPendingWrites,
     executionIds: data.executionIds ?? [],
     turnLeadId: toLeadId(data.turnLeadId),
     joinedCaptureIds: toIds(data.joinedCaptureIds),
     attachmentIds: toIds(data.attachmentIds),
     seenAt: data.seenAt ?? null,
+    dismissedAt: data.dismissedAt ?? null,
     quotedSourceKeys: toIds(data.quotedSourceKeys),
     answerSavedNoteId:
       typeof data.answerSavedNoteId === 'string'
@@ -318,6 +332,25 @@ export const startWaitingCapturesListener = (
     onChange,
     onError,
     true,
+  );
+
+/** The newest turns an outside assistant sent, at most a page of them, whenever they were sent. */
+export const startOutsideCapturesListener = (
+  uid: string,
+  read: SealedReader,
+  onChange: (captures: OpenCapture[]) => void,
+  onError: (error: Error) => void,
+) =>
+  startCapturesListener(
+    uid,
+    read,
+    [
+      where('medium', '==', 'mcp'),
+      orderBy('createdAt', 'desc'),
+      limit(OUTSIDE_LIMIT),
+    ],
+    onChange,
+    onError,
   );
 
 /** The next sessions older than `before`, whole ones only: a session cut by the fetch's end waits for the next page. */

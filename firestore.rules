@@ -171,6 +171,14 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // Emails whose owners see error details. A person reads only their own entry.
+    match /debugProfiles/{emailLower} {
+      allow read, write: if isAdmin();
+      allow get: if request.auth != null
+        && request.auth.token.get('email_verified', false) == true
+        && emailLower == request.auth.token.email.lower();
+    }
+
     // What a member without access may see of an app open to requests: no access list, nothing else.
     // The admin writes it beside the app doc and deletes it when the app stops taking requests.
     match /appListings/{appId} {
@@ -258,6 +266,14 @@ service cloud.firestore {
     match /apps/helm/users/{uid}/{collection}/{docId} {
       allow read, create, update, delete: if isHelmOwner(uid)
         && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places', 'keyDates', 'meta', 'projects', 'notes', 'topics'];
+    }
+
+    // A day's written summary is made by the server; the owner reads it and may only mark it stale so the next open rewrites it.
+    match /apps/helm/users/{uid}/daySummaries/{dayKey} {
+      allow read: if isHelmOwner(uid);
+      allow update: if isHelmOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['staleAt'])
+        && (request.resource.data.staleAt == null || request.resource.data.staleAt is int);
     }
 
     // A topic's versions are history: the owner reads, adds and trims them, and nobody rewrites one.
@@ -1185,6 +1201,11 @@ service cloud.firestore {
 
     // What one person lets an app read from another: only they read it, from any app, and only the platform's callables write it. `connectionsServer/` has no match: server only.
     match /connections/{uid}/{document=**} {
+      allow read: if isUser(uid);
+    }
+
+    // The assistants a person connected over MCP: only they read the list; the callables and the MCP server write it. `mcpServer/` has no match: server only.
+    match /mcpClients/{uid}/clients/{clientKey} {
       allow read: if isUser(uid);
     }
 
