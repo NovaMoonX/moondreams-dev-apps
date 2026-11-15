@@ -121,6 +121,8 @@ export async function sendCapture(
     attachmentIds?: string[];
     /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
+    /** Called with the turn's id when the server found the words only asked to hear the last reply again; the turn is then gone and leaves nothing in the history. */
+    onRepeat?: (captureId: string) => void;
   },
 ) {
   const text = turn.text.trim();
@@ -189,7 +191,14 @@ export async function sendCapture(
       : setDoc(reference, capture);
   // Once the write is acknowledged the server reads the turn; offline that happens when the device is back.
   void write.then(
-    () => sortCapture(reference.id, 'full', turn.noteIds ?? []),
+    async () => {
+      const { kind } = await sortCapture(
+        reference.id,
+        'full',
+        turn.noteIds ?? [],
+      );
+      if (kind === 'repeat') turn.onRepeat?.(reference.id);
+    },
     () => undefined,
   );
   return { write, id: reference.id };

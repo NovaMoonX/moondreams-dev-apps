@@ -4895,6 +4895,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         batch.set(users.doc(user.uid), {
           timeZone,
           assistantName,
+          assistantNameVariants:
+            assistantName === 'Juniper' ? ['juniper', 'june per'] : null,
           assistantTone,
           theme,
           dayStartTime: DEFAULT_DAY_START_TIME,

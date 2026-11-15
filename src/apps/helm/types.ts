@@ -44,6 +44,8 @@ export type HelmTheme = 'chestnut' | 'plum' | 'teal' | 'indigo';
 export interface HelmProfile {
   /** The person's own name for the assistant; null reads as the default. Always read through readAssistantName. */
   assistantName: string | null;
+  /** Ways a speech recognizer may write the assistant's name, made by the server after a rename; null when none were made. */
+  assistantNameVariants: string[] | null;
   /** How the assistant's answers sound; null reads as composed. */
   assistantTone: AssistantTone | null;
   /** The colour theme; null reads as chestnut. */
