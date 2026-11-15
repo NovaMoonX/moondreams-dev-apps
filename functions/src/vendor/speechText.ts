@@ -1,5 +1,5 @@
 // Generated from src/lib/speech/speechText.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
-import { soundsLike } from './soundAlike';
+import { soundsLike } from './soundAlike.js';
 
 /** Lower case, accents and punctuation off, apostrophes dropped and spaces single: what spoken phrases are compared as. */
 export const toPlainText = (text: string) =>
