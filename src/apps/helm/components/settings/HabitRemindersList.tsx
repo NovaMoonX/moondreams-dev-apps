@@ -96,6 +96,11 @@ function HabitRemindersList({
       onClose={onClose}
       title={HELM_COPY.habitRemindersTitle}
     >
+      {isOpen && !profile && (
+        <p className='text-muted-foreground text-[15px]'>
+          {HELM_COPY.habitRemindersLoading}
+        </p>
+      )}
       {isOpen && profile && (
         <div className='space-y-5'>
           <div className='flex items-center gap-3'>

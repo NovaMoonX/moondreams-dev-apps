@@ -4371,6 +4371,13 @@ async function writeResult(
       habitPlan.updates.forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/habits/${id}`), data),
       );
+      if (
+        profileSnap?.exists &&
+        habitPlan.creates.length + habitPlan.updates.length > 0
+      )
+        transaction.update(firestore.doc(base), {
+          habitRemindersChangedAt: now,
+        });
       habitDayWrites.forEach((write) =>
         writeHabitDayIn(
           transaction,

@@ -56,7 +56,7 @@ function HabitStage({ habit }: HabitStageProps) {
         </HelpTip>
       </div>
       <p className='text-muted-foreground text-[13px]'>
-        {HELM_COPY.stageSince(habit.stage, formatDateShort(habit.stageAt))}
+        {HELM_COPY.stageSince(formatDateShort(habit.stageAt))}
       </p>
     </div>
   );

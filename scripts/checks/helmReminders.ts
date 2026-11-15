@@ -46,7 +46,13 @@ const habit = (
   status: 'active',
   cadence: { kind: 'everyDay' },
   windowState: {
-    m: { start: '07:00', end: '10:00', order: 0, part: 'morning' },
+    m: {
+      start: '07:00',
+      end: '10:00',
+      order: 0,
+      part: 'morning',
+      editedAt: null,
+    },
   },
   timesPerDay: null,
   startsOn: Date.UTC(2026, 0, 1),
@@ -127,13 +133,21 @@ test('each pace and stage fires at its table time for a window', () => {
 
 test('a window under an hour is reminded halfway when late, and times round down to 5 minutes', () => {
   const short = {
-    m: { start: '07:00', end: '07:50', order: 0, part: 'morning' as const },
+    m: {
+      start: '07:00',
+      end: '07:50',
+      order: 0,
+      part: 'morning' as const,
+      editedAt: null,
+    },
   };
   assert.deepEqual(
     fireOf([habit('h', { stage: 'holding', windowState: short })]),
     [at(DAY, '07:25')],
   );
-  const odd = { m: { start: '07:03', end: '10:00', order: 0, part: null } };
+  const odd = {
+    m: { start: '07:03', end: '10:00', order: 0, part: null, editedAt: null },
+  };
   assert.deepEqual(fireOf([habit('h', { windowState: odd })]), [
     at(DAY, '07:00'),
   ]);
@@ -154,7 +168,7 @@ test('a habit with no window fires at its time, the middle of Your day, or 2 hou
   ]);
 });
 
-test('quiet hours move a fire time to the last minute of the window outside them, or drop a window wholly inside', () => {
+test('quiet hours move a fire time to the nearest minute of the window outside them, or drop a window wholly inside', () => {
   const quiet = profile({ quietHours: { start: '22:00', end: '07:30' } });
   const run = (
     window: { start: string; end: string },
@@ -165,7 +179,12 @@ test('quiet hours move a fire time to the last minute of the window outside them
       [
         habit(
           'h',
-          { windowState: { w: { ...window, order: 0, part: null } }, ...extra },
+          {
+            windowState: {
+              w: { ...window, order: 0, part: null, editedAt: null },
+            },
+            ...extra,
+          },
           reminder,
         ),
       ],
@@ -182,6 +201,35 @@ test('quiet hours move a fire time to the last minute of the window outside them
     [at(DAY, '23:00')],
   );
   assert.deepEqual(run({ start: '12:00', end: '13:00' }), [at(DAY, '12:00')]);
+  assert.deepEqual(
+    run({ start: '21:30', end: '23:59' }, { stage: 'holding' }),
+    [at(DAY, '21:59')],
+  );
+  assert.deepEqual(
+    run({ start: '22:00', end: '23:59' }, { stage: 'building' }),
+    [],
+  );
+  const justAfter = profile({ quietHours: { start: '22:40', end: '23:05' } });
+  assert.deepEqual(
+    plan(
+      [
+        habit('h', {
+          windowState: {
+            w: {
+              start: '21:30',
+              end: '23:30',
+              order: 0,
+              part: null,
+              editedAt: null,
+            },
+          },
+          stage: 'holding',
+        }),
+      ],
+      { profile: { ...justAfter, dayEndTime: '23:59' } },
+    ).map((slot) => slot.fireAt),
+    [at(DAY, '23:05')],
+  );
 });
 
 test('with no quiet hours set, what lies outside Your day is quiet', () => {
@@ -191,7 +239,7 @@ test('with no quiet hours set, what lies outside Your day is quiet', () => {
   ) =>
     fireOf([
       habit('h', {
-        windowState: { w: { ...window, order: 0, part: null } },
+        windowState: { w: { ...window, order: 0, part: null, editedAt: null } },
         ...extra,
       }),
     ]);
@@ -206,7 +254,9 @@ test('with no quiet hours set, what lies outside Your day is quiet', () => {
 test('fire times within 15 minutes of an earlier one join it', () => {
   const at15 = (id: string, start: string) =>
     habit(id, {
-      windowState: { w: { start, end: '12:00', order: 0, part: 'morning' } },
+      windowState: {
+        w: { start, end: '12:00', order: 0, part: 'morning', editedAt: null },
+      },
     });
   const slots = plan([
     at15('a', '07:00'),
@@ -228,7 +278,9 @@ test('a day has at most 6 reminders; the rest join the nearest earlier one', () 
   const habits = Array.from({ length: 9 }, (_, at30) => {
     const start = `${String(7 + Math.floor(at30 / 2)).padStart(2, '0')}:${at30 % 2 ? '30' : '00'}`;
     return habit(`h${at30}`, {
-      windowState: { w: { start, end: '18:00', order: 0, part: null } },
+      windowState: {
+        w: { start, end: '18:00', order: 0, part: null, editedAt: null },
+      },
     });
   });
   const slots = plan(habits);
@@ -284,6 +336,8 @@ const ticked = (tickTime: (back: number) => string | null, habitId = 'h') =>
                 [habitId]: {
                   checks: { m: { status: 'done', at: at(key, time) } },
                   count: 0,
+                  lastCountAt: null,
+                  reminded: null,
                 },
               }
             : {},
@@ -324,6 +378,42 @@ test('a window that keeps itself goes quiet until it misses one', () => {
   );
 });
 
+test('days before a window was moved do not count toward keeping itself', () => {
+  const moved = habit('h', {
+    stage: 'holding',
+    windowState: {
+      m: {
+        start: '07:00',
+        end: '10:00',
+        order: 0,
+        part: 'morning',
+        editedAt: at(shiftDayKeyBy(DAY, -3), '12:00'),
+      },
+    },
+  });
+  assert.equal(
+    plan([moved], { days: ticked((back) => (back > 3 ? '09:50' : '09:00')) })
+      .length,
+    0,
+  );
+  assert.equal(
+    plan(
+      [
+        {
+          ...moved,
+          windowState: {
+            m: { ...moved.windowState.m, editedAt: at(DAY, '03:00') },
+          },
+        },
+      ],
+      {
+        days: ticked(() => '09:00'),
+      },
+    ).length,
+    1,
+  );
+});
+
 test('a tally gets one reminder across the day and only the late one while holding', () => {
   const tally = (extra: Partial<ReminderHabit>) =>
     habit('h', { ...noWindow, timesPerDay: 8, ...extra });
@@ -333,7 +423,14 @@ test('a tally gets one reminder across the day and only the late one while holdi
     ...busy(DAY),
     [DAY]: {
       isInUse: true,
-      entries: { h: { checks: {}, count: 8, lastCountAt: at(DAY, '12:00') } },
+      entries: {
+        h: {
+          checks: {},
+          count: 8,
+          lastCountAt: at(DAY, '12:00'),
+          reminded: null,
+        },
+      },
     },
   };
   assert.deepEqual(plan([tally({})], { days: full }), []);
@@ -363,7 +460,14 @@ test('a habit that is off, paused, not due, done or past its time is left out', 
     ...busy(DAY),
     [DAY]: {
       isInUse: true,
-      entries: { h: { checks: { m: { status: 'skipped', at: 1 } }, count: 0 } },
+      entries: {
+        h: {
+          checks: { m: { status: 'skipped', at: 1 } },
+          count: 0,
+          lastCountAt: null,
+          reminded: null,
+        },
+      },
     },
   };
   assert.deepEqual(plan([habit('h')], { days: done }), []);
@@ -376,11 +480,25 @@ test('a habit that is off, paused, not due, done or past its time is left out', 
     ...busy(DAY),
     '2026-06-08': {
       isInUse: true,
-      entries: { h: { checks: { m: { status: 'done', at: 1 } }, count: 0 } },
+      entries: {
+        h: {
+          checks: { m: { status: 'done', at: 1 } },
+          count: 0,
+          lastCountAt: null,
+          reminded: null,
+        },
+      },
     },
     '2026-06-09': {
       isInUse: true,
-      entries: { h: { checks: { m: { status: 'done', at: 1 } }, count: 0 } },
+      entries: {
+        h: {
+          checks: { m: { status: 'done', at: 1 } },
+          count: 0,
+          lastCountAt: null,
+          reminded: null,
+        },
+      },
     },
   };
   assert.deepEqual(plan([weekly], { days: met }), []);
@@ -403,7 +521,13 @@ test('after 21 idle days the day gets one closing reminder, then nothing until t
       habit('a'),
       habit('b', {
         windowState: {
-          w: { start: '12:00', end: '14:00', order: 0, part: null },
+          w: {
+            start: '12:00',
+            end: '14:00',
+            order: 0,
+            part: null,
+            editedAt: null,
+          },
         },
       }),
     ],
@@ -517,7 +641,13 @@ test('planning reads only readable fields, never the sealed ones', () => {
     const one = habit(id, {
       stage: 'holding',
       windowState: {
-        m: { start: '07:00', end: '10:00', order: 0, part: 'morning' },
+        m: {
+          start: '07:00',
+          end: '10:00',
+          order: 0,
+          part: 'morning',
+          editedAt: null,
+        },
       },
     });
     Object.defineProperty(one, 'sealed', { get: sealed, enumerable: true });

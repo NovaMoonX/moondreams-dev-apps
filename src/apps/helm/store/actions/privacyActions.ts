@@ -13,6 +13,7 @@ import { store } from '@/store';
 
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { openJson, sealJson } from '@apps/helm/security';
+import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import type { HelmEncryption, Sealed } from '@apps/helm/types';
 import {
   readEffectivePrivacy,
@@ -204,7 +205,32 @@ export async function writePrivacy(
     if (!opened) return { kind: 'unreadable' };
     const previous = readPrivacyFacts(opened as Partial<PrivacyFacts>);
     const next = change(previous);
+    const privacy = readEffectivePrivacy(next, parentFacts);
+    const data = snapshot.data() as {
+      lockScreenName?: string | null;
+      history?: unknown[];
+    };
+    const isNameHidden =
+      kind === 'habit' &&
+      privacy === 'private' &&
+      typeof data.lockScreenName === 'string';
+    const now = Date.now();
     transaction.update(ref, {
+      ...(isNameHidden
+        ? {
+            lockScreenName: null,
+            history: [
+              ...(data.history ?? []),
+              {
+                kind: 'nameHidden',
+                at: now,
+                by: 'person',
+                pace: null,
+                stage: null,
+              },
+            ].slice(-30),
+          }
+        : {}),
       sealed: await sealJson(
         {
           ...opened,
@@ -213,8 +239,9 @@ export async function writePrivacy(
         },
         encryption,
       ),
-      privacy: readEffectivePrivacy(next, parentFacts),
+      privacy,
     });
+    if (isNameHidden) markRemindersChanged(transaction, uid, now);
     return { kind: 'saved', previous, next };
   });
 }

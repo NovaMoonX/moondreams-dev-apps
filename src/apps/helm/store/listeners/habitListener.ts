@@ -124,6 +124,8 @@ async function openHabit(
     medicineAskedAt: data.medicineAskedAt ?? null,
     untoldSince: data.untoldSince ?? null,
     formedAt: data.formedAt ?? null,
+    formedKeptAt: data.formedKeptAt ?? null,
+    formedKeptCount: data.formedKeptCount ?? 0,
     formedSummary: data.formedSummary ?? null,
     history: data.history ?? [],
     createdBy: data.createdBy ?? 'nomos',

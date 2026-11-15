@@ -21,7 +21,7 @@ import type { OpenHabit } from '@apps/helm/types';
 interface HabitReminderRowProps {
   habit: OpenHabit;
   now: number;
-  /** The offer above is asking, so this row leaves the opt-in to it. */
+  /** The offer above is asking, so this row leaves the opt-in to it; decided once when the page opens. */
   isOptInHidden: boolean;
 }
 
@@ -85,111 +85,87 @@ function HabitReminderRow({
     );
   };
 
-  const keepReminding = () =>
-    report(
-      setHabitReminder(user.uid, habit, { kind: 'pace', pace: 'late' }),
-      HELM_COPY.habitFormedKeepRemindingDone,
-      HELM_COPY.remindersTurnOnFailed,
-    );
-
-  const line = readLine(habit, next, isFresh);
-  const hasCard = isOn || device === 'on';
+  const line = device === 'on' ? readLine(habit, next, isFresh) : null;
 
   return (
     <section className='space-y-3'>
-      {!isOptInHidden && (
-        <PushOptInRow
-          uid={user.uid}
-          icon={<Bell className='size-4' />}
-          title={HELM_COPY.remindersPushTitle}
-          modalTitle={HELM_COPY.remindersPushModalTitle(habit.name)}
-          body={
-            <>
-              <p>{HELM_COPY.remindersPushBody(assistantName)}</p>
-              <p className='text-muted-foreground text-xs'>
-                {HELM_COPY.remindersPushPrivacy(assistantName)}
+      <div className='helm-card overflow-hidden'>
+        <div className='flex items-center gap-3 px-4 py-3'>
+          <div className='min-w-0 flex-1'>
+            <p className='text-foreground text-[15px] leading-[21px]'>
+              {HELM_COPY.remindersRowTitle}
+            </p>
+            <p className='text-muted-foreground text-[13px] break-words'>
+              {habit.reminder?.isOn
+                ? HELM_COPY.remindersPaceLine(
+                    habit.reminder.pace,
+                    isCare,
+                    habit.lockScreenName !== null,
+                  )
+                : HELM_COPY.remindersRowOff}
+            </p>
+            {line && (
+              <p className='text-muted-foreground text-[13px]'>{line}</p>
+            )}
+            {habit.reminder?.isOn && habit.stage === 'buildingAgain' && (
+              <p className='text-muted-foreground text-[13px]'>
+                {HELM_COPY.remindersAgainLine}
               </p>
-            </>
-          }
-          doneText={HELM_COPY.remindersPushDone(assistantName)}
-          isSettingOn
-          isCompact={false}
-          onTurnedOn={async () => {
-            setIsFresh(true);
-            try {
-              await setHabitReminder(user.uid, habit, {
-                kind: 'on',
-                pace: isCare ? 'start' : 'adaptive',
-              }).written;
-              return true;
-            } catch (error) {
-              console.error('Helm habit reminder was not turned on', error);
-              return false;
-            }
-          }}
-        />
-      )}
-      {hasCard && (
-        <div className='helm-card overflow-hidden'>
-          <div className='flex items-center gap-3 px-4 py-3'>
-            <div className='min-w-0 flex-1'>
-              <p className='text-foreground text-[15px] leading-[21px]'>
-                {HELM_COPY.remindersRowTitle}
-              </p>
-              <p className='text-muted-foreground text-[13px] break-words'>
-                {habit.reminder?.isOn
-                  ? HELM_COPY.remindersPaceLine(
-                      habit.reminder.pace,
-                      isCare,
-                      habit.lockScreenName !== null,
-                    )
-                  : HELM_COPY.remindersRowOff}
-              </p>
-              {line && (
-                <p className='text-muted-foreground text-[13px]'>{line}</p>
-              )}
-              {habit.reminder?.isOn && habit.stage === 'buildingAgain' && (
-                <p className='text-muted-foreground text-[13px]'>
-                  {HELM_COPY.remindersAgainLine}
-                </p>
-              )}
-            </div>
-            <AppToggle
-              checked={isOn}
-              onCheckedChange={change}
-              aria-label={HELM_COPY.remindersRowTitle}
-            />
+            )}
           </div>
-          {isOn && (
-            <Button
-              type='button'
-              variant='tertiary'
-              className='border-border flex h-auto min-h-12 w-full min-w-0 items-center justify-between gap-3 rounded-none border-0 border-t px-4 py-3 text-left focus-visible:-outline-offset-2'
-              onClick={() => setIsOpen(true)}
-            >
-              <span className='text-foreground min-w-0 flex-1 text-[15px] leading-[21px]'>
-                {HELM_COPY.remindersMore}
-              </span>
-              <ChevronRight
-                className='text-muted-foreground size-4 shrink-0'
-                aria-hidden='true'
-              />
-            </Button>
-          )}
+          <AppToggle
+            checked={isOn}
+            onCheckedChange={change}
+            aria-label={HELM_COPY.remindersRowTitle}
+          />
         </div>
-      )}
-      {isOn &&
-        habit.stage === 'formed' &&
-        habit.reminder?.pace === 'adaptive' && (
+        {isOn && !isOptInHidden && (
+          <PushOptInRow
+            uid={user.uid}
+            icon={<Bell className='size-4' />}
+            title={HELM_COPY.remindersPushTitle}
+            modalTitle={HELM_COPY.remindersPushModalTitle(habit.name)}
+            body={
+              <>
+                <p>{HELM_COPY.remindersPushBody(assistantName)}</p>
+                <p className='text-muted-foreground text-xs'>
+                  {HELM_COPY.remindersPushPrivacy(assistantName)}
+                </p>
+              </>
+            }
+            doneText={HELM_COPY.remindersPushDone(assistantName)}
+            isSettingOn={isOn}
+            isInCard
+            onTurnedOn={async () => {
+              if (habit.reminder?.isOn) return true;
+              setIsFresh(true);
+              try {
+                await turnOn().written;
+                return true;
+              } catch (error) {
+                console.error('Helm habit reminder was not turned on', error);
+                return false;
+              }
+            }}
+          />
+        )}
+        {isOn && (
           <Button
             type='button'
             variant='tertiary'
-            size='sm'
-            onClick={keepReminding}
+            className='border-border flex h-auto min-h-12 w-full min-w-0 items-center justify-between gap-3 rounded-none border-0 border-t px-4 py-3 text-left focus-visible:-outline-offset-2'
+            onClick={() => setIsOpen(true)}
           >
-            {HELM_COPY.habitFormedKeepReminding}
+            <span className='text-foreground min-w-0 flex-1 text-[15px] leading-[21px]'>
+              {HELM_COPY.remindersMore}
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
           </Button>
         )}
+      </div>
       <HabitReminderSheet
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}

@@ -1,5 +1,4 @@
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { LockOpen } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import { useAuth } from '@/hooks/useAuth';
@@ -47,29 +46,22 @@ function LockScreenNameSwitch({ habit }: LockScreenNameSwitchProps) {
   };
 
   return (
-    <div className='space-y-2'>
-      <div className='flex items-center gap-3'>
-        <div className='min-w-0 flex-1'>
-          <p className='text-foreground text-[15px] leading-[21px] font-medium'>
-            {HELM_COPY.lockScreenNameTitle}
-          </p>
-          <p className='text-muted-foreground text-[13px]'>
-            {HELM_COPY.lockScreenNameOff(HELM_COPY.lockScreenNameOffWords)}
-          </p>
-          <p className='text-muted-foreground text-[13px] break-words'>
-            {HELM_COPY.lockScreenNameOn(habit.name)}
-          </p>
-        </div>
-        <AppToggle
-          checked={isOn}
-          onCheckedChange={(isShown) => void change(isShown)}
-          aria-label={HELM_COPY.lockScreenNameTitle}
-        />
+    <div className='flex items-center gap-3'>
+      <div className='min-w-0 flex-1'>
+        <p className='text-foreground text-[15px] leading-[21px] font-medium'>
+          {HELM_COPY.lockScreenNameTitle}
+        </p>
+        <p className='text-muted-foreground text-[13px] break-words'>
+          {isOn
+            ? HELM_COPY.lockScreenNameOn(habit.name)
+            : HELM_COPY.lockScreenNameOff(HELM_COPY.lockScreenNameOffWords)}
+        </p>
       </div>
-      <p className='text-muted-foreground flex gap-2 text-[13px] text-pretty'>
-        <LockOpen className='mt-0.5 size-3.5 shrink-0' aria-hidden='true' />
-        <span>{HELM_COPY.lockScreenNameWarning}</span>
-      </p>
+      <AppToggle
+        checked={isOn}
+        onCheckedChange={(isShown) => void change(isShown)}
+        aria-label={HELM_COPY.lockScreenNameTitle}
+      />
     </div>
   );
 }

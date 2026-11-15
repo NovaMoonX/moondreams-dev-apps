@@ -55,7 +55,7 @@ function HabitReminderSheet({
     <FormSheet
       isOpen={isOpen}
       onClose={onClose}
-      title={HELM_COPY.remindersSheetTitle(habit.name)}
+      title={HELM_COPY.remindersSheetTitle}
     >
       {isOpen && (
         <div className='space-y-5'>
@@ -91,6 +91,26 @@ function HabitReminderSheet({
               <p className='text-muted-foreground text-[13px]'>
                 {PACE_HELP[reminder.pace]}
               </p>
+              {habit.stage === 'formed' && reminder.pace === 'adaptive' && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  onClick={() => {
+                    if (!user) return;
+                    report(
+                      setHabitReminder(user.uid, habit, {
+                        kind: 'pace',
+                        pace: 'late',
+                      }),
+                      HELM_COPY.habitFormedKeepRemindingDone,
+                      HELM_COPY.remindersSheetSaveFailed,
+                    );
+                  }}
+                >
+                  {HELM_COPY.habitFormedKeepReminding}
+                </Button>
+              )}
             </div>
           )}
           <div className='flex items-center gap-3'>

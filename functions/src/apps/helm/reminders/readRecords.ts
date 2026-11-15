@@ -17,7 +17,7 @@ import type {
 } from '../nomos/habitReminders.js';
 
 export const HABIT_HISTORY_MAX = 30;
-export const HABITS_READ = 30;
+export const HABITS_READ = 60;
 
 export const userPath = (uid: string) => `apps/helm/users/${uid}`;
 export const queuePath = (uid: string) => `apps/helm/reminderQueue/${uid}`;

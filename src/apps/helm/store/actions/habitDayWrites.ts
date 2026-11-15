@@ -55,9 +55,9 @@ const writeDay = (
   const batch = writeBatch(db);
   write(batch);
   const isBack = markHabitDay(batch, uid, dayKey, habitId, isCheck);
-  const committed = batch.commit();
-  if (isBack) notifyRemindersBack();
-  return committed;
+  return batch.commit().then(() => {
+    if (isBack) notifyRemindersBack();
+  });
 };
 
 /** The writes a habit's ticks and tallies make. Each is handed back unawaited by its callers so it works offline; no execution for the person's own taps. */

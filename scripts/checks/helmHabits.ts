@@ -656,6 +656,7 @@ const lifeDays = (
               h: {
                 checks: isDone ? { day: { status: 'done', at: doneAt } } : {},
                 count: 0,
+                lastCountAt: null,
                 reminded: remindedWeeks.includes(week)
                   ? { day: doneAt - 1000 }
                   : {},

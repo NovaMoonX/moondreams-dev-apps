@@ -52,7 +52,8 @@ if (getApps().length === 0) {
 
 const MINUTE = 60_000;
 const LOOK_AHEAD = 5 * MINUTE;
-const CHANGED_BEHIND = 15 * MINUTE;
+const CHANGED_BEHIND = 24 * 60 * MINUTE;
+const RETRY_AFTER = 15 * MINUTE;
 const CHANGED_AHEAD = 10 * MINUTE;
 const LEASE = 2 * MINUTE;
 const PEOPLE_MAX = 300;
@@ -246,6 +247,9 @@ const writeStage = async (
       stageAt: patch.stageAt,
       stageWeek: patch.stageWeek,
       formedAt: patch.formedAt,
+      ...(patch.isStageChange && patch.stage === 'formed'
+        ? { formedKeptAt: null, formedKeptCount: 0 }
+        : {}),
       rejudgeFrom: null,
       ...(patch.event ? { history: next } : {}),
       ...(patch.isStageChange ? { untoldSince: now } : {}),
@@ -370,6 +374,8 @@ export async function planPerson(
     .where('status', 'in', ['active', 'paused'])
     .limit(HABITS_READ)
     .get();
+  if (habitsSnap.size === HABITS_READ)
+    logger.warn('helm.reminders.habitsTruncated', { who: uid.slice(0, 4) });
   const read = habitsSnap.docs.map((doc) =>
     readHabit(doc.id, doc.data(), timeZone),
   );
@@ -492,11 +498,15 @@ const planGroups = async (
     return report;
   const results = await Promise.all(
     groups[0].map((uid) =>
-      planPerson(firestore, uid, now).catch((error) => {
+      planPerson(firestore, uid, now).catch(async (error) => {
         logger.error('helm.reminders.planFailed', {
           who: uid.slice(0, 4),
           code: errorCode(error),
         });
+        await firestore
+          .doc(queuePath(uid))
+          .set({ lookAt: now + RETRY_AFTER, leaseUntil: null }, { merge: true })
+          .catch(() => undefined);
         return 'failed' as const;
       }),
     ),
@@ -518,7 +528,7 @@ const planGroups = async (
   });
 };
 
-/** One planning pass as of `now`: the people whose planning time has come plus those whose reminders changed in the last 15 minutes, at most 300, 20 at a time, no new person after 200 seconds. */
+/** One planning pass as of `now`: the people whose planning time has come plus those whose reminders changed in the last day and are not yet planned, at most 300, 20 at a time, no new person after 200 seconds. */
 export async function runHelmReminderPlanning(
   firestore: Firestore,
   now: number,
@@ -535,6 +545,7 @@ export async function runHelmReminderPlanning(
       .collection('apps/helm/users')
       .where('habitRemindersChangedAt', '>=', now - CHANGED_BEHIND)
       .where('habitRemindersChangedAt', '<=', now + CHANGED_AHEAD)
+      .orderBy('habitRemindersChangedAt', 'desc')
       .limit(PEOPLE_MAX)
       .get(),
   ]);
@@ -551,7 +562,7 @@ export async function runHelmReminderPlanning(
       readQueue(queues[at].data()).plannedFor !==
       doc.get('habitRemindersChangedAt'),
   );
-  const uids = [...dueIds, ...pending.map((doc) => doc.id)].slice(
+  const uids = [...pending.map((doc) => doc.id), ...dueIds].slice(
     0,
     PEOPLE_MAX,
   );

@@ -1796,6 +1796,8 @@ export const toHabit = async (
   medicineAskedAt: null,
   untoldSince: null,
   formedAt: null,
+  formedKeptAt: null,
+  formedKeptCount: 0,
   formedSummary: null,
   history: [
     {

@@ -55,6 +55,25 @@ import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 const { option, separator } = DropdownMenuFactories;
 
 const FORMED_OFFER_WAIT_MS = 7 * 86_400_000;
+const FORMED_KEPT_WAITS_MS = [28 * 86_400_000, 56 * 86_400_000];
+
+/** The offer comes a week after Formed, then after four weeks, then eight, from each "Keep it on Today", then never; a habit brought back stays quiet until it next becomes Formed afresh. */
+const isFormedOfferDue = (habit: OpenHabit, now: number) => {
+  if (habit.formedAt === null) return false;
+  const formedAt = habit.formedAt;
+  if (
+    habit.history.some(
+      (entry) => entry.kind === 'broughtBack' && entry.at > formedAt,
+    )
+  ) {
+    return false;
+  }
+  if (habit.formedKeptAt === null || habit.formedKeptCount === 0) {
+    return now >= formedAt + FORMED_OFFER_WAIT_MS;
+  }
+  const wait = FORMED_KEPT_WAITS_MS[habit.formedKeptCount - 1];
+  return wait !== undefined && now >= habit.formedKeptAt + wait;
+};
 
 interface HabitScreenProps {
   habitId: string | null;
@@ -93,6 +112,9 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
   const [isAllNotes, setIsAllNotes] = useState(false);
   const [isWritingCare, setIsWritingCare] = useState(false);
   const [isRetiring, setIsRetiring] = useState(false);
+  const [isNewHabit] = useState(
+    () => habit !== null && isInOfferWindow(habit, Date.now()),
+  );
   const report = useHabitChange();
   const name = habit && !habit.isUnreadable ? habit.name : '';
 
@@ -169,19 +191,22 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
     habit.stage === 'formed' &&
     !habit.isCare &&
     habit.forWhoId === null &&
-    habit.formedAt !== null &&
-    clock.now >= habit.formedAt + FORMED_OFFER_WAIT_MS;
+    isFormedOfferDue(habit, clock.now);
 
-  const takeOffToday = async () => {
+  const takeOffToday = async (
+    read: Awaited<ReturnType<typeof readFormedSummary>> | null,
+  ) => {
     if (!user || !habit || isRetiring) return;
     setIsRetiring(true);
     try {
-      const summary = await readFormedSummary(
-        user.uid,
-        habit,
-        clock.dayKey,
-        clock.timeZone,
-      );
+      const summary =
+        read ??
+        (await readFormedSummary(
+          user.uid,
+          habit,
+          clock.dayKey,
+          clock.timeZone,
+        ));
       report(
         retireHabit(user.uid, habit, summary),
         HELM_COPY.habitFormedTakenOffToast(
@@ -386,11 +411,11 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
             <HabitStage habit={habit} />
             {isFormedOffered && (
               <HabitFormedOffer
-                habitId={habit.id}
-                name={habit.name}
-                now={clock.now}
+                habit={habit}
+                dayKey={clock.dayKey}
+                timeZone={clock.timeZone}
                 isTaking={isRetiring}
-                onTakeOff={() => void takeOffToday()}
+                onTakeOff={(summary) => void takeOffToday(summary)}
               />
             )}
             {isRetired && habit.formedSummary && (
@@ -487,13 +512,11 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
             </section>
             {!isRetired && habit.status !== 'ended' && (
               <>
-                {isInOfferWindow(habit, clock.now) && (
-                  <HabitReminderOffer habit={habit} now={clock.now} />
-                )}
+                {isNewHabit && <HabitReminderOffer habit={habit} />}
                 <HabitReminderRow
                   habit={habit}
                   now={clock.now}
-                  isOptInHidden={isInOfferWindow(habit, clock.now)}
+                  isOptInHidden={isNewHabit}
                 />
               </>
             )}

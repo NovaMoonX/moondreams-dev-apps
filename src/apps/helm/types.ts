@@ -1507,6 +1507,9 @@ export interface Habit {
   medicineAskedAt: number | null;
   untoldSince: number | null;
   formedAt: number | null;
+  /** When "Keep it on Today" was last chosen on the Formed offer, and how many times since it last became Formed; the offer waits longer each time. A record from before the fields reads null and 0. */
+  formedKeptAt: number | null;
+  formedKeptCount: number;
   formedSummary: { doneCount: number; dueCount: number; since: number } | null;
   history: HabitHistoryEvent[];
   createdBy: 'person' | 'nomos';

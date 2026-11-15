@@ -23,6 +23,7 @@ import {
   type LifeHabit,
 } from '@apps/helm/engine/habitLife';
 import { sealJson } from '@apps/helm/security';
+import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import type {
   Execution,
   ExecutionSealed,
@@ -192,10 +193,16 @@ async function judgeOne(
       stageAt: patch.stageAt,
       stageWeek: patch.stageWeek,
       formedAt: patch.formedAt,
+      ...(patch.isStageChange && patch.stage === 'formed'
+        ? { formedKeptAt: null, formedKeptCount: 0 }
+        : {}),
       rejudgeFrom: null,
       history: toHistory(life.history as HabitHistoryEvent[], patch.event),
       ...(patch.isStageChange ? { untoldSince: null } : {}),
     });
+    if (patch.isStageChange && current.reminder?.isOn) {
+      markRemindersChanged(transaction, uid, Date.now());
+    }
     if (patch.isStageChange && patch.stage) {
       transaction.set(
         doc(collection(userOf(uid), 'executions')),

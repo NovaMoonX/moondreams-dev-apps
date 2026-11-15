@@ -34,7 +34,7 @@ export interface LifeHabit extends HabitScheduleLike {
   id: string;
   windowState: Record<
     string,
-    ClockWindow & { order: number; editedAt?: number | null }
+    ClockWindow & { order: number; editedAt: number | null }
   >;
   isCare: boolean;
   forWhoId: string | null;
@@ -52,8 +52,8 @@ export interface LifeDay {
     {
       checks: Record<string, { status: string; at: number }>;
       count: number;
-      lastCountAt?: number | null;
-      reminded?: Record<string, number> | null;
+      lastCountAt: number | null;
+      reminded: Record<string, number> | null;
     }
   >;
 }

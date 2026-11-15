@@ -349,6 +349,14 @@ export const resolveHelmQuestion = onCall(
         habitResult.habit?.updates.forEach(({ id, data }) =>
           transaction.update(firestore.doc(`${base}/habits/${id}`), data),
         );
+        if (
+          habitResult.habit &&
+          habitResult.habit.creates.length + habitResult.habit.updates.length >
+            0
+        )
+          transaction.update(firestore.doc(base), {
+            habitRemindersChangedAt: now,
+          });
         habitResult.habit?.dayWrites.forEach((write) =>
           writeHabitDayIn(
             transaction,

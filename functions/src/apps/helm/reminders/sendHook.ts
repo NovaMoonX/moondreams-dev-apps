@@ -1,4 +1,5 @@
 import type { DocumentData, Firestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 
 import type { ReminderSendHook } from '../../../notifications/sendScheduledReminders.js';
 import {
@@ -123,10 +124,10 @@ const check = async (
         profile.remindersPausedAt === null,
     };
   const { dayKey, timeZone } = readClock(fireAt, profile);
-  const habitIds = [...new Set(refs.map((ref) => ref.habitId))].slice(
-    0,
-    HABITS_READ,
-  );
+  const allHabitIds = [...new Set(refs.map((ref) => ref.habitId))];
+  if (allHabitIds.length > HABITS_READ)
+    logger.warn('helm.reminders.habitsTruncated', { who: uid.slice(0, 4) });
+  const habitIds = allHabitIds.slice(0, HABITS_READ);
   const [habitSnaps, daySnap] = await Promise.all([
     firestore.getAll(
       ...habitIds.map((id) => firestore.doc(`${userPath(uid)}/habits/${id}`)),

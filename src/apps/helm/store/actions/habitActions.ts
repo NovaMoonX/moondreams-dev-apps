@@ -4,6 +4,7 @@ import {
   doc,
   runTransaction,
   setDoc,
+  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -115,6 +116,8 @@ export async function createHabit(
     medicineAskedAt: null,
     untoldSince: null,
     formedAt: null,
+    formedKeptAt: null,
+    formedKeptCount: 0,
     formedSummary: null,
     history: [event('started', now)],
     createdBy: 'person',
@@ -233,6 +236,7 @@ export const updateHabitWords = (
         ? (current.medicineAskedAt ?? Date.now())
         : current.medicineAskedAt,
     },
+    isReminderChange: words.forWhoId !== current.forWhoId,
   }));
 
 /** Answers "Which medicine is it?": the medicine, or null for Not now. Either way it is marked asked, so the question never comes back. Needs a connection. */
@@ -293,7 +297,7 @@ const readBefore = (habit: OpenHabit): ChangedFields => ({
   formedSummary: habit.formedSummary,
 });
 
-/** Writes fields on one habit with the reminder stamp in the same batch, and hands back an Undo that writes the earlier fields (and stamps again) only while the habit, as the store shows it, still carries this change's last history entry; 'kept' when something wrote to it since. Plain writes, so both queue offline. */
+/** Writes fields on one habit with the reminder stamp in the same batch, and hands back an Undo that writes back only those fields (and stamps again) while the habit, as the store shows it, still carries this change: its last history entry when it added one, and the values it wrote. 'kept' when something wrote to it since. Plain writes, so both queue offline. */
 function changeHabit(
   uid: string,
   habit: OpenHabit,
@@ -302,6 +306,22 @@ function changeHabit(
 ) {
   const ref = doc(habitsOf(uid), habit.id);
   const before = readBefore(habit);
+  const keys = Object.keys(fields) as (keyof ChangedFields)[];
+  const written = fields.history[fields.history.length - 1];
+  const isStillThis = (live: OpenHabit) => {
+    const last = live.history[live.history.length - 1];
+    const isHistoryOk =
+      fields.history === before.history ||
+      (last?.kind === written?.kind && last?.at === written?.at);
+    return (
+      isHistoryOk &&
+      keys.every(
+        (key) =>
+          key === 'history' ||
+          JSON.stringify(live[key]) === JSON.stringify(fields[key]),
+      )
+    );
+  };
   const batch = writeBatch(db);
   batch.update(ref, { ...fields, lastEditedAt: now });
   markRemindersChanged(batch, uid, now);
@@ -311,12 +331,13 @@ function changeHabit(
       const live = store
         .getState()
         .helm.habits.items.find((item) => item.id === habit.id);
-      if (!live || live.history.length !== fields.history.length) {
-        return 'kept';
-      }
+      if (!live || !isStillThis(live)) return 'kept';
       const undoNow = Date.now();
       const undoBatch = writeBatch(db);
-      undoBatch.update(ref, { ...before, lastEditedAt: undoNow });
+      undoBatch.update(ref, {
+        ...Object.fromEntries(keys.map((key) => [key, before[key]])),
+        lastEditedAt: undoNow,
+      });
       markRemindersChanged(undoBatch, uid, undoNow);
       await undoBatch.commit();
       return 'undone';
@@ -469,6 +490,13 @@ export function retireHabit(
   );
 }
 
+/** "Keep it on Today" on the Formed offer: nothing changes but the offer's back-off, which every device reads from the habit. */
+export const keepFormedOnToday = (uid: string, habit: OpenHabit) =>
+  updateDoc(doc(habitsOf(uid), habit.id), {
+    formedKeptAt: Date.now(),
+    formedKeptCount: habit.formedKeptCount + 1,
+  });
+
 /** Puts a retired habit back on Today as Formed, with its reminders off. */
 export function bringHabitBack(uid: string, habit: OpenHabit) {
   const now = Date.now();
@@ -497,34 +525,46 @@ export async function setHabitCare(
   const parents = parentsOf('habit', habit, readParentIndex()).map(
     (parent) => parent.facts,
   );
-  const result = await editHabit(uid, encryption, habit.id, (opened) => {
-    const facts = readPrivacyFacts(opened);
-    const next: PrivacyFacts = isCare
-      ? {
-          privateMark: facts.privateMark === 'care' ? 'care' : 'health',
-          isPrivacyCleared: false,
-          isCare: true,
-        }
-      : { privateMark: null, isPrivacyCleared: true, isCare: false };
-    return {
-      sealed: {
-        ...opened,
-        privateMark: next.privateMark,
-        isPrivacyCleared: next.isPrivacyCleared,
-      },
-      fields: {
-        isCare: next.isCare === true,
-        privacy: readEffectivePrivacy(next, parents),
-        stage: habit.forWhoId !== null ? null : (habit.stage ?? 'building'),
-        careAskedAt: isCare ? Date.now() : habit.careAskedAt,
-        reminder:
-          habit.reminder && isCare && habit.reminder.pace === 'adaptive'
-            ? { ...habit.reminder, pace: 'start' }
-            : habit.reminder,
-      },
-      isReminderChange: true,
-    };
-  });
+  const result = await editHabit(
+    uid,
+    encryption,
+    habit.id,
+    (opened, current) => {
+      const now = Date.now();
+      const facts = readPrivacyFacts(opened);
+      const next: PrivacyFacts = isCare
+        ? {
+            privateMark: facts.privateMark === 'care' ? 'care' : 'health',
+            isPrivacyCleared: false,
+            isCare: true,
+          }
+        : { privateMark: null, isPrivacyCleared: true, isCare: false };
+      return {
+        sealed: {
+          ...opened,
+          privateMark: next.privateMark,
+          isPrivacyCleared: next.isPrivacyCleared,
+        },
+        fields: {
+          isCare: next.isCare === true,
+          privacy: readEffectivePrivacy(next, parents),
+          stage: habit.forWhoId !== null ? null : (habit.stage ?? 'building'),
+          careAskedAt: isCare ? now : habit.careAskedAt,
+          ...(isCare && current.lockScreenName !== null
+            ? {
+                lockScreenName: null,
+                history: addEvent(current.history, 'nameHidden', now),
+              }
+            : {}),
+          reminder:
+            habit.reminder && isCare && habit.reminder.pace === 'adaptive'
+              ? { ...habit.reminder, pace: 'start' }
+              : habit.reminder,
+        },
+        isReminderChange: true,
+      };
+    },
+  );
   return {
     result,
     undo: () => setHabitCare(uid, encryption, habit, !isCare),

@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import PromptRow from '@/components/PromptRow';
 import { useSheetHistory } from '@/hooks/useBackHistory';
@@ -36,6 +37,8 @@ interface PushOptInRowProps {
   /** Called once this device can be reached; saves the app's own setting and says whether it saved. */
   onTurnedOn: () => Promise<boolean>;
   isCompact?: boolean;
+  /** Draws the row as a warning-toned footer line for the inside of a card (a hairline above it, no tinted box), with a solid Turn on. */
+  isInCard?: boolean;
   actionLabel?: string;
 }
 
@@ -52,6 +55,7 @@ function PushOptInRow({
   isSettingOn,
   onTurnedOn,
   isCompact = true,
+  isInCard = false,
   actionLabel = 'Turn on',
 }: PushOptInRowProps) {
   const queryClient = useQueryClient();
@@ -104,15 +108,34 @@ function PushOptInRow({
 
   return (
     <>
-      {!isHidden && (
-        <PromptRow
-          icon={icon}
-          isCompact={isCompact}
-          title={title}
-          actionLabel={actionLabel}
-          onAction={() => setIsOpen(true)}
-        />
-      )}
+      {!isHidden &&
+        (isInCard ? (
+          <div className='border-border flex items-center gap-3 border-t px-4 py-3'>
+            <span className='shrink-0' aria-hidden='true'>
+              {icon}
+            </span>
+            <p className='text-warning-foreground dark:text-warning min-w-0 flex-1 text-[13px] font-medium'>
+              {title}
+            </p>
+            <Button
+              type='button'
+              variant='primary'
+              size='sm'
+              className={`shrink-0 ${NOTICE_ACTION_CLASSES.warning}`}
+              onClick={() => setIsOpen(true)}
+            >
+              {actionLabel}
+            </Button>
+          </div>
+        ) : (
+          <PromptRow
+            icon={icon}
+            isCompact={isCompact}
+            title={title}
+            actionLabel={actionLabel}
+            onAction={() => setIsOpen(true)}
+          />
+        ))}
       <Modal
         id={dialogId}
         isOpen={isOpen}

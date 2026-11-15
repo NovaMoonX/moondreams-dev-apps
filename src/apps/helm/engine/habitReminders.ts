@@ -6,6 +6,7 @@ import {
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import {
   dayPartWindows,
+  habitDayKey,
   readHabitStatusOn,
   readWindowSpans,
   windowInstants,
@@ -43,8 +44,8 @@ export interface ReminderHabit extends LifeHabit {
     string,
     ClockWindow & {
       order: number;
-      editedAt?: number | null;
-      part?: DayPart | null;
+      editedAt: number | null;
+      part: DayPart | null;
     }
   >;
 }
@@ -116,7 +117,7 @@ const readUnits = (
     ? [{ id: 'day', part: null, window: null }]
     : readWindowSpans(habit, dayKey, zone).map((span) => ({
         id: span.id,
-        part: habit.windowState[span.id].part ?? null,
+        part: habit.windowState[span.id].part,
         window: { startAt: span.startAt, endAt: span.endAt },
       }));
 
@@ -191,7 +192,7 @@ const subtract = (span: Interval, blocked: Interval[]): Interval[] =>
     [span],
   );
 
-/** A fire time inside quiet hours moves to the nearest minute of its window outside them (the last minute before them, or the first after); null when the window lies wholly inside. */
+/** A fire time inside quiet hours moves to the nearest minute of its window outside them (just before or just after); null when the window lies wholly inside. */
 const moveOutOfQuiet = (
   fireAt: number,
   unit: Unit,
@@ -232,9 +233,15 @@ const isKeepingItself = (
   profile: ReminderProfile,
 ) => {
   if (!unit.window) return false;
+  const editedAt = habit.windowState[unit.id]?.editedAt ?? null;
   const dueDays = Array.from({ length: GOES_QUIET_DAYS }, (_, at) =>
     shiftKey(dayKey, -(at + 1)),
-  ).filter((key) => toMs(key) >= habit.startsOn && isDueOn(habit.cadence, key));
+  ).filter(
+    (key) =>
+      toMs(key) >= habit.startsOn &&
+      (editedAt === null || key >= habitDayKey(editedAt, profile.timeZone)) &&
+      isDueOn(habit.cadence, key),
+  );
   return (
     dueDays.length > 0 &&
     dueDays.every((key) => {

@@ -590,6 +590,32 @@ test('a person with only a pause that ends is looked at on that day, not before'
   assert.equal((await reminders()).length, 0);
 });
 
+test('a stamp synced hours late is still planned, and a person whose plan failed is looked at again later', async () => {
+  const now = at(DAY, '12:00');
+  await seedPerson(
+    U1,
+    { h1: { windowState: { m: window('18:00', '21:00', 'evening') } } },
+    { habitRemindersChangedAt: now - 3 * 60 * MINUTE },
+  );
+  assert.equal((await runHelmReminderPlanning(firestore, now)).planned, 1);
+  await firestore.doc('apps/helm/reminderQueue/' + U1).delete();
+  await firestore.doc(userPath(U1)).update({ habitRemindersChangedAt: now });
+  const broken = new Proxy(firestore, {
+    get: (target, key) =>
+      key === 'collection'
+        ? (path: string) => {
+            if (path.endsWith('/habits')) throw new Error('boom');
+            return target.collection(path);
+          }
+        : Reflect.get(target, key).bind?.(target),
+  });
+  const report = await runHelmReminderPlanning(broken, now);
+  assert.equal(report.failed, 1);
+  const queue = await read('apps/helm/reminderQueue/' + U1);
+  assert.equal(queue.lookAt, now + 15 * MINUTE);
+  assert.equal(queue.leaseUntil, null);
+});
+
 test('a change stamp is answered once, a stamp far ahead is ignored, a held person is skipped', async () => {
   const now = at(DAY, '12:00');
   await seedPerson(
