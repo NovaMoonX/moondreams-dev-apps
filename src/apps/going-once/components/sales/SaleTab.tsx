@@ -91,7 +91,7 @@ function SaleTab({
   const [isEditingPayment, setIsEditingPayment] = useState(false);
   const [isEditingDays, setIsEditingDays] = useState(false);
   const [now] = useState(() => Date.now());
-  const upcomingDays = getUpcomingDays(sale.pickupDays, now);
+  const upcomingDays = getUpcomingDays(sale.pickupDays, now, sale.timeZone);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const isSeller = isSaleSeller(sale, uid);
@@ -264,6 +264,7 @@ function SaleTab({
         <PickupDaysSheet
           saleId={sale.id}
           value={sale.pickupDays}
+          timeZone={sale.timeZone}
           onClose={() => setIsEditingDays(false)}
         />
       )}

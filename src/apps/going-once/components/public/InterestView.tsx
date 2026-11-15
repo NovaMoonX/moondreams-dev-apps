@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 
 import BackLink from '@/components/BackLink';
@@ -15,7 +16,10 @@ import {
 } from '@apps/going-once/constants';
 import PickupDaysQuestion from '@apps/going-once/components/public/PickupDaysQuestion';
 import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
-import { sendInterest } from '@apps/going-once/queries/salePageQueries';
+import {
+  salePageQueryKeys,
+  sendInterest,
+} from '@apps/going-once/queries/salePageQueries';
 import type { InterestResult, PublicThing } from '@apps/going-once/types';
 import { formatPhone, readContact } from '@apps/going-once/utils/contact';
 import { toPrefilledMessage } from '@apps/going-once/utils/inquiries';
@@ -80,10 +84,12 @@ function InterestView({
   const [message, setMessage] = useState(
     toPrefilledMessage(thing.title, thing.status === 'PENDING'),
   );
-  const [days, setDays] = useState<DaysAnswer>(() => ({
-    ...daysAnswer,
-    days: daysAnswer.days.filter((day) => openDays.includes(day)),
-  }));
+  const [pickedDays, setDays] = useState<DaysAnswer>(daysAnswer);
+  const days = {
+    ...pickedDays,
+    days: pickedDays.days.filter((day) => openDays.includes(day)),
+  };
+  const queryClient = useQueryClient();
   const [website, setWebsite] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<Sent | null>(null);
@@ -126,6 +132,10 @@ function InterestView({
         }
         if (result.status === 'not_available' || result.status === 'not_found')
           onRefused(result.status);
+        if (result.status === 'invalid' && result.field === 'days')
+          void queryClient.invalidateQueries({
+            queryKey: [...salePageQueryKeys.all, linkId],
+          });
         setError(getRefusal(result));
       } catch {
         setError(INTEREST_FAILURE);
@@ -250,7 +260,10 @@ function InterestView({
         <PickupDaysQuestion
           openDays={openDays}
           answer={days}
-          onChange={setDays}
+          onChange={(answer) => {
+            setDays(answer);
+            setError(null);
+          }}
         />
       )}
       <div className='space-y-2'>

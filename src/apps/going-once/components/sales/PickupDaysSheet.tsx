@@ -19,14 +19,21 @@ const QUEUED_AFTER_MS = 2000;
 interface PickupDaysSheetProps {
   saleId: string;
   value: number[];
+  /** The sale's time zone, so a day passes when it does for buyers. */
+  timeZone: string | null;
   onClose: () => void;
 }
 
 /** The days the sellers can hand things over, on a calendar; written on Done, and only when they changed. */
-function PickupDaysSheet({ saleId, value, onClose }: PickupDaysSheetProps) {
+function PickupDaysSheet({
+  saleId,
+  value,
+  timeZone,
+  onClose,
+}: PickupDaysSheetProps) {
   const { addToast } = useToast();
   const [now] = useState(() => Date.now());
-  const [upcoming] = useState(() => getUpcomingDays(value, now));
+  const [upcoming] = useState(() => getUpcomingDays(value, now, timeZone));
   const [draft, setDraft] = useState(upcoming);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +90,7 @@ function PickupDaysSheet({ saleId, value, onClose }: PickupDaysSheetProps) {
         <DaysPicker
           days={draft}
           onChange={setDraft}
-          minDay={getLocalToday(now)}
+          minDay={getLocalToday(now, timeZone)}
           maxDays={MAX_PICKUP_DAYS}
         />
       </div>

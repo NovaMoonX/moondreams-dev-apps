@@ -10,9 +10,13 @@ import type { Inquiry } from '@apps/going-once/types';
 export const normalizePickupDays = (days: readonly number[]) =>
   normalizeDays(days, MAX_PICKUP_DAYS);
 
-/** The pickup days that haven't passed on this device. */
-export const getUpcomingDays = (days: readonly number[], now: number) => {
-  const today = getLocalToday(now);
+/** The pickup days that haven't passed, in the sale's time zone when given (as buyers see them), else on this device. */
+export const getUpcomingDays = (
+  days: readonly number[],
+  now: number,
+  timeZone: string | null = null,
+) => {
+  const today = getLocalToday(now, timeZone);
   return normalizeDays(days).filter((day) => day >= today);
 };
 

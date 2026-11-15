@@ -57,8 +57,23 @@ export const formatDayRun = (run: readonly number[]) => {
 export const formatDayRuns = (days: readonly number[]) =>
   toDayRuns(days).map(formatDayRun).join(', ');
 
-/** Today in the device's time zone as a date-only value, to compare with stored days. */
-export const getLocalToday = (now: number) => {
+/** Today as a date-only value, in the given time zone (the device's when none or an unknown one), to compare with stored days. */
+export const getLocalToday = (now: number, timeZone: string | null = null) => {
   const date = new Date(now);
-  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  if (timeZone === null)
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  try {
+    const [year, month, day] = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .format(date)
+      .split('-')
+      .map(Number);
+    return Date.UTC(year, month - 1, day);
+  } catch {
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  }
 };
