@@ -2223,6 +2223,89 @@ The nightly reflective batch also looks across the person's records and connecte
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
 - [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 
+### Issue 131: Several phones and emails, labelled, with a primary
+
+**Prerequisites:** 35, 38
+**Target PR Size:** ~700 lines (L)
+**Context:** `PRODUCT.md` "How Your People Connect, In Detail" (the first bullet); `TECHNICAL.md` section on who records; `.claude/rules/helm.md`.
+### Description
+A person or organization holds several phone numbers and emails, each labelled, one of each primary. The single `phone` and `email` a record held before read as the primary of each, labelled Other, so nothing is lost and nothing needs a migration job.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** Add a phone, Add an email on the who's page and in its edit sheet; "Dana's work number is 555-0142" by voice or typing.
+- [ ] **Read:** "How to reach" on the who's page, primary first with its mark and each label; the assistant uses the primary.
+- [ ] **Update:** each row's sheet: Make primary, Change (number or address and label), Copy, Call or Text, Email.
+- [ ] **Delete:** Remove on each row's sheet with Undo; removing the primary makes the next one primary.
+### Success Criteria
+- [ ] The sealed who payload holds `phones` and `emails` (each `{ id, value, label, isPrimary }`, at most 10 each, exactly one primary when any); `phone` and `email` are deprecated, written null, and a payload that has only them reads as one primary each labelled Other (`check:helm-who-contacts`).
+- [ ] Labels: Mobile, Home, Work, Other or the person's own word (at most 20 characters); a phone is kept as typed and compared by its digits, so the same number twice is refused with a line saying it's already there (`check:helm-who-contacts`).
+- [ ] The Google Contacts import keeps every number and email with its label, and matching an imported contact to an existing who compares against all of them (`check:helm-contact-import`).
+- [ ] The server's people context gives the primary phone and email and the labels; "text Dana" uses the primary, "Dana's work email" the labelled one; a private who's numbers never leave the device beyond what Private Things allows (`check:helm-private`).
+- [ ] At 320px the rows keep one line each (value truncated, label beside it) and every action sits in the row's sheet, not on the row.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 132: Connections between people, and a couple's status
+
+**Prerequisites:** 131
+**Target PR Size:** ~1,200 lines (L)
+**Context:** `PRODUCT.md` "How Your People Connect, In Detail" (bullets 2, 3 and 7); `.claude/rules/helm.md`; `docs/conventions/data-contracts.md`.
+### Description
+Any two who records can be linked: family (parent, child, sibling, grandparent, aunt or uncle, cousin, in-law, step), a couple (with a status: dating, engaged, married, separated, divorced, widowed, and an optional since date), friends, or work. One link is one record read from either side, so each person's page names it from their side.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** Add a connection on a who's page (pick the person, then what they are to each other); "Dana and Sam are married" or "Joan is Dana's mom" said or typed, with a line and Undo.
+- [ ] **Read:** "Connections" on each page, read from that person's side ("Eli · brother"); "Who is Eli's wife?" answered.
+- [ ] **Update:** a connection's sheet: change what they are, a couple's status and since date; "Dana and Sam got engaged" changes the status and keeps a moment on both pages.
+- [ ] **Delete:** Remove on the sheet with Undo; forgetting a who removes their connections and the confirm names how many.
+### Success Criteria
+- [ ] `apps/helm/users/{uid}/connections/{id}` holds `whoIds` (two ids, sorted), the kind and, sealed, the relation from each side, the status and since date, `source` (`said`, `page`) and the usual `createdBy`, `executionId` and timestamps; every field `T | null`; a duplicate pair-and-kind is refused (`check:helm-connections`).
+- [ ] The reading from each side is one pure function (Maya is Eli's sister ⇒ Eli is Maya's brother or sibling, by Eli's known gender words or "sibling"), shared by the page, the server and the checks (`check:helm-connections`).
+- [ ] The server gets `connect`, `updateConnection` and `disconnect` commands; a turn that names two people and how they relate makes the link; one that only implies it ("Dana's husband Sam called") proposes it once and never again after No; each is undoable (`check:helm-connection-commands`).
+- [ ] The people context lists each person's connections so "Who is Eli's wife?" and "How do I know Priya?" are answered; a private who's connections follow Private Things (`check:helm-private`).
+- [ ] Rules for `connections` proven as owner, another user and signed out; row added to `WHERE_THINGS_LIVE`; the scale seed gets 200 people and 400 connections.
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 133: Family links worked out, and marked "Figured out"
+
+**Prerequisites:** 132
+**Target PR Size:** ~700 lines (L)
+**Context:** `PRODUCT.md` "How Your People Connect, In Detail" (bullet 4); `engine/kinKinds.ts`.
+### Description
+From the owner's own family words (`kin`) and the connections set, a pure engine works out the family links that follow (siblings through a shared parent or both being the owner's siblings, aunts and uncles, cousins, grandparents, in-laws, step-parents) and shows them as "Figured out" on the pages and the map. One tap confirms one (it becomes a stored connection with `source: 'confirmed'`) or corrects it (stored as a refusal that is never worked out again). Inferred links are computed when read, never stored.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** Confirm on a figured-out link makes it a connection.
+- [ ] **Read:** figured-out links on each page, quieter, with "Figured out"; the assistant says when an answer rests on one.
+- [ ] **Update:** Not right on a figured-out link: "Not related" or the right relation.
+- [ ] **Delete:** Undo on Confirm or Not right.
+### Success Criteria
+- [ ] `inferFamilyLinks(selfId, people, connections, refusals)` is pure, in the engine, vendored to the server, and covers: two of the owner's siblings are siblings; a parent's sibling is an aunt or uncle and their child a cousin; a parent's parent a grandparent; a sibling's spouse an in-law; a parent's spouse who isn't a parent a step-parent; nothing for friends or work (`check:helm-family-links`).
+- [ ] A stored connection or a refusal always beats an inferred one; a refusal is kept sealed with the pair and relation and never inferred again (`check:helm-family-links`).
+- [ ] Each inferred link carries the chain it came from, shown on its sheet ("Because Maya and Eli are both your siblings"); the server answers with the same function and says the link was worked out.
+- [ ] It runs in under 50 ms on the scale seed (200 people, 400 connections).
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
+### Issue 134: The map of your circle
+
+**Prerequisites:** 133
+**Target PR Size:** ~800 lines (L)
+**Context:** `PRODUCT.md` "How Your People Connect, In Detail" (bullet 5); `docs/conventions/design-ux.md`; `docs/conventions/state-data.md` "Performance is a design check".
+### Description
+People → Map draws the owner's circle as a network with Cytoscape.js (MIT), loaded only when the map opens: the owner in the middle, each person a circle with their photo or initials, a line per link styled by kind, figured-out lines lighter. Tapping a person opens a small card with Open. Filters: Close only (the default past 30 people), Family, Everyone.
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** from a person's card on the map, Add a connection.
+- [ ] **Read:** the map from People (a Map view beside the list); a person's card.
+- [ ] **Update:** drag a person to place them, kept on this device; Reset layout.
+- [ ] **Delete:** none on the map; a connection is removed from its sheet.
+### Success Criteria
+- [ ] Cytoscape.js is a lazily loaded chunk (not in the main bundle), its licence is named in the PR, and the map opens in under a second on the scale seed at 390px.
+- [ ] Line styles: family solid, couple double, friends dotted, work dashed, figured out lighter, past couples faint; a legend sheet explains them; colours are the theme's tokens in light and dark.
+- [ ] Touch: pinch to zoom, drag to pan, tap a person for their card; a drag that starts on a person moves only that person; checked in the emulated phone at 320 and 390.
+- [ ] Pets and organizations show only when linked; Passing people never show; private people show with initials only when the screen is masked.
+- [ ] Positions dragged are kept in localStorage per uid and cleared by Reset layout and by "Remove from this device".
+- [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
+- [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
+
 ## Beyond
 
 ### Issue 91: Information service: a digest of what matters
