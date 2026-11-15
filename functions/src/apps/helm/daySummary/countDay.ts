@@ -27,6 +27,7 @@ export interface HelmDayCounts {
   placesAdded: number;
   habitsStarted: number;
   habitChecksDone: number;
+  connectionsAdded: number;
   tasksDone: number;
   planned: number;
   answered: number;
@@ -76,6 +77,7 @@ const NO_COUNTS: HelmDayCounts = {
   placesAdded: 0,
   habitsStarted: 0,
   habitChecksDone: 0,
+  connectionsAdded: 0,
   tasksDone: 0,
   planned: 0,
   answered: 0,
@@ -120,12 +122,13 @@ export const getDayBounds = (dayKey: string, timeZone: string): DayBounds => {
 const isIn = (at: number | null, { dayStart, dayEnd }: DayBounds) =>
   at !== null && at >= dayStart && at < dayEnd;
 
-/** What happened on one day, each item counted on the day it happened; an outside assistant's turns, an undone or failed execution and an undo itself count for nothing, and a habit started or a check-in removed by an undo is no longer in the records read. */
+/** What happened on one day, each item counted on the day it happened; an outside assistant's turns, an undone or failed execution and an undo itself count for nothing, and a habit or connection started or a check-in removed by an undo is no longer in the records read. */
 export const countHelmDay = (input: {
   captures: DayCapture[];
   executions: DayExecution[];
   tasks: { completedAt: number | null }[];
   habits: { createdAt: number }[];
+  connections: { createdAt: number; isOutside: boolean }[];
   habitChecks: DayHabitCheck[];
   dayStart: number;
   dayEnd: number;
@@ -162,6 +165,10 @@ export const countHelmDay = (input: {
     ).length,
     habitsStarted: input.habits.filter((habit) => isIn(habit.createdAt, bounds))
       .length,
+    connectionsAdded: input.connections.filter(
+      (connection) =>
+        !connection.isOutside && isIn(connection.createdAt, bounds),
+    ).length,
     habitChecksDone: input.habitChecks.filter(
       (check) =>
         check.status === 'done' && !check.isOutside && isIn(check.at, bounds),
@@ -215,6 +222,7 @@ const toAddedClause = (counts: HelmDayCounts) => {
       [counts.factsAdded, 'fact', 'facts'],
       [counts.peopleAdded, 'person', 'people'],
       [counts.placesAdded, 'place', 'places'],
+      [counts.connectionsAdded, 'connection', 'connections'],
     ] as const
   )
     .filter(([count]) => count > 0)
@@ -357,7 +365,10 @@ export const toEffectTitles = (
   effects.flatMap((effect, index) => {
     const ref = refs[index];
     const written = effect.written ?? {};
-    const isMade = ref?.op === 'create' && ref.collection !== 'habits';
+    const isMade =
+      ref?.op === 'create' &&
+      ref.collection !== 'habits' &&
+      ref.collection !== 'connections';
     const isDone =
       ref?.collection === 'tasks' &&
       ref.op === 'update' &&

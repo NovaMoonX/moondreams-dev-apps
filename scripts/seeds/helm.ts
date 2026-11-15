@@ -1474,6 +1474,7 @@ async function buildPlanDays(input: {
       placesAdded: 0,
       habitsStarted: 0,
       habitChecksDone: 3,
+      connectionsAdded: 0,
       tasksDone: 1,
       planned: 1,
       answered: 2,

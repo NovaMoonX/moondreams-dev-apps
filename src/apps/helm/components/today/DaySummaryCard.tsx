@@ -19,6 +19,7 @@ const ROWS: [keyof HelmDayCounts, (count: number) => string][] = [
   ['placesAdded', HELM_COPY.daySummaryPlacesAdded],
   ['habitChecksDone', HELM_COPY.daySummaryHabitChecksDone],
   ['habitsStarted', HELM_COPY.daySummaryHabitsStarted],
+  ['connectionsAdded', HELM_COPY.daySummaryConnectionsAdded],
   ['tasksDone', HELM_COPY.daySummaryTasksDone],
   ['planned', HELM_COPY.daySummaryPlanned],
   ['answered', HELM_COPY.daySummaryAnswered],
