@@ -287,6 +287,13 @@ export async function writeHelmDaySummary(
       .filter((_, index) => dayExecutions[index].isOutside)
       .map(({ id }) => id),
   );
+  const outsideHabitIds = new Set(
+    dayExecutions
+      .filter((execution) => execution.isOutside)
+      .flatMap((execution) => execution.effectRefs)
+      .filter((ref) => ref.op === 'create' && ref.collection === 'habits')
+      .map((ref) => ref.docId),
+  );
   const counts = countHelmDay({
     captures: [...captureDocs.values()].map(toCapture),
     executions: dayExecutions,
@@ -295,6 +302,7 @@ export async function writeHelmDaySummary(
     })),
     habits: habitSnap.docs.map((doc) => ({
       createdAt: Number(doc.get('createdAt')),
+      isOutside: outsideHabitIds.has(doc.id),
     })),
     habitChecks: habitDaySnap.docs.flatMap((doc) =>
       toHabitChecks(doc.get('entries'), outsideExecutionIds),
