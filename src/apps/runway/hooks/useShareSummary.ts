@@ -20,6 +20,7 @@ import { selectBalances } from '@apps/runway/store/selectors/billCoverSelectors'
 import { selectBillsDueBeforePay } from '@apps/runway/store/selectors/overviewSelectors';
 import {
   selectBillPayments,
+  selectBillProgress,
   selectBills,
   selectComingDays,
   selectCostPaid,
@@ -27,10 +28,13 @@ import {
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Sealed, ShareSummary } from '@apps/runway/types';
+import { describeBillRepeat } from '@apps/runway/utils/billText';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 const LIST_LIMIT = 20;
 const BILLS_WITHIN_DAYS = 30;
+const BILLS_NEXT_WITHIN_DAYS = 365;
+const PAID_LIMIT = 10;
 const DAY_MS = 86_400_000;
 const WRITE_DELAY_MS = 2000;
 const HOUR_MS = 3_600_000;
@@ -57,6 +61,7 @@ export function useShareSummary(uid: string | null) {
   );
   const bills = useAppSelector((state) => selectBills(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
+  const progress = useAppSelector(selectBillProgress);
   const horizon = useAppSelector((state) => selectHorizonItems(state, today));
   const networkStatus = useNetworkStatus();
   const { isScrambled } = useValuesHidden();
@@ -67,32 +72,66 @@ export function useShareSummary(uid: string | null) {
   const figures = useMemo((): SummaryFigures | null => {
     const free = getFreeToSpendFigure(balances);
     if (!isReady || currency === null || free.kind === 'unknown') return null;
-    const through = today + BILLS_WITHIN_DAYS * DAY_MS;
+    const soon = today + BILLS_WITHIN_DAYS * DAY_MS;
+    const through = today + BILLS_NEXT_WITHIN_DAYS * DAY_MS;
+    const thisMonth = toDateInputValue(today).slice(0, 7);
+    const describe = ({ version }: (typeof bills)[number]) => ({
+      name: version.payload.name,
+      repeats: describeBillRepeat(version.payload.timing.schedule),
+      endsOn:
+        toDateInputValue(version.payload.ending.onDate ?? undefined) || null,
+      endsAfter: version.payload.ending.afterCount,
+    });
+    const upcomingBills = bills
+      .flatMap((bill) => {
+        const unpaid = (payments[bill.item.id] ?? []).filter(
+          ({ paid, dueOn }) =>
+            paid === null && dueOn >= today && dueOn <= through,
+        );
+        const chosen = unpaid.some(({ dueOn }) => dueOn <= soon)
+          ? unpaid.filter(({ dueOn }) => dueOn <= soon)
+          : unpaid.slice(0, 1);
+        return chosen.map(({ dueOn, totalCents }) => ({
+          ...describe(bill),
+          amountCents: totalCents,
+          dueOn,
+          paidOn: null,
+        }));
+      })
+      .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name))
+      .slice(0, LIST_LIMIT)
+      .map(({ dueOn, ...rest }) => ({
+        ...rest,
+        dueOn: toDateInputValue(dueOn),
+      }));
+    const paidBills = bills
+      .flatMap((bill) =>
+        (progress[bill.item.id]?.paid ?? [])
+          .filter(
+            ({ dueOn, paidOn }) =>
+              toDateInputValue(paidOn).startsWith(thisMonth) ||
+              toDateInputValue(dueOn).startsWith(thisMonth),
+          )
+          .map(({ dueOn, paidOn, amountCents }) => ({
+            ...describe(bill),
+            amountCents,
+            dueOn,
+            paidOn,
+          })),
+      )
+      .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name))
+      .slice(0, PAID_LIMIT)
+      .map(({ dueOn, paidOn, ...rest }) => ({
+        ...rest,
+        dueOn: toDateInputValue(dueOn),
+        paidOn: toDateInputValue(paidOn),
+      }));
     return {
       currency,
       freeToSpendCents: balances.freeToSpendCents,
       nextIncomeOn: comingDays[0] ? toDateInputValue(comingDays[0].on) : null,
       dueBeforeIncomeCents: dueBeforePay?.cents ?? 0,
-      bills: bills
-        .flatMap(({ item, version }) =>
-          (payments[item.id] ?? [])
-            .filter(
-              ({ paid, dueOn }) =>
-                paid === null && dueOn >= today && dueOn <= through,
-            )
-            .map(({ dueOn, totalCents }) => ({
-              name: version.payload.name,
-              amountCents: totalCents,
-              dueOn,
-            })),
-        )
-        .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name))
-        .slice(0, LIST_LIMIT)
-        .map(({ name, amountCents, dueOn }) => ({
-          name,
-          amountCents,
-          dueOn: toDateInputValue(dueOn),
-        })),
+      bills: [...paidBills, ...upcomingBills],
       horizon: horizon.slice(0, LIST_LIMIT).map(({ item, version }) => {
         const status = getHorizonStatus(
           version.payload,
@@ -122,6 +161,7 @@ export function useShareSummary(uid: string | null) {
     dueBeforePay,
     bills,
     payments,
+    progress,
     horizon,
   ]);
   const isUnknown = useMemo(

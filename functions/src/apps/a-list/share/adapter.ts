@@ -71,6 +71,26 @@ interface CategoryRead {
 const readMovieTitle = (doc: FirebaseFirestore.DocumentSnapshot) =>
   readText(doc.get('movie.title'));
 
+const MINUTES_PER_HOUR = 60;
+
+const toRuntimeLabel = (minutes: number | null) =>
+  minutes === null || minutes <= 0
+    ? null
+    : `${Math.floor(minutes / MINUTES_PER_HOUR)}h ${Math.round(minutes % MINUTES_PER_HOUR)}m`;
+
+/** The movie's running time and age rating in words, after any lead facts. */
+const toMovieDetail = (
+  doc: FirebaseFirestore.DocumentSnapshot,
+  ...lead: (string | null)[]
+) => {
+  const parts = [
+    ...lead,
+    toRuntimeLabel(readTime(doc.get('movie.runtimeMinutes'))),
+    readText(doc.get('movie.contentRating')),
+  ].filter((part): part is string => part !== null);
+  return parts.length === 0 ? null : parts.join(' · ');
+};
+
 async function syncPlannedShowings(
   firestore: Firestore,
   uid: string,
@@ -83,6 +103,8 @@ async function syncPlannedShowings(
     .orderBy('showtimeAt')
     .select(
       'movie.title',
+      'movie.runtimeMinutes',
+      'movie.contentRating',
       'showtimeAt',
       'endsAt',
       'theatre.name',
@@ -101,6 +123,7 @@ async function syncPlannedShowings(
         sourceRef: `viewings/${doc.id}`,
         kind: 'event',
         title,
+        detail: toMovieDetail(doc),
         startAt,
         endAt: readTime(doc.get('endsAt')),
         timeZone: readText(doc.get('theatre.timeZone')),
@@ -262,7 +285,10 @@ async function syncSeenMovies(
     .orderBy('showtimeAt', 'desc')
     .select(
       'movie.title',
+      'movie.runtimeMinutes',
+      'movie.contentRating',
       'showtimeAt',
+      'theatre.name',
       'theatre.timeZone',
       'rating',
       'lastEditedAt',
@@ -277,21 +303,25 @@ async function syncSeenMovies(
   const seen = snapshot.docs.flatMap((doc) => {
     const title = readMovieTitle(doc);
     const rating = readTime(doc.get('rating'));
-    if (title === null || rating === null) return [];
+    if (title === null) return [];
     return [
       toRecord({
         sourceRef: `viewings/${doc.id}`,
         kind: 'knowledge',
         title,
-        detail: toDayLine(
-          'Seen',
-          readTime(doc.get('showtimeAt')),
-          readText(doc.get('theatre.timeZone')) === null
-            ? fallbackZone
-            : readZone(doc.get('theatre.timeZone')),
+        detail: toMovieDetail(
+          doc,
+          toDayLine(
+            'Seen',
+            readTime(doc.get('showtimeAt')),
+            readText(doc.get('theatre.timeZone')) === null
+              ? fallbackZone
+              : readZone(doc.get('theatre.timeZone')),
+          ),
         ),
+        placeLabel: readText(doc.get('theatre.name')),
         sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
-        extra: { rating },
+        extra: rating === null ? {} : { rating },
       }),
     ];
   });
@@ -318,6 +348,8 @@ async function syncWatchlist(
       .select(
         'movie.title',
         'movie.releaseDate',
+        'movie.runtimeMinutes',
+        'movie.contentRating',
         'priority',
         'archivedAt',
         'lastEditedAt',
@@ -349,7 +381,7 @@ async function syncWatchlist(
         sourceRef: `watchlist/${doc.id}`,
         kind: 'artifact',
         title,
-        detail: toDayLine('Out', releaseDate, 'UTC'),
+        detail: toMovieDetail(doc, toDayLine('Out', releaseDate, 'UTC')),
         sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
         extra: {
           status: PRIORITY_LABELS[readText(doc.get('priority')) ?? ''] ?? null,

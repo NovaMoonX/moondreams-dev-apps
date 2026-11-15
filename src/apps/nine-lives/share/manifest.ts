@@ -94,8 +94,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
           kind: 'place',
           label: 'Vet clinics',
           meaning:
-            'The vet clinics the person uses, with their phone number, address and doctors.',
-          detail: 'Name, phone, address and doctors',
+            'The vet clinics the person uses, with their phone number, address, doctors and whether one is open 24 hours for emergencies.',
+          detail: 'Name, phone, address, doctors and 24-hour emergency care',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -111,8 +111,13 @@ export const NINE_LIVES_SHARES: SourceShares = {
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
+            {
+              label: 'Whether it is open 24 hours for emergencies',
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'conditions',
@@ -137,6 +142,44 @@ export const NINE_LIVES_SHARES: SourceShares = {
             },
           ],
           scopeVersion: 1,
+        },
+        {
+          id: 'symptoms',
+          kind: 'knowledge',
+          label: 'Symptoms',
+          meaning:
+            'Symptoms the person notes for each cat, with when they were first noticed, how severe they were and whether they have cleared up.',
+          detail:
+            "Each cat's symptoms: what was noticed, when, how severe and whether resolved",
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 2,
+          reads: [
+            {
+              label:
+                "Each symptom's description, quick tags and the cat it is for",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'When it was first noticed and how severe it was',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'Whether and when it was resolved',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label:
+                'Symptoms from the past six months, and any not yet resolved',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 1,
+          historyDays: 180,
         },
       ],
       never: [

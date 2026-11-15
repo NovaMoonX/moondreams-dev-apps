@@ -28,6 +28,8 @@ const UPCOMING_LOOKBACK_DAYS = 30;
 const PAST_VISIT_LIMIT = 50;
 const DOCTOR_LIMIT = 10;
 const DOC_LIMIT = 500;
+const SYMPTOM_CLIP = 160;
+const SYMPTOM_TAG_LIMIT = 8;
 
 const EMPTY_RECORD: SharedRecord = {
   sourceRef: '',
@@ -84,6 +86,7 @@ interface Clinic {
   name: string;
   phone: string | null;
   address: string | null;
+  isEmergency24Hour: boolean;
   updatedAt: number | null;
 }
 
@@ -99,6 +102,20 @@ const CONDITION_STATUS_LABELS: Record<string, string> = {
   active: 'Active',
   ongoing: 'Ongoing',
   resolved: 'Resolved',
+};
+
+const SEVERITY_LABELS: Record<string, string> = {
+  mild: 'Mild',
+  moderate: 'Moderate',
+  severe: 'Severe',
+};
+
+const clipTo = (text: string, limit: number) =>
+  text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`;
+
+const toTagLabel = (tag: string) => {
+  const words = tag.replace(/_/g, ' ').trim();
+  return `${words.slice(0, 1).toUpperCase()}${words.slice(1)}`;
 };
 
 const dayFormatter = new Intl.DateTimeFormat('en-US', {
@@ -189,7 +206,7 @@ async function readClinics(household: Household) {
   const { docs, isFull } = await readDocs(
     household.ref
       .collection('vetClinics')
-      .select('name', 'phone', 'address', 'lastEditedAt'),
+      .select('name', 'phone', 'address', 'isEmergency24Hour', 'lastEditedAt'),
   );
   return {
     clinics: docs.flatMap((doc): Clinic[] => {
@@ -202,6 +219,7 @@ async function readClinics(household: Household) {
               name,
               phone: readText(doc.get('phone')),
               address: readText(doc.get('address')),
+              isEmergency24Hour: doc.get('isEmergency24Hour') === true,
               updatedAt: readTime(doc.get('lastEditedAt')),
             },
           ];
@@ -277,8 +295,10 @@ const syncClinics = (firestore: Firestore, uid: string) =>
           sourceRef: `households/${household.id}/vetClinics/${clinic.id}`,
           kind: 'place',
           title: clinic.name,
-          detail:
+          detail: joinLines([
+            clinic.isEmergency24Hour ? 'Open 24 hours for emergencies' : null,
             doctors.length === 0 ? null : `Doctors: ${doctors.join(', ')}`,
+          ]),
           sourceUpdatedAt: clinic.updatedAt,
           extra: { phone: clinic.phone, address: clinic.address },
         });
@@ -499,6 +519,76 @@ const syncConditions = (firestore: Firestore, uid: string) =>
     };
   });
 
+const syncSymptoms = (firestore: Firestore, uid: string, windowStart: number) =>
+  inEveryHousehold(firestore, uid, async (household) => {
+    const symptomFields = [
+      'catId',
+      'description',
+      'quickTags',
+      'firstNoticedAt',
+      'severity',
+      'resolvedAt',
+      'lastEditedAt',
+    ];
+    const symptoms = household.ref.collection('symptoms');
+    const [catRead, recentRead, unresolvedRead] = await Promise.all([
+      readCatNames(household),
+      readDocs(
+        symptoms
+          .where('firstNoticedAt', '>=', windowStart)
+          .select(...symptomFields),
+      ),
+      readDocs(
+        symptoms.where('resolvedAt', '==', null).select(...symptomFields),
+      ),
+    ]);
+    const catNames = new Map(catRead.cats.map((cat) => [cat.id, cat.name]));
+    const docs = [
+      ...new Map(
+        [...recentRead.docs, ...unresolvedRead.docs].map((doc) => [
+          doc.id,
+          doc,
+        ]),
+      ).values(),
+    ];
+    return {
+      records: docs.flatMap((doc) => {
+        const catId = readText(doc.get('catId'));
+        const catName = catId === null ? undefined : catNames.get(catId);
+        const description = readText(doc.get('description'));
+        const noticedAt = readTime(doc.get('firstNoticedAt'));
+        if (catName === undefined || noticedAt === null) return [];
+        const resolvedAt = readTime(doc.get('resolvedAt'));
+        const tags = readIds(doc.get('quickTags'))
+          .filter((tag) => tag !== 'other')
+          .map(toTagLabel)
+          .slice(0, SYMPTOM_TAG_LIMIT);
+        const severity = SEVERITY_LABELS[readText(doc.get('severity')) ?? ''];
+        return [
+          toRecord({
+            sourceRef: `households/${household.id}/symptoms/${doc.id}`,
+            kind: 'knowledge',
+            title: clipTo(
+              description ?? (tags.join(', ') || 'Symptom'),
+              SYMPTOM_CLIP,
+            ),
+            subtitle: catName,
+            detail: joinLines([
+              tags.length === 0 ? null : tags.join(', '),
+              severity ?? null,
+              `First noticed ${formatDay(noticedAt)}`,
+              resolvedAt === null
+                ? 'Not resolved'
+                : `Resolved ${formatDay(resolvedAt)}`,
+            ]),
+            sourceUpdatedAt: readTime(doc.get('lastEditedAt')),
+          }),
+        ];
+      }),
+      isFull: catRead.isFull && recentRead.isFull && unresolvedRead.isFull,
+    };
+  });
+
 export interface NineLivesAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
@@ -535,6 +625,8 @@ export function createNineLivesAdapter(
         return syncClinics(firestore, uid);
       case 'conditions':
         return syncConditions(firestore, uid);
+      case 'symptoms':
+        return syncSymptoms(firestore, uid, req.windowStart);
       default:
         throw new Error('Unknown category.');
     }

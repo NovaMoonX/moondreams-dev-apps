@@ -32,8 +32,8 @@ const MOVIE_SNAPSHOT_FIELDS = {
   title: 'shared',
   releaseDate: 'shared',
   posterUrl: 'notUseful',
-  runtimeMinutes: 'notUseful',
-  contentRating: 'notUseful',
+  runtimeMinutes: 'shared',
+  contentRating: 'shared',
 } satisfies Record<keyof MovieSnapshot, ShareDecision>;
 
 const WATCHLIST_ITEM_FIELDS = {

@@ -104,7 +104,8 @@ export const PINCH_SHARES: SourceShares = {
           label: 'Recipes',
           meaning:
             "The person's saved recipes, each with how many it serves, how long it takes and what kind of dish it is.",
-          detail: 'Each recipe with its servings, time and kind of dish',
+          detail:
+            'Each recipe with its servings, time, kind of dish and whether it is a favourite',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 2,
@@ -124,8 +125,13 @@ export const PINCH_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: '2026-11-14',
             },
+            {
+              label: 'Whether it is a favourite',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
         },
         {
           id: 'savedMeals',
@@ -133,7 +139,8 @@ export const PINCH_SHARES: SourceShares = {
           label: 'Saved meals',
           meaning:
             'Meals the person saved to plan again, each a plate of recipes or foods eaten together.',
-          detail: 'Each saved meal and what is on its plate',
+          detail:
+            'Each saved meal, what is on its plate and whether it is a favourite',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 2,
@@ -145,6 +152,36 @@ export const PINCH_SHARES: SourceShares = {
             },
             {
               label: 'What is on its plate, in one line',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'Whether it is a favourite',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 2,
+        },
+        {
+          id: 'ideas',
+          kind: 'artifact',
+          label: 'Recipe ideas',
+          meaning:
+            'Recipe ideas the person saved to try later, each a saved link, photo or written idea.',
+          detail: 'Each idea you want to try and where it came from',
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 2,
+          reads: [
+            {
+              label: "Each idea's title",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label:
+                'Whether it is a link, a photo or a written idea, and the site it came from',
               sinceVersion: 1,
               addedOn: '2026-11-14',
             },

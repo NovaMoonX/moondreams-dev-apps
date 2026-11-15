@@ -36,10 +36,11 @@ export const RUNWAY_SHARES: SourceShares = {
         {
           id: 'upcomingBills',
           kind: 'task',
-          label: 'Bills coming up',
-          detail: 'Each bill due in the next 30 days: its name, amount and day',
+          label: 'Bills',
+          detail:
+            "Each bill: its name, amount, day, how often it repeats, when it ends and whether it's paid this month",
           meaning:
-            'Bills the person pays, here the ones falling due in the next 30 days, each with its amount and due day.',
+            'Bills the person pays: those falling due in the next 30 days, the next one of every other bill within a year, and those already paid this month, each with its amount, due day, how often it repeats, when it ends and the day it was paid.',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -47,8 +48,19 @@ export const RUNWAY_SHARES: SourceShares = {
             { label: "Each bill's name", sinceVersion: 1, addedOn: null },
             { label: 'Its amount', sinceVersion: 1, addedOn: null },
             { label: 'The day it is due', sinceVersion: 1, addedOn: null },
+            {
+              label: 'Whether it is paid this month, and the day you paid it',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
+            {
+              label:
+                'How often it repeats and when it ends, with bills due up to a year away',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
         },
         {
           id: 'horizon',

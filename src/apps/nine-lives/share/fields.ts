@@ -125,7 +125,7 @@ const VET_CLINIC_FIELDS = {
   email: 'never',
   website: 'notUseful',
   address: 'shared',
-  isEmergency24Hour: 'notUseful',
+  isEmergency24Hour: 'shared',
   notes: 'never',
   createdAt: 'notUseful',
   lastEditedAt: 'shared',
@@ -394,17 +394,17 @@ const CUSTOM_SYMPTOM_QUICK_TAG_FIELDS = {
 
 const SYMPTOM_FIELDS = {
   id: 'notUseful',
-  catId: 'notUseful',
-  description: 'notUseful',
-  quickTags: 'notUseful',
-  firstNoticedAt: 'notUseful',
-  severity: 'notUseful',
+  catId: 'shared',
+  description: 'shared',
+  quickTags: 'shared',
+  firstNoticedAt: 'shared',
+  severity: 'shared',
   linkedVisitIds: 'notUseful',
   linkedConditionId: 'notUseful',
-  resolvedAt: 'notUseful',
+  resolvedAt: 'shared',
   createdBy: 'notUseful',
   createdAt: 'notUseful',
-  lastEditedAt: 'notUseful',
+  lastEditedAt: 'shared',
 } satisfies Record<keyof Symptom, ShareDecision>;
 
 const LIBRARY_CONDITION_FIELDS = {

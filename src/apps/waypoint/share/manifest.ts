@@ -65,8 +65,24 @@ export const WAYPOINT_SHARES: SourceShares = {
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
+            {
+              label:
+                "A plan's street address, arrive-by time and opening hours",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: "A train's or ferry's operator, number and stops",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: "A rental's vehicle and where to return it",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'myTasks',
