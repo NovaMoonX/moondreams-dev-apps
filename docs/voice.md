@@ -67,13 +67,13 @@ Both stand on the same base: `createSpeechListener` (browser recognition), `list
 
 ### One conversation turn
 
-1. The person taps the mic or says the wake phrase.
+1. The person taps the mic or says the wake phrase. The phrase does not send anything: the listener that heard it (the browser's, kept running, or the on-device model's open microphone, handed over with the rest of that breath as its first words) carries on as the turn's listener, so what follows the phrase is part of the turn like any other.
 2. The microphone opens with echo cancellation and noise suppression.
 3. Words appear as they are heard.
-4. The turn ends on a tap, an end phrase such as "that's all", or 8 seconds of quiet.
+4. The turn ends on a tap, an end phrase such as "that's all" (held 0.9 s so "that's all I need" keeps going), or when the heard words stop changing: 1.8 seconds, or 3.5 when they end on a word that says more is coming ("and", "um", "the"; `getSettleMs` in `turnEnd.ts`). Before anything is heard, 8 seconds of quiet ends it. Empty or repeated partials never restart the wait, and an error mid-turn sends the words heard so far.
 5. The text goes to the assistant like a typed message.
 6. A confirmation is spoken as soon as the work is filed, then the answer.
-7. An 8-second follow-up window lets the person reply without tapping again.
+7. An 8-second follow-up window lets the person reply without tapping again. With the cloud or the on-device model it is a speech gate that hands over its audio with pre-roll; with only the browser's recognition it is a silent listen that starts at once, so the first word is never lost.
 
 Talking over a reply stops it and starts a new turn (barge-in). A fixed phrase such as "undo that" is matched on the device and never goes to the assistant. Mute lasts for the sitting only. A confirmation and a reply never overlap, and a newer turn cuts the older one's audio.
 

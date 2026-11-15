@@ -24,6 +24,11 @@ import {
   readWakePhrase,
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
+import {
+  getSettleMs,
+  LONG_SETTLE_MS,
+  SETTLE_MS,
+} from '../../src/lib/speech/turnEnd.ts';
 import { createSpeechGate } from '../../src/lib/speech/voice/bargeIn.ts';
 import { createDeepgramAura } from '../../functions/src/voice/providers/deepgramAura.ts';
 import { createGeminiTts } from '../../functions/src/voice/providers/geminiTts.ts';
@@ -2394,4 +2399,27 @@ assert.equal(
   0.88,
   'a speed is rounded to two decimals',
 );
+assert.equal(
+  getSettleMs('Add milk to the list'),
+  SETTLE_MS,
+  'a finished thought settles quickly',
+);
+assert.equal(
+  getSettleMs('Add milk and'),
+  LONG_SETTLE_MS,
+  'a trailing "and" waits longer',
+);
+assert.equal(
+  getSettleMs('Remind me to,'),
+  LONG_SETTLE_MS,
+  'punctuation after a continuing word is ignored',
+);
+assert.equal(getSettleMs('Um'), LONG_SETTLE_MS, 'a filler alone waits longer');
+assert.equal(getSettleMs('Buy the'), LONG_SETTLE_MS, 'an article waits longer');
+assert.equal(
+  getSettleMs('Call Sam at five'),
+  SETTLE_MS,
+  'a number closes the thought',
+);
+assert.equal(getSettleMs(''), SETTLE_MS, 'no words use the short wait');
 console.log('speechShared: voice provider checks passed');
