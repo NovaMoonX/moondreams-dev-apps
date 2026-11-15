@@ -20,6 +20,13 @@ import {
   DEFAULT_PLAN_FILL_PERCENT,
   PHOTOS_PER_RECORD,
 } from '../../src/apps/helm/constants.ts';
+import {
+  buildConnection,
+  toConnectionId,
+  type ConnectionKind,
+  type ConnectionRelation,
+  type CoupleStatus,
+} from '../../src/apps/helm/engine/connections.ts';
 import { sealJson } from '../../src/apps/helm/security.ts';
 import type {
   Capture,
@@ -137,6 +144,7 @@ const SESSION_COUNT = 60;
 const MEDIA_COUNT = 200;
 const PROJECT_COUNT = 40;
 const HABIT_COUNT = 30;
+const CONNECTION_COUNT = 400;
 const HABIT_DAY_COUNT = 28;
 const OWNER_TIME_ZONE = 'America/New_York';
 
@@ -987,6 +995,84 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     })),
   );
   habits.forEach((entry) => put('habits', `habits/${entry.id}`, entry.habit));
+
+  // Four hundred connections between people, a quarter each of family, couples, friends and work.
+  const personIndexes = range(WHO_COUNT).filter(
+    (index) => index > 0 && whoKindOf(index) === 'person',
+  );
+  const FAMILY_WORDS: ConnectionRelation[] = [
+    'sister',
+    'cousin',
+    'uncle',
+    'parent',
+  ];
+  const COUPLE_STATUSES: CoupleStatus[] = [
+    'married',
+    'dating',
+    'engaged',
+    'divorced',
+  ];
+  const CONNECTION_KINDS: ConnectionKind[] = [
+    'family',
+    'couple',
+    'friend',
+    'work',
+  ];
+  const connectionSpecs = range(CONNECTION_COUNT).map((index) => ({
+    first: whoIdOf(personIndexes[index % personIndexes.length]),
+    second: whoIdOf(
+      personIndexes[
+        (index * 7 + 11 + Math.floor(index / personIndexes.length)) %
+          personIndexes.length
+      ],
+    ),
+    kind: CONNECTION_KINDS[index % 4],
+    index,
+  }));
+  const seenConnections = new Set<string>();
+  const connections = await Promise.all(
+    connectionSpecs
+      .filter(({ first, second, kind }) => {
+        const id = toConnectionId(first, second, kind);
+        if (first === second || seenConnections.has(id)) return false;
+        seenConnections.add(id);
+        return true;
+      })
+      .map(async ({ first, second, kind, index }) => {
+        const record = buildConnection(
+          first,
+          second,
+          kind,
+          kind === 'family' ? FAMILY_WORDS[(index >> 2) % 4] : null,
+          kind === 'couple' ? COUPLE_STATUSES[(index >> 2) % 4] : null,
+          kind === 'couple'
+            ? Date.UTC(2000 + (index % 24), index % 12, 1 + (index % 28))
+            : null,
+          {},
+        );
+        return {
+          id: toConnectionId(first, second, kind),
+          connection: {
+            whoIds: record.whoIds,
+            kind,
+            source: 'page',
+            createdBy: index % 5 === 0 ? 'nomos' : 'person',
+            executionId: null,
+            createdAt: createdAt + index * MINUTE_MS,
+            lastEditedAt: null,
+            sealed: await seal({
+              fromFirst: record.fromFirst,
+              fromSecond: record.fromSecond,
+              status: record.status,
+              since: record.since,
+            }),
+          },
+        };
+      }),
+  );
+  connections.forEach((entry) =>
+    put('connections', `connections/${entry.id}`, entry.connection),
+  );
   range(HABIT_DAY_COUNT).forEach((back) => {
     const dayKey = habitDayKey(now - back * DAY_MS, OWNER_TIME_ZONE);
     const dayMs = Date.parse(`${dayKey}T00:00:00Z`);

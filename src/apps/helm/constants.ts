@@ -228,6 +228,8 @@ export const TOPIC_MAX = 40;
 /** The most who and places the app keeps listening to. */
 export const WHO_LIMIT = 2_500;
 export const PLACES_LIMIT = 500;
+/** The most connections between people the app keeps listening to. */
+export const CONNECTIONS_LIMIT = 5_000;
 /** 30 active or paused habits plus the 200 ended or retired ones kept. */
 export const HABITS_LIMIT = 230;
 export const HABITS_ACTIVE_MAX = 30;
@@ -407,6 +409,11 @@ const forgetDatesLine = (dates: number) =>
   dates === 0
     ? ''
     : ` ${dates === 1 ? 'Its date is' : `Its ${dates} dates are`} deleted too.`;
+
+const forgetConnectionsLine = (connections: number) =>
+  connections === 0
+    ? ''
+    : ` ${connections === 1 ? 'Their connection goes' : `Their ${connections} connections go`} too.`;
 
 const forgetMomentsLine = (moments: number) =>
   moments === 0
@@ -1947,6 +1954,69 @@ export const HELM_COPY = {
   whoPhoneField: 'Phone',
   whoEmailField: 'Email',
   whoReachTitle: 'How to reach',
+  connectionsTitle: 'Connections',
+  connectionAdd: 'Add a connection',
+  connectionAddTitle: 'Add a connection',
+  connectionTitle: 'Connection',
+  connectionPickLead: (name: string) => `Who is connected to ${name}?`,
+  connectionSearch: 'Search people',
+  connectionNoMatch: 'Nobody matches that.',
+  connectionNobodyElse: 'There is nobody else to connect yet.',
+  connectionPicked: 'Connected to',
+  connectionPickAgain: 'Choose someone else',
+  connectionKindField: 'How are they connected?',
+  connectionKinds: {
+    family: 'Family',
+    couple: 'Couple',
+    friend: 'Friends',
+    work: 'Work',
+  },
+  connectionFamilyField: (other: string, name: string) =>
+    `${other} is ${name}'s…`,
+  connectionFamilyNotSure: 'Family, not sure how',
+  connectionStatusField: 'Where they are',
+  connectionStatuses: {
+    dating: 'Dating',
+    engaged: 'Engaged',
+    married: 'Married',
+    separated: 'Separated',
+    divorced: 'Divorced',
+    widowed: 'Widowed',
+  },
+  connectionSinceField: 'Since (optional)',
+  connectionSave: 'Add it',
+  connectionSaveChange: 'Save',
+  connectionDuplicate: (other: string) =>
+    `${other} is already connected that way.`,
+  connectionNeedsPerson: 'Choose who they are connected to first.',
+  connectionChange: 'Change how they are connected',
+  connectionChangeSubtitle: 'The family word, where they are or since when',
+  connectionRemove: 'Remove this connection',
+  connectionRemoveSubtitle: 'You can undo it right after',
+  connectionRemovedToast: (other: string) => `Removed the link to ${other}`,
+  connectionRestoredToast: (other: string) => `Linked ${other} again`,
+  connectionRestoreExists: 'That connection was made again meanwhile.',
+  connectionStatusChanged: (status: string) => `Now ${status.toLowerCase()}.`,
+  connectionFamilyFallback: 'family',
+  connectionPartner: 'partner',
+  connectionLinkGone: 'This connection is gone.',
+  connectionLine: {
+    family: (other: string, name: string, word: string | null) =>
+      word === null
+        ? `${other} and ${name} are family.`
+        : `${other} is ${name}'s ${word}.`,
+    friend: (other: string, name: string) =>
+      `${other} and ${name} are friends.`,
+    work: (other: string, name: string) =>
+      `${other} and ${name} work together.`,
+    couple: (other: string, name: string, status: string | null) =>
+      status === null
+        ? `${other} and ${name} are a couple.`
+        : status === 'widowed'
+          ? `${other} and ${name} were married.`
+          : `${other} and ${name} are ${status}.`,
+  },
+  connectionSince: (date: string) => `Since ${date}`,
   contactAddPhone: 'Add a phone',
   contactAddEmail: 'Add an email',
   contactPrimary: 'Primary',
@@ -1980,7 +2050,7 @@ export const HELM_COPY = {
   contactDuplicate: (kind: 'phone' | 'email') =>
     kind === 'phone'
       ? "That number's already there."
-      : "That address is already there.",
+      : 'That address is already there.',
   contactFull: (max: number) =>
     `That is as many as fit (${max}). Remove one to add another.`,
   contactEditPhones: 'Phone numbers',
@@ -2019,12 +2089,13 @@ export const HELM_COPY = {
     facts: number,
     dates: number,
     moments: number,
+    connections: number,
   ) =>
     `${
       tasks === 0
         ? `Forget ${name}? No tasks are linked to them.`
         : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no person.`
-    }${forgetFactsLine(facts)}${forgetDatesLine(dates)}${forgetMomentsLine(moments)}${forgetPhotosLine(photos)}`,
+    }${forgetFactsLine(facts)}${forgetDatesLine(dates)}${forgetMomentsLine(moments)}${forgetConnectionsLine(connections)}${forgetPhotosLine(photos)}`,
   forgetConfirmPlace: (
     name: string,
     tasks: number,
@@ -2497,7 +2568,8 @@ export const HELM_COPY = {
     bedtime: 'Bedtime',
   },
   habitPauseTitle: (name: string) => `Pause ${name}`,
-  habitPauseHint: "It's off from today, and paused days don't count against it.",
+  habitPauseHint:
+    "It's off from today, and paused days don't count against it.",
   habitPauseQuickLabel: 'How long',
   habitPauseWeek: 'A week',
   habitPauseTwoWeeks: 'Two weeks',

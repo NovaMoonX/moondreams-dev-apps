@@ -53,6 +53,8 @@ import {
   setMediaFailed,
   setWho,
   setWhoFailed,
+  setConnections,
+  setConnectionsFailed,
   setHabits,
   setHabitsFailed,
   setHabitDays,
@@ -90,6 +92,7 @@ import { startProjectsListener } from '@apps/helm/store/listeners/projectListene
 import { startProceduresListener } from '@apps/helm/store/listeners/procedureListener';
 import { startOpenRunsListener } from '@apps/helm/store/listeners/runListener';
 import { startTopicsListener } from '@apps/helm/store/listeners/topicListener';
+import { startConnectionsListener } from '@apps/helm/store/listeners/connectionListener';
 import { startHabitsListener } from '@apps/helm/store/listeners/habitListener';
 import {
   getHabitDaysWindow,
@@ -396,6 +399,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm people listener failed', error);
               dispatch(setWhoFailed());
+            },
+          ),
+          startConnectionsListener(
+            uid,
+            read,
+            (connections) => dispatch(setConnections(connections)),
+            (error) => {
+              console.error('Helm connections listener failed', error);
+              dispatch(setConnectionsFailed());
             },
           ),
           startHabitsListener(

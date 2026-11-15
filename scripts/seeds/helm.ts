@@ -32,6 +32,15 @@ import {
   DEFAULT_PLAN_FILL_PERCENT,
 } from '../../src/apps/helm/constants.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
+import {
+  buildConnection,
+  toConnectionId,
+  type ConnectionKind,
+  type ConnectionRelation,
+  type ConnectionSource,
+  type CoupleStatus,
+  type Gender,
+} from '../../src/apps/helm/engine/connections.ts';
 import { openJson, sealBytes, sealJson } from '../../src/apps/helm/security.ts';
 import { toStepState } from '../../src/apps/helm/utils/stepGroups.ts';
 import {
@@ -68,6 +77,7 @@ import type {
   NoteSealed,
   Project,
   ProjectSealed,
+  Connection,
   Who,
   WhoSealed,
   ScreenContext,
@@ -4041,6 +4051,118 @@ async function buildFileTurns(input: {
   };
 }
 
+/** Alex's people's connections: Dana and Sam Rivera married since 2019-06-20, Mom is Dana's mother, Dana and Priya are friends, Sam Rivera works with Priya, Priya and Sam Patel are divorced (a past couple, drawn quieter), and one refused proposal (Sam Patel as Dana's brother) that is never drawn. */
+async function buildConnections(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
+  const { now, encryption } = input;
+  const genders: Record<string, Gender> = {
+    'seed-who-dana': 'female',
+    'seed-who-mom': 'female',
+    'seed-who-sam-patel': null,
+  };
+  const specs: {
+    first: string;
+    second: string;
+    kind: ConnectionKind;
+    relation: ConnectionRelation | null;
+    status: CoupleStatus | null;
+    since: number | null;
+    source: ConnectionSource;
+  }[] = [
+    {
+      first: 'seed-who-dana',
+      second: 'seed-who-sam-rivera',
+      kind: 'couple',
+      relation: null,
+      status: 'married',
+      since: Date.UTC(2019, 5, 20),
+      source: 'page',
+    },
+    {
+      first: 'seed-who-mom',
+      second: 'seed-who-dana',
+      kind: 'family',
+      relation: 'mother',
+      status: null,
+      since: null,
+      source: 'page',
+    },
+    {
+      first: 'seed-who-dana',
+      second: 'seed-who-priya-raman',
+      kind: 'friend',
+      relation: null,
+      status: null,
+      since: null,
+      source: 'said',
+    },
+    {
+      first: 'seed-who-sam-rivera',
+      second: 'seed-who-priya-raman',
+      kind: 'work',
+      relation: null,
+      status: null,
+      since: null,
+      source: 'confirmed',
+    },
+    {
+      first: 'seed-who-priya-raman',
+      second: 'seed-who-sam-patel',
+      kind: 'couple',
+      relation: null,
+      status: 'divorced',
+      since: Date.UTC(2014, 8, 6),
+      source: 'page',
+    },
+    {
+      first: 'seed-who-sam-patel',
+      second: 'seed-who-dana',
+      kind: 'family',
+      relation: 'brother',
+      status: null,
+      since: null,
+      source: 'refused',
+    },
+  ];
+  return Promise.all(
+    specs.map(async (spec) => {
+      const record = buildConnection(
+        spec.first,
+        spec.second,
+        spec.kind,
+        spec.relation,
+        spec.status,
+        spec.since,
+        genders,
+      );
+      const connection: Connection = {
+        whoIds: record.whoIds,
+        kind: record.kind,
+        source: spec.source,
+        createdBy: spec.source === 'said' ? 'nomos' : 'person',
+        executionId: null,
+        createdAt: now - 5 * DAY_MS,
+        lastEditedAt: null,
+        sealed: await sealJson(
+          {
+            fromFirst: record.fromFirst,
+            fromSecond: record.fromSecond,
+            status: record.status,
+            since: record.since,
+          },
+          encryption,
+        ),
+      };
+      return {
+        id: toConnectionId(spec.first, spec.second, spec.kind),
+        connection,
+      };
+    }),
+  );
+}
+
 /** Alex's people: themself, two Sams, Dana, a cat and a bakery, five facts on Dana, Sam and Home, four on Alex themself (two preferences, a favorite and who they are), the turn that said Dana's, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
 async function buildPeople(input: {
   uid: string;
@@ -5721,6 +5843,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               encryption,
             })
           : null;
+      const connectionWorld = people
+        ? await buildConnections({ now: context.now, encryption })
+        : null;
+      connectionWorld?.forEach((entry) =>
+        batch.set(person.collection('connections').doc(entry.id), entry.connection),
+      );
       if (people) {
         people.who.forEach((entry) =>
           batch.set(person.collection('who').doc(entry.id), entry.who),
@@ -5975,6 +6103,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               fileTurns.versions.length
             : 0) +
           people.who.length +
+          (connectionWorld ? connectionWorld.length : 0) +
           people.places.length +
           people.media.length +
           people.tasks.length +

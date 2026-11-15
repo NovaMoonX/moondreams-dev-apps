@@ -15,6 +15,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import ConnectionsSection from '@apps/helm/components/who/ConnectionsSection';
 import ContactRowsSection from '@apps/helm/components/who/ContactRowsSection';
 import FactsSection from '@apps/helm/components/who/FactsSection';
 import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
@@ -37,6 +38,7 @@ import { useContactsReport } from '@apps/helm/hooks/useContactsReport';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
+  countConnectionsOf,
   countLinkedTasks,
   countOnlyFacts,
   ForgetPartialError,
@@ -157,7 +159,17 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
         return null;
       },
     );
-    if (linkedCount === null || factCount === null) {
+    const connectionCount = await countConnectionsOf(user.uid, who.id).catch(
+      (error: unknown) => {
+        console.error('Helm connections were not counted', error);
+        return null;
+      },
+    );
+    if (
+      linkedCount === null ||
+      factCount === null ||
+      connectionCount === null
+    ) {
       addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
       return;
     }
@@ -170,6 +182,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
         factCount,
         who.yearlyDateCount,
         who.momentCount,
+        connectionCount,
       ),
       confirmText: HELM_COPY.forgetAction,
       destructive: true,
@@ -294,6 +307,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
               onOpen={setSheet}
             />
             <ContactRowsSection who={who} />
+            <ConnectionsSection who={who} />
             {projectLines.length > 0 && (
               <section className='space-y-3'>
                 <SectionDivider label={HELM_COPY.whoProjectsTitle} />

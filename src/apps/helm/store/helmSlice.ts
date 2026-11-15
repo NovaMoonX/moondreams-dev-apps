@@ -9,6 +9,7 @@ import type {
   OpenCapture,
   OpenExecution,
   OpenFact,
+  OpenConnection,
   OpenHabit,
   OpenHabitDay,
   OpenMedia,
@@ -89,6 +90,8 @@ export interface HelmState {
   facts: LoadedSet<OpenFact>;
   /** The people, pets and organizations the person knows. */
   who: LoadedSet<OpenWho>;
+  /** How the people are connected, every document including the refused ones; a screen reads `selectShownConnections`. */
+  connections: LoadedSet<OpenConnection>;
   /** The things the person keeps up, active or not. */
   habits: LoadedSet<OpenHabit>;
   /** Each habit's ticks and tallies for the days from two weeks back. */
@@ -170,6 +173,7 @@ const initialState: HelmState = {
   planDays: emptyPlanDays,
   facts: emptyLoadedSet,
   who: emptyLoadedSet,
+  connections: emptyLoadedSet,
   habits: emptyLoadedSet,
   habitDays: emptyHabitDays,
   keyDateIndex: emptyKeyDateIndex,
@@ -299,6 +303,16 @@ const helmSlice = createSlice({
     },
     setWhoFailed: (state) => {
       state.who.isFailed = true;
+    },
+    setConnections: (state, action: PayloadAction<OpenConnection[]>) => {
+      state.connections = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setConnectionsFailed: (state) => {
+      state.connections.isFailed = true;
     },
     setHabits: (state, action: PayloadAction<OpenHabit[]>) => {
       state.habits = { items: action.payload, isLoaded: true, isFailed: false };
@@ -498,6 +512,8 @@ export const {
   setFactsFailed,
   setWho,
   setWhoFailed,
+  setConnections,
+  setConnectionsFailed,
   setHabits,
   setHabitsFailed,
   setHabitDays,

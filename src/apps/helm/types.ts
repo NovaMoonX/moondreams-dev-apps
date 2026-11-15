@@ -3,6 +3,12 @@ import type { Cadence, Weekday } from '@/utils/cadenceUtils';
 import type { DayPart } from '@apps/helm/engine/habitDay';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type { ContactPoint } from '@apps/helm/engine/contactPoints';
+import type {
+  ConnectionKind,
+  ConnectionRelation,
+  ConnectionSource,
+  CoupleStatus,
+} from '@apps/helm/engine/connections';
 import type { WhoKin } from '@apps/helm/engine/kinKinds';
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
@@ -634,6 +640,45 @@ export interface OpenWho
   /** Always the lists, filled by `readContactPoints` when the who is opened. */
   phones: ContactPoint[];
   emails: ContactPoint[];
+  id: string;
+  isUnreadable: boolean;
+}
+
+export type {
+  ConnectionKind,
+  ConnectionRelation,
+  ConnectionSource,
+  CoupleStatus,
+} from '@apps/helm/engine/connections';
+
+/** `apps/helm/users/{uid}/connections/{id}`: how two of the person's people are connected. The id is `toConnectionId`, so a pair and kind exists once; the words are sealed, the pair and kind stay readable. */
+export interface Connection {
+  /** Two who ids, sorted. */
+  whoIds: [string, string];
+  kind: ConnectionKind;
+  /** `refused` is a proposal the person turned down, or later a correction; it is never drawn as a connection. */
+  source: ConnectionSource;
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface ConnectionSealed {
+  /** What `whoIds[0]` is to `whoIds[1]`; a family word, `friend`, `coworker` or `partner`. */
+  fromFirst: ConnectionRelation | null;
+  /** What `whoIds[1]` is to `whoIds[0]`. */
+  fromSecond: ConnectionRelation | null;
+  /** A couple only; null for every other kind. */
+  status: CoupleStatus | null;
+  /** Date-only, UTC midnight. */
+  since: number | null;
+}
+
+/** A connection after its words are opened; one that would not open keeps `isUnreadable` and is never drawn. */
+export interface OpenConnection
+  extends Omit<Connection, 'sealed'>, ConnectionSealed {
   id: string;
   isUnreadable: boolean;
 }

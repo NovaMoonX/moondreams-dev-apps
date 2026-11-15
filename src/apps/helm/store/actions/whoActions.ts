@@ -396,6 +396,8 @@ export interface ForgetCounts {
   who: number;
   /** Facts that were only about the forgotten record and went with it. */
   facts: number;
+  /** Connections to other people that went with the forgotten person. */
+  connections: number;
 }
 
 /** The links already taken could not all be put back after a failure, so some may be gone. */
@@ -438,6 +440,17 @@ export async function countLinkedTasks(
   const field = target === 'who' ? 'whoIds' : 'placeIds';
   const snapshot = await getCountFromServer(
     query(collection(userOf(uid), 'tasks'), where(field, 'array-contains', id)),
+  );
+  return snapshot.data().count;
+}
+
+/** How many connections to other people a who has, so forgetting them says so; needs a connection. */
+export async function countConnectionsOf(uid: string, id: string) {
+  const snapshot = await getCountFromServer(
+    query(
+      collection(userOf(uid), 'connections'),
+      where('whoIds', 'array-contains', id),
+    ),
   );
   return snapshot.data().count;
 }
@@ -582,13 +595,65 @@ export async function forgetLinked(
         }
       }),
     );
+  const connectionIds =
+    target === 'who'
+      ? (
+          await getDocs(
+            query(
+              collection(userOf(uid), 'connections'),
+              where('whoIds', 'array-contains', id),
+            ),
+          )
+        ).docs.map((entry) => entry.id)
+      : [];
+  const connectionOutcomes = await Promise.allSettled(
+    toChunks(connectionIds).map((chunk) =>
+      runTransaction(db, async (transaction) => {
+        const snapshots = await Promise.all(
+          chunk.map((entryId) =>
+            transaction.get(
+              doc(collection(userOf(uid), 'connections'), entryId),
+            ),
+          ),
+        );
+        return snapshots.flatMap((snapshot) => {
+          const data = snapshot.data() as DocumentData | undefined;
+          if (!data) return [];
+          transaction.delete(snapshot.ref);
+          return [{ id: snapshot.id, data }];
+        });
+      }),
+    ),
+  );
+  const connectionsTaken = connectionOutcomes.flatMap((outcome) =>
+    outcome.status === 'fulfilled' ? outcome.value : [],
+  );
+  const putBackConnections = () =>
+    inSequence(connectionsTaken, (entry) =>
+      runTransaction(db, async (transaction) => {
+        const connectionRef = doc(
+          collection(userOf(uid), 'connections'),
+          entry.id,
+        );
+        if (!(await transaction.get(connectionRef)).exists())
+          transaction.set(connectionRef, entry.data);
+      }),
+    );
   const putBack = () =>
-    Promise.allSettled([putBackLinks(), putBackFacts()]).then((settled) => {
+    Promise.allSettled([
+      putBackLinks(),
+      putBackFacts(),
+      putBackConnections(),
+    ]).then((settled) => {
       const failed = settled.find((entry) => entry.status === 'rejected');
       if (failed) throw failed.reason;
     });
   const failedOutcome = (
-    [...outcomes, ...factOutcomes] as PromiseSettledResult<unknown>[]
+    [
+      ...outcomes,
+      ...factOutcomes,
+      ...connectionOutcomes,
+    ] as PromiseSettledResult<unknown>[]
   ).find((outcome) => outcome.status === 'rejected');
   const abandon = async (reason: unknown): Promise<never> => {
     await putBack().catch((error: unknown) => {
@@ -674,6 +739,7 @@ export async function forgetLinked(
         (entry) =>
           entry.kind === 'deleted' && entry.data.status !== 'superseded',
       ).length,
+      connections: connectionsTaken.length,
     },
     restore,
   };

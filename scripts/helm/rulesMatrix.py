@@ -215,7 +215,7 @@ def main():
         admin([rm(f'{path}/planDays/new-' + a)])
     check('planDays create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/planDays/d', plan)]), False)
 
-    # A who, a place, a project, a note, a topic, a habit, a habit day and a pattern are the owner's alone, like a task.
+    # A who, a place, a project, a note, a topic, a habit, a habit day, a pattern and a connection are the owner's alone, like a task.
     whoDoc = dict(kind='person', tier='passing', tierSetBy='nomos', isSelf=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     placeDoc = dict(isHome=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     projectDoc = dict(status='active', targetDate=None, whoRoles={}, createdBy='person', createdAt=NOW, sealed=SEAL)
@@ -224,7 +224,8 @@ def main():
     habitDoc = dict(status='active', cadence=dict(kind='everyDay'), windowState={}, timesPerDay=None, isCare=False, startsOn=1893456000000, createdBy='person', createdAt=NOW, sealed=SEAL)
     habitDayDoc = dict(date=1893456000000, isInUse=True, entries={}, sealed=None)
     patternDoc = dict(kind='windowMissed', state='candidate', signature='sig', createdAt=NOW, stateAt=NOW, sealed=SEAL)
-    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted')):
+    connectionDoc = dict(whoIds=['who-1', 'who-2'], kind='family', source='page', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted'), ('connections', connectionDoc, 'source', 'confirmed')):
         dk = f'{path}/{name}/{name}-1'
         for a, tok in actors.items():
             admin([put(dk, doc)])

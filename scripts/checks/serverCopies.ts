@@ -123,6 +123,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/engine/connections.ts',
+    dest: 'functions/src/apps/helm/nomos/connections.ts',
+    importRewrites: { '@apps/helm/engine/kinKinds': './kinKinds.js' },
+  },
+  {
     src: 'src/apps/helm/engine/kin.ts',
     dest: 'functions/src/apps/helm/nomos/kin.ts',
     importRewrites: { '@apps/helm/engine/kinKinds': './kinKinds.js' },

@@ -30,7 +30,7 @@ import {
 
 const ROOT = resolve(import.meta.dirname, '../..');
 const SNAPSHOT = join(ROOT, 'scripts/checks/fixtures/helmWhere.snapshot.txt');
-const VIRTUAL_HOMES = ['profile', 'live', 'connections'];
+const VIRTUAL_HOMES = ['profile', 'live', 'platform'];
 
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8');
 

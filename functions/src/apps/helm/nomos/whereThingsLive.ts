@@ -24,6 +24,7 @@ export const HELM_HOMES = [
   'synced',
   'profile',
   'live',
+  'platform',
   'connections',
 ] as const;
 
@@ -161,7 +162,15 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     contextBlock: '<people>',
     writer: 'actions/whoActions',
     taps: ['updateWho', 'forgetWho', 'setWhoSoundsLike'],
-    deleteTakes: ['keyDates', 'facts'],
+    deleteTakes: ['keyDates', 'facts', 'connections'],
+  }),
+  row({
+    thing: "How people are connected to each other, and a couple's status",
+    home: 'connections',
+    classes: ['readable', 'sealed'],
+    readers: ['device', 'server', 'turn', 'quick'],
+    writer: 'actions/connectionActions',
+    taps: ['addConnection', 'updateConnection', 'removeConnection'],
   }),
   row({
     thing: 'Places',
@@ -419,7 +428,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   }),
   row({
     thing: 'Connections and what each one shares',
-    home: 'connections',
+    home: 'platform',
     tools: ['list_connections', 'connection_status'],
     writer: 'platform/callables',
     classes: ['readable'],
