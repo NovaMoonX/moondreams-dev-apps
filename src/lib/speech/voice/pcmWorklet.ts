@@ -1,3 +1,9 @@
+import {
+  createNoiseNode,
+  isNoiseCleaningOn,
+  NOISE_SAMPLE_RATE,
+} from '@/lib/speech/voice/noiseCleaning';
+
 export const PCM_SAMPLE_RATE = 16_000;
 // A context made after an await can stay suspended on some browsers; listening then falls back instead of waiting.
 const RESUME_WAIT_MS = 1000;
@@ -41,15 +47,18 @@ class PcmDownsampler extends AudioWorkletProcessor {
 registerProcessor('${PROCESSOR_NAME}', PcmDownsampler);
 `;
 
-/** Turns a microphone stream into 16 kHz mono 16-bit little-endian frames of about 20 ms. */
-export const startPcmCapture = async ({
+const openCapture = async ({
   stream,
   onFrame,
+  isCleaned,
 }: {
   stream: MediaStream;
   onFrame: (frame: ArrayBuffer) => void;
+  isCleaned: boolean;
 }): Promise<{ stop: () => void }> => {
-  const context = new AudioContext();
+  const context = isCleaned
+    ? new AudioContext({ sampleRate: NOISE_SAMPLE_RATE })
+    : new AudioContext();
   const url = URL.createObjectURL(
     new Blob([PROCESSOR_SOURCE], { type: 'application/javascript' }),
   );
@@ -68,6 +77,7 @@ export const startPcmCapture = async ({
         ),
       ),
     ]);
+    const cleaner = isCleaned ? await createNoiseNode(context) : null;
     const source = context.createMediaStreamSource(stream);
     const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
       numberOfInputs: 1,
@@ -78,13 +88,18 @@ export const startPcmCapture = async ({
     silence.gain.value = 0;
     node.port.onmessage = (event: MessageEvent<ArrayBuffer>) =>
       onFrame(event.data);
-    source.connect(node);
+    if (cleaner) {
+      source.connect(cleaner);
+      cleaner.connect(node);
+    } else source.connect(node);
     node.connect(silence);
     silence.connect(context.destination);
     return {
       stop: () => {
         node.port.onmessage = null;
         source.disconnect();
+        cleaner?.disconnect();
+        cleaner?.destroy();
         node.disconnect();
         silence.disconnect();
         release();
@@ -94,4 +109,22 @@ export const startPcmCapture = async ({
     release();
     throw error;
   }
+};
+
+/** Turns a microphone stream into 16 kHz mono 16-bit little-endian frames of about 20 ms, cleaned of background noise first unless the person turned that off or it can't load (then the raw stream is used). */
+export const startPcmCapture = async ({
+  stream,
+  onFrame,
+}: {
+  stream: MediaStream;
+  onFrame: (frame: ArrayBuffer) => void;
+}): Promise<{ stop: () => void }> => {
+  if (isNoiseCleaningOn()) {
+    try {
+      return await openCapture({ stream, onFrame, isCleaned: true });
+    } catch (error) {
+      console.warn('Noise cleaning is off for this listen', error);
+    }
+  }
+  return openCapture({ stream, onFrame, isCleaned: false });
 };

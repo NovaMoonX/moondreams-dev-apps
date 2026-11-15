@@ -299,7 +299,11 @@ function QuestionCard({
 
   return (
     <div className='flex w-full flex-col items-start gap-2'>
-      {!isPromptHidden && <AssistantLine>{question.prompt}</AssistantLine>}
+      {!isPromptHidden && (
+        <AssistantLine speakText={question.prompt}>
+          {question.prompt}
+        </AssistantLine>
+      )}
       <div
         className={join(
           'flex flex-col gap-2',

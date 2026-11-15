@@ -75,7 +75,7 @@ Both stand on the same base: `createSpeechListener` (browser recognition), `list
 6. A confirmation is spoken as soon as the work is filed, then the answer.
 7. An 8-second follow-up window lets the person reply without tapping again.
 
-Talking over a reply stops it and starts a new turn (barge-in). A fixed phrase such as "undo that" is matched on the device and never goes to the assistant. Mute lasts for the sitting only. A confirmation and a reply never overlap, and a newer turn cuts the older one's audio.
+Talking over a reply stops it and starts a new turn (barge-in). A fixed phrase such as "undo that" or "say that again" is matched on the device and never goes to the assistant as a turn. **Every voice command accepts loose, natural phrasing on the device** (leading fillers and politeness, several wordings: `isRepeatRequest` in `@/lib/speech/repeatRequest` is the reference, and it never fires on a sentence that merely contains the words), **and what the phone's matching cannot place goes to the assistant to decide**, which may answer with an outcome that leaves no turn behind (a repeat deletes its own turn on the server and the device replays the last line). Never make the person say an exact phrase. Mute lasts for the sitting only. A confirmation and a reply never overlap, and a newer turn cuts the older one's audio.
 
 ## The allowances
 

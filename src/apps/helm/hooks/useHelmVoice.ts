@@ -14,6 +14,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { useOnDeviceRecognition } from '@/hooks/useOnDeviceRecognition';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
+import { isRepeatRequest } from '@/lib/speech/repeatRequest';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
 import {
   createVoiceTokenSource,
@@ -23,7 +24,10 @@ import {
 import { store, useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { END_PHRASES, HELM_COPY, SESSION_IDLE_MS } from '@apps/helm/constants';
-import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import {
+  useAssistantName,
+  useAssistantNameVariants,
+} from '@apps/helm/hooks/useAssistantName';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
   clearSentTurn,
@@ -104,6 +108,7 @@ export function useHelmVoice() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const name = useAssistantName();
+  const nameVariants = useAssistantNameVariants();
   const voiceIdentity = useMemo(() => toVoiceIdentity(name), [name]);
   const uid = user?.uid ?? null;
   const [note, setNote] = useState<string | null>(null);
@@ -204,7 +209,8 @@ export function useHelmVoice() {
         isWakeWordOn &&
         keyStatus === 'ready' &&
         (isHomeView || topScreen !== null),
-      spellings: toWakeSpellings(name),
+      spellings: toWakeSpellings(name, nameVariants),
+      looseNames: [name],
       onWake: wakeUp,
     },
     cloudListening: {
@@ -283,6 +289,11 @@ export function useHelmVoice() {
       voice.settle();
       queueMicrotask(() => setDictationOwner(null));
       write(text);
+      return;
+    }
+    if (isRepeatRequest(text)) {
+      voice.settle();
+      if (!voice.repeat()) say(HELM_COPY.nothingToRepeat);
       return;
     }
     if (isUndoPhrase(text)) {
@@ -524,6 +535,11 @@ export function useHelmVoice() {
         voice: {
           sttProvider,
           interruptedCaptureId: interrupted,
+        },
+        onRepeat: (captureId) => {
+          waiting.current.delete(captureId);
+          voice.settle();
+          if (!voice.repeat()) say(HELM_COPY.nothingToRepeat);
         },
       });
       recordSentTurn(uid, turn, id);

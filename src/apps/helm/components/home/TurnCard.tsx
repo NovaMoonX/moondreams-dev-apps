@@ -271,12 +271,12 @@ function TurnCard({
       )}
       {planLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine>{planLine}</AssistantLine>
+          <AssistantLine speakText={planLine}>{planLine}</AssistantLine>
         </div>
       )}
       {quietLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine>{quietLine}</AssistantLine>
+          <AssistantLine speakText={quietLine}>{quietLine}</AssistantLine>
         </div>
       )}
       {capture.answer && !capture.isUnreadable && (

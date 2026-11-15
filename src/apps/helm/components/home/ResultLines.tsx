@@ -117,7 +117,9 @@ function ResultLines({
       ) : (
         <>
           {execution.summary && execution.category !== 'answer' && (
-            <AssistantLine>
+            <AssistantLine
+              speakText={execution.said ?? toSentence(execution.summary)}
+            >
               {execution.said ?? toSentence(execution.summary)}
             </AssistantLine>
           )}
