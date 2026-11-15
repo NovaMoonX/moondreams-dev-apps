@@ -37,6 +37,7 @@ const readManifest = () => {
 const manifest = readManifest();
 
 const LIST_LIMIT = 20;
+const BILL_LIMIT = 30;
 const NAME_LIMIT = 120;
 const DAY_MS = 86_400_000;
 
@@ -81,7 +82,15 @@ interface Summary {
   freeToSpendCents: number;
   nextIncomeAt: number | null;
   dueBeforeIncomeCents: number;
-  bills: { name: string; amountCents: number; dueAt: number }[];
+  bills: {
+    name: string;
+    amountCents: number;
+    dueAt: number;
+    repeats: string | null;
+    endsAt: number | null;
+    endsAfter: number | null;
+    paidAt: number | null;
+  }[];
   horizon: {
     name: string;
     targetCents: number;
@@ -113,8 +122,12 @@ const readDay = (value: unknown) => {
     : null;
 };
 
-const readList = <T>(value: unknown, read: (entry: unknown) => T | null) =>
-  (Array.isArray(value) ? value : []).slice(0, LIST_LIMIT).flatMap((entry) => {
+const readList = <T>(
+  value: unknown,
+  read: (entry: unknown) => T | null,
+  limit = LIST_LIMIT,
+) =>
+  (Array.isArray(value) ? value : []).slice(0, limit).flatMap((entry) => {
     const one = read(entry);
     return one === null ? [] : [one];
   });
@@ -124,12 +137,22 @@ const readBill = (entry: unknown, today: number) => {
   const name = readName(bill?.name);
   const amountCents = readCents(bill?.amountCents);
   const dueAt = readDay(bill?.dueOn);
+  const paidAt = readDay(bill?.paidOn);
+  const endsAfter = readCents(bill?.endsAfter);
   return name === null ||
     amountCents === null ||
     dueAt === null ||
-    dueAt < today
+    (paidAt === null && dueAt < today)
     ? null
-    : { name, amountCents, dueAt };
+    : {
+        name,
+        amountCents,
+        dueAt,
+        repeats: readName(bill?.repeats)?.slice(0, 40) ?? null,
+        endsAt: readDay(bill?.endsOn),
+        endsAfter: endsAfter !== null && endsAfter > 0 ? endsAfter : null,
+        paidAt,
+      };
 };
 
 const readGoal = (entry: unknown) => {
@@ -142,7 +165,7 @@ const readGoal = (entry: unknown) => {
     : { name, targetCents, setAsideCents, targetAt: readDay(goal?.targetOn) };
 };
 
-/** Every field checked by type; null when the totals themselves are malformed, and a malformed list entry or a bill already past is dropped. */
+/** Every field checked by type; null when the totals themselves are malformed, and a malformed list entry or an unpaid bill already past is dropped. */
 const readSummary = (
   opened: Record<string, unknown>,
   today: number,
@@ -167,7 +190,11 @@ const readSummary = (
     freeToSpendCents,
     nextIncomeAt: readDay(opened.nextIncomeOn),
     dueBeforeIncomeCents,
-    bills: readList(opened.bills, (entry) => readBill(entry, today)),
+    bills: readList(
+      opened.bills,
+      (entry) => readBill(entry, today),
+      BILL_LIMIT,
+    ),
     horizon: readList(opened.horizon, readGoal),
   };
 };
@@ -238,6 +265,13 @@ async function readStoredSummary(
 
 const formatDay = (at: number) => new Date(at).toISOString().slice(0, 10);
 
+const DAY_WORDS = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
 const readDetail = (summary: Summary) => {
   if (summary.nextIncomeAt === null) return 'No income day is coming up';
   const day = formatDay(summary.nextIncomeAt);
@@ -257,6 +291,21 @@ const toRef = (prefix: string, keys: string[], index: number) =>
 
 const readGoalDetail = (goal: Summary['horizon'][number], currency: string) =>
   `${formatMoney(goal.setAsideCents, currency)} set aside of ${formatMoney(goal.targetCents, currency)}`;
+
+const readBillDetail = (bill: Summary['bills'][number]) =>
+  [
+    bill.paidAt !== null
+      ? `Paid on ${DAY_WORDS.format(bill.paidAt)} (due ${DAY_WORDS.format(bill.dueAt)})`
+      : null,
+    bill.repeats,
+    bill.endsAt !== null
+      ? `ends ${DAY_WORDS.format(bill.endsAt)}`
+      : bill.endsAfter !== null
+        ? `ends after ${bill.endsAfter} payments`
+        : null,
+  ]
+    .filter((part) => part !== null)
+    .join(', ') || null;
 
 const toRecords = (category: string, summary: Summary): SharedRecord[] => {
   const billKeys = summary.bills.map(
@@ -288,9 +337,10 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
           sourceRef: toRef('bills', billKeys, index),
           kind: 'task',
           title: bill.name,
+          detail: readBillDetail(bill),
           amountCents: bill.amountCents,
           currency: summary.currency,
-          dueAt: bill.dueAt,
+          dueAt: bill.paidAt === null ? bill.dueAt : null,
           isAllDay: true,
           sourceUpdatedAt: summary.computedAt,
         }),

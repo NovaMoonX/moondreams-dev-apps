@@ -78,6 +78,7 @@ const seedOwner = () =>
       prepMinutes: 10,
       cookMinutes: 20,
       categories: ['MAIN', 'SIDE', 'BOGUS'],
+      isFavorite: true,
       isArchived: false,
       ingredients: [{ note: SECRET_NOTE }],
       updatedAt: NOW - 3,
@@ -111,6 +112,7 @@ const seedOwner = () =>
     }),
     kitchen(OWNER, 'meals/m-long').set({
       name: 'Big spread',
+      isFavorite: true,
       items: [
         { id: 'a', kind: 'RECIPE', refId: 'r1', servings: 2 },
         { id: 'b', kind: 'INGREDIENT', refId: 'cat-salmon', servings: 1 },
@@ -302,6 +304,50 @@ const seedOther = () =>
       unit: 'LB',
       isChecked: false,
     }),
+    kitchen(OWNER, 'ideas/i-link').set({
+      kind: 'LINK',
+      title: 'Crispy Gnocchi',
+      note: SECRET_NOTE,
+      url: 'https://secret.example.test/gnocchi',
+      siteName: 'Food Blog',
+      imageUrl: 'https://secret.example.test/gnocchi.jpg',
+      photoPath: 'secret/path.jpg',
+      recipeId: null,
+      updatedAt: NOW - 6,
+    }),
+    kitchen(OWNER, 'ideas/i-text').set({
+      kind: 'TEXT',
+      title: 'Something with miso',
+      note: SECRET_NOTE,
+      updatedAt: NOW - 7,
+    }),
+    kitchen(OWNER, 'ideas/i-made').set({
+      kind: 'LINK',
+      title: 'Already a recipe',
+      recipeId: 'r1',
+      updatedAt: NOW - 7.5,
+    }),
+    kitchen(OWNER, 'ideas/i-archived-recipe').set({
+      kind: 'TEXT',
+      title: 'Stew idea again',
+      recipeId: 'r-archived',
+      updatedAt: NOW - 7.6,
+    }),
+    kitchen(OWNER, 'ideas/i-deleted-recipe').set({
+      kind: 'TEXT',
+      title: 'Lost recipe idea',
+      recipeId: 'r-deleted',
+      updatedAt: NOW - 7.7,
+    }),
+    kitchen(OWNER, 'ideas/i-untitled').set({
+      kind: 'PHOTO',
+      updatedAt: NOW - 8,
+    }),
+    kitchen(OTHER, 'ideas/o-idea').set({
+      kind: 'TEXT',
+      title: 'OTHER idea',
+      updatedAt: NOW,
+    }),
     kitchen(OTHER, 'recipes/o-recipe').set({
       title: 'OTHER recipe',
       updatedAt: NOW,
@@ -346,6 +392,7 @@ const ctxFor = (uid: string) => ({
         'pantryStock',
         'recipes',
         'savedMeals',
+        'ideas',
       ],
       options: null,
     },
@@ -385,6 +432,10 @@ const assertShape = (records: SharedRecord[]) =>
         EXTRA_KEYS[record.kind].includes(key),
         `${record.sourceRef} extra ${key}`,
       ),
+    );
+    assert.ok(
+      record.detail === null || record.detail.length <= 120,
+      `${record.sourceRef} detail over 120 characters`,
     );
   });
 
@@ -510,7 +561,7 @@ assert.deepEqual(refs(recipes), ['recipes/r-old', 'recipes/r1']);
 assert.ok(recipes.every((entry) => entry.kind === 'artifact'));
 assert.equal(
   recipes.find((entry) => entry.sourceRef === 'recipes/r1')?.detail,
-  'Main dishes, Sides · serves 4 · 30 min',
+  'Favourite · Main dishes, Sides · serves 4 · 30 min',
 );
 assert.equal(
   recipes.find((entry) => entry.sourceRef === 'recipes/r1')?.sourceUpdatedAt,
@@ -529,11 +580,32 @@ assert.equal(savedOf('meals/m1')?.title, 'Pasta night');
 assert.equal(savedOf('meals/m1')?.detail, 'Lemon Pasta and Salmon');
 assert.equal(
   savedOf('meals/m-long')?.detail,
-  'Lemon Pasta, Salmon, Smoky bacon and 2 more',
+  'Favourite · Lemon Pasta, Salmon, Smoky bacon and 2 more',
 );
 assert.equal(savedOf('meals/m-empty')?.detail, null);
 
-const all = [...meals, ...lines, ...soon, ...stock, ...recipes, ...saved];
+const ideas = await run(OWNER, 'ideas');
+assert.deepEqual(refs(ideas), [
+  'ideas/i-archived-recipe',
+  'ideas/i-deleted-recipe',
+  'ideas/i-link',
+  'ideas/i-text',
+]);
+assert.ok(ideas.every((entry) => entry.kind === 'artifact'));
+assert.equal(ideas[0].title, 'Crispy Gnocchi');
+assert.equal(ideas[0].detail, 'Saved link · Food Blog');
+assert.equal(ideas[1].detail, 'Written idea');
+assert.equal(ideas[0].sourceUpdatedAt, NOW - 6);
+
+const all = [
+  ...meals,
+  ...lines,
+  ...soon,
+  ...stock,
+  ...recipes,
+  ...saved,
+  ...ideas,
+];
 assertShape(all);
 all.forEach((record) => {
   const values = flatten(record);
@@ -558,6 +630,8 @@ const otherSoon = await run(OTHER, 'useSoon');
 const otherStock = await run(OTHER, 'pantryStock');
 const otherRecipes = await run(OTHER, 'recipes');
 const otherSaved = await run(OTHER, 'savedMeals');
+assert.deepEqual(titles(await run(OTHER, 'ideas')), ['OTHER idea']);
+assert.deepEqual(await run('empty-uid', 'ideas'), []);
 assert.deepEqual(titles(otherStock), ['OTHER chili', 'OTHER milk']);
 assert.deepEqual(titles(otherRecipes), ['OTHER recipe']);
 assert.deepEqual(titles(otherSaved), ['OTHER saved']);
@@ -617,6 +691,7 @@ assert.deepEqual(
     pantryStock: true,
     recipes: true,
     savedMeals: true,
+    ideas: true,
   },
 );
 const staged = buildNewGrant(
@@ -631,6 +706,7 @@ const staged = buildNewGrant(
   NOW,
 );
 assert.deepEqual(Object.keys(staged.categories).sort(), [
+  'ideas',
   'pantryStock',
   'plannedMeals',
   'recipes',
@@ -674,7 +750,12 @@ const showing = (
   extra: Record<string, unknown> = {},
 ) => ({
   movieKey: 'tmdb-1',
-  movie: { title, runtimeMinutes: 120, posterUrl: null },
+  movie: {
+    title,
+    runtimeMinutes: 119.6,
+    contentRating: 'PG-13',
+    posterUrl: null,
+  },
   showtimeAt,
   endsAt: showtimeAt + 3 * 3_600_000,
   status,
@@ -718,7 +799,12 @@ await Promise.all([
   ),
   membership(OWNER, 'watchlist/tmdb-10').set({
     movieKey: 'tmdb-10',
-    movie: { title: 'Moon Garden', releaseDate: Date.UTC(2026, 11, 18) },
+    movie: {
+      title: 'Moon Garden',
+      releaseDate: Date.UTC(2026, 11, 18),
+      runtimeMinutes: 146,
+      contentRating: 'PG',
+    },
     priority: 'MUST_SEE',
     archivedAt: null,
     lastEditedAt: NOW - 3,
@@ -847,7 +933,11 @@ assert.deepEqual(
 );
 
 const seen = await runAList(OWNER, 'seenMovies');
-assert.deepEqual(refs(seen), ['goals', 'viewings/v-seen']);
+assert.deepEqual(refs(seen).sort(), [
+  'goals',
+  'viewings/v-seen',
+  'viewings/v-seen-unrated',
+]);
 assert.ok(seen.every((entry) => entry.kind === 'knowledge'));
 assert.equal(seen[0].title, 'Movie goals');
 assert.equal(
@@ -857,8 +947,16 @@ assert.equal(
 assert.deepEqual(seen[0].extra, {});
 assert.equal(seen[1].title, 'Dune');
 assert.equal(seen[1].startAt, null);
-assert.match(seen[1].detail ?? '', /^Seen [A-Z][a-z]{2} \d{1,2}, \d{4}$/);
+assert.match(
+  seen[1].detail ?? '',
+  /^Seen [A-Z][a-z]{2} \d{1,2}, \d{4} · 2h 0m · PG-13$/,
+);
 assert.deepEqual(seen[1].extra, { rating: 4.5 });
+assert.equal(seen[1].placeLabel, 'AMC Town Center 20');
+assert.match(seen[1].detail ?? '', / · 2h 0m · PG-13$/);
+const unrated = seen.find((entry) => entry.title === 'The Matrix');
+assert.deepEqual(unrated?.extra, {});
+assert.equal(unrated?.placeLabel, 'AMC Town Center 20');
 
 const watchlist = await runAList(OWNER, 'watchlist');
 assert.deepEqual(refs(watchlist).sort(), [
@@ -868,7 +966,7 @@ assert.deepEqual(refs(watchlist).sort(), [
 assert.ok(watchlist.every((entry) => entry.kind === 'artifact'));
 const moonGarden = watchlist.find((entry) => entry.title === 'Moon Garden');
 assert.equal(moonGarden?.startAt, null);
-assert.equal(moonGarden?.detail, 'Out Dec 18, 2026');
+assert.equal(moonGarden?.detail, 'Out Dec 18, 2026 · 2h 26m · PG');
 assert.deepEqual(moonGarden?.extra, { status: 'Must see' });
 assert.equal(
   watchlist.find((entry) => entry.title === 'Undated Tale')?.detail,
@@ -1216,6 +1314,7 @@ await Promise.all([
     name: 'Blue Bark Vet',
     phone: '555-0100',
     address: '1 Cat Lane',
+    isEmergency24Hour: true,
     email: 'secret-clinic@example.test',
     notes: CARE_SECRET,
     lastEditedAt: NOW - 15,
@@ -1308,6 +1407,60 @@ await Promise.all([
     fileName: 'secret-record.pdf',
     notes: CARE_SECRET,
   }),
+  careDocs('symptoms', 'limp').set({
+    catId: 'mochi',
+    description: 'Limping on the back left leg',
+    quickTags: ['lethargy', 'other', 'Custom tag'],
+    firstNoticedAt: TODAY - 10 * DAY,
+    severity: 'moderate',
+    resolvedAt: null,
+    notes: CARE_SECRET,
+    lastEditedAt: NOW - 20,
+  }),
+  careDocs('symptoms', 'vomit').set({
+    catId: 'juniper',
+    description: 'x'.repeat(300),
+    quickTags: ['vomiting'],
+    firstNoticedAt: TODAY - 100 * DAY,
+    severity: 'mild',
+    resolvedAt: TODAY - 95 * DAY,
+    lastEditedAt: NOW - 21,
+  }),
+  careDocs('symptoms', 'old-open').set({
+    catId: 'mochi',
+    description: 'Long standing sneeze',
+    quickTags: [],
+    firstNoticedAt: TODAY - 400 * DAY,
+    severity: null,
+    resolvedAt: null,
+    lastEditedAt: NOW - 22,
+  }),
+  careDocs('symptoms', 'old-done').set({
+    catId: 'mochi',
+    description: 'Old scratch',
+    quickTags: [],
+    firstNoticedAt: TODAY - 400 * DAY,
+    severity: 'mild',
+    resolvedAt: TODAY - 390 * DAY,
+    lastEditedAt: NOW - 23,
+  }),
+  careDocs('symptoms', 'no-cat').set({
+    catId: 'gone-cat',
+    description: 'Orphan',
+    quickTags: [],
+    firstNoticedAt: TODAY - DAY,
+    resolvedAt: null,
+  }),
+  leftHousehold
+    .collection('symptoms')
+    .doc('s')
+    .set({
+      catId: 'ghost',
+      description: 'Ghost symptom',
+      quickTags: [],
+      firstNoticedAt: TODAY - DAY,
+      resolvedAt: null,
+    }),
   leftHousehold.set({
     name: 'Left behind',
     members: [HOUSEMATE],
@@ -1348,7 +1501,14 @@ const nineLivesCtx = (uid: string) => ({
       readerAppId: 'helm',
       connectorId: 'app:nine-lives',
       accountId: 'site',
-      categoryIds: ['cats', 'vetVisits', 'dueCare', 'clinics', 'conditions'],
+      categoryIds: [
+        'cats',
+        'vetVisits',
+        'dueCare',
+        'clinics',
+        'conditions',
+        'symptoms',
+      ],
       options: null,
     },
     nineLivesAdapter.manifest,
@@ -1448,7 +1608,10 @@ const careClinics = await runNineLives(OWNER, 'clinics');
 assert.deepEqual(refs(careClinics), ['households/home/vetClinics/blue-bark']);
 assert.equal(careClinics[0].kind, 'place');
 assert.equal(careClinics[0].title, 'Blue Bark Vet');
-assert.equal(careClinics[0].detail, 'Doctors: Dr. Lee, Dr. Ray');
+assert.equal(
+  careClinics[0].detail,
+  'Open 24 hours for emergencies · Doctors: Dr. Lee, Dr. Ray',
+);
 assert.deepEqual(careClinics[0].extra, {
   phone: '555-0100',
   address: '1 Cat Lane',
@@ -1461,12 +1624,33 @@ assert.equal(careConditions[0].title, 'Asthma');
 assert.equal(careConditions[0].subtitle, 'Juniper');
 assert.equal(careConditions[0].detail, 'Ongoing');
 
+const careSymptoms = await runNineLives(OWNER, 'symptoms');
+assert.deepEqual(refs(careSymptoms).sort(), [
+  'households/home/symptoms/limp',
+  'households/home/symptoms/vomit',
+]);
+assert.ok(careSymptoms.every((record) => record.kind === 'knowledge'));
+const symptomOf = (id: string) =>
+  careSymptoms.find((record) => record.sourceRef.endsWith(`/${id}`));
+assert.equal(symptomOf('limp')?.title, 'Limping on the back left leg');
+assert.equal(symptomOf('limp')?.subtitle, 'Mochi');
+assert.equal(
+  symptomOf('limp')?.detail,
+  `Moderate · First noticed ${new Date(TODAY - 10 * DAY).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })} · Lethargy, Custom tag`,
+);
+assert.equal(symptomOf('vomit')?.title.length, 160);
+assert.match(
+  symptomOf('vomit')?.detail ?? '',
+  /^Mild · First noticed .* · Vomiting$/,
+);
+
 const careCategories = [
   'cats',
   'vetVisits',
   'dueCare',
   'clinics',
   'conditions',
+  'symptoms',
 ];
 assert.deepEqual(refs(await runNineLives(HOUSEMATE, 'cats')).sort(), [
   'households/home/cats/juniper',
@@ -1493,6 +1677,7 @@ const careAll = [
   ...careDue,
   ...careClinics,
   ...careConditions,
+  ...careSymptoms,
 ];
 assertShape(careAll);
 careAll.forEach((record) => {
@@ -1550,7 +1735,11 @@ const planned = (fields: Record<string, unknown>) => ({
   timezone: null,
   endTimezone: null,
   locationName: 'Somewhere',
-  address: TRIP_SECRET,
+  address: null,
+  arriveByTime: null,
+  arriveByNote: null,
+  venueOpenTime: null,
+  venueCloseTime: null,
   notes: TRIP_SECRET,
   eventDetails: { transitDetails: { confirmationCode: TRIP_SECRET } },
   attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
@@ -1627,6 +1816,47 @@ await Promise.all([
     ),
   nyc
     .collection('events')
+    .doc('train')
+    .set(
+      planned({
+        eventType: 'TRAVEL',
+        title: 'Train north',
+        eventDetails: {
+          transitType: 'TRAIN',
+          transitDetails: {
+            operator: 'Amtrak',
+            trainNumber: '171',
+            departureStation: 'Penn Station',
+            arrivalStation: 'Union Station',
+            confirmationCode: TRIP_SECRET,
+            notes: TRIP_SECRET,
+          },
+        },
+        startTime: '08:00',
+        timezone: 'America/New_York',
+      }),
+    ),
+  nyc
+    .collection('events')
+    .doc('ferry')
+    .set(
+      planned({
+        eventType: 'TRAVEL',
+        title: 'Ferry across',
+        eventDetails: {
+          transitType: 'FERRY',
+          transitDetails: {
+            operator: 'Staten Island Ferry',
+            departurePort: 'Whitehall',
+            confirmationCode: TRIP_SECRET,
+          },
+        },
+        startTime: '12:00',
+        timezone: 'America/New_York',
+      }),
+    ),
+  nyc
+    .collection('events')
     .doc('dinner-before')
     .set(
       planned({
@@ -1635,6 +1865,11 @@ await Promise.all([
         dayIndex: 1,
         endDayIndex: 1,
         startTime: '19:00',
+        address: '12 Pike St',
+        arriveByTime: '18:30',
+        arriveByNote: 'bring tickets',
+        venueOpenTime: '09:00',
+        venueCloseTime: '17:00',
       }),
     ),
   nyc
@@ -1734,8 +1969,9 @@ await Promise.all([
     .doc('car')
     .set({
       name: 'Hertz',
-      vehicle: TRIP_SECRET,
+      vehicle: 'Toyota RAV4 or similar',
       pickupAddress: 'JFK Rental Center',
+      returnAddress: 'LGA Rental Center',
       notes: TRIP_SECRET,
       confirmationCode: TRIP_SECRET,
       pickupDayIndex: 0,
@@ -2043,9 +2279,11 @@ assert.deepEqual(refs(plan).sort(), [
   'trips/nyc/events/clocks-back',
   'trips/nyc/events/dinner-after',
   'trips/nyc/events/dinner-before',
+  'trips/nyc/events/ferry',
   'trips/nyc/events/flight',
   'trips/nyc/events/mine',
   'trips/nyc/events/spa',
+  'trips/nyc/events/train',
   'trips/nyc/rentals/car',
   'trips/nyc/stays/hotel',
   'trips/spring/events/after-gap',
@@ -2065,7 +2303,7 @@ assert.equal(flight?.placeLabel, 'JFK');
 assert.equal(flight?.isAllDay, false);
 assert.equal(flight?.sourceUpdatedAt, NOW - 22);
 assert.equal(flight?.detail, 'Delta DL 1 · LGA → ORD');
-assert.equal(planBy('trips/nyc/events/dinner-before')?.detail, null);
+assert.equal(planBy('trips/nyc/events/mine')?.detail, null);
 assert.equal(planBy('trips/nyc/stays/hotel')?.placeLabel, '1 Hudson St');
 
 assert.equal(
@@ -2100,6 +2338,22 @@ const car = planBy('trips/nyc/rentals/car');
 assert.equal(car?.startAt, utc(2026, 9, 30, 14, 0));
 assert.equal(car?.endAt, utc(2026, 10, 2, 15, 0));
 assert.equal(car?.placeLabel, 'JFK Rental Center');
+assert.equal(
+  car?.detail,
+  'Toyota RAV4 or similar · Return to LGA Rental Center',
+);
+assert.equal(
+  planBy('trips/nyc/events/train')?.detail,
+  'Amtrak 171 · Penn Station → Union Station',
+);
+assert.equal(
+  planBy('trips/nyc/events/ferry')?.detail,
+  'Staten Island Ferry · from Whitehall',
+);
+assert.equal(
+  planBy('trips/nyc/events/dinner-before')?.detail,
+  'Arrive by 18:30 (bring tickets) · Open 09:00–17:00 · 12 Pike St',
+);
 
 assert.equal(
   planBy('trips/spring/events/gap')?.startAt,
@@ -2511,7 +2765,33 @@ const runwaySummary = {
   bills: [
     { name: 'Overdue', amountCents: 9_000, dueOn: '2026-11-09' },
     { name: 'Rent', amountCents: 150_000, dueOn: '2026-11-14' },
-    { name: 'Phone', amountCents: 6_000, dueOn: '2026-11-20' },
+    {
+      name: 'Phone',
+      amountCents: 6_000,
+      dueOn: '2026-11-20',
+      repeats: 'Every other week',
+      endsOn: null,
+      endsAfter: null,
+      paidOn: null,
+    },
+    {
+      name: 'Car insurance',
+      amountCents: 90_000,
+      dueOn: '2027-06-01',
+      repeats: 'Yearly',
+      endsOn: '2028-06-01',
+      endsAfter: null,
+      paidOn: null,
+    },
+    {
+      name: 'Gym',
+      amountCents: 4_000,
+      dueOn: '2026-11-02',
+      repeats: 'Monthly',
+      endsOn: null,
+      endsAfter: 6,
+      paidOn: '2026-11-03',
+    },
     { name: 'Broken date', amountCents: 100, dueOn: '2026-02-31' },
     { name: '', amountCents: 100, dueOn: '2026-11-20' },
     { name: 'Fractional', amountCents: 1.5, dueOn: '2026-11-20' },
@@ -2678,8 +2958,22 @@ assert.deepEqual(summaryRecord.extra, {
 assert.match(summaryRecord.detail ?? '', /\$450\.00.*2026-11-15/);
 assert.deepEqual(
   titles(runwayBills),
-  ['Phone', 'Rent'],
-  'a bill already past is dropped',
+  ['Car insurance', 'Gym', 'Phone', 'Rent'],
+  'an unpaid bill already past is dropped, a paid one this month and a yearly one stay',
+);
+const billDetail = (title: string) =>
+  runwayBills.find((record) => record.title === title)?.detail ?? null;
+assert.equal(billDetail('Phone'), 'Every other week');
+assert.equal(billDetail('Rent'), null, 'an older summary has no schedule');
+assert.equal(billDetail('Car insurance'), 'Yearly, ends Jun 1, 2028');
+assert.equal(
+  billDetail('Gym'),
+  'Paid on Nov 3, 2026 (due Nov 2, 2026), Monthly, ends after 6 payments',
+);
+assert.equal(
+  runwayBills.find((record) => record.title === 'Gym')?.dueAt,
+  null,
+  'a paid bill is never a task still due',
 );
 runwayBills.forEach((record) => {
   assert.equal(record.kind, 'task');

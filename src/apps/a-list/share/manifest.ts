@@ -17,7 +17,8 @@ export const A_LIST_SHARES: SourceShares = {
           label: 'Planned showings',
           meaning:
             'Movies the person has planned to see in a theater, each with the showtime and theater they picked and whether they have a ticket.',
-          detail: 'The movie, time, theater and whether you have a ticket',
+          detail:
+            'The movie, time, length and age rating, theater and whether you have a ticket',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -38,8 +39,13 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
+            {
+              label: "The movie's running time and age rating",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'savedTheaters',
@@ -63,8 +69,8 @@ export const A_LIST_SHARES: SourceShares = {
           kind: 'knowledge',
           label: 'Movies you have seen',
           meaning:
-            'Movies the person has already watched, with the day, the rating they gave and their movie-watching goals.',
-          detail: 'The title, the day, your rating and your goals',
+            'Movies the person has already watched, with the day, the theater, the star rating they gave if any and their movie-watching goals.',
+          detail: 'The title, the day, the theater, your star rating and your goals',
           mode: 'sync',
           isOnAtConnect: false,
           addedInVersion: 1,
@@ -74,7 +80,7 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: null,
             },
-            { label: 'Your rating', sinceVersion: 1, addedOn: null },
+            { label: 'Your star rating', sinceVersion: 1, addedOn: null },
             {
               label: 'The day you saw it',
               sinceVersion: 2,
@@ -86,8 +92,18 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
+            {
+              label: 'The theater where you saw it',
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: "The movie's running time and age rating",
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'watchlist',
@@ -95,7 +111,8 @@ export const A_LIST_SHARES: SourceShares = {
           label: 'Your watchlist',
           meaning:
             "Movies the person wants to see but hasn't planned yet, each with how much they want to see it and its release date.",
-          detail: 'Each movie you want to see, its priority and release date',
+          detail:
+            'Each movie you want to see, its priority, release date, length and age rating',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 2,
@@ -111,8 +128,13 @@ export const A_LIST_SHARES: SourceShares = {
               sinceVersion: 1,
               addedOn: '2026-11-14',
             },
+            {
+              label: 'Its running time and age rating',
+              sinceVersion: 2,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 1,
+          scopeVersion: 2,
         },
       ],
       never: ['what you paid', 'savings', 'membership', 'share links'],
