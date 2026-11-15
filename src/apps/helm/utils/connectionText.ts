@@ -6,7 +6,7 @@ import {
 } from '@apps/helm/engine/connections';
 import type { ConnectionKind, ConnectionRelation } from '@apps/helm/types';
 
-/** The word for what the other is to someone: a family word as written, friend, coworker, or partner for a couple. Null when none is known. */
+/** A family word as written, friend, coworker, or partner for a couple; null when none is known. */
 export const toRelationWord = (relation: ConnectionRelation | null) => {
   if (relation === null) return null;
   if (relation === 'friend') return 'friend';
@@ -14,16 +14,26 @@ export const toRelationWord = (relation: ConnectionRelation | null) => {
   return KIN_KINDS.find((entry) => entry.kind === relation)?.written ?? null;
 };
 
-/** The short tail of a row: "brother", "married", "friend". */
-export const toRowTail = (kind: ConnectionKind, side: ConnectionSide) => {
-  if (kind === 'couple')
-    return side.status === null
-      ? HELM_COPY.connectionPartner
-      : HELM_COPY.connectionStatuses[side.status].toLowerCase();
-  return toRelationWord(side.relation) ?? HELM_COPY.connectionFamilyFallback;
+/** What the other person is, from `name`'s side: "Dana's mother", "Married to Dana · since June 20, 2019". */
+export const toSideLine = (
+  kind: ConnectionKind,
+  side: ConnectionSide,
+  name: string,
+) => {
+  const line =
+    kind === 'family'
+      ? HELM_COPY.connectionSideLine.family(name, toRelationWord(side.relation))
+      : kind === 'friend'
+        ? HELM_COPY.connectionSideLine.friend(name)
+        : kind === 'work'
+          ? HELM_COPY.connectionSideLine.work(name)
+          : HELM_COPY.connectionSideLine.couple[side.status ?? 'partner'](name);
+  return kind === 'couple' && side.since !== null
+    ? `${line}\u00A0· ${HELM_COPY.connectionSinceInline(formatDateUTC(side.since))}`
+    : line;
 };
 
-/** The connection in a sentence from one person's side, with a couple's since appended. */
+/** A couple's since is appended. */
 export const toConnectionSentence = (
   kind: ConnectionKind,
   side: ConnectionSide,
@@ -53,7 +63,6 @@ export const toConnectionSentence = (
     : line;
 };
 
-/** A couple's statuses as pills. */
 export const STATUS_OPTIONS = CONNECTION_STATUSES.map((status) => ({
   value: status,
   label: HELM_COPY.connectionStatuses[status],

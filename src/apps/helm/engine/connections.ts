@@ -24,7 +24,6 @@ export const CONNECTION_STATUSES: CoupleStatus[] = [
   'widowed',
 ];
 
-/** A relation word: a family word from the fixed list, or `friend` / `coworker`. */
 export type ConnectionRelation = KinKind | 'friend' | 'coworker';
 
 export type Gender = 'female' | 'male' | null;
@@ -47,7 +46,6 @@ export interface ConnectionRecord extends ConnectionWords {
   kind: ConnectionKind;
 }
 
-/** A connection as one person's page reads it. */
 export interface ConnectionSide {
   otherId: string;
   /** What the other is to this person. */
@@ -117,7 +115,7 @@ const SIDES = ['female', 'male'] as const;
 export const toConnectionId = (a: string, b: string, kind: ConnectionKind) =>
   `${[a, b].sort().join('_')}_${kind}`;
 
-/** What the other is to you, when you are `kinKind` to them: Maya (sister) to Eli gives brother when Eli is male, sibling when it is unknown. Null only when the list has no word for an unknown gender (niece or nephew, aunt or uncle). */
+/** What the other is to you when you are `kinKind` to them (Maya, a sister, to Eli gives brother, or sibling when his gender is unknown); null when the list has no such word. */
 export const reverseRelation = (
   kinKind: KinKind,
   otherGender: Gender,
@@ -128,7 +126,7 @@ export const reverseRelation = (
   return answer[otherGender ?? 'neutral'];
 };
 
-/** A who's gender from their own family word, the only source there is: sister, mother and the like are female, brother, father and the like male, everything else unknown. Never guessed from a name. */
+/** From their own family word only, never guessed from a name. */
 export const genderOf = (who: { kin: { kind: KinKind } | null }): Gender => {
   const kind = who.kin?.kind;
   if (!kind) return null;
@@ -141,7 +139,28 @@ export const genderOf = (who: { kin: { kind: KinKind } | null }): Gender => {
 export const isPastStatus = (status: CoupleStatus | null) =>
   status === 'separated' || status === 'divorced' || status === 'widowed';
 
-/** Both sides of a connection, sorted. `relationOfFirstToSecond` is what `firstId` is to `secondId` (a friend or coworker, partner for a couple); the other side is worked out from the gender of the one it describes. Only a couple keeps a status. */
+const forwardRelation = (
+  kind: ConnectionKind,
+  relation: ConnectionRelation | null,
+): ConnectionRelation | null => {
+  if (kind === 'friend') return 'friend';
+  if (kind === 'work') return 'coworker';
+  if (kind === 'couple') return 'partner';
+  return relation;
+};
+
+const backwardRelation = (
+  kind: ConnectionKind,
+  forward: ConnectionRelation | null,
+  secondGender: Gender,
+): ConnectionRelation | null => {
+  if (kind !== 'family') return forward;
+  if (forward === null || forward === 'friend' || forward === 'coworker')
+    return null;
+  return reverseRelation(forward, secondGender);
+};
+
+/** Both sides, sorted; the other side is worked out from the gender of the one it describes. */
 export const buildConnection = (
   firstId: string,
   secondId: string,
@@ -151,19 +170,8 @@ export const buildConnection = (
   since: number | null,
   genders: ConnectionGenders,
 ): ConnectionRecord => {
-  const forward = ((): ConnectionRelation | null => {
-    if (kind === 'friend') return 'friend';
-    if (kind === 'work') return 'coworker';
-    if (kind === 'couple') return 'partner';
-    return relationOfFirstToSecond;
-  })();
-  const backward = ((): ConnectionRelation | null => {
-    if (kind === 'family')
-      return forward === null || forward === 'friend' || forward === 'coworker'
-        ? null
-        : reverseRelation(forward, genders[secondId] ?? null);
-    return forward;
-  })();
+  const forward = forwardRelation(kind, relationOfFirstToSecond);
+  const backward = backwardRelation(kind, forward, genders[secondId] ?? null);
   const isInOrder = firstId <= secondId;
   return {
     whoIds: isInOrder ? [firstId, secondId] : [secondId, firstId],
@@ -175,7 +183,7 @@ export const buildConnection = (
   };
 };
 
-/** The connection as `whoId`'s page reads it: the other person and what they are to this one; null when `whoId` is neither of the two. */
+/** The other person and what they are to `whoId`; null when `whoId` is neither. */
 export const readFromSide = (
   connection: ConnectionRecord,
   whoId: string,
@@ -196,7 +204,7 @@ export const readFromSide = (
 export const isShownConnection = (connection: { source: ConnectionSource }) =>
   connection.source !== 'refused';
 
-/** A who as the inference reads them: their family word to the owner, whether they are private and whether they are a person (a private one, a pet or an organization is never part of a proposal). */
+/** A private one, a pet or an organization is never part of a proposal. */
 export interface ImpliedPerson {
   id: string;
   kin: { kind: KinKind } | null;
@@ -204,7 +212,6 @@ export interface ImpliedPerson {
   isPerson: boolean;
 }
 
-/** One link a turn makes likely: who is what to whom, ready for `buildConnection`. */
 export interface ImpliedLink {
   firstId: string;
   secondId: string;
@@ -219,16 +226,19 @@ const SIBLING_KINDS: KinKind[] = ['sister', 'brother', 'sibling'];
 const isPartnerLink = (connection: ImpliedConnectionState) =>
   connection.kind === 'couple' && connection.source !== 'refused';
 
-/** A stored connection as the inference needs it: the pair and kind, whether it is a refusal, and for a couple whether it is over. */
+/** A refusal is kept so it is never asked again. */
 export interface ImpliedConnectionState {
   whoIds: [string, string];
   kind: ConnectionKind;
   source: ConnectionSource;
   status: CoupleStatus | null;
+  /** Its sealed words could not be opened. */
+  isUnreadable: boolean;
 }
 
 /**
- * The family links a turn makes likely, from the owner's family words and the couples already stored: two of the owner's siblings are siblings of each other, a parent's partner who is not a parent is a stepparent, and a sibling's partner is a sibling-in-law. Only links that touch someone in `touchedIds`, only between people who are not private, and never one the pair already has or has refused (a refusal of the pair and kind is final). A past couple implies nothing. Pure: the turn asks about each once, and the device can reuse it.
+ * The family links a turn makes likely: the owner's siblings are siblings of each other, a parent's partner who is not a parent is a stepparent, a sibling's partner a sibling-in-law.
+ * Only for `touchedIds`, only between people who are not private, never a pair and kind already decided or refused; a past or unreadable couple implies nothing.
  */
 export const impliedConnections = (input: {
   selfId: string | null;
@@ -254,6 +264,7 @@ export const impliedConnections = (input: {
   const partnersOf = (id: string) =>
     connections.flatMap((connection) =>
       isPartnerLink(connection) &&
+      !connection.isUnreadable &&
       !isPastStatus(connection.status) &&
       connection.whoIds.includes(id)
         ? [

@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Pencil, Trash2 } from 'lucide-react';
+import { ChevronRight, Pencil, Trash2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -16,13 +16,13 @@ import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 import ConnectionFields from '@apps/helm/components/who/ConnectionFields';
 import ConnectionPersonPicker from '@apps/helm/components/who/ConnectionPersonPicker';
+import WhoMark from '@apps/helm/components/who/WhoMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
   CONNECTION_KINDS,
   genderOf,
   readFromSide,
   type ConnectionGenders,
-  type ConnectionWords,
 } from '@apps/helm/engine/connections';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
@@ -41,8 +41,8 @@ import type {
   OpenWho,
 } from '@apps/helm/types';
 import {
-  STATUS_OPTIONS,
   toConnectionSentence,
+  toSideLine,
 } from '@apps/helm/utils/connectionText';
 
 export type ConnectionTarget = { kind: 'add' } | { kind: 'row'; id: string };
@@ -75,6 +75,17 @@ const toKinWord = (relation: string | null) =>
     ? null
     : (relation as KinKind);
 
+const toRowTitle = (
+  connections: { id: string; whoIds: [string, string] }[],
+  people: OpenWho[],
+  whoId: string,
+  id: string,
+) => {
+  const row = connections.find((entry) => entry.id === id);
+  const otherId = row?.whoIds.find((entry) => entry !== whoId);
+  return people.find((entry) => entry.id === otherId)?.name ?? null;
+};
+
 function AddBody({
   who,
   onClose,
@@ -82,6 +93,7 @@ function AddBody({
   onDirtyChange,
 }: Omit<BodyProps, 'target'>) {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const people = useAppSelector((state) => state.helm.who.items);
   const [otherId, setOtherId] = useState<string | null>(null);
   const [kind, setKind] = useState<ConnectionKind>('family');
@@ -100,6 +112,19 @@ function AddBody({
         !entry.isUnreadable,
     )
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  const preview = toConnectionSentence(
+    kind,
+    {
+      otherId: other?.id ?? '',
+      relation: kind === 'family' ? word : null,
+      status: kind === 'couple' ? status : null,
+      since: kind === 'couple' ? (fromDateInputValue(since) ?? null) : null,
+      isPast: false,
+    },
+    other?.name ?? '',
+    who.name,
+  );
 
   const toNote = (result: Exclude<ConnectionResult, 'saved' | 'unreadable'>) =>
     result === 'offline'
@@ -133,6 +158,10 @@ function AddBody({
       if (result === 'saved') {
         onDirtyChange(false);
         onClose();
+        addToast({
+          title: HELM_COPY.connectionAddedToast(preview),
+          type: 'success',
+        });
         return;
       }
       setNote(toNote(result));
@@ -161,31 +190,34 @@ function AddBody({
 
   return (
     <div className='space-y-4'>
-      <div className='min-w-0'>
-        <p className='text-muted-foreground text-[13px]'>
-          {HELM_COPY.connectionPicked}
-        </p>
-        <PrivateTitle
-          kind='who'
-          record={other}
-          className='text-[17px] font-medium'
-        >
-          {other.name}
-        </PrivateTitle>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          className='-ml-2'
-          disabled={isBusy}
-          onClick={() => {
-            setOtherId(null);
-            setNote(null);
-          }}
-        >
-          {HELM_COPY.connectionPickAgain}
-        </Button>
-      </div>
+      <Button
+        type='button'
+        variant='tertiary'
+        className='helm-card flex h-auto min-h-14 w-full min-w-0 items-center gap-3 px-4 py-2 text-left'
+        disabled={isBusy}
+        onClick={() => {
+          setOtherId(null);
+          setNote(null);
+        }}
+      >
+        <WhoMark kind={other.kind} name={other.name} />
+        <span className='min-w-0 flex-1'>
+          <span className='text-muted-foreground block text-[13px]'>
+            {HELM_COPY.connectionPicked}
+          </span>
+          <PrivateTitle
+            kind='who'
+            record={other}
+            className='text-foreground text-[15px] break-words'
+          >
+            {other.name}
+          </PrivateTitle>
+        </span>
+        <ChevronRight
+          className='text-muted-foreground size-4 shrink-0'
+          aria-hidden='true'
+        />
+      </Button>
       <div className='space-y-1.5'>
         <span className='block text-sm font-medium'>
           {HELM_COPY.connectionKindField}
@@ -213,6 +245,9 @@ function AddBody({
         onStatusChange={setStatus}
         onSinceChange={setSince}
       />
+      <p className='text-muted-foreground text-[15px] text-pretty break-words'>
+        {preview}
+      </p>
       <ModalFooterActions
         note={note}
         cancelAction={
@@ -262,8 +297,6 @@ function RowBody({
   );
   const [note, setNote] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
-  const [isStatusBusy, setIsStatusBusy] = useState(false);
-  const [undo, setUndo] = useState<ConnectionWords | null>(null);
 
   if (!connection || !side || !other)
     return (
@@ -280,67 +313,61 @@ function RowBody({
         ? HELM_COPY.connectionLinkGone
         : HELM_COPY.editUnreadable;
 
-  const changeStatus = async (next: CoupleStatus) => {
-    if (!user || isStatusBusy || next === side.status) return;
-    setIsStatusBusy(true);
-    setNote(null);
-    try {
-      const { result, before } = await updateConnection(
-        user.uid,
-        await getHelmEncryption(user.uid),
-        connection.id,
-        { status: next, genders },
-      );
-      if (result === 'saved') setUndo(before);
-      else setNote(toNote(result));
-    } catch (error) {
-      console.error('Helm connection status was not saved', error);
-      setNote(HELM_COPY.editFailed);
-    }
-    setIsStatusBusy(false);
-  };
-
-  const undoStatus = async () => {
-    if (!user || !undo || isStatusBusy) return;
-    setIsStatusBusy(true);
-    try {
-      const result = await setConnectionWords(
-        user.uid,
-        await getHelmEncryption(user.uid),
-        connection.id,
-        undo,
-      );
-      if (result === 'saved') setUndo(null);
-      else setNote(toNote(result));
-    } catch (error) {
-      console.error('Helm connection status was not put back', error);
-      setNote(HELM_COPY.editFailed);
-    }
-    setIsStatusBusy(false);
-  };
-
   const saveChange = async () => {
     if (!user || isBusy) return;
     setIsBusy(true);
     setNote(null);
     try {
-      const { result } = await updateConnection(
+      const encryption = await getHelmEncryption(user.uid);
+      const nextSince =
+        connection.kind === 'couple'
+          ? (fromDateInputValue(since) ?? null)
+          : null;
+      const { result, before } = await updateConnection(
         user.uid,
-        await getHelmEncryption(user.uid),
+        encryption,
         connection.id,
         {
           ...(connection.kind === 'family'
             ? { relation: { fromId: other.id, word } }
             : {}),
-          ...(connection.kind === 'couple'
-            ? { status, since: fromDateInputValue(since) ?? null }
-            : {}),
+          ...(connection.kind === 'couple' ? { status, since: nextSince } : {}),
           genders,
         },
       );
       if (result === 'saved') {
         onDirtyChange(false);
         onClose();
+        if (before && connection.kind === 'couple' && status !== side.status)
+          addToast({
+            title: HELM_COPY.connectionChangedToast(
+              toSideLine(
+                connection.kind,
+                { ...side, status, since: nextSince },
+                who.name,
+              ),
+            ),
+            type: 'info',
+            action: {
+              label: HELM_COPY.undo,
+              onClick: () =>
+                void setConnectionWords(
+                  user.uid,
+                  encryption,
+                  connection.id,
+                  before,
+                ).then(
+                  (outcome) => {
+                    if (outcome !== 'saved')
+                      addToast({ title: toNote(outcome), type: 'error' });
+                  },
+                  (error: unknown) => {
+                    console.error('Helm connection was not put back', error);
+                    addToast({ title: HELM_COPY.editFailed, type: 'error' });
+                  },
+                ),
+            },
+          });
         return;
       }
       setNote(toNote(result));
@@ -448,63 +475,24 @@ function RowBody({
     );
 
   return (
-    <div className='space-y-4'>
-      <div className='min-w-0 space-y-1'>
-        <PrivateTitle
-          kind='who'
-          record={other}
-          className='text-[17px] font-medium'
-        >
-          {other.name}
-        </PrivateTitle>
-        <p className='text-muted-foreground text-[15px] text-pretty'>
-          {toConnectionSentence(connection.kind, side, other.name, who.name)}
-        </p>
-      </div>
-      {connection.kind === 'couple' && (
-        <div className='space-y-1.5'>
-          <PillGroup
-            label={HELM_COPY.connectionStatusField}
-            isThin
-            wrapsNarrow
-            options={STATUS_OPTIONS}
-            value={side.status}
-            onChange={(next) => void changeStatus(next)}
-          />
-          {undo && (
-            <p className='text-muted-foreground flex items-center gap-2 text-[13px]'>
-              <span className='min-w-0'>
-                {HELM_COPY.connectionStatusChanged(
-                  side.status === null
-                    ? HELM_COPY.connectionPartner
-                    : HELM_COPY.connectionStatuses[side.status],
-                )}
-              </span>
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                disabled={isStatusBusy}
-                onClick={() => void undoStatus()}
-              >
-                {HELM_COPY.undo}
-              </Button>
-            </p>
-          )}
-        </div>
-      )}
+    <div className='space-y-6'>
+      <p className='text-muted-foreground -mt-1 text-[15px] text-pretty break-words'>
+        {toSideLine(connection.kind, side, who.name)}
+      </p>
       {note && <p className='text-destructive text-sm'>{note}</p>}
-      <ActionGroup>
-        {(connection.kind === 'family' || connection.kind === 'couple') && (
+      {(connection.kind === 'family' || connection.kind === 'couple') && (
+        <ActionGroup>
           <ActionRow
             isGrouped
             icon={<Pencil />}
-            label={HELM_COPY.connectionChange}
-            subtitle={HELM_COPY.connectionChangeSubtitle}
+            label={HELM_COPY.connectionChange[connection.kind]}
+            subtitle={HELM_COPY.connectionChangeSubtitle[connection.kind]}
             hasChevron
             onClick={() => setIsEditing(true)}
           />
-        )}
+        </ActionGroup>
+      )}
+      <ActionGroup>
         <ActionRow
           isGrouped
           isDestructive
@@ -519,7 +507,7 @@ function RowBody({
   );
 }
 
-/** A connection's sheet: the person and kind to add one, or one row's sentence, a couple's status in one tap, Change and Remove with Undo. */
+/** One link's sheet: add one, or a row's line with Change and Remove (Undo after either). */
 function ConnectionSheet({
   isOpen,
   onClose,
@@ -527,6 +515,12 @@ function ConnectionSheet({
   target,
 }: ConnectionSheetProps) {
   const [isDirty, setIsDirty] = useState(false);
+  const connections = useAppSelector(selectShownConnections);
+  const people = useAppSelector((state) => state.helm.who.items);
+  const rowTitle =
+    target?.kind === 'row'
+      ? toRowTitle(connections, people, who.id, target.id)
+      : null;
   const requestClose = useDiscardGuard({
     isDirty,
     onClose: () => {
@@ -545,7 +539,7 @@ function ConnectionSheet({
       onClose={requestClose}
       title={
         target?.kind === 'row'
-          ? HELM_COPY.connectionTitle
+          ? (rowTitle ?? HELM_COPY.connectionTitle)
           : HELM_COPY.connectionAddTitle
       }
     >

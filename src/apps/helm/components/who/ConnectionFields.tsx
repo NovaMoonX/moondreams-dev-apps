@@ -34,7 +34,7 @@ interface ConnectionFieldsProps {
   onSinceChange: (since: string) => void;
 }
 
-/** What a connection holds beyond its kind: the family word in this person's terms for family, the status and an optional since for a couple. A friend or coworker has nothing more to say. */
+/** The family word for family, the status and an optional since for a couple; a friend or coworker has nothing more. */
 function ConnectionFields({
   kind,
   name,

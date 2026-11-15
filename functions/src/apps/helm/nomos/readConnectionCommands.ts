@@ -19,6 +19,8 @@ export interface ConnectionReadContext {
   people?: AliasBook;
   reading: CaptureReading;
   captureText?: string;
+  /** Every name and alias each listed person answers to, by id. */
+  personNames?: Map<string, string[]>;
   timeZone?: string;
 }
 
@@ -30,6 +32,21 @@ const toParty = (alias: unknown, people: AliasBook | undefined): Party => {
   const id = people?.idOf(alias) ?? null;
   return id ? { isKnown: true, id } : { isKnown: false };
 };
+
+const OWNER_WORDS = /\b(?:i|me|my|myself|mine)\b/i;
+
+const isNamedIn = (
+  party: { id: string | null },
+  text: string,
+  words: string,
+  names: Map<string, string[]> | undefined,
+) =>
+  party.id === null
+    ? OWNER_WORDS.test(text)
+    : (names?.get(party.id) ?? []).some((name) => {
+        const comparable = toComparable(name);
+        return comparable !== '' && words.includes(` ${comparable} `);
+      });
 
 const toRelation = (value: unknown): ConnectionRelation | null =>
   value === 'friend' || value === 'coworker' ? value : toKinKind(value);
@@ -49,7 +66,7 @@ const toSince = (
     : getDayIn(span.due.at, toKnownZone(timeZone));
 };
 
-/** Reads the reply's link commands from their own list. Both people must be ones the context listed (or the person themself), the words must be quoted from the turn, and a question never links anyone. */
+/** Both people must be listed in the context (or the person themself) and named in the words, the quote must be from the turn, one command stands for a pair (the last said), and a question links no one. */
 export const readConnectionCommands = (
   items: Record<string, unknown>[],
   context: ConnectionReadContext,
@@ -72,6 +89,11 @@ export const readConnectionCommands = (
         words.includes(` ${toComparable(quote)} `);
       if (!first.isKnown || !second.isKnown || !isQuoted) return [];
       if (first.id === second.id) return [];
+      if (
+        !isNamedIn(first, text, words, context.personNames) ||
+        !isNamedIn(second, text, words, context.personNames)
+      )
+        return [];
       const connectionKind =
         CONNECTION_KINDS.find((entry) => entry === item.connectionKind) ?? null;
       const isCouple =
@@ -130,7 +152,9 @@ export const readConnectionCommands = (
   return [
     ...new Map(
       read.map((command) => [
-        `${command.kind}:${command.firstWhoId ?? 'me'}:${command.secondWhoId ?? 'me'}:${command.connectionKind ?? ''}`,
+        [command.firstWhoId ?? 'me', command.secondWhoId ?? 'me']
+          .sort()
+          .join(':'),
         command,
       ]),
     ).values(),

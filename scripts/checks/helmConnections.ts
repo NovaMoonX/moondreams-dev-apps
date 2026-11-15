@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+import { formatDateUTC } from '../../src/utils/formatUtils.ts';
 import * as server from '../../functions/src/apps/helm/nomos/connections.ts';
 import {
   KIN_KINDS,
@@ -23,7 +24,7 @@ import { selectShownConnections } from '../../src/apps/helm/store/selectors/conn
 import type { OpenConnection } from '../../src/apps/helm/types.ts';
 import {
   toConnectionSentence,
-  toRowTail,
+  toSideLine,
 } from '../../src/apps/helm/utils/connectionText.ts';
 
 // The id: sorted pair, then kind, whichever way round.
@@ -247,11 +248,23 @@ assert.equal(sam?.status, 'married');
 assert.equal(sam?.since, SINCE);
 
 // Row and sentence words.
-assert.equal(toRowTail('couple', sam!), 'married');
-assert.equal(toRowTail('family', fromMaya!), 'brother');
-assert.equal(toRowTail('friend', readFromSide(friends, 'a')!), 'friend');
-assert.equal(toRowTail('work', readFromSide(mates, 'a')!), 'coworker');
-assert.equal(toRowTail('family', readFromSide(notSure, maya)!), 'family');
+assert.equal(
+  toSideLine('couple', sam!, 'Dana'),
+  `Married to Dana\u00A0· since ${formatDateUTC(SINCE)}`,
+);
+assert.equal(toSideLine('family', fromMaya!, 'Maya'), "Maya's brother");
+assert.equal(
+  toSideLine('friend', readFromSide(friends, 'a')!, 'B'),
+  "B's friend",
+);
+assert.equal(
+  toSideLine('work', readFromSide(mates, 'a')!, 'B'),
+  'Works with B',
+);
+assert.equal(
+  toSideLine('family', readFromSide(notSure, maya)!, 'Maya'),
+  "Maya's family",
+);
 assert.equal(
   toConnectionSentence('family', fromMaya!, 'Eli', 'Maya'),
   "Eli is Maya's brother.",

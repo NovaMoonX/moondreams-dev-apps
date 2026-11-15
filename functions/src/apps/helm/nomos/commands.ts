@@ -124,7 +124,7 @@ export const SOUNDS_LIKE_COMMAND_KINDS = ['noteSoundsLike'] as const;
 /** A phone number or email the person says for someone they have; read from its own list and is no `NomosCommand`. */
 export const CONTACT_COMMAND_KINDS = ['addContactPoint'] as const;
 
-/** The kinds the reply may carry that link two people, change a link or take one away; each is read from its own list and is no `NomosCommand`. */
+/** Read from their own list; none is a `NomosCommand`. */
 export const CONNECTION_COMMAND_KINDS = [
   'connect',
   'updateConnection',
@@ -664,7 +664,7 @@ export interface AddContactPointCommand {
   label: string | null;
 }
 
-/** Two people linked, as the words said it: `firstWhoId` is `relation` to `secondWhoId` ("Joan is Dana's mother"). A null id is the person themself. A couple's `since` is date-only (UTC midnight). */
+/** `firstWhoId` is `relation` to `secondWhoId` ("Joan is Dana's mother"); a null id is the person themself; `since` is date-only. */
 export interface ConnectCommand {
   kind: 'connect';
   firstWhoId: string | null;
@@ -676,7 +676,7 @@ export interface ConnectCommand {
   requestQuote: string;
 }
 
-/** A change to a link the two people already have; a null part is left as it is. */
+/** A null part is left as it is. */
 export interface UpdateConnectionCommand {
   kind: 'updateConnection';
   firstWhoId: string | null;

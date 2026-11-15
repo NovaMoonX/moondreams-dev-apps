@@ -444,15 +444,22 @@ export async function countLinkedTasks(
   return snapshot.data().count;
 }
 
-/** How many connections to other people a who has, so forgetting them says so; needs a connection. */
-export async function countConnectionsOf(uid: string, id: string) {
-  const snapshot = await getCountFromServer(
+/** Shown connections only, so the forget line counts what the person saw; needs a connection. */
+export async function countConnectionsOf(
+  uid: string,
+  id: string,
+  unreadableIds: ReadonlySet<string>,
+) {
+  const snapshot = await getDocs(
     query(
       collection(userOf(uid), 'connections'),
       where('whoIds', 'array-contains', id),
     ),
   );
-  return snapshot.data().count;
+  return snapshot.docs.filter(
+    (entry) =>
+      entry.get('source') !== 'refused' && !unreadableIds.has(entry.id),
+  ).length;
 }
 
 /** How many facts are only about this who or place, so forgetting it forgets them too; needs a connection. */

@@ -2,11 +2,23 @@
 import assert from 'node:assert/strict';
 
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
+import {
+  sealForHelm,
+  type HelmKey,
+} from '../../functions/src/apps/helm/helmKey.ts';
+import {
+  planAnswerTurn,
+  type AskedCapture,
+} from '../../functions/src/apps/helm/nomos/answerTurn.ts';
+import { planImpliedQuestions } from '../../functions/src/apps/helm/sortHelmCapture.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import {
   buildImpliedQuestion,
+  planConnectionAnswer,
   planConnections,
   planResolveConnection,
+  readConnectionAnswer,
+  withConnectionAnswer,
   type PlanWho,
   type StoredConnection,
 } from '../../functions/src/apps/helm/nomos/planConnections.ts';
@@ -99,6 +111,10 @@ const reply = (item: Record<string, unknown>, captureText: string) =>
     {
       tasks: [],
       people,
+      personNames: new Map([
+        ['dana', ['Dana', 'Dee']],
+        ['sam', ['Sam']],
+      ]),
       reading: { dates: [], people: [], places: [], tags: [], urgent: [] },
       captureText,
       timeZone: 'UTC',
@@ -112,7 +128,13 @@ assert.equal(reply({}, `Are ${SAID}?`).length, 0, 'a question links no one');
 assert.equal(reply({ requestQuote: 'they wed' }, SAID).length, 0);
 assert.equal(reply({ otherWhoAlias: 'w99' }, SAID).length, 0);
 assert.equal(reply({ otherWhoAlias: dana }, SAID).length, 0);
-assert.equal(reply({ whoAlias: 'me' }, SAID)[0].firstWhoId, null);
+assert.equal(
+  reply(
+    { whoAlias: 'me', requestQuote: 'I am married to Sam' },
+    'I am married to Sam',
+  )[0].firstWhoId,
+  null,
+);
 assert.equal(
   reply({ connectionKind: 'family', connectionRelation: null }, SAID).length,
   0,
@@ -136,6 +158,73 @@ assert.equal(
   reply({ kind: 'updateConnection', coupleStatus: null }, SAID).length,
   0,
   'an update that changes nothing is dropped',
+);
+
+// One command stands for a pair whichever way round and whatever kind (the last said wins), and both people are named in the words.
+const replyMany = (items: Record<string, unknown>[], captureText: string) =>
+  normalizeNomosReply(
+    {
+      commands: items.map((item) => ({
+        kind: 'connect',
+        whoAlias: dana,
+        otherWhoAlias: sam,
+        connectionKind: 'couple',
+        connectionRelation: null,
+        coupleStatus: 'married',
+        dateSpanId: null,
+        requestQuote: 'Dana and Sam',
+        ...item,
+      })),
+    },
+    {
+      tasks: [],
+      people,
+      personNames: new Map([
+        ['dana', ['Dana', 'Dee']],
+        ['sam', ['Sam']],
+      ]),
+      reading: { dates: [], people: [], places: [], tags: [], urgent: [] },
+      captureText,
+      timeZone: 'UTC',
+      now: 1,
+    } as never,
+  ).connectionCommands;
+const twice = replyMany(
+  [
+    { connectionKind: 'friend', coupleStatus: null },
+    { whoAlias: sam, otherWhoAlias: dana },
+  ],
+  'Dana and Sam were friends, then Sam and Dana married',
+);
+assert.equal(twice.length, 1, 'a pair is one command, whatever the kind');
+assert.equal(
+  twice[0].connectionKind,
+  'couple',
+  'the last command said for the pair wins',
+);
+assert.equal(
+  replyMany([{ requestQuote: 'they are married' }], 'They are married').length,
+  0,
+  'a quote that names no one links no one',
+);
+assert.equal(
+  replyMany([{ requestQuote: 'got married' }], 'Dana got married').length,
+  0,
+  'both people must be named',
+);
+assert.equal(
+  replyMany([{ requestQuote: 'Dee and Sam' }], 'Dee and Sam are married')
+    .length,
+  1,
+  'an alias names a person',
+);
+assert.equal(
+  replyMany(
+    [{ whoAlias: 'me', requestQuote: 'married Sam' }],
+    'Sam married someone',
+  ).length,
+  0,
+  'the owner is named by I, me or my',
 );
 
 // connect writes one record with source said, by the assistant, and a line.
@@ -486,6 +575,7 @@ const stepparent = impliedConnections({
       kind: 'couple',
       source: 'said',
       status: 'married',
+      isUnreadable: false,
     },
   ],
   touchedIds: ['sam'],
@@ -508,6 +598,7 @@ assert.equal(
         kind: 'couple',
         source: 'said',
         status: 'divorced',
+        isUnreadable: false,
       },
     ],
     touchedIds: ['sam'],
@@ -519,7 +610,13 @@ const inLaw = impliedConnections({
   selfId: 'me',
   people: family,
   connections: [
-    { whoIds: ['eli', 'sam'], kind: 'couple', source: 'said', status: null },
+    {
+      whoIds: ['eli', 'sam'],
+      kind: 'couple',
+      source: 'said',
+      status: null,
+      isUnreadable: false,
+    },
   ],
   touchedIds: ['sam'],
 });
@@ -623,6 +720,7 @@ assert.equal(
         kind: 'family',
         source: 'refused',
         status: null,
+        isUnreadable: false,
       },
     ],
     touchedIds: ['maya'],
@@ -640,6 +738,7 @@ assert.equal(
         kind: 'family',
         source: 'confirmed',
         status: null,
+        isUnreadable: false,
       },
     ],
     touchedIds: ['maya'],
@@ -652,5 +751,199 @@ assert.equal(
   null,
   'a pair that already has a shown link writes nothing',
 );
+
+// The prompt never builds a plural from the word, and a pair of other people reads as a question about one of them.
+const others = buildImpliedQuestion(
+  {
+    firstId: 'sam',
+    secondId: 'dana',
+    kind: 'family',
+    relationOfFirstToSecond: 'brother',
+    because: 'siblingsPartner',
+  },
+  { first: 'Sam', second: 'Dana', isSecondSelf: false },
+);
+assert.equal(others.prompt, "Is Sam Dana's brother?");
+assert.equal(
+  buildImpliedQuestion(
+    {
+      firstId: 'sam',
+      secondId: 'me',
+      kind: 'family',
+      relationOfFirstToSecond: 'stepparent',
+      because: 'parentsPartner',
+    },
+    { first: 'Sam', second: 'Me', isSecondSelf: true },
+  ).prompt,
+  'Is Sam your stepparent?',
+);
+
+// A typed or spoken Yes or No settles the question like the tap does.
+const asked: AskedCapture = {
+  status: 'needsYou',
+  questionState: {
+    q1: {
+      kind: 'isConnection',
+      shape: 'yesNo',
+      askedAt: 1,
+      answeredAt: null,
+      skippedAt: null,
+      leftAt: null,
+    },
+  },
+  opened: { questions: { q1: question } },
+};
+const typed = (words: string, value: unknown = null) =>
+  planAnswerTurn({
+    asked,
+    questionId: 'q1',
+    value,
+    words,
+    by: 'voice',
+    turnCaptureId: 'c2',
+    now: NOW,
+  });
+assert.equal(
+  typed('yes').kind,
+  'apply',
+  'a connection question takes an answer',
+);
+assert.equal(readConnectionAnswer(asked, 'q1', null, 'Yes.')?.optionId, 'yes');
+assert.equal(readConnectionAnswer(asked, 'q1', null, 'nope')?.optionId, 'no');
+assert.equal(
+  readConnectionAnswer(asked, 'q1', { shape: 'yesNo', optionId: 'no' }, 'x')
+    ?.optionId,
+  'no',
+);
+assert.equal(
+  readConnectionAnswer(asked, 'q1', null, 'maybe so'),
+  null,
+  'anything but a yes or no settles nothing',
+);
+assert.equal(readConnectionAnswer(null, 'q1', null, 'yes'), null);
+const typedYes = readConnectionAnswer(asked, 'q1', null, 'yes');
+const typedWrite = planConnectionAnswer({
+  held: typedYes!.held,
+  optionId: typedYes!.optionId,
+  whos: owner,
+  existing: null,
+  executionId: 'exec-3',
+  now: NOW,
+  seal,
+});
+const merged = withConnectionAnswer(run([]), typedWrite!);
+assert.equal(merged.creates[0].data.source, 'confirmed');
+assert.equal(merged.effects.length, 1);
+assert.deepEqual(merged.linkedWhoIds, ['eli', 'maya']);
+
+// A person who is private now makes the answer's record private; the link is written and the pair is linked either way.
+const answerWith = (whos: Map<string, PlanWho | null>) => {
+  const result = planResolveConnection({
+    captureId: 'c1',
+    questionId: 'q1',
+    optionId: 'yes',
+    by: 'tap',
+    now: NOW,
+    executionId: 'exec-4',
+    capture: {
+      status: 'needsYou',
+      executionIds: [],
+      questionState: asked.questionState,
+    },
+    opened: asked.opened,
+    whos,
+    existing: null,
+    seal,
+  });
+  if (result.refused !== null) throw new Error('refused');
+  return result;
+};
+const quietPair = answerWith(owner);
+assert.equal(quietPair.execution?.privacy, 'ordinary');
+assert.deepEqual(quietPair.execution?.linkedWhoIds, ['eli', 'maya']);
+const hiddenPair = answerWith(
+  new Map([
+    ['maya', person('Maya', { privateMark: 'health' })],
+    ['eli', person('Eli', { kin: { kind: 'brother', order: null } })],
+  ]),
+);
+assert.equal(
+  hiddenPair.write?.doc.data.source,
+  'confirmed',
+  'the link is written',
+);
+assert.equal(hiddenPair.execution?.privacy, 'private');
+assert.deepEqual(hiddenPair.execution?.linkedWhoIds, ['eli', 'maya']);
+
+// A link whose words would not open implies nothing.
+assert.equal(
+  impliedConnections({
+    selfId: 'me',
+    people: family,
+    connections: [
+      {
+        whoIds: ['mom', 'sam'],
+        kind: 'couple',
+        source: 'said',
+        status: null,
+        isUnreadable: true,
+      },
+    ],
+    touchedIds: ['sam'],
+  }).length,
+  0,
+  'an unreadable couple implies nothing',
+);
+
+// A turn that only names someone runs no implied reads; one that sets a family word or writes a link does.
+const HELM_KEY: HelmKey = {
+  keyId: 'k',
+  keyVersion: 1,
+  key: Buffer.alloc(32, 7),
+};
+const noReads = {
+  get: () => {
+    throw new Error('read');
+  },
+} as never;
+const noCollections = {
+  collection: () => {
+    throw new Error('read');
+  },
+} as never;
+const whoDoc = (kin: unknown) => ({
+  kind: 'person',
+  lastMentionedAt: 1,
+  sealed: sealForHelm(HELM_KEY, { name: 'Sam', aliases: [], kin }),
+});
+const implied = (
+  connectionTouchedIds: string[],
+  whoRewrites: { id: string; data: Record<string, unknown> }[],
+) =>
+  planImpliedQuestions(noReads, noCollections, 'base', HELM_KEY, {
+    selfWhoId: 'me',
+    connectionTouchedIds,
+    whoRewrites,
+    settled: new Map(),
+    capturesRef: {} as never,
+    now: NOW,
+    newId: () => 'q',
+  });
+assert.deepEqual(
+  await implied([], [{ id: 'sam', data: { lastMentionedAt: 2 } }]),
+  [],
+  'a mention only touches nothing',
+);
+assert.deepEqual(
+  await implied([], [{ id: 'sam', data: whoDoc(null) }]),
+  [],
+  'a new person with no family word reads nothing',
+);
+await assert.rejects(
+  implied([], [{ id: 'sam', data: whoDoc({ kind: 'brother', order: null }) }]),
+  /read/,
+  'a family word set this turn reads the people',
+);
+await assert.rejects(implied(['sam'], []), /read/, 'a written link reads them');
 
 console.log('helm connection commands: ok');

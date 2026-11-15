@@ -127,7 +127,6 @@ const toContactWords = (record: PersonRecord) =>
         }),
       };
 
-/** A stored connection with its words opened, as the people lines read it. */
 export interface ContextConnection {
   whoIds: [string, string];
   kind: ConnectionKind;
@@ -152,7 +151,7 @@ const toRelationText = (relation: ConnectionRelation | null) =>
     ? null
     : (KIN_KINDS.find((entry) => entry.kind === relation)?.written ?? null);
 
-/** One connection as one person's line reads it ("married to Sam since 2019", "Joan is their mother"). Never for a pair with a private, pet or organization end, a refusal or a link whose words would not open. */
+/** Never for a pair with a private, pet or organization end, a refusal, or words that would not open. */
 const toConnectionText = (
   connection: ContextConnection,
   whoId: string,

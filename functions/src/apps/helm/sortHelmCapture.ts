@@ -240,7 +240,11 @@ import {
 import { planContactPoints } from './nomos/planContactPoints.js';
 import {
   buildImpliedQuestion,
+  isConnectionQuestion,
+  planConnectionAnswer,
   planConnections,
+  readConnectionAnswer,
+  withConnectionAnswer,
   type PlanWho,
   type StoredConnection,
 } from './nomos/planConnections.js';
@@ -1119,6 +1123,7 @@ async function readContextPeople(
         .get(),
       firestore
         .collection(`${base}/connections`)
+        .orderBy('createdAt', 'desc')
         .limit(MAX_CONTEXT_CONNECTIONS_READ)
         .get()
         .catch(() => null),
@@ -1724,15 +1729,15 @@ const openClashIdsOf = (asked: AskedCapture | null): string[] => {
       });
 };
 
-/** The questions a turn's family changes earn: each link that follows and was neither decided nor already asked, held with the pair it would write. Reads the people and connections only when someone was touched, and never on an unattended turn. */
-async function planImpliedQuestions(
+/** Asks about each link a turn's family changes make likely, once. Reads nothing unless the turn wrote a link or a family word, and never on an unattended turn. */
+export async function planImpliedQuestions(
   transaction: Transaction,
   firestore: Firestore,
   base: string,
   key: HelmKey,
   input: {
     selfWhoId: string | null;
-    touchedIds: string[];
+    connectionTouchedIds: string[];
     whoRewrites: { id: string; data: Record<string, unknown> }[];
     settled: Map<string, StoredConnection | null>;
     capturesRef: CollectionReference;
@@ -1740,7 +1745,19 @@ async function planImpliedQuestions(
     newId: () => string;
   },
 ): Promise<PlannedQuestion[]> {
-  if (input.touchedIds.length === 0) return [];
+  const touchedIds = [
+    ...new Set([
+      ...input.connectionTouchedIds,
+      ...input.whoRewrites.flatMap(({ id, data }) =>
+        normalizeKin(
+          toPersonRecord(key, { id, get: (field) => data[field] })?.words.kin,
+        )
+          ? [id]
+          : [],
+      ),
+    ]),
+  ];
+  if (touchedIds.length === 0) return [];
   const [whoSnap, connectionSnap] = await Promise.all([
     transaction.get(
       firestore
@@ -1748,7 +1765,12 @@ async function planImpliedQuestions(
         .orderBy('lastMentionedAt', 'desc')
         .limit(MAX_INFERENCE_PEOPLE_READ),
     ),
-    transaction.get(firestore.collection(`${base}/connections`).limit(500)),
+    transaction.get(
+      firestore
+        .collection(`${base}/connections`)
+        .orderBy('createdAt', 'desc')
+        .limit(500),
+    ),
   ]);
   const rewrites = new Map(
     input.whoRewrites.map((entry) => [entry.id, entry.data]),
@@ -1788,6 +1810,7 @@ async function planImpliedQuestions(
             kind: entry.kind,
             source: entry.source,
             status: entry.words?.status ?? null,
+            isUnreadable: entry.words === null,
           },
         ]
       : [],
@@ -1796,7 +1819,7 @@ async function planImpliedQuestions(
     selfId: input.selfWhoId,
     people,
     connections: [...stored, ...settled],
-    touchedIds: input.touchedIds,
+    touchedIds,
   });
   if (links.length === 0) return [];
   const open = await transaction.get(
@@ -1895,7 +1918,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const isMedicineAnswer =
     answerTurn !== null &&
     isMedicineQuestion(askedBefore, answerTurn.ref.questionId);
-  if (answerTurn && (answeredPlan?.kind === 'stale' || isMedicineAnswer)) {
+  const isConnectionAnswer =
+    answerTurn !== null &&
+    isConnectionQuestion(askedBefore, answerTurn.ref.questionId);
+  if (
+    answerTurn &&
+    (answeredPlan?.kind === 'stale' || isMedicineAnswer || isConnectionAnswer)
+  ) {
     return writeResult({
       ...claimed,
       key,
@@ -2723,6 +2752,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       synced: context.synced,
       facts: context.facts,
       people: context.people,
+      personNames: new Map(
+        knownNames.map((person) => [person.id, person.names]),
+      ),
       keyDates: context.keyDates,
       topics: context.topics,
       notes: context.notes,
@@ -3385,17 +3417,31 @@ async function writeResult(
     const selfWhoId = (profileSnap?.get('selfWhoId') as string | null) ?? null;
     const executionRef = firestore.collection(`${base}/executions`).doc();
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
+    const connectionAnswer =
+      answerTurn && turn?.kind === 'apply'
+        ? readConnectionAnswer(
+            toAskedCapture(key, askedSnap?.data() as CaptureDoc | undefined),
+            answerTurn.ref.questionId,
+            answerTurn.value,
+            answerTurn.words,
+          )
+        : null;
+    const answeredPair = [
+      connectionAnswer?.held.firstId,
+      connectionAnswer?.held.secondId,
+    ].filter((id): id is string => typeof id === 'string');
     const connectionWhoIds = isStale
       ? []
       : [
-          ...new Set(
-            connectionCommands.flatMap((command) =>
+          ...new Set([
+            ...answeredPair,
+            ...connectionCommands.flatMap((command) =>
               [
                 command.firstWhoId ?? selfWhoId,
                 command.secondWhoId ?? selfWhoId,
               ].flatMap((id) => id ?? []),
             ),
-          ),
+          ]),
         ];
     const connectionWhoSnaps = await Promise.all(
       connectionWhoIds.map((id) =>
@@ -3422,16 +3468,25 @@ async function writeResult(
         ];
       }),
     );
+    const answeredId =
+      connectionAnswer && answeredPair.length === 2
+        ? toConnectionId(
+            answeredPair[0],
+            answeredPair[1],
+            connectionAnswer.held.connectionKind as ConnectionKind,
+          )
+        : null;
     const connectionPairIds = [
-      ...new Set(
-        connectionCommands.flatMap((command) => {
+      ...new Set([
+        ...(answeredId ? [answeredId] : []),
+        ...connectionCommands.flatMap((command) => {
           const a = command.firstWhoId ?? selfWhoId;
           const b = command.secondWhoId ?? selfWhoId;
           return a && b
             ? CONNECTION_KINDS.map((kind) => toConnectionId(a, b, kind))
             : [];
         }),
-      ),
+      ]),
     ];
     const connectionSnaps = isStale
       ? []
@@ -3441,7 +3496,7 @@ async function writeResult(
           ),
         );
     const storedConnections = readStoredConnections(key, connectionSnaps);
-    const connectionPlan = planConnections({
+    const plannedConnections = planConnections({
       commands: isStale ? [] : connectionCommands,
       selfWhoId,
       whos: connectionWhos,
@@ -3453,6 +3508,21 @@ async function writeResult(
       seal,
       room: MAX_CONNECTION_EFFECTS,
     });
+    const answerWrite =
+      connectionAnswer && answeredId
+        ? planConnectionAnswer({
+            held: connectionAnswer.held,
+            optionId: connectionAnswer.optionId,
+            whos: connectionWhos,
+            existing: storedConnections.get(answeredId) ?? null,
+            executionId: executionRef.id,
+            now,
+            seal,
+          })
+        : null;
+    const connectionPlan = answerWrite
+      ? withConnectionAnswer(plannedConnections, answerWrite)
+      : plannedConnections;
     const allKeyDates = [...keyDates, ...connectionPlan.keyDates];
     const keyDateRead =
       allKeyDates.length > 0 && !isStale
@@ -4086,13 +4156,7 @@ async function writeResult(
         ? []
         : await planImpliedQuestions(transaction, firestore, base, key, {
             selfWhoId,
-            touchedIds: [
-              ...new Set([
-                ...connectionPlan.touchedWhoIds,
-                ...plan.whoCreates.map(({ id }) => id),
-                ...plan.whoUpdates.map(({ id }) => id),
-              ]),
-            ],
+            connectionTouchedIds: connectionPlan.touchedWhoIds,
             whoRewrites: [...plan.whoCreates, ...plan.whoUpdates],
             settled: connectionPlan.settled,
             capturesRef: captureRef.parent,

@@ -47,7 +47,7 @@ export interface NewConnection {
   genders: ConnectionGenders;
 }
 
-/** Writes a connection the person made on a page. The id holds the pair and kind, so an existing one is refused as `duplicate` inside the transaction; a refused proposal is replaced. Needs a connection. */
+/** An existing pair and kind is refused as `duplicate` inside the transaction; a refused proposal is replaced. Needs a connection. */
 export async function addConnection(
   uid: string,
   encryption: HelmEncryption,
@@ -118,7 +118,7 @@ export interface ConnectionChange {
   genders: ConnectionGenders;
 }
 
-/** Changes a connection's relation, status or since in one transaction that re-reads it, so the other side is always worked out from what is stored. `before` is what Undo hands to `setConnectionWords`. Needs a connection. */
+/** Re-reads the document so the other side is worked out from what is stored; `before` is what Undo hands to `setConnectionWords`. Needs a connection. */
 export async function updateConnection(
   uid: string,
   encryption: HelmEncryption,
@@ -186,7 +186,7 @@ export async function updateConnection(
   }
 }
 
-/** Puts a connection's sealed words back as they were, for an Undo of a change. */
+/** Undo of a change. */
 export async function setConnectionWords(
   uid: string,
   encryption: HelmEncryption,
@@ -210,13 +210,12 @@ export async function setConnectionWords(
   }
 }
 
-/** What Undo of a removal needs: the document exactly as it was. */
 export interface RemovedConnection {
   id: string;
   data: DocumentData;
 }
 
-/** Deletes one connection and hands back what `restoreConnection` needs. Needs a connection. */
+/** Needs a connection. */
 export async function removeConnection(
   uid: string,
   id: string,
@@ -230,7 +229,7 @@ export async function removeConnection(
   });
 }
 
-/** Puts a removed connection back unless the same pair and kind was made again meanwhile. */
+/** Not put back when the same pair and kind was made again meanwhile. */
 export async function restoreConnection(
   uid: string,
   removed: RemovedConnection,

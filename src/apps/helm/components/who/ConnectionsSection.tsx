@@ -11,17 +11,21 @@ import AddRow from '@apps/helm/components/who/AddRow';
 import ConnectionSheet, {
   type ConnectionTarget,
 } from '@apps/helm/components/who/ConnectionSheet';
+import WhoMark from '@apps/helm/components/who/WhoMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import { CONNECTION_KINDS, readFromSide } from '@apps/helm/engine/connections';
 import { selectShownConnections } from '@apps/helm/store/selectors/connectionSelectors';
 import type { OpenWho } from '@apps/helm/types';
-import { toRowTail } from '@apps/helm/utils/connectionText';
+import { toSideLine } from '@apps/helm/utils/connectionText';
+
+const shownName = (other: OpenWho) =>
+  other.isUnreadable ? HELM_COPY.unreadable : other.name;
 
 interface ConnectionsSectionProps {
   who: OpenWho;
 }
 
-/** "Connections": the people this one is connected to, read from this side ("Eli · brother", "Sam · married"; a past couple quieter); every action is in the row's sheet. */
+/** The people this one is linked to, each with what they are to them; every action is in the row's sheet. */
 function ConnectionsSection({ who }: ConnectionsSectionProps) {
   const [target, setTarget] = useState<ConnectionTarget | null>(null);
   const connections = useAppSelector(selectShownConnections);
@@ -50,22 +54,23 @@ function ConnectionsSection({ who }: ConnectionsSectionProps) {
             <Button
               type='button'
               variant='tertiary'
-              className='flex h-auto min-h-14 w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
+              className='flex h-auto min-h-16 w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-2 text-left focus-visible:-outline-offset-2'
               onClick={() => setTarget({ kind: 'row', id: connection.id })}
             >
-              <span className='flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5'>
+              <WhoMark kind={other.kind} name={shownName(other)} />
+              <span className='min-w-0 flex-1'>
                 <PrivateTitle
                   kind='who'
                   record={other}
                   className={join(
-                    'text-[15px]',
+                    'text-[15px] break-words',
                     side.isPast ? 'text-muted-foreground' : 'text-foreground',
                   )}
                 >
-                  {other.isUnreadable ? HELM_COPY.unreadable : other.name}
+                  {shownName(other)}
                 </PrivateTitle>
-                <span className='text-muted-foreground text-[13px] break-words'>
-                  · {toRowTail(connection.kind, side)}
+                <span className='text-muted-foreground block text-[13px] break-words'>
+                  {toSideLine(connection.kind, side, who.name)}
                 </span>
               </span>
               <ChevronRight

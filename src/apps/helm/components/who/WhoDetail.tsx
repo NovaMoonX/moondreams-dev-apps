@@ -68,6 +68,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
   const { reportDone, toFailureLine } = useContactsReport();
   const { items, isLoaded } = useAppSelector((state) => state.helm.who);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
+  const connections = useAppSelector((state) => state.helm.connections.items);
   const captures = useAppSelector(selectAllCaptures);
   const activeProjects = useAppSelector(selectActiveProjects);
   const { showView } = useHelmUrlState();
@@ -159,12 +160,16 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
         return null;
       },
     );
-    const connectionCount = await countConnectionsOf(user.uid, who.id).catch(
-      (error: unknown) => {
-        console.error('Helm connections were not counted', error);
-        return null;
-      },
-    );
+    const connectionCount = await countConnectionsOf(
+      user.uid,
+      who.id,
+      new Set(
+        connections.flatMap((entry) => (entry.isUnreadable ? [entry.id] : [])),
+      ),
+    ).catch((error: unknown) => {
+      console.error('Helm connections were not counted', error);
+      return null;
+    });
     if (
       linkedCount === null ||
       factCount === null ||

@@ -1992,6 +1992,8 @@ export function normalizeNomosReply(
     keyDates?: AliasBook;
     /** The people listed in the context, by alias (w1, w2, …). */
     people?: AliasBook;
+    /** Every name and alias of each listed person, by id. */
+    personNames?: Map<string, string[]>;
     topics?: AliasBook;
     notes?: AliasBook;
     parts?: AliasBook;
@@ -2183,6 +2185,7 @@ export function normalizeNomosReply(
     people: context.people,
     reading: context.reading,
     captureText: context.captureText,
+    personNames: context.personNames,
     timeZone: context.timeZone,
   });
   const whereabouts = readWhereabouts(

@@ -54,7 +54,7 @@ const readHead = (doc: ConnectionDocLike) => {
     : null;
 };
 
-/** The connection documents a turn read, by id, with their words opened; a document that is absent is null, and one that is not a connection is left out. */
+/** The connection documents a turn read, by id, with words opened; an absent one is null. */
 export const readStoredConnections = (
   key: HelmKey,
   docs: ConnectionDocLike[],
@@ -79,7 +79,7 @@ export const readStoredConnections = (
     }),
   );
 
-/** Every connection with readable words, as the people lines and the inference read them. */
+/** Connections with readable words, as the people lines and the inference read them. */
 export const readContextConnections = (
   key: HelmKey,
   docs: ConnectionDocLike[],
@@ -90,14 +90,21 @@ export const readContextConnections = (
     return head && words ? [{ ...head, ...words }] : [];
   });
 
-/** Every connection document as the inference reads it: the pair, the kind, whether it was refused and a couple's status; a document whose words would not open still counts, so a refusal is never lost. */
+/** A document whose words would not open still counts, so a refusal is never lost. */
 export const readConnectionStates = (
   key: HelmKey,
   docs: ConnectionDocLike[],
 ): ImpliedConnectionState[] =>
   docs.flatMap((doc): ImpliedConnectionState[] => {
     const head = readHead(doc);
+    const words = head ? openWords(key, doc.get('sealed')) : null;
     return head
-      ? [{ ...head, status: openWords(key, doc.get('sealed'))?.status ?? null }]
+      ? [
+          {
+            ...head,
+            status: words?.status ?? null,
+            isUnreadable: words === null,
+          },
+        ]
       : [];
   });

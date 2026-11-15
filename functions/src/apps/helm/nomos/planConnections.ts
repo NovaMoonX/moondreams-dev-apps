@@ -24,13 +24,12 @@ import type { QuestionStateEntry } from './executeCommands.js';
 
 const PRIVATE_PERSON_LABEL = 'a private person';
 
-/** A who as the plan reads it: its sealed words opened, and its readable kind. */
 export interface PlanWho {
   kind: 'person' | 'pet' | 'organization';
   opened: Record<string, unknown>;
 }
 
-/** A connection document as the transaction read it; `words` is null when the sealed words did not open. */
+/** `words` is null when the sealed words did not open. */
 export interface StoredConnection {
   whoIds: [string, string];
   kind: ConnectionKind;
@@ -66,7 +65,7 @@ const words = (relation: ConnectionRelation | null) =>
     ? null
     : (KIN_KINDS.find((entry) => entry.kind === relation)?.written ?? null);
 
-/** What the pair is, as one plain sentence: "Joan is Dana’s mother", "Dana and Sam are married". */
+/** "Joan is Dana’s mother", "Dana and Sam are married". */
 export const buildConnectionLine = (input: {
   first: string;
   second: string;
@@ -125,7 +124,7 @@ interface Acc extends ConnectionPlan {
   stored: Map<string, StoredConnection | null>;
 }
 
-/** Plans each said link as an undoable write of the connection document: a new pair and kind is created, a shown one is updated rather than duplicated, a refused one is replaced, and a removal deletes. Both ends must be people the turn can name, never a pet or an organization. A couple's new engaged or married status also asks for a moment on both people. */
+/** Plans each said link as an undoable write of the connection document; a shown pair is updated, never duplicated, and both ends must be people. */
 export function planConnections(input: {
   commands: ConnectionCommand[];
   selfWhoId: string | null;
@@ -535,7 +534,18 @@ export function planConnections(input: {
   };
 }
 
-/** The question asked for a link a turn makes likely, held with the pair it would write. */
+const toImpliedPrompt = (
+  link: ImpliedLink,
+  names: { first: string; second: string; isSecondSelf: boolean },
+  word: string,
+) => {
+  if (names.isSecondSelf) return `Is ${names.first} your ${word}?`;
+  if (link.because === 'siblings')
+    return `Are ${names.first} and ${names.second} siblings?`;
+  return `Is ${names.first} ${names.second}'s ${word}?`;
+};
+
+/** Held with the pair it would write. */
 export const buildImpliedQuestion = (
   link: ImpliedLink,
   names: { first: string; second: string; isSecondSelf: boolean },
@@ -552,9 +562,7 @@ export const buildImpliedQuestion = (
     answer: null,
     kind: 'isConnection' as const,
     shape: 'yesNo' as const,
-    prompt: names.isSecondSelf
-      ? `Is ${names.first} your ${word}?`
-      : `Are ${names.first} and ${names.second} ${link.because === 'siblings' ? 'siblings' : `${word}s`}?`,
+    prompt: toImpliedPrompt(link, names, word),
     options: [
       { id: 'yes', label: 'Yes' },
       { id: 'no', label: 'No' },
@@ -571,7 +579,7 @@ export const buildImpliedQuestion = (
   };
 };
 
-/** The document a Yes or a No writes: a confirmed link, or a refusal that keeps the pair and the relation so it is never asked again. */
+/** Yes confirms the link; No writes a refusal that keeps the pair and relation so it is never asked again. */
 export const planConnectionAnswer = (input: {
   held: Record<string, unknown>;
   optionId: string;
@@ -586,6 +594,8 @@ export const planConnectionAnswer = (input: {
   effectRef: EffectRef;
   effect: Effect;
   line: string;
+  whoIds: [string, string];
+  isPrivate: boolean;
 } | null => {
   const { held } = input;
   const firstId = typeof held.firstId === 'string' ? held.firstId : null;
@@ -604,6 +614,14 @@ export const planConnectionAnswer = (input: {
   if (input.existing && isShownConnection({ source: input.existing.source }))
     return null;
   const isYes = input.optionId === 'yes';
+  const isPrivate = [whoA, whoB].some((who) =>
+    isPrivateInEffect(
+      readPrivacyFacts({
+        privateMark: toPrivateMark(who.opened.privateMark),
+        isPrivacyCleared: who.opened.isPrivacyCleared === true,
+      }),
+    ),
+  );
   const genders: ConnectionGenders = Object.fromEntries(
     [firstId, secondId].map((id) => [
       id,
@@ -668,6 +686,8 @@ export const planConnectionAnswer = (input: {
         },
       },
       line,
+      whoIds: record.whoIds,
+      isPrivate,
     };
   }
   return {
@@ -691,15 +711,82 @@ export const planConnectionAnswer = (input: {
       previous: null,
     },
     line,
+    whoIds: record.whoIds,
+    isPrivate,
   };
 };
-
-export type ConnectionResolveRefusal = 'answered' | 'unknown' | 'gone';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-/** Decides what answering "Is Sam your stepparent?" writes, without touching a database: Yes writes the link as confirmed, No writes a refusal so it is never asked again, and the question closes either way. A pair that already has a shown link writes nothing. */
+const YES_WORDS = /^(?:yes|yeah|yep|yup|sure|ok|okay|correct|right)\W*$/i;
+const NO_WORDS = /^(?:no|nope|nah)\W*$/i;
+
+export const isConnectionQuestion = (
+  asked: { opened: Record<string, unknown> } | null,
+  questionId: string,
+) => {
+  const questions = asked?.opened.questions;
+  return (
+    isRecord(questions) &&
+    isRecord(questions[questionId]) &&
+    questions[questionId].kind === 'isConnection'
+  );
+};
+
+/** The held link and Yes or No from a tapped option or a plain yes or no in words; null for anything else, so the question stays open. */
+export const readConnectionAnswer = (
+  asked: { opened: Record<string, unknown> } | null,
+  questionId: string,
+  value: unknown,
+  words: string,
+): { held: Record<string, unknown>; optionId: 'yes' | 'no' } | null => {
+  const questions = asked?.opened.questions;
+  const question =
+    isRecord(questions) && isRecord(questions[questionId])
+      ? questions[questionId]
+      : null;
+  const held =
+    question?.kind === 'isConnection' && Array.isArray(question.heldCommands)
+      ? question.heldCommands.find(isRecord)
+      : null;
+  if (!held) return null;
+  const picked = isRecord(value) ? value.optionId : null;
+  const text = words.trim();
+  const optionId =
+    picked === 'yes' || picked === 'no'
+      ? picked
+      : YES_WORDS.test(text)
+        ? 'yes'
+        : NO_WORDS.test(text)
+          ? 'no'
+          : null;
+  return optionId ? { held, optionId } : null;
+};
+
+export const withConnectionAnswer = (
+  plan: ConnectionPlan,
+  write: NonNullable<ReturnType<typeof planConnectionAnswer>>,
+): ConnectionPlan => ({
+  ...plan,
+  creates:
+    write.doc.op === 'create'
+      ? [...plan.creates, { id: write.id, data: write.doc.data }]
+      : plan.creates,
+  updates:
+    write.doc.op === 'update'
+      ? [...plan.updates, { id: write.id, data: write.doc.data }]
+      : plan.updates,
+  effectRefs: [...plan.effectRefs, write.effectRef],
+  effects: [...plan.effects, write.effect],
+  lines: [...plan.lines, write.line || 'Noted'],
+  linkedWhoIds: [...new Set([...plan.linkedWhoIds, ...write.whoIds])],
+  isPrivate: plan.isPrivate || write.isPrivate,
+});
+
+export type ConnectionResolveRefusal = 'answered' | 'unknown' | 'gone';
+
+/** Yes writes the link as confirmed, No a refusal, and the question closes either way; a pair that already has a shown link writes nothing. */
 export function planResolveConnection(input: {
   captureId: string;
   questionId: string;
@@ -753,12 +840,12 @@ export function planResolveConnection(input: {
     ? {
         captureId: input.captureId,
         actor: 'nomos',
-        privacy: 'ordinary',
+        privacy: write.isPrivate ? 'private' : 'ordinary',
         category: 'organize',
         autonomyLevel: AUTOMATIC_LEVEL,
         state: 'succeeded',
         effectRefs: [write.effectRef],
-        linkedWhoIds: [],
+        linkedWhoIds: write.whoIds,
         linkedPlaceIds: [],
         undoesExecutionId: null,
         undoneByExecutionId: null,

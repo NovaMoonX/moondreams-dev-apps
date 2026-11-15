@@ -50,7 +50,7 @@ export interface ContextPerson {
   /** Numbers and addresses, the primary first, each with its label; left out for a private person and when there are none. */
   phones?: ContextContact[];
   emails?: ContextContact[];
-  /** How this person is connected to others, each as one line from their side; left out when there are none, and never for a private person. */
+  /** One line per connection from their side; never for a private person. */
   connections?: string[];
 }
 

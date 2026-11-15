@@ -413,7 +413,7 @@ const forgetDatesLine = (dates: number) =>
 const forgetConnectionsLine = (connections: number) =>
   connections === 0
     ? ''
-    : ` ${connections === 1 ? 'Their connection goes' : `Their ${connections} connections go`} too.`;
+    : ` ${connections === 1 ? 'Their link to another person goes' : `Their ${connections} links to other people go`} too.`;
 
 const forgetMomentsLine = (moments: number) =>
   moments === 0
@@ -1963,7 +1963,6 @@ export const HELM_COPY = {
   connectionNoMatch: 'Nobody matches that.',
   connectionNobodyElse: 'There is nobody else to connect yet.',
   connectionPicked: 'Connected to',
-  connectionPickAgain: 'Choose someone else',
   connectionKindField: 'How are they connected?',
   connectionKinds: {
     family: 'Family',
@@ -1989,17 +1988,37 @@ export const HELM_COPY = {
   connectionDuplicate: (other: string) =>
     `${other} is already connected that way.`,
   connectionNeedsPerson: 'Choose who they are connected to first.',
-  connectionChange: 'Change how they are connected',
-  connectionChangeSubtitle: 'The family word, where they are or since when',
-  connectionRemove: 'Remove this connection',
+  connectionChange: {
+    couple: 'Change status or since',
+    family: 'Change the family word',
+  },
+  connectionChangeSubtitle: {
+    couple: 'Married, engaged, divorced…',
+    family: 'Mother, cousin, in-law…',
+  },
+  connectionRemove: 'Remove this link',
   connectionRemoveSubtitle: 'You can undo it right after',
   connectionRemovedToast: (other: string) => `Removed the link to ${other}`,
   connectionRestoredToast: (other: string) => `Linked ${other} again`,
-  connectionRestoreExists: 'That connection was made again meanwhile.',
-  connectionStatusChanged: (status: string) => `Now ${status.toLowerCase()}.`,
-  connectionFamilyFallback: 'family',
-  connectionPartner: 'partner',
-  connectionLinkGone: 'This connection is gone.',
+  connectionRestoreExists: 'That link was made again meanwhile.',
+  connectionAddedToast: (line: string) => `Added: ${line}`,
+  connectionChangedToast: (line: string) => `Now: ${line}`,
+  connectionLinkGone: 'This link is gone.',
+  connectionSideLine: {
+    family: (name: string, word: string | null) =>
+      `${name}'s ${word ?? 'family'}`,
+    friend: (name: string) => `${name}'s friend`,
+    work: (name: string) => `Works with ${name}`,
+    couple: {
+      partner: (name: string) => `Partner of ${name}`,
+      dating: (name: string) => `Dating ${name}`,
+      engaged: (name: string) => `Engaged to ${name}`,
+      married: (name: string) => `Married to ${name}`,
+      separated: (name: string) => `Separated from ${name}`,
+      divorced: (name: string) => `Divorced from ${name}`,
+      widowed: (name: string) => `Was married to ${name}`,
+    },
+  },
   connectionLine: {
     family: (other: string, name: string, word: string | null) =>
       word === null
@@ -2017,6 +2036,7 @@ export const HELM_COPY = {
           : `${other} and ${name} are ${status}.`,
   },
   connectionSince: (date: string) => `Since ${date}`,
+  connectionSinceInline: (date: string) => `since ${date}`,
   contactAddPhone: 'Add a phone',
   contactAddEmail: 'Add an email',
   contactPrimary: 'Primary',
