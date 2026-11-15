@@ -169,6 +169,8 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     home: 'connections',
     classes: ['readable', 'sealed'],
     readers: ['device', 'server', 'turn', 'quick'],
+    contextBlock: '<people>',
+    commands: ['connect', 'updateConnection', 'disconnect'],
     writer: 'actions/connectionActions',
     taps: ['addConnection', 'updateConnection', 'removeConnection'],
   }),

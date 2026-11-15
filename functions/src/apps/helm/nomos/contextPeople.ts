@@ -14,10 +14,18 @@ import {
 import type { ByWho } from '../keyDateIndex.js';
 import { normalizeKin, type KinBirthday } from './kin.js';
 import { KIN_KINDS, type WhoKin } from './kinKinds.js';
+import {
+  isShownConnection,
+  type ConnectionKind,
+  type ConnectionRelation,
+  type ConnectionSource,
+  type CoupleStatus,
+} from './connections.js';
 
 export interface PersonRecord {
   id: string;
   isSelf: boolean;
+  kind: 'person' | 'pet' | 'organization';
   isPrivate: boolean;
   lastMentionedAt: number | null;
   words: {
@@ -48,6 +56,10 @@ export const toPersonRecord = (
     return {
       id: doc.id,
       isSelf: doc.get('isSelf') === true,
+      kind:
+        doc.get('kind') === 'pet' || doc.get('kind') === 'organization'
+          ? (doc.get('kind') as 'pet' | 'organization')
+          : 'person',
       isPrivate: isPrivateInEffect(
         readPrivacyFacts({
           privateMark: toPrivateMark(words.privateMark),
@@ -83,10 +95,24 @@ export const toKinText = (kin: WhoKin) =>
 /** The most labelled numbers or addresses of one kind a person's context line carries, the primary always first. */
 export const MAX_CONTEXT_CONTACTS = 2;
 
+export const MAX_CONTEXT_CONNECTIONS = 8;
+
 const toContextContacts = (points: ContactPoint[]) =>
   sortPrimaryFirst(points)
     .slice(0, MAX_CONTEXT_CONTACTS)
     .map(({ value, label, isPrimary }) => ({ value, label, isPrimary }));
+
+const toConnectionWords = (
+  whoId: string,
+  connections: ContextConnection[],
+  names: Map<string, string>,
+) => {
+  const lines = connections
+    .filter((connection) => connection.whoIds.includes(whoId))
+    .flatMap((connection) => toConnectionText(connection, whoId, names))
+    .slice(0, MAX_CONTEXT_CONNECTIONS);
+  return lines.length > 0 ? { connections: lines } : {};
+};
 
 /** What reaching a person is read as: nothing for a private person, whose numbers and addresses never leave the device in a turn. */
 const toContactWords = (record: PersonRecord) =>
@@ -101,11 +127,81 @@ const toContactWords = (record: PersonRecord) =>
         }),
       };
 
+/** A stored connection with its words opened, as the people lines read it. */
+export interface ContextConnection {
+  whoIds: [string, string];
+  kind: ConnectionKind;
+  source: ConnectionSource;
+  fromFirst: ConnectionRelation | null;
+  fromSecond: ConnectionRelation | null;
+  status: CoupleStatus | null;
+  since: number | null;
+}
+
+const STATUS_PHRASES: Record<CoupleStatus, (name: string) => string> = {
+  dating: (name) => `dating ${name}`,
+  engaged: (name) => `engaged to ${name}`,
+  married: (name) => `married to ${name}`,
+  separated: (name) => `separated from ${name}`,
+  divorced: (name) => `divorced from ${name}`,
+  widowed: (name) => `widowed, ${name} passed away`,
+};
+
+const toRelationText = (relation: ConnectionRelation | null) =>
+  relation === null || relation === 'friend' || relation === 'coworker'
+    ? null
+    : (KIN_KINDS.find((entry) => entry.kind === relation)?.written ?? null);
+
+/** One connection as one person's line reads it ("married to Sam since 2019", "Joan is their mother"). Never for a pair with a private, pet or organization end, a refusal or a link whose words would not open. */
+const toConnectionText = (
+  connection: ContextConnection,
+  whoId: string,
+  names: Map<string, string>,
+) => {
+  const [first, second] = connection.whoIds;
+  const isFirst = whoId === first;
+  const otherId = isFirst ? second : first;
+  const other = names.get(otherId);
+  if (!other) return [];
+  const relation = isFirst ? connection.fromSecond : connection.fromFirst;
+  const sinceText =
+    connection.since === null
+      ? ''
+      : ` since ${new Date(connection.since).getUTCFullYear()}`;
+  if (connection.kind === 'couple')
+    return [
+      `${
+        connection.status === null
+          ? `partner of ${other}`
+          : STATUS_PHRASES[connection.status](other)
+      }${sinceText}`,
+    ];
+  if (connection.kind === 'friend') return [`friends with ${other}`];
+  if (connection.kind === 'work') return [`works with ${other}`];
+  const word = toRelationText(relation);
+  return [word ? `${other} is their ${word}` : `${other} is family`];
+};
+
 /** The people the model is shown to link a name to: never the self, and on an unattended turn never a private one; those with another name or a family word first, then the most recently named. */
 export function toContextPeople(
   records: PersonRecord[],
-  options: { isUnattended: boolean },
+  options: { isUnattended: boolean; connections?: ContextConnection[] },
 ): ContextPerson[] {
+  const linkable = new Map(
+    records
+      .filter(
+        (record) =>
+          record.kind === 'person' &&
+          !record.isPrivate &&
+          record.words.name.trim() !== '',
+      )
+      .map((record) => [record.id, record.isSelf ? 'you' : record.words.name]),
+  );
+  const shownConnections = (options.connections ?? []).filter(
+    (connection) =>
+      isShownConnection(connection) &&
+      connection.whoIds.every((id) => linkable.has(id)),
+  );
   return records
     .filter(
       (record) =>
@@ -131,6 +227,7 @@ export function toContextPeople(
       relation: record.words.relation,
       kin: kin ? toKinText(kin) : null,
       ...toContactWords(record),
+      ...toConnectionWords(record.id, shownConnections, linkable),
     }));
 }
 

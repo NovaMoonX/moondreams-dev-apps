@@ -195,3 +195,137 @@ export const readFromSide = (
 /** A refused connection is only a memory that it was turned down. */
 export const isShownConnection = (connection: { source: ConnectionSource }) =>
   connection.source !== 'refused';
+
+/** A who as the inference reads them: their family word to the owner, whether they are private and whether they are a person (a private one, a pet or an organization is never part of a proposal). */
+export interface ImpliedPerson {
+  id: string;
+  kin: { kind: KinKind } | null;
+  isPrivate: boolean;
+  isPerson: boolean;
+}
+
+/** One link a turn makes likely: who is what to whom, ready for `buildConnection`. */
+export interface ImpliedLink {
+  firstId: string;
+  secondId: string;
+  kind: ConnectionKind;
+  relationOfFirstToSecond: ConnectionRelation;
+  because: 'siblings' | 'parentsPartner' | 'siblingsPartner';
+}
+
+const PARENT_KINDS: KinKind[] = ['mother', 'father', 'parent'];
+const SIBLING_KINDS: KinKind[] = ['sister', 'brother', 'sibling'];
+
+const isPartnerLink = (connection: ImpliedConnectionState) =>
+  connection.kind === 'couple' && connection.source !== 'refused';
+
+/** A stored connection as the inference needs it: the pair and kind, whether it is a refusal, and for a couple whether it is over. */
+export interface ImpliedConnectionState {
+  whoIds: [string, string];
+  kind: ConnectionKind;
+  source: ConnectionSource;
+  status: CoupleStatus | null;
+}
+
+/**
+ * The family links a turn makes likely, from the owner's family words and the couples already stored: two of the owner's siblings are siblings of each other, a parent's partner who is not a parent is a stepparent, and a sibling's partner is a sibling-in-law. Only links that touch someone in `touchedIds`, only between people who are not private, and never one the pair already has or has refused (a refusal of the pair and kind is final). A past couple implies nothing. Pure: the turn asks about each once, and the device can reuse it.
+ */
+export const impliedConnections = (input: {
+  selfId: string | null;
+  people: ImpliedPerson[];
+  connections: ImpliedConnectionState[];
+  touchedIds: string[];
+}): ImpliedLink[] => {
+  const { selfId, connections } = input;
+  const touched = new Set(input.touchedIds);
+  const person = new Map(input.people.map((entry) => [entry.id, entry]));
+  const kinOf = (id: string) => person.get(id)?.kin?.kind ?? null;
+  const isOpen = (id: string) =>
+    person.get(id)?.isPerson === true && person.get(id)?.isPrivate === false;
+  const genderById = (id: string) =>
+    genderOf({ kin: person.get(id)?.kin ?? null });
+  const isDecided = (a: string, b: string, kind: ConnectionKind) =>
+    connections.some(
+      (connection) =>
+        connection.whoIds.includes(a) &&
+        connection.whoIds.includes(b) &&
+        connection.kind === kind,
+    );
+  const partnersOf = (id: string) =>
+    connections.flatMap((connection) =>
+      isPartnerLink(connection) &&
+      !isPastStatus(connection.status) &&
+      connection.whoIds.includes(id)
+        ? [
+            connection.whoIds[0] === id
+              ? connection.whoIds[1]
+              : connection.whoIds[0],
+          ]
+        : [],
+    );
+  const siblings = input.people.filter(
+    (entry) => entry.kin && SIBLING_KINDS.includes(entry.kin.kind),
+  );
+  const siblingPairs = siblings.flatMap((first, index) =>
+    siblings.slice(index + 1).map((second): ImpliedLink => ({
+      firstId: first.id,
+      secondId: second.id,
+      kind: 'family',
+      relationOfFirstToSecond:
+        SIBLING[genderById(first.id) ?? 'neutral'] ?? 'sibling',
+      because: 'siblings',
+    })),
+  );
+  const partnerLinks = (
+    kinds: KinKind[],
+    forms: Forms,
+    because: ImpliedLink['because'],
+  ): ImpliedLink[] =>
+    selfId === null
+      ? []
+      : input.people
+          .filter((entry) => entry.kin && kinds.includes(entry.kin.kind))
+          .flatMap((relative) =>
+            partnersOf(relative.id).flatMap((partnerId): ImpliedLink[] => {
+              const partnerKin = kinOf(partnerId);
+              const isAlready =
+                partnerId === selfId ||
+                (partnerKin !== null &&
+                  [...PARENT_KINDS, ...SIBLING_KINDS].includes(partnerKin));
+              return isAlready
+                ? []
+                : [
+                    {
+                      firstId: partnerId,
+                      secondId: selfId,
+                      kind: 'family',
+                      relationOfFirstToSecond:
+                        forms[genderById(partnerId) ?? 'neutral'] ??
+                        forms.neutral ??
+                        'sibling',
+                      because,
+                    },
+                  ];
+            }),
+          );
+  const candidates = [
+    ...siblingPairs,
+    ...partnerLinks(PARENT_KINDS, STEPPARENT, 'parentsPartner'),
+    ...partnerLinks(SIBLING_KINDS, SIBLING_IN_LAW, 'siblingsPartner'),
+  ];
+  const links = candidates.filter(
+    (link) =>
+      isOpen(link.firstId) &&
+      isOpen(link.secondId) &&
+      (touched.has(link.firstId) || touched.has(link.secondId)) &&
+      !isDecided(link.firstId, link.secondId, link.kind),
+  );
+  return [
+    ...new Map(
+      links.map((link) => [
+        toConnectionId(link.firstId, link.secondId, link.kind),
+        link,
+      ]),
+    ).values(),
+  ];
+};

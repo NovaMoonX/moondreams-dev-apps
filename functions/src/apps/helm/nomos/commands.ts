@@ -10,6 +10,13 @@ import { KIN_KINDS, KIN_ORDERS, type WhoKin } from './kinKinds.js';
 import { CONTACT_LABEL_CAP, CONTACT_VALUE_CAP } from './contactPoints.js';
 import type { Cadence } from '../../../vendor/cadenceUtils.js';
 import type { DayPart } from './habitDay.js';
+import {
+  CONNECTION_KINDS,
+  CONNECTION_STATUSES,
+  type ConnectionKind,
+  type ConnectionRelation,
+  type CoupleStatus,
+} from './connections.js';
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
@@ -116,6 +123,15 @@ export const SOUNDS_LIKE_COMMAND_KINDS = ['noteSoundsLike'] as const;
 
 /** A phone number or email the person says for someone they have; read from its own list and is no `NomosCommand`. */
 export const CONTACT_COMMAND_KINDS = ['addContactPoint'] as const;
+
+/** The kinds the reply may carry that link two people, change a link or take one away; each is read from its own list and is no `NomosCommand`. */
+export const CONNECTION_COMMAND_KINDS = [
+  'connect',
+  'updateConnection',
+  'disconnect',
+] as const;
+
+export const MAX_CONNECTIONS_PER_TURN = 3;
 
 export const RUN_STEPS_MAX = 80;
 export const RUN_EXTRA_MAX = 20;
@@ -648,6 +664,42 @@ export interface AddContactPointCommand {
   label: string | null;
 }
 
+/** Two people linked, as the words said it: `firstWhoId` is `relation` to `secondWhoId` ("Joan is Dana's mother"). A null id is the person themself. A couple's `since` is date-only (UTC midnight). */
+export interface ConnectCommand {
+  kind: 'connect';
+  firstWhoId: string | null;
+  secondWhoId: string | null;
+  connectionKind: ConnectionKind;
+  relation: ConnectionRelation | null;
+  status: CoupleStatus | null;
+  since: number | null;
+  requestQuote: string;
+}
+
+/** A change to a link the two people already have; a null part is left as it is. */
+export interface UpdateConnectionCommand {
+  kind: 'updateConnection';
+  firstWhoId: string | null;
+  secondWhoId: string | null;
+  /** Null names the only shown link the pair has. */
+  connectionKind: ConnectionKind | null;
+  relation: ConnectionRelation | null;
+  status: CoupleStatus | null;
+  since: number | null;
+  requestQuote: string;
+}
+
+export interface DisconnectCommand {
+  kind: 'disconnect';
+  firstWhoId: string | null;
+  secondWhoId: string | null;
+  connectionKind: ConnectionKind | null;
+  requestQuote: string;
+}
+
+export type ConnectionCommand =
+  ConnectCommand | UpdateConnectionCommand | DisconnectCommand;
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -882,6 +934,10 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'contactKind',
             'contactValue',
             'contactLabel',
+            'otherWhoAlias',
+            'connectionKind',
+            'connectionRelation',
+            'coupleStatus',
             'habitAlias',
             'cadence',
             'windows',
@@ -904,6 +960,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
                 ...HABIT_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
                 ...CONTACT_COMMAND_KINDS,
+                ...CONNECTION_COMMAND_KINDS,
                 'answer',
                 'ask',
               ],
@@ -1147,7 +1204,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             dateSpanId: nullable(
               'string',
-              'setKeyDate: the id of the date span in the reading that gives the date; updateHabit pause: the date span of the day it comes back, or null. Never write a date yourself.',
+              'setKeyDate: the id of the date span in the reading that gives the date; updateHabit pause: the date span of the day it comes back, or null; connect and updateConnection for a couple: the date span of when they got together, got engaged or got married, or null. Never write a date yourself.',
             ),
             comesBack: nullable(
               'boolean',
@@ -1224,7 +1281,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare and updateHabit: the words of the capture that ask for it, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, updateHabit, connect, updateConnection and disconnect: the words of the capture that ask for it, copied exactly.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -1333,6 +1390,33 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               'string',
               `addContactPoint: the word the person used for it ("work", "mobile", "home"), at most ${CONTACT_LABEL_CAP} characters; null when none was said.`,
             ),
+            otherWhoAlias: nullable(
+              'string',
+              'connect, updateConnection and disconnect: the alias (w1, w2, …) from <people> of the second person, or "me" for the person talking; the first is whoAlias, also "me" when it is the person talking. Null otherwise.',
+            ),
+            connectionKind: {
+              type: ['string', 'null'],
+              enum: [...CONNECTION_KINDS, null],
+              description:
+                'connect: family, couple, friend or work. updateConnection and disconnect: the kind of the link, or null when the pair has one. Null otherwise.',
+            },
+            connectionRelation: {
+              type: ['string', 'null'],
+              enum: [
+                ...KIN_KINDS.map((entry) => entry.kind),
+                'friend',
+                'coworker',
+                null,
+              ],
+              description:
+                'connect and updateConnection: what whoAlias is to otherWhoAlias, as a family word from the list ("Joan is Dana\'s mom" is mother with Joan first); null for a couple, a friend or work, and when no family word changes.',
+            },
+            coupleStatus: {
+              type: ['string', 'null'],
+              enum: [...CONNECTION_STATUSES, null],
+              description:
+                'connect and updateConnection for a couple: dating, engaged, married, separated, divorced or widowed, only as the words say; null otherwise. "got engaged" and "got married" are updateConnection with engaged or married. A date is dateSpanId.',
+            },
             habitAlias: nullable(
               'string',
               'updateHabit, setCare and checkIn: the alias (h1, h2, …) of the habit in <habits> the words are about; null for createHabit, and for a checkIn that cannot tell which habit (use candidateAliases).',

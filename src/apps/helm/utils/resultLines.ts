@@ -31,7 +31,12 @@ export function buildResultLines(
 ): ResultLine[] {
   const effectLines = execution.effectRefs.flatMap(
     (ref, index): ResultLine[] => {
-      if (ref.collection === 'who' || ref.collection === 'places') return [];
+      if (
+        ref.collection === 'who' ||
+        ref.collection === 'places' ||
+        ref.collection === 'connections'
+      )
+        return [];
       const effect = execution.effects[index];
       // A kept photo is said once, by the turn's photo line.
       if (ref.collection === 'media') return [];

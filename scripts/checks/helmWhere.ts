@@ -12,6 +12,7 @@ import { SOURCE_SHARES } from '../../src/lib/connections/sources.ts';
 import {
   CLOSE_CONVERSATION_TOOL,
   COMMAND_KINDS,
+  CONNECTION_COMMAND_KINDS,
   DELETING_COMMANDS,
   PROCEDURE_COMMAND_KINDS,
   RUN_COMMAND_KINDS,
@@ -93,6 +94,7 @@ const world: World = {
     ...PROCEDURE_COMMAND_KINDS,
     ...RUN_COMMAND_KINDS,
     ...HABIT_COMMAND_KINDS,
+    ...CONNECTION_COMMAND_KINDS,
     CLOSE_CONVERSATION_TOOL.name,
   ],
   collections: [

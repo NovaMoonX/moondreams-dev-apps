@@ -213,7 +213,8 @@ export interface EffectRef {
     | 'procedures'
     | 'procedureRuns'
     | 'habits'
-    | 'habitDays';
+    | 'habitDays'
+    | 'connections';
   docId: string;
 }
 
@@ -701,6 +702,10 @@ interface PlanInput {
   selfWhoId?: string | null;
   timeZone?: string;
   keyDates?: KeyDateCommand[];
+  /** People a key date command names by a ref that is no mention of the turn, with the name their line shows. */
+  extraWho?: Map<string, { id: string; name: string }>;
+  /** Effects another part of the turn already records, so the turn stays within its cap. */
+  reservedEffects?: number;
   /** The yearly index as read in the transaction. */
   keyDateIndex?: { byWho: ByWho; entryCount: number };
   /** The index could not be opened, so the turn's date commands are skipped lines and never written over an index taken for empty. */
@@ -1407,6 +1412,10 @@ export function planWrites(input: PlanInput): WritePlan {
       place.id,
       place.name,
     ]),
+    ...[...(input.extraWho ?? []).values()].map((who): [string, string] => [
+      who.id,
+      who.name,
+    ]),
     ...entities.newWho.map(({ id, mention }): [string, string] => [
       id,
       toNameCase(mention.name),
@@ -1750,7 +1759,13 @@ export function planWrites(input: PlanInput): WritePlan {
   }));
   const keyDatePlan = planKeyDates({
     commands: input.keyDates ?? [],
-    whoIdOf: entities.whoIdOf,
+    whoIdOf: new Map([
+      ...entities.whoIdOf,
+      ...[...(input.extraWho ?? [])].map(([ref, who]): [string, string] => [
+        ref,
+        who.id,
+      ]),
+    ]),
     selfWhoId,
     nameOf,
     whoCounts: new Map([
@@ -1788,7 +1803,8 @@ export function planWrites(input: PlanInput): WritePlan {
         (effects.length +
           drafts.size +
           entities.newWho.length +
-          entities.newPlaces.length),
+          entities.newPlaces.length +
+          (input.reservedEffects ?? 0)),
     ),
   });
   keyDatePlan.effects.forEach(({ ref, effect }) =>
@@ -3222,6 +3238,7 @@ const isPickKind = (kind: string) =>
   kind === 'groupTopics' ||
   kind === 'whichHabit' ||
   kind === 'isMedicine' ||
+  kind === 'isConnection' ||
   kind === 'whichMedicine' ||
   kind === 'howWasIt' ||
   kind === 'asked';

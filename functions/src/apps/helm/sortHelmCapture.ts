@@ -13,11 +13,18 @@ import {
   readMedicineAnswer,
   toPlannedQuestion,
 } from './nomos/planHabitCommands.js';
+import {
+  CONNECTION_KINDS,
+  toConnectionId,
+  type ConnectionKind,
+} from './nomos/connections.js';
+import type { PlannedQuestion } from './nomos/executeCommands.js';
 import { MAX_EFFECTS, type HabitCommand } from './nomos/commands.js';
 import { decideHabit } from './nomos/policy.js';
 import {
   FieldValue,
   getFirestore,
+  type CollectionReference,
   type DocumentReference,
   type Firestore,
   type DocumentSnapshot,
@@ -152,6 +159,7 @@ import {
   type MentionRead,
   type NoteFactCommand,
   type KeyDateCommand,
+  type ConnectionCommand,
   type ProjectCommand,
   MAX_CONTEXT_PROJECTS,
   MAX_CONTEXT_TOPICS,
@@ -230,6 +238,18 @@ import {
   type HeardName,
 } from './nomos/heardNames.js';
 import { planContactPoints } from './nomos/planContactPoints.js';
+import {
+  buildImpliedQuestion,
+  planConnections,
+  type PlanWho,
+  type StoredConnection,
+} from './nomos/planConnections.js';
+import { impliedConnections, type ImpliedPerson } from './nomos/connections.js';
+import {
+  readConnectionStates,
+  readContextConnections,
+  readStoredConnections,
+} from './connectionStore.js';
 import { planSoundsLike, type EarlierTask } from './nomos/planSoundsLike.js';
 import {
   decideAbilityOffer,
@@ -305,6 +325,10 @@ const EARLIER_RECORDS = 10;
 const MAX_JOINED = 9;
 const MAX_LISTED = 50;
 const MAX_OPEN_ASKED_READ = 200;
+const MAX_CONNECTION_EFFECTS = 3;
+const MAX_CONTEXT_CONNECTIONS_READ = 500;
+const MAX_IMPLIED_QUESTIONS = 2;
+const MAX_INFERENCE_PEOPLE_READ = 200;
 
 const readPlaceName = (key: HelmKey, sealed: unknown) => {
   try {
@@ -1087,14 +1111,24 @@ async function readContextPeople(
   isUnattended: boolean,
 ): Promise<ContextPerson[]> {
   try {
-    const snap = await firestore
-      .collection(`${base}/who`)
-      .orderBy('lastMentionedAt', 'desc')
-      .limit(MAX_CONTEXT_PEOPLE_READ)
-      .get();
+    const [snap, connectionSnap] = await Promise.all([
+      firestore
+        .collection(`${base}/who`)
+        .orderBy('lastMentionedAt', 'desc')
+        .limit(MAX_CONTEXT_PEOPLE_READ)
+        .get(),
+      firestore
+        .collection(`${base}/connections`)
+        .limit(MAX_CONTEXT_CONNECTIONS_READ)
+        .get()
+        .catch(() => null),
+    ]);
     return toContextPeople(
       snap.docs.flatMap((doc) => toPersonRecord(key, doc) ?? []),
-      { isUnattended },
+      {
+        isUnattended,
+        connections: readContextConnections(key, connectionSnap?.docs ?? []),
+      },
     );
   } catch (error) {
     logger.warn('helm.sort.peopleUnread', {
@@ -1690,6 +1724,131 @@ const openClashIdsOf = (asked: AskedCapture | null): string[] => {
       });
 };
 
+/** The questions a turn's family changes earn: each link that follows and was neither decided nor already asked, held with the pair it would write. Reads the people and connections only when someone was touched, and never on an unattended turn. */
+async function planImpliedQuestions(
+  transaction: Transaction,
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  input: {
+    selfWhoId: string | null;
+    touchedIds: string[];
+    whoRewrites: { id: string; data: Record<string, unknown> }[];
+    settled: Map<string, StoredConnection | null>;
+    capturesRef: CollectionReference;
+    now: number;
+    newId: () => string;
+  },
+): Promise<PlannedQuestion[]> {
+  if (input.touchedIds.length === 0) return [];
+  const [whoSnap, connectionSnap] = await Promise.all([
+    transaction.get(
+      firestore
+        .collection(`${base}/who`)
+        .orderBy('lastMentionedAt', 'desc')
+        .limit(MAX_INFERENCE_PEOPLE_READ),
+    ),
+    transaction.get(firestore.collection(`${base}/connections`).limit(500)),
+  ]);
+  const rewrites = new Map(
+    input.whoRewrites.map((entry) => [entry.id, entry.data]),
+  );
+  const records = new Map(
+    whoSnap.docs.flatMap((doc) => {
+      const over = rewrites.get(doc.id) ?? {};
+      const record = toPersonRecord(key, {
+        id: doc.id,
+        get: (field) => (field in over ? over[field] : doc.get(field)),
+      });
+      return record ? [[doc.id, record] as const] : [];
+    }),
+  );
+  input.whoRewrites.forEach(({ id, data }) => {
+    if (records.has(id)) return;
+    const record = toPersonRecord(key, { id, get: (field) => data[field] });
+    if (record) records.set(id, record);
+  });
+  const people: ImpliedPerson[] = [...records.values()].map((record) => ({
+    id: record.id,
+    kin: normalizeKin(record.words.kin),
+    isPrivate: record.isPrivate,
+    isPerson: record.kind === 'person',
+  }));
+  const stored = readConnectionStates(key, connectionSnap.docs).filter(
+    (state) =>
+      !input.settled.has(
+        toConnectionId(state.whoIds[0], state.whoIds[1], state.kind),
+      ),
+  );
+  const settled = [...input.settled.values()].flatMap((entry) =>
+    entry
+      ? [
+          {
+            whoIds: entry.whoIds,
+            kind: entry.kind,
+            source: entry.source,
+            status: entry.words?.status ?? null,
+          },
+        ]
+      : [],
+  );
+  const links = impliedConnections({
+    selfId: input.selfWhoId,
+    people,
+    connections: [...stored, ...settled],
+    touchedIds: input.touchedIds,
+  });
+  if (links.length === 0) return [];
+  const open = await transaction.get(
+    input.capturesRef
+      .where('status', '==', 'needsYou')
+      .limit(MAX_OPEN_ASKED_READ),
+  );
+  const asked = new Set(
+    open.docs.flatMap((doc) => {
+      const captured = toAskedCapture(key, doc.data() as CaptureDoc);
+      const questions = captured?.opened.questions;
+      return typeof questions === 'object' && questions !== null
+        ? Object.entries(questions).flatMap(([id, question]) => {
+            const held: unknown = (question as { heldCommands?: unknown })
+              .heldCommands;
+            const first = Array.isArray(held)
+              ? (held[0] as Record<string, unknown> | undefined)
+              : undefined;
+            return first?.kind === 'askConnection' &&
+              typeof first.firstId === 'string' &&
+              typeof first.secondId === 'string' &&
+              captured?.questionState[id]?.answeredAt === null
+              ? [
+                  toConnectionId(
+                    first.firstId,
+                    first.secondId,
+                    first.connectionKind as ConnectionKind,
+                  ),
+                ]
+              : [];
+          })
+        : [];
+    }),
+  );
+  return links
+    .filter(
+      (link) =>
+        !asked.has(toConnectionId(link.firstId, link.secondId, link.kind)),
+    )
+    .slice(0, MAX_IMPLIED_QUESTIONS)
+    .map((link) =>
+      toPlannedQuestion(
+        buildImpliedQuestion(link, {
+          first: records.get(link.firstId)?.words.name ?? '',
+          second: records.get(link.secondId)?.words.name ?? '',
+          isSecondSelf: link.secondId === input.selfWhoId,
+        }),
+        { id: input.newId(), now: input.now },
+      ),
+    );
+}
+
 async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const { firestore, uid, capture, mode } = claimed;
   const base = `apps/helm/users/${uid}`;
@@ -1753,6 +1912,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       habitCommands: [],
       soundsLike: [],
       contactPoints: [],
+      connectionCommands: [],
       whereabouts: [],
       offerAbility: null,
       abilities: null,
@@ -2673,6 +2833,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         : [],
     soundsLike: mode === 'full' ? reply.soundsLike : [],
     contactPoints: mode === 'full' ? reply.contactPoints : [],
+    connectionCommands: mode === 'full' ? reply.connectionCommands : [],
     whereabouts: mode === 'full' ? reply.whereabouts : [],
     offerAbility:
       mode === 'full'
@@ -2840,6 +3001,7 @@ async function writeResult(
     habitCommands: HabitCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     contactPoints: AddContactPointCommand[];
+    connectionCommands: ConnectionCommand[];
     whereabouts: SetWhereaboutsCommand[];
     offerAbility: { ability: 'location'; level: 'city' | 'precise' } | null;
     abilities: ReturnType<typeof readCaptureAbilities>;
@@ -2888,6 +3050,7 @@ async function writeResult(
     habitCommands,
     soundsLike,
     contactPoints,
+    connectionCommands,
     whereabouts,
     offerAbility,
     abilities,
@@ -3088,6 +3251,7 @@ async function writeResult(
       requestedHome ||
       noteFacts.length > 0 ||
       keyDates.length > 0 ||
+      connectionCommands.length > 0 ||
       whereabouts.length > 0 ||
       offerAbility !== null
         ? transaction.get(firestore.doc(base))
@@ -3219,16 +3383,88 @@ async function writeResult(
         ? await readSubjectFacts(transaction, firestore, base, key)
         : [];
     const selfWhoId = (profileSnap?.get('selfWhoId') as string | null) ?? null;
+    const executionRef = firestore.collection(`${base}/executions`).doc();
+    const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
+    const connectionWhoIds = isStale
+      ? []
+      : [
+          ...new Set(
+            connectionCommands.flatMap((command) =>
+              [
+                command.firstWhoId ?? selfWhoId,
+                command.secondWhoId ?? selfWhoId,
+              ].flatMap((id) => id ?? []),
+            ),
+          ),
+        ];
+    const connectionWhoSnaps = await Promise.all(
+      connectionWhoIds.map((id) =>
+        transaction.get(firestore.doc(`${base}/who/${id}`)),
+      ),
+    );
+    const connectionWhos = new Map<string, PlanWho | null>(
+      connectionWhoSnaps.map((snapshot): [string, PlanWho | null] => {
+        const opened = snapshot.exists
+          ? openSealed(key, snapshot.get('sealed'))
+          : null;
+        return [
+          snapshot.id,
+          opened
+            ? {
+                kind:
+                  snapshot.get('kind') === 'pet' ||
+                  snapshot.get('kind') === 'organization'
+                    ? snapshot.get('kind')
+                    : 'person',
+                opened,
+              }
+            : null,
+        ];
+      }),
+    );
+    const connectionPairIds = [
+      ...new Set(
+        connectionCommands.flatMap((command) => {
+          const a = command.firstWhoId ?? selfWhoId;
+          const b = command.secondWhoId ?? selfWhoId;
+          return a && b
+            ? CONNECTION_KINDS.map((kind) => toConnectionId(a, b, kind))
+            : [];
+        }),
+      ),
+    ];
+    const connectionSnaps = isStale
+      ? []
+      : await Promise.all(
+          connectionPairIds.map((id) =>
+            transaction.get(firestore.doc(`${base}/connections/${id}`)),
+          ),
+        );
+    const storedConnections = readStoredConnections(key, connectionSnaps);
+    const connectionPlan = planConnections({
+      commands: isStale ? [] : connectionCommands,
+      selfWhoId,
+      whos: connectionWhos,
+      existing: storedConnections,
+      todayDay: getDayIn(capture.createdAt, toKnownZone(timeZone)),
+      now,
+      executionId: executionRef.id,
+      isUnattended: input.isUnattended === true,
+      seal,
+      room: MAX_CONNECTION_EFFECTS,
+    });
+    const allKeyDates = [...keyDates, ...connectionPlan.keyDates];
     const keyDateRead =
-      keyDates.length > 0 && !isStale
+      allKeyDates.length > 0 && !isStale
         ? await readKeyDateState(transaction, firestore, base, key, {
-            keyDates,
+            keyDates: allKeyDates,
             selfWhoId,
             candidateWhoIds: (people?.known ?? []).map((who) => who.id),
             momentWhoIds: namedMomentWhoIds({
-              commands: keyDates,
-              whoIdOf: new Map(
-                people
+              commands: allKeyDates,
+              whoIdOf: new Map([
+                ...connectionPlan.keyDateRefs,
+                ...(people
                   ? matchWho({
                       mentions: people.mentions,
                       known: people.known,
@@ -3238,8 +3474,8 @@ async function writeResult(
                         ? [[people.mentions[index].ref, match.id]]
                         : [],
                     )
-                  : [],
-              ),
+                  : []),
+              ]),
               selfWhoId,
             }),
           })
@@ -3383,8 +3619,6 @@ async function writeResult(
         )
         .map((snapshot) => snapshot.id),
     );
-    const executionRef = firestore.collection(`${base}/executions`).doc();
-    const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
     const homeDoc = profileSnap?.exists ? homeSnap?.docs[0] : undefined;
     const homeWords =
       requestedHome && !isStale
@@ -3556,7 +3790,21 @@ async function writeResult(
               executionId: executionRef.id,
             } satisfies MediaInput)
           : undefined,
-      keyDates: isStale ? [] : keyDates,
+      keyDates: isStale ? [] : allKeyDates,
+      extraWho: new Map(
+        [...connectionPlan.keyDateRefs.entries()].map(
+          ([ref, id]): [string, { id: string; name: string }] => [
+            ref,
+            {
+              id,
+              name: connectionWhos.get(id)
+                ? String(connectionWhos.get(id)?.opened.name ?? '')
+                : '',
+            },
+          ],
+        ),
+      ),
+      reservedEffects: connectionPlan.effects.length,
       keyDateIndex: keyDateRead?.index ?? undefined,
       isKeyDateIndexUnreadable:
         keyDateRead !== null && keyDateRead.index === null,
@@ -3742,7 +3990,8 @@ async function writeResult(
           written.effects.length -
           soundsPlan.effects.length -
           wherePlan.effects.length -
-          contactPlan.effects.length,
+          contactPlan.effects.length -
+          connectionPlan.effects.length,
       ),
     });
     const abilityOffer = isStale
@@ -3761,6 +4010,7 @@ async function writeResult(
         ...soundsPlan.effectRefs,
         ...wherePlan.effectRefs,
         ...contactPlan.effectRefs,
+        ...connectionPlan.effectRefs,
         ...habitPlan.effectRefs,
       ],
       effects: [
@@ -3769,12 +4019,14 @@ async function writeResult(
         ...soundsPlan.effects,
         ...wherePlan.effects,
         ...contactPlan.effects,
+        ...connectionPlan.effects,
         ...habitPlan.effects,
       ],
       notKept: [
         ...written.notKept,
         ...wherePlan.notKept,
         ...contactPlan.notKept,
+        ...connectionPlan.notKept,
         ...habitPlan.notKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
@@ -3784,6 +4036,7 @@ async function writeResult(
           ...soundsPlan.linkedWhoIds,
           ...wherePlan.linkedWhoIds,
           ...contactPlan.linkedWhoIds,
+          ...connectionPlan.linkedWhoIds,
         ]),
       ],
       isPrivate:
@@ -3791,6 +4044,7 @@ async function writeResult(
         soundsPlan.isPrivate ||
         wherePlan.isPrivate ||
         contactPlan.isPrivate ||
+        connectionPlan.isPrivate ||
         habitPlan.isPrivate,
     };
     const plan = sentMedia
@@ -3827,10 +4081,29 @@ async function writeResult(
       now,
       newId: () => crypto.randomUUID(),
     });
+    const impliedQuestions =
+      isStale || input.isUnattended === true
+        ? []
+        : await planImpliedQuestions(transaction, firestore, base, key, {
+            selfWhoId,
+            touchedIds: [
+              ...new Set([
+                ...connectionPlan.touchedWhoIds,
+                ...plan.whoCreates.map(({ id }) => id),
+                ...plan.whoUpdates.map(({ id }) => id),
+              ]),
+            ],
+            whoRewrites: [...plan.whoCreates, ...plan.whoUpdates],
+            settled: connectionPlan.settled,
+            capturesRef: captureRef.parent,
+            now,
+            newId: () => crypto.randomUUID(),
+          });
     const otherQuestions = [
       ...plan.questions,
       ...askPlan.questions,
       ...habitPlan.questions,
+      ...impliedQuestions,
     ];
     const followUp =
       otherQuestions.length === 0 && habitPlan.followUp
@@ -3991,6 +4264,15 @@ async function writeResult(
           seal,
         }),
       );
+      connectionPlan.creates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/connections/${id}`), data),
+      );
+      connectionPlan.updates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/connections/${id}`), data),
+      );
+      connectionPlan.deletes.forEach((id) =>
+        transaction.delete(firestore.doc(`${base}/connections/${id}`)),
+      );
       habitPlan.creates.forEach(({ id, doc }) =>
         transaction.create(firestore.doc(`${base}/habits/${id}`), doc),
       );
@@ -4055,6 +4337,7 @@ async function writeResult(
               ...soundsPlan.lines,
               ...wherePlan.lines,
               ...contactPlan.lines,
+              ...connectionPlan.lines,
               ...habitPlan.lines,
             ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,

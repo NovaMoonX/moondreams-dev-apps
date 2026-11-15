@@ -39,6 +39,7 @@ import {
   type UndoTarget,
 } from '@apps/helm/nomos/planUndo';
 import type {
+  ConnectionSealed,
   EffectRef,
   ExecutionSealed,
   HabitDaySealed,
@@ -214,7 +215,7 @@ const toDateChanges = (
               : {
                   op: 'upsert',
                   whoId,
-                  entry: toKeyEntry(entry.docId, entry.seal),
+                  entry: toKeyEntry(entry.docId, entry.seal as KeyDateSealed),
                 },
             delta: 1,
           },
@@ -309,7 +310,10 @@ async function writeDatesIn(
     plan.creates.map(async ({ docId, collection: from, fields, seal }) =>
       transaction.set(doc(collection(userOf(uid), from), docId), {
         ...fields,
-        sealed: await sealJson<KeyDateSealed>(seal, encryption),
+        sealed: await sealJson<KeyDateSealed | ConnectionSealed>(
+          seal,
+          encryption,
+        ),
       }),
     ),
   );
@@ -401,8 +405,35 @@ export async function undoExecution(
                 ref.collection === 'procedures' ||
                 ref.collection === 'procedureRuns' ||
                 ref.collection === 'habits' ||
-                ref.collection === 'habitDays';
+                ref.collection === 'habitDays' ||
+                ref.collection === 'connections';
               const entry = await transaction.get(docOf(ref));
+              if (ref.collection === 'connections' && ref.op === 'delete') {
+                const whoIds =
+                  original.effects[original.effectRefs.indexOf(ref)]?.previous
+                    ?.whoIds;
+                const owners = Array.isArray(whoIds)
+                  ? await Promise.all(
+                      whoIds.map((id) =>
+                        transaction.get(doc(userOf(uid), 'who', String(id))),
+                      ),
+                    )
+                  : [];
+                const existing = await transaction.get(docOf(ref));
+                return [
+                  docId,
+                  {
+                    docId,
+                    data: existing.exists()
+                      ? (existing.data() as Record<string, unknown>)
+                      : null,
+                    opened: null,
+                    isOwnerHere:
+                      owners.length === 2 &&
+                      owners.every((owner) => owner.exists()),
+                  },
+                ];
+              }
               if (ref.collection === 'keyDates' && ref.op === 'delete') {
                 const whoId =
                   original.effects[original.effectRefs.indexOf(ref)]?.previous
@@ -470,6 +501,7 @@ export async function undoExecution(
                       | RunSealed
                       | HabitSealed
                       | HabitDaySealed
+                      | ConnectionSealed
                     >(data.sealed as Sealed, encryption)
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);
@@ -566,6 +598,7 @@ export async function undoExecution(
                     | ProjectSealed
                     | HabitSealed
                     | HabitDaySealed
+                    | ConnectionSealed
                   >(update.reseal, encryption),
                 }
               : {},

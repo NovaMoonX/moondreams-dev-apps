@@ -307,7 +307,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
               onOpen={setSheet}
             />
             <ContactRowsSection who={who} />
-            <ConnectionsSection who={who} />
+            {who.kind === 'person' && <ConnectionsSection who={who} />}
             {projectLines.length > 0 && (
               <section className='space-y-3'>
                 <SectionDivider label={HELM_COPY.whoProjectsTitle} />

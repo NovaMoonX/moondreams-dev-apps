@@ -1381,6 +1381,83 @@ test("a private person's numbers and addresses never reach the context, and an o
   );
 });
 
+test("a private person's connection never reaches the people lines, and neither does a pet's or a refused one", () => {
+  const doc = (
+    name: string,
+    extra: Record<string, unknown>,
+    kind = 'person',
+  ) => ({
+    id: name.toLowerCase(),
+    get: (field: string) =>
+      ({
+        sealed: sealForHelm(HELM_KEY, {
+          name,
+          aliases: [],
+          kin: null,
+          relation: null,
+          privateMark: null,
+          isPrivacyCleared: false,
+          phones: [],
+          emails: [],
+          phone: null,
+          email: null,
+          ...extra,
+        }),
+        kind,
+        lastMentionedAt: 5,
+        isSelf: false,
+        privacy: 'ordinary',
+      })[field],
+  });
+  const records = [
+    doc('Secret', { privateMark: 'health' }),
+    doc('Open', {}),
+    doc('Dana', {}),
+    doc('Miso', {}, 'pet'),
+  ].flatMap((entry) => toPersonRecord(HELM_KEY, entry) ?? []);
+  const connection = (
+    ids: [string, string],
+    source: 'said' | 'refused' = 'said',
+  ) => ({
+    whoIds: ids,
+    kind: 'friend' as const,
+    source,
+    fromFirst: null,
+    fromSecond: null,
+    status: null,
+    since: null,
+  });
+  const connections = [
+    connection(['dana', 'secret']),
+    connection(['dana', 'miso']),
+    connection(['dana', 'open'], 'refused'),
+    connection(['open', 'dana']),
+  ];
+  const everyone = toContextPeople(records, {
+    isUnattended: false,
+    connections,
+  });
+  const text = JSON.stringify(everyone);
+  assert.ok(!text.includes('Secret and'), 'a private pair is not a line');
+  assert.ok(!text.includes('and Secret'));
+  assert.ok(!text.includes('Miso and'));
+  assert.ok(!text.includes('and Miso'));
+  assert.equal(
+    everyone.find((person) => person.name === 'Secret')?.connections,
+    undefined,
+  );
+  assert.equal(
+    everyone.find((person) => person.name === 'Dana')?.connections?.length,
+    1,
+    'only the shown ordinary pair is read',
+  );
+  assert.ok(
+    !JSON.stringify(
+      toContextPeople(records, { isUnattended: true, connections }),
+    ).includes('Secret'),
+  );
+});
+
 test('a number said for a private person is rewritten as a private turn, with the name masked and the value out of the line', () => {
   const opened = (extra: Record<string, unknown>) => ({
     name: 'Ann Lee',

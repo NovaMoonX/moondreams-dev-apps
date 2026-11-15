@@ -114,7 +114,9 @@ import {
   type NomosCommand,
   type TaskDue,
   type HabitCommand,
+  type ConnectionCommand,
 } from './commands.js';
+import { readConnectionCommands } from './readConnectionCommands.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import type { ModelChange } from '../topicWrite.js';
 
@@ -2051,6 +2053,7 @@ export function normalizeNomosReply(
   habitDropped: HabitDrop[];
   soundsLike: NoteSoundsLikeCommand[];
   contactPoints: AddContactPointCommand[];
+  connectionCommands: ConnectionCommand[];
   whereabouts: SetWhereaboutsCommand[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
@@ -2176,6 +2179,12 @@ export function normalizeNomosReply(
     context.previousTurn,
   );
   const contactPoints = readContactPoints(items, context.people);
+  const connectionCommands = readConnectionCommands(items, {
+    people: context.people,
+    reading: context.reading,
+    captureText: context.captureText,
+    timeZone: context.timeZone,
+  });
   const whereabouts = readWhereabouts(
     items,
     context.people,
@@ -2256,6 +2265,7 @@ export function normalizeNomosReply(
     habitDropped,
     soundsLike,
     contactPoints,
+    connectionCommands,
     whereabouts,
     planDay,
     setCurrentPlace: items.some(

@@ -6,6 +6,7 @@ import type {
   EffectRef,
   Execution,
   ExecutionEffect,
+  ConnectionSealed,
   ExecutionSealed,
   HabitDaySealed,
   HabitSealed,
@@ -44,6 +45,7 @@ export interface UndoTarget {
     | TopicSealed
     | ProcedureSealed
     | RunSealed
+    | ConnectionSealed
     | null;
   /** For a date that was removed: whether the person it belonged to is still there; for a topic that was moved: whether its old parent is. */
   isOwnerHere?: boolean;
@@ -67,6 +69,7 @@ export type UndoPlan =
           | ProjectSealed
           | HabitSealed
           | HabitDaySealed
+          | ConnectionSealed
           | null;
       }[];
       /** Topics and procedures whose document goes back to an earlier version, written as a new version `from + 1` holding the parts of `to`. */
@@ -81,7 +84,7 @@ export type UndoPlan =
         docId: string;
         collection: EffectRef['collection'];
         fields: Values;
-        seal: KeyDateSealed;
+        seal: KeyDateSealed | ConnectionSealed;
       }[];
       undoExecution: Omit<Execution, 'sealed'>;
       undoSealed: ExecutionSealed;
@@ -167,6 +170,7 @@ type RecordOutcome =
         | ProjectSealed
         | HabitSealed
         | HabitDaySealed
+        | ConnectionSealed
         | null;
       effect: ExecutionEffect;
     }
@@ -174,7 +178,7 @@ type RecordOutcome =
       kind: 'recreated';
       title: string;
       fields: Values;
-      seal: KeyDateSealed;
+      seal: KeyDateSealed | ConnectionSealed;
       effect: ExecutionEffect;
     };
 
@@ -371,6 +375,46 @@ const planRecreate = (
   };
 };
 
+const toRelation = (value: unknown): ConnectionSealed['fromFirst'] =>
+  typeof value === 'string' ? (value as ConnectionSealed['fromFirst']) : null;
+
+/** A removed connection comes back under its id from what the removal sealed; it is not brought back when either person is gone. */
+const planRecreateConnection = (
+  target: UndoTarget,
+  effect: ExecutionEffect,
+): RecordOutcome => {
+  const previous = effect.previous;
+  const title = toText(effect.written['sealed.title']) ?? '';
+  if (!previous || target.data !== null) return { kind: 'skipped' };
+  if (target.isOwnerHere === false || !Array.isArray(previous.whoIds)) {
+    return { kind: 'gone' };
+  }
+  return {
+    kind: 'recreated',
+    title,
+    seal: {
+      fromFirst: toRelation(previous['sealed.fromFirst']),
+      fromSecond: toRelation(previous['sealed.fromSecond']),
+      status: (toText(previous['sealed.status']) ??
+        null) as ConnectionSealed['status'],
+      since: toNumber(previous['sealed.since']),
+    },
+    fields: {
+      whoIds: previous.whoIds,
+      kind: previous.kind,
+      source: toText(previous.source) ?? 'said',
+      createdBy: toText(previous.createdBy) ?? 'nomos',
+      executionId: null,
+      createdAt: toNumber(previous.createdAt) ?? 0,
+      lastEditedAt: null,
+    },
+    effect: {
+      written: { 'sealed.title': title, ...previous },
+      previous: null,
+    },
+  };
+};
+
 const isKnowledge = (name: EffectRef['collection'] | undefined) =>
   name === 'notes' || name === 'topics';
 
@@ -397,7 +441,10 @@ const planRecord = (
   isImport: boolean,
 ): RecordOutcome => {
   const removal = entries.find((entry) => entry.ref.op === 'delete');
-  if (removal) return planRecreate(target, removal.effect);
+  if (removal)
+    return removal.ref.collection === 'connections'
+      ? planRecreateConnection(target, removal.effect)
+      : planRecreate(target, removal.effect);
   if (target.data === null) return { kind: 'gone' };
   const effects = entries.map((entry) => entry.effect);
   const title = toTitle(target, effects);

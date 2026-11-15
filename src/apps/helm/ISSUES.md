@@ -2265,6 +2265,8 @@ Any two who records can be linked: family (parent, child, sibling, grandparent, 
 - [ ] **Release and validation**: the PR carries the repo's `patch` or `minor` label at the size the issue warrants, `npm run typecheck` and `npx eslint .` pass, and the feature was driven in a real browser at phone width in light and dark.
 - [ ] **Docs current**: the PRODUCT.md Build Plan lines the issue delivers are checked off (and the README's Status list), and `UX.md`, `TECHNICAL.md` and `.claude/rules/helm.md` still match what shipped.
 
+**Note for 133 and 134:** 132 already writes `refused` documents (a No to a proposed link, `source: 'refused'`, never drawn) and the implied-link proposals are built by the pure `impliedConnections`; 133's worked-out links and 134's map read both and never re-propose a refused pair.
+
 ### Issue 133: Family links worked out, and marked "Figured out"
 
 **Prerequisites:** 132

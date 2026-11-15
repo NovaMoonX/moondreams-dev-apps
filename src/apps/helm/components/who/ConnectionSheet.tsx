@@ -93,7 +93,11 @@ function AddBody({
   const other = people.find((entry) => entry.id === otherId) ?? null;
   const others = people
     .filter(
-      (entry) => entry.id !== who.id && !entry.isSelf && !entry.isUnreadable,
+      (entry) =>
+        entry.id !== who.id &&
+        entry.kind === 'person' &&
+        !entry.isSelf &&
+        !entry.isUnreadable,
     )
     .sort((a, b) => a.name.localeCompare(b.name));
 

@@ -19,6 +19,12 @@ import {
 import type { PlacedTopic } from './nomos/planTopicCommands.js';
 import { MAX_CONTEXT_TOPICS } from './nomos/commands.js';
 import { planResolveHabit } from './nomos/planHabitCommands.js';
+import {
+  planResolveConnection,
+  type PlanWho,
+} from './nomos/planConnections.js';
+import { readStoredConnections } from './connectionStore.js';
+import { toConnectionId, type ConnectionKind } from './nomos/connections.js';
 import { habitDayRef, readHabitState, writeHabitDayIn } from './habitStore.js';
 import { NOTE_TOPICS_CAP } from './nomos/commands.js';
 import type { NoteTopicState } from './nomos/executeCommands.js';
@@ -292,6 +298,9 @@ export const resolveHelmQuestion = onCall(
             whoIds?: unknown;
             alias?: { whoId?: unknown };
             mention?: { kin?: unknown };
+            firstId?: unknown;
+            secondId?: unknown;
+            connectionKind?: unknown;
           }[];
         }
       >;
@@ -355,6 +364,87 @@ export const resolveHelmQuestion = onCall(
         });
         return {
           executionId: habitResult.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === 'askConnection') {
+        const now = Date.now();
+        const firstId = typeof held.firstId === 'string' ? held.firstId : '';
+        const secondId = typeof held.secondId === 'string' ? held.secondId : '';
+        const connectionKind = held.connectionKind as ConnectionKind;
+        const pairIds = [firstId, secondId].filter((id) => ID_RE.test(id));
+        const [whoSnaps, connectionSnap] = await Promise.all([
+          Promise.all(
+            pairIds.map((id) =>
+              transaction.get(firestore.doc(`${base}/who/${id}`)),
+            ),
+          ),
+          pairIds.length === 2
+            ? transaction.get(
+                firestore.doc(
+                  `${base}/connections/${toConnectionId(firstId, secondId, connectionKind)}`,
+                ),
+              )
+            : Promise.resolve(null),
+        ]);
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const answered = planResolveConnection({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          whos: new Map(
+            whoSnaps.map((snap): [string, PlanWho | null] => {
+              const data = snap.data();
+              try {
+                return [
+                  snap.id,
+                  data
+                    ? {
+                        kind:
+                          data.kind === 'pet' || data.kind === 'organization'
+                            ? data.kind
+                            : 'person',
+                        opened: openForHelm(key, data.sealed as SealedPayload),
+                      }
+                    : null,
+                ];
+              } catch {
+                return [snap.id, null];
+              }
+            }),
+          ),
+          existing: connectionSnap
+            ? ([...readStoredConnections(key, [connectionSnap]).values()][0] ??
+              null)
+            : null,
+          seal,
+        });
+        if (answered.refused !== null) {
+          throw toRefusal(answered.refused, 'person');
+        }
+        if (answered.write) {
+          const ref = firestore.doc(`${base}/connections/${answered.write.id}`);
+          if (answered.write.doc.op === 'create')
+            transaction.create(ref, answered.write.doc.data);
+          else transaction.update(ref, answered.write.doc.data);
+        }
+        if (answered.execution)
+          transaction.create(executionRef, answered.execution);
+        transaction.update(captureRef, {
+          ...answered.capture,
+          sealed: seal(answered.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: answered.execution ? executionRef.id : null,
           isStale: false,
         };
       }
