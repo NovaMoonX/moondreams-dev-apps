@@ -95,8 +95,8 @@ export const NINE_LIVES_SHARES: SourceShares = {
           kind: 'place',
           label: 'Vet clinics',
           meaning:
-            'The vet clinics the person uses, with their phone number, address and doctors.',
-          detail: 'Name, phone, address and doctors',
+            'The vet clinics the person uses, with their phone number, address, doctors and whether one is open 24 hours for emergencies.',
+          detail: 'Name, phone, address, doctors and 24-hour emergency care',
           mode: 'sync',
           isOnAtConnect: true,
           addedInVersion: 1,
@@ -112,8 +112,13 @@ export const NINE_LIVES_SHARES: SourceShares = {
               sinceVersion: 2,
               addedOn: '2026-11-14',
             },
+            {
+              label: 'Whether it is open 24 hours for emergencies',
+              sinceVersion: 3,
+              addedOn: '2026-11-14',
+            },
           ],
-          scopeVersion: 2,
+          scopeVersion: 3,
         },
         {
           id: 'conditions',
@@ -138,6 +143,38 @@ export const NINE_LIVES_SHARES: SourceShares = {
             },
           ],
           scopeVersion: 1,
+        },
+        {
+          id: 'symptoms',
+          kind: 'knowledge',
+          label: 'Symptoms',
+          meaning:
+            'Symptoms the person noted for each cat in the past six months, with when each was first noticed and how severe it was.',
+          detail:
+            "Each cat's symptoms from the past six months: what was noticed, when and how severe",
+          mode: 'sync',
+          isOnAtConnect: false,
+          addedInVersion: 2,
+          reads: [
+            {
+              label:
+                "Each symptom's description, quick tags and the cat it is for",
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'When it was first noticed and how severe it was',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+            {
+              label: 'Symptoms first noticed in the past six months',
+              sinceVersion: 1,
+              addedOn: '2026-11-14',
+            },
+          ],
+          scopeVersion: 1,
+          historyDays: 180,
         },
       ],
       never: [

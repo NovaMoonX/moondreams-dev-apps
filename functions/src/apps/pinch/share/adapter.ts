@@ -35,6 +35,7 @@ const STOCK_LIMIT = 100;
 const FULL_STOCK_LIMIT = 300;
 const RECIPE_LIMIT = 500;
 const SAVED_MEAL_LIMIT = 200;
+const IDEA_LIMIT = 200;
 const PLATE_NAMES_SHOWN = 3;
 const PLATE_ITEMS_READ = 8;
 const NAME_CLIP = 40;
@@ -79,6 +80,12 @@ const MEAL_TYPE_WORDS: Record<string, string> = {
   SNACK: 'Snack',
   DESSERT: 'Dessert',
   DRINK: 'Drink',
+};
+
+const IDEA_WORDS: Record<string, string> = {
+  LINK: 'Saved link',
+  PHOTO: 'Saved photo',
+  TEXT: 'Written idea',
 };
 
 const PLACE_WORDS: Record<string, string> = {
@@ -503,6 +510,7 @@ async function syncRecipes(
       'prepMinutes',
       'cookMinutes',
       'categories',
+      'isFavorite',
       'isArchived',
       'updatedAt',
     )
@@ -523,6 +531,7 @@ async function syncRecipes(
         title,
         detail: clip(
           joinLines([
+            doc.get('isFavorite') === true ? 'Favourite' : null,
             Array.isArray(dishes)
               ? joinLines(
                   dishes.flatMap((dish) =>
@@ -569,13 +578,14 @@ async function syncSavedMeals(
   const snapshot = await firestore
     .collection(kitchenPath(uid, 'meals'))
     .orderBy('updatedAt', 'desc')
-    .select('name', 'items', 'updatedAt')
+    .select('name', 'items', 'isFavorite', 'updatedAt')
     .limit(SAVED_MEAL_LIMIT)
     .get();
   const meals = snapshot.docs.map((doc) => ({
     id: doc.id,
     name: readText(doc.get('name')),
     items: readItems(doc.get('items')),
+    isFavorite: doc.get('isFavorite') === true,
     updatedAt: readTime(doc.get('updatedAt')),
   }));
   const shown = meals.flatMap((meal) => meal.items.slice(0, PLATE_ITEMS_READ));
@@ -613,7 +623,12 @@ async function syncSavedMeals(
         sourceRef: `meals/${meal.id}`,
         kind: 'artifact',
         title: meal.name,
-        detail: clip(describePlate(names, meal.items.length - consumed)),
+        detail: clip(
+          joinLines([
+            meal.isFavorite ? 'Favourite' : null,
+            describePlate(names, meal.items.length - consumed),
+          ]),
+        ),
         sourceUpdatedAt: meal.updatedAt,
       }),
     ];
@@ -621,9 +636,63 @@ async function syncSavedMeals(
   return { records, isFull: snapshot.size < SAVED_MEAL_LIMIT };
 }
 
+async function syncIdeas(
+  firestore: Firestore,
+  uid: string,
+): Promise<CategoryRead> {
+  const snapshot = await firestore
+    .collection(kitchenPath(uid, 'ideas'))
+    .orderBy('updatedAt', 'desc')
+    .select('title', 'kind', 'siteName', 'recipeId', 'updatedAt')
+    .limit(IDEA_LIMIT)
+    .get();
+  const recipeIds = Array.from(
+    new Set(
+      snapshot.docs.flatMap((doc) => {
+        const recipeId = readText(doc.get('recipeId'));
+        return recipeId === null ? [] : [recipeId];
+      }),
+    ),
+  );
+  const recipes = await readNames(
+    firestore,
+    uid,
+    'recipes',
+    recipeIds,
+    'isArchived',
+  );
+  const isMadeIntoRecipe = (recipeId: string | null) => {
+    if (recipeId === null) return false;
+    const recipe = recipes.get(recipeId);
+    return recipe?.exists === true && recipe.get('isArchived') !== true;
+  };
+  const records = snapshot.docs.flatMap((doc) => {
+    const title = readText(doc.get('title'));
+    if (title === null || isMadeIntoRecipe(readText(doc.get('recipeId'))))
+      return [];
+    const kind = readText(doc.get('kind')) ?? '';
+    return [
+      toRecord({
+        sourceRef: `ideas/${doc.id}`,
+        kind: 'artifact',
+        title: clipTo(title, DETAIL_LIMIT),
+        detail: clip(
+          joinLines([
+            Object.hasOwn(IDEA_WORDS, kind) ? IDEA_WORDS[kind] : null,
+            readText(doc.get('siteName')),
+          ]),
+        ),
+        sourceUpdatedAt: readTime(doc.get('updatedAt')),
+      }),
+    ];
+  });
+  return { records, isFull: snapshot.size < IDEA_LIMIT };
+}
+
 const DEEP_LINKS: Record<string, string> = {
   recipes: '/pinch?tab=recipes',
   meals: '/pinch?tab=recipes',
+  ideas: '/pinch?tab=recipes',
   plannedMeals: '/pinch?tab=calendar',
   shoppingItems: '/pinch?tab=shopping',
   containers: '/pinch?tab=kitchen',
@@ -670,6 +739,8 @@ export function createPinchAdapter(
         return syncRecipes(firestore, uid);
       case 'savedMeals':
         return syncSavedMeals(firestore, uid);
+      case 'ideas':
+        return syncIdeas(firestore, uid);
       default:
         throw new Error('Unknown category.');
     }
