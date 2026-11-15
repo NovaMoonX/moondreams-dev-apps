@@ -81,6 +81,17 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     warning:
       'Google lets only the people on its test-user list connect these until the app passes its review.',
   },
+  {
+    id: 'helm-assistants',
+    appId: 'helm',
+    label: 'Connected assistants',
+    description:
+      "Someone kept out sees no Connected assistants in Helm's settings, and an assistant they connected earlier is turned away. Someone with it can connect Claude or Gemini to Helm, so that assistant can read their Helm and, if they allow it, add things to it.",
+    defaultRollout: 'off',
+    isServerEnforced: false,
+    warning:
+      "Whatever the assistant reads from Helm is sent to that company and handled under its own terms, outside Helm's private storage.",
+  },
 ];
 
 export function getAppFeatureGates(appId: string) {

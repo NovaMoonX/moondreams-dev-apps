@@ -49,10 +49,14 @@ interface SourceParts {
 const toSources = (parts: SourceParts): PlanSources | null => {
   const { profile, now, awayKey, ...rest } = parts;
   if (!profile) return null;
-  const timeZone = readTodayZone(now, {
-    timeZone: profile.timeZone || getDeviceTimeZone() || 'UTC',
-    zoneSpans: profile.zoneSpans,
-  }, fromAwayKey(awayKey));
+  const timeZone = readTodayZone(
+    now,
+    {
+      timeZone: profile.timeZone || getDeviceTimeZone() || 'UTC',
+      zoneSpans: profile.zoneSpans,
+    },
+    fromAwayKey(awayKey),
+  );
   return { ...rest, profile, now, timeZone, todayKey: toDayKey(now, timeZone) };
 };
 

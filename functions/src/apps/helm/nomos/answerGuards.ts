@@ -1,6 +1,11 @@
 import { readConnectorAppId } from '../../../vendor/connectionsContract.js';
 import { connectorLabel } from '../syncedCopies.js';
-import type { QuoteEntry, QuoteRecord, SearchedEntry } from './aliases.js';
+import {
+  TURNED_OFF_FAILURE,
+  type QuoteEntry,
+  type QuoteRecord,
+  type SearchedEntry,
+} from './aliases.js';
 import {
   QUOTE_CAP,
   type AnswerCommand,
@@ -132,15 +137,24 @@ export function buildAnswer(
       index,
   );
   const hasRecordsText = !!command.fromRecordsText;
-  const hasEmptyAppSearch = searched.some(
+  // An app look that found nothing, or found the thing switched off, is what a "nothing matched" or "it isn't read" answer rests on.
+  const isFailedApp = (connectorId: string) =>
+    searched.some(
+      (entry) =>
+        entry.connectorId === connectorId &&
+        entry.failed !== null &&
+        entry.failed !== TURNED_OFF_FAILURE,
+    );
+  const hasAppLook = searched.some(
     (entry) =>
-      entry.found === 0 &&
-      entry.failed === null &&
-      readConnectorAppId(entry.connectorId) !== null,
+      readConnectorAppId(entry.connectorId) !== null &&
+      !isFailedApp(entry.connectorId) &&
+      ((entry.found === 0 && entry.failed === null) ||
+        entry.failed === TURNED_OFF_FAILURE),
   );
   const fromRecords =
     command.fromRecordsText &&
-    (sources.length + quotes.length > 0 || hasEmptyAppSearch)
+    (sources.length + quotes.length > 0 || hasAppLook)
       ? oneLine(command.fromRecordsText)
       : null;
   if (hasRecordsText && !fromRecords) onDrop('answer-unsourced');

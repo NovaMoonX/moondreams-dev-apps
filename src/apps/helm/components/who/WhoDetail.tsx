@@ -45,7 +45,7 @@ import {
   forgetWho,
 } from '@apps/helm/store/actions/whoActions';
 import { useImportContacts } from '@apps/helm/queries/contactsQueries';
-import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
+import { selectEveryCapture } from '@apps/helm/store/selectors/captureSelectors';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
@@ -69,7 +69,7 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
   const { items, isLoaded } = useAppSelector((state) => state.helm.who);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
   const connections = useAppSelector((state) => state.helm.connections.items);
-  const captures = useAppSelector(selectAllCaptures);
+  const captures = useAppSelector(selectEveryCapture);
   const activeProjects = useAppSelector(selectActiveProjects);
   const { showView } = useHelmUrlState();
   const [isAllMentions, setIsAllMentions] = useState(false);

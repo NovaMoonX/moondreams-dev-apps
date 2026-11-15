@@ -7,6 +7,7 @@ import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexLi
 import type {
   HelmProfile,
   OpenCapture,
+  OpenConnectedAssistant,
   OpenExecution,
   OpenFact,
   OpenConnection,
@@ -80,6 +81,8 @@ export interface HelmState {
   unseenCaptures: CaptureSet;
   /** Turns waiting to be read, being read, failed or asking the person, whenever they were said. */
   waitingCaptures: CaptureSet;
+  /** Turns an outside assistant sent, whenever they were sent: the "From your assistants" view reads these, never home. */
+  outsideCaptures: CaptureSet;
   /** The person's open tasks, newest first. */
   openTasks: LoadedSet<OpenTask>;
   /** Every task that belongs to a project, open or done. */
@@ -114,6 +117,8 @@ export interface HelmState {
   media: LoadedSet<OpenMedia>;
   /** The person's writing-style profiles, opened. */
   style: LoadedSet<OpenStyle>;
+  /** The outside assistants the person connected, most recently used first; disconnected ones are left out. */
+  assistants: LoadedSet<OpenConnectedAssistant>;
   /** Copies of other apps' records, opened. */
   synced: LoadedSet<SyncedRecord>;
   /** What the assistant did for the turns in the eager window. */
@@ -168,6 +173,7 @@ const initialState: HelmState = {
   recentCaptures: emptySet,
   unseenCaptures: emptySet,
   waitingCaptures: emptySet,
+  outsideCaptures: emptySet,
   openTasks: emptyLoadedSet,
   projectTasks: emptyLoadedSet,
   planDays: emptyPlanDays,
@@ -185,6 +191,7 @@ const initialState: HelmState = {
   openRuns: emptyLoadedSet,
   media: emptyLoadedSet,
   style: emptyLoadedSet,
+  assistants: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
@@ -254,6 +261,16 @@ const helmSlice = createSlice({
     setWaitingCapturesFailed: (state) => {
       state.waitingCaptures.isFailed = true;
     },
+    setOutsideCaptures: (state, action: PayloadAction<OpenCapture[]>) => {
+      state.outsideCaptures = {
+        captures: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setOutsideCapturesFailed: (state) => {
+      state.outsideCaptures.isFailed = true;
+    },
     setOpenTasks: (state, action: PayloadAction<OpenTask[]>) => {
       state.openTasks = {
         items: action.payload,
@@ -297,6 +314,16 @@ const helmSlice = createSlice({
     },
     setStyleFailed: (state) => {
       state.style.isFailed = true;
+    },
+    setAssistants: (state, action: PayloadAction<OpenConnectedAssistant[]>) => {
+      state.assistants = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setAssistantsFailed: (state) => {
+      state.assistants.isFailed = true;
     },
     setWho: (state, action: PayloadAction<OpenWho[]>) => {
       state.who = { items: action.payload, isLoaded: true, isFailed: false };
@@ -502,6 +529,8 @@ export const {
   setUnseenCapturesFailed,
   setWaitingCaptures,
   setWaitingCapturesFailed,
+  setOutsideCaptures,
+  setOutsideCapturesFailed,
   setOpenTasks,
   setOpenTasksFailed,
   setProjectTasks,
@@ -550,6 +579,8 @@ export const {
   setEarlierFailed,
   setStyle,
   setStyleFailed,
+  setAssistants,
+  setAssistantsFailed,
   clearHelm,
   setKeyStatus,
   retryKey,

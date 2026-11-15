@@ -592,6 +592,7 @@ export async function keepLetGoMedia(
   const execution: Execution = {
     captureId,
     actor: 'person',
+    via: null,
     category: 'organize',
     autonomyLevel: 1,
     state: 'succeeded',
