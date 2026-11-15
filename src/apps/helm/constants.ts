@@ -1251,7 +1251,7 @@ export const HELM_COPY = {
     'Noise cleaning uses RNNoise (BSD-3-Clause) and web-noise-suppressor (MIT), both open source.',
   voiceWakeTitle: (name: string) => `Hey ${name}`,
   voiceWake: (name: string) =>
-    `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple.`,
+    `While this is open on screen, this browser listens for "Hey ${name}". In Chrome that listening goes to Google, in Safari to Apple. Music may pause while it listens; Hear me offline keeps it playing.`,
   voiceWakeLocked: "This browser can't listen for a phrase.",
   voiceDeviceOnlyOnOffline:
     "Your speech isn't sent anywhere: this phone turns it into words itself, and answers are read by this device's voice.",

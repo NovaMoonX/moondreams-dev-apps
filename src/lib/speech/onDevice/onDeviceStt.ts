@@ -36,10 +36,22 @@ const toErrorCode = (error: unknown): SttErrorCode => {
   return 'unavailable';
 };
 
-/** Opens the microphone (echo cancellation on, so a line the page plays is not heard as the person) as a frame source. */
-const openMicrophone = async (): Promise<FrameSource> => {
+/**
+ * Opens the microphone as a frame source. Echo cancellation keeps a line the page plays from being heard as the person,
+ * but on Android it also puts the phone in call mode, which pauses or muffles music, so a listener that runs while
+ * nothing plays opens without it.
+ */
+const openMicrophone = async ({
+  isEchoCancelled,
+}: {
+  isEchoCancelled: boolean;
+}): Promise<FrameSource> => {
   const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+    audio: {
+      echoCancellation: isEchoCancelled,
+      noiseSuppression: true,
+      channelCount: 1,
+    },
   });
   const state = {
     subscriber: null as ((frame: ArrayBuffer) => void) | null,
@@ -151,7 +163,8 @@ export const createOnDeviceStt = ({
         // The model loads before the microphone opens, so a failed load never leaves a microphone running.
         await loadRecognizer();
         if (state.isDone) return;
-        const microphone = source ?? (await openMicrophone());
+        const microphone =
+          source ?? (await openMicrophone({ isEchoCancelled: true }));
         if (source === null) state.microphone = microphone;
         if (state.isDone) {
           microphone.stop();
@@ -230,7 +243,9 @@ export const listenOnDevice = ({
     return { ...microphone, preRoll: buffered };
   };
   loadRecognizer()
-    .then(() => (state.isClosed ? null : openMicrophone()))
+    .then(() =>
+      state.isClosed ? null : openMicrophone({ isEchoCancelled: false }),
+    )
     .then((microphone) => {
       if (microphone === null) return;
       if (state.isClosed) {
