@@ -206,6 +206,9 @@ export function useHelmVoice() {
     onBargeIn: () => {
       interruptedCaptureId.current = speakingCaptureId.current;
     },
+    onLiveEnd: (why) => {
+      if (why === 'quiet') showNote(HELM_COPY.liveEndedQuiet);
+    },
     // A utility screen with no ask bar has nowhere to show the conversation, so it never listens for the phrase.
     wake: {
       isOn:
@@ -215,6 +218,7 @@ export function useHelmVoice() {
       spellings: toWakeSpellings(name, nameVariants),
       looseNames: [name],
       onWake: wakeUp,
+      startsLive: isHandsFreeOn,
     },
     cloudListening: {
       tokenSource,
@@ -689,8 +693,9 @@ export function useHelmVoice() {
     });
   };
 
-  /** Starts listening from `page` (what the page publishes, null from home), or sends what is being said, or stops what is working or speaking. */
-  const talk = (page: ScreenContext | null) => {
+  /** Starts listening from `page` (what the page publishes, null from home), as a live conversation when that setting is on and the listen isn't a one-off (dictation), or sends what is being said, or stops what is working or speaking. */
+  const talk = (page: ScreenContext | null, isOneOff = false) => {
+    const isLive = isHandsFreeOn && !isOneOff;
     // An answer window or a line being said gives way to listening: the tap is the answer.
     if (
       voice.isAvailable &&
@@ -700,7 +705,7 @@ export function useHelmVoice() {
         waiting.current.clear();
         stopCount.current += 1;
       }
-      return startListening(page);
+      return startListening(page, isLive);
     }
     if (voice.state !== 'idle' || voice.isStarting) {
       if (voice.state !== 'listening' && !voice.isStarting) {
@@ -733,7 +738,7 @@ export function useHelmVoice() {
       );
       return 'blocked' as const;
     }
-    return startListening(page);
+    return startListening(page, isLive);
   };
 
   function prepareListening(page: ScreenContext | null) {
@@ -747,9 +752,10 @@ export function useHelmVoice() {
     interruptedCaptureId.current = null;
   }
 
-  function startListening(page: ScreenContext | null) {
+  function startListening(page: ScreenContext | null, isLive: boolean) {
     prepareListening(page);
-    voice.listen();
+    if (isLive && !voice.isLive) voice.startLive();
+    else voice.listen();
     return 'started' as const;
   }
 
@@ -760,7 +766,7 @@ export function useHelmVoice() {
       return 'stopped' as const;
     }
     if (voice.state !== 'idle' || voice.isStarting) return 'blocked' as const;
-    const result = talk(null);
+    const result = talk(null, true);
     if (result === 'started') {
       dictation.current = write;
       setDictationOwner(owner);
@@ -793,6 +799,13 @@ export function useHelmVoice() {
       setNeedsMicrophone(false);
     },
     talk,
+    /** Ends the live conversation: what is being heard is dropped and a reply on its way is written, not said. */
+    endLive: () => {
+      waiting.current.clear();
+      stopCount.current += 1;
+      voice.endLive();
+      voice.settle();
+    },
     setSurfaceShown,
     /** Plays a line the person tapped again, or says why it can't right now. */
     replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),

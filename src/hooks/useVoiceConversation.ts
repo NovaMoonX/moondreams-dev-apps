@@ -106,16 +106,23 @@ interface VoiceConversationOptions {
   /** The person started talking over a line that was playing; the line is already stopped and listening is starting. */
   onBargeIn?: () => void;
   /** Waits for a phrase on the device (the downloaded model, else the browser's own recognition) while nothing else is going on and the page is visible; Null never does. `onWake` says whether the phrase may start a turn (the app readies its screen); the same listener, and the words said after the phrase, then carry on as that turn's listening. */
+  /** A live conversation (`startLive`) ends after this long with nothing heard or said. */
+  liveIdleMs?: number;
+  /** A live conversation ended on its own: an end phrase closed a turn (after its reply), `liveIdleMs` went by in quiet, the page was left, or listening stopped working. */
+  onLiveEnd?: (why: VoiceLiveEnd) => void;
   wake?: {
     isOn: boolean;
     spellings: readonly string[];
     /** Names that also wake when the words after "hey" sound like one, for a recognizer that mishears them. */
     looseNames?: readonly string[];
     onWake: () => boolean;
+    /** The turn the phrase starts opens a live conversation, as `startLive` does. */
+    startsLive?: boolean;
   } | null;
 }
 
 export type VoiceListeningRoute = 'cloud' | 'device';
+export type VoiceLiveEnd = 'phrase' | 'quiet' | 'left' | 'failed';
 /** What a repeat did: played, or why it could not. */
 export type VoiceRepeat = 'played' | 'none' | 'muted' | 'busy';
 
@@ -124,6 +131,9 @@ const QUIET_MS = 8000;
 const CONVERSATION_IDLE_MS = 10 * 60 * 1000;
 const FIRST_LINE_FIRST_BYTE_MS = 4000;
 const FOLLOW_UP_MS = 8000;
+const LIVE_IDLE_MS = 2 * 60 * 1000;
+// A reply's audio can end a beat before the queue says so; listening again a moment later never clips the next line.
+const LIVE_REOPEN_MS = 250;
 const WAKE_SETTLE_MS = 400;
 const WAKE_RETRIES = 2;
 const WAKE_RETRY_MS = 3000;
@@ -169,6 +179,8 @@ export function useVoiceConversation({
   cloudSpeaking = null,
   onCloudHeld,
   onBargeIn,
+  liveIdleMs = LIVE_IDLE_MS,
+  onLiveEnd,
   wake = null,
 }: VoiceConversationOptions) {
   const [isListening, setIsListening] = useState(false);
@@ -179,6 +191,9 @@ export function useVoiceConversation({
   const [isSounding, setIsSounding] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [isLiveMuted, setIsLiveMuted] = useState(false);
+  const [liveSaid, setLiveSaid] = useState('');
   const [heard, setHeard] = useState('');
   const [saying, setSaying] = useState('');
   const [held, setHeld] = useState<{
@@ -213,6 +228,8 @@ export function useVoiceConversation({
     cloudSpeaking,
     onCloudHeld,
     onBargeIn,
+    liveIdleMs,
+    onLiveEnd,
     wake,
     reason,
   });
@@ -228,6 +245,7 @@ export function useVoiceConversation({
     | null
   >(null);
   const pauseOnHide = useRef<() => void>(() => undefined);
+  const reopenLive = useRef<() => void>(() => undefined);
   const isMicGranted = useRef(false);
   const run = useRef({
     heldDay: null as string | null,
@@ -253,6 +271,10 @@ export function useVoiceConversation({
     pending: null as { text: string; timerId: number } | null,
     lastLine: null as { text: string; voice: SpeechVoice | null } | null,
     turnKey: 0,
+    isLive: false,
+    isLiveMuted: false,
+    liveAt: 0,
+    isLiveClosing: false,
   });
   const speechCache = useRef(createSpeechCache());
 
@@ -274,6 +296,8 @@ export function useVoiceConversation({
       cloudSpeaking,
       onCloudHeld,
       onBargeIn,
+      liveIdleMs,
+      onLiveEnd,
       wake,
       reason,
     };
@@ -422,6 +446,7 @@ export function useVoiceConversation({
       return;
     }
     run.current.heardWords = text;
+    run.current.liveAt = Date.now();
     armQuiet(text);
     window.clearTimeout(run.current.holdId);
     run.current.holdId = 0;
@@ -462,7 +487,10 @@ export function useVoiceConversation({
     if (wasPending) defer(syncBargeGate);
     if (run.current.isCancelled) return;
     if (!submit(text, run.current.heardBy)) {
-      latest.current.onNothingHeard?.(!run.current.isUnasked);
+      // In a live conversation silence just waits for the next words.
+      latest.current.onNothingHeard?.(
+        !run.current.isUnasked && !run.current.isLive,
+      );
     }
   };
 
@@ -470,8 +498,13 @@ export function useVoiceConversation({
   const submit = (text: string, sttProvider: string) => {
     const pattern = toEndPattern(latest.current.endPhrases);
     const said = (pattern ? text.replace(pattern, '') : text).trim();
-    if (pattern?.test(text)) endConversation();
+    if (pattern?.test(text)) {
+      endConversation();
+      if (run.current.isLive) run.current.isLiveClosing = true;
+    }
+    run.current.liveAt = Date.now();
     if (said === '') return false;
+    if (run.current.isLive) setLiveSaid(said);
     setIsThinking(true);
     latest.current.onUtterance(said, { sttProvider });
     return true;
@@ -504,6 +537,12 @@ export function useVoiceConversation({
       abortPending();
       endFollowUp();
       closeGate();
+      endLive('left');
+    };
+    reopenLive.current = () => {
+      if (run.current.isLiveClosing) endLive('phrase');
+      else if (latest.current.reason !== null) endLive('failed');
+      else openFollowUp();
     };
   });
 
@@ -516,6 +555,7 @@ export function useVoiceConversation({
       isMicGranted.current &&
       document.visibilityState !== 'hidden' &&
       !latest.current.isMuted &&
+      !run.current.isLiveMuted &&
       run.current.mode.phase === 'OFF' &&
       (queueRef.current?.isPlayingThroughWebAudio() ?? false) &&
       pickListener({
@@ -539,7 +579,8 @@ export function useVoiceConversation({
     const said = run.current.heardWords;
     run.current.isCancelled = true;
     const isLasting = BLOCKED.includes(code) || code === 'language';
-    const isAsked = !run.current.isUnasked;
+    const isAsked = !run.current.isUnasked && !run.current.isLive;
+    const isRefusalShown = !run.current.isUnasked || run.current.isLive;
     const wasPending = run.current.pending !== null;
     const isMicrophoneAllowed =
       peekMicrophonePermission() === 'granted' || wasMicrophoneGranted();
@@ -556,7 +597,10 @@ export function useVoiceConversation({
     if (wasPending) return;
     const isKept = said !== '' && submit(said, run.current.heardBy);
     if (isLasting) {
-      if (lasting !== null && isAsked) latest.current.onUnavailable?.(lasting);
+      if (lasting !== null && isRefusalShown) {
+        latest.current.onUnavailable?.(lasting);
+      }
+      endLive('failed');
       return;
     }
     if (isKept) return;
@@ -760,19 +804,30 @@ export function useVoiceConversation({
 
   useEffect(() => {
     gateHandler.current = handleGate;
-    wakeHandler.current = ({ source, seed, adopt }) =>
-      run.current.pending === null && listen({ source, seed, adopt });
+    wakeHandler.current = ({ source, seed, adopt }) => {
+      if (run.current.pending !== null) return false;
+      const start = () => listen({ source, seed, adopt });
+      return latest.current.wake?.startsLive ? beginLive(start) : start();
+    };
   });
 
-  /** Opens a short window after a spoken answer in which speaking starts a listen without a tap; silence closes it with no sound and nothing sent. False when it can't open now (a line still waiting or playing, muted, already listening, the page hidden). */
+  /** Opens a short window after a spoken answer in which speaking starts a listen without a tap; silence closes it with no sound and nothing sent. In a live conversation it stays open until the conversation's quiet runs out, muted voice or not. False when it can't open now (a line still waiting or playing, muted, already listening, the page hidden). */
   const openFollowUp = () => {
+    const { isLive: isLiveNow, isLiveMuted: isMicMuted } = run.current;
     if (
       latest.current.reason !== null ||
-      latest.current.isMuted ||
+      (latest.current.isMuted && !isLiveNow) ||
+      isMicMuted ||
       run.current.mode.phase !== 'OFF' ||
       (queueRef.current?.isActive() ?? false) ||
       document.visibilityState === 'hidden'
     ) {
+      return false;
+    }
+    const liveLeft =
+      run.current.liveAt + latest.current.liveIdleMs - Date.now();
+    if (isLiveNow && liveLeft <= 0) {
+      endLive('quiet');
       return false;
     }
     closeGate();
@@ -781,8 +836,8 @@ export function useVoiceConversation({
     run.current.stopListening = () => endFollowUp();
     run.current.cancelListening = () => endFollowUp();
     run.current.followUpId = window.setTimeout(
-      () => endFollowUp(),
-      FOLLOW_UP_MS,
+      () => (isLiveNow ? endLive('quiet') : endFollowUp()),
+      isLiveNow ? liveLeft : FOLLOW_UP_MS,
     );
     run.current.gate = openSpeechGate({
       onSpeech: (source) => gateHandler.current?.(source, false),
@@ -829,6 +884,14 @@ export function useVoiceConversation({
     },
   ): Promise<VoiceSpoken> => {
     endFollowUp(true);
+    // A muted live conversation still shows each answer as its last line.
+    if (
+      latest.current.isMuted &&
+      run.current.isLive &&
+      options.priority !== 'ack'
+    ) {
+      setSaying(text);
+    }
     if (
       latest.current.isMuted ||
       (run.current.mode.phase !== 'OFF' && run.current.pending === null)
@@ -847,12 +910,14 @@ export function useVoiceConversation({
     const spoken = getQueue().enqueue(text, {
       ...line,
       onStart: () => {
+        run.current.liveAt = Date.now();
         setSaying(text);
         setIsSounding(true);
         setIsThinking(false);
       },
     });
     void spoken.then((result) => {
+      run.current.liveAt = Date.now();
       if (result.status !== 'cancelled') defer(() => setIsThinking(false));
       if (result.status === 'spoken' && line.priority !== 'ack') {
         run.current.lastLine = { text, voice: run.current.voice };
@@ -879,6 +944,55 @@ export function useVoiceConversation({
     if (lastLine !== null) run.current.voice ??= lastLine.voice;
     void speak(line, { priority: 'reply', turnKey: run.current.turnKey });
     return 'played';
+  };
+
+  const beginLive = (start: () => boolean) => {
+    run.current.isLive = true;
+    run.current.isLiveClosing = false;
+    run.current.liveAt = Date.now();
+    run.current.isLiveMuted = false;
+    setIsLiveMuted(false);
+    setLiveSaid('');
+    setSaying('');
+    if (!start()) {
+      run.current.isLive = false;
+      return false;
+    }
+    setIsLive(true);
+    return true;
+  };
+
+  /** Starts a live conversation: a listen now, and after every answer another, with no tap, until an end phrase, `endLive` or `liveIdleMs` of quiet. False when listening can't start. */
+  const startLive = () => beginLive(() => listen());
+
+  /** Ends a live conversation: drops what is being heard and said, never a turn already sent. Reports why unless the person ended it. */
+  function endLive(why: VoiceLiveEnd | null = null) {
+    if (!run.current.isLive) return;
+    run.current.isLive = false;
+    run.current.isLiveClosing = false;
+    run.current.isLiveMuted = false;
+    abortPending();
+    endFollowUp(true);
+    if (why !== 'phrase' && run.current.mode.phase !== 'OFF') cancel();
+    if (why === null) queueRef.current?.clear();
+    defer(() => {
+      setIsLive(false);
+      setIsLiveMuted(false);
+    });
+    if (why !== null) latest.current.onLiveEnd?.(why);
+  }
+
+  /** Pauses a live conversation's microphone (what is being heard is sent first) or opens it again; the quiet clock waits while it is paused. */
+  const setLiveMuted = (isOn: boolean) => {
+    if (!run.current.isLive) return;
+    run.current.isLiveMuted = isOn;
+    run.current.liveAt = Date.now();
+    setIsLiveMuted(isOn);
+    if (!isOn) return;
+    abortPending();
+    endFollowUp();
+    closeGate();
+    if (run.current.mode.phase !== 'OFF') finish();
   };
 
   const setMuted = (isOn: boolean) => {
@@ -937,6 +1051,7 @@ export function useVoiceConversation({
 
   const isWakeActive =
     (wake?.isOn ?? false) &&
+    !isLive &&
     reason === null &&
     !isListening &&
     !isThinking &&
@@ -1066,6 +1181,23 @@ export function useVoiceConversation({
     };
   }, [isWakeActive, wakeListener, wakeSpellings, lang]);
 
+  const isLiveIdle =
+    isLive &&
+    !isLiveMuted &&
+    !isListening &&
+    !isStarting &&
+    !isThinking &&
+    !isSpeaking &&
+    !isSounding;
+  useEffect(() => {
+    if (!isLiveIdle) return;
+    const reopenId = window.setTimeout(
+      () => reopenLive.current(),
+      LIVE_REOPEN_MS,
+    );
+    return () => window.clearTimeout(reopenId);
+  }, [isLiveIdle]);
+
   const state: VoiceState = isListening
     ? 'listening'
     : isSounding
@@ -1085,6 +1217,16 @@ export function useVoiceConversation({
     submit,
     /** The short window after an answer is open: listening for the person to speak, nothing sent yet. */
     isFollowUpOpen,
+    /** A live conversation is on: each answer is followed by listening, with no tap. */
+    isLive,
+    /** The live conversation's microphone is paused. */
+    isLiveMuted,
+    /** What the person last said in this live conversation, and the last line said back (still shown once it has played). */
+    liveSaid,
+    lastLine: isLive ? saying : '',
+    startLive,
+    endLive: () => endLive(),
+    setLiveMuted,
     /** Listening has started but the model on the device is still getting ready, so nothing is being heard yet. */
     isPreparing,
     /** A tapped listen is under way but not yet shown as listening, while a refusal could still come back at once. */
