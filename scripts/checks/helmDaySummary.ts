@@ -52,7 +52,7 @@ const execution = (patch: Partial<DayExecution>): DayExecution => ({
   category: 'organize',
   undoneByExecutionId: null,
   isOutside: false,
-  effectRefs: [{ op: 'create', collection: 'tasks' }],
+  effectRefs: [{ op: 'create', collection: 'tasks', docId: 'd' }],
   ...patch,
 });
 
@@ -63,7 +63,7 @@ const count = (input: {
   captures?: DayCapture[];
   executions?: DayExecution[];
   tasks?: { completedAt: number | null }[];
-  habits?: { createdAt: number }[];
+  habits?: { createdAt: number; isOutside: boolean }[];
   connections?: { createdAt: number; isOutside: boolean }[];
   habitChecks?: { at: number; status: string; isOutside: boolean }[];
 }) =>
@@ -110,15 +110,15 @@ assert.deepEqual(
       execution({
         createdAt: at,
         effectRefs: [
-          { op: 'create', collection: 'keyDates' },
-          { op: 'create', collection: 'notes' },
-          { op: 'create', collection: 'topics' },
-          { op: 'create', collection: 'procedures' },
-          { op: 'create', collection: 'facts' },
-          { op: 'create', collection: 'who' },
-          { op: 'create', collection: 'places' },
-          { op: 'update', collection: 'tasks' },
-          { op: 'delete', collection: 'tasks' },
+          { op: 'create', collection: 'keyDates', docId: 'd' },
+          { op: 'create', collection: 'notes', docId: 'd' },
+          { op: 'create', collection: 'topics', docId: 'd' },
+          { op: 'create', collection: 'procedures', docId: 'd' },
+          { op: 'create', collection: 'facts', docId: 'd' },
+          { op: 'create', collection: 'who', docId: 'd' },
+          { op: 'create', collection: 'places', docId: 'd' },
+          { op: 'update', collection: 'tasks', docId: 'd' },
+          { op: 'delete', collection: 'tasks', docId: 'd' },
         ],
       }),
       execution({ createdAt: at, category: 'plan', effectRefs: [] }),
@@ -189,13 +189,14 @@ assert.deepEqual(
   assert.equal(of(before), 0, `${before} gets none`);
 });
 
-// Habits: a check-in counts on the day it happened, a skip or an outside assistant's never does.
+// Habits: a check-in or a start counts on the day it happened, a skip or an outside assistant's never does.
 assert.deepEqual(
   count({
     habits: [
-      { createdAt: at },
-      { createdAt: utc.dayEnd },
-      { createdAt: utc.dayStart - 1 },
+      { createdAt: at, isOutside: false },
+      { createdAt: at, isOutside: true },
+      { createdAt: utc.dayEnd, isOutside: false },
+      { createdAt: utc.dayStart - 1, isOutside: false },
     ],
     habitChecks: [
       { at, status: 'done', isOutside: false },
@@ -214,7 +215,7 @@ assert.equal(
     executions: [
       execution({
         createdAt: at,
-        effectRefs: [{ op: 'create', collection: 'habits' }],
+        effectRefs: [{ op: 'create', collection: 'habits', docId: 'd' }],
       }),
     ],
   }).tasksAdded,
@@ -242,7 +243,7 @@ assert.equal(
     executions: [
       execution({
         createdAt: at,
-        effectRefs: [{ op: 'create', collection: 'connections' }],
+        effectRefs: [{ op: 'create', collection: 'connections', docId: 'd' }],
       }),
     ],
   }).connectionsAdded,
