@@ -776,7 +776,12 @@ export const HELM_COPY = {
   savedHeldRecent: 'Saved as written. Read in a few minutes.',
   savedHeldBudget: 'Saved as written. Read once reading is back.',
   turnsFailed: "Your turns didn't open. Close this page and open it again.",
-  undoAll: 'Undo all of this',
+  undoPickTitle: 'What should go?',
+  undoPickAll: 'Undo all',
+  undoPickSome: (count: number) => `Undo ${count}`,
+  undoPickNone: 'Tick what to take back.',
+  undoPickKeepHint: 'Untick anything that should stay.',
+  undoPickCancel: 'Cancel',
   tookBackHome: 'Took back being home',
   tookBackNotHome: 'Took back No longer home',
   undoReportHome: "You're no longer marked home.",
@@ -1959,6 +1964,9 @@ export const HELM_COPY = {
   questionDismissed: 'Dismissed.',
   questionDismissedLine: (prompt: string) => `${prompt} · Dismissed`,
   questionAnswered: 'Done.',
+  undoOfferKept: 'Kept it.',
+  undoOfferKeptAll: 'Kept everything.',
+  undoOfferFinishOnCard: 'Pick the one to undo on the card.',
   factKept: (statement: string) => `Kept “${statement}”`,
   factKeptNeither: 'Saved what’s true now',
   questionSheetTitle: 'Which one?',
@@ -2051,9 +2059,11 @@ export const HELM_COPY = {
         ? 'That note or one of those topics was removed.'
         : kind === 'groupTopics'
           ? 'Those topics changed since.'
-          : kind === 'whichPlace'
-            ? 'That place was removed.'
-            : 'That person was removed.',
+          : kind === 'undoOffer'
+            ? 'That was already taken back.'
+            : kind === 'whichPlace'
+              ? 'That place was removed.'
+              : 'That person was removed.',
   editUnreadable: "This page couldn't be opened.",
   whoTierTitle: 'How close',
   whoTierHelp: (assistant: string) =>

@@ -555,6 +555,8 @@ async function saveTurn({
         linkedPlaceIds: [],
         undoesExecutionId: null,
         undoneByExecutionId: null,
+        undoneDocIds: null,
+        partUndoIds: null,
         questionRef: null,
         errorCode: null,
         createdAt: now,
@@ -568,6 +570,7 @@ async function saveTurn({
           lines: plan.lines,
           undoReport: null,
           goneIds: null,
+          undoReason: null,
           spoken: null,
         }),
       });
