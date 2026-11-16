@@ -116,6 +116,7 @@
     "check:helm-whereabouts": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhereabouts.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhereabouts.ts",
     "check:helm-importance": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmImportance.ts",
     "check:helm-said": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSaid.ts",
+    "check:helm-act-now": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmActNow.ts",
     "check:helm-patterns": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPatterns.ts",
     "check:helm-retention": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRetention.ts",
     "check:helm-habits": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts",

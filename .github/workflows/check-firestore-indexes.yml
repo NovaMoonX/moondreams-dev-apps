@@ -116,4 +116,5 @@ jobs:
       - run: npm run check:helm-importance
       - run: npm run check:helm-said
       - run: npm run check:helm-patterns
+      - run: npm run check:helm-act-now
       - run: npm run check:helm-retention

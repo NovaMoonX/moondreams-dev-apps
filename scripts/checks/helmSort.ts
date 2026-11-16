@@ -29,7 +29,7 @@ import {
   readMadeTitles,
 } from '../../functions/src/apps/helm/nomos/buildContext.ts';
 import {
-  FILE_RESULTS_TOOL,
+  buildFileResultsTool,
   type CaptureReading,
 } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
@@ -75,6 +75,7 @@ const TASK_IDS = [
 ];
 const KEY = { keyId: 'helm-key-test', keyVersion: 1, key: Buffer.alloc(32, 7) };
 const seal = (fields: Record<string, unknown>) => sealForHelm(KEY, fields);
+const FILE_RESULTS_TOOL = buildFileResultsTool({ isLearningOn: true });
 
 const TEXT = 'Call @Dana Friday, buy the rings and pick up the cake tomorrow';
 const FRIDAY = Date.UTC(2026, 10, 13);

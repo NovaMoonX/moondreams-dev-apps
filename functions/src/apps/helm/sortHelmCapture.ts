@@ -157,9 +157,19 @@ import {
   type EarlierTurn,
 } from './nomos/buildContext.js';
 import {
+  readActNow,
+  toDisposition,
+  type CaptureDisposition,
+  type ObservationRead,
+} from './nomos/actNow.js';
+import {
+  planObservations,
+  readTurnSubjects,
+} from './nomos/planObservations.js';
+import {
   CLOSE_CONVERSATION_TOOL,
   isShortEnoughToClose,
-  FILE_RESULTS_TOOL,
+  buildFileResultsTool,
   MENTION_KINDS,
   toReading,
   type AnswerCommand,
@@ -322,6 +332,7 @@ import {
   INTERRUPTED_PROMPT,
   APP_RECORDS_PROMPT,
   toOffCategoriesPrompt,
+  LEARNING_PROMPT,
   MAIL_PROMPT,
   MAX_CONTEXT_TASKS,
   MEDIA_PROMPT,
@@ -583,6 +594,37 @@ const readStyleNotes = (firestore: Firestore, base: string, key: HelmKey) =>
         : null,
     )
     .catch(() => null);
+
+const NOTICED_SHOWN = 10;
+
+const readNoticed = (
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  options: { forgottenAt: number | null; isMasked: boolean },
+) =>
+  firestore
+    .collection(`${base}/patterns`)
+    .where('isLive', '==', true)
+    .limit(NOTICED_SHOWN * 3)
+    .get()
+    .then((snapshot) =>
+      snapshot.docs
+        .filter(
+          (doc) =>
+            (options.forgottenAt === null ||
+              (doc.get('createdAt') as number) > options.forgottenAt) &&
+            !(options.isMasked && doc.get('privacy') === 'private'),
+        )
+        .flatMap((doc) => {
+          const statement = openSealed(key, doc.get('sealed'))?.statement;
+          return typeof statement === 'string' && statement !== ''
+            ? [statement]
+            : [];
+        })
+        .slice(0, NOTICED_SHOWN),
+    )
+    .catch(() => []);
 
 const openSealed = (key: HelmKey, sealed: unknown) => {
   try {
@@ -1982,6 +2024,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       key,
       commands: [],
       answer: null,
+      disposition: 'acted',
+      observations: [],
       remember: [],
       noteFacts: [],
       keyDates: [],
@@ -2154,6 +2198,15 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     await awayIdsRead,
   );
   const unattendedMask = { ...earlyMask, timeZone };
+  const isLearningOn = profile.get('isLearningOn') !== false;
+  const noticed =
+    isLearningOn && mode !== 'rest'
+      ? await readNoticed(firestore, base, key, {
+          forgottenAt:
+            (profile.get('forgottenAt') as number | null | undefined) ?? null,
+          isMasked: earlyMask.isOn,
+        })
+      : [];
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
     if (!words?.title) {
@@ -2565,6 +2618,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       projects: masked.projects,
       topics: masked.topics,
       style,
+      noticed,
       whereabouts: contextWhereabouts,
       abilities: readCaptureAbilities(capture.abilities),
       notes: masked.notes,
@@ -2662,6 +2716,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         ? PROCEDURE_PROMPT
         : null,
       isHabitsInPlay ? HABIT_PROMPT : null,
+      isLearningOn && mode !== 'rest' ? LEARNING_PROMPT : null,
       contextImportance ? IMPORTANCE_PROMPT : null,
       mode === 'rest' ? REST_PROMPT : null,
       attached.media.length > 0 ? MEDIA_PROMPT : null,
@@ -2727,7 +2782,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             },
           ],
           mcpClient: mcp.client,
-          terminalTool: FILE_RESULTS_TOOL,
+          terminalTool: buildFileResultsTool({ isLearningOn }),
           extraTerminalTools: [
             ...(canHandOver ? [HAND_OVER_TOOL] : []),
             ...(mode === 'full' ? [CLOSE_CONVERSATION_TOOL] : []),
@@ -2947,6 +3002,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             heard: previousTurn.heard.map((entry) => entry.heard),
           }
         : undefined,
+      isLearningOn,
     },
   );
   reply.mediaDropped.forEach((code) =>
@@ -2990,6 +3046,49 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     (command) => decide(command) === 'automatic',
   );
 
+  const otherCount =
+    reply.noteFacts.length +
+    reply.keyDates.length +
+    reply.projects.length +
+    reply.notes.length +
+    reply.topicCommands.length +
+    reply.procedureCommands.length +
+    reply.runCommands.length +
+    reply.importanceCommands.length +
+    reply.soundsLike.length +
+    reply.contactPoints.length +
+    reply.connectionCommands.length +
+    reply.whereabouts.length +
+    reply.asks.length +
+    (reply.planDay ? 1 : 0) +
+    (reply.setCurrentPlace ? 1 : 0);
+  const outcome =
+    mode === 'full' && !answerTurn
+      ? readActNow({
+          intent: reply.intent,
+          commands: [
+            ...(reply.answer ? [{ kind: 'answer' }] : []),
+            ...(reply.remember.length > 0 ? [{ kind: 'remember' }] : []),
+            ...commands,
+            ...reply.habitCommands,
+            ...Array.from({ length: otherCount }, () => ({ kind: 'other' })),
+          ],
+          subjects: readTurnSubjects(
+            {
+              commands,
+              habitCommands: reply.habitCommands,
+              hasPlanDay: reply.planDay !== null,
+              hasHome: reply.setCurrentPlace !== null,
+              extras:
+                otherCount -
+                (reply.planDay ? 1 : 0) -
+                (reply.setCurrentPlace ? 1 : 0),
+            },
+            claimed.capture.createdAt,
+          ),
+        })
+      : 'act';
+  const keeps = mode === 'full' && outcome !== 'note';
   const answerWords = [
     reply.answer?.fromRecordsText,
     reply.answer?.generalText,
@@ -2998,8 +3097,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   return writeResult({
     ...claimed,
     key,
-    commands,
+    commands: keeps ? commands : [],
     answer,
+    disposition: toDisposition(outcome),
+    observations: mode === 'full' ? reply.observations : [],
     isUnattended: unattendedMask.isOn,
     isQuotingPrivate:
       mode === 'full' &&
@@ -3009,24 +3110,23 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           maskPrivateNames(text, unattendedMask.quoted) !== text,
       ),
     remember: mode === 'full' ? reply.remember : [],
-    noteFacts: mode === 'full' ? reply.noteFacts : [],
-    keyDates: mode === 'full' ? reply.keyDates : [],
-    projects: mode === 'full' ? reply.projects : [],
-    notes: mode === 'full' ? reply.notes : [],
-    topicCommands: mode === 'full' ? reply.topicCommands : [],
-    procedureCommands: mode === 'full' ? reply.procedureCommands : [],
-    runCommands: mode === 'full' ? reply.runCommands : [],
-    habitCommands:
-      mode === 'full'
-        ? reply.habitCommands.filter(
-            (command) => decideHabit(command) === 'automatic',
-          )
-        : [],
-    importanceCommands: mode === 'full' ? reply.importanceCommands : [],
-    soundsLike: mode === 'full' ? reply.soundsLike : [],
-    contactPoints: mode === 'full' ? reply.contactPoints : [],
-    connectionCommands: mode === 'full' ? reply.connectionCommands : [],
-    whereabouts: mode === 'full' ? reply.whereabouts : [],
+    noteFacts: keeps ? reply.noteFacts : [],
+    keyDates: keeps ? reply.keyDates : [],
+    projects: keeps ? reply.projects : [],
+    notes: keeps ? reply.notes : [],
+    topicCommands: keeps ? reply.topicCommands : [],
+    procedureCommands: keeps ? reply.procedureCommands : [],
+    runCommands: keeps ? reply.runCommands : [],
+    habitCommands: keeps
+      ? reply.habitCommands.filter(
+          (command) => decideHabit(command) === 'automatic',
+        )
+      : [],
+    importanceCommands: keeps ? reply.importanceCommands : [],
+    soundsLike: keeps ? reply.soundsLike : [],
+    contactPoints: keeps ? reply.contactPoints : [],
+    connectionCommands: keeps ? reply.connectionCommands : [],
+    whereabouts: keeps ? reply.whereabouts : [],
     offerAbility:
       mode === 'full'
         ? readOfferAbility(
@@ -3057,25 +3157,27 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       })),
     },
     captureText: combined.text,
-    planDay: mode === 'full' ? reply.planDay : null,
-    setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
-    asks: mode === 'full' ? reply.asks : [],
+    planDay: keeps ? reply.planDay : null,
+    setCurrentPlace: keeps ? reply.setCurrentPlace : null,
+    asks: keeps ? reply.asks : [],
     answerTurn,
-    replyLine: ownLineStands(
-      reply.mediaDropped,
-      reply.askDropped,
-      reply.noteDropped,
-      reply.topicDropped,
-      reply.procedureDropped,
-      reply.runDropped,
-      reply.habitDropped,
-      reply.importanceDropped,
-      commands.length < reply.commands.length,
-    )
-      ? hide(reply.replyLine)
-      : null,
-    mentions: reply.mentions,
-    places: reply.places,
+    replyLine: !keeps
+      ? null
+      : ownLineStands(
+            reply.mediaDropped,
+            reply.askDropped,
+            reply.noteDropped,
+            reply.topicDropped,
+            reply.procedureDropped,
+            reply.runDropped,
+            reply.habitDropped,
+            reply.importanceDropped,
+            commands.length < reply.commands.length,
+          )
+        ? hide(reply.replyLine)
+        : null,
+    mentions: keeps ? reply.mentions : [],
+    places: keeps ? reply.places : [],
     assistantName,
     calledAs: combined.reading.addressedAs?.text ?? null,
     assistantNameVariants,
@@ -3251,6 +3353,8 @@ async function writeResult(
     asks: AskCommand[];
     answerTurn: AnswerTurn | null;
     replyLine: string | null;
+    disposition: CaptureDisposition;
+    observations: ObservationRead[];
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
@@ -3301,6 +3405,8 @@ async function writeResult(
     asks,
     answerTurn,
     replyLine,
+    disposition,
+    observations,
     mentions,
     places,
     assistantName,
@@ -3490,6 +3596,7 @@ async function writeResult(
       keyDates.length > 0 ||
       connectionCommands.length > 0 ||
       whereabouts.length > 0 ||
+      observations.length > 0 ||
       offerAbility !== null
         ? transaction.get(firestore.doc(base))
         : Promise.resolve(null),
@@ -4472,6 +4579,28 @@ async function writeResult(
       ),
     );
 
+    const learning = await planObservations({
+      transaction,
+      firestore,
+      base,
+      observations,
+      isLearningOn: profileSnap?.get('isLearningOn') !== false,
+      captureId: captureRef.id,
+      isCapturePrivate:
+        capture.touchesPrivate === true ||
+        plan.isPrivate ||
+        input.isQuotingPrivate === true,
+      whoNames: knownNames
+        .filter((person) => person.id !== selfWhoId)
+        .flatMap((person) => [...person.names, ...(person.kinNames ?? [])]),
+      now,
+      at: capture.createdAt,
+      timeZone,
+      reflectDueAt:
+        (profileSnap?.get('reflectDueAt') as number | null | undefined) ?? null,
+      newId: () => crypto.randomUUID(),
+      seal,
+    });
     if (isFiling) {
       plan.creates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${tasksPath}/${id}`), data),
@@ -4695,6 +4824,13 @@ async function writeResult(
     plan.mediaLetGo.forEach(({ id, data }) =>
       transaction.update(firestore.doc(`${base}/media/${id}`), data),
     );
+    learning.writes.forEach(({ id, data }) =>
+      transaction.create(firestore.doc(`${base}/observations/${id}`), data),
+    );
+    if (learning.reflectDueAt !== null)
+      transaction.update(firestore.doc(base), {
+        reflectDueAt: learning.reflectDueAt,
+      });
     const spokenAnswer = reply && isSpoken ? reply.spoken : null;
     const spokenLine =
       spokenAnswer && !isFiling && firstQuestion
@@ -4841,6 +4977,7 @@ async function writeResult(
       ...((plan.isPrivate || input.isQuotingPrivate === true) && {
         touchesPrivate: true,
       }),
+      disposition,
       status: settled.status,
       sortedAt: now,
       executionIds: settled.executionIds,

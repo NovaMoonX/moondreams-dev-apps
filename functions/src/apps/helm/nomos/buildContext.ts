@@ -253,6 +253,8 @@ export interface ContextInput {
   importance?: ContextImportance;
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
   topicDocument?: 'whole' | 'outline' | null;
+  /** Up to ten statements of what has been noticed about the person; left out when learning is off or there are none. */
+  noticed?: string[];
   /** The person's style notes, descriptions only; left out when there are none. */
   style?: { traits: string[]; avoid: string[] } | null;
   /** Where the person is today and on any day the turn names, and where the people it names live, as names only. */
@@ -693,6 +695,9 @@ export function buildContext(input: ContextInput): {
             ),
           )}</importance>`,
         ]
+      : []),
+    ...(input.noticed?.length
+      ? [`<noticed>${toDataJson(input.noticed.slice(0, 10))}</noticed>`]
       : []),
     ...(openRuns.length > 0
       ? [`<open_runs>${toDataJson(openRuns)}</open_runs>`]

@@ -12,6 +12,13 @@ import {
 } from './contactPoints.js';
 import { isSpanOf, SOUNDS_LIKE_CAP } from './heardNames.js';
 import { KIN_KINDS } from './kinKinds.js';
+import {
+  readObservations,
+  readTurnIntent,
+  withoutWatchingPhrases,
+  type ObservationRead,
+  type TurnIntent,
+} from './actNow.js';
 import { ASK_WORDS } from './summaries.js';
 import { readHabitCommands, type HabitDrop } from './readHabitCommands.js';
 import {
@@ -2092,8 +2099,12 @@ export function normalizeNomosReply(
     /** The photos and files the turn sent, by alias. */
     attachments?: { alias: string; kind: string }[];
     previousTurn?: { text: string; heard: string[] };
+    /** Missing means on. */
+    isLearningOn?: boolean;
   },
 ): {
+  intent: TurnIntent;
+  observations: ObservationRead[];
   media: MediaDecision[];
   mediaDropped: MediaDrop[];
   commands: NomosCommand[];
@@ -2135,7 +2146,10 @@ export function normalizeNomosReply(
   const made = new Set((context.alreadyMade ?? []).map(toKey));
   const items = raw.commands.filter(isRecord);
   items.forEach(assertNoDateKeys);
-  const answer =
+  const isLearningOn = context.isLearningOn !== false;
+  const readAnswerText = (text: string | null) =>
+    isLearningOn ? text : withoutWatchingPhrases(text);
+  const answerRead =
     items
       .filter((item) => item.kind === 'answer')
       .flatMap((item) => {
@@ -2151,6 +2165,13 @@ export function normalizeNomosReply(
         );
         return read ? [read] : [];
       })[0] ?? null;
+  const answer = answerRead
+    ? {
+        ...answerRead,
+        generalText: readAnswerText(answerRead.generalText),
+        generalSpoken: readAnswerText(answerRead.generalSpoken),
+      }
+    : null;
   const remember = items
     .filter((item) => item.kind === 'remember')
     .map((item) => readRemember(item, context.synced, context.quotes));
@@ -2317,11 +2338,26 @@ export function normalizeNomosReply(
     ),
   });
   return {
+    intent: readTurnIntent(raw.intent, answer !== null),
+    observations: readObservations(raw.observations, {
+      isLearningOn,
+      turnText: context.captureText ?? '',
+      resolve: (alias) => {
+        const habitId = context.habits?.idOf(alias);
+        if (habitId) return { collection: 'habits', id: habitId };
+        const projectId = context.projects?.idOf(alias);
+        if (projectId) return { collection: 'projects', id: projectId };
+        const taskId = context.aliases.idOf(alias);
+        return taskId ? { collection: 'tasks', id: taskId } : null;
+      },
+    }),
     media,
     mediaDropped,
     commands: kept,
     hasMore: fresh.length > MAX_COMMANDS,
-    replyLine: readReplyLine(raw.replyLine, context.captureText ?? ''),
+    replyLine: readAnswerText(
+      readReplyLine(raw.replyLine, context.captureText ?? ''),
+    ),
     answer,
     remember,
     noteFacts,

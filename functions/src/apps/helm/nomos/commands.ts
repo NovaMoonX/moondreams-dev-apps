@@ -1,4 +1,11 @@
 import type { TerminalTool } from '../../../ai/modelProvider.js';
+import {
+  MAX_OBSERVATIONS_PER_TURN,
+  OBSERVATION_KINDS,
+  OBSERVATION_QUOTE_CAP,
+  TURN_INTENTS,
+} from './actNow.js';
+import { OBSERVATION_TAGS } from './said.js';
 import type { QuoteEntry } from './aliases.js';
 import type { SyncedCopy } from '../syncedCopies.js';
 import { toPlainText } from '../../../vendor/speechText.js';
@@ -831,15 +838,54 @@ export interface MediaDecision {
 }
 
 /** One flat object per command, every field required and nullable; sent non-strict (too many nullable fields for strict mode), so `normalizeNomosReply` checks the reply's shape. */
-export const FILE_RESULTS_TOOL: TerminalTool = {
+export const buildFileResultsTool = ({
+  isLearningOn,
+}: {
+  isLearningOn: boolean;
+}): TerminalTool => ({
   name: 'file_results',
   description:
     'Files what the capture asks for as commands. Call it once, last, with every command.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
-    required: ['commands', 'replyLine'],
+    required: ['intent', 'commands', 'replyLine'],
     properties: {
+      intent: {
+        type: 'string',
+        enum: [...TURN_INTENTS],
+        description:
+          'question: the person asks something and your answer command answers it. request: the person asks you to do something. remark: the person only says how things are going or went, asking for nothing.',
+      },
+      ...(isLearningOn
+        ? {
+            observations: {
+              type: 'array',
+              description: `At most ${MAX_OBSERVATIONS_PER_TURN}. What the person said about how a habit, project, task or their day felt or went, only when they said it themselves. Never a guess, a diagnosis or a mood they did not name. Empty when they said nothing of the kind.`,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['aboutAlias', 'kind', 'tags', 'quote'],
+                properties: {
+                  aboutAlias: nullable(
+                    'string',
+                    'The habit (h1…), project (p1…) or task (t1…) it is about; null when it is about their day.',
+                  ),
+                  kind: { type: 'string', enum: [...OBSERVATION_KINDS] },
+                  tags: {
+                    type: 'array',
+                    description: '1 to 3 from the list.',
+                    items: { type: 'string', enum: [...OBSERVATION_TAGS] },
+                  },
+                  quote: {
+                    type: 'string',
+                    description: `The person's own words, copied exactly from the turn, at most ${OBSERVATION_QUOTE_CAP} characters.`,
+                  },
+                },
+              },
+            },
+          }
+        : {}),
       media: {
         type: 'array',
         description:
@@ -1689,7 +1735,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
       },
     },
   },
-};
+});
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
