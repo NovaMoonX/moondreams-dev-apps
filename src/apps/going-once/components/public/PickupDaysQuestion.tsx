@@ -1,0 +1,157 @@
+import { Input } from '@moondreamsdev/dreamer-ui/components';
+
+import Pill from '@/components/Pill';
+import { formatDayRun, toDayRuns } from '@/utils/dayRunUtils';
+import { MAX_ANOTHER_DAY_NOTE_LENGTH } from '@apps/going-once/constants';
+import type { DaysAnswer } from '@apps/going-once/utils/pickupDays';
+
+const chipFormatter = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  timeZone: 'UTC',
+});
+
+// Each 28px pill reaches 40px with a pseudo-element; rows sit 12px apart so the areas never overlap.
+const PILL_HIT =
+  "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
+
+const formatChip = (day: number) =>
+  `${chipFormatter.format(new Date(day))} ${new Date(day).getUTCDate()}`;
+
+const singleChipFormatter = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+const formatSingleChip = (day: number) =>
+  singleChipFormatter.format(new Date(day));
+
+interface PickupDaysQuestionProps {
+  /** The sale's days that haven't passed. */
+  openDays: number[];
+  answer: DaysAnswer;
+  onChange: (answer: DaysAnswer) => void;
+}
+
+/** Which pickup days work for the buyer: every day, a whole stretch, single days, or none of them and when they could come instead. */
+function PickupDaysQuestion({
+  openDays,
+  answer,
+  onChange,
+}: PickupDaysQuestionProps) {
+  // Neighbouring one-day runs share a row, so lone days don't each take a line.
+  const groups = toDayRuns(openDays).reduce<
+    { isStretch: boolean; days: number[] }[]
+  >((kept, run) => {
+    const last = kept.at(-1);
+    if (run.length === 1 && last !== undefined && !last.isStretch)
+      return [...kept.slice(0, -1), { ...last, days: [...last.days, ...run] }];
+    return [...kept, { isStretch: run.length > 1, days: run }];
+  }, []);
+  const picked = new Set(answer.days);
+  const isAll = openDays.every((day) => picked.has(day));
+  const pickDays = (days: number[]) =>
+    onChange({
+      ...answer,
+      days: openDays.filter((day) => days.includes(day)),
+      needsAnotherDay: false,
+    });
+  const toggleDay = (day: number) =>
+    pickDays(
+      picked.has(day)
+        ? answer.days.filter((kept) => kept !== day)
+        : [...answer.days, day],
+    );
+  const toggleRun = (run: number[]) => {
+    const isRunPicked = run.every((day) => picked.has(day));
+    pickDays(
+      isRunPicked
+        ? answer.days.filter((day) => !run.includes(day))
+        : [...answer.days, ...run],
+    );
+  };
+
+  return (
+    <div className='space-y-4'>
+      <div className='space-y-1'>
+        <p className='font-medium'>Which days work for you?</p>
+        <p className='text-muted-foreground text-sm text-pretty'>
+          Pick every day you could pick it up.
+        </p>
+      </div>
+      {openDays.length > 1 && (
+        <Pill
+          className={PILL_HIT}
+          isSelected={isAll}
+          onClick={() => pickDays(isAll ? [] : openDays)}
+        >
+          All of them
+        </Pill>
+      )}
+      {groups.map(({ isStretch, days: run }) => (
+        <div key={run[0]} className='space-y-2'>
+          {isStretch && (
+            <p className='text-muted-foreground text-xs font-medium'>
+              {formatDayRun(run)}
+            </p>
+          )}
+          <div className='flex flex-wrap gap-x-2 gap-y-3'>
+            {isStretch && (
+              <Pill
+                className={PILL_HIT}
+                isSelected={run.every((day) => picked.has(day))}
+                ariaLabel={`All of ${formatDayRun(run)}`}
+                onClick={() => toggleRun(run)}
+              >
+                All {run.length} days
+              </Pill>
+            )}
+            {run.map((day) => (
+              <Pill
+                className={PILL_HIT}
+                key={day}
+                isSelected={picked.has(day)}
+                ariaLabel={formatDayRun([day])}
+                onClick={() => toggleDay(day)}
+              >
+                {isStretch ? formatChip(day) : formatSingleChip(day)}
+              </Pill>
+            ))}
+          </div>
+        </div>
+      ))}
+      <Pill
+        className={PILL_HIT}
+        isSelected={answer.needsAnotherDay}
+        onClick={() =>
+          onChange({
+            ...answer,
+            days: [],
+            needsAnotherDay: !answer.needsAnotherDay,
+          })
+        }
+      >
+        None of these, I&apos;d need another day
+      </Pill>
+      {answer.needsAnotherDay && (
+        <div className='space-y-2'>
+          <p className='text-muted-foreground text-sm'>
+            When could you come? (optional)
+          </p>
+          <Input
+            aria-label='When could you come?'
+            placeholder='Weekday evenings after 6'
+            value={answer.note}
+            maxLength={MAX_ANOTHER_DAY_NOTE_LENGTH}
+            onChange={(event) =>
+              onChange({ ...answer, note: event.target.value })
+            }
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default PickupDaysQuestion;

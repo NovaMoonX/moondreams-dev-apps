@@ -1,13 +1,15 @@
 import { HELM_COPY } from '@apps/helm/constants';
-import { topicEffectKind } from '@apps/helm/nomos/planUndo';
 import type { OpenExecution, OpenTask } from '@apps/helm/types';
 import { formatTaskDue, toTaskDue } from '@apps/helm/utils/taskDue';
+import { buildUndoUnits, hasResultRow } from '@apps/helm/utils/undoUnits';
 
 export interface ResultLine {
   key: string;
   docId: string;
   title: string;
   detail: string | null;
+  /** The undo unit this row belongs to; null for a line that touches no record. */
+  unitKey: string | null;
   /** The record a tap on the row opens. */
   ref?: {
     collection: 'notes' | 'topics' | 'procedures' | 'procedureRuns';
@@ -29,164 +31,135 @@ export function buildResultLines(
   timeZone: string,
   now: number,
 ): ResultLine[] {
-  const effectLines = execution.effectRefs.flatMap(
-    (ref, index): ResultLine[] => {
-      if (ref.collection === 'who' || ref.collection === 'places') return [];
-      const effect = execution.effects[index];
-      // A kept photo is said once, by the turn's photo line.
-      if (ref.collection === 'media') return [];
-      if (ref.collection === 'topics') {
-        const title = toText(effect?.written['sealed.title']);
-        const kind = effect ? topicEffectKind(effect) : 'filing';
-        const hasLine =
-          kind === 'made' ||
-          (kind === 'version' &&
-            effect?.written.change !== 'moved' &&
-            effect?.written.change !== 'grouped') ||
-          (kind === 'placement' && 'parentId' in (effect?.written ?? {}));
-        return title && hasLine
-          ? [
-              {
-                key: `${ref.docId}:${index}`,
-                docId: ref.docId,
-                title,
-                detail: null,
-                ref: { collection: 'topics', id: ref.docId },
-              },
-            ]
-          : [];
-      }
-      if (ref.collection === 'procedures') {
-        const title = toText(effect?.written['sealed.title']);
-        return title
-          ? [
-              {
-                key: `${ref.docId}:${index}`,
-                docId: ref.docId,
-                title,
-                detail: null,
-                ref: { collection: 'procedures', id: ref.docId },
-              },
-            ]
-          : [];
-      }
-      if (ref.collection === 'procedureRuns') {
-        const title = toText(effect?.written['sealed.title']);
-        return title
-          ? [
-              {
-                key: `${ref.docId}:${index}`,
-                docId: ref.docId,
-                title,
-                detail: null,
-                ref: { collection: 'procedureRuns', id: ref.docId },
-              },
-            ]
-          : [];
-      }
-      if (ref.collection === 'notes') {
-        return [
-          {
-            key: `${ref.docId}:${index}`,
-            docId: ref.docId,
-            title:
-              toText(effect?.written['sealed.title']) ??
-              toText(effect?.previous?.['sealed.title']) ??
-              HELM_COPY.resultNoteFallback,
-            detail: null,
-            ref: { collection: 'notes', id: ref.docId },
-          },
-        ];
-      }
-      if (ref.collection === 'profile') {
-        return [
-          {
-            key: `${ref.docId}:${index}`,
-            docId: ref.docId,
-            title:
-              toText(effect?.written['sealed.title']) ?? HELM_COPY.homeTitle,
-            detail:
-              effect?.written.currentPlace === null
-                ? HELM_COPY.homeLeft
-                : HELM_COPY.homeRowDetail,
-          },
-        ];
-      }
-      if (ref.collection === 'projects') {
-        const label = toText(effect?.written['sealed.title']);
-        const name = toText(effect?.written['sealed.name']);
-        return [
-          {
-            key: `${ref.docId}:${index}`,
-            docId: ref.docId,
-            title:
-              label ??
-              (name
-                ? HELM_COPY.resultProjectLine(
-                    toText(effect?.written['sealed.emoji']),
-                    name,
-                  )
-                : HELM_COPY.projectUntitled),
-            detail: null,
-          },
-        ];
-      }
-      if (ref.collection === 'keyDates') {
-        return [
-          {
-            key: `${ref.docId}:${index}`,
-            docId: ref.docId,
-            title:
-              toText(effect?.written['sealed.title']) ??
-              toText(effect?.previous?.['sealed.title']) ??
-              HELM_COPY.resultKeyDateFallback,
-            detail: null,
-          },
-        ];
-      }
-      const task = tasksById.get(ref.docId);
-      const title =
-        toText(effect?.written['sealed.title']) ??
-        toText(effect?.previous?.['sealed.title']) ??
-        toText(task?.title) ??
-        HELM_COPY.resultTaskFallback;
-      if (ref.collection === 'facts') {
-        return [
-          {
-            key: `${ref.docId}:${index}`,
-            docId: ref.docId,
-            title:
-              toText(effect?.written['sealed.statement']) ??
-              toText(effect?.written['sealed.title']) ??
-              HELM_COPY.resultFactFallback,
-            detail: toText(effect?.written['sealed.statement'])
-              ? toText(effect?.written['sealed.title'])
-              : null,
-          },
-        ];
-      }
-      const isDone = effect?.written.status === 'done';
-      const due =
-        effect && 'due' in effect.written
-          ? toTaskDue(effect.written.due)
-          : (task?.due ?? null);
-      const detail = isDone
-        ? HELM_COPY.resultDone
-        : due
-          ? HELM_COPY.resultTaskDue(formatTaskDue(due, timeZone, now))
-          : null;
-      const isPrivate =
-        task?.privacy === 'private' || effect?.written.privacy === 'private';
+  const { units } = buildUndoUnits(execution);
+  const unitKeyOf = (index: number) =>
+    units.find((unit) => unit.effectIndexes.includes(index))?.key ?? null;
+  const toRows = (
+    ref: OpenExecution['effectRefs'][number],
+    index: number,
+  ): Omit<ResultLine, 'unitKey'>[] => {
+    const effect = execution.effects[index];
+    // A kept photo, a person or a place is said elsewhere, not as a row.
+    if (!hasResultRow(ref, effect)) return [];
+    if (
+      ref.collection === 'topics' ||
+      ref.collection === 'procedures' ||
+      ref.collection === 'procedureRuns'
+    ) {
       return [
         {
           key: `${ref.docId}:${index}`,
           docId: ref.docId,
-          title,
-          detail,
-          ...(isPrivate ? { isPrivate } : {}),
+          title: toText(effect?.written['sealed.title']) ?? '',
+          detail: null,
+          ref: { collection: ref.collection, id: ref.docId },
         },
       ];
-    },
+    }
+    if (ref.collection === 'notes') {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title:
+            toText(effect?.written['sealed.title']) ??
+            toText(effect?.previous?.['sealed.title']) ??
+            HELM_COPY.resultNoteFallback,
+          detail: null,
+          ref: { collection: 'notes', id: ref.docId },
+        },
+      ];
+    }
+    if (ref.collection === 'profile') {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title: toText(effect?.written['sealed.title']) ?? HELM_COPY.homeTitle,
+          detail:
+            effect?.written.currentPlace === null
+              ? HELM_COPY.homeLeft
+              : HELM_COPY.homeRowDetail,
+        },
+      ];
+    }
+    if (ref.collection === 'projects') {
+      const label = toText(effect?.written['sealed.title']);
+      const name = toText(effect?.written['sealed.name']);
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title:
+            label ??
+            (name
+              ? HELM_COPY.resultProjectLine(
+                  toText(effect?.written['sealed.emoji']),
+                  name,
+                )
+              : HELM_COPY.projectUntitled),
+          detail: null,
+        },
+      ];
+    }
+    if (ref.collection === 'keyDates') {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title:
+            toText(effect?.written['sealed.title']) ??
+            toText(effect?.previous?.['sealed.title']) ??
+            HELM_COPY.resultKeyDateFallback,
+          detail: null,
+        },
+      ];
+    }
+    const task = tasksById.get(ref.docId);
+    const title =
+      toText(effect?.written['sealed.title']) ??
+      toText(effect?.previous?.['sealed.title']) ??
+      toText(task?.title) ??
+      HELM_COPY.resultTaskFallback;
+    if (ref.collection === 'facts') {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title:
+            toText(effect?.written['sealed.statement']) ??
+            toText(effect?.written['sealed.title']) ??
+            HELM_COPY.resultFactFallback,
+          detail: toText(effect?.written['sealed.statement'])
+            ? toText(effect?.written['sealed.title'])
+            : null,
+        },
+      ];
+    }
+    const isDone = effect?.written.status === 'done';
+    const due =
+      effect && 'due' in effect.written
+        ? toTaskDue(effect.written.due)
+        : (task?.due ?? null);
+    const detail = isDone
+      ? HELM_COPY.resultDone
+      : due
+        ? HELM_COPY.resultTaskDue(formatTaskDue(due, timeZone, now))
+        : null;
+    const isPrivate =
+      task?.privacy === 'private' || effect?.written.privacy === 'private';
+    return [
+      {
+        key: `${ref.docId}:${index}`,
+        docId: ref.docId,
+        title,
+        detail,
+        ...(isPrivate ? { isPrivate } : {}),
+      },
+    ];
+  };
+  const effectLines = execution.effectRefs.flatMap((ref, index) =>
+    toRows(ref, index).map((line) => ({ ...line, unitKey: unitKeyOf(index) })),
   );
   const lines = effectLines.filter((line, index) =>
     line.ref?.collection === 'notes'
@@ -215,6 +188,7 @@ export function buildResultLines(
       docId: line.ref.id,
       title: line.text,
       detail: null,
+      unitKey: null,
       ref: line.ref,
       isNoEffect: true,
     }));

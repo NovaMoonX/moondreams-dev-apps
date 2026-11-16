@@ -384,7 +384,8 @@ export const createSpeechListener = (
     setOptions: (options: ListenerOptions) => {
       state.options = options;
     },
-    start: () => {
+    /** `isFromTap: false` for a start no tap caused (a wake listener): readying the browser's voice is only for a tap. */
+    start: ({ isFromTap = true }: { isFromTap?: boolean } = {}) => {
       if (state.isWanted || getRecognitionConstructor() === null) return;
       // Starting would only flash on and off: the screen shows the way to allow the microphone instead.
       if (needsMicrophoneAsk(peekMicrophonePermission())) {
@@ -397,7 +398,7 @@ export const createSpeechListener = (
       state.failures = 0;
       state.isHidden = document.visibilityState === 'hidden';
       unlockAudio();
-      if (state.canSpeak) primeSpeech();
+      if (isFromTap && state.canSpeak) primeSpeech();
       setStatus('starting');
       armIdle();
       beginSession();
@@ -548,7 +549,7 @@ export function useSpeechCommands({
     status,
     isOn: status !== 'off',
     error,
-    start: listener.start,
+    start: () => listener.start(),
     stop: listener.stop,
     say: listener.say,
     quiet: listener.quiet,
