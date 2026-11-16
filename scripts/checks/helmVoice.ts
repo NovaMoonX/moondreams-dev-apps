@@ -11,8 +11,10 @@ import {
   SPOKEN_MAX_CHARS,
   type SpokenAckInput,
 } from '../../functions/src/apps/helm/nomos/spoken.ts';
-import { UNDO_PHRASES } from '../../src/apps/helm/constants.ts';
+import { END_PHRASES, UNDO_PHRASES } from '../../src/apps/helm/constants.ts';
 import {
+  isAcknowledgement,
+  isLiveCloser,
   isUndoPhrase,
   normalizeSaid,
   toWakeSpellings,
@@ -353,6 +355,49 @@ assert.ok(
   'an undo phrase is an undo phrase and, with an offer open, also reads as yes',
 );
 
+const nods: [string, boolean][] = [
+  ['Gotcha. Okay.', true],
+  ['Gotcha. Okay. Now', true],
+  ['thanks', true],
+  ['Thank you!', true],
+  ['all right, sounds good', true],
+  ['okay buy milk', false],
+  ['thanks Dana for the gift', false],
+  ['kk', false],
+  ['nowso', false],
+  ['', false],
+  ['remind me to say thanks', false],
+];
+nods.forEach(([said, expected]) =>
+  assert.equal(
+    isAcknowledgement(said),
+    expected,
+    `"${said}" ${expected ? 'only acknowledges' : 'is something to act on'}`,
+  ),
+);
+const closers: [string, boolean][] = [
+  ["Okay, I'm done.", true],
+  ['Gotcha. Bye!', true],
+  ['goodbye', true],
+  ['Thanks, nothing else.', true],
+  ["tell Sam I'm done", false],
+  ['stop the timer', false],
+  ['okay', false],
+];
+closers.forEach(([said, expected]) =>
+  assert.equal(
+    isLiveCloser(said),
+    expected,
+    `"${said}" ${expected ? 'ends' : 'does not end'} a live conversation`,
+  ),
+);
+["that's it", 'thats all', 'end the conversation'].forEach((phrase) =>
+  assert.ok(
+    END_PHRASES.includes(phrase.toLowerCase()),
+    `"${phrase}" ends a live conversation`,
+  ),
+);
+
 console.log(
-  'check:helm-voice: spoken lines, undo phrases and the wake phrase passed.',
+  'check:helm-voice: spoken lines, undo phrases, nods and the wake phrase passed.',
 );

@@ -86,7 +86,12 @@ import {
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
-import { isUndoPhrase, toWakeSpellings } from '@apps/helm/utils/voicePhrases';
+import {
+  isAcknowledgement,
+  isLiveCloser,
+  isUndoPhrase,
+  toWakeSpellings,
+} from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
@@ -307,6 +312,16 @@ export function useHelmVoice() {
       return;
     }
     if (await answerQuestion(text, sttProvider, now)) return;
+    // A nod or a goodbye in a live conversation is not a turn: filing it read back "nothing to file in it".
+    if (voice.isLive && isLiveCloser(text)) {
+      voice.endLive();
+      voice.settle();
+      return;
+    }
+    if (voice.isLive && isAcknowledgement(text)) {
+      voice.settle();
+      return;
+    }
     await sendTurn(text, sttProvider, interrupted);
   }
 
