@@ -7,6 +7,7 @@ import type {
 import type { SealedPayload } from '../../appKeys/seal.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
 import { MAX_CONTEXT_MILESTONES } from './nomos/commands.js';
+import { readShownWhy, type GoalWhy } from './goalWhy.js';
 import type {
   ExistingMilestoneState,
   ExistingProject,
@@ -20,6 +21,11 @@ export interface ContextProject {
   name: string;
   milestones: { title: string; date: string | null }[];
   isPrivate?: boolean;
+  kind: 'project' | 'goal';
+  /** Present only for a goal set aside. */
+  status?: 'set aside';
+  /** A goal's why as the person has it: their words, or the tidy version once chosen. */
+  why?: string;
 }
 
 const isRole = (value: unknown): value is ProjectRoleName =>
@@ -74,12 +80,19 @@ const toMilestoneTitles = (value: unknown): Record<string, string> =>
       )
     : {};
 
+const toGoalWhy = (value: unknown) =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as GoalWhy).verbatim === 'string'
+    ? (value as GoalWhy)
+    : null;
+
 const openProjects = (
   key: HelmKey,
   docs: QueryDocumentSnapshot[],
-): ExistingProject[] =>
+): (ExistingProject & { isPaused: boolean })[] =>
   docs
-    .flatMap((doc): [number, ExistingProject][] => {
+    .flatMap((doc): [number, ExistingProject & { isPaused: boolean }][] => {
       try {
         const words = openForHelm(key, doc.get('sealed') as SealedPayload);
         if (typeof words.name !== 'string' || words.name === '') return [];
@@ -95,6 +108,8 @@ const openProjects = (
               milestoneState: toMilestoneState(doc.get('milestoneState')),
               milestoneTitles: toMilestoneTitles(words.milestones),
               isPrivate: doc.get('privacy') === 'private',
+              kind: doc.get('kind') === 'goal' ? 'goal' : 'project',
+              isPaused: doc.get('status') === 'paused',
               sealed: words,
             },
           ],
@@ -132,12 +147,23 @@ export async function readContextProjects(
   key: HelmKey,
   max: number,
 ): Promise<ContextProject[]> {
-  const docs = (await activeQuery(firestore, base).get()).docs;
+  const docs = (
+    await firestore
+      .collection(`${base}/projects`)
+      .where('status', 'in', ['active', 'paused'])
+      .limit(MAX_PROJECTS_READ)
+      .get()
+  ).docs;
   return openProjects(key, docs)
     .slice(0, max)
     .map((project) => ({
       name: project.name,
       isPrivate: project.isPrivate === true,
+      kind: project.kind,
+      ...(project.isPaused && { status: 'set aside' as const }),
+      ...(project.kind === 'goal' && {
+        why: readShownWhy(toGoalWhy(project.sealed.why))?.text,
+      }),
       milestones: Object.entries(project.milestoneState)
         .flatMap(([id, state]) =>
           state.doneAt === null && project.milestoneTitles[id]

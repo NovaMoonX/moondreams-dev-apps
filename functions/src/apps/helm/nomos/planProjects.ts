@@ -9,6 +9,7 @@ import {
   type CreateProjectCommand,
   type SetProjectRoleCommand,
 } from './commands.js';
+import { whyFingerprint } from '../goalWhy.js';
 import {
   buildMilestoneLine,
   buildMilestonesFullLine,
@@ -41,6 +42,7 @@ export interface ExistingProject {
   /** Milestone titles by id; an id with no state, or a state with no title, is not a milestone. */
   milestoneTitles: Record<string, string>;
   isPrivate?: boolean;
+  kind: 'project' | 'goal';
   sealed: Record<string, unknown>;
 }
 
@@ -124,6 +126,7 @@ export function planProjectRoles(input: {
   whoIdOf: Map<string, string>;
   nameOf: Map<string, string>;
   executionId: string;
+  captureId: string;
   now: number;
   seal: (fields: Record<string, unknown>) => SealedPayload;
 }): {
@@ -274,6 +277,18 @@ export function planProjectRoles(input: {
     ...(requests.get(projectId) ?? new Map<string, Request>()).entries(),
   ];
 
+  const toWhy = ({ why }: CreateProjectCommand) =>
+    why && {
+      verbatim: why.verbatim,
+      cleaned: why.cleaned,
+      cleanedState: why.cleaned === null ? null : 'offered',
+      summary: why.summary,
+      tags: why.tags,
+      basedOn: whyFingerprint(why.verbatim),
+      saidAt: input.now,
+      editedAt: null,
+      captureId: input.captureId,
+    };
   const writeCreated = ({ id, command }: CreatedProject) => {
     const entries = rolesOf(id);
     const whoRoles = Object.fromEntries(
@@ -289,7 +304,10 @@ export function planProjectRoles(input: {
       id,
       data: {
         targetDate: command.targetDate,
+        kind: command.projectKind,
         status: 'active',
+        pausedAt: null,
+        pausedUntil: null,
         milestoneState: Object.fromEntries(
           added.map((entry) => [entry.id, toMilestoneState(entry)]),
         ),
@@ -304,6 +322,9 @@ export function planProjectRoles(input: {
           name: command.name,
           emoji: command.emoji,
           objective: command.objective,
+          ...(command.projectKind === 'goal' && {
+            why: toWhy(command) ?? null,
+          }),
           milestones: Object.fromEntries(
             added.map((entry) => [entry.id, { title: entry.title }]),
           ),
@@ -321,6 +342,7 @@ export function planProjectRoles(input: {
           written: {
             'sealed.name': command.name,
             'sealed.emoji': command.emoji,
+            kind: command.projectKind,
             status: 'active',
             whoRoles,
             'sealed.roleNotes': roleNotes,

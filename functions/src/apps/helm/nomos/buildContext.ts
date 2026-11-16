@@ -570,9 +570,13 @@ export function buildContext(input: ContextInput): {
           `<open_projects>${toDataJson(
             input.projects
               .slice(0, MAX_CONTEXT_PROJECTS)
-              .map(({ name, milestones }) =>
-                milestones.length > 0 ? { name, milestones } : { name },
-              ),
+              .map(({ name, milestones, kind, status, why }) => ({
+                name,
+                ...(kind === 'goal' && { kind }),
+                ...(status && { status }),
+                ...(why && { why }),
+                ...(milestones.length > 0 && { milestones }),
+              })),
           )}</open_projects>`,
         ]
       : []),
