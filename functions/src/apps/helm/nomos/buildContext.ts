@@ -8,6 +8,7 @@ import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
 import type { HeardName } from './heardNames.js';
 import {
   MAX_CONTEXT_HABITS,
+  MAX_CONTEXT_IMPORTANCE,
   MAX_CONTEXT_PROJECTS,
   MAX_CONTEXT_TOPICS,
   MAX_HINT_NOTES,
@@ -89,6 +90,30 @@ export interface ContextHabit {
   /** Whether it is kept for someone else. */
   isForOther: boolean;
   isPrivate?: boolean;
+}
+
+/** A project, goal or habit in the person's order of what matters, as the model sees it. */
+export interface ContextImportanceEntry {
+  id: string;
+  kind: 'project' | 'goal' | 'habit';
+  name: string;
+  /** The person's own words for where they put it. */
+  words: string | null;
+  /** Date-only, inclusive: the day the placing ends. */
+  until: string | null;
+  /** Its nearest date, shown for things nobody placed. */
+  date: string | null;
+  /** The place number in In order; ties share one. */
+  position: number | null;
+  isPrivate?: boolean;
+}
+
+/** The order as the model sees it: placed things first, then Can wait, then the unplaced, then health and care that are never placed. */
+export interface ContextImportance {
+  inOrder: ContextImportanceEntry[];
+  canWait: ContextImportanceEntry[];
+  notSaid: ContextImportanceEntry[];
+  alwaysKept: ContextImportanceEntry[];
 }
 
 /** A topic as the model sees it: its name and its path from the top down ("Car care › Washing"). */
@@ -224,6 +249,8 @@ export interface ContextInput {
   runs?: ContextRun[];
   /** The person's habits as of today, at most `MAX_CONTEXT_HABITS`; each name goes through `toDataJson`. */
   habits?: ContextHabit[];
+  /** What matters most, when the turn is about it; at most `MAX_CONTEXT_IMPORTANCE` entries. */
+  importance?: ContextImportance;
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
   topicDocument?: 'whole' | 'outline' | null;
   /** The person's style notes, descriptions only; left out when there are none. */
@@ -298,6 +325,38 @@ const describeNow = (at: number, timeZone: string) => {
   return { timeZone: zone, saidAt: new Date(at).toISOString(), local };
 };
 
+const toImportanceView = (
+  importance: ContextImportance,
+  aliasOf: (entry: ContextImportanceEntry) => string,
+) => {
+  const view = (entry: ContextImportanceEntry) => ({
+    alias: aliasOf(entry),
+    name: entry.name,
+    ...(entry.kind !== 'project' && { kind: entry.kind }),
+    ...(entry.position !== null && { place: entry.position }),
+    ...(entry.words && { saidAs: entry.words }),
+    ...(entry.until && { until: entry.until }),
+    ...(entry.date && { date: entry.date }),
+  });
+  const inOrder = importance.inOrder.slice(0, MAX_CONTEXT_IMPORTANCE);
+  const canWait = importance.canWait.slice(
+    0,
+    MAX_CONTEXT_IMPORTANCE - inOrder.length,
+  );
+  const notSaid = importance.notSaid.slice(
+    0,
+    MAX_CONTEXT_IMPORTANCE - inOrder.length - canWait.length,
+  );
+  return {
+    inOrder: inOrder.map(view),
+    canWait: canWait.map(view),
+    notSaid: notSaid.map(view),
+    alwaysKept: importance.alwaysKept
+      .slice(0, MAX_CONTEXT_IMPORTANCE)
+      .map(view),
+  };
+};
+
 const toTokenView = (token: Token) => ({ id: token.id, text: token.text });
 
 /** The whole of what the model is told about this capture. Records come as aliases; no id, no uid. */
@@ -316,6 +375,7 @@ export function buildContext(input: ContextInput): {
   procedureSteps: AliasBook;
   runSteps: AliasBook;
   habits: AliasBook;
+  projects: AliasBook;
   habitNames: Map<string, string>;
   focus: { id: string; version: number } | null;
 } {
@@ -327,6 +387,7 @@ export function buildContext(input: ContextInput): {
   const procedureSteps = createAliasBook('ps');
   const runSteps = createAliasBook('rs');
   const habits = createAliasBook('h');
+  const projectBook = createAliasBook('p');
   const partIds = new Map<string, string>();
   const parts: AliasBook = {
     add: (id) => {
@@ -622,6 +683,17 @@ export function buildContext(input: ContextInput): {
           )}</habits>`,
         ]
       : []),
+    ...(input.importance
+      ? [
+          `<importance>${toDataJson(
+            toImportanceView(input.importance, (entry) =>
+              entry.kind === 'habit'
+                ? habits.add(entry.id)
+                : projectBook.add(entry.id),
+            ),
+          )}</importance>`,
+        ]
+      : []),
     ...(openRuns.length > 0
       ? [`<open_runs>${toDataJson(openRuns)}</open_runs>`]
       : []),
@@ -673,6 +745,7 @@ export function buildContext(input: ContextInput): {
     procedureSteps,
     runSteps,
     habits,
+    projects: projectBook,
     habitNames: new Map(
       (input.habits ?? [])
         .slice(0, MAX_CONTEXT_HABITS)

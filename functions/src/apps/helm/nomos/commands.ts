@@ -186,6 +186,22 @@ export const MAX_HABITS_PER_TURN = 3;
 export const MAX_CHECKINS_PER_TURN = 10;
 export const MAX_CARE_PER_TURN = 3;
 export const MAX_HABIT_CANDIDATES = 4;
+export const MAX_IMPORTANCE_PER_TURN = 3;
+export const MAX_CONTEXT_IMPORTANCE = 30;
+
+/** The kind the reply may carry that places a project or habit in the person's order of what matters; read from its own list and no `NomosCommand`. */
+export const IMPORTANCE_COMMAND_KINDS = ['setImportance'] as const;
+
+export const IMPORTANCE_RELATIONS = [
+  'most',
+  'above',
+  'below',
+  'same',
+  'matters',
+  'canWait',
+  'clear',
+] as const;
+
 export const MAX_CONTEXT_HABITS = 30;
 
 /** One window of a new or rescheduled habit: a named part of the day, or times from the reading; code settles both to "HH:mm". */
@@ -245,6 +261,17 @@ export interface SetMedicineCommand {
   habitId: string;
   name: string;
   dose: string | null;
+}
+
+/** One sentence about what matters: `subjectId` placed by `relation` to `otherId`, in words copied from the capture. A name no project has comes as `unknownName`. */
+export interface SetImportanceCommand {
+  kind: 'setImportance';
+  subjectId: string | null;
+  unknownName: string | null;
+  relation: (typeof IMPORTANCE_RELATIONS)[number];
+  otherId: string | null;
+  words: string;
+  until: number | null;
 }
 
 export type HabitCommand =
@@ -967,6 +994,10 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'candidateAliases',
             'checkDay',
             'checkStatus',
+            'subjectAlias',
+            'otherAlias',
+            'importanceRelation',
+            'subjectName',
           ],
           properties: {
             kind: {
@@ -977,6 +1008,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
                 ...PROCEDURE_COMMAND_KINDS,
                 ...RUN_COMMAND_KINDS,
                 ...HABIT_COMMAND_KINDS,
+                ...IMPORTANCE_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
                 ...CONTACT_COMMAND_KINDS,
                 ...CONNECTION_COMMAND_KINDS,
@@ -1323,7 +1355,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, updateHabit, connect, updateConnection and disconnect: the words of the capture that ask for it, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, updateHabit, connect, updateConnection and disconnect: the words of the capture that ask for it, copied exactly.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -1550,6 +1582,24 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               description:
                 'checkIn: skipped for "not today", "skipped it"; null is done.',
             },
+            subjectAlias: nullable(
+              'string',
+              'setImportance: the alias (p1 for a project, h1 for a habit) in <importance> or <habits> of the one the person places; null when no project or habit by that name is listed.',
+            ),
+            otherAlias: nullable(
+              'string',
+              'setImportance with above, below or same: the alias of the one it is placed against; null otherwise.',
+            ),
+            importanceRelation: {
+              type: ['string', 'null'],
+              enum: [...IMPORTANCE_RELATIONS, null],
+              description:
+                'setImportance: most for "X matters most", above for "X before Y" or "X matters more than Y", below for "Y comes after X", same for "equally important", matters for "X matters" with nothing to compare, canWait for "X can wait", clear for "forget what I said about X"; null otherwise. A sentence naming several is one setImportance each, in the order said. Never for medicine or care.',
+            },
+            subjectName: nullable(
+              'string',
+              'setImportance: the name the person said when subjectAlias is null, at most 80 characters; null otherwise. The words of the placement are requestQuote and a "until Friday" is dateSpanId.',
+            ),
           },
         },
       },

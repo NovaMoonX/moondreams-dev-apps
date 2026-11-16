@@ -16,6 +16,8 @@ export interface PlannerTask {
   due: TaskDue | null;
   importance: Importance | null;
   isUrgent: boolean;
+  /** Its project's place number in what matters most; null when the project is not placed. */
+  projectPlace?: number | null;
   durationMinutes: number | null;
   energy: Energy | null;
   placeIds: string[];
@@ -193,6 +195,8 @@ const rankTasks = (
           (second.task.importance
             ? IMPORTANCE_RANK[second.task.importance]
             : 3) ||
+        (first.task.projectPlace ?? Infinity) -
+          (second.task.projectPlace ?? Infinity) ||
         Number(second.task.isUrgent) - Number(first.task.isUrgent) ||
         first.index - second.index,
     )

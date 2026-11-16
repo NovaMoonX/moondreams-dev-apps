@@ -939,6 +939,16 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           },
           roleNotes: {},
           why: null,
+          importance:
+            isDone || index % 3 === 2
+              ? null
+              : {
+                  rank: index % 9 === 0 ? -1 : (index % 7) + 1,
+                  words: 'what I said about it',
+                  saidAt: now - between(1, 60) * DAY_MS,
+                  until: null,
+                  captureId: null,
+                },
           privateMark: isPrivateProject(index) ? 'person' : null,
           isPrivacyCleared: false,
         }),

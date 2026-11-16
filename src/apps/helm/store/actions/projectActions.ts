@@ -99,6 +99,7 @@ export async function createProject(
         milestones: {},
         roleNotes: {},
         why: input.why ?? null,
+        importance: null,
         privateMark: null,
         isPrivacyCleared: false,
       },

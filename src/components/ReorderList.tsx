@@ -1,0 +1,674 @@
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { GripVertical } from 'lucide-react';
+
+import SectionDivider from '@/components/SectionDivider';
+
+export interface ReorderGroup<T extends { id: string }> {
+  id: string;
+  /** Words on the group's divider; `null` draws the group with no heading. */
+  label: string | null;
+  items: T[];
+  /** Draws place numbers and a drag handle on each row. */
+  isOrdered: boolean;
+  /** Whether a dragged row can be dropped into this group. Defaults to true. */
+  isDropTarget?: boolean;
+  /** Shown in place of the rows while the group is empty, and as the drop target for it. */
+  empty?: ReactNode;
+}
+
+export interface ReorderMove {
+  itemId: string;
+  toGroupId: string;
+  /** Where the item ends up in that group's items once it has left its old spot. */
+  toIndex: number;
+}
+
+export interface ReorderRowState {
+  place: number;
+  isDragging: boolean;
+}
+
+interface MoveInfo {
+  itemLabel: string;
+  place: number;
+  groupLabel: string | null;
+}
+
+export interface ReorderAnnouncements {
+  pickedUp: (itemLabel: string) => string;
+  moved: (info: MoveInfo) => string;
+  dropped: (info: MoveInfo) => string;
+  cancelled: (itemLabel: string) => string;
+}
+
+export interface ReorderListProps<T extends { id: string }> {
+  groups: ReorderGroup<T>[];
+  /** Draws the row's content; the list adds the place number, the handle and the tap target. */
+  renderRow: (item: T, state: ReorderRowState) => ReactNode;
+  /** Called with the finished move; the list keeps no order of its own beyond the drag. */
+  onMove: (move: ReorderMove) => void;
+  /** A tap on a row anywhere but its handle. Without it rows are not tappable. */
+  onOpen?: (item: T) => void;
+  /** The number shown for a row; defaults to its position, so a caller can show equal places. */
+  getPlace?: (item: T, index: number, group: ReorderGroup<T>) => number;
+  /** Names an item for the handle and the spoken announcements. */
+  getItemLabel?: (item: T) => string;
+  /** The handle's accessible name before the item's own. */
+  handleLabel?: string;
+  announcements?: Partial<ReorderAnnouncements>;
+  className?: string;
+}
+
+const DEFAULT_ANNOUNCEMENTS: ReorderAnnouncements = {
+  pickedUp: (label) =>
+    `Picked up${label ? ` ${label}` : ''}. Use the arrow keys to move, Space to drop, Escape to cancel.`,
+  moved: ({ place, groupLabel }) =>
+    `Moved to place ${place}${groupLabel ? ` in ${groupLabel}` : ''}`,
+  dropped: ({ place, groupLabel }) =>
+    `Dropped at place ${place}${groupLabel ? ` in ${groupLabel}` : ''}`,
+  cancelled: () => 'Move cancelled',
+};
+
+const DRAG_START_PX = 4;
+const EDGE_ZONE_PX = 72;
+const MAX_SCROLL_PX_PER_FRAME = 18;
+
+interface Slot {
+  g: number;
+  i: number;
+}
+
+interface Measured {
+  id: string;
+  top: number;
+  bottom: number;
+}
+
+interface Snapshot {
+  itemId: string;
+  src: Slot;
+  height: number;
+  srcTop: number;
+  groups: {
+    top: number;
+    bottom: number;
+    isTarget: boolean;
+    itemsTop: number;
+    items: Measured[];
+  }[];
+  scroller: HTMLElement | null;
+  startScroll: number;
+  startPointerY: number;
+  target: Slot;
+  mode: 'pointer' | 'keyboard';
+}
+
+function findScroller(from: HTMLElement | null): HTMLElement | null {
+  if (!from) return null;
+  const parent = from.parentElement;
+  if (!parent || parent === document.body) return null;
+  const { overflowY } = getComputedStyle(parent);
+  const isScroller =
+    /(auto|scroll|overlay)/.test(overflowY) &&
+    parent.scrollHeight > parent.clientHeight;
+  return isScroller ? parent : findScroller(parent);
+}
+
+const scrollOffset = (scroller: HTMLElement | null) =>
+  window.scrollY + (scroller?.scrollTop ?? 0);
+
+const excluding = (items: Measured[], id: string) =>
+  items.filter((item) => item.id !== id);
+
+/** How far an item at its original place has moved up because the dragged row left its spot. */
+const removalShift = (snap: Snapshot, g: number, originalIndex: number) =>
+  g > snap.src.g || (g === snap.src.g && originalIndex > snap.src.i)
+    ? -snap.height
+    : 0;
+
+function chooseTarget(snap: Snapshot, centerY: number): Slot {
+  const candidates = snap.groups
+    .map((group, g) => ({ group, g }))
+    .filter(({ group }) => group.isTarget);
+  if (candidates.length === 0) return snap.src;
+  const distance = (top: number, bottom: number) =>
+    centerY < top ? top - centerY : centerY > bottom ? centerY - bottom : 0;
+  const best = candidates.reduce((nearest, next) =>
+    distance(next.group.top, next.group.bottom) <
+    distance(nearest.group.top, nearest.group.bottom)
+      ? next
+      : nearest,
+  );
+  const others = excluding(best.group.items, snap.itemId);
+  return {
+    g: best.g,
+    i: others.filter((item) => (item.top + item.bottom) / 2 < centerY).length,
+  };
+}
+
+/** Top edge, in page coordinates, of the gap the dragged row would fill at a slot. */
+function slotTop(snap: Snapshot, slot: Slot): number {
+  const group = snap.groups[slot.g];
+  const others = excluding(group.items, snap.itemId);
+  const originalIndexOf = (k: number) =>
+    k + (slot.g === snap.src.g && k >= snap.src.i ? 1 : 0);
+  if (slot.i < others.length) {
+    return (
+      others[slot.i].top + removalShift(snap, slot.g, originalIndexOf(slot.i))
+    );
+  }
+  if (others.length > 0) {
+    const last = others.length - 1;
+    return (
+      others[last].bottom + removalShift(snap, slot.g, originalIndexOf(last))
+    );
+  }
+  return group.itemsTop + (slot.g > snap.src.g ? -snap.height : 0);
+}
+
+interface RowProps<T extends { id: string }> {
+  item: T;
+  place: number;
+  isOrdered: boolean;
+  isActive: boolean;
+  itemLabel: string;
+  handleLabel: string;
+  renderRow: ReorderListProps<T>['renderRow'];
+  onOpen?: (item: T) => void;
+  register: (key: string, el: HTMLElement | null) => void;
+  onHandlePointerDown: (
+    event: ReactPointerEvent<HTMLElement>,
+    id: string,
+  ) => void;
+  onHandleKeyDown: (event: KeyboardEvent<HTMLElement>, id: string) => void;
+  onHandleBlur: (id: string) => void;
+}
+
+function RowInner<T extends { id: string }>({
+  item,
+  place,
+  isOrdered,
+  isActive,
+  itemLabel,
+  handleLabel,
+  renderRow,
+  onOpen,
+  register,
+  onHandlePointerDown,
+  onHandleKeyDown,
+  onHandleBlur,
+}: RowProps<T>) {
+  const content = (
+    <span className='block w-full min-w-0'>
+      {renderRow(item, { place, isDragging: isActive })}
+    </span>
+  );
+  return (
+    <div
+      ref={(el) => register(`row:${item.id}`, el)}
+      className={join(
+        'border-border relative flex items-center gap-1 border-b transition-transform duration-150 motion-reduce:transition-none',
+        isActive &&
+          'bg-background ring-border z-10 rounded-xl border-b-0 shadow-lg ring-1 transition-none select-none',
+      )}
+    >
+      {isOrdered && (
+        <span
+          className='text-muted-foreground w-6 shrink-0 text-center text-sm tabular-nums'
+          aria-hidden='true'
+        >
+          {place}
+        </span>
+      )}
+      {onOpen ? (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='stripped'
+          className='h-auto min-h-10 min-w-0 flex-1 justify-start rounded-xl py-3 text-left font-normal'
+          onClick={() => onOpen(item)}
+        >
+          {content}
+        </Button>
+      ) : (
+        <div className='min-w-0 flex-1 py-3'>{content}</div>
+      )}
+      {isOrdered && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='stripped'
+          data-no-swipe
+          data-reorder-handle={item.id}
+          aria-label={itemLabel ? `${handleLabel}: ${itemLabel}` : handleLabel}
+          aria-pressed={isActive}
+          className="text-muted-foreground relative size-8! min-h-8! min-w-8! shrink-0 cursor-grab touch-none rounded-full p-0 select-none before:absolute before:-inset-1 before:content-[''] active:cursor-grabbing"
+          onPointerDown={(event) => onHandlePointerDown(event, item.id)}
+          onKeyDown={(event) => onHandleKeyDown(event, item.id)}
+          onBlur={() => onHandleBlur(item.id)}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <GripVertical className='size-5' aria-hidden='true' />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+const Row = memo(RowInner) as typeof RowInner;
+
+/** An ordered list in groups, where a row's handle is pressed and dragged (or moved by keyboard) to a new place; the caller applies the finished move. */
+function ReorderList<T extends { id: string }>({
+  groups,
+  renderRow,
+  onMove,
+  onOpen,
+  getPlace,
+  getItemLabel,
+  handleLabel = 'Reorder',
+  announcements,
+  className,
+}: ReorderListProps<T>) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const liveRef = useRef<HTMLDivElement>(null);
+  const elements = useRef(new Map<string, HTMLElement>());
+  const snapshot = useRef<Snapshot | null>(null);
+  const pointerY = useRef(0);
+  const frame = useRef(0);
+  const detach = useRef<(() => void) | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const latest = useRef({ groups, onMove, getItemLabel, announcements });
+  useEffect(() => {
+    latest.current = { groups, onMove, getItemLabel, announcements };
+  });
+
+  const register = useCallback((key: string, el: HTMLElement | null) => {
+    if (el) elements.current.set(key, el);
+    else elements.current.delete(key);
+  }, []);
+
+  const say = (
+    key: keyof ReorderAnnouncements,
+    slot: Slot | null,
+    itemId: string,
+    fromGroup = snapshot.current?.src.g,
+  ) => {
+    const {
+      groups: current,
+      getItemLabel: labelOf,
+      announcements: custom,
+    } = latest.current;
+    const words = { ...DEFAULT_ANNOUNCEMENTS, ...custom };
+    const item = current
+      .flatMap((group) => group.items)
+      .find((entry) => entry.id === itemId);
+    const itemLabel = (item && labelOf?.(item)) ?? '';
+    const text =
+      key === 'pickedUp' || key === 'cancelled'
+        ? words[key](itemLabel)
+        : words[key]({
+            itemLabel,
+            place: (slot?.i ?? 0) + 1,
+            groupLabel:
+              slot && slot.g !== fromGroup
+                ? (current[slot.g]?.label ?? null)
+                : null,
+          });
+    if (liveRef.current) liveRef.current.textContent = text;
+  };
+
+  const measure = (
+    itemId: string,
+    mode: Snapshot['mode'],
+    pointer: number,
+  ): Snapshot | null => {
+    const root = rootRef.current;
+    const current = latest.current.groups;
+    const src = current.reduce<Slot | null>((found, group, g) => {
+      const i = group.items.findIndex((item) => item.id === itemId);
+      return found ?? (i >= 0 ? { g, i } : null);
+    }, null);
+    const srcEl = elements.current.get(`row:${itemId}`);
+    if (!root || !src || !srcEl) return null;
+    const scroller = findScroller(root);
+    const offset = scrollOffset(scroller);
+    const page = (el: HTMLElement) => {
+      const rect = el.getBoundingClientRect();
+      return { top: rect.top + offset, bottom: rect.bottom + offset };
+    };
+    const srcRect = page(srcEl);
+    return {
+      itemId,
+      src,
+      height: srcRect.bottom - srcRect.top,
+      srcTop: srcRect.top,
+      groups: current.map((group) => {
+        const wrapper = elements.current.get(`group:${group.id}`);
+        const body = elements.current.get(`items:${group.id}`);
+        return {
+          ...(wrapper ? page(wrapper) : { top: 0, bottom: 0 }),
+          isTarget: group.isDropTarget !== false,
+          itemsTop: body ? page(body).top : 0,
+          items: group.items.map((item) => {
+            const el = elements.current.get(`row:${item.id}`);
+            return { id: item.id, ...(el ? page(el) : { top: 0, bottom: 0 }) };
+          }),
+        };
+      }),
+      scroller,
+      startScroll: offset,
+      startPointerY: pointer,
+      target: src,
+      mode,
+    };
+  };
+
+  const setTransform = (el: HTMLElement | undefined, offset: number) => {
+    if (el)
+      el.style.transform = offset === 0 ? '' : `translate3d(0, ${offset}px, 0)`;
+  };
+
+  const layout = (snap: Snapshot, draggedOffset: number) => {
+    const { target, height } = snap;
+    snap.groups.forEach((group, g) => {
+      const headOffset =
+        (g > snap.src.g ? -height : 0) + (g > target.g ? height : 0);
+      setTransform(
+        elements.current.get(`head:${latest.current.groups[g].id}`),
+        headOffset,
+      );
+      setTransform(
+        elements.current.get(`empty:${latest.current.groups[g].id}`),
+        headOffset,
+      );
+      excluding(group.items, snap.itemId).forEach((item, k) => {
+        const originalIndex = k + (g === snap.src.g && k >= snap.src.i ? 1 : 0);
+        const makesRoom = g > target.g || (g === target.g && k >= target.i);
+        setTransform(
+          elements.current.get(`row:${item.id}`),
+          removalShift(snap, g, originalIndex) + (makesRoom ? height : 0),
+        );
+      });
+    });
+    setTransform(elements.current.get(`row:${snap.itemId}`), draggedOffset);
+  };
+
+  const refresh = () => {
+    const snap = snapshot.current;
+    if (!snap || snap.mode !== 'pointer') return;
+    const dy =
+      pointerY.current -
+      snap.startPointerY +
+      scrollOffset(snap.scroller) -
+      snap.startScroll;
+    snap.target = chooseTarget(snap, snap.srcTop + snap.height / 2 + dy);
+    layout(snap, dy);
+  };
+
+  const autoScroll = () => {
+    const snap = snapshot.current;
+    if (!snap) return;
+    const bounds = snap.scroller?.getBoundingClientRect();
+    const top = Math.max(0, bounds?.top ?? 0);
+    const bottom = Math.min(
+      window.innerHeight,
+      bounds?.bottom ?? window.innerHeight,
+    );
+    const y = pointerY.current;
+    const speed =
+      y < top + EDGE_ZONE_PX
+        ? -Math.min(1, (top + EDGE_ZONE_PX - y) / EDGE_ZONE_PX)
+        : y > bottom - EDGE_ZONE_PX
+          ? Math.min(1, (y - (bottom - EDGE_ZONE_PX)) / EDGE_ZONE_PX)
+          : 0;
+    if (speed !== 0 && snap.mode === 'pointer') {
+      const step = Math.round(speed * MAX_SCROLL_PX_PER_FRAME);
+      if (snap.scroller) snap.scroller.scrollTop += step;
+      else window.scrollBy(0, step);
+      refresh();
+    }
+    frame.current = requestAnimationFrame(autoScroll);
+  };
+
+  const finish = (shouldCommit: boolean) => {
+    const snap = snapshot.current;
+    detach.current?.();
+    detach.current = null;
+    cancelAnimationFrame(frame.current);
+    if (!snap) return;
+    snapshot.current = null;
+    const touched = Array.from(elements.current.entries()).filter(
+      ([key]) =>
+        key.startsWith('row:') ||
+        key.startsWith('head:') ||
+        key.startsWith('empty:'),
+    );
+    touched.forEach(([, el]) => {
+      el.style.transition = 'none';
+      el.style.transform = '';
+    });
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        touched.forEach(([, el]) => (el.style.transition = '')),
+      ),
+    );
+    setActiveId(null);
+    const { target, src, itemId } = snap;
+    if (!shouldCommit) return say('cancelled', null, itemId);
+    if (target.g === src.g && target.i === src.i) return;
+    say('dropped', target, itemId, src.g);
+    latest.current.onMove({
+      itemId,
+      toGroupId: latest.current.groups[target.g].id,
+      toIndex: target.i,
+    });
+    if (snap.mode === 'keyboard') {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() =>
+          rootRef.current
+            ?.querySelector<HTMLElement>(
+              `[data-reorder-handle="${CSS.escape(itemId)}"]`,
+            )
+            ?.focus(),
+        ),
+      );
+    }
+  };
+
+  const onHandlePointerDown = (
+    event: ReactPointerEvent<HTMLElement>,
+    id: string,
+  ) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (snapshot.current) return;
+    const { pointerId, clientX, clientY } = event;
+    pointerY.current = clientY;
+    let isStarted = false;
+
+    const onMovePointer = (move: PointerEvent) => {
+      if (move.pointerId !== pointerId) return;
+      pointerY.current = move.clientY;
+      if (!isStarted) {
+        if (
+          Math.hypot(move.clientX - clientX, move.clientY - clientY) <
+          DRAG_START_PX
+        )
+          return;
+        const snap = measure(id, 'pointer', clientY);
+        if (!snap) return;
+        isStarted = true;
+        snapshot.current = snap;
+        setActiveId(id);
+        frame.current = requestAnimationFrame(autoScroll);
+      }
+      move.preventDefault();
+      refresh();
+    };
+    const onEnd = (end: PointerEvent) => {
+      if (end.pointerId !== pointerId) return;
+      if (!isStarted) return detach.current?.();
+      finish(end.type === 'pointerup');
+    };
+    const onEscape = (key: globalThis.KeyboardEvent) => {
+      if (key.key === 'Escape' && isStarted) finish(false);
+    };
+    window.addEventListener('pointermove', onMovePointer, { passive: false });
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+    window.addEventListener('keydown', onEscape);
+    detach.current = () => {
+      window.removeEventListener('pointermove', onMovePointer);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onEnd);
+      window.removeEventListener('keydown', onEscape);
+      detach.current = null;
+    };
+  };
+
+  const slotsFor = (snap: Snapshot): Slot[] =>
+    snap.groups.flatMap((group, g) =>
+      group.isTarget
+        ? Array.from(
+            { length: excluding(group.items, snap.itemId).length + 1 },
+            (_, i) => ({ g, i }),
+          )
+        : [],
+    );
+
+  const onHandleKeyDown = (event: KeyboardEvent<HTMLElement>, id: string) => {
+    const snap = snapshot.current;
+    const isOurs = snap?.mode === 'keyboard' && snap.itemId === id;
+    if (event.key === ' ' || event.key === 'Enter') {
+      event.preventDefault();
+      if (isOurs) return finish(true);
+      if (snap) return;
+      const next = measure(id, 'keyboard', 0);
+      if (!next) return;
+      snapshot.current = next;
+      setActiveId(id);
+      say('pickedUp', null, id);
+      return;
+    }
+    if (!isOurs) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      return finish(false);
+    }
+    const step =
+      event.key === 'ArrowUp' || event.key === 'ArrowLeft'
+        ? -1
+        : event.key === 'ArrowDown' || event.key === 'ArrowRight'
+          ? 1
+          : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const slots = slotsFor(snap);
+    const here = slots.findIndex(
+      (slot) => slot.g === snap.target.g && slot.i === snap.target.i,
+    );
+    const next = slots[Math.min(slots.length - 1, Math.max(0, here + step))];
+    if (!next || (next.g === snap.target.g && next.i === snap.target.i)) return;
+    snap.target = next;
+    layout(snap, slotTop(snap, next) - snap.srcTop);
+    elements.current.get(`row:${id}`)?.scrollIntoView({ block: 'nearest' });
+    say('moved', next, id);
+  };
+
+  const onHandleBlur = (id: string) => {
+    const snap = snapshot.current;
+    if (snap?.mode === 'keyboard' && snap.itemId === id) finish(false);
+  };
+
+  const handlerFns = useRef({
+    onHandlePointerDown,
+    onHandleKeyDown,
+    onHandleBlur,
+  });
+  useEffect(() => {
+    handlerFns.current = { onHandlePointerDown, onHandleKeyDown, onHandleBlur };
+  });
+  const stable = useMemo(
+    () => ({
+      down: (event: ReactPointerEvent<HTMLElement>, id: string) =>
+        handlerFns.current.onHandlePointerDown(event, id),
+      key: (event: KeyboardEvent<HTMLElement>, id: string) =>
+        handlerFns.current.onHandleKeyDown(event, id),
+      blur: (id: string) => handlerFns.current.onHandleBlur(id),
+    }),
+    [],
+  );
+
+  useEffect(
+    () => () => {
+      detach.current?.();
+      cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
+
+  return (
+    <div ref={rootRef} className={join(activeId && 'select-none', className)}>
+      {groups.map((group) => (
+        <div key={group.id} ref={(el) => register(`group:${group.id}`, el)}>
+          {group.label !== null && (
+            <div
+              ref={(el) => register(`head:${group.id}`, el)}
+              className='transition-transform duration-150 motion-reduce:transition-none'
+            >
+              <SectionDivider label={group.label} className='py-2' />
+            </div>
+          )}
+          <div ref={(el) => register(`items:${group.id}`, el)}>
+            {group.items.length === 0 && group.empty && (
+              <div
+                ref={(el) => register(`empty:${group.id}`, el)}
+                className='text-muted-foreground py-3 text-sm transition-transform duration-150 motion-reduce:transition-none'
+              >
+                {group.empty}
+              </div>
+            )}
+            {group.items.map((item, index) => (
+              <Row
+                key={item.id}
+                item={item}
+                place={getPlace ? getPlace(item, index, group) : index + 1}
+                isOrdered={group.isOrdered}
+                isActive={activeId === item.id}
+                itemLabel={getItemLabel?.(item) ?? ''}
+                handleLabel={handleLabel}
+                renderRow={renderRow}
+                onOpen={onOpen}
+                register={register}
+                onHandlePointerDown={stable.down}
+                onHandleKeyDown={stable.key}
+                onHandleBlur={stable.blur}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+      <div
+        ref={liveRef}
+        className='sr-only'
+        aria-live='assertive'
+        role='status'
+      />
+    </div>
+  );
+}
+
+export default ReorderList;

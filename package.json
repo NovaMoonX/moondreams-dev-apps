@@ -114,6 +114,7 @@
     "check:helm-contact-import": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmContactImport.ts",
     "check:helm-match-entities": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmMatchEntities.ts",
     "check:helm-whereabouts": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhereabouts.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmWhereabouts.ts",
+    "check:helm-importance": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmImportance.ts",
     "check:helm-habits": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts",
     "check:helm-reminders-server": "firebase emulators:exec --only firestore --project demo-helm-reminders \"TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRemindersServer.ts\"",
     "helm:reminders-tick": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/helm/remindersTick.ts",

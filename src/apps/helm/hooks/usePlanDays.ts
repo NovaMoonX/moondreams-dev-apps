@@ -5,10 +5,17 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useAuth } from '@/hooks/useAuth';
 import { useConnections } from '@/lib/connections/useConnections';
 import { store, useAppSelector } from '@/store';
+import { dayKeyToMs } from '@/utils/cadenceUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { HELM_COPY } from '@apps/helm/constants';
+import {
+  readImportanceOrder,
+  readProjectPlaces,
+  type ImportanceItem,
+} from '@apps/helm/engine/importance';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { generatePlan } from '@apps/helm/store/actions/planActions';
+import { selectImportanceItems } from '@apps/helm/store/selectors/importanceSelectors';
 import { selectActiveTasks } from '@apps/helm/store/selectors/taskSelectors';
 import {
   formatDayWord,
@@ -43,11 +50,12 @@ interface SourceParts {
   planDays: Record<string, PlanDay>;
   tasks: OpenTask[];
   places: OpenPlace[];
+  importanceItems: ImportanceItem[];
   now: number;
 }
 
 const toSources = (parts: SourceParts): PlanSources | null => {
-  const { profile, now, awayKey, ...rest } = parts;
+  const { profile, now, awayKey, importanceItems, ...rest } = parts;
   if (!profile) return null;
   const timeZone = readTodayZone(
     now,
@@ -57,7 +65,17 @@ const toSources = (parts: SourceParts): PlanSources | null => {
     },
     fromAwayKey(awayKey),
   );
-  return { ...rest, profile, now, timeZone, todayKey: toDayKey(now, timeZone) };
+  const todayKey = toDayKey(now, timeZone);
+  return {
+    ...rest,
+    profile,
+    now,
+    timeZone,
+    todayKey,
+    projectPlaces: readProjectPlaces(
+      readImportanceOrder(importanceItems, dayKeyToMs(todayKey)),
+    ),
+  };
 };
 
 /** What the planner reads, as of this moment: for a tap or an effect, never for rendering. */
@@ -72,6 +90,7 @@ const readPlanSources = (grants: ConnectionGrantWithId[]) => {
     planDays: state.helm.planDays.byId,
     tasks: selectActiveTasks(state, Math.floor(now / MINUTE_MS) * MINUTE_MS),
     places: state.helm.places.items,
+    importanceItems: selectImportanceItems(state),
     now,
   });
 };
@@ -84,6 +103,7 @@ export function usePlanSources(nowMinute: number) {
   const planDays = useAppSelector((state) => state.helm.planDays.byId);
   const tasks = useAppSelector((state) => selectActiveTasks(state, nowMinute));
   const places = useAppSelector((state) => state.helm.places.items);
+  const importanceItems = useAppSelector(selectImportanceItems);
   const awayKey = useAppSelector((state) => toAwayKey(state.helm.who.items));
   return useMemo(
     () =>
@@ -95,9 +115,20 @@ export function usePlanSources(nowMinute: number) {
         planDays,
         tasks,
         places,
+        importanceItems,
         now: nowMinute,
       }),
-    [grants, awayKey, profile, synced, planDays, tasks, places, nowMinute],
+    [
+      grants,
+      awayKey,
+      profile,
+      synced,
+      planDays,
+      tasks,
+      places,
+      importanceItems,
+      nowMinute,
+    ],
   );
 }
 

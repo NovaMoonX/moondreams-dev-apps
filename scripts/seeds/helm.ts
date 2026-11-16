@@ -1665,7 +1665,7 @@ export async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   }
 }
 
-/** Alex's three projects: the 🎸 Get back into guitar goal (a why in the person's words with a tidied version offered and a summary with tags, two milestones one reached, the Practice guitar habit as its regular step), the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone. */
+/** Alex's projects (and what matters most: the wedding first, then 💼 Work, the guitar goal not said yet, stretching on Can wait): the 🎸 Get back into guitar goal (a why in the person's words with a tidied version offered and a summary with tags, two milestones one reached, the Practice guitar habit as its regular step), the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone. */
 async function buildProjects(input: {
   now: number;
   encryption: HelmEncryption;
@@ -1689,7 +1689,8 @@ async function buildProjects(input: {
       | 'pausedUntil'
     > &
       Partial<Pick<Project, 'kind' | 'pausedAt' | 'pausedUntil'>>,
-    words: Omit<ProjectSealed, 'why'> & Partial<Pick<ProjectSealed, 'why'>>,
+    words: Omit<ProjectSealed, 'why' | 'importance'> &
+      Partial<Pick<ProjectSealed, 'why' | 'importance'>>,
     milestoneState: Project['milestoneState'] = {},
   ): Promise<{ id: string; project: Project }> => ({
     id,
@@ -1704,7 +1705,7 @@ async function buildProjects(input: {
       createdBy: 'person',
       executionId: null,
       lastEditedAt: null,
-      sealed: await seal<ProjectSealed>({ why: null, ...words }),
+      sealed: await seal<ProjectSealed>({ why: null, importance: null, ...words }),
     },
   });
   const taskOf = async (
@@ -1774,6 +1775,13 @@ async function buildProjects(input: {
           'seed-milestone-wedding-3': { title: 'Pick the menu' },
         },
         roleNotes: { 'seed-who-dana': 'florist' },
+        importance: {
+          rank: 2,
+          words: 'the wedding matters most, then work',
+          saidAt: now - 20 * DAY_MS,
+          until: null,
+          captureId: null,
+        },
         privateMark: null,
         isPrivacyCleared: false,
       },
@@ -1865,6 +1873,32 @@ async function buildProjects(input: {
           order: 1,
           doneAt: null,
         },
+      },
+    ),
+    projectOf(
+      'seed-project-work',
+      {
+        targetDate: null,
+        status: 'active',
+        whoRoles: {},
+        createdAt: now - 80 * DAY_MS,
+        finishedAt: null,
+      },
+      {
+        name: 'Work: year-end review',
+        emoji: '💼',
+        objective: null,
+        milestones: {},
+        roleNotes: {},
+        importance: {
+          rank: 1,
+          words: 'the wedding matters most, then work',
+          saidAt: now - 20 * DAY_MS,
+          until: null,
+          captureId: null,
+        },
+        privateMark: null,
+        isPrivacyCleared: false,
       },
     ),
   ]);
@@ -2096,6 +2130,13 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
         name: 'Stretch for ten minutes',
         emoji: '🧘',
         windows: { m: { label: 'Morning' } },
+        importance: {
+          rank: -1,
+          words: 'stretching can wait',
+          saidAt: now - 10 * DAY_MS,
+          until: null,
+          captureId: null,
+        },
       },
       encryption,
     ).then((habit) => ({ id: 'seed-habit-stretch', habit })),

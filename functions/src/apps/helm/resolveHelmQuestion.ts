@@ -19,6 +19,8 @@ import {
 import type { PlacedTopic } from './nomos/planTopicCommands.js';
 import { MAX_CONTEXT_TOPICS } from './nomos/commands.js';
 import { planResolveHabit } from './nomos/planHabitCommands.js';
+import { importanceToday, readImportanceRecordsIn } from './importanceStore.js';
+import { planResolveImportance } from './nomos/planImportance.js';
 import {
   planResolveConnection,
   type PlanWho,
@@ -365,6 +367,55 @@ export const resolveHelmQuestion = onCall(
         });
         return {
           executionId: habitResult.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === 'whichComesFirst') {
+        const now = Date.now();
+        const timeZone = String(profileSnap.get('timeZone') ?? 'UTC');
+        const records = await readImportanceRecordsIn(
+          transaction,
+          firestore,
+          base,
+          key,
+          capture.createdAt,
+          timeZone,
+        );
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const picked = planResolveImportance({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          records,
+          today: importanceToday(now, timeZone),
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          seal,
+        });
+        if (picked.refused !== null) {
+          throw toRefusal(picked.refused, 'person');
+        }
+        picked.plan?.updates.forEach(({ collection, id, data }) =>
+          transaction.update(
+            firestore.doc(`${base}/${collection}/${id}`),
+            data,
+          ),
+        );
+        if (picked.execution)
+          transaction.create(executionRef, picked.execution);
+        transaction.update(captureRef, {
+          ...picked.capture,
+          sealed: seal(picked.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: picked.execution ? executionRef.id : null,
           isStale: false,
         };
       }

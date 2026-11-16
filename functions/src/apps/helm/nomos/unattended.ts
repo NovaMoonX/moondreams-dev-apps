@@ -1,4 +1,8 @@
-import type { ContextInput, ContextTask } from './buildContext.js';
+import type {
+  ContextImportanceEntry,
+  ContextInput,
+  ContextTask,
+} from './buildContext.js';
 import type { SyncedCopy } from '../syncedCopies.js';
 import type { TaskDue } from './commands.js';
 import { readMaskedLabel } from '../privacy.js';
@@ -94,6 +98,19 @@ export const maskSyncedCopy = (mask: Mask, copy: SyncedCopy): SyncedCopy =>
       }
     : copy;
 
+const maskImportance = (mask: Mask, entries: ContextImportanceEntry[]) =>
+  entries.map((entry) =>
+    cover(mask, entry.isPrivate, 'a private item', [entry.name, entry.words])
+      ? {
+          ...entry,
+          name: 'a private item',
+          words: null,
+          until: null,
+          date: null,
+        }
+      : entry,
+  );
+
 /** Every private record that would reach the model on an unattended turn, replaced by a label made by code; the words it covers join the names the reply is masked with. */
 export const maskContextRecords = (
   mask: Mask,
@@ -111,6 +128,7 @@ export const maskContextRecords = (
     | 'focusedTopic'
     | 'runs'
     | 'habits'
+    | 'importance'
   > & { synced: SyncedCopy[] },
 ) => ({
   facts: input.facts?.map((fact) =>
@@ -229,5 +247,11 @@ export const maskContextRecords = (
         }
       : habit,
   ),
+  importance: input.importance && {
+    inOrder: maskImportance(mask, input.importance.inOrder),
+    canWait: maskImportance(mask, input.importance.canWait),
+    notSaid: maskImportance(mask, input.importance.notSaid),
+    alwaysKept: maskImportance(mask, input.importance.alwaysKept),
+  },
   synced: input.synced.map((copy) => maskSyncedCopy(mask, copy)),
 });

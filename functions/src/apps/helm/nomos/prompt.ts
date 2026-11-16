@@ -35,6 +35,7 @@ import {
   MAX_HABIT_CANDIDATES,
   MAX_HABITS_PER_TURN,
   MAX_CHECKINS_PER_TURN,
+  MAX_IMPORTANCE_PER_TURN,
   PROJECT_NAME_CAP,
   PROJECT_OBJECTIVE_CAP,
   PROJECT_ROLE_NOTE_CAP,
@@ -131,6 +132,10 @@ export const PROCEDURE_PROMPT = `Procedures: <your_procedures> lists the person'
 - startRun: only when the person asks to begin a procedure ("start packing for the Pacific Northwest weekend"). procedureAlias is the procedure. When they name a trip or event in <synced_records> (a Waypoint trip is kind trip), aboutAlias is its alias; when they name a project from <open_projects>, projectRef is its name; otherwise both are null. requestQuote is their exact words, which must say start, begin or run. At most one per turn; never start one for a procedure <open_runs> already shows for the same thing.
 - tickRun: only when the person says steps of an open run are done ("done with the charger", "packed the shirts and trousers"). <open_runs> lists the run's steps still to do, each with an alias (rs1, rs2, …): put the alias of every step they say is done in runStepAliases, at most ${MAX_TICKS_PER_TURN}. requestQuote is their exact words. Never tick a step they did not say, and never un-tick.
 - A procedure holds at most ${PROCEDURE_STEPS_MAX} steps; a run holds at most ${RUN_STEPS_MAX}.`;
+
+export const IMPORTANCE_PROMPT = `What matters most: <importance> is the person's order of projects, goals and habits, each with an alias (p1 for a project or goal, h1 for a habit). inOrder runs first to last (equal place numbers share a place), canWait is what they said can wait, notSaid is what they have not placed, and alwaysKept is health and care, which are never placed.
+- setImportance: only when the person says what matters more or less ("the wedding matters most, then work", "work comes before the gym", "stretching can wait", "forget what I said about work"). One command per project or habit named, in the order said, at most ${MAX_IMPORTANCE_PER_TURN} per turn. subjectAlias is the one placed, importanceRelation says how: most, above (with otherAlias, the one it is placed above), below, same, matters (nothing to compare), canWait, clear. "X matters most, then Y" is X most, then Y below X. requestQuote is their exact words for it; dateSpanId is the day when they said "until Friday", otherwise null. A name <importance> does not list is subjectName with subjectAlias null; never invent an alias.
+- Never place a medicine or anything in alwaysKept; say nothing about it. A question about the order ("what matters most?") is an answer command from <importance>, never a setImportance.`;
 
 export const HABIT_PROMPT = `Habits: <habits> lists the person's habits with today's state: each has an alias (h1, h2, …), its windows (a name and whether today's tick is in), a count for something counted, and whether it is a medicine or care.
 - createHabit: only when the person asks for something to do again and again ("remind me to take my vitamins every morning", "I want to drink eight glasses of water a day"). title is the habit's name (at most ${HABIT_NAME_CAP} characters). cadence is how often (null is every day). windows is when in the day, at most ${HABIT_WINDOWS_MAX}: each a named part (morning, midday, afternoon, evening, bedtime) or the ids of time spans from the reading; label is null when the part names it (at most ${HABIT_LABEL_CAP} characters otherwise). timesPerDay (2 to ${HABIT_TIMES_PER_DAY_MAX}) is for a count such as glasses of water, and then windows is []. isCare is true for a medicine, a dose, a treatment, or anything kept for someone else. At most ${MAX_HABITS_PER_TURN} per turn. Never make one that <habits> already lists.

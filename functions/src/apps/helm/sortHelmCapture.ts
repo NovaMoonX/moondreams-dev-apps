@@ -19,7 +19,18 @@ import {
   type ConnectionKind,
 } from './nomos/connections.js';
 import type { PlannedQuestion } from './nomos/executeCommands.js';
-import { MAX_EFFECTS, type HabitCommand } from './nomos/commands.js';
+import {
+  MAX_EFFECTS,
+  type HabitCommand,
+  type SetImportanceCommand,
+} from './nomos/commands.js';
+import {
+  importanceToday,
+  readImportanceRecords,
+  readImportanceRecordsIn,
+  toContextImportance,
+} from './importanceStore.js';
+import { planImportance } from './nomos/planImportance.js';
 import { decideHabit } from './nomos/policy.js';
 import {
   FieldValue,
@@ -295,6 +306,7 @@ import {
   REPEAT_TOOL,
   hasReviseCue,
   isHabitTurn,
+  hasImportanceCue,
   hasProcedureCue,
   hasProcedureReviseCue,
   isQuestion,
@@ -320,6 +332,7 @@ import {
   TOPIC_PROMPT,
   PROCEDURE_PROMPT,
   HABIT_PROMPT,
+  IMPORTANCE_PROMPT,
 } from './nomos/prompt.js';
 import { renderWhereBlock } from './nomos/whereThingsLive.js';
 
@@ -1978,6 +1991,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureCommands: [],
       runCommands: [],
       habitCommands: [],
+      importanceCommands: [],
       soundsLike: [],
       contactPoints: [],
       connectionCommands: [],
@@ -2442,6 +2456,29 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         sanitizeScreen(capture.screen)?.view ?? null,
         contextHabits,
       );
+    const isImportanceInPlay =
+      mode !== 'rest' && hasImportanceCue(combined.text);
+    const contextImportance = isImportanceInPlay
+      ? await readImportanceRecords(
+          firestore,
+          base,
+          key,
+          capture.createdAt,
+          timeZone,
+        )
+          .then((records) =>
+            toContextImportance(
+              records,
+              importanceToday(capture.createdAt, timeZone),
+            ),
+          )
+          .catch((error) => {
+            logger.warn('helm.sort.importanceUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return undefined;
+          })
+      : undefined;
     const contextSynced = read.isOutside
       ? filterSourcesForOutside(read.outsideReadScopes, allSynced)
       : allSynced;
@@ -2496,6 +2533,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       focusedTopic: topicDocument ? focusedTopic : null,
       runs: contextRuns,
       habits: isHabitsInPlay ? contextHabits : [],
+      importance: contextImportance,
       synced: contextSynced,
     });
     const context = buildContext({
@@ -2532,6 +2570,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       focusedProcedure: masked.focusedProcedure,
       runs: masked.runs,
       habits: masked.habits,
+      importance: masked.importance,
       attachments: attached.media.map((item) => ({
         alias: item.alias,
         kind: item.kind,
@@ -2619,6 +2658,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         ? PROCEDURE_PROMPT
         : null,
       isHabitsInPlay ? HABIT_PROMPT : null,
+      contextImportance ? IMPORTANCE_PROMPT : null,
       mode === 'rest' ? REST_PROMPT : null,
       attached.media.length > 0 ? MEDIA_PROMPT : null,
       typeof capture.interruptedCaptureId === 'string' &&
@@ -2886,6 +2926,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureVersions,
       runSteps: context.runSteps,
       habits: context.habits,
+      projects: context.projects,
       habitNames: context.habitNames,
       captureText: combined.text,
       keyDateNames,
@@ -2977,6 +3018,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             (command) => decideHabit(command) === 'automatic',
           )
         : [],
+    importanceCommands: mode === 'full' ? reply.importanceCommands : [],
     soundsLike: mode === 'full' ? reply.soundsLike : [],
     contactPoints: mode === 'full' ? reply.contactPoints : [],
     connectionCommands: mode === 'full' ? reply.connectionCommands : [],
@@ -3023,6 +3065,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       reply.procedureDropped,
       reply.runDropped,
       reply.habitDropped,
+      reply.importanceDropped,
       commands.length < reply.commands.length,
     )
       ? hide(reply.replyLine)
@@ -3185,6 +3228,7 @@ async function writeResult(
     procedureCommands: ProcedureCommand[];
     runCommands: RunCommand[];
     habitCommands: HabitCommand[];
+    importanceCommands: SetImportanceCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     contactPoints: AddContactPointCommand[];
     connectionCommands: ConnectionCommand[];
@@ -3235,6 +3279,7 @@ async function writeResult(
     procedureCommands,
     runCommands,
     habitCommands,
+    importanceCommands,
     soundsLike,
     contactPoints,
     connectionCommands,
@@ -4221,6 +4266,42 @@ async function writeResult(
           connectionPlan.effects.length,
       ),
     });
+    const keptImportance = isStale ? [] : importanceCommands;
+    const importanceRecords =
+      keptImportance.length > 0
+        ? await readImportanceRecordsIn(
+            transaction,
+            firestore,
+            base,
+            key,
+            capture.createdAt,
+            timeZone,
+          )
+        : [];
+    const importancePlan = planImportance({
+      commands: keptImportance,
+      records: importanceRecords,
+      today: importanceToday(capture.createdAt, timeZone),
+      now,
+      captureId: captureRef.id,
+      blockedIds: new Set([
+        ...habitPlan.updates.map(({ id }) => id),
+        ...written.projectUpdates.map(({ id }) => id),
+      ]),
+      isUnattended: input.isUnattended === true,
+      newId: () => crypto.randomUUID(),
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length,
+      ),
+    });
     const abilityOffer = isStale
       ? null
       : decideAbilityOffer({
@@ -4239,6 +4320,7 @@ async function writeResult(
         ...contactPlan.effectRefs,
         ...connectionPlan.effectRefs,
         ...habitPlan.effectRefs,
+        ...importancePlan.effectRefs,
       ],
       effects: [
         ...written.effects,
@@ -4248,6 +4330,7 @@ async function writeResult(
         ...contactPlan.effects,
         ...connectionPlan.effects,
         ...habitPlan.effects,
+        ...importancePlan.effects,
       ],
       notKept: [
         ...written.notKept,
@@ -4255,6 +4338,7 @@ async function writeResult(
         ...contactPlan.notKept,
         ...connectionPlan.notKept,
         ...habitPlan.notKept,
+        ...importancePlan.notKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
       linkedWhoIds: [
@@ -4272,7 +4356,8 @@ async function writeResult(
         wherePlan.isPrivate ||
         contactPlan.isPrivate ||
         connectionPlan.isPrivate ||
-        habitPlan.isPrivate,
+        habitPlan.isPrivate ||
+        importancePlan.isPrivate,
     };
     const plan = sentMedia
       ? {
@@ -4324,6 +4409,7 @@ async function writeResult(
       ...plan.questions,
       ...askPlan.questions,
       ...habitPlan.questions,
+      ...importancePlan.questions,
       ...impliedQuestions,
     ];
     const followUp =
@@ -4500,6 +4586,9 @@ async function writeResult(
       habitPlan.updates.forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/habits/${id}`), data),
       );
+      importancePlan.updates.forEach(({ collection, id, data }) =>
+        transaction.update(firestore.doc(`${base}/${collection}/${id}`), data),
+      );
       if (
         profileSnap?.exists &&
         habitPlan.creates.length + habitPlan.updates.length > 0
@@ -4567,6 +4656,7 @@ async function writeResult(
               ...contactPlan.lines,
               ...connectionPlan.lines,
               ...habitPlan.lines,
+              ...importancePlan.lines,
             ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
@@ -4575,6 +4665,7 @@ async function writeResult(
               questions,
               plan.lines,
               habitPlan.lines,
+              importancePlan.lines,
               noted.refused,
               liveRefused,
               askPlan.isDeferred,
@@ -4668,6 +4759,8 @@ async function writeResult(
           soundsPlan.lines.length +
           habitPlan.lines.length +
           habitPlan.notKept.length +
+          importancePlan.lines.length +
+          importancePlan.notKept.length +
           wherePlan.lines.length +
           wherePlan.notKept.length +
           contactPlan.lines.length +

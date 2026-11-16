@@ -39,6 +39,8 @@ export interface PlanSources {
   tasks: OpenTask[];
   places: OpenPlace[];
   planDays: Record<string, PlanDay>;
+  /** Each placed project's place number in what matters most. */
+  projectPlaces: Record<string, number>;
 }
 
 export const isLiveCalendar = (grant: ConnectionGrantWithId) =>
@@ -66,8 +68,12 @@ export const isStoppedCalendar = (grant: ConnectionGrantWithId) =>
 export const isCalendarHeld = (grants: ConnectionGrantWithId[]) =>
   grants.some((grant) => isFailingCalendar(grant) || isStoppedCalendar(grant));
 
-export const toPlannerTask = (task: OpenTask): PlannerTask => ({
+export const toPlannerTask = (
+  task: OpenTask,
+  projectPlaces: Record<string, number> = {},
+): PlannerTask => ({
   id: task.id,
+  projectPlace: task.projectId ? (projectPlaces[task.projectId] ?? null) : null,
   title: task.title,
   due: task.due,
   importance: task.importance,
@@ -204,7 +210,7 @@ export function buildPlanInput(
     slots,
     tasks: tasks
       .filter((task) => !task.isUnreadable && !taken.has(task.id))
-      .map(toPlannerTask),
+      .map((task) => toPlannerTask(task, sources.projectPlaces)),
   };
   return {
     input,

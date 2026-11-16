@@ -1,6 +1,7 @@
 import type { City } from '@/lib/cities/types';
 import type { Cadence, Weekday } from '@/utils/cadenceUtils';
 import type { DayPart } from '@apps/helm/engine/habitDay';
+import type { ImportancePlace } from '@apps/helm/engine/importance';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type { ContactPoint } from '@apps/helm/engine/contactPoints';
 import type {
@@ -850,6 +851,8 @@ export interface ProjectSealed {
   why: GoalWhy | null;
   /** whoId to a short note ("florist"). */
   roleNotes: Record<string, string>;
+  /** Where it sits in what matters most; null when nothing was said, absent in a payload sealed before the field. */
+  importance: ImportancePlace | null;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
@@ -1505,14 +1508,7 @@ export interface HabitHistoryEvent {
   stage: HabitStage | null;
 }
 
-/** What a person said matters, in their own words; sealed inside a habit's payload. */
-export interface HabitImportance {
-  rank: number;
-  words: string | null;
-  saidAt: number;
-  until: number | null;
-  captureId: string | null;
-}
+export type { ImportancePlace };
 
 /** `apps/helm/users/{uid}/habits/{habitId}`: something kept up rather than finished; a missed time simply passes. */
 export interface Habit {
@@ -1562,7 +1558,7 @@ export interface HabitSealed {
   notes: string | null;
   medicine: { name: string; dose: string | null } | null;
   windows: Record<string, { label: string }>;
-  importance: HabitImportance | null;
+  importance: ImportancePlace | null;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */

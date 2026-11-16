@@ -113,6 +113,11 @@ const COPIES: Copy[] = [
     importRewrites: { '@/utils/stringUtils': './stringUtils.js' },
   },
   {
+    src: 'src/apps/helm/engine/importance.ts',
+    dest: 'functions/src/apps/helm/nomos/importanceOrder.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/apps/helm/engine/whoTier.ts',
     dest: 'functions/src/apps/helm/nomos/whoTier.ts',
     importRewrites: {},

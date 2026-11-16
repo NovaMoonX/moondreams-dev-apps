@@ -11,6 +11,7 @@ import { db } from '@lib/firebase/config';
 import type { SealedReader } from '@lib/security';
 
 import { PROJECTS_LIMIT } from '@apps/helm/constants';
+import { readPlace } from '@apps/helm/engine/importance';
 import type {
   OpenProject,
   Project,
@@ -135,6 +136,7 @@ async function openProject(
       milestones: toMilestones(payload.milestones),
       roleNotes: toNotes(payload.roleNotes),
       why: toWhy(payload.why),
+      importance: readPlace(payload.importance),
       privateMark: payload.privateMark ?? null,
       isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,
@@ -148,6 +150,7 @@ async function openProject(
       milestones: {},
       roleNotes: {},
       why: null,
+      importance: null,
       isUnreadable: true,
       privateMark: null,
       isPrivacyCleared: false,

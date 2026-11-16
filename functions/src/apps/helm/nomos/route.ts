@@ -95,6 +95,16 @@ const HABIT_CUES = new Set(['habit', 'habits', ...MEDICINE_CUES]);
 /** Whether the words could make a habit: "habit", or a medicine or vitamin word. A bare "every" or "daily" is not enough, since a task or a note says those too. */
 export const hasHabitCue = (text: string) => hasWordIn(HABIT_CUES, text);
 
+const IMPORTANCE_CUES = new Set(
+  'matter matters important importance priority priorities first before wait waits waiting'.split(
+    ' ',
+  ),
+);
+
+/** Whether the words could say what matters more or less: "matters", "important", "priority", "first", "before", "can wait", as a word of its own. */
+export const hasImportanceCue = (text: string) =>
+  hasWordIn(IMPORTANCE_CUES, text);
+
 const CHECKIN_WORDS = new Set(
   (
     'took take taken gave give given done did had finished finish drank drink ' +

@@ -15,6 +15,10 @@ import { KIN_KINDS } from './kinKinds.js';
 import { ASK_WORDS } from './summaries.js';
 import { readHabitCommands, type HabitDrop } from './readHabitCommands.js';
 import {
+  readImportanceCommands,
+  type ImportanceDrop,
+} from './readImportanceCommands.js';
+import {
   hasProcedureCue,
   hasProcedureReviseCue,
   hasReviseCue,
@@ -115,6 +119,7 @@ import {
   type NomosCommand,
   type TaskDue,
   type HabitCommand,
+  type SetImportanceCommand,
   type ConnectionCommand,
 } from './commands.js';
 import {
@@ -2071,6 +2076,8 @@ export function normalizeNomosReply(
     runSteps?: AliasBook;
     /** The person's habits, by alias (h1, h2, …). */
     habits?: AliasBook;
+    /** The person's projects and goals, by alias (p1, p2, …). */
+    projects?: AliasBook;
     /** Each habit's real name by id, for the check that words in the turn name it. */
     habitNames?: Map<string, string>;
     /** The words of the turn, which a note's words must come from. */
@@ -2106,6 +2113,8 @@ export function normalizeNomosReply(
   runDropped: RunDrop[];
   habitCommands: HabitCommand[];
   habitDropped: HabitDrop[];
+  importanceCommands: SetImportanceCommand[];
+  importanceDropped: ImportanceDrop[];
   soundsLike: NoteSoundsLikeCommand[];
   contactPoints: AddContactPointCommand[];
   connectionCommands: ConnectionCommand[];
@@ -2228,6 +2237,13 @@ export function normalizeNomosReply(
       now: context.now,
     },
   );
+  const { commands: importanceCommands, dropped: importanceDropped } =
+    readImportanceCommands(items, {
+      projects: context.projects,
+      habits: context.habits,
+      reading: context.reading,
+      captureText: context.captureText,
+    });
   const soundsLike = readSoundsLike(
     items,
     context.people,
@@ -2320,6 +2336,8 @@ export function normalizeNomosReply(
     runDropped,
     habitCommands,
     habitDropped,
+    importanceCommands,
+    importanceDropped,
     soundsLike,
     contactPoints,
     connectionCommands,

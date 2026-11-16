@@ -1,4 +1,4 @@
-import { formatList } from '@/utils/formatUtils';
+import { formatList, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type { ThemeOption } from '@/components/ThemePicker';
 import type { DayPart } from '@apps/helm/engine/habitDay';
@@ -3833,6 +3833,68 @@ export const HELM_COPY = {
   habitLeftRange: (from: string, to: string) => `kept, ${from} to ${to}`,
   habitsFormedFold: (count: number) => `Formed · ${count}`,
   habitsFormedOn: (date: string) => `Formed · off Today since ${date}`,
+  importanceTitle: 'What matters most',
+  importanceIntro: (assistantName: string) =>
+    `What comes first gets planned first, and ${assistantName} never suggests pausing it.`,
+  importanceInOrder: 'In order',
+  importanceNotSaid: 'Not said yet',
+  importanceNotSaidTrailing: 'by date',
+  importanceCanWait: 'Can wait',
+  importanceAlwaysKept: (count: number) =>
+    `Always kept: health and care · ${count}`,
+  importanceAlwaysKeptNote: (assistantName: string) =>
+    `${assistantName} never suggests pausing these, whatever the order.`,
+  importanceNothingSaid: (assistantName: string) =>
+    `Nothing said yet, so ${assistantName} goes by dates: the nearest deadline comes first. Tell ${assistantName} what matters most, like \u201cthe wedding matters most\u201d.`,
+  importanceChange: 'Change the order',
+  importanceClear: 'Clear the order',
+  importancePlaceTitle: (name: string) => `${name}\u2019s place`,
+  importanceMakeFirst: 'Make it come first',
+  importanceMakeFirstNote: 'Everything else moves down one.',
+  importancePutAbove: 'Put it above\u2026',
+  importancePutAboveNote: 'Pick what it should come before.',
+  importancePutAboveTitle: (name: string) => `Put ${name} above\u2026`,
+  importanceCanWaitAction: 'It can wait',
+  importanceCanWaitNote: 'Moves to Can wait.',
+  importanceTakeOut: 'Take it out of the order',
+  importanceTakeOutNote: 'Goes by its date again.',
+  importanceOpenThing: (name: string) => `Open ${name}`,
+  importanceMovedFirst: (name: string) => `Moved ${name} to first.`,
+  importanceMovedAbove: (name: string, other: string) =>
+    `Moved ${name} above ${other}.`,
+  importanceMovedAfter: (name: string, other: string) =>
+    `Moved ${name} after ${other}.`,
+  importanceMovedBeside: (name: string, other: string) =>
+    `Moved ${name} beside ${other}.`,
+  importanceMovedUp: (name: string) => `Moved ${name} up.`,
+  importanceMovedDown: (name: string) => `Moved ${name} down.`,
+  importanceMovedCanWait: (name: string) => `Moved ${name} to Can wait.`,
+  importanceMovedOut: (name: string) =>
+    `Took ${name} out of what matters most.`,
+  importanceUnchanged: (name: string) => `${name} is already there.`,
+  importanceRefusedCare: (name: string) =>
+    `${name} is always kept, so it doesn\u2019t need a place.`,
+  importanceRowFirst: 'First in what matters',
+  importanceRowNth: (position: number, of: number) =>
+    `${toDayOrdinal(position)} of ${of} in what matters`,
+  importanceRowShares: (position: number, other: string) =>
+    `Shares ${toDayOrdinal(position)} with ${other}`,
+  importanceRowCanWait: (date: string | null) =>
+    date ? `Can wait \u00b7 you said ${date}` : 'Can wait',
+  importanceRowNotSaidByDate: (date: string) =>
+    `Not said \u00b7 goes by its date, ${date}`,
+  importanceRowNotSaid: 'Not said',
+  importanceRowAlwaysKept: 'Always kept \u00b7 health',
+  importanceRowThrough: (goal: string, position: number | null) =>
+    position === null
+      ? `Through ${goal}`
+      : `Through ${goal} \u00b7 ${toDayOrdinal(position)}`,
+  importanceNoLongerFirst: (date: string) =>
+    `No longer first since ${date}, as you said`,
+  importanceWhichComesFirst: 'Which comes first?',
+  importanceWhichComesBefore: 'Which of these comes before the others?',
+  importanceWhichSkipped:
+    'Okay, nothing\u2019s changed. It\u2019s waiting in Needs you.',
 } as const;
 
 export const PLANNER_COPY = {
