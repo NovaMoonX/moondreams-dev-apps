@@ -1243,6 +1243,7 @@ export function useVoiceConversation({
     return () => window.clearInterval(checkId);
   }, [isLive]);
 
+  // Turning the microphone back on reopens listening even though the conversation never stopped being idle.
   useEffect(() => {
     if (!isLiveIdle) return;
     const reopenId = window.setTimeout(
@@ -1250,7 +1251,7 @@ export function useVoiceConversation({
       LIVE_REOPEN_MS,
     );
     return () => window.clearTimeout(reopenId);
-  }, [isLiveIdle]);
+  }, [isLiveIdle, isLiveMuted]);
 
   const state: VoiceState = isListening
     ? 'listening'
