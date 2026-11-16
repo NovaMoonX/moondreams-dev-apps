@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { createSpeechListener } from '@/hooks/useSpeechCommands';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
+import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
 import { unlockAudio } from '@/lib/speech/audioContext';
 import {
   createListeningState,
@@ -17,6 +18,7 @@ import {
   wasMicrophoneGranted,
   watchMicrophonePermission,
 } from '@/lib/speech/microphonePermission';
+import { readSpeechEvents } from '@/lib/speech/speechDiagnostics';
 import { readWakePhrase } from '@/lib/speech/speechText';
 import {
   hasSameWords,
@@ -156,6 +158,8 @@ const createLineProgress = () => {
 };
 
 export type VoiceListeningRoute = 'cloud' | 'device';
+/** `device`: a reply was spoken in a device voice though the app's chosen (cloud) voice is on, so the person hears something other than their pick. */
+export type VoiceSpeaking = 'chosen' | 'device';
 /** `unavailable`: listening can't work until something changes, and `onUnavailable` has said why; `failed`: it kept failing for no lasting reason. */
 export type VoiceLiveEnd =
   'phrase' | 'quiet' | 'left' | 'unavailable' | 'failed';
@@ -169,6 +173,8 @@ const CONVERSATION_IDLE_MS = 10 * 60 * 1000;
 const FIRST_LINE_FIRST_BYTE_MS = 6000;
 // Two cloud lines in a row that fall back latch the device voice; one slow line never does.
 const CLOUD_FAILURES_MAX = 2;
+const LATCH_FALLBACK_KEY = 'speech:device-voice-latch';
+const CLOUD_LISTEN_FALLBACK_KEY = 'speech:cloud-listening';
 const FOLLOW_UP_MS = 8000;
 const LIVE_IDLE_MS = 2 * 60 * 1000;
 // A phrase heard by mistake (a TV, a passing remark) must not hold the microphone for the full quiet limit.
@@ -246,6 +252,9 @@ export function useVoiceConversation({
   } | null>(null);
   const [listeningRoute, setListeningRoute] =
     useState<VoiceListeningRoute | null>(null);
+  const [speakingVoice, setSpeakingVoice] = useState<VoiceSpeaking | null>(
+    null,
+  );
   const [lastingReason, setReason] = useState<VoiceUnavailableReason | null>(
     () => (canUseBrowserStt() ? null : 'no-recognition'),
   );
@@ -406,7 +415,11 @@ export function useVoiceConversation({
           },
         });
       },
-      onRouteChange: () => queueMicrotask(syncBargeGate),
+      onRouteChange: () =>
+        queueMicrotask(() => {
+          syncBargeGate();
+          syncSpeakingVoice();
+        }),
       onActiveChange: (isActive) =>
         queueMicrotask(() => {
           setIsSpeaking(isActive);
@@ -437,16 +450,35 @@ export function useVoiceConversation({
     return getListeningEffect(before, run.current.mode);
   };
 
+  // A confirmation is always the device's, so only a reply or summary says which voice the person is hearing.
+  const syncSpeakingVoice = () => {
+    const playing = queueRef.current?.getPlayingVoice() ?? null;
+    if (playing === null || playing.priority === 'ack') return;
+    const isChosenCloud = latest.current.cloudSpeaking?.isAllowed === true;
+    setSpeakingVoice(
+      !isChosenCloud || playing.route === 'cloud' ? 'chosen' : 'device',
+    );
+  };
+
   const countCloudFailure = () => {
     run.current.cloudFailures += 1;
     if (run.current.cloudFailures >= CLOUD_FAILURES_MAX) {
       run.current.isDeviceSticky = true;
+      reportFallback({
+        key: LATCH_FALLBACK_KEY,
+        feature: 'Speaking',
+        wanted: 'your chosen voice',
+        used: "this device's voice for the rest of the conversation",
+        reason: 'two lines in a row fell back or were cut short',
+        facts: [`Failures in a row: ${run.current.cloudFailures}`],
+      });
     }
   };
 
   const clearLatch = () => {
     run.current.isDeviceSticky = false;
     run.current.cloudFailures = 0;
+    clearFallback(LATCH_FALLBACK_KEY);
   };
 
   const endConversation = () => {
@@ -454,6 +486,7 @@ export function useVoiceConversation({
     run.current.voice = null;
     run.current.hasSpokenCloud = false;
     run.current.lastLineAt = null;
+    defer(() => setSpeakingVoice(null));
   };
 
   const finish = () => {
@@ -774,6 +807,9 @@ export function useVoiceConversation({
         if (!run.current.pending) setIsListening(true);
         isMicGranted.current = true;
         setReason(null);
+        if (run.current.heardBy === 'deepgram') {
+          clearFallback(CLOUD_LISTEN_FALLBACK_KEY);
+        }
       },
       onListening: () => {
         if (!isCurrent()) return;
@@ -865,6 +901,24 @@ export function useVoiceConversation({
               setHeld({ day: today, reason: heldReason });
               latest.current.onCloudHeld?.(heldReason);
             }
+            const events = readSpeechEvents();
+            reportFallback({
+              key: CLOUD_LISTEN_FALLBACK_KEY,
+              feature: 'Listening',
+              wanted: 'the cloud listener',
+              used: latest.current.canHearOnDevice
+                ? 'the on-device speech model'
+                : "the browser's listening",
+              reason:
+                heldReason === null
+                  ? "the cloud listener couldn't start"
+                  : "today's cloud listening allowance is used up",
+              facts: [
+                `Held: ${heldReason ?? 'no'}`,
+                `Online: ${navigator.onLine ? 'yes' : 'no'}`,
+              ],
+              trace: events.length > 0 ? events.join('\n') : null,
+            });
             startDevice(null);
           },
           onClosed: cloud.tokenSource.reportClosed,
@@ -985,7 +1039,7 @@ export function useVoiceConversation({
       turnKey: number;
       /** The person may answer once this line has been said: when it is the last one waiting, a short window opens in which speaking starts a listen without a tap. */
       canAnswer?: boolean;
-      /** Said after what plays or waits, and dropped if a newer turn has spoken since. */
+      /** Said after what plays or waits, and dropped if a newer turn has spoken since; the `turnKey` passed is the earlier turn's that this line answers. */
       joinsLine?: boolean;
     },
   ): Promise<VoiceSpoken> => {
@@ -1388,5 +1442,7 @@ export function useVoiceConversation({
     cloudHeld: held?.reason ?? null,
     /** Where the words being heard are listened to; null when not listening. */
     listeningRoute,
+    /** How the last reply or summary was voiced: `device` when the chosen voice was on but a device voice spoke it (offline, a fallback, the conversation's latch); `chosen` otherwise; null before any, and after a conversation ends. */
+    speakingVoice,
   };
 }

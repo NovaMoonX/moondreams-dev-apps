@@ -105,6 +105,11 @@ function VoiceStatus({ hasControls = false, screen = null }: VoiceStatusProps) {
           ))}
         </div>
       )}
+      {voice.state === 'speaking' && voice.speakingVoice === 'device' && (
+        <p className='text-muted-foreground -mt-1 text-xs'>
+          {HELM_COPY.voiceUsingDevice}
+        </p>
+      )}
       {voice.state === 'listening' && voice.listeningRoute === 'cloud' && (
         <VoiceNotice />
       )}

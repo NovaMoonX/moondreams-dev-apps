@@ -1,3 +1,4 @@
+import { reportFallback } from '@/lib/fallbacks/fallbacks';
 import { getAudioContext } from '@/lib/speech/audioContext';
 import {
   isNaturalVoiceLang,
@@ -6,6 +7,7 @@ import {
 import {
   cancelNaturalSynthesis,
   getNaturalVoiceState,
+  NATURAL_VOICE_FALLBACK_KEY,
   isNaturalVoiceCancel,
   recordFastNaturalReading,
   recordSlowNaturalReading,
@@ -32,6 +34,30 @@ export interface ReadAloudOptions {
 }
 
 const PROGRESS_MS = 150;
+
+const reportBrowserVoice = (reason: string, facts: string[]) =>
+  reportFallback({
+    key: NATURAL_VOICE_FALLBACK_KEY,
+    feature: 'Speaking',
+    wanted: 'the natural voice',
+    used: "the browser's voice",
+    reason,
+    facts,
+  });
+
+const toNaturalBlock = (
+  options: ReadAloudOptions,
+  context: AudioContext | null,
+) => {
+  if (context === null) return 'audio is not available here';
+  if (!isNaturalVoiceLang(options.lang)) {
+    return "it doesn't speak this language";
+  }
+  const { status, problem } = getNaturalVoiceState();
+  return status === 'ready'
+    ? null
+    : `it isn't ready (${status}${problem === null ? '' : `, ${problem}`})`;
+};
 
 interface Run {
   isStopped: boolean;
@@ -173,6 +199,10 @@ const readNatural = (
     } catch (error) {
       if (run.isStopped || isNaturalVoiceCancel(error)) return;
       console.error('The natural voice failed to read', error);
+      reportBrowserVoice('it failed while reading', [
+        `Error: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+        `Sentence: ${index + 1} of ${sentences.length}`,
+      ]);
       giveUpOn(index);
       return;
     }
@@ -183,6 +213,9 @@ const readNatural = (
     if (run.isStarted || run.isStopped) return;
     cancelNaturalSynthesis();
     recordSlowNaturalReading();
+    reportBrowserVoice('it was too slow to start', [
+      `Limit: ${NATURAL_START_TIMEOUT_MS} ms`,
+    ]);
     giveUpOn(0);
   }, NATURAL_START_TIMEOUT_MS);
 
@@ -228,6 +261,11 @@ export function readAloud(text: string, options: ReadAloudOptions): () => void {
     isNaturalVoiceLang(options.lang) &&
     getNaturalVoiceState().status === 'ready';
   if (!canUseNatural) {
+    const block =
+      options.isNatural === true && sentences.length > 0
+        ? toNaturalBlock(options, context)
+        : null;
+    if (block !== null) reportBrowserVoice(block, []);
     options.onVoice?.('system');
     return speakText(spokenText, options);
   }

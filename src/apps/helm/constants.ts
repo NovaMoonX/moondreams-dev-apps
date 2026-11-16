@@ -1445,6 +1445,7 @@ export const HELM_COPY = {
   voicePickerNormal: 'Normal',
   voicePickerFaster: 'Faster',
   voiceOnPhone: 'Listening with this browser for the rest of today.',
+  voiceUsingDevice: "In this device's voice for now",
   voiceNoticeTitle: 'Where your speech goes',
   voiceNotice:
     "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound or use it to train its models. You can change this in Settings.",

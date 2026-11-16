@@ -1,5 +1,7 @@
+import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
 import { getAudioContext } from '@/lib/speech/audioContext';
 import { splitSentences } from '@/lib/speech/naturalVoice/sentences';
+import { describeThrown } from '@/lib/speech/speechDiagnostics';
 import { toSpokenText } from '@/lib/speech/spokenText';
 import { getDuckBus } from '@/lib/speech/voice/duckBus';
 import {
@@ -23,6 +25,7 @@ const FIRST_BYTE_MS = 5000;
 const BODY_BASE_MS = 6000;
 const BODY_MS_PER_CHAR = 30;
 const PROGRESS_MS = 150;
+const FALLBACK_KEY = 'speech:cloud-voice';
 
 export interface CloudPlayer {
   /** Turns the audio into something `play` can start; throws when it can't. */
@@ -186,12 +189,40 @@ export const createCloudTts = ({
         ? fallback.isPlayingThroughWebAudio
         : live.isSounding;
     },
+    get isFallingBack() {
+      return live.isFallingBack;
+    },
     speak: async (text, options) => {
       const { priority, signal, onStart, onProgress, onRouteChange } = options;
       const spoken = toSpokenText(text);
       const pieces = toPieces(spoken);
       const totalChars = pieces.reduce((sum, piece) => sum + piece.length, 0);
-      const run = { playedBy: 'cloud', isStarted: false, isCut: false };
+      const run = {
+        playedBy: 'cloud',
+        isStarted: false,
+        isCut: false,
+        failure: { reason: '', raw: null as string | null },
+      };
+      const fail = (reason: string, raw: string | null = null) => {
+        run.failure = { reason, raw };
+      };
+      const reportFailure = (index: number, isCut: boolean) =>
+        reportFallback({
+          key: FALLBACK_KEY,
+          feature: 'Speaking',
+          wanted: isCut
+            ? 'the whole line in your chosen voice'
+            : 'your chosen voice',
+          used: isCut ? 'the part that played' : "this device's voice",
+          reason: run.failure.reason,
+          facts: [
+            ...(run.failure.raw === null ? [] : [`Error: ${run.failure.raw}`]),
+            `Failed part: ${index + 1} of ${pieces.length}`,
+            `Line: ${totalChars} characters, ${priority}`,
+            `Stood in: ${fallback.id}`,
+            `First-byte limit: ${firstByteMs} ms`,
+          ],
+        });
       const prefetch = {
         index: -1,
         isTaken: false,
@@ -315,7 +346,10 @@ export const createCloudTts = ({
           sink.push(first);
           const pump = async (): Promise<void> => {
             const next = await within(reader.read(), gapMs);
-            if (next === 'late' && !signal.aborted) state.isCut = true;
+            if (next === 'late' && !signal.aborted) {
+              state.isCut = true;
+              fail('the voice stopped partway', `No audio for ${gapMs} ms`);
+            }
             if (next === 'late' || next.done || signal.aborted) return;
             sink.push(next.value);
             return pump();
@@ -328,6 +362,7 @@ export const createCloudTts = ({
             if (!wasPlaying) throw error;
             if (!signal.aborted) {
               state.isCut = true;
+              fail('the voice stopped partway', describeThrown(error));
               console.error('The cloud voice stopped partway', error);
             }
           }
@@ -361,11 +396,27 @@ export const createCloudTts = ({
             controller.abort();
             return 'aborted';
           }
-          if (answer === 'late' || answer.status === 'unavailable') {
+          if (answer === 'late') {
+            fail(
+              "the voice service didn't answer in time",
+              `No response within ${firstByteMs} ms`,
+            );
+            controller.abort();
+            return 'failed';
+          }
+          if (answer.status === 'unavailable') {
+            fail(
+              "the voice service couldn't be reached",
+              answer.detail ?? null,
+            );
             controller.abort();
             return 'failed';
           }
           if (answer.status === 'held') {
+            fail(
+              "today's cloud voice allowance is used up",
+              `Held: ${answer.reason}`,
+            );
             onHeld?.(answer.reason);
             controller.abort();
             return 'failed';
@@ -378,6 +429,12 @@ export const createCloudTts = ({
             Math.max(0, firstByteBy - Date.now()),
           );
           if (first === 'late' || signal.aborted) {
+            if (first === 'late') {
+              fail(
+                'the voice service sent no sound in time',
+                `No audio within ${firstByteMs} ms of the request`,
+              );
+            }
             controller.abort();
             return first === 'late' ? 'failed' : 'aborted';
           }
@@ -387,14 +444,20 @@ export const createCloudTts = ({
             if (!state.isPlaying) return 'aborted';
             return state.isCut ? 'cut' : 'played';
           }
+          const bodyLimitMs =
+            bodyMs ?? BODY_BASE_MS + piece.length * BODY_MS_PER_CHAR;
           const rest = await within(
             first.done
               ? Promise.resolve([] as Uint8Array[])
               : readRest(reader, [first.value]),
-            bodyMs ?? BODY_BASE_MS + piece.length * BODY_MS_PER_CHAR,
+            bodyLimitMs,
           );
           if (signal.aborted) return 'aborted';
           if (rest === 'late') {
+            fail(
+              'the voice audio took too long to arrive',
+              `Audio incomplete after ${bodyLimitMs} ms`,
+            );
             controller.abort();
             return 'failed';
           }
@@ -404,7 +467,11 @@ export const createCloudTts = ({
           return 'played';
         } catch (error) {
           if (signal.aborted) return 'aborted';
-          if (state.isPlaying) return 'cut';
+          if (state.isPlaying) {
+            fail('the voice stopped partway', describeThrown(error));
+            return 'cut';
+          }
+          fail("the voice audio couldn't be played", describeThrown(error));
           console.error('The cloud voice failed to read', error);
           controller.abort();
           return 'failed';
@@ -417,7 +484,10 @@ export const createCloudTts = ({
       };
       const speakFrom = async (index: number): Promise<string | undefined> => {
         if (index >= pieces.length) {
-          if (!run.isCut) onPlayed?.();
+          if (!run.isCut) {
+            clearFallback(FALLBACK_KEY);
+            onPlayed?.();
+          }
           return run.playedBy;
         }
         if (signal.aborted) return index === 0 ? undefined : run.playedBy;
@@ -427,11 +497,13 @@ export const createCloudTts = ({
         if (outcome === 'aborted')
           return index === 0 ? undefined : run.playedBy;
         if (outcome === 'failed') {
+          reportFailure(index, false);
           onFallback?.();
           return speakRest(index);
         }
         if (outcome === 'cut') {
           run.isCut = true;
+          reportFailure(index, true);
           onCut?.();
         }
         return speakFrom(index + 1);

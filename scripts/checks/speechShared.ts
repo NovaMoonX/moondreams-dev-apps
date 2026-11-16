@@ -72,6 +72,13 @@ import {
 } from '../../functions/src/voice/voiceConfig.ts';
 import { readSpeechRequest } from '../../functions/src/voice/streamSpeech.ts';
 import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
+import {
+  clearFallback,
+  dismissFallback,
+  readFallbacks,
+  reportFallback,
+  resetFallbacks,
+} from '../../src/lib/fallbacks/fallbacks.ts';
 import { createCloudTts } from '../../src/lib/speech/voice/cloudTts.ts';
 import {
   createSpeechSource,
@@ -1126,6 +1133,196 @@ assert.deepEqual(
   'clear stops what plays and drops what waits',
 );
 console.log('speechShared: voice router and playback queue checks passed');
+
+{
+  resetFallbacks();
+  const report = (key: string, reason = 'it broke') =>
+    reportFallback({
+      key,
+      feature: 'Speaking',
+      wanted: 'your chosen voice',
+      used: "this device's voice",
+      reason,
+    });
+  report('a');
+  report('a', 'it broke again');
+  report('b');
+  assert.deepEqual(
+    readFallbacks()
+      .map(({ key, count, reason }) => [key, count, reason])
+      .sort(),
+    [
+      ['a', 2, 'it broke again'],
+      ['b', 1, 'it broke'],
+    ],
+    'the same key is one entry that counts and keeps the latest reason',
+  );
+  const before = readFallbacks();
+  assert.equal(
+    readFallbacks(),
+    before,
+    'the snapshot is stable until a change',
+  );
+  clearFallback('b');
+  assert.deepEqual(
+    readFallbacks().map(({ key }) => key),
+    ['a'],
+    'a recovered key goes away',
+  );
+  clearFallback('b');
+  dismissFallback('a');
+  assert.equal(readFallbacks().length, 0, 'a dismissed key is hidden');
+  report('a');
+  assert.equal(
+    readFallbacks().length,
+    0,
+    'a fresh failure of a dismissed key stays hidden for the session',
+  );
+  clearFallback('a');
+  report('a');
+  assert.equal(
+    readFallbacks().length,
+    0,
+    'recovering never undoes a dismissal',
+  );
+  report('c');
+  assert.deepEqual(
+    readFallbacks().map(({ key }) => key),
+    ['c'],
+    'other keys still show',
+  );
+  resetFallbacks();
+  report('a');
+  assert.equal(
+    readFallbacks().length,
+    1,
+    'a new session starts with nothing dismissed',
+  );
+  resetFallbacks();
+
+  const cloudKey = 'speech:cloud-voice';
+  const system: TtsAdapter = {
+    id: 'system',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: async () => undefined,
+  };
+  const speakOptions = () => ({
+    priority: 'reply' as const,
+    signal: new AbortController().signal,
+    onStart: () => undefined,
+    onEnd: () => undefined,
+  });
+  const played = {
+    decode: async () => ({}) as AudioBuffer,
+    play: async (
+      _audio: AudioBuffer,
+      _signal: AbortSignal,
+      onStart: () => void,
+    ) => onStart(),
+    openStream: async () => {
+      throw new Error('not a stream');
+    },
+  };
+  const mpeg = (): SpeechFetch => ({
+    status: 'ready',
+    provider: 'googleTts',
+    contentType: 'audio/mpeg',
+    body: new ReadableStream<Uint8Array>({
+      start: (stream) => {
+        stream.enqueue(new Uint8Array([1]));
+        stream.close();
+      },
+    }),
+  });
+  const fallbacks: string[] = [];
+  await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({ status: 'unavailable', detail: 'HTTP 500' }),
+    },
+    fallback: system,
+    onFallback: () => fallbacks.push('fell'),
+  }).speak('Hello', speakOptions());
+  const [cloudReport] = readFallbacks();
+  assert.equal(
+    cloudReport?.key,
+    cloudKey,
+    'a cloud line that fell back is reported',
+  );
+  assert.equal(
+    cloudReport?.reason,
+    "the voice service couldn't be reached",
+    'the report says why in plain words',
+  );
+  assert.ok(
+    cloudReport?.facts.includes('Error: HTTP 500') &&
+      cloudReport.facts.includes('Stood in: system'),
+    'the report keeps the raw cause and what stood in',
+  );
+  await createCloudTts({
+    source: { fetchSpeech: () => new Promise<never>(() => undefined) },
+    fallback: system,
+    firstByteMs: 10,
+  }).speak('Hello again', speakOptions());
+  assert.deepEqual(
+    [readFallbacks()[0]?.count, readFallbacks()[0]?.reason],
+    [2, "the voice service didn't answer in time"],
+    'a second failure updates the same entry',
+  );
+  await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({ status: 'held', reason: 'speechLimit' }),
+    },
+    fallback: system,
+  }).speak('Held', speakOptions());
+  assert.equal(
+    readFallbacks()[0]?.reason,
+    "today's cloud voice allowance is used up",
+    'a spent allowance is reported as the reason',
+  );
+  await createCloudTts({
+    source: { fetchSpeech: async () => mpeg() },
+    fallback: system,
+    player: played,
+  }).speak('Fine', speakOptions());
+  assert.equal(
+    readFallbacks().some(({ key }) => key === cloudKey),
+    false,
+    'a cloud line that plays clears the report',
+  );
+  resetFallbacks();
+
+  const voices = { current: 'cloud' as 'cloud' | 'device' };
+  const gate: { release: () => void } = { release: () => undefined };
+  const routed = createPlaybackQueue({
+    pick: (priority) => ({
+      id: priority,
+      route: 'cloud',
+      isPlayingThroughWebAudio: true,
+      get isFallingBack() {
+        return voices.current === 'device';
+      },
+      speak: () => new Promise<void>((resolve) => (gate.release = resolve)),
+    }),
+  });
+  assert.equal(routed.getPlayingVoice(), null, 'nothing plays, no voice');
+  void routed.enqueue('Reply', { priority: 'reply', turnKey: 1 });
+  assert.deepEqual(
+    routed.getPlayingVoice(),
+    { priority: 'reply', route: 'cloud' },
+    'a cloud line that is sounding is the cloud route',
+  );
+  voices.current = 'device';
+  assert.deepEqual(
+    routed.getPlayingVoice(),
+    { priority: 'reply', route: 'device' },
+    'a cloud line a device voice took over is the device route',
+  );
+  gate.release();
+  await tick();
+  routed.clear();
+  console.log('speechShared: fallback reporting checks passed');
+}
 
 {
   const calls: string[] = [];

@@ -224,6 +224,19 @@ export const createPlaybackQueue = ({
     unduck: () => setDucked(false),
     /** The words of the line playing now; null when none is. */
     getPlayingText: () => state.playing?.line.text ?? null,
+    /** How the line playing now is voiced: `cloud` unless a device voice speaks it (by choice or after a fallback); null when none plays. */
+    getPlayingVoice: () => {
+      const { playing } = state;
+      if (playing === null) return null;
+      const { adapter, line } = playing;
+      return {
+        priority: line.priority,
+        route:
+          adapter.route === 'cloud' && adapter.isFallingBack !== true
+            ? ('cloud' as const)
+            : ('device' as const),
+      };
+    },
     isActive: () => state.playing !== null || state.waiting.length > 0,
     /** True while the line playing goes through the page's audio, so the microphone's echo cancellation can tell it from the person. */
     isPlayingThroughWebAudio: () =>

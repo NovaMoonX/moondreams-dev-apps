@@ -59,6 +59,8 @@ export interface TtsAdapter {
   speak: (text: string, options: TtsSpeakOptions) => Promise<string | void>;
   /** True while the sound goes through the page's audio, so echo cancellation hears it. */
   isPlayingThroughWebAudio: boolean;
+  /** True once a fallback voice has taken over the line this adapter was given. */
+  isFallingBack?: boolean;
 }
 
 export interface VoiceIdentity {
