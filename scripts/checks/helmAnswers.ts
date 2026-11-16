@@ -314,6 +314,7 @@ const answer = (fields: Partial<AnswerCommand> = {}): AnswerCommand => ({
   question: 'When is the cake tasting?',
   isHealth: false,
   fromRecordsText: 'Friday at 2.',
+  fromRecordsSpoken: null,
   sources: [TASK],
   quotes: [],
   syncedKeys: [],
@@ -465,6 +466,89 @@ const tests: [string, () => void | Promise<void>][] = [
     () => {
       const built = buildAnswer(answer({ fromRecordsText: 'Friday at 2.' }));
       assert.ok(built.spoken.startsWith('Friday at 2.'));
+    },
+  ],
+  [
+    'a spoken records line is said instead of a cut of the written text',
+    () => {
+      const written = 'You have 6 boxes. '.repeat(40);
+      const built = buildAnswer(
+        answer({
+          fromRecordsText: written,
+          fromRecordsSpoken: 'Six boxes, and the first is the Pike Place one.',
+        }),
+      );
+      assert.equal(
+        built.spoken,
+        'Six boxes, and the first is the Pike Place one.',
+      );
+      assert.equal(built.answer.fromRecords, written.trim());
+    },
+  ],
+  [
+    'a spoken records line keeps the general label and the health caution within the cap',
+    () => {
+      const built = buildAnswer(
+        answer({
+          scope: 'both',
+          isHealth: true,
+          fromRecordsText: 'a '.repeat(500),
+          fromRecordsSpoken: 'spoken '.repeat(28),
+          generalText: 'b',
+          generalSpoken: 'general '.repeat(25),
+        }),
+      );
+      assert.ok(built.spoken.length <= SPOKEN_MAX_CHARS);
+      assert.ok(built.spoken.includes(GENERAL_LABEL));
+      assert.ok(built.spoken.startsWith('spoken'));
+      assert.ok(built.spoken.endsWith(HEALTH_CAUTION_SPOKEN));
+    },
+  ],
+  [
+    'with no spoken records line the written text is cut as before',
+    () => {
+      const written = 'word '.repeat(200).trim();
+      const built = buildAnswer(
+        answer({ fromRecordsText: written, fromRecordsSpoken: null }),
+      );
+      assert.ok(built.spoken.length <= SPOKEN_MAX_CHARS);
+      assert.ok(written.startsWith(built.spoken));
+      assert.ok(built.spoken.length > 200);
+    },
+  ],
+  [
+    'a spoken records line never speaks an answer the guards dropped',
+    () => {
+      const built = buildAnswer(
+        answer({
+          fromRecordsText: 'Friday at 2.',
+          fromRecordsSpoken: 'Friday at two.',
+          sources: [],
+        }),
+      );
+      assert.equal(built.answer.fromRecords, null);
+      assert.equal(built.spoken, 'Nothing in your records answers that.');
+    },
+  ],
+  [
+    "the model's spoken records line is read within its cap, and absent when missing",
+    () => {
+      const base = {
+        kind: 'answer',
+        scope: 'yourThings',
+        question: 'q',
+        fromRecordsText: 'Friday at 2.',
+      };
+      const read = (extra: Record<string, unknown>) =>
+        normalizeNomosReply(
+          { commands: [{ ...base, ...extra }] },
+          { reading: READING, aliases: createAliasBook('t') },
+        ).answer;
+      assert.ok(
+        (read({ fromRecordsSpoken: 'w '.repeat(300) })?.fromRecordsSpoken ?? '')
+          .length <= 200,
+      );
+      assert.equal(read({})?.fromRecordsSpoken, null);
     },
   ],
   [

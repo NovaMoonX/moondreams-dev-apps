@@ -13,6 +13,7 @@ interface Line {
   /** Rises with each turn; a line from an older turn than the newest seen is dropped. */
   turnKey: number;
   onStart?: () => void;
+  onProgress?: (fraction: number) => void;
   resolve: (result: SpeakResult) => void;
 }
 
@@ -20,15 +21,67 @@ interface Playing {
   line: Line;
   controller: AbortController;
   adapter: TtsAdapter;
+  progress: ReturnType<typeof createProgress>;
 }
+
+const ESTIMATE_CHARS_PER_SECOND = 14;
+const ESTIMATE_TICK_MS = 150;
+const ESTIMATE_CEILING = 0.96;
+
+/** A line's progress only ever moves forward; until its adapter reports any, a clock estimate from the text's length stands in, short of the end. */
+const createProgress = (line: Line) => {
+  const state = {
+    last: 0,
+    isReported: false,
+    timerId: null as ReturnType<typeof setInterval> | null,
+  };
+  const report = (fraction: number) => {
+    const next = Math.min(1, Math.max(0, fraction));
+    if (next <= state.last) return;
+    state.last = next;
+    line.onProgress?.(next);
+  };
+  const stop = () => {
+    if (state.timerId !== null) clearInterval(state.timerId);
+    state.timerId = null;
+  };
+  return {
+    fromAdapter: (fraction: number) => {
+      state.isReported = true;
+      report(fraction);
+    },
+    start: () => {
+      if (!line.onProgress || state.timerId !== null) return;
+      const startedAt = Date.now();
+      state.timerId = setInterval(() => {
+        if (state.isReported) return;
+        report(
+          Math.min(
+            ESTIMATE_CEILING,
+            ((Date.now() - startedAt) / 1000) *
+              (ESTIMATE_CHARS_PER_SECOND / Math.max(1, line.text.length)),
+          ),
+        );
+      }, ESTIMATE_TICK_MS);
+    },
+    stop,
+    complete: () => {
+      stop();
+      report(1);
+    },
+  };
+};
 
 /** One line plays at a time. Within a turn an `ack` goes before a `reply` or `summary` that is waiting, and never cuts one off; a line of a newer turn cancels the older turn's playing and waiting lines; `clear` stops everything. */
 export const createPlaybackQueue = ({
   pick,
   onActiveChange,
+  onRouteChange,
 }: {
   pick: (priority: SpeechPriority) => TtsAdapter;
   onActiveChange?: (isActive: boolean) => void;
+  /** What the playing line's `isPlayingThroughWebAudio` says may have changed: its sound began, or it fell back to another voice. */
+  onRouteChange?: () => void;
 }) => {
   const state = {
     waiting: [] as Line[],
@@ -52,6 +105,8 @@ export const createPlaybackQueue = ({
   ) => {
     if (state.playing !== playing) return;
     state.playing = null;
+    if (status === 'spoken') playing.progress.complete();
+    else playing.progress.stop();
     playing.line.resolve({ status, adapterId: playedBy ?? playing.adapter.id });
     if (isResuming) play();
   };
@@ -75,6 +130,7 @@ export const createPlaybackQueue = ({
       line: next,
       controller: new AbortController(),
       adapter,
+      progress: createProgress(next),
     };
     state.playing = playing;
     onActiveChange?.(true);
@@ -82,8 +138,14 @@ export const createPlaybackQueue = ({
       .speak(next.text, {
         priority: next.priority,
         signal: playing.controller.signal,
-        onStart: () => next.onStart?.(),
+        onStart: () => {
+          next.onStart?.();
+          playing.progress.start();
+          onRouteChange?.();
+        },
         onEnd: () => undefined,
+        onProgress: next.onProgress ? playing.progress.fromAdapter : undefined,
+        onRouteChange: () => onRouteChange?.(),
       })
       .then(
         (playedBy) => finish(playing, 'spoken', true, playedBy),
@@ -98,6 +160,8 @@ export const createPlaybackQueue = ({
         priority: SpeechPriority;
         turnKey: number;
         onStart?: () => void;
+        /** How far through the line the sound is (0 to 1); never goes back, and an estimate from the text's length runs until the voice reports its own. */
+        onProgress?: (fraction: number) => void;
       },
     ) =>
       new Promise<SpeakResult>((resolve) => {

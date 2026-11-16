@@ -513,6 +513,7 @@ export interface AnswerCommand {
   question: string;
   isHealth: boolean;
   fromRecordsText: string | null;
+  fromRecordsSpoken: string | null;
   sources: SourceRef[];
   quotes: QuoteEntry[];
   syncedKeys: string[];
@@ -630,6 +631,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'question',
             'isHealth',
             'fromRecordsText',
+            'fromRecordsSpoken',
             'sourceAliases',
             'quoteAliases',
             'generalText',
@@ -742,6 +744,10 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             fromRecordsText: nullable(
               'string',
               `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters; null when they say nothing about it.`,
+            ),
+            fromRecordsSpoken: nullable(
+              'string',
+              `answer: only on a spoken turn, fromRecordsText as one or two plain sentences for the ear, at most ${ANSWER_SPOKEN_CAP} characters, with no lists or Markdown; null on a typed turn and when fromRecordsText is null.`,
             ),
             sourceAliases: {
               type: ['array', 'null'],

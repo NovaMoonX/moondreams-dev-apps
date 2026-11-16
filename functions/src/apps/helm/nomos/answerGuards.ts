@@ -165,7 +165,9 @@ export function buildAnswer(
     command.generalText && mayAddGeneral ? oneLine(command.generalText) : null;
   if (command.generalText && !general) onDrop('answer-general-refused');
 
-  const recordsSpoken = fromRecords ?? NOTHING_LINE;
+  const recordsSpoken = fromRecords
+    ? oneLine(command.fromRecordsSpoken || fromRecords)
+    : NOTHING_LINE;
   const generalSpoken = general
     ? oneLine(command.generalSpoken || general)
     : null;

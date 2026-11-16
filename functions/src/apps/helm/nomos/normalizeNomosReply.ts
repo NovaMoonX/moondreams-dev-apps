@@ -126,6 +126,7 @@ const KNOWN_KEYS = new Set([
   'question',
   'isHealth',
   'fromRecordsText',
+  'fromRecordsSpoken',
   'sourceAliases',
   'quoteAliases',
   'generalText',
@@ -307,6 +308,7 @@ const readAnswer = (
     question,
     isHealth: item.isHealth === true,
     fromRecordsText: toText(item.fromRecordsText, ANSWER_TEXT_CAP),
+    fromRecordsSpoken: toText(item.fromRecordsSpoken, ANSWER_SPOKEN_CAP),
     sources: listed.flatMap((alias: unknown) => {
       const source = toSource(alias, aliases, synced, facts, parts);
       return source ? [source] : [];

@@ -850,13 +850,33 @@ console.log('speechShared: on-device recognition checks passed');
   );
   const ends = hook.match(/endConversation\(\)/g) ?? [];
   assert.ok(
-    ends.length === 4,
-    'a conversation ends on an end phrase, a stop, the idle gap and a newly picked voice',
+    ends.length === 5,
+    'a conversation ends on an end phrase, a stop, the idle gap, a newly picked voice and the start of a live conversation',
   );
   assert.match(
     hook,
-    /const endConversation = \(\) => \{\s*run\.current\.isDeviceSticky = false;\s*run\.current\.voice = null;/,
+    /const endConversation = \(\) => \{\s*clearLatch\(\);\s*run\.current\.voice = null;/,
     'ending a conversation resets the device stickiness and the latched voice together',
+  );
+  assert.match(
+    hook,
+    /const clearLatch = \(\) => \{\s*run\.current\.isDeviceSticky = false;\s*run\.current\.cloudFailures = 0;/,
+    'the device latch and its failure count clear together',
+  );
+  assert.match(
+    hook,
+    /if \(!wasLive\) endConversation\(\);/,
+    'a live conversation starts with the cloud voice tried afresh',
+  );
+  assert.doesNotMatch(
+    hook,
+    /choice !== 'cloud'[^]{0,80}isDeviceSticky = true/,
+    'a line the router sent to the device (offline, not ready) never latches the device voice',
+  );
+  assert.match(
+    hook,
+    /cloudFailures >= CLOUD_FAILURES_MAX/,
+    'only repeated cloud failures latch the device voice',
   );
   assert.equal(
     (hook.match(/readVoice\(\)/g) ?? []).length,
@@ -894,8 +914,8 @@ console.log('speechShared: on-device recognition checks passed');
   );
   assert.match(
     hook,
-    /FIRST_LINE_FIRST_BYTE_MS = 4000/,
-    "a conversation's first line waits 4 s for its first byte",
+    /FIRST_LINE_FIRST_BYTE_MS = 6000/,
+    "a conversation's first line waits 6 s for its first byte",
   );
 }
 {
@@ -1161,9 +1181,160 @@ console.log('speechShared: voice router and playback queue checks passed');
       options,
     ),
     'system',
-    'a long text goes straight to the fallback',
+    'a long text whose cloud voice fails is spoken by the fallback',
   );
-  assert.equal(fetched.length, fetchedBefore, 'a long text is never fetched');
+  assert.equal(
+    fetched.length - fetchedBefore,
+    1,
+    'a long text is tried in the cloud first, one piece at a time',
+  );
+  const sentence = 'This is one sentence of a long reply. ';
+  const longText = sentence.repeat(40);
+  const pieceFetches: string[] = [];
+  const pieceStarts: number[] = [];
+  const longBy = await createCloudTts({
+    source: {
+      fetchSpeech: async (piece) => {
+        pieceFetches.push(piece);
+        return {
+          status: 'ready',
+          provider: 'googleTts',
+          contentType: 'audio/mpeg',
+          body: new ReadableStream<Uint8Array>({
+            start: (stream) => {
+              stream.enqueue(new Uint8Array([1]));
+              stream.close();
+            },
+          }),
+        };
+      },
+    },
+    fallback,
+    player: {
+      decode: async () => ({}) as AudioBuffer,
+      play: async (_audio, _signal, onStart, onProgress) => {
+        pieceStarts.push(pieceFetches.length);
+        onStart();
+        onProgress?.(0.5);
+      },
+      openStream: async () => {
+        throw new Error('not a stream');
+      },
+    },
+  }).speak(longText, {
+    ...options,
+    onStart: () => pieceStarts.push(-1),
+  });
+  assert.equal(longBy, 'cloud:googleTts', 'a long line is spoken by the cloud');
+  assert.ok(
+    pieceFetches.length > 1 &&
+      pieceFetches.every((piece) => piece.length <= 600),
+    'a line over 600 characters is cut into pieces that each fit',
+  );
+  assert.equal(
+    pieceFetches.join(' ').replace(/\s+/g, ' '),
+    longText.trim().replace(/\s+/g, ' '),
+    'the pieces say every word in order',
+  );
+  assert.equal(
+    pieceStarts.filter((entry) => entry === -1).length,
+    1,
+    'a line reports its start once, not once per piece',
+  );
+  const lineProgress: number[] = [];
+  await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({
+        status: 'ready',
+        provider: 'googleTts',
+        contentType: 'audio/mpeg',
+        body: new ReadableStream<Uint8Array>({
+          start: (stream) => {
+            stream.enqueue(new Uint8Array([1]));
+            stream.close();
+          },
+        }),
+      }),
+    },
+    fallback,
+    player: {
+      decode: async () => ({}) as AudioBuffer,
+      play: async (_audio, _signal, onStart, onProgress) => {
+        onStart();
+        onProgress?.(0.5);
+        onProgress?.(1);
+      },
+      openStream: async () => {
+        throw new Error('not a stream');
+      },
+    },
+  }).speak(longText, { ...options, onProgress: (f) => lineProgress.push(f) });
+  assert.ok(
+    lineProgress.every(
+      (value, index) => index === 0 || value >= lineProgress[index - 1]!,
+    ) && lineProgress.at(-1)! > 0.9,
+    'progress through the pieces of a long line runs forward to the end',
+  );
+  const attempts: string[] = [];
+  const secondBy = await createCloudTts({
+    source: {
+      fetchSpeech: async (piece) => {
+        attempts.push(piece);
+        return attempts.length === 1
+          ? {
+              status: 'ready',
+              provider: 'googleTts',
+              contentType: 'audio/mpeg',
+              body: new ReadableStream<Uint8Array>({
+                start: (stream) => {
+                  stream.enqueue(new Uint8Array([1]));
+                  stream.close();
+                },
+              }),
+            }
+          : { status: 'unavailable' };
+      },
+    },
+    fallback,
+    player: {
+      decode: async () => ({}) as AudioBuffer,
+      play: async (_audio, _signal, onStart) => onStart(),
+      openStream: async () => {
+        throw new Error('not a stream');
+      },
+    },
+  }).speak(longText, options);
+  assert.equal(
+    attempts.length,
+    2,
+    'a piece that fails sends the rest to the fallback in one go, not piece by piece',
+  );
+  assert.equal(
+    secondBy,
+    'system',
+    'the fallback finishes a line whose later piece failed',
+  );
+  const routeEvents: boolean[] = [];
+  const probe = createCloudTts({
+    source: {
+      fetchSpeech: async () => ({ status: 'unavailable' }),
+    },
+    fallback: { ...fallback, isPlayingThroughWebAudio: false },
+  });
+  assert.equal(
+    probe.isPlayingThroughWebAudio,
+    false,
+    'a cloud line is not in the page audio before it makes a sound',
+  );
+  await probe.speak('Probe', {
+    ...options,
+    onRouteChange: () => routeEvents.push(probe.isPlayingThroughWebAudio),
+  });
+  assert.deepEqual(
+    [routeEvents, probe.isPlayingThroughWebAudio],
+    [[false], false],
+    'a line that fell back to the system voice reports it is not in the page audio',
+  );
   const callsBefore = calls.length;
   const aborting = new AbortController();
   const pending = cloudWith(
@@ -1415,6 +1586,7 @@ console.log('speechShared: voice router and playback queue checks passed');
       },
       end: () => events.push('end'),
       remainingMs: () => 0,
+      getTiming: () => ({ playedMs: 0, scheduledMs: 0, isEnded: true }),
       stop: () => events.push('stop'),
       done: Promise.resolve(),
     }),
@@ -1477,6 +1649,7 @@ console.log('speechShared: voice router and playback queue checks passed');
         push: () => undefined,
         end: () => undefined,
         remainingMs: () => 0,
+        getTiming: () => ({ playedMs: 0, scheduledMs: 0, isEnded: true }),
         stop: () => undefined,
         done: Promise.resolve(),
       }),
@@ -1517,6 +1690,7 @@ console.log('speechShared: voice router and playback queue checks passed');
         push: () => onStart(),
         end: () => hungEvents.push('end'),
         remainingMs: () => 100,
+        getTiming: () => ({ playedMs: 0, scheduledMs: 100, isEnded: true }),
         stop: () => hungEvents.push('stop'),
         done: new Promise<void>(() => undefined),
       }),
@@ -1549,6 +1723,7 @@ console.log('speechShared: voice router and playback queue checks passed');
         },
         end: () => undefined,
         remainingMs: () => 0,
+        getTiming: () => ({ playedMs: 0, scheduledMs: 0, isEnded: true }),
         stop: () => undefined,
         done: Promise.resolve(),
       }),
@@ -2595,4 +2770,128 @@ console.log('speechShared: voice provider checks passed');
   await readAll(await cached.fetchSpeech('one', 'reply', signal));
   assert.equal(fetched.count, 4, 'the oldest line is dropped past the limit');
   console.log('speechShared: turn end, barge-in and replay checks passed');
+}
+
+{
+  const clock = { now: 10 };
+  const context: PcmContext = {
+    get currentTime() {
+      return clock.now;
+    },
+    destination: {} as AudioNode,
+    createBuffer: (_channels, length, rate) =>
+      ({
+        duration: length / rate,
+        length,
+        copyToChannel: () => undefined,
+      }) as unknown as AudioBuffer,
+    createBufferSource: () =>
+      ({
+        buffer: null,
+        connect: () => undefined,
+        start: () => undefined,
+        stop: () => undefined,
+      }) as unknown as AudioBufferSourceNode,
+  };
+  const sink = createPcmSink({
+    context,
+    sampleRate: 1000,
+    prebufferSeconds: 0,
+    leadSeconds: 0,
+    onStart: () => undefined,
+  });
+  assert.deepEqual(
+    sink.getTiming(),
+    { playedMs: 0, scheduledMs: 0, isEnded: false },
+    'a sink that has made no sound has played nothing',
+  );
+  sink.push(new Uint8Array(4000));
+  clock.now = 11;
+  assert.deepEqual(
+    sink.getTiming(),
+    { playedMs: 1000, scheduledMs: 2000, isEnded: false },
+    'a sink says how much it has played of what it was handed',
+  );
+  clock.now = 20;
+  sink.end();
+  assert.deepEqual(
+    sink.getTiming(),
+    { playedMs: 2000, scheduledMs: 2000, isEnded: true },
+    'played never runs past what was scheduled',
+  );
+  sink.stop();
+
+  const events: string[] = [];
+  const reports: number[] = [];
+  const adapter = (progress: number[]): TtsAdapter => ({
+    id: 'reporter',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: async (_text, { onStart, onProgress, onRouteChange }) => {
+      onStart();
+      onRouteChange?.();
+      progress.forEach((value) => onProgress?.(value));
+    },
+  });
+  const progressQueue = createPlaybackQueue({
+    pick: () => adapter([0.2, 0.1, 0.6]),
+    onRouteChange: () => events.push('route'),
+  });
+  const spokenLine = await progressQueue.enqueue('Hello there', {
+    priority: 'reply',
+    turnKey: 1,
+    onProgress: (value) => reports.push(value),
+  });
+  assert.equal(spokenLine.status, 'spoken');
+  assert.deepEqual(
+    reports,
+    [0.2, 0.6, 1],
+    "a line's progress only moves forward and ends at 1 once it is spoken",
+  );
+  assert.deepEqual(
+    events,
+    ['route', 'route'],
+    'the queue passes on that the sound began and that the line changed voice',
+  );
+  const estimated: number[] = [];
+  const silent: TtsAdapter = {
+    id: 'silent',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: (_text, { onStart, signal }) =>
+      new Promise<void>((resolve) => {
+        onStart();
+        signal.addEventListener('abort', () => resolve());
+      }),
+  };
+  const estimateQueue = createPlaybackQueue({ pick: () => silent });
+  const estimating = estimateQueue.enqueue('Fourteen chars', {
+    priority: 'reply',
+    turnKey: 1,
+    onProgress: (value) => estimated.push(value),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  estimateQueue.clear();
+  await estimating;
+  assert.ok(
+    estimated.length > 0 &&
+      estimated.every((value) => value > 0 && value <= 0.96),
+    'with no report from the voice, a clock estimate runs short of the end',
+  );
+
+  const hook = readFileSync(
+    new URL('../../src/hooks/useVoiceConversation.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    hook,
+    /!run\.current\.isBargeSuppressed &&\s*\(queueRef\.current\?\.isPlayingThroughWebAudio\(\)/,
+    'the barge-in microphone stays shut after a listen over the line came to nothing',
+  );
+  assert.match(
+    hook,
+    /joinsLine && \(queueRef\.current\?\.isActive\(\) \?\? false\)/,
+    'a line that joins one already playing waits for it instead of cutting it',
+  );
+  console.log('speechShared: line progress and playback route checks passed');
 }

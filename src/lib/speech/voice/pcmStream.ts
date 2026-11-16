@@ -13,10 +13,20 @@ export interface PcmContext {
   createBufferSource: () => AudioBufferSourceNode;
 }
 
+export interface PcmTiming {
+  /** Sound that has played so far, from the first sample. */
+  playedMs: number;
+  /** All the sound handed over so far, played or still to play. */
+  scheduledMs: number;
+  /** No more audio is coming, so `scheduledMs` is the whole line. */
+  isEnded: boolean;
+}
+
 export interface PcmSink {
   push: (bytes: Uint8Array) => void;
   end: () => void;
   remainingMs: () => number;
+  getTiming: () => PcmTiming;
   stop: () => void;
   done: Promise<void>;
 }
@@ -68,6 +78,7 @@ export const createPcmSink = ({
   const state = {
     carry: null as number | null,
     nextStartTime: 0,
+    firstStartTime: 0,
     isStarted: false,
     isEnded: false,
     isStopped: false,
@@ -101,6 +112,7 @@ export const createPcmSink = ({
       context.currentTime + leadSeconds,
     );
     state.nextStartTime = startAt + buffer.duration;
+    if (!state.isStarted) state.firstStartTime = startAt;
     state.nodes.add(node);
     node.onended = () => {
       state.nodes.delete(node);
@@ -146,6 +158,19 @@ export const createPcmSink = ({
     },
     remainingMs: () =>
       Math.max(0, state.nextStartTime - context.currentTime) * 1000,
+    getTiming: () => {
+      const scheduledMs = state.isStarted
+        ? (state.nextStartTime - state.firstStartTime) * 1000
+        : 0;
+      const playedMs = state.isStarted
+        ? (context.currentTime - state.firstStartTime) * 1000
+        : 0;
+      return {
+        playedMs: Math.min(scheduledMs, Math.max(0, playedMs)),
+        scheduledMs,
+        isEnded: state.isEnded,
+      };
+    },
     stop: () => {
       state.isStopped = true;
       state.isEnded = true;

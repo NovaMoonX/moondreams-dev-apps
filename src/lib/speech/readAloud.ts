@@ -25,7 +25,13 @@ export interface ReadAloudOptions {
   /** Gives up the browser's voice when it hasn't started by then (`onNoStart`, then `onEnd`). */
   startTimeoutMs?: number;
   onNoStart?: () => void;
+  /** How far through the text the voice is (0 to 1), from sentence timing for the natural voice and sentence starts and word boundaries for the browser's. */
+  onProgress?: (fraction: number) => void;
+  /** Which voice is making the sound now: called when it begins, and again if the natural voice gives way to the browser's. */
+  onVoice?: (voice: 'natural' | 'system') => void;
 }
+
+const PROGRESS_MS = 150;
 
 interface Run {
   isStopped: boolean;
@@ -34,8 +40,11 @@ interface Run {
   isEnded: boolean;
   playUntil: number;
   rest: string | null;
+  restFrom: number;
   sources: Set<AudioBufferSourceNode>;
   startId: number;
+  progressId: number;
+  heard: { startAt: number; endAt: number; chars: number }[];
   stopFallback: (() => void) | null;
 }
 
@@ -51,23 +60,40 @@ const readNatural = (
     isEnded: false,
     playUntil: 0,
     rest: null,
+    restFrom: 0,
     sources: new Set(),
     startId: 0,
+    progressId: 0,
+    heard: [],
     stopFallback: null,
   };
+  const wholeChars = sentences.reduce((sum, line) => sum + line.length, 0);
 
   const end = () => {
     if (run.isEnded) return;
     run.isEnded = true;
     window.clearTimeout(run.startId);
+    window.clearInterval(run.progressId);
     options.onEnd?.();
   };
 
-  const speakRest = (rest: string) => {
+  const speakRest = (rest: string, from: number) => {
+    window.clearInterval(run.progressId);
+    options.onVoice?.('system');
+    const before = sentences
+      .slice(0, from)
+      .reduce((sum, line) => sum + line.length, 0);
     run.stopFallback = speakText(rest, {
       lang: options.lang,
       startTimeoutMs: options.startTimeoutMs,
       onNoStart: options.onNoStart,
+      onProgress: options.onProgress
+        ? (fraction) =>
+            options.onProgress?.(
+              (before + fraction * (wholeChars - before)) /
+                Math.max(1, wholeChars),
+            )
+        : undefined,
       onStart: () => {
         if (run.isStarted) return;
         run.isStarted = true;
@@ -77,15 +103,30 @@ const readNatural = (
     });
   };
 
+  const reportProgress = () => {
+    const now = context.currentTime;
+    const done = run.heard.reduce(
+      (sum, part) =>
+        sum +
+        part.chars *
+          Math.min(
+            1,
+            Math.max(0, (now - part.startAt) / (part.endAt - part.startAt)),
+          ),
+      0,
+    );
+    options.onProgress?.(done / Math.max(1, wholeChars));
+  };
+
   const settle = () => {
     if (!run.isDone || run.sources.size > 0 || run.isStopped || run.isEnded) {
       return;
     }
     if (run.rest === null) end();
-    else speakRest(run.rest);
+    else speakRest(run.rest, run.restFrom);
   };
 
-  const play = (pcm: Float32Array, sampleRate: number) => {
+  const play = (pcm: Float32Array, sampleRate: number, chars: number) => {
     const buffer = context.createBuffer(1, pcm.length, sampleRate);
     buffer.copyToChannel(new Float32Array(pcm), 0);
     const source = context.createBufferSource();
@@ -93,6 +134,7 @@ const readNatural = (
     source.connect(context.destination);
     const startAt = Math.max(context.currentTime + 0.02, run.playUntil);
     run.playUntil = startAt + buffer.duration;
+    run.heard.push({ startAt, endAt: run.playUntil, chars });
     run.sources.add(source);
     source.onended = () => {
       run.sources.delete(source);
@@ -103,10 +145,15 @@ const readNatural = (
     run.isStarted = true;
     window.clearTimeout(run.startId);
     recordFastNaturalReading();
+    options.onVoice?.('natural');
     options.onStart?.();
+    if (options.onProgress) {
+      run.progressId = window.setInterval(reportProgress, PROGRESS_MS);
+    }
   };
 
   const giveUpOn = (from: number) => {
+    run.restFrom = from;
     run.rest = sentences.slice(from).join(' ');
     run.isDone = true;
     settle();
@@ -122,7 +169,7 @@ const readNatural = (
     try {
       const audio = await synthesizeNaturalVoice(sentences[index]);
       if (run.isStopped) return;
-      play(audio.pcm, audio.sampleRate);
+      play(audio.pcm, audio.sampleRate, sentences[index].length);
     } catch (error) {
       if (run.isStopped || isNaturalVoiceCancel(error)) return;
       console.error('The natural voice failed to read', error);
@@ -148,6 +195,7 @@ const readNatural = (
     if (run.isStopped || run.isEnded) return;
     run.isStopped = true;
     window.clearTimeout(run.startId);
+    window.clearInterval(run.progressId);
     cancelNaturalSynthesis();
     run.sources.forEach((source) => {
       source.onended = null;
@@ -179,6 +227,9 @@ export function readAloud(text: string, options: ReadAloudOptions): () => void {
     sentences.length > 0 &&
     isNaturalVoiceLang(options.lang) &&
     getNaturalVoiceState().status === 'ready';
-  if (!canUseNatural) return speakText(spokenText, options);
+  if (!canUseNatural) {
+    options.onVoice?.('system');
+    return speakText(spokenText, options);
+  }
   return readNatural(sentences, context, options);
 }

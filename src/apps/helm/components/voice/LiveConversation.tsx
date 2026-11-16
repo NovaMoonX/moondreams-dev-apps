@@ -14,6 +14,10 @@ import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 const ROUND =
   "relative size-16 min-w-16 rounded-full! p-0 before:absolute before:-inset-1 before:content-['']";
 
+// Where in the scroller the word being said is kept, as a share of its height.
+const FOLLOW_AT = 0.4;
+const FOLLOW_EASE = 0.15;
+
 const HEARD_MAX_PX = 30;
 const HEARD_MIN_PX = 19;
 
@@ -98,7 +102,7 @@ function LiveConversation() {
     };
   }, []);
 
-  // The person's words shrink to fit as they grow, and once at the floor their newest stay in view; a reply arrives whole and is read from its start.
+  // The person's words shrink to fit as they grow, and once at the floor their newest stay in view; a reply is read from its start.
   useLayoutEffect(() => {
     const box = scroller.current;
     if (!box) return;
@@ -115,6 +119,56 @@ function LiveConversation() {
     box.scrollTop =
       reply.offsetTop - parseFloat(getComputedStyle(box).paddingTop);
   }, [helmLine]);
+
+  // The reply scrolls to keep the part being said in view, never backwards; a hand on the scroller ends it for that line.
+  useEffect(() => {
+    const box = scroller.current;
+    if (!box) return;
+    const follow = { isOn: true, target: 0, frameId: 0 };
+    const isReduced = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    const glide = () => {
+      follow.frameId = 0;
+      const gap = follow.target - box.scrollTop;
+      if (!follow.isOn || gap < 0.5) return;
+      box.scrollTop += gap * FOLLOW_EASE;
+      follow.frameId = requestAnimationFrame(glide);
+    };
+    const release = () => {
+      follow.isOn = false;
+    };
+    const unsubscribe = voice.lineProgress.subscribe((fraction) => {
+      const reply = helmParagraph.current;
+      if (!reply) return;
+      if (fraction === 0) {
+        follow.isOn = true;
+        follow.target = 0;
+        return;
+      }
+      if (!follow.isOn) return;
+      const spokenAt = reply.offsetTop + fraction * reply.offsetHeight;
+      follow.target = Math.max(
+        follow.target,
+        Math.min(
+          box.scrollHeight - box.clientHeight,
+          spokenAt - box.clientHeight * FOLLOW_AT,
+        ),
+      );
+      if (isReduced) box.scrollTop = Math.max(box.scrollTop, follow.target);
+      else if (follow.frameId === 0) {
+        follow.frameId = requestAnimationFrame(glide);
+      }
+    });
+    box.addEventListener('wheel', release, { passive: true });
+    box.addEventListener('touchstart', release, { passive: true });
+    return () => {
+      unsubscribe();
+      cancelAnimationFrame(follow.frameId);
+      box.removeEventListener('wheel', release);
+      box.removeEventListener('touchstart', release);
+    };
+  }, [voice.lineProgress]);
 
   return (
     <div

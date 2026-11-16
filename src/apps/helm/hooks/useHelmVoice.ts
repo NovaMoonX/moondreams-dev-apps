@@ -276,6 +276,7 @@ export function useHelmVoice() {
     void voice.speak(line, {
       priority: 'reply',
       turnKey: Date.now(),
+      joinsLine: true,
       canAnswer: isHandsFreeOn && isSurfaceShown.current,
     });
   }

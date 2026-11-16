@@ -47,6 +47,10 @@ export interface TtsSpeakOptions {
   signal: AbortSignal;
   onStart: () => void;
   onEnd: () => void;
+  /** How far through the line the sound is (0 to 1), as it plays; an adapter that can't tell never calls it. */
+  onProgress?: (fraction: number) => void;
+  /** What `isPlayingThroughWebAudio` reports just changed: the sound began, or the line fell back to another voice. */
+  onRouteChange?: () => void;
 }
 
 export interface TtsAdapter {
@@ -54,7 +58,7 @@ export interface TtsAdapter {
   route: VoiceRoute;
   /** Resolves with the id of what actually played (provider-qualified for the cloud, the fallback's id when it stood in); void means this adapter's id. */
   speak: (text: string, options: TtsSpeakOptions) => Promise<string | void>;
-  /** True when the audio goes through the page's audio graph, so the browser's echo cancellation hears it. */
+  /** True while the sound being made goes through the page's audio graph, so the browser's echo cancellation hears it; false before any sound and after a fall back to the system voice. */
   isPlayingThroughWebAudio: boolean;
 }
 
