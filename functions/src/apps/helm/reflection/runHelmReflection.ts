@@ -342,7 +342,13 @@ async function prepareDue(
     .collection('apps/helm/users')
     .where('reflectDueAt', '<=', now)
     .limit(DUE_LIMIT)
-    .select('isLearningOn', 'reflectDueAt', 'timeZone', 'forgottenAt')
+    .select(
+      'isLearningOn',
+      'reflectDueAt',
+      'timeZone',
+      'forgottenAt',
+      'seenAsRebuiltAt',
+    )
     .get();
   const startedAt = Date.now();
   const chunks = Array.from(

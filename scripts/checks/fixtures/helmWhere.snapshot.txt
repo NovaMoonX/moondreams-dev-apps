@@ -22,6 +22,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - What matters most: the order of projects, goals and habits: look in <importance>; change it with setImportance.
 - A habit ticked, skipped or counted by a sentence: change it with checkIn.
 - What the app has noticed, and what the person said about it: look in <noticed>; you cannot change it.
+- How the person seems: what works for them, what gets in the way, their rhythm, how they talk: look in <how_you_seem>; change it with correctSeenAs or removeSeenAs.
 - Whether a thing is private: change it with setPrivate.
 - Photos and files kept with a record: look in <attachments>; you cannot change it.
 - How the person writes: look in <your_style>; you cannot change it.
@@ -98,6 +99,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - What matters most: the order of projects, goals and habits: look in <importance>; change it with setImportance.
 - A habit ticked, skipped or counted by a sentence: change it with checkIn.
 - What the app has noticed, and what the person said about it: look in <noticed>; you cannot change it.
+- How the person seems: what works for them, what gets in the way, their rhythm, how they talk: look in <how_you_seem>; change it with correctSeenAs or removeSeenAs.
 - Whether a thing is private: change it with setPrivate.
 - Photos and files kept with a record: look in <attachments>; you cannot change it.
 - How the person writes: look in <your_style>; you cannot change it.

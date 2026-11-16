@@ -1,5 +1,6 @@
 import { WHY_SUMMARY_CAP, WHY_TAGS_CAP } from '../goalWhy.js';
 import { OBSERVATION_TAGS, type ObservationTag } from '../nomos/said.js';
+import { normalizeSeeYou, type SeeYouLine } from './seeYou.js';
 
 export const REFLECT_LINKS = [
   'shift',
@@ -60,6 +61,8 @@ export interface NormalizedReflection {
   candidates: ReflectCandidate[];
   whyRefresh: ReflectWhyRefresh[];
   noteObservations: ReflectNoteObservation[];
+  /** The lines of how the assistant sees the person; null when the night did not ask for them. */
+  seeYou: SeeYouLine[] | null;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -162,5 +165,6 @@ export function normalizeReflection(value: unknown): NormalizedReflection {
     noteObservations: toList(body.noteObservations)
       .flatMap(toNoteObservation)
       .slice(0, MAX_NOTE_OBSERVATIONS),
+    seeYou: normalizeSeeYou(body.seeYou),
   };
 }

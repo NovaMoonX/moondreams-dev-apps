@@ -22,6 +22,7 @@ import {
   RESEARCH_COMMAND_KINDS,
   LEARN_COMMAND_KINDS,
   SCHEDULE_COMMAND_KINDS,
+  SEEN_AS_COMMAND_KINDS,
   TOPIC_COMMAND_KINDS,
 } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
@@ -102,6 +103,7 @@ const world: World = {
     ...IMPORTANCE_COMMAND_KINDS,
     ...SCHEDULE_COMMAND_KINDS,
     ...RESEARCH_COMMAND_KINDS,
+    ...SEEN_AS_COMMAND_KINDS,
     ...LEARN_COMMAND_KINDS,
     ...CONNECTION_COMMAND_KINDS,
     CLOSE_CONVERSATION_TOOL.name,

@@ -34,6 +34,8 @@ import {
   retryKey,
   setFacts,
   setFactsFailed,
+  setSeenAs,
+  setSeenAsFailed,
   setStyle,
   setStyleFailed,
   setAssistants,
@@ -103,6 +105,7 @@ import {
   startWaitingCapturesListener,
 } from '@apps/helm/store/listeners/captureListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
+import { startSeenAsListener } from '@apps/helm/store/listeners/seenAsListener';
 import { startStyleListener } from '@apps/helm/store/listeners/styleListener';
 import { startPatternsListener } from '@apps/helm/store/listeners/patternListener';
 import { startObservationsListener } from '@apps/helm/store/listeners/observationListener';
@@ -501,6 +504,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm facts listener failed', error);
               dispatch(setFactsFailed());
+            },
+          ),
+          startSeenAsListener(
+            uid,
+            read,
+            (lines) => dispatch(setSeenAs(lines)),
+            (error) => {
+              console.error('Helm seen-as listener failed', error);
+              dispatch(setSeenAsFailed());
             },
           ),
           startStyleListener(

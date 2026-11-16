@@ -58,6 +58,7 @@ import type {
   ProcedureVersion,
   ProcedureVersionSealed,
   ResearchSealed,
+  SeenAsSealed,
   RunSealed,
   ProjectSealed,
   Sealed,
@@ -473,7 +474,8 @@ export async function undoExecution(
                 ref.collection === 'habitDays' ||
                 ref.collection === 'scheduledActions' ||
                 ref.collection === 'research' ||
-                ref.collection === 'connections';
+                ref.collection === 'connections' ||
+                ref.collection === 'seenAs';
               const entry = await transaction.get(docOf(ref));
               if (ref.collection === 'connections' && ref.op === 'delete') {
                 const whoIds =
@@ -570,6 +572,7 @@ export async function undoExecution(
                       | HabitDaySealed
                       | ConnectionSealed
                       | ResearchSealed
+                      | SeenAsSealed
                     >(data.sealed as Sealed, encryption)
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);
@@ -676,6 +679,7 @@ export async function undoExecution(
                     | HabitDaySealed
                     | ConnectionSealed
                     | ResearchSealed
+                    | SeenAsSealed
                   >(update.reseal, encryption),
                 }
               : {},

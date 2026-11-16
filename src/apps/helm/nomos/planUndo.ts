@@ -21,6 +21,7 @@ import type {
   OpenExecution,
   ProjectSealed,
   ResearchSealed,
+  SeenAsSealed,
   TaskSealed,
   ProcedureSealed,
   RunSealed,
@@ -94,6 +95,7 @@ export interface UndoTarget {
     | RunSealed
     | ConnectionSealed
     | ResearchSealed
+    | SeenAsSealed
     | null;
   /** For a date that was removed: whether the person it belonged to is still there; for a topic that was moved: whether its old parent is. */
   isOwnerHere?: boolean;
@@ -119,6 +121,7 @@ export type UndoPlan =
           | HabitDaySealed
           | ConnectionSealed
           | ResearchSealed
+          | SeenAsSealed
           | null;
       }[];
       /** Topics and procedures whose document goes back to an earlier version, written as a new version `from + 1` holding the parts of `to`. */
@@ -221,6 +224,7 @@ type RecordOutcome =
         | HabitDaySealed
         | ConnectionSealed
         | ResearchSealed
+        | SeenAsSealed
         | null;
       effect: ExecutionEffect;
     }
@@ -596,7 +600,10 @@ const planRecord = (
       : planRecreate(target, removal.effect);
   if (target.data === null) return { kind: 'gone' };
   const effects = entries.map((entry) => entry.effect);
-  const title = toTitle(target, effects);
+  const isSeenAs = entries[0]?.ref.collection === 'seenAs';
+  const title = isSeenAs
+    ? HELM_COPY.resultSeenAsFallback
+    : toTitle(target, effects);
   const left: RecordOutcome = isImport
     ? { kind: 'kept', title }
     : { kind: 'skipped' };
@@ -680,13 +687,16 @@ const planRecord = (
           NoteSealed | TopicSealed | ProcedureSealed | RunSealed
         >)
       : null;
-  const restoredTitle = toOpenedTitle(updated.opened) || title;
+  const restoredTitle = isSeenAs
+    ? title
+    : toOpenedTitle(updated.opened) || title;
   return {
     kind: 'restored',
     title: restoredTitle,
-    fields: isKnowledge(entries[0]?.ref.collection)
-      ? updated.fields
-      : { ...updated.fields, lastEditedAt: now },
+    fields:
+      isKnowledge(entries[0]?.ref.collection) || isSeenAs
+        ? updated.fields
+        : { ...updated.fields, lastEditedAt: now },
     reseal,
     effect: {
       written: { ...updated.restored, 'sealed.title': restoredTitle },
@@ -1300,6 +1310,7 @@ export function planUndo(input: {
   const isProjectDoc = (docId: string) =>
     collectionOf.get(docId) === 'projects';
   const isNoteDoc = (docId: string) => collectionOf.get(docId) === 'notes';
+  const isSeenAsDoc = (docId: string) => collectionOf.get(docId) === 'seenAs';
   const projectsDone = done.filter(({ docId }) => isProjectDoc(docId));
   const notesDeleted = done.filter(
     ({ docId, outcome }) => isNoteDoc(docId) && outcome.kind === 'deleted',
@@ -1323,8 +1334,10 @@ export function planUndo(input: {
         !isProcedureDoc(docId) &&
         !isRunDoc(docId) &&
         !isHabitDoc(docId) &&
-        !isHabitDayDoc(docId),
+        !isHabitDayDoc(docId) &&
+        !isSeenAsDoc(docId),
   );
+  const seenAsCount = done.filter(({ docId }) => isSeenAsDoc(docId)).length;
   const habitsDone = done.filter(({ docId }) => isHabitDoc(docId));
   const habitDaysDone = done.filter(({ docId }) => isHabitDayDoc(docId));
   const habitCount = habitsDone.length + habitDaysDone.length;
@@ -1406,7 +1419,8 @@ export function planUndo(input: {
     topicCount === 0 &&
     procedureCount === 0 &&
     runCount === 0 &&
-    habitCount === 0
+    habitCount === 0 &&
+    seenAsCount === 0
   ) {
     return refuse(
       'nothingToTakeBack',
@@ -1567,9 +1581,27 @@ export function planUndo(input: {
     : habitCount > 0
       ? `${withRuns} ${HELM_COPY.undoReportHabitsToo(habitsTicked, habitsChanged)}`
       : withRuns;
-  const report = isPhotosOnly
+  const isSeenAsOnly =
+    seenAsCount > 0 &&
+    photoCount +
+      records.length +
+      factsDone.length +
+      datesDone.length +
+      notesDone.length +
+      projectCount +
+      topicCount +
+      procedureCount +
+      runCount +
+      habitCount ===
+      0;
+  const otherReport = isPhotosOnly
     ? HELM_COPY.undoReportPhotos(photoCount)
     : [withHabits, photosToo].filter(Boolean).join(' ');
+  const report = isSeenAsOnly
+    ? HELM_COPY.undoReportSeenAs(seenAsCount, kept.length, gone)
+    : seenAsCount > 0
+      ? `${otherReport} ${HELM_COPY.undoReportSeenAsToo(seenAsCount)}`
+      : otherReport;
   const baseSummary =
     records.length === 0
       ? isNotesOnly
@@ -1685,9 +1717,13 @@ export function planUndo(input: {
       finishedAt: now,
     },
     undoSealed: {
-      summary: isPhotosOnly
-        ? HELM_COPY.tookBackPhotos(photoCount)
-        : withHabitsSummary,
+      summary: isSeenAsOnly
+        ? HELM_COPY.tookBackSeenAs(seenAsCount)
+        : `${
+            isPhotosOnly
+              ? HELM_COPY.tookBackPhotos(photoCount)
+              : withHabitsSummary
+          }${seenAsCount > 0 ? ` and ${HELM_COPY.undoSeenAsPhrase(seenAsCount)}` : ''}`,
       said: null,
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
@@ -1710,6 +1746,7 @@ export function planUndo(input: {
       ...runsUnticked,
       ...habitsDone,
       ...habitDaysDone,
+      ...done.filter(({ docId }) => isSeenAsDoc(docId)),
     ].map(({ outcome }) => outcome.title),
     kept,
     gone,

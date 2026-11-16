@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { ACTIVITY_PAGE } from '@apps/helm/constants';
 import { resetAllState } from '@/store/actions/globalActions';
+import type { OpenSeenAs } from '@apps/helm/store/listeners/seenAsListener';
 import type { OpenStyle } from '@apps/helm/store/listeners/styleListener';
 import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexListener';
 import type {
@@ -135,6 +136,8 @@ export interface HelmState {
   openRuns: LoadedSet<OpenRun>;
   /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
   media: LoadedSet<OpenMedia>;
+  /** How the assistant sees the person, every line including removed ones; a screen reads `seenAsSelectors`. */
+  seenAs: LoadedSet<OpenSeenAs>;
   /** The person's writing-style profiles, opened. */
   style: LoadedSet<OpenStyle>;
   /** The outside assistants the person connected, most recently used first; disconnected ones are left out. */
@@ -218,6 +221,7 @@ const initialState: HelmState = {
   procedures: emptyLoadedSet,
   openRuns: emptyLoadedSet,
   media: emptyLoadedSet,
+  seenAs: emptyLoadedSet,
   style: emptyLoadedSet,
   assistants: emptyLoadedSet,
   synced: emptyLoadedSet,
@@ -388,6 +392,12 @@ const helmSlice = createSlice({
     },
     setFactsFailed: (state) => {
       state.facts.isFailed = true;
+    },
+    setSeenAs: (state, action: PayloadAction<OpenSeenAs[]>) => {
+      state.seenAs = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setSeenAsFailed: (state) => {
+      state.seenAs.isFailed = true;
     },
     setStyle: (state, action: PayloadAction<OpenStyle[]>) => {
       state.style = { items: action.payload, isLoaded: true, isFailed: false };
@@ -718,6 +728,8 @@ export const {
   startLoadingEarlier,
   addEarlierCaptures,
   setEarlierFailed,
+  setSeenAs,
+  setSeenAsFailed,
   setStyle,
   setStyleFailed,
   setAssistants,

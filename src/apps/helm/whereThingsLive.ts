@@ -19,6 +19,7 @@ export const HELM_HOMES = [
   'patterns',
   'observations',
   'reflections',
+  'seenAs',
   'procedures',
   'procedureRuns',
   'media',
@@ -433,6 +434,27 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     writer: 'server/writeReflection',
     jobFields: [{ field: 'reflectionId', job: 'writeReflection' }],
     derivedFrom: ['observations', 'habitDays'],
+    sourceKeys: 'sourceKeys',
+  }),
+  row({
+    thing:
+      'How the person seems: what works for them, what gets in the way, their rhythm, how they talk',
+    home: 'seenAs',
+    classes: ['readable', 'sealed'],
+    readers: ['device', 'server', 'turn', 'quick', 'night'],
+    contextBlock: '<how_you_seem>',
+    commands: ['correctSeenAs', 'removeSeenAs'],
+    writer: 'actions/seenAsActions',
+    taps: ['correctSeenAs', 'removeSeenAs'],
+    jobFields: [
+      {
+        field:
+          'the shown lines (kind, sourceKeys, subjectRefs, derivedAt, privacy, sealed line and basis); never a correction or a removal',
+        job: 'runHelmReflection',
+      },
+    ],
+    batchJobs: ['reflect'],
+    derivedFrom: ['patterns', 'observations', 'style', 'habits'],
     sourceKeys: 'sourceKeys',
   }),
   row({

@@ -1386,6 +1386,7 @@ export interface EffectRef {
   /** `delete` appears only in the executions an undo writes. */
   op: 'create' | 'update' | 'delete';
   collection:
+    | 'seenAs'
     | 'tasks'
     | 'facts'
     | 'who'

@@ -23,6 +23,7 @@ import {
   type NormalizedReflection,
 } from './normalizeReflection.js';
 import { readReflectWindow, type ReflectWindow } from './readReflectWindow.js';
+import { planSeeYouIn, type SeeYouPlan } from './seeYou.js';
 import {
   readRun,
   readState,
@@ -335,29 +336,44 @@ export async function applyReflectionOutcome(
       profile,
       hasAnswer: answer !== null && key !== null,
     });
-    const planned =
+    const window =
       decision === 'write' && answer && key && profile
+        ? await readReflectWindow(
+            (query) => transaction.get(query),
+            firestore,
+            uid,
+            key,
+            {
+              timeZone: toKnownZone(String(profile.timeZone ?? 'UTC')),
+              forgottenAt: toNumberOrNull(profile.forgottenAt),
+            },
+            current.dayKey,
+          )
+        : null;
+    const planned =
+      window && answer && key
         ? planReflection({
             uid,
             customId,
             dayKey: current.dayKey,
             now,
             key,
-            window: await readReflectWindow(
-              (query) => transaction.get(query),
-              firestore,
-              uid,
-              key,
-              {
-                timeZone: toKnownZone(String(profile.timeZone ?? 'UTC')),
-                forgottenAt: toNumberOrNull(profile.forgottenAt),
-              },
-              current.dayKey,
-            ),
+            window,
             result: answer,
           })
         : null;
     const isAlreadyWritten = reflectionSnap.data()?.reflectionId === customId;
+    const seeYou: SeeYouPlan | null =
+      window && answer?.seeYou && key && profile && !isAlreadyWritten
+        ? await planSeeYouIn(transaction, firestore, {
+            uid,
+            now,
+            key,
+            window,
+            lines: answer.seeYou,
+            forgottenAt: toNumberOrNull(profile.forgottenAt),
+          })
+        : null;
     const existing =
       planned && planned.observations.length > 0
         ? await transaction.getAll(
@@ -418,6 +434,19 @@ export async function applyReflectionOutcome(
       if (!existing[index]?.exists)
         transaction.set(firestore.doc(`${base}/observations/${id}`), data);
     });
+    if (seeYou) {
+      seeYou.creates.forEach(({ id, data }) =>
+        transaction.set(firestore.doc(`${base}/seenAs/${id}`), data),
+      );
+      seeYou.updates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/seenAs/${id}`), data),
+      );
+      seeYou.deletes.forEach((id) =>
+        transaction.delete(firestore.doc(`${base}/seenAs/${id}`)),
+      );
+      transaction.update(profileRef, { seenAsRebuiltAt: now });
+      logger.info('helm.reflect.seeYou', seeYou.counts);
+    }
     return 'written';
   });
 }

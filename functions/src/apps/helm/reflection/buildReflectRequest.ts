@@ -10,11 +10,20 @@ import { maskPrivateNames } from '../privacy.js';
 import { maskOthersHealth, OBSERVATION_TAGS } from '../nomos/said.js';
 import { toKnownZone } from '../nomos/spoken.js';
 import { habitDayKey } from '../nomos/habitDay.js';
+import { isSeenAsRebuildDue } from '../nomos/seenAs.js';
 import {
   OBSERVATION_KINDS,
   REFLECT_LINKS,
   REFLECT_SUGGESTIONS,
 } from './normalizeReflection.js';
+import {
+  buildSeeYouBlocks,
+  readSeeYouWorld,
+  SEE_YOU_MAX_TOKENS,
+  SEE_YOU_SCHEMA,
+  SEE_YOU_SYSTEM,
+  type SeeYouWorld,
+} from './seeYou.js';
 import {
   readReflectWindow,
   type ReflectWindow,
@@ -106,6 +115,16 @@ export const REFLECT_SCHEMA: Record<string, unknown> = {
   },
 };
 
+/** The schema with the `seeYou` list asked for as well. */
+const withSeeYou = (schema: Record<string, unknown>) => ({
+  ...schema,
+  required: [...(schema.required as string[]), 'seeYou'],
+  properties: {
+    ...(schema.properties as Record<string, unknown>),
+    seeYou: SEE_YOU_SCHEMA,
+  },
+});
+
 const toDataJson = (value: unknown) =>
   JSON.stringify(value).replace(/</g, '\\u003c');
 
@@ -120,6 +139,8 @@ interface MessageInput {
   dayKey: string;
   window: ReflectWindow;
   patterns: { kind: string; subject: DocumentData; state: string }[];
+  /** What the lines of how the assistant sees the person are rebuilt from; left out on a night that does not rebuild them. */
+  seeYou?: SeeYouWorld | null;
 }
 
 /** The user message: aliases for every record, no name of another person, and no words from anything private or care. Null when there is nothing to look at. */
@@ -128,6 +149,7 @@ export function buildReflectMessage({
   dayKey,
   window,
   patterns,
+  seeYou = null,
 }: MessageInput): string | null {
   const { habits, goals, whoNames } = window;
   const habitAlias = (id: string) => toAlias('h', uid, id);
@@ -258,6 +280,7 @@ export function buildReflectMessage({
         state,
       })),
     )}</already_noticed>`,
+    ...(seeYou ? buildSeeYouBlocks(uid, window, seeYou) : []),
   ].join('\n');
 }
 
@@ -285,6 +308,10 @@ export async function buildReflectRequest(
   const dayKey = habitDayKey(now, timeZone);
   const forgottenAt =
     typeof profile.forgottenAt === 'number' ? profile.forgottenAt : null;
+  const lastRebuildAt =
+    typeof profile.seenAsRebuiltAt === 'number'
+      ? profile.seenAsRebuiltAt
+      : null;
   const [window, patternSnap] = await Promise.all([
     readReflectWindow(
       (query) => query.get(),
@@ -300,10 +327,25 @@ export async function buildReflectRequest(
       .limit(MAX_PATTERNS)
       .get(),
   ]);
+  const isSeeYouDue = isSeenAsRebuildDue(
+    lastRebuildAt,
+    window.observations.filter((o) => o.at > (lastRebuildAt ?? 0)).length,
+    now,
+  );
+  const seeYou = isSeeYouDue
+    ? await readSeeYouWorld(
+        (query) => query.get(),
+        firestore,
+        uid,
+        key,
+        forgottenAt,
+      )
+    : null;
   const prompt = buildReflectMessage({
     uid,
     dayKey,
     window,
+    seeYou,
     patterns: patternSnap.docs
       .filter((doc) => Number(doc.get('createdAt') ?? 0) > (forgottenAt ?? 0))
       .map((doc) => ({
@@ -316,10 +358,12 @@ export async function buildReflectRequest(
   return {
     dayKey,
     request: {
-      system: REFLECT_SYSTEM,
+      system: seeYou ? `${REFLECT_SYSTEM}\n${SEE_YOU_SYSTEM}` : REFLECT_SYSTEM,
       prompt,
-      schema: REFLECT_SCHEMA,
-      maxTokens: REFLECT_MAX_TOKENS,
+      schema: seeYou ? withSeeYou(REFLECT_SCHEMA) : REFLECT_SCHEMA,
+      maxTokens: seeYou
+        ? REFLECT_MAX_TOKENS + SEE_YOU_MAX_TOKENS
+        : REFLECT_MAX_TOKENS,
     },
   };
 }

@@ -7777,6 +7777,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               entry.execution,
             ),
           );
+          learning.seenAs.forEach((entry) =>
+            batch.set(person.collection('seenAs').doc(entry.id), entry.line),
+          );
         }
         const knowledge = people
           ? await buildKnowledge({
@@ -7891,7 +7894,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               ? learning.patterns.length +
                 learning.observations.length +
                 learning.reflections.length +
-                learning.executions.length
+                learning.executions.length +
+                learning.seenAs.length
               : 0) +
             (knowledge
               ? knowledge.topics.length +

@@ -1945,6 +1945,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   learning.reflections.forEach((entry) =>
     put('reflections', `reflections/${entry.id}`, entry.reflection),
   );
+  learning.seenAs.forEach((entry) =>
+    put('seenAs', `seenAs/${entry.id}`, entry.line),
+  );
 
   // The emulator commits one batch at a time, so the batches are written one after another once everything is built.
   await Array.from(

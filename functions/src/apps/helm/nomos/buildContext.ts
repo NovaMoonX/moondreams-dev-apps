@@ -26,6 +26,7 @@ import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
 import type { ContextProject } from '../projectStore.js';
 import type { ContextLearnItem } from '../research/learnStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
+import { SEEN_AS_LIMITS } from './seenAs.js';
 
 export interface ContextTask {
   id: string;
@@ -277,6 +278,8 @@ export interface ContextInput {
   topicDocument?: 'whole' | 'outline' | null;
   /** Up to ten statements of what has been noticed about the person; left out when learning is off or there are none. */
   noticed?: string[];
+  /** How the assistant sees the person, at most `SEEN_AS_LIMITS.toModel` lines, corrected first; left out when learning is off or there are none. */
+  seenAs?: ContextSeenAs[];
   /** The person's style notes, descriptions only; left out when there are none. */
   style?: { traits: string[]; avoid: string[] } | null;
   /** Where the person is today and on any day the turn names, and where the people it names live, as names only. */
@@ -290,6 +293,14 @@ export interface ContextInput {
       permission: 'granted' | 'prompt' | 'denied' | 'unsupported';
     };
   } | null;
+}
+
+/** A line of how the assistant sees the person, as the model is shown it: a correction already stands in place of the line it corrects. */
+export interface ContextSeenAs {
+  id: string;
+  kind: string;
+  text: string;
+  isCorrected: boolean;
 }
 
 export interface ContextFocusedTopic {
@@ -427,6 +438,9 @@ export function buildContext(input: ContextInput): {
   habits: AliasBook;
   scheduledActions: AliasBook;
   learnLater: AliasBook;
+  seenAs: AliasBook;
+  /** What each line shown says, by id, for the check that a removal still names it. */
+  seenAsWords: Map<string, string>;
   projects: AliasBook;
   habitNames: Map<string, string>;
   undoTurns: AliasBook;
@@ -444,6 +458,7 @@ export function buildContext(input: ContextInput): {
   const habits = createAliasBook('h');
   const scheduledBook = createAliasBook('sa');
   const learnBook = createAliasBook('r');
+  const seenAsBook = createAliasBook('sy');
   const projectBook = createAliasBook('p');
   const undoTurns = createAliasBook('u');
   const partIds = new Map<string, string>();
@@ -867,6 +882,18 @@ export function buildContext(input: ContextInput): {
     ...(input.noticed?.length
       ? [`<noticed>${toDataJson(input.noticed.slice(0, 10))}</noticed>`]
       : []),
+    ...(input.seenAs?.length
+      ? [
+          `<how_you_seem>${toDataJson(
+            input.seenAs.slice(0, SEEN_AS_LIMITS.toModel).map((line) => ({
+              alias: seenAsBook.add(line.id),
+              kind: line.kind,
+              text: line.text,
+              ...(line.isCorrected && { from: 'the person says' }),
+            })),
+          )}</how_you_seem>`,
+        ]
+      : []),
     ...(openRuns.length > 0
       ? [`<open_runs>${toDataJson(openRuns)}</open_runs>`]
       : []),
@@ -921,6 +948,12 @@ export function buildContext(input: ContextInput): {
     habits,
     scheduledActions: scheduledBook,
     learnLater: learnBook,
+    seenAs: seenAsBook,
+    seenAsWords: new Map(
+      (input.seenAs ?? [])
+        .slice(0, SEEN_AS_LIMITS.toModel)
+        .map((line): [string, string] => [line.id, line.text]),
+    ),
     projects: projectBook,
     habitNames: new Map(
       (input.habits ?? [])

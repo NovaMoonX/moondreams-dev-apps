@@ -23,6 +23,7 @@ import type { PlannedQuestion } from './nomos/executeCommands.js';
 import {
   MAX_EFFECTS,
   type HabitCommand,
+  type SeenAsCommand,
   type SetImportanceCommand,
 } from './nomos/commands.js';
 import {
@@ -32,6 +33,8 @@ import {
   toContextImportance,
 } from './importanceStore.js';
 import { planImportance } from './nomos/planImportance.js';
+import { planSeenAs } from './nomos/planSeenAs.js';
+import { readSeenAsForContext, readSeenAsRecordsIn } from './seenAsStore.js';
 import { decideHabit } from './nomos/policy.js';
 import {
   FieldValue,
@@ -411,6 +414,7 @@ import {
   PROCEDURE_PROMPT,
   HABIT_PROMPT,
   IMPORTANCE_PROMPT,
+  SEEN_AS_PROMPT,
 } from './nomos/prompt.js';
 import { renderWhereBlock } from './nomos/whereThingsLive.js';
 
@@ -2229,6 +2233,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       runCommands: [],
       habitCommands: [],
       importanceCommands: [],
+      seenAsCommands: [],
       scheduleCommands: [],
       scheduleDropped: [],
       researchCommands: [],
@@ -2407,6 +2412,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             (profile.get('forgottenAt') as number | null | undefined) ?? null,
           isMasked: earlyMask.isOn,
         })
+      : [];
+  const seenAsLines =
+    isLearningOn && mode !== 'rest'
+      ? await readSeenAsForContext(firestore, base, key, {
+          forgottenAt:
+            (profile.get('forgottenAt') as number | null | undefined) ?? null,
+          isMasked: earlyMask.isOn,
+        }).catch(() => [])
       : [];
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
@@ -2897,6 +2910,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       topics: masked.topics,
       style,
       noticed,
+      seenAs: seenAsLines,
       whereabouts: contextWhereabouts,
       fit: contextFit,
       abilities: readCaptureAbilities(capture.abilities),
@@ -3001,6 +3015,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         : null,
       isHabitsInPlay ? HABIT_PROMPT : null,
       isLearningOn && mode !== 'rest' ? LEARNING_PROMPT : null,
+      seenAsLines.length > 0 ? SEEN_AS_PROMPT : null,
       contextImportance ? IMPORTANCE_PROMPT : null,
       mode === 'rest' ? REST_PROMPT : null,
       attached.media.length > 0 ? MEDIA_PROMPT : null,
@@ -3283,6 +3298,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       undoUnitCounts: context.undoUnitCounts,
       captureText: combined.text,
       keyDateNames,
+      seenAs: context.seenAs,
+      seenAsWords: context.seenAsWords,
       quotes,
       alreadyMade,
       timeZone,
@@ -3359,6 +3376,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reply.procedureCommands.length +
     reply.runCommands.length +
     reply.importanceCommands.length +
+    reply.seenAsCommands.length +
     reply.soundsLike.length +
     reply.contactPoints.length +
     reply.connectionCommands.length +
@@ -3433,6 +3451,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         )
       : [],
     importanceCommands: keeps ? reply.importanceCommands : [],
+    seenAsCommands: keeps ? reply.seenAsCommands : [],
     scheduleCommands: keeps ? reply.scheduleCommands : [],
     scheduleDropped: keeps ? reply.scheduleDropped : [],
     researchCommands: keeps ? reply.researchCommands : [],
@@ -3491,6 +3510,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             reply.habitDropped,
             reply.scheduleDropped,
             reply.importanceDropped,
+            reply.seenAsDropped,
             commands.length < reply.commands.length,
           )
         ? hide(reply.replyLine)
@@ -3662,6 +3682,7 @@ async function writeResult(
     /** A run is open or the turn answers a question, so a question about two saved items would interrupt. */
     isMidTask: boolean;
     importanceCommands: SetImportanceCommand[];
+    seenAsCommands: SeenAsCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     contactPoints: AddContactPointCommand[];
     connectionCommands: ConnectionCommand[];
@@ -3716,6 +3737,7 @@ async function writeResult(
     runCommands,
     habitCommands,
     importanceCommands,
+    seenAsCommands,
     scheduleCommands,
     scheduleDropped,
     researchCommands,
@@ -4911,6 +4933,33 @@ async function writeResult(
       ),
       knownPeople: knownNames,
     });
+    const keptSeenAs = isStale ? [] : seenAsCommands;
+    const seenAsPlan = planSeenAs({
+      commands: keptSeenAs,
+      records: await readSeenAsRecordsIn(
+        transaction,
+        firestore,
+        base,
+        key,
+        keptSeenAs.map((command) => command.lineId),
+      ),
+      now,
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length -
+          schedulePlan.effects.length -
+          researchPlan.effects.length -
+          learnPlan.effects.length,
+      ),
+    });
     const scheduleNotKept = [
       ...schedulePlan.notKept,
       ...(isStale ? [] : scheduleDropped).flatMap(
@@ -4939,6 +4988,7 @@ async function writeResult(
         ...schedulePlan.effectRefs,
         ...researchPlan.effectRefs,
         ...learnPlan.effectRefs,
+        ...seenAsPlan.effectRefs,
       ],
       effects: [
         ...written.effects,
@@ -4952,6 +5002,7 @@ async function writeResult(
         ...schedulePlan.effects,
         ...researchPlan.effects,
         ...learnPlan.effects,
+        ...seenAsPlan.effects,
       ],
       notKept: [
         ...written.notKept,
@@ -4963,6 +5014,7 @@ async function writeResult(
         ...scheduleNotKept,
         ...researchPlan.notKept,
         ...learnPlan.notKept,
+        ...seenAsPlan.notKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
       linkedWhoIds: [
@@ -4982,6 +5034,7 @@ async function writeResult(
         connectionPlan.isPrivate ||
         habitPlan.isPrivate ||
         importancePlan.isPrivate ||
+        seenAsPlan.isPrivate ||
         schedulePlan.isPrivate,
     };
     const plan = sentMedia
@@ -5290,6 +5343,9 @@ async function writeResult(
       importancePlan.updates.forEach(({ collection, id, data }) =>
         transaction.update(firestore.doc(`${base}/${collection}/${id}`), data),
       );
+      seenAsPlan.updates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/seenAs/${id}`), data),
+      );
       schedulePlan.creates.forEach(({ id, doc }) =>
         transaction.create(
           firestore.doc(`${base}/scheduledActions/${id}`),
@@ -5410,6 +5466,7 @@ async function writeResult(
               ...schedulePlan.lines,
               ...researchPlan.lines,
               ...learnPlan.lines,
+              ...seenAsPlan.lines,
             ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
@@ -5420,6 +5477,8 @@ async function writeResult(
               plan.offerLines,
               habitPlan.lines,
               importancePlan.lines,
+              seenAsPlan.lines,
+              seenAsPlan.notKept,
               schedulePlan.lines,
               scheduleNotKept,
               researchPlan.lines,
@@ -5530,6 +5589,8 @@ async function writeResult(
           habitPlan.notKept.length +
           importancePlan.lines.length +
           importancePlan.notKept.length +
+          seenAsPlan.lines.length +
+          seenAsPlan.notKept.length +
           schedulePlan.lines.length +
           scheduleNotKept.length +
           schedulePlan.questions.length +

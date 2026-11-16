@@ -234,7 +234,7 @@ export const ACKNOWLEDGEMENT_WORDS = [
   'so',
 ];
 /** Commands that delete a record. A closing phrase never reaches one: the reading keeps one only when its subject is still named once every closing phrase is taken out of the words. */
-export const DELETING_COMMANDS = ['removeKeyDate'] as const;
+export const DELETING_COMMANDS = ['removeKeyDate', 'removeSeenAs'] as const;
 /** A whole utterance that is one of these takes the open session's latest turn back, on the device, before anything is sent. */
 export const UNDO_PHRASES = ['undo that', 'undo', 'take that back'];
 
@@ -2979,6 +2979,21 @@ export const HELM_COPY = {
   undoReportHabitsToo: (ticked: number, changed: number) =>
     `${toHabitParts(ticked, changed).map(toCapital).join('. ')}.`,
   resultHabitFallback: 'Habit',
+  resultSeenAsFallback: 'A line about you',
+  tookBackSeenAs: (count: number) =>
+    `Put back ${count} ${count === 1 ? 'line' : 'lines'} about you`,
+  undoSeenAsPhrase: (count: number) =>
+    `${count} ${count === 1 ? 'line' : 'lines'} about you`,
+  undoReportSeenAs: (takenBack: number, kept: number, gone: number) =>
+    [
+      `Put back ${takenBack} ${takenBack === 1 ? 'line' : 'lines'} about you.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportSeenAsToo: (count: number) =>
+    `${count === 1 ? '1 line' : `${count} lines`} about you too.`,
   undoReportNoteUnfiled: 'Took the note back out of those topics.',
   tookBackNoteUnfiled: 'Took the note back out of those topics',
   undoReportNotesToo: (count: number) =>

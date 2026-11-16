@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
 
+import { DEV_KEYRING } from '../../functions/src/appKeys/keyring.ts';
+import {
+  deriveSeedDataKey,
+  sealForHelm,
+} from '../../functions/src/apps/helm/helmKey.ts';
+import { planSeenAs } from '../../functions/src/apps/helm/nomos/planSeenAs.ts';
+import { toSeenAsRecord } from '../../functions/src/apps/helm/seenAsStore.ts';
 import { MAX_EXECUTION_EFFECTS } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { buildWriteExecution } from '../../functions/src/apps/helm/topicWriteExecution.ts';
 import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
@@ -35,6 +42,7 @@ import type {
   ProcedureSealed,
   ResearchSealed,
   RunSealed,
+  SeenAsSealed,
   TaskSealed,
   TopicSealed,
 } from '../../src/apps/helm/types.ts';
@@ -3258,6 +3266,168 @@ test('Save to my knowledge takes the note away while unedited and puts the quest
   const edited = asWrite(plan(kept, targets(NOW)));
   assert.deepEqual(edited.deletes, []);
   assert.deepEqual(edited.kept, ['Engines']);
+});
+
+const seenKey = {
+  ...deriveSeedDataKey(DEV_KEYRING, 'undo-seen-as'),
+  keyVersion: 1,
+};
+
+const seenDoc = (id: string, line: string, state: string, extra = {}) => {
+  const words: SeenAsSealed = {
+    line,
+    basis: 'From 2 things you said',
+    corrected: null,
+  };
+  const data = {
+    kind: 'whatWorks',
+    state,
+    sourceKeys: ['observations/a', 'observations/b'],
+    subjectRefs: [],
+    writtenBy: 'reflection',
+    dontDrawFrom: [],
+    derivedAt: EARLIER,
+    correctedAt: null,
+    removedAt: null,
+    privacy: 'ordinary',
+    createdAt: EARLIER,
+    sealed: sealForHelm(seenKey, { ...words }),
+    ...extra,
+  };
+  const record = toSeenAsRecord(seenKey, id, data);
+  assert.ok(record);
+  return { data, words, record };
+};
+
+const seenTurn = () => {
+  const one = seenDoc('sa_one', 'You work best in the morning', 'shown');
+  const two = seenDoc('sa_two', 'You skip the gym on Fridays', 'shown');
+  const planned = planSeenAs({
+    commands: [
+      {
+        kind: 'correctSeenAs',
+        lineId: 'sa_one',
+        words: 'I work best at night',
+      },
+      { kind: 'removeSeenAs', lineId: 'sa_two' },
+    ],
+    records: new Map([
+      ['sa_one', one.record],
+      ['sa_two', two.record],
+    ]),
+    now: EARLIER,
+    seal: (fields) => sealForHelm(seenKey, fields),
+    room: 10,
+  });
+  assert.equal(planned.effects.length, 2);
+  const original = execution(
+    planned.effectRefs.map((ref, index) => ({
+      ref: { ...ref, op: 'update' } as EffectRef,
+      effect: planned.effects[index] as ExecutionEffect,
+    })),
+  );
+  return { original, one, two };
+};
+
+test('undoing a turn that corrected one line and removed another puts both back exactly', () => {
+  const { original, one, two } = seenTurn();
+  const result = asWrite(
+    plan(original, [
+      [
+        'sa_one',
+        {
+          docId: 'sa_one',
+          data: { ...one.data, state: 'corrected', correctedAt: EARLIER },
+          opened: { ...one.words, corrected: 'I work best at night' },
+        },
+      ],
+      [
+        'sa_two',
+        {
+          docId: 'sa_two',
+          data: {
+            ...two.data,
+            state: 'removed',
+            removedAt: EARLIER,
+            dontDrawFrom: ['observations/a', 'observations/b'],
+          },
+          opened: { ...two.words, line: 'you skip the gym on fridays' },
+        },
+      ],
+    ]),
+  );
+  const byId = Object.fromEntries(result.updates.map((u) => [u.docId, u]));
+  assert.deepEqual(byId.sa_one.fields, { state: 'shown', correctedAt: null });
+  assert.deepEqual(byId.sa_one.reseal, one.words);
+  assert.deepEqual(byId.sa_two.fields, {
+    state: 'shown',
+    removedAt: null,
+    dontDrawFrom: [],
+  });
+  assert.deepEqual(byId.sa_two.reseal, two.words);
+  assert.ok(result.updates.every((u) => u.collection === 'seenAs'));
+  assert.ok(!result.updates.some((u) => 'lastEditedAt' in u.fields));
+  assert.equal(result.undoSealed.summary, 'Put back 2 lines about you');
+  assert.equal(result.undoSealed.undoReport, 'Put back 2 lines about you.');
+});
+
+test('a line changed again since the turn is left alone and the other still comes back', () => {
+  const { original, one, two } = seenTurn();
+  const result = asWrite(
+    plan(original, [
+      [
+        'sa_one',
+        {
+          docId: 'sa_one',
+          data: { ...one.data, state: 'corrected', correctedAt: EARLIER + 5 },
+          opened: { ...one.words, corrected: 'Something I said later' },
+        },
+      ],
+      [
+        'sa_two',
+        {
+          docId: 'sa_two',
+          data: {
+            ...two.data,
+            state: 'removed',
+            removedAt: EARLIER,
+            dontDrawFrom: ['observations/a', 'observations/b'],
+          },
+          opened: { ...two.words, line: 'you skip the gym on fridays' },
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual(
+    result.updates.map((u) => u.docId),
+    ['sa_two'],
+  );
+  assert.equal(result.kept.length, 1);
+});
+
+test('a turn whose lines were all changed since takes nothing back', () => {
+  const { original, one, two } = seenTurn();
+  const refused = asRefused(
+    plan(original, [
+      [
+        'sa_one',
+        {
+          docId: 'sa_one',
+          data: { ...one.data, state: 'corrected', correctedAt: EARLIER + 5 },
+          opened: { ...one.words, corrected: 'later' },
+        },
+      ],
+      [
+        'sa_two',
+        {
+          docId: 'sa_two',
+          data: { ...two.data, state: 'shown' },
+          opened: two.words,
+        },
+      ],
+    ]),
+  );
+  assert.equal(refused.reason, 'nothingToTakeBack');
 });
 
 const failures: string[] = [];

@@ -30,6 +30,7 @@ import {
   readImportanceCommands,
   type ImportanceDrop,
 } from './readImportanceCommands.js';
+import { readSeenAsCommands, type SeenAsDrop } from './readSeenAsCommands.js';
 import {
   hasProcedureCue,
   hasProcedureReviseCue,
@@ -140,6 +141,7 @@ import {
   type MeetsHow,
   MEETS_HOWS,
   type HabitCommand,
+  type SeenAsCommand,
   type SetImportanceCommand,
   type ConnectionCommand,
 } from './commands.js';
@@ -2239,6 +2241,9 @@ export function normalizeNomosReply(
     captureText?: string;
     /** What names each date in the context (who, label, kind), for the check that a removal is still asked once closing phrases are taken out. */
     keyDateNames?: Map<string, string[]>;
+    /** The lines of how the assistant sees the person, by alias (sy1, sy2, …), and the words of each by id. */
+    seenAs?: AliasBook;
+    seenAsWords?: Map<string, string>;
     quotes?: QuoteBook;
     alreadyMade?: string[];
     records?: RecordBook;
@@ -2279,6 +2284,8 @@ export function normalizeNomosReply(
   learnAsks: LearnAsk[];
   importanceCommands: SetImportanceCommand[];
   importanceDropped: ImportanceDrop[];
+  seenAsCommands: SeenAsCommand[];
+  seenAsDropped: SeenAsDrop[];
   soundsLike: NoteSoundsLikeCommand[];
   contactPoints: AddContactPointCommand[];
   connectionCommands: ConnectionCommand[];
@@ -2428,6 +2435,12 @@ export function normalizeNomosReply(
       reading: context.reading,
       captureText: context.captureText,
     });
+  const { commands: seenAsCommands, dropped: seenAsDropped } =
+    readSeenAsCommands(items, {
+      lines: context.seenAs,
+      lineWords: context.seenAsWords,
+      captureText: context.captureText,
+    });
   const soundsLike = readSoundsLike(
     items,
     context.people,
@@ -2571,6 +2584,8 @@ export function normalizeNomosReply(
     learnAsks: learn.asks,
     importanceCommands,
     importanceDropped,
+    seenAsCommands,
+    seenAsDropped,
     soundsLike,
     contactPoints,
     connectionCommands,

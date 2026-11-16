@@ -219,7 +219,8 @@ export interface EffectRef {
     | 'habitDays'
     | 'connections'
     | 'scheduledActions'
-    | 'research';
+    | 'research'
+    | 'seenAs';
   docId: string;
 }
 
@@ -785,7 +786,9 @@ const toMeetsAfter = (
   due: TaskDue | null,
 ) => {
   if (due?.kind !== 'moment' || how === null) return null;
-  return how === undefined ? (before ?? null) : { how, setBy: 'person' as const };
+  return how === undefined
+    ? (before ?? null)
+    : { how, setBy: 'person' as const };
 };
 
 const union = (left: string[], right: string[]) => [

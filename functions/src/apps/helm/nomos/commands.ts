@@ -28,6 +28,7 @@ import { KIN_KINDS, KIN_ORDERS, type WhoKin } from './kinKinds.js';
 import { CONTACT_LABEL_CAP, CONTACT_VALUE_CAP } from './contactPoints.js';
 import type { Cadence } from '../../../vendor/cadenceUtils.js';
 import type { DayPart } from './habitDay.js';
+import { SEEN_AS_LIMITS } from './seenAs.js';
 import {
   CONNECTION_KINDS,
   CONNECTION_STATUSES,
@@ -96,7 +97,7 @@ export const COMMAND_KINDS = [
 ] as const;
 
 /** Commands that delete a record. A deleting command is kept only when its subject is still named once every closing phrase is taken out of the turn's words. */
-export const DELETING_COMMANDS = ['removeKeyDate'] as const;
+export const DELETING_COMMANDS = ['removeKeyDate', 'removeSeenAs'] as const;
 
 /** A terminal tool beside `file_results`: the turn only ends the conversation. It carries no command, so a close can never delete or change anything. */
 export const CLOSE_CONVERSATION_TOOL: TerminalTool = {
@@ -442,6 +443,10 @@ export const MAX_CONTEXT_IMPORTANCE = 30;
 /** The kind the reply may carry that places a project or habit in the person's order of what matters; read from its own list and no `NomosCommand`. */
 export const IMPORTANCE_COMMAND_KINDS = ['setImportance'] as const;
 
+/** The kinds the reply may carry that correct or remove a line of how the assistant sees the person; each is read from its own list and is no `NomosCommand`. */
+export const SEEN_AS_COMMAND_KINDS = ['correctSeenAs', 'removeSeenAs'] as const;
+export const MAX_SEEN_AS_PER_TURN = 3;
+
 export const IMPORTANCE_RELATIONS = [
   'most',
   'above',
@@ -523,6 +528,20 @@ export interface SetImportanceCommand {
   words: string;
   until: number | null;
 }
+
+/** The person says a line of how the assistant sees them is not right, in their own words. */
+export interface CorrectSeenAsCommand {
+  kind: 'correctSeenAs';
+  lineId: string;
+  words: string;
+}
+
+export interface RemoveSeenAsCommand {
+  kind: 'removeSeenAs';
+  lineId: string;
+}
+
+export type SeenAsCommand = CorrectSeenAsCommand | RemoveSeenAsCommand;
 
 export type HabitCommand =
   | CreateHabitCommand
@@ -1328,6 +1347,8 @@ export const buildFileResultsTool = ({
             'otherAlias',
             'importanceRelation',
             'subjectName',
+            'seenAsAlias',
+            'seenAsWords',
             'repeat',
             'startsSpanId',
             'timeSpanId',
@@ -1375,6 +1396,7 @@ export const buildFileResultsTool = ({
                 ...LEARN_COMMAND_KINDS,
                 ...HABIT_COMMAND_KINDS,
                 ...IMPORTANCE_COMMAND_KINDS,
+                ...SEEN_AS_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
                 ...CONTACT_COMMAND_KINDS,
                 ...CONNECTION_COMMAND_KINDS,
@@ -1728,7 +1750,7 @@ export const buildFileResultsTool = ({
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, updateHabit, connect, updateConnection and disconnect: the words of the capture that ask for it, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, correctSeenAs, removeSeenAs, updateHabit, connect, updateConnection and disconnect: the words of the capture that ask for it, copied exactly.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -1972,6 +1994,14 @@ export const buildFileResultsTool = ({
             subjectName: nullable(
               'string',
               'setImportance: the name the person said when subjectAlias is null, at most 80 characters; null otherwise. The words of the placement are requestQuote and a "until Friday" is dateSpanId.',
+            ),
+            seenAsAlias: nullable(
+              'string',
+              'correctSeenAs and removeSeenAs: the alias (sy1, sy2, …) in <how_you_seem> of the line the person is talking about; null otherwise.',
+            ),
+            seenAsWords: nullable(
+              'string',
+              `correctSeenAs: what the person says is true instead, in their own words, at most ${SEEN_AS_LIMITS.corrected} characters; null otherwise. The words of the request are requestQuote.`,
             ),
             repeat: {
               type: ['object', 'null'],
