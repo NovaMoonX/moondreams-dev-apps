@@ -2,8 +2,10 @@ import {
   clearFallback,
   removeFallback,
   reportFallback,
+  type FallbackCause,
 } from '@/lib/fallbacks/fallbacks';
 import { hasRoomForOnDevice } from '@/lib/speech/onDevice/capability';
+import { describeThrown } from '@/lib/speech/speechDiagnostics';
 import {
   ON_DEVICE_CACHE_NAME,
   ON_DEVICE_FALLBACK_KEYS,
@@ -29,13 +31,19 @@ class FileCheckError extends Error {}
 const STORAGE_FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.storage;
 const DOWNLOAD_FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.download;
 
-const reportModelFallback = (key: string, reason: string, facts: string[]) =>
+const reportModelFallback = (
+  key: string,
+  reason: string,
+  cause: FallbackCause,
+  facts: string[] = [],
+) =>
   reportFallback({
     key,
     feature: 'Listening',
     wanted: 'the on-device speech model',
     used: "the browser's listening",
     reason,
+    cause,
     facts,
   });
 
@@ -120,9 +128,10 @@ export const refreshOnDeviceStored = async () => {
       reportModelFallback(
         STORAGE_FALLBACK_KEY,
         'the downloaded model is missing files, so it was cleared',
-        [
-          `Files found: ${found.filter((response) => response !== undefined).length} of ${ON_DEVICE_FILES.length}`,
-        ],
+        {
+          stage: 'stored model check',
+          detail: `Files found: ${found.filter((response) => response !== undefined).length} of ${ON_DEVICE_FILES.length}`,
+        },
       );
       await caches.delete(ON_DEVICE_CACHE_NAME);
     } else clearFallback(STORAGE_FALLBACK_KEY);
@@ -131,9 +140,7 @@ export const refreshOnDeviceStored = async () => {
     reportModelFallback(
       STORAGE_FALLBACK_KEY,
       "the downloaded model couldn't be read from this browser",
-      [
-        `Error: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
-      ],
+      { stage: 'stored model read', detail: describeThrown(error) },
     );
     setState({ isStored: false });
   }
@@ -193,10 +200,8 @@ export const downloadOnDeviceModel = async () => {
         getProblem(error) === 'check'
           ? 'a downloaded file was not the expected one, so nothing was kept'
           : "the download couldn't be kept",
-        [
-          `Problem: ${getProblem(error)}`,
-          `Error: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
-        ],
+        { stage: 'model download', detail: describeThrown(error) },
+        [`Problem: ${getProblem(error)}`],
       );
     }
     setState({

@@ -240,6 +240,13 @@ html[data-site-banner='true'] .subview-backdrop {
   z-index: 126 !important;
 }
 
+/* Dreamer UI's closed Popover keeps its panel mounted as an `inert`, `aria-hidden` dialog, so only an open one counts. */
+html:has([role='dialog']:not([inert], [aria-hidden='true'], [data-app-surface])) [data-fallback-tab] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* The library's toast stack is `w-full max-w-sm` pinned with `right-4`, which on a phone pushes its left edge off the screen. */
 @media (max-width: 639.98px) {
   [role='region'][aria-label='Notifications'] {
