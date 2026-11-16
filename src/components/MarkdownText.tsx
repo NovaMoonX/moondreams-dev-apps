@@ -33,7 +33,7 @@ function ProseLink({ href, label }: { href: string; label: string }) {
       href={href}
       target='_blank'
       rel='noopener noreferrer'
-      className="text-primary decoration-primary relative break-words underline underline-offset-2 before:absolute before:inset-x-0 before:-inset-y-2 before:content-[''] hover:no-underline"
+      className='text-primary decoration-primary box-decoration-clone py-0.5 break-words underline underline-offset-2 hover:no-underline'
     >
       {head}
       <span className='whitespace-nowrap'>
