@@ -102,7 +102,7 @@ const claimsOf = (label: string): Claim[] =>
 const isSameSite = (claimed: string, host: string) =>
   claimed === host || claimed.endsWith(`.${host}`);
 
-/** The words a link shows: the model's own label, with invisible characters removed and cut at 300 characters, unless it names a web address that isn't the link's own (then the link's host; a doubtful one gets the host beside it). */
+/** The words a link shows: its label cleaned and capped, or the link's host when the label names another site. */
 export function labelForLink(rawLabel: string, href: string): string {
   const stripped = withoutInvisible(rawLabel.slice(0, MAX_LABEL * 10)).trim();
   const shown = stripped.slice(0, MAX_LABEL);
@@ -442,7 +442,7 @@ const cutAtBreak = (text: string, cap: number) => {
 const writeProse = (value: string, allowed: ReadonlySet<string>) =>
   writeBlocks(readBlocks(value), allowed).join('\n\n');
 
-/** A written reply kept as light Markdown: paragraphs split on one blank line, `-` and `1.` lists, one `>` blockquote (nested marks flattened, any later one a plain paragraph), **bold**, *italic* and https links to an address in `allowedLinks` (any other link is reduced to its text, and a label that names a different web address becomes the link's host); headings, tables, images, code and raw HTML are dropped to plain words. Cut at `cap` characters at a word, with no mark left open; null when nothing is left. */
+/** A written reply kept as light Markdown, with only `allowedLinks` kept as links; capped at `cap`. */
 export function normalizeProse(
   value: unknown,
   cap: number,
@@ -474,7 +474,7 @@ const stripInline = (text: string, isSpoken: boolean) =>
 const asSentence = (text: string) =>
   /[.!?…:;]$/.test(text) ? text : `${text}.`;
 
-/** `text` with Markdown marks removed. By default one plain line for the ear (list items become sentences, web addresses are left out); with `keepBreaks`, paragraphs stay split by a blank line and list items stay on their own lines. */
+/** `text` with Markdown marks removed: one line for the ear, or paragraphs and list lines with `keepBreaks`. */
 export function stripProseMarks(
   text: string,
   { keepBreaks = false }: { keepBreaks?: boolean } = {},
@@ -583,7 +583,7 @@ const splitSentences = (text: string) => {
     .filter(Boolean);
 };
 
-/** Plain `text` as short paragraphs for large type: about two sentences each, one when a sentence runs past `longSentence` characters. Breaks only at a sentence end (never after Dr., e.g., an initial, a decimal, a time or an ellipsis); text already split by blank lines keeps its paragraphs. */
+/** Plain `text` as short paragraphs for large type, broken only at sentence ends. */
 export function splitIntoParagraphs(
   text: string,
   { sentencesPerParagraph = 2, longSentence = 120 } = {},
