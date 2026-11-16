@@ -352,7 +352,7 @@ Every board's copy reads `{Name}`. Rows marked "edge" are the unusual states; "r
 
 - **Browse** has four big tiles, fixed; small tiles two to a row, up to 8, then the last is "More · 3" opening the rest in place.
 - **Key dates** (round 6e, for 2,000 whos and 20,000 dates): a who page lists every date that comes back (a few) and the latest 3 moments, then "See all 14 moments"; Moments opens the three newest decades and folds the rest to counts, loading 30 at a time. Today shows 3 lines, then "+2 more this week". Coming up reads 12 months ahead, a month at a time, 20 per month then "Show 14 more in March"; passing people only behind "Show everyone".
-- **Home** shows the latest turn, Earlier today folded (today's turns only, 20 then "Show earlier"), and nothing older; Activity holds every turn.
+- **Home** shows the latest turn, Earlier today folded (today's turns only, 20 then "Show earlier"), and nothing older; Activity holds every turn; once opened, "Hide earlier" (where the earlier turns meet today's) folds them back, and each day's heading (Today, Yesterday, then the weekday and date) rides under the pinned header while its turns scroll past.
 - **People** groups Close, Regular and a Passing door; search from 8; Passing lists 30 at a time. A who's Media lists 12 then "Show all".
 - **Procedures** lists A to Z with search from 8; a procedure past 50 steps folds its groups; a procedure's runs list the last 5 then "Show all runs".
 - **How {Name} sees you** shows 5 per group, then "Show all 23".

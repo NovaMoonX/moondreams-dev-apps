@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
+import StickyDivider from '@/components/StickyDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
-import { formatDate } from '@/utils/formatUtils';
 import TurnCard from '@apps/helm/components/home/TurnCard';
 import { HELM_COPY } from '@apps/helm/constants';
 import { loadEarlierSessions } from '@apps/helm/store/actions/captureActions';
@@ -78,6 +78,23 @@ const returnToPlace = (
   if (scroller) scroller.scrollBy({ top: shift });
   else window.scrollBy({ top: shift });
   return true;
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const formatThreadDay = (dayStart: number) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysAgo = Math.round((today.getTime() - dayStart) / DAY_MS);
+  if (daysAgo === 0) return HELM_COPY.threadToday;
+  if (daysAgo === 1) return HELM_COPY.threadYesterday;
+  const date = new Date(dayStart);
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    ...(date.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+  });
 };
 
 /** Mounts when scrolled near and brings in the next page of earlier sessions. */
@@ -192,9 +209,52 @@ function ConversationThread({
       (session.startedAt < foldsBefore && session.sessionId !== lastSessionId));
   const foldedSessions = sessions.filter(isFolded);
   const hasFold = foldedSessions.length > 0 && !isUnfolded;
-  const shownSessions = hasFold
-    ? sessions.filter((session) => !isFolded(session))
-    : sessions;
+  // Once opened, everything up to the last folded session sits above Hide earlier, in order.
+  const foldEnd = sessions.reduce(
+    (end, session, index) => (isFolded(session) ? index + 1 : end),
+    0,
+  );
+  const groups = hasFold
+    ? [sessions.filter((session) => !isFolded(session))]
+    : foldEnd > 0
+      ? [sessions.slice(0, foldEnd), sessions.slice(foldEnd)]
+      : [sessions];
+  const renderDays = (shown: Session[]) =>
+    groupSessionsByDay(shown).map((day) => (
+      <section key={day.dayStart} className='flex flex-col gap-4'>
+        {scroll === 'window' ? (
+          <StickyDivider
+            label={formatThreadDay(day.dayStart)}
+            className='sticky top-(--helm-home-header-h,0px) z-[5]'
+          />
+        ) : (
+          <SectionDivider label={formatThreadDay(day.dayStart)} />
+        )}
+        {day.sessions.map((session) =>
+          session.sessionId === openSessionId ? (
+            <div key={session.sessionId} data-anchor={session.sessionId}>
+              <SessionTurns
+                session={session}
+                latestId={latestId}
+                noticeId={noticeId}
+              />
+            </div>
+          ) : (
+            <div key={session.sessionId} data-anchor={session.sessionId}>
+              <LazyMount
+                estimatedHeight={TURN_ESTIMATED_HEIGHT * session.turns.length}
+              >
+                <SessionTurns
+                  session={session}
+                  latestId={latestId}
+                  noticeId={noticeId}
+                />
+              </LazyMount>
+            </div>
+          ),
+        )}
+      </section>
+    ));
 
   return (
     <div ref={root} className='flex flex-1 flex-col gap-4'>
@@ -238,35 +298,25 @@ function ConversationThread({
             {HELM_COPY.earlierFailed}
           </Button>
         )}
-        {groupSessionsByDay(shownSessions).map((day) => (
-          <section key={day.dayStart} className='flex flex-col gap-4'>
-            <SectionDivider label={formatDate(day.dayStart)} />
-            {day.sessions.map((session) =>
-              session.sessionId === openSessionId ? (
-                <div key={session.sessionId} data-anchor={session.sessionId}>
-                  <SessionTurns
-                    session={session}
-                    latestId={latestId}
-                    noticeId={noticeId}
-                  />
-                </div>
-              ) : (
-                <div key={session.sessionId} data-anchor={session.sessionId}>
-                  <LazyMount
-                    estimatedHeight={
-                      TURN_ESTIMATED_HEIGHT * session.turns.length
-                    }
-                  >
-                    <SessionTurns
-                      session={session}
-                      latestId={latestId}
-                      noticeId={noticeId}
-                    />
-                  </LazyMount>
-                </div>
-              ),
+        {groups.map((shown, index) => (
+          <div key={index} className='flex flex-col gap-4'>
+            {index === 1 && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                className="relative min-h-0 self-center rounded-full before:absolute before:-inset-x-2 before:-inset-y-2 before:content-['']"
+                onClick={() => {
+                  isFollowing.current = true;
+                  setIsUnfolded(false);
+                }}
+              >
+                {HELM_COPY.earlierHide}
+                <ChevronUp className='size-4' aria-hidden='true' />
+              </Button>
             )}
-          </section>
+            {renderDays(shown)}
+          </div>
         ))}
         <div data-anchor='end' />
       </div>

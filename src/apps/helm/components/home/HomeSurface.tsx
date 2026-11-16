@@ -312,6 +312,24 @@ function HomeSurface({
     '00:00',
     timeZone,
   );
+  const headerBox = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = headerBox.current;
+    if (!element) return;
+    const root = document.documentElement;
+    const publish = () =>
+      root.style.setProperty(
+        '--helm-home-header-h',
+        `${element.getBoundingClientRect().height}px`,
+      );
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--helm-home-header-h');
+    };
+  }, []);
   const composerBox = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const element = composerBox.current;
@@ -334,6 +352,7 @@ function HomeSurface({
   return (
     <main className='flex flex-1 flex-col pb-10'>
       <div
+        ref={headerBox}
         data-home-header
         className='bg-background sticky top-0 z-10 -mx-4 px-4 pt-0'
       >
