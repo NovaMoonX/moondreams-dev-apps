@@ -37,9 +37,11 @@ function UndoPickActions({
   const [refusal, setRefusal] = useState<string | null>(null);
   const chosen = units.filter((unit) => picked.has(unit.key));
   const label =
-    chosen.length === units.length
-      ? HELM_COPY.undoPickAll
-      : HELM_COPY.undoPickSome(chosen.length);
+    chosen.length === 0
+      ? HELM_COPY.undo
+      : chosen.length === units.length
+        ? HELM_COPY.undoPickAll
+        : HELM_COPY.undoPickSome(chosen.length);
 
   const run = async () => {
     if (!user || isWorking || chosen.length === 0) return;
