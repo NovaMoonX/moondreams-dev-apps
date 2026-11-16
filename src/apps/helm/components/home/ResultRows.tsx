@@ -9,7 +9,7 @@ import { useAppSelector } from '@/store';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
-import { getTakenBackIds } from '@apps/helm/nomos/planUndo';
+import { getTakenBackIds, getUndoneDocIds } from '@apps/helm/nomos/planUndo';
 import {
   selectNoteById,
   selectTopicById,
@@ -23,17 +23,20 @@ import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 interface ResultRowsProps {
   execution: OpenExecution;
   lines: ResultLine[];
-  /** The Undo that took this execution back, once it is known: its rows strike through, the rest say they were kept. */
-  undo: OpenExecution | null;
+  /** The Undos that took this execution back, once they are known: their rows strike through, the rest say they were kept. */
+  undos: OpenExecution[];
   /** No inset: the list sits on a sheet, not in a card. */
   isFlat?: boolean;
 }
 
 /** One row per change; after an Undo the taken-back rows are struck, and the ones kept or deleted since say so. A row for a note opens it over this screen, and a row for a topic, a procedure or a run opens it from home. */
-function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
-  const takenBack = getTakenBackIds(undo);
-  const gone = new Set(undo?.goneIds ?? []);
-  const isUndone = execution.undoneByExecutionId !== null && undo !== null;
+function ResultRows({ execution, lines, undos, isFlat }: ResultRowsProps) {
+  const takenBack = new Set(
+    undos.flatMap((undo) => [...getTakenBackIds(undo)]),
+  );
+  const gone = new Set(undos.flatMap((undo) => undo.goneIds ?? []));
+  const undoneIds = getUndoneDocIds(execution);
+  const hasUndos = undos.length > 0;
   const noteById = useAppSelector(selectNoteById);
   const topicById = useAppSelector(selectTopicById);
   const procedureById = useAppSelector(selectProcedureById);
@@ -46,7 +49,8 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
       <ul aria-label={HELM_COPY.resultLabel} className='divide-border divide-y'>
         {lines.map((line) => {
           const { docId } = line;
-          const isTracked = isUndone && !line.isNoEffect;
+          const isTracked =
+            hasUndos && !line.isNoEffect && undoneIds.has(docId);
           const isStruck = isTracked && takenBack.has(docId);
           const isGone = isTracked && !isStruck && gone.has(docId);
           const isKept = isTracked && !isStruck && !isGone;
