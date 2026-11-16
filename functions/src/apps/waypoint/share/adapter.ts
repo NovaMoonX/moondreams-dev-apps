@@ -3,6 +3,8 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
+  LiveQueryRequest,
+  LiveQueryResult,
   SourceAdapter,
   SourceCtx,
   SyncPageRequest,
@@ -10,6 +12,7 @@ import type {
 } from '../../../connections/registry.js';
 import { zonedDateTimeToEpoch } from '../../../notifications/zonedTime.js';
 import {
+  MAX_RECORDS_PER_CATEGORY,
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
@@ -904,6 +907,342 @@ const syncBalances = async (
   };
 };
 
+interface LiveArgs {
+  text: string | null;
+  from: number | null;
+  to: number | null;
+  fromText: string | null;
+  toText: string | null;
+}
+
+const readDayText = (value: unknown) =>
+  typeof value === 'string' &&
+  /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+  Number.isFinite(Date.parse(`${value}T00:00:00Z`))
+    ? value
+    : null;
+
+const readLiveArgs = (args: unknown): LiveArgs => {
+  const source =
+    typeof args === 'object' && args !== null
+      ? (args as Record<string, unknown>)
+      : {};
+  const fromText = readDayText(source.from);
+  const toText = readDayText(source.to);
+  return {
+    text: readText(source.text)?.toLowerCase() ?? null,
+    from: fromText === null ? null : Date.parse(`${fromText}T00:00:00Z`),
+    to: toText === null ? null : Date.parse(`${toText}T00:00:00Z`) + DAY_MS,
+    fromText,
+    toText,
+  };
+};
+
+const matchesText = (text: string | null, ...names: (string | null)[]) =>
+  text === null ||
+  names.some((name) => name !== null && name.toLowerCase().includes(text));
+
+const isInRange = (args: LiveArgs, at: number | null) =>
+  (args.from === null && args.to === null) ||
+  (at !== null &&
+    (args.from === null || at >= args.from) &&
+    (args.to === null || at < args.to));
+
+const LINK_RE = /[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
+const EMAIL_RE = /\S@\S+\.\S/;
+const MEETING_WORDS_RE =
+  /\b(?:zoom|webex|google meet|microsoft teams|teams meeting|facetime)\b/i;
+const DIAL_RE =
+  /(?:\+|\btel:)\s?\d|\(\d{3}\)\s?\d{3}|\b\d{3}[\s.-]\d{3}[\s.-]\d{4}\b|\bpin\b\s*[:#]?\s*\d{4,}|\bdial\b[^a-z]*\d/i;
+
+/** Text another traveler wrote is kept only when it holds no link, email, number to dial or meeting; otherwise it is dropped whole. */
+const readSharedText = (value: unknown, chars: number) => {
+  const text = readText(value);
+  return text === null ||
+    LINK_RE.test(text) ||
+    EMAIL_RE.test(text) ||
+    MEETING_WORDS_RE.test(text) ||
+    DIAL_RE.test(text)
+    ? null
+    : clip(text, chars);
+};
+
+const readLinkHost = (value: unknown) => {
+  const text = readText(value);
+  if (text === null) return null;
+  try {
+    const url = new URL(text);
+    return url.protocol === 'https:' || url.protocol === 'http:'
+      ? url.hostname.replace(/^www\./, '')
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const formatDay = (at: number, zone: string | null) => {
+  const format = (timeZone: string) =>
+    new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(at);
+  try {
+    return format(zone ?? 'UTC');
+  } catch {
+    return format('UTC');
+  }
+};
+
+const toFirstName = (displayName: unknown) =>
+  typeof displayName === 'string' && !displayName.includes('@')
+    ? (displayName.trim().split(/\s+/)[0] ?? '') || null
+    : null;
+
+const toLiveResult = (
+  args: LiveArgs,
+  records: SharedRecord[],
+  isFull: boolean,
+): LiveQueryResult => ({
+  records: records.slice(0, MAX_RECORDS_PER_CATEGORY),
+  matchedCount: records.length,
+  totalCents: null,
+  currency: null,
+  isPartial: !isFull || records.length > MAX_RECORDS_PER_CATEGORY,
+  from: args.fromText,
+  to: args.toText,
+});
+
+/** Every trip the person is on, whatever its dates, with who is on it. */
+const readLiveTrips = async (firestore: Firestore, uid: string) => {
+  const read = await readTrips(firestore, uid, 0, ['members']);
+  const members = new Map(
+    read.docs.map((doc) => [
+      doc.id,
+      Object.keys((doc.get('members') ?? {}) as Record<string, unknown>),
+    ]),
+  );
+  return { trips: read.trips, members, isFull: read.isFull };
+};
+
+const readTripDocs = async (
+  trips: Trip[],
+  collection: string,
+  fields: string[],
+  orderField: string | null,
+) => {
+  const reads = await Promise.all(
+    trips.map(async (trip) => ({
+      trip,
+      ...(await readDocs(
+        (orderField === null
+          ? trip.ref.collection(collection)
+          : trip.ref.collection(collection).orderBy(orderField, 'desc')
+        ).select(...fields),
+      )),
+    })),
+  );
+  return { reads, isFull: reads.every((one) => one.isFull) };
+};
+
+const LIVE_CHECKLIST_FIELDS = [
+  ...CHECKLIST_FIELDS,
+  'completeByDayIndex',
+  'assignedToUids',
+];
+
+const readFirstNames = async (firestore: Firestore, uids: string[]) => {
+  const unique = Array.from(new Set(uids));
+  if (unique.length === 0) return new Map<string, string | null>();
+  const snapshots = await firestore.getAll(
+    ...unique.map((uid) => firestore.doc(`users/${uid}`)),
+    { fieldMask: ['displayName'] },
+  );
+  return new Map(
+    snapshots.map((snapshot) => [
+      snapshot.id,
+      toFirstName(snapshot.get('displayName')),
+    ]),
+  );
+};
+
+const toAssignedLine = (
+  uids: string[],
+  members: string[],
+  names: Map<string, string | null>,
+) => {
+  const assigned = uids.filter((uid) => members.includes(uid));
+  if (assigned.length === 0) return null;
+  const named = assigned.flatMap((uid) => names.get(uid) ?? []);
+  const unnamed = assigned.length - named.length;
+  return [
+    ...named,
+    ...(unnamed === 0 ? [] : [unnamed === 1 ? 'someone' : `${unnamed} others`]),
+  ].join(', ');
+};
+
+async function queryFullChecklist(
+  firestore: Firestore,
+  uid: string,
+  args: LiveArgs,
+): Promise<LiveQueryResult> {
+  const { trips, members, isFull } = await readLiveTrips(firestore, uid);
+  const { reads, isFull: isReadFull } = await readTripDocs(
+    trips,
+    'checklist',
+    LIVE_CHECKLIST_FIELDS,
+    null,
+  );
+  const names = await readFirstNames(
+    firestore,
+    reads.flatMap((one) =>
+      one.docs.flatMap((doc) =>
+        readIds(doc.get('assignedToUids')).filter((id) =>
+          (members.get(one.trip.id) ?? []).includes(id),
+        ),
+      ),
+    ),
+  );
+  const records = reads.flatMap(({ trip, docs }) =>
+    docs.flatMap((doc) => {
+      const line = toChecklistLine(trip.id, doc)[0];
+      if (line === undefined) return [];
+      const dueDay = readNumber(doc.get('completeByDayIndex'));
+      const dueAt = dueDay === null ? null : trip.startDate + dueDay * DAY_MS;
+      const assigned = toAssignedLine(
+        readIds(doc.get('assignedToUids')),
+        members.get(trip.id) ?? [],
+        names,
+      );
+      if (
+        !isInRange(args, dueAt) ||
+        !matchesText(args.text, line.title, trip.title, line.group, assigned)
+      )
+        return [];
+      return [
+        {
+          dueAt,
+          isDone: line.isDone,
+          record: toRecord({
+            sourceRef: `trips/${trip.id}/checklist/${doc.id}`,
+            kind: 'task',
+            title: line.title,
+            subtitle: clip(trip.title, NAME_CHARS),
+            detail: joinDetail([
+              line.group,
+              assigned === null ? 'Not assigned yet' : `For ${assigned}`,
+              line.isDone ? 'Done' : 'To do',
+            ]),
+            dueAt,
+            isAllDay: dueAt !== null,
+            sourceUpdatedAt: line.updatedAt,
+          }),
+        },
+      ];
+    }),
+  );
+  const ordered = records.sort(
+    (a, b) =>
+      Number(a.isDone) - Number(b.isDone) ||
+      (a.dueAt ?? Number.MAX_SAFE_INTEGER) -
+        (b.dueAt ?? Number.MAX_SAFE_INTEGER),
+  );
+  return toLiveResult(
+    args,
+    ordered.map((entry) => entry.record),
+    isFull && isReadFull,
+  );
+}
+
+async function queryTripIdeas(
+  firestore: Firestore,
+  uid: string,
+  args: LiveArgs,
+): Promise<LiveQueryResult> {
+  const { trips, isFull } = await readLiveTrips(firestore, uid);
+  const { reads, isFull: isReadFull } = await readTripDocs(
+    trips,
+    'ideas',
+    ['title', 'notes', 'linkUrl', 'createdAt'],
+    'createdAt',
+  );
+  const records = reads.flatMap(({ trip, docs }) =>
+    docs.flatMap((doc) => {
+      const title = readText(doc.get('title'));
+      const createdAt = readNumber(doc.get('createdAt'));
+      const notes = readSharedText(doc.get('notes'), NAME_CHARS);
+      const host = readLinkHost(doc.get('linkUrl'));
+      if (
+        title === null ||
+        !isInRange(args, createdAt) ||
+        !matchesText(args.text, title, trip.title, notes)
+      )
+        return [];
+      return [
+        toRecord({
+          sourceRef: `trips/${trip.id}/ideas/${doc.id}`,
+          kind: 'artifact',
+          title: clip(title, NAME_CHARS),
+          subtitle: clip(trip.title, NAME_CHARS),
+          detail: joinDetail([
+            createdAt === null
+              ? null
+              : `Added ${formatDay(createdAt, trip.zone)}`,
+            notes,
+            host === null ? null : `Link on ${host}`,
+          ]),
+          startAt: createdAt,
+        }),
+      ];
+    }),
+  );
+  return toLiveResult(args, records, isFull && isReadFull);
+}
+
+async function queryAnnouncements(
+  firestore: Firestore,
+  uid: string,
+  args: LiveArgs,
+): Promise<LiveQueryResult> {
+  const { trips, isFull } = await readLiveTrips(firestore, uid);
+  const { reads, isFull: isReadFull } = await readTripDocs(
+    trips,
+    'announcements',
+    ['title', 'body', 'createdAt'],
+    'createdAt',
+  );
+  const records = reads.flatMap(({ trip, docs }) =>
+    docs.flatMap((doc) => {
+      const createdAt = readNumber(doc.get('createdAt'));
+      const title = readSharedText(doc.get('title'), NAME_CHARS);
+      const body = readSharedText(doc.get('body'), NAME_CHARS * 2);
+      if (
+        (title === null && body === null) ||
+        !isInRange(args, createdAt) ||
+        !matchesText(args.text, title, body, trip.title)
+      )
+        return [];
+      return [
+        toRecord({
+          sourceRef: `trips/${trip.id}/announcements/${doc.id}`,
+          kind: 'artifact',
+          title: title ?? 'Announcement',
+          subtitle: clip(trip.title, NAME_CHARS),
+          detail: joinDetail([
+            createdAt === null
+              ? null
+              : `Posted ${formatDay(createdAt, trip.zone)}`,
+            body,
+          ]),
+          startAt: createdAt,
+        }),
+      ];
+    }),
+  );
+  return toLiveResult(args, records, isFull && isReadFull);
+}
+
 export interface WaypointAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
@@ -956,6 +1295,20 @@ export function createWaypointAdapter(
       isDone: true,
       resumeState: null,
     }),
+    query: async (ctx, req: LiveQueryRequest): Promise<LiveQueryResult> => {
+      const firestore = deps.firestore();
+      const args = readLiveArgs(req.args);
+      switch (req.category) {
+        case 'fullChecklist':
+          return queryFullChecklist(firestore, ctx.uid, args);
+        case 'tripIdeas':
+          return queryTripIdeas(firestore, ctx.uid, args);
+        case 'announcements':
+          return queryAnnouncements(firestore, ctx.uid, args);
+        default:
+          throw new Error('Unknown category.');
+      }
+    },
     deepLink: (ref) => {
       const tripId = /^trips\/([^/]+)/.exec(ref)?.[1];
       return tripId === undefined

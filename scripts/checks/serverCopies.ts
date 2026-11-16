@@ -35,6 +35,24 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/a-list/types.ts',
+    dest: 'functions/src/apps/a-list/share/aListTypes.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/apps/a-list/utils/billing.ts',
+    dest: 'functions/src/apps/a-list/share/billing.ts',
+    importRewrites: { '@apps/a-list/types': './aListTypes.js' },
+  },
+  {
+    src: 'src/apps/a-list/utils/savings.ts',
+    dest: 'functions/src/apps/a-list/share/savings.ts',
+    importRewrites: {
+      '@apps/a-list/types': './aListTypes.js',
+      '@apps/a-list/utils/billing': './billing.js',
+    },
+  },
+  {
     src: 'src/apps/going-once/share/manifest.ts',
     dest: 'functions/src/apps/going-once/share/manifest.ts',
     importRewrites: {

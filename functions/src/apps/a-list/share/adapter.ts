@@ -3,6 +3,8 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
+  LiveQueryRequest,
+  LiveQueryResult,
   SourceAdapter,
   SourceCtx,
   SyncPageRequest,
@@ -12,7 +14,10 @@ import {
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
+import type { MembershipProfile, Viewing } from './aListTypes.js';
+import { getBillingCycleDates, getMonthlyTotalAt } from './billing.js';
 import { A_LIST_SHARES } from './manifest.js';
+import { getSavingsSummary } from './savings.js';
 
 const readManifest = () => {
   const [declared] = A_LIST_SHARES.shares;
@@ -398,6 +403,129 @@ async function syncWatchlist(
   };
 }
 
+const CURRENCY = 'USD';
+
+const moneyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: CURRENCY,
+});
+
+const formatMoney = (cents: number) => moneyFormatter.format(cents / 100);
+
+const dayFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+const toTicket = (value: unknown): Viewing['ticket'] => {
+  if (typeof value !== 'object' || value === null) return null;
+  const ticket = value as Record<string, unknown>;
+  const totalCents = readTime(ticket.totalCents);
+  if (totalCents === null) return null;
+  return {
+    format: readText(ticket.format) ?? 'STANDARD',
+    priceCents: readTime(ticket.priceCents) ?? 0,
+    standardPriceCents: readTime(ticket.standardPriceCents),
+    feeAvoidedCents: readTime(ticket.feeAvoidedCents) ?? 0,
+    totalCents,
+  } as NonNullable<Viewing['ticket']>;
+};
+
+const toSavingsLine = (tickets: number, cost: number, net: number) =>
+  `Tickets saved ${formatMoney(tickets)} · membership cost ${formatMoney(cost)} · net ${formatMoney(net)}`;
+
+/** The dashboard's own helper over the seen movies with a ticket; the year's cost is the billing cycles that fall in it. */
+async function queryMembershipSavings(
+  firestore: Firestore,
+  uid: string,
+  now: number,
+): Promise<LiveQueryResult> {
+  const empty: LiveQueryResult = {
+    records: [],
+    matchedCount: 0,
+    totalCents: null,
+    currency: null,
+    isPartial: false,
+    from: null,
+    to: null,
+  };
+  const [profile, snapshot] = await Promise.all([
+    firestore.doc(`apps/a-list/memberships/${uid}`).get(),
+    firestore
+      .collection(membershipPath(uid, 'viewings'))
+      .where('status', '==', 'SEEN')
+      .orderBy('showtimeAt', 'desc')
+      .select('showtimeAt', 'ticket')
+      .limit(WATCHLIST_READ_LIMIT)
+      .get(),
+  ]);
+  const startDate = readTime(profile.get('startDate'));
+  const monthlyTotalCents = readTime(profile.get('monthlyTotalCents'));
+  if (startDate === null || monthlyTotalCents === null) return empty;
+  const membership = { startDate, monthlyTotalCents } as MembershipProfile;
+  const todayDay = Math.floor(now / DAY_MS) * DAY_MS;
+  const yearStart = Date.UTC(new Date(todayDay).getUTCFullYear(), 0, 1);
+  const seen = snapshot.docs.map((doc) => ({
+    at: readTime(doc.get('showtimeAt')),
+    viewing: {
+      status: 'SEEN',
+      ticket: toTicket(doc.get('ticket')),
+    } as Viewing,
+  }));
+  const all = getSavingsSummary(
+    seen.map((entry) => entry.viewing),
+    membership,
+    todayDay,
+  );
+  const thisYear = getSavingsSummary(
+    seen
+      .filter((entry) => entry.at !== null && entry.at >= yearStart)
+      .map((entry) => entry.viewing),
+    membership,
+    todayDay,
+  );
+  const yearCost = getBillingCycleDates(startDate, todayDay)
+    .filter((cycle) => cycle >= yearStart)
+    .reduce((total, cycle) => total + getMonthlyTotalAt(membership, cycle), 0);
+  const yearNet = thisYear.totalTicketSavingsCents - yearCost;
+  return {
+    records: [
+      toRecord({
+        sourceRef: 'savings/year',
+        kind: 'moneySummary',
+        title: `Membership savings in ${new Date(todayDay).getUTCFullYear()}`,
+        detail: toSavingsLine(
+          thisYear.totalTicketSavingsCents,
+          yearCost,
+          yearNet,
+        ),
+        amountCents: yearNet,
+        currency: CURRENCY,
+      }),
+      toRecord({
+        sourceRef: 'savings/all',
+        kind: 'moneySummary',
+        title: 'Membership savings since joining',
+        detail: `Since ${dayFormatter.format(startDate)}: ${toSavingsLine(
+          all.totalTicketSavingsCents,
+          all.membershipCostCents,
+          all.netSavingsCents,
+        )}`,
+        amountCents: all.netSavingsCents,
+        currency: CURRENCY,
+      }),
+    ],
+    matchedCount: 2,
+    totalCents: yearNet,
+    currency: CURRENCY,
+    isPartial: snapshot.size >= WATCHLIST_READ_LIMIT,
+    from: null,
+    to: null,
+  };
+}
+
 export interface AListAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
@@ -450,6 +578,10 @@ export function createAListAdapter(
       isDone: true,
       resumeState: null,
     }),
+    query: async (ctx, req: LiveQueryRequest): Promise<LiveQueryResult> => {
+      if (req.category !== 'savings') throw new Error('Unknown category.');
+      return queryMembershipSavings(deps.firestore(), ctx.uid, deps.now());
+    },
     deepLink: (ref) => {
       const [collection, id] = ref.split('/');
       return collection === 'viewings' && id

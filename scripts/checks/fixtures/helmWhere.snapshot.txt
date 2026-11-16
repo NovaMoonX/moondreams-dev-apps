@@ -47,6 +47,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Saved theaters: look in <synced_records>, then call search_synced; you cannot change it.
 - Movies the person has seen: look in <synced_records>, then call search_synced; you cannot change it.
 - The movie watchlist: look in <synced_records>, then call search_synced; you cannot change it.
+- Movie membership savings: call search_app_records; you cannot change it.
 - Pickups: look in <synced_records>, then call search_synced; you cannot change it.
 - Sales: look in <synced_records>, then call search_synced; you cannot change it.
 - Things for sale: look in <synced_records>, then call search_synced; you cannot change it.
@@ -65,6 +66,8 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Recipes: look in <synced_records>, then call search_synced; you cannot change it.
 - Saved meals: look in <synced_records>, then call search_synced; you cannot change it.
 - Recipe ideas: look in <synced_records>, then call search_synced; you cannot change it.
+- Recipe ingredients: call search_app_records; you cannot change it.
+- Recipes the person cooked: call search_app_records; you cannot change it.
 - Free to Spend: look in <synced_records>, then call search_synced; you cannot change it.
 - Bills coming up: look in <synced_records>, then call search_synced; you cannot change it.
 - Horizon goals: look in <synced_records>, then call search_synced; you cannot change it.
@@ -75,6 +78,9 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Trip to-dos: look in <synced_records>, then call search_synced; you cannot change it.
 - What is owed on trips: look in <synced_records>, then call search_synced; you cannot change it.
 - Trip checklists: look in <synced_records>, then call search_synced; you cannot change it.
+- The whole trip checklist: call search_app_records; you cannot change it.
+- Trip ideas: call search_app_records; you cannot change it.
+- Trip announcements: call search_app_records; you cannot change it.
 - Box counts: look in <synced_records>, then call search_synced; you cannot change it.
 - Revealed items: call search_app_records; you cannot change it.
 </where_things_live>

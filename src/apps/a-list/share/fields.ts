@@ -15,9 +15,9 @@ import type {
 const MEMBERSHIP_PROFILE_FIELDS = {
   uid: 'never',
   monthlyCostCents: 'never',
-  monthlyTotalCents: 'never',
+  monthlyTotalCents: 'shared',
   taxRate: 'never',
-  startDate: 'never',
+  startDate: 'shared',
   weeklyGoal: 'shared',
   monthlyGoal: 'shared',
   favoriteTheatreId: 'never',
@@ -71,7 +71,7 @@ const TICKET_FIELDS = {
   feeAvoidedCents: 'never',
   taxRate: 'never',
   taxCents: 'never',
-  totalCents: 'never',
+  totalCents: 'shared',
 } satisfies Record<keyof Ticket, ShareDecision>;
 
 const THEATRE_SNAPSHOT_FIELDS = {

@@ -80,9 +80,57 @@ const seedOwner = () =>
       categories: ['MAIN', 'SIDE', 'BOGUS'],
       isFavorite: true,
       isArchived: false,
-      ingredients: [{ note: SECRET_NOTE }],
+      ingredients: [
+        {
+          id: 'l1',
+          ingredientId: 'cat-salmon',
+          amount: 2,
+          unit: 'CUP',
+          note: SECRET_NOTE,
+        },
+        { id: 'l2', ingredientId: 'custom1', amount: 1, unit: 'EACH' },
+        { id: 'l3', ingredientId: 'cat-bacon', amount: null, unit: 'EACH' },
+        { id: 'l4', ingredientId: 'gone-ingredient', amount: 3, unit: 'EACH' },
+        { id: 'l5', note: SECRET_NOTE },
+      ],
+      collectionIds: ['col1', 'col-gone'],
       updatedAt: NOW - 3,
       ...priced,
+    }),
+    kitchen(OWNER, 'collections/col1').set({ label: 'Weeknight dinners' }),
+    kitchen(OWNER, 'cooks/c1').set({
+      recipeId: 'r1',
+      plannedMealId: null,
+      servings: 4,
+      cookedAt: NOW - 2 * DAY,
+      rating: 5,
+      photoPath: 'SECRET photo path',
+    }),
+    kitchen(OWNER, 'cooks/c2').set({
+      recipeId: 'r-old',
+      servings: 1,
+      cookedAt: NOW - 20 * DAY,
+    }),
+    kitchen(OWNER, 'cooks/c-gone').set({
+      recipeId: 'r-deleted',
+      servings: 1,
+      cookedAt: NOW - DAY,
+    }),
+    kitchen('long-uid', 'ingredients/cat-bacon').set({
+      name: 'Smoky bacon',
+      catalogId: 'cat-bacon',
+    }),
+    kitchen('long-uid', 'recipes/r-big').set({
+      title: 'Big Pot',
+      ingredients: Array.from({ length: 25 }, (_, index) => ({
+        id: `b${index}`,
+        ingredientId: 'cat-bacon',
+        amount: index + 1,
+        unit: 'CUP',
+      })),
+      prepMinutes: 5,
+      cookMinutes: 5,
+      updatedAt: NOW,
     }),
     kitchen(OWNER, 'recipes/r-old').set({
       title: 'Plain Toast',
@@ -351,6 +399,11 @@ const seedOther = () =>
     kitchen(OTHER, 'recipes/o-recipe').set({
       title: 'OTHER recipe',
       updatedAt: NOW,
+    }),
+    kitchen(OTHER, 'cooks/o-cook').set({
+      recipeId: 'o-recipe',
+      servings: 2,
+      cookedAt: NOW,
     }),
     kitchen(OTHER, 'meals/o-meal').set({
       name: 'OTHER saved',
@@ -679,6 +732,118 @@ assert.equal(
 );
 assert.equal(adapter.deepLink('???', ctxFor(OWNER)), '/pinch');
 
+const queryPinch = (uid: string, category: string, args: unknown) =>
+  adapter.query!(ctxFor(uid), { category, args });
+const ingredientsOf = await queryPinch(OWNER, 'recipeIngredients', {});
+assertShape(ingredientsOf.records);
+assert.deepEqual(refs(ingredientsOf.records), ['recipes/r-old', 'recipes/r1']);
+assert.equal(ingredientsOf.matchedCount, 2);
+assert.equal(ingredientsOf.totalCents, null);
+assert.equal(ingredientsOf.currency, null);
+assert.equal(ingredientsOf.isPartial, false);
+assert.deepEqual([ingredientsOf.from, ingredientsOf.to], [null, null]);
+assert.equal(
+  ingredientsOf.records.find((entry) => entry.sourceRef === 'recipes/r1')
+    ?.detail,
+  '30 min · in Weeknight dinners · With 2 cup Salmon, 1 Saffron, Smoky bacon',
+  'a line with no name and a deleted collection are left out',
+);
+assert.equal(
+  ingredientsOf.records.find((entry) => entry.sourceRef === 'recipes/r-old')
+    ?.detail,
+  null,
+);
+const textIds = async (text: string) =>
+  refs((await queryPinch(OWNER, 'recipeIngredients', { text })).records);
+assert.deepEqual(await textIds('SALMON'), ['recipes/r1'], 'by ingredient');
+assert.deepEqual(await textIds('weeknight'), ['recipes/r1'], 'by collection');
+assert.deepEqual(await textIds('toast'), ['recipes/r-old'], 'by title');
+assert.deepEqual(await textIds('zzz'), []);
+assert.equal(
+  (await queryPinch(OWNER, 'recipeIngredients', 'garbage')).matchedCount,
+  2,
+);
+const bigPot = (await queryPinch('long-uid', 'recipeIngredients', {}))
+  .records[0];
+assert.ok((bigPot.detail ?? '').length <= 120);
+assert.match(
+  bigPot.detail ?? '',
+  /^10 min · With 1 cup Smoky bacon, .* and \d+ more$/,
+);
+assert.equal(
+  (bigPot.detail ?? '').split(', ').length +
+    Number(/and (\d+) more$/.exec(bigPot.detail ?? '')?.[1]),
+  25,
+  'the tail counts what the list left out',
+);
+const cookedOf = await queryPinch(OWNER, 'cooked', {});
+assertShape(cookedOf.records);
+assert.deepEqual(
+  cookedOf.records.map((entry) => [entry.title, entry.detail, entry.startAt]),
+  [
+    ['Lemon Pasta', 'Cooked Nov 8, 2026', NOW - 2 * DAY],
+    ['Plain Toast', 'Cooked Oct 21, 2026', NOW - 20 * DAY],
+  ],
+  'newest first; a cook of a deleted recipe is ignored',
+);
+assert.equal(cookedOf.matchedCount, 2);
+assert.equal(cookedOf.isPartial, false);
+assert.deepEqual(
+  (
+    await queryPinch(OWNER, 'cooked', { from: '2026-11-08', to: '2026-11-08' })
+  ).records.map((entry) => entry.title),
+  ['Lemon Pasta'],
+);
+const cookRange = await queryPinch(OWNER, 'cooked', {
+  from: '2026-11-09',
+  to: '2026-11-10',
+});
+assert.deepEqual(cookRange.records, []);
+assert.deepEqual([cookRange.from, cookRange.to], ['2026-11-09', '2026-11-10']);
+assert.deepEqual(
+  (await queryPinch(OWNER, 'cooked', { text: 'toast' })).records.map(
+    (entry) => entry.title,
+  ),
+  ['Plain Toast'],
+);
+assert.equal((await queryPinch(OWNER, 'cooked', 'garbage')).matchedCount, 2);
+[...ingredientsOf.records, ...cookedOf.records, bigPot].forEach((record) => {
+  const values = flatten(record);
+  assert.ok(
+    !values.includes(SECRET_PRICE) &&
+      !values.includes(777) &&
+      !values.includes(999) &&
+      !values.includes(5),
+    record.sourceRef,
+  );
+  assert.ok(
+    !values.some(
+      (value) => typeof value === 'string' && /SECRET|secret|gone/.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+assert.deepEqual(
+  (await queryPinch(OTHER, 'recipeIngredients', {})).records.map(
+    (entry) => entry.title,
+  ),
+  ['OTHER recipe'],
+);
+assert.deepEqual(
+  (await queryPinch(OTHER, 'cooked', {})).records.map((entry) => entry.title),
+  ['OTHER recipe'],
+);
+assert.deepEqual((await queryPinch('empty-uid', 'cooked', {})).records, []);
+assert.deepEqual(
+  (await queryPinch('empty-uid', 'recipeIngredients', {})).records,
+  [],
+);
+await assert.rejects(
+  () => queryPinch(OWNER, 'recipes', {}),
+  /Unknown category/,
+);
+assert.equal(adapter.deepLink('cooks/c1', ctxFor(OWNER)), '/pinch?tab=recipes');
+
 const grant = ctxFor(OWNER).grant;
 assert.deepEqual(
   Object.fromEntries(
@@ -692,6 +857,8 @@ assert.deepEqual(
     recipes: true,
     savedMeals: true,
     ideas: true,
+    recipeIngredients: false,
+    cooked: false,
   },
 );
 const staged = buildNewGrant(
@@ -706,15 +873,19 @@ const staged = buildNewGrant(
   NOW,
 );
 assert.deepEqual(Object.keys(staged.categories).sort(), [
+  'cooked',
   'ideas',
   'pantryStock',
   'plannedMeals',
+  'recipeIngredients',
   'recipes',
   'savedMeals',
   'shoppingList',
   'useSoon',
 ]);
 assert.equal(staged.categories.plannedMeals.isOn, false);
+assert.equal(staged.categories.recipeIngredients.isOn, false);
+assert.equal(staged.categories.cooked.isOn, false);
 assert.equal(staged.status, 'live');
 assert.throws(
   () =>
@@ -833,8 +1004,33 @@ await Promise.all([
     weeklyGoal: 2,
     monthlyGoal: 5,
     monthlyCostCents: SECRET_PRICE,
+    monthlyTotalCents: 150,
+    startDate: Date.UTC(2025, 10, 15),
     lastEditedAt: NOW - 2,
   }),
+  membership(OWNER, 'viewings/v-seen-last-year').set(
+    showing('SEEN', 'Old Favorite', Date.UTC(2025, 11, 20), {
+      ticket: {
+        entryMode: 'ITEMIZED',
+        priceCents: SECRET_PRICE,
+        totalCents: 1000,
+        feeAvoidedCents: 999,
+      },
+    }),
+  ),
+  membership(OWNER, 'viewings/v-seen-no-ticket').set(
+    showing('SEEN', 'No Ticket Yet', NOW - 21 * DAY, { ticket: null }),
+  ),
+  membership('bystander-uid').set({
+    monthlyTotalCents: 9900,
+    startDate: Date.UTC(2026, 0, 1),
+    lastEditedAt: NOW - 2,
+  }),
+  membership('bystander-uid', 'viewings/o-seen').set(
+    showing('SEEN', 'Other Movie', NOW - DAY, {
+      ticket: { entryMode: 'ITEMIZED', priceCents: 1, totalCents: 31337 },
+    }),
+  ),
   membership(OWNER, 'theatres/2078').set({
     theatreId: '2078',
     name: 'AMC Town Center 20',
@@ -936,6 +1132,8 @@ const seen = await runAList(OWNER, 'seenMovies');
 assert.deepEqual(refs(seen).sort(), [
   'goals',
   'viewings/v-seen',
+  'viewings/v-seen-last-year',
+  'viewings/v-seen-no-ticket',
   'viewings/v-seen-unrated',
 ]);
 assert.ok(seen.every((entry) => entry.kind === 'knowledge'));
@@ -1011,6 +1209,75 @@ assert.equal(
   '/a-list',
 );
 assert.equal(aListAdapter.deepLink('???', aListCtx(OWNER)), '/a-list');
+
+const savingsOf = (uid: string, args: unknown = {}) =>
+  aListAdapter.query!(aListCtx(uid), { category: 'savings', args });
+const savings = await savingsOf(OWNER);
+assertShape(savings.records);
+assert.deepEqual(refs(savings.records), ['savings/all', 'savings/year']);
+assert.ok(savings.records.every((record) => record.kind === 'moneySummary'));
+assert.ok(savings.records.every((record) => record.currency === 'USD'));
+const savingsYear = savings.records.find(
+  (record) => record.sourceRef === 'savings/year',
+);
+const savingsAll = savings.records.find(
+  (record) => record.sourceRef === 'savings/all',
+);
+assert.equal(savingsYear?.title, 'Membership savings in 2026');
+assert.equal(
+  savingsYear?.detail,
+  'Tickets saved $15.54 · membership cost $15.00 · net $0.54',
+  'two 2026 tickets of 7.77 against ten 2026 billing dates of 1.50',
+);
+assert.equal(savingsYear?.amountCents, 54);
+assert.equal(savingsAll?.title, 'Membership savings since joining');
+assert.equal(
+  savingsAll?.detail,
+  'Since Nov 15, 2025: Tickets saved $25.54 · membership cost $18.00 · net $7.54',
+  'twelve billing dates since the start, the 2025 ticket counted',
+);
+assert.equal(savingsAll?.amountCents, 754);
+assert.equal(savings.totalCents, 54);
+assert.equal(savings.currency, 'USD');
+assert.equal(savings.matchedCount, 2);
+assert.equal(savings.isPartial, false);
+assert.deepEqual(
+  (await savingsOf(OWNER, { text: 'anything', from: '2026-01-01' })).records,
+  savings.records,
+  'a single figure ignores words and dates',
+);
+assert.deepEqual((await savingsOf(OWNER, 'garbage')).records, savings.records);
+savings.records.forEach((record) => {
+  const values = flatten(record);
+  assert.ok(
+    ![SECRET_PRICE, 777, 999, 31337, 3133700].some((secret) =>
+      values.includes(secret),
+    ),
+    record.sourceRef,
+  );
+  assert.ok(
+    !values.some(
+      (value) =>
+        typeof value === 'string' &&
+        /SECRET|secret|1234|https:|31,337|42\.42/.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+assert.deepEqual((await savingsOf(OTHER)).records, []);
+assert.equal((await savingsOf(OTHER)).totalCents, null);
+assert.deepEqual((await savingsOf('empty-uid')).records, []);
+assert.match(
+  (await savingsOf('bystander-uid')).records[0]?.detail ?? '',
+  /313\.37/,
+  "the bystander's own figure is theirs alone",
+);
+await assert.rejects(
+  () =>
+    aListAdapter.query!(aListCtx(OWNER), { category: 'watchlist', args: {} }),
+  /Unknown category/,
+);
+assert.equal(aListAdapter.deepLink('savings/year', aListCtx(OWNER)), '/a-list');
 
 const CO_SELLER = 'co-seller-uid';
 const BUYER_NAME = 'SECRET BUYER NAME';
@@ -2195,7 +2462,98 @@ await Promise.all([
         isCompleted: true,
       }),
     ),
-  nyc.collection('ideas').doc('idea').set({ title: TRIP_SECRET }),
+  firestore.doc(`users/${OWNER}`).set({ displayName: 'Alex Kim' }),
+  firestore.doc(`users/${HOUSEMATE}`).set({ displayName: 'maya@example.test' }),
+  nyc
+    .collection('checklist')
+    .doc('open')
+    .set(task({ title: 'Buy adapter', assignedToUids: [] })),
+  nyc
+    .collection('ideas')
+    .doc('idea')
+    .set({
+      title: 'Rooftop bar',
+      notes: 'Ask about the sunset table',
+      linkUrl: 'https://www.rooftop.test/menu?token=SECRETLINK',
+      createdAt: NOW - 2 * DAY,
+      addedByUid: OWNER,
+      voterUids: [TRIP_SECRET],
+      ideaDetails: { cuisines: [TRIP_SECRET] },
+    }),
+  nyc
+    .collection('ideas')
+    .doc('pizza')
+    .set({
+      title: 'Pizza crawl',
+      notes: 'Try the slice near the hotel',
+      linkUrl: null,
+      createdAt: NOW - 5 * DAY,
+    }),
+  nyc
+    .collection('ideas')
+    .doc('museum')
+    .set({
+      title: 'Museum',
+      notes: 'Tickets at https://museum.test/buy',
+      linkUrl: 'https://museum.test/tickets?id=SECRET9',
+      createdAt: NOW - 7 * DAY,
+    }),
+  nyc
+    .collection('ideas')
+    .doc('guide')
+    .set({
+      title: 'Tour guide',
+      notes: 'Email guide@tours.test for a price',
+      createdAt: NOW - 8 * DAY,
+    }),
+  nyc
+    .collection('ideas')
+    .doc('cab')
+    .set({
+      title: 'Cab',
+      notes: 'Call 555-123-4567',
+      linkUrl: 'javascript:alert(1)',
+      createdAt: NOW - 9 * DAY,
+    }),
+  nyc
+    .collection('ideas')
+    .doc('long')
+    .set({
+      title: 'Long one',
+      notes: 'word '.repeat(40),
+      createdAt: NOW - 10 * DAY,
+    }),
+  nyc
+    .collection('announcements')
+    .doc('lobby')
+    .set({
+      title: 'Meet at the lobby',
+      body: 'Be there at 8am sharp.',
+      createdAt: NOW - DAY,
+    }),
+  nyc
+    .collection('announcements')
+    .doc('late')
+    .set({
+      title: 'Running late?',
+      body: 'Call 555-123-4567 if late',
+      createdAt: NOW - 2 * DAY,
+    }),
+  nyc
+    .collection('announcements')
+    .doc('zoom')
+    .set({
+      title: 'Join zoom call',
+      body: 'https://zoom.us/j/1',
+      createdAt: NOW - 3 * DAY,
+    }),
+  nyc
+    .collection('announcements')
+    .doc('plain')
+    .set({
+      body: 'Pack light layers',
+      createdAt: NOW - 4 * DAY,
+    }),
   nyc.collection('eventSuggestions').doc('s').set({ title: TRIP_SECRET }),
   nyc.collection('announcements').doc('a').set({ message: TRIP_SECRET }),
   nyc.collection('contacts').doc('c').set({
@@ -2674,6 +3032,158 @@ waypointAll.forEach((record) => {
     record.sourceRef,
   );
 });
+const waypointQuery = (uid: string, category: string, args: unknown = {}) =>
+  waypointAdapter.query!(waypointCtx(uid), { category, args });
+const fullList = await waypointQuery(OWNER, 'fullChecklist');
+assertShape(fullList.records);
+assert.ok(fullList.records.every((record) => record.kind === 'task'));
+assert.deepEqual(
+  fullList.records.map((record) => [record.title, record.detail]),
+  [
+    ['Passports', 'Documents · For Alex · To do'],
+    ['Housemate only', 'Packing · For someone · To do'],
+    ['Buy adapter', 'Other · Not assigned yet · To do'],
+    ['Book dinner', 'Bookings · For Alex, someone · To do'],
+    ['Packed shoes', 'Packing · For Alex · Done'],
+  ],
+  'to-dos first by due day, the unassigned and the others included, an email name read as someone',
+);
+assert.equal(fullList.matchedCount, 5);
+assert.equal(fullList.isPartial, false);
+assert.equal(fullList.totalCents, null);
+assert.equal(fullList.records[0].subtitle, 'New York');
+assert.equal(fullList.records[0].dueAt, utc(2026, 9, 30));
+assert.equal(fullList.records[0].isAllDay, true);
+assert.equal(fullList.records[1].dueAt, null);
+assert.deepEqual(
+  refs(fullList.records).sort(),
+  [
+    'trips/nyc/checklist/done',
+    'trips/nyc/checklist/hers',
+    'trips/nyc/checklist/open',
+    'trips/nyc/checklist/passports',
+    'trips/nyc/checklist/shared',
+  ],
+  'only the shared checklist: no private to-do, no trip the person left',
+);
+const listTitles = async (args: unknown) =>
+  (await waypointQuery(OWNER, 'fullChecklist', args)).records.map(
+    (record) => record.title,
+  );
+assert.deepEqual(await listTitles({ text: 'dinner' }), ['Book dinner']);
+assert.deepEqual(await listTitles({ text: 'ALEX' }), [
+  'Passports',
+  'Book dinner',
+  'Packed shoes',
+]);
+assert.deepEqual(await listTitles({ text: 'documents' }), ['Passports']);
+assert.equal((await listTitles({ text: 'new york' })).length, 5);
+const dueRange = await waypointQuery(OWNER, 'fullChecklist', {
+  from: '2026-10-30',
+  to: '2026-10-30',
+});
+assert.deepEqual(
+  dueRange.records.map((record) => record.title),
+  ['Passports'],
+  'a range keeps only the to-dos due in it',
+);
+assert.deepEqual([dueRange.from, dueRange.to], ['2026-10-30', '2026-10-30']);
+assert.equal((await listTitles('garbage')).length, 5);
+const mateList = await waypointQuery(HOUSEMATE, 'fullChecklist');
+assert.ok(mateList.records.some((record) => record.title === 'Left task'));
+assert.ok(mateList.records.some((record) => record.title === 'Passports'));
+assert.ok(
+  mateList.records.every(
+    (record) => !record.title.includes('HOUSEMATE PRIVATE'),
+  ),
+);
+
+const ideaList = await waypointQuery(OWNER, 'tripIdeas');
+assertShape(ideaList.records);
+assert.deepEqual(
+  ideaList.records.map((record) => [record.title, record.detail]),
+  [
+    [
+      'Rooftop bar',
+      'Added Nov 8, 2026 · Ask about the sunset table · Link on rooftop.test',
+    ],
+    ['Pizza crawl', 'Added Nov 5, 2026 · Try the slice near the hotel'],
+    ['Museum', 'Added Nov 3, 2026 · Link on museum.test'],
+    ['Tour guide', 'Added Nov 2, 2026'],
+    ['Cab', 'Added Nov 1, 2026'],
+    ['Long one', `Added Oct 31, 2026 · ${'word '.repeat(12).trim()}…`],
+  ],
+  'newest first; a note with a link, email or number is dropped, a link shows its host only',
+);
+assert.equal(ideaList.records[0].subtitle, 'New York');
+assert.equal(ideaList.records[0].startAt, NOW - 2 * DAY);
+assert.equal(ideaList.matchedCount, 6);
+assert.deepEqual(
+  (await waypointQuery(OWNER, 'tripIdeas', { text: 'sunset' })).records.map(
+    (record) => record.title,
+  ),
+  ['Rooftop bar'],
+);
+assert.deepEqual(
+  (
+    await waypointQuery(OWNER, 'tripIdeas', {
+      from: '2026-11-05',
+      to: '2026-11-08',
+    })
+  ).records.map((record) => record.title),
+  ['Rooftop bar', 'Pizza crawl'],
+);
+
+const noticeList = await waypointQuery(OWNER, 'announcements');
+assertShape(noticeList.records);
+assert.deepEqual(
+  noticeList.records.map((record) => [record.title, record.detail]),
+  [
+    ['Meet at the lobby', 'Posted Nov 9, 2026 · Be there at 8am sharp.'],
+    ['Running late?', 'Posted Nov 8, 2026'],
+    ['Announcement', 'Posted Nov 6, 2026 · Pack light layers'],
+  ],
+  'a text with a number to dial is dropped, one with only a meeting or a link is skipped, one with no words stays out',
+);
+assert.equal(noticeList.records[0].subtitle, 'New York');
+assert.deepEqual(
+  (
+    await waypointQuery(OWNER, 'announcements', {
+      from: '2026-11-09',
+      to: '2026-11-09',
+    })
+  ).records.map((record) => record.title),
+  ['Meet at the lobby'],
+);
+assert.deepEqual(
+  (await waypointQuery(OWNER, 'announcements', { text: 'layers' })).records.map(
+    (record) => record.title,
+  ),
+  ['Announcement'],
+);
+
+[...fullList.records, ...ideaList.records, ...noticeList.records].forEach(
+  (record) => {
+    const values = flatten(record);
+    assert.ok(!values.includes(TRIP_EXPENSE_AMOUNT), record.sourceRef);
+    assert.ok(
+      !values.some(
+        (value) =>
+          typeof value === 'string' &&
+          /SECRET|secret|HOUSEMATE|example\.test|Kim|maya|@|zoom|555|https?:/.test(
+            value,
+          ),
+      ),
+      record.sourceRef,
+    );
+  },
+);
+for (const category of ['fullChecklist', 'tripIdeas', 'announcements']) {
+  assert.deepEqual((await waypointQuery(OTHER, category)).records, []);
+  assert.deepEqual((await waypointQuery('empty-uid', category)).records, []);
+}
+await assert.rejects(() => waypointQuery(OWNER, 'myTasks'), /Unknown category/);
+
 await assert.rejects(() => runWaypoint(OWNER, 'nothing'), /Unknown category/);
 assert.equal(await waypointAdapter.status(waypointCtx(OWNER)), 'ok');
 assert.equal(await waypointAdapter.status(waypointCtx(OTHER)), 'noAccess');
