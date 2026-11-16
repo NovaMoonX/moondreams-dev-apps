@@ -4,6 +4,7 @@ import {
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
 import { centsToInputValue } from '@/utils/moneyUtils';
+import { getUpcomingDays } from '@apps/going-once/utils/pickupDays';
 import { MAX_BUYER_NAME_LENGTH } from '@apps/going-once/constants';
 import type {
   Inquiry,
@@ -33,8 +34,31 @@ export interface SoldDraft {
   soldOn: string;
 }
 
-/** Today and the next six days as pills, each valued as a local date input's text. */
-export const getDayOptions = (now: number): PillOption<string>[] => {
+const buyerDayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** The pickup days the buyer said work when any are still ahead, else the sale's own, else today and the next six days; each valued as a date input's text. */
+export const getDayOptions = (
+  now: number,
+  buyerDays: number[] | null = null,
+  saleDays: number[] = [],
+  timeZone: string | null = null,
+): PillOption<string>[] => {
+  const buyerUpcoming = getUpcomingDays(buyerDays ?? [], now, timeZone);
+  const upcoming = (
+    buyerUpcoming.length > 0
+      ? buyerUpcoming
+      : getUpcomingDays(saleDays, now, timeZone)
+  ).slice(0, DAYS_SHOWN);
+  if (upcoming.length > 0)
+    return upcoming.map((day) => ({
+      value: toDateInputValue(day),
+      label: buyerDayFormatter.format(new Date(day)),
+    }));
   const today = new Date(now);
   return Array.from({ length: DAYS_SHOWN }, (_, offset) => {
     const day = new Date(
@@ -53,29 +77,28 @@ export const getDayOptions = (now: number): PillOption<string>[] => {
 };
 
 /** The hold as it stands (empty for a new one), so a changed hold opens with its name and day filled in. */
-export function getHoldDraft(
-  pending: ItemPendingRecord | null,
-  now: number,
-): HoldDraft {
+export function getHoldDraft(pending: ItemPendingRecord | null): HoldDraft {
   const day = pending?.pickupOn ? toDateInputValue(pending.pickupOn) : '';
   return {
     inquiryId: pending?.inquiryId ?? null,
     name: pending?.buyerName ?? '',
     isDayShown: day !== '',
     day,
-    isOtherDay:
-      day !== '' && !getDayOptions(now).some((option) => option.value === day),
+    isOtherDay: false,
   };
 }
 
-/** Mark pending opens empty, or with the name of the inquiry it is held for. */
+/** Mark pending opens empty, or with the name of the inquiry it is held for and, when that buyer named days still ahead, the pickup day question open. */
 export const getHoldStart = (
-  inquiry: Pick<Inquiry, 'id' | 'name'> | null,
+  inquiry: Pick<Inquiry, 'id' | 'name' | 'pickupDays'> | null,
   now: number,
 ): HoldDraft => ({
-  ...getHoldDraft(null, now),
+  ...getHoldDraft(null),
   inquiryId: inquiry?.name ? inquiry.id : null,
   name: inquiry?.name?.trim().slice(0, MAX_BUYER_NAME_LENGTH) ?? '',
+  isDayShown:
+    inquiry?.name != null &&
+    getUpcomingDays(inquiry.pickupDays ?? [], now).length > 0,
 });
 
 /** Mark sold opens on the asking price, paid today, no method. */
@@ -91,3 +114,12 @@ export const getSoldDraft = (
 /** Whether the person has changed anything since the view opened. */
 export const isDraftChanged = <T extends object>(draft: T, initial: T) =>
   JSON.stringify(draft) !== JSON.stringify(initial);
+
+const settleHold = (draft: HoldDraft): HoldDraft => ({
+  ...draft,
+  isOtherDay: draft.day === '' ? draft.isOtherDay : false,
+});
+
+/** Whether a hold draft differs from where it started; once a day is set, whether it came from Other day doesn't count. */
+export const isHoldChanged = (draft: HoldDraft, initial: HoldDraft) =>
+  isDraftChanged(settleHold(draft), settleHold(initial));

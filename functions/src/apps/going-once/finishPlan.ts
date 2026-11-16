@@ -70,7 +70,8 @@ export const isDueForClearing = (sale: unknown, now: number): boolean =>
 /** Decided on the contact fields themselves, never on `contactClearedAt`: a resend writes that back to null with new details. */
 export const isInquiryCleared = (inquiry: unknown): boolean =>
   isRecord(inquiry) &&
-  INQUIRY_CONTACT_FIELDS.every((field) => inquiry[field] === null);
+  INQUIRY_CONTACT_FIELDS.every((field) => inquiry[field] === null) &&
+  (inquiry.anotherDayNote ?? null) === null;
 
 /** What clearing an inquiry writes, or `null` when it is already clear. */
 export const scrubInquiry = (inquiry: unknown, now: number): Patch | null =>
@@ -81,6 +82,7 @@ export const scrubInquiry = (inquiry: unknown, now: number): Patch | null =>
         email: null,
         phone: null,
         message: null,
+        anotherDayNote: null,
         contactClearedAt: now,
       };
 

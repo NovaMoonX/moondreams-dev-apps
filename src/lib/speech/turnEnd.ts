@@ -1,7 +1,7 @@
 import { toSpokenText } from '@/lib/speech/spokenText';
 import { toPlainText } from '@/lib/speech/speechText';
 
-export const TURN_END_COMPLETE_MS = 900;
+export const TURN_END_COMPLETE_MS = 1500;
 export const TURN_END_UNFINISHED_MS = 2500;
 export const BARGE_MIN_NEW_WORDS = 2;
 
