@@ -231,6 +231,7 @@ function HelmApp() {
             onHome={goHome}
             onOpenWho={(whoId) => showView('who', whoId)}
             onOpenRun={(runId) => showView('run', runId)}
+            onOpenHabit={(habitId) => showView('habit', habitId)}
           />
         )}
         {!isLocked && view === 'habits' && (

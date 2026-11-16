@@ -17,6 +17,8 @@ import {
   PROJECT_OBJECTIVE_MAX,
 } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import GoalWhyField from '@apps/helm/components/projects/GoalWhyField';
+import { editGoalWhy } from '@apps/helm/store/actions/goalActions';
 import { updateProject } from '@apps/helm/store/actions/projectActions';
 import type { OpenProject } from '@apps/helm/types';
 
@@ -24,6 +26,8 @@ interface ProjectEditSheetProps {
   isOpen: boolean;
   onClose: () => void;
   project: OpenProject;
+  /** A goal's edit opened from its why starts in that field. */
+  isWhyFirst?: boolean;
 }
 
 interface ProjectEditFormProps extends Omit<ProjectEditSheetProps, 'isOpen'> {
@@ -36,6 +40,7 @@ const toFirstEmoji = (text: string) =>
 
 function ProjectEditForm({
   project,
+  isWhyFirst = false,
   onClose,
   requestClose,
   onDirtyChange,
@@ -49,6 +54,8 @@ function ProjectEditForm({
   const [date, setDate] = useState(
     toDateInputValue(project.targetDate ?? undefined),
   );
+  const isGoal = project.kind === 'goal';
+  const [whyText, setWhyText] = useState(project.why?.verbatim ?? '');
   const [isTouched, setIsTouched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isMissing = name.trim() === '';
@@ -75,11 +82,14 @@ function ProjectEditForm({
         {
           name,
           emoji: emoji || null,
-          objective: objective.trim() || null,
+          objective: isGoal ? project.objective : objective.trim() || null,
           targetDate: fromDateInputValue(date) ?? null,
         },
       );
       if (result === 'saved') {
+        if (isGoal && whyText.trim() !== (project.why?.verbatim ?? '').trim()) {
+          await editGoalWhy(user.uid, project.id, whyText.trim() || null);
+        }
         onClose();
         return;
       }
@@ -116,23 +126,42 @@ function ProjectEditForm({
             className='min-w-0 flex-1'
             value={name}
             maxLength={PROJECT_NAME_MAX}
-            autoFocus={canFocusFieldOnOpen()}
+            autoFocus={canFocusFieldOnOpen() && !isWhyFirst}
             onChange={(event) => edit(setName)(event.target.value)}
           />
         </div>
       </div>
-      <div className='space-y-1.5'>
-        <label htmlFor={`${fieldId}-objective`} className='text-sm font-medium'>
-          {HELM_COPY.projectObjectiveField}
-        </label>
-        <Input
-          id={`${fieldId}-objective`}
-          value={objective}
-          maxLength={PROJECT_OBJECTIVE_MAX}
-          placeholder={HELM_COPY.projectFlowObjectivePlaceholder}
-          onChange={(event) => edit(setObjective)(event.target.value)}
-        />
-      </div>
+      {isGoal ? (
+        <div className='space-y-1.5'>
+          <label htmlFor={`${fieldId}-why`} className='text-sm font-medium'>
+            {HELM_COPY.goalWhyField}
+          </label>
+          <GoalWhyField
+            id={`${fieldId}-why`}
+            value={whyText}
+            ariaLabel={HELM_COPY.goalWhyField}
+            placeholder={HELM_COPY.goalWhyEditPlaceholder}
+            autoFocus={canFocusFieldOnOpen() && isWhyFirst}
+            onChange={edit(setWhyText)}
+          />
+        </div>
+      ) : (
+        <div className='space-y-1.5'>
+          <label
+            htmlFor={`${fieldId}-objective`}
+            className='text-sm font-medium'
+          >
+            {HELM_COPY.projectObjectiveField}
+          </label>
+          <Input
+            id={`${fieldId}-objective`}
+            value={objective}
+            maxLength={PROJECT_OBJECTIVE_MAX}
+            placeholder={HELM_COPY.projectFlowObjectivePlaceholder}
+            onChange={(event) => edit(setObjective)(event.target.value)}
+          />
+        </div>
+      )}
       <div className='space-y-1.5'>
         <label htmlFor={`${fieldId}-date`} className='text-sm font-medium'>
           {HELM_COPY.projectDateField}
@@ -166,7 +195,12 @@ function ProjectEditForm({
 }
 
 /** Change a project's name, emoji, what done looks like and its date. */
-function ProjectEditSheet({ isOpen, onClose, project }: ProjectEditSheetProps) {
+function ProjectEditSheet({
+  isOpen,
+  onClose,
+  project,
+  isWhyFirst = false,
+}: ProjectEditSheetProps) {
   const [isDirty, setIsDirty] = useState(false);
   const close = () => {
     setIsDirty(false);
@@ -178,11 +212,16 @@ function ProjectEditSheet({ isOpen, onClose, project }: ProjectEditSheetProps) {
     <FormSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={HELM_COPY.projectEditTitle}
+      title={
+        project.kind === 'goal'
+          ? HELM_COPY.goalEditTitle
+          : HELM_COPY.projectEditTitle
+      }
     >
       {isOpen && (
         <ProjectEditForm
           project={project}
+          isWhyFirst={isWhyFirst}
           onClose={close}
           requestClose={requestClose}
           onDirtyChange={setIsDirty}
