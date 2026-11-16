@@ -4,7 +4,11 @@ import {
   getInitialTicketDraft,
   type TicketDraft,
 } from '@apps/a-list/utils/ticketDraft';
-import { centsToInputValue, formatCents } from '@/utils/moneyUtils';
+import {
+  centsToInputValue,
+  formatCents,
+  parseMoneyToCents,
+} from '@/utils/moneyUtils';
 
 export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
   return {
@@ -18,14 +22,18 @@ export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
   };
 }
 
-/** The ticket form's start for a picked showing: its format, AMC's prices and AMC's tax to offer beside the usual rate. */
+/** The ticket form's start for a picked showing: its format, AMC's prices and AMC's tax to offer beside the usual rate; a tax set for another price starts over. */
 export function applyPurchaseToDraft(
   draft: TicketDraft,
   plan: Pick<PurchasePlan, 'format' | 'priceCents' | 'standardPriceCents'> &
     Partial<Pick<PurchasePlan, 'taxCents'>>,
 ): TicketDraft {
+  const priceCents = plan.priceCents;
+  const isNewPrice =
+    draft.price !== '' && parseMoneyToCents(draft.price) !== priceCents;
   return {
     ...draft,
+    ...(isNewPrice ? { tax: '', isTaxEdited: false } : {}),
     amcTaxCents: plan.taxCents ?? null,
     format: plan.format,
     price: centsToInputValue(plan.priceCents),

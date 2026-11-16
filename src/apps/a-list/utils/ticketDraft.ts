@@ -17,7 +17,7 @@ export interface TicketDraft {
   isTaxEdited: boolean;
   /** AMC's tax for the picked showing; null with no pick or when AMC lists none. */
   amcTaxCents: number | null;
-  /** The saved ticket's choice and the tax it was made on, kept while that tax is unchanged. */
+  /** The saved ticket's choice (a figure the member picked or typed, never the default left as is) and the tax it was made on, kept while that tax is unchanged. */
   savedTaxChoice: { taxCents: number; choice: TaxChoice | null } | null;
 }
 
@@ -37,7 +37,8 @@ export function getTaxOptions(
   if (draft.amcTaxCents === null || priceCents === null || usualRate === null)
     return null;
   const usualCents = getItemizedTaxCents(priceCents, usualRate);
-  if (usualCents === draft.amcTaxCents) return null;
+  // A stored rate is rounded, so a cent apart is the same tax.
+  if (Math.abs(usualCents - draft.amcTaxCents) <= 1) return null;
   return { amcCents: draft.amcTaxCents, usualCents, usualRate };
 }
 
@@ -66,6 +67,7 @@ function getTaxChoice(
   taxCents: number,
 ): TaxChoice | null {
   if (options) {
+    if (!draft.isTaxEdited) return null;
     if (taxCents === options.amcCents) return 'AMC';
     return taxCents === options.usualCents ? 'USUAL' : null;
   }

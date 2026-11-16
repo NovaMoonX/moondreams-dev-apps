@@ -9,6 +9,8 @@ interface SuggestionNoteProps {
   theatreName: string | null;
   /** The tax as shown; it was filled from this theater only when it is the learned rate on the price. */
   shownTax: string;
+  /** The tax chips are showing, and they speak for the tax. */
+  hasTaxChoice: boolean;
 }
 
 /** Says which of the fee and tax came from the member's past tickets here, until they change it. */
@@ -17,6 +19,7 @@ function SuggestionNote({
   draft,
   theatreName,
   shownTax,
+  hasTaxChoice,
 }: SuggestionNoteProps) {
   const priceCents = parseMoneyToCents(draft.price);
   const isTaxFromHere =
@@ -28,7 +31,10 @@ function SuggestionNote({
     suggestion.isFeeLearned && !draft.isFeeEdited
       ? `${formatCents(suggestion.feeCents)} fee`
       : null,
-    suggestion.isTaxLearned && !draft.isTaxEdited && isTaxFromHere
+    suggestion.isTaxLearned &&
+    !draft.isTaxEdited &&
+    !hasTaxChoice &&
+    isTaxFromHere
       ? 'tax'
       : null,
   ].filter((part): part is string => part !== null);

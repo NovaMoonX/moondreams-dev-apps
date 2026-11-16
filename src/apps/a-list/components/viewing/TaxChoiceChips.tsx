@@ -4,13 +4,11 @@ import { formatTaxRate } from '@apps/a-list/utils/tax';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 
 interface TaxChoiceChipsProps {
-  /** The tax as shown in the field. */
   value: string;
   options: TaxOptions | null;
   onPick: (cents: number) => void;
 }
 
-/** AMC's tax and the usual rate side by side, each named, when they disagree. */
 function TaxChoiceChips({ value, options, onPick }: TaxChoiceChipsProps) {
   if (!options) {
     return null;
@@ -21,9 +19,9 @@ function TaxChoiceChips({ value, options, onPick }: TaxChoiceChipsProps) {
     {
       key: 'usual',
       cents: options.usualCents,
-      label: `Your usual ${formatTaxRate(options.usualRate)}`,
+      label: `Usual ${formatTaxRate(options.usualRate)}`,
     },
-    { key: 'amc', cents: options.amcCents, label: 'AMC lists' },
+    { key: 'amc', cents: options.amcCents, label: 'AMC' },
   ];
 
   return (
@@ -40,8 +38,7 @@ function TaxChoiceChips({ value, options, onPick }: TaxChoiceChipsProps) {
         ))}
       </div>
       <p className='text-muted-foreground text-xs'>
-        These two don't agree. Pick the one on your checkout, and we'll lean
-        that way at this theater next time.
+        Tap the one on your checkout; we'll remember it here.
       </p>
     </div>
   );

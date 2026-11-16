@@ -18,7 +18,8 @@ export function applyTicketPriceKind(
 ): ShowtimeOption {
   return {
     ...option,
-    priceCents: option.prices?.[kind] ?? (option.prices ? null : option.priceCents),
+    priceCents:
+      option.prices?.[kind] ?? (option.prices ? null : option.priceCents),
     standardPriceCents:
       option.standardPrices?.[kind] ??
       (option.standardPrices ? null : option.standardPriceCents),

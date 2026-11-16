@@ -130,7 +130,6 @@ export interface Viewing {
   lastEditedAt: number;
 }
 
-/** AMC's listed tax for the showing, or the member's usual rate applied to the price. */
 export type TaxChoice = 'AMC' | 'USUAL';
 
 /** What a non-member would have paid. Always `totalCents = priceCents + feeAvoidedCents + taxCents`. */

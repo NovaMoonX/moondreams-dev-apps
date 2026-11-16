@@ -1,7 +1,10 @@
 import { doc, collection } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import { cancelReminder, scheduleReminder } from '@/lib/notifications/scheduleReminder';
+import {
+  cancelReminder,
+  scheduleReminder,
+} from '@/lib/notifications/scheduleReminder';
 import { TRAILER_REMINDER_DELAY_MINUTES } from '@apps/a-list/constants';
 
 /** Whether a showing's trailer push is still ahead of us. */
@@ -50,7 +53,9 @@ export async function scheduleTrailerReminder({
   }
 }
 
-export async function cancelTrailerReminder(reminderId: string | null | undefined) {
+export async function cancelTrailerReminder(
+  reminderId: string | null | undefined,
+) {
   if (!reminderId) {
     return;
   }

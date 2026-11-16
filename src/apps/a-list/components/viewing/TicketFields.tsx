@@ -202,6 +202,7 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
         draft={draft}
         theatreName={theatre?.name ?? null}
         shownTax={shown.tax}
+        hasTaxChoice={taxOptions !== null}
       />
       {ticket && (
         <p className='text-muted-foreground text-sm'>

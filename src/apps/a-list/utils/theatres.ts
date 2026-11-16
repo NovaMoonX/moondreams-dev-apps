@@ -69,4 +69,3 @@ export function createTypedTheatre(name: string): TheatreDraft {
     timeZone: null,
   };
 }
-

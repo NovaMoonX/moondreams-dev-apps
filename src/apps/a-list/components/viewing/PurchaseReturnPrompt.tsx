@@ -138,6 +138,7 @@ function PurchaseReturnPrompt({
             draft={draft}
             theatreName={viewing.theatre?.name ?? null}
             shownTax={shown.tax}
+            hasTaxChoice={getTaxOptions(draft, suggestion) !== null}
           />
           <p className='text-muted-foreground text-sm'>
             {suggestion.isFeeLearned || suggestion.isTaxLearned
