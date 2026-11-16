@@ -27,6 +27,7 @@ import type { GoalWhy } from '@apps/helm/utils/goalWhy';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 import type { PrivacyClass, PrivateMark } from '@apps/helm/utils/privacy';
+import type { SeenAsKind, SeenAsState } from '@apps/helm/engine/seenAs';
 import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
 
 export type { SharedKind };
@@ -1953,6 +1954,35 @@ export interface PatternSealed {
   statement: string;
   evidenceLine: string;
   reasonLine: string | null;
+}
+
+/** `seenAs/{lineId}`, id `sa_` + the first 24 hex of sha256(`seenAsIdInput`): one line of how the assistant sees the person, derived and citing its sources; the person's correction or removal survives every rebuild. */
+export interface SeenAsLine {
+  kind: SeenAsKind;
+  state: SeenAsState;
+  /** Two to 20 of `'patterns/{id}'`, `'observations/{id}'`, `'habits/{id}'`, `'style/{scope}#{traitKey}'`. */
+  sourceKeys: string[];
+  /** The habits, goals or who it is about, as `'habits/{id}'`, `'projects/{id}'` or `'who/{id}'`. */
+  subjectRefs: string[];
+  writtenBy: 'reflection' | 'person';
+  /** On Remove, the line's sources: no new line of the same kind may cite one of them. */
+  dontDrawFrom: string[];
+  derivedAt: number;
+  correctedAt: number | null;
+  removedAt: number | null;
+  privacy: PrivacyClass | null;
+  createdAt: number;
+  /** Null on a removed line past the cap, which keeps only its id. */
+  sealed: Sealed | null;
+}
+
+export interface SeenAsSealed {
+  /** 140 at most; on a removed line, the normalised claim. */
+  line: string;
+  /** Code-built, 120 at most: "From 6 things you said and 2 patterns". */
+  basis: string;
+  /** The person's own words, 140 at most. */
+  corrected: string | null;
 }
 
 export type ObservationSource = 'turn' | 'checkInNote' | 'followUp';
