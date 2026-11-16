@@ -4,7 +4,8 @@ export type ModelRole =
   | 'style'
   | 'topicWrite'
   | 'topicOverview'
-  | 'daySummary';
+  | 'daySummary'
+  | 'reflect';
 
 export interface ModelUsage {
   inputTokens: number;
@@ -65,7 +66,16 @@ const MODELS: Record<ModelRole, ModelSpec> = {
     hasServerFallback: false,
     price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
   },
+  reflect: {
+    id: 'claude-haiku-5-5',
+    effort: 'low',
+    hasServerFallback: false,
+    price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  },
 };
+
+/** A Message Batch is billed at half the price of the same call made at once. */
+const BATCH_PRICE_FACTOR = 0.5;
 
 export const getModelSpec = (role: ModelRole) => MODELS[role];
 
@@ -86,7 +96,11 @@ export const addUsage = (a: ModelUsage, b: ModelUsage): ModelUsage => ({
 const HUNDREDTHS_OF_A_CENT_PER_DOLLAR = 10_000;
 
 /** What a call cost, rounded up, in hundredths of a cent. */
-export function getUsageCost(role: ModelRole, usage: ModelUsage): number {
+export function getUsageCost(
+  role: ModelRole,
+  usage: ModelUsage,
+  { isBatch = false }: { isBatch?: boolean } = {},
+): number {
   const { price } = MODELS[role];
   const dollars =
     (usage.inputTokens * price.input +
@@ -94,5 +108,6 @@ export function getUsageCost(role: ModelRole, usage: ModelUsage): number {
       usage.cacheReadTokens * price.cacheRead +
       usage.cacheWriteTokens * price.cacheWrite) /
     1_000_000;
-  return Math.ceil(dollars * HUNDREDTHS_OF_A_CENT_PER_DOLLAR);
+  const billed = isBatch ? dollars * BATCH_PRICE_FACTOR : dollars;
+  return Math.ceil(billed * HUNDREDTHS_OF_A_CENT_PER_DOLLAR);
 }
