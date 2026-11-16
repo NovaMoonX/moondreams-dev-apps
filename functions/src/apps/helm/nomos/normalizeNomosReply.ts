@@ -1107,6 +1107,10 @@ const readQuietCommands = (
         isQuiet: item.isQuiet,
         until:
           until === null ? null : new Date(until).toISOString().slice(0, 10),
+        isUntilUnread:
+          item.isQuiet &&
+          until === null &&
+          typeof item.untilSpanId === 'string',
         isGuess,
       };
     });

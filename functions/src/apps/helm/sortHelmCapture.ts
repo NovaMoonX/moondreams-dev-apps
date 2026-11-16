@@ -65,7 +65,11 @@ import {
   MAX_MOMENTS_PER_WHO,
 } from './nomos/commands.js';
 import { namedMomentWhoIds, type KeyDateRecord } from './nomos/planKeyDates.js';
-import { readActiveProjectsIn, readContextProjects } from './projectStore.js';
+import {
+  readActiveProjectsIn,
+  readContextProjects,
+  readQuietProjectIds,
+} from './projectStore.js';
 import {
   openTopicRecord,
   readContextTopics,
@@ -1865,6 +1869,17 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             });
             return [];
           });
+    const quietProjectsRead =
+      mode === 'rest'
+        ? Promise.resolve({ ids: new Set<string>(), isComplete: true })
+        : readQuietProjectIds(firestore, base, key, today).catch(
+            (error) => {
+              logger.warn('helm.quiet.unknown', {
+                cause: error instanceof Error ? error.name : 'error',
+              });
+              return { ids: new Set<string>(), isComplete: false };
+            },
+          );
     const [
       topics,
       hintedNotes,
@@ -1995,9 +2010,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         hintedNotes,
       )),
     ];
-    const quietProjectIds = new Set(
-      projects.flatMap((project) => (project.isQuiet ? [project.id] : [])),
-    );
+    const quietProjects = await quietProjectsRead;
+    const quietProjectIds = quietProjects.ids;
+    if (!quietProjects.isComplete) {
+      logger.warn('helm.quiet.unknown', { cause: 'incomplete' });
+    }
     const quietOf = new Map([...taskQuiet, ...(screen?.quiet ?? [])]);
     const isTaskQuiet = (id: string) => {
       const entry = quietOf.get(id);
@@ -2015,26 +2032,29 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         isQuietOn(note.quietFacts, today) ||
         note.projectIds.some((id) => quietProjectIds.has(id)),
     }));
-    const quietIndex = buildQuietIndex([
-      ...[...quietOf].map(([id, entry]) => ({
-        kind: 'task' as const,
-        id,
-        name: entry.title,
-        isQuiet: isTaskQuiet(id),
-      })),
-      ...projects.map((project) => ({
-        kind: 'project' as const,
-        id: project.id,
-        name: project.name,
-        isQuiet: project.isQuiet === true,
-      })),
-      ...quietNotes.map((note) => ({
-        kind: 'note' as const,
-        id: note.id,
-        name: note.title,
-        isQuiet: note.isQuiet,
-      })),
-    ]);
+    const quietIndex = buildQuietIndex(
+      [
+        ...[...quietOf].map(([id, entry]) => ({
+          kind: 'task' as const,
+          id,
+          name: entry.title,
+          isQuiet: isTaskQuiet(id),
+        })),
+        ...projects.map((project) => ({
+          kind: 'project' as const,
+          id: project.id,
+          name: project.name,
+          isQuiet: project.isQuiet === true || quietProjectIds.has(project.id),
+        })),
+        ...quietNotes.map((note) => ({
+          kind: 'note' as const,
+          id: note.id,
+          name: note.title,
+          isQuiet: note.isQuiet,
+        })),
+      ],
+      !quietProjects.isComplete,
+    );
     const masked = maskContextRecords(unattendedMask, {
       facts,
       selfFacts,

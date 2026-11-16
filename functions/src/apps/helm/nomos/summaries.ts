@@ -225,12 +225,15 @@ export const buildQuietLine = (input: {
   name: string;
   isQuiet: boolean;
   isGuess: boolean;
+  isUntilUnread?: boolean;
 }) =>
   !input.isQuiet
     ? `Stopped keeping ${input.name} quiet`
-    : input.isGuess
-      ? `Kept ${input.name} quiet: it sounded like a surprise`
-      : `Kept ${input.name} quiet`;
+    : input.isUntilUnread
+      ? `Kept ${input.name} quiet until you turn it off`
+      : input.isGuess
+        ? `Kept ${input.name} quiet: it sounded like a surprise`
+        : `Kept ${input.name} quiet`;
 
 /** The result line of a note kept: "Saved a note: Cakes keep 3 days · Baking"; no topic part when it is in none. */
 export const buildNoteLine = (title: string, topicNames: string[]) =>

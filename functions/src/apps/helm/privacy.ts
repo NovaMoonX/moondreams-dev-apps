@@ -123,6 +123,8 @@ export const readPersonMark = (
     isCare: false,
     quietMark: null,
     quietUntil: null,
+    isQuietCleared:
+      (current.quietMark ?? null) !== null || current.isQuietCleared === true,
     isPrivacyCleared:
       current.privateMark === 'health' ||
       current.privateMark === 'care' ||
@@ -320,12 +322,17 @@ export const readSetQuiet = (input: {
       },
     };
   }
-  if (input.mark === 'guessed' && (current.isQuietCleared || isOn))
+  if (
+    input.mark === 'guessed' &&
+    (current.isQuietCleared || current.isPrivacyCleared || isOn)
+  )
     return { kind: 'unchanged' };
+  const until =
+    input.until !== null && input.until < input.today ? null : input.until;
   if (
     isOn &&
     current.quietMark === input.mark &&
-    (current.quietUntil ?? null) === input.until
+    (current.quietUntil ?? null) === until
   )
     return { kind: 'unchanged' };
   return {
@@ -335,7 +342,7 @@ export const readSetQuiet = (input: {
       privateMark: current.privateMark ?? 'person',
       isPrivacyCleared: false,
       quietMark: current.quietMark === 'person' ? 'person' : input.mark,
-      quietUntil: input.until,
+      quietUntil: until,
       isQuietCleared: false,
     },
   };

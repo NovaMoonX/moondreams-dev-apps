@@ -26,6 +26,7 @@ import {
   type MaskedName,
 } from '../../functions/src/apps/helm/nomos/unattended.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import { buildQuietLine } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import {
   buildQuietIndex,
   isQuietTurn,
@@ -78,6 +79,14 @@ const mark = (words: string, current: PrivacyFacts = NONE, isCare = false) =>
     isSensitiveHealth: false,
     words,
   });
+
+const makeIdCounter = () => {
+  const made = { count: 0 };
+  return () => {
+    made.count += 1;
+    return `id-${made.count}`;
+  };
+};
 
 test('a record from before the field reads as ordinary', () => {
   assert.equal(readPrivacy(undefined), 'ordinary');
@@ -1453,6 +1462,7 @@ test('a quiet request is kept with a quote copied from the capture, whatever wor
       isNew: false,
       isQuiet: true,
       until: null,
+      isUntilUnread: false,
       isGuess: false,
     },
   ]);
@@ -1497,6 +1507,7 @@ const quietCommand = (over: Record<string, unknown>) => ({
   isNew: true,
   isQuiet: true,
   until: '2026-12-01',
+  isUntilUnread: false,
   isGuess: true,
   ...over,
 });
@@ -1523,10 +1534,7 @@ test('a project made quiet in the same reply is stored quiet and private, with i
     executionId: 'exec-1',
     now: 5000,
     seal: seal as never,
-    newId: (() => {
-      let next = 0;
-      return () => `id-${(next += 1)}`;
-    })(),
+    newId: makeIdCounter(),
   });
   assert.equal(plan.projectCreates.length, 1);
   const [made] = plan.projectCreates;
@@ -1542,6 +1550,72 @@ test('a project made quiet in the same reply is stored quiet and private, with i
   assert.deepEqual(plan.quietLines, [
     'Kept Anniversary trip quiet: it sounded like a surprise',
   ]);
+});
+
+test('an end day that cannot be read keeps it quiet until released, and says so', () => {
+  const words = "don't let Sam hear about the ring";
+  const kept = quietReply(words, [
+    setQuiet('t1', { requestQuote: words, untilSpanId: 'nowhere' }),
+  ]);
+  assert.equal(kept.quietCommands[0]?.until, null);
+  assert.equal(kept.quietCommands[0]?.isUntilUnread, true);
+  assert.equal(
+    buildQuietLine({
+      name: 'Gift',
+      isQuiet: true,
+      isGuess: false,
+      isUntilUnread: true,
+    }),
+    'Kept Gift quiet until you turn it off',
+  );
+});
+
+test('a project with more tasks than fit says how many stay quiet through it', () => {
+  const plan = planWrites({
+    commands: [],
+    quietCommands: [
+      quietCommand({
+        targetId: 'project-1',
+        isNew: false,
+        isGuess: false,
+        until: null,
+      }) as never,
+    ],
+    today: DAY,
+    existingProjects: [
+      {
+        id: 'project-1',
+        name: 'Anniversary trip',
+        emoji: null,
+        whoRoles: {},
+        roleNotes: {},
+        milestoneState: {},
+        milestoneTitles: {},
+        sealed: { name: 'Anniversary trip' },
+      },
+    ],
+    projectTasks: new Map([
+      [
+        'project-1',
+        Array.from({ length: 200 }, (_, index) => ({
+          id: `task-${index}`,
+          title: `Task ${index}`,
+          privacy: null,
+        })),
+      ],
+    ]),
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: 5000,
+    seal: seal as never,
+    newId: () => 'new-1',
+  });
+  assert.equal(plan.quietLines.length, 2);
+  assert.match(
+    plan.quietLines[1],
+    /^\d+ of Anniversary trip's tasks stay quiet through it$/,
+  );
 });
 
 test('keeping a stored project quiet writes an Undo effect and makes its open tasks private', () => {
@@ -1683,6 +1757,17 @@ test('a turn is quiet when a command, a touched record, an answer source, a name
   assert.equal(turn({ sourceKeys: ['project:p1'] }), true);
   assert.equal(turn({ sourceKeys: ['task:t1'] }), false);
   assert.equal(turn({ texts: ['Added to Anniversary trip.'] }), true);
+  assert.equal(
+    isQuietTurn({
+      index: buildQuietIndex([], true),
+      hasQuietCommand: false,
+      touchesQuiet: false,
+      keepQuiet: false,
+      sourceKeys: [],
+      texts: ['Moved the dentist visit.'],
+    }),
+    true,
+  );
 });
 
 const failures = (

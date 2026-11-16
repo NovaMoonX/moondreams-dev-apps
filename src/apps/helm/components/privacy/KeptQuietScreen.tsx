@@ -4,7 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import {
   CalendarClock,
   ChevronRight,
-  ExternalLink,
+  ArrowUpRight,
   VolumeX,
 } from 'lucide-react';
 
@@ -87,12 +87,12 @@ function QuietRowButton({
       className='flex h-auto w-full items-center justify-between gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
       onClick={onOpen}
     >
-      <span className='min-w-0 flex-1'>
-        <span className='text-foreground line-clamp-2 block text-[15px] leading-[21px] break-words'>
+      <span className='flex min-w-0 flex-1 flex-col'>
+        <span className='text-foreground line-clamp-2 text-[15px] leading-[21px] break-words'>
           {item.title}
         </span>
         <span className='text-muted-foreground block text-[13px]'>
-          {`${who} · ${readQuietEndClause(item.until)}`}
+          {`${HELM_COPY.quietKind[item.kind]} · ${who} · ${readQuietEndClause(item.until)}`}
         </span>
       </span>
       <ChevronRight
@@ -197,8 +197,8 @@ function QuietItemSheet({
             />
             <ActionRow
               isGrouped
-              icon={<ExternalLink />}
-              label={HELM_COPY.quietOpen}
+              icon={<ArrowUpRight />}
+              label={HELM_COPY.quietOpen(item.kind)}
               onClick={onOpenRecord}
             />
           </ActionGroup>

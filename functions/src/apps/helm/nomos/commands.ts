@@ -287,6 +287,8 @@ export interface SetQuietCommand {
   isQuiet: boolean;
   /** The last quiet day (YYYY-MM-DD, in the person's zone); null keeps it quiet until released. */
   until: string | null;
+  /** An end day was asked for but could not be read as one, so it stays quiet until released. */
+  isUntilUnread: boolean;
   /** The assistant read it as a secret; the person did not ask. A guess only ever keeps quiet. */
   isGuess: boolean;
 }

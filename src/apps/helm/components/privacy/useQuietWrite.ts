@@ -41,6 +41,17 @@ export function useQuietWrite(
         addToast({ title: HELM_COPY.privateNeedsConnection, type: 'info' });
         return false;
       }
+      if (result.kind === 'saved' && result.isCascadeIncomplete) {
+        addToast({
+          title: HELM_COPY.privateCascadePartial,
+          type: 'error',
+          action: {
+            label: HELM_COPY.tryAgain,
+            onClick: () => void write(isQuiet, until, toastTitle),
+          },
+        });
+        return true;
+      }
       if (result.kind === 'saved') {
         addToast({
           title: toastTitle,

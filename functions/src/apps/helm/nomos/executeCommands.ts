@@ -1303,6 +1303,7 @@ export function planWrites(input: PlanInput): WritePlan {
         name,
         isQuiet: command.isQuiet,
         isGuess: command.isGuess,
+        isUntilUnread: command.isUntilUnread,
       }),
     );
     return outcome.facts;
@@ -1436,18 +1437,23 @@ export function planWrites(input: PlanInput): WritePlan {
     });
     if (!command.isQuiet) return;
     const room = Math.max(0, MAX_EFFECTS - effects.length - drafts.size);
-    (input.projectTasks?.get(projectId) ?? [])
-      .filter((task) => task.privacy !== 'private')
-      .slice(0, room)
-      .forEach((task) => {
-        record(
-          task.id,
-          'update',
-          { 'sealed.title': task.title, privacy: 'private' },
-          { 'sealed.title': task.title, privacy: 'ordinary' },
-        );
-        patch(task.id, { privacy: 'private', lastEditedAt: now });
-      });
+    const unmarked = (input.projectTasks?.get(projectId) ?? []).filter(
+      (task) => task.privacy !== 'private',
+    );
+    if (unmarked.length > room) {
+      quietLines.push(
+        `${unmarked.length - room} of ${project.name}'s tasks stay quiet through it`,
+      );
+    }
+    unmarked.slice(0, room).forEach((task) => {
+      record(
+        task.id,
+        'update',
+        { 'sealed.title': task.title, privacy: 'private' },
+        { 'sealed.title': task.title, privacy: 'ordinary' },
+      );
+      patch(task.id, { privacy: 'private', lastEditedAt: now });
+    });
   });
   const createdFacts =
     quietNew.get(projectStart.created?.command.ref ?? '') ?? null;

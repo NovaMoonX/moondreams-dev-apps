@@ -6,7 +6,7 @@ export const findHeldLine = (
   captures: readonly Pick<OpenCapture, 'heldLine'>[],
   executions: readonly Pick<OpenExecution, 'heldSpoken'>[],
 ) =>
-  captures.find((capture) => capture.heldLine !== null)?.heldLine ??
+  captures.find((capture) => (capture.heldLine ?? null) !== null)?.heldLine ??
   executions.find((execution) => (execution.heldSpoken ?? null) !== null)
     ?.heldSpoken ??
   null;

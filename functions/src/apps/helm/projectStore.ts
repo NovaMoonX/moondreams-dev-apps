@@ -130,6 +130,26 @@ export async function readActiveProjectsIn(
   );
 }
 
+/** Which active projects are quiet, across every project the read covers; `isComplete` is false when a project could not be opened or the read hit its limit, so a quiet one may be missing. */
+export async function readQuietProjectIds(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  today: string,
+): Promise<{ ids: Set<string>; isComplete: boolean }> {
+  const docs = (await activeQuery(firestore, base).get()).docs;
+  const opened = openProjects(key, docs);
+  return {
+    ids: new Set(
+      opened.flatMap((project) =>
+        isQuietOn(readQuietFacts(project.sealed), today) ? [project.id] : [],
+      ),
+    ),
+    isComplete:
+      opened.length === docs.length && docs.length < MAX_PROJECTS_READ,
+  };
+}
+
 /** The active projects, newest first, each with its open milestones (soonest first, undated last), for the model to point a task or a milestone at. */
 export async function readContextProjects(
   firestore: Firestore,

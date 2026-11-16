@@ -41,15 +41,19 @@ export const toQuietKey = (kind: QuietKind, id: string) => `${kind}:${id}`;
 export interface QuietIndex {
   keys: Set<string>;
   names: string[];
+  /** Some quiet marks could not be read, so nothing can be said to be not quiet. */
+  isUnknown: boolean;
 }
 
 export const buildQuietIndex = (
   things: { kind: QuietKind; id: string; name: string; isQuiet: boolean }[],
+  isUnknown = false,
 ): QuietIndex => {
   const quiet = things.filter((thing) => thing.isQuiet);
   return {
     keys: new Set(quiet.map((thing) => toQuietKey(thing.kind, thing.id))),
     names: [...new Set(quiet.map((thing) => thing.name))],
+    isUnknown,
   };
 };
 
@@ -66,6 +70,7 @@ export const isQuietTurn = (input: {
   input.hasQuietCommand ||
   input.touchesQuiet ||
   input.keepQuiet ||
+  input.index.isUnknown ||
   input.sourceKeys.some((key) => input.index.keys.has(key)) ||
   input.texts.some(
     (text) =>

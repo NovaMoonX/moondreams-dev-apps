@@ -386,15 +386,25 @@ export async function setQuiet(
     kind: 'saved',
     isCascadeIncomplete,
     undo: async () => {
-      await writePrivacy(
+      const { previous } = written;
+      const putBack = await writePrivacy(
         uid,
         encryption,
         kind,
         id,
-        () => written.previous,
+        (facts) => ({
+          ...facts,
+          privateMark: previous.privateMark,
+          isPrivacyCleared: previous.isPrivacyCleared,
+          quietMark: previous.quietMark ?? null,
+          quietUntil: previous.quietUntil ?? null,
+          isQuietCleared: previous.isQuietCleared ?? false,
+        }),
         parentFacts,
       );
-      await cascade(written.previous);
+      if (putBack.kind !== 'saved')
+        throw new Error(`The quiet change was not put back: ${putBack.kind}`);
+      await cascade(putBack.next);
     },
   };
 }

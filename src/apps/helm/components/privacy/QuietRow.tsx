@@ -87,7 +87,7 @@ function QuietRow({ kind, record, title, onOpenParent }: QuietRowProps) {
 
   const isDayUsable = day !== '' && day >= today;
   return (
-    <div className='mt-3'>
+    <div className='border-border mt-3 border-t pt-3'>
       <div className='flex items-center gap-3'>
         <VolumeX
           className='text-muted-foreground size-[18px] shrink-0'
@@ -98,7 +98,9 @@ function QuietRow({ kind, record, title, onOpenParent }: QuietRowProps) {
             {HELM_COPY.quietRowTitle}
           </p>
           <p className='text-muted-foreground text-[13px]'>
-            {HELM_COPY.quietRowSubtitle}
+            {kind === 'project'
+              ? HELM_COPY.quietRowSubtitleProject
+              : HELM_COPY.quietRowSubtitle}
           </p>
         </div>
         <AppToggle
