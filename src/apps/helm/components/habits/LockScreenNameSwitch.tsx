@@ -16,6 +16,9 @@ function LockScreenNameSwitch({ habit }: LockScreenNameSwitchProps) {
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const isOn = habit.lockScreenName !== null;
+  const firstPart =
+    Object.values(habit.windowState).sort((a, b) => a.order - b.order)[0]
+      ?.part ?? null;
 
   const change = async (isShown: boolean) => {
     if (!user) return;
@@ -54,7 +57,9 @@ function LockScreenNameSwitch({ habit }: LockScreenNameSwitchProps) {
         <p className='text-muted-foreground text-[13px] break-words'>
           {isOn
             ? HELM_COPY.lockScreenNameOn(habit.name)
-            : HELM_COPY.lockScreenNameOff(HELM_COPY.lockScreenNameOffWords)}
+            : HELM_COPY.lockScreenNameOff(
+                HELM_COPY.lockScreenNameOffWords(firstPart),
+              )}
         </p>
       </div>
       <AppToggle

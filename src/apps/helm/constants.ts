@@ -1,6 +1,7 @@
 import { formatList } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type { ThemeOption } from '@/components/ThemePicker';
+import type { DayPart } from '@apps/helm/engine/habitDay';
 import type {
   AssistantTone,
   HelmTheme,
@@ -3644,7 +3645,10 @@ export const HELM_COPY = {
   lockScreenNameSection: 'On the lock screen',
   lockScreenNameTitle: 'Show its name on the lock screen',
   lockScreenNameOff: (words: string) => `Off: “${words}”.`,
-  lockScreenNameOffWords: 'Time for your evening habit',
+  lockScreenNameOffWords: (part: DayPart | null) =>
+    part === null
+      ? 'A habit is waiting for you'
+      : `Time for your ${part} habit`,
   lockScreenNameWarning:
     "A name shown here isn't sealed like the rest of your things. A readable copy is kept so the reminder can show it, it passes through Google's push service (Apple's on an iPhone), and anyone who picks up this device can read it.",
   lockScreenNameOn: (name: string) => `On: “${name}”.`,
