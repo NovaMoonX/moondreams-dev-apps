@@ -5,6 +5,14 @@ import {
   type Transaction,
 } from 'firebase-admin/firestore';
 
+export const REFLECT_BATCH = {
+  jobId: 'reflect',
+  /** Longest an answer may take, in hours; a batch offers 24. */
+  maxWaitHours: 24,
+  maxAttempts: 3,
+  deleteAfterCollect: true,
+} as const;
+
 export const RUNS_PATH = 'apps/helm/reflectionRuns';
 export const OPEN_RUN_STATUSES = ['creating', 'submitted'];
 export const statePath = (uid: string) =>

@@ -64,6 +64,7 @@ import {
   selectShownObservations,
   selectShownReflections,
 } from '@apps/helm/store/selectors/patternSelectors';
+import { readUndoFields } from '@apps/helm/nomos/planUndo';
 import type { UndoResult } from '@apps/helm/nomos/undoExecution';
 import type {
   Execution,
@@ -1028,17 +1029,24 @@ export async function undoPatternExecution(
             encryption,
           ),
         } satisfies Execution);
+        const earlier = readUndoFields(original);
+        const undoneDocIds = [
+          ...new Set([
+            ...earlier.undoneDocIds,
+            ...original.effectRefs.map((effect) => effect.docId),
+          ]),
+        ];
         transaction.update(executionRef, {
           undoneByExecutionId: undoRef.id,
-          undoneDocIds: [ref.docId],
-          partUndoIds: [undoRef.id],
+          undoneDocIds,
+          partUndoIds: [...earlier.partUndoIds, undoRef.id],
         });
         return {
           kind: 'done',
           undoExecutionId: undoRef.id,
           report: HELM_COPY.patternTookBackReport,
           isFinal: true,
-          undoneDocIds: [ref.docId],
+          undoneDocIds,
           objectPaths: [],
         };
       },
