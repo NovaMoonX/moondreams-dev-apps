@@ -912,7 +912,6 @@ export function useVoiceConversation({
     },
   ): Promise<VoiceSpoken> => {
     endFollowUp(true);
-    // A muted live conversation still shows each answer as its last line.
     if (
       latest.current.isMuted &&
       run.current.isLive &&

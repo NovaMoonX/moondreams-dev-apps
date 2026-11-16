@@ -42,7 +42,6 @@ const keepTabInside = (event: KeyboardEvent<HTMLDivElement>) => {
   (event.shiftKey ? last : first).focus();
 };
 
-/** The screen of a live conversation: a glow that breathes while it listens, swells with each new word, drifts while it works and shimmers while it speaks; the current exchange in large text; Mic off and End. */
 function LiveConversation() {
   const voice = useHelmVoiceContext();
   const name = useAssistantName();
