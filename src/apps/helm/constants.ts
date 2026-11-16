@@ -1649,10 +1649,12 @@ export const HELM_COPY = {
       : `About ${count} thorough ${count === 1 ? 'look' : 'looks'} left this month`,
   aheadStatement: (subject: string, project: string) =>
     `Want me to look into ${subject} before ${project}?`,
-  aheadDateReason: (date: string, weeks: number, project: string) =>
-    weeks <= 1
-      ? `${project}'s date is ${date}, this week or next.`
-      : `${project}'s date is ${date}, ${weeks} weeks from now.`,
+  aheadDateReason: (date: string, days: number, project: string) =>
+    days <= 1
+      ? `${project}'s date is ${date}, tomorrow.`
+      : days < 14
+        ? `${project}'s date is ${date}, in ${days} days.`
+        : `${project}'s date is ${date}, ${Math.round(days / 7)} weeks from now.`,
   aheadAsk: 'Ask me a few things first',
   aheadNotNow: 'Not now',
   aheadNotNowToast: (weeks: number | null) =>
@@ -1674,11 +1676,15 @@ export const HELM_COPY = {
   aheadDepthThoroughLine: (left: number) =>
     `Reads more widely · about ${left} thorough ${left === 1 ? 'look' : 'looks'} left this month`,
   aheadStartNow: 'Start now',
-  aheadStartNowLine: 'Instead of having it ready by morning',
+  aheadStartNowLine: (arrival: string | null) =>
+    arrival === null
+      ? 'Ready by morning. Turn this on to start right away.'
+      : `Starts right away. ${arrival}`,
   aheadSend: 'Look into it',
   aheadCancel: 'Cancel',
   aheadSendFailed: "Couldn't send that. Check your connection and try again.",
   aheadGone: 'This offer is no longer here.',
+  aheadAlreadyAnswered: 'That was already answered.',
   aheadArrival: {
     fewMinutes: 'Ready in a few minutes.',
     fiveToTen: 'Ready in about 5 to 10 minutes.',

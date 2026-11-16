@@ -913,10 +913,13 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
     projectIds.map(async (id, index) => {
       const isDone = index % 10 === 9;
       const finishedAt = isDone ? now - between(10, 300) * DAY_MS : null;
+      const targetDate = isDone ? null : dayStart(now + between(5, 365) * DAY_MS);
+      const hasOffer = !isDone && index % 8 === 0;
+      const offerId = `scale-ahead-${pad(index, 3)}`;
       const project: Project = {
         privacy: isPrivateProject(index) ? 'private' : 'ordinary',
         kind: 'project',
-        targetDate: isDone ? null : dayStart(now + between(5, 365) * DAY_MS),
+        targetDate: hasOffer ? dayStart(now) + 30 * DAY_MS : targetDate,
         status: isDone ? 'finished' : 'active',
         pausedAt: null,
         pausedUntil: null,
@@ -938,9 +941,46 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         createdAt: now - between(30, 700) * DAY_MS,
         lastEditedAt: null,
         finishedAt,
-        researchOffers: [],
+        researchOffers: hasOffer
+          ? [
+              {
+                id: offerId,
+                leadDays: 30,
+                offerOn: dayStart(now),
+                state: 'waiting',
+                declineCount: 0,
+                nextEligibleOn: null,
+                shownOn: null,
+                researchId: null,
+                toldAt: null,
+                createdAt: now - 2 * DAY_MS,
+              },
+            ]
+          : [],
         sealed: await seal<ProjectSealed>({
-          aheadAsks: null,
+          aheadAsks: hasOffer
+            ? {
+                [offerId]: {
+                  subject: 'what to plan for',
+                  question: 'What would help most to plan ahead for this?',
+                  whyNow: null,
+                  isDecision: false,
+                  questions: [
+                    {
+                      id: 'focus',
+                      label: 'What matters most',
+                      shape: 'text',
+                      options: [],
+                      prefill: [],
+                      from: null,
+                      isInferred: false,
+                    },
+                  ],
+                  answers: null,
+                  brief: null,
+                },
+              }
+            : null,
           name: `${PROJECT_NAMES[index % 10]}${index >= 10 ? ` ${Math.floor(index / 10) + 1}` : ''}`,
           emoji: index % 3 === 0 ? '🛠️' : null,
           objective:

@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -36,7 +36,10 @@ import {
   type LeadQuestion,
 } from '@apps/helm/engine/researchAhead';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { sendAheadOffer } from '@apps/helm/store/actions/aheadActions';
+import {
+  AheadAnsweredError,
+  sendAheadOffer,
+} from '@apps/helm/store/actions/aheadActions';
 import type { AheadAsk, OpenProject } from '@apps/helm/types';
 import { readThoroughLeft } from '@apps/helm/utils/researchWords';
 
@@ -52,6 +55,13 @@ type Draft =
   | { kind: 'text'; text: string }
   | { kind: 'picks'; picks: string[] }
   | { kind: 'range'; min: string; max: string };
+
+/** A pick question whose prefill names nothing among its options has nothing ticked, so it says nothing was filled. */
+const settleQuestion = (question: LeadQuestion): LeadQuestion =>
+  (question.shape === 'pickOne' || question.shape === 'pickMany') &&
+  !question.prefill.some((pick) => question.options.includes(pick))
+    ? { ...question, prefill: [], from: null }
+    : question;
 
 const toStartDraft = (question: LeadQuestion): Draft => {
   if (question.shape === 'text') {
@@ -87,8 +97,9 @@ const toAnswer = (draft: Draft): LeadAnswer => {
   }
   const minCents = parseMoneyToCents(draft.min);
   const maxCents = parseMoneyToCents(draft.max);
-  return minCents === null && maxCents === null
-    ? { kind: 'skipped' }
+  if (minCents === null && maxCents === null) return { kind: 'skipped' };
+  return minCents !== null && maxCents !== null && minCents > maxCents
+    ? { kind: 'range', minCents: maxCents, maxCents: minCents }
     : { kind: 'range', minCents, maxCents };
 };
 
@@ -147,7 +158,8 @@ function DepthRow({
         'border-border flex h-auto min-h-12 w-full items-start justify-start gap-3 rounded-xl border px-3.5 py-2.5 text-left font-normal',
         isSelected && !isLocked && 'border-primary bg-primary/5',
       )}
-      aria-pressed={isSelected}
+      role='radio'
+      aria-checked={isSelected && !isLocked}
       onClick={isLocked ? undefined : onPick}
     >
       <span
@@ -194,9 +206,13 @@ function AheadForm({
   const now = useNow(60_000);
   const profile = useAppSelector((state) => state.helm.profile);
   const timeZone = profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
+  const questions = useMemo(
+    () => ask.questions.map(settleQuestion),
+    [ask.questions],
+  );
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
     Object.fromEntries(
-      ask.questions.map((question) => [question.id, toStartDraft(question)]),
+      questions.map((question) => [question.id, toStartDraft(question)]),
     ),
   );
   const allowance = readResearchAllowance(
@@ -225,20 +241,21 @@ function AheadForm({
       : picked;
   const [isNow, setIsNow] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const isSendingRef = useRef(false);
 
   const answers = useMemo(
     () =>
       Object.fromEntries(
-        ask.questions.map((question) => [
+        questions.map((question) => [
           question.id,
           toAnswer(drafts[question.id] ?? toStartDraft(question)),
         ]),
       ),
-    [ask.questions, drafts],
+    [questions, drafts],
   );
   const brief = buildAheadBrief({
     subject: ask.subject,
-    questions: ask.questions,
+    questions,
     answers,
     depth,
   });
@@ -257,10 +274,11 @@ function AheadForm({
   };
 
   const send = async () => {
-    if (!user || isSending) return;
+    if (!user || isSendingRef.current) return;
+    isSendingRef.current = true;
     setIsSending(true);
     try {
-      const { write } = await sendAheadOffer(user.uid, {
+      await sendAheadOffer(user.uid, {
         projectId: project.id,
         offerId: offer.id,
         ask,
@@ -269,10 +287,6 @@ function AheadForm({
         depth,
         isNow,
         assistantName: assistant,
-      });
-      write.catch((error: unknown) => {
-        console.error('Helm ahead research was not sent', error);
-        addToast({ title: HELM_COPY.aheadSendFailed, type: 'error' });
       });
       addToast({
         title: HELM_COPY.aheadSent(
@@ -285,8 +299,14 @@ function AheadForm({
       onClose();
     } catch (error) {
       console.error('Helm ahead research was not sent', error);
-      addToast({ title: HELM_COPY.aheadSendFailed, type: 'error' });
+      isSendingRef.current = false;
       setIsSending(false);
+      if (error instanceof AheadAnsweredError) {
+        addToast({ title: HELM_COPY.aheadAlreadyAnswered, type: 'info' });
+        onClose();
+        return;
+      }
+      addToast({ title: HELM_COPY.aheadSendFailed, type: 'error' });
     }
   };
 
@@ -379,11 +399,11 @@ function AheadForm({
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.aheadOptional}
       </p>
-      {ask.questions.map(renderField)}
+      {questions.map(renderField)}
       {isAsking && (
         <div
           className='space-y-2'
-          role='group'
+          role='radiogroup'
           aria-label={HELM_COPY.aheadDepthLabel}
         >
           <p className='text-sm font-medium'>{HELM_COPY.aheadDepthLabel}</p>
@@ -418,7 +438,11 @@ function AheadForm({
         <div className='min-w-0 flex-1'>
           <p className='text-[15px] font-medium'>{HELM_COPY.aheadStartNow}</p>
           <p className='text-muted-foreground text-[13px] text-pretty'>
-            {HELM_COPY.aheadStartNowLine}
+            {HELM_COPY.aheadStartNowLine(
+              isNow
+                ? HELM_COPY.aheadArrival[readResearchArrival(depth, 'now')]
+                : null,
+            )}
           </p>
         </div>
         <AppToggle

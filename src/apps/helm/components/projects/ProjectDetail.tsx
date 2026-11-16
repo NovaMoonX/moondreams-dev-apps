@@ -20,7 +20,10 @@ import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import DoneTasksFold from '@apps/helm/components/projects/DoneTasksFold';
 import AheadLines from '@apps/helm/components/projects/AheadLines';
-import AheadOfferCard from '@apps/helm/components/projects/AheadOfferCard';
+import AheadOfferCard, {
+  type AheadSheetTarget,
+} from '@apps/helm/components/projects/AheadOfferCard';
+import AheadSheet from '@apps/helm/components/projects/AheadSheet';
 import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import ImportancePlaceRow from '@apps/helm/components/importance/ImportancePlaceRow';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
@@ -104,6 +107,8 @@ function ProjectDetail({
     project && project.status === 'active'
       ? pickAheadOffer(project.researchOffers, project.targetDate, todayUtc)
       : null;
+  const [aheadTarget, setAheadTarget] = useState<AheadSheetTarget | null>(null);
+  const [isAheadOpen, setIsAheadOpen] = useState(false);
   const [tab, setTab] = useState<ProjectTab>('tasks');
   const [isAllTasks, setIsAllTasks] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -489,6 +494,17 @@ function ProjectDetail({
                 project={project}
                 offer={aheadOffer}
                 today={todayUtc}
+                onOpen={(target) => {
+                  setAheadTarget(target);
+                  setIsAheadOpen(true);
+                }}
+              />
+            )}
+            {aheadTarget && (
+              <AheadSheet
+                isOpen={isAheadOpen}
+                onClose={() => setIsAheadOpen(false)}
+                {...aheadTarget}
               />
             )}
             {isGoal && !isFinished && tidyOffer && (

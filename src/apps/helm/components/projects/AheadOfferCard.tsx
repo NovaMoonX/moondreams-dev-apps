@@ -1,21 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { CalendarDays, Lightbulb } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
-import AheadSheet from '@apps/helm/components/projects/AheadSheet';
-import { HELM_COPY } from '@apps/helm/constants';
-import {
-  weeksUntil,
-  type AheadOfferMeta,
-} from '@apps/helm/engine/researchAhead';
+import { DAY_MS, HELM_COPY } from '@apps/helm/constants';
+import type { AheadOfferMeta } from '@apps/helm/engine/researchAhead';
 import {
   markAheadShown,
   notNowAhead,
 } from '@apps/helm/store/actions/aheadActions';
-import type { OpenProject } from '@apps/helm/types';
+import type { AheadAsk, OpenProject } from '@apps/helm/types';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 
 interface AheadOfferCardProps {
@@ -25,6 +21,14 @@ interface AheadOfferCardProps {
   today: number;
   /** Set on Today: the first showing stamps the offer, so Today offers it once. */
   dayKey?: string;
+  /** Opens the questions; the parent holds the sheet so typed work outlives this card. */
+  onOpen: (target: AheadSheetTarget) => void;
+}
+
+export interface AheadSheetTarget {
+  project: OpenProject;
+  offer: AheadOfferMeta;
+  ask: AheadAsk;
 }
 
 /** Research offered ahead of a project's date, in the offer card's dashed look: Ask me a few things first opens the questions, and Not now sits apart below a hairline. */
@@ -33,10 +37,10 @@ function AheadOfferCard({
   offer,
   today,
   dayKey,
+  onOpen,
 }: AheadOfferCardProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
   const marked = useRef<string | null>(null);
   const ask = project.aheadAsks?.[offer.id] ?? null;
 
@@ -76,7 +80,7 @@ function AheadOfferCard({
           <span className='min-w-0 break-words'>
             {HELM_COPY.aheadDateReason(
               formatWeekdayDayUTC(project.targetDate),
-              weeksUntil(project.targetDate, today),
+              Math.round((project.targetDate - today) / DAY_MS),
               project.name,
             )}
           </span>
@@ -91,7 +95,11 @@ function AheadOfferCard({
           </li>
         )}
       </ul>
-      <Button type='button' className='w-full' onClick={() => setIsOpen(true)}>
+      <Button
+        type='button'
+        className='w-full'
+        onClick={() => onOpen({ project, offer, ask })}
+      >
         {HELM_COPY.aheadAsk}
       </Button>
       <div className='border-border flex justify-center border-t pt-3'>
@@ -99,13 +107,6 @@ function AheadOfferCard({
           {HELM_COPY.aheadNotNow}
         </Button>
       </div>
-      <AheadSheet
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-        project={project}
-        offer={offer}
-        ask={ask}
-      />
     </section>
   );
 }

@@ -2684,7 +2684,7 @@ async function buildPartnerLearn(input: { now: number; encryption: HelmEncryptio
   ]);
 }
 
-/** Jamie's 🌱 Garden project with one offer already taken: its look into raised beds is ready with a topic filed, and Jamie has not been told yet, so the project page shows "Looked into raised beds for you." with Open it. */
+/** Jamie's 🌱 Garden project with one offer already taken: its look into raised beds is ready with a topic filed, and Jamie has not been told yet, so the project page shows "Looked into raised beds for you." with Open it; and a 🎉 Family reunion project dated 24 days out with a second offer waiting and due today (a reunion place, three questions, nothing prefilled), already shown on a past Today so it stays on the project's page and Jamie's Today keeps the learn card, for a second reviewer to answer untouched. */
 async function buildPartnerAhead(input: { now: number; encryption: HelmEncryption }) {
   const { now, encryption } = input;
   const today = getSeedToday(now);
@@ -2821,7 +2821,79 @@ async function buildPartnerAhead(input: { now: number; encryption: HelmEncryptio
       encryption,
     ),
   };
-  return { project, research, topic };
+  const reunion = {
+    ...project,
+    targetDate: today + 24 * DAY_MS,
+    createdAt: now - 9 * DAY_MS,
+    researchOffers: [
+      {
+        id: 'seed-ahead-reunion',
+        leadDays: 24,
+        offerOn: today,
+        state: 'waiting' as const,
+        declineCount: 0,
+        nextEligibleOn: null,
+        shownOn: new Date(today - DAY_MS).toISOString().slice(0, 10),
+        researchId: null,
+        toldAt: null,
+        createdAt: now - 2 * DAY_MS,
+      },
+    ],
+    sealed: await sealJson<ProjectSealed>(
+      {
+        name: 'Family reunion',
+        emoji: '🎉',
+        objective: null,
+        milestones: {},
+        roleNotes: {},
+        why: null,
+        importance: null,
+        privateMark: null,
+        isPrivacyCleared: false,
+        aheadAsks: {
+          'seed-ahead-reunion': {
+            subject: 'reunion places',
+            question: 'Where could a family reunion for about twenty people happen?',
+            whyNow: 'Nothing in Family reunion says where it will be yet.',
+            isDecision: true,
+            questions: [
+              {
+                id: 'kind',
+                label: 'Kind of place',
+                shape: 'pickOne',
+                options: ['Lake house', 'Backyard', 'Restaurant room'],
+                prefill: [],
+                from: null,
+                isInferred: false,
+              },
+              {
+                id: 'guests',
+                label: 'Who is coming',
+                shape: 'text',
+                options: [],
+                prefill: [],
+                from: null,
+                isInferred: false,
+              },
+              {
+                id: 'budget',
+                label: 'Budget',
+                shape: 'amountRange',
+                options: [],
+                prefill: [],
+                from: null,
+                isInferred: false,
+              },
+            ],
+            answers: null,
+            brief: null,
+          },
+        },
+      },
+      encryption,
+    ),
+  };
+  return { project, research, topic, reunion };
 }
 
 /** Alex's habits for the week that holds today: 💊 Pills (morning and evening, health: 10 of 12 Monday to Saturday when today is a Sunday, the morning ticked today, so "11 of 13"), 💧 Water (6 a day, 4 of 6 days), 🎸 Guitar (3 times a week) and Mom's metoprolol (a care habit, private) and 🧘 Stretch (a morning window left unticked today, so "Window ended" shows once it has passed). */
@@ -7532,6 +7604,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           batch.set(
             person.collection('projects').doc('seed-project-jamie-garden'),
             partnerAhead.project,
+          );
+          batch.set(
+            person.collection('projects').doc('seed-project-jamie-reunion'),
+            partnerAhead.reunion,
           );
           batch.set(
             person

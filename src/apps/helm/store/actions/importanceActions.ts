@@ -1,4 +1,10 @@
-import { collection, doc, writeBatch } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  type DocumentReference,
+  getDoc,
+  writeBatch,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -14,14 +20,16 @@ import {
   type ImportancePlace,
   type ImportanceRelation,
 } from '@apps/helm/engine/importance';
-import { sealJson } from '@apps/helm/security';
+import { openJson, sealJson } from '@apps/helm/security';
 import { selectImportanceItems } from '@apps/helm/store/selectors/importanceSelectors';
 import type {
   HabitSealed,
   HelmEncryption,
   OpenHabit,
   OpenProject,
+  Project,
   ProjectSealed,
+  Sealed,
 } from '@apps/helm/types';
 
 const BATCH_MAX = 399;
@@ -78,7 +86,20 @@ interface Write {
   place: ImportancePlace | null;
 }
 
-/** Reseals each thing from the copy this device holds, so the write never waits for the server and works offline. */
+/** The project's stored words reopened, so a field this device does not read (a research ask) survives the reseal; null when the stored copy can't be read here. */
+const openStored = (ref: DocumentReference, encryption: HelmEncryption) =>
+  getDoc(ref)
+    .then((snapshot) =>
+      snapshot.exists()
+        ? openJson<ProjectSealed>(
+            (snapshot.data() as Project).sealed as Sealed,
+            encryption,
+          )
+        : null,
+    )
+    .catch(() => null);
+
+/** Reseals each project from its stored words with only the place changed, and each habit from the copy this device holds; the writes never wait for the server and work offline. */
 async function commit(
   uid: string,
   writes: Write[],
@@ -89,14 +110,18 @@ async function commit(
     writes.flatMap(({ id, place }) => {
       const project = projectOf(id);
       if (project) {
+        const ref = doc(collection(userOf(uid), 'projects'), id);
         return [
-          sealJson<ProjectSealed>(
-            projectSealed(project, place),
-            encryption,
-          ).then((payload) => ({
-            ref: doc(collection(userOf(uid), 'projects'), id),
-            payload,
-          })),
+          openStored(ref, encryption)
+            .then((stored) =>
+              sealJson<ProjectSealed>(
+                stored
+                  ? { ...stored, importance: place }
+                  : projectSealed(project, place),
+                encryption,
+              ),
+            )
+            .then((payload) => ({ ref, payload })),
         ];
       }
       const habit = habitOf(id);

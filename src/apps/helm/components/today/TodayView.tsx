@@ -25,7 +25,10 @@ import DayPlan from '@apps/helm/components/today/DayPlan';
 import DayStrip from '@apps/helm/components/today/DayStrip';
 import KeyDatesLine from '@apps/helm/components/today/KeyDatesLine';
 import PastDay from '@apps/helm/components/today/PastDay';
-import AheadOfferCard from '@apps/helm/components/projects/AheadOfferCard';
+import AheadOfferCard, {
+  type AheadSheetTarget,
+} from '@apps/helm/components/projects/AheadOfferCard';
+import AheadSheet from '@apps/helm/components/projects/AheadSheet';
 import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
 import {
@@ -185,6 +188,13 @@ function TodayView({
     );
   }, [isToday, offer, projects, todayKey]);
 
+  const [aheadTarget, setAheadTarget] = useState<AheadSheetTarget | null>(null);
+  const [isAheadOpen, setIsAheadOpen] = useState(false);
+  const openAhead = (target: AheadSheetTarget) => {
+    setAheadTarget(target);
+    setIsAheadOpen(true);
+  };
+
   const learns = useMemo(
     () =>
       isToday && offer === null && aheadToday === null
@@ -333,6 +343,14 @@ function TodayView({
             offer={aheadToday.offer}
             today={aheadToday.today}
             dayKey={todayKey}
+            onOpen={openAhead}
+          />
+        )}
+        {aheadTarget && (
+          <AheadSheet
+            isOpen={isAheadOpen}
+            onClose={() => setIsAheadOpen(false)}
+            {...aheadTarget}
           />
         )}
         {isToday && <SyncedToday now={now} />}

@@ -1,4 +1,4 @@
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -39,19 +39,32 @@ const liveProject = (projectId: string) =>
       (item) => item.id === projectId && !item.isUnreadable,
     ) ?? null;
 
-/** Writes the project's offers with one of them changed, from the offers the device holds now; the write is handed back unawaited so it works offline. */
+/** Re-reads the project in one transaction and changes only this offer in the offers the server holds, so a research id it just set is kept; `change` answers null to leave it. Needs a connection. */
 const changeOffer = (
   uid: string,
   projectId: string,
   offerId: string,
-  change: (offer: AheadOfferMeta) => AheadOfferMeta,
+  change: (
+    offer: AheadOfferMeta,
+    targetDate: number | null,
+  ) => AheadOfferMeta | null,
 ) => {
   const offers = liveProject(projectId)?.researchOffers ?? [];
   if (!offers.some((offer) => offer.id === offerId)) return null;
-  return updateDoc(projectRef(uid, projectId), {
-    researchOffers: offers.map((offer) =>
-      offer.id === offerId ? change(offer) : offer,
-    ),
+  const ref = projectRef(uid, projectId);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) return;
+    const data = snapshot.data() as Project;
+    const fresh = data.researchOffers ?? [];
+    const current = fresh.find((offer) => offer.id === offerId);
+    const next = current ? change(current, data.targetDate) : null;
+    if (!next) return;
+    transaction.update(ref, {
+      researchOffers: fresh.map((offer) =>
+        offer.id === offerId ? next : offer,
+      ),
+    });
   });
 };
 
@@ -66,10 +79,9 @@ export const markAheadShown = (
     (one) => one.id === offerId,
   );
   if (!offer || offer.shownOn !== null) return null;
-  return changeOffer(uid, projectId, offerId, (one) => ({
-    ...one,
-    shownOn: dayKey,
-  }));
+  return changeOffer(uid, projectId, offerId, (one) =>
+    one.shownOn !== null ? null : { ...one, shownOn: dayKey },
+  );
 };
 
 /** Not now on an offer: it waits, or turns off after the third. Returns the weeks it waits (null when it is off) and the write. */
@@ -83,7 +95,11 @@ export const notNowAhead = (
   const offer = project?.researchOffers.find((one) => one.id === offerId);
   if (!project || !offer) return null;
   const next = applyAheadNotNow(offer, project.targetDate, today);
-  const written = changeOffer(uid, projectId, offerId, () => next);
+  const written = changeOffer(uid, projectId, offerId, (fresh, targetDate) =>
+    fresh.state === 'waiting'
+      ? applyAheadNotNow(fresh, targetDate, today)
+      : null,
+  );
   if (!written) return null;
   return {
     written,
@@ -112,34 +128,17 @@ export interface AheadSend {
   assistantName: string;
 }
 
-/** Sends the answers and the brief as one turn the server turns into the research, and marks the offer taken with the sealed answers, in one batch. The write is handed back unawaited. */
+/** Thrown when the offer is no longer waiting by the time the answers are sent. */
+export class AheadAnsweredError extends Error {
+  constructor() {
+    super('That offer was already answered.');
+  }
+}
+
+/** Sends the answers and the brief as one turn the server turns into the research, and marks the offer taken with the sealed answers, in one transaction that re-reads the project and refuses an offer already answered. Needs a connection: it settles once the server has both writes, and a failure leaves the offer waiting and the turn unsent. */
 export async function sendAheadOffer(uid: string, input: AheadSend) {
   const encryption = await getHelmEncryption(uid);
   const ref = projectRef(uid, input.projectId);
-  const snapshot = await getDoc(ref);
-  if (!snapshot.exists()) throw new Error('This project is gone.');
-  const data = snapshot.data() as Project;
-  const opened = await openJson<ProjectSealed>(
-    data.sealed as Sealed,
-    encryption,
-  );
-  const sealed = await sealJson<ProjectSealed>(
-    {
-      ...opened,
-      aheadAsks: {
-        ...(opened.aheadAsks ?? {}),
-        [input.offerId]: {
-          ...input.ask,
-          answers: input.answers,
-          brief: input.brief,
-        },
-      },
-    },
-    encryption,
-  );
-  const offers = (data.researchOffers ?? []).map((offer) =>
-    offer.id === input.offerId ? { ...offer, state: 'taken' as const } : offer,
-  );
   const timeZone =
     store.getState().helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
   const next = { ...getNextTurn(), leadId: null, createdAt: Date.now() };
@@ -165,11 +164,56 @@ export async function sendAheadOffer(uid: string, input: AheadSend) {
         depth: input.depth,
         when: input.isNow ? 'now' : 'later',
       },
-      alsoWrite: (batch) =>
-        batch.update(ref, { researchOffers: offers, sealed }),
+      commit: (captureRef, capture) =>
+        runTransaction(db, async (transaction) => {
+          const snapshot = await transaction.get(ref);
+          if (!snapshot.exists()) throw new Error('This project is gone.');
+          const data = snapshot.data() as Project;
+          const offers = data.researchOffers ?? [];
+          if (
+            !offers.some(
+              (offer) =>
+                offer.id === input.offerId && offer.state === 'waiting',
+            )
+          ) {
+            throw new AheadAnsweredError();
+          }
+          const opened = await openJson<ProjectSealed>(
+            data.sealed as Sealed,
+            encryption,
+          );
+          const sealed = await sealJson<ProjectSealed>(
+            {
+              ...opened,
+              aheadAsks: {
+                ...(opened.aheadAsks ?? {}),
+                [input.offerId]: {
+                  ...input.ask,
+                  answers: input.answers,
+                  brief: input.brief,
+                },
+              },
+            },
+            encryption,
+          );
+          transaction.set(captureRef, capture);
+          transaction.update(ref, {
+            researchOffers: offers.map((offer) =>
+              offer.id === input.offerId
+                ? { ...offer, state: 'taken' as const }
+                : offer,
+            ),
+            sealed,
+          });
+        }),
     },
   });
   recordSentTurn(uid, next, id);
-  void write.catch(() => clearSentTurn(uid, id));
-  return { write, id };
+  try {
+    await write;
+  } catch (error) {
+    clearSentTurn(uid, id);
+    throw error;
+  }
+  return { id };
 }
