@@ -5013,6 +5013,7 @@ async function writeResult(
           seenAsPlan.effects.length,
       ),
       isProfileTaken: home !== null,
+      hasProfile: profileSnap?.exists === true,
     });
     const scheduleNotKept = [
       ...schedulePlan.notKept,
@@ -5508,7 +5509,7 @@ async function writeResult(
         });
       }
       if (home) transaction.update(firestore.doc(base), home.data);
-      if (personalityPlan.data)
+      if (profileSnap?.exists && personalityPlan.data)
         transaction.update(firestore.doc(base), personalityPlan.data);
       transaction.create(executionRef, {
         via: capture.via ?? null,

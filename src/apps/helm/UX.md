@@ -396,7 +396,7 @@ Drawn on rows 13 to 19 of the canvas (HB1 to HB6, GO1 to GO6, LN1 to LN7; round 
 | "Hey {Name}" more than 2 minutes after a question | A new turn; the old question stays tappable on screen until the conversation moves on |
 | A line in How {Name} sees you loses all its sources | It leaves the page without a word |
 | A correction contradicts a later pattern from new words | The correction wins; the new pattern is offered as a question, "Still true that guitar's fine on weekends?" |
-| Five traits picked and a sixth tapped | "Up to 5. Drop one first?" under the group; nothing is unpicked for them |
+| Five traits picked and a sixth tapped | "Up to five. Drop one first." under the group; nothing is unpicked for them |
 | The phone refuses location | LC1's row reads "Your phone said no · Open your phone's settings"; Helm uses what it's told |
 | A time away overlaps another | Both are kept; "where you'll be" uses the one said last for the overlap |
 | A Google event has both a video link and a place | Shows both, "Video, or at Milstead & Co."; "nearby" uses the place |

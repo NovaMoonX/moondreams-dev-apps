@@ -42,6 +42,8 @@ export interface PersonalityPlanInput {
   room: number;
   /** The turn already writes the profile ("I'm home"); Undo tells effects apart by document, so a second profile change waits for its own turn. */
   isProfileTaken: boolean;
+  /** The profile document exists; a turn never creates it. */
+  hasProfile: boolean;
 }
 
 export interface PersonalityPlan {
@@ -76,6 +78,9 @@ export const buildOverCapLine = (traits: PersonalityTrait[]) =>
 
 export const buildProfileTakenLine = (assistantName: string) =>
   `Not changed · how ${assistantName} talks · ask again in its own message`;
+
+export const buildNoProfileLine = (assistantName: string) =>
+  `Not changed · how ${assistantName} talks · change it in Settings`;
 
 const lower = (trait: PersonalityTrait) => TRAIT_LABELS[trait].toLowerCase();
 
@@ -172,6 +177,8 @@ export function planPersonality(input: PersonalityPlanInput): PersonalityPlan {
           : [`That's already how ${input.assistantName} talks`],
     };
   if (input.room < 1) return { ...EMPTY, notKept: [ROOM_LINE] };
+  if (!input.hasProfile)
+    return { ...EMPTY, notKept: [buildNoProfileLine(input.assistantName)] };
   if (input.isProfileTaken)
     return {
       ...EMPTY,

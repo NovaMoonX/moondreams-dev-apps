@@ -36,6 +36,7 @@ import {
   buildOverCapLine,
   planPersonality,
   planResolvePersonality,
+  buildNoProfileLine,
   buildProfileTakenLine,
 } from '../../functions/src/apps/helm/nomos/planPersonality.ts';
 import {
@@ -220,6 +221,28 @@ test('a quote that was said but asks nothing about talking changes nothing', () 
     ).commands.length,
     1,
   );
+  [
+    'get to the point',
+    'be more professional',
+    'be more fun',
+    'lighten up',
+    'be more upbeat',
+    'be more supportive',
+    'be less sarcastic',
+    'stop lecturing me',
+    'use fewer emojis',
+    'be more laid back',
+    'cut the fluff',
+    'be less drier',
+  ].forEach((quote) =>
+    assert.equal(
+      readPersonalityCommands([asked(quote, { honesty: 'tactful' })], {
+        captureText: quote,
+      }).commands.length,
+      1,
+      quote,
+    ),
+  );
 });
 
 test('setPersonality is read only from the closed set and only when asked', () => {
@@ -328,6 +351,7 @@ const plan = (
     isUnattended?: boolean;
     room?: number;
     isProfileTaken?: boolean;
+    hasProfile?: boolean;
   } = {},
 ) =>
   planPersonality({
@@ -342,6 +366,7 @@ const plan = (
     newId: () => 'q1',
     room: extra.room ?? 10,
     isProfileTaken: extra.isProfileTaken ?? false,
+    hasProfile: extra.hasProfile ?? true,
   });
 
 test('a turn that already writes the profile ("I\'m home") leaves how it talks for its own turn', () => {
@@ -349,6 +374,12 @@ test('a turn that already writes the profile ("I\'m home") leaves how it talks f
   assert.equal(result.data, null);
   assert.equal(result.effects.length, 0);
   assert.deepEqual(result.notKept, [buildProfileTakenLine('Juniper')]);
+});
+
+test('a turn for a person with no profile yet writes nothing and says so', () => {
+  const result = plan({ addTraits: ['blunt'] }, null, { hasProfile: false });
+  assert.equal(result.data, null);
+  assert.deepEqual(result.notKept, [buildNoProfileLine('Juniper')]);
 });
 
 test('"be more blunt with me" writes the profile field with a way back', () => {

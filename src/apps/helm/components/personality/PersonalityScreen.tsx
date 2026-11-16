@@ -309,13 +309,15 @@ function PersonalityScreen({ onClose }: PersonalityScreenProps) {
               {HELM_COPY.personalityTooMany}
             </p>
           )}
-          {dropped && (
-            <StatusLine
-              text={HELM_COPY.personalityDropped(TRAIT_LABELS[dropped])}
-              actionLabel={HELM_COPY.personalityUndo}
-              onAction={() => undoDrop(dropped)}
-            />
-          )}
+          {dropped &&
+            !personality.traits.includes(dropped) &&
+            personality.traits.length < MAX_TRAITS && (
+              <StatusLine
+                text={HELM_COPY.personalityDropped(TRAIT_LABELS[dropped])}
+                actionLabel={HELM_COPY.personalityUndo}
+                onAction={() => undoDrop(dropped)}
+              />
+            )}
           <ClashChoices
             assistant={assistant}
             personality={personality}

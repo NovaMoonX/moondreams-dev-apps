@@ -2086,7 +2086,7 @@ export const HELM_COPY = {
   personalityDropped: (trait: string) => `Dropped ${trait}`,
   personalityUndo: 'Undo',
   personalityKept: (left: string, right: string, line: string) =>
-    `Keeping both ${left} and ${right.toLowerCase()}: ${line}`,
+    `Keeping both ${left} and ${right}: ${line}`,
   personalityAskAgain: 'Ask me again',
   personalityCareNote: 'Health and care stay careful whatever you pick.',
   assistantSave: 'Save',
