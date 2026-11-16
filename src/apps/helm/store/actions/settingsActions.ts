@@ -88,6 +88,8 @@ export async function ensureHelmProfile(uid: string) {
       forgottenAt: null,
       prunedOn: null,
       outsideSeenAt: null,
+      researchDepth: null,
+      researchAllowance: null,
       createdAt: Date.now(),
       lastEditedAt: null,
     };

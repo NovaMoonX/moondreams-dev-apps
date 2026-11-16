@@ -135,6 +135,10 @@ export interface HelmProfile {
   prunedOn: string | null;
   /** When the person last looked at what outside assistants added; null until then, and on a profile from before. */
   outsideSeenAt: number | null;
+  /** The depth research runs at when a request doesn't say; null asks when it feeds a decision and is a quick look otherwise. */
+  researchDepth: 'light' | 'thorough' | null;
+  /** This month's research allowance as the server last settled it, shown as "About 4 thorough looks left"; the server's own usage decides, never this. */
+  researchAllowance: { month: string; leftCents: number } | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -311,6 +315,8 @@ export interface HelmQuestion {
     | 'groupTopics'
     | 'whichComesFirst'
     | 'undoOffer'
+    | 'researchDepth'
+    | 'researchRerun'
     | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
@@ -1335,7 +1341,8 @@ export interface EffectRef {
     | 'habitDays'
     | 'connections'
     | 'patterns'
-    | 'scheduledActions';
+    | 'scheduledActions'
+    | 'research';
   docId: string;
 }
 
@@ -2029,4 +2036,56 @@ export interface ConnectedAssistant {
 
 export interface OpenConnectedAssistant extends ConnectedAssistant {
   clientKey: string;
+}
+
+export type ResearchMode = 'asked' | 'learnLater' | 'leadTime';
+export type ResearchStatus =
+  | 'planned'
+  | 'asking'
+  | 'preparing'
+  | 'ready'
+  | 'offered'
+  | 'done'
+  | 'dismissed';
+
+/** A research item: asked for in a turn (it starts at once), saved to learn later, or offered ahead of a dated project. */
+export interface Research {
+  id: string;
+  mode: ResearchMode;
+  status: ResearchStatus;
+  /** The capture that asked for it, where its line joins the conversation. */
+  captureId: string | null;
+  projectId: string | null;
+  depth: 'light' | 'thorough' | null;
+  /** True when it answered from general knowledge because the month's allowance was used up ("Not from the web"). */
+  isWithoutWeb: boolean;
+  /** What this item holds of the month's allowance until it settles; 0 once settled or released. */
+  reservedCents: number;
+  searchesUsed: number;
+  costCents: number;
+  /** Date-only; set only by the person's yes to "Look on <reset date>" after a look past the allowance. */
+  rerunOn: number | null;
+  startedAt: number | null;
+  preparedAt: number | null;
+  cancelledAt: number | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  question: string;
+  subject: string;
+  overview: ResearchOverview | null;
+  sources: { title: string; url: string; site: string }[];
+}
+
+export interface ResearchOverview {
+  summary: string;
+  sections: { heading: string; points: string[] }[];
+  comparison: { columns: string[]; rows: string[][] } | null;
+}
+
+/** The sealed part of a research item. */
+export interface ResearchSealed {
+  question: string;
+  subject: string;
+  overview: ResearchOverview | null;
+  sources: { title: string; url: string; site: string }[];
 }

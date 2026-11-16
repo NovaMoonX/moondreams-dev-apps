@@ -1607,6 +1607,37 @@ export const HELM_COPY = {
   sheetChanged: 'What it changed',
   answerNothingInRecords: 'Nothing in your records answers this.',
   answerNotFromRecords: 'Not from your records',
+  researchNotFromWeb: 'Not from the web',
+  researchLooking: 'Looking into it…',
+  researchArrival: {
+    fewMinutes: 'Give me about 2 minutes.',
+    fiveToTen: "About 5 to 10 minutes; I'll tell you when it's in.",
+    byMorning: 'It will be ready by morning.',
+  },
+  researchIn: (subject: string) => `What I found on ${subject}`,
+  researchOpen: 'Open',
+  researchCancel: 'Stop looking',
+  researchCancelled: 'Stopped looking.',
+  researchSources: 'Sources',
+  researchDepthQuestion: (subject: string) =>
+    `How deep should I look into ${subject}?`,
+  researchDepthQuick: 'A quick look',
+  researchDepthThorough: 'A thorough look',
+  researchDepthAlwaysQuick: 'Always a quick look',
+  researchDepthAlwaysThorough: 'Always a thorough look',
+  researchThoroughLocked: (resetOn: string) =>
+    `Thorough looks are used up this month; they come back ${resetOn}.`,
+  researchCappedLine: (resetOn: string) =>
+    `This month's web searches are used up, so this is from what I already know. Want me to look on the web on ${resetOn}?`,
+  researchRerunYes: (resetOn: string) => `Look on ${resetOn}`,
+  researchRerunNo: 'This is enough',
+  researchSettingsTitle: 'Research',
+  researchSettingsDefault: 'How deep to look',
+  researchSettingsAsk: 'Ask me when it matters',
+  researchThoroughLeft: (count: number) =>
+    count === 0
+      ? 'No thorough looks left this month'
+      : `About ${count} thorough ${count === 1 ? 'look' : 'looks'} left this month`,
   answerGeneralHeading: 'General knowledge',
   answerGeneralCaution: (name: string) =>
     `From general knowledge, not checked against anything you've told ${name}. It may be out of date.`,

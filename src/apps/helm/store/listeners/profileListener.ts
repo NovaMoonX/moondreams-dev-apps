@@ -47,6 +47,17 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   forgottenAt: data.forgottenAt ?? null,
   prunedOn: data.prunedOn ?? null,
   outsideSeenAt: data.outsideSeenAt ?? null,
+  researchDepth:
+    data.researchDepth === 'light' || data.researchDepth === 'thorough'
+      ? data.researchDepth
+      : null,
+  researchAllowance:
+    data.researchAllowance && typeof data.researchAllowance.month === 'string'
+      ? {
+          month: data.researchAllowance.month,
+          leftCents: Number(data.researchAllowance.leftCents) || 0,
+        }
+      : null,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,
 });
