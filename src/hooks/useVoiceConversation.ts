@@ -23,7 +23,10 @@ import {
   wasMicrophoneGranted,
   watchMicrophonePermission,
 } from '@/lib/speech/microphonePermission';
-import { readSpeechEvents } from '@/lib/speech/speechDiagnostics';
+import {
+  readSpeechEvents,
+  recordSpeechEvent,
+} from '@/lib/speech/speechDiagnostics';
 import { readWakePhrase } from '@/lib/speech/speechText';
 import {
   hasSameWords,
@@ -874,6 +877,18 @@ export function useVoiceConversation({
       setListeningRoute(adapter.route === 'cloud' ? 'cloud' : 'device');
       adapter.start(callbacks).catch((error: unknown) => {
         console.error('Voice listening did not start', error);
+        const name = error instanceof Error ? error.name : 'Error';
+        recordSpeechEvent(`Listening did not start, ${adapter.id}: ${name}`);
+        if (adapter.route === 'cloud') {
+          reportFallback({
+            key: CLOUD_LISTEN_FALLBACK_KEY,
+            feature: 'Listening',
+            wanted: 'the cloud listener',
+            used: 'nothing, listening stopped',
+            reason: "the cloud listener couldn't start",
+            cause: { stage: CLOUD_LISTEN_STAGES.listenStart, detail: name },
+          });
+        }
         if (isCurrent()) handleError('unavailable');
       });
     };

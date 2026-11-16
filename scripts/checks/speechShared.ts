@@ -1045,6 +1045,7 @@ console.log('speechShared: on-device recognition checks passed');
   }
   class FakeSocket {
     static all: FakeSocket[] = [];
+    static failWith: Error | null = null;
     onopen: (() => void) | null = null;
     onerror: (() => void) | null = null;
     onclose: ((event: FakeClose) => void) | null = null;
@@ -1053,6 +1054,7 @@ console.log('speechShared: on-device recognition checks passed');
       public url: string,
       public protocols: string[],
     ) {
+      if (FakeSocket.failWith) throw FakeSocket.failWith;
       FakeSocket.all.push(this);
     }
     send() {}
@@ -1119,13 +1121,14 @@ console.log('speechShared: on-device recognition checks passed');
   ) => {
     const unavailable: [CloudHeldReason | null, CloudListenCause][] = [];
     const errors: string[] = [];
+    const closed: [string, number][] = [];
     const stt = createDeepgramStt({
       lang: 'en',
       getToken,
       tokenWaitMs,
       source: isOwnMicrophone ? null : microphone(),
       onUnavailable: (reason, cause) => unavailable.push([reason, cause]),
-      onClosed: () => undefined,
+      onClosed: (mintId, ms) => closed.push([mintId, ms]),
     });
     const started = stt.start({
       onPartial: () => undefined,
@@ -1134,7 +1137,7 @@ console.log('speechShared: on-device recognition checks passed');
       onError: (code) => errors.push(code),
       preRoll: null,
     });
-    return { unavailable, errors, started };
+    return { unavailable, errors, closed, started };
   };
   const only = (unavailable: [CloudHeldReason | null, CloudListenCause][]) => {
     assert.equal(unavailable.length, 1, 'one failure is reported once');
@@ -1334,6 +1337,23 @@ console.log('speechShared: on-device recognition checks passed');
         ([, cause]) => cause.stage === CLOUD_LISTEN_STAGES.microphoneCapture,
       ),
       'the capture failure is the first cause',
+    );
+    FakeSocket.failWith = new SyntaxError(
+      "Failed to construct 'WebSocket': The subprotocol 'secret-token-value' is invalid.",
+    );
+    const unbuilt = listen(async () => READY_ANSWER);
+    await unbuilt.started;
+    FakeSocket.failWith = null;
+    const [, unbuiltCause] = only(unbuilt.unavailable);
+    assert.deepEqual(
+      [unbuiltCause.stage, unbuiltCause.detail, unbuilt.closed],
+      [CLOUD_LISTEN_STAGES.socketConstruct, 'SyntaxError', [['mint-9', 0]]],
+      "a socket that cannot be built reports its name only, and the token's mint is released",
+    );
+    assert.equal(
+      JSON.stringify(unbuilt.unavailable).includes('secret-token-value'),
+      false,
+      'a constructor message that quotes the token never reaches the cause',
     );
     assert.equal(
       JSON.stringify(
@@ -2652,6 +2672,34 @@ console.log('speechShared: voice router and playback queue checks passed');
       answer.status === 'ready' && answer.contentType,
       'audio/L16; rate=24000; channels=1',
       'the response type is passed on',
+    );
+    const failedWith = async (response: Response) => {
+      globalThis.fetch = (async () => response) as typeof fetch;
+      const failed = await createSpeechSource({
+        appId: 'helm',
+        url: 'http://localhost/speech',
+        getHeaders: async () => ({}),
+      }).fetchSpeech('Hi', 'reply', new AbortController().signal);
+      return failed.status === 'unavailable' ? failed.detail : failed.status;
+    };
+    assert.deepEqual(
+      [
+        await failedWith(
+          new Response('<html>Bad gateway <b>secret</b></html>', {
+            status: 502,
+          }),
+        ),
+        await failedWith(
+          new Response(JSON.stringify({ error: 'app-check' }), { status: 401 }),
+        ),
+        await failedWith(
+          new Response(JSON.stringify({ error: 'Token abc: bad' }), {
+            status: 401,
+          }),
+        ),
+      ],
+      ['HTTP 502', 'HTTP 401: app-check', 'HTTP 401'],
+      'a failed response keeps only a short error code, never its body',
     );
   } finally {
     globalThis.fetch = realFetch;

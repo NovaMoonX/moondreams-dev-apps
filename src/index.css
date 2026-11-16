@@ -240,9 +240,10 @@ html[data-site-banner='true'] .subview-backdrop {
   z-index: 126 !important;
 }
 
-/* The fallback tab belongs to the app's space: a drawer, modal or the site's menu panel (any dialog) covers it, while an app's full-screen surface (`data-app-surface`) keeps it. It fades out rather than leaving the layout so a drawer that closes can hand focus back to it. */
-html:has([role='dialog']:not([data-app-surface])) [data-fallback-tab] {
+/* Dreamer UI's closed Popover keeps its panel mounted as an `inert`, `aria-hidden` dialog, so only an open one counts (`dialogUtils`). */
+html:has([role='dialog']:not([inert], [aria-hidden='true'], [data-app-surface])) [data-fallback-tab] {
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
 }
 

@@ -68,7 +68,7 @@ const toRequestFailure = (error: unknown): FallbackCause => {
   };
 };
 
-/** Asks the server for a short-lived listening token (`mint` is the callable, injected). A failed request reads as held `unavailable` with the error it threw, and a server that says unavailable keeps its stated why; the stream reports stay for the next request when the server couldn't count them. */
+/** Asks the server for a short-lived listening token; a failed request reads as held `unavailable`. */
 export const createVoiceTokenSource = ({
   appId,
   mint,

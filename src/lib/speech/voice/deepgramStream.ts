@@ -78,7 +78,7 @@ interface DeepgramSttOptions {
   tokenWaitMs?: number;
   /** A microphone already open (a speech gate that heard the person start): its pre-roll is sent first, then its live frames, and the stream releases it when it ends. Without one the stream opens the microphone itself. */
   source?: FrameSource | null;
-  /** The cloud could not take this listen; `reason` is the limit that held it, null for any other cause, and `cause` is the exact stage and error either way. Nothing was delivered. */
+  /** `reason` is the limit that held it, null for any other cause. */
   onUnavailable: (
     reason: CloudHeldReason | null,
     cause: CloudListenCause,
@@ -113,6 +113,18 @@ const readHeard = (data: unknown): Heard | null => {
     };
   } catch {
     return null;
+  }
+};
+
+// A constructor's own message can quote the subprotocol, which is the token, so only its name is kept.
+const openSocket = (url: string, token: string) => {
+  try {
+    return { socket: new WebSocket(url, ['bearer', token]), errorName: '' };
+  } catch (error) {
+    return {
+      socket: null,
+      errorName: error instanceof Error ? error.name : 'Error',
+    };
   }
 };
 
@@ -342,10 +354,16 @@ export const createDeepgramStt = ({
       }
 
       state.mintId = answer.mintId;
-      const socket = new WebSocket(toListenUrl(answer.model, lang), [
-        'bearer',
-        answer.token,
-      ]);
+      const opened = openSocket(toListenUrl(answer.model, lang), answer.token);
+      if (opened.socket === null) {
+        fail(null, {
+          stage: CLOUD_LISTEN_STAGES.socketConstruct,
+          detail: opened.errorName,
+          facts: [],
+        });
+        return;
+      }
+      const { socket } = opened;
       state.socket = socket;
       state.openId = window.setTimeout(
         () =>

@@ -31,6 +31,17 @@ export interface SpeechSource {
 const isHeldReason = (value: unknown): value is SpeechHeldReason =>
   value === 'speechLimit' || value === 'budgetReached';
 
+const toErrorCode = (body: string) => {
+  try {
+    const { error } = JSON.parse(body) as { error?: unknown };
+    return typeof error === 'string' && /^[a-z][a-z-]{0,39}$/.test(error)
+      ? error
+      : '';
+  } catch {
+    return '';
+  }
+};
+
 /** Asks the app's speech endpoint for audio. */
 export const createSpeechSource = ({
   appId,
@@ -76,17 +87,17 @@ export const createSpeechSource = ({
           : { status: 'unavailable', detail: 'HTTP 429' };
       }
       if (!response.ok || response.body === null) {
-        const snippet = response.ok
+        const code = response.ok
           ? ''
           : await response
               .text()
-              .then((body) => body.replace(/\s+/g, ' ').trim().slice(0, 160))
+              .then(toErrorCode)
               .catch(() => '');
         return {
           status: 'unavailable',
           detail: response.ok
             ? 'No body'
-            : `HTTP ${response.status}${snippet === '' ? '' : `: ${snippet}`}`,
+            : `HTTP ${response.status}${code === '' ? '' : `: ${code}`}`,
         };
       }
       return {

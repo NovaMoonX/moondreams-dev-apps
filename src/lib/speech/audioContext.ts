@@ -25,7 +25,9 @@ export const getAudioContext = () => {
 export const unlockAudio = () => {
   getAudioContext()
     ?.resume()
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      recordSpeechEvent(`Audio could not resume: ${describeThrown(error)}`);
+    });
 };
 
 const UNLOCK_EVENTS = ['pointerdown', 'keydown', 'touchend'] as const;

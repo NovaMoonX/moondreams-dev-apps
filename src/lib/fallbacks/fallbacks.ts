@@ -1,8 +1,6 @@
 /** What failed and the raw error from the place it was caught: never a token, a key or the person's text. */
 export interface FallbackCause {
-  /** The stage that failed, short and stable ("token request", "socket closed before open"). */
   stage: string;
-  /** The error as the catch saw it: code, message, HTTP status, close code, or the limit that ran out. */
   detail: string;
 }
 
@@ -69,7 +67,7 @@ const publish = () => {
   store.listeners.forEach((listener) => listener());
 };
 
-/** Notes that something preferred wasn't used and a stand-in was (a chosen voice, a downloaded model, a service, a cached copy), so debug viewers get a dismissible notice with Copy. Cheap and silent for everyone else. A fixed `key` per fallback keeps repeats on one entry, and the `cause` (the stage and the raw error) is required: say where it was caught, never a guess. */
+/** Records a stand-in for what was chosen, for debug viewers' notice; the `cause` is the stage and raw error where it was caught, never a guess. */
 export const reportFallback = (report: FallbackReport) => {
   if (
     import.meta.env?.DEV &&
