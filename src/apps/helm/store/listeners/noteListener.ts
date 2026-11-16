@@ -25,7 +25,18 @@ const SOURCES: readonly NoteSource[] = [
   'savedAnswer',
   'importedFile',
   'assistantDraft',
+  'outside',
 ];
+
+const toLinks = (value: unknown): { title: string; url: string }[] =>
+  Array.isArray(value)
+    ? value.flatMap((entry: unknown) => {
+        const link = entry as { title?: unknown; url?: unknown } | null;
+        return typeof link?.url === 'string'
+          ? [{ title: toText(link.title) ?? '', url: link.url }]
+          : [];
+      })
+    : [];
 
 const toIds = (value: unknown): string[] =>
   Array.isArray(value)
@@ -57,6 +68,8 @@ async function openNote(
       lastEditedAt: data.lastEditedAt ?? null,
       title: toText(payload.title) ?? '',
       body: toText(payload.body) ?? '',
+      via: toText(payload.via),
+      links: toLinks(payload.links),
       isUnreadable: false,
     };
   } catch {

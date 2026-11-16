@@ -30,6 +30,9 @@ export const SALE_NAME_SUGGESTIONS = [
 export const MAX_SALE_NAME_LENGTH = 80;
 export const MAX_PICKUP_AREA_LENGTH = 80;
 export const MAX_BUYER_NOTE_LENGTH = 300;
+/** The most pickup days one sale keeps. */
+export const MAX_PICKUP_DAYS = 60;
+export const MAX_ANOTHER_DAY_NOTE_LENGTH = 120;
 
 /** The ways to pay a seller can pick in one tap; they may add their own. */
 export const PAYMENT_METHOD_SUGGESTIONS = [
@@ -202,4 +205,5 @@ export const INTEREST_INVALID_FIELDS = {
   name: 'Add your name.',
   contact: "That phone or email doesn't look right.",
   message: 'That message is too long.',
+  days: 'Pick the days that work for you.',
 } as const;
