@@ -1360,11 +1360,18 @@ export function readUndoableUnits(
 }
 
 const UNDO_CLAIMS =
-  /\b(undid|undone|took (it |that |them )?(back|out|off)|taken (back|out|off)|put (it )?back|dropped|reverted|removed|deleted|cancell?ed|scrapped|cleared|erased|gone|rolled back)\b/i;
+  /\b(undid|undone|took (it |that |them )?back|taken back|put (it |that |them )?back|reverted|rolled back)\b/i;
+const REMOVAL_WORDS =
+  /\b(took (it |that |them )?(out|off)|taken (out|off)|dropped|removed|deleted|cancell?ed|scrapped|cleared|erased|gone)\b/i;
+const REASON_WORDS = /\b(because|since|as you|you (said|asked|wanted|told))\b/i;
 
-/** The model's line leading an undo offer; one that says or implies something was already taken back is refused, since only the person's answer undoes. */
+/** The model's line leading an undo offer; one that says or implies something was already taken back is refused, since only the person's answer undoes, while a removal the earlier turn made may be named when the line says why. */
 export const toUndoLead = (line: string | null) =>
-  line && !UNDO_CLAIMS.test(line) ? line : null;
+  line &&
+  !UNDO_CLAIMS.test(line) &&
+  (!REMOVAL_WORDS.test(line) || REASON_WORDS.test(line))
+    ? line
+    : null;
 
 /** The last turns of this turn's conversation, oldest first: what was said, the summary of what was done and the tasks it touched. A turn from before conversations were kept has none. */
 async function readEarlierTurns(

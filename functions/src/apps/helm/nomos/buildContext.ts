@@ -458,7 +458,7 @@ export function buildContext(input: ContextInput): {
     ...(hasUndoCue(input.text) &&
     !earlierTurns.some((turn) => 'undoable' in turn)
       ? [
-          `<nothing_to_undo>Nothing from earlier turns can be taken back now. Say plainly that you can't take that back, and do not send offerUndo.</nothing_to_undo>`,
+          `<nothing_to_undo>Nothing from earlier turns can be taken back now. If they are asking to take something back, say plainly you can't and send no offerUndo; otherwise carry on as usual.</nothing_to_undo>`,
         ]
       : []),
     ...(input.answeredQuestion

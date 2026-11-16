@@ -1400,8 +1400,11 @@ test('a lead that claims something was undone is refused and one that explains s
     'Cancelled.',
     "It's gone.",
   ].forEach((line) => assert.equal(toUndoLead(line), null, line));
-  const kept = "I read 'next week' as Monday.";
-  assert.equal(toUndoLead(kept), kept);
+  [
+    "I read 'next week' as Monday.",
+    'Removed the tyre step because you asked to drop it.',
+  ].forEach((kept) => assert.equal(toUndoLead(kept), kept, kept));
+  assert.equal(toUndoLead('Took it back because you said so.'), null);
   assert.equal(toUndoLead(null), null);
 });
 
