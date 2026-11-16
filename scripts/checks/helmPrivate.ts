@@ -1957,6 +1957,73 @@ test('a turn whose tools read something under a quiet project is spoken as quiet
   );
 });
 
+test('a note kept quiet directly and through its project in one turn gets one Undo line', () => {
+  const plan = planWrites({
+    commands: [],
+    quietCommands: [
+      quietCommand({
+        targetId: 'project-1',
+        isNew: false,
+        isGuess: false,
+        until: null,
+      }) as never,
+      quietCommand({
+        targetKind: 'note',
+        targetId: 'note-1',
+        isNew: false,
+        isGuess: false,
+        until: null,
+      }) as never,
+    ],
+    today: DAY,
+    existingProjects: [
+      {
+        id: 'project-1',
+        name: 'Anniversary',
+        emoji: null,
+        whoRoles: {},
+        roleNotes: {},
+        milestoneState: {},
+        milestoneTitles: {},
+        sealed: { name: 'Anniversary' },
+      },
+    ],
+    existingNotes: new Map([
+      [
+        'note-1',
+        {
+          title: 'Ring ideas',
+          sealed: { title: 'Ring ideas' },
+          privacy: null,
+          parents: [],
+        },
+      ],
+    ]),
+    projectChildren: new Map([
+      [
+        'project-1',
+        {
+          isMore: false,
+          children: [
+            { kind: 'note', id: 'note-1', title: 'Ring ideas', privacy: null },
+          ],
+        },
+      ],
+    ]),
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: 5000,
+    seal: seal as never,
+    newId: () => 'new-1',
+  });
+  assert.equal(
+    plan.effectRefs.filter((ref) => ref.docId === 'note-1').length,
+    1,
+  );
+  assert.equal(plan.noteUpdates.length, 1);
+});
+
 test('a project read that stopped at its limit says some things are not private yet', () => {
   const plan = quietPlan(
     [{ kind: 'task', id: 'task-1', title: 'Book', privacy: null }],

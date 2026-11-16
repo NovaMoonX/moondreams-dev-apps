@@ -1288,7 +1288,11 @@ export function planWrites(input: PlanInput): WritePlan {
     counts.updated += 1;
   });
 
-  const quietCommands = input.quietCommands ?? [];
+  const quietCommands = [...(input.quietCommands ?? [])].sort(
+    (left, right) =>
+      Number(left.targetKind === 'project') -
+      Number(right.targetKind === 'project'),
+  );
   const quietLines: string[] = [];
   const quietNew = new Map<string, PrivacyFacts>();
   const workingProjects = new Map(

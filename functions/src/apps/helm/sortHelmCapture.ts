@@ -1857,18 +1857,20 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               .toISOString()
               .slice(0, 10),
           });
-    const activeProjects: ActiveProjectsRead | null =
-      mode === 'rest'
-        ? { projects: [], unreadableIds: new Set(), isCapped: false }
-        : await readActiveProjects(firestore, base, key).catch((error) => {
-            logger.warn('helm.sort.projectsUnreadable', {
-              cause: error instanceof Error ? error.name : 'error',
-            });
-            return null;
-          });
-    const projects = activeProjects
-      ? toContextProjects(activeProjects, MAX_CONTEXT_PROJECTS, today)
-      : [];
+    const activeProjects: ActiveProjectsRead | null = await readActiveProjects(
+      firestore,
+      base,
+      key,
+    ).catch((error) => {
+      logger.warn('helm.sort.projectsUnreadable', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+      return null;
+    });
+    const projects =
+      activeProjects && mode !== 'rest'
+        ? toContextProjects(activeProjects, MAX_CONTEXT_PROJECTS, today)
+        : [];
     const quietProjects = activeProjects
       ? readQuietProjects(activeProjects, today)
       : {
