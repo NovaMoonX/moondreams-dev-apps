@@ -17,6 +17,7 @@ import { db } from '@lib/firebase/config';
 import { createSealedReader } from '@lib/security';
 
 import { store } from '@/store';
+import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { dayKeyToMs, shiftDayKeyBy } from '@/utils/cadenceUtils';
 import { HELM_COPY, PRUNE_RUN_CAP } from '@apps/helm/constants';
 import {
@@ -32,6 +33,7 @@ import {
   toPatternFields,
 } from '@apps/helm/engine/patternCheck';
 import {
+  applyConfirm,
   applyNo,
   applyReopen,
   applyRetire,
@@ -133,6 +135,14 @@ export const notNowPattern = (uid: string, id: string, todayKey: string) =>
           today: toMidnight(todayKey),
           by: 'person',
         })
+      : null,
+  );
+
+/** "It's right" on a statement that offers no change: the pattern stays as it is, waits like Not now and never counts as a no. */
+export const confirmPattern = (uid: string, id: string, todayKey: string) =>
+  changePattern(uid, id, (current, now) =>
+    current.state === 'suggested' && (current.confirmedAt ?? null) === null
+      ? applyConfirm(current, { now, today: toMidnight(todayKey) })
       : null,
   );
 
@@ -500,7 +510,9 @@ async function offerOne(uid: string, todayKey: string, timeZone: string) {
     ),
     suggestedCount: patterns.filter(
       ({ pattern }) =>
-        pattern.state === 'suggested' && pattern.handling !== 'actAndTell',
+        pattern.state === 'suggested' &&
+        pattern.handling !== 'actAndTell' &&
+        (pattern.confirmedAt ?? null) === null,
     ).length,
     isNewShownToday: patterns.some(({ pattern }) => isShownToday(pattern)),
     today: dayKeyToMs(todayKey),
@@ -718,12 +730,12 @@ export async function forgetAllNoticed(
 export const undoForgetAll = (uid: string, stamp: ForgetStamp) =>
   updateDoc(userOf(uid), { forgottenAt: stamp.previous });
 
-/** The deletion that follows Forget once its Undo window has passed. */
-export const finishForget = (
-  uid: string,
-  encryption: HelmEncryption,
-  stamp: ForgetStamp,
-) => deleteForgotten(uid, encryption, stamp.stampedAt);
+/** The deletion that follows Forget when its toast closes; nothing is deleted when Undo put the old stamp back, and offline the next daily check does it. */
+export async function finishForget(uid: string, stamp: ForgetStamp) {
+  if (!navigator.onLine) return;
+  if (store.getState().helm.profile?.forgottenAt !== stamp.stampedAt) return;
+  await deleteForgotten(uid, await getHelmEncryption(uid), stamp.stampedAt);
+}
 
 /** Ends a pattern whose evidence was words that are now gone, keeping its answer, in a transaction beside the deletes. */
 const retireFor = (
@@ -760,15 +772,18 @@ export async function forgetWords(
   });
 }
 
-/** "Noted · Forget it": deletes what one turn left, and ends any pattern that cited it. */
-export async function forgetTurnObservations(uid: string, captureId: string) {
+/** "Forget what I noted": deletes what one turn left, ends any pattern that cited it, and says whether anything was there. */
+export async function forgetTurnObservations(
+  uid: string,
+  captureId: string,
+): Promise<boolean> {
   const found = await getDocs(
     query(
       collection(userOf(uid), 'observations'),
       where('sourceKeys', 'array-contains', `captures/${captureId}`),
     ),
   );
-  if (found.empty) return;
+  if (found.empty) return false;
   const ids = new Set(found.docs.map((entry) => entry.id));
   const citing = store
     .getState()
@@ -795,6 +810,7 @@ export async function forgetTurnObservations(uid: string, captureId: string) {
         );
     });
   });
+  return true;
 }
 
 /** Takes the person's yes: a change to a habit they set is written through the habit's own edit, then the pattern is marked accepted; nothing is marked when the habit could not be changed. */
@@ -1014,19 +1030,15 @@ export async function runDailyPatternCheck(
   const { todayKey, timeZone } = context;
   const { helm } = store.getState();
   const profile = helm.profile;
-  if (
-    !profile ||
-    profile.isLearningOn === false ||
-    profile.patternsCheckedOn === todayKey ||
-    !navigator.onLine
-  )
+  if (!profile || !navigator.onLine) return 'skipped';
+  if (profile.forgottenAt !== null)
+    await deleteForgotten(uid, encryption, profile.forgottenAt);
+  if (profile.isLearningOn === false || profile.patternsCheckedOn === todayKey)
     return 'skipped';
   const state = store.getState();
   const observations = selectShownObservations(state);
   const reflections = selectShownReflections(state);
   const forgottenAt = profile.forgottenAt ?? 0;
-  if (profile.forgottenAt !== null)
-    await deleteForgotten(uid, encryption, profile.forgottenAt);
   const [days, slots] = await Promise.all([
     readHabitDays(uid, todayKey),
     readPlannedSlots(uid, encryption, todayKey, timeZone),

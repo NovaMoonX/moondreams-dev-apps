@@ -262,7 +262,11 @@ service cloud.firestore {
     // A profile is private to one person and only the server deletes it, so a stray client can't half-delete a Helm.
     match /apps/helm/users/{uid} {
       allow read: if isHelmOwner(uid);
-      allow create, update: if isHelmOwner(uid) && isHelmTheme(request.resource.data) && isHelmVoice(request.resource.data) && isHelmLearning(request.resource.data);
+      allow create: if isHelmOwner(uid) && isHelmTheme(request.resource.data) && isHelmVoice(request.resource.data) && isHelmLearning(request.resource.data)
+        && request.resource.data.get('reflectDueAt', null) == null;
+      // When the nightly pass is due is the server's to set: the person's device may only leave it as it is or clear it.
+      allow update: if isHelmOwner(uid) && isHelmTheme(request.resource.data) && isHelmVoice(request.resource.data) && isHelmLearning(request.resource.data)
+        && (request.resource.data.get('reflectDueAt', null) == null || request.resource.data.get('reflectDueAt', null) == resource.data.get('reflectDueAt', null));
     }
 
     // The reminder planner's queue (when to look at a person next, its lease and the reminders it wrote) is for the Admin SDK alone.

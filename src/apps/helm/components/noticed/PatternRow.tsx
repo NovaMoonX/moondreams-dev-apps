@@ -14,7 +14,7 @@ interface PatternRowProps {
   onOpen: (patternId: string) => void;
 }
 
-/** One thing noticed: the hollow ring (inferred, always), the sentence, and a muted line of its evidence and state. Opens the pattern. */
+/** One thing noticed: the hollow ring (inferred, always), the sentence (two lines at most), its state on a short line of its own and a muted line of its evidence. Opens the pattern. */
 function PatternRow({ pattern, assistant, onOpen }: PatternRowProps) {
   const state = readStateWords(pattern, assistant);
   return (
@@ -31,18 +31,27 @@ function PatternRow({ pattern, assistant, onOpen }: PatternRowProps) {
         className='mt-1.5'
       />
       <span className='min-w-0 flex-1'>
-        <PrivateTitle
-          isPrivate={pattern.privacy === 'private'}
-          className='text-foreground text-[15px] leading-[21px] text-pretty'
-        >
-          {pattern.statement}
-        </PrivateTitle>
-        <span className='text-muted-foreground block text-[13px] break-words'>
-          {pattern.evidenceLine !== '' && `${pattern.evidenceLine} · `}
-          <span className={join(state.isAsking && 'text-primary font-medium')}>
-            {state.line}
-          </span>
+        <span className='line-clamp-2 text-[15px] leading-[21px] break-words'>
+          <PrivateTitle
+            isPrivate={pattern.privacy === 'private'}
+            className='text-foreground text-pretty'
+          >
+            {pattern.statement}
+          </PrivateTitle>
         </span>
+        <span
+          className={join(
+            'text-muted-foreground block text-[13px]',
+            state.isAsking && 'text-primary font-medium',
+          )}
+        >
+          {state.line}
+        </span>
+        {pattern.evidenceLine !== '' && (
+          <span className='text-muted-foreground line-clamp-1 text-[13px] break-words'>
+            {pattern.evidenceLine}
+          </span>
+        )}
       </span>
       <ChevronRight
         className='text-muted-foreground mt-1 size-4 shrink-0'

@@ -70,7 +70,7 @@ const MODELS: Record<ModelRole, ModelSpec> = {
     id: 'claude-haiku-5-5',
     effort: 'low',
     hasServerFallback: false,
-    price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+    price: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.2 },
   },
 };
 

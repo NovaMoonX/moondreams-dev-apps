@@ -12,11 +12,11 @@ import type { OpenPattern } from '@apps/helm/types';
 
 interface PatternOfferCardProps {
   pattern: OpenPattern;
-  /** Where the person makes the change themselves (the habit's When sheet); none draws no such action. */
-  onChange?: () => void;
+  /** Where the person makes the change themselves (the habit's When sheet); `onSaved` is called once that change saves. None draws no yes that needs it. */
+  onChange?: (onSaved: () => void) => void;
 }
 
-/** What Helm noticed about something the person set, asked once: the yes is named for its change, "Not now" waits below a hairline, and "Stop suggesting that" is a tap further, in the pattern's sheet. Something going well is a solid card, since it is about what is already theirs. Care is only ever asked. */
+/** What was noticed about something the person set, asked once: the yes is named for its change (one that only opens the place to change it accepts the pattern when that saves, and is left out where there is no such place), "Not now" waits below a hairline, and "Stop suggesting that" is a tap further, in the pattern's sheet. Something going well is a solid card, since it is about what is already theirs. Care is only ever asked. */
 function PatternOfferCard({ pattern, onChange }: PatternOfferCardProps) {
   const answers = usePatternAnswers();
   const [isOpen, setIsOpen] = useState(false);
@@ -25,10 +25,12 @@ function PatternOfferCard({ pattern, onChange }: PatternOfferCardProps) {
   const yes = readYes(pattern);
   const isBusy = answers.busyId !== null;
 
+  const hasYes = yes !== null && (yes.isDirect || onChange !== undefined);
+
   const sayYes = () => {
     if (!yes) return;
-    if (!yes.isDirect) onChange?.();
-    void answers.accept(pattern);
+    if (yes.isDirect) void answers.accept(pattern);
+    else onChange?.(() => void answers.accept(pattern));
   };
 
   return (
@@ -62,12 +64,12 @@ function PatternOfferCard({ pattern, onChange }: PatternOfferCardProps) {
           type='button'
           className='w-full'
           disabled={isBusy}
-          onClick={onChange}
+          onClick={() => onChange(() => undefined)}
         >
           {HELM_COPY.noticedYes.changeTime}
         </Button>
       )}
-      {!isCare && yes && (
+      {!isCare && yes && hasYes && (
         <Button
           type='button'
           className='w-full'
@@ -81,10 +83,12 @@ function PatternOfferCard({ pattern, onChange }: PatternOfferCardProps) {
       <div className='border-border flex justify-center border-t pt-3'>
         <Button
           type='button'
-          variant='tertiary'
+          variant='outline'
           size='sm'
           disabled={isBusy}
-          onClick={() => void answers.notNow(pattern)}
+          onClick={() =>
+            void (isCare ? answers.confirm(pattern) : answers.notNow(pattern))
+          }
         >
           {isCare ? HELM_COPY.noticedItsRight : HELM_COPY.noticedNotNow}
         </Button>
@@ -92,6 +96,7 @@ function PatternOfferCard({ pattern, onChange }: PatternOfferCardProps) {
       <PatternSheet
         patternId={isOpen ? pattern.id : null}
         onClose={() => setIsOpen(false)}
+        onChange={onChange}
       />
     </section>
   );

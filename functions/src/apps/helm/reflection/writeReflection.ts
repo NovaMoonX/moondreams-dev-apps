@@ -251,7 +251,11 @@ const isPlainObject = (value: unknown) =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const openKey = (firestore: Firestore, keyring: Keyring, uid: string) =>
-  unwrapHelmKey(firestore, keyring, uid).catch(() => null);
+  unwrapHelmKey(firestore, keyring, uid).catch((error: unknown) => {
+    if (typeof (error as { code?: unknown } | null)?.code !== 'undefined')
+      throw error;
+    return null;
+  });
 
 type Decision = 'superseded' | 'off' | 'forgotten' | 'failed' | 'write';
 
@@ -373,27 +377,43 @@ export async function applyReflectionOutcome(
         transaction.update(profileRef, { reflectDueAt: null });
     };
     if (decision === 'off') {
-      releaseLeaseIn(transaction, firestore, uid, 0);
+      releaseLeaseIn(transaction, firestore, uid, 0, state.lastDayKey);
       return 'dropped';
     }
     if (decision === 'forgotten') {
-      releaseLeaseIn(transaction, firestore, uid, 0);
+      releaseLeaseIn(transaction, firestore, uid, 0, state.lastDayKey);
       clearDue();
       return 'dropped';
     }
     if (decision === 'failed') {
       const attempts = state.attempts + 1;
       const hasGivenUp = attempts >= BATCH_JOBS.reflect.maxAttempts;
-      releaseLeaseIn(transaction, firestore, uid, hasGivenUp ? 0 : attempts);
+      releaseLeaseIn(
+        transaction,
+        firestore,
+        uid,
+        hasGivenUp ? 0 : attempts,
+        state.lastDayKey,
+      );
       if (!hasGivenUp) return 'failed';
       clearDue();
       logger.warn('helm.reflect.gaveUp', { attempts });
       return 'gaveUp';
     }
-    releaseLeaseIn(transaction, firestore, uid, 0);
+    releaseLeaseIn(
+      transaction,
+      firestore,
+      uid,
+      0,
+      planned && !isAlreadyWritten ? current.dayKey : state.lastDayKey,
+    );
     clearDue();
     if (!planned || isAlreadyWritten) return 'skipped';
-    transaction.set(reflectionRef, planned.reflection);
+    transaction.set(reflectionRef, {
+      ...planned.reflection,
+      seenAt:
+        (reflectionSnap.get('seenAt') as number | null | undefined) ?? null,
+    });
     planned.observations.forEach(({ id, data }, index) => {
       if (!existing[index]?.exists)
         transaction.set(firestore.doc(`${base}/observations/${id}`), data);

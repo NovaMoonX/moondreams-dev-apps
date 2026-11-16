@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   Button,
@@ -124,6 +124,7 @@ function HabitScreen({
   const whoName = useHabitWhoName(habit ?? { forWhoId: null });
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingWhen, setIsChangingWhen] = useState(false);
+  const whenSavedRef = useRef<(() => void) | null>(null);
   const [isPausing, setIsPausing] = useState(false);
   const [isAllNotes, setIsAllNotes] = useState(false);
   const [isWritingCare, setIsWritingCare] = useState(false);
@@ -459,7 +460,10 @@ function HabitScreen({
             {offer && (
               <PatternOfferCard
                 pattern={offer}
-                onChange={() => setIsChangingWhen(true)}
+                onChange={(onSaved) => {
+                  whenSavedRef.current = onSaved;
+                  setIsChangingWhen(true);
+                }}
               />
             )}
             {notes.length > 0 && (
@@ -582,7 +586,11 @@ function HabitScreen({
           />
           <HabitWhenSheet
             isOpen={isChangingWhen}
-            onClose={() => setIsChangingWhen(false)}
+            onClose={() => {
+              whenSavedRef.current = null;
+              setIsChangingWhen(false);
+            }}
+            onSaved={() => whenSavedRef.current?.()}
             habit={habit}
           />
           <HabitPauseSheet

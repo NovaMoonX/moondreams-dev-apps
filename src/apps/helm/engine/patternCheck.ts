@@ -72,6 +72,7 @@ export const toPatternFields = (
   sourceKeys: toSourceKeys(finding.evidence),
   declineCount: 0,
   nextEligibleOn: null,
+  confirmedAt: null,
   offReason: null,
   history: [],
   seenAt: null,

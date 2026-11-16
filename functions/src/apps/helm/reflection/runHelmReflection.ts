@@ -20,7 +20,7 @@ import {
 } from '../../../ai/batches.js';
 import type { Keyring } from '../../../appKeys/keyring.js';
 import { isForcedFixture, isRunningInEmulator } from '../../../emulator.js';
-import { reserveBatchSpend } from '../aiLimits.js';
+import { recordAiSpendIn, reserveBatchSpend } from '../aiLimits.js';
 import { HELM_MASTER_KEYS } from '../getHelmKey.js';
 import { unwrapHelmKey } from '../helmKey.js';
 import { ANTHROPIC_API_KEY, loadKeyringOrFail } from '../sortHelmCapture.js';
@@ -53,6 +53,10 @@ const CREATING_LOST_MS = 15 * 60_000;
 const BUILD_LEASE_MS = 30 * 60_000;
 /** A batch answers within its job's longest wait, so a request still open after that is replaced. */
 const SUBMITTED_LEASE_MS = (BATCH_JOBS.reflect.maxWaitHours + 1) * HOUR_MS;
+/** A submitted batch past its job's longest wait plus this is given up on, so its reservation returns to the day's budget. */
+const SUBMITTED_GRACE_MS = 2 * HOUR_MS;
+/** Collecting stops starting runs after this, leaving the rest of the 540 s to build and submit. */
+const COLLECT_BUDGET_MS = 240_000;
 /** New people are started only inside this, leaving the rest of the 540 s to submit and collect. */
 const BUILD_BUDGET_MS = 300_000;
 
@@ -73,6 +77,11 @@ interface Prepared extends PreparedReflection {
   replaced: { runId: string | null; customId: string } | null;
 }
 
+class OutOfTime extends Error {}
+
+const toCode = (error: unknown) =>
+  (error as { code?: unknown } | null)?.code ?? null;
+
 const toDueAt = (profile: DocumentData) =>
   typeof profile.reflectDueAt === 'number' ? profile.reflectDueAt : 0;
 
@@ -89,10 +98,12 @@ async function takeLease(
     transaction.set(ref, {
       ...lease,
       attempts: state.attempts,
+      lastDayKey: state.lastDayKey,
       leaseUntil: now + BUILD_LEASE_MS,
       continuation: null,
     });
     return {
+      lastDayKey: state.lastDayKey,
       replaced:
         state.customId === null
           ? null
@@ -114,7 +125,13 @@ const releaseLease = (
     const profileSnap = clear ? await transaction.get(profileRef) : null;
     const state = readState(stateSnap.data());
     if (state.customId === customId)
-      releaseLeaseIn(transaction, firestore, uid, state.attempts);
+      releaseLeaseIn(
+        transaction,
+        firestore,
+        uid,
+        state.attempts,
+        state.lastDayKey,
+      );
     if (clear && profileSnap?.get('reflectDueAt') === clear.answersDueAt)
       transaction.update(profileRef, { reflectDueAt: null });
   });
@@ -153,6 +170,10 @@ async function prepare(
       await releaseLease(firestore, uid, customId, { answersDueAt });
       return null;
     }
+    if (lease.lastDayKey === built.dayKey) {
+      await releaseLease(firestore, uid, customId, { answersDueAt });
+      return null;
+    }
     const reserved = estimateReflectCost(built.request);
     if (!(await reserveBatchSpend(firestore, now, reserved))) {
       await releaseLease(firestore, uid, customId, null);
@@ -166,29 +187,74 @@ async function prepare(
       reserved,
       replaced: lease.replaced,
     };
-  } catch {
-    logger.warn('helm.reflect.prepareFailed');
+  } catch (error) {
+    logger.warn('helm.reflect.prepareFailed', { runId, code: toCode(error) });
     await releaseLease(firestore, uid, customId, null).catch(() => null);
     return null;
   }
 }
 
-async function markLost(
-  firestore: Firestore,
-  runId: string,
-  run: ReflectionRun,
-) {
+/** Closes a run that will never answer, in one transaction with returning what its unsettled requests reserved; a run already closed is left alone. */
+async function markLost(firestore: Firestore, runId: string): Promise<void> {
+  const runRef = firestore.doc(`${RUNS_PATH}/${runId}`);
+  const run = readRun((await runRef.get()).data());
+  if (!run) return;
   await Promise.all(
     Object.entries(run.requests).map(([customId, { uid }]) =>
       releaseLease(firestore, uid, customId, null),
     ),
   );
-  await firestore.doc(`${RUNS_PATH}/${runId}`).update({
-    status: 'lost',
-    superseded: Object.keys(run.requests),
-    requests: {},
+  await firestore.runTransaction(async (transaction) => {
+    const current = readRun((await transaction.get(runRef)).data());
+    if (!current || !OPEN_RUN_STATUSES.includes(current.status)) return;
+    const refund = Object.values(current.requests).reduce(
+      (sum, request) => sum + request.reserved,
+      0,
+    );
+    if (refund > 0)
+      recordAiSpendIn(transaction, firestore, current.createdAt, -refund);
+    transaction.update(runRef, {
+      status: 'lost',
+      superseded: Object.keys(current.requests),
+      requests: {},
+    });
   });
 }
+
+/** Closes a collected run, returning what any request that got no result had reserved. */
+async function closeCollected(
+  firestore: Firestore,
+  runId: string,
+  now: number,
+) {
+  const runRef = firestore.doc(`${RUNS_PATH}/${runId}`);
+  const leftover = readRun((await runRef.get()).data())?.requests ?? {};
+  await Promise.all(
+    Object.entries(leftover).map(([customId, { uid }]) =>
+      releaseLease(firestore, uid, customId, null),
+    ),
+  );
+  await firestore.runTransaction(async (transaction) => {
+    const current = readRun((await transaction.get(runRef)).data());
+    if (!current || !OPEN_RUN_STATUSES.includes(current.status)) return;
+    const refund = Object.values(current.requests).reduce(
+      (sum, request) => sum + request.reserved,
+      0,
+    );
+    if (refund > 0)
+      recordAiSpendIn(transaction, firestore, current.createdAt, -refund);
+    transaction.update(runRef, {
+      status: 'collected',
+      collectedAt: now,
+      deletedAtProvider: BATCH_JOBS.reflect.deleteAfterCollect ? now : null,
+      requests: {},
+    });
+  });
+}
+
+const isExpired = (run: ReflectionRun, now: number) =>
+  now - (run.submittedAt ?? run.createdAt) >
+  BATCH_JOBS.reflect.maxWaitHours * HOUR_MS + SUBMITTED_GRACE_MS;
 
 async function collectRun(
   firestore: Firestore,
@@ -197,17 +263,23 @@ async function collectRun(
   runId: string,
   run: ReflectionRun,
   now: number,
+  deadline: number,
 ): Promise<'collected' | 'lost' | 'waiting'> {
   if (run.status === 'creating') {
     if (now - run.createdAt <= CREATING_LOST_MS) return 'waiting';
-    await markLost(firestore, runId, run);
+    await markLost(firestore, runId);
     return 'lost';
   }
-  if (run.batchId === null) return 'waiting';
+  if (run.batchId === null) {
+    if (!isExpired(run, now)) return 'waiting';
+    await markLost(firestore, runId);
+    return 'lost';
+  }
   const state = await collectBatch(
     client,
     { jobId: 'reflect', batchId: run.batchId },
     async (customId, outcome) => {
+      if (Date.now() > deadline) throw new OutOfTime();
       await applyReflectionOutcome(firestore, keyring, {
         runId,
         customId,
@@ -216,13 +288,12 @@ async function collectRun(
       });
     },
   );
-  if (state === 'pending') return 'waiting';
-  await firestore.doc(`${RUNS_PATH}/${runId}`).update({
-    status: 'collected',
-    collectedAt: now,
-    deletedAtProvider: BATCH_JOBS.reflect.deleteAfterCollect ? now : null,
-    requests: {},
-  });
+  if (state === 'pending') {
+    if (!isExpired(run, now)) return 'waiting';
+    await markLost(firestore, runId);
+    return 'lost';
+  }
+  await closeCollected(firestore, runId, now);
   return 'collected';
 }
 
@@ -236,10 +307,11 @@ async function collectOpenRuns(
     .collection(RUNS_PATH)
     .where('status', 'in', OPEN_RUN_STATUSES)
     .get();
+  const deadline = Date.now() + COLLECT_BUDGET_MS;
   return open.docs.reduce(async (previous, doc) => {
     const totals = await previous;
     const run = readRun(doc.data());
-    if (!run) return totals;
+    if (!run || Date.now() > deadline) return totals;
     try {
       const result = await collectRun(
         firestore,
@@ -248,10 +320,16 @@ async function collectOpenRuns(
         doc.id,
         run,
         now,
+        deadline,
       );
       return { ...totals, [result]: (totals[result] ?? 0) + 1 };
-    } catch {
-      logger.warn('helm.reflect.collectFailed', { status: run.status });
+    } catch (error) {
+      if (!(error instanceof OutOfTime))
+        logger.warn('helm.reflect.collectFailed', {
+          runId: doc.id,
+          status: run.status,
+          code: toCode(error),
+        });
       return totals;
     }
   }, Promise.resolve<Record<string, number>>({}));
@@ -321,30 +399,44 @@ async function submitPrepared(
     ),
   );
   const ids = prepared.map(({ customId }) => customId);
-  try {
-    const { batchId } = await submitBatch(client, {
-      jobId: 'reflect',
-      requests: prepared.map(({ request }) => request),
-      makeId: () => ids.shift() ?? newId('b', 16),
-    });
-    await runRef.update({ status: 'submitted', batchId, submittedAt: now });
-    const writer = firestore.bulkWriter();
-    prepared.forEach(({ uid }) =>
-      writer.update(firestore.doc(statePath(uid)), {
-        leaseUntil: now + SUBMITTED_LEASE_MS,
+  const sent = await submitBatch(client, {
+    jobId: 'reflect',
+    requests: prepared.map(({ request }) => request),
+    makeId: () => ids.shift() ?? newId('b', 16),
+  }).catch(async (error: unknown) => {
+    logger.error('helm.reflect.submitFailed', { runId, code: toCode(error) });
+    await markLost(firestore, runId).catch((lostError: unknown) =>
+      logger.error('helm.reflect.markLostFailed', {
+        runId,
+        code: toCode(lostError),
       }),
     );
-    await writer.close();
-    return prepared.length;
-  } catch {
-    logger.error('helm.reflect.submitFailed');
-    await markLost(
-      firestore,
-      runId,
-      readRun((await runRef.get()).data()) as ReflectionRun,
+    return null;
+  });
+  if (!sent) return 0;
+  await runRef
+    .update({ status: 'submitted', batchId: sent.batchId, submittedAt: now })
+    .catch((error: unknown) =>
+      logger.error('helm.reflect.submittedUpdateFailed', {
+        runId,
+        code: toCode(error),
+      }),
     );
-    return 0;
-  }
+  const writer = firestore.bulkWriter();
+  prepared.forEach(({ uid }) =>
+    writer
+      .update(firestore.doc(statePath(uid)), {
+        leaseUntil: now + SUBMITTED_LEASE_MS,
+      })
+      .catch((error: unknown) =>
+        logger.warn('helm.reflect.leaseExtendFailed', {
+          runId,
+          code: toCode(error),
+        }),
+      ),
+  );
+  await writer.close().catch(() => null);
+  return prepared.length;
 }
 
 /** One hourly pass: finish what earlier runs sent, then send what is newly due. The batch client is injected so a pass can be rehearsed without the provider. */

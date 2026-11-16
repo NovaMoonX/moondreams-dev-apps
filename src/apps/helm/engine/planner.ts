@@ -261,7 +261,7 @@ const ENERGY_ORDER: Record<Energy, number> = { high: 0, medium: 1, low: 2 };
 
 /** Where each day-part begins and ends on the clock; the last runs to the habit day's turn at 03:00. */
 export const PART_CLOCKS = {
-  morning: ['00:00', '11:00'],
+  morning: ['03:00', '11:00'],
   midday: ['11:00', '14:00'],
   afternoon: ['14:00', '18:00'],
   evening: ['18:00', '21:00'],

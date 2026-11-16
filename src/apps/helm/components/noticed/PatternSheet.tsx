@@ -22,6 +22,8 @@ import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 interface PatternSheetProps {
   patternId: string | null;
   onClose: () => void;
+  /** The same place the card opens to make the change; where the sheet has none, a yes that needs it is left out. */
+  onChange?: (onSaved: () => void) => void;
 }
 
 const ROWS_SHOWN = 8;
@@ -65,7 +67,7 @@ const readEvidenceRows = (
 };
 
 /** One pattern: what it is based on (days newest first, the person's own words when they said it), its state in words, and the answers named by what they do. Stopping it sits apart, below. */
-function PatternSheet({ patternId, onClose }: PatternSheetProps) {
+function PatternSheet({ patternId, onClose, onChange }: PatternSheetProps) {
   const assistant = useAssistantName();
   const patterns = useAppSelector(selectShownPatterns);
   const observations = useAppSelector(selectShownObservations);
@@ -79,7 +81,8 @@ function PatternSheet({ patternId, onClose }: PatternSheetProps) {
     pattern !== null &&
     pattern.offReason === null &&
     (pattern.state === 'suggested' || pattern.state === 'candidate');
-  const isAskedNow = isAsked && pattern.state === 'suggested';
+  const isAskedNow =
+    isAsked && pattern.state === 'suggested' && pattern.confirmedAt === null;
   const isSaid = pattern?.evidence.kind === 'said';
   const isTakenBackAble =
     pattern !== null &&
@@ -100,6 +103,18 @@ function PatternSheet({ patternId, onClose }: PatternSheetProps) {
 
   const first = pattern && (
     <div className='space-y-2'>
+      {isAskedNow && yes && !yes.isDirect && onChange && (
+        <ActionRow
+          icon={<Check />}
+          label={yes.label}
+          subtitle={yes.subtitle ?? undefined}
+          isDisabled={isBusy}
+          onClick={() => {
+            onClose();
+            onChange(() => void answers.accept(pattern));
+          }}
+        />
+      )}
       {isAskedNow && yes && yes.isDirect && (
         <ActionRow
           icon={<Check />}
@@ -115,7 +130,7 @@ function PatternSheet({ patternId, onClose }: PatternSheetProps) {
           label={HELM_COPY.noticedItsRight}
           subtitle={HELM_COPY.noticedItsRightSubtitle}
           isDisabled={isBusy}
-          onClick={() => done(answers.notNow(pattern))}
+          onClick={() => done(answers.confirm(pattern))}
         />
       )}
       {isAskedNow && pattern.handling !== 'askOnly' && (
@@ -202,6 +217,7 @@ function PatternSheet({ patternId, onClose }: PatternSheetProps) {
                     icon={<Eraser />}
                     label={HELM_COPY.noticedForgetWords}
                     subtitle={HELM_COPY.noticedForgetWordsSubtitle}
+                    isDestructive
                     isDisabled={isBusy}
                     onClick={() =>
                       done(
@@ -220,6 +236,7 @@ function PatternSheet({ patternId, onClose }: PatternSheetProps) {
                     icon={<Ban />}
                     label={HELM_COPY.noticedStop}
                     subtitle={HELM_COPY.noticedStopSubtitle}
+                    isDestructive
                     isDisabled={isBusy}
                     onClick={() => done(answers.stop(pattern))}
                   />

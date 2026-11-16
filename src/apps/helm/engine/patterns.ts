@@ -30,6 +30,7 @@ import {
   type LifeHabit,
 } from '@apps/helm/engine/habitLife';
 import {
+  WORKING_TAGS,
   readSaidSignals,
   type ObservationTag,
   type SaidObservation,
@@ -612,10 +613,16 @@ export function readSaidLinkCandidates(input: {
           otherId: null,
         },
         bucket: { kind: 'none' },
-        parts: candidate.tags,
+        parts: [
+          candidate.tags.some((tag) => WORKING_TAGS.some((one) => one === tag))
+            ? 'working'
+            : 'struggling',
+        ],
         evidence: saidEvidence(matched, dayKeys),
         effect: SUGGESTION_EFFECT[candidate.suggestion],
-        isCare: input.isCareOf(candidate.subject),
+        isCare:
+          input.isCareOf(candidate.subject) ||
+          matched.some((one) => one.isCare),
         tags: candidate.tags,
         linkedTo: candidate.linkedTo,
         lastEvidenceAt: Math.max(...matched.map((one) => one.at)),
@@ -707,6 +714,23 @@ export function applyStop(
     evidenceSince: pattern.evidenceSince,
     history: withHistory(pattern, 'off', input.now, 'person'),
     stateAt: input.now,
+  };
+}
+
+/** "It's right" on a statement with nothing to change: the pattern keeps its state and count, is not asked again, and the date is kept for its read-back; `today` is date-only. */
+export function applyConfirm(
+  pattern: Pick<Pattern, 'declineCount' | 'history'>,
+  input: { now: number; today: number },
+): Pick<Pattern, 'confirmedAt' | 'nextEligibleOn'> {
+  return {
+    confirmedAt: input.now,
+    nextEligibleOn:
+      input.today +
+      PATTERN_BACKOFF_WEEKS[
+        Math.min(pattern.declineCount, PATTERN_BACKOFF_WEEKS.length - 1)
+      ] *
+        7 *
+        DAY_MS,
   };
 }
 

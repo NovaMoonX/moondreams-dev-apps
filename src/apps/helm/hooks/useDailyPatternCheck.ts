@@ -17,6 +17,12 @@ export function useDailyPatternCheck(uid: string | null) {
   const observationsLoaded = useAppSelector(
     (state) => state.helm.observations.isLoaded,
   );
+  const projectsLoaded = useAppSelector(
+    (state) => state.helm.projects.isLoaded,
+  );
+  const patternsLoaded = useAppSelector(
+    (state) => state.helm.patterns.isLoaded,
+  );
   const reflectionsLoaded = useAppSelector(
     (state) => state.helm.unseenReflections.isLoaded,
   );
@@ -27,11 +33,14 @@ export function useDailyPatternCheck(uid: string | null) {
     keyStatus === 'ready' &&
     profile !== null &&
     habitsLoaded &&
+    projectsLoaded &&
+    patternsLoaded &&
     observationsLoaded &&
     reflectionsLoaded;
   const isDue =
     profile !== null &&
     ((profile.isLearningOn && profile.patternsCheckedOn !== clock.dayKey) ||
+      profile.forgottenAt !== null ||
       isPruneDue(profile.prunedOn, clock.dayKey));
 
   useEffect(() => {
@@ -43,7 +52,9 @@ export function useDailyPatternCheck(uid: string | null) {
         await runDailyPatternCheck(uid, encryption, {
           todayKey: clock.dayKey,
           timeZone: clock.timeZone,
-        });
+        }).catch((error: unknown) =>
+          console.error('Helm patterns were not checked', error),
+        );
         if (isPruneDue(profile?.prunedOn ?? null, clock.dayKey))
           await pruneWeekly(uid, encryption, Date.now(), clock.dayKey);
       })

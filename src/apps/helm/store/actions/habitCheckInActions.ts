@@ -131,6 +131,7 @@ const toCapture = async (
     screen: null,
     privacy: input.isPrivate ? 'private' : 'ordinary',
     touchesPrivate: input.isPrivate,
+    noticedCount: null,
     presence: turn.presence,
     abilities: null,
     sealed: await sealJson<CaptureSealed>(

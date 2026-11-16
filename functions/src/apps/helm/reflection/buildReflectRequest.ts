@@ -215,7 +215,10 @@ export function buildReflectMessage({
               verbatim === ''
                 ? null
                 : toSomeone(verbatim.slice(0, WHY_CAP), whoNames),
-            summary: verbatim === '' ? null : (why?.summary ?? null),
+            summary:
+              verbatim === '' || !why?.summary
+                ? null
+                : toSomeone(why.summary.slice(0, WHY_CAP), whoNames),
             basedOn: verbatim === '' ? null : whyFingerprint(verbatim),
           },
         ];

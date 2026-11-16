@@ -41,6 +41,17 @@ export function readStateWords(
           isAsking: false,
         };
   }
+  if (
+    pattern.confirmedAt !== null &&
+    (pattern.state === 'suggested' || pattern.state === 'candidate')
+  ) {
+    const date = formatDateShort(pattern.confirmedAt);
+    return {
+      line: HELM_COPY.noticedStateConfirmed(date),
+      sentence: HELM_COPY.noticedConfirmedSentence(date),
+      isAsking: false,
+    };
+  }
   if (pattern.state === 'declined' || pattern.state === 'undone') {
     const date =
       pattern.nextEligibleOn === null
@@ -80,11 +91,11 @@ export function readStateWords(
 export interface PatternYes {
   label: string;
   subtitle: string | null;
-  /** True when saying yes changes something by itself; false when the person has to make the change (a time, a plan). */
+  /** True when saying yes changes something by itself; false when it only opens where the person makes the change, and the pattern is accepted once that saves. */
   isDirect: boolean;
 }
 
-/** What "yes" is named for, by the change it makes; none for care and for what has no change of its own. */
+/** What "yes" is named for, by the change it makes; a yes that only opens the place to make the change is `isDirect: false`. None for care and for what has no change of its own. */
 export function readYes(pattern: OpenPattern): PatternYes | null {
   if (pattern.handling === 'askOnly') return null;
   const { effect } = pattern;
@@ -109,7 +120,11 @@ export function readYes(pattern: OpenPattern): PatternYes | null {
       isDirect: true,
     };
   if (effect.kind === 'talkItThrough')
-    return { label: names.talkItThrough, subtitle: null, isDirect: false };
+    return {
+      label: names.changeTime,
+      subtitle: subtitles.changeTime,
+      isDirect: false,
+    };
   return null;
 }
 

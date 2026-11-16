@@ -1,26 +1,28 @@
+import { useState } from 'react';
+
 import { Sparkles } from 'lucide-react';
 
-import AppToggle from '@/components/AppToggle';
 import SettingsRow from '@/components/SettingsRow';
-import { useLearningSwitch } from '@apps/helm/components/noticed/useLearningSwitch';
+import { useAppSelector } from '@/store';
+import LearningSheet from '@apps/helm/components/settings/LearningSheet';
 import { HELM_COPY } from '@apps/helm/constants';
+import { selectIsLearningOn } from '@apps/helm/store/selectors/patternSelectors';
 
-/** The switch as a settings row, for the top of What I've noticed. */
+/** The switch as a settings row that opens its sheet, so what the overnight reading does is always read before turning noticing on. */
 function LearningSwitchRow() {
-  const { isOn, change } = useLearningSwitch();
+  const [isOpen, setIsOpen] = useState(false);
+  const isOn = useAppSelector(selectIsLearningOn);
   return (
-    <SettingsRow
-      icon={<Sparkles className='size-5' aria-hidden='true' />}
-      title={HELM_COPY.learningTitle}
-      description={isOn ? HELM_COPY.learningRowOn : HELM_COPY.learningRowOff}
-      control={
-        <AppToggle
-          aria-label={HELM_COPY.learningTitle}
-          checked={isOn}
-          onCheckedChange={change}
-        />
-      }
-    />
+    <>
+      <SettingsRow
+        icon={<Sparkles className='size-5' aria-hidden='true' />}
+        title={HELM_COPY.learningTitle}
+        description={isOn ? HELM_COPY.learningRowOn : HELM_COPY.learningRowOff}
+        onClick={() => setIsOpen(true)}
+        hasChevron
+      />
+      <LearningSheet isOpen={isOpen} onClose={() => setIsOpen(false)} />
+    </>
   );
 }
 

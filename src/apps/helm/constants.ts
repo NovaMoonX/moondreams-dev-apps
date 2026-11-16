@@ -3972,6 +3972,8 @@ export const HELM_COPY = {
   noticedTitle: "What I've noticed",
   noticedHelp: (assistant: string) =>
     `Patterns in when things get done, and in what you've said about them. ${assistant} quotes your words and never guesses how you feel.`,
+  noticedHelpOff:
+    "Noticing is off, so nothing new is picked up. What you've already answered stays.",
   noticedEmpty: (assistant: string) =>
     `Nothing yet. As you and ${assistant} get to know each other's days, patterns about when things work will show up here, with what they're based on.`,
   noticedOffNote:
@@ -4013,7 +4015,6 @@ export const HELM_COPY = {
     lowerCadence: 'Do it less often',
     raiseCadence: 'Do it more often',
     keepTime: 'Keep this time',
-    talkItThrough: 'Change something',
     changeTime: 'Change the time',
   },
   noticedYesSubtitle: {
@@ -4021,6 +4022,7 @@ export const HELM_COPY = {
     lowerCadence: 'Changes how often it comes up. You can change it back.',
     raiseCadence: 'Changes how often it comes up. You can change it back.',
     keepTime: 'Keeps things just as they are.',
+    changeTime: "Opens this habit's times. It counts as a yes once you save.",
   },
   noticedNotNow: 'Not now',
   noticedNotNowSubtitle: (weeks: number | null, assistant: string) =>
@@ -4030,6 +4032,10 @@ export const HELM_COPY = {
   noticedItsRight: "It's right",
   noticedItsRightSubtitle:
     "Keeps things as they are. It won't ask for a while.",
+  noticedOfferConfirmed: (date: string) =>
+    `Okay, I'll leave it. I'll check again ${date}.`,
+  noticedStateConfirmed: (date: string) => `Confirmed \u00b7 ${date}`,
+  noticedConfirmedSentence: (date: string) => `You said it's right on ${date}.`,
   noticedStop: 'Stop suggesting that',
   noticedStopSubtitle: "Won't bring this up again unless you ask.",
   noticedStartAgain: 'Start suggesting again',
@@ -4047,7 +4053,13 @@ export const HELM_COPY = {
   noticedOtherChoices: 'Other choices',
   noticedCareAsk: (name: string) => `Is the time still right for ${name}?`,
   noticedWorkingTitle: 'Going well',
-  noticedOfferSaved: 'Okay, done.',
+  noticedOfferDone: {
+    moveWindow: (time: string) => `Moved to ${time}`,
+    lowerCadence: 'Now it comes up less often',
+    raiseCadence: 'Now it comes up more often',
+    keepTime: 'Okay, keeping this time',
+    change: 'Okay, your change is saved',
+  },
   noticedOfferNotNow: (date: string | null) =>
     date === null
       ? "Okay. I won't bring this up again unless you ask."
@@ -4060,8 +4072,9 @@ export const HELM_COPY = {
   noticedActedLine: (dayName: string, part: string) =>
     `${dayName}'s ${part} left empty`,
   noticedForget: "Forget what you've noticed",
+  noticedForgetDivider: 'Start fresh',
   noticedForgetSubtitle:
-    'Clears every pattern and what it was based on. Your notes and conversations stay.',
+    'Clears every pattern and the words it was based on. Ones you stopped stay only as a \u201cdon\u2019t suggest\u201d mark, with no words. Your notes and conversations stay.',
   noticedForgotten: "Forgot what I'd noticed.",
   noticedForgotUndone: 'Put back what I had noticed.',
   noticedWordsForgotten: 'Forgot those words.',
@@ -4080,8 +4093,10 @@ export const HELM_COPY = {
   learningFailed: "Couldn't save that. Check your connection.",
   notedLine: (assistant: string) =>
     `Noted \u00b7 ${assistant} will think it over tonight`,
-  notedForgetIt: 'Forget it',
+  notedLinePlain: 'Noted',
+  notedForgetIt: 'Forget what I noted',
   notedForgotten: "Okay, I won't keep that.",
+  notedNothingKept: 'Nothing from this is kept anymore.',
   patternTookBack: (line: string) => `Took back: ${line}`,
   patternTookBackReport: 'Okay, back the way it was.',
 } as const;
@@ -4093,14 +4108,6 @@ export const WATCHING_PHRASES = [
   "i'll notice",
   'noted',
 ] as const;
-
-/** The fixed line after a turn that was only noted, by the assistant's tone; never stored. */
-export const TONE_LINES: Record<AssistantTone, { noted: string }> = {
-  composed: { noted: 'Noted.' },
-  warm: { noted: 'Noted, thank you for telling me.' },
-  brief: { noted: 'Noted.' },
-  formal: { noted: 'Noted.' },
-};
 
 /** Weeks Helm waits after the first and the second no; the third is final. */
 export const PATTERN_BACKOFF_WEEKS = [4, 8] as const;

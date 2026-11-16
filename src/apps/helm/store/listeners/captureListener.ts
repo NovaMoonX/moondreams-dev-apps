@@ -241,6 +241,7 @@ async function openCapture(
     createdAt: data.createdAt ?? 0,
     privacy: readPrivacy(data.privacy),
     touchesPrivate: data.touchesPrivate ?? null,
+    noticedCount: data.noticedCount ?? null,
     presence: data.presence ?? null,
     abilities: data.abilities ?? null,
     sortedAt: data.sortedAt ?? null,

@@ -6,11 +6,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
+  finishForget,
   forgetAllNoticed,
   undoForgetAll,
 } from '@apps/helm/store/actions/patternActions';
 
-/** "Forget what you've noticed": hides everything at once with an Undo in the toast; the deletion follows at the next daily check. */
+const FORGET_TOAST_MS = 8000;
+
+/** "Forget what you've noticed": hides everything at once with an Undo in the toast; the deletion follows when the toast has closed, unless Undo put the old stamp back (and at the next daily check if the app closed first). */
 function ForgetNoticedRow() {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -22,13 +25,14 @@ function ForgetNoticedRow() {
     if (!user) return;
     const uid = user.uid;
     forgetAllNoticed(uid, previous)
-      .then((stamp) =>
+      .then((stamp) => {
         addToast({
+          duration: FORGET_TOAST_MS,
           title: HELM_COPY.noticedForgotten,
           type: 'success',
           action: {
             label: HELM_COPY.undo,
-            onClick: () =>
+            onClick: () => {
               void undoForgetAll(uid, stamp)
                 .then(() =>
                   addToast({
@@ -42,10 +46,18 @@ function ForgetNoticedRow() {
                     title: HELM_COPY.noticedOfferFailed,
                     type: 'error',
                   });
-                }),
+                });
+            },
           },
-        }),
-      )
+        });
+        window.setTimeout(
+          () =>
+            void finishForget(uid, stamp).catch((error: unknown) =>
+              console.error('Helm forget was not finished', error),
+            ),
+          FORGET_TOAST_MS,
+        );
+      })
       .catch((error: unknown) => {
         console.error('Helm noticed was not forgotten', error);
         addToast({ title: HELM_COPY.noticedOfferFailed, type: 'error' });

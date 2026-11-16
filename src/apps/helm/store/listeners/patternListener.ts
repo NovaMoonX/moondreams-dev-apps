@@ -53,6 +53,7 @@ export async function openPattern(
     sourceKeys: data.sourceKeys ?? [],
     declineCount: data.declineCount ?? 0,
     nextEligibleOn: data.nextEligibleOn ?? null,
+    confirmedAt: data.confirmedAt ?? null,
     offReason: data.offReason ?? null,
     history: data.history ?? [],
     seenAt: data.seenAt ?? null,

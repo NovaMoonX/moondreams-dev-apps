@@ -43,7 +43,15 @@ export interface ActSubject {
   isCare: boolean;
 }
 
-/** A question answered stays answered; a plain request acts; a remark acts only when it touches something within 48 hours and no care item beyond that, and otherwise only what it said is kept. */
+const CREATING_KINDS = [
+  'createTask',
+  'createNote',
+  'createProject',
+  'setKeyDate',
+  'create',
+] as const;
+
+/** A question answered stays answered; a plain request acts; a remark that creates something acts, and one that adjusts existing things acts only when it touches something within 48 hours and no care item beyond that, otherwise only what it said is kept. */
 export function readActNow(input: {
   intent: TurnIntent;
   commands: { kind: string }[];
@@ -55,6 +63,12 @@ export function readActNow(input: {
   )
     return 'answered';
   if (input.intent === 'request') return 'act';
+  if (
+    input.commands.some((command) =>
+      CREATING_KINDS.some((kind) => kind === command.kind),
+    )
+  )
+    return 'act';
   const hasConcrete = input.commands.some(
     (command) => command.kind !== 'remember',
   );

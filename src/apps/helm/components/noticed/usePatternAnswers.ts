@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatClockTime, formatDateShortUTC } from '@/utils/formatUtils';
 import { readNotNowWeeks } from '@apps/helm/components/noticed/patternWords';
-import { HELM_COPY } from '@apps/helm/constants';
+import { HELM_COPY, PATTERN_BACKOFF_WEEKS } from '@apps/helm/constants';
 import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   acceptPattern,
+  confirmPattern,
   forgetWords,
   notNowPattern,
   reopenPattern,
@@ -23,6 +24,21 @@ import type { OpenPattern } from '@apps/helm/types';
 type Outcome = PatternChangeResult | 'unreadable';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** What a yes did, in words: the new time, how often, or that the person's own change saved. */
+const readDone = (pattern: OpenPattern) => {
+  const { effect } = pattern;
+  const done = HELM_COPY.noticedOfferDone;
+  return effect.kind === 'moveWindow'
+    ? done.moveWindow(formatClockTime(effect.start))
+    : effect.kind === 'lowerCadence'
+      ? done.lowerCadence
+      : effect.kind === 'raiseCadence'
+        ? done.raiseCadence
+        : effect.kind === 'keepTime'
+          ? done.keepTime
+          : done.change;
+};
 
 /** The answers a person can give a pattern, each told in a toast; one write at a time, and nothing else on the screen locks. */
 export function usePatternAnswers() {
@@ -66,7 +82,21 @@ export function usePatternAnswers() {
         pattern.id,
         async (uid) =>
           acceptPattern(uid, await getHelmEncryption(uid), pattern),
-        HELM_COPY.noticedOfferSaved,
+        readDone(pattern),
+      ),
+    confirm: (pattern: OpenPattern) =>
+      run(
+        pattern.id,
+        (uid) => confirmPattern(uid, pattern.id, dayKey),
+        HELM_COPY.noticedOfferConfirmed(
+          formatDateShortUTC(
+            Date.parse(dayKey) +
+              PATTERN_BACKOFF_WEEKS[
+                Math.min(pattern.declineCount, PATTERN_BACKOFF_WEEKS.length - 1)
+              ] *
+                WEEK_MS,
+          ),
+        ),
       ),
     notNow: (pattern: OpenPattern) => {
       const weeks = readNotNowWeeks(pattern);

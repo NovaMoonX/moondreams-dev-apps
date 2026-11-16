@@ -13,6 +13,7 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
   selectNoticedRows,
   selectShownObservations,
+  selectIsLearningOn,
 } from '@apps/helm/store/selectors/patternSelectors';
 
 const ROWS_SHOWN = 3;
@@ -24,9 +25,7 @@ function WhatIveNoticed() {
   const hasObservations = useAppSelector(
     (state) => selectShownObservations(state).length > 0,
   );
-  const isLearningOn = useAppSelector(
-    (state) => state.helm.profile?.isLearningOn ?? true,
-  );
+  const isLearningOn = useAppSelector(selectIsLearningOn);
   const isLoaded = useAppSelector((state) => state.helm.patterns.isLoaded);
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAll, setIsAll] = useState(false);
@@ -56,7 +55,9 @@ function WhatIveNoticed() {
           <span className='inline-flex items-center gap-1.5 whitespace-nowrap'>
             {HELM_COPY.noticedTitle}
             <HelpTip title={HELM_COPY.noticedTitle}>
-              {HELM_COPY.noticedHelp(assistant)}
+              {isLearningOn
+                ? HELM_COPY.noticedHelp(assistant)
+                : HELM_COPY.noticedHelpOff}
             </HelpTip>
           </span>
         }
@@ -64,7 +65,7 @@ function WhatIveNoticed() {
       <ul className='helm-card divide-border divide-y px-3'>
         <LearningSwitchRow />
       </ul>
-      {isLoaded && used.length === 0 && (
+      {isLearningOn && isLoaded && used.length === 0 && (
         <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
           {HELM_COPY.noticedEmpty(assistant)}
         </p>
@@ -85,18 +86,23 @@ function WhatIveNoticed() {
         </div>
       )}
       {unused.length > 0 && (
-        <div className='space-y-3'>
-          <ShowMoreButton
-            isOpen={isUnusedOpen}
-            onClick={() => setIsUnusedOpen(!isUnusedOpen)}
-          >
-            {HELM_COPY.noticedNotUsed(unused.length)}
-          </ShowMoreButton>
+        <div className='space-y-3 pt-3'>
+          <SectionDivider
+            label={
+              <ShowMoreButton
+                isOpen={isUnusedOpen}
+                onClick={() => setIsUnusedOpen(!isUnusedOpen)}
+              >
+                {HELM_COPY.noticedNotUsed(unused.length)}
+              </ShowMoreButton>
+            }
+          />
           {isUnusedOpen && list(unused)}
         </div>
       )}
       {(rows.length > 0 || hasObservations) && (
-        <div className='pt-3'>
+        <div className='space-y-3 pt-3'>
+          <SectionDivider label={HELM_COPY.noticedForgetDivider} />
           <ForgetNoticedRow />
         </div>
       )}

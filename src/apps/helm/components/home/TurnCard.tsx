@@ -289,9 +289,12 @@ function TurnCard({
           </AssistantLine>
         </div>
       )}
-      {capture.disposition === 'noted' && !capture.isUnreadable && isSorted && (
-        <NotedRow captureId={capture.id} />
-      )}
+      {capture.disposition === 'noted' &&
+        (capture.noticedCount ?? 0) > 0 &&
+        !capture.isUnreadable &&
+        isSorted && (
+          <NotedRow captureId={capture.id} createdAt={capture.createdAt} />
+        )}
       {capture.answer && !capture.isUnreadable && (
         <AnswerCard answer={capture.answer} isInset capture={capture} />
       )}

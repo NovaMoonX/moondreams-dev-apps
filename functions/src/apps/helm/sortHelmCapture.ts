@@ -596,6 +596,7 @@ const readStyleNotes = (firestore: Firestore, base: string, key: HelmKey) =>
     .catch(() => null);
 
 const NOTICED_SHOWN = 10;
+const NOTICED_READ = 100;
 
 const readNoticed = (
   firestore: Firestore,
@@ -606,10 +607,15 @@ const readNoticed = (
   firestore
     .collection(`${base}/patterns`)
     .where('isLive', '==', true)
-    .limit(NOTICED_SHOWN * 3)
+    .limit(NOTICED_READ)
     .get()
     .then((snapshot) =>
-      snapshot.docs
+      [...snapshot.docs]
+        .sort(
+          (a, b) =>
+            ((b.get('createdAt') as number) ?? 0) -
+            ((a.get('createdAt') as number) ?? 0),
+        )
         .filter(
           (doc) =>
             (options.forgottenAt === null ||
@@ -3046,11 +3052,14 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     (command) => decide(command) === 'automatic',
   );
 
-  const otherCount =
+  const createdCount =
     reply.noteFacts.length +
     reply.keyDates.length +
     reply.projects.length +
     reply.notes.length +
+    reply.asks.length;
+  const otherCount =
+    createdCount +
     reply.topicCommands.length +
     reply.procedureCommands.length +
     reply.runCommands.length +
@@ -3059,7 +3068,6 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reply.contactPoints.length +
     reply.connectionCommands.length +
     reply.whereabouts.length +
-    reply.asks.length +
     (reply.planDay ? 1 : 0) +
     (reply.setCurrentPlace ? 1 : 0);
   const outcome =
@@ -3071,7 +3079,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             ...(reply.remember.length > 0 ? [{ kind: 'remember' }] : []),
             ...commands,
             ...reply.habitCommands,
-            ...Array.from({ length: otherCount }, () => ({ kind: 'other' })),
+            ...Array.from({ length: createdCount }, () => ({ kind: 'create' })),
+            ...Array.from({ length: otherCount - createdCount }, () => ({
+              kind: 'other',
+            })),
           ],
           subjects: readTurnSubjects(
             {
@@ -3104,7 +3115,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     isUnattended: unattendedMask.isOn,
     isQuotingPrivate:
       mode === 'full' &&
-      answerWords.some(
+      [...answerWords, ...reply.observations.map(({ quote }) => quote)].some(
         (text) =>
           typeof text === 'string' &&
           maskPrivateNames(text, unattendedMask.quoted) !== text,
@@ -4978,6 +4989,7 @@ async function writeResult(
         touchesPrivate: true,
       }),
       disposition,
+      noticedCount: learning.writes.length,
       status: settled.status,
       sortedAt: now,
       executionIds: settled.executionIds,

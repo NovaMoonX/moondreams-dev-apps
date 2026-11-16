@@ -202,6 +202,7 @@ export async function sendCapture(
     screen: turn.screen,
     privacy: 'ordinary',
     touchesPrivate: null,
+    noticedCount: null,
     presence: turn.presence ?? null,
     abilities: {
       location: {

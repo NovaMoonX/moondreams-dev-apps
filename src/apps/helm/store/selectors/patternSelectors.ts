@@ -16,6 +16,10 @@ const selectObservations = (state: RootState) => state.helm.observations.items;
 const selectReflections = (state: RootState) =>
   state.helm.unseenReflections.items;
 
+/** Whether Helm may use what it noticed: a profile before the switch counts as on. */
+export const selectIsLearningOn = (state: RootState) =>
+  state.helm.profile?.isLearningOn !== false;
+
 const isKept = (forgottenAt: number | null, createdAt: number) =>
   forgottenAt === null || createdAt > forgottenAt;
 
@@ -78,7 +82,9 @@ export const selectNoticedRows = createSelector(
 );
 
 const isOffer = (pattern: OpenPattern) =>
-  pattern.state === 'suggested' && pattern.handling !== 'actAndTell';
+  pattern.state === 'suggested' &&
+  pattern.handling !== 'actAndTell' &&
+  (pattern.confirmedAt ?? null) === null;
 
 const offerOrder = (a: OpenPattern, b: OpenPattern) =>
   Number(b.handling === 'askOnly') - Number(a.handling === 'askOnly') ||
@@ -129,9 +135,9 @@ export type AvoidBucket = Extract<PatternBucket, { kind: 'weekdayPart' }>;
 
 /** The day-parts the planner leaves empty: accepted `plannerAvoid` patterns, whoever accepted them. */
 export const selectAvoidBuckets = createSelector(
-  [selectShownPatterns],
-  (patterns): AvoidBucket[] =>
-    patterns.flatMap((pattern) =>
+  [selectShownPatterns, selectIsLearningOn],
+  (patterns, isLearningOn): AvoidBucket[] =>
+    (isLearningOn ? patterns : []).flatMap((pattern) =>
       pattern.state === 'accepted' &&
       pattern.effect.kind === 'plannerAvoid' &&
       pattern.effect.bucket.kind === 'weekdayPart'

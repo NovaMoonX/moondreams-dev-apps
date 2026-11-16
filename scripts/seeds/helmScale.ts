@@ -1513,6 +1513,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       ttsProvider: null,
       arrivedVia: 'direct',
       disposition: null,
+      noticedCount: null,
       medium: 'web',
       via: null,
       outsideReadScopes: null,

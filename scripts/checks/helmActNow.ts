@@ -107,6 +107,20 @@ test('a remark touching a care item beyond 48 hours is only noted', () => {
   );
 });
 
+test('a remark that creates something acts, whenever it is due', () => {
+  ['createTask', 'createNote', 'createProject', 'setKeyDate', 'create'].forEach(
+    (kind) =>
+      assert.equal(
+        readActNow({
+          intent: 'remark',
+          commands: [{ kind: 'remember' }, { kind }],
+          subjects: [{ isWithin48h: false, isCare: false }],
+        }),
+        'act',
+      ),
+  );
+});
+
 test('a question that was answered stays answered', () => {
   assert.equal(
     readActNow({ intent: 'question', commands: [], subjects: [] }),
@@ -134,7 +148,7 @@ test('a remark about how things go is noted, keeping remember', () => {
   assert.equal(
     readActNow({
       intent: 'remark',
-      commands: [{ kind: 'createTask' }],
+      commands: [{ kind: 'updateHabit' }],
       subjects: [{ isWithin48h: false, isCare: false }],
     }),
     'note',

@@ -407,7 +407,11 @@ export async function undoExecution(
   const undoRef = doc(executions);
   const executionRef = doc(executions, executionId);
   const read = createSealedReader(encryption, openJson);
-  const peek = await getDoc(executionRef);
+  const peek = await getDoc(executionRef).catch((error: unknown) => {
+    if (isUnavailable(error)) return null;
+    throw error;
+  });
+  if (peek === null) return { kind: 'offline' };
   if (
     peek.exists() &&
     (peek.data().effectRefs as EffectRef[] | undefined)?.some(

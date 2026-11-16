@@ -526,6 +526,189 @@ test('a note observation keeps only a quote found in the note', async () => {
   );
 });
 
+const dayBudget = async (dayKey: string) =>
+  (await firestore.doc(`apps/helm/aiBudget/${dayKey}`).get()).get(
+    'hundredthsOfCent',
+  ) as number | undefined;
+const seedBudget = (dayKey: string, hundredthsOfCent: number) =>
+  firestore.doc(`apps/helm/aiBudget/${dayKey}`).set({ hundredthsOfCent });
+const seedRun = (
+  id: string,
+  run: {
+    status: string;
+    batchId: string | null;
+    createdAt: number;
+    reserved: number;
+    customId: string;
+  },
+) =>
+  firestore.doc(`${RUNS_PATH}/${id}`).set({
+    status: run.status,
+    batchId: run.batchId,
+    requests: {
+      [run.customId]: {
+        uid: U,
+        dayKey: DAY,
+        answersDueAt: NOW - HOUR,
+        reserved: run.reserved,
+      },
+    },
+    superseded: [],
+    createdAt: run.createdAt,
+    submittedAt: run.status === 'submitted' ? run.createdAt : null,
+    collectedAt: null,
+    deletedAtProvider: null,
+  });
+const dayOf = (at: number) => new Date(at).toISOString().slice(0, 10);
+const NO_USAGE = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+};
+
+test('a run marked lost returns what its requests reserved, once', async () => {
+  await setup();
+  await firestore.doc(base(U)).update({ reflectDueAt: null });
+  await seedBudget(DAY, 1000);
+  await seedRun('run_lost', {
+    status: 'creating',
+    batchId: null,
+    createdAt: NOW - 20 * 60_000,
+    reserved: 300,
+    customId: 'b_lost',
+  });
+  const { client } = rehearse([]);
+  assert.equal((await pass(client, 0)).lost, 1);
+  assert.equal(await dayBudget(DAY), 700);
+  assert.equal((await pass(client, 1)).lost, 0);
+  assert.equal(await dayBudget(DAY), 700, 'a second pass refunds nothing more');
+  assert.deepEqual(
+    (await runs()).find((run) => run.id === 'run_lost')?.requests,
+    {},
+  );
+});
+
+test('a submitted run past its longest wait plus the grace is lost and refunded, inside it stays waiting', async () => {
+  await setup();
+  await firestore.doc(base(U)).update({ reflectDueAt: null });
+  const old = NOW - 50 * HOUR;
+  await seedBudget(dayOf(old), 1000);
+  await seedBudget(dayOf(NOW - 25 * HOUR), 1000);
+  await seedRun('run_old', {
+    status: 'submitted',
+    batchId: 'fake_batch_1',
+    createdAt: old,
+    reserved: 200,
+    customId: 'b_old',
+  });
+  await seedRun('run_inside', {
+    status: 'submitted',
+    batchId: 'fake_batch_1',
+    createdAt: NOW - 25 * HOUR,
+    reserved: 150,
+    customId: 'b_inside',
+  });
+  const client = createFakeBatchClient([], { isEnded: false });
+  const result = await pass(client as ReturnType<typeof rehearse>['client'], 0);
+  assert.equal(result.lost, 1);
+  const all = await runs();
+  assert.equal(all.find((run) => run.id === 'run_old')?.status, 'lost');
+  assert.equal(all.find((run) => run.id === 'run_inside')?.status, 'submitted');
+  assert.equal(await dayBudget(dayOf(old)), 800);
+  assert.equal(await dayBudget(dayOf(NOW - 25 * HOUR)), 1000);
+});
+
+test('a collected run with a request that got no result returns that request reserve', async () => {
+  const ids = await setup();
+  const { client } = rehearse([
+    {
+      type: 'answer',
+      json: {
+        candidates: [candidate(ids)],
+        whyRefresh: [],
+        noteObservations: [],
+      },
+      usage: NO_USAGE,
+    },
+  ]);
+  await pass(client, 0);
+  const [run] = await runs();
+  const reservedForReal = (await dayBudget(DAY)) as number;
+  assert.ok(reservedForReal > 0);
+  await firestore.doc(`${RUNS_PATH}/${run.id}`).update({
+    'requests.b_leftover': {
+      uid: 'someone-else',
+      dayKey: DAY,
+      answersDueAt: NOW - HOUR,
+      reserved: 400,
+    },
+  });
+  await seedBudget(DAY, reservedForReal + 400);
+  assert.equal((await pass(client, 1)).collected, 1);
+  assert.equal(await dayBudget(DAY), 0);
+  assert.deepEqual((await runs())[0].requests, {});
+});
+
+test('a person already reflected on this day is skipped and their due time cleared', async () => {
+  await setup();
+  await firestore.doc(statePath(U)).set({
+    runId: null,
+    customId: null,
+    answersDueAt: null,
+    attempts: 0,
+    leaseUntil: 0,
+    continuation: null,
+    lastDayKey: DAY,
+  });
+  const { client } = rehearse([answer({})]);
+  assert.equal((await pass(client, 0)).submitted, 0);
+  assert.equal(client.created.length, 0);
+  assert.equal((await profile())?.reflectDueAt, null);
+  assert.equal((await state())?.lastDayKey, DAY);
+});
+
+test('a reflection written again for the same day keeps when it was seen', async () => {
+  const ids = await setup();
+  const fixture = answer({ candidates: [candidate(ids)] });
+  const { client } = rehearse([fixture]);
+  await pass(client, 0);
+  await pass(client, 1);
+  const [run] = await runs();
+  await firestore
+    .doc(`${base(U)}/reflections/${DAY}`)
+    .update({ seenAt: 12345 });
+  await firestore.doc(`${RUNS_PATH}/${run.id}`).update({
+    'requests.b_again': {
+      uid: U,
+      dayKey: DAY,
+      answersDueAt: NOW - HOUR,
+      reserved: 0,
+    },
+  });
+  await firestore.doc(statePath(U)).set({
+    runId: run.id,
+    customId: 'b_again',
+    answersDueAt: NOW - HOUR,
+    attempts: 0,
+    leaseUntil: NOW + HOUR,
+    continuation: null,
+  });
+  await applyReflectionOutcome(firestore, DEV_KEYRING, {
+    runId: run.id,
+    customId: 'b_again',
+    outcome: {
+      kind: 'answer' as const,
+      json: (fixture as { json: unknown }).json,
+      usage: NO_USAGE as never,
+    },
+    now: NOW + 2 * HOUR,
+  });
+  const written = (await reflection())?.data;
+  assert.equal(written?.reflectionId, 'b_again');
+  assert.equal(written?.seenAt, 12345);
+});
+
 const failures: string[] = [];
 await clean();
 await tests.reduce(async (previous, [name, run]) => {

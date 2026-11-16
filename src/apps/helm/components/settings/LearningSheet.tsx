@@ -24,7 +24,7 @@ function LearningSheet({ isOpen, onClose }: LearningSheetProps) {
       <div className='space-y-4'>
         <div className='flex items-center justify-between gap-3'>
           <span className='min-w-0 font-medium text-pretty'>
-            {HELM_COPY.learningTitle}
+            {isOn ? HELM_COPY.learningRowOn : HELM_COPY.learningRowOff}
           </span>
           <AppToggle
             aria-label={HELM_COPY.learningTitle}

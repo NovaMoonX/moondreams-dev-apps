@@ -38,6 +38,7 @@ export interface ReflectionState {
   attempts: number;
   leaseUntil: number;
   continuation: null;
+  lastDayKey: string | null;
 }
 
 const toNumber = (value: unknown, fallback: number) =>
@@ -53,6 +54,7 @@ export const readState = (data: DocumentData | undefined): ReflectionState => ({
   attempts: toNumber(data?.attempts, 0),
   leaseUntil: toNumber(data?.leaseUntil, 0),
   continuation: null,
+  lastDayKey: toText(data?.lastDayKey),
 });
 
 const toRequests = (value: unknown): Record<string, RunRequest> =>
@@ -104,13 +106,17 @@ export const readRun = (
     : null;
 
 /** The state a person is left in once a request is done with: no lease, so the next hourly run may take them again if they are still due. */
-export const toReleasedState = (attempts: number): ReflectionState => ({
+export const toReleasedState = (
+  attempts: number,
+  lastDayKey: string | null,
+): ReflectionState => ({
   runId: null,
   customId: null,
   answersDueAt: null,
   attempts,
   leaseUntil: 0,
   continuation: null,
+  lastDayKey,
 });
 
 export const releaseLeaseIn = (
@@ -118,7 +124,12 @@ export const releaseLeaseIn = (
   firestore: Firestore,
   uid: string,
   attempts: number,
-) => transaction.set(firestore.doc(statePath(uid)), toReleasedState(attempts));
+  lastDayKey: string | null,
+) =>
+  transaction.set(
+    firestore.doc(statePath(uid)),
+    toReleasedState(attempts, lastDayKey),
+  );
 
 /** Takes a person out of every run still waiting, so a result that arrives later has no request to land on. */
 export async function removeFromOpenRuns(firestore: Firestore, uid: string) {

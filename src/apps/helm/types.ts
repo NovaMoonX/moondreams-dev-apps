@@ -416,6 +416,8 @@ export interface Capture {
   privacy: PrivacyClass | null;
   /** Whether the turn filed or touched a private thing, set by the executor; null before it ran. */
   touchesPrivate: boolean | null;
+  /** How many observations this turn's learning wrote; set by the server in the turn's transaction, null before it ran and on a turn made before the field (read as 0). */
+  noticedCount: number | null;
   /** How the turn began and whether anyone was looking: a wake-phrase turn on a hidden or untouched page is answered without private names. Null on a turn made before the field. */
   presence: {
     startedByWake: boolean;
@@ -1736,6 +1738,8 @@ export interface Pattern {
   sourceKeys: string[];
   declineCount: number;
   nextEligibleOn: number | null;
+  /** When the person said "It's right" to a statement that offers no change (a care pattern); the pattern stays as it was and is not asked again. Null until then and on a pattern from before the field. */
+  confirmedAt: number | null;
   offReason: 'thirdNo' | 'askedToStop' | null;
   history: {
     to: PatternState | 'off' | 'reopened';
