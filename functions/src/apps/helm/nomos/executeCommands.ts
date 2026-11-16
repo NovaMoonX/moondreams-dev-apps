@@ -784,11 +784,8 @@ const toMeetsAfter = (
   how: MeetsHow | null | undefined,
   due: TaskDue | null,
 ) => {
-  if (how === undefined) return before ?? null;
-  if (how === null) return null;
-  return due?.kind === 'moment'
-    ? { how, setBy: 'person' as const }
-    : (before ?? null);
+  if (due?.kind !== 'moment' || how === null) return null;
+  return how === undefined ? (before ?? null) : { how, setBy: 'person' as const };
 };
 
 const union = (left: string[], right: string[]) => [

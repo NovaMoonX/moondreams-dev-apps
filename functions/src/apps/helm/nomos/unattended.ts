@@ -85,7 +85,10 @@ export const toContextTask = (
             meetingAt: task.meeting.startAt,
           }
         : null,
-    meetsHow: isHidden ? null : (readMeets(task.meets)?.how ?? null),
+    meetsHow:
+      isHidden || task.due?.kind !== 'moment'
+        ? null
+        : (readMeets(task.meets)?.how ?? null),
   };
 };
 

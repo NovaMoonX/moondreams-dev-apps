@@ -125,7 +125,7 @@ const HOW_WORDS: [RegExp, 'inPerson' | 'video' | 'phone'][] = [
   [/^in person$/i, 'inPerson'],
 ];
 
-/** "Monday's call is on video": the Helm task of that name gets the format; a calendar event of that name is a copy and gets nothing written. */
+/** "Monday's call is on video": the task of that name gets the format; an event of that name is a copy and is left alone. */
 function readMeetsFollowUp(text: string, message: string) {
   const said = text
     .trim()

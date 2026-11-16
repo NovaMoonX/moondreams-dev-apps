@@ -183,6 +183,14 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
       }),
       meeting('fx-m-address', { location: '  Sweet Layer, 4 Main St  ' }),
       meeting('fx-m-none', {}),
+      meeting('fx-m-zoom-mid', {
+        location: 'Zoom: https://zoom.us/j/987654?pwd=hidden',
+      }),
+      meeting('fx-m-teams-mid', {
+        location: 'Join teams.microsoft.com/l/meetup-join/xyz',
+      }),
+      meeting('fx-m-dial', { location: 'Dial +1 555 0100, PIN 482913' }),
+      meeting('fx-m-pin-oak', { location: 'Pin Oak Cafe @ 4 Elm St' }),
     ],
     'work@example.com': [
       {

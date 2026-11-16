@@ -993,9 +993,16 @@ const main = async () => {
       place: 'Sweet Layer, 4 Main St',
     });
     assert.deepEqual(read('fx-m-none'), { format: null, place: null });
+    assert.deepEqual(read('fx-m-zoom-mid'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-teams-mid'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-dial'), { format: 'phone', place: null });
+    assert.deepEqual(read('fx-m-pin-oak'), {
+      format: null,
+      place: 'Pin Oak Cafe @ 4 Elm St',
+    });
     assert.ok(
       !JSON.stringify(result.records).match(
-        /https?:|tel:|zoom\.us|secret|meet\./,
+        /https?:|tel:|zoom|teams\.|secret|hidden|482913|meet\./,
       ),
       'no link, number or conference detail is kept',
     );

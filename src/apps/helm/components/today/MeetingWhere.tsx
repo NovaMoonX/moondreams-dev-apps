@@ -8,7 +8,6 @@ interface MeetingWhereProps {
   hasBefore: boolean;
 }
 
-/** The end of a meeting's line, "· Video" or "· In person · Milstead & Co.", with the format kept whole so it never splits across two lines. Nothing when neither is known. */
 function MeetingWhere({ how, place, hasBefore }: MeetingWhereProps) {
   const parts = getMeetingWhereParts(how, place);
   if (!parts.format && !parts.place) return null;

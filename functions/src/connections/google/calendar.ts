@@ -229,22 +229,19 @@ const MEETING_HOSTS = [
 ];
 const PLACE_CHARS = 120;
 
-const isLink = (text: string) =>
-  /^[a-z][a-z0-9+.-]*:\/\//i.test(text) || /^www\./i.test(text);
+const LINK_RE = /[a-z][a-z0-9+.-]*:\/\/|\bwww\.|\S@\S+\.\S/i;
+const DIAL_RE = /\+\s?\d|\d[\d\s().-]{5,}\d|\bpin\b\s*[:#]?\s*\d/i;
 
-const isMeetingHost = (text: string) => {
-  const host = text
-    .toLowerCase()
-    .match(/^(?:[a-z][a-z0-9+.-]*:\/\/)?([^/\s?#:]+)/)?.[1];
-  return (
-    host !== undefined &&
-    MEETING_HOSTS.some((known) => host === known || host.endsWith(`.${known}`))
-  );
+const hasMeetingHost = (text: string) => {
+  const lower = text.toLowerCase();
+  return MEETING_HOSTS.some((known) => lower.includes(known));
 };
+
+const isLinkText = (text: string) => LINK_RE.test(text) || hasMeetingHost(text);
 
 const toPlace = (event: CalendarEvent) => {
   const text = event.location?.trim() ?? '';
-  return text && !isLink(text) && !isMeetingHost(text)
+  return text && !isLinkText(text) && !DIAL_RE.test(text)
     ? text.slice(0, PLACE_CHARS)
     : null;
 };
@@ -258,11 +255,10 @@ const toFormat = (event: CalendarEvent): 'video' | 'phone' | null => {
   if (
     types.includes('video') ||
     Boolean(event.hangoutLink) ||
-    isLink(location) ||
-    isMeetingHost(location)
+    isLinkText(location)
   )
     return 'video';
-  return types.includes('phone') ? 'phone' : null;
+  return types.includes('phone') || DIAL_RE.test(location) ? 'phone' : null;
 };
 
 const toRecord = (calendarId: string, event: CalendarEvent): SharedRecord => ({
