@@ -229,6 +229,12 @@ const toText = (value: unknown, cap: number) =>
     ? cutAtWord(value.replace(/\s+/g, ' ').trim(), cap) || null
     : null;
 
+const toWholeLine = (value: unknown, cap: number) => {
+  if (typeof value !== 'string') return null;
+  const line = value.replace(/\s+/g, ' ').trim();
+  return line === '' || line.length > cap ? null : line;
+};
+
 const readNumbers = (text: string) =>
   (text.match(/\d(?:[\d,.:]*\d)?/g) ?? []).map((number) =>
     number.replace(/,/g, ''),
@@ -319,7 +325,7 @@ const readAnswer = (
     question,
     isHealth: item.isHealth === true,
     fromRecordsText: toText(item.fromRecordsText, ANSWER_TEXT_CAP),
-    fromRecordsSpoken: toText(item.fromRecordsSpoken, ANSWER_SPOKEN_CAP),
+    fromRecordsSpoken: toWholeLine(item.fromRecordsSpoken, ANSWER_SPOKEN_CAP),
     sources: listed.flatMap((alias: unknown) => {
       const source = toSource(alias, aliases, synced, facts, parts);
       return source ? [source] : [];

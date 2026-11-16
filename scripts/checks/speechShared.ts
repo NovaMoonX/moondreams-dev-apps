@@ -3116,7 +3116,9 @@ console.log('speechShared: voice provider checks passed');
       assert.equal(cut.ended, 1, 'a cancelled chunk ends the line');
 
       const stuck = begin();
-      advance(55_000);
+      advance(40_000);
+      fake.queue[1]!.onstart?.();
+      advance(15_000);
       assert.equal(
         stuck.ended,
         0,

@@ -74,7 +74,8 @@ function LiveConversation() {
   const helmParagraph = useRef<HTMLParagraphElement>(null);
   const isHearing = voice.state === 'listening' && voice.heard !== '';
   const personLine = isHearing ? voice.heard : voice.liveSaid;
-  const helmLine = isHearing ? '' : voice.lastLine;
+  const helmLine =
+    isHearing || voice.state === 'thinking' ? '' : voice.lastLine;
   const isThinking = voice.state === 'thinking';
   const isWaiting =
     !voice.isLiveMuted && (voice.isStarting || voice.isPreparing);

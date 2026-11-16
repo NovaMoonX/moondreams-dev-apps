@@ -583,9 +583,13 @@ const tests: [string, () => void | Promise<void>][] = [
           { commands: [{ ...base, ...extra }] },
           { reading: READING, aliases: createAliasBook('t') },
         ).answer;
-      assert.ok(
-        (read({ fromRecordsSpoken: 'w '.repeat(300) })?.fromRecordsSpoken ?? '')
-          .length <= 200,
+      assert.equal(
+        read({ fromRecordsSpoken: 'w '.repeat(300) })?.fromRecordsSpoken,
+        null,
+      );
+      assert.equal(
+        read({ fromRecordsSpoken: '  Friday   at 2. ' })?.fromRecordsSpoken,
+        'Friday at 2.',
       );
       assert.equal(read({})?.fromRecordsSpoken, null);
     },

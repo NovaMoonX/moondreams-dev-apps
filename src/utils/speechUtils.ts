@@ -189,7 +189,8 @@ export function speakText(
   const checkGuard = () => {
     if (state.isEnded) return;
     const restMs =
-      (wholeChars - state.spokenChars) * SLOW_SPEAK_MS_PER_CHAR +
+      Math.min(wholeChars - state.spokenChars, CHUNK_MAX_CHARS) *
+        SLOW_SPEAK_MS_PER_CHAR +
       STUCK_MARGIN_MS;
     if (synth.speaking && Date.now() < state.reportedAt + restMs) {
       state.guardId = window.setTimeout(checkGuard, GUARD_POLL_MS);
