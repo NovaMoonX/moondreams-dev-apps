@@ -2353,6 +2353,17 @@ test('a habit turn names its habits in the result lines, never as a task', () =>
   );
 });
 
+test('taking back something Helm did on its own says what it took back, in plain words', () => {
+  assert.equal(
+    HELM_COPY.patternTookBack('Evening pills moved'),
+    'Took back: Evening pills moved',
+  );
+  assert.doesNotMatch(
+    `${HELM_COPY.patternTookBack('x')}${HELM_COPY.patternTookBackReport}`,
+    /Nomos|pattern/i,
+  );
+});
+
 const failures = tests.flatMap(([name, run]) => {
   try {
     run();

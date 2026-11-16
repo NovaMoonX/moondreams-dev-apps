@@ -254,10 +254,15 @@ service cloud.firestore {
         && (!('voiceSpeed' in data) || data.voiceSpeed == null || (data.voiceSpeed is number && data.voiceSpeed >= 0.8 && data.voiceSpeed <= 1.2));
     }
 
+    // A profile written before the learning switch has no key; a written one is a plain true or false, so the server's read of it never meets another type.
+    function isHelmLearning(data) {
+      return !('isLearningOn' in data) || data.isLearningOn is bool;
+    }
+
     // A profile is private to one person and only the server deletes it, so a stray client can't half-delete a Helm.
     match /apps/helm/users/{uid} {
       allow read: if isHelmOwner(uid);
-      allow create, update: if isHelmOwner(uid) && isHelmTheme(request.resource.data) && isHelmVoice(request.resource.data);
+      allow create, update: if isHelmOwner(uid) && isHelmTheme(request.resource.data) && isHelmVoice(request.resource.data) && isHelmLearning(request.resource.data);
     }
 
     // The reminder planner's queue (when to look at a person next, its lease and the reminders it wrote) is for the Admin SDK alone.
@@ -267,10 +272,10 @@ service cloud.firestore {
 
     // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out.
     // `facts` are what an answer noted, `planDays` one plan per day, `keyDates` and `meta` (their sealed index) move in one transaction,
-    // and `notes` and `topics` are the person's Knowledge, sealed. `habits`, `habitDays` and `patterns` are the person's habits, their ticks by day and what Helm noticed, and `connections` are how two of their people are connected (the pair and kind in the id, the words sealed).
+    // and `notes` and `topics` are the person's Knowledge, sealed. `habits`, `habitDays` and `patterns` are the person's habits, their ticks by day and what Helm noticed, `observations` and `reflections` are what was said about them and the nightly pass's candidates (the server writes both and the owner reads, marks a reflection seen and deletes; the rule is the owner list, so only the code keeps the writer to the server), and `connections` are how two of their people are connected (the pair and kind in the id, the words sealed).
     match /apps/helm/users/{uid}/{collection}/{docId} {
       allow read, create, update, delete: if isHelmOwner(uid)
-        && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places', 'keyDates', 'meta', 'projects', 'notes', 'topics', 'habits', 'habitDays', 'patterns', 'connections'];
+        && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places', 'keyDates', 'meta', 'projects', 'notes', 'topics', 'habits', 'habitDays', 'patterns', 'observations', 'reflections', 'connections'];
     }
 
     // A day's written summary is made by the server; the owner reads it and may only mark it stale so the next open rewrites it.
@@ -371,9 +376,10 @@ service cloud.firestore {
       allow read: if isHelmOwner(uid);
     }
 
-    // Activity never loses a line: the owner reads, writes and marks an execution undone, and nothing deletes one.
+    // Activity never loses a recent line: the owner reads, writes and marks an execution undone, and only one older than 396 days (13 months and a little) can be deleted, by the weekly clean-up.
     match /apps/helm/users/{uid}/executions/{executionId} {
       allow read, create, update: if isHelmOwner(uid);
+      allow delete: if isHelmOwner(uid) && resource.data.createdAt < request.time.toMillis() - 34214400000;
     }
 
     // --- App: nine-lives ---

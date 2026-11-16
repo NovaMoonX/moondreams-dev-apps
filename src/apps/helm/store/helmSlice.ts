@@ -15,8 +15,11 @@ import type {
   OpenHabitDay,
   OpenMedia,
   OpenNote,
+  OpenObservation,
+  OpenPattern,
   OpenPlace,
   OpenProject,
+  OpenReflection,
   OpenTask,
   OpenProcedure,
   OpenRun,
@@ -84,6 +87,12 @@ export interface HelmState {
   waitingCaptures: CaptureSet;
   /** Turns an outside assistant sent, whenever they were sent: the "From your assistants" view reads these, never home. */
   outsideCaptures: CaptureSet;
+  /** What Helm has noticed that is neither off nor retired; a screen reads `patternSelectors`, which leave out what Forget hid. */
+  patterns: LoadedSet<OpenPattern>;
+  /** What was said about habits, goals, tasks and the day in the last two weeks, oldest first. */
+  observations: LoadedSet<OpenObservation>;
+  /** The nightly pass's reflections the daily check has not weighed yet. */
+  unseenReflections: LoadedSet<OpenReflection>;
   /** The person's open tasks, newest first. */
   openTasks: LoadedSet<OpenTask>;
   /** Every task that belongs to a project, open or done. */
@@ -176,6 +185,9 @@ const initialState: HelmState = {
   unseenCaptures: emptySet,
   waitingCaptures: emptySet,
   outsideCaptures: emptySet,
+  patterns: emptyLoadedSet,
+  observations: emptyLoadedSet,
+  unseenReflections: emptyLoadedSet,
   openTasks: emptyLoadedSet,
   projectTasks: emptyLoadedSet,
   planDays: emptyPlanDays,
@@ -276,6 +288,36 @@ const helmSlice = createSlice({
     },
     setOutsideCapturesFailed: (state) => {
       state.outsideCaptures.isFailed = true;
+    },
+    setPatterns: (state, action: PayloadAction<OpenPattern[]>) => {
+      state.patterns = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setPatternsFailed: (state) => {
+      state.patterns.isFailed = true;
+    },
+    setObservations: (state, action: PayloadAction<OpenObservation[]>) => {
+      state.observations = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setObservationsFailed: (state) => {
+      state.observations.isFailed = true;
+    },
+    setUnseenReflections: (state, action: PayloadAction<OpenReflection[]>) => {
+      state.unseenReflections = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setUnseenReflectionsFailed: (state) => {
+      state.unseenReflections.isFailed = true;
     },
     setOpenTasks: (state, action: PayloadAction<OpenTask[]>) => {
       state.openTasks = {
@@ -537,6 +579,12 @@ export const {
   setWaitingCapturesFailed,
   setOutsideCaptures,
   setOutsideCapturesFailed,
+  setPatterns,
+  setPatternsFailed,
+  setObservations,
+  setObservationsFailed,
+  setUnseenReflections,
+  setUnseenReflectionsFailed,
   setOpenTasks,
   setOpenTasksFailed,
   setProjectTasks,

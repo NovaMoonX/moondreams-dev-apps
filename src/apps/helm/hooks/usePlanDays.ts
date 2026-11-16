@@ -16,6 +16,10 @@ import {
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { generatePlan } from '@apps/helm/store/actions/planActions';
 import { selectImportanceItems } from '@apps/helm/store/selectors/importanceSelectors';
+import {
+  selectAvoidBuckets,
+  type AvoidBucket,
+} from '@apps/helm/store/selectors/patternSelectors';
 import { selectActiveTasks } from '@apps/helm/store/selectors/taskSelectors';
 import {
   formatDayWord,
@@ -51,6 +55,7 @@ interface SourceParts {
   tasks: OpenTask[];
   places: OpenPlace[];
   importanceItems: ImportanceItem[];
+  avoidBuckets: AvoidBucket[];
   now: number;
 }
 
@@ -91,6 +96,7 @@ const readPlanSources = (grants: ConnectionGrantWithId[]) => {
     tasks: selectActiveTasks(state, Math.floor(now / MINUTE_MS) * MINUTE_MS),
     places: state.helm.places.items,
     importanceItems: selectImportanceItems(state),
+    avoidBuckets: selectAvoidBuckets(state),
     now,
   });
 };
@@ -104,6 +110,7 @@ export function usePlanSources(nowMinute: number) {
   const tasks = useAppSelector((state) => selectActiveTasks(state, nowMinute));
   const places = useAppSelector((state) => state.helm.places.items);
   const importanceItems = useAppSelector(selectImportanceItems);
+  const avoidBuckets = useAppSelector(selectAvoidBuckets);
   const awayKey = useAppSelector((state) => toAwayKey(state.helm.who.items));
   return useMemo(
     () =>
@@ -116,6 +123,7 @@ export function usePlanSources(nowMinute: number) {
         tasks,
         places,
         importanceItems,
+        avoidBuckets,
         now: nowMinute,
       }),
     [
@@ -127,6 +135,7 @@ export function usePlanSources(nowMinute: number) {
       tasks,
       places,
       importanceItems,
+      avoidBuckets,
       nowMinute,
     ],
   );

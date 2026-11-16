@@ -34,6 +34,7 @@ import { buildProcedureVersionDoc } from '@apps/helm/store/actions/procedureActi
 import { buildVersionDoc } from '@apps/helm/store/actions/topicActions';
 import { HELM_COPY } from '@apps/helm/constants';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
+import { undoPatternExecution } from '@apps/helm/store/actions/patternActions';
 import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import {
   planReopen,
@@ -406,6 +407,14 @@ export async function undoExecution(
   const undoRef = doc(executions);
   const executionRef = doc(executions, executionId);
   const read = createSealedReader(encryption, openJson);
+  const peek = await getDoc(executionRef);
+  if (
+    peek.exists() &&
+    (peek.data().effectRefs as EffectRef[] | undefined)?.some(
+      (ref) => ref.collection === 'patterns',
+    )
+  )
+    return undoPatternExecution(uid, encryption, executionId);
 
   try {
     const usedIds = await readUsedIds(uid, executionId);

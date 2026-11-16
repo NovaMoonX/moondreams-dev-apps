@@ -4,6 +4,7 @@ import { syncConnections } from '@/lib/connections/connectionCalls';
 import { useConnections } from '@/lib/connections/useConnections';
 import { setSiteNotice } from '@/hooks/useSiteNotice';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { shiftDayKeyBy } from '@/utils/cadenceUtils';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
 import { createSealedReader } from '@lib/security';
@@ -19,6 +20,7 @@ import {
   openJson,
 } from '@apps/helm/security';
 import { useHabitJudgement } from '@apps/helm/hooks/useHabitJudgement';
+import { useDailyPatternCheck } from '@apps/helm/hooks/useDailyPatternCheck';
 import { useStyleLearning } from '@apps/helm/queries/styleLearning';
 import {
   ensureHelmProfile,
@@ -63,8 +65,14 @@ import {
   setHabitsFailed,
   setHabitDays,
   setHabitDaysFailed,
+  setObservations,
   setOpenTasks,
   setOpenTasksFailed,
+  setPatterns,
+  setPatternsFailed,
+  setObservationsFailed,
+  setUnseenReflections,
+  setUnseenReflectionsFailed,
   setPlanDays,
   setPlanDaysFailed,
   setProfile,
@@ -89,6 +97,9 @@ import {
 } from '@apps/helm/store/listeners/captureListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
 import { startStyleListener } from '@apps/helm/store/listeners/styleListener';
+import { startPatternsListener } from '@apps/helm/store/listeners/patternListener';
+import { startObservationsListener } from '@apps/helm/store/listeners/observationListener';
+import { startReflectionsListener } from '@apps/helm/store/listeners/reflectionListener';
 import { startFactsListener } from '@apps/helm/store/listeners/factListener';
 import { startKeyDateIndexListener } from '@apps/helm/store/listeners/keyDateIndexListener';
 import { sweepExpiredMedia } from '@apps/helm/store/actions/mediaActions';
@@ -123,6 +134,8 @@ import { HELM_COPY, SYNC_REFRESH_MS } from '@apps/helm/constants';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import { getPlanDaysWindow } from '@apps/helm/utils/planDays';
 import { isDueForRefresh } from '@apps/helm/utils/synced';
+
+const OBSERVATION_DAYS = 14;
 
 const OFFLINE_CODES = ['functions/unavailable', 'functions/deadline-exceeded'];
 
@@ -268,6 +281,7 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
   useSelfWho(uid, displayName);
   useKeyDateRepair(uid);
   useHabitJudgement(uid);
+  useDailyPatternCheck(uid);
   useStyleLearning(uid);
 
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);
@@ -295,6 +309,34 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
       })
       .catch((error: unknown) =>
         console.error('Helm habit days listener did not start', error),
+      );
+    return () => {
+      isCurrent = false;
+      stop();
+    };
+  }, [uid, keyStatus, keyAttempt, dayKey, dispatch]);
+
+  // Two weeks of what was said, following the habit day like the habit days do.
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready') return;
+    let isCurrent = true;
+    let stop = () => {};
+    getHelmEncryption(uid)
+      .then((encryption) => {
+        if (!isCurrent) return;
+        stop = startObservationsListener(
+          uid,
+          createSealedReader(encryption, openJson),
+          shiftDayKeyBy(dayKey, -OBSERVATION_DAYS),
+          (observations) => dispatch(setObservations(observations)),
+          (error) => {
+            console.error('Helm observations listener failed', error);
+            dispatch(setObservationsFailed());
+          },
+        );
+      })
+      .catch((error: unknown) =>
+        console.error('Helm observations listener did not start', error),
       );
     return () => {
       isCurrent = false;
@@ -401,6 +443,24 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm plan days listener failed', error);
               dispatch(setPlanDaysFailed());
+            },
+          ),
+          startPatternsListener(
+            uid,
+            read,
+            (patterns) => dispatch(setPatterns(patterns)),
+            (error) => {
+              console.error('Helm patterns listener failed', error);
+              dispatch(setPatternsFailed());
+            },
+          ),
+          startReflectionsListener(
+            uid,
+            read,
+            (reflections) => dispatch(setUnseenReflections(reflections)),
+            (error) => {
+              console.error('Helm reflections listener failed', error);
+              dispatch(setUnseenReflectionsFailed());
             },
           ),
           startFactsListener(

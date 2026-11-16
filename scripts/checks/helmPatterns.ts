@@ -22,6 +22,11 @@ import {
   type DetectHabit,
   type PlannedSlot,
 } from '../../src/apps/helm/engine/patterns.ts';
+import {
+  CUT_EVIDENCE,
+  isPatternCut,
+  readPatternMove,
+} from '../../src/apps/helm/engine/patternCheck.ts';
 import type { LifeDay } from '../../src/apps/helm/engine/habitLife.ts';
 import type { Pattern } from '../../src/apps/helm/types.ts';
 
@@ -514,6 +519,60 @@ const run = async () => {
       `${lines.statement}${lines.evidenceLine}`,
       /Helm|Nomos/,
     );
+  });
+
+  await test('the daily check creates, refreshes, brings back or leaves a finding', () => {
+    const evidence = (matched: number) => ({
+      kind: 'occurrences' as const,
+      from: 0,
+      to: 1,
+      matched,
+      total: 10,
+      dayKeys: [],
+    });
+    const finding = (matched: number) =>
+      ({ signature: 'sig', evidence: evidence(matched) }) as never;
+    const stored = (extra: Record<string, unknown>) =>
+      ({
+        state: 'candidate',
+        offReason: null,
+        nextEligibleOn: null,
+        evidenceSince: 0,
+        evidence: evidence(6),
+        ...extra,
+      }) as never;
+    const move = (current: never, found: never, recheck = () => null) =>
+      readPatternMove({ current, finding: found, recheck, today: ms(TODAY) })
+        .kind;
+    assert.equal(move(null as never, finding(6)), 'create');
+    assert.equal(move(stored({}), finding(7)), 'refresh');
+    assert.equal(move(stored({}), finding(6)), 'skip');
+    assert.equal(move(stored({ state: 'accepted' }), finding(9)), 'skip');
+    assert.equal(
+      move(
+        stored({ state: 'declined', nextEligibleOn: ms(TODAY) + DAY }),
+        finding(9),
+        () => finding(9) as never,
+      ),
+      'skip',
+      'a declined pattern waits out its back-off',
+    );
+    assert.equal(
+      move(
+        stored({ state: 'declined', nextEligibleOn: ms(TODAY) - DAY }),
+        finding(9),
+        () => null as never,
+      ),
+      'skip',
+      'no fresh evidence, no comeback',
+    );
+  });
+
+  await test('a pattern cut to its signature is told from a live one', () => {
+    const cut = { sourceKeys: [], reasons: [], evidence: CUT_EVIDENCE };
+    assert.equal(isPatternCut(cut), true);
+    assert.equal(isPatternCut({ ...cut, sourceKeys: ['a'] }), false);
+    assert.equal(isPatternCut({ ...cut, reasons: ['r'] as never }), false);
   });
 };
 

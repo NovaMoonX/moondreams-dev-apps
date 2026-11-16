@@ -1236,7 +1236,8 @@ export interface EffectRef {
     | 'procedureRuns'
     | 'habits'
     | 'habitDays'
-    | 'connections';
+    | 'connections'
+    | 'patterns';
   docId: string;
 }
 
@@ -1828,6 +1829,23 @@ export interface ReflectionSealed {
     tags: string[];
     basedOn: string;
   }[];
+}
+
+/** A pattern after its lines are opened; the id is `pt_` and the signature's hash. A pattern whose lines won't open keeps `isUnreadable` and says nothing. */
+export interface OpenPattern extends Omit<Pattern, 'sealed'>, PatternSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+export interface OpenObservation
+  extends Omit<Observation, 'sealed'>, ObservationSealed {
+  id: string;
+}
+
+/** A reflection after it is opened; the id is its day key. */
+export interface OpenReflection
+  extends Omit<Reflection, 'sealed'>, ReflectionSealed {
+  id: string;
 }
 
 export type CaptureDisposition = 'acted' | 'noted' | 'answered';

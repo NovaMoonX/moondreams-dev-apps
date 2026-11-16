@@ -41,6 +41,8 @@ export interface PlanSources {
   planDays: Record<string, PlanDay>;
   /** Each placed project's place number in what matters most. */
   projectPlaces: Record<string, number>;
+  /** The weekday day-parts the person accepted leaving empty. */
+  avoidBuckets?: PlannerInput['avoidBuckets'];
 }
 
 export const isLiveCalendar = (grant: ConnectionGrantWithId) =>
@@ -73,6 +75,7 @@ export const toPlannerTask = (
   projectPlaces: Record<string, number> = {},
 ): PlannerTask => ({
   id: task.id,
+  isCare: task.privateMark === 'care',
   projectPlace: task.projectId ? (projectPlaces[task.projectId] ?? null) : null,
   title: task.title,
   due: task.due,
@@ -208,6 +211,7 @@ export function buildPlanInput(
         : null,
     busy,
     slots,
+    avoidBuckets: sources.avoidBuckets ?? [],
     tasks: tasks
       .filter((task) => !task.isUnreadable && !taken.has(task.id))
       .map((task) => toPlannerTask(task, sources.projectPlaces)),
