@@ -197,9 +197,21 @@ export function useHelmVoice() {
   const fieldWriter = useRef<((text: string) => void) | null>(null);
   // Turns whose reply, once said, doesn't reopen listening: they ended with a finish phrase.
   const finishedIds = useRef(new Set<string>());
-  const captures = useAppSelector(selectAllCaptures);
   const [askedStore] = useState(createAskedStore);
-  const askedAloud = useSyncExternalStore(askedStore.subscribe, askedStore.get);
+  const askedMark = useSyncExternalStore(askedStore.subscribe, askedStore.get);
+  const captures = useAppSelector(selectAllCaptures);
+  const askedCapture = askedMark
+    ? captures.find((capture) => capture.id === askedMark.captureId)
+    : undefined;
+  // The mark is drawn only while its question is still open, so an answer or a skip from the card clears it at once.
+  const askedAloud =
+    askedMark &&
+    askedCapture?.status === 'needsYou' &&
+    getOpenQuestions(askedCapture).some(
+      (entry) => entry.id === askedMark.questionId && entry.skippedAt === null,
+    )
+      ? askedMark
+      : null;
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
   const screen = useRef<ScreenContext | null>(null);
@@ -1326,9 +1338,12 @@ export function useHelmVoice() {
     );
   }, [isListeningForAnswer, askedStore]);
 
+  useEffect(() => () => askedStore.set(null), [uid, askedStore]);
+
   /** Starts listening from `page` (what the page publishes, null from home), as a live conversation when that setting is on and the listen isn't a one-off (dictation), or sends what is being said, or stops what is working or speaking. */
   const talk = (page: ScreenContext | null, isOneOff = false) => {
     const isLive = isHandsFreeOn && !isOneOff;
+    isWakeStarted.current = false;
     // An answer window or a line being said gives way to listening: the tap is the answer.
     if (
       voice.isAvailable &&

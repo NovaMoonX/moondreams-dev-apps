@@ -12,20 +12,27 @@ const PHRASES_SHOWN = 3;
 
 const quote = (words: string) => `“${words}”`;
 
-/** Up to three things to say that answer the question, the way they read in a sentence. */
-const toPhrases = (question: HelmQuestion) => {
-  if (question.shape === 'yesNo') return [quote('yes'), quote('no')];
+/** What to say that answers the question, the way it reads in a sentence; empty when it has no options to name. */
+const toHint = (question: HelmQuestion) => {
+  if (question.shape === 'yesNo') {
+    return HELM_COPY.questionSay(joinOr([quote('yes'), quote('no')]));
+  }
   if (question.shape !== 'pickOne' && question.shape !== 'pickSeveral') {
-    return [];
+    return HELM_COPY.questionSayAnswer;
   }
   const labels = question.options
     .filter((option) => option.id !== 'none' && option.id !== 'new')
     .map((option) => option.label);
-  const said =
-    question.shape === 'pickSeveral' && labels.length === 2
-      ? [...labels, 'both']
-      : labels;
-  return said.slice(0, PHRASES_SHOWN).map(quote);
+  if (labels.length === 0) return HELM_COPY.questionSayAnswer;
+  const isSeveral = question.shape === 'pickSeveral';
+  const said = isSeveral && labels.length === 2 ? [...labels, 'both'] : labels;
+  const shown = said.slice(0, PHRASES_SHOWN).map(quote);
+  const phrases = joinOr(
+    said.length > PHRASES_SHOWN ? [...shown, HELM_COPY.questionSayMore] : shown,
+  );
+  return isSeveral && labels.length > 2
+    ? HELM_COPY.questionSaySeveral(phrases)
+    : HELM_COPY.questionSay(phrases);
 };
 
 const joinOr = (items: string[]) =>
@@ -84,7 +91,6 @@ function AskedStrip({
     (voice.isFollowUpOpen ||
       (voice.isLive && !voice.isLiveMuted && voice.state === 'listening'));
   if (!isListening && isWakeOver) return null;
-  const phrases = toPhrases(question);
 
   return (
     <div
@@ -96,13 +102,11 @@ function AskedStrip({
         <span className='min-w-0 break-words'>
           {!isListening
             ? HELM_COPY.questionWakeToAnswer(name)
-            : phrases.length > 0
-              ? HELM_COPY.questionListeningFor(joinOr(phrases))
-              : HELM_COPY.questionListening}
+            : HELM_COPY.questionListening(toHint(question))}
         </span>
       </p>
       {isListening && voice.isFollowUpOpen && (
-        <div className='bg-border h-0.5 w-full overflow-hidden rounded-full'>
+        <div className='helm-listen-track bg-border h-0.5 w-full overflow-hidden rounded-full'>
           <div
             className='helm-listen-drain bg-primary h-full w-full origin-left rounded-full'
             style={{ animationDuration: `${FOLLOW_UP_MS}ms` }}
@@ -118,12 +122,10 @@ export function LiveAnswerHint() {
   const voice = useHelmVoiceContext();
   const asked = voice.askedAloud;
   if (!asked || voice.isLiveMuted || voice.state !== 'listening') return null;
-  const phrases = toPhrases(asked.question);
-  if (phrases.length === 0) return null;
+  const hint = toHint(asked.question);
   return (
     <p role='status' className='text-foreground/80 text-[17px] text-pretty'>
-      <Ear className='mr-1.5 inline size-4 align-[-2px]' aria-hidden='true' />
-      {HELM_COPY.questionListeningFor(joinOr(phrases))}
+      {hint.charAt(0).toUpperCase() + hint.slice(1)}
     </p>
   );
 }
