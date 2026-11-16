@@ -11,8 +11,10 @@ import {
   SPOKEN_MAX_CHARS,
   type SpokenAckInput,
 } from '../../functions/src/apps/helm/nomos/spoken.ts';
-import { UNDO_PHRASES } from '../../src/apps/helm/constants.ts';
+import { END_PHRASES, UNDO_PHRASES } from '../../src/apps/helm/constants.ts';
 import {
+  isAcknowledgement,
+  isLiveCloser,
   isUndoPhrase,
   normalizeSaid,
   toWakeSpellings,
@@ -263,6 +265,8 @@ const dayQuestion: HelmQuestion = {
   builtBy: 'model',
   shape: 'dateTime',
   prompt: 'When is it due?',
+  lead: null,
+  undoChoices: [],
   options: [],
   allowsSomethingElse: false,
   noneOption: false,
@@ -325,6 +329,101 @@ assert.deepEqual(
 );
 assert.ok(HELM_VOICE_SPEEDS.includes(1), 'normal pace is a notch');
 
+const undoOffer: HelmQuestion = {
+  kind: 'undoOffer',
+  builtBy: 'code',
+  shape: 'yesNo',
+  prompt: 'Undo adding Call Sam? Buy milk stays.',
+  lead: null,
+  undoChoices: [],
+  options: [
+    { id: 'yes', label: 'Undo it', detail: null, ref: null },
+    { id: 'no', label: 'Keep it', detail: null, ref: null },
+  ],
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: null,
+  number: null,
+  aboutRef: null,
+  answer: null,
+};
+assert.ok(
+  isUndoPhrase('undo that') &&
+    matchSpokenAnswer('undo that', undoOffer, { now: NOW, timeZone: ZONE })
+      ?.kind === 'answer',
+  'an undo phrase is an undo phrase and, with an offer open, also reads as yes',
+);
+
+const nods: [string, boolean][] = [
+  ['Gotcha. Okay.', true],
+  ['Gotcha. Okay. Now', true],
+  ['thanks', true],
+  ['Thank you!', true],
+  ['all right, sounds good', true],
+  ['okay buy milk', false],
+  ['thanks Dana for the gift', false],
+  ['kk', false],
+  ['nowso', false],
+  ['', false],
+  ['remind me to say thanks', false],
+];
+nods.forEach(([said, expected]) =>
+  assert.equal(
+    isAcknowledgement(said),
+    expected,
+    `"${said}" ${expected ? 'only acknowledges' : 'is something to act on'}`,
+  ),
+);
+const closers: [string, boolean][] = [
+  ["Okay, I'm done.", true],
+  ['Gotcha. Bye!', true],
+  ['goodbye', true],
+  ['Thanks, nothing else.', true],
+  ["tell Sam I'm done", false],
+  ["Gotcha, that's all", true],
+  ["okay that's it", true],
+  ["that's everything", true],
+  ['Okay, im done', true],
+  ['all done', true],
+  ['Gotcha, stop', true],
+  ['tell Sam that is all', false],
+  ['tell Sam all done', false],
+  ['stop the timer', false],
+  ['okay', false],
+];
+closers.forEach(([said, expected]) =>
+  assert.equal(
+    isLiveCloser(said),
+    expected,
+    `"${said}" ${expected ? 'ends' : 'does not end'} a live conversation`,
+  ),
+);
+[
+  "that's it",
+  'thats all',
+  "that's everything",
+  'thats everything',
+  "that's all for now",
+  'thats it for now',
+  'end the conversation',
+  'bye for now',
+].forEach((phrase) =>
+  assert.ok(
+    END_PHRASES.includes(phrase.toLowerCase()),
+    `"${phrase}" ends a live conversation`,
+  ),
+);
+assert.ok(
+  !END_PHRASES.some((phrase) => /\b(?:i'?m|we'?re) done/.test(phrase)),
+  'a whole-utterance closer is never an end phrase',
+);
+assert.equal(
+  new Set(END_PHRASES).size,
+  END_PHRASES.length,
+  'each end phrase is listed once',
+);
+
 console.log(
-  'check:helm-voice: spoken lines, undo phrases and the wake phrase passed.',
+  'check:helm-voice: spoken lines, undo phrases, nods and the wake phrase passed.',
 );

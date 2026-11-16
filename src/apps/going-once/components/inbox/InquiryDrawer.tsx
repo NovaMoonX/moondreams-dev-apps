@@ -27,6 +27,7 @@ import {
   deleteInquiry,
   markHandled,
 } from '@apps/going-once/store/actions/inquiryActions';
+import { formatDayRuns } from '@/utils/dayRunUtils';
 import { formatDateShort } from '@/utils/formatUtils';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import ThingThumb from '@apps/going-once/components/things/ThingThumb';
@@ -82,6 +83,33 @@ const getStatusLine = (
     .filter((part) => part !== null)
     .join(' · ');
 };
+
+/** The pickup days the buyer said work, or that they need another day and when they could come. */
+function BuyerDays({ inquiry }: { inquiry: Inquiry }) {
+  const isAsked =
+    inquiry.needsAnotherDay ||
+    (inquiry.pickupDays !== null && inquiry.pickupDays.length > 0);
+  if (!isAsked) return null;
+  return (
+    <div className='space-y-1'>
+      <p className='text-muted-foreground text-xs font-medium'>
+        Days that work
+      </p>
+      {inquiry.needsAnotherDay ? (
+        <p className='text-sm text-pretty break-words'>
+          None of your pickup days.
+          {inquiry.anotherDayNote !== null &&
+            inquiry.anotherDayNote !== '' &&
+            ` They could come: ${inquiry.anotherDayNote}`}
+        </p>
+      ) : (
+        <p className='text-sm text-pretty'>
+          {formatDayRuns(inquiry.pickupDays ?? [])}
+        </p>
+      )}
+    </div>
+  );
+}
 
 /** The buyer's words as a message from them: their initial beside a bubble whose corner points at it. */
 function MessageBubble({ name, message }: { name: string; message: string }) {
@@ -285,6 +313,7 @@ function InquiryDrawer({
           ) : (
             <MessageBubble name={name} message={inquiry.message} />
           )}
+          <BuyerDays inquiry={inquiry} />
           <div className='space-y-2'>
             <p className='text-muted-foreground text-xs font-medium'>About</p>
             {item === null ? (

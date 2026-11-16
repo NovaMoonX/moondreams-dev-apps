@@ -9,7 +9,7 @@ import { GOOGLE_CONTACTS_MANIFEST } from '../../src/lib/connections/google/conta
 import { GOOGLE_DRIVE_MANIFEST } from '../../src/lib/connections/google/driveManifest.ts';
 import { GOOGLE_GMAIL_MANIFEST } from '../../src/lib/connections/google/gmailManifest.ts';
 import { SOURCE_SHARES } from '../../src/lib/connections/sources.ts';
-import { BATCH_JOBS } from '../../functions/src/ai/batchJobs.ts';
+import { REFLECT_BATCH } from '../../functions/src/apps/helm/reflection/reflectionRuns.ts';
 import {
   CLOSE_CONVERSATION_TOOL,
   COMMAND_KINDS,
@@ -119,7 +119,7 @@ const world: World = {
   categories: manifests.flatMap((manifest) =>
     manifest.categories.map((category) => `${manifest.id}/${category.id}`),
   ),
-  batchJobs: Object.keys(BATCH_JOBS),
+  batchJobs: [REFLECT_BATCH.jobId],
   writerExists: (writer) =>
     writer === 'none' ||
     writerPath(writer).some((path) => existsSync(join(ROOT, path))),

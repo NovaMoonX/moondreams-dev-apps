@@ -5,6 +5,7 @@ import { CalendarClock } from 'lucide-react';
 
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { useUndoChoices } from '@apps/helm/hooks/useUndoChoices';
 import UndoButton from '@apps/helm/components/activity/UndoButton';
 import ScheduledForm from '@apps/helm/components/scheduled/ScheduledForm';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -25,6 +26,12 @@ interface ScheduledRuleRowsProps {
 }
 
 /** What a reply that made or changed an action says it will do, in the rule's own words with Change; the action may have changed or ended since, so it is read live and a gone one draws nothing. */
+/** Undo for a whole turn, offering a pick when more than one thing is left to take back. */
+export function TurnUndo({ execution }: { execution: OpenExecution }) {
+  const { units } = useUndoChoices(execution);
+  return <UndoButton execution={execution} unitCount={units.length} />;
+}
+
 function ScheduledRuleRows({ execution, hasUndoHere }: ScheduledRuleRowsProps) {
   const now = useNow(60_000);
   const byId = useAppSelector(selectScheduledById);
@@ -89,7 +96,7 @@ function ScheduledRuleRows({ execution, hasUndoHere }: ScheduledRuleRowsProps) {
                 {HELM_COPY.scheduledChangeShort}
               </Button>
               {hasUndoHere && index === 0 && canUndo(execution) && (
-                <UndoButton execution={execution} lineCount={1} />
+                <TurnUndo execution={execution} />
               )}
             </div>
           </div>

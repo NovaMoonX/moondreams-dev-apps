@@ -211,7 +211,25 @@ export const hasTickCue = (text: string) => {
   );
 };
 
-/** Short plain turns go to the quick model; a turn with photos or files, a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
+const UNDO_CUES = [
+  /\bundo\b/,
+  /\brevert\b/,
+  /\bthat ?s wrong\b/,
+  /\bnever ?mind\b/,
+  /\bscrap (that|it)\b/,
+  /\bnot what i (wanted|asked|meant)\b/,
+  /\bno i meant\b/,
+  /\btake (that|it) back\b/,
+  /\bwhy did you (do|add|make|put|file|change|move)\b/,
+];
+
+/** Whether the words ask to take back or question what the assistant just did ("undo that", "never mind", "no, I meant a note"); these go to the fuller model, which sees what was done. */
+export const hasUndoCue = (text: string) => {
+  const words = toComparable(text);
+  return UNDO_CUES.some((cue) => cue.test(words));
+};
+
+/** Short plain turns go to the quick model; a turn with photos or files, a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is quick, since the question already says what is wanted, unless the words ask to take something back. */
 export const pickRoute = ({
   text,
   mode,
@@ -229,6 +247,7 @@ export const pickRoute = ({
 }): Route => {
   const trimmed = text.trim();
   if (hasMedia) return 'full';
+  if (mode === 'full' && hasUndoCue(trimmed)) return 'full';
   if (isAnswer && mode === 'full') return 'quick';
   if (hasTopicFocus && mode === 'full' && hasReviseCue(trimmed)) return 'full';
   if (mode === 'full' && hasProcedureCue(trimmed)) return 'full';

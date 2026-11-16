@@ -40,6 +40,7 @@ The plan is for the owner, and its job is to lighten their mental load (owner: "
 - **What counts** (the criteria) when the request has them, with any change you made to them in a clause.
 - **Under the hood**, a few short one-line bullets on how the thing works where that is worth the owner knowing (owner, Runway fresh balances: "the technical section lately hasn't been too helpful… treat it like noise"; an under-the-hood section "for things that are worth raising"): how a figure is worked out (pending is the balance less what is available), how often something is asked and why that often (a limit, a cost), what happens when an outside service fails or refuses, a new cloud function or stored data in a few words, and whether a behaviour is shared or app-specific when that is a choice. Write it in the person's terms, not the code's, and never list plumbing (a new prop, a selector, a transaction). Anything not named is unchanged, so never write "no new functions". Leave the section out when nothing qualifies. Tune it from the owner's feedback.
 - **Nomos**, one line whenever the plan changes what an app stores or what a person does in it: what Nomos, Helm's assistant, can now read, answer or do there, what the outside assistants and connected apps or services gain, any gap it opens or closes, or that none is affected and why (`connections.md` "Every app is planned and changed with Nomos in mind").
+- **The way back**, one line whenever the plan adds an action or capability that changes the person's things: how the person takes it back (an Undo where they made it, by asking the assistant, in part when the act did several things), or what can't come back and how the plan asks first (product "Every action can be undone").
 - **Decisions for the owner**, only the ones that are uncertain or risky, each a 🚩 question with your recommendation. When none are left, say "No open decisions."
 
 Leave out the files, selectors, data paths, verification steps, docs to update and review sizing (Under the hood says how it works, never where in the code it lives). They are yours to get right, and they belong in the PR's How it works and evidence blocks. Keep paragraphs and nested bullets out of the plan. These rules replace plan mode's default template, whose Context, Files and Verification sections never appear; in plan mode the prompt hook states them, and `.claude/hooks/plan-check.sh` (before ExitPlanMode) sends back a plan with paths, code spans, nested bullets, those sections or more than 350 words (owner: "it should not have been missed").
@@ -97,7 +98,7 @@ The owner merges, unless they hand the merges over. "Merge them through" (in cha
 For each PR, in order:
 
 1. **Gate it.** Merge only when every one holds on the current head, and never with admin rights or past a failing check:
-   - CI is green.
+   - CI is green: the required runs exist on the current head and passed. A head with no runs at all (GitHub dropped the push event) is not green; the next real commit brings them, never an empty one.
    - There is no conflict with the base.
    - Claude Approvals passes, where the repo runs it.
    - Every `(who: owner)` decision on it is answered. A PR with an open decision is skipped, along with those after it that depend on it, and the rest go on.

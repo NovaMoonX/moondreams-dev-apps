@@ -13,7 +13,7 @@ import {
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
-import { isListable } from '../salePageView.js';
+import { isListable, toOpenPickupDays } from '../salePageView.js';
 import { GOING_ONCE_SHARES } from './manifest.js';
 
 const readManifest = () => {
@@ -84,6 +84,7 @@ interface ReadSale {
   pickupArea: string | null;
   buyerNote: string | null;
   paymentMethods: string[];
+  pickupDays: number[];
   currency: string | null;
   newInquiries: number | null;
   updatedAt: number | null;
@@ -152,6 +153,13 @@ async function readOpenSales(
             pickupArea: readText(doc.get('pickupArea')),
             buyerNote: readText(doc.get('buyerNote')),
             paymentMethods: readPaymentMethods(doc.get('paymentMethods')),
+            pickupDays: toOpenPickupDays(
+              {
+                pickupDays: doc.get('pickupDays'),
+                timeZone: doc.get('timeZone'),
+              },
+              Date.now(),
+            ),
             currency: readText(doc.get('currency')),
             newInquiries: isCountingInquiries
               ? await doc.ref
@@ -184,12 +192,40 @@ const countStatus = (items: ReadItem[], status: string) =>
 const sumCents = (items: ReadItem[], pick: (item: ReadItem) => number | null) =>
   items.reduce((total, item) => total + (pick(item) ?? 0), 0);
 
+const SHORT_DATE = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric',
+});
+
+/** Consecutive days grouped into runs: "Nov 28–30, Dec 2", "Nov 30–Dec 2" across months. */
+const toPickupLine = (days: number[]) => {
+  const runs = days.reduce<number[][]>(
+    (grouped, day) =>
+      grouped.length > 0 && day - grouped[grouped.length - 1].at(-1)! === DAY_MS
+        ? [...grouped.slice(0, -1), [...grouped[grouped.length - 1], day]]
+        : [...grouped, [day]],
+    [],
+  );
+  const text = runs.map((run) => {
+    const first = new Date(run[0]);
+    const last = new Date(run[run.length - 1]);
+    if (run.length === 1) return SHORT_DATE.format(first);
+    const end =
+      first.getUTCMonth() === last.getUTCMonth()
+        ? String(last.getUTCDate())
+        : SHORT_DATE.format(last);
+    return `${SHORT_DATE.format(first)}–${end}`;
+  });
+  return text.length > 0 ? `Pickups ${text.join(', ')}` : null;
+};
+
 const toSaleDetail = (sale: ReadSale) => {
   const pay =
     sale.paymentMethods.length > 0
       ? `Pay by ${sale.paymentMethods.join(', ')}`
       : null;
-  const parts = [sale.buyerNote, pay].filter(
+  const parts = [sale.buyerNote, pay, toPickupLine(sale.pickupDays)].filter(
     (part): part is string => part !== null,
   );
   return parts.length > 0 ? parts.join(' · ') : null;

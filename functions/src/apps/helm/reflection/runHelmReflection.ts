@@ -11,13 +11,10 @@ import {
 import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
-import { BATCH_JOBS } from '../../../ai/batchJobs.js';
 import {
-  collectBatch,
-  createBatchClient,
-  submitBatch,
-  type BatchClient,
-} from '../../../ai/batches.js';
+  createAnthropicBatchProvider,
+  type BatchProvider,
+} from '../../../ai/batch.js';
 import type { Keyring } from '../../../appKeys/keyring.js';
 import { isForcedFixture, isRunningInEmulator } from '../../../emulator.js';
 import { recordAiSpendIn, reserveBatchSpend } from '../aiLimits.js';
@@ -33,6 +30,7 @@ import {
   OPEN_RUN_STATUSES,
   readRun,
   readState,
+  REFLECT_BATCH,
   releaseLeaseIn,
   RUNS_PATH,
   statePath,
@@ -52,7 +50,7 @@ const CREATING_LOST_MS = 15 * 60_000;
 /** Held while a person's request is built; a run that dies in between frees them when it ends. */
 const BUILD_LEASE_MS = 30 * 60_000;
 /** A batch answers within its job's longest wait, so a request still open after that is replaced. */
-const SUBMITTED_LEASE_MS = (BATCH_JOBS.reflect.maxWaitHours + 1) * HOUR_MS;
+const SUBMITTED_LEASE_MS = (REFLECT_BATCH.maxWaitHours + 1) * HOUR_MS;
 /** A submitted batch past its job's longest wait plus this is given up on, so its reservation returns to the day's budget. */
 const SUBMITTED_GRACE_MS = 2 * HOUR_MS;
 /** Collecting stops starting runs after this, leaving the rest of the 540 s to build and submit. */
@@ -246,7 +244,7 @@ async function closeCollected(
     transaction.update(runRef, {
       status: 'collected',
       collectedAt: now,
-      deletedAtProvider: BATCH_JOBS.reflect.deleteAfterCollect ? now : null,
+      deletedAtProvider: REFLECT_BATCH.deleteAfterCollect ? now : null,
       requests: {},
     });
   });
@@ -254,11 +252,11 @@ async function closeCollected(
 
 const isExpired = (run: ReflectionRun, now: number) =>
   now - (run.submittedAt ?? run.createdAt) >
-  BATCH_JOBS.reflect.maxWaitHours * HOUR_MS + SUBMITTED_GRACE_MS;
+  REFLECT_BATCH.maxWaitHours * HOUR_MS + SUBMITTED_GRACE_MS;
 
 async function collectRun(
   firestore: Firestore,
-  client: BatchClient,
+  client: BatchProvider,
   keyring: Keyring,
   runId: string,
   run: ReflectionRun,
@@ -275,31 +273,30 @@ async function collectRun(
     await markLost(firestore, runId);
     return 'lost';
   }
-  const state = await collectBatch(
-    client,
-    { jobId: 'reflect', batchId: run.batchId },
-    async (customId, outcome) => {
-      if (Date.now() > deadline) throw new OutOfTime();
-      await applyReflectionOutcome(firestore, keyring, {
-        runId,
-        customId,
-        outcome,
-        now,
-      });
-    },
-  );
-  if (state === 'pending') {
+  const results = await client.collect(run.batchId);
+  if (results === null) {
     if (!isExpired(run, now)) return 'waiting';
     await markLost(firestore, runId);
     return 'lost';
   }
+  await results.reduce(async (previous, result) => {
+    await previous;
+    if (Date.now() > deadline) throw new OutOfTime();
+    await applyReflectionOutcome(firestore, keyring, {
+      runId,
+      customId: result.customId,
+      result,
+      now,
+    });
+  }, Promise.resolve());
+  if (REFLECT_BATCH.deleteAfterCollect) await client.remove(run.batchId);
   await closeCollected(firestore, runId, now);
   return 'collected';
 }
 
 async function collectOpenRuns(
   firestore: Firestore,
-  client: BatchClient,
+  client: BatchProvider,
   keyring: Keyring,
   now: number,
 ) {
@@ -364,7 +361,7 @@ async function prepareDue(
 
 async function submitPrepared(
   firestore: Firestore,
-  client: BatchClient,
+  client: BatchProvider,
   runId: string,
   prepared: Prepared[],
   now: number,
@@ -398,24 +395,31 @@ async function submitPrepared(
         : [],
     ),
   );
-  const ids = prepared.map(({ customId }) => customId);
-  const sent = await submitBatch(client, {
-    jobId: 'reflect',
-    requests: prepared.map(({ request }) => request),
-    makeId: () => ids.shift() ?? newId('b', 16),
-  }).catch(async (error: unknown) => {
-    logger.error('helm.reflect.submitFailed', { runId, code: toCode(error) });
-    await markLost(firestore, runId).catch((lostError: unknown) =>
-      logger.error('helm.reflect.markLostFailed', {
-        runId,
-        code: toCode(lostError),
-      }),
-    );
-    return null;
-  });
+  const sent = await client
+    .submit(
+      prepared.map(({ customId, request }) => ({
+        customId,
+        role: 'reflect' as const,
+        system: request.system,
+        message: request.prompt,
+        schema: request.schema,
+        maxTokens: request.maxTokens,
+        isSystemCached: true,
+      })),
+    )
+    .catch(async (error: unknown) => {
+      logger.error('helm.reflect.submitFailed', { runId, code: toCode(error) });
+      await markLost(firestore, runId).catch((lostError: unknown) =>
+        logger.error('helm.reflect.markLostFailed', {
+          runId,
+          code: toCode(lostError),
+        }),
+      );
+      return null;
+    });
   if (!sent) return 0;
   await runRef
-    .update({ status: 'submitted', batchId: sent.batchId, submittedAt: now })
+    .update({ status: 'submitted', batchId: sent, submittedAt: now })
     .catch((error: unknown) =>
       logger.error('helm.reflect.submittedUpdateFailed', {
         runId,
@@ -439,10 +443,10 @@ async function submitPrepared(
   return prepared.length;
 }
 
-/** One hourly pass: finish what earlier runs sent, then send what is newly due. The batch client is injected so a pass can be rehearsed without the provider. */
+/** One hourly pass: finish what earlier runs sent, then send what is newly due. The batch provider is injected so a pass can be rehearsed without the provider. */
 export async function runHelmReflectionPass(
   firestore: Firestore,
-  client: BatchClient,
+  client: BatchProvider,
   keyring: Keyring,
   now = Date.now(),
 ): Promise<ReflectionPass> {
@@ -485,7 +489,7 @@ export const runHelmReflection = onSchedule(
     }
     const pass = await runHelmReflectionPass(
       getFirestore(),
-      createBatchClient(apiKey),
+      createAnthropicBatchProvider(apiKey),
       loadKeyringOrFail(),
     );
     logger.info('helm.reflect.run', pass);

@@ -64,6 +64,7 @@ import {
   selectShownObservations,
   selectShownReflections,
 } from '@apps/helm/store/selectors/patternSelectors';
+import { readUndoFields } from '@apps/helm/nomos/planUndo';
 import type { UndoResult } from '@apps/helm/nomos/undoExecution';
 import type {
   Execution,
@@ -380,6 +381,8 @@ const toActedExecution = async (
   linkedPlaceIds: [],
   undoesExecutionId: null,
   undoneByExecutionId: null,
+  undoneDocIds: null,
+  partUndoIds: null,
   questionRef: null,
   errorCode: null,
   privacy: input.privacy,
@@ -400,6 +403,7 @@ const toActedExecution = async (
       undoReport: null,
       spoken: null,
       goneIds: null,
+      undoReason: null,
       lines: null,
       abilityOffer: null,
       awayZoneOffer: null,
@@ -488,6 +492,8 @@ export async function writeFinding(
           acceptedBy: 'auto' as const,
           executionId: executionRef?.id ?? null,
           undoneByExecutionId: null,
+          undoneDocIds: null,
+          partUndoIds: null,
           history: [
             ...(move.kind === 'create' ? [] : stateFields.history),
             { to: 'accepted' as const, at: now, by: 'nomos' as const },
@@ -993,6 +999,8 @@ export async function undoPatternExecution(
           linkedPlaceIds: [],
           undoesExecutionId: executionId,
           undoneByExecutionId: null,
+          undoneDocIds: null,
+          partUndoIds: null,
           questionRef: null,
           errorCode: null,
           privacy: original.privacy,
@@ -1013,6 +1021,7 @@ export async function undoPatternExecution(
               undoReport: HELM_COPY.patternTookBackReport,
               spoken: null,
               goneIds: null,
+              undoReason: null,
               lines: null,
               abilityOffer: null,
               awayZoneOffer: null,
@@ -1020,11 +1029,24 @@ export async function undoPatternExecution(
             encryption,
           ),
         } satisfies Execution);
-        transaction.update(executionRef, { undoneByExecutionId: undoRef.id });
+        const earlier = readUndoFields(original);
+        const undoneDocIds = [
+          ...new Set([
+            ...earlier.undoneDocIds,
+            ...original.effectRefs.map((effect) => effect.docId),
+          ]),
+        ];
+        transaction.update(executionRef, {
+          undoneByExecutionId: undoRef.id,
+          undoneDocIds,
+          partUndoIds: [...earlier.partUndoIds, undoRef.id],
+        });
         return {
           kind: 'done',
           undoExecutionId: undoRef.id,
           report: HELM_COPY.patternTookBackReport,
+          isFinal: true,
+          undoneDocIds,
           objectPaths: [],
         };
       },

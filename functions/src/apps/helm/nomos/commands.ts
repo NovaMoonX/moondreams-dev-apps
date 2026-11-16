@@ -146,6 +146,28 @@ export const CONNECTION_COMMAND_KINDS = [
 
 export const MAX_CONNECTIONS_PER_TURN = 3;
 
+/** Why the person wants something taken back, read from their words. */
+export const UNDO_REASONS = [
+  'wrongThing',
+  'wrongDetails',
+  'tooHasty',
+  'changedMind',
+  'unclear',
+] as const;
+
+export type UndoReason = (typeof UNDO_REASONS)[number];
+
+export const MAX_UNDO_OFFERS = 4;
+export const UNDO_QUOTE_CAP = 200;
+
+/** An offer to take back part or all of an earlier turn, read from the reply and still to be checked against the records. */
+export interface UndoOffer {
+  executionId: string;
+  lineNumbers: number[] | 'all';
+  reason: UndoReason;
+  quote: string | null;
+}
+
 export const RUN_STEPS_MAX = 80;
 export const RUN_EXTRA_MAX = 20;
 export const RUN_EXTRA_TEXT_CAP = 200;
@@ -402,6 +424,9 @@ export const NAME_CAP = 80;
 export const PLAN_DAY_AHEAD = 6;
 export const MAX_EFFECTS = 40;
 export const MAX_MEDIA_TARGETS = 3;
+/** Most effects a whole turn records: its commands, then the people and places they name, the home effect and a photo's keeps. The device's undo reads every one in one transaction. */
+export const MAX_EXECUTION_EFFECTS =
+  MAX_EFFECTS + MAX_MENTIONS + MAX_PLACES + 1 + MAX_MEDIA_TARGETS;
 export const MAX_MEDIA_TOPICS = 10;
 export const TITLE_CAP = 200;
 export const QUESTION_CAP = 200;
@@ -1143,6 +1168,10 @@ export const buildFileResultsTool = ({
             'heldCommands',
             'allowedKinds',
             'actionAlias',
+            'undoTurn',
+            'undoLines',
+            'undoReason',
+            'undoQuote',
           ],
           properties: {
             kind: {
@@ -1158,6 +1187,7 @@ export const buildFileResultsTool = ({
                 ...SOUNDS_LIKE_COMMAND_KINDS,
                 ...CONTACT_COMMAND_KINDS,
                 ...CONNECTION_COMMAND_KINDS,
+                'offerUndo',
                 'answer',
                 'ask',
               ],
@@ -1843,6 +1873,26 @@ export const buildFileResultsTool = ({
             actionAlias: nullable(
               'string',
               'changeScheduledAction: the alias (sa1, sa2, …) of the scheduled action in <scheduled_actions>; null for every other kind. scope is thisOne for one run only, thisAndFollowing from that run on; fromSpanId is the date span of the run named, null for the next one; toSpanId is the day a skipped or moved run goes to.',
+            ),
+            undoTurn: nullable(
+              'string',
+              "offerUndo: the turn handle (u1, u2, …) from the earlier turn's undoable list; null otherwise.",
+            ),
+            undoLines: {
+              type: ['array', 'null'],
+              items: { type: 'integer' },
+              description:
+                'offerUndo: the line numbers (n) of that turn to offer to take back; an empty array offers everything left of that turn. Never a line marked isUndone. null otherwise.',
+            },
+            undoReason: {
+              type: ['string', 'null'],
+              enum: [...UNDO_REASONS, null],
+              description:
+                'offerUndo: why the person wants it back, by their words. wrongThing: they meant something else ("I meant a note"). wrongDetails: right thing, wrong details ("Friday not Saturday"). tooHasty: it should have asked first ("don\'t do that without asking"). changedMind: they no longer want it ("never mind, I don\'t need it"). unclear: anything else, or a plain "why did you do that?". null otherwise.',
+            },
+            undoQuote: nullable(
+              'string',
+              `offerUndo: the words from THIS capture that show the reason, copied exactly, at most ${UNDO_QUOTE_CAP} characters; null when no words do.`,
             ),
           },
         },

@@ -6,7 +6,7 @@ import { CalendarClock } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import UndoButton from '@apps/helm/components/activity/UndoButton';
+import { TurnUndo } from '@apps/helm/components/scheduled/ScheduledRuleRows';
 import ScheduledSheet from '@apps/helm/components/scheduled/ScheduledSheet';
 import { useScheduledChange } from '@apps/helm/components/scheduled/useScheduledChange';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -148,7 +148,7 @@ function RunLine({ run, onOpenConnectedApps, onOpen }: RunLineProps) {
       )}
       {!isFailed && execution && (
         <div className='pl-8'>
-          <UndoButton execution={execution} lineCount={1} />
+          <TurnUndo execution={execution} />
         </div>
       )}
     </div>

@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 
 import type { DocumentData, Firestore } from 'firebase-admin/firestore';
 
-import type { BatchRequest } from '../../../ai/batches.js';
 import { getUsageCost } from '../../../ai/models.js';
 import { whyFingerprint } from '../goalWhy.js';
 import { isPrivateHabit } from '../habitStore.js';
@@ -262,8 +261,15 @@ export function buildReflectMessage({
   ].join('\n');
 }
 
+export interface ReflectRequest {
+  system: string;
+  prompt: string;
+  schema: Record<string, unknown>;
+  maxTokens: number;
+}
+
 export interface PreparedReflection {
-  request: BatchRequest;
+  request: ReflectRequest;
   dayKey: string;
 }
 
@@ -319,7 +325,7 @@ export async function buildReflectRequest(
 }
 
 /** What a request is expected to cost as a batch, in hundredths of a cent: the whole prompt as input and every allowed token as output. */
-export const estimateReflectCost = (request: BatchRequest) =>
+export const estimateReflectCost = (request: ReflectRequest) =>
   getUsageCost(
     'reflect',
     {
