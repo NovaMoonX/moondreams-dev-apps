@@ -49,6 +49,10 @@ import {
   normalizeNomosReply,
   NomosReplyError,
 } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import {
+  readPrivacyFacts,
+  type PrivacyFacts,
+} from '../../functions/src/apps/helm/privacy.ts';
 import { planLearnLater } from '../../functions/src/apps/helm/nomos/planLearnLater.ts';
 import { planResolveQuestionsTask } from '../../functions/src/apps/helm/nomos/planQuestionsTask.ts';
 import { planUndoOffer } from '../../functions/src/apps/helm/nomos/planUndoOffer.ts';
@@ -3249,9 +3253,11 @@ test('an offer for an existing person makes a task for that person, a new name m
   const answerYes = (
     knownPeople: { id: string; names: string[] }[],
     now: number,
+    whoFacts: { id: string; privacyFacts: PrivacyFacts }[] = [],
   ) => {
     const [question] = offerPlan([], knownPeople).questions;
     const result = planResolveQuestionsTask({
+      whoFacts,
       captureId: 'capture-1',
       executionId: 'exec-2',
       questionId: question.id,
@@ -3282,6 +3288,22 @@ test('an offer for an existing person makes a task for that person, a new name m
   );
   assert.deepEqual(known.whoIds, ['who-priya']);
   assert.deepEqual(answerYes([], QUESTION_NOW).whoIds, []);
+  const marked = (privateMark: 'person' | null) =>
+    answerYes([priya], QUESTION_NOW, [
+      {
+        id: 'who-priya',
+        privacyFacts: readPrivacyFacts({
+          privateMark,
+          isPrivacyCleared: false,
+        }),
+      },
+    ]);
+  assert.equal(marked('person').privacy, 'private');
+  assert.equal(
+    (marked('person').sealed as { privateMark?: string }).privateMark,
+    undefined,
+  );
+  assert.equal(marked(null).privacy, 'ordinary');
   const past = answerYes([priya], MEETING_AT + 1);
   assert.equal(past.meeting, null);
   assert.equal(

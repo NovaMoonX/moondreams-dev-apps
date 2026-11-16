@@ -1,8 +1,10 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
+import type { PrivacyFacts } from '../privacy.js';
 import type { OfferQuestionsCommand, QuestionsMeeting } from './commands.js';
 import {
   planWrites,
   type Effect,
+  type PeopleInput,
   type EffectRef,
   type PlannedQuestion,
   type QuestionStateEntry,
@@ -132,6 +134,8 @@ export interface QuestionsTaskResolveInput {
     questionState: Record<string, QuestionStateEntry>;
   };
   opened: Record<string, unknown>;
+  /** The privacy of the held people, read by the caller, so the task takes their private mark. */
+  whoFacts?: { id: string; privacyFacts: PrivacyFacts }[];
 }
 
 export type QuestionsTaskResolveResult =
@@ -193,6 +197,23 @@ export function planResolveQuestionsTask(
           now,
           seal: input.seal,
           newId: input.newId,
+          people: {
+            mentions: [],
+            places: [],
+            known: (input.whoFacts ?? []).map((who) => ({
+              id: who.id,
+              kind: 'person',
+              name: '',
+              aliases: [],
+              lastMentionedAt: null,
+              privacyFacts: who.privacyFacts,
+            })),
+            knownPlaces: [],
+            assistantName: null,
+            assistantNames: [],
+            dayKey: '',
+            capturedAt: now,
+          } as unknown as PeopleInput,
         })
       : null;
   const questionState = {

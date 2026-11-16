@@ -8,6 +8,8 @@ import type { SealedPayload } from '../../appKeys/seal.js';
 import { HELM_MASTER_KEYS } from './getHelmKey.js';
 import { openForHelm, sealForHelm, unwrapHelmKey } from './helmKey.js';
 import { loadKeyringOrFail } from './sortHelmCapture.js';
+import { readPrivacyFacts } from './privacy.js';
+import { toPrivateMark } from './nomos/contextPeople.js';
 import type { QuestionStateEntry } from './nomos/executeCommands.js';
 import { openKeyDate } from './sortHelmCapture.js';
 import { openTopicRecord } from './noteStore.js';
@@ -612,7 +614,33 @@ export const resolveHelmQuestion = onCall(
       if (held?.kind === QUESTIONS_TASK_KIND) {
         const now = Date.now();
         const executionRef = firestore.collection(`${base}/executions`).doc();
+        const heldWhoIds = (Array.isArray(held.whoIds) ? held.whoIds : [])
+          .filter(
+            (id): id is string => typeof id === 'string' && ID_RE.test(id),
+          )
+          .slice(0, 4);
+        const whoFacts = (
+          await Promise.all(
+            heldWhoIds.map((id) =>
+              transaction.get(firestore.doc(`${base}/who/${id}`)),
+            ),
+          )
+        ).flatMap((snap) => {
+          const words = snap.exists ? openWords(key, snap.get('sealed')) : null;
+          return words
+            ? [
+                {
+                  id: snap.id,
+                  privacyFacts: readPrivacyFacts({
+                    privateMark: toPrivateMark(words.privateMark),
+                    isPrivacyCleared: words.isPrivacyCleared === true,
+                  }),
+                },
+              ]
+            : [];
+        });
         const answered = planResolveQuestionsTask({
+          whoFacts,
           captureId,
           executionId: executionRef.id,
           questionId,
