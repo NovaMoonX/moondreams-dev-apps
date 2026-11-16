@@ -14,6 +14,9 @@ export function toSale(id: string, data: DocumentData): Sale {
     paymentMethods: Array.isArray(sale.paymentMethods)
       ? sale.paymentMethods.filter((method) => typeof method === 'string')
       : [],
+    pickupDays: Array.isArray(sale.pickupDays)
+      ? sale.pickupDays.filter((day) => typeof day === 'number')
+      : [],
     currency: sale.currency ?? 'USD',
     timeZone: sale.timeZone ?? null,
     ownerUid: sale.ownerUid ?? '',
