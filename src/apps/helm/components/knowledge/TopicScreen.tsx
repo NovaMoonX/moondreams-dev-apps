@@ -55,16 +55,24 @@ import {
   pathOf,
 } from '@apps/helm/utils/topicTree';
 
+import OutsideMark from '@apps/helm/components/outside/OutsideMark';
+
 const { option } = DropdownMenuFactories;
 
-/** The one quiet line naming the outside assistant behind a part, when one is. */
+/** The outside assistants behind a part, by mark and name, inside the door to where it came from. */
 function OutsideFrom({ sources }: { sources: TopicSource[] }) {
   const noteById = useAppSelector(selectNoteById);
   const captureById = useCaptureById();
   const vias = outsideVias(sources, noteById, captureById);
   return vias.length === 0 ? null : (
-    <span className='text-muted-foreground min-w-0 truncate text-[13px]'>
-      {HELM_COPY.assistantFrom(vias.join(', '))}
+    <span className='flex min-w-0 items-center gap-1.5'>
+      <span aria-hidden='true'>·</span>
+      {vias.map((via) => (
+        <OutsideMark key={via} via={via} isSmall />
+      ))}
+      <span className='truncate'>
+        {HELM_COPY.assistantFrom(vias.join(', '))}
+      </span>
     </span>
   );
 }
@@ -491,23 +499,24 @@ function TopicScreen({
                     </h2>
                   ))}
                 <MarkdownText text={section.markdown} />
-                <div className='flex items-center justify-between gap-3'>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='sm'
-                    aria-label={HELM_COPY.topicSectionOpen(section.heading)}
-                    className="text-muted-foreground relative -ml-2 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSourcesId(section.id);
-                    }}
-                  >
-                    {HELM_COPY.sourcesTitle}
-                    <ChevronRight className='size-3.5' aria-hidden='true' />
-                  </Button>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  aria-label={HELM_COPY.topicSectionOpen(section.heading)}
+                  className="text-muted-foreground relative -ml-2 max-w-full after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSourcesId(section.id);
+                  }}
+                >
+                  <span className='shrink-0'>{HELM_COPY.sourcesTitle}</span>
                   <OutsideFrom sources={section.sources} />
-                </div>
+                  <ChevronRight
+                    className='size-3.5 shrink-0'
+                    aria-hidden='true'
+                  />
+                </Button>
               </section>
             ))}
             <Button

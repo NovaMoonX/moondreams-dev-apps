@@ -19,6 +19,7 @@ import { formatDateShort } from '@/utils/formatUtils';
 import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import { NoteTopicsFields } from '@apps/helm/components/knowledge/NoteTopicsSheet';
+import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
@@ -140,7 +141,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
           : note.source === 'capture'
             ? HELM_COPY.noteFromWhatYouSaid(formatDateShort(note.createdAt))
             : note.source === 'outside'
-              ? `${HELM_COPY.noteSavedFromOutside(note.via || HELM_COPY.outsideUnnamed)} · ${formatDateShort(note.createdAt)}`
+              ? HELM_COPY.noteAdded(formatDateShort(note.createdAt))
               : note.isFromGeneralAnswer
                 ? `${HELM_COPY.noteSavedFromAnswer} · ${formatDateShort(note.createdAt)}`
                 : HELM_COPY.noteAdded(formatDateShort(note.createdAt)),
@@ -209,6 +210,19 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
                   aria-hidden='true'
                 />
                 <span className='min-w-0'>{HELM_COPY.answerHealthCaution}</span>
+              </p>
+            )}
+            {note.source === 'outside' && (
+              <p className='text-muted-foreground flex min-w-0 items-center gap-1.5 text-[13px]'>
+                <OutsideMark
+                  via={note.via || HELM_COPY.outsideUnnamed}
+                  isSmall
+                />
+                <span className='truncate'>
+                  {HELM_COPY.noteSavedFromOutside(
+                    note.via || HELM_COPY.outsideUnnamed,
+                  )}
+                </span>
               </p>
             )}
             {note.body &&

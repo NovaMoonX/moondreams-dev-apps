@@ -41,6 +41,10 @@ export const cleanSavedLinks = (
         return [];
       }
     })
+    .filter(
+      (link, index, all) =>
+        all.findIndex((other) => other.url === link.url) === index,
+    )
     .slice(0, SAVE_SOURCES_KEPT);
 
 export type SavePlan =
@@ -49,6 +53,8 @@ export type SavePlan =
       kind: 'saved';
       where: 'topic' | 'newTopic' | 'loose';
       topicName: string | null;
+      noteTitle: string;
+      linkCount: number;
       noteId: string;
       noteData: Record<string, unknown>;
       topic: {
@@ -254,6 +260,8 @@ export function planSaveToHelm(input: {
     kind: 'saved',
     where: topicId ? 'newTopic' : existing ? 'topic' : 'loose',
     topicName: topicId ? newTopicName : (existing?.state.name ?? null),
+    noteTitle,
+    linkCount: links.length,
     noteId,
     noteData,
     topic,
@@ -277,10 +285,15 @@ export const describeSave = (
 ) =>
   [
     plan.where === 'newTopic'
-      ? `Saved to Helm: started a new topic, ${plan.topicName}, with it.`
+      ? `Saved "${plan.noteTitle}" to Helm and started a new topic, ${plan.topicName}, with it.`
       : plan.where === 'topic'
-        ? `Saved to Helm under the topic ${plan.topicName}. ${name} folds it into the topic's document the next time the topic is opened.`
-        : 'Saved to Helm as a note on its own.',
+        ? `Saved "${plan.noteTitle}" to Helm under the topic ${plan.topicName}. It is listed in that topic now, and ${name} works it into the topic's text the next time the topic is opened.`
+        : `Saved "${plan.noteTitle}" to Helm as a note on its own.`,
     ...(plan.notice ? [plan.notice] : []),
+    ...(plan.linkCount > 0
+      ? [
+          `Kept ${plan.linkCount === 1 ? '1 link' : `${plan.linkCount} links`} with it.`,
+        ]
+      : []),
     `The person can see it, and undo it, in Helm under From your assistants.`,
   ].join(' ');

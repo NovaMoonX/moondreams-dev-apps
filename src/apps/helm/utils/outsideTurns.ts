@@ -44,19 +44,32 @@ export function groupOutsideConversations(
     .sort((a, b) => b.endedAt - a.endedAt);
 }
 
-const isUndoneExecution = (execution: OpenExecution | undefined) =>
-  execution !== undefined && execution.undoneByExecutionId !== null;
-
 export interface OutsideAdditions {
-  /** Executions of turns that arrived since the person last looked and were not taken back. */
+  /** Records the outside turns since the person last looked made or changed, not counting what was taken back. */
   count: number;
+  /** True when every one of them was made rather than changed. */
+  isAllNew: boolean;
   /** The assistants that made them, in the order they first appear. */
   vias: string[];
-  /** The one thing's title when there is exactly one and it is already loaded; null otherwise. */
+  /** The one record's title when exactly one was made; null otherwise. */
   title: string | null;
 }
 
-/** What outside assistants made since `since`: sorted turns with an execution that is not known to be undone and not dismissed. */
+/** A filed note also marks its topic behind; the topic is not a second thing the assistant changed. */
+const changedRefs = (execution: OpenExecution) =>
+  execution.effectRefs.filter(
+    (ref) =>
+      ref.op === 'create' ||
+      (ref.op === 'update' &&
+        !(
+          ref.collection === 'topics' &&
+          execution.effectRefs.some(
+            (other) => other.op === 'create' && other.collection === 'notes',
+          )
+        )),
+  );
+
+/** What outside assistants made or changed since `since`; an answer, a failed or undone turn, and an execution not loaded yet count for nothing. */
 export function readOutsideAdditions(
   captures: OpenCapture[],
   since: number,
@@ -73,20 +86,26 @@ export function readOutsideAdditions(
     )
     .flatMap((capture) =>
       capture.executionIds
-        .filter((id) => !isUndoneExecution(executionsById.get(id)))
-        .map((id) => ({
-          via: capture.via || HELM_COPY.outsideUnnamed,
-          execution: executionsById.get(id),
-        })),
+        .map((id) => executionsById.get(id))
+        .filter(
+          (execution): execution is OpenExecution =>
+            execution !== undefined &&
+            execution.state === 'succeeded' &&
+            execution.undoneByExecutionId === null,
+        )
+        .flatMap((execution) =>
+          changedRefs(execution).map((ref) => ({
+            via: capture.via || HELM_COPY.outsideUnnamed,
+            ref,
+          })),
+        ),
     );
-  const only = made.length === 1 ? made[0].execution : undefined;
+  const only =
+    made.length === 1 && made[0].ref.op === 'create' ? made[0].ref : null;
   return {
     count: made.length,
+    isAllNew: made.every((entry) => entry.ref.op === 'create'),
     vias: [...new Set(made.map((entry) => entry.via))],
-    title:
-      only?.effectRefs
-        .filter((ref) => ref.op === 'create')
-        .map(titleOf)
-        .find((title) => title !== null) ?? null,
+    title: only === null ? null : titleOf(only),
   };
 }

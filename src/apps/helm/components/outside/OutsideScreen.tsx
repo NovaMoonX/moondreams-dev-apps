@@ -90,9 +90,11 @@ function OutsideScreen({
   const uid = user?.uid ?? null;
   useEffect(() => {
     if (uid === null) return;
-    setOutsideSeenAt(uid, Date.now()).catch((error: unknown) =>
-      console.error('Helm outside view not marked looked at', error),
-    );
+    return () => {
+      setOutsideSeenAt(uid, Date.now()).catch((error: unknown) =>
+        console.error('Helm outside view not marked looked at', error),
+      );
+    };
   }, [uid]);
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);

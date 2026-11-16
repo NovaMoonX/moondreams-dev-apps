@@ -42,6 +42,9 @@ import {
 import type { McpReadScope } from '../../../mcp/shapes.js';
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { openTopicRecord } from '../noteStore.js';
+import { openLiveTopic } from '../topicVersionStore.js';
+import { TOPICS_LIMIT } from '../topicLimits.js';
+import { createOptionMatcher } from '../../../vendor/optionMatchUtils.js';
 import { buildHelmTools } from './buildTools.js';
 import {
   SAVE_ABOUT_CAP,
@@ -420,6 +423,22 @@ const saveShape = {
 const NOT_FOUND_TOPIC_TEXT =
   'That topic was not found in list_topics, so it was treated as no topic.';
 
+const topicNameMatcher = createOptionMatcher<{ id: string; name: string }>({
+  names: (topic) => [topic.name],
+});
+
+/** The person's topic an assistant's new topic name already means, so a skipped list_topics or a different casing never makes a second one. */
+async function sameNamedTopic(key: HelmKey, base: string, name: string) {
+  const docs = (
+    await getFirestore().collection(`${base}/topics`).limit(TOPICS_LIMIT).get()
+  ).docs;
+  const topics = docs.flatMap((doc) => {
+    const topic = openLiveTopic(key, doc.id, doc.data());
+    return topic ? [{ id: doc.id, name: topic.name }] : [];
+  });
+  return topicNameMatcher.match(name, topics)?.id ?? null;
+}
+
 /** Saves what an outside assistant learned as a note (and a topic when asked) with no model call, in one transaction, recorded as one execution so Undo in Helm takes it back like a file import. */
 async function saveTurn({
   ctx,
@@ -447,7 +466,12 @@ async function saveTurn({
     .collection(`${base}/captures`)
     .doc(retryKeyFor(ctx, words, now));
   const executionRef = firestore.collection(`${base}/executions`).doc();
-  const topicId = input.topic ? topicIdOf(input.topic) : null;
+  const namedId = input.topic ? topicIdOf(input.topic) : null;
+  const topicId =
+    namedId ??
+    (input.newTopic?.trim()
+      ? await sameNamedTopic(key, base, input.newTopic)
+      : null);
   const outcome = await firestore
     .runTransaction(async (transaction) => {
       const [topicSnapshot, notes, topics] = await Promise.all([
@@ -478,7 +502,7 @@ async function saveTurn({
                 },
               }
             : null,
-        newTopic: input.newTopic ?? null,
+        newTopic: topicId ? null : (input.newTopic ?? null),
         noteCount: notes.data().count,
         topicCount: topics.data().count,
         via: ctx.clientName,
@@ -634,7 +658,7 @@ const instructionsFor = (
     canWrite
       ? `When they say "tell ${name}", "ask ${name}", "have ${name}" or mention Helm, use these tools: tell_helm passes on something for ${name} to file or do (a task, a date, anything to do), ask_helm asks ${name} a question, save_to_helm saves what they learned or researched in this chat, and the search tools look things up directly.`
       : `When they say "ask ${name}" or mention Helm, look things up with the search tools. This connection can't add anything, since the person turned that off in Helm; when they ask ${name} to add or change something, say so.`,
-    `Whenever the conversation touches the person's own life (their things, people, plans or routines), check Helm on your own, without waiting to be told: list_topics and get_topic for what they have written down, search_tasks, get_calendar and search_procedures. Use only what the tools return; if they find nothing, say so rather than guessing.`,
+    `Whenever the conversation touches the person's own life (their things, people, plans or routines), check Helm on your own, without waiting to be told: list_topics and get_topic for what they have written down, search_tasks and get_calendar. Use only what the tools return; if they find nothing, say so rather than guessing.`,
     canWrite
       ? `When they want to keep what they learned or researched here (they say save this, remember this or tell ${name} about it), call save_to_helm with the learning written out in full, after list_topics so it goes in the topic that fits. For a task, a date or anything to do, use tell_helm.`
       : '',

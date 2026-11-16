@@ -53,6 +53,7 @@ import {
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 import { readOutsideAdditions } from '@apps/helm/utils/outsideTurns';
+import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import { formatClock, getDayNoon, toDayKey } from '@apps/helm/utils/planDays';
 import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
@@ -113,7 +114,15 @@ function QuietLines({ now }: { now: number }) {
     );
     return added.count === 0
       ? null
-      : HELM_COPY.homeOutsideAdded(added.vias, added.count, added.title);
+      : {
+          label: HELM_COPY.homeOutsideAdded(
+            added.vias,
+            added.count,
+            added.isAllNew,
+            added.title,
+          ),
+          via: added.vias.length === 1 ? added.vias[0] : null,
+        };
   }, [
     outsideCaptures,
     outsideSeenAt,
@@ -209,11 +218,15 @@ function QuietLines({ now }: { now: number }) {
             onClick={() => void showView('outside')}
           >
             <span className='flex min-w-0 items-center gap-2'>
-              <Sparkles
-                className='text-muted-foreground size-4 shrink-0'
-                aria-hidden='true'
-              />
-              <span className='truncate'>{outside}</span>
+              {outside.via !== null ? (
+                <OutsideMark via={outside.via} isSmall />
+              ) : (
+                <Sparkles
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              )}
+              <span className='truncate'>{outside.label}</span>
             </span>
             <ChevronRight
               className='text-muted-foreground size-4 shrink-0'

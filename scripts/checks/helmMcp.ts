@@ -18,6 +18,12 @@ import {
   planSaveToHelm,
 } from '../../functions/src/apps/helm/mcp/saveToHelm.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
+import {
+  planUndo,
+  type UndoTarget,
+} from '../../src/apps/helm/nomos/planUndo.ts';
+import type { OpenCapture, OpenExecution } from '../../src/apps/helm/types.ts';
+import { readOutsideAdditions } from '../../src/apps/helm/utils/outsideTurns.ts';
 import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
 import {
   readDates,
@@ -351,6 +357,10 @@ assert.match(external, /`Asks \$\{name\}/);
 // Saving what was learned points to save_to_helm, and the instructions tell an outside assistant to check Helm on its own.
 assert.match(external, /use save_to_helm instead/);
 assert.match(external, /check Helm on your own, without waiting to be told/);
+assert.match(
+  external,
+  /list_topics and get_topic for what they have written down, search_tasks and get_calendar\./,
+);
 assert.match(external, /Use only what the tools return/);
 
 // save_to_helm writes one note, filed under a topic, a new topic or none, with no model call.
@@ -505,8 +515,171 @@ assert.equal(tooMany.notice, TOO_LONG_NOTICE);
 const spoken = describeSave(onTopic, 'Sol');
 assert.match(spoken, /under the topic Cars/);
 assert.match(spoken, /next time the topic is opened/);
+assert.match(spoken, /"Timing belt schedule"/);
+assert.match(spoken, /listed in that topic now/);
 assert.match(spoken, /undo it, in Helm under From your assistants/);
 assert.ok(!/\bI\b|Nomos/.test(spoken));
+
+// Undo in Helm takes back each of the three things save_to_helm can write.
+const asExecution = (made: ReturnType<typeof saved>): OpenExecution => ({
+  id: 'ex1',
+  captureId: 'cap1',
+  actor: 'nomos',
+  via: 'Gemini',
+  category: 'organize',
+  autonomyLevel: 3 as never,
+  state: 'succeeded',
+  effectRefs: made.effectRefs as OpenExecution['effectRefs'],
+  linkedWhoIds: [],
+  linkedPlaceIds: [],
+  undoesExecutionId: null,
+  undoneByExecutionId: null,
+  questionRef: null,
+  errorCode: null,
+  createdAt: 1000,
+  decidedAt: 1000,
+  finishedAt: 1000,
+  summary: made.summary,
+  said: null,
+  effects: made.effects,
+  undoReport: null,
+  spoken: null,
+  goneIds: null,
+  lines: [],
+  isUnreadable: false,
+});
+const undoOf = (made: ReturnType<typeof saved>, targets: UndoTarget[]) =>
+  planUndo({
+    original: asExecution(made),
+    targets: new Map(targets.map((target) => [target.docId, target])),
+    undoExecutionId: 'u1',
+    now: 2000,
+    usedIds: new Set(),
+  });
+const savedNote = (made: ReturnType<typeof saved>): UndoTarget => ({
+  docId: made.noteId,
+  data: { lastEditedAt: null, topicIds: made.noteData.topicIds },
+  opened: {
+    title: 'Timing belt schedule',
+    body: 'x',
+    via: 'Gemini',
+    links: [],
+  },
+});
+const undoFiled = undoOf(onTopic, [
+  savedNote(onTopic),
+  {
+    docId: 'topicCars',
+    data: {
+      docState: 'behind',
+      pendingNoteIds: ['n0', onTopic.noteId],
+      lastEditedAt: null,
+    },
+    opened: null,
+  },
+]);
+assert.equal(undoFiled.kind, 'write');
+if (undoFiled.kind === 'write') {
+  assert.deepEqual(
+    undoFiled.deletes.map((entry) => entry.docId),
+    [onTopic.noteId],
+  );
+  assert.deepEqual(
+    undoFiled.updates.find((update) => update.docId === 'topicCars')?.fields
+      .pendingNoteIds,
+    ['n0'],
+  );
+}
+const freshTopicId = fresh.topic?.id ?? '';
+const undoFresh = undoOf(fresh, [
+  savedNote(fresh),
+  {
+    docId: freshTopicId,
+    data: {
+      version: 1,
+      docState: 'current',
+      pendingNoteIds: [],
+      lastEditedAt: null,
+    },
+    opened: null,
+  },
+]);
+assert.equal(undoFresh.kind, 'write');
+if (undoFresh.kind === 'write') {
+  assert.deepEqual(
+    undoFresh.deletes.map((entry) => entry.docId).sort(),
+    [fresh.noteId, freshTopicId].sort(),
+  );
+}
+const undoLoose = undoOf(loose, [savedNote(loose)]);
+assert.equal(undoLoose.kind, 'write');
+if (undoLoose.kind === 'write') {
+  assert.deepEqual(
+    undoLoose.deletes.map((entry) => entry.docId),
+    [loose.noteId],
+  );
+}
+assert.deepEqual(
+  cleanSavedLinks([
+    { title: 'A', url: 'https://example.com/a' },
+    { title: 'A again', url: 'https://example.com/a' },
+  ]).map((link) => link.title),
+  ['A'],
+);
+
+// Home's outside row counts records made or changed, never an answer, a failed or undone turn, or an execution not loaded.
+const turnWith = (id: string, executionIds: string[]) =>
+  ({
+    id,
+    medium: 'mcp',
+    via: 'Gemini',
+    status: 'sorted',
+    dismissedAt: null,
+    createdAt: 5000,
+    executionIds,
+  }) as unknown as OpenCapture;
+const executionOf = (
+  id: string,
+  over: Partial<OpenExecution>,
+): [string, OpenExecution] => [id, { ...asExecution(onTopic), id, ...over }];
+const executions = new Map<string, OpenExecution>([
+  executionOf('saved', {}),
+  executionOf('answer', { category: 'answer', effectRefs: [] }),
+  executionOf('failed', { state: 'failed' }),
+  executionOf('undone', { undoneByExecutionId: 'u9' }),
+]);
+const additions = readOutsideAdditions(
+  [
+    turnWith('t1', ['saved']),
+    turnWith('t2', ['answer']),
+    turnWith('t3', ['failed']),
+    turnWith('t4', ['undone']),
+    turnWith('t5', ['not-loaded']),
+  ],
+  1000,
+  executions,
+  () => 'Timing belt schedule',
+);
+assert.equal(additions.count, 1);
+assert.equal(additions.isAllNew, true);
+assert.equal(additions.title, 'Timing belt schedule');
+assert.equal(
+  readOutsideAdditions(
+    [turnWith('t2', ['answer'])],
+    1000,
+    executions,
+    () => null,
+  ).count,
+  0,
+);
+assert.equal(
+  HELM_COPY.homeOutsideAdded(['Gemini', 'Claude'], 3, true, null),
+  'Gemini and Claude added 3 things',
+);
+assert.equal(
+  HELM_COPY.homeOutsideAdded(['Gemini'], 2, false, null),
+  'Gemini changed 2 things',
+);
 
 // An outside turn reads stored records only through its own switches.
 const stored = [
