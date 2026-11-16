@@ -97,17 +97,17 @@ const MAY_CHANGE: Record<string, string> = {
 };
 
 const rowClass =
-  'flex min-h-12 w-full items-center gap-3 rounded-none border-0 px-0 py-2 text-left font-normal';
+  'text-foreground! flex min-h-12 w-full items-center gap-3 rounded-none border-0 px-0! py-2 text-left font-normal';
 
 /** The next runs in time order, with a run that was skipped still listed (struck) so its Undo stays where it was made. */
 const readRunRows = (
   action: OpenScheduledAction,
   next: Occurrence[],
+  today: string,
 ): RunRow[] => {
   const last = next.at(-1)?.key ?? null;
-  const first = next[0]?.key ?? null;
   const skipped = action.skipped.filter(
-    (key) => first !== null && last !== null && key >= first && key <= last,
+    (key) => last !== null && key >= today && key <= last,
   );
   return [
     ...next.map((run) => ({
@@ -174,7 +174,10 @@ function ScheduledSheet({
   const next = readNextOf(action, homeZone, now);
   const isPaused = isPausedNow(action, now, zone);
   const { words } = readRuleWords(action, homeZone, now);
-  const rows = readRunRows(action, next);
+  const rows =
+    action.status === 'paused'
+      ? []
+      : readRunRows(action, next, toDayKeyIn(now, zone));
   const lastRun = runs.find((run) => run.actionId === action.id) ?? null;
   const mayChange = [
     ...new Set(action.allowed.map((kind) => MAY_CHANGE[kind] ?? kind)),

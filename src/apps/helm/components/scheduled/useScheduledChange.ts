@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { HELM_COPY } from '@apps/helm/constants';
@@ -20,9 +22,10 @@ type Write = Written | { refused: Refusal | ScheduledCreateRefusal };
 export const readRefusal = (reason: Refusal | ScheduledCreateRefusal) =>
   HELM_COPY.scheduledRefusal[reason];
 
-/** Shows what a scheduled-action write did: a refusal says why, a failed write says so, a good one gets its toast with Undo. The write is never awaited, so a change works offline. */
+/** Shows what a scheduled-action write did: a refusal says why, a failed write says so, a good one gets its toast with Undo, replacing the last one so an older Undo never undoes a newer change. The write is never awaited, so a change works offline. */
 export function useScheduledChange() {
-  const { addToast } = useToast();
+  const { addToast, removeToast } = useToast();
+  const undoToastId = useRef<string | null>(null);
 
   const guard = (write: Write): Written | null => {
     if ('refused' in write) {
@@ -52,7 +55,8 @@ export function useScheduledChange() {
   const report = (write: Write, message: string) => {
     const kept = guard(write);
     if (!kept) return false;
-    addToast({
+    if (undoToastId.current) removeToast(undoToastId.current);
+    undoToastId.current = addToast({
       title:
         kept.dropped > 0
           ? `${message} ${HELM_COPY.scheduledDropped(kept.dropped)}`

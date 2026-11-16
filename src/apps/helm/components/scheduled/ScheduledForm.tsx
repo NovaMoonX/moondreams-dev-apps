@@ -135,7 +135,20 @@ function ScheduledForm({
     !isOne ||
     range === null ||
     (day >= range.earliest && (range.latest === null || day <= range.latest));
-  const canSave = hasWords && isDayValid && time !== '' && day !== '';
+  const clockNow = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: zone,
+  }).format(now);
+  const isPast =
+    isCreate &&
+    rule === null &&
+    day === today &&
+    time !== '' &&
+    time <= clockNow;
+  const canSave =
+    hasWords && isDayValid && !isPast && time !== '' && day !== '';
 
   const requestClose = useDiscardGuard({
     isDirty,
@@ -355,6 +368,11 @@ function ScheduledForm({
           value={time}
           onChange={(event) => setTime(event.target.value)}
         />
+        {isPast && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.scheduledTimePassed(formatClockWords(time))}
+          </p>
+        )}
       </div>
       {!isOne && <RepeatPicker picker={picker} />}
       <ModalFooterActions

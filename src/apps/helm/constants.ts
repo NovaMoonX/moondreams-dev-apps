@@ -4404,6 +4404,8 @@ export const HELM_COPY = {
   scheduledMoveFrom: (from: string) => `From ${from}`,
   scheduledFormChangeTitle: (title: string) => `Change ${title}`,
   scheduledFormNewTitle: 'Schedule something',
+  scheduledTimePassed: (time: string) =>
+    `${time} today has passed. Pick a later time or another day.`,
   scheduledFormChangeBack: (title: string) => title,
   scheduledHowOften: 'How often',
   scheduledScopeOne: 'Just this one',
