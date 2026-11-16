@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { MAX_EXECUTION_EFFECTS } from '../../functions/src/apps/helm/nomos/commands.ts';
-import { buildWriteExecution } from '../../functions/src/apps/helm/writeHelmTopic.ts';
+import { buildWriteExecution } from '../../functions/src/apps/helm/topicWriteExecution.ts';
 import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import {
