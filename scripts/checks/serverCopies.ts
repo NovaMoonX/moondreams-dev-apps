@@ -183,6 +183,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/utils/goalWhy.ts',
+    dest: 'functions/src/apps/helm/goalWhy.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/apps/helm/utils/privacy.ts',
     dest: 'functions/src/apps/helm/privacy.ts',
     importRewrites: {
