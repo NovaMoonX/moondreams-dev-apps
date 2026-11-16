@@ -212,10 +212,11 @@ export function planProjectRoles(input: {
   });
   const offeredBy = (projectId: string) =>
     offered.accepted.filter((entry) => entry.projectId === projectId);
-  const toAsks = (projectId: string) =>
-    Object.fromEntries(
-      offeredBy(projectId).map((entry) => [entry.meta.id, { ...entry.ask }]),
-    );
+  const toAsks = (
+    projectId: string,
+    made: ReturnType<typeof offeredBy> = offeredBy(projectId),
+  ) =>
+    Object.fromEntries(made.map((entry) => [entry.meta.id, { ...entry.ask }]));
   const labelOf = (projectId: string) => {
     const project = input.existing.find((entry) => entry.id === projectId);
     const made = input.created?.id === projectId ? input.created.command : null;
@@ -282,17 +283,53 @@ export function planProjectRoles(input: {
       },
     };
   };
-  const offerEffect = (projectId: string, line: string) => ({
-    ref: {
-      op: 'update' as const,
-      collection: 'projects' as const,
-      docId: projectId,
-    },
-    effect: {
-      written: { 'sealed.title': line },
-      previous: { 'sealed.title': line },
-    },
-  });
+  const offerEffects = (
+    projectId: string,
+    madeOffers: ReturnType<typeof offeredBy>,
+    held: { offers: unknown[]; asks: Record<string, unknown> | null } | null,
+  ) =>
+    madeOffers.map((entry, index) => {
+      const ref = {
+        op: 'update' as const,
+        collection: 'projects' as const,
+        docId: projectId,
+      };
+      if (!held) {
+        return {
+          ref,
+          effect: {
+            written: { 'sealed.title': entry.line },
+            previous: { 'sealed.title': entry.line },
+          },
+        };
+      }
+      const upTo = (count: number) => madeOffers.slice(0, count);
+      const asksUpTo = (count: number) =>
+        count === 0 && held.asks === null
+          ? null
+          : { ...held.asks, ...toAsks(projectId, upTo(count)) };
+      return {
+        ref,
+        effect: {
+          written: {
+            researchOffers: [
+              ...held.offers,
+              ...upTo(index + 1).map((made) => made.meta),
+            ],
+            'sealed.aheadAsks': asksUpTo(index + 1),
+            'sealed.title': entry.line,
+          },
+          previous: {
+            researchOffers: [
+              ...held.offers,
+              ...upTo(index).map((made) => made.meta),
+            ],
+            'sealed.aheadAsks': asksUpTo(index),
+            'sealed.title': entry.line,
+          },
+        },
+      };
+    });
   const said = matched.flatMap(({ command, projectId }) =>
     projectId
       ? [
@@ -399,7 +436,7 @@ export function planProjectRoles(input: {
       },
       milestoneEffects: [
         ...added.map((entry) => milestoneEffect(id, entry)),
-        ...madeOffers.map((entry) => offerEffect(id, entry.line)),
+        ...offerEffects(id, madeOffers, null),
       ],
       effect: {
         ref: {
@@ -543,7 +580,12 @@ export function planProjectRoles(input: {
               ]
             : []),
           ...added.map((entry) => milestoneEffect(project.id, entry)),
-          ...madeOffers.map((entry) => offerEffect(project.id, entry.line)),
+          ...offerEffects(project.id, madeOffers, {
+            offers: project.researchOffers,
+            asks: isRecord(project.sealed.aheadAsks)
+              ? project.sealed.aheadAsks
+              : null,
+          }),
         ],
       },
     ];

@@ -1216,6 +1216,72 @@ test('a milestone ticked or retitled since is kept, and the other one the turn a
   assert.deepEqual(alone.kept, ['Wedding']);
 });
 
+const offerMeta = (id: string, over: Record<string, unknown> = {}) => ({
+  id,
+  leadDays: 14,
+  offerOn: 5,
+  state: 'waiting',
+  declineCount: 0,
+  nextEligibleOn: null,
+  shownOn: null,
+  researchId: null,
+  toldAt: null,
+  createdAt: 1,
+  ...over,
+});
+const offerAsk = (subject: string) => ({
+  subject,
+  question: `Look into ${subject}?`,
+  whyNow: null,
+  isDecision: false,
+  questions: [],
+  answers: null,
+  brief: null,
+});
+
+test('an offer the turn added to a project is taken away from both places by its undo, and one taken since is kept', () => {
+  const line = 'I will offer to look into venues 2 weeks before Wedding';
+  const added: { ref: EffectRef; effect: ExecutionEffect } = {
+    ref: { op: 'update', collection: 'projects', docId: 'p1' },
+    effect: {
+      written: {
+        researchOffers: [offerMeta('o0'), offerMeta('o1')],
+        'sealed.aheadAsks': { o0: offerAsk('cake'), o1: offerAsk('venues') },
+        'sealed.title': line,
+      },
+      previous: {
+        researchOffers: [offerMeta('o0')],
+        'sealed.aheadAsks': { o0: offerAsk('cake') },
+        'sealed.title': line,
+      },
+    },
+  };
+  const target = (offers: unknown[]): [string, UndoTarget] => [
+    'p1',
+    {
+      docId: 'p1',
+      data: { researchOffers: offers, lastEditedAt: NOW },
+      opened: {
+        ...projectSealed(),
+        aheadAsks: { o0: offerAsk('cake'), o1: offerAsk('venues') },
+      },
+    },
+  ];
+  const result = asWrite(
+    plan(execution([added]), [target([offerMeta('o0'), offerMeta('o1')])]),
+  );
+  assert.deepEqual(result.updates[0].fields.researchOffers, [offerMeta('o0')]);
+  assert.deepEqual(
+    (result.updates[0].reseal as { aheadAsks: unknown }).aheadAsks,
+    { o0: offerAsk('cake') },
+  );
+  const taken = plan(execution([added]), [
+    target([offerMeta('o0'), offerMeta('o1', { state: 'taken' })]),
+  ]);
+  assert.equal(taken.kind, 'refused');
+  assert.deepEqual(taken.kept, ['Wedding']);
+});
+
 test('a project the turn made stays when the person ticked one of its milestones since', () => {
   const made: { ref: EffectRef; effect: ExecutionEffect } = {
     ref: { op: 'create', collection: 'projects', docId: 'p1' },

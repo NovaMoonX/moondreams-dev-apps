@@ -2432,6 +2432,17 @@ test('an offer already started, not taken or gone starts nothing', () => {
   assert.equal(aheadStart('now', null).create, null);
 });
 
+test('a taken offer whose words are missing goes back to waiting and says so', () => {
+  const plan = aheadStart('now', { ...aheadProject(), ask: null });
+  assert.equal(plan.create, null);
+  assert.equal(plan.usage, null);
+  assert.deepEqual(
+    plan.offers?.map((entry) => [entry.id, entry.state, entry.researchId]),
+    [['o1', 'waiting', null]],
+  );
+  assert.equal(plan.line, "I couldn't start that look. I'll offer it again.");
+});
+
 test('the night starts a leadTime item at its depth, always live, and a learn-later wish as before', () => {
   const planned = {
     mode: 'leadTime',

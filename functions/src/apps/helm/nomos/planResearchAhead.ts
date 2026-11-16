@@ -33,6 +33,7 @@ export const AHEAD_WORDS = {
   duplicate: (subject: string, project: string) =>
     `I already have an offer to look into ${subject} for ${project}`,
   alreadyStarted: 'That look is already under way.',
+  couldntStart: "I couldn't start that look. I'll offer it again.",
   started: (subject: string, arrival: string) =>
     `Looking into ${subject}. ${arrival}`,
 };
@@ -231,6 +232,21 @@ export function planAheadStart(input: {
 }): AheadStartPlan {
   const { start, project } = input;
   const offer = project?.offers.find((entry) => entry.id === start.offerId);
+  if (
+    project &&
+    !project.ask &&
+    offer?.state === 'taken' &&
+    offer.researchId === null
+  ) {
+    return {
+      create: null,
+      offers: project.offers.map((entry) =>
+        entry.id === start.offerId ? { ...entry, state: 'waiting' } : entry,
+      ),
+      usage: null,
+      line: AHEAD_WORDS.couldntStart,
+    };
+  }
   if (
     !project ||
     !project.ask ||
