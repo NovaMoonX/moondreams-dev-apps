@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -12,7 +13,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
-import RadioRows from '@apps/helm/components/scheduled/RadioRows';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
   fixedSampleFor,
@@ -60,31 +60,24 @@ interface AskedPreview {
   replies: string[];
 }
 
+const NOTICE_ROW =
+  'bg-foreground/5 flex h-auto min-h-10 w-full flex-col items-start gap-0.5 rounded-lg border-0 px-3 py-2 text-left';
+
 function ClashChoices({
   assistant,
   personality,
-  onChange,
+  onKeep,
+  onDrop,
 }: {
   assistant: string;
   personality: Personality;
-  onChange: (next: Personality) => void;
+  onKeep: (key: string) => void;
+  onDrop: (trait: PersonalityTrait) => void;
 }) {
   const clash = findOpenClashes(personality)[0];
   if (!clash) return null;
   const left = TRAIT_LABELS[clash.left];
   const right = TRAIT_LABELS[clash.right];
-  const drop = (trait: PersonalityTrait) =>
-    onChange({
-      ...personality,
-      traits: personality.traits.filter((entry) => entry !== trait),
-    });
-  const choose = (value: string) =>
-    value === 'keep'
-      ? onChange({
-          ...personality,
-          keptClashes: [...personality.keptClashes, clash.key],
-        })
-      : drop(value === clash.left ? clash.left : clash.right);
 
   return (
     <InlineNotice
@@ -93,21 +86,76 @@ function ClashChoices({
     >
       <div className='space-y-2.5'>
         <p>{HELM_COPY.personalityClashLabel(assistant)}</p>
-        <RadioRows
-          value=''
-          onChange={choose}
-          rows={[
-            {
-              value: 'keep',
-              label: HELM_COPY.personalityKeepBoth,
-              subtitle: KEEP_BOTH_LINES[clash.key],
-            },
-            { value: clash.left, label: HELM_COPY.personalityDrop(left) },
-            { value: clash.right, label: HELM_COPY.personalityDrop(right) },
-          ]}
-        />
+        <Button
+          type='button'
+          variant='tertiary'
+          className={NOTICE_ROW}
+          onClick={() => onKeep(clash.key)}
+        >
+          <span className='text-sm font-medium'>
+            {HELM_COPY.personalityKeepBoth}
+          </span>
+          <span className='text-muted-foreground text-[13px] font-normal text-pretty'>
+            {KEEP_BOTH_LINES[clash.key]}
+          </span>
+        </Button>
+        <div className='space-y-2 pt-2'>
+          {[clash.left, clash.right].map((trait) => (
+            <Button
+              key={trait}
+              type='button'
+              variant='tertiary'
+              className={NOTICE_ROW}
+              onClick={() => onDrop(trait)}
+            >
+              <span className='text-sm font-medium'>
+                {HELM_COPY.personalityDrop(TRAIT_LABELS[trait])}
+              </span>
+            </Button>
+          ))}
+        </div>
       </div>
     </InlineNotice>
+  );
+}
+
+function readSampleNote(
+  hasReplies: boolean,
+  isWaiting: boolean,
+  isOffline: boolean,
+) {
+  if (hasReplies) return HELM_COPY.personalitySampleReal;
+  if (isWaiting) return null;
+  return isOffline
+    ? HELM_COPY.personalitySampleOffline
+    : HELM_COPY.personalitySampleFailed;
+}
+
+function StatusLine({
+  text,
+  actionLabel,
+  onAction,
+}: {
+  text: string;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <div
+      role='status'
+      className='text-muted-foreground flex items-center justify-between gap-3 text-[13px]'
+    >
+      <p className='min-w-0 text-pretty'>{text}</p>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        className="relative shrink-0 after:absolute after:-inset-2 after:content-['']"
+        onClick={onAction}
+      >
+        {actionLabel}
+      </Button>
+    </div>
   );
 }
 
@@ -145,6 +193,7 @@ function PersonalityScreen({ onClose }: PersonalityScreenProps) {
   const [isFull, setIsFull] = useState(false);
   const [asked, setAsked] = useState<AskedPreview | null>(null);
   const [failedHash, setFailedHash] = useState<string | null>(null);
+  const [dropped, setDropped] = useState<PersonalityTrait | null>(null);
   const hash = personalityHash(personality);
   const isKnown = storedPreview?.hash === hash || asked?.hash === hash;
 
@@ -175,6 +224,10 @@ function PersonalityScreen({ onClose }: PersonalityScreenProps) {
   const isWaiting = !isKnown && !isOffline && failedHash !== hash;
   const firstReply = replies[0] ?? fixedSampleFor(personality);
   const secondReply = replies[1];
+  const keptPairs = findTraitClashes(personality.traits).filter((clash) =>
+    personality.keptClashes.includes(clash.key),
+  );
+  const sampleNote = readSampleNote(replies.length > 0, isWaiting, isOffline);
 
   const save = (next: Personality) => {
     if (!user) return;
@@ -188,7 +241,36 @@ function PersonalityScreen({ onClose }: PersonalityScreenProps) {
     });
   };
 
+  const keepBoth = (key: string) => {
+    setIsFull(false);
+    setDropped(null);
+    save({ ...personality, keptClashes: [...personality.keptClashes, key] });
+  };
+
+  const dropTrait = (trait: PersonalityTrait) => {
+    setIsFull(false);
+    setDropped(trait);
+    save({
+      ...personality,
+      traits: personality.traits.filter((entry) => entry !== trait),
+    });
+  };
+
+  const undoDrop = (trait: PersonalityTrait) => {
+    setDropped(null);
+    save({ ...personality, traits: [...personality.traits, trait] });
+  };
+
+  const askAgain = (key: string) => {
+    setDropped(null);
+    save({
+      ...personality,
+      keptClashes: personality.keptClashes.filter((entry) => entry !== key),
+    });
+  };
+
   const changeTraits = (traits: PersonalityTrait[]) => {
+    setDropped(null);
     const isTooMany =
       traits.length > MAX_TRAITS && traits.length > personality.traits.length;
     setIsFull(isTooMany);
@@ -227,14 +309,31 @@ function PersonalityScreen({ onClose }: PersonalityScreenProps) {
               {HELM_COPY.personalityTooMany}
             </p>
           )}
+          {dropped && (
+            <StatusLine
+              text={HELM_COPY.personalityDropped(TRAIT_LABELS[dropped])}
+              actionLabel={HELM_COPY.personalityUndo}
+              onAction={() => undoDrop(dropped)}
+            />
+          )}
           <ClashChoices
             assistant={assistant}
             personality={personality}
-            onChange={(next) => {
-              setIsFull(false);
-              save(next);
-            }}
+            onKeep={keepBoth}
+            onDrop={dropTrait}
           />
+          {keptPairs.map((pair) => (
+            <StatusLine
+              key={pair.key}
+              text={HELM_COPY.personalityKept(
+                TRAIT_LABELS[pair.left],
+                TRAIT_LABELS[pair.right],
+                KEEP_BOTH_LINES[pair.key],
+              )}
+              actionLabel={HELM_COPY.personalityAskAgain}
+              onAction={() => askAgain(pair.key)}
+            />
+          ))}
         </div>
         <SectionHeader title={HELM_COPY.personalityHonestHeader} />
         <div className='space-y-1'>
@@ -242,10 +341,13 @@ function PersonalityScreen({ onClose }: PersonalityScreenProps) {
             label={HELM_COPY.personalityHonestHeader}
             options={HONESTY_OPTIONS}
             value={personality.honesty}
-            onChange={(honesty) => save({ ...personality, honesty })}
+            onChange={(honesty) => {
+              setDropped(null);
+              save({ ...personality, honesty });
+            }}
             className='w-full'
           />
-          <div className='grid grid-cols-3 gap-2 text-[13px] text-pretty'>
+          <div className='grid grid-cols-3 gap-2 text-[13px] text-balance'>
             {HONESTY_OPTIONS.map((option, index) => (
               <span
                 key={option.value}
@@ -273,6 +375,7 @@ function PersonalityScreen({ onClose }: PersonalityScreenProps) {
           )}
         </div>
         <p className='text-muted-foreground text-[13px] text-pretty'>
+          {sampleNote && `${sampleNote} `}
           {HELM_COPY.personalityCareNote}
         </p>
       </div>

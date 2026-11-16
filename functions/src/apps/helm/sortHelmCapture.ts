@@ -5012,6 +5012,7 @@ async function writeResult(
           learnPlan.effects.length -
           seenAsPlan.effects.length,
       ),
+      isProfileTaken: home !== null,
     });
     const scheduleNotKept = [
       ...schedulePlan.notKept,

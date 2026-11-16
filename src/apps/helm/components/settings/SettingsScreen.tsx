@@ -172,7 +172,7 @@ function SettingsScreen({
           <SettingsRow
             icon={<Sparkles className='size-5' aria-hidden='true' />}
             title={HELM_COPY.assistantRow}
-            description={HELM_COPY.assistantLine(assistant, traits)}
+            description={assistant}
             onClick={() => setIsAssistantOpen(true)}
             hasChevron
           />

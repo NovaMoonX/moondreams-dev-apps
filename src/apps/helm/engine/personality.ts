@@ -24,7 +24,7 @@ export const MAX_TRAITS = 5;
 export interface Personality {
   traits: PersonalityTrait[];
   honesty: HonestyLevel;
-  /** Clash pairs the person chose to keep both of, as `clashKey` values. */
+  /** Clash pairs the person chose to keep both of, each written as its two traits joined in alphabetical order. */
   keptClashes: string[];
 }
 
@@ -98,7 +98,7 @@ export const KEEP_BOTH_LINES: Record<string, string> = {
 export const clashKey = (left: PersonalityTrait, right: PersonalityTrait) =>
   [left, right].sort().join('+');
 
-/** Every pair among the traits that pulls apart, in the fixed order of `TRAIT_CLASHES`. */
+/** Every pair among the traits that pulls apart, in the fixed order of the list of pairs. */
 export const findTraitClashes = (traits: readonly PersonalityTrait[]) =>
   TRAIT_CLASHES.filter(
     ([left, right]) => traits.includes(left) && traits.includes(right),

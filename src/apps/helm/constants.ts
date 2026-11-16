@@ -2054,7 +2054,6 @@ export const HELM_COPY = {
   coloursDark: 'Dark',
   assistantRow: 'Name',
   assistantSheetTitle: 'Your assistant',
-  assistantLine: (name: string, traits: string) => `${name} · ${traits}`,
   assistantNameLabel: 'Name',
   assistantNameHint:
     "With Hey on in Voice service, it's also the name you say.",
@@ -2079,6 +2078,16 @@ export const HELM_COPY = {
   personalityDrop: (trait: string) => `Drop ${trait}`,
   personalityPreviewHeader: 'How replies will read',
   personalityPreviewWaiting: 'Writing a sample',
+  personalitySampleReal: 'Example replies to two set questions.',
+  personalitySampleOffline:
+    'A plain example for now. Real samples come back with a connection.',
+  personalitySampleFailed:
+    "A plain example for now. Real samples couldn't be written.",
+  personalityDropped: (trait: string) => `Dropped ${trait}`,
+  personalityUndo: 'Undo',
+  personalityKept: (left: string, right: string, line: string) =>
+    `Keeping both ${left} and ${right.toLowerCase()}: ${line}`,
+  personalityAskAgain: 'Ask me again',
   personalityCareNote: 'Health and care stay careful whatever you pick.',
   assistantSave: 'Save',
   settingsPlanning: 'Planning',

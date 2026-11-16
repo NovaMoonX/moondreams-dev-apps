@@ -1,5 +1,6 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import type { SetPersonalityCommand } from './commands.js';
+import { applyPersonalityCommand } from './personalityChange.js';
 import type {
   Effect,
   EffectRef,
@@ -19,6 +20,7 @@ import {
   type Personality,
   type PersonalityTrait,
 } from './personality.js';
+export { applyPersonalityCommand };
 import {
   baseQuestion,
   buildHabitAnswerExecution,
@@ -27,7 +29,7 @@ import {
 
 export interface PersonalityPlanInput {
   command: SetPersonalityCommand | null;
-  /** The profile's stored `personality` and `assistantTone`, as they are. */
+  /** The profile's stored personality and old tone, as they are. */
   stored: unknown;
   legacyTone: unknown;
   storedSetAt: number | null;
@@ -38,10 +40,16 @@ export interface PersonalityPlanInput {
   newId: () => string;
   /** How many effects the turn can still record. */
   room: number;
+  /** The turn already writes the profile ("I'm home"); Undo tells effects apart by document, so a second profile change waits for its own turn. */
+  isProfileTaken: boolean;
 }
 
 export interface PersonalityPlan {
-  data: { personality: Personality; personalitySetAt: number } | null;
+  data: {
+    personality: Personality;
+    personalitySetAt: number;
+    lastEditedAt: number;
+  } | null;
   effectRefs: EffectRef[];
   effects: Effect[];
   lines: string[];
@@ -66,38 +74,15 @@ export const buildPersonalityTitle = (assistantName: string) =>
 export const buildOverCapLine = (traits: PersonalityTrait[]) =>
   `Not added · ${describeTraits(traits)} · ${MAX_TRAITS} traits at most, so drop one first`;
 
+export const buildProfileTakenLine = (assistantName: string) =>
+  `Not changed · how ${assistantName} talks · ask again in its own message`;
+
 const lower = (trait: PersonalityTrait) => TRAIT_LABELS[trait].toLowerCase();
 
 const isSame = (left: Personality, right: Personality) =>
   [...left.traits].sort().join() === [...right.traits].sort().join() &&
   left.honesty === right.honesty &&
   [...left.keptClashes].sort().join() === [...right.keptClashes].sort().join();
-
-/** The personality a request leaves: removals first, then additions up to the cap; what the cap leaves out is returned so code can say so. */
-export const applyPersonalityCommand = (
-  current: Personality,
-  command: SetPersonalityCommand,
-) => {
-  const remaining = current.traits.filter(
-    (trait) => !command.removeTraits.includes(trait),
-  );
-  const adds = Array.from(new Set(command.addTraits)).filter(
-    (trait) =>
-      !remaining.includes(trait) && !command.removeTraits.includes(trait),
-  );
-  const room = Math.max(0, MAX_TRAITS - remaining.length);
-  return {
-    next: readPersonality(
-      {
-        traits: [...remaining, ...adds.slice(0, room)],
-        honesty: command.honesty ?? current.honesty,
-        keptClashes: current.keptClashes,
-      },
-      null,
-    ),
-    overCap: adds.slice(room),
-  };
-};
 
 const toWrite = (
   input: Pick<
@@ -110,7 +95,11 @@ const toWrite = (
   const title = { 'sealed.title': buildPersonalityTitle(input.assistantName) };
   const detail = { 'sealed.detail': describePersonalityChange(current, next) };
   return {
-    data: { personality: next, personalitySetAt: input.now },
+    data: {
+      personality: next,
+      personalitySetAt: input.now,
+      lastEditedAt: input.now,
+    },
     ref: {
       op: 'update',
       collection: 'profile',
@@ -183,6 +172,11 @@ export function planPersonality(input: PersonalityPlanInput): PersonalityPlan {
           : [`That's already how ${input.assistantName} talks`],
     };
   if (input.room < 1) return { ...EMPTY, notKept: [ROOM_LINE] };
+  if (input.isProfileTaken)
+    return {
+      ...EMPTY,
+      notKept: [buildProfileTakenLine(input.assistantName)],
+    };
   const write = toWrite(input, current, next);
   const before = new Set(findOpenClashes(current).map(({ key }) => key));
   const fresh = findOpenClashes(next).find(({ key }) => !before.has(key));

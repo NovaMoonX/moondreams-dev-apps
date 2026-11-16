@@ -81,10 +81,10 @@ export interface HelmProfile {
   assistantNameVariants: string[] | null;
   /** How the assistant's answers sound; null reads as composed. */
   assistantTone: AssistantTone | null;
-  /** How the assistant talks; null reads from `assistantTone`. Always read through `readPersonality`. */
+  /** How the assistant talks; null reads from the old tone. Always read through the personality reader. */
   personality: Personality | null;
   personalitySetAt: number | null;
-  /** The sample replies made for the personality whose `personalityHash` is `hash`, so a device never asks again for one already made. */
+  /** The sample replies made for the personality whose personality hashes to `hash`, so a device never asks again for one already made. */
   personalityPreview: { hash: string; replies: string[]; at: number } | null;
   /** The colour theme; null reads as chestnut. */
   theme: HelmTheme | null;

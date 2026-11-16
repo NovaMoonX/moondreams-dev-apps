@@ -57,7 +57,7 @@ export const previewHelmPersonality = onCall(
   async (request): Promise<PreviewPersonalityResult> => {
     const uid = request.auth?.uid;
     if (!uid) {
-      throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
+      throw new HttpsError('unauthenticated', 'Sign in first.');
     }
     const personality = readPersonality(
       (request.data as { personality?: unknown } | null)?.personality,

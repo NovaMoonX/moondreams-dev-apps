@@ -8,7 +8,7 @@ import {
   PERSONALITY_TRAITS,
   type Personality,
 } from './personality.js';
-import { applyPersonalityCommand } from './planPersonality.js';
+import { applyPersonalityCommand } from './personalityChange.js';
 import { sliceOfCapture } from './readHabitCommands.js';
 
 export type PersonalityDrop =
@@ -22,6 +22,56 @@ export interface PersonalityReadContext {
   /** The personality the person has now, for the cap. */
   current?: Personality;
 }
+
+/** Word starts a request about how it talks always holds one of; `sliceOfCapture` only proves the words were said, not that they ask for this. */
+const TALK_WORDS = [
+  ...PERSONALITY_TRAITS,
+  'talk',
+  'speak',
+  'say',
+  'tone',
+  'sound',
+  'word',
+  'repl',
+  'answer',
+  'voice',
+  'straight',
+  'plain',
+  'direct',
+  'sugarcoat',
+  'sugar',
+  'soft',
+  'harsh',
+  'nice',
+  'kind',
+  'chatt',
+  'wordy',
+  'verbose',
+  'concise',
+  'short',
+  'long',
+  'polite',
+  'funny',
+  'joke',
+  'serious',
+  'cushion',
+  'tact',
+  'varnish',
+  'rude',
+  'mean',
+  'sweet',
+  'cheer',
+  'friendly',
+  'stiff',
+  'relax',
+  'honesty',
+  'truth',
+];
+
+const isAboutTalking = (quote: string) =>
+  toComparable(quote)
+    .split(' ')
+    .some((word) => TALK_WORDS.some((start) => word.startsWith(start)));
 
 const readTraits = (value: unknown) =>
   Array.isArray(value)
@@ -55,7 +105,8 @@ export const readPersonalityCommands = (
           toComparable(item.requestQuote) !== ''
             ? sliceOfCapture(text, item.requestQuote)
             : null;
-        if (quote === null) return drop('personality-unasked');
+        if (quote === null || !isAboutTalking(quote))
+          return drop('personality-unasked');
         const command: SetPersonalityCommand = {
           kind: 'setPersonality',
           addTraits: readTraits(item.addTraits),

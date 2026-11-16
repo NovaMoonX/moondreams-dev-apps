@@ -36,6 +36,7 @@ import {
   buildOverCapLine,
   planPersonality,
   planResolvePersonality,
+  buildProfileTakenLine,
 } from '../../functions/src/apps/helm/nomos/planPersonality.ts';
 import {
   PREVIEW_REPLY_CAP,
@@ -203,6 +204,24 @@ const asked = (quote: string, fields: Record<string, unknown> = {}) => ({
   ...fields,
 });
 
+test('a quote that was said but asks nothing about talking changes nothing', () => {
+  ['never mind', "I'm home", 'forget it'].forEach((quote) =>
+    assert.deepEqual(
+      readPersonalityCommands([asked(quote, { honesty: 'unvarnished' })], {
+        captureText: `${quote}, thanks`,
+      }),
+      { commands: [], dropped: ['personality-unasked'] },
+    ),
+  );
+  assert.equal(
+    readPersonalityCommands(
+      [asked('stop sugarcoating things', { honesty: 'unvarnished' })],
+      { captureText: 'stop sugarcoating things' },
+    ).commands.length,
+    1,
+  );
+});
+
 test('setPersonality is read only from the closed set and only when asked', () => {
   const read = readPersonalityCommands(
     [
@@ -304,7 +323,12 @@ const command = (
 const plan = (
   fields: Partial<SetPersonalityCommand>,
   stored: unknown = null,
-  extra: { legacyTone?: unknown; isUnattended?: boolean; room?: number } = {},
+  extra: {
+    legacyTone?: unknown;
+    isUnattended?: boolean;
+    room?: number;
+    isProfileTaken?: boolean;
+  } = {},
 ) =>
   planPersonality({
     command: command(fields),
@@ -317,7 +341,15 @@ const plan = (
     isUnattended: extra.isUnattended ?? false,
     newId: () => 'q1',
     room: extra.room ?? 10,
+    isProfileTaken: extra.isProfileTaken ?? false,
   });
+
+test('a turn that already writes the profile ("I\'m home") leaves how it talks for its own turn', () => {
+  const result = plan({ addTraits: ['blunt'] }, null, { isProfileTaken: true });
+  assert.equal(result.data, null);
+  assert.equal(result.effects.length, 0);
+  assert.deepEqual(result.notKept, [buildProfileTakenLine('Juniper')]);
+});
 
 test('"be more blunt with me" writes the profile field with a way back', () => {
   const result = plan({ addTraits: ['blunt'] });
