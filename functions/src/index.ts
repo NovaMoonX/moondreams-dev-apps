@@ -38,6 +38,7 @@ export { learnHelmStyle } from './apps/helm/learnHelmStyle.js';
 export { learnHelmMailStyle } from './apps/helm/learnHelmStyle.js';
 export { writeHelmDaySummary } from './apps/helm/daySummary/writeHelmDaySummary.js';
 export { runHelmDaySummaries } from './apps/helm/daySummary/runHelmDaySummaries.js';
+export { runHelmReflection } from './apps/helm/reflection/runHelmReflection.js';
 export { mintVoiceToken } from './voice/mintVoiceToken.js';
 export { signOutEverywhere } from './auth/signOutEverywhere.js';
 export { streamSpeech } from './voice/streamSpeech.js';

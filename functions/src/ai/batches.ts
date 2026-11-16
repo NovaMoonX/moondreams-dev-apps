@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import type Anthropic from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 
 import { BATCH_JOBS, isBatchJobId, type BatchJobId } from './batchJobs.js';
 import { getModelSpec, type ModelUsage } from './models.js';
@@ -17,6 +17,10 @@ export interface BatchClient {
   results(id: string): Promise<AsyncIterable<Individual>>;
   delete(id: string): Promise<unknown>;
 }
+
+/** The provider's batch client for an API key. */
+export const createBatchClient = (apiKey: string): BatchClient =>
+  new Anthropic({ apiKey }).messages.batches;
 
 export type BatchOutcome =
   | { kind: 'answer'; json: unknown; usage: ModelUsage }

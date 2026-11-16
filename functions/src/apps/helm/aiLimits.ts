@@ -1,4 +1,8 @@
-import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import {
+  FieldValue,
+  type Firestore,
+  type Transaction,
+} from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
 export const AI_LIMITS = {
@@ -86,6 +90,41 @@ export async function recordAiSpend(
       { merge: true },
     );
 }
+
+/** Adds to the day's spend inside a transaction, so a result that is written is counted once with it. */
+export const recordAiSpendIn = (
+  transaction: Transaction,
+  firestore: Firestore,
+  now: number,
+  hundredthsOfCent: number,
+) =>
+  transaction.set(
+    firestore.doc(budgetPath(getDayKey(now))),
+    { hundredthsOfCent: FieldValue.increment(hundredthsOfCent) },
+    { merge: true },
+  );
+
+/** Counts an expected spend against the project's day before it is made; false when it would pass the daily stop. */
+export const reserveBatchSpend = (
+  firestore: Firestore,
+  now: number,
+  hundredthsOfCent: number,
+): Promise<boolean> => {
+  const ref = firestore.doc(budgetPath(getDayKey(now)));
+  return firestore.runTransaction(async (transaction) => {
+    const spent =
+      ((await transaction.get(ref)).data()?.hundredthsOfCent as
+        number | undefined) ?? 0;
+    if (spent + hundredthsOfCent > AI_DAILY_BUDGET_CENTS * HUNDREDTHS_PER_CENT)
+      return false;
+    transaction.set(
+      ref,
+      { hundredthsOfCent: FieldValue.increment(hundredthsOfCent) },
+      { merge: true },
+    );
+    return true;
+  });
+};
 
 /** Counts one topic write against the person's day; false when the day's 30 are spent. */
 export const reserveTopicWrite = (
