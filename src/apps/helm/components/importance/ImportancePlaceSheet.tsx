@@ -14,6 +14,7 @@ import ActionRow from '@/components/ActionRow';
 import Drawer from '@/components/Drawer';
 import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
+import { formatDateShort } from '@/utils/formatUtils';
 import SourceRing from '@apps/helm/components/who/SourceRing';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { ImportanceRowView } from '@apps/helm/store/selectors/importanceSelectors';
@@ -120,6 +121,9 @@ function ImportancePlaceSheet({
     isInOrder &&
     row.position === 1 &&
     others.every((other) => other.position !== 1);
+  const canPutAbove = others.some((other) => other.position !== 1);
+  const isStillSaid = isInOrder && row.position === 1;
+  const quote = row.place?.words ?? null;
   return (
     <Drawer
       isOpen
@@ -131,51 +135,66 @@ function ImportancePlaceSheet({
           {words && (
             <p className='text-muted-foreground text-[13px]'>{words}</p>
           )}
-          {row.place?.words && (
+          {quote && row.place && (
             <p className='flex items-start gap-2 text-[15px]'>
               <SourceRing
                 isConfirmed
                 label={HELM_COPY.factRingSaid}
                 className='mt-1.5'
               />
-              <span className='min-w-0 break-words'>{`“${row.place.words}”`}</span>
+              <span className='min-w-0 break-words'>
+                {isStillSaid
+                  ? `\u201c${quote}\u201d`
+                  : HELM_COPY.importanceSaidOn(
+                      formatDateShort(row.place.saidAt),
+                      quote,
+                    )}
+              </span>
             </p>
           )}
         </div>
         <ActionGroup>
-          <ActionRow
-            isGrouped
-            icon={<ArrowUpToLine aria-hidden='true' />}
-            label={HELM_COPY.importanceMakeFirst}
-            subtitle={HELM_COPY.importanceMakeFirstNote}
-            isDisabled={isOnlyFirst}
-            onClick={() => onChoose({ kind: 'first' })}
-          />
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<ArrowUpDown aria-hidden='true' />}
-            label={HELM_COPY.importancePutAbove}
-            subtitle={HELM_COPY.importancePutAboveNote}
-            isDisabled={others.length === 0}
-            onClick={() => onChoose({ kind: 'pickAbove' })}
-          />
-          <ActionRow
-            isGrouped
-            icon={<Hourglass aria-hidden='true' />}
-            label={HELM_COPY.importanceCanWaitAction}
-            subtitle={HELM_COPY.importanceCanWaitNote}
-            isDisabled={row.group === 'canWait'}
-            onClick={() => onChoose({ kind: 'canWait' })}
-          />
-          <ActionRow
-            isGrouped
-            icon={<CircleSlash aria-hidden='true' />}
-            label={HELM_COPY.importanceTakeOut}
-            subtitle={HELM_COPY.importanceTakeOutNote}
-            isDisabled={row.group === 'notSaid'}
-            onClick={() => onChoose({ kind: 'out' })}
-          />
+          {!isOnlyFirst && (
+            <ActionRow
+              isGrouped
+              icon={<ArrowUpToLine aria-hidden='true' />}
+              label={HELM_COPY.importanceMakeFirst}
+              subtitle={
+                row.group === 'canWait'
+                  ? HELM_COPY.importanceMakeFirstFromCanWaitNote
+                  : HELM_COPY.importanceMakeFirstNote
+              }
+              onClick={() => onChoose({ kind: 'first' })}
+            />
+          )}
+          {canPutAbove && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<ArrowUpDown aria-hidden='true' />}
+              label={HELM_COPY.importancePutAbove}
+              subtitle={HELM_COPY.importancePutAboveNote}
+              onClick={() => onChoose({ kind: 'pickAbove' })}
+            />
+          )}
+          {row.group !== 'canWait' && (
+            <ActionRow
+              isGrouped
+              icon={<Hourglass aria-hidden='true' />}
+              label={HELM_COPY.importanceCanWaitAction}
+              subtitle={HELM_COPY.importanceCanWaitNote}
+              onClick={() => onChoose({ kind: 'canWait' })}
+            />
+          )}
+          {row.group !== 'notSaid' && (
+            <ActionRow
+              isGrouped
+              icon={<CircleSlash aria-hidden='true' />}
+              label={HELM_COPY.importanceTakeOut}
+              subtitle={HELM_COPY.importanceTakeOutNote}
+              onClick={() => onChoose({ kind: 'out' })}
+            />
+          )}
         </ActionGroup>
         <ActionGroup>
           <ActionRow

@@ -378,7 +378,7 @@ export const resolveHelmQuestion = onCall(
           firestore,
           base,
           key,
-          capture.createdAt,
+          now,
           timeZone,
         );
         const executionRef = firestore.collection(`${base}/executions`).doc();

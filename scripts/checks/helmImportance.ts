@@ -4,18 +4,24 @@ import assert from 'node:assert/strict';
 import {
   applyImportance,
   findImportanceTie,
-  isAbove,
+  readProjectPlaces,
+  readUnderGoalIds,
+  CAN_WAIT_PLACE,
+  NOT_SAID_PLACE,
   readImportanceOrder,
   readPlace,
   renumberRanks,
-  stepCommand,
   withPlaceChanges,
   type ImportanceCommand,
   type ImportanceItem,
   type ImportancePlace,
 } from '../../src/apps/helm/engine/importance.ts';
-import { planImportance } from '../../functions/src/apps/helm/nomos/planImportance.ts';
+import {
+  planImportance,
+  planResolveImportance,
+} from '../../functions/src/apps/helm/nomos/planImportance.ts';
 import { readImportanceCommands } from '../../functions/src/apps/helm/nomos/readImportanceCommands.ts';
+import { hasImportanceCue } from '../../functions/src/apps/helm/nomos/route.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import type { ImportanceRecord } from '../../functions/src/apps/helm/importanceStore.ts';
 import type { SetImportanceCommand } from '../../functions/src/apps/helm/nomos/commands.ts';
@@ -300,15 +306,20 @@ test("a habit with no place of its own sits at its goal's place, and finished th
     order.inOrder.map((row) => [row.id, row.position, row.isInherited]),
     [
       ['guitar', 1, false],
-      ['practice', 1, true],
       ['paused', 2, false],
     ],
+  );
+  const practice = order.rows.find((row) => row.id === 'practice');
+  assert.deepEqual(
+    [practice?.position, practice?.isInherited],
+    [1, true],
+    'read at its goal, never counted in a place',
   );
   assert.equal(
     order.rows.some((row) => row.id === 'move'),
     false,
   );
-  assert.equal(order.inOrder[2].isPaused, true);
+  assert.equal(order.inOrder[1].isPaused, true);
   assert.deepEqual(
     order.canWait.map((row) => row.id),
     ['stretch'],
@@ -351,12 +362,6 @@ test('things nobody placed are ordered by their nearest date, undated last', () 
     item('placed', { place: place(1) }),
   ];
   assert.deepEqual(ids(items), ['placed', 'overdue', 'soon', 'later', 'none']);
-  const order = readImportanceOrder(items, TODAY);
-  assert.equal(isAbove(order, 'placed', 'overdue'), true);
-  assert.equal(isAbove(order, 'overdue', 'soon'), false, 'under 7 days apart');
-  assert.equal(isAbove(order, 'soon', 'later'), true);
-  assert.equal(isAbove(order, 'later', 'none'), true);
-  assert.equal(isAbove(order, 'none', 'later'), false);
 });
 
 test('Which comes first is for 3 or more sharing a place, never 2', () => {
@@ -398,28 +403,6 @@ test('the pick goes just above the others, which keep sharing their place', () =
       ['c', 2],
     ],
   );
-});
-
-test('a step up or down is one place, and a thing outside In order is handled', () => {
-  const items = [
-    item('a', { place: place(3) }),
-    item('b', { place: place(2) }),
-    item('c', { place: place(1) }),
-    item('d'),
-    item('e', { place: place(-1) }),
-  ];
-  const order = readImportanceOrder(items, TODAY);
-  assert.equal(stepCommand(order, 'a', 'up'), null);
-  assert.equal(stepCommand(order, 'c', 'down'), null);
-  const up = stepCommand(order, 'c', 'up');
-  assert.equal(up?.relation, 'above');
-  assert.equal(up?.otherId, 'b');
-  assert.deepEqual(
-    ids(apply(items, up as ImportanceCommand).items).slice(0, 3),
-    ['a', 'c', 'b'],
-  );
-  assert.equal(stepCommand(order, 'd', 'up')?.relation, 'matters');
-  assert.equal(stepCommand(order, 'e', 'up')?.relation, 'clear');
 });
 
 test('a stored place that is malformed reads as none', () => {
@@ -528,21 +511,272 @@ test('server: health and care are refused and an unknown name offers to start on
   assert.equal(made.effects.length, 0);
   assert.deepEqual(made.notKept, [
     "Pills is always kept, so it doesn't need a place",
-    "There's no project called Garden. Start one?",
+    "I couldn't find that in your projects, goals or habits, so nothing moved.",
   ]);
 });
 
-test('server: a third thing at the top asks which comes first', () => {
-  const made = plan(
-    [saying('same', 'c', 'a')],
-    [
-      record('a', 'A', { place: place(1) }),
-      record('b', 'B', { place: place(1) }),
-      record('c', 'C'),
-    ],
-  );
+const tieRecords = () => [
+  record('a', 'A', { place: place(1) }),
+  record('b', 'B', { place: place(1) }),
+  record('c', 'C'),
+];
+
+test('server: a third thing at the top is held and asked, never written first', () => {
+  const made = plan([saying('same', 'c', 'a')], tieRecords());
   assert.equal(made.questions.length, 1);
   assert.equal(made.questions[0].sealed.kind, 'whichComesFirst');
+  assert.equal(
+    made.updates.some(({ id }) => id === 'c'),
+    false,
+    'the tied thing is not written before it is asked',
+  );
+  assert.deepEqual(made.questions[0].sealed.heldCommands, [
+    {
+      kind: 'whichComesFirst',
+      ids: ['a', 'b', 'c'],
+      held: [{ subjectId: 'c', otherId: 'a' }],
+    },
+  ]);
+});
+
+test('server: an unattended tie writes nothing for the tied thing and says it waits', () => {
+  const made = plan([saying('same', 'c', 'a')], tieRecords(), {
+    isUnattended: true,
+  });
+  assert.equal(made.questions.length, 0);
+  assert.equal(made.updates.length, 0);
+  assert.equal(made.notKept.length, 1);
+  assert.match(made.notKept[0], /waits until you're here/);
+});
+
+const asked = (over: { heldC?: boolean } = {}) => {
+  const made = plan([saying('same', 'c', 'a')], tieRecords());
+  return {
+    sealed: {
+      ...(made.questions[0].sealed as Record<string, unknown>),
+      ...(over.heldC === false
+        ? { heldCommands: [{ kind: 'whichComesFirst', ids: ['a', 'b', 'c'] }] }
+        : {}),
+    },
+  };
+};
+
+const resolve = (optionId: string, records: ImportanceRecord[], heldC = true) =>
+  planResolveImportance({
+    captureId: 'c1',
+    questionId: 'q1',
+    optionId,
+    by: 'tap',
+    now: NOW,
+    executionId: 'e1',
+    records,
+    today: TODAY,
+    capture: {
+      status: 'needsYou',
+      executionIds: [],
+      questionState: {
+        q1: {
+          kind: 'whichComesFirst',
+          shape: 'pickOne',
+          askedAt: NOW,
+          answeredAt: null,
+          skippedAt: null,
+          dismissedAt: null,
+        },
+      },
+    },
+    opened: { questions: { q1: asked({ heldC }).sealed } },
+    seal: (fields) => fields as never,
+  });
+
+const rankOf = (
+  result: ReturnType<typeof resolve>,
+  records: ImportanceRecord[],
+) => {
+  assert.equal(result.refused, null);
+  if (result.refused !== null || !result.plan) throw new Error('no plan');
+  const written = new Map(
+    result.plan.updates.map(({ id, data }) => [
+      id,
+      (data.sealed as { importance: ImportancePlace | null }).importance,
+    ]),
+  );
+  const items = records.map((entry) => ({
+    ...entry.item,
+    place: written.has(entry.item.id)
+      ? (written.get(entry.item.id) ?? null)
+      : entry.item.place,
+  }));
+  return Object.fromEntries(
+    readImportanceOrder(items, TODAY).inOrder.map((row) => [
+      row.id,
+      row.position,
+    ]),
+  );
+};
+
+test('server: answering puts the pick first and the held thing shares second, with nothing "already there"', () => {
+  assert.deepEqual(rankOf(resolve('a', tieRecords()), tieRecords()), {
+    a: 1,
+    b: 2,
+    c: 2,
+  });
+  assert.deepEqual(rankOf(resolve('c', tieRecords()), tieRecords()), {
+    c: 1,
+    a: 2,
+    b: 2,
+  });
+  const answered = resolve('b', tieRecords());
+  assert.equal(answered.refused, null);
+  if (answered.refused === null && answered.plan)
+    assert.deepEqual(answered.plan.notKept, []);
+});
+
+test('server: a question asked before things were held still puts the pick above the others', () => {
+  const sharing = [
+    record('a', 'A', { place: place(1) }),
+    record('b', 'B', { place: place(1) }),
+    record('c', 'C', { place: place(1) }),
+  ];
+  assert.deepEqual(rankOf(resolve('c', sharing, false), sharing), {
+    c: 1,
+    a: 2,
+    b: 2,
+  });
+});
+
+test('server: the only one in place keeps its place while the held ones follow it', () => {
+  const made = plan(
+    [saying('same', 'b', 'a'), saying('same', 'c', 'a')],
+    [record('a', 'A', { place: place(1) }), record('b', 'B'), record('c', 'C')],
+  );
+  assert.equal(made.updates.length, 0);
+  assert.deepEqual(made.questions[0].sealed.heldCommands, [
+    {
+      kind: 'whichComesFirst',
+      ids: ['a', 'b', 'c'],
+      held: [
+        { subjectId: 'b', otherId: 'a' },
+        { subjectId: 'c', otherId: 'a' },
+      ],
+    },
+  ]);
+});
+
+test("server: a goal's habit is pointed at its goal, and a name is matched against the records", () => {
+  const records = [
+    record('g', 'Guitar', { kind: 'goal' }),
+    record('h', 'Practice', { kind: 'habit', goalId: 'g' }),
+    record('w', 'Work', { place: place(1) }),
+  ];
+  const made = plan([saying('most', 'h')], records);
+  assert.deepEqual(
+    made.updates.map(({ id }) => id),
+    ['g'],
+  );
+  const named = plan(
+    [{ ...saying('most', null), unknownName: 'guitar' }],
+    records,
+  );
+  assert.deepEqual(
+    named.updates.map(({ id }) => id),
+    ['g'],
+  );
+  const heard = planImportance({
+    commands: [{ ...saying('most', null), unknownName: 'Garden' }],
+    records,
+    today: TODAY,
+    now: NOW,
+    captureId: 'c1',
+    blockedIds: new Set(),
+    isUnattended: false,
+    newId: () => 'q1',
+    seal: (fields) => fields as never,
+    room: 20,
+    captureText: 'the garden matters most',
+  });
+  assert.deepEqual(heard.notKept, [
+    "I couldn't find Garden in your projects, goals or habits, so nothing moved.",
+  ]);
+});
+
+test("a goal's habit ignores its own place while the goal is in the order, and is listed alone once it leaves", () => {
+  const items = [
+    item('guitar', { kind: 'goal', place: place(2) }),
+    item('practice', { kind: 'habit', goalId: 'guitar', place: place(2) }),
+    item('scales', { kind: 'habit', goalId: 'guitar', place: place(2) }),
+    item('work', { place: place(2) }),
+  ];
+  assert.deepEqual(readUnderGoalIds(items), ['practice', 'scales']);
+  const order = readImportanceOrder(items, TODAY);
+  assert.deepEqual(order.inOrder.map((row) => row.id).sort(), [
+    'guitar',
+    'work',
+  ]);
+  assert.equal(findImportanceTie(order), null, 'habits never make a tie');
+  const gone = items.map((entry) =>
+    entry.id === 'guitar' ? { ...entry, status: 'out' as const } : entry,
+  );
+  assert.deepEqual(readUnderGoalIds(gone), []);
+  assert.deepEqual(
+    readImportanceOrder(gone, TODAY)
+      .inOrder.map((row) => row.id)
+      .sort(),
+    ['practice', 'scales', 'work'],
+  );
+  const care = items.map((entry) =>
+    entry.id === 'guitar' ? { ...entry, isCare: true } : entry,
+  );
+  assert.deepEqual(readUnderGoalIds(care), []);
+});
+
+test('the planner is given a finite place for every project', () => {
+  const places = readProjectPlaces(
+    readImportanceOrder(
+      [
+        item('first', { place: place(3) }),
+        item('second', { place: place(2) }),
+        item('open'),
+        item('later', { place: place(-1) }),
+        item('latest', { place: place(-2) }),
+      ],
+      TODAY,
+    ),
+  );
+  assert.deepEqual(places, {
+    first: 1,
+    second: 2,
+    open: NOT_SAID_PLACE,
+    later: CAN_WAIT_PLACE,
+    latest: CAN_WAIT_PLACE + 1,
+  });
+});
+
+test('every phrase the order is said in opens the importance reading', () => {
+  [
+    'The wedding matters most',
+    'Wedding comes first',
+    'Wedding is my top priority',
+    'Guitar matters more than work',
+    'Guitar before work',
+    'Work matters less than guitar',
+    'Work after guitar',
+    'Guitar comes after work',
+    'Guitar matters as much as work',
+    'Guitar and work matter equally',
+    'Guitar is important',
+    'Home can wait',
+    "Home isn't a priority right now",
+    'Home, whenever',
+    "Guitar doesn't matter so much now",
+    'Take guitar out of the order',
+    'Clear what matters',
+  ].forEach((phrase) => assert.equal(hasImportanceCue(phrase), true, phrase));
+  ['Guitar too', 'The wedding, then work, then guitar'].forEach((phrase) => {
+    assert.equal(hasImportanceCue(phrase), false, phrase);
+    assert.equal(hasImportanceCue(phrase, 'importance'), true, phrase);
+  });
+  assert.equal(hasImportanceCue('Buy milk too'), false);
 });
 
 test('server: the newer sentence wins and a private name is masked unattended', () => {

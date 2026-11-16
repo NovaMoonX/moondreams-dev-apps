@@ -3,6 +3,7 @@ import { dayKeyToMs } from '@/utils/cadenceUtils';
 import { formatDateShort } from '@/utils/formatUtils';
 import { useTodayKey } from '@apps/helm/hooks/useTodayKey';
 import {
+  selectImportanceGroups,
   selectImportanceItems,
   selectImportanceOrder,
 } from '@apps/helm/store/selectors/importanceSelectors';
@@ -16,6 +17,9 @@ export const useImportanceToday = () => dayKeyToMs(useTodayKey());
 export function useImportancePlace(id: string) {
   const today = useImportanceToday();
   const order = useAppSelector((state) => selectImportanceOrder(state, today));
+  const groups = useAppSelector((state) =>
+    selectImportanceGroups(state, today),
+  );
   const items = useAppSelector(selectImportanceItems);
   const projects = useAppSelector((state) => state.helm.projects.items);
   const habits = useAppSelector((state) => state.helm.habits.items);
@@ -24,6 +28,7 @@ export function useImportancePlace(id: string) {
     order,
     items,
     id,
+    underGoalIds: groups.underGoalIds,
     emojiOf: (otherId) =>
       (
         projects.find((project) => project.id === otherId) ??

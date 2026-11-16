@@ -1,5 +1,6 @@
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { PLANNER_COPY } from '@apps/helm/constants';
+import { NOT_SAID_PLACE } from '@apps/helm/engine/importance';
 import type { RestDayKind } from '@apps/helm/engine/restDay';
 import type { Energy, Importance, PlanSlot, TaskDue } from '@apps/helm/types';
 import {
@@ -16,7 +17,7 @@ export interface PlannerTask {
   due: TaskDue | null;
   importance: Importance | null;
   isUrgent: boolean;
-  /** Its project's place number in what matters most; null when the project is not placed. */
+  /** Its project's place number in what matters most (a finite number: not said yet and Can wait come after every placed one); null when it has no project. */
   projectPlace?: number | null;
   durationMinutes: number | null;
   energy: Energy | null;
@@ -195,8 +196,8 @@ const rankTasks = (
           (second.task.importance
             ? IMPORTANCE_RANK[second.task.importance]
             : 3) ||
-        (first.task.projectPlace ?? Infinity) -
-          (second.task.projectPlace ?? Infinity) ||
+        (first.task.projectPlace ?? NOT_SAID_PLACE) -
+          (second.task.projectPlace ?? NOT_SAID_PLACE) ||
         Number(second.task.isUrgent) - Number(first.task.isUrgent) ||
         first.index - second.index,
     )

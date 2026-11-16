@@ -12,7 +12,7 @@ import {
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { GripVertical } from 'lucide-react';
+import { ChevronRight, GripVertical } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
 
@@ -45,7 +45,9 @@ export interface ReorderRowState {
 
 interface MoveInfo {
   itemLabel: string;
-  place: number;
+  /** The item's place at the slot; null in a group that draws no places. */
+  place: number | null;
+  /** Set only when the slot is in another group than the one the item came from. */
   groupLabel: string | null;
 }
 
@@ -54,6 +56,7 @@ export interface ReorderAnnouncements {
   moved: (info: MoveInfo) => string;
   dropped: (info: MoveInfo) => string;
   cancelled: (itemLabel: string) => string;
+  unchanged: (itemLabel: string) => string;
 }
 
 export interface ReorderListProps<T extends { id: string }> {
@@ -74,14 +77,21 @@ export interface ReorderListProps<T extends { id: string }> {
   className?: string;
 }
 
+const whereWords = (info: MoveInfo) =>
+  [
+    info.place === null ? null : `place ${info.place}`,
+    info.groupLabel ? `in ${info.groupLabel}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ') || 'a new spot';
+
 const DEFAULT_ANNOUNCEMENTS: ReorderAnnouncements = {
   pickedUp: (label) =>
     `Picked up${label ? ` ${label}` : ''}. Use the arrow keys to move, Space to drop, Escape to cancel.`,
-  moved: ({ place, groupLabel }) =>
-    `Moved to place ${place}${groupLabel ? ` in ${groupLabel}` : ''}`,
-  dropped: ({ place, groupLabel }) =>
-    `Dropped at place ${place}${groupLabel ? ` in ${groupLabel}` : ''}`,
+  moved: (info) => `Moved to ${whereWords(info)}`,
+  dropped: (info) => `Dropped at ${whereWords(info)}`,
   cancelled: () => 'Move cancelled',
+  unchanged: () => 'Dropped where it was',
 };
 
 const DRAG_START_PX = 4;
@@ -101,6 +111,8 @@ interface Measured {
 
 interface Snapshot {
   itemId: string;
+  groupIds: string[];
+  signature: string;
   src: Slot;
   height: number;
   srcTop: number;
@@ -116,7 +128,16 @@ interface Snapshot {
   startPointerY: number;
   target: Slot;
   mode: 'pointer' | 'keyboard';
+  canScrollUp: boolean;
+  canScrollDown: boolean;
 }
+
+const signatureOf = <T extends { id: string }>(groups: ReorderGroup<T>[]) =>
+  groups
+    .map(
+      (group) => `${group.id}:${group.items.map((item) => item.id).join(',')}`,
+    )
+    .join('|');
 
 function findScroller(from: HTMLElement | null): HTMLElement | null {
   if (!from) return null;
@@ -186,6 +207,7 @@ interface RowProps<T extends { id: string }> {
   place: number;
   isOrdered: boolean;
   isActive: boolean;
+  isOverOtherGroup: boolean;
   itemLabel: string;
   handleLabel: string;
   renderRow: ReorderListProps<T>['renderRow'];
@@ -204,6 +226,7 @@ function RowInner<T extends { id: string }>({
   place,
   isOrdered,
   isActive,
+  isOverOtherGroup,
   itemLabel,
   handleLabel,
   renderRow,
@@ -213,28 +236,24 @@ function RowInner<T extends { id: string }>({
   onHandleKeyDown,
   onHandleBlur,
 }: RowProps<T>) {
-  const content = (
-    <span className='block w-full min-w-0'>
-      {renderRow(item, { place, isDragging: isActive })}
-    </span>
-  );
+  const body = renderRow(item, { place, isDragging: isActive });
+  if (body === null) return null;
+  const content = <span className='block w-full min-w-0'>{body}</span>;
   return (
     <div
       ref={(el) => register(`row:${item.id}`, el)}
       className={join(
-        'border-border relative flex items-center gap-1 border-b transition-transform duration-150 motion-reduce:transition-none',
+        'border-border relative flex items-center gap-1 border-b transition-transform duration-150 last:border-b-0 motion-reduce:transition-none',
         isActive &&
           'bg-background ring-border z-10 rounded-xl border-b-0 shadow-lg ring-1 transition-none select-none',
       )}
     >
-      {isOrdered && (
-        <span
-          className='text-muted-foreground w-6 shrink-0 text-center text-sm tabular-nums'
-          aria-hidden='true'
-        >
-          {place}
-        </span>
-      )}
+      <span
+        className='text-muted-foreground w-6 shrink-0 text-center text-sm tabular-nums'
+        aria-hidden='true'
+      >
+        {isOrdered && !(isActive && isOverOtherGroup) ? place : ''}
+      </span>
       {onOpen ? (
         <Button
           type='button'
@@ -248,6 +267,14 @@ function RowInner<T extends { id: string }>({
       ) : (
         <div className='min-w-0 flex-1 py-3'>{content}</div>
       )}
+      {!isOrdered && onOpen && (
+        <span
+          className='text-muted-foreground flex size-8 shrink-0 items-center justify-center'
+          aria-hidden='true'
+        >
+          <ChevronRight className='size-4' />
+        </span>
+      )}
       {isOrdered && (
         <Button
           type='button'
@@ -255,7 +282,11 @@ function RowInner<T extends { id: string }>({
           size='stripped'
           data-no-swipe
           data-reorder-handle={item.id}
-          aria-label={itemLabel ? `${handleLabel}: ${itemLabel}` : handleLabel}
+          aria-label={
+            itemLabel
+              ? `${handleLabel}: ${itemLabel}, place ${place}`
+              : `${handleLabel}, place ${place}`
+          }
           aria-pressed={isActive}
           className="text-muted-foreground relative size-8! min-h-8! min-w-8! shrink-0 cursor-grab touch-none rounded-full p-0 select-none before:absolute before:-inset-1 before:content-[''] active:cursor-grabbing"
           onPointerDown={(event) => onHandlePointerDown(event, item.id)}
@@ -292,10 +323,35 @@ function ReorderList<T extends { id: string }>({
   const frame = useRef(0);
   const detach = useRef<(() => void) | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [overGroupId, setOverGroupId] = useState<string | null>(null);
+  const announceFlip = useRef(false);
 
-  const latest = useRef({ groups, onMove, getItemLabel, announcements });
+  const drawnGroups = groups.map((group) => ({
+    ...group,
+    items: group.items.filter(
+      (item, index) =>
+        renderRow(item, {
+          place: getPlace ? getPlace(item, index, group) : index + 1,
+          isDragging: false,
+        }) !== null,
+    ),
+  }));
+
+  const latest = useRef({
+    groups: drawnGroups,
+    onMove,
+    getItemLabel,
+    getPlace,
+    announcements,
+  });
   useEffect(() => {
-    latest.current = { groups, onMove, getItemLabel, announcements };
+    latest.current = {
+      groups: drawnGroups,
+      onMove,
+      getItemLabel,
+      getPlace,
+      announcements,
+    };
   });
 
   const register = useCallback((key: string, el: HTMLElement | null) => {
@@ -303,11 +359,21 @@ function ReorderList<T extends { id: string }>({
     else elements.current.delete(key);
   }, []);
 
+  const placeAt = (group: ReorderGroup<T>, slot: Slot, itemId: string) => {
+    if (!group.isOrdered) return null;
+    const placeOf = latest.current.getPlace;
+    const others = group.items.filter((item) => item.id !== itemId);
+    const read = (index: number) =>
+      placeOf ? placeOf(others[index], index, group) : index + 1;
+    if (others.length === 0) return 1;
+    return slot.i < others.length ? read(slot.i) : read(others.length - 1) + 1;
+  };
+
   const say = (
     key: keyof ReorderAnnouncements,
-    slot: Slot | null,
     itemId: string,
-    fromGroup = snapshot.current?.src.g,
+    snap: Snapshot | null = snapshot.current,
+    slot: Slot | null = null,
   ) => {
     const {
       groups: current,
@@ -319,18 +385,23 @@ function ReorderList<T extends { id: string }>({
       .flatMap((group) => group.items)
       .find((entry) => entry.id === itemId);
     const itemLabel = (item && labelOf?.(item)) ?? '';
+    const toGroupId = snap && slot ? snap.groupIds[slot.g] : null;
+    const toGroup = current.find((group) => group.id === toGroupId);
+    const fromGroupId = snap ? snap.groupIds[snap.src.g] : null;
     const text =
-      key === 'pickedUp' || key === 'cancelled'
+      key === 'pickedUp' || key === 'cancelled' || key === 'unchanged'
         ? words[key](itemLabel)
         : words[key]({
             itemLabel,
-            place: (slot?.i ?? 0) + 1,
+            place: toGroup && slot ? placeAt(toGroup, slot, itemId) : null,
             groupLabel:
-              slot && slot.g !== fromGroup
-                ? (current[slot.g]?.label ?? null)
-                : null,
+              toGroup && toGroup.id !== fromGroupId ? toGroup.label : null,
           });
-    if (liveRef.current) liveRef.current.textContent = text;
+    announceFlip.current = !announceFlip.current;
+    if (liveRef.current)
+      liveRef.current.textContent = announceFlip.current
+        ? text
+        : `${text}\u00a0`;
   };
 
   const measure = (
@@ -355,6 +426,8 @@ function ReorderList<T extends { id: string }>({
     const srcRect = page(srcEl);
     return {
       itemId,
+      groupIds: current.map((group) => group.id),
+      signature: signatureOf(current),
       src,
       height: srcRect.bottom - srcRect.top,
       srcTop: srcRect.top,
@@ -376,6 +449,8 @@ function ReorderList<T extends { id: string }>({
       startPointerY: pointer,
       target: src,
       mode,
+      canScrollUp: false,
+      canScrollDown: false,
     };
   };
 
@@ -390,11 +465,11 @@ function ReorderList<T extends { id: string }>({
       const headOffset =
         (g > snap.src.g ? -height : 0) + (g > target.g ? height : 0);
       setTransform(
-        elements.current.get(`head:${latest.current.groups[g].id}`),
+        elements.current.get(`head:${snap.groupIds[g]}`),
         headOffset,
       );
       setTransform(
-        elements.current.get(`empty:${latest.current.groups[g].id}`),
+        elements.current.get(`empty:${snap.groupIds[g]}`),
         headOffset,
       );
       excluding(group.items, snap.itemId).forEach((item, k) => {
@@ -407,6 +482,16 @@ function ReorderList<T extends { id: string }>({
       });
     });
     setTransform(elements.current.get(`row:${snap.itemId}`), draggedOffset);
+    setOverGroupId(
+      target.g === snap.src.g ? null : (snap.groupIds[target.g] ?? null),
+    );
+  };
+
+  const begin = (snap: Snapshot) => {
+    snapshot.current = snap;
+    const el = elements.current.get(`row:${snap.itemId}`);
+    if (el) el.style.transition = 'none';
+    setActiveId(snap.itemId);
   };
 
   const refresh = () => {
@@ -431,10 +516,16 @@ function ReorderList<T extends { id: string }>({
       bounds?.bottom ?? window.innerHeight,
     );
     const y = pointerY.current;
+    if (signatureOf(latest.current.groups) !== snap.signature) {
+      finish(false);
+      return;
+    }
+    if (y < snap.startPointerY - DRAG_START_PX) snap.canScrollUp = true;
+    if (y > snap.startPointerY + DRAG_START_PX) snap.canScrollDown = true;
     const speed =
-      y < top + EDGE_ZONE_PX
+      snap.canScrollUp && y < top + EDGE_ZONE_PX
         ? -Math.min(1, (top + EDGE_ZONE_PX - y) / EDGE_ZONE_PX)
-        : y > bottom - EDGE_ZONE_PX
+        : snap.canScrollDown && y > bottom - EDGE_ZONE_PX
           ? Math.min(1, (y - (bottom - EDGE_ZONE_PX)) / EDGE_ZONE_PX)
           : 0;
     if (speed !== 0 && snap.mode === 'pointer') {
@@ -469,15 +560,20 @@ function ReorderList<T extends { id: string }>({
       ),
     );
     setActiveId(null);
+    setOverGroupId(null);
     const { target, src, itemId } = snap;
-    if (!shouldCommit) return say('cancelled', null, itemId);
-    if (target.g === src.g && target.i === src.i) return;
-    say('dropped', target, itemId, src.g);
-    latest.current.onMove({
-      itemId,
-      toGroupId: latest.current.groups[target.g].id,
-      toIndex: target.i,
-    });
+    if (!shouldCommit) return say('cancelled', itemId, snap);
+    if (target.g === src.g && target.i === src.i)
+      return say('unchanged', itemId, snap);
+    const current = latest.current.groups;
+    const toGroupId = snap.groupIds[target.g];
+    const isItemKept = current.some((group) =>
+      group.items.some((item) => item.id === itemId),
+    );
+    if (!isItemKept || !current.some((group) => group.id === toGroupId))
+      return say('cancelled', itemId, snap);
+    say('dropped', itemId, snap, target);
+    latest.current.onMove({ itemId, toGroupId, toIndex: target.i });
     if (snap.mode === 'keyboard') {
       requestAnimationFrame(() =>
         requestAnimationFrame(() =>
@@ -497,6 +593,7 @@ function ReorderList<T extends { id: string }>({
   ) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     if (snapshot.current) return;
+    detach.current?.();
     const { pointerId, clientX, clientY } = event;
     pointerY.current = clientY;
     let isStarted = false;
@@ -513,11 +610,15 @@ function ReorderList<T extends { id: string }>({
         const snap = measure(id, 'pointer', clientY);
         if (!snap) return;
         isStarted = true;
-        snapshot.current = snap;
-        setActiveId(id);
+        begin(snap);
         frame.current = requestAnimationFrame(autoScroll);
       }
       move.preventDefault();
+      if (
+        snapshot.current &&
+        signatureOf(latest.current.groups) !== snapshot.current.signature
+      )
+        return finish(false);
       refresh();
     };
     const onEnd = (end: PointerEvent) => {
@@ -560,12 +661,13 @@ function ReorderList<T extends { id: string }>({
       if (snap) return;
       const next = measure(id, 'keyboard', 0);
       if (!next) return;
-      snapshot.current = next;
-      setActiveId(id);
-      say('pickedUp', null, id);
+      begin(next);
+      say('pickedUp', id);
       return;
     }
     if (!isOurs) return;
+    if (signatureOf(latest.current.groups) !== snap.signature)
+      return finish(false);
     if (event.key === 'Escape') {
       event.preventDefault();
       return finish(false);
@@ -587,7 +689,7 @@ function ReorderList<T extends { id: string }>({
     snap.target = next;
     layout(snap, slotTop(snap, next) - snap.srcTop);
     elements.current.get(`row:${id}`)?.scrollIntoView({ block: 'nearest' });
-    say('moved', next, id);
+    say('moved', id, snap, next);
   };
 
   const onHandleBlur = (id: string) => {
@@ -624,12 +726,15 @@ function ReorderList<T extends { id: string }>({
 
   return (
     <div ref={rootRef} className={join(activeId && 'select-none', className)}>
-      {groups.map((group) => (
+      {drawnGroups.map((group) => (
         <div key={group.id} ref={(el) => register(`group:${group.id}`, el)}>
           {group.label !== null && (
             <div
               ref={(el) => register(`head:${group.id}`, el)}
-              className='transition-transform duration-150 motion-reduce:transition-none'
+              className={join(
+                'rounded-lg transition-transform duration-150 motion-reduce:transition-none',
+                overGroupId === group.id && 'bg-primary/10',
+              )}
             >
               <SectionDivider
                 label={group.label}
@@ -654,6 +759,7 @@ function ReorderList<T extends { id: string }>({
                 place={getPlace ? getPlace(item, index, group) : index + 1}
                 isOrdered={group.isOrdered}
                 isActive={activeId === item.id}
+                isOverOtherGroup={overGroupId !== null}
                 itemLabel={getItemLabel?.(item) ?? ''}
                 handleLabel={handleLabel}
                 renderRow={renderRow}
@@ -667,12 +773,7 @@ function ReorderList<T extends { id: string }>({
           </div>
         </div>
       ))}
-      <div
-        ref={liveRef}
-        className='sr-only'
-        aria-live='assertive'
-        role='status'
-      />
+      <div ref={liveRef} className='sr-only' aria-live='assertive' />
     </div>
   );
 }

@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   Button,
   DropdownMenuFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, HeartPulse } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import { type ReorderGroup, type ReorderMove } from '@/components/ReorderList';
 import ReorderList from '@/components/ReorderList';
 import SearchInput from '@/components/SearchInput';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
@@ -24,7 +25,6 @@ import ImportanceRowBody, {
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
-import { readListedApartIds } from '@apps/helm/utils/importanceWords';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
   useImportancePlace,
@@ -42,7 +42,6 @@ import {
 } from '@apps/helm/store/actions/importanceActions';
 import {
   selectImportanceGroups,
-  selectImportanceItems,
   type ImportanceRowView,
 } from '@apps/helm/store/selectors/importanceSelectors';
 
@@ -50,6 +49,12 @@ const { option } = DropdownMenuFactories;
 
 const SEARCH_FROM = 8;
 const TINT_MS = 1000;
+
+interface Spot {
+  key: string;
+  id: string;
+  block: ScrollLogicalPosition;
+}
 
 interface ImportanceViewProps {
   /** The thing the view opens scrolled to, its row tinted for a second. */
@@ -105,7 +110,6 @@ function ImportanceView({
   const groups = useAppSelector((state) =>
     selectImportanceGroups(state, today),
   );
-  const items = useAppSelector(selectImportanceItems);
   const projects = useAppSelector((state) => state.helm.projects);
   const habits = useAppSelector((state) => state.helm.habits);
   const [query, setQuery] = useState('');
@@ -113,7 +117,11 @@ function ImportanceView({
   const [openId, setOpenId] = useState<string | null>(null);
   const [pickingId, setPickingId] = useState<string | null>(null);
   const [isKeptOpen, setIsKeptOpen] = useState(false);
+  const [moved, setMoved] = useState<Spot | null>(null);
   const [tintEndedFor, setTintEndedFor] = useState<string | null>(null);
+  const scrolledKey = useRef<string | null>(null);
+  const tintTimer = useRef(0);
+  const moveCount = useRef(0);
 
   useScreenContext('importance', null, [], {
     ask: HELM_COPY.askImportance,
@@ -121,16 +129,13 @@ function ImportanceView({
     back: HELM_COPY.backToImportance,
   });
 
-  const listed = useMemo(() => {
-    const apart = readListedApartIds(items);
-    const kept = (rows: ImportanceRowView[]) =>
-      rows.filter((row) => !apart.has(row.id));
-    return {
-      inOrder: kept(groups.inOrder),
-      notSaid: kept(groups.notSaid),
-      canWait: kept(groups.canWait),
-    };
-  }, [groups, items]);
+  const kept = (rows: ImportanceRowView[]) =>
+    rows.filter((row) => !groups.underGoalIds.includes(row.id));
+  const listed = {
+    inOrder: kept(groups.inOrder),
+    notSaid: kept(groups.notSaid),
+    canWait: kept(groups.canWait),
+  };
   const rows = [...listed.inOrder, ...listed.notSaid, ...listed.canWait];
   const rowById = new Map(rows.map((row) => [row.id, row]));
   const needle = query.trim().toLowerCase();
@@ -150,11 +155,12 @@ function ImportanceView({
     return habit ? { kind: 'habit', habit } : null;
   };
 
+  const isReadable = (row: ImportanceRowView) => recordOf(row.id) !== null;
   const shownGroups: ReorderGroup<ImportanceRowView>[] = [
     {
       id: 'inOrder',
       label: HELM_COPY.importanceInOrder,
-      items: listed.inOrder.filter(matches),
+      items: listed.inOrder.filter(isReadable).filter(matches),
       isOrdered: true,
     },
     {
@@ -165,29 +171,49 @@ function ImportanceView({
           {HELM_COPY.importanceNotSaidTrailing}
         </span>
       ),
-      items: listed.notSaid.filter(matches),
+      items: listed.notSaid.filter(isReadable).filter(matches),
       isOrdered: false,
     },
     {
       id: 'canWait',
       label: HELM_COPY.importanceCanWait,
-      items: listed.canWait.filter(matches),
+      items: listed.canWait.filter(isReadable).filter(matches),
       isOrdered: false,
     },
   ].filter((group) => group.items.length > 0);
 
   const hasNoMatch = needle !== '' && shownGroups.length === 0;
 
+  const spot: Spot | null =
+    moved ??
+    (focusId === null
+      ? null
+      : { key: `focus:${focusId}`, id: focusId, block: 'center' });
+
+  const spotKey = spot?.key ?? null;
+  const spotId = spot?.id ?? null;
+  const spotBlock = spot?.block ?? 'center';
+
   useEffect(() => {
-    if (focusId === null || !isLoaded) return;
-    const target = document.querySelector(
-      `[data-importance-row="${CSS.escape(focusId)}"]`,
-    );
-    if (!target) return;
-    target.scrollIntoView({ block: 'center' });
-    const timer = window.setTimeout(() => setTintEndedFor(focusId), TINT_MS);
-    return () => window.clearTimeout(timer);
-  }, [focusId, isLoaded, rows.length]);
+    if (spotKey === null || spotId === null || !isLoaded) return;
+    if (scrolledKey.current === spotKey) return;
+    const frame = requestAnimationFrame(() => {
+      const target = document.querySelector(
+        `[data-importance-row="${CSS.escape(spotId)}"]`,
+      );
+      if (!target) return;
+      scrolledKey.current = spotKey;
+      target.scrollIntoView({ block: spotBlock });
+      window.clearTimeout(tintTimer.current);
+      tintTimer.current = window.setTimeout(
+        () => setTintEndedFor(spotKey),
+        TINT_MS,
+      );
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [spotKey, spotId, spotBlock, isLoaded, rows.length]);
+
+  useEffect(() => () => window.clearTimeout(tintTimer.current), []);
 
   const report = (error: unknown) => {
     console.error('Helm order was not changed', error);
@@ -196,14 +222,23 @@ function ImportanceView({
 
   const settle = async (
     start: Promise<ImportanceResult>,
-    name: string,
+    subject: { id: string | null; name: string },
     line: string,
   ) => {
+    const { id, name } = subject;
     try {
       const result = await start;
       if (result.kind === 'written') {
         const { undo, written } = result;
         setSaid({ line, undo });
+        if (id !== null) {
+          moveCount.current += 1;
+          setMoved({
+            key: `moved:${id}:${moveCount.current}`,
+            id,
+            block: 'nearest',
+          });
+        }
         written.catch(report);
         return;
       }
@@ -222,10 +257,12 @@ function ImportanceView({
   };
 
   const undoSaid = () => {
-    const undo = said?.undo;
+    const previous = said;
+    const undo = previous?.undo;
     if (!undo) return;
     setSaid({ line: HELM_COPY.takenBackLabel, undo: null });
     undo().catch((error: unknown) => {
+      setSaid(previous);
       console.error('Helm order was not put back', error);
       addToast({ title: HELM_COPY.undoFailed, type: 'error' });
     });
@@ -235,7 +272,7 @@ function ImportanceView({
     user &&
     settle(
       placeFirst(user.uid, today, row.id),
-      row.name,
+      row,
       HELM_COPY.importanceMovedFirst(row.name),
     );
 
@@ -243,7 +280,7 @@ function ImportanceView({
     user &&
     settle(
       placeAbove(user.uid, today, row.id, other.id),
-      row.name,
+      row,
       HELM_COPY.importanceMovedAbove(row.name, other.name),
     );
 
@@ -251,7 +288,7 @@ function ImportanceView({
     user &&
     settle(
       moveToCanWait(user.uid, today, row.id),
-      row.name,
+      row,
       HELM_COPY.importanceMovedCanWait(row.name),
     );
 
@@ -259,7 +296,7 @@ function ImportanceView({
     user &&
     settle(
       takeOutOfOrder(user.uid, today, row.id),
-      row.name,
+      row,
       HELM_COPY.importanceMovedOut(row.name),
     );
 
@@ -286,7 +323,7 @@ function ImportanceView({
     else if (user) {
       void settle(
         placeAfter(user.uid, today, row.id, previous.id),
-        row.name,
+        row,
         HELM_COPY.importanceMovedAfter(row.name, previous.name),
       );
     }
@@ -298,7 +335,7 @@ function ImportanceView({
     else if (choice.kind === 'pickAbove') setPickingId(row.id);
     else if (choice.kind === 'canWait') void canWaitRow(row);
     else if (choice.kind === 'out') void takeOutRow(row);
-    else open(row);
+    else afterBackLayersClose(() => open(row));
   };
 
   const clear = async () => {
@@ -311,7 +348,7 @@ function ImportanceView({
     if (isConfirmed) {
       void settle(
         clearImportanceOrder(user.uid),
-        '',
+        { id: null, name: '' },
         HELM_COPY.importanceCleared,
       );
     }
@@ -347,7 +384,11 @@ function ImportanceView({
             {HELM_COPY.importanceIntro(assistant)}
           </p>
         </div>
-        {said && <UndoLine said={said} onUndo={undoSaid} />}
+        {said && (
+          <div className='min-h-[42px]'>
+            <UndoLine said={said} onUndo={undoSaid} />
+          </div>
+        )}
         {isLoaded && rows.length < 2 && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.importanceFew}
@@ -384,7 +425,11 @@ function ImportanceView({
                 <ImportanceRowBody
                   record={record}
                   isPaused={row.isPaused}
-                  isTinted={focusId === row.id && tintEndedFor !== focusId}
+                  isTinted={
+                    spotKey !== null &&
+                    spotId === row.id &&
+                    tintEndedFor !== spotKey
+                  }
                 />
               ) : null;
             }}
@@ -394,13 +439,20 @@ function ImportanceView({
           <Button
             type='button'
             variant='tertiary'
-            className='text-muted-foreground flex h-auto min-h-12 w-full min-w-0 items-center justify-between gap-2 px-1 py-3 text-left text-[15px] font-normal'
+            className='helm-card flex h-auto min-h-10 w-full min-w-0 items-center gap-3 px-4 py-2 text-left font-normal'
             onClick={() => setIsKeptOpen(true)}
           >
-            <span className='min-w-0 flex-1 break-words'>
+            <HeartPulse
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+            <span className='text-muted-foreground min-w-0 flex-1 text-[15px] leading-[21px] break-words'>
               {HELM_COPY.importanceAlwaysKept(groups.alwaysKept.length)}
             </span>
-            <ChevronRight className='size-4 shrink-0' aria-hidden='true' />
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
           </Button>
         )}
       </main>
@@ -420,7 +472,10 @@ function ImportanceView({
             setPickingId(null);
             void placeAboveRow(pickingRow, other);
           }}
-          onClose={() => setPickingId(null)}
+          onClose={() => {
+            setPickingId(null);
+            setOpenId(pickingRow.id);
+          }}
         />
       )}
       <DetailSheet
@@ -443,7 +498,7 @@ function ImportanceView({
                     className='flex h-auto min-h-14 w-full min-w-0 items-center gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
                     onClick={() => {
                       setIsKeptOpen(false);
-                      open(entry);
+                      afterBackLayersClose(() => open(entry));
                     }}
                   >
                     <span className='min-w-0 flex-1'>

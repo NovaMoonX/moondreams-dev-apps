@@ -96,14 +96,14 @@ const HABIT_CUES = new Set(['habit', 'habits', ...MEDICINE_CUES]);
 export const hasHabitCue = (text: string) => hasWordIn(HABIT_CUES, text);
 
 const IMPORTANCE_CUES = new Set(
-  'matter matters important importance priority priorities first before wait waits waiting'.split(
+  'matter matters important importance priority priorities first before after order equally wait waits waiting whenever'.split(
     ' ',
   ),
 );
 
-/** Whether the words could say what matters more or less: "matters", "important", "priority", "first", "before", "can wait", as a word of its own. */
-export const hasImportanceCue = (text: string) =>
-  hasWordIn(IMPORTANCE_CUES, text);
+/** Whether the words could say what matters more or less: "matters", "important", "priority", "first", "before", "after", "equally", "can wait", as a word of its own; on What matters most itself ("guitar too", "the wedding, then work") any words could. */
+export const hasImportanceCue = (text: string, view: string | null = null) =>
+  view === 'importance' || hasWordIn(IMPORTANCE_CUES, text);
 
 const CHECKIN_WORDS = new Set(
   (

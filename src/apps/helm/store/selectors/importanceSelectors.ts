@@ -1,23 +1,45 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import {
   nearestDate,
   readImportanceOrder,
+  readUnderGoalIds,
   readProjectPlaces,
   type ImportanceItem,
   type OrderRow,
 } from '@apps/helm/engine/importance';
 import type { OpenHabit, OpenProject } from '@apps/helm/types';
+import { getDueDay } from '@apps/helm/utils/captureReading';
 
 const selectProjects = (state: RootState) => state.helm.projects.items;
 const selectHabits = (state: RootState) => state.helm.habits.items;
+const selectOpenTasks = (state: RootState) => state.helm.openTasks.items;
+const selectZone = (state: RootState) =>
+  state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
 const selectToday = (_state: RootState, today: number) => today;
+
+/** Each project's open tasks' due days (overdue ones by their due day), date-only. Sleeping tasks are read too, since the selector holds no clock. */
+const selectTaskDays = createSelector(
+  [selectOpenTasks, selectZone],
+  (tasks, timeZone) =>
+    tasks.reduce<Map<string, number[]>>((days, task) => {
+      if (task.isUnreadable || !task.projectId || !task.due) return days;
+      return days.set(task.projectId, [
+        ...(days.get(task.projectId) ?? []),
+        getDueDay(task.due, timeZone),
+      ]);
+    }, new Map()),
+);
 
 const isCareMark = (mark: string | null) =>
   mark === 'health' || mark === 'care';
 
-const toProjectItem = (project: OpenProject): ImportanceItem => ({
+const toProjectItem = (
+  project: OpenProject,
+  taskDays: ReadonlyMap<string, number[]>,
+): ImportanceItem => ({
   id: project.id,
   kind: project.kind,
   name: project.name,
@@ -32,6 +54,7 @@ const toProjectItem = (project: OpenProject): ImportanceItem => ({
         : 'running',
   date: nearestDate([
     project.targetDate,
+    ...(taskDays.get(project.id) ?? []),
     ...Object.values(project.milestoneState).map((state) =>
       state.doneAt === null ? state.date : null,
     ),
@@ -56,9 +79,11 @@ const toHabitItem = (habit: OpenHabit): ImportanceItem => ({
 
 /** Every readable project, goal and habit as the order reads them; one that won't open can't be moved, so it stays out. */
 export const selectImportanceItems = createSelector(
-  [selectProjects, selectHabits],
-  (projects, habits): ImportanceItem[] => [
-    ...projects.filter((project) => !project.isUnreadable).map(toProjectItem),
+  [selectProjects, selectHabits, selectTaskDays],
+  (projects, habits, taskDays): ImportanceItem[] => [
+    ...projects
+      .filter((project) => !project.isUnreadable)
+      .map((project) => toProjectItem(project, taskDays)),
     ...habits.filter((habit) => !habit.isUnreadable).map(toHabitItem),
   ],
 );
@@ -90,6 +115,7 @@ export const selectImportanceGroups = createSelector(
       emoji: emojiOf(projects, habits, row),
     });
     return {
+      underGoalIds: readUnderGoalIds(items),
       inOrder: order.inOrder.map(view),
       notSaid: order.notSaid.map(view),
       canWait: order.canWait.map(view),

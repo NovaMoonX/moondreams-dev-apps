@@ -16,10 +16,10 @@ export const IMPORTANCE_WORDS_CAP = 120;
 export const RANK_MIN_GAP = 2 ** -30;
 /** This many things in one place is too many to leave side by side. */
 export const TIE_ASKED_AT = 3;
-/** Among things nobody placed, a date this much nearer is what counts as above. */
-export const UNPLACED_DATE_GAP_DAYS = 7;
-
-const DAY_MS = 86_400_000;
+/** The place number the planner gives a project nobody placed, after every placed one. */
+export const NOT_SAID_PLACE = 1e5;
+/** Can wait projects come after every placed and not said one, in their order. */
+export const CAN_WAIT_PLACE = 1e6;
 
 export type ImportanceKind = 'project' | 'goal' | 'habit';
 
@@ -28,7 +28,7 @@ export interface ImportanceItem {
   kind: ImportanceKind;
   name: string;
   place: ImportancePlace | null;
-  /** A habit's goal; it sits at the goal's place unless it has one of its own. */
+  /** A habit's goal; while the goal is in the order the habit sits at its place and ignores any of its own. */
   goalId: string | null;
   /** Health and care: never placed, never paused. */
   isCare: boolean;
@@ -112,7 +112,21 @@ const compareWith =
     byDate(left, right) ||
     (names.get(left.id) ?? '').localeCompare(names.get(right.id) ?? '');
 
-/** The order at a day: the placed by rank (ties side by side), then the unplaced by nearest date (undated last), then Can wait. Finished things are left out; paused ones keep their place, marked. */
+const isGoalInOrder = (item: ImportanceItem) =>
+  item.kind !== 'habit' && item.status !== 'out' && !item.isCare;
+
+/** The ids of the habits that take their goal's place: the goal is still in the order (live, not health or care). Such a habit ignores any place of its own, is never listed apart and never counted in a place or a tie; one whose goal has left the order is listed on its own. */
+export const readUnderGoalIds = (items: readonly ImportanceItem[]) => {
+  const goals = new Set(items.filter(isGoalInOrder).map((item) => item.id));
+  return items
+    .filter(
+      (item) =>
+        item.kind === 'habit' && item.goalId !== null && goals.has(item.goalId),
+    )
+    .map((item) => item.id);
+};
+
+/** The order at a day: the placed by rank (ties side by side), then the unplaced by nearest date (undated last), then Can wait. Finished things are left out; paused ones keep their place, marked. A goal's habits follow their goal's row at its place, in `rows` only. */
 export function readImportanceOrder(
   items: readonly ImportanceItem[],
   today: number,
@@ -120,13 +134,15 @@ export function readImportanceOrder(
   const kept = items.filter((item) => item.status !== 'out');
   const names = new Map(kept.map((item) => [item.id, item.name]));
   const goals = new Map(
-    kept.filter((item) => item.kind !== 'habit').map((item) => [item.id, item]),
+    kept.filter(isGoalInOrder).map((item) => [item.id, item]),
   );
+  const underGoal = new Set(readUnderGoalIds(items));
   const alwaysKept = kept.filter((item) => item.isCare).map((item) => item.id);
   const rows = kept
     .filter((item) => !item.isCare)
     .map((item): OrderRow => {
-      const own = livePlace(item.place, today);
+      const isUnder = underGoal.has(item.id);
+      const own = isUnder ? null : livePlace(item.place, today);
       const goal =
         !own && item.goalId
           ? livePlace(goals.get(item.goalId)?.place ?? null, today)
@@ -140,13 +156,14 @@ export function readImportanceOrder(
         position: null,
         isPaused: item.status === 'paused',
         isInherited: !own && goal !== null,
-        isExpired: item.place !== null && own === null,
+        isExpired: !isUnder && item.place !== null && own === null,
         place: own ?? goal,
         date: item.date,
       };
     });
+  const listed = rows.filter((row) => !underGoal.has(row.id));
   const compare = compareWith(names);
-  const inOrder = rows
+  const inOrder = listed
     .filter((row) => row.group === 'inOrder')
     .sort(
       (left, right) =>
@@ -157,39 +174,31 @@ export function readImportanceOrder(
     ...row,
     position: places.indexOf(row.rank) + 1,
   }));
-  const notSaid = rows.filter((row) => row.group === 'notSaid').sort(compare);
-  const canWait = rows
+  const positions = new Map(numbered.map((row) => [row.id, row.position]));
+  const goalIdOf = new Map(items.map((item) => [item.id, item.goalId]));
+  const notSaid = listed.filter((row) => row.group === 'notSaid').sort(compare);
+  const canWait = listed
     .filter((row) => row.group === 'canWait')
     .sort(
       (left, right) =>
         (right.rank ?? 0) - (left.rank ?? 0) || compare(left, right),
     );
+  const beside = rows
+    .filter((row) => underGoal.has(row.id))
+    .map((row) => ({
+      ...row,
+      position:
+        row.group === 'inOrder'
+          ? (positions.get(goalIdOf.get(row.id) ?? '') ?? null)
+          : null,
+    }));
   return {
-    rows: [...numbered, ...notSaid, ...canWait],
+    rows: [...numbered, ...notSaid, ...canWait, ...beside],
     inOrder: numbered,
     notSaid,
     canWait,
     alwaysKept,
   };
-}
-
-/** Whether `first`'s place is above `second`'s. Among things nobody placed only a date at least 7 days nearer counts, and Can wait is never above anything. */
-export function isAbove(order: ImportanceOrder, first: string, second: string) {
-  const left = order.rows.find((row) => row.id === first);
-  const right = order.rows.find((row) => row.id === second);
-  if (!left || !right) return false;
-  const tiers: OrderGroup[] = ['inOrder', 'notSaid', 'canWait'];
-  const apart = tiers.indexOf(left.group) - tiers.indexOf(right.group);
-  if (apart !== 0) return apart < 0;
-  if (left.group === 'inOrder')
-    return (left.position ?? 0) < (right.position ?? 0);
-  if (left.group === 'notSaid')
-    return (
-      left.date !== null &&
-      (right.date === null ||
-        left.date <= right.date - UNPLACED_DATE_GAP_DAYS * DAY_MS)
-    );
-  return false;
 }
 
 /** The ranks spaced evenly with ties and order kept: 1 at the foot of In order, -1 at the top of Can wait. */
@@ -467,44 +476,16 @@ export function findImportanceTie(
   };
 }
 
-/** The command a move up or down makes, or null when there is nowhere to go. Up from Not said yet puts a thing at the foot of In order; up from Can wait takes it back to Not said yet. */
-export function stepCommand(
-  order: ImportanceOrder,
-  id: string,
-  direction: 'up' | 'down',
-): ImportanceCommand | null {
-  const row = order.rows.find((entry) => entry.id === id);
-  if (!row) return null;
-  const base = { subjectId: id, words: null, until: null, captureId: null };
-  if (row.group === 'notSaid')
-    return direction === 'up'
-      ? { ...base, relation: 'matters', otherId: null }
-      : null;
-  if (row.group === 'canWait')
-    return direction === 'up'
-      ? { ...base, relation: 'clear', otherId: null }
-      : null;
-  const mate = order.inOrder.find(
-    (entry) => entry.rank === row.rank && entry.id !== id,
-  );
-  const next = order.inOrder.find(
-    (entry) =>
-      entry.position === (row.position ?? 0) + (direction === 'up' ? -1 : 1),
-  );
-  const against = next ?? mate;
-  return against
-    ? {
-        ...base,
-        relation: direction === 'up' ? 'above' : 'below',
-        otherId: against.id,
-      }
-    : null;
-}
-
-/** Each placed project's or goal's place number, which Today's planner breaks ties by. */
+/** Each project's or goal's place number, which Today's planner breaks ties by: its place in In order, then every not said one together, then Can wait in its order. Always finite. */
 export const readProjectPlaces = (order: ImportanceOrder) =>
-  Object.fromEntries(
-    order.inOrder
+  Object.fromEntries([
+    ...order.inOrder
       .filter((row) => row.kind !== 'habit' && row.position !== null)
       .map((row) => [row.id, row.position ?? 0]),
-  );
+    ...order.notSaid
+      .filter((row) => row.kind !== 'habit')
+      .map((row) => [row.id, NOT_SAID_PLACE]),
+    ...order.canWait
+      .filter((row) => row.kind !== 'habit')
+      .map((row, index) => [row.id, CAN_WAIT_PLACE + index]),
+  ]);

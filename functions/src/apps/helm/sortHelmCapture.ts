@@ -2457,7 +2457,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         contextHabits,
       );
     const isImportanceInPlay =
-      mode !== 'rest' && hasImportanceCue(combined.text);
+      mode !== 'rest' &&
+      hasImportanceCue(
+        combined.text,
+        sanitizeScreen(capture.screen)?.view ?? null,
+      );
     const contextImportance = isImportanceInPlay
       ? await readImportanceRecords(
           firestore,
@@ -4291,6 +4295,7 @@ async function writeResult(
       isUnattended: input.isUnattended === true,
       newId: () => crypto.randomUUID(),
       seal,
+      captureText,
       room: Math.max(
         0,
         MAX_EFFECTS -

@@ -943,7 +943,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
             isDone || index % 3 === 2
               ? null
               : {
-                  rank: index % 9 === 0 ? -1 : (index % 7) + 1,
+                  rank:
+                    index % 9 === 0 ? -(index + 1) : Math.floor(index / 2) + 1,
                   words: 'what I said about it',
                   saidAt: now - between(1, 60) * DAY_MS,
                   until: null,

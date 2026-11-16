@@ -1,4 +1,8 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
+import {
+  createOptionMatcher,
+  toComparable,
+} from '../../../vendor/optionMatchUtils.js';
 import type { ImportanceRecord } from '../importanceStore.js';
 import type { SetImportanceCommand } from './commands.js';
 import type { Effect, EffectRef, PlannedQuestion } from './executeCommands.js';
@@ -6,6 +10,7 @@ import {
   applyImportance,
   findImportanceTie,
   readImportanceOrder,
+  readUnderGoalIds,
   withPlaceChanges,
   type ImportanceItem,
   type ImportancePlace,
@@ -36,6 +41,10 @@ export interface ImportancePlanInput {
   seal: (fields: Record<string, unknown>) => SealedPayload;
   /** How many effects the turn can still record. */
   room: number;
+  /** The words of the turn, to echo a name the person actually said. */
+  captureText?: string;
+  /** Answering "Which comes first?": what the answer places is written as it is, never held for another question. */
+  isAnswer?: boolean;
 }
 
 export interface ImportancePlan {
@@ -79,22 +88,43 @@ export function planImportance(input: ImportancePlanInput): ImportancePlan {
       ? PRIVATE_ITEM
       : record.item.name;
   };
+  const underGoal = new Set(readUnderGoalIds(input.records.map((r) => r.item)));
+  const toGoal = (id: string | null) =>
+    id !== null && underGoal.has(id) ? (byId.get(id)?.item.goalId ?? id) : id;
+  const matcher = createOptionMatcher<ImportanceRecord>({
+    names: (record) => [record.item.name],
+  });
+  const said = toComparable(input.captureText ?? '');
+  const notFound = (name: string | null) => {
+    const heard = name === null ? '' : toComparable(name);
+    const shownName =
+      heard !== '' && ` ${said} `.includes(` ${heard} `) ? name : 'that';
+    return `I couldn't find ${shownName} in your projects, goals or habits, so nothing moved.`;
+  };
+  const resolveIds = (command: SetImportanceCommand) => ({
+    subjectId: toGoal(
+      command.subjectId ??
+        matcher.match(command.unknownName ?? '', input.records)?.item.id ??
+        null,
+    ),
+    otherId: toGoal(command.otherId),
+  });
   const step = (acc: Acc, command: SetImportanceCommand): Acc => {
     const withNotKept = (line: string): Acc => ({
       ...acc,
       notKept: [...acc.notKept, line],
     });
-    if (command.subjectId === null)
-      return withNotKept(
-        `There's no project called ${command.unknownName ?? 'that'}. Start one?`,
-      );
-    const subjectName = shown(command.subjectId);
+    const { subjectId, otherId } = resolveIds(command);
+    if (subjectId === null) return withNotKept(notFound(command.unknownName));
+    const subjectName = shown(subjectId);
+    if (otherId !== null && otherId === subjectId)
+      return withNotKept(`${subjectName} is already there`);
     const result = applyImportance(
       readImportanceOrder(acc.items, input.today),
       {
-        subjectId: command.subjectId,
+        subjectId,
         relation: command.relation,
-        otherId: command.otherId,
+        otherId,
         words: command.words === '' ? null : command.words,
         until: command.until,
         captureId: input.captureId,
@@ -111,7 +141,7 @@ export function planImportance(input: ImportancePlanInput): ImportancePlan {
       return withNotKept(
         result.reason === 'already'
           ? `${subjectName} is already there`
-          : `Say where ${shown(command.otherId ?? '')} goes first`,
+          : `Say where ${shown(otherId ?? '')} goes first`,
       );
     const fresh = result.changes.filter(({ id }) => !acc.changed.has(id));
     if (result.changes.some(({ id }) => input.blockedIds.has(id)))
@@ -144,13 +174,31 @@ export function planImportance(input: ImportancePlanInput): ImportancePlan {
       };
     return { ...standing, placed: true };
   };
-  const done = input.commands.reduce<Acc>(step, {
-    items: input.records.map((record) => record.item),
-    changed: new Map(),
-    lines: [],
-    notKept: [],
-    placed: false,
-  });
+  const run = (commands: SetImportanceCommand[]) =>
+    commands.reduce<Acc>(step, {
+      items: input.records.map((record) => record.item),
+      changed: new Map(),
+      lines: [],
+      notKept: [],
+      placed: false,
+    });
+  const first = run(input.commands);
+  const tie = input.isAnswer
+    ? null
+    : findImportanceTie(
+        readImportanceOrder(first.items, input.today),
+        new Set(first.changed.keys()),
+      );
+  const held = input.commands.filter(
+    (command) =>
+      tie !== null &&
+      command.relation === 'same' &&
+      tie.ids.includes(resolveIds(command).subjectId ?? ''),
+  );
+  const done =
+    held.length === 0
+      ? first
+      : run(input.commands.filter((c) => !held.includes(c)));
   const order = readImportanceOrder(done.items, input.today);
   const places = order.inOrder.reduce<string[][]>(
     (groups, row) =>
@@ -176,7 +224,6 @@ export function planImportance(input: ImportancePlanInput): ImportancePlan {
           )
           .join(', ')
     : null;
-  const tie = findImportanceTie(order, new Set(done.changed.keys()));
   const prompt =
     tie &&
     (tie.isTop
@@ -188,11 +235,23 @@ export function planImportance(input: ImportancePlanInput): ImportancePlan {
     shape: 'pickOne' as const,
     prompt: prompt ?? '',
     options: (tie?.ids ?? []).map((id) => ({ id, label: shown(id) })),
-    heldCommands: [{ kind: 'whichComesFirst', ids: tie?.ids ?? [] }],
+    heldCommands: [
+      {
+        kind: 'whichComesFirst',
+        ids: tie?.ids ?? [],
+        held: held.map((command) => resolveIds(command)),
+      },
+    ],
   };
   const question =
     tie && prompt && !input.isUnattended
       ? [toPlannedQuestion(asked, { id: input.newId(), now: input.now })]
+      : [];
+  const waits =
+    tie && held.length > 0 && input.isUnattended
+      ? [
+          `Which of ${joinNames(tie.ids.map(shown))} comes first waits until you're here`,
+        ]
       : [];
   const changes = [...done.changed.entries()].flatMap(([id, change]) => {
     const record = byId.get(id);
@@ -225,7 +284,7 @@ export function planImportance(input: ImportancePlanInput): ImportancePlan {
       },
     })),
     lines: [...done.lines, ...(sentence ? [sentence] : [])],
-    notKept: done.notKept,
+    notKept: [...done.notKept, ...waits],
     questions: question,
     isPrivate: changes.some(({ record }) => record.isPrivate),
   };
@@ -252,7 +311,7 @@ export interface ImportanceResolveInput {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-/** Decides what answering "Which comes first?" writes, without touching a database: the pick is placed above the others it was tied with, against the order as it is now, and the question is closed either way. */
+/** Decides what answering "Which comes first?" writes, without touching a database: the pick goes just above one of the others, then the things held back join the others' place so they share second, against the order as it is now; the question is closed either way. A tie of four or more that this leaves is not asked about again. */
 export function planResolveImportance(input: ImportanceResolveInput):
   | { refused: 'answered' | 'unknown' | 'gone' }
   | {
@@ -278,18 +337,50 @@ export function planResolveImportance(input: ImportanceResolveInput):
       ? held.ids.filter((id): id is string => typeof id === 'string')
       : [];
   if (!ids.includes(optionId)) return { refused: 'unknown' };
+  const heldSubjects =
+    held && Array.isArray(held.held)
+      ? held.held.flatMap((entry) =>
+          isRecord(entry) &&
+          typeof entry.subjectId === 'string' &&
+          ids.includes(entry.subjectId)
+            ? [entry.subjectId]
+            : [],
+        )
+      : [];
+  const anchors = ids.filter(
+    (id) => id !== optionId && !heldSubjects.includes(id),
+  );
+  const movers = heldSubjects.filter((id) => id !== optionId);
+  const say = (
+    subjectId: string,
+    relation: 'above' | 'below' | 'same' | 'most',
+    otherId: string | null,
+  ) => ({
+    kind: 'setImportance' as const,
+    subjectId,
+    unknownName: null,
+    relation,
+    otherId,
+    words: '',
+    until: null,
+  });
+  const share = anchors[0] ?? movers[0] ?? null;
   const plan = planImportance({
-    commands: ids
-      .filter((id) => id !== optionId)
-      .map((id) => ({
-        kind: 'setImportance' as const,
-        subjectId: optionId,
-        unknownName: null,
-        relation: 'above' as const,
-        otherId: id,
-        words: '',
-        until: null,
-      })),
+    commands: [
+      ...(heldSubjects.includes(optionId) || anchors.length > 0
+        ? [
+            anchors.length > 0
+              ? say(optionId, 'above', anchors[0])
+              : say(optionId, 'most', null),
+          ]
+        : []),
+      ...movers.map((id, index) =>
+        anchors.length === 0 && index === 0
+          ? say(id, 'below', optionId)
+          : say(id, 'same', share),
+      ),
+    ],
+    isAnswer: true,
     records: input.records,
     today: input.today,
     now,

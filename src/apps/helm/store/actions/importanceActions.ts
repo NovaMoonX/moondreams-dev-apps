@@ -6,15 +6,13 @@ import { store } from '@/store';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   applyImportance,
-  findImportanceTie,
   readImportanceOrder,
-  stepCommand,
+  readUnderGoalIds,
   withPlaceChanges,
   type ApplyResult,
   type ImportanceCommand,
   type ImportancePlace,
   type ImportanceRelation,
-  type ImportanceTie,
 } from '@apps/helm/engine/importance';
 import { sealJson } from '@apps/helm/security';
 import { selectImportanceItems } from '@apps/helm/store/selectors/importanceSelectors';
@@ -124,8 +122,46 @@ async function commit(
   );
 }
 
+/** What this device has written and the store may not show yet, so a second move reads the first one's result. Dropped once the server has it. */
+const unsynced = new Map<string, ImportancePlace | null>();
+
+/** One action at a time: a move reads the order the one before it left. */
+const queue = { tail: Promise.resolve() };
+
+const inTurn = <T>(run: () => Promise<T>): Promise<T> => {
+  const next = queue.tail.then(run);
+  queue.tail = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+};
+
+const currentItems = () =>
+  withPlaceChanges(
+    selectImportanceItems(store.getState()),
+    [...unsynced].map(([id, place]) => ({ id, place })),
+  );
+
 const placeNow = (id: string): ImportancePlace | null =>
-  projectOf(id)?.importance ?? habitOf(id)?.importance ?? null;
+  unsynced.has(id)
+    ? (unsynced.get(id) ?? null)
+    : (projectOf(id)?.importance ?? habitOf(id)?.importance ?? null);
+
+const write = (
+  uid: string,
+  writes: Write[],
+  encryption: HelmEncryption,
+): Promise<void> => {
+  writes.forEach(({ id, place }) => unsynced.set(id, place));
+  const written = commit(uid, writes, encryption);
+  const settle = () =>
+    writes.forEach(({ id, place }) => {
+      if (unsynced.get(id) === place) unsynced.delete(id);
+    });
+  written.then(settle, settle);
+  return written;
+};
 
 export type ImportanceResult =
   | {
@@ -134,9 +170,6 @@ export type ImportanceResult =
       written: Promise<void>;
       /** Puts every thing it moved back to the place it held. */
       undo: () => Promise<void>;
-      changedIds: string[];
-      /** Three or more now share a place the change touched: the question "Which comes first?" is due. */
-      tie: ImportanceTie | null;
     }
   | { kind: 'unchanged' }
   | { kind: 'refused'; id: string }
@@ -145,46 +178,39 @@ export type ImportanceResult =
 const toResult = (
   uid: string,
   encryption: HelmEncryption,
-  today: number,
   applied: Extract<ApplyResult, { kind: 'applied' }>,
 ): ImportanceResult => {
   const before = applied.changes.map(({ id }): Write => ({
     id,
     place: placeNow(id),
   }));
-  const items = selectImportanceItems(store.getState());
-  const order = readImportanceOrder(
-    withPlaceChanges(items, applied.changes),
-    today,
-  );
   return {
     kind: 'written',
-    written: commit(uid, applied.changes, encryption),
-    undo: () => commit(uid, before, encryption),
-    changedIds: applied.changes.map(({ id }) => id),
-    tie: findImportanceTie(order, new Set(applied.changes.map(({ id }) => id))),
+    written: write(uid, applied.changes, encryption),
+    undo: () => write(uid, before, encryption),
   };
 };
 
 /** Applies one relation to the order as it stands and writes every place it changes, in one batch. `today` is date-only. */
-export async function placeImportance(
+export const placeImportance = (
   uid: string,
   today: number,
   command: ImportanceCommand,
-): Promise<ImportanceResult> {
-  const order = readImportanceOrder(
-    selectImportanceItems(store.getState()),
-    today,
-  );
-  const result = applyImportance(order, command, Date.now());
-  if (result.kind === 'applied')
-    return toResult(uid, await getHelmEncryption(uid), today, result);
-  return result.kind === 'refused'
-    ? { kind: 'refused', id: result.id }
-    : result.kind === 'missing'
-      ? { kind: 'missing' }
-      : { kind: 'unchanged' };
-}
+): Promise<ImportanceResult> =>
+  inTurn(async () => {
+    const result = applyImportance(
+      readImportanceOrder(currentItems(), today),
+      command,
+      Date.now(),
+    );
+    if (result.kind === 'applied')
+      return toResult(uid, await getHelmEncryption(uid), result);
+    return result.kind === 'refused'
+      ? { kind: 'refused', id: result.id }
+      : result.kind === 'missing'
+        ? { kind: 'missing' }
+        : { kind: 'unchanged' };
+  });
 
 const byHand = (
   subjectId: string,
@@ -219,14 +245,6 @@ export const placeAfter = (
   otherId: string,
 ) => placeImportance(uid, today, byHand(id, 'below', otherId));
 
-/** Puts it beside another thing, sharing its place. */
-export const placeBeside = (
-  uid: string,
-  today: number,
-  id: string,
-  otherId: string,
-) => placeImportance(uid, today, byHand(id, 'same', otherId));
-
 /** Moves it to Can wait, below everything not placed. */
 export const moveToCanWait = (uid: string, today: number, id: string) =>
   placeImportance(uid, today, byHand(id, 'canWait', null));
@@ -235,56 +253,28 @@ export const moveToCanWait = (uid: string, today: number, id: string) =>
 export const takeOutOfOrder = (uid: string, today: number, id: string) =>
   placeImportance(uid, today, byHand(id, 'clear', null));
 
-/** One place up or down; from Not said yet an up puts it at the foot of In order, from Can wait an up takes it back to Not said yet. */
-export async function moveStep(
-  uid: string,
-  today: number,
-  id: string,
-  direction: 'up' | 'down',
-): Promise<ImportanceResult> {
-  const order = readImportanceOrder(
-    selectImportanceItems(store.getState()),
-    today,
-  );
-  const command = stepCommand(order, id, direction);
-  return command ? placeImportance(uid, today, command) : { kind: 'unchanged' };
-}
-
-/** "Which comes first?": the pick goes just above the others, which keep sharing their place. */
-export async function answerWhichComesFirst(
-  uid: string,
-  today: number,
-  tieIds: string[],
-  pickedId: string,
-): Promise<ImportanceResult> {
-  const other = tieIds.find((id) => id !== pickedId);
-  return other
-    ? placeImportance(uid, today, {
-        ...byHand(pickedId, 'above', other),
-        words: placeNow(pickedId)?.words ?? null,
-      })
-    : { kind: 'unchanged' };
-}
-
-/** Takes every thing out of the order in one write; Undo puts each back where it was. */
-export async function clearImportanceOrder(
-  uid: string,
-): Promise<ImportanceResult> {
-  const placed = selectImportanceItems(store.getState()).filter(
-    (item) => item.place !== null,
-  );
-  if (placed.length === 0) return { kind: 'unchanged' };
-  const encryption = await getHelmEncryption(uid);
-  const before = placed.map(({ id }): Write => ({ id, place: placeNow(id) }));
-  return {
-    kind: 'written',
-    written: commit(
-      uid,
-      placed.map(({ id }): Write => ({ id, place: null })),
-      encryption,
-    ),
-    undo: () => commit(uid, before, encryption),
-    changedIds: placed.map(({ id }) => id),
-    tie: null,
-  };
-}
+/** Takes every thing still in the order out of it in one write; Undo puts each back where it was. */
+export const clearImportanceOrder = (uid: string): Promise<ImportanceResult> =>
+  inTurn(async () => {
+    const items = currentItems();
+    const underGoal = new Set(readUnderGoalIds(items));
+    const placed = items.filter(
+      (item) =>
+        item.place !== null &&
+        item.status !== 'out' &&
+        !item.isCare &&
+        !underGoal.has(item.id),
+    );
+    if (placed.length === 0) return { kind: 'unchanged' };
+    const encryption = await getHelmEncryption(uid);
+    const before = placed.map(({ id }): Write => ({ id, place: placeNow(id) }));
+    return {
+      kind: 'written',
+      written: write(
+        uid,
+        placed.map(({ id }): Write => ({ id, place: null })),
+        encryption,
+      ),
+      undo: () => write(uid, before, encryption),
+    };
+  });

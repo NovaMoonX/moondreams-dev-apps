@@ -4,11 +4,7 @@ import { ChevronRight, ListOrdered } from 'lucide-react';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useImportanceToday } from '@apps/helm/hooks/useImportancePlace';
 import { useAppSelector } from '@/store';
-import {
-  selectImportanceGroups,
-  selectImportanceItems,
-} from '@apps/helm/store/selectors/importanceSelectors';
-import { readListedApartIds } from '@apps/helm/utils/importanceWords';
+import { selectImportanceGroups } from '@apps/helm/store/selectors/importanceSelectors';
 
 /** The thin door under Projects' title: what comes first, in a few words, and a way into the whole order. Absent until two things could be placed. */
 function ImportanceDoor({ onOpen }: { onOpen: () => void }) {
@@ -16,10 +12,8 @@ function ImportanceDoor({ onOpen }: { onOpen: () => void }) {
   const groups = useAppSelector((state) =>
     selectImportanceGroups(state, today),
   );
-  const items = useAppSelector(selectImportanceItems);
-  const apart = readListedApartIds(items);
   const listed = (rows: typeof groups.inOrder) =>
-    rows.filter((row) => !apart.has(row.id));
+    rows.filter((row) => !groups.underGoalIds.includes(row.id));
   const inOrder = listed(groups.inOrder);
   const count =
     inOrder.length +
@@ -38,16 +32,14 @@ function ImportanceDoor({ onOpen }: { onOpen: () => void }) {
         className='text-muted-foreground size-4 shrink-0'
         aria-hidden='true'
       />
-      <span className='min-w-0 flex-1 break-words'>
-        <span className='text-foreground text-[15px] leading-[21px]'>
+      <span className='min-w-0 flex-1'>
+        <span className='text-foreground block text-[15px] leading-[21px]'>
           {HELM_COPY.importanceTitle}
         </span>
-        <span className='text-muted-foreground text-[13px]'>
-          {` \u00b7 ${
-            first.length === 0
-              ? HELM_COPY.importanceDoorNone
-              : HELM_COPY.importanceDoorFirst(first.map((row) => row.name))
-          }`}
+        <span className='text-muted-foreground block text-[13px] break-words'>
+          {first.length === 0
+            ? HELM_COPY.importanceDoorNone
+            : HELM_COPY.importanceDoorFirst(first.map((row) => row.name))}
         </span>
       </span>
       <ChevronRight

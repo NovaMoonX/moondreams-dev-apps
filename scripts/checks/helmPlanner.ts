@@ -9,6 +9,10 @@ import {
   type PlannerInput,
   type PlannerTask,
 } from '../../src/apps/helm/engine/planner.ts';
+import {
+  CAN_WAIT_PLACE,
+  NOT_SAID_PLACE,
+} from '../../src/apps/helm/engine/importance.ts';
 import type { PlanSlot } from '../../src/apps/helm/types.ts';
 
 const ZONE = 'America/Los_Angeles';
@@ -448,6 +452,31 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
     Object.values(timed.slots).find((entry) => entry.taskId === 'home')
       ?.startAt,
     at('08:30'),
+  );
+}
+
+{
+  const order = (tasks: PlannerTask[]) =>
+    Object.values(run(base({ hasCalendar: false, tasks })).slots).map(
+      (entry) => entry.taskId,
+    );
+  assert.deepEqual(
+    order([
+      task('none'),
+      task('second', { projectPlace: 2 }),
+      task('first', { projectPlace: 1 }),
+    ]),
+    ['first', 'second', 'none'],
+    'placed first, then those not said or with no project',
+  );
+  assert.deepEqual(
+    order([
+      task('waitsLater', { projectPlace: CAN_WAIT_PLACE + 1 }),
+      task('waits', { projectPlace: CAN_WAIT_PLACE }),
+      task('notSaid', { projectPlace: NOT_SAID_PLACE }),
+    ]),
+    ['notSaid', 'waits', 'waitsLater'],
+    'Can wait follows every not said one, in its own order',
   );
 }
 

@@ -3836,6 +3836,11 @@ export const HELM_COPY = {
   habitsFormedFold: (count: number) => `Formed · ${count}`,
   habitsFormedOn: (date: string) => `Formed · off Today since ${date}`,
   importanceTitle: 'What matters most',
+  importanceYouMoved: (date: string) => `you moved it ${date}`,
+  importanceSaidOn: (date: string, words: string) =>
+    `On ${date} you said \u201c${words}\u201d`,
+  importanceMakeFirstFromCanWaitNote:
+    'Leaves Can wait. Everything else moves down one.',
   importanceIntro: (assistantName: string) =>
     `What comes first gets planned first, and ${assistantName} never suggests pausing it.`,
   importanceInOrder: 'In order',
