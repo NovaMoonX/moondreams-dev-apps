@@ -359,6 +359,8 @@ export const HELM_CAPS = {
   yearlyPerWho: 20,
   momentsPerWho: 500,
   indexSplit: 6_000,
+  /** Scheduled actions a person has that have not ended; also the listener's cap. */
+  scheduledActions: 50,
 } as const;
 
 /** The kinds of date that come back each year, in the order the add sheet offers them. */

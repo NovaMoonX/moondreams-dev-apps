@@ -151,6 +151,98 @@ export const RUN_EXTRA_MAX = 20;
 export const RUN_EXTRA_TEXT_CAP = 200;
 export const MAX_TICKS_PER_TURN = 20;
 
+/** The kinds the reply may carry that make or change a scheduled action; each is read from its own list and is no `NomosCommand`. */
+export const SCHEDULE_COMMAND_KINDS = [
+  'scheduleAction',
+  'changeScheduledAction',
+] as const;
+
+export const SCHEDULE_CHANGES = [
+  'skip',
+  'move',
+  'pause',
+  'resume',
+  'end',
+  'reschedule',
+] as const;
+
+export const SCHEDULE_SCOPES = ['thisOne', 'thisAndFollowing'] as const;
+
+export const SCHEDULE_FREQS = ['daily', 'weekly', 'monthly', 'yearly'] as const;
+
+export const SCHEDULE_TITLE_CAP = 80;
+export const SCHEDULE_INSTRUCTION_CAP = 400;
+export const MAX_HELD_COMMANDS = 3;
+export const MAX_SCHEDULE_COMMANDS_PER_TURN = 3;
+
+/** The command kinds a scheduled run may write while only Helm's own kinds are allowed. */
+export const SCHEDULED_OWN_KINDS = [
+  'createTask',
+  'updateTask',
+  'planDay',
+] as const;
+
+/** Kinds that reach outside Helm; a scheduled action may not hold one until the approval queue exists. */
+export const SCHEDULED_OUTBOUND_KINDS = [
+  'addCalendarEvent',
+  'sendMessage',
+  'sendEmail',
+] as const;
+
+export const SCHEDULED_ALLOWED_ENUM = [
+  ...SCHEDULED_OWN_KINDS,
+  ...SCHEDULED_OUTBOUND_KINDS,
+] as const;
+
+export interface ScheduleRepeatRead {
+  freq: (typeof SCHEDULE_FREQS)[number] | 'subDaily' | null;
+  interval: number;
+  weekdays: ('MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU')[];
+  monthBy: 'day' | 'nthWeekday' | 'lastDay' | null;
+  nth: 1 | 2 | 3 | 4 | -1 | null;
+  endsKind: 'never' | 'on' | 'after';
+  /** A day key. */
+  until: string | null;
+  count: number | null;
+}
+
+export interface HeldScheduleCommand {
+  kind: (typeof SCHEDULED_ALLOWED_ENUM)[number];
+  title: string | null;
+}
+
+/** Something the assistant does for the person at a set time. Dates and times come from the reading's spans, never the model's words. */
+export interface ScheduleActionCommand {
+  kind: 'scheduleAction';
+  title: string;
+  repeat: ScheduleRepeatRead;
+  /** A day key; null means the first day the rule gives from today. */
+  startsOn: string | null;
+  /** Floating "HH:mm". */
+  time: string | null;
+  /** Every time of day the turn's words name, in order; what "at 8 and at 6" splits into. */
+  times: string[];
+  instruction: string | null;
+  held: HeldScheduleCommand[];
+  allowedKinds: string[];
+  quote: string;
+}
+
+/** Skip, move, pause, resume, end or change one scheduled action, or the runs from one on. */
+export interface ChangeScheduledActionCommand {
+  kind: 'changeScheduledAction';
+  actionId: string;
+  scope: (typeof SCHEDULE_SCOPES)[number];
+  change: (typeof SCHEDULE_CHANGES)[number];
+  /** The original day key of the run named; null means the next run. */
+  fromKey: string | null;
+  /** A move's new day, and a reschedule's new first day. */
+  toDay: string | null;
+  time: string | null;
+  repeat: ScheduleRepeatRead | null;
+  quote: string;
+}
+
 /** The kinds the reply may carry that make or change a habit, tick it or mark it care; each is read from its own list and is no `NomosCommand`. */
 export const HABIT_COMMAND_KINDS = [
   'createHabit',
@@ -1044,6 +1136,13 @@ export const buildFileResultsTool = ({
             'otherAlias',
             'importanceRelation',
             'subjectName',
+            'repeat',
+            'startsSpanId',
+            'timeSpanId',
+            'instruction',
+            'heldCommands',
+            'allowedKinds',
+            'actionAlias',
           ],
           properties: {
             kind: {
@@ -1053,6 +1152,7 @@ export const buildFileResultsTool = ({
                 ...TOPIC_COMMAND_KINDS,
                 ...PROCEDURE_COMMAND_KINDS,
                 ...RUN_COMMAND_KINDS,
+                ...SCHEDULE_COMMAND_KINDS,
                 ...HABIT_COMMAND_KINDS,
                 ...IMPORTANCE_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
@@ -1169,9 +1269,9 @@ export const buildFileResultsTool = ({
             },
             change: {
               type: ['string', 'null'],
-              enum: [...WHEREABOUTS_CHANGES, null],
+              enum: [...WHEREABOUTS_CHANGES, ...SCHEDULE_CHANGES, null],
               description:
-                'setWhereabouts: home for where someone lives ("Priya lives in Leavenworth"), away for where someone will be or is for some days ("I\'m in Lisbon Dec 2 to 9"), back when the person says they are back home from being away; null for every other kind.',
+                'changeScheduledAction: skip or move one run, pause, resume or end the action, or reschedule it (a new repeat or time). setWhereabouts: home for where someone lives ("Priya lives in Leavenworth"), away for where someone will be or is for some days ("I\'m in Lisbon Dec 2 to 9"), back when the person says they are back home from being away; null for every other kind.',
             },
             cityName: nullable(
               'string',
@@ -1261,7 +1361,7 @@ export const buildFileResultsTool = ({
             ),
             quote: nullable(
               'string',
-              `noteFact and setWhereabouts: the person's exact words from the capture that say it, at most ${FACT_QUOTE_CAP} characters; null when none. checkIn: only words said with the tick ("felt dizzy"), copied exactly, at most ${HABIT_NOTE_CAP} characters; null when none.`,
+              `noteFact, setWhereabouts, scheduleAction and changeScheduledAction: the person's exact words from the capture that say it, at most ${FACT_QUOTE_CAP} characters; null when none. checkIn: only words said with the tick ("felt dizzy"), copied exactly, at most ${HABIT_NOTE_CAP} characters; null when none.`,
             ),
             isStated: nullable(
               'boolean',
@@ -1645,6 +1745,104 @@ export const buildFileResultsTool = ({
             subjectName: nullable(
               'string',
               'setImportance: the name the person said when subjectAlias is null, at most 80 characters; null otherwise. The words of the placement are requestQuote and a "until Friday" is dateSpanId.',
+            ),
+            repeat: {
+              type: ['object', 'null'],
+              description:
+                'scheduleAction: how often, in fields only, never a rule written out: freq daily, weekly, monthly or yearly ("every Sunday" is weekly with weekdays ["SU"]); subDaily when it says more than once a day ("every 2 hours", "at 8 and at 6"); null freq for a single run. changeScheduledAction reschedule: the new repeat; null for every other change.',
+              additionalProperties: false,
+              required: [
+                'freq',
+                'interval',
+                'weekdays',
+                'monthBy',
+                'nth',
+                'endsKind',
+                'untilSpanId',
+                'count',
+              ],
+              properties: {
+                freq: {
+                  type: ['string', 'null'],
+                  enum: [...SCHEDULE_FREQS, 'subDaily', null],
+                },
+                interval: {
+                  type: 'integer',
+                  description:
+                    'Every how many days, weeks, months or years: "every other Tuesday" is weekly with interval 2; 1 otherwise.',
+                },
+                weekdays: {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                    enum: ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'],
+                  },
+                  description:
+                    'weekly: the days; "weekdays" is MO to FR. monthly on a weekday ("the last Friday"): that one day. Empty otherwise.',
+                },
+                monthBy: {
+                  type: ['string', 'null'],
+                  enum: ['day', 'nthWeekday', 'lastDay', null],
+                  description:
+                    'monthly only: day for "on the 23rd", nthWeekday for "the second Monday" or "the last Friday", lastDay for "on the last day"; null otherwise.',
+                },
+                nth: {
+                  type: ['integer', 'null'],
+                  enum: [1, 2, 3, 4, -1, null],
+                  description:
+                    'monthly nthWeekday: 1 to 4, or -1 for the last; null otherwise.',
+                },
+                endsKind: {
+                  type: 'string',
+                  enum: ['never', 'on', 'after'],
+                },
+                untilSpanId: nullable(
+                  'string',
+                  'endsKind on: the id of the date span in the reading that gives the last day; null otherwise. Never write a date yourself.',
+                ),
+                count: nullable(
+                  'integer',
+                  'endsKind after: how many times; null otherwise.',
+                ),
+              },
+            },
+            startsSpanId: nullable(
+              'string',
+              'scheduleAction: the id of the date span that gives the first day; null starts from the next time the rule comes round. Never write a date yourself.',
+            ),
+            timeSpanId: nullable(
+              'string',
+              'scheduleAction, and changeScheduledAction reschedule or move: the id of the time span in the reading that gives the time of day; null when none was said. Never write a time yourself.',
+            ),
+            instruction: nullable(
+              'string',
+              `scheduleAction: when the work needs judgment, what to do in the person's words, at most ${SCHEDULE_INSTRUCTION_CAP} characters; null when heldCommands holds it.`,
+            ),
+            heldCommands: {
+              type: ['array', 'null'],
+              description: `scheduleAction: the plain Helm commands to run each time, at most ${MAX_HELD_COMMANDS}; null for an instruction.`,
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['kind', 'title'],
+                properties: {
+                  kind: { type: 'string', enum: [...SCHEDULED_ALLOWED_ENUM] },
+                  title: nullable(
+                    'string',
+                    'createTask: the task in plain words; null for the other kinds.',
+                  ),
+                },
+              },
+            },
+            allowedKinds: {
+              type: ['array', 'null'],
+              items: { type: 'string', enum: [...SCHEDULED_ALLOWED_ENUM] },
+              description:
+                'scheduleAction with an instruction: the command kinds a run may write, as few as will do; null for heldCommands.',
+            },
+            actionAlias: nullable(
+              'string',
+              'changeScheduledAction: the alias (sa1, sa2, …) of the scheduled action in <scheduled_actions>; null for every other kind. scope is thisOne for one run only, thisAndFollowing from that run on; fromSpanId is the date span of the run named, null for the next one; toSpanId is the day a skipped or moved run goes to.',
             ),
           },
         },

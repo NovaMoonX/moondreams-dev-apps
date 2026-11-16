@@ -449,6 +449,7 @@ export async function undoExecution(
                 ref.collection === 'procedureRuns' ||
                 ref.collection === 'habits' ||
                 ref.collection === 'habitDays' ||
+                ref.collection === 'scheduledActions' ||
                 ref.collection === 'connections';
               const entry = await transaction.get(docOf(ref));
               if (ref.collection === 'connections' && ref.op === 'delete') {

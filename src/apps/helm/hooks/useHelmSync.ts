@@ -62,6 +62,8 @@ import {
   setWhoFailed,
   setConnections,
   setConnectionsFailed,
+  setScheduledActions,
+  setScheduledActionsFailed,
   setHabits,
   setHabitsFailed,
   setHabitDays,
@@ -111,6 +113,8 @@ import { startProjectsListener } from '@apps/helm/store/listeners/projectListene
 import { startProceduresListener } from '@apps/helm/store/listeners/procedureListener';
 import { startOpenRunsListener } from '@apps/helm/store/listeners/runListener';
 import { startTopicsListener } from '@apps/helm/store/listeners/topicListener';
+import { stampWaitingScheduledActions } from '@apps/helm/store/actions/scheduledActionWrites';
+import { startScheduledActionsListener } from '@apps/helm/store/listeners/scheduledActionListener';
 import { startConnectionsListener } from '@apps/helm/store/listeners/connectionListener';
 import { startHabitsListener } from '@apps/helm/store/listeners/habitListener';
 import {
@@ -145,6 +149,22 @@ const isOfflineError = (error: unknown) =>
   (error instanceof Error &&
     'code' in error &&
     OFFLINE_CODES.includes(String(error.code)));
+
+/** A run held for the person's limits tries again when they open Helm: stamps the profile once per open, after the actions have loaded. */
+function useWaitingActionsStamp(uid: string | null) {
+  const isLoaded = useAppSelector(
+    (state) => state.helm.scheduledActions.isLoaded,
+  );
+  const isStamped = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!uid || !isLoaded || isStamped.current === uid) return;
+    isStamped.current = uid;
+    stampWaitingScheduledActions(uid, Date.now()).catch((error: unknown) =>
+      console.error('Helm waiting actions were not stamped', error),
+    );
+  }, [uid, isLoaded]);
+}
 
 /** Asks the platform to update the connections that are due, on open and on coming back to the tab, at most once per window; never offline. */
 function useConnectionsRefresh(uid: string | null) {
@@ -279,6 +299,7 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
   useCaptureOutbox(uid);
   usePlanOnCapture(uid);
   useConnectionsRefresh(uid);
+  useWaitingActionsStamp(uid);
   useSelfWho(uid, displayName);
   useKeyDateRepair(uid);
   useHabitJudgement(uid);
@@ -499,6 +520,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm connections listener failed', error);
               dispatch(setConnectionsFailed());
+            },
+          ),
+          startScheduledActionsListener(
+            uid,
+            read,
+            (actions) => dispatch(setScheduledActions(actions)),
+            (error) => {
+              console.error('Helm scheduled actions listener failed', error);
+              dispatch(setScheduledActionsFailed());
             },
           ),
           startHabitsListener(

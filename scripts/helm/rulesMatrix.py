@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, and one value's shape (a profile's theme is absent, null or a palette Helm ships; its voice name is absent, null or at most 32 characters, and its speed absent, null or 0.8 to 1.2): only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner and deleted by it only once it is older than 396 days, a profile's learning switch is absent or a true or false, observations and reflections are the owner's like a task, the nightly pass's run records are for the Admin SDK alone, and no other path under apps/helm is open to a client (the reminder planner's queue included). A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner and deleted by it only once it is older than 396 days, a profile's learning switch is absent or a true or false, observations, reflections and scheduled actions are the owner's like a task, the nightly pass's run records are for the Admin SDK alone, and no other path under apps/helm is open to a client (the reminder planner's and the scheduled actions' queues included). A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -256,8 +256,9 @@ def main():
     patternDoc = dict(kind='windowMissed', state='candidate', signature='sig', createdAt=NOW, stateAt=NOW, sealed=SEAL)
     observationDoc = dict(subject=dict(collection='habits', id='habit-1'), dayKey='2030-01-01', at=NOW, source='turn', sourceKeys=['captures/capture-1'], isCare=False, writtenBy='turn', createdAt=NOW, privacy='ordinary', sealed=SEAL)
     reflectionDoc = dict(dayKey='2030-01-01', reflectionId='r1', candidateCount=1, seenAt=None, sourceKeys=['observations/observation-1'], createdAt=NOW, privacy='ordinary', sealed=SEAL)
+    scheduledActionDoc = dict(status='active', endedBy=None, repeat='FREQ=WEEKLY;BYDAY=SU', startsOn='2030-01-06', time='18:00', timeZone=None, skipped=[], moved={}, nextRunAt=NOW, nextRunKey='2030-01-06', splitFromId=None, kind='commands', allowed=['createTask'], needsApproval=False, lastRunAt=None, lastRunCaptureId=None, lastRunDueAt=None, lastOutcome=None, lastFailReason=None, pausedFrom=None, pausedUntil=None, createdBy='person', sourceCaptureId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
     connectionDoc = dict(whoIds=['who-1', 'who-2'], kind='family', source='page', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
-    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted'), ('observations', observationDoc, 'isCare', True), ('reflections', reflectionDoc, 'seenAt', NOW), ('connections', connectionDoc, 'source', 'confirmed')):
+    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted'), ('observations', observationDoc, 'isCare', True), ('reflections', reflectionDoc, 'seenAt', NOW), ('connections', connectionDoc, 'source', 'confirmed'), ('scheduledActions', scheduledActionDoc, 'status', 'paused')):
         dk = f'{path}/{name}/{name}-1'
         for a, tok in actors.items():
             admin([put(dk, doc)])
@@ -461,7 +462,7 @@ def main():
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', 'apps/helm/reflectionRuns/run-1', f'apps/helm/server/{uid}/reflection/state', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}'):
+    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', 'apps/helm/reflectionRuns/run-1', f'apps/helm/server/{uid}/reflection/state', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}', f'apps/helm/actionQueue/{uid}'):
         admin([put(p, {'x': 1})])
         label = p.split("/")[0] if p.startswith('voice') else p.split("/")[-2]
         for a, tok in actors.items():
@@ -474,6 +475,12 @@ def main():
         check(f'reminderQueue list [{a}]', get('apps/helm/reminderQueue', tok), False)
         check(f'reminderQueue create at own uid [{a}]', commit(tok, [put_new(f'apps/helm/reminderQueue/{uid}-own', {'lookAt': NOW})]), False)
         check(f'reminderQueue delete [{a}]', commit(tok, [rm(f'apps/helm/reminderQueue/{uid}')]), False)
+
+    # The scheduled actions' queue is Admin SDK only too.
+    for a, tok in actors.items():
+        check(f'actionQueue list [{a}]', get('apps/helm/actionQueue', tok), False)
+        check(f'actionQueue create at own uid [{a}]', commit(tok, [put_new(f'apps/helm/actionQueue/{uid}-own', {'lookAt': NOW})]), False)
+        check(f'actionQueue delete [{a}]', commit(tok, [rm(f'apps/helm/actionQueue/{uid}')]), False)
 
     if STORAGE_HOST:
         storage_cases(o_tok, x_tok, uid, x_uid, actors)

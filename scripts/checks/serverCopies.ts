@@ -220,6 +220,15 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/engine/scheduledActions.ts',
+    dest: 'functions/src/apps/helm/nomos/scheduledActions.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/repeatRule': '../../../vendor/repeatRule.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+    },
+  },
+  {
     src: 'src/utils/yearlyDateUtils.ts',
     dest: 'functions/src/vendor/yearlyDateUtils.ts',
     importRewrites: {},

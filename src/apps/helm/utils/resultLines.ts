@@ -34,7 +34,8 @@ export function buildResultLines(
       if (
         ref.collection === 'who' ||
         ref.collection === 'places' ||
-        ref.collection === 'connections'
+        ref.collection === 'connections' ||
+        ref.collection === 'scheduledActions'
       )
         return [];
       const effect = execution.effects[index];

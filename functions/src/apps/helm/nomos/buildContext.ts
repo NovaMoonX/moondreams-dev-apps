@@ -92,6 +92,17 @@ export interface ContextHabit {
   isPrivate?: boolean;
 }
 
+/** A scheduled action as the model sees it: its words, when it runs, and whether it is paused. */
+export interface ContextScheduledAction {
+  id: string;
+  title: string;
+  /** The rule's one words line, built by code. */
+  repeat: string;
+  status: string;
+  next: string | null;
+  isPrivate?: boolean;
+}
+
 /** A project, goal or habit in the person's order of what matters, as the model sees it. */
 export interface ContextImportanceEntry {
   id: string;
@@ -249,6 +260,8 @@ export interface ContextInput {
   runs?: ContextRun[];
   /** The person's habits as of today, at most `MAX_CONTEXT_HABITS`; each name goes through `toDataJson`. */
   habits?: ContextHabit[];
+  /** The person's scheduled actions that have not ended, at most 50, when the turn could be about one. */
+  scheduledActions?: ContextScheduledAction[];
   /** What matters most, when the turn is about it; at most `MAX_CONTEXT_IMPORTANCE` entries. */
   importance?: ContextImportance;
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
@@ -377,6 +390,7 @@ export function buildContext(input: ContextInput): {
   procedureSteps: AliasBook;
   runSteps: AliasBook;
   habits: AliasBook;
+  scheduledActions: AliasBook;
   projects: AliasBook;
   habitNames: Map<string, string>;
   focus: { id: string; version: number } | null;
@@ -389,6 +403,7 @@ export function buildContext(input: ContextInput): {
   const procedureSteps = createAliasBook('ps');
   const runSteps = createAliasBook('rs');
   const habits = createAliasBook('h');
+  const scheduledBook = createAliasBook('sa');
   const projectBook = createAliasBook('p');
   const partIds = new Map<string, string>();
   const parts: AliasBook = {
@@ -685,6 +700,19 @@ export function buildContext(input: ContextInput): {
           )}</habits>`,
         ]
       : []),
+    ...(input.scheduledActions?.length
+      ? [
+          `<scheduled_actions>${toDataJson(
+            input.scheduledActions.map((action) => ({
+              action: scheduledBook.add(action.id),
+              title: action.title,
+              repeat: action.repeat,
+              status: action.status,
+              next: action.next,
+            })),
+          )}</scheduled_actions>`,
+        ]
+      : []),
     ...(input.importance
       ? [
           `<importance>${toDataJson(
@@ -750,6 +778,7 @@ export function buildContext(input: ContextInput): {
     procedureSteps,
     runSteps,
     habits,
+    scheduledActions: scheduledBook,
     projects: projectBook,
     habitNames: new Map(
       (input.habits ?? [])

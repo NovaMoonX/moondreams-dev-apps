@@ -19,6 +19,7 @@ import {
   RUN_COMMAND_KINDS,
   HABIT_COMMAND_KINDS,
   IMPORTANCE_COMMAND_KINDS,
+  SCHEDULE_COMMAND_KINDS,
   TOPIC_COMMAND_KINDS,
 } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
@@ -97,6 +98,7 @@ const world: World = {
     ...RUN_COMMAND_KINDS,
     ...HABIT_COMMAND_KINDS,
     ...IMPORTANCE_COMMAND_KINDS,
+    ...SCHEDULE_COMMAND_KINDS,
     ...CONNECTION_COMMAND_KINDS,
     CLOSE_CONVERSATION_TOOL.name,
   ],

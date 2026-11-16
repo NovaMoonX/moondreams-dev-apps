@@ -11,6 +11,7 @@ import type {
   OpenExecution,
   OpenFact,
   OpenConnection,
+  OpenScheduledAction,
   OpenHabit,
   OpenHabitDay,
   OpenMedia,
@@ -105,6 +106,8 @@ export interface HelmState {
   who: LoadedSet<OpenWho>;
   /** How the people are connected, every document including the refused ones; a screen reads `selectShownConnections`. */
   connections: LoadedSet<OpenConnection>;
+  /** What the assistant does at set times, ended ones included; a screen reads `selectScheduledActions`. */
+  scheduledActions: LoadedSet<OpenScheduledAction>;
   /** The things the person keeps up, active or not. */
   habits: LoadedSet<OpenHabit>;
   /** Each habit's ticks and tallies for the days from two weeks back. */
@@ -194,6 +197,7 @@ const initialState: HelmState = {
   facts: emptyLoadedSet,
   who: emptyLoadedSet,
   connections: emptyLoadedSet,
+  scheduledActions: emptyLoadedSet,
   habits: emptyLoadedSet,
   habitDays: emptyHabitDays,
   keyDateIndex: emptyKeyDateIndex,
@@ -388,6 +392,19 @@ const helmSlice = createSlice({
     },
     setConnectionsFailed: (state) => {
       state.connections.isFailed = true;
+    },
+    setScheduledActions: (
+      state,
+      action: PayloadAction<OpenScheduledAction[]>,
+    ) => {
+      state.scheduledActions = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setScheduledActionsFailed: (state) => {
+      state.scheduledActions.isFailed = true;
     },
     setHabits: (state, action: PayloadAction<OpenHabit[]>) => {
       state.habits = { items: action.payload, isLoaded: true, isFailed: false };
@@ -597,6 +614,8 @@ export const {
   setWhoFailed,
   setConnections,
   setConnectionsFailed,
+  setScheduledActions,
+  setScheduledActionsFailed,
   setHabits,
   setHabitsFailed,
   setHabitDays,

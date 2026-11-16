@@ -283,6 +283,23 @@ import {
 } from './connectionStore.js';
 import { planSoundsLike, type EarlierTask } from './nomos/planSoundsLike.js';
 import {
+  SCHEDULE_DROP_LINES,
+  planScheduledActions,
+} from './nomos/planScheduledActions.js';
+import type {
+  ScheduleCommand,
+  ScheduleDrop,
+} from './nomos/readScheduledCommands.js';
+import {
+  readContextScheduled,
+  readScheduledState,
+} from './scheduledActions/actionStore.js';
+import {
+  isScheduledCapture,
+  narrowReply,
+  readHeldLoop,
+} from './scheduledActions/scheduledTurn.js';
+import {
   decideAbilityOffer,
   describeWhereabouts,
   isNamedText,
@@ -317,6 +334,7 @@ import {
   hasReviseCue,
   isHabitTurn,
   hasImportanceCue,
+  hasScheduleCue,
   hasProcedureCue,
   hasProcedureReviseCue,
   isQuestion,
@@ -454,6 +472,10 @@ export interface CaptureDoc {
   inputMode?: string;
   medium?: 'web' | 'mcp';
   via?: string | null;
+  arrivedVia?: string;
+  scheduledActionId?: string | null;
+  heldCommands?: unknown;
+  allowedKinds?: unknown;
   outsideReadScopes?: unknown;
   attachmentIds?: string[];
   route?: Route | null;
@@ -2042,6 +2064,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       runCommands: [],
       habitCommands: [],
       importanceCommands: [],
+      scheduleCommands: [],
+      scheduleDropped: [],
       soundsLike: [],
       contactPoints: [],
       connectionCommands: [],
@@ -2508,6 +2532,28 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             });
             return [];
           });
+    const isScheduleInPlay =
+      mode !== 'rest' &&
+      !isScheduledCapture(capture) &&
+      !unattendedMask.isOn &&
+      hasScheduleCue(
+        combined.text,
+        sanitizeScreen(capture.screen)?.view ?? null,
+      );
+    const contextScheduled = isScheduleInPlay
+      ? await readContextScheduled(
+          firestore,
+          base,
+          key,
+          capture.createdAt,
+          String(profile.data()?.timeZone ?? timeZone),
+        ).catch((error): Awaited<ReturnType<typeof readContextScheduled>> => {
+          logger.warn('helm.sort.scheduledUnreadable', {
+            cause: error instanceof Error ? error.name : 'error',
+          });
+          return [];
+        })
+      : [];
     const isHabitsInPlay =
       mode !== 'rest' &&
       isHabitTurn(
@@ -2634,6 +2680,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       focusedProcedure: masked.focusedProcedure,
       runs: masked.runs,
       habits: masked.habits,
+      scheduledActions: contextScheduled,
       importance: masked.importance,
       attachments: attached.media.map((item) => ({
         alias: item.alias,
@@ -2685,7 +2732,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const provider = pickProvider(combined.text, combined.reading);
     // An outside assistant's answer leaves Helm, and the person granted mail, documents and app records to Helm alone.
     const isLiveReadOffered =
-      mode !== 'rest' && !read.isOutside && isQuestion(combined.text.trim());
+      mode !== 'rest' &&
+      !read.isOutside &&
+      !isScheduledCapture(capture) &&
+      isQuestion(combined.text.trim());
     const [liveGrants, siteGrants, offCategories] = isLiveReadOffered
       ? await Promise.all([
           readLiveGrants(firestore, uid),
@@ -2829,26 +2879,30 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       });
       return { handedOver, value: loop };
     };
-    const routed = await runRouted({
-      route:
-        isRestart && timeLeft() < QUICK_LOOP_MILLIS + MIN_RESTART_MS
-          ? 'full'
-          : pickRoute({
-              text: combined.text,
-              mode,
-              isAnswer: answerTurn !== null,
-              hasTopicFocus: focusedTopic !== null,
-              hasProcedureFocus: focusedLive !== null,
-              hasMedia:
-                attached.media.length +
-                  attached.voiceIds.length +
-                  attached.unreadable.length >
-                0,
-            }),
-      runOn,
-      reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
-      isAborted: () => signal.aborted,
-    });
+    const heldLoop = readHeldLoop(capture);
+    const routed = heldLoop
+      ? { value: heldLoop, route: 'quick' as const, aborted: false }
+      : await runRouted({
+          route:
+            isScheduledCapture(capture) ||
+            (isRestart && timeLeft() < QUICK_LOOP_MILLIS + MIN_RESTART_MS)
+              ? 'full'
+              : pickRoute({
+                  text: combined.text,
+                  mode,
+                  isAnswer: answerTurn !== null,
+                  hasTopicFocus: focusedTopic !== null,
+                  hasProcedureFocus: focusedLive !== null,
+                  hasMedia:
+                    attached.media.length +
+                      attached.voiceIds.length +
+                      attached.unreadable.length >
+                    0,
+                }),
+          runOn,
+          reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
+          isAborted: () => signal.aborted,
+        });
     if ('held' in routed) {
       await failClaim(
         firestore,
@@ -2960,7 +3014,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   }
 
   const isRefusedClose = loop.terminalName === CLOSE_CONVERSATION_TOOL.name;
-  const reply = normalizeNomosReply(
+  const reply0 = normalizeNomosReply(
     isRefusedClose ? { commands: [] } : loop.terminalInput,
     {
       reading: combined.reading,
@@ -2991,6 +3045,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureVersions,
       runSteps: context.runSteps,
       habits: context.habits,
+      scheduledActions: context.scheduledActions,
       projects: context.projects,
       habitNames: context.habitNames,
       captureText: combined.text,
@@ -3011,6 +3066,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       isLearningOn,
     },
   );
+  const reply = narrowReply(reply0, claimed.capture);
   reply.mediaDropped.forEach((code) =>
     logger.info('helm.media.dropped', { code }),
   );
@@ -3033,6 +3089,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   reply.runDropped.forEach((code) => logger.info('helm.run.dropped', { code }));
   reply.habitDropped.forEach((code) =>
     logger.info('helm.habit.dropped', { code }),
+  );
+  reply.scheduleDropped.forEach((code) =>
+    logger.info('helm.schedule.dropped', { code }),
   );
   const maskedNames = unattendedMask.names;
   const hide = (text: string | null) =>
@@ -3068,6 +3127,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reply.contactPoints.length +
     reply.connectionCommands.length +
     reply.whereabouts.length +
+    reply.scheduleCommands.length +
     (reply.planDay ? 1 : 0) +
     (reply.setCurrentPlace ? 1 : 0);
   const outcome =
@@ -3134,6 +3194,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         )
       : [],
     importanceCommands: keeps ? reply.importanceCommands : [],
+    scheduleCommands: keeps ? reply.scheduleCommands : [],
+    scheduleDropped: keeps ? reply.scheduleDropped : [],
     soundsLike: keeps ? reply.soundsLike : [],
     contactPoints: keeps ? reply.contactPoints : [],
     connectionCommands: keeps ? reply.connectionCommands : [],
@@ -3182,6 +3244,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             reply.procedureDropped,
             reply.runDropped,
             reply.habitDropped,
+            reply.scheduleDropped,
             reply.importanceDropped,
             commands.length < reply.commands.length,
           )
@@ -3345,6 +3408,8 @@ async function writeResult(
     procedureCommands: ProcedureCommand[];
     runCommands: RunCommand[];
     habitCommands: HabitCommand[];
+    scheduleCommands: ScheduleCommand[];
+    scheduleDropped: ScheduleDrop[];
     importanceCommands: SetImportanceCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     contactPoints: AddContactPointCommand[];
@@ -3399,6 +3464,8 @@ async function writeResult(
     runCommands,
     habitCommands,
     importanceCommands,
+    scheduleCommands,
+    scheduleDropped,
     soundsLike,
     contactPoints,
     connectionCommands,
@@ -3607,6 +3674,7 @@ async function writeResult(
       keyDates.length > 0 ||
       connectionCommands.length > 0 ||
       whereabouts.length > 0 ||
+      scheduleCommands.length > 0 ||
       observations.length > 0 ||
       offerAbility !== null
         ? transaction.get(firestore.doc(base))
@@ -4425,6 +4493,37 @@ async function writeResult(
           habitPlan.effects.length,
       ),
     });
+    const keptSchedule = isStale ? [] : scheduleCommands;
+    const scheduledStored =
+      keptSchedule.length > 0
+        ? await readScheduledState(transaction, firestore, base, key)
+        : new Map();
+    const schedulePlan = planScheduledActions({
+      commands: keptSchedule,
+      stored: scheduledStored,
+      homeZone: String(profileSnap?.get('timeZone') ?? timeZone),
+      now,
+      captureId: captureRef.id,
+      newId: () => crypto.randomUUID(),
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length,
+      ),
+    });
+    const scheduleNotKept = [
+      ...schedulePlan.notKept,
+      ...(isStale ? [] : scheduleDropped).flatMap(
+        (code) => SCHEDULE_DROP_LINES[code] ?? [],
+      ),
+    ];
     const abilityOffer = isStale
       ? null
       : decideAbilityOffer({
@@ -4444,6 +4543,7 @@ async function writeResult(
         ...connectionPlan.effectRefs,
         ...habitPlan.effectRefs,
         ...importancePlan.effectRefs,
+        ...schedulePlan.effectRefs,
       ],
       effects: [
         ...written.effects,
@@ -4454,6 +4554,7 @@ async function writeResult(
         ...connectionPlan.effects,
         ...habitPlan.effects,
         ...importancePlan.effects,
+        ...schedulePlan.effects,
       ],
       notKept: [
         ...written.notKept,
@@ -4462,6 +4563,7 @@ async function writeResult(
         ...connectionPlan.notKept,
         ...habitPlan.notKept,
         ...importancePlan.notKept,
+        ...scheduleNotKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
       linkedWhoIds: [
@@ -4480,7 +4582,8 @@ async function writeResult(
         contactPlan.isPrivate ||
         connectionPlan.isPrivate ||
         habitPlan.isPrivate ||
-        importancePlan.isPrivate,
+        importancePlan.isPrivate ||
+        schedulePlan.isPrivate,
     };
     const plan = sentMedia
       ? {
@@ -4533,6 +4636,7 @@ async function writeResult(
       ...askPlan.questions,
       ...habitPlan.questions,
       ...importancePlan.questions,
+      ...schedulePlan.questions,
       ...impliedQuestions,
     ];
     const followUp =
@@ -4734,6 +4838,25 @@ async function writeResult(
       importancePlan.updates.forEach(({ collection, id, data }) =>
         transaction.update(firestore.doc(`${base}/${collection}/${id}`), data),
       );
+      schedulePlan.creates.forEach(({ id, doc }) =>
+        transaction.create(
+          firestore.doc(`${base}/scheduledActions/${id}`),
+          doc,
+        ),
+      );
+      schedulePlan.updates.forEach(({ id, data }) =>
+        transaction.update(
+          firestore.doc(`${base}/scheduledActions/${id}`),
+          data,
+        ),
+      );
+      if (
+        profileSnap?.exists &&
+        schedulePlan.creates.length + schedulePlan.updates.length > 0
+      )
+        transaction.update(firestore.doc(base), {
+          scheduledActionsChangedAt: now,
+        });
       if (
         profileSnap?.exists &&
         habitPlan.creates.length + habitPlan.updates.length > 0
@@ -4802,6 +4925,7 @@ async function writeResult(
               ...connectionPlan.lines,
               ...habitPlan.lines,
               ...importancePlan.lines,
+              ...schedulePlan.lines,
             ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
@@ -4811,6 +4935,8 @@ async function writeResult(
               plan.lines,
               habitPlan.lines,
               importancePlan.lines,
+              schedulePlan.lines,
+              scheduleNotKept,
               noted.refused,
               liveRefused,
               askPlan.isDeferred,
@@ -4913,6 +5039,9 @@ async function writeResult(
           habitPlan.notKept.length +
           importancePlan.lines.length +
           importancePlan.notKept.length +
+          schedulePlan.lines.length +
+          scheduleNotKept.length +
+          schedulePlan.questions.length +
           wherePlan.lines.length +
           wherePlan.notKept.length +
           contactPlan.lines.length +

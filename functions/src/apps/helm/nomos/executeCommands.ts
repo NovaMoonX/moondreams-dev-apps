@@ -214,7 +214,8 @@ export interface EffectRef {
     | 'procedureRuns'
     | 'habits'
     | 'habitDays'
-    | 'connections';
+    | 'connections'
+    | 'scheduledActions';
   docId: string;
 }
 

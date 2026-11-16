@@ -22,6 +22,11 @@ import {
 import { ASK_WORDS } from './summaries.js';
 import { readHabitCommands, type HabitDrop } from './readHabitCommands.js';
 import {
+  readScheduledCommands,
+  type ScheduleCommand,
+  type ScheduleDrop,
+} from './readScheduledCommands.js';
+import {
   readImportanceCommands,
   type ImportanceDrop,
 } from './readImportanceCommands.js';
@@ -188,6 +193,10 @@ const KNOWN_KEYS = new Set([
   'keyDateKind',
   'keyDateLabel',
   'dateSpanId',
+  'startsSpanId',
+  'timeSpanId',
+  'fromSpanId',
+  'toSpanId',
   'comesBack',
   'projectRef',
   'projectEmoji',
@@ -2083,6 +2092,8 @@ export function normalizeNomosReply(
     runSteps?: AliasBook;
     /** The person's habits, by alias (h1, h2, …). */
     habits?: AliasBook;
+    /** The person's scheduled actions, by alias (sa1, sa2, …). */
+    scheduledActions?: AliasBook;
     /** The person's projects and goals, by alias (p1, p2, …). */
     projects?: AliasBook;
     /** Each habit's real name by id, for the check that words in the turn name it. */
@@ -2124,6 +2135,8 @@ export function normalizeNomosReply(
   runDropped: RunDrop[];
   habitCommands: HabitCommand[];
   habitDropped: HabitDrop[];
+  scheduleCommands: ScheduleCommand[];
+  scheduleDropped: ScheduleDrop[];
   importanceCommands: SetImportanceCommand[];
   importanceDropped: ImportanceDrop[];
   soundsLike: NoteSoundsLikeCommand[];
@@ -2258,6 +2271,13 @@ export function normalizeNomosReply(
       now: context.now,
     },
   );
+  const { commands: scheduleCommands, dropped: scheduleDropped } =
+    readScheduledCommands(items, {
+      actions: context.scheduledActions,
+      reading: context.reading,
+      captureText: context.captureText,
+      timeZone: context.timeZone,
+    });
   const { commands: importanceCommands, dropped: importanceDropped } =
     readImportanceCommands(items, {
       projects: context.projects,
@@ -2372,6 +2392,8 @@ export function normalizeNomosReply(
     runDropped,
     habitCommands,
     habitDropped,
+    scheduleCommands,
+    scheduleDropped,
     importanceCommands,
     importanceDropped,
     soundsLike,

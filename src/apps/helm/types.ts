@@ -126,6 +126,8 @@ export interface HelmProfile {
   patternsCheckedOn: string | null;
   /** The next night's reflection is due from this instant; null when nothing new waits. */
   reflectDueAt: number | null;
+  /** Stamped with any change to a scheduled action, so the server looks at the person's actions within minutes; null on a profile from before. */
+  scheduledActionsChangedAt: number | null;
   /** When the person last chose Forget what you've noticed; what was made at or before it is hidden. */
   forgottenAt: number | null;
   /** The day key the weekly clean-up last ran; null until it has. */
@@ -370,7 +372,9 @@ export interface Capture {
   /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
   ttsProvider: string | null;
   /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
-  arrivedVia: 'direct' | 'dropBox';
+  arrivedVia: 'direct' | 'dropBox' | 'scheduled';
+  /** The scheduled action a run's turn was made for; null on any other turn. */
+  scheduledActionId?: string | null;
   /** Whether the turn acted, was only noted, or answered a question; null on a turn from before. */
   disposition: CaptureDisposition | null;
   /** 'mcp' for a turn an outside assistant (Claude, Gemini) sent; 'web' for every turn typed or spoken in Helm. */
@@ -723,6 +727,65 @@ export interface ConnectionSealed {
 /** A connection after its words are opened; one that would not open keeps `isUnreadable` and is never drawn. */
 export interface OpenConnection
   extends Omit<Connection, 'sealed'>, ConnectionSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+export type ScheduledActionKind = 'commands' | 'prompt';
+
+export type ScheduledOutcome =
+  'done' | 'needsYou' | 'failed' | 'skipped' | 'waiting';
+
+export type ScheduledFailReason =
+  'notConnected' | 'grantExpired' | 'notAllowed' | 'runFailed' | 'ruleInvalid';
+
+/** `apps/helm/users/{uid}/scheduledActions/{id}`: something the assistant does for the person at a set time. `repeat` is an RRULE body read only through `@/utils/repeatRule`; every occurrence is a day and `time` is applied after, in `timeZone` or the home zone. */
+export interface ScheduledAction {
+  status: 'active' | 'paused' | 'ended';
+  endedBy: 'person' | 'finished' | null;
+  repeat: string | null;
+  startsOn: string;
+  time: string;
+  timeZone: string | null;
+  /** The original day keys of future runs skipped, at most 100. */
+  skipped: string[];
+  /** Original day key to the day and time that run happens instead, once; at most 20 future. */
+  moved: Record<string, { day: string; time: string }>;
+  nextRunAt: number | null;
+  nextRunKey: string | null;
+  splitFromId: string | null;
+  kind: ScheduledActionKind;
+  /** The command kinds a run may write; checked at create and at each run. */
+  allowed: string[];
+  needsApproval: boolean;
+  lastRunAt: number | null;
+  lastRunCaptureId: string | null;
+  /** The set time of the last run, which its outcome line shows. */
+  lastRunDueAt: number | null;
+  lastOutcome: ScheduledOutcome | null;
+  lastFailReason: ScheduledFailReason | null;
+  /** Date-only, inclusive; runs on a day between them are paused. */
+  pausedFrom: number | null;
+  pausedUntil: number | null;
+  /** Set by the device to run it once now, only before its next scheduled run; the server clears it. */
+  runNowAt: number | null;
+  createdBy: 'person' | 'nomos';
+  sourceCaptureId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface ScheduledActionSealed {
+  title: string;
+  /** The person's words; what a `prompt` action does. */
+  instruction: string | null;
+  /** The commands a `commands` action runs, as the executor reads them. */
+  heldCommands: Record<string, unknown>[] | null;
+}
+
+export interface OpenScheduledAction
+  extends Omit<ScheduledAction, 'sealed'>, ScheduledActionSealed {
   id: string;
   isUnreadable: boolean;
 }
@@ -1239,7 +1302,8 @@ export interface EffectRef {
     | 'habits'
     | 'habitDays'
     | 'connections'
-    | 'patterns';
+    | 'patterns'
+    | 'scheduledActions';
   docId: string;
 }
 

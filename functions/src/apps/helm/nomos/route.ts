@@ -95,6 +95,16 @@ const HABIT_CUES = new Set(['habit', 'habits', ...MEDICINE_CUES]);
 /** Whether the words could make a habit: "habit", or a medicine or vitamin word. A bare "every" or "daily" is not enough, since a task or a note says those too. */
 export const hasHabitCue = (text: string) => hasWordIn(HABIT_CUES, text);
 
+const SCHEDULE_CUES = new Set(
+  'schedule scheduled every each weekly daily monthly yearly weekdays weekends annually nightly hourly other'.split(
+    ' ',
+  ),
+);
+
+/** Whether the words could set or change something done on a schedule: "every", "weekly", "schedule", as a word of its own; on Browse › Scheduled any words could. */
+export const hasScheduleCue = (text: string, view: string | null = null) =>
+  view === 'scheduled' || hasWordIn(SCHEDULE_CUES, text);
+
 const IMPORTANCE_CUES = new Set(
   'matter matters important importance priority priorities first before after order equally wait waits waiting whenever'.split(
     ' ',

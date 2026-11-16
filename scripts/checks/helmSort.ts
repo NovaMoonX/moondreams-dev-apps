@@ -62,6 +62,8 @@ import {
   toContextHeard,
 } from '../../functions/src/apps/helm/nomos/heardNames.ts';
 import { readPrivacyFacts } from '../../functions/src/apps/helm/privacy.ts';
+import { readDates } from '../../functions/src/apps/helm/dateReading.ts';
+import { planScheduledActions } from '../../functions/src/apps/helm/nomos/planScheduledActions.ts';
 import { planSoundsLike } from '../../functions/src/apps/helm/nomos/planSoundsLike.ts';
 import type { MentionRead } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
@@ -2321,6 +2323,158 @@ test('Undo takes the heard form and the earlier link back', () => {
     writes.includes('sealed.soundsLike') || writes.includes('soundsLike'),
   );
   assert.ok(writes.includes('"whoIds":["who-doyle"]'));
+});
+
+const SAID_NOW = Date.UTC(2026, 10, 16, 12, 0);
+const SAID_NEW_ID = (() => {
+  const state = { count: 0 };
+  return () => `sa-${(state.count += 1)}`;
+})();
+const planSaid = (
+  text: string,
+  item: Record<string, unknown>,
+  pick: (spans: { id: string; text: string }[]) => Record<string, unknown>,
+) => {
+  const reading: CaptureReading = {
+    people: [],
+    places: [],
+    documents: [],
+    commands: [],
+    isUrgent: false,
+    dates: readDates(text, { now: SAID_NOW, timeZone: 'America/New_York' }),
+    addressedAs: null,
+  };
+  const reply = normalizeNomosReply(
+    {
+      commands: [
+        {
+          kind: 'scheduleAction',
+          title: 'Take out the bins',
+          startsSpanId: null,
+          timeSpanId: null,
+          instruction: null,
+          heldCommands: [{ kind: 'createTask', title: 'Take out the bins' }],
+          allowedKinds: null,
+          actionAlias: null,
+          quote: text,
+          ...item,
+          ...pick(reading.dates),
+        },
+      ],
+    },
+    {
+      reading,
+      aliases: createAliasBook('t'),
+      captureText: text,
+      now: SAID_NOW,
+      timeZone: 'America/New_York',
+    },
+  );
+  return {
+    reply,
+    plan: planScheduledActions({
+      commands: reply.scheduleCommands,
+      stored: new Map(),
+      homeZone: 'America/New_York',
+      now: SAID_NOW,
+      captureId: 'cap-1',
+      newId: SAID_NEW_ID,
+      seal,
+      room: 20,
+    }),
+  };
+};
+const repeatOf = (over: Record<string, unknown>) => ({
+  repeat: {
+    freq: 'weekly',
+    interval: 1,
+    weekdays: [],
+    monthBy: null,
+    nth: null,
+    endsKind: 'never',
+    untilSpanId: null,
+    count: null,
+    ...over,
+  },
+});
+
+test('said: "every other Tuesday at 8" becomes a fortnightly Tuesday rule at 8:00', () => {
+  const { plan } = planSaid(
+    'Every other Tuesday at 8 take out the bins',
+    repeatOf({ interval: 2, weekdays: ['TU'] }),
+    (spans) => ({
+      timeSpanId: spans.find((one) => one.text.includes('8'))?.id ?? null,
+    }),
+  );
+  assert.equal(plan.creates.length, 1);
+  assert.match(
+    String(plan.creates[0].doc.repeat),
+    /FREQ=WEEKLY;INTERVAL=2.*BYDAY=TU/,
+  );
+  assert.equal(plan.creates[0].doc.time, '08:00');
+  assert.ok(
+    plan.lines.some((line) => /Every 2 weeks on Tuesday/.test(line)),
+    plan.lines.join(' | '),
+  );
+});
+
+test('said: "the last Friday of every month" becomes the last-Friday rule', () => {
+  const { plan } = planSaid(
+    'The last Friday of every month take out the bins',
+    repeatOf({
+      freq: 'monthly',
+      monthBy: 'nthWeekday',
+      nth: -1,
+      weekdays: ['FR'],
+    }),
+    () => ({}),
+  );
+  assert.equal(plan.creates.length, 1);
+  assert.match(String(plan.creates[0].doc.repeat), /FREQ=MONTHLY.*BYDAY=-1FR/);
+  assert.ok(
+    plan.lines.some((line) => /last Friday/.test(line)),
+    plan.lines.join(' | '),
+  );
+});
+
+test('said: "weekdays at 7 until the end of March" keeps the end date', () => {
+  const { plan } = planSaid(
+    'Weekdays at 7 until March 31 2027 take out the bins',
+    repeatOf({ weekdays: ['MO', 'TU', 'WE', 'TH', 'FR'], endsKind: 'on' }),
+    (spans) => ({
+      repeat: {
+        ...repeatOf({
+          weekdays: ['MO', 'TU', 'WE', 'TH', 'FR'],
+          endsKind: 'on',
+        }).repeat,
+        untilSpanId: spans.find((one) => /2027/.test(one.text))?.id ?? null,
+      },
+      timeSpanId: spans.find((one) => /\b7\b/.test(one.text))?.id ?? null,
+    }),
+  );
+  assert.equal(plan.creates.length, 1, plan.notKept.join(' | '));
+  assert.match(String(plan.creates[0].doc.repeat), /UNTIL=20270331/);
+});
+
+test('said: "every 2 hours" makes nothing and asks for the times', () => {
+  const { plan } = planSaid(
+    'Every 2 hours take out the bins',
+    repeatOf({ freq: 'subDaily' }),
+    () => ({}),
+  );
+  assert.equal(plan.creates.length, 0);
+  assert.equal(plan.notKept.length, 1);
+  assert.match(plan.notKept[0], /once a day at most/);
+});
+
+test('said: "at 8 and 6" offers one daily action for each time, made only on a yes', () => {
+  const { plan } = planSaid(
+    'Take out the bins at 8 am and at 6 pm every day',
+    repeatOf({ freq: 'subDaily' }),
+    () => ({}),
+  );
+  assert.equal(plan.creates.length, 0);
+  assert.equal(plan.questions.length, 1);
 });
 
 const failures: string[] = [];

@@ -21,6 +21,9 @@ import { MAX_CONTEXT_TOPICS } from './nomos/commands.js';
 import { planResolveHabit } from './nomos/planHabitCommands.js';
 import { importanceToday, readImportanceRecordsIn } from './importanceStore.js';
 import { planResolveImportance } from './nomos/planImportance.js';
+import { planResolveScheduled } from './nomos/planScheduledActions.js';
+import { buildHabitAnswerExecution } from './nomos/planHabitCommands.js';
+import { readScheduledState } from './scheduledActions/actionStore.js';
 import {
   planResolveConnection,
   type PlanWho,
@@ -367,6 +370,64 @@ export const resolveHelmQuestion = onCall(
         });
         return {
           executionId: habitResult.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === 'splitDaily') {
+        const now = Date.now();
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const stored =
+          optionId === 'yes'
+            ? await readScheduledState(transaction, firestore, base, key)
+            : new Map();
+        const scheduled = planResolveScheduled({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          stored,
+          homeZone: String(profileSnap.get('timeZone') ?? 'UTC'),
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          newId: () => crypto.randomUUID(),
+          seal,
+        });
+        if (scheduled.refused !== null) {
+          throw toRefusal(scheduled.refused, 'person');
+        }
+        const plan = scheduled.plan;
+        plan?.creates.forEach(({ id, doc }) =>
+          transaction.create(
+            firestore.doc(`${base}/scheduledActions/${id}`),
+            doc,
+          ),
+        );
+        if (plan && plan.creates.length > 0)
+          transaction.update(firestore.doc(base), {
+            scheduledActionsChangedAt: now,
+          });
+        if (plan && plan.effects.length > 0)
+          transaction.create(
+            executionRef,
+            buildHabitAnswerExecution(plan, {
+              captureId,
+              questionId,
+              now,
+              seal,
+            }),
+          );
+        transaction.update(captureRef, {
+          ...scheduled.capture,
+          sealed: seal(scheduled.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: plan && plan.effects.length > 0 ? executionRef.id : null,
           isStale: false,
         };
       }
