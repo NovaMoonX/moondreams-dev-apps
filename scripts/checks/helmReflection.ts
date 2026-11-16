@@ -1,4 +1,4 @@
-// The nightly reflection against the Firestore emulator with the fake batch client: `npm run check:helm-reflection`.
+// The nightly reflection against the Firestore emulator with the fake batch provider: `npm run check:helm-reflection`.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -25,8 +25,8 @@ const { toAlias } =
   await import('../../functions/src/apps/helm/reflection/buildReflectRequest.ts');
 const { removeFromOpenRuns, RUNS_PATH, statePath } =
   await import('../../functions/src/apps/helm/reflection/reflectionRuns.ts');
-const { createFakeBatchClient } =
-  await import('../../functions/src/ai/providers/fakeBatches.ts');
+const { createFakeBatchProvider } =
+  await import('../../functions/src/ai/providers/fakeBatchProvider.ts');
 const { DEV_KEYRING } = await import('../../functions/src/appKeys/keyring.ts');
 const { wrapDataKey } = await import('../../functions/src/appKeys/wrap.ts');
 const { deriveSeedDataKey, openForHelm, sealForHelm, wrappedKeyPath } =
@@ -34,7 +34,7 @@ const { deriveSeedDataKey, openForHelm, sealForHelm, wrappedKeyPath } =
 const { whyFingerprint } =
   await import('../../functions/src/apps/helm/goalWhy.ts');
 
-type Fixture = Parameters<typeof createFakeBatchClient>[0][number];
+type Fixture = Parameters<typeof createFakeBatchProvider>[0][number];
 
 const tests: [string, () => Promise<void>][] = [];
 const test = (name: string, run: () => Promise<void>) =>
@@ -159,12 +159,12 @@ const answer = (json: Record<string, unknown>): Fixture => ({
 });
 
 const rehearse = (fixtures: Fixture[]) => {
-  const client = createFakeBatchClient(fixtures);
+  const client = createFakeBatchProvider(fixtures);
   const prompts: string[] = [];
-  const create = client.create.bind(client);
-  client.create = (params) => {
-    prompts.push(...params.requests.map((r) => JSON.stringify(r.params)));
-    return create(params);
+  const submit = client.submit.bind(client);
+  client.submit = (requests) => {
+    prompts.push(...requests.map((r) => JSON.stringify(r)));
+    return submit(requests);
   };
   return { client, prompts };
 };
@@ -285,16 +285,17 @@ test('collecting the same answer again changes nothing and counts nothing twice'
   await pass(client, 1);
   const first = (await reflection())?.data;
   const spent = await budget();
-  const outcome = {
-    kind: 'answer' as const,
-    json: (fixture as { json: unknown }).json,
+  const result = {
+    customId,
+    outcome: 'succeeded' as const,
+    output: (fixture as { json: unknown }).json,
     usage: (fixture as unknown as { usage: never }).usage,
   };
   assert.equal(
     await applyReflectionOutcome(firestore, DEV_KEYRING, {
       runId: run.id,
       customId,
-      outcome,
+      result,
       now: NOW + 2 * HOUR,
     }),
     'skipped',
@@ -320,7 +321,7 @@ test('collecting the same answer again changes nothing and counts nothing twice'
   await applyReflectionOutcome(firestore, DEV_KEYRING, {
     runId: run.id,
     customId,
-    outcome,
+    result,
     now: NOW + 3 * HOUR,
   });
   assert.deepEqual(
@@ -609,7 +610,7 @@ test('a submitted run past its longest wait plus the grace is lost and refunded,
     reserved: 150,
     customId: 'b_inside',
   });
-  const client = createFakeBatchClient([], { isEnded: false });
+  const client = createFakeBatchProvider([], { isEnded: false });
   const result = await pass(client as ReturnType<typeof rehearse>['client'], 0);
   assert.equal(result.lost, 1);
   const all = await runs();
@@ -697,9 +698,10 @@ test('a reflection written again for the same day keeps when it was seen', async
   await applyReflectionOutcome(firestore, DEV_KEYRING, {
     runId: run.id,
     customId: 'b_again',
-    outcome: {
-      kind: 'answer' as const,
-      json: (fixture as { json: unknown }).json,
+    result: {
+      customId: 'b_again',
+      outcome: 'succeeded' as const,
+      output: (fixture as { json: unknown }).json,
       usage: NO_USAGE as never,
     },
     now: NOW + 2 * HOUR,

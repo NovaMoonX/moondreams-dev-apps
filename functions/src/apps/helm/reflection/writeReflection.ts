@@ -7,8 +7,7 @@ import {
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
-import type { BatchOutcome } from '../../../ai/batches.js';
-import { BATCH_JOBS } from '../../../ai/batchJobs.js';
+import type { BatchResult } from '../../../ai/batch.js';
 import { getUsageCost } from '../../../ai/models.js';
 import type { Keyring } from '../../../appKeys/keyring.js';
 import { recordAiSpendIn } from '../aiLimits.js';
@@ -30,6 +29,7 @@ import {
   releaseLeaseIn,
   RUNS_PATH,
   statePath,
+  REFLECT_BATCH,
   type ReflectionRun,
   type ReflectionState,
   type RunRequest,
@@ -290,24 +290,24 @@ export async function applyReflectionOutcome(
   input: {
     runId: string;
     customId: string;
-    outcome: BatchOutcome;
+    result: BatchResult;
     now: number;
   },
 ): Promise<ReflectionResult> {
-  const { runId, customId, outcome, now } = input;
+  const { runId, customId, result: batchResult, now } = input;
   const runRef = firestore.doc(`${RUNS_PATH}/${runId}`);
   const request: RunRequest | undefined = readRun((await runRef.get()).data())
     ?.requests[customId];
   if (!request) return 'skipped';
   const { uid } = request;
   const answer =
-    outcome.kind === 'answer' && isPlainObject(outcome.json)
-      ? normalizeReflection(outcome.json)
+    batchResult.outcome === 'succeeded' && isPlainObject(batchResult.output)
+      ? normalizeReflection(batchResult.output)
       : null;
   const key = answer ? await openKey(firestore, keyring, uid) : null;
   const spent =
-    outcome.kind === 'answer'
-      ? getUsageCost('reflect', outcome.usage, { isBatch: true })
+    batchResult.outcome === 'succeeded'
+      ? getUsageCost('reflect', batchResult.usage, { isBatch: true })
       : 0;
   const base = `apps/helm/users/${uid}`;
   const profileRef = firestore.doc(base);
@@ -387,7 +387,7 @@ export async function applyReflectionOutcome(
     }
     if (decision === 'failed') {
       const attempts = state.attempts + 1;
-      const hasGivenUp = attempts >= BATCH_JOBS.reflect.maxAttempts;
+      const hasGivenUp = attempts >= REFLECT_BATCH.maxAttempts;
       releaseLeaseIn(
         transaction,
         firestore,

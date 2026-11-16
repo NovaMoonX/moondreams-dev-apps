@@ -1,4 +1,4 @@
-// One nightly-reflection pass against the emulators with a fake batch client that has ended at once: `npm run helm:reflect-tick [-- --at <iso>]`. Emulators only.
+// One nightly-reflection pass against the emulators with a fake batch provider that has ended at once: `npm run helm:reflect-tick [-- --at <iso>]`. Emulators only.
 // The functions' own copy of the SDK, so the sentinels the server code writes are the classes this client expects.
 const fn = '../../functions/node_modules';
 const { getApps, initializeApp } = await import(
@@ -22,12 +22,12 @@ if (Number.isNaN(at)) {
 
 const { runHelmReflectionPass } =
   await import('../../functions/src/apps/helm/reflection/runHelmReflection.ts');
-const { createFakeBatchClient } =
-  await import('../../functions/src/ai/providers/fakeBatches.ts');
+const { createFakeBatchProvider } =
+  await import('../../functions/src/ai/providers/fakeBatchProvider.ts');
 const { DEV_KEYRING } = await import('../../functions/src/appKeys/keyring.ts');
 
 const firestore = getFirestore();
-const client = createFakeBatchClient(
+const client = createFakeBatchProvider(
   Array.from({ length: 2000 }, () => ({
     type: 'answer' as const,
     json: { candidates: [], whyRefresh: [], noteObservations: [] },
