@@ -28,7 +28,12 @@ import {
   createOnDeviceStt,
   listenOnDevice,
 } from '@/lib/speech/onDevice/onDeviceStt';
-import { BARGE_IN_GATE, openSpeechGate } from '@/lib/speech/voice/bargeIn';
+import {
+  BARGE_IN_GATE,
+  BARGE_SUPPRESS_MS,
+  isBargeSuppressed,
+  openSpeechGate,
+} from '@/lib/speech/voice/bargeIn';
 import {
   canUseBrowserStt,
   createBrowserStt,
@@ -37,7 +42,10 @@ import {
 import { createDeepgramStt } from '@/lib/speech/voice/deepgramStream';
 import { createCloudTts } from '@/lib/speech/voice/cloudTts';
 import { createDeviceTts } from '@/lib/speech/voice/deviceTts';
-import { createPlaybackQueue } from '@/lib/speech/voice/playbackQueue';
+import {
+  createPlaybackQueue,
+  toJoinKey,
+} from '@/lib/speech/voice/playbackQueue';
 import {
   createSpeechCache,
   isOtherVoice,
@@ -94,7 +102,7 @@ interface VoiceConversationOptions {
   onCloudHeld?: (reason: CloudHeldReason) => void;
   /** Listens in the cloud while `isAllowed`, online and not held for the day; the device takes over whenever it can't (the downloaded model, else the browser's recognition). Null listens on the device only. */
   cloudListening?: { tokenSource: VoiceTokenSource; isAllowed: boolean } | null;
-  /** Speaks a `reply` or `summary` in the cloud while `isAllowed`, online and not held for the day; the device voice takes over for a line whenever the cloud can't speak it. An `ack` always stays on the device, and so does the rest of a conversation once two lines in a row have fallen back. Null speaks on the device only. */
+  /** Speaks a `reply` or `summary` in the cloud while `isAllowed`; the device voice covers a line the cloud can't, and the rest of a conversation after two in a row fail. An `ack` stays on the device. Null: device only. */
   cloudSpeaking?: {
     source: SpeechSource;
     isAllowed: boolean;
@@ -122,9 +130,8 @@ interface VoiceConversationOptions {
 }
 
 export interface VoiceLineProgress {
-  /** How far through the line being said the voice is (0 to 1); 0 when a line starts. */
   get: () => number;
-  /** Called as the sound moves on, about every 150 ms, so a screen can follow it without rendering each time; returns how to stop. */
+  /** Called as the sound moves on, about every 150 ms; returns how to stop. */
   subscribe: (listener: (fraction: number) => void) => () => void;
 }
 
@@ -160,7 +167,7 @@ const QUIET_MS = 8000;
 const CONVERSATION_IDLE_MS = 10 * 60 * 1000;
 // A conversation's first cloud line may meet a cold function on top of the usual sign-in and App Check waits.
 const FIRST_LINE_FIRST_BYTE_MS = 6000;
-// Two cloud lines in a row that fall back make the rest of the conversation the device voice; one slow line never does.
+// Two cloud lines in a row that fall back latch the device voice; one slow line never does.
 const CLOUD_FAILURES_MAX = 2;
 const FOLLOW_UP_MS = 8000;
 const LIVE_IDLE_MS = 2 * 60 * 1000;
@@ -290,7 +297,8 @@ export function useVoiceConversation({
     speechHeldDay: null as string | null,
     isDeviceSticky: false,
     cloudFailures: 0,
-    isBargeSuppressed: false,
+    bargeSuppressedUntil: 0,
+    suppressId: 0,
     voice: null as SpeechVoice | null,
     hasSpokenCloud: false,
     lastLineAt: null as number | null,
@@ -391,11 +399,10 @@ export function useVoiceConversation({
           onHeld: () => {
             run.current.speechHeldDay = today;
           },
-          onFallback: () => {
-            run.current.cloudFailures += 1;
-            if (run.current.cloudFailures >= CLOUD_FAILURES_MAX) {
-              run.current.isDeviceSticky = true;
-            }
+          onFallback: countCloudFailure,
+          onCut: countCloudFailure,
+          onPlayed: () => {
+            run.current.cloudFailures = 0;
           },
         });
       },
@@ -428,6 +435,13 @@ export function useVoiceConversation({
     const before = run.current.mode;
     run.current.mode = reduceListening(before, event, TAP_CONFIG);
     return getListeningEffect(before, run.current.mode);
+  };
+
+  const countCloudFailure = () => {
+    run.current.cloudFailures += 1;
+    if (run.current.cloudFailures >= CLOUD_FAILURES_MAX) {
+      run.current.isDeviceSticky = true;
+    }
   };
 
   const clearLatch = () => {
@@ -482,9 +496,18 @@ export function useVoiceConversation({
     run.current.cancelListening?.();
   };
 
-  // A line's own echo can pass the gate; once a listen over it came to nothing the microphone stays shut for that line, so it isn't opened and dropped again and again.
+  // A line's own echo can pass the gate, so after an unconfirmed listen over it the microphone stays shut a few seconds.
+  const suppressBarge = () => {
+    run.current.bargeSuppressedUntil = Date.now() + BARGE_SUPPRESS_MS;
+    window.clearTimeout(run.current.suppressId);
+    run.current.suppressId = window.setTimeout(
+      syncBargeGate,
+      BARGE_SUPPRESS_MS + 20,
+    );
+  };
+
   const dropUnconfirmed = () => {
-    run.current.isBargeSuppressed = true;
+    suppressBarge();
     abortPending();
   };
 
@@ -538,7 +561,7 @@ export function useVoiceConversation({
       window.clearTimeout(run.current.pending.timerId);
       run.current.pending = null;
       run.current.isCancelled = true;
-      run.current.isBargeSuppressed = true;
+      suppressBarge();
       queueRef.current?.unduck();
     }
     endListen();
@@ -612,7 +635,6 @@ export function useVoiceConversation({
     };
   });
 
-  // The microphone is open on the device only while a line that its echo cancellation can hear (one through the page's audio, never the system voice) is making sound, and nothing leaves it until the person speaks (and nothing at all when the model on the device listens).
   const syncBargeGate = () => {
     if (run.current.isFollowUp) return;
     const cloud = latest.current.cloudListening;
@@ -623,7 +645,7 @@ export function useVoiceConversation({
       !latest.current.isMuted &&
       !run.current.isLiveMuted &&
       run.current.mode.phase === 'OFF' &&
-      !run.current.isBargeSuppressed &&
+      !isBargeSuppressed(run.current.bargeSuppressedUntil, Date.now()) &&
       (queueRef.current?.isPlayingThroughWebAudio() ?? false) &&
       pickListener({
         isOnline: navigator.onLine,
@@ -963,7 +985,7 @@ export function useVoiceConversation({
       turnKey: number;
       /** The person may answer once this line has been said: when it is the last one waiting, a short window opens in which speaking starts a listen without a tap. */
       canAnswer?: boolean;
-      /** The line answers something the person said earlier, not a newer turn: when a line is playing or waiting it is said after it instead of cutting it off. */
+      /** The line answers an earlier turn, whose key `turnKey` is: it is said after what plays or waits, and dropped if a newer turn has spoken since. */
       joinsLine?: boolean;
     },
   ): Promise<VoiceSpoken> => {
@@ -982,10 +1004,16 @@ export function useVoiceConversation({
       return Promise.resolve({ status: 'cancelled', adapterId: null });
     }
     const { joinsLine = false, canAnswer = false, ...line } = options;
-    const turnKey =
-      joinsLine && (queueRef.current?.isActive() ?? false)
-        ? run.current.turnKey
-        : options.turnKey;
+    const turnKey = joinsLine
+      ? toJoinKey({
+          turnKey: options.turnKey,
+          currentKey: run.current.turnKey,
+          isActive: queueRef.current?.isActive() ?? false,
+        })
+      : options.turnKey;
+    if (turnKey === null) {
+      return Promise.resolve({ status: 'cancelled', adapterId: null });
+    }
     run.current.turnKey = Math.max(run.current.turnKey, turnKey);
     const { lastLineAt } = run.current;
     if (
@@ -1000,7 +1028,7 @@ export function useVoiceConversation({
       onProgress: lineProgress.emit,
       onStart: () => {
         run.current.liveAt = Date.now();
-        run.current.isBargeSuppressed = false;
+        run.current.bargeSuppressedUntil = 0;
         lineProgress.emit(0);
         setSaying(text);
         setIsSounding(true);
@@ -1010,7 +1038,6 @@ export function useVoiceConversation({
     void spoken.then((result) => {
       run.current.liveAt = Date.now();
       if (result.status !== 'cancelled') defer(() => setIsThinking(false));
-      if (result.adapterId?.startsWith('cloud:')) run.current.cloudFailures = 0;
       if (result.status === 'spoken' && line.priority !== 'ack') {
         run.current.lastLine = { text, voice: run.current.voice };
       }
@@ -1147,6 +1174,7 @@ export function useVoiceConversation({
       window.clearTimeout(run.current.holdId);
       window.clearTimeout(run.current.showId);
       window.clearTimeout(run.current.pending?.timerId);
+      window.clearTimeout(run.current.suppressId);
       run.current.cancelListening?.();
       pauseOnHide.current();
       queueRef.current?.clear();
@@ -1336,7 +1364,6 @@ export function useVoiceConversation({
     isLive,
     /** The live conversation's microphone is paused. */
     isLiveMuted,
-    /** How far through the line being said the voice is, for a screen that follows it. */
     lineProgress: lineProgress.reader,
     /** What the person last said in this live conversation, and the last line said back (still shown once it has played). */
     liveSaid,

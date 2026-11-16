@@ -12,7 +12,7 @@ import {
   type AnswerScope,
   type SourceRef,
 } from './commands.js';
-import { cutAtWord } from './normalizeNomosReply.js';
+import { cutAtWord, readSpokenRecordsLine } from './normalizeNomosReply.js';
 import { SPOKEN_MAX_CHARS } from './spoken.js';
 
 export const GENERAL_LABEL = 'Not from your records:';
@@ -91,28 +91,46 @@ const toQuoteText = (snippet: string) =>
     ? `${snippet.slice(0, QUOTE_CAP - 1).trimEnd()}…`
     : snippet;
 
+/** Whole sentences that fit `cap`, or nothing when not even the first does. */
+const cutAtSentence = (text: string, cap: number) => {
+  if (text.length <= cap) return text;
+  const sentences = text.match(/\S.*?[.!?]+(?=\s|$)/g) ?? [];
+  return (
+    sentences
+      .map((_, index) => sentences.slice(0, index + 1).join(' '))
+      .filter((prefix) => prefix.length <= cap)
+      .at(-1) ?? ''
+  );
+};
+
 const toSpoken = (input: {
-  records: string | null;
+  records: string;
+  isRecordsSpoken: boolean;
   general: string | null;
   isHealth: boolean;
 }) => {
   const caution = input.isHealth ? ` ${HEALTH_CAUTION_SPOKEN}` : '';
   const room = SPOKEN_MAX_CHARS - caution.length;
-  const generalLength = input.general
-    ? GENERAL_LABEL.length + 1 + input.general.length
-    : 0;
-  const records = input.records
-    ? cutAtWord(
-        input.records,
-        input.general
-          ? Math.max(MIN_RECORDS_SPOKEN, room - generalLength - 1)
-          : room,
-      )
-    : '';
+  const label = `${GENERAL_LABEL} `;
+  if (input.isRecordsSpoken) {
+    const records =
+      cutAtSentence(input.records, room) || cutAtWord(input.records, room);
+    const general = input.general
+      ? cutAtSentence(input.general, room - records.length - 1 - label.length)
+      : '';
+    return `${[records, general && `${label}${general}`].filter(Boolean).join(' ')}${caution}`;
+  }
+  const generalLength = input.general ? label.length + input.general.length : 0;
+  const records = cutAtWord(
+    input.records,
+    input.general
+      ? Math.max(MIN_RECORDS_SPOKEN, room - generalLength - 1)
+      : room,
+  );
   const general = input.general
-    ? `${GENERAL_LABEL} ${cutAtWord(
+    ? `${label}${cutAtWord(
         input.general,
-        Math.max(0, room - records.length - 1 - GENERAL_LABEL.length - 1),
+        Math.max(0, room - records.length - 1 - label.length),
       )}`.trim()
     : '';
   return `${[records, general].filter(Boolean).join(' ')}${caution}`;
@@ -165,8 +183,11 @@ export function buildAnswer(
     command.generalText && mayAddGeneral ? oneLine(command.generalText) : null;
   if (command.generalText && !general) onDrop('answer-general-refused');
 
+  const spokenRecords = fromRecords
+    ? readSpokenRecordsLine(command.fromRecordsSpoken, fromRecords)
+    : null;
   const recordsSpoken = fromRecords
-    ? oneLine(command.fromRecordsSpoken || fromRecords)
+    ? (spokenRecords ?? fromRecords)
     : NOTHING_LINE;
   const generalSpoken = general
     ? oneLine(command.generalSpoken || general)
@@ -228,6 +249,7 @@ export function buildAnswer(
     quotedSourceKeys,
     spoken: toSpoken({
       records: recordsSpoken,
+      isRecordsSpoken: spokenRecords !== null,
       general: generalSpoken,
       isHealth: command.isHealth,
     }),

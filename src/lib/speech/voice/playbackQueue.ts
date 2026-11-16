@@ -24,14 +24,18 @@ interface Playing {
   progress: ReturnType<typeof createProgress>;
 }
 
-const ESTIMATE_CHARS_PER_SECOND = 14;
+export const SPOKEN_CHARS_PER_SECOND = 14;
 const ESTIMATE_TICK_MS = 150;
 const ESTIMATE_CEILING = 0.96;
+// A voice that reports only at chunk starts is estimated forward from its last report, but never further than a chunk.
+const ESTIMATE_RUN_CHARS = 120;
 
-/** A line's progress only ever moves forward; until its adapter reports any, a clock estimate from the text's length stands in, short of the end. */
+/** A line's progress only moves forward: the voice's reports, with a clock estimate between them, short of the end. */
 const createProgress = (line: Line) => {
   const state = {
     last: 0,
+    reportedAt: 0,
+    reportedFraction: 0,
     isReported: false,
     timerId: null as ReturnType<typeof setInterval> | null,
   };
@@ -48,18 +52,25 @@ const createProgress = (line: Line) => {
   return {
     fromAdapter: (fraction: number) => {
       state.isReported = true;
+      state.reportedAt = Date.now();
+      state.reportedFraction = Math.min(1, Math.max(0, fraction));
       report(fraction);
     },
     start: () => {
       if (!line.onProgress || state.timerId !== null) return;
-      const startedAt = Date.now();
+      state.reportedAt = Date.now();
       state.timerId = setInterval(() => {
-        if (state.isReported) return;
+        const chars =
+          ((Date.now() - state.reportedAt) / 1000) * SPOKEN_CHARS_PER_SECOND;
         report(
           Math.min(
             ESTIMATE_CEILING,
-            ((Date.now() - startedAt) / 1000) *
-              (ESTIMATE_CHARS_PER_SECOND / Math.max(1, line.text.length)),
+            state.reportedFraction +
+              Math.min(
+                state.isReported ? ESTIMATE_RUN_CHARS : Infinity,
+                chars,
+              ) /
+                Math.max(1, line.text.length),
           ),
         );
       }, ESTIMATE_TICK_MS);
@@ -72,6 +83,20 @@ const createProgress = (line: Line) => {
   };
 };
 
+/** The key a line joining the queue takes, or null to drop it: never newer than the queue's, and dropped when a newer turn has spoken. */
+export const toJoinKey = ({
+  turnKey,
+  currentKey,
+  isActive,
+}: {
+  turnKey: number;
+  currentKey: number;
+  isActive: boolean;
+}) => {
+  if (!isActive) return turnKey;
+  return turnKey < currentKey ? null : currentKey;
+};
+
 /** One line plays at a time. Within a turn an `ack` goes before a `reply` or `summary` that is waiting, and never cuts one off; a line of a newer turn cancels the older turn's playing and waiting lines; `clear` stops everything. */
 export const createPlaybackQueue = ({
   pick,
@@ -80,7 +105,7 @@ export const createPlaybackQueue = ({
 }: {
   pick: (priority: SpeechPriority) => TtsAdapter;
   onActiveChange?: (isActive: boolean) => void;
-  /** What the playing line's `isPlayingThroughWebAudio` says may have changed: its sound began, or it fell back to another voice. */
+  /** The playing line's sound began or it changed voice. */
   onRouteChange?: () => void;
 }) => {
   const state = {
@@ -160,7 +185,7 @@ export const createPlaybackQueue = ({
         priority: SpeechPriority;
         turnKey: number;
         onStart?: () => void;
-        /** How far through the line the sound is (0 to 1); never goes back, and an estimate from the text's length runs until the voice reports its own. */
+        /** How far through the line the sound is (0 to 1); never goes back. */
         onProgress?: (fraction: number) => void;
       },
     ) =>

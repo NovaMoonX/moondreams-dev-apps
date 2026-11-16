@@ -1,7 +1,7 @@
 import { readAloud } from '@/lib/speech/readAloud';
 import type { TtsAdapter } from '@/lib/speech/voice/types';
 
-/** Speaks through `readAloud` (text written out for the ear first): the natural voice when `isNatural` and it is ready, the system voice otherwise. `isPlayingThroughWebAudio` follows the voice actually heard, so a natural voice that gave way to the system voice says so. */
+/** Speaks through `readAloud`: the natural voice when `isNatural` and ready, the system voice otherwise. */
 export const createDeviceTts = ({
   isNatural,
   lang,

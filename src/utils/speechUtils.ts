@@ -3,8 +3,9 @@ import { splitSentences } from '@/lib/speech/naturalVoice/sentences';
 const MIN_SPEAK_GUARD_MS = 4000;
 const MAX_SPEAK_GUARD_MS = 60_000;
 const SPEAK_MS_PER_CHAR = 90;
-// The guard only ends a reading the browser has stopped reporting; one still speaking is waited on, up to this long past it.
-const GUARD_EXTENSION_MS = 120_000;
+// A reading still reporting progress outlasts the guard; one silent longer than its rest at a slow pace is stuck.
+const SLOW_SPEAK_MS_PER_CHAR = 130;
+const STUCK_MARGIN_MS = 5000;
 const GUARD_POLL_MS = 1000;
 // Chrome stops a single utterance after about 15 seconds, so a reading is queued a sentence or two at a time.
 const CHUNK_MIN_CHARS = 40;
@@ -21,7 +22,7 @@ interface SpeakOptions {
   /** Gives up when the reading hasn't started by then (`onNoStart`, then `onEnd`). */
   startTimeoutMs?: number;
   onNoStart?: () => void;
-  /** How far through the text the voice is (0 to 1); at each sentence start and, where the browser reports word boundaries, between them. */
+  /** How far through the text the voice is (0 to 1). */
   onProgress?: (fraction: number) => void;
 }
 
@@ -101,19 +102,22 @@ export function speakText(
   const starts = chunks.map((_, index) =>
     chunks.slice(0, index).reduce((sum, chunk) => sum + chunk.length, 0),
   );
-  const reportAt = (index: number, charIndex: number) =>
-    onProgress?.(
-      Math.min(1, (starts[index]! + charIndex) / Math.max(1, wholeChars)),
-    );
+  const reportAt = (index: number, charIndex: number) => {
+    const at = starts[index]! + charIndex;
+    state.spokenChars = Math.max(state.spokenChars, at);
+    state.reportedAt = Date.now();
+    onProgress?.(Math.min(1, at / Math.max(1, wholeChars)));
+  };
 
   const state = {
+    spokenChars: 0,
+    reportedAt: Date.now(),
     isEnded: false,
     guardId: 0,
     startId: 0,
     speakId: 0,
     attempts: 0,
     utterances: null as SpeechSynthesisUtterance[] | null,
-    hardStopAt: 0,
   };
   const finish = () => {
     if (state.isEnded) return;
@@ -138,7 +142,16 @@ export function speakText(
       };
       utterance.onboundary = (event) => reportAt(index, event.charIndex);
       utterance.onend = index === chunks.length - 1 ? finish : null;
-      utterance.onerror = finish;
+      utterance.onerror = (event) => {
+        const isLast = index === chunks.length - 1;
+        if (
+          isLast ||
+          event.error === 'canceled' ||
+          event.error === 'interrupted'
+        ) {
+          finish();
+        }
+      };
       return utterance;
     });
     state.utterances = utterances;
@@ -164,6 +177,7 @@ export function speakText(
       utterances.forEach((utterance) => synth.speak(utterance));
     } catch (error) {
       console.error('Text could not be read aloud', error);
+      synth.cancel();
       finish();
     }
   };
@@ -174,14 +188,16 @@ export function speakText(
   );
   const checkGuard = () => {
     if (state.isEnded) return;
-    if (synth.speaking && Date.now() < state.hardStopAt) {
+    const restMs =
+      (wholeChars - state.spokenChars) * SLOW_SPEAK_MS_PER_CHAR +
+      STUCK_MARGIN_MS;
+    if (synth.speaking && Date.now() < state.reportedAt + restMs) {
       state.guardId = window.setTimeout(checkGuard, GUARD_POLL_MS);
       return;
     }
     if (synth.speaking) synth.cancel();
     finish();
   };
-  state.hardStopAt = Date.now() + guardMs + GUARD_EXTENSION_MS;
   state.guardId = window.setTimeout(checkGuard, guardMs);
   if (wasBusy) state.speakId = window.setTimeout(speakOnce, CANCEL_SETTLE_MS);
   else speakOnce();

@@ -14,11 +14,8 @@ export interface PcmContext {
 }
 
 export interface PcmTiming {
-  /** Sound that has played so far, from the first sample. */
   playedMs: number;
-  /** All the sound handed over so far, played or still to play. */
   scheduledMs: number;
-  /** No more audio is coming, so `scheduledMs` is the whole line. */
   isEnded: boolean;
 }
 

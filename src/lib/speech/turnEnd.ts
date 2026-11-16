@@ -1,7 +1,7 @@
 import { toSpokenText } from '@/lib/speech/spokenText';
 import { toPlainText } from '@/lib/speech/speechText';
 
-// A person pausing to think mid-sentence is common on a phone, and a turn sent too early can't be taken back.
+// A pause mid-sentence is common on a phone, and a sent turn can't be taken back.
 export const TURN_END_COMPLETE_MS = 2400;
 export const TURN_END_UNFINISHED_MS = 3600;
 export const BARGE_MIN_NEW_WORDS = 2;

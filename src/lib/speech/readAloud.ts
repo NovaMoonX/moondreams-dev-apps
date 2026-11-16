@@ -25,9 +25,9 @@ export interface ReadAloudOptions {
   /** Gives up the browser's voice when it hasn't started by then (`onNoStart`, then `onEnd`). */
   startTimeoutMs?: number;
   onNoStart?: () => void;
-  /** How far through the text the voice is (0 to 1), from sentence timing for the natural voice and sentence starts and word boundaries for the browser's. */
+  /** How far through the text the voice is (0 to 1). */
   onProgress?: (fraction: number) => void;
-  /** Which voice is making the sound now: called when it begins, and again if the natural voice gives way to the browser's. */
+  /** Which voice is sounding; called again if the natural voice gives way to the browser's. */
   onVoice?: (voice: 'natural' | 'system') => void;
 }
 

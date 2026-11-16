@@ -28,7 +28,9 @@ import {
 } from '../../src/lib/speech/speechText.ts';
 import {
   BARGE_IN_GATE,
+  BARGE_SUPPRESS_MS,
   createSpeechGate,
+  isBargeSuppressed,
 } from '../../src/lib/speech/voice/bargeIn.ts';
 import {
   createSpeechCache,
@@ -83,7 +85,10 @@ import {
   type PcmContext,
   type PcmFormat,
 } from '../../src/lib/speech/voice/pcmStream.ts';
-import { createPlaybackQueue } from '../../src/lib/speech/voice/playbackQueue.ts';
+import {
+  createPlaybackQueue,
+  toJoinKey,
+} from '../../src/lib/speech/voice/playbackQueue.ts';
 import {
   createVoiceTokenSource,
   type MintVoiceTokenRequest,
@@ -101,7 +106,11 @@ import {
   ON_DEVICE_SIZE_MB,
 } from '../../src/lib/speech/onDevice/config.ts';
 import { toHeardText } from '../../src/lib/speech/onDevice/onDeviceStt.ts';
-import { getVoiceQuality, pickVoice } from '../../src/utils/speechUtils.ts';
+import {
+  getVoiceQuality,
+  pickVoice,
+  speakText,
+} from '../../src/utils/speechUtils.ts';
 
 const sharedFiles = [
   ...readdirSync(new URL('../../src/lib/speech/', import.meta.url), {
@@ -1241,6 +1250,54 @@ console.log('speechShared: voice router and playback queue checks passed');
     1,
     'a line reports its start once, not once per piece',
   );
+  const overlapFetches: string[] = [];
+  const overlapSignals: AbortSignal[] = [];
+  const stopMidLine = new AbortController();
+  const overlapping = createCloudTts({
+    source: {
+      fetchSpeech: async (piece, _priority, fetchSignal) => {
+        overlapFetches.push(piece);
+        overlapSignals.push(fetchSignal);
+        return {
+          status: 'ready',
+          provider: 'googleTts',
+          contentType: 'audio/mpeg',
+          body: new ReadableStream<Uint8Array>({
+            start: (stream) => {
+              stream.enqueue(new Uint8Array([1]));
+              stream.close();
+            },
+          }),
+        };
+      },
+    },
+    fallback,
+    player: {
+      decode: async () => ({}) as AudioBuffer,
+      play: (_audio, playSignal, onStart) =>
+        new Promise<void>((resolve) => {
+          onStart();
+          playSignal.addEventListener('abort', () => resolve());
+        }),
+      openStream: async () => {
+        throw new Error('not a stream');
+      },
+    },
+  }).speak(longText, { ...options, signal: stopMidLine.signal });
+  await tick();
+  assert.equal(
+    overlapFetches.length,
+    2,
+    'the next piece is fetched while the first one plays, with none beyond it',
+  );
+  assert.equal(overlapSignals[1]!.aborted, false, 'its answer is held');
+  stopMidLine.abort();
+  await overlapping;
+  assert.equal(
+    overlapSignals[1]!.aborted,
+    true,
+    'a held piece is released when the line is stopped',
+  );
   const lineProgress: number[] = [];
   await createCloudTts({
     source: {
@@ -1677,6 +1734,29 @@ console.log('speechShared: voice router and playback queue checks passed');
     calls.includes('Nine'),
     false,
     'a line that stalled after sound never repeats on the device',
+  );
+  const outcomes: string[] = [];
+  pushed.length = 0;
+  await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0])], true)),
+    fallback,
+    gapMs: 20,
+    player: player([]),
+    onCut: () => outcomes.push('cut'),
+    onPlayed: () => outcomes.push('played'),
+  }).speak('Stalled', options());
+  pushed.length = 0;
+  await createCloudTts({
+    source: streamed(pcmBody([new Uint8Array([1, 0])])),
+    fallback,
+    player: player([]),
+    onCut: () => outcomes.push('cut'),
+    onPlayed: () => outcomes.push('played'),
+  }).speak('Whole', options());
+  assert.deepEqual(
+    outcomes,
+    ['cut', 'played'],
+    'a piece that stalls after sound counts as a cloud failure, and only a whole line counts as played',
   );
 
   const hungEvents: string[] = [];
@@ -2879,19 +2959,210 @@ console.log('speechShared: voice provider checks passed');
     'with no report from the voice, a clock estimate runs short of the end',
   );
 
+  assert.deepEqual(
+    [
+      toJoinKey({ turnKey: 5, currentKey: 9, isActive: true }),
+      toJoinKey({ turnKey: 9, currentKey: 9, isActive: true }),
+      toJoinKey({ turnKey: 12, currentKey: 9, isActive: true }),
+      toJoinKey({ turnKey: 5, currentKey: 9, isActive: false }),
+    ],
+    [null, 9, 9, 5],
+    'a stale say is dropped while a newer reply plays, one of the turn joins it, and none takes the newest key',
+  );
+  assert.ok(
+    isBargeSuppressed(1000 + BARGE_SUPPRESS_MS, 1000 + BARGE_SUPPRESS_MS - 1) &&
+      !isBargeSuppressed(1000 + BARGE_SUPPRESS_MS, 1000 + BARGE_SUPPRESS_MS) &&
+      BARGE_SUPPRESS_MS <= 8000,
+    'barge suppression after an unconfirmed listen expires after a few seconds',
+  );
+
+  const sparse: number[] = [];
+  const sparseQueue = createPlaybackQueue({
+    pick: () => ({
+      id: 'sparse',
+      route: 'device',
+      isPlayingThroughWebAudio: false,
+      speak: (_text, { onStart, onProgress, signal }) =>
+        new Promise<void>((resolve) => {
+          onStart();
+          onProgress?.(0.2);
+          signal.addEventListener('abort', () => resolve());
+        }),
+    }),
+  });
+  const sparseLine = sparseQueue.enqueue('x'.repeat(140), {
+    priority: 'reply',
+    turnKey: 1,
+    onProgress: (value) => sparse.push(value),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  sparseQueue.clear();
+  await sparseLine;
+  assert.ok(
+    sparse[0] === 0.2 &&
+      sparse.length > 2 &&
+      sparse.every(
+        (value, index) => index === 0 || value > sparse[index - 1]!,
+      ) &&
+      sparse.at(-1)! < 0.96,
+    "progress keeps advancing between a voice's sparse reports, never backwards",
+  );
+
+  {
+    const timers = {
+      now: 1_000_000,
+      nextId: 1,
+      tasks: [] as { id: number; at: number; run: () => void }[],
+    };
+    const realNow = Date.now;
+    Date.now = () => timers.now;
+    const advance = (ms: number) => {
+      const end = timers.now + ms;
+      const step = (): void => {
+        const due = timers.tasks
+          .filter((task) => task.at <= end)
+          .sort((a, b) => a.at - b.at)[0];
+        if (due === undefined) {
+          timers.now = end;
+          return;
+        }
+        timers.tasks = timers.tasks.filter((task) => task.id !== due.id);
+        timers.now = Math.max(timers.now, due.at);
+        due.run();
+        step();
+      };
+      step();
+    };
+    interface FakeUtterance {
+      text: string;
+      onstart: (() => void) | null;
+      onend: (() => void) | null;
+      onerror: ((event: { error: string }) => void) | null;
+    }
+    const fake = {
+      speaking: false,
+      pending: false,
+      queue: [] as FakeUtterance[],
+      cancels: 0,
+      getVoices: () => [],
+      resume: () => undefined,
+      speak(utterance: FakeUtterance) {
+        this.queue.push(utterance);
+        this.speaking = true;
+      },
+      cancel() {
+        this.cancels += 1;
+        const dropped = this.queue.splice(0);
+        this.speaking = false;
+        dropped.forEach((utterance) =>
+          utterance.onerror?.({ error: 'canceled' }),
+        );
+      },
+    };
+    const priorWindow = Reflect.get(globalThis, 'window');
+    const priorUtterance = Reflect.get(globalThis, 'SpeechSynthesisUtterance');
+    Object.assign(globalThis, {
+      window: {
+        speechSynthesis: fake,
+        setTimeout: (run: () => void, ms: number) => {
+          const id = timers.nextId++;
+          timers.tasks.push({ id, at: timers.now + ms, run });
+          return id;
+        },
+        clearTimeout: (id: number) => {
+          timers.tasks = timers.tasks.filter((task) => task.id !== id);
+        },
+      },
+      SpeechSynthesisUtterance: class {
+        onstart = null;
+        onend = null;
+        onerror = null;
+        onboundary = null;
+        lang = '';
+        voice = null;
+        constructor(public text: string) {}
+      },
+    });
+    try {
+      const reading =
+        'This sentence is long enough to be a chunk of its own. '.repeat(8);
+      const begin = () => {
+        fake.queue = [];
+        fake.speaking = false;
+        const seen = { ended: 0 };
+        speakText(reading, {
+          lang: 'en-US',
+          onEnd: () => {
+            seen.ended += 1;
+          },
+        });
+        return seen;
+      };
+      const failing = begin();
+      assert.ok(fake.queue.length >= 2, 'a long reading is queued in chunks');
+      const [first, ...later] = fake.queue;
+      fake.queue = later;
+      first!.onerror?.({ error: 'synthesis-failed' });
+      assert.equal(
+        failing.ended,
+        0,
+        'a chunk that errors never reports the line done while later chunks are queued',
+      );
+      later.at(-1)!.onend?.();
+      assert.equal(failing.ended, 1, 'the last chunk ending ends the line');
+
+      const cut = begin();
+      fake.queue[0]!.onerror?.({ error: 'canceled' });
+      assert.equal(cut.ended, 1, 'a cancelled chunk ends the line');
+
+      const stuck = begin();
+      advance(55_000);
+      assert.equal(
+        stuck.ended,
+        0,
+        'a reading still speaking past the guard is waited on',
+      );
+      const cancelsBefore = fake.cancels;
+      advance(60_000);
+      assert.equal(
+        stuck.ended,
+        1,
+        'a reading stuck speaking is ended within its estimated length',
+      );
+      assert.ok(fake.cancels > cancelsBefore, 'a stuck reading is cancelled');
+    } finally {
+      Date.now = realNow;
+      Object.assign(globalThis, {
+        window: priorWindow,
+        SpeechSynthesisUtterance: priorUtterance,
+      });
+      if (priorWindow === undefined) {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+      if (priorUtterance === undefined) {
+        Reflect.deleteProperty(globalThis, 'SpeechSynthesisUtterance');
+      }
+    }
+  }
+
   const hook = readFileSync(
     new URL('../../src/hooks/useVoiceConversation.ts', import.meta.url),
     'utf8',
   );
   assert.match(
     hook,
-    /!run\.current\.isBargeSuppressed &&\s*\(queueRef\.current\?\.isPlayingThroughWebAudio\(\)/,
+    /!isBargeSuppressed\(run\.current\.bargeSuppressedUntil, Date\.now\(\)\) &&\s*\(queueRef\.current\?\.isPlayingThroughWebAudio\(\)/,
     'the barge-in microphone stays shut after a listen over the line came to nothing',
   );
   assert.match(
     hook,
-    /joinsLine && \(queueRef\.current\?\.isActive\(\) \?\? false\)/,
+    /joinsLine\s*\?\s*toJoinKey\(\{[^}]*isActive: queueRef\.current\?\.isActive\(\) \?\? false/,
     'a line that joins one already playing waits for it instead of cutting it',
+  );
+  assert.match(
+    hook,
+    /if \(turnKey === null\) \{\s*return Promise\.resolve\(\{ status: 'cancelled'/,
+    'a joining line from an older turn is dropped',
   );
   console.log('speechShared: line progress and playback route checks passed');
 }

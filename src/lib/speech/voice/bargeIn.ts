@@ -101,12 +101,18 @@ export const createSpeechGate = ({
   return { push };
 };
 
-/** Talking over a playing line has to be well above the room, since the line's own echo and the room are in the signal (a phone's speaker is close to its microphone). */
+/** A phone's speaker is close to its microphone, so talking over a line has to be well above the room. */
 export const BARGE_IN_GATE: SpeechGateOptions = {
   floorMargin: 6,
   minEnergy: 0.025,
   triggerMs: 300,
 };
+
+/** How long the gate stays shut after a listen over a line came to nothing. */
+export const BARGE_SUPPRESS_MS = 6000;
+
+export const isBargeSuppressed = (suppressedUntil: number, now: number) =>
+  now < suppressedUntil;
 
 interface SpeechGateHandle {
   close: () => void;

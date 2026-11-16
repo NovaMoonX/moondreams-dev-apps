@@ -8,7 +8,11 @@ import {
   type PcmFormat,
   type PcmSink,
 } from '@/lib/speech/voice/pcmStream';
-import type { SpeechSource } from '@/lib/speech/voice/speechSource';
+import { SPOKEN_CHARS_PER_SECOND } from '@/lib/speech/voice/playbackQueue';
+import type {
+  SpeechFetch,
+  SpeechSource,
+} from '@/lib/speech/voice/speechSource';
 import type { SpeechHeldReason, TtsAdapter } from '@/lib/speech/voice/types';
 
 const MAX_CHARS = 600;
@@ -19,7 +23,6 @@ const FIRST_BYTE_MS = 5000;
 const BODY_BASE_MS = 6000;
 const BODY_MS_PER_CHAR = 30;
 const PROGRESS_MS = 150;
-const SPOKEN_CHARS_PER_SECOND = 14;
 
 export interface CloudPlayer {
   /** Turns the audio into something `play` can start; throws when it can't. */
@@ -132,7 +135,7 @@ const concat = (chunks: Uint8Array[]) => {
   return bytes.buffer;
 };
 
-/** A line over the provider's cap is cut at sentence ends into pieces that each fit, packed as full as they go. */
+/** Cuts a line over the provider's cap at sentence ends into pieces that each fit. */
 const toPieces = (spoken: string) =>
   spoken.length <= MAX_CHARS
     ? [spoken]
@@ -146,9 +149,10 @@ const toPieces = (spoken: string) =>
           : [...pieces, sentence];
       }, []);
 
-type PieceOutcome = 'played' | 'failed' | 'aborted';
+// `cut`: it sounded, then stalled or broke, so some of its tail was never said.
+type PieceOutcome = 'played' | 'cut' | 'failed' | 'aborted';
 
-/** Speaks through the cloud voice, streamed when it is raw PCM, a line over the cap piece by piece in order; before any sound a slow, held or failed answer sends that piece and the rest to `fallback`. */
+/** Speaks through the cloud voice, piece by piece for a long line (the next fetched while one plays); a slow, held or failed answer before any sound sends the rest to `fallback`. */
 export const createCloudTts = ({
   source,
   fallback,
@@ -157,16 +161,22 @@ export const createCloudTts = ({
   gapMs = 4000,
   onHeld,
   onFallback,
+  onCut,
+  onPlayed,
   player = webAudioPlayer,
 }: {
   source: SpeechSource;
   fallback: TtsAdapter;
   firstByteMs?: number;
-  /** How long a whole buffered answer may take to arrive; by default it grows with the text's length. */
+  /** How long a buffered answer may take to arrive; by default it grows with the text. */
   bodyMs?: number;
   gapMs?: number;
   onHeld?: (reason: SpeechHeldReason) => void;
   onFallback?: () => void;
+  /** A piece stalled or broke after it began sounding; the line carried on without its tail. */
+  onCut?: () => void;
+  /** A line was spoken whole in the cloud voice. */
+  onPlayed?: () => void;
   player?: CloudPlayer;
 }): TtsAdapter => {
   const live = { isSounding: false, isFallingBack: false };
@@ -183,7 +193,32 @@ export const createCloudTts = ({
       const spoken = toSpokenText(text);
       const pieces = toPieces(spoken);
       const totalChars = pieces.reduce((sum, piece) => sum + piece.length, 0);
-      const run = { playedBy: 'cloud', isStarted: false };
+      const run = { playedBy: 'cloud', isStarted: false, isCut: false };
+      const prefetch = {
+        index: -1,
+        isTaken: false,
+        controller: null as AbortController | null,
+        answer: null as Promise<SpeechFetch> | null,
+      };
+      const startPrefetch = (index: number) => {
+        const piece = pieces[index];
+        if (piece === undefined || prefetch.index === index || signal.aborted) {
+          return;
+        }
+        const controller = new AbortController();
+        const answer = source.fetchSpeech(piece, priority, controller.signal);
+        answer.catch(() => undefined);
+        Object.assign(prefetch, {
+          index,
+          isTaken: false,
+          controller,
+          answer,
+        });
+      };
+      const dropPrefetch = () => {
+        if (!prefetch.isTaken) prefetch.controller?.abort();
+      };
+      signal.addEventListener('abort', dropPrefetch);
       const charsBefore = (index: number) =>
         pieces.slice(0, index).reduce((sum, piece) => sum + piece.length, 0);
       const toLine = (index: number, fraction: number) =>
@@ -214,18 +249,22 @@ export const createCloudTts = ({
         );
       };
       const speakPiece = async (
-        piece: string,
+        index: number,
         report: (fraction: number) => void,
       ): Promise<PieceOutcome> => {
         if (signal.aborted) return 'aborted';
-        const controller = new AbortController();
+        const piece = pieces[index] ?? '';
+        const isPrefetched = prefetch.index === index;
+        if (isPrefetched) prefetch.isTaken = true;
+        const controller =
+          (isPrefetched ? prefetch.controller : null) ?? new AbortController();
         const sinks: PcmSink[] = [];
         const abort = () => {
           controller.abort();
           sinks.forEach((sink) => sink.stop());
         };
         signal.addEventListener('abort', abort);
-        const state = { isPlaying: false };
+        const state = { isPlaying: false, isCut: false };
         const timers: ReturnType<typeof setTimeout>[] = [];
         const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
         const within = <T>(work: Promise<T>, ms: number) =>
@@ -249,6 +288,7 @@ export const createCloudTts = ({
           state.isPlaying = true;
           live.isSounding = true;
           onRouteChange?.();
+          startPrefetch(index + 1);
           if (run.isStarted) return;
           run.isStarted = true;
           onStart();
@@ -277,6 +317,7 @@ export const createCloudTts = ({
           sink.push(first);
           const pump = async (): Promise<void> => {
             const next = await within(reader.read(), gapMs);
+            if (next === 'late' && !signal.aborted) state.isCut = true;
             if (next === 'late' || next.done || signal.aborted) return;
             sink.push(next.value);
             return pump();
@@ -288,6 +329,7 @@ export const createCloudTts = ({
             sink.end();
             if (!wasPlaying) throw error;
             if (!signal.aborted) {
+              state.isCut = true;
               console.error('The cloud voice stopped partway', error);
             }
           }
@@ -313,7 +355,8 @@ export const createCloudTts = ({
         const firstByteBy = Date.now() + firstByteMs;
         try {
           const answer = await within(
-            source.fetchSpeech(piece, priority, controller.signal),
+            (isPrefetched ? prefetch.answer : null) ??
+              source.fetchSpeech(piece, priority, controller.signal),
             firstByteMs,
           );
           if (signal.aborted) {
@@ -343,7 +386,8 @@ export const createCloudTts = ({
           const pcm = parsePcmFormat(answer.contentType);
           if (pcm !== null && !first.done) {
             await streamPcm(pcm, reader, first.value);
-            return state.isPlaying ? 'played' : 'aborted';
+            if (!state.isPlaying) return 'aborted';
+            return state.isCut ? 'cut' : 'played';
           }
           const rest = await within(
             first.done
@@ -362,7 +406,7 @@ export const createCloudTts = ({
           return 'played';
         } catch (error) {
           if (signal.aborted) return 'aborted';
-          if (state.isPlaying) return 'played';
+          if (state.isPlaying) return 'cut';
           console.error('The cloud voice failed to read', error);
           controller.abort();
           return 'failed';
@@ -374,9 +418,12 @@ export const createCloudTts = ({
         }
       };
       const speakFrom = async (index: number): Promise<string | undefined> => {
-        if (index >= pieces.length) return run.playedBy;
+        if (index >= pieces.length) {
+          if (!run.isCut) onPlayed?.();
+          return run.playedBy;
+        }
         if (signal.aborted) return index === 0 ? undefined : run.playedBy;
-        const outcome = await speakPiece(pieces[index] ?? '', (fraction) =>
+        const outcome = await speakPiece(index, (fraction) =>
           onProgress?.(toLine(index, fraction)),
         );
         if (outcome === 'aborted')
@@ -385,9 +432,18 @@ export const createCloudTts = ({
           onFallback?.();
           return speakRest(index);
         }
+        if (outcome === 'cut') {
+          run.isCut = true;
+          onCut?.();
+        }
         return speakFrom(index + 1);
       };
-      return speakFrom(0);
+      try {
+        return await speakFrom(0);
+      } finally {
+        dropPrefetch();
+        signal.removeEventListener('abort', dropPrefetch);
+      }
     },
   };
 };

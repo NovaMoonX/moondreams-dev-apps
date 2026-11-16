@@ -462,7 +462,7 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
-    'the records part is spoken from the stored records text, never a separate model line',
+    'with no spoken records line, the records part is spoken from the stored text',
     () => {
       const built = buildAnswer(answer({ fromRecordsText: 'Friday at 2.' }));
       assert.ok(built.spoken.startsWith('Friday at 2.'));
@@ -486,22 +486,61 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
-    'a spoken records line keeps the general label and the health caution within the cap',
+    'a both and health answer keeps the spoken records sentence whole and ends the general part at a sentence end',
     () => {
+      const records = 'You have 6 boxes, and the first is the Pike Place one.';
       const built = buildAnswer(
         answer({
           scope: 'both',
           isHealth: true,
-          fromRecordsText: 'a '.repeat(500),
-          fromRecordsSpoken: 'spoken '.repeat(28),
+          fromRecordsText: `${records} More about the rest.`,
+          fromRecordsSpoken: records,
           generalText: 'b',
-          generalSpoken: 'general '.repeat(25),
+          generalSpoken:
+            'Cake keeps for a few days in a cool place. Wrapped well it keeps even longer in the fridge, but let it come back to room temperature before you eat it.',
         }),
       );
       assert.ok(built.spoken.length <= SPOKEN_MAX_CHARS);
-      assert.ok(built.spoken.includes(GENERAL_LABEL));
-      assert.ok(built.spoken.startsWith('spoken'));
-      assert.ok(built.spoken.endsWith(HEALTH_CAUTION_SPOKEN));
+      assert.ok(built.spoken.startsWith(`${records} ${GENERAL_LABEL} `));
+      assert.ok(built.spoken.endsWith(`. ${HEALTH_CAUTION_SPOKEN}`));
+      const general = built.spoken
+        .slice(`${records} ${GENERAL_LABEL} `.length)
+        .replace(` ${HEALTH_CAUTION_SPOKEN}`, '');
+      assert.equal(general, 'Cake keeps for a few days in a cool place.');
+    },
+  ],
+  [
+    'a general part with no whole sentence that fits is dropped with its label',
+    () => {
+      const records = 'You have 6 boxes, and the first is the Pike Place one.';
+      const built = buildAnswer(
+        answer({
+          scope: 'both',
+          isHealth: true,
+          fromRecordsText: records,
+          fromRecordsSpoken: records,
+          generalText: 'b',
+          generalSpoken: `${'general '.repeat(25)}done.`,
+        }),
+      );
+      assert.equal(built.spoken, `${records} ${HEALTH_CAUTION_SPOKEN}`);
+    },
+  ],
+  [
+    'a spoken records line that speaks as I, carries markup or names a number the records lack falls back to the cut of the written text',
+    () => {
+      const written = 'You have 6 boxes. '.repeat(40).trim();
+      [
+        'I found 6 boxes.',
+        'You have **6** boxes.',
+        'You have 7 boxes.',
+      ].forEach((spoken) => {
+        const built = buildAnswer(
+          answer({ fromRecordsText: written, fromRecordsSpoken: spoken }),
+        );
+        assert.ok(built.spoken.startsWith('You have 6 boxes. You have'));
+        assert.ok(built.spoken.length > 200);
+      });
     },
   ],
   [
@@ -2330,6 +2369,7 @@ const tests: [string, () => void | Promise<void>][] = [
             scope: 'yourThings',
             isHealth: false,
             fromRecordsText: text,
+            fromRecordsSpoken: null,
             sources: [],
             quotes: [],
             syncedKeys: [],

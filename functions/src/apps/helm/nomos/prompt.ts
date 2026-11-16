@@ -154,7 +154,6 @@ Speech can mishear your name: words at the start of a message that sound like yo
 
 export const SPOKEN_TURN_PROMPT = `This turn was spoken and your answer is read aloud, so answer like a person talking: the one thing they asked, in a sentence or two of natural speech, never reading out lists, records or every detail. When there are several things, give the most relevant one, or a count and the first few, and let them ask for more. Never say "here is a list". Write fromRecordsSpoken for every answer from their records.`;
 
-/** The spoken-turn rules, only for a turn the person spoke. */
 export const toSpokenTurnPrompt = (isSpoken: boolean) =>
   isSpoken ? SPOKEN_TURN_PROMPT : null;
 
