@@ -79,6 +79,7 @@ export async function answerUndoOffer(
     (entry) => entry.optionId === optionId,
   );
   if (!choice) {
+    if (optionId !== 'no' && optionId !== 'keep') return { kind: 'failed' };
     const recorded = await record();
     return recorded.kind === 'done' || recorded.kind === 'answered'
       ? { kind: 'kept' }

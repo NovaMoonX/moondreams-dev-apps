@@ -298,7 +298,7 @@ export function useHelmVoice() {
     // eslint-disable-next-line react-hooks/purity -- runs from a heard phrase; the compiler flags every clock read once the answer path calls the sender
     const now = Date.now();
     if (isUndoPhrase(text)) {
-      const offer = findAskedQuestion(now);
+      const offer = findAskedQuestion(now, 'undoOffer');
       if (offer?.asked.question.kind === 'undoOffer') {
         await answerOpenUndoOffer(offer.asked, 'yes');
         return;
@@ -323,8 +323,8 @@ export function useHelmVoice() {
     return next ? buildSpokenQuestion(next.question) : null;
   }
 
-  /** The first open, unskipped question of the latest spoken turn of the open session, with that turn. */
-  function findAskedQuestion(now: number) {
+  /** The first open, unskipped question (of a kind, when given) of the latest spoken turn of the open session, with that turn. */
+  function findAskedQuestion(now: number, kind: string | null = null) {
     const state = store.getState();
     const all = selectAllCaptures(state);
     const sessionId = getOpenSessionId(
@@ -344,7 +344,8 @@ export function useHelmVoice() {
                 entry.skippedAt === null &&
                 !isAnswerInFlight(latest.id, entry.id),
             )
-            .map((entry) => ({ captureId: latest.id, ...entry }))[0]
+            .map((entry) => ({ captureId: latest.id, ...entry }))
+            .find((entry) => kind === null || entry.question.kind === kind)
         : undefined;
     return latest && asked ? { state, latest, asked } : null;
   }

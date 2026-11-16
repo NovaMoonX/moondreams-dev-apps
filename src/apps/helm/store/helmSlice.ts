@@ -421,7 +421,9 @@ const helmSlice = createSlice({
           ? {
               ...entry,
               undoneDocIds,
-              partUndoIds: [...entry.partUndoIds, undoExecutionId],
+              partUndoIds: entry.partUndoIds.includes(undoExecutionId)
+                ? entry.partUndoIds
+                : [...entry.partUndoIds, undoExecutionId],
               ...(isFinal && { undoneByExecutionId: undoExecutionId }),
             }
           : entry;

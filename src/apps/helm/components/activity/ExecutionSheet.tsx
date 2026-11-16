@@ -266,15 +266,16 @@ function ExecutionSheet({ execution: opened, onClose }: ExecutionSheetProps) {
     setKept(new Set());
   };
   useBackStep(isPicking, stop);
-  const pick: PickState | null = isPicking
-    ? {
-        kept,
-        onKeptChange: setKept,
-        isBusy,
-        onBusyChange: setIsBusy,
-        onStop: stop,
-      }
-    : null;
+  const pick: PickState | null =
+    isPicking && execution !== null && canUndo(execution)
+      ? {
+          kept,
+          onKeptChange: setKept,
+          isBusy,
+          onBusyChange: setIsBusy,
+          onStop: stop,
+        }
+      : null;
 
   return (
     <DetailSheet

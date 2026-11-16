@@ -100,17 +100,17 @@ function ActivityLoader({ limit }: { limit: number }) {
 
 function ActivityRow({
   execution,
-  undo,
+  undos,
   via,
   onOpen,
 }: {
   execution: OpenExecution;
-  undo: OpenExecution | null;
+  undos: OpenExecution[];
   via: string | null;
   onOpen: () => void;
 }) {
   const subject = getActivitySubject(execution);
-  const mark = getTakenBackMark(execution, undo);
+  const mark = getTakenBackMark(execution, undos);
 
   return (
     <Button
@@ -232,7 +232,9 @@ function ActivityScreen({ onBack, onOpenOutside }: ActivityScreenProps) {
                 <li key={execution.id}>
                   <ActivityRow
                     execution={execution}
-                    undo={byId.get(execution.partUndoIds.at(-1) ?? '') ?? null}
+                    undos={execution.partUndoIds.flatMap(
+                      (id) => byId.get(id) ?? [],
+                    )}
                     via={
                       execution.via ??
                       (execution.captureId

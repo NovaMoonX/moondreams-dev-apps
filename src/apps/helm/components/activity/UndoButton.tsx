@@ -32,6 +32,13 @@ function UndoButton({ execution, unitCount, onPick, isFull }: UndoButtonProps) {
   const [refusal, setRefusal] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
   const label = HELM_COPY.undo;
+  const sheet = !onPick && (
+    <UndoPickSheet
+      execution={execution}
+      isOpen={isPicking && canUndo(execution)}
+      onClose={() => setIsPicking(false)}
+    />
+  );
 
   if (refusal !== null) {
     return (
@@ -48,14 +55,17 @@ function UndoButton({ execution, unitCount, onPick, isFull }: UndoButtonProps) {
   if (!canUndo(execution)) return null;
   if (isOffline) {
     return (
-      <LockedButton
-        label={label}
-        title={HELM_COPY.undoNeedsConnectionTitle}
-        size={isFull ? undefined : 'sm'}
-        className={isFull ? 'w-full' : undefined}
-      >
-        <p>{HELM_COPY.undoNeedsConnectionBody}</p>
-      </LockedButton>
+      <>
+        <LockedButton
+          label={label}
+          title={HELM_COPY.undoNeedsConnectionTitle}
+          size={isFull ? undefined : 'sm'}
+          className={isFull ? 'w-full' : undefined}
+        >
+          <p>{HELM_COPY.undoNeedsConnectionBody}</p>
+        </LockedButton>
+        {sheet}
+      </>
     );
   }
 
@@ -101,13 +111,7 @@ function UndoButton({ execution, unitCount, onPick, isFull }: UndoButtonProps) {
       >
         {label}
       </Button>
-      {!onPick && (
-        <UndoPickSheet
-          execution={execution}
-          isOpen={isPicking}
-          onClose={() => setIsPicking(false)}
-        />
-      )}
+      {sheet}
     </>
   );
 }
