@@ -162,7 +162,7 @@ export interface ProjectChildren {
   isMore: boolean;
 }
 
-const MAX_QUIET_CHILD_WRITES = 250;
+const MAX_QUIET_CHILD_WRITES = 200;
 
 /** A who the person already has, with what the tier rule reads about it. */
 export interface KnownWhoState extends KnownWho {

@@ -1635,9 +1635,9 @@ test('a project with more things than fit says how many are not private yet', ()
   assert.equal(plan.quietLines.length, 2);
   assert.equal(
     plan.quietLines[1],
-    "150 of Anniversary trip's things aren't private yet",
+    "200 of Anniversary trip's things aren't private yet",
   );
-  assert.equal(plan.updates.length, 250);
+  assert.equal(plan.updates.length, 200);
   assert.equal(plan.effectRefs.length, 40);
 });
 
@@ -1921,9 +1921,9 @@ test('two quiet projects share one write budget for their children, and the seco
     seal: seal as never,
     newId: () => 'new-1',
   });
-  assert.equal(plan.updates.length, 250);
+  assert.equal(plan.updates.length, 200);
   assert.ok(
-    plan.quietLines.includes("150 of Work's things aren't private yet"),
+    plan.quietLines.includes("200 of Work's things aren't private yet"),
   );
 });
 
