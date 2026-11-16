@@ -116,6 +116,7 @@ async function openWho(
                     city,
                     label: toText(span.label),
                     zoneOffered: span.zoneOffered ?? false,
+                    pausesScheduled: span.pausesScheduled ?? null,
                   },
                 ]
               : [];

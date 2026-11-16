@@ -6,7 +6,9 @@ import { formatTime } from '@/utils/formatUtils';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import UndoButton from '@apps/helm/components/activity/UndoButton';
 import AbilityOfferRow from '@apps/helm/components/home/AbilityOfferRow';
+import AwayPauseOfferRow from '@apps/helm/components/home/AwayPauseOfferRow';
 import AwayZoneOfferRow from '@apps/helm/components/home/AwayZoneOfferRow';
+import ScheduledRuleRows from '@apps/helm/components/scheduled/ScheduledRuleRows';
 import ResultRows from '@apps/helm/components/home/ResultRows';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -166,8 +168,15 @@ function ResultLines({
               )}
             </div>
           )}
+          <ScheduledRuleRows
+            execution={execution}
+            hasUndoHere={lines.length === 0 && !isUndone}
+          />
           {execution.awayZoneOffer && (
             <AwayZoneOfferRow offer={execution.awayZoneOffer} />
+          )}
+          {execution.awayZoneOffer && (
+            <AwayPauseOfferRow offer={execution.awayZoneOffer} />
           )}
           {execution.abilityOffer && (
             <AbilityOfferRow offer={execution.abilityOffer} />

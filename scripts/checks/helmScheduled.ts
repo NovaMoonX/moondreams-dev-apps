@@ -10,6 +10,7 @@ import {
 } from '../../functions/src/apps/helm/scheduledActions/runAction.ts';
 import {
   countKept,
+  planScheduledActions,
   readActionState,
   type StoredScheduled,
 } from '../../functions/src/apps/helm/nomos/planScheduledActions.ts';
@@ -621,6 +622,51 @@ test('no outcome ever sends a push: the scheduled-actions code never touches rem
     'utf8',
   );
   assert.equal(/push|messaging/i.test(engine), false);
+});
+
+test('an action the server makes inside a marked time-away span waits it out, and one outside does not', () => {
+  const plan = (pauseSpans: { from: number; to: number }[]) =>
+    planScheduledActions({
+      commands: [
+        {
+          kind: 'scheduleAction',
+          title: 'Plan the day',
+          repeat: {
+            freq: 'daily',
+            interval: 1,
+            weekdays: [],
+            monthBy: null,
+            nth: null,
+            endsKind: 'never',
+            until: null,
+            count: null,
+          },
+          startsOn: null,
+          time: '08:00',
+          times: ['08:00'],
+          instruction: 'Plan my day',
+          held: [],
+          allowedKinds: [],
+          quote: 'every day at 8',
+        },
+      ],
+      stored: new Map(),
+      homeZone: NY,
+      now: NOW,
+      captureId: 'capture-1',
+      newId: () => 'made-1',
+      pauseSpans,
+      seal: (fields) => fields as never,
+      room: 5,
+    }).creates[0]?.doc;
+  const inside = plan([
+    { from: Date.UTC(2026, 10, 17), to: Date.UTC(2026, 10, 20) },
+  ]);
+  assert.equal(inside?.pausedFrom, Date.UTC(2026, 10, 17));
+  assert.equal(inside?.pausedUntil, Date.UTC(2026, 10, 20));
+  const outside = plan([]);
+  assert.equal(outside?.pausedFrom ?? null, null);
+  assert.equal(outside?.pausedUntil ?? null, null);
 });
 
 const failures: string[] = [];

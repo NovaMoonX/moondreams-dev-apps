@@ -50,6 +50,7 @@ export type HelmView =
   | 'howNomosSeesYou'
   | 'importance'
   | 'comingUp'
+  | 'scheduled'
   | 'search';
 
 export type Sealed = EncryptedFieldPayload;
@@ -160,6 +161,8 @@ export interface AwaySpan {
   label: string | null;
   source: 'said' | 'page';
   zoneOffered: boolean;
+  /** Set when the person chose "Pause what runs at home" for this time away; scheduled actions made inside it wait it out too. Null on a span from before. */
+  pausesScheduled: boolean | null;
 }
 
 export interface NearNow {

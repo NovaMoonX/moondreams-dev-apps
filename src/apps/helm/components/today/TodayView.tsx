@@ -32,6 +32,7 @@ import { selectTodayOffer } from '@apps/helm/store/selectors/patternSelectors';
 import SuggestionSheet, {
   type SuggestionTarget,
 } from '@apps/helm/components/today/SuggestionSheet';
+import ScheduledRunLines from '@apps/helm/components/scheduled/ScheduledRunLines';
 import SyncedToday from '@apps/helm/components/today/SyncedToday';
 import HabitQuestionFlow from '@apps/helm/components/habits/HabitQuestionFlow';
 import NewTaskSheet from '@apps/helm/components/tasks/NewTaskSheet';
@@ -67,6 +68,8 @@ interface TodayViewProps {
   onOpenComingUp: () => void;
   onOpenWho: (whoId: string) => void;
   onOpenHabit: (habitId: string) => void;
+  onOpenConnectedApps: () => void;
+  onOpenActivity: () => void;
 }
 
 /** Today: a strip of days with each day's events and plan (what was kept and what is suggested), and on today the open tasks that are awake and overdue or due in the next week, soonest first, with a door to all of them; its first-run line until there is a task. */
@@ -76,6 +79,8 @@ function TodayView({
   onOpenTasks,
   onOpenComingUp,
   onOpenWho,
+  onOpenConnectedApps,
+  onOpenActivity,
   onOpenHabit,
 }: TodayViewProps) {
   const { user } = useAuth();
@@ -227,6 +232,13 @@ function TodayView({
             todayKey={todayKey}
             selectedKey={selectedKey}
             onSelect={(key) => setPickedKey(key === todayKey ? null : key)}
+          />
+        )}
+        {isToday && (
+          <ScheduledRunLines
+            scope='today'
+            onOpenConnectedApps={onOpenConnectedApps}
+            onOpenActivity={onOpenActivity}
           />
         )}
         {isToday && <ConnectCalendarRow />}

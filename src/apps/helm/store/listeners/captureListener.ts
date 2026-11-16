@@ -193,7 +193,14 @@ async function openCapture(
     interruptedCaptureId: data.interruptedCaptureId ?? null,
     answersQuestion: data.answersQuestion ?? null,
     ttsProvider: data.ttsProvider ?? null,
-    arrivedVia: data.arrivedVia === 'dropBox' ? 'dropBox' : 'direct',
+    arrivedVia:
+      data.arrivedVia === 'dropBox' || data.arrivedVia === 'scheduled'
+        ? data.arrivedVia
+        : 'direct',
+    scheduledActionId:
+      typeof data.scheduledActionId === 'string'
+        ? data.scheduledActionId
+        : null,
     disposition:
       data.disposition === 'acted' ||
       data.disposition === 'noted' ||

@@ -3303,7 +3303,7 @@ Owner: "similar to how Google Calendar does it… I do wonder how the schedules 
 
 ### Scheduled actions (as built, issue 115)
 
-Data, rules, server and turn commands; the screens (Browse › Scheduled, the sheet, the rule editor, the outcome lines on Today and Activity) are part B.
+Data, rules, server and turn commands, then the screens (Browse › Scheduled, the sheet, the rule editor, the outcome lines on Today and Activity).
 
 - **One pure module** `src/apps/helm/engine/scheduledActions.ts`, vendored to `functions/src/apps/helm/nomos/scheduledActions.ts` (`check:server-copies`): next run from the rule with skips, moves and the paused span applied, `planScheduleChange` (pause, resume, end, skip, move, "this and following" rewritten in place or split with `COUNT` carried), the 6-hour rule (`readDueRuns`), `readRunBlocker`, `canRunNow` and the code-built outcome and rule lines. Each occurrence day becomes an instant only through `zonedDateTimeToEpoch` in the action's own zone or the home zone; a time-away span never moves an action.
 - **Capture id** is `sa_{actionId}_{originalDayKey}`, the day the rule gave, so a retry, a move and a time change all find the same capture; Run it now adds `_now`. `lastRunCaptureId` is set on every attempt (also a blocked one), which is how Run it now finds the occurrence that failed.
@@ -3313,6 +3313,10 @@ Data, rules, server and turn commands; the screens (Browse › Scheduled, the sh
 - **Outbound kinds are refused at create** with a code-built line, since Issue 67's approval queue does not exist yet.
 - **More than once a day** is refused, or, when the words give two or more times ("at 8 and at 6"), becomes a code-built `splitDaily` question; a yes makes one daily action for each time.
 - **Rules**: `apps/helm/users/{uid}/scheduledActions/{id}` is owner-only through the collection list; `apps/helm/actionQueue/{uid}` has no rule (Admin only), and `deleteHelmData` removes it with the collection. `check:helm-rules` proves both.
+- **Screens** in `components/scheduled/`: `ScheduledView` (the list), `ScheduledSheet` (one `DetailSheet` with `viewKey` main, pause, run, move), `ScheduledForm` (`FormSheet` with the shared `RepeatPicker`, for a new action, Change and Change from a run), `ScheduledRunLines` (Today, three at most, and Activity: the last run of every action), `ScheduledRuleRows` (the rule words and Change under a turn reply that made or changed an action). Words and the list meta line are in `utils/scheduledWords.ts`; `useScheduledChange` turns every write's `{refused}` into a toast and gives each success its Undo toast.
+- **Device writes added** to `scheduledActionWrites.ts`: `createScheduledAction` (the 50 cap, the rule check, the span pause), `pauseScheduledActionUntil`, `changeScheduledWords` and `restoreScheduledRun` (un-skip, un-move), none of which the engine's `ScheduleChange` has.
+- **Unseen** is the run capture's own `seenAt` being null (`selectScheduledRuns`), marked by `useOnceVisible` + `markCaptureSeen`; run captures (`arrivedVia: 'scheduled'`) are dropped from the home thread by `toHomeTurns`.
+- **`pausesScheduled: boolean | null`** is on the self who's sealed `AwaySpan` (not on the profile's `ZoneSpan`, since pausing alone must not make a clock follow), so no rule changes: the who doc is sealed. The device reads it in `createScheduledAction`; the server reads the self who in `sortHelmCapture` and passes `pauseSpans` to `planScheduledActions`. `check:helm-scheduled` has the case.
 - **Checks**: `check:helm-scheduled` (DST in two zones, skip and move limits, the split with `COUNT`, the 6-hour rule, waiting runs, each blocker, capture ids, ended leaving the count, no push, the pause by span) and the said-rule cases in `check:helm-sort`.
 
 ### Nothing learned lives on one device

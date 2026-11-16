@@ -805,6 +805,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
                       label: null,
                       source: 'said',
                       zoneOffered: false,
+                      pausesScheduled: null,
                     },
                   ]
                 : null,

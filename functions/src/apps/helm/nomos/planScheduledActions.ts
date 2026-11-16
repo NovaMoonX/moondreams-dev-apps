@@ -1,5 +1,5 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
-import { dayKeyToMs } from '../../../vendor/cadenceUtils.js';
+import { dayKeyToMs, msToDayKey } from '../../../vendor/cadenceUtils.js';
 import {
   repeatFromParts,
   type RepeatParts,
@@ -23,6 +23,7 @@ import {
   buildScheduleRule,
   describeScheduledRule,
   planScheduleChange,
+  readSpanPause,
   toDayKeyIn,
   type ActionState,
   type ScheduleChange,
@@ -67,6 +68,8 @@ export interface ScheduledPlanInput {
   captureId: string;
   isAnswer?: boolean;
   newId: () => string;
+  /** Time-away spans (date-only `from` and `to`) the person chose to pause what runs at home for; a new action with a run inside one waits it out. */
+  pauseSpans?: { from: number; to: number }[];
   seal: (fields: Record<string, unknown>) => SealedPayload;
   /** How many effects the turn may still write. */
   room: number;
@@ -259,7 +262,7 @@ export function planScheduledActions(input: ScheduledPlanInput): ScheduledPlan {
     const built = buildScheduleRule(rule, startsOn, today);
     if ('error' in built) return withNotKept(RULE_PROBLEM_WORDS[built.error]);
     const id = input.newId();
-    const schedule = {
+    const unpaused = {
       repeat: built.repeat,
       startsOn,
       time,
@@ -269,6 +272,19 @@ export function planScheduledActions(input: ScheduledPlanInput): ScheduledPlan {
       pausedFrom: null,
       pausedUntil: null,
     };
+    const spanPause =
+      (input.pauseSpans ?? [])
+        .filter((span) => msToDayKey(span.to) >= today)
+        .flatMap((span) => {
+          const pause = readSpanPause(
+            unpaused,
+            input.homeZone,
+            { fromDay: msToDayKey(span.from), toDay: msToDayKey(span.to) },
+            input.now,
+          );
+          return pause ? [pause] : [];
+        })[0] ?? null;
+    const schedule = { ...unpaused, ...spanPause };
     const { words, next } = describeScheduledRule(
       schedule,
       input.homeZone,

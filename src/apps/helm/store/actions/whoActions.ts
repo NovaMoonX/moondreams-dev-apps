@@ -190,6 +190,7 @@ export type WhereChange =
   | { kind: 'home'; city: City | null }
   | { kind: 'save'; span: AwaySpan }
   | { kind: 'remove'; id: string }
+  | { kind: 'pauses'; id: string; value: boolean | null }
   | { kind: 'back'; id: string; todayKey: string };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -201,6 +202,11 @@ const nextAway = (
 ): AwaySpan[] => {
   if (change.kind === 'remove') {
     return away.filter((span) => span.id !== change.id);
+  }
+  if (change.kind === 'pauses') {
+    return away.map((span) =>
+      span.id === change.id ? { ...span, pausesScheduled: change.value } : span,
+    );
   }
   if (change.kind === 'back') {
     const yesterday = Date.parse(todayKey) - DAY_MS;

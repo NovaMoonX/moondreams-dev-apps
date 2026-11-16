@@ -37,6 +37,8 @@ export interface AwaySpanLike {
   label: string | null;
   source: 'said' | 'page';
   zoneOffered: boolean;
+  /** True once the person paused what runs at home for this span; null on a span from before. */
+  pausesScheduled: boolean | null;
 }
 
 export interface Whereabouts {

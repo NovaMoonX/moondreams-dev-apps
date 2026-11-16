@@ -78,6 +78,7 @@ import type {
   NoteSealed,
   Project,
   ProjectSealed,
+  ScheduledActionSealed,
   Connection,
   Who,
   WhoSealed,
@@ -2043,6 +2044,111 @@ const seedReminder = (turnedOnAt: number): Habit['reminder'] => ({
   turnedOnAt,
   easedAt: null,
 });
+
+/** Three scheduled actions: Friday's weekend plan running with last Friday's run done, a paused water reminder, and an ended weekly review. */
+async function buildScheduled(input: { now: number; encryption: HelmEncryption }) {
+  const { now, encryption } = input;
+  const today = getSeedToday(now);
+  const dayKey = (at: number) => new Date(at).toISOString().slice(0, 10);
+  const daysToFriday = (5 - new Date(today).getUTCDay() + 7) % 7;
+  const nextFriday = today + (daysToFriday === 0 ? 7 : daysToFriday) * DAY_MS;
+  const lastFriday = nextFriday - 7 * DAY_MS;
+  const base = {
+    status: 'active' as const,
+    endedBy: null,
+    timeZone: null,
+    skipped: [],
+    moved: {},
+    splitFromId: null,
+    kind: 'prompt' as const,
+    allowed: ['createTask', 'planDay'],
+    needsApproval: false,
+    lastRunCaptureId: null,
+    lastFailReason: null,
+    pausedFrom: null,
+    pausedUntil: null,
+    runNowAt: null,
+    createdBy: 'person' as const,
+    sourceCaptureId: null,
+    lastEditedAt: null,
+  };
+  const item = async (
+    id: string,
+    words: { title: string; instruction: string },
+    fields: Record<string, unknown>,
+  ) => ({
+    id,
+    doc: {
+      ...base,
+      ...fields,
+      sealed: await sealJson<ScheduledActionSealed>(
+        { ...words, heldCommands: null },
+        encryption,
+      ),
+    },
+  });
+  return Promise.all([
+    item(
+      'seed-scheduled-weekend',
+      {
+        title: 'Plan the weekend',
+        instruction: 'Look at my week and plan the weekend, then add what is left to my tasks',
+      },
+      {
+        repeat: 'FREQ=WEEKLY;BYDAY=FR',
+        startsOn: dayKey(lastFriday - 14 * DAY_MS),
+        time: '17:00',
+        nextRunAt: nextFriday + 17 * 3_600_000,
+        nextRunKey: dayKey(nextFriday),
+        lastRunAt: lastFriday + 17 * 3_600_000 + 60_000,
+        lastRunDueAt: lastFriday + 17 * 3_600_000,
+        lastOutcome: 'done',
+        createdAt: now - 21 * DAY_MS,
+      },
+    ),
+    item(
+      'seed-scheduled-water',
+      {
+        title: 'Water the plants',
+        instruction: 'Remind me to water the plants',
+      },
+      {
+        status: 'paused',
+        repeat: 'FREQ=WEEKLY;BYDAY=SU',
+        startsOn: dayKey(today - 28 * DAY_MS),
+        time: '09:00',
+        nextRunAt: null,
+        nextRunKey: null,
+        lastRunAt: null,
+        lastRunDueAt: null,
+        lastOutcome: null,
+        createdAt: now - 28 * DAY_MS,
+        lastEditedAt: now - 2 * DAY_MS,
+      },
+    ),
+    item(
+      'seed-scheduled-review',
+      {
+        title: 'Monthly review',
+        instruction: 'Summarize what got done this month',
+      },
+      {
+        status: 'ended',
+        endedBy: 'person',
+        repeat: 'FREQ=MONTHLY;BYMONTHDAY=1',
+        startsOn: dayKey(today - 90 * DAY_MS),
+        time: '10:00',
+        nextRunAt: null,
+        nextRunKey: null,
+        lastRunAt: null,
+        lastRunDueAt: null,
+        lastOutcome: null,
+        createdAt: now - 90 * DAY_MS,
+        lastEditedAt: now - 5 * DAY_MS,
+      },
+    ),
+  ]);
+}
 
 /** Alex's habits for the week that holds today: 💊 Pills (morning and evening, health: 10 of 12 Monday to Saturday when today is a Sunday, the morning ticked today, so "11 of 13"), 💧 Water (6 a day, 4 of 6 days), 🎸 Guitar (3 times a week) and Mom's metoprolol (a care habit, private) and 🧘 Stretch (a morning window left unticked today, so "Window ended" shows once it has passed). */
 async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
@@ -4485,6 +4591,7 @@ async function buildPeople(input: {
                 label: null,
                 source: 'said',
                 zoneOffered: false,
+                pausesScheduled: null,
               },
             ],
           }),
@@ -6407,6 +6514,17 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             batch.set(person.collection('habitDays').doc(entry.id), entry.day),
           );
         }
+        const scheduledWorld = people
+          ? await buildScheduled({ now: context.now, encryption })
+          : null;
+        if (scheduledWorld) {
+          scheduledWorld.forEach((entry) =>
+            batch.set(
+              person.collection('scheduledActions').doc(entry.id),
+              entry.doc,
+            ),
+          );
+        }
         const learning = people
           ? await buildLearning({
               now: context.now,
@@ -6544,6 +6662,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             7 +
             (projects ? projects.projects.length + projects.tasks.length : 0) +
             (habitWorld ? habitWorld.habits.length + habitWorld.days.length : 0) +
+            (scheduledWorld ? scheduledWorld.length : 0) +
             (learning
               ? learning.patterns.length +
                 learning.observations.length +

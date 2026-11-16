@@ -10,12 +10,19 @@ import { db } from '@lib/firebase/config';
 
 import { store } from '@/store';
 import { generateUuid } from '@/utils';
+import { msToDayKey } from '@/utils/cadenceUtils';
+import type { RepeatCapError, RepeatRule } from '@/utils/repeatRule';
+import { HELM_CAPS } from '@apps/helm/constants';
 import {
+  buildScheduleRule,
   canRunNow,
   planScheduleChange,
+  readNextRun,
   readSpanPause,
+  toDayKeyIn,
   type ActionState,
   type ChangeRefusal,
+  type RunSchedule,
   type ScheduleChange,
 } from '@apps/helm/engine/scheduledActions';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
@@ -29,6 +36,9 @@ const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
 const actionsOf = (uid: string) => collection(userOf(uid), 'scheduledActions');
 
 export type ScheduledWriteRefusal = ChangeRefusal | 'notNow' | 'gone';
+
+/** The command kinds an action the person makes by hand may write: Helm's own, never one that leaves it. */
+const OWN_KINDS = ['createTask', 'updateTask', 'planDay'];
 
 export type ScheduledWrite =
   | { refused: ScheduledWriteRefusal }
@@ -272,4 +282,231 @@ export function stampWaitingScheduledActions(uid: string, now: number) {
     .update(userOf(uid), stamp(now))
     .commit()
     .then(() => true);
+}
+
+/** The first marked time-away span (still going or ahead) with a run of `schedule` inside it, as the pause that span asks for. */
+const readMarkedSpanPause = (
+  schedule: RunSchedule,
+  homeZone: string,
+  now: number,
+) => {
+  const today = toDayKeyIn(now, homeZone);
+  const self = store.getState().helm.who.items.find((who) => who.isSelf);
+  return (
+    (self?.away ?? [])
+      .filter(
+        (span) => span.pausesScheduled === true && msToDayKey(span.to) >= today,
+      )
+      .flatMap((span) => {
+        const pause = readSpanPause(
+          schedule,
+          homeZone,
+          { fromDay: msToDayKey(span.from), toDay: msToDayKey(span.to) },
+          now,
+        );
+        return pause ? [pause] : [];
+      })[0] ?? null
+  );
+};
+
+export type ScheduledCreateRefusal =
+  RepeatCapError | 'full' | 'neverComes' | 'words';
+
+export interface ScheduledCreateInput {
+  title: string;
+  instruction: string | null;
+  rule: RepeatRule | null;
+  startsOn: string;
+  time: string;
+}
+
+/** Makes an action by hand from Browse. It runs as a turn with the person's words and may only write Helm's own kinds; a time away marked "pause what runs at home" holds it too. Undo deletes it. */
+export function createScheduledAction(
+  uid: string,
+  input: ScheduledCreateInput,
+):
+  | { refused: ScheduledCreateRefusal }
+  | { written: Promise<void>; undo: () => Promise<void>; createdId: string } {
+  const now = Date.now();
+  const homeZone = homeZoneOf();
+  const title = input.title.trim();
+  const instruction = input.instruction?.trim() || null;
+  if (!title || !instruction) return { refused: 'words' };
+  const kept = store
+    .getState()
+    .helm.scheduledActions.items.filter(
+      (action) => action.status !== 'ended',
+    ).length;
+  if (kept >= HELM_CAPS.scheduledActions) return { refused: 'full' };
+  const built = buildScheduleRule(
+    input.rule,
+    input.startsOn,
+    toDayKeyIn(now, homeZone),
+  );
+  if ('error' in built) return { refused: built.error };
+  const unpaused: RunSchedule = {
+    repeat: built.repeat,
+    startsOn: input.startsOn,
+    time: input.time,
+    timeZone: null,
+    skipped: [],
+    moved: {},
+    pausedFrom: null,
+    pausedUntil: null,
+  };
+  const pause = readMarkedSpanPause(unpaused, homeZone, now);
+  const schedule: RunSchedule = { ...unpaused, ...pause };
+  const first = readNextRun(schedule, homeZone, { now });
+  if (!first) return { refused: 'neverComes' };
+  const id = generateUuid();
+  const words: ScheduledActionSealed = {
+    title,
+    instruction,
+    heldCommands: null,
+  };
+  const written = (async () => {
+    const encryption = await getHelmEncryption(uid);
+    const batch = writeBatch(db);
+    batch.set(doc(actionsOf(uid), id), {
+      status: 'active',
+      endedBy: null,
+      ...schedule,
+      nextRunAt: first.at,
+      nextRunKey: first.key,
+      splitFromId: null,
+      kind: 'prompt',
+      allowed: OWN_KINDS,
+      needsApproval: false,
+      lastRunAt: null,
+      lastRunCaptureId: null,
+      lastRunDueAt: null,
+      lastOutcome: null,
+      lastFailReason: null,
+      runNowAt: null,
+      createdBy: 'person',
+      sourceCaptureId: null,
+      createdAt: now,
+      lastEditedAt: null,
+      sealed: await sealJson<ScheduledActionSealed>(words, encryption),
+    });
+    batch.update(userOf(uid), stamp(now));
+    await batch.commit();
+  })();
+  return {
+    written,
+    createdId: id,
+    undo: async () => {
+      await written;
+      const undoBatch = writeBatch(db);
+      undoBatch.delete(doc(actionsOf(uid), id));
+      undoBatch.update(userOf(uid), stamp(Date.now()));
+      await undoBatch.commit();
+    },
+  };
+}
+
+/** "Until a day you pick": every run from today to that day (a day key, inclusive) waits, the action stays active. */
+export function pauseScheduledActionUntil(
+  uid: string,
+  id: string,
+  toDay: string,
+): ScheduledWrite {
+  const action = liveOf(id);
+  if (!action) return { refused: 'gone' };
+  if (action.status === 'ended') return { refused: 'ended' };
+  const now = Date.now();
+  const homeZone = homeZoneOf();
+  const state = toActionState(action);
+  const today = toDayKeyIn(now, state.timeZone ?? homeZone);
+  const pause = readSpanPause(state, homeZone, { fromDay: today, toDay }, now);
+  if (!pause) return { refused: 'noRun' };
+  const next = readNextRun({ ...state, ...pause }, homeZone, { now });
+  if (!next) return { refused: 'neverComes' };
+  return writeFields(
+    uid,
+    action,
+    { ...pause, nextRunAt: next.at, nextRunKey: next.key },
+    now,
+    { createdId: null, dropped: 0 },
+  );
+}
+
+/** Changes what an action is called and what it does; Undo puts the earlier words back while these are still the ones shown. */
+export function changeScheduledWords(
+  uid: string,
+  id: string,
+  words: { title: string; instruction: string | null },
+): ScheduledWrite {
+  const action = liveOf(id);
+  if (!action) return { refused: 'gone' };
+  if (action.status === 'ended') return { refused: 'ended' };
+  const writeWords = async (next: ScheduledActionSealed) => {
+    const at = Date.now();
+    const encryption = await getHelmEncryption(uid);
+    const batch = writeBatch(db);
+    batch.update(doc(actionsOf(uid), id), {
+      sealed: await sealJson<ScheduledActionSealed>(next, encryption),
+      lastEditedAt: at,
+    });
+    batch.update(userOf(uid), stamp(at));
+    await batch.commit();
+  };
+  const before: ScheduledActionSealed = {
+    title: action.title,
+    instruction: action.instruction,
+    heldCommands: action.heldCommands,
+  };
+  return {
+    written: writeWords({ ...before, ...words }),
+    createdId: null,
+    dropped: 0,
+    undo: async () => {
+      const live = liveOf(id);
+      if (
+        !live ||
+        live.title !== words.title ||
+        live.instruction !== words.instruction
+      )
+        return 'kept';
+      await writeWords(before);
+      return 'undone';
+    },
+  };
+}
+
+/** Takes a skip or a move off one run (a day key), so it runs as the rule says. */
+export function restoreScheduledRun(
+  uid: string,
+  id: string,
+  key: string,
+): ScheduledWrite {
+  const action = liveOf(id);
+  if (!action) return { refused: 'gone' };
+  if (action.status === 'ended') return { refused: 'ended' };
+  const now = Date.now();
+  const state = toActionState(action);
+  const restored: ActionState = {
+    ...state,
+    skipped: state.skipped.filter((one) => one !== key),
+    moved: Object.fromEntries(
+      Object.entries(state.moved).filter(([one]) => one !== key),
+    ),
+  };
+  const next =
+    action.status === 'active'
+      ? readNextRun(restored, homeZoneOf(), { now })
+      : null;
+  return writeFields(
+    uid,
+    action,
+    {
+      skipped: restored.skipped,
+      moved: restored.moved,
+      ...(action.status === 'active'
+        ? { nextRunAt: next?.at ?? null, nextRunKey: next?.key ?? null }
+        : {}),
+    },
+    now,
+    { createdId: null, dropped: 0 },
+  );
 }

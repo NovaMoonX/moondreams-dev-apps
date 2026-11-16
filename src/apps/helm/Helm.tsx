@@ -30,6 +30,7 @@ import ProjectDetail from '@apps/helm/components/projects/ProjectDetail';
 import ProjectsView from '@apps/helm/components/projects/ProjectsView';
 import HabitScreen from '@apps/helm/components/habits/HabitScreen';
 import HabitsView from '@apps/helm/components/habits/HabitsView';
+import ScheduledView from '@apps/helm/components/scheduled/ScheduledView';
 import PlaceDetail from '@apps/helm/components/who/PlaceDetail';
 import WhoDetail from '@apps/helm/components/who/WhoDetail';
 import WhoView from '@apps/helm/components/who/WhoView';
@@ -52,6 +53,7 @@ const ORIGIN_LABELS: Partial<Record<HelmView, string>> = {
   people: HELM_COPY.peopleTitle,
   projects: HELM_COPY.projectsTitle,
   habits: HELM_COPY.habitsTitle,
+  scheduled: HELM_COPY.scheduledTitle,
   procedures: HELM_COPY.proceduresTitle,
   search: HELM_COPY.searchTitle,
 };
@@ -143,6 +145,8 @@ function HelmApp() {
             onOpenComingUp={() => showView('comingUp')}
             onOpenWho={(whoId) => showView('who', whoId)}
             onOpenHabit={(habitId) => showView('habit', habitId)}
+            onOpenConnectedApps={() => showView('connectedApps')}
+            onOpenActivity={() => showView('activity')}
           />
         )}
         {!isLocked && view === 'comingUp' && (
@@ -182,6 +186,7 @@ function HelmApp() {
           <ActivityScreen
             onBack={goBack}
             onOpenOutside={() => showView('outside')}
+            onOpenConnectedApps={() => showView('connectedApps')}
           />
         )}
         {!isLocked && view === 'outside' && (
@@ -242,6 +247,13 @@ function HelmApp() {
             onBack={goBack}
             onHome={goHome}
             onOpenHabit={(habitId) => showView('habit', habitId)}
+          />
+        )}
+        {!isLocked && view === 'scheduled' && (
+          <ScheduledView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenActivity={() => showView('activity')}
           />
         )}
         {!isLocked && view === 'habit' && (

@@ -4498,9 +4498,21 @@ async function writeResult(
       keptSchedule.length > 0
         ? await readScheduledState(transaction, firestore, base, key)
         : new Map();
+    const hasNewSchedule = keptSchedule.some(
+      (command) => command.kind === 'scheduleAction',
+    );
+    const selfWhoSnap =
+      hasNewSchedule && selfWhoId
+        ? await transaction.get(firestore.doc(`${base}/who/${selfWhoId}`))
+        : null;
     const schedulePlan = planScheduledActions({
       commands: keptSchedule,
       stored: scheduledStored,
+      pauseSpans: selfWhoSnap?.exists
+        ? readWhoWhere(openSealed(key, selfWhoSnap.get('sealed'))).away.filter(
+            (span) => span.pausesScheduled === true,
+          )
+        : [],
       homeZone: String(profileSnap?.get('timeZone') ?? timeZone),
       now,
       captureId: captureRef.id,
