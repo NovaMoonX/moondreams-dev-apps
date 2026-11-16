@@ -24,6 +24,7 @@ import TopicRow from '@apps/helm/components/knowledge/TopicRow';
 import TopicVersionsSheet from '@apps/helm/components/knowledge/TopicVersionsSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { CLAIM_MS, HELM_COPY } from '@apps/helm/constants';
+import { useCaptureById } from '@apps/helm/hooks/useCaptureById';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { useTopicVersions } from '@apps/helm/hooks/useTopicVersions';
 import {
@@ -40,10 +41,13 @@ import {
 } from '@apps/helm/store/actions/topicActions';
 import {
   selectAllTopics,
+  selectNoteById,
   selectNotesByTopic,
   selectSubtopicsByParent,
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
+import type { TopicSource } from '@apps/helm/types';
+import { outsideVias } from '@apps/helm/utils/outsideAttribution';
 import {
   createRefusal,
   legalParents,
@@ -52,6 +56,18 @@ import {
 } from '@apps/helm/utils/topicTree';
 
 const { option } = DropdownMenuFactories;
+
+/** The one quiet line naming the outside assistant behind a part, when one is. */
+function OutsideFrom({ sources }: { sources: TopicSource[] }) {
+  const noteById = useAppSelector(selectNoteById);
+  const captureById = useCaptureById();
+  const vias = outsideVias(sources, noteById, captureById);
+  return vias.length === 0 ? null : (
+    <span className='text-muted-foreground min-w-0 truncate text-[13px]'>
+      {HELM_COPY.assistantFrom(vias.join(', '))}
+    </span>
+  );
+}
 
 const HEADING_CLASS = {
   1: 'helm-serif text-[22px] leading-[28px]',
@@ -475,20 +491,23 @@ function TopicScreen({
                     </h2>
                   ))}
                 <MarkdownText text={section.markdown} />
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='sm'
-                  aria-label={HELM_COPY.topicSectionOpen(section.heading)}
-                  className="text-muted-foreground relative -ml-2 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSourcesId(section.id);
-                  }}
-                >
-                  {HELM_COPY.sourcesTitle}
-                  <ChevronRight className='size-3.5' aria-hidden='true' />
-                </Button>
+                <div className='flex items-center justify-between gap-3'>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='sm'
+                    aria-label={HELM_COPY.topicSectionOpen(section.heading)}
+                    className="text-muted-foreground relative -ml-2 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSourcesId(section.id);
+                    }}
+                  >
+                    {HELM_COPY.sourcesTitle}
+                    <ChevronRight className='size-3.5' aria-hidden='true' />
+                  </Button>
+                  <OutsideFrom sources={section.sources} />
+                </div>
               </section>
             ))}
             <Button

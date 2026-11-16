@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
@@ -12,6 +12,7 @@ import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY, OUTSIDE_CONVERSATION_GAP_MS } from '@apps/helm/constants';
 import { markCaptureSeen } from '@apps/helm/store/actions/captureActions';
+import { setOutsideSeenAt } from '@apps/helm/store/actions/settingsActions';
 import { selectOutsideCaptures } from '@apps/helm/store/selectors/captureSelectors';
 import {
   groupOutsideConversations,
@@ -86,6 +87,13 @@ function OutsideScreen({
     (state) => state.helm.outsideCaptures,
   );
   const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  useEffect(() => {
+    if (uid === null) return;
+    setOutsideSeenAt(uid, Date.now()).catch((error: unknown) =>
+      console.error('Helm outside view not marked looked at', error),
+    );
+  }, [uid]);
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const conversations = useMemo(

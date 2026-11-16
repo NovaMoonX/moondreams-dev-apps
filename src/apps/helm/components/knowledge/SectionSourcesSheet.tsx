@@ -9,11 +9,13 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
+import { useCaptureById } from '@apps/helm/hooks/useCaptureById';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { markNoteChecked } from '@apps/helm/store/actions/noteActions';
 import { selectNoteById } from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { TopicSection, TopicSource } from '@apps/helm/types';
+import { outsideSourceVia } from '@apps/helm/utils/outsideAttribution';
 
 interface SectionSourcesSheetProps {
   /** The part to show, read live by the host; null keeps the sheet closed. */
@@ -34,6 +36,7 @@ function SectionSourcesSheet({
   const { user } = useAuth();
   const { addToast } = useToast();
   const noteById = useAppSelector(selectNoteById);
+  const captureById = useCaptureById();
   const media = useAppSelector((state) => state.helm.media.items);
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
@@ -48,6 +51,25 @@ function SectionSourcesSheet({
       const note = noteId === null ? undefined : noteById.get(noteId);
       return note ? note.title || HELM_COPY.noteUntitled : null;
     };
+    const outsideVia = outsideSourceVia(source, noteById, captureById);
+    if (
+      outsideVia !== null &&
+      (source.kind === 'note' || source.kind === 'message')
+    ) {
+      const noteId = source.noteId;
+      return {
+        text: HELM_COPY.sourceOutside(
+          outsideVia,
+          formatDateShort(
+            source.kind === 'message'
+              ? source.at
+              : (noteById.get(source.noteId)?.createdAt ?? 0),
+          ),
+        ),
+        noteId: noteId !== null && noteById.has(noteId) ? noteId : null,
+        unCheckedNoteId: null,
+      };
+    }
     if (source.kind === 'note') {
       const title = noteTitle(source.noteId);
       return title === null

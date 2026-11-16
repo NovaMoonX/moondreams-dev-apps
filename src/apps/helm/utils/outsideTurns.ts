@@ -1,5 +1,5 @@
 import { HELM_COPY } from '@apps/helm/constants';
-import type { OpenCapture } from '@apps/helm/types';
+import type { EffectRef, OpenCapture, OpenExecution } from '@apps/helm/types';
 
 export interface OutsideConversation {
   id: string;
@@ -42,4 +42,51 @@ export function groupOutsideConversations(
         })),
     )
     .sort((a, b) => b.endedAt - a.endedAt);
+}
+
+const isUndoneExecution = (execution: OpenExecution | undefined) =>
+  execution !== undefined && execution.undoneByExecutionId !== null;
+
+export interface OutsideAdditions {
+  /** Executions of turns that arrived since the person last looked and were not taken back. */
+  count: number;
+  /** The assistants that made them, in the order they first appear. */
+  vias: string[];
+  /** The one thing's title when there is exactly one and it is already loaded; null otherwise. */
+  title: string | null;
+}
+
+/** What outside assistants made since `since`: sorted turns with an execution that is not known to be undone and not dismissed. */
+export function readOutsideAdditions(
+  captures: OpenCapture[],
+  since: number,
+  executionsById: Map<string, OpenExecution>,
+  titleOf: (ref: EffectRef) => string | null,
+): OutsideAdditions {
+  const made = captures
+    .filter(
+      (capture) =>
+        isOutsideTurn(capture) &&
+        capture.status === 'sorted' &&
+        capture.dismissedAt === null &&
+        capture.createdAt > since,
+    )
+    .flatMap((capture) =>
+      capture.executionIds
+        .filter((id) => !isUndoneExecution(executionsById.get(id)))
+        .map((id) => ({
+          via: capture.via || HELM_COPY.outsideUnnamed,
+          execution: executionsById.get(id),
+        })),
+    );
+  const only = made.length === 1 ? made[0].execution : undefined;
+  return {
+    count: made.length,
+    vias: [...new Set(made.map((entry) => entry.via))],
+    title:
+      only?.effectRefs
+        .filter((ref) => ref.op === 'create')
+        .map(titleOf)
+        .find((title) => title !== null) ?? null,
+  };
 }
