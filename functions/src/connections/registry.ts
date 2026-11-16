@@ -45,6 +45,13 @@ export interface SyncPageResult {
   resumeState: string | null;
 }
 
+/** What every live category accepts; an adapter ignores what its records do not carry. Days are YYYY-MM-DD. */
+export interface LiveQueryArgs {
+  text?: string | null;
+  from?: string | null;
+  to?: string | null;
+}
+
 export interface LiveQueryRequest {
   category: string;
   args: unknown;

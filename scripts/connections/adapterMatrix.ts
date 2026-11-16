@@ -1015,7 +1015,8 @@ assert.equal(aListAdapter.deepLink('???', aListCtx(OWNER)), '/a-list');
 const CO_SELLER = 'co-seller-uid';
 const BUYER_NAME = 'SECRET BUYER NAME';
 const BUYER_CONTACT = 'secret-buyer@example.test';
-const BUYER_MESSAGE = 'SECRET BUYER MESSAGE';
+const BUYER_FIRST = 'Pat';
+const BUYER_PHONE = '206-555-0142';
 const FLOOR_PRICE = 3131;
 const SALE_PRICE = 5252;
 const ORIGINAL_PRICE = 7373;
@@ -1090,7 +1091,14 @@ await Promise.all([
     .collection('items')
     .doc('desk')
     .set(
-      saleItem('Oak desk', 'PENDING', { pending: pendingFor(TODAY + 2 * DAY) }),
+      saleItem('Oak desk', 'PENDING', {
+        pending: pendingFor(TODAY + 2 * DAY),
+        condition: 'GOOD',
+        statusHistory: [
+          { at: TODAY - 6 * DAY, kind: 'STATUS', byUid: OWNER },
+          { at: TODAY - 3 * DAY, kind: 'STATUS', byUid: OWNER },
+        ],
+      }),
     ),
   fallSale
     .collection('items')
@@ -1113,17 +1121,34 @@ await Promise.all([
         sale: { priceCents: SALE_PRICE, buyerName: BUYER_NAME },
       }),
     ),
-  fallSale.collection('inquiries').doc('q1').set({
-    status: 'NEW',
-    buyerName: BUYER_NAME,
-    contact: BUYER_CONTACT,
-    message: BUYER_MESSAGE,
-  }),
+  fallSale
+    .collection('inquiries')
+    .doc('q1')
+    .set({
+      status: 'NEW',
+      itemTitleAtSend: 'Oak desk',
+      name: `${BUYER_FIRST} Q. Surname`,
+      email: BUYER_CONTACT,
+      phone: BUYER_PHONE,
+      message: 'Is it still free this weekend?',
+      createdAt: TODAY - 2 * DAY,
+    }),
+  fallSale
+    .collection('inquiries')
+    .doc('q4')
+    .set({
+      status: 'HANDLED',
+      itemTitleAtSend: 'Gray sofa',
+      name: 'buyer@example.test',
+      email: BUYER_CONTACT,
+      phone: BUYER_PHONE,
+      message: `Call me on ${BUYER_PHONE} please`,
+      createdAt: TODAY - 9 * DAY,
+    }),
   fallSale.collection('inquiries').doc('q2').set({
     status: 'HANDLED',
     buyerName: BUYER_NAME,
     contact: BUYER_CONTACT,
-    message: BUYER_MESSAGE,
   }),
   goingOnceSales
     .doc('spring')
@@ -1153,7 +1178,7 @@ const goingOnceCtx = (uid: string) => ({
       readerAppId: 'helm',
       connectorId: 'app:going-once',
       accountId: 'site',
-      categoryIds: ['pickups', 'sales', 'things'],
+      categoryIds: ['pickups', 'sales', 'things', 'allThings', 'questions'],
       options: null,
     },
     goingOnceAdapter.manifest,
@@ -1246,6 +1271,153 @@ goingOnceAll.forEach((record) => {
   );
 });
 await assert.rejects(() => runGoingOnce(OWNER, 'nothing'), /Unknown category/);
+
+const goingOnceDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+const queryGoingOnce = (uid: string, category: string, args: unknown) =>
+  goingOnceAdapter.query!(goingOnceCtx(uid), { category, args });
+const allThings = await queryGoingOnce(OWNER, 'allThings', {});
+assertShape(allThings.records);
+assert.deepEqual(
+  refs(allThings.records).sort(),
+  [
+    'bench',
+    'bike',
+    'desk',
+    'draft',
+    'gone',
+    'lamp',
+    'nodate',
+    'pan',
+    'sofa',
+    'unpriced',
+  ]
+    .flatMap((id) =>
+      id === 'bench'
+        ? ['sales/spring/items/bench']
+        : [`sales/fall/items/${id}`],
+    )
+    .sort(),
+  'drafts, taken-off things and finished sales are included',
+);
+const stateOf = (title: string) =>
+  allThings.records.find((record) => record.title === title)?.extra.state;
+assert.equal(stateOf('Draft thing'), 'draft');
+assert.equal(stateOf('Withdrawn thing'), 'withdrawn');
+assert.equal(stateOf('No price yet'), 'notReady');
+assert.equal(stateOf('Gray sofa'), 'available');
+assert.equal(stateOf('Cast iron pan'), 'sold');
+const desk = allThings.records.find((record) => record.title === 'Oak desk')!;
+assert.equal(desk.startAt, TODAY - 3 * DAY, 'the newest status change');
+assert.equal(desk.amountCents, 4000);
+assert.equal(desk.currency, 'USD');
+assert.deepEqual(desk.extra, {
+  state: 'pending',
+  condition: 'Good',
+  floorPriceCents: FLOOR_PRICE,
+});
+assert.equal(desk.detail, `Good · ${ITEM_NOTE}`);
+assert.equal(desk.subtitle, 'Fall clear-out');
+assert.equal(allThings.totalCents, null);
+assert.equal(allThings.isPartial, false);
+assert.equal(
+  (await queryGoingOnce(OWNER, 'allThings', { text: 'FALL' })).records.length,
+  9,
+  'text also matches the sale name',
+);
+assert.deepEqual(
+  (await queryGoingOnce(OWNER, 'allThings', { text: 'lamp' })).records.map(
+    (record) => record.title,
+  ),
+  ['Floor lamp'],
+);
+assert.deepEqual(
+  (
+    await queryGoingOnce(OWNER, 'allThings', {
+      from: goingOnceDay(TODAY - 4 * DAY),
+      to: goingOnceDay(TODAY),
+    })
+  ).records.map((record) => record.title),
+  ['Oak desk'],
+);
+assert.equal(
+  (await queryGoingOnce(OWNER, 'allThings', { from: 'nope', to: 5 })).records
+    .length,
+  10,
+  'unreadable days are ignored',
+);
+assert.equal(
+  (await queryGoingOnce(CO_SELLER, 'allThings', {})).records.length,
+  9,
+  'a co-seller reads the sale they are in',
+);
+assert.deepEqual((await queryGoingOnce(OTHER, 'allThings', {})).records, []);
+
+const questions = await queryGoingOnce(OWNER, 'questions', {});
+assertShape(questions.records);
+assert.deepEqual(
+  questions.records.map((record) => [
+    record.title,
+    record.detail,
+    record.extra,
+    record.startAt,
+  ]),
+  [
+    [
+      'Oak desk',
+      'Is it still free this weekend?',
+      { buyerFirstName: BUYER_FIRST, status: 'new' },
+      TODAY - 2 * DAY,
+    ],
+    [
+      'Gray sofa',
+      null,
+      { buyerFirstName: null, status: 'handled' },
+      TODAY - 9 * DAY,
+    ],
+    ['A thing', null, { buyerFirstName: null, status: 'handled' }, null],
+  ],
+  'newest first; a message with a phone number and a name that is an email are left out',
+);
+assert.equal(
+  (await queryGoingOnce(OWNER, 'questions', { text: 'sofa' })).records.length,
+  1,
+);
+assert.equal(
+  (
+    await queryGoingOnce(OWNER, 'questions', {
+      from: goingOnceDay(TODAY - 3 * DAY),
+    })
+  ).records.length,
+  1,
+);
+assert.equal(
+  (await queryGoingOnce(CO_SELLER, 'questions', {})).records.length,
+  3,
+);
+assert.deepEqual((await queryGoingOnce(OTHER, 'questions', {})).records, []);
+[allThings, questions].forEach(({ records }) =>
+  records.forEach((record) => {
+    const values = flatten(record);
+    assert.ok(
+      ![ORIGINAL_PRICE].some((secret) => values.includes(secret)),
+      record.sourceRef,
+    );
+    assert.ok(
+      !values.some(
+        (value) =>
+          typeof value === 'string' &&
+          [BUYER_NAME, BUYER_CONTACT, BUYER_PHONE, 'Surname', 'buyer@'].some(
+            (secret) => value.includes(secret),
+          ),
+      ),
+      record.sourceRef,
+    );
+  }),
+);
+await assert.rejects(
+  () => queryGoingOnce(OWNER, 'sales', {}),
+  /Unknown category/,
+);
 assert.equal(await goingOnceAdapter.status(goingOnceCtx(OWNER)), 'ok');
 assert.equal(await goingOnceAdapter.status(goingOnceCtx(OTHER)), 'noAccess');
 assert.equal(
@@ -2645,7 +2817,10 @@ assert.deepEqual(
     category.id,
     category.isOnAtConnect,
   ]),
-  [['boxCounts', false]],
+  [
+    ['boxCounts', false],
+    ['revealedItems', false],
+  ],
 );
 const waitCtx = (uid: string) => ({
   uid,
@@ -2745,6 +2920,58 @@ await firestore
   .get();
 assert.equal(itemReads.length, 1, 'the spy sees an item query');
 unwatch.forEach((restore) => restore());
+
+const queryWait = (uid: string, args: unknown) =>
+  waitAdapter.query!(waitCtx(uid), { category: 'revealedItems', args });
+const revealed = await queryWait(OWNER, {});
+assertShape(revealed.records);
+assert.deepEqual(
+  revealed.records.map((record) => [record.title, record.subtitle]).sort(),
+  [
+    [ITEM_SECRET, 'Date ideas'],
+    [ITEM_SECRET, 'Date ideas'],
+  ],
+  "only revealed items of readable boxes of the owner's own spaces; hidden items, the garbled box and a stranger's box give nothing",
+);
+assert.equal(revealed.matchedCount, 2);
+assert.equal(revealed.totalCents, null);
+assert.equal(revealed.currency, null);
+assert.equal(revealed.isPartial, false);
+revealed.records.forEach((record) => {
+  assert.equal(record.kind, 'knowledge');
+  assert.equal(record.startAt, NOW);
+  assert.match(record.detail ?? '', /^Date ideas · revealed Nov 10, 2026$/);
+  assert.match(
+    record.sourceRef,
+    /^spaces\/wtw-home\/boxes\/dates\/items\/i[01]$/,
+  );
+  assert.ok(
+    !flatten(record).some(
+      (value) => typeof value === 'string' && /INVITE|invite/i.test(value),
+    ),
+  );
+  assert.ok(!flatten(record).includes(OWNER), 'no author');
+});
+assert.equal((await queryWait(OWNER, { text: 'date IDEAS' })).matchedCount, 2);
+assert.equal((await queryWait(OWNER, { text: 'trips' })).matchedCount, 0);
+assert.equal(
+  (await queryWait(OWNER, { from: '2026-11-11', to: null })).matchedCount,
+  0,
+);
+assert.equal(
+  (await queryWait(OWNER, { from: '2026-11-10', to: '2026-11-10' }))
+    .matchedCount,
+  2,
+);
+assert.deepEqual((await queryWait(OTHER, {})).records, []);
+assert.deepEqual(
+  (await queryWait(STRANGER, {})).records.map((record) => record.sourceRef),
+  ['spaces/wtw-stranger/boxes/hidden/items/i0'],
+);
+await assert.rejects(
+  () => waitAdapter.query!(waitCtx(OWNER), { category: 'boxCounts', args: {} }),
+  /Unknown category/,
+);
 
 // One sealed summary opened under the plan's key; only totals and names leave.
 const RUNWAY_FORBIDDEN = [

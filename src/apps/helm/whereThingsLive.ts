@@ -664,6 +664,8 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   syncedApp('app:going-once', 'pickups', 'Pickups'),
   syncedApp('app:going-once', 'sales', 'Sales'),
   syncedApp('app:going-once', 'things', 'Things for sale'),
+  liveApp('app:going-once', 'allThings', 'Everything in the sales'),
+  liveApp('app:going-once', 'questions', "Buyers' questions"),
   syncedApp('app:nine-lives', 'cats', 'Cats'),
   syncedApp('app:nine-lives', 'vetVisits', 'Vet visits'),
   syncedApp('app:nine-lives', 'dueCare', 'Vaccines and preventives due'),
@@ -688,6 +690,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
   syncedApp('app:waypoint', 'tripBalances', 'What is owed on trips'),
   syncedApp('app:waypoint', 'tripChecklist', 'Trip checklists'),
   syncedApp('app:worth-the-wait', 'boxCounts', 'Box counts'),
+  liveApp('app:worth-the-wait', 'revealedItems', 'Revealed items'),
 ];
 
 /** Command or terminal-tool kind to the writer that makes the change, for a sentence and a tap alike. */

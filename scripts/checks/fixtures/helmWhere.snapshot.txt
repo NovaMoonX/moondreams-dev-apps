@@ -50,6 +50,8 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Pickups: look in <synced_records>, then call search_synced; you cannot change it.
 - Sales: look in <synced_records>, then call search_synced; you cannot change it.
 - Things for sale: look in <synced_records>, then call search_synced; you cannot change it.
+- Everything in the sales: call search_app_records; you cannot change it.
+- Buyers' questions: call search_app_records; you cannot change it.
 - Cats: look in <synced_records>, then call search_synced; you cannot change it.
 - Vet visits: look in <synced_records>, then call search_synced; you cannot change it.
 - Vaccines and preventives due: look in <synced_records>, then call search_synced; you cannot change it.
@@ -74,6 +76,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - What is owed on trips: look in <synced_records>, then call search_synced; you cannot change it.
 - Trip checklists: look in <synced_records>, then call search_synced; you cannot change it.
 - Box counts: look in <synced_records>, then call search_synced; you cannot change it.
+- Revealed items: call search_app_records; you cannot change it.
 </where_things_live>
 
 <where_things_live>
