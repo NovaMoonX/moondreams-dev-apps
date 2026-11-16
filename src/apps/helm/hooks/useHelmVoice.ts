@@ -666,6 +666,7 @@ export function useHelmVoice() {
     } | null = null,
   ) {
     if (!uid) return false;
+    if (!isSpoken) isTypedSince.current = true;
     const turn = getNextTurn();
     const result = await takeDeviceCheckIn(uid, text, {
       sessionId: turn.sessionId,
@@ -1501,8 +1502,9 @@ export function useHelmVoice() {
     handleTyped,
     handleCheckIn: (text: string) => takeCheckIn(text, false),
     registerField,
-    /** The question a reply last said aloud, which its card marks as listened for. */
+    /** A tapped choice: whether its turn is spoken, and how to have its reply said. */
     followTap,
+    /** The question a reply last said aloud, which its card marks as listened for. */
     askedAloud,
     /** The wake phrase is on here, so a question asked aloud can still be answered with it for a while. */
     canWakeAnswer: isWakeWordOn && keyStatus === 'ready',
