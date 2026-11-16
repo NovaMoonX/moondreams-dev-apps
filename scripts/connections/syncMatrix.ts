@@ -1000,6 +1000,11 @@ const main = async () => {
       format: null,
       place: 'Pin Oak Cafe @ 4 Elm St',
     });
+    assert.deepEqual(read('fx-m-teams-word'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-range'), {
+      format: null,
+      place: '2000-2010 Main St, Suite 200',
+    });
     assert.ok(
       !JSON.stringify(result.records).match(
         /https?:|tel:|zoom|teams\.|secret|hidden|482913|meet\./,

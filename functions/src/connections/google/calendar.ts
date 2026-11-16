@@ -229,19 +229,27 @@ const MEETING_HOSTS = [
 ];
 const PLACE_CHARS = 120;
 
-const LINK_RE = /[a-z][a-z0-9+.-]*:\/\/|\bwww\.|\S@\S+\.\S/i;
-const DIAL_RE = /\+\s?\d|\d[\d\s().-]{5,}\d|\bpin\b\s*[:#]?\s*\d/i;
+const LINK_RE = /[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
+const EMAIL_RE = /\S@\S+\.\S/;
+const MEETING_WORDS_RE =
+  /\b(?:zoom|webex|google meet|microsoft teams|teams meeting|facetime)\b/i;
+const DIAL_RE =
+  /(?:\+|\btel:)\s?\d|\(\d{3}\)\s?\d{3}|\b\d{3}[\s.-]\d{3}[\s.-]\d{4}\b|\bpin\b\s*[:#]?\s*\d{4,}|\bdial\b[^a-z]*\d/i;
 
 const hasMeetingHost = (text: string) => {
   const lower = text.toLowerCase();
   return MEETING_HOSTS.some((known) => lower.includes(known));
 };
 
-const isLinkText = (text: string) => LINK_RE.test(text) || hasMeetingHost(text);
+const isVideoText = (text: string) =>
+  LINK_RE.test(text) || hasMeetingHost(text) || MEETING_WORDS_RE.test(text);
 
 const toPlace = (event: CalendarEvent) => {
   const text = event.location?.trim() ?? '';
-  return text && !isLinkText(text) && !DIAL_RE.test(text)
+  return text &&
+    !isVideoText(text) &&
+    !EMAIL_RE.test(text) &&
+    !DIAL_RE.test(text)
     ? text.slice(0, PLACE_CHARS)
     : null;
 };
@@ -255,7 +263,7 @@ const toFormat = (event: CalendarEvent): 'video' | 'phone' | null => {
   if (
     types.includes('video') ||
     Boolean(event.hangoutLink) ||
-    isLinkText(location)
+    isVideoText(location)
   )
     return 'video';
   return types.includes('phone') || DIAL_RE.test(location) ? 'phone' : null;

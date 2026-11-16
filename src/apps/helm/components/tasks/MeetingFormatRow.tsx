@@ -29,7 +29,8 @@ function MeetingFormatRow({ editing }: MeetingFormatRowProps) {
           const live = store
             .getState()
             .helm.openTasks.items.find((item) => item.id === task.id);
-          if (live?.meets?.how === meets?.how) saveFields({ meets: previous });
+          if (live && live.meets?.how === meets?.how)
+            saveFields({ meets: previous });
         },
       },
     });
@@ -46,7 +47,7 @@ function MeetingFormatRow({ editing }: MeetingFormatRowProps) {
             type='button'
             variant='tertiary'
             size='sm'
-            className="text-muted-foreground! relative text-xs before:absolute before:-inset-x-2 before:-inset-y-1.5 before:content-['']"
+            className="text-muted-foreground! relative text-xs before:absolute before:-inset-x-2 before:-top-1.5 before:-bottom-0.5 before:content-['']"
             onClick={() => change(null, HELM_COPY.meetsCleared)}
           >
             {HELM_COPY.clearField}
