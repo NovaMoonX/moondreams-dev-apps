@@ -124,7 +124,10 @@ export function useGuardrailAnswers() {
         const result = await stopPattern(uid, pattern.id);
         if (result !== 'saved') return told(result, '');
         addToast({
-          title: HELM_COPY.guardrailStopped(assistant, name),
+          title:
+            pattern.subject.collection === 'tasks'
+              ? HELM_COPY.guardrailStoppedTask(assistant, name)
+              : HELM_COPY.guardrailStopped(assistant, name),
           type: 'success',
           action: {
             label: HELM_COPY.undo,

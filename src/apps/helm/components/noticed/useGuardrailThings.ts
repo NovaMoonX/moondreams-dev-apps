@@ -16,16 +16,17 @@ export interface GuardrailThingRef {
   name: string;
 }
 
-/** The name of what a guardrail suggests pausing ('' while it can't be read). */
+/** The name of what a guardrail is about, its own subject even after another thing was paused instead (a task's title for a task; '' while it can't be read). */
 export const useGuardrailSubjectName = (pattern: OpenPattern) => {
-  const { effect } = pattern;
+  const { subject } = pattern;
   return useAppSelector((state) =>
-    effect.kind !== 'pause'
-      ? ''
-      : ((effect.collection === 'habits'
+    subject.collection === 'tasks'
+      ? (state.helm.openTasks.items.find((item) => item.id === subject.id)
+          ?.title ?? '')
+      : ((subject.collection === 'habits'
           ? state.helm.habits.items
           : state.helm.projects.items
-        ).find((item) => item.id === effect.id)?.name ?? ''),
+        ).find((item) => item.id === subject.id)?.name ?? ''),
   );
 };
 

@@ -91,16 +91,94 @@ const offerOrder = (a: OpenPattern, b: OpenPattern) =>
   b.stateAt - a.stateAt ||
   a.id.localeCompare(b.id);
 
-/** The guardrails (advice to hold something off): accepted first, then asked, then not yet asked, then what was said no to. */
+const selectProjectItems = (state: RootState) => state.helm.projects.items;
+const selectHabitItems = (state: RootState) => state.helm.habits.items;
+const selectOpenTaskItems = (state: RootState) => state.helm.openTasks.items;
+
+type SubjectLife = 'live' | 'paused' | 'gone';
+
+const readThingLife = (
+  collection: 'projects' | 'habits',
+  id: string,
+  projects: ReturnType<typeof selectProjectItems>,
+  habits: ReturnType<typeof selectHabitItems>,
+): SubjectLife => {
+  const item = (collection === 'habits' ? habits : projects).find(
+    (one) => one.id === id,
+  );
+  return !item || item.isUnreadable
+    ? 'gone'
+    : item.status === 'active'
+      ? 'live'
+      : item.status === 'paused'
+        ? 'paused'
+        : 'gone';
+};
+
+/** Whether what a guardrail asks about is still there to hold: gone when finished, ended or removed, paused when already set aside by another route. */
+const readSubjectLife = (
+  pattern: OpenPattern,
+  projects: ReturnType<typeof selectProjectItems>,
+  habits: ReturnType<typeof selectHabitItems>,
+  tasks: ReturnType<typeof selectOpenTaskItems>,
+): SubjectLife => {
+  const { subject } = pattern;
+  if (subject.id === null) return 'gone';
+  if (subject.collection === 'tasks')
+    return tasks.some((task) => task.id === subject.id && !task.isUnreadable)
+      ? 'live'
+      : 'gone';
+  const own = readThingLife(
+    subject.collection === 'habits' ? 'habits' : 'projects',
+    subject.id,
+    projects,
+    habits,
+  );
+  const started =
+    pattern.moment !== 'onStart' ||
+    subject.otherId === null ||
+    subject.otherId === subject.id
+      ? 'live'
+      : readThingLife(
+          habits.some((one) => one.id === subject.otherId)
+            ? 'habits'
+            : 'projects',
+          subject.otherId,
+          projects,
+          habits,
+        );
+  return own === 'gone' || started === 'gone' ? 'gone' : own;
+};
+
+/** The guardrails (advice to hold something off): accepted first, then asked, then not yet asked, then what was said no to. One still asking about something finished or removed is left out, and one whose subject was paused another way reads as no longer true, both worked out here and never written. */
 export const selectGuardrailRows = createSelector(
-  [selectShownPatterns],
-  (patterns): NoticedRow[] =>
+  [
+    selectShownPatterns,
+    selectProjectItems,
+    selectHabitItems,
+    selectOpenTaskItems,
+  ],
+  (patterns, projects, habits, tasks): NoticedRow[] =>
     patterns
       .filter(
         (pattern) =>
           patternFamily(pattern.kind) === 'guardrail' &&
           pattern.statement !== '',
       )
+      .flatMap((pattern): OpenPattern[] => {
+        const isAsking =
+          pattern.state === 'suggested' &&
+          pattern.offReason === null &&
+          (pattern.confirmedAt ?? null) === null;
+        const life = isAsking
+          ? readSubjectLife(pattern, projects, habits, tasks)
+          : 'live';
+        return life === 'live'
+          ? [pattern]
+          : life === 'gone'
+            ? []
+            : [{ ...pattern, state: 'retired' }];
+      })
       .sort(
         (a, b) =>
           STATE_ORDER[a.state] - STATE_ORDER[b.state] ||

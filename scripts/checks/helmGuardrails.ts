@@ -18,6 +18,8 @@ import {
   toPatternFields,
 } from '../../src/apps/helm/engine/patternCheck.ts';
 import { isEvidenceAsStrong } from '../../src/apps/helm/engine/patterns.ts';
+import { HELM_COPY } from '../../src/apps/helm/constants.ts';
+import { selectGuardrailRows } from '../../src/apps/helm/store/selectors/patternSelectors.ts';
 
 let failures = 0;
 const test = (name: string, run: () => void | Promise<void>) =>
@@ -486,6 +488,95 @@ const run = async () => {
         { ...later.evidence, measured: 3 } as typeof later.evidence,
         since,
       ),
+      false,
+    );
+  });
+
+  await test('a start-time check never names something finished', () => {
+    const finished = { ...fourth, status: 'out' as const };
+    assert.equal(
+      checkOnStart(
+        { id: 'g4', kind: 'goal' },
+        input([...goals, finished], busy),
+      ),
+      null,
+    );
+  });
+
+  await test('the goals reason names what it has and says "including" when short', () => {
+    const copy = HELM_COPY.guardrailGoalsReason;
+    assert.equal(copy(2, ['A', 'B']), '2 goals already going: A and B.');
+    assert.equal(copy(3, ['A']), '3 goals already going, including A.');
+    assert.equal(
+      copy(5, ['A', 'B', 'C', 'D', 'E']),
+      '5 goals already going, including A, B, and C.',
+    );
+    assert.equal(copy(3, []), '3 goals already going.');
+    const found = checkOnStart(
+      { id: 'g4', kind: 'goal' },
+      input([...goals, fourth], busy),
+    );
+    assert.equal(
+      found?.lines.reasonLine
+        ?.split('\n')
+        .find((line) => line.includes('goals')),
+      '3 goals already going: g1, g2, and g3.',
+    );
+  });
+
+  await test('a guardrail still asking about something finished, paused or gone is not shown as asking', () => {
+    const pattern = (id: string, subjectId: string) =>
+      ({
+        id,
+        kind: 'tooManyGoals',
+        statement: 'Pause it?',
+        state: 'suggested',
+        offReason: null,
+        confirmedAt: null,
+        stateAt: 1,
+        moment: 'daily',
+        isUnreadable: false,
+        createdAt: 1,
+        subject: {
+          collection: 'projects',
+          id: subjectId,
+          windowId: null,
+          otherId: null,
+        },
+      }) as never;
+    const item = (id: string, status: string) => ({
+      id,
+      status,
+      isUnreadable: false,
+    });
+    const rows = selectGuardrailRows({
+      helm: {
+        profile: null,
+        patterns: {
+          items: [
+            pattern('live', 'a'),
+            pattern('done', 'b'),
+            pattern('paused', 'c'),
+            pattern('gone', 'z'),
+          ],
+        },
+        projects: {
+          items: [
+            item('a', 'active'),
+            item('b', 'finished'),
+            item('c', 'paused'),
+          ],
+        },
+        habits: { items: [] },
+        openTasks: { items: [] },
+      },
+    } as never);
+    const by = Object.fromEntries(
+      rows.map((row) => [row.pattern.id, row.pattern.state]),
+    );
+    assert.deepEqual(by, { live: 'suggested', paused: 'retired' });
+    assert.equal(
+      rows.find((row) => row.pattern.id === 'paused')?.isUsed,
       false,
     );
   });

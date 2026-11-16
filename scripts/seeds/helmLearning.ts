@@ -626,9 +626,9 @@ export async function buildLearning(input: {
   patterns.push(guardrail);
   const holdSubject = {
     collection: 'projects' as const,
-    id: 'seed-project-move',
+    id: 'seed-project-spare-room',
     windowId: null,
-    otherId: 'seed-project-move',
+    otherId: 'seed-project-spare-room',
   };
   const goalsEvidence = {
     kind: 'load' as const,
@@ -638,7 +638,7 @@ export async function buildLearning(input: {
     asOf: now,
     refs: ['seed-project-guitar-goal'],
   };
-  const holdLine = '3 goals already going: Get back into guitar.';
+  const holdLine = '3 goals already going, including Get back into guitar.';
   const hold = await toSeedPattern(
     toSeedFinding({
       kind: 'tooManyGoals',
@@ -654,7 +654,7 @@ export async function buildLearning(input: {
       lastEvidenceAt: now,
     }),
     {
-      name: 'Plan the move',
+      name: 'Paint the spare room',
       now: now - 1 * DAY_MS,
       overrides: {
         moment: 'onStart',
@@ -668,14 +668,14 @@ export async function buildLearning(input: {
   );
   hold.pattern.sealed = await sealJson<PatternSealed>(
     {
-      statement: 'Maybe hold Plan the move for a while?',
+      statement: 'Maybe hold Paint the spare room for a while?',
       evidenceLine: holdLine,
       reasonLine: holdLine,
     },
     encryption,
   );
   patterns.push(hold);
-  const taskDay = dayMs(shiftKey(todayKey, 2));
+  const taskDay = dayMs(shiftKey(todayKey, -2));
   const taskSubject = {
     collection: 'tasks' as const,
     id: 'seed-task-3-1',
@@ -715,7 +715,10 @@ export async function buildLearning(input: {
   );
   taskGuardrail.pattern.sealed = await sealJson<PatternSealed>(
     {
-      statement: 'That day looks full for this',
+      statement: `${new Date(taskDay).toLocaleDateString('en-US', {
+        weekday: 'long',
+        timeZone: 'UTC',
+      })} looks full for Buy the rings`,
       evidenceLine: taskLine,
       reasonLine: taskLine,
     },

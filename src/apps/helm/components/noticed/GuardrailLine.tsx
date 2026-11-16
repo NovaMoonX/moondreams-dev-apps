@@ -40,7 +40,7 @@ function GuardrailLine({ pattern, onFindLater }: GuardrailLineProps) {
       : HELM_COPY.guardrailKeepGoing;
 
   return (
-    <section className='helm-card border-primary/40 w-full space-y-3 border border-dashed p-4'>
+    <section className='helm-card border-primary/40! w-full space-y-3 border-dashed! p-4'>
       <p className='text-foreground text-[15px] leading-[21px] font-medium text-pretty'>
         {pattern.statement}
       </p>
