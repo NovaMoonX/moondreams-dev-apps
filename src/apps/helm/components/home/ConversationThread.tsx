@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -209,52 +209,56 @@ function ConversationThread({
       (session.startedAt < foldsBefore && session.sessionId !== lastSessionId));
   const foldedSessions = sessions.filter(isFolded);
   const hasFold = foldedSessions.length > 0 && !isUnfolded;
-  // Once opened, everything up to the last folded session sits above Hide earlier, in order.
+  // Once opened, Hide earlier sits just above the first session after the last folded one.
   const foldEnd = sessions.reduce(
     (end, session, index) => (isFolded(session) ? index + 1 : end),
     0,
   );
-  const groups = hasFold
-    ? [sessions.filter((session) => !isFolded(session))]
-    : foldEnd > 0
-      ? [sessions.slice(0, foldEnd), sessions.slice(foldEnd)]
-      : [sessions];
-  const renderDays = (shown: Session[]) =>
-    groupSessionsByDay(shown).map((day) => (
-      <section key={day.dayStart} className='flex flex-col gap-4'>
-        {scroll === 'window' ? (
-          <StickyDivider
-            label={formatThreadDay(day.dayStart)}
-            className='sticky top-(--helm-home-header-h,0px) z-[5]'
+  const hideBeforeId =
+    !hasFold && foldEnd > 0 ? (sessions[foldEnd]?.sessionId ?? null) : null;
+  const shownSessions = hasFold
+    ? sessions.filter((session) => !isFolded(session))
+    : sessions;
+  const hideButton = (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='sm'
+      className="relative min-h-0 self-center rounded-full before:absolute before:-inset-x-2 before:-inset-y-2 before:content-['']"
+      onClick={() => {
+        isFollowing.current = true;
+        setIsUnfolded(false);
+      }}
+    >
+      {HELM_COPY.earlierHide}
+      <ChevronUp className='size-4' aria-hidden='true' />
+    </Button>
+  );
+  const renderSession = (session: Session, isFirstOfDay: boolean) => (
+    <Fragment key={session.sessionId}>
+      {session.sessionId === hideBeforeId && !isFirstOfDay && hideButton}
+      <div data-anchor={session.sessionId}>
+        {session.sessionId === openSessionId ? (
+          <SessionTurns
+            session={session}
+            latestId={latestId}
+            noticeId={noticeId}
           />
         ) : (
-          <SectionDivider label={formatThreadDay(day.dayStart)} />
+          <LazyMount
+            estimatedHeight={TURN_ESTIMATED_HEIGHT * session.turns.length}
+          >
+            <SessionTurns
+              session={session}
+              latestId={latestId}
+              noticeId={noticeId}
+            />
+          </LazyMount>
         )}
-        {day.sessions.map((session) =>
-          session.sessionId === openSessionId ? (
-            <div key={session.sessionId} data-anchor={session.sessionId}>
-              <SessionTurns
-                session={session}
-                latestId={latestId}
-                noticeId={noticeId}
-              />
-            </div>
-          ) : (
-            <div key={session.sessionId} data-anchor={session.sessionId}>
-              <LazyMount
-                estimatedHeight={TURN_ESTIMATED_HEIGHT * session.turns.length}
-              >
-                <SessionTurns
-                  session={session}
-                  latestId={latestId}
-                  noticeId={noticeId}
-                />
-              </LazyMount>
-            </div>
-          ),
-        )}
-      </section>
-    ));
+      </div>
+    </Fragment>
+  );
+  const days = groupSessionsByDay(shownSessions);
 
   return (
     <div ref={root} className='flex flex-1 flex-col gap-4'>
@@ -298,26 +302,27 @@ function ConversationThread({
             {HELM_COPY.earlierFailed}
           </Button>
         )}
-        {groups.map((shown, index) => (
-          <div key={index} className='flex flex-col gap-4'>
-            {index === 1 && (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                className="relative min-h-0 self-center rounded-full before:absolute before:-inset-x-2 before:-inset-y-2 before:content-['']"
-                onClick={() => {
-                  isFollowing.current = true;
-                  setIsUnfolded(false);
-                }}
-              >
-                {HELM_COPY.earlierHide}
-                <ChevronUp className='size-4' aria-hidden='true' />
-              </Button>
-            )}
-            {renderDays(shown)}
-          </div>
-        ))}
+        {days.map((day) => {
+          const startsAtHide = day.sessions[0]?.sessionId === hideBeforeId;
+          return (
+            <Fragment key={day.dayStart}>
+              {startsAtHide && hideButton}
+              <section className='flex flex-col gap-4'>
+                {scroll === 'window' ? (
+                  <StickyDivider
+                    label={formatThreadDay(day.dayStart)}
+                    className='sticky top-(--helm-home-header-h,0px) z-[5]'
+                  />
+                ) : (
+                  <SectionDivider label={formatThreadDay(day.dayStart)} />
+                )}
+                {day.sessions.map((session, index) =>
+                  renderSession(session, index === 0),
+                )}
+              </section>
+            </Fragment>
+          );
+        })}
         <div data-anchor='end' />
       </div>
     </div>
