@@ -11,7 +11,10 @@ import {
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
-import { acceptGuardrail } from '@apps/helm/store/actions/guardrailActions';
+import {
+  acceptGuardrail,
+  undoGuardrailAnswer,
+} from '@apps/helm/store/actions/guardrailActions';
 import {
   notNowPattern,
   reopenPattern,
@@ -96,6 +99,13 @@ export function useGuardrailAnswers() {
         });
         return true;
       }),
+    undo: (pattern: OpenPattern, name: string) =>
+      guard(pattern.id, async (uid) =>
+        told(
+          await undoGuardrailAnswer(uid, pattern),
+          HELM_COPY.guardrailUndone(name),
+        ),
+      ),
     keepGoing: (pattern: OpenPattern) => {
       const weeks = readNotNowWeeks(pattern);
       return guard(pattern.id, async (uid) =>

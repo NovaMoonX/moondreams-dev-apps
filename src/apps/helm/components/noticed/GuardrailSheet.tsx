@@ -1,11 +1,14 @@
 import { useState } from 'react';
 
-import { Ban, CalendarDays, Clock, Pause, PauseCircle } from 'lucide-react';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Ban, CalendarDays, Pause, PauseCircle, Undo2 } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import SectionDivider from '@/components/SectionDivider';
 import { useAppSelector } from '@/store';
+import { formatDateShort } from '@/utils/formatUtils';
 import HabitPauseSheet from '@apps/helm/components/habits/HabitPauseSheet';
 import {
   isHoldingStarted,
@@ -19,7 +22,9 @@ import {
 import { readStateWords } from '@apps/helm/components/noticed/patternWords';
 import { useGuardrailAnswers } from '@apps/helm/components/noticed/useGuardrailAnswers';
 import {
+  useGuardrailDone,
   useGuardrailOthers,
+  useGuardrailStartedName,
   useGuardrailSubjectName,
 } from '@apps/helm/components/noticed/useGuardrailThings';
 import { HELM_COPY, PATTERN_BACKOFF_WEEKS } from '@apps/helm/constants';
@@ -34,20 +39,32 @@ interface GuardrailSheetProps {
   onFindLater?: () => void;
 }
 
+type SheetView = 'choices' | 'others';
+
 interface BodyProps {
   pattern: OpenPattern;
+  view: SheetView;
+  onView: (view: SheetView) => void;
   onClose: () => void;
   onFindLater?: () => void;
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-function GuardrailBody({ pattern, onClose, onFindLater }: BodyProps) {
+function GuardrailBody({
+  pattern,
+  view,
+  onView,
+  onClose,
+  onFindLater,
+}: BodyProps) {
   const assistant = useAssistantName();
   const { dayKey } = useHabitClock();
   const answers = useGuardrailAnswers();
   const others = useGuardrailOthers(pattern);
   const name = useGuardrailSubjectName(pattern);
+  const startedName = useGuardrailStartedName(pattern);
+  const answered = useGuardrailDone(pattern);
   const [isPicking, setIsPicking] = useState(false);
   const state = readStateWords(pattern, assistant);
   const reasons = readReasonLines(pattern);
@@ -66,25 +83,65 @@ function GuardrailBody({ pattern, onClose, onFindLater }: BodyProps) {
     weeks === null ? null : toShortDay(Date.parse(dayKey) + weeks * WEEK_MS);
   const pauseLabel = isHold
     ? HELM_COPY.guardrailHold(date)
-    : isStart
-      ? HELM_COPY.guardrailPauseNamed(name, date)
-      : HELM_COPY.guardrailPause(date);
+    : HELM_COPY.guardrailPause(date);
   const noLabel = isTask
     ? readKeepDayLabel(pattern)
     : isStart
       ? HELM_COPY.guardrailStartNow
       : HELM_COPY.guardrailKeepGoing;
+  const noSubtitle =
+    isStart && !isTask
+      ? HELM_COPY.guardrailStartNowSubtitle(startedName, noDate)
+      : HELM_COPY.guardrailKeepGoingSubtitle(noDate, assistant);
 
   const done = (work: Promise<boolean>) =>
     void work.then((isSaved) => {
       if (isSaved) onClose();
     });
 
+  if (view === 'others') {
+    return (
+      <div className='space-y-4'>
+        <BackLink
+          label={HELM_COPY.guardrailOthersBack}
+          onBack={() => onView('choices')}
+        />
+        <p className='text-muted-foreground text-[14px] text-pretty'>
+          {HELM_COPY.guardrailOthersHint(name)}
+        </p>
+        <div className='space-y-2'>
+          {others.map((other) => (
+            <ActionRow
+              key={other.id}
+              icon={<PauseCircle />}
+              label={HELM_COPY.guardrailInstead(other.name, date)}
+              isDisabled={isBusy}
+              onClick={() =>
+                done(
+                  answers.pause(pattern, {
+                    target: { collection: other.collection, id: other.id },
+                  }),
+                )
+              }
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='space-y-5'>
-      <p className='bg-muted/50 text-muted-foreground rounded-xl px-3 py-2.5 text-[14px] text-pretty'>
-        {state.sentence}
-      </p>
+      {!state.isAsking && (
+        <p className='bg-muted/50 text-muted-foreground rounded-xl px-3 py-2.5 text-[14px] text-pretty'>
+          {answered
+            ? HELM_COPY.guardrailAnsweredSentence(
+                answered.line,
+                formatDateShort(pattern.stateAt),
+              )
+            : state.sentence}
+        </p>
+      )}
       <section className='space-y-2'>
         <h3 className='text-muted-foreground text-[13px] font-medium'>
           {HELM_COPY.noticedBasedOn}
@@ -109,6 +166,15 @@ function GuardrailBody({ pattern, onClose, onFindLater }: BodyProps) {
           </p>
         )}
       </section>
+      {answered?.isUndoable && (
+        <ActionRow
+          icon={<Undo2 />}
+          label={HELM_COPY.guardrailUndo}
+          subtitle={HELM_COPY.guardrailUndoSubtitle(answered.name)}
+          isDisabled={isBusy}
+          onClick={() => void answers.undo(pattern, answered.name)}
+        />
+      )}
       {isAsked && (
         <div className='space-y-2'>
           {isTask && onFindLater && (
@@ -127,7 +193,7 @@ function GuardrailBody({ pattern, onClose, onFindLater }: BodyProps) {
             <ActionRow
               icon={<Pause />}
               label={pauseLabel}
-              subtitle={HELM_COPY.guardrailHoldSubtitle}
+              subtitle={HELM_COPY.guardrailHoldSubtitle(date)}
               isDisabled={isBusy}
               onClick={() => done(answers.pause(pattern, { isHold }))}
             />
@@ -142,37 +208,27 @@ function GuardrailBody({ pattern, onClose, onFindLater }: BodyProps) {
               onClick={() => setIsPicking(true)}
             />
           )}
-          <ActionRow
-            icon={<Clock />}
-            label={noLabel}
-            subtitle={HELM_COPY.guardrailKeepGoingSubtitle(noDate, assistant)}
-            isDisabled={isBusy}
-            onClick={() => done(answers.keepGoing(pattern))}
-          />
-        </div>
-      )}
-      {isAsked && !isTask && others.length > 0 && (
-        <section className='space-y-2'>
-          <h3 className='text-muted-foreground text-[13px] font-medium'>
-            {HELM_COPY.guardrailOthers}
-          </h3>
-          {others.map((other) => (
+          {!isTask && others.length > 0 && (
             <ActionRow
-              key={other.id}
               icon={<PauseCircle />}
-              label={HELM_COPY.guardrailInstead(other.name, date)}
-              subtitle={HELM_COPY.guardrailInsteadSubtitle}
+              label={HELM_COPY.guardrailOthers}
+              subtitle={HELM_COPY.guardrailOthersSubtitle}
+              hasChevron
               isDisabled={isBusy}
-              onClick={() =>
-                done(
-                  answers.pause(pattern, {
-                    target: { collection: other.collection, id: other.id },
-                  }),
-                )
-              }
+              onClick={() => onView('others')}
             />
-          ))}
-        </section>
+          )}
+          <Button
+            type='button'
+            variant='tertiary'
+            className='text-muted-foreground h-auto min-h-11 w-full flex-col gap-0.5 py-2 text-center font-normal'
+            disabled={isBusy}
+            onClick={() => done(answers.keepGoing(pattern))}
+          >
+            <span className='text-[15px] font-medium'>{noLabel}</span>
+            <span className='text-[13px] text-pretty'>{noSubtitle}</span>
+          </Button>
+        </div>
       )}
       {pattern.offReason === null && (
         <div className='space-y-3 pt-4'>
@@ -212,16 +268,29 @@ function GuardrailSheet({
 }: GuardrailSheetProps) {
   const patterns = useAppSelector(selectShownPatterns);
   const pattern = patterns.find((one) => one.id === patternId) ?? null;
+  const [shown, setShown] = useState<{ id: string | null; view: SheetView }>({
+    id: null,
+    view: 'choices',
+  });
+  const view = shown.id === patternId ? shown.view : 'choices';
+  const setView = (next: SheetView) => setShown({ id: patternId, view: next });
+  const close = () => {
+    setView('choices');
+    onClose();
+  };
   return (
     <DetailSheet
       isOpen={pattern !== null}
-      onClose={onClose}
+      onClose={close}
       title={pattern?.statement ?? ''}
+      viewKey={view}
     >
       {pattern && (
         <GuardrailBody
           pattern={pattern}
-          onClose={onClose}
+          view={view}
+          onView={setView}
+          onClose={close}
           onFindLater={onFindLater}
         />
       )}

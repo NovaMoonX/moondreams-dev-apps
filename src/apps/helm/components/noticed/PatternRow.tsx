@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 import { readStateWords } from '@apps/helm/components/noticed/patternWords';
+import { useGuardrailDone } from '@apps/helm/components/noticed/useGuardrailThings';
 import SourceRing from '@apps/helm/components/who/SourceRing';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenPattern } from '@apps/helm/types';
@@ -14,9 +15,10 @@ interface PatternRowProps {
   onOpen: (patternId: string) => void;
 }
 
-/** One thing noticed: the hollow ring (inferred, always), the sentence (two lines at most), its state on a short line of its own and a muted line of its evidence. Opens the pattern. */
+/** One thing noticed: the hollow ring (inferred, always), the sentence (two lines at most), its state (or, for a guardrail answered yes, what it did) on a short line of its own and a muted line of its evidence, two lines at most. Opens the pattern. */
 function PatternRow({ pattern, assistant, onOpen }: PatternRowProps) {
   const state = readStateWords(pattern, assistant);
+  const done = useGuardrailDone(pattern);
   return (
     <Button
       type='button'
@@ -45,10 +47,10 @@ function PatternRow({ pattern, assistant, onOpen }: PatternRowProps) {
             state.isAsking && 'text-primary font-medium',
           )}
         >
-          {state.line}
+          {done?.line ?? state.line}
         </span>
         {pattern.evidenceLine !== '' && (
-          <span className='text-muted-foreground line-clamp-1 text-[13px] break-words'>
+          <span className='text-muted-foreground line-clamp-2 text-[13px] break-words'>
             {pattern.evidenceLine}
           </span>
         )}

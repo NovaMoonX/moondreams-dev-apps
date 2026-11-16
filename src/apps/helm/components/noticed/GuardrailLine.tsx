@@ -13,7 +13,6 @@ import {
   toShortDay,
 } from '@apps/helm/components/noticed/guardrailWords';
 import { useGuardrailAnswers } from '@apps/helm/components/noticed/useGuardrailAnswers';
-import { useGuardrailSubjectName } from '@apps/helm/components/noticed/useGuardrailThings';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenPattern } from '@apps/helm/types';
 
@@ -26,16 +25,13 @@ interface GuardrailLineProps {
 function GuardrailLine({ pattern, onFindLater }: GuardrailLineProps) {
   const answers = useGuardrailAnswers();
   const [isOpen, setIsOpen] = useState(false);
-  const name = useGuardrailSubjectName(pattern);
   const reasons = readReasonLines(pattern);
   const isTask = isTaskGuardrail(pattern);
   const isStart = pattern.moment === 'onStart';
   const date = toShortDay(readPauseUntil(pattern));
   const isBusy = answers.busyId !== null;
-  const yes = isStart
-    ? isHoldingStarted(pattern)
-      ? HELM_COPY.guardrailHold(date)
-      : HELM_COPY.guardrailPauseNamed(name, date)
+  const yes = isHoldingStarted(pattern)
+    ? HELM_COPY.guardrailHold(date)
     : HELM_COPY.guardrailPause(date);
   const no = isTask
     ? readKeepDayLabel(pattern)

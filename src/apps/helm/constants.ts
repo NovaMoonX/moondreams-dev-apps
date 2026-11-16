@@ -2813,7 +2813,7 @@ export const HELM_COPY = {
   habitsStoppedRow: (count: number) => `Stopped · ${count}`,
   habitsStoppedHide: 'Hide stopped',
   habitsPausedUntil: (date: string) => `Paused until ${date}`,
-  habitsPausedOpen: 'Paused',
+  habitsPausedOpen: 'Paused for a while',
   habitsStoppedOn: (date: string) => `Stopped ${date}`,
   habitsWeekLine: (done: number, due: number) => `${done} of ${due} this week`,
   habitsStartsToday: 'Starts today',
@@ -4232,19 +4232,24 @@ export const HELM_COPY = {
     } about ${free} free.`,
   guardrailTaskReason: (date: string, work: string, free: string) =>
     `Due ${date}: about ${work} of work, ${free} free before then.`,
-  guardrailStarvedReason: (name: string, days: number) =>
-    `${name} comes first, and nothing's been done on it in ${days} days.`,
+  guardrailStarvedReason: (days: number) =>
+    `What matters most has had nothing done in ${days} days.`,
   guardrailHoursFromCalendar:
     "From the lengths on your tasks and your calendar's free time",
   guardrailHoursNoCalendar: 'No calendar connected, so counting your whole day',
   guardrailHold: (date: string | null) =>
     date === null ? 'Hold it for now' : `Hold it until ${date}`,
-  guardrailHoldSubtitle: 'It stays off your plans until then. You can undo it.',
-  guardrailPauseNamed: (name: string, date: string | null) =>
-    date === null ? `Pause ${name} for a while` : `Pause ${name} until ${date}`,
+  guardrailHoldSubtitle: (date: string | null) =>
+    date === null
+      ? 'It stays off your plans until you resume it. You can undo it.'
+      : 'It stays off your plans until then. You can undo it.',
   guardrailPause: (date: string | null) =>
     date === null ? 'Pause for a while' : `Pause until ${date}`,
   guardrailStartNow: 'Start it now',
+  guardrailStartNowSubtitle: (name: string, date: string | null) =>
+    date === null
+      ? `Keeps ${name} going. I won't ask again.`
+      : `Keeps ${name} going. I won't ask again before ${date}.`,
   guardrailKeepGoing: 'Keep going',
   guardrailKeepDay: (weekday: string) => `Keep ${weekday}`,
   guardrailKeepDate: 'Keep the date',
@@ -4257,12 +4262,24 @@ export const HELM_COPY = {
   guardrailPickDay: 'Pause until a day you pick',
   guardrailPickDaySubtitle: 'Choose when it comes back.',
   guardrailPickDayConfirm: 'Pause',
-  guardrailOthers: 'Other things it could pause',
+  guardrailOthers: 'Pause something else instead',
+  guardrailOthersSubtitle: 'Choose what to set aside.',
+  guardrailOthersHint: (name: string) =>
+    `Keeps ${name} going. You can undo it.`,
+  guardrailOthersBack: 'Back to the choices',
   guardrailInstead: (name: string, date: string | null) =>
     date === null
-      ? `Set ${name} aside for a while instead`
-      : `Set ${name} aside until ${date} instead`,
-  guardrailInsteadSubtitle: 'Keeps this one going. You can undo it.',
+      ? `Set ${name} aside for a while`
+      : `Set ${name} aside until ${date}`,
+  guardrailRowPaused: (name: string, date: string | null) =>
+    date === null ? `Paused ${name}` : `Paused ${name} until ${date}`,
+  guardrailRowHeld: (name: string, date: string | null) =>
+    date === null ? `Held ${name} for now` : `Held ${name} until ${date}`,
+  guardrailAnsweredSentence: (done: string, date: string) =>
+    `${done}. You said yes on ${date}.`,
+  guardrailUndo: 'Undo this',
+  guardrailUndoSubtitle: (name: string) => `Puts ${name} back on your plans.`,
+  guardrailUndone: (name: string) => `Okay, ${name} is back on your plans.`,
   guardrailStop: 'Stop suggesting this',
   guardrailStopSubtitle: (name: string) =>
     `Won't suggest pausing ${name} again unless you ask.`,
