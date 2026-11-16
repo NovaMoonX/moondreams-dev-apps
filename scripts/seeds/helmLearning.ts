@@ -675,7 +675,10 @@ export async function buildLearning(input: {
     encryption,
   );
   patterns.push(hold);
-  const taskDay = dayMs(shiftKey(todayKey, -2));
+  const calendarKey = new Date(now).toLocaleDateString('en-CA', {
+    timeZone: LEARNING_ZONE,
+  });
+  const taskDay = dayMs(shiftKey(calendarKey, -2));
   const taskSubject = {
     collection: 'tasks' as const,
     id: 'seed-task-3-1',
@@ -718,7 +721,7 @@ export async function buildLearning(input: {
       statement: `${new Date(taskDay).toLocaleDateString('en-US', {
         weekday: 'long',
         timeZone: 'UTC',
-      })} looks full for Buy the rings`,
+      })} looks full for Call Grandpa about the wedding questions`,
       evidenceLine: taskLine,
       reasonLine: taskLine,
     },

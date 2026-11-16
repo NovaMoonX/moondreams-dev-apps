@@ -94,6 +94,7 @@ const offerOrder = (a: OpenPattern, b: OpenPattern) =>
 const selectProjectItems = (state: RootState) => state.helm.projects.items;
 const selectHabitItems = (state: RootState) => state.helm.habits.items;
 const selectOpenTaskItems = (state: RootState) => state.helm.openTasks.items;
+const selectAnsweringIds = (state: RootState) => state.helm.answeringPatternIds;
 
 type SubjectLife = 'live' | 'paused' | 'gone';
 
@@ -157,8 +158,9 @@ export const selectGuardrailRows = createSelector(
     selectProjectItems,
     selectHabitItems,
     selectOpenTaskItems,
+    selectAnsweringIds,
   ],
-  (patterns, projects, habits, tasks): NoticedRow[] =>
+  (patterns, projects, habits, tasks, answering): NoticedRow[] =>
     patterns
       .filter(
         (pattern) =>
@@ -169,7 +171,8 @@ export const selectGuardrailRows = createSelector(
         const isAsking =
           pattern.state === 'suggested' &&
           pattern.offReason === null &&
-          (pattern.confirmedAt ?? null) === null;
+          (pattern.confirmedAt ?? null) === null &&
+          !answering.includes(pattern.id);
         const life = isAsking
           ? readSubjectLife(pattern, projects, habits, tasks)
           : 'live';

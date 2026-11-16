@@ -90,6 +90,8 @@ export interface HelmState {
   outsideCaptures: CaptureSet;
   /** What Helm has noticed that is neither off nor retired; a screen reads `patternSelectors`, which leave out what Forget hid. */
   patterns: LoadedSet<OpenPattern>;
+  /** Guardrails whose yes is being written or not yet heard back: their subject is already paused, so they must not read as no longer true meanwhile. Cleared when the stored pattern stops asking. */
+  answeringPatternIds: string[];
   /** What was said about habits, goals, tasks and the day in the last two weeks, oldest first. */
   observations: LoadedSet<OpenObservation>;
   /** The nightly pass's reflections the daily check has not weighed yet. */
@@ -189,6 +191,7 @@ const initialState: HelmState = {
   waitingCaptures: emptySet,
   outsideCaptures: emptySet,
   patterns: emptyLoadedSet,
+  answeringPatternIds: [],
   observations: emptyLoadedSet,
   unseenReflections: emptyLoadedSet,
   openTasks: emptyLoadedSet,
@@ -299,6 +302,24 @@ const helmSlice = createSlice({
         isLoaded: true,
         isFailed: false,
       };
+      state.answeringPatternIds = state.answeringPatternIds.filter((id) =>
+        action.payload.some(
+          (one) =>
+            one.id === id &&
+            (one.state === 'suggested' || one.state === 'candidate'),
+        ),
+      );
+    },
+    startAnsweringPattern: (state, action: PayloadAction<string>) => {
+      state.answeringPatternIds = [
+        ...state.answeringPatternIds.filter((id) => id !== action.payload),
+        action.payload,
+      ];
+    },
+    endAnsweringPattern: (state, action: PayloadAction<string>) => {
+      state.answeringPatternIds = state.answeringPatternIds.filter(
+        (id) => id !== action.payload,
+      );
     },
     setPatternsFailed: (state) => {
       state.patterns.isFailed = true;
@@ -612,6 +633,8 @@ export const {
   setOutsideCapturesFailed,
   setPatterns,
   setPatternsFailed,
+  startAnsweringPattern,
+  endAnsweringPattern,
   setObservations,
   setObservationsFailed,
   setUnseenReflections,

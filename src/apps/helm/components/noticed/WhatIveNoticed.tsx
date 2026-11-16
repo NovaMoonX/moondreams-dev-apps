@@ -37,7 +37,11 @@ function WhatIveNoticed() {
   const [isAll, setIsAll] = useState(false);
   const [isUnusedOpen, setIsUnusedOpen] = useState(false);
   const used = rows.filter((row) => row.isUsed);
-  const unused = rows.filter((row) => !row.isUsed);
+  const usedGuardrails = guardrails.filter((row) => row.isUsed);
+  const guardrailIds = new Set(guardrails.map((row) => row.pattern.id));
+  const unused = [...rows, ...guardrails].filter((row) => !row.isUsed);
+  const openRow = (id: string) =>
+    guardrailIds.has(id) ? setOpenGuardrailId(id) : setOpenId(id);
   const shown = isAll ? used : used.slice(0, ROWS_SHOWN);
 
   const list = (items: typeof rows) => (
@@ -47,7 +51,7 @@ function WhatIveNoticed() {
           <PatternRow
             pattern={pattern}
             assistant={assistant}
-            onOpen={setOpenId}
+            onOpen={openRow}
           />
         </li>
       ))}
@@ -91,11 +95,11 @@ function WhatIveNoticed() {
           </ShowMoreButton>
         </div>
       )}
-      {guardrails.length > 0 && (
+      {usedGuardrails.length > 0 && (
         <div className='space-y-3 pt-3'>
           <SectionDivider label={HELM_COPY.guardrailGroupTitle} />
           <ul className='helm-card divide-border divide-y overflow-hidden'>
-            {guardrails.map(({ pattern }) => (
+            {usedGuardrails.map(({ pattern }) => (
               <li key={pattern.id}>
                 <PatternRow
                   pattern={pattern}
