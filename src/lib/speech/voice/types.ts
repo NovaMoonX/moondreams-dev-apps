@@ -49,7 +49,6 @@ export interface TtsSpeakOptions {
   onEnd: () => void;
   /** How far through the line the sound is (0 to 1); an adapter that can't tell never calls it. */
   onProgress?: (fraction: number) => void;
-  /** The sound began, or the line fell back to another voice. */
   onRouteChange?: () => void;
 }
 

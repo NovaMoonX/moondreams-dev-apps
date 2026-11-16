@@ -7,6 +7,7 @@ import GeneralKnowledgeCard from '@apps/helm/components/home/GeneralKnowledgeCar
 import SaveToKnowledge from '@apps/helm/components/home/SaveToKnowledge';
 import { HELM_COPY } from '@apps/helm/constants';
 import { readConnectorAppId } from '@/lib/connections/contract';
+import { readWrittenAnswer } from '@apps/helm/utils/writtenAnswer';
 import type { AnswerQuote, CaptureAnswer } from '@apps/helm/types';
 
 interface AnswerCardProps {
@@ -52,7 +53,7 @@ function AnswerCard({ answer, isInset = false, capture }: AnswerCardProps) {
             </p>
           ) : (
             <MarkdownText
-              text={fromRecords}
+              text={readWrittenAnswer(fromRecords)}
               className='pb-2 text-[15px] break-words'
             />
           )}

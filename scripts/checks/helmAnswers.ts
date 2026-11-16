@@ -55,6 +55,7 @@ import {
   normalizeProse,
   stripProseMarks,
 } from '../../src/utils/proseUtils.ts';
+import { readWrittenAnswer } from '../../src/apps/helm/utils/writtenAnswer.ts';
 import { SPOKEN_MAX_CHARS } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   sealForHelm,
@@ -2474,14 +2475,14 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
-    'lists are kept as lists, renumbered, and a list item continues on an indented line',
+    'lists are kept as lists, numbered on from the first number, and a list item continues on an indented line',
     () => {
       assert.equal(
         normalizeProse(
           'Next steps:\n* Call the florist\n* Book the van\n  for Saturday\n\n3. Pay\n7. Confirm',
           1_200,
         ),
-        'Next steps:\n\n- Call the florist\n- Book the van for Saturday\n\n1. Pay\n2. Confirm',
+        'Next steps:\n\n- Call the florist\n- Book the van for Saturday\n\n3. Pay\n4. Confirm',
       );
     },
   ],
@@ -2519,6 +2520,136 @@ const tests: [string, () => void | Promise<void>][] = [
         normalizeProse('[contract](https://docs.example/contract)', 1_200),
         'contract',
         'general text has no records to link to',
+      );
+    },
+  ],
+  [
+    'a hard-wrapped line that only looks like a list item stays in its paragraph',
+    () => {
+      assert.equal(
+        normalizeProse('It was cold at night,\n3. then warm.', 1_200),
+        'It was cold at night, 3. then warm.',
+      );
+      assert.equal(
+        normalizeProse('Set the oven to\n- 5 degrees more', 1_200),
+        'Set the oven to - 5 degrees more',
+      );
+      assert.equal(
+        normalizeProse('Steps:\n3. Pay\n4. Confirm\n\n- Done', 1_200),
+        'Steps:\n\n3. Pay\n4. Confirm\n\n- Done',
+      );
+    },
+  ],
+  [
+    'a reference-style link never becomes a link, and its definition is dropped',
+    () => {
+      assert.equal(
+        normalizeProse(
+          'See [the form][1] or [this][].\n\n[1]: https://evil.example',
+          1_200,
+          ['https://evil.example'],
+        ),
+        'See the form or this.',
+      );
+    },
+  ],
+  [
+    'a label that names another web address shows the link host; plain labels stay; only https stays',
+    () => {
+      const allowed = ['https://a.example/x', 'http://b.example/y'];
+      assert.equal(
+        normalizeProse(
+          '[https://paypal.com](https://a.example/x)',
+          1_200,
+          allowed,
+        ),
+        '[a.example](https://a.example/x)',
+      );
+      assert.equal(
+        normalizeProse(
+          '[log in at www.paypal.com now](https://a.example/x)',
+          1_200,
+          allowed,
+        ),
+        '[a.example](https://a.example/x)',
+      );
+      assert.equal(
+        normalizeProse(
+          '[the a.example guide](https://www.a.example/x)',
+          1_200,
+          ['https://www.a.example/x'],
+        ),
+        '[the a.example guide](https://www.a.example/x)',
+      );
+      assert.equal(
+        normalizeProse(
+          '[tasting guide](https://a.example/x) and [old](http://b.example/y)',
+          1_200,
+          allowed,
+        ),
+        '[tasting guide](https://a.example/x) and old',
+      );
+      assert.equal(
+        normalizeProse('[x](//evil.example)', 1_200, ['//evil.example']),
+        'x',
+      );
+    },
+  ],
+  [
+    'a stored answer is made safe on the device: structure kept, only its own https links, hosts for spoofed labels',
+    () => {
+      const stored =
+        '# Hi\n\n[a](//evil.example) [b](https://ok.example/p_(1)) [https://paypal.com](https://ok.example/p_(1)) [c](http://nope.example)';
+      assert.equal(
+        readWrittenAnswer(stored),
+        'Hi\n\na [b](https://ok.example/p_(1)) [ok.example](https://ok.example/p_(1)) c',
+      );
+      assert.equal(readWrittenAnswer(stored), readWrittenAnswer(stored));
+      const clean = normalizeProse('One **two** *three*\n\n3. a\n4. b', 1_200)!;
+      assert.equal(
+        readWrittenAnswer(clean),
+        clean,
+        'normalizing twice changes nothing',
+      );
+    },
+  ],
+  [
+    'a link address with balanced parentheses is read whole',
+    () => {
+      assert.deepEqual(
+        extractLinks([
+          'See https://a.example/x_(1). And (https://b.example/y).',
+        ]),
+        ['https://a.example/x_(1)', 'https://b.example/y'],
+      );
+      assert.equal(
+        normalizeProse('[x](https://a.example/x_(1))', 1_200, [
+          'https://a.example/x_(1)',
+        ]),
+        '[x](https://a.example/x_(1))',
+      );
+    },
+  ],
+  [
+    'a star between numbers is a times sign, never emphasis, and spoken as such',
+    () => {
+      assert.equal(
+        normalizeProse('2*3*4 and 5 * 3 = 15', 1_200),
+        '2\\*3\\*4 and 5 \\* 3 = 15',
+      );
+      assert.equal(stripProseMarks('2*3*4'), '2 times 3 times 4');
+      assert.equal(stripProseMarks('5 * 3 = 15'), '5 times 3 = 15');
+      assert.equal(
+        stripProseMarks('**bold** and *soft* and 2*3'),
+        'bold and soft and 2 times 3',
+      );
+      assert.equal(
+        stripProseMarks('5 * 3 = 15', { keepBreaks: true }),
+        '5 * 3 = 15',
+      );
+      assert.equal(
+        readWrittenAnswer(normalizeProse('It is 2*3 and *very* big', 1_200)!),
+        'It is 2\\*3 and *very* big',
       );
     },
   ],

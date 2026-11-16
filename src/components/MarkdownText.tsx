@@ -1,9 +1,8 @@
 import { Children, isValidElement, type ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ExternalLink } from 'lucide-react';
 import Markdown, { type Components } from 'react-markdown';
-
-import ExternalLinkText from '@/components/ExternalLinkText';
 
 interface MarkdownTextProps {
   text: string;
@@ -20,6 +19,33 @@ const toPlainText = (node: ReactNode): string =>
           : '',
     )
     .join('');
+
+const splitLastWord = (label: string) => {
+  const trimmed = label.trim();
+  const at = trimmed.search(/\S+$/);
+  return { head: trimmed.slice(0, at), last: trimmed.slice(at) };
+};
+
+function ProseLink({ href, label }: { href: string; label: string }) {
+  const { head, last } = splitLastWord(label || href);
+  return (
+    <a
+      href={href}
+      target='_blank'
+      rel='noopener noreferrer'
+      className="text-primary decoration-primary relative break-words underline underline-offset-2 before:absolute before:inset-x-0 before:-inset-y-2 before:content-[''] hover:no-underline"
+    >
+      {head}
+      <span className='whitespace-nowrap'>
+        {last}
+        <ExternalLink
+          className='ml-0.5 inline-block size-3 align-[-1px]'
+          aria-hidden='true'
+        />
+      </span>
+    </a>
+  );
+}
 
 const COMPONENTS: Components = {
   h1: ({ children }) => (
@@ -38,15 +64,20 @@ const COMPONENTS: Components = {
     </h5>
   ),
   p: ({ children }) => (
-    <p className='text-[15px] leading-[22px] break-words'>{children}</p>
+    <p className='text-[15px] leading-[22px] text-pretty break-words'>
+      {children}
+    </p>
   ),
   ul: ({ children }) => (
     <ul className='ml-5 list-disc space-y-1 text-[15px] leading-[22px]'>
       {children}
     </ul>
   ),
-  ol: ({ children }) => (
-    <ol className='ml-5 list-decimal space-y-1 text-[15px] leading-[22px]'>
+  ol: ({ children, start }) => (
+    <ol
+      start={start}
+      className='ml-5 list-decimal space-y-1 text-[15px] leading-[22px]'
+    >
       {children}
     </ol>
   ),
@@ -78,11 +109,7 @@ const COMPONENTS: Components = {
   hr: () => <hr className='border-border' />,
   a: ({ href, children }) =>
     href ? (
-      <ExternalLinkText
-        href={href}
-        label={toPlainText(children) || undefined}
-        className='text-[length:inherit]'
-      />
+      <ProseLink href={href} label={toPlainText(children)} />
     ) : (
       <span>{children}</span>
     ),

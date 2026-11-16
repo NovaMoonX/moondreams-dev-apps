@@ -9,6 +9,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { selectNoteById } from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { CaptureAnswer } from '@apps/helm/types';
+import { readWrittenAnswer } from '@apps/helm/utils/writtenAnswer';
 
 interface GeneralKnowledgeCardProps {
   text: string;
@@ -60,7 +61,10 @@ function GeneralKnowledgeCard({
           </p>
         )}
         {differs && <DiffersLine differs={differs} />}
-        <MarkdownText text={text} className='text-[15px] break-words' />
+        <MarkdownText
+          text={readWrittenAnswer(text)}
+          className='text-[15px] break-words'
+        />
         <p className='text-muted-foreground text-[13px] text-pretty'>
           {HELM_COPY.answerGeneralCaution(name)}
         </p>

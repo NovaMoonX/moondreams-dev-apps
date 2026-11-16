@@ -270,7 +270,6 @@ export function useHelmVoice() {
     if (outcome === 'busy') showNote(HELM_COPY.replayBusy);
   }
 
-  /** `turnKey` is the key of the turn that caused the line. */
   function say(line: string, turnKey: number) {
     voice.settle();
     showNote(line);

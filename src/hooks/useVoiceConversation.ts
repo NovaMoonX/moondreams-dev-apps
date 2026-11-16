@@ -88,7 +88,7 @@ interface VoiceConversationOptions {
   onUtterance: (text: string, heardBy: { sttProvider: string }) => void;
   /** Listening ended with nothing heard (not a cancel). `isAsked` is false when the listen started without a tap (the person's voice opened it after a reply or over a line), where saying so would be a fault the person didn't earn. */
   onNothingHeard?: (isAsked: boolean) => void;
-  /** The model on the device couldn't start or died while listening; `isAsked` is as for `onNothingHeard`. Without it this counts as nothing heard. */
+  /** The on-device model failed while listening; `isAsked` as for `onNothingHeard`. Without it this counts as nothing heard. */
   onDeviceListenFailed?: (isAsked: boolean) => void;
   /** A tapped listen ended on a lasting failure (the microphone refused, recognition off). */
   onUnavailable?: (reason: VoiceUnavailableReason) => void;
@@ -985,7 +985,7 @@ export function useVoiceConversation({
       turnKey: number;
       /** The person may answer once this line has been said: when it is the last one waiting, a short window opens in which speaking starts a listen without a tap. */
       canAnswer?: boolean;
-      /** The line answers an earlier turn, whose key `turnKey` is: it is said after what plays or waits, and dropped if a newer turn has spoken since. */
+      /** Said after what plays or waits, and dropped if a newer turn has spoken since. */
       joinsLine?: boolean;
     },
   ): Promise<VoiceSpoken> => {

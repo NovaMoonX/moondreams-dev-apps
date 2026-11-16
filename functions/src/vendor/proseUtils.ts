@@ -1,11 +1,33 @@
 // Generated from src/utils/proseUtils.ts by scripts/checks/serverCopies.ts. Do not edit; run npm run connections:vendor.
 const BULLET_RE = /^\s*[-*+•]\s+(.*)$/;
-const NUMBER_RE = /^\s*\d{1,3}[.)]\s+(.*)$/;
+const NUMBER_RE = /^\s*(\d{1,3})[.)]\s+(.*)$/;
+const DEFINITION_RE = /^\s*\[[^\]]+\]:\s*\S/;
 const RULE_RE = /^\s*([-*_]\s*){3,}$/;
 const FENCE_RE = /^\s*(```|~~~)/;
 const TABLE_RULE_RE = /^[\s|:-]+$/;
-const URL_RE = /https?:\/\/[^\s<>()[\]"']+/g;
-const LINK_RE = /\[([^\]]+)\]\(\s*([^\s)]+)(?:\s+"[^"]*")?\s*\)/g;
+const URL_RE = /https?:\/\/(?:[^\s<>()[\]"']|\([^\s<>()[\]"']*\))+/g;
+const LINK_RE =
+  /\[([^\]]+)\]\(\s*((?:[^\s()]|\([^\s()]*\))+)(?:\s+"[^"]*")?\s*\)/g;
+const DOMAIN_RE = /(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi;
+const LITERAL_STAR = '\u0001';
+
+const hostOf = (address: string) => {
+  try {
+    return new URL(
+      /^https?:\/\//i.test(address) ? address : `https://${address}`,
+    ).hostname
+      .replace(/^www\./, '')
+      .toLowerCase();
+  } catch {
+    return null;
+  }
+};
+
+/** A kept link's label: the model's own words, unless they name a web address that isn't the link's own. */
+const labelOf = (label: string, host: string) =>
+  (label.match(DOMAIN_RE) ?? []).some((claimed) => hostOf(claimed) !== host)
+    ? host
+    : label;
 
 /** Every web address written out in `texts`, as written (trailing punctuation left off). */
 export function extractLinks(texts: readonly string[]): string[] {
@@ -20,10 +42,12 @@ export function extractLinks(texts: readonly string[]): string[] {
 
 type Block =
   | { kind: 'paragraph'; text: string }
-  | { kind: 'bullets' | 'numbers'; items: string[] };
+  | { kind: 'bullets'; items: string[] }
+  | { kind: 'numbers'; items: string[]; start: number };
 
 const cleanLine = (line: string) => {
-  if (RULE_RE.test(line) || FENCE_RE.test(line)) return null;
+  if (RULE_RE.test(line) || FENCE_RE.test(line) || DEFINITION_RE.test(line))
+    return null;
   const heading = line.replace(/^\s*#{1,6}\s+/, '').replace(/^\s*>+\s?/, '');
   if (/^\s*\|.*\|\s*$/.test(heading)) {
     return TABLE_RULE_RE.test(heading)
@@ -54,16 +78,31 @@ const readLine = (state: ReadState, raw: string): ReadState => {
   const last = state.blocks[state.blocks.length - 1];
   const bullet = BULLET_RE.exec(line);
   const number = bullet ? null : NUMBER_RE.exec(line);
-  const item = bullet ?? number;
-  if (item) {
-    const kind = bullet ? 'bullets' : 'numbers';
-    const text = item[1].trim();
+  const opensList =
+    !last || state.hasGap || last.kind !== 'paragraph' || /:$/.test(last.text);
+  if (opensList && (bullet || number)) {
+    const text = (bullet ? bullet[1] : (number?.[2] ?? '')).trim();
+    if (bullet) {
+      return {
+        hasGap: false,
+        blocks:
+          last && last.kind === 'bullets'
+            ? withLast(state.blocks, {
+                ...last,
+                items: [...last.items, text],
+              })
+            : [...state.blocks, { kind: 'bullets', items: [text] }],
+      };
+    }
     return {
       hasGap: false,
       blocks:
-        last && last.kind === kind
-          ? withLast(state.blocks, { kind, items: [...last.items, text] })
-          : [...state.blocks, { kind, items: [text] }],
+        last && last.kind === 'numbers'
+          ? withLast(state.blocks, { ...last, items: [...last.items, text] })
+          : [
+              ...state.blocks,
+              { kind: 'numbers', items: [text], start: Number(number?.[1]) },
+            ],
     };
   }
   const text = line.trim();
@@ -134,17 +173,26 @@ const balanceMarks = (text: string) => {
     : afterStrong;
 };
 
+const keepLink = (label: string, url: string, allowed: ReadonlySet<string>) => {
+  const host = url.startsWith('https://') ? hostOf(url) : null;
+  return host !== null && allowed.has(url.replace(/[.,;:!?]+$/, ''))
+    ? `[${labelOf(label, host)}](${url})`
+    : label;
+};
+
 const readInline = (text: string, allowed: ReadonlySet<string>) =>
   balanceMarks(
     text
+      .replace(/\\\*/g, LITERAL_STAR)
+      .replace(/(\d)(\s*)\*(\s*)(?=\d)/g, `$1$2${LITERAL_STAR}$3`)
+      .replace(/(^|\s)\*(?=\s|$)/g, `$1${LITERAL_STAR}`)
       .replace(/<(https?:\/\/[^\s>]+)>/g, '$1')
       .replace(/<\/?[a-z][^>]*>/gi, '')
       .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
       .replace(LINK_RE, (_, label: string, url: string) =>
-        allowed.has(url.replace(/[.,;:!?]+$/, ''))
-          ? `[${label}](${url})`
-          : label,
+        keepLink(label, url, allowed),
       )
+      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
       .replace(/\[([^\]\n]*)\]\([^)]*$/, '$1')
       .replace(/\[[^\]]*$/, (rest) => rest.slice(1))
       .replace(/`+/g, '')
@@ -152,7 +200,7 @@ const readInline = (text: string, allowed: ReadonlySet<string>) =>
       .replace(/__([^_]+)__/g, '**$1**')
       .replace(/\s+/g, ' ')
       .trim(),
-  );
+  ).replace(new RegExp(LITERAL_STAR, 'g'), '\\*');
 
 const writeBlocks = (blocks: Block[], allowed: ReadonlySet<string>): string[] =>
   blocks.flatMap((block): string[] => {
@@ -168,7 +216,9 @@ const writeBlocks = (blocks: Block[], allowed: ReadonlySet<string>): string[] =>
       : [
           items
             .map((item, index) =>
-              block.kind === 'bullets' ? `- ${item}` : `${index + 1}. ${item}`,
+              block.kind === 'bullets'
+                ? `- ${item}`
+                : `${block.start + index}. ${item}`,
             )
             .join('\n'),
         ];
@@ -184,7 +234,7 @@ const cutAtBreak = (text: string, cap: number) => {
 const writeProse = (value: string, allowed: ReadonlySet<string>) =>
   writeBlocks(readBlocks(value), allowed).join('\n\n');
 
-/** A written reply kept as light Markdown: paragraphs split on one blank line, `-` and `1.` lists, **bold**, *italic* and links to a web address in `allowedLinks` (any other link is reduced to its text); headings, tables, images, code and raw HTML are dropped to plain words. Cut at `cap` characters at a word, with no mark left open; null when nothing is left. */
+/** A written reply kept as light Markdown: paragraphs split on one blank line, `-` and `1.` lists, **bold**, *italic* and https links to an address in `allowedLinks` (any other link is reduced to its text, and a label that names a different web address becomes the link's host); headings, tables, images, code and raw HTML are dropped to plain words. Cut at `cap` characters at a word, with no mark left open; null when nothing is left. */
 export function normalizeProse(
   value: unknown,
   cap: number,
@@ -197,8 +247,18 @@ export function normalizeProse(
   return cut || null;
 }
 
-const stripInline = (text: string) =>
-  text.replace(/\*+/g, '').replace(/(^|[^\w])_+([^_]+)_+(?=[^\w]|$)/g, '$1$2');
+const stripInline = (text: string, isSpoken: boolean) =>
+  text
+    .replace(/\\\*/g, LITERAL_STAR)
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^\s*](?:[^*]*[^\s*])?)\*/g, '$1')
+    .replace(/\*+/g, '')
+    .replace(/(^|[^\w])_+([^_]+)_+(?=[^\w]|$)/g, '$1$2')
+    .replace(
+      new RegExp(`(\\d)\\s*${LITERAL_STAR}\\s*(?=\\d)`, 'g'),
+      (whole, digit: string) => (isSpoken ? `${digit} times ` : whole),
+    )
+    .replace(new RegExp(LITERAL_STAR, 'g'), isSpoken ? '' : '*');
 
 const asSentence = (text: string) =>
   /[.!?…:;]$/.test(text) ? text : `${text}.`;
@@ -208,8 +268,8 @@ export function stripProseMarks(
   text: string,
   { keepBreaks = false }: { keepBreaks?: boolean } = {},
 ): string {
-  const blocks = writeBlocks(readBlocks(text), new Set<string>()).map(
-    stripInline,
+  const blocks = writeBlocks(readBlocks(text), new Set<string>()).map((block) =>
+    stripInline(block, !keepBreaks),
   );
   if (keepBreaks) return blocks.join('\n\n');
   return blocks

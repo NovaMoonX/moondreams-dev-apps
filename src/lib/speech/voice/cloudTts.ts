@@ -135,7 +135,6 @@ const concat = (chunks: Uint8Array[]) => {
   return bytes.buffer;
 };
 
-/** Cuts a line over the provider's cap at sentence ends into pieces that each fit. */
 const toPieces = (spoken: string) =>
   spoken.length <= MAX_CHARS
     ? [spoken]
@@ -152,7 +151,7 @@ const toPieces = (spoken: string) =>
 // `cut`: it sounded, then stalled or broke, so some of its tail was never said.
 type PieceOutcome = 'played' | 'cut' | 'failed' | 'aborted';
 
-/** Speaks through the cloud voice, piece by piece for a long line (the next fetched while one plays); a slow, held or failed answer before any sound sends the rest to `fallback`. */
+/** Speaks through the cloud voice, with `fallback` covering a slow or failed answer before any sound. */
 export const createCloudTts = ({
   source,
   fallback,
@@ -175,7 +174,6 @@ export const createCloudTts = ({
   onFallback?: () => void;
   /** A piece stalled or broke after it began sounding; the line carried on without its tail. */
   onCut?: () => void;
-  /** A line was spoken whole in the cloud voice. */
   onPlayed?: () => void;
   player?: CloudPlayer;
 }): TtsAdapter => {

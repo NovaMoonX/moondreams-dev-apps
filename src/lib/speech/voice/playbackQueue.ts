@@ -105,7 +105,6 @@ export const createPlaybackQueue = ({
 }: {
   pick: (priority: SpeechPriority) => TtsAdapter;
   onActiveChange?: (isActive: boolean) => void;
-  /** The playing line's sound began or it changed voice. */
   onRouteChange?: () => void;
 }) => {
   const state = {

@@ -260,11 +260,11 @@ const readModelLine = (
     : null;
 };
 
-/** The model's own line about the turn, refused (so code's line stands) when it speaks as "I", falls back on a template, runs long, carries a link or markup, or names a number the person never said. A count ("Added 2 things") is the line's own; an amount, a time or a date must be the person's. */
+/** The model's reply line, or null so code's line stands. A count ("Added 2 things") is the line's own; an amount, a time or a date must be the person's. */
 export const readReplyLine = (value: unknown, saidText = '') =>
   readModelLine(value, saidText, REPLY_LINE_CAP, true);
 
-/** The model's spoken line for an answer, under the same guards as the reply line, with every number (a count too) taken from the records text it speaks for. */
+/** The model's spoken line for an answer; every number, a count too, must come from the records text. */
 export const readSpokenRecordsLine = (value: unknown, recordsText: string) =>
   readModelLine(value, recordsText, ANSWER_SPOKEN_CAP, false);
 
@@ -332,7 +332,6 @@ const readAnswer = (
   const recordLinks = [
     ...citedQuotes.flatMap((quote) => (quote.deepLink ? [quote.deepLink] : [])),
     ...extractLinks([
-      ...citedQuotes.map((quote) => quote.snippet),
       ...citedCopies.flatMap((copy) => [
         copy.title,
         copy.subtitle ?? '',
