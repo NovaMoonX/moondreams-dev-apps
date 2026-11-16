@@ -249,6 +249,14 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/helm/engine/freeTime.ts',
+    dest: 'functions/src/apps/helm/nomos/freeTime.ts',
+    importRewrites: {
+      '@/utils/cadenceUtils': '../../../vendor/cadenceUtils.js',
+      '@/utils/timezoneUtils': '../../../notifications/zonedTime.js',
+    },
+  },
+  {
     src: 'src/utils/yearlyDateUtils.ts',
     dest: 'functions/src/vendor/yearlyDateUtils.ts',
     importRewrites: {},

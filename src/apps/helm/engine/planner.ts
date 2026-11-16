@@ -1,5 +1,11 @@
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { PLANNER_COPY } from '@apps/helm/constants';
+import {
+  getDayWindow,
+  getGapMinutes,
+  getGaps,
+  type Span,
+} from '@apps/helm/engine/freeTime';
 import { NOT_SAID_PLACE } from '@apps/helm/engine/importance';
 import type { RestDayKind } from '@apps/helm/engine/restDay';
 import type {
@@ -63,11 +69,6 @@ export interface PlannerResult {
   outcome: 'planned' | 'full' | 'late' | 'past' | 'nothing' | 'rest';
 }
 
-interface Span {
-  startAt: number;
-  endAt: number;
-}
-
 interface Chosen {
   task: PlannerTask;
   minutes: number;
@@ -75,66 +76,9 @@ interface Chosen {
 
 const MINUTE_MS = 60_000;
 const BUFFER_MS = 15 * MINUTE_MS;
-const ROUND_MS = 5 * MINUTE_MS;
 const DEFAULT_MINUTES = 30;
 const MAX_SUGGESTIONS = 3;
 const MIN_USEFUL_MINUTES = 15;
-
-const getDayKeyAt = (at: number, timeZone: string) =>
-  new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(at));
-
-const getWindow = (
-  input: Pick<
-    PlannerInput,
-    'dayKey' | 'timeZone' | 'now' | 'dayStartTime' | 'dayEndTime'
-  >,
-): { state: 'open' | 'past' | 'late'; startAt: number; endAt: number } => {
-  const dayStart = zonedDateTimeToEpoch(
-    input.dayKey,
-    input.dayStartTime,
-    input.timeZone,
-  );
-  const endAt = zonedDateTimeToEpoch(
-    input.dayKey,
-    input.dayEndTime,
-    input.timeZone,
-  );
-  const todayKey = getDayKeyAt(input.now, input.timeZone);
-  if (input.dayKey < todayKey) return { state: 'past', startAt: endAt, endAt };
-  const startAt =
-    input.dayKey === todayKey
-      ? Math.max(dayStart, Math.ceil(input.now / ROUND_MS) * ROUND_MS)
-      : dayStart;
-  return { state: startAt >= endAt ? 'late' : 'open', startAt, endAt };
-};
-
-const getGaps = (window: Span, blocks: Span[]): Span[] => {
-  const merged = blocks
-    .map((block) => ({
-      startAt: Math.max(block.startAt, window.startAt),
-      endAt: Math.min(block.endAt, window.endAt),
-    }))
-    .filter((block) => block.endAt > block.startAt)
-    .sort((first, second) => first.startAt - second.startAt);
-  const { gaps, cursor } = merged.reduce(
-    (state, block) => ({
-      gaps:
-        block.startAt > state.cursor
-          ? [...state.gaps, { startAt: state.cursor, endAt: block.startAt }]
-          : state.gaps,
-      cursor: Math.max(state.cursor, block.endAt),
-    }),
-    { gaps: [] as Span[], cursor: window.startAt },
-  );
-  return cursor < window.endAt
-    ? [...gaps, { startAt: cursor, endAt: window.endAt }]
-    : gaps;
-};
 
 const getObstacles = (
   input: PlannerInput,
@@ -155,9 +99,6 @@ const getObstacles = (
     startAt: (block.startAt as number) - BUFFER_MS,
     endAt: (block.endAt as number) + BUFFER_MS,
   }));
-
-const getMinutes = (gaps: Span[]) =>
-  gaps.reduce((sum, gap) => sum + (gap.endAt - gap.startAt) / MINUTE_MS, 0);
 
 const formatLength = (minutes: number) =>
   minutes < 60
@@ -375,7 +316,7 @@ export function planDay(
     outcome,
   });
   if (input.restDay !== null) return unchanged('rest');
-  const window = getWindow(input);
+  const window = getDayWindow(input);
   if (window.state !== 'open') return unchanged(window.state);
   const candidates = getCandidates(input);
 
@@ -409,7 +350,7 @@ export function planDay(
 
   const gaps = getGaps(window, getObstacles(input, null, false));
   const avoid = getAvoidSpans(input);
-  const freeMinutes = getMinutes(gaps);
+  const freeMinutes = getGapMinutes(gaps);
   if (freeMinutes < MIN_USEFUL_MINUTES) return unchanged('full');
   const budget = (freeMinutes * input.fillPercent) / 100;
   const picks = candidates.reduce(
@@ -458,7 +399,7 @@ export function findOpenings(
   task: PlannerTask,
   limit: number,
 ): { startAt: number; endAt: number }[] {
-  const window = getWindow(input);
+  const window = getDayWindow(input);
   if (window.state !== 'open') return [];
   const length = (task.durationMinutes ?? DEFAULT_MINUTES) * MINUTE_MS;
   const step = Math.max(length, DEFAULT_MINUTES * MINUTE_MS);
@@ -488,24 +429,14 @@ export function findFreeGaps(
   >,
   minMinutes: number,
 ): { startAt: number; endAt: number }[] {
-  const window = getWindow(input);
+  const window = getDayWindow(input);
   if (window.state !== 'open') return [];
   return getGaps(window, input.busy).filter(
     (gap) => gap.endAt - gap.startAt >= minMinutes * MINUTE_MS,
   );
 }
 
-/** The minutes the planner could fill on a day; 0 on a rest day, a past day or a day with no room. */
-export function readFreeMinutes(input: PlannerInput): number {
-  if (input.restDay !== null) return 0;
-  const window = getWindow(input);
-  if (window.state !== 'open') return 0;
-  const gaps = getGaps(
-    window,
-    getObstacles({ ...input, slots: {} }, null, false),
-  );
-  return (getMinutes(gaps) * input.fillPercent) / 100;
-}
+export { readFreeMinutes } from '@apps/helm/engine/freeTime';
 
 /** How much of Your day the calendar's busy blocks take, 0 to 1 (a rest day is 1). */
 export function readBusyShare(
@@ -526,5 +457,5 @@ export function readBusyShare(
   const total = window.endAt - window.startAt;
   return total <= 0
     ? 0
-    : 1 - getMinutes(getGaps(window, input.busy)) * (MINUTE_MS / total);
+    : 1 - getGapMinutes(getGaps(window, input.busy)) * (MINUTE_MS / total);
 }

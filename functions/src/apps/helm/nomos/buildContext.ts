@@ -5,6 +5,7 @@ import {
   type SyncedBook,
 } from './aliases.js';
 import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
+import type { ContextFit } from './fitContext.js';
 import type { HeardName } from './heardNames.js';
 import {
   MAX_CONTEXT_HABITS,
@@ -277,6 +278,8 @@ export interface ContextInput {
   style?: { traits: string[]; avoid: string[] } | null;
   /** Where the person is today and on any day the turn names, and where the people it names live, as names only. */
   whereabouts?: Record<string, unknown> | null;
+  /** How a stretch away fits the work and the calendar, worked out by code for a can-I-go question. */
+  fit?: ContextFit | null;
   /** What this phone lets the assistant read of where it is. */
   abilities?: {
     location: {
@@ -466,6 +469,55 @@ export function buildContext(input: ContextInput): {
       meeting: describeMeetingDay(task.questions.meetingAt, input.timeZone),
     }),
   }));
+  const listedTaskIds = new Set(
+    input.tasks.slice(0, MAX_CONTEXT_TASKS).map((task) => task.id),
+  );
+  const listedProjects = new Set(
+    (input.projects ?? [])
+      .slice(0, MAX_CONTEXT_PROJECTS)
+      .map((project) => project.name),
+  );
+  const fit = input.fit
+    ? {
+        leaving: input.fit.firstDay,
+        back: input.fit.lastDay,
+        mustDoFirst: input.fit.fit.mustDoFirst.flatMap((task) =>
+          listedTaskIds.has(task.id)
+            ? [
+                {
+                  task: aliases.add(task.id),
+                  due: new Date(task.dueDay).toISOString().slice(0, 10),
+                  minutes: task.minutes,
+                },
+              ]
+            : [],
+        ),
+        workMinutes: input.fit.fit.workMinutes,
+        freeMinutesBefore: Math.round(input.fit.fit.freeMinutesBefore),
+        noCalendar: !input.fit.fit.hasCalendar,
+        wontFit: input.fit.fit.isWontFit,
+        wouldMove: input.fit.events
+          .filter(
+            (copy) =>
+              input.fit?.fit.wouldMove.includes(copy.id) &&
+              (input.synced ?? []).some((shown) => shown.id === copy.id),
+          )
+          .map((copy) => synced.add(copy)),
+        deadlines: input.fit.fit.deadlines.flatMap((deadline) =>
+          listedProjects.has(deadline.name)
+            ? [
+                {
+                  name: deadline.name,
+                  date: new Date(deadline.date).toISOString().slice(0, 10),
+                  workMinutes: deadline.workMinutes,
+                  freeMinutes: Math.round(deadline.freeMinutes),
+                  becauseAway: deadline.isBecauseAway,
+                },
+              ]
+            : [],
+        ),
+      }
+    : null;
   const toRef = (task: ContextTask) => ({
     alias: aliases.add(task.id),
     title: task.title,
@@ -830,6 +882,7 @@ export function buildContext(input: ContextInput): {
     ...(input.whereabouts
       ? [`<whereabouts>${toDataJson(input.whereabouts)}</whereabouts>`]
       : []),
+    ...(fit ? [`<fit>${toDataJson(fit)}</fit>`] : []),
     ...(input.abilities
       ? [`<abilities>${toDataJson(input.abilities)}</abilities>`]
       : []),

@@ -99,6 +99,7 @@ import {
   MAX_MOMENTS_PER_WHO,
 } from './nomos/commands.js';
 import { namedMomentWhoIds, type KeyDateRecord } from './nomos/planKeyDates.js';
+import { readContextFit } from './nomos/fitContext.js';
 import {
   readActiveProjectsIn,
   readContextProjects,
@@ -2683,6 +2684,36 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               ),
             ),
           });
+    const contextFit =
+      mode === 'rest'
+        ? null
+        : await readContextFit({
+            firestore,
+            uid,
+            base,
+            key,
+            profile: profile.data(),
+            taskDocs: openTasks.docs,
+            selfWhoId,
+            trips: tripsFromCopies(
+              [...synced, ...placeTrips].filter(
+                (copy) => copy.kind === 'trip' || copy.category === 'trips',
+              ),
+            ),
+            text: combined.text,
+            answeredQuestion,
+            dates: combined.reading.dates,
+            isQuestion:
+              isQuestion(combined.text.trim()) || answeredQuestion !== null,
+            isAppsHeld: isAppsHeldBack,
+            now: capture.createdAt,
+            timeZone,
+          }).catch((error): null => {
+            logger.warn('helm.sort.fitUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return null;
+          });
     const contextHabits =
       mode === 'rest'
         ? []
@@ -2770,9 +2801,15 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             return undefined;
           })
       : undefined;
+    const fitEvents = (contextFit?.events ?? []).filter(
+      (copy) => !allSynced.some((known) => known.id === copy.id),
+    );
     const contextSynced = read.isOutside
-      ? filterSourcesForOutside(read.outsideReadScopes, allSynced)
-      : allSynced;
+      ? filterSourcesForOutside(read.outsideReadScopes, [
+          ...allSynced,
+          ...fitEvents,
+        ])
+      : [...allSynced, ...fitEvents];
     const heldBackNames = [
       ...new Set(
         [
@@ -2854,6 +2891,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       style,
       noticed,
       whereabouts: contextWhereabouts,
+      fit: contextFit,
       abilities: readCaptureAbilities(capture.abilities),
       notes: masked.notes,
       focusedTopic: masked.focusedTopic,

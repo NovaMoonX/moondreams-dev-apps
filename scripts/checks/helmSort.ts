@@ -44,6 +44,7 @@ import {
   settleCapture,
   type ExistingFact,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import { readFitRange } from '../../functions/src/apps/helm/nomos/fitContext.ts';
 import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtureProvider.ts';
 import {
   normalizeNomosReply,
@@ -3337,6 +3338,180 @@ test('an open task reads out how many of its questions are answered and when its
   });
   assert.ok(message.includes('"questions":"2 of 6 answered"'));
   assert.ok(message.includes('"meeting":"Mon, Nov 23"'));
+});
+
+const FIT_TODAY = '2026-11-16';
+const fitDay = (key: string) => ({
+  id: `date:${key}`,
+  text: key,
+  start: 0,
+  end: key.length,
+  precision: null,
+  due: { kind: 'day' as const, date: Date.parse(`${key}T00:00:00Z`) },
+});
+const fitRange = (
+  text: string,
+  over: Partial<Parameters<typeof readFitRange>[0]> = {},
+) =>
+  readFitRange({
+    text,
+    answeredQuestion: null,
+    dates: [],
+    away: [],
+    todayKey: FIT_TODAY,
+    timeZone: 'UTC',
+    isQuestion: true,
+    ...over,
+  });
+const awayOn = (from: string, to: string) => ({
+  from: Date.parse(`${from}T00:00:00Z`),
+  to: Date.parse(`${to}T00:00:00Z`),
+});
+
+test('a can-I-go question names the days it is about, widened to the stretch away they start', () => {
+  assert.deepEqual(
+    fitRange('What would I need to get done before leaving Sunday?', {
+      dates: [fitDay('2026-11-22')],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-22' },
+  );
+  assert.deepEqual(
+    fitRange('Could I hit the road Sunday?', {
+      dates: [fitDay('2026-11-22')],
+      away: [awayOn('2026-11-22', '2026-11-24')],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-24' },
+  );
+  assert.deepEqual(
+    fitRange('Could I go from Friday to the 20th?', {
+      dates: [fitDay('2026-11-20'), fitDay('2026-11-18')],
+    }),
+    { firstDay: '2026-11-18', lastDay: '2026-11-20' },
+  );
+  assert.deepEqual(
+    fitRange('When do you leave?', {
+      text: 'Sunday',
+      answeredQuestion: 'When do you leave?',
+      dates: [fitDay('2026-11-22')],
+    }),
+    { firstDay: '2026-11-22', lastDay: '2026-11-22' },
+  );
+});
+
+test("what's left before I go uses the nearest trip within two weeks, and nothing without one", () => {
+  assert.deepEqual(
+    fitRange("What's left before I go?", {
+      away: [
+        awayOn('2026-12-20', '2026-12-24'),
+        awayOn('2026-11-19', '2026-11-21'),
+      ],
+    }),
+    { firstDay: '2026-11-19', lastDay: '2026-11-21' },
+  );
+  assert.equal(
+    fitRange("What's left before I go?", {
+      away: [awayOn('2026-12-20', '2026-12-24')],
+    }),
+    null,
+  );
+});
+
+test('a statement, a question with no cue, or a past day gives no range, and a long one is cut to 14 days', () => {
+  const sunday = { dates: [fitDay('2026-11-22')] };
+  assert.equal(
+    fitRange("I'm leaving Sunday.", { ...sunday, isQuestion: false }),
+    null,
+  );
+  assert.equal(fitRange('What is on Sunday?', sunday), null);
+  assert.deepEqual(
+    fitRange('Could I go away from the 10th to Dec 20?', {
+      dates: [fitDay('2026-11-10'), fitDay('2026-12-20')],
+    }),
+    { firstDay: '2026-11-16', lastDay: '2026-11-29' },
+  );
+});
+
+test('the fit block carries aliases, only for tasks and projects the model is shown', () => {
+  const copy = copyOf('ev-fit', { title: 'Call with Priya and Sam' });
+  const fit = {
+    firstDay: '2026-11-22',
+    lastDay: '2026-11-24',
+    events: [copy],
+    fit: {
+      mustDoFirst: [
+        { id: TASK_IDS[0], dueDay: Date.UTC(2026, 10, 20), minutes: 120 },
+        { id: 'task-not-listed', dueDay: Date.UTC(2026, 10, 21), minutes: 20 },
+      ],
+      workMinutes: 140,
+      freeMinutesBefore: 61.4,
+      hasCalendar: false,
+      isWontFit: true,
+      wouldMove: ['ev-fit'],
+      deadlines: [
+        {
+          thingId: 'p1',
+          name: 'Wedding',
+          date: Date.UTC(2026, 10, 27),
+          taskCount: 3,
+          workMinutes: 200,
+          freeMinutes: 90,
+          hasCalendar: true,
+          isCare: false,
+          isWontFit: true,
+          isBecauseAway: true,
+        },
+        {
+          thingId: 'p2',
+          name: 'Hidden project',
+          date: Date.UTC(2026, 10, 27),
+          taskCount: 3,
+          workMinutes: 200,
+          freeMinutes: 90,
+          hasCalendar: true,
+          isCare: false,
+          isWontFit: true,
+          isBecauseAway: false,
+        },
+      ],
+    },
+  };
+  const input = {
+    text: TEXT,
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 16, 15, 0),
+    timeZone: 'UTC',
+    tasks: [{ id: TASK_IDS[0], title: 'Finish the ceremony draft', due: null }],
+    synced: [copy as never],
+    projects: [
+      {
+        name: 'Wedding',
+        milestones: [],
+        kind: 'project' as const,
+        date: null,
+        researchOffered: [],
+      },
+    ],
+  };
+  const block = /<fit>(.*)<\/fit>/.exec(
+    buildContext({ ...input, fit }).message,
+  );
+  assert.ok(block, 'a <fit> block');
+  const read = JSON.parse(block[1]);
+  assert.deepEqual(read.mustDoFirst, [
+    { task: 't1', due: '2026-11-20', minutes: 120 },
+  ]);
+  assert.deepEqual(read.wouldMove, ['e1']);
+  assert.equal(read.noCalendar, true);
+  assert.equal(read.wontFit, true);
+  assert.equal(read.freeMinutesBefore, 61);
+  assert.deepEqual(
+    read.deadlines.map((entry: { name: string }) => entry.name),
+    ['Wedding'],
+  );
+  assert.ok(
+    !block[0].includes('task-not-listed') && !block[0].includes('ev-fit'),
+  );
+  assert.ok(!buildContext(input).message.includes('<fit>'));
 });
 
 const failures: string[] = [];

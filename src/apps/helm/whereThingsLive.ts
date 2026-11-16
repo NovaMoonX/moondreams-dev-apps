@@ -497,6 +497,15 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     taps: ['setWhoWhere'],
   }),
   row({
+    thing: 'How a stretch away fits the work and the calendar',
+    home: 'tasks',
+    classes: ['readable'],
+    readers: ['turn'],
+    contextBlock: '<fit>',
+    tools: ['search_tasks', 'get_calendar'],
+    writer: 'none',
+  }),
+  row({
     thing: "The phone's last city, and its point at Precise",
     home: 'who',
     writer: 'actions/whoActions',

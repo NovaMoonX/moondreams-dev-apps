@@ -2,6 +2,7 @@ import { CLOSING_PHRASES } from '@/lib/speech/closingPhrase';
 import { formatList, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type { ThemeOption } from '@/components/ThemePicker';
+import { DEADLINE_FIT_LIMITS } from '@apps/helm/engine/freeTime';
 import type { DayPart } from '@apps/helm/engine/habitDay';
 import type {
   AssistantTone,
@@ -4675,11 +4676,7 @@ export const GUARDRAIL_LIMITS = {
   goalsOnStart: 3,
   goalsDaily: 4,
   quietGoalDays: 21,
-  deadlineWindowDays: 60,
-  deadlineSlackMinutes: 60,
-  deadlineMinTasks: 3,
-  lengthsKnownShare: 0.5,
-  defaultTaskMinutes: 30,
+  ...DEADLINE_FIT_LIMITS,
   starvedDays: 14,
   starvedOtherMin: 3,
   busyDayShare: 0.75,

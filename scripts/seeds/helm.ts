@@ -2125,6 +2125,18 @@ async function buildProjects(input: {
       createdAt: now - 44 * DAY_MS,
       completedAt: now - 30 * DAY_MS,
     }),
+    taskOf('seed-task-ceremony-draft', 'Finish the ceremony draft', {
+      projectId: 'seed-project-wedding',
+      due: { kind: 'day', date: today + 2 * DAY_MS },
+      durationMinutes: 120,
+      createdAt: now - 6 * DAY_MS,
+    }),
+    taskOf('seed-task-readings-list', 'Send Priya the readings list', {
+      projectId: null,
+      due: { kind: 'day', date: today + DAY_MS },
+      durationMinutes: 20,
+      createdAt: now - 4 * DAY_MS,
+    }),
     taskOf('seed-task-medicine', 'Take the morning medicine', {
       projectId: null,
       privacy: 'private',

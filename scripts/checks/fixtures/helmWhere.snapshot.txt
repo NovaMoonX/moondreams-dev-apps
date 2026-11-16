@@ -29,6 +29,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Where the person is right now: change it with setCurrentPlace or planDay.
 - Where someone lives: look in <whereabouts>; change it with setWhereabouts.
 - Where someone will be away: look in <whereabouts>; change it with setWhereabouts.
+- How a stretch away fits the work and the calendar: look in <fit>, then call search_tasks or get_calendar; you cannot change it.
 - Phone location and the offers put off: look in <abilities>; you cannot change it.
 - Earlier turns of the conversation: look in <earlier_turns>; you cannot change it.
 - Names the microphone heard and what they matched: look in <heard_names>; you cannot change it.
@@ -104,6 +105,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Where the person is right now: change it with setCurrentPlace or planDay.
 - Where someone lives: look in <whereabouts>; change it with setWhereabouts.
 - Where someone will be away: look in <whereabouts>; change it with setWhereabouts.
+- How a stretch away fits the work and the calendar: look in <fit>, then call search_tasks or get_calendar; you cannot change it.
 - Phone location and the offers put off: look in <abilities>; you cannot change it.
 - Earlier turns of the conversation: look in <earlier_turns>; you cannot change it.
 - Names the microphone heard and what they matched: look in <heard_names>; you cannot change it.

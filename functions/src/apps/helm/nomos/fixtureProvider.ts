@@ -768,6 +768,33 @@ function readQuestion(text: string, message: string) {
     ...(readBlock<ListedRecord[]>(message, 'open_tasks') ?? []),
     ...(readBlock<ListedRecord[]>(message, 'synced_records') ?? []),
   ];
+  const fit = readBlock<{
+    mustDoFirst: { task: string }[];
+    wouldMove: string[];
+    wontFit: boolean;
+  }>(message, 'fit');
+  if (fit) {
+    const titleOf = (alias: string) =>
+      records.find((record) => record.alias === alias)?.title ?? alias;
+    const first = fit.mustDoFirst.map((entry) => titleOf(entry.task));
+    const moved = fit.wouldMove.map(titleOf);
+    const said = [
+      first.length > 0
+        ? `${first.length === 1 ? 'One thing' : `${first.length} things`} first: ${first.join(' and ')}.`
+        : 'Nothing has to be done first.',
+      ...(fit.wontFit ? ['It will not all fit, so maybe leave later.'] : []),
+      ...(moved.length > 0 ? [`${moved.join(' and ')} would move.`] : []),
+    ].join(' ');
+    return toAnswer({
+      scope: 'yourThings',
+      question,
+      fromRecordsText: said,
+      sourceAliases: [
+        ...fit.mustDoFirst.map((entry) => entry.task),
+        ...fit.wouldMove,
+      ],
+    });
+  }
   const words = lower
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 2 && !QUESTION_WORDS.has(word));
