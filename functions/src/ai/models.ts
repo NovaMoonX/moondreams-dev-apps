@@ -74,9 +74,6 @@ const MODELS: Record<ModelRole, ModelSpec> = {
   },
 };
 
-/** A Message Batch is billed at half the price of the same call made at once. */
-const BATCH_PRICE_FACTOR = 0.5;
-
 export const getModelSpec = (role: ModelRole) => MODELS[role];
 
 export const EMPTY_USAGE: ModelUsage = {
@@ -95,7 +92,10 @@ export const addUsage = (a: ModelUsage, b: ModelUsage): ModelUsage => ({
 
 const HUNDREDTHS_OF_A_CENT_PER_DOLLAR = 10_000;
 
-/** What a call cost, rounded up, in hundredths of a cent. */
+/** The Message Batches API bills every token at 50% of the standard price. */
+export const BATCH_PRICE_RATIO = 0.5;
+
+/** What a call cost, rounded up, in hundredths of a cent; a batched call costs `BATCH_PRICE_RATIO` of it. */
 export function getUsageCost(
   role: ModelRole,
   usage: ModelUsage,
@@ -108,6 +108,6 @@ export function getUsageCost(
       usage.cacheReadTokens * price.cacheRead +
       usage.cacheWriteTokens * price.cacheWrite) /
     1_000_000;
-  const billed = isBatch ? dollars * BATCH_PRICE_FACTOR : dollars;
-  return Math.ceil(billed * HUNDREDTHS_OF_A_CENT_PER_DOLLAR);
+  const ratio = isBatch ? BATCH_PRICE_RATIO : 1;
+  return Math.ceil(dollars * ratio * HUNDREDTHS_OF_A_CENT_PER_DOLLAR);
 }

@@ -4,7 +4,7 @@ import type { HelmQuestion } from '@apps/helm/types';
 const SPOKEN_OPTIONS = 4;
 const SPOKEN_FIRST = 3;
 const YES_NO_OPENERS = new Set(
-  'is are do does did can could should will would have has'.split(' '),
+  'is are do does did can could should will would have has undo'.split(' '),
 );
 
 const joinOr = (labels: string[]) =>
@@ -28,6 +28,13 @@ const sayOptions = (labels: string[]) =>
 
 /** A question the way it is read aloud, worded per shape exactly as the server words the first one. */
 export function buildSpokenQuestion(question: HelmQuestion): string {
+  const lead = question.lead?.trim();
+  return lead
+    ? `${toSentence(lead)} ${buildQuestionBody(question)}`
+    : buildQuestionBody(question);
+}
+
+function buildQuestionBody(question: HelmQuestion): string {
   const prompt = toSentence(question.prompt.trim());
   const labels = choiceLabels(question);
   const isLong = labels.length > SPOKEN_OPTIONS;

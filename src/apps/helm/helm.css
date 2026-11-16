@@ -214,6 +214,11 @@ html.helm-theme .subview-backdrop:has(.helm-ask-overlay) {
   z-index: 110;
 }
 
+/* A live conversation covers the whole screen: above the site header, sheets and the conversation over a page, under a sheet it opens and toasts. */
+html.helm-theme .helm-live-screen {
+  z-index: 115;
+}
+
 /* A sheet opened from inside that conversation mounts after it, so it rises above it too. */
 html.helm-theme .subview-backdrop:has(.helm-ask-overlay) ~ .z-\[100\] {
   z-index: 120;
@@ -272,5 +277,143 @@ html.helm-theme .helm-dock-in {
 @media (prefers-reduced-motion: reduce) {
   html.helm-theme .helm-dock-in {
     animation: none;
+  }
+}
+
+/* A live conversation's ambience: the person's glow rises from the foot and swells with each word, the assistant's halo spreads from the top while it speaks, and both drift low while it works.
+   State opacity lives on the state rules; the keyframes only move, so they never override it. */
+html.helm-theme .helm-live-glow,
+html.helm-theme .helm-live-ripple {
+  position: absolute;
+  left: -25%;
+  right: -25%;
+  bottom: -32%;
+  height: 72%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--color-primary) 60%, transparent),
+    color-mix(in oklab, var(--color-primary) 24%, transparent) 60%,
+    transparent
+  );
+  filter: blur(28px);
+  transform-origin: 50% 100%;
+}
+
+html.helm-theme .helm-live-scroll {
+  mask-image: linear-gradient(to bottom, transparent, #000 20px);
+}
+
+html.helm-theme .helm-live-halo {
+  position: absolute;
+  left: -30%;
+  right: -30%;
+  top: -38%;
+  height: 78%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--color-secondary-foreground) 50%, transparent),
+    color-mix(in oklab, var(--color-primary) 20%, transparent) 62%,
+    transparent
+  );
+  filter: blur(36px);
+  transform-origin: 50% 0%;
+  opacity: 0;
+  transition: opacity 600ms ease-out;
+}
+
+html.helm-theme .helm-live-glow {
+  opacity: 0.7;
+  transition: opacity 500ms ease-out;
+}
+
+html.helm-theme [data-glow='listening'] .helm-live-glow {
+  animation: helm-live-breathe 4.2s ease-in-out infinite;
+}
+
+html.helm-theme [data-glow='waiting'] .helm-live-glow {
+  opacity: 0.5;
+  animation: helm-live-breathe 2.4s ease-in-out infinite;
+}
+
+html.helm-theme [data-glow='thinking'] .helm-live-glow {
+  opacity: 0.4;
+  animation: helm-live-drift 5s ease-in-out infinite;
+}
+
+html.helm-theme [data-glow='thinking'] .helm-live-halo {
+  opacity: 0.45;
+  animation: helm-live-drift 5s ease-in-out infinite reverse;
+}
+
+html.helm-theme [data-glow='speaking'] .helm-live-glow {
+  opacity: 0.12;
+}
+
+html.helm-theme [data-glow='speaking'] .helm-live-halo {
+  opacity: 1;
+  animation: helm-live-wave 2.6s ease-in-out infinite;
+}
+
+html.helm-theme [data-glow='muted'] .helm-live-glow {
+  opacity: 0.2;
+}
+
+html.helm-theme .helm-live-ripple {
+  animation: helm-live-ripple 700ms ease-out forwards;
+}
+
+@keyframes helm-live-breathe {
+  0%,
+  100% {
+    transform: scale(0.94);
+  }
+  50% {
+    transform: scale(1);
+  }
+}
+
+@keyframes helm-live-drift {
+  0%,
+  100% {
+    transform: translateX(-5%) scale(0.92);
+  }
+  50% {
+    transform: translateX(5%) scale(0.96);
+  }
+}
+
+@keyframes helm-live-wave {
+  0%,
+  100% {
+    transform: scale(1) translateX(-3%);
+    filter: blur(36px) brightness(1);
+  }
+  50% {
+    transform: scale(1.08) translateX(3%);
+    filter: blur(30px) brightness(1.12);
+  }
+}
+
+@keyframes helm-live-ripple {
+  from {
+    opacity: 0.55;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.helm-theme .helm-live-glow,
+  html.helm-theme .helm-live-halo,
+  html.helm-theme .helm-live-ripple {
+    animation: none !important;
+  }
+  html.helm-theme .helm-live-ripple {
+    display: none;
   }
 }

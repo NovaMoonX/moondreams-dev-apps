@@ -37,6 +37,7 @@ import { openExecution } from '@apps/helm/store/listeners/executionListener';
 import { undoPatternExecution } from '@apps/helm/store/actions/patternActions';
 import { markRemindersChanged } from '@apps/helm/store/actions/markRemindersChanged';
 import {
+  narrowForUndo,
   planReopen,
   planUndo,
   type UndoPlan,
@@ -62,6 +63,7 @@ import type {
   TaskSealed,
   TopicSealed,
   TopicVersion,
+  UndoReasonRecord,
   TopicVersionSealed,
   WhoSealed,
 } from '@apps/helm/types';
@@ -71,6 +73,10 @@ export type UndoResult =
       kind: 'done';
       undoExecutionId: string;
       report: string;
+      /** Whether this took back the last of what the execution wrote. */
+      isFinal: boolean;
+      /** Every record of the execution now taken back, this undo's included. */
+      undoneDocIds: string[];
       /** Sealed photo objects the undo left without a document; deleted once it commits. */
       objectPaths: string[];
     }
@@ -79,22 +85,12 @@ export type UndoResult =
 
 const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
 
-/** The people and places an execution made that a task or turn outside it also links; a transaction can't query, so this reads just before it. */
+/** The people and places an execution made that a task or turn outside it also links; a transaction can't query, so this reads just before it. Only the records the undo takes back are its own, so a person a task kept earlier links stays. */
 async function readUsedIds(
   uid: string,
-  executionId: string,
+  refs: EffectRef[],
+  own: Set<string>,
 ): Promise<Set<string>> {
-  const snapshot = await getDoc(doc(userOf(uid), 'executions', executionId));
-  if (!snapshot.exists()) return new Set();
-  const data = snapshot.data() as {
-    captureId?: unknown;
-    effectRefs?: EffectRef[];
-  };
-  const refs = Array.isArray(data.effectRefs) ? data.effectRefs : [];
-  const own = new Set([
-    ...refs.map((ref) => ref.docId),
-    ...(typeof data.captureId === 'string' ? [data.captureId] : []),
-  ]);
   const made = refs.filter(
     (ref) =>
       ref.op === 'create' &&
@@ -389,6 +385,13 @@ export async function undoExecution(
   uid: string,
   encryption: HelmEncryption,
   executionId: string,
+  options: {
+    /** Takes back only the units that write these records; every unit still left when absent. */
+    docIds?: string[];
+    questionRef?: { captureId: string; questionId: string };
+    /** Why the undo was asked for; written on the undo and read later for learning. */
+    reason?: UndoReasonRecord;
+  } = {},
 ): Promise<UndoResult> {
   if (!navigator.onLine) return { kind: 'offline' };
   const executions = collection(userOf(uid), 'executions');
@@ -421,7 +424,25 @@ export async function undoExecution(
     return undoPatternExecution(uid, encryption, executionId);
 
   try {
-    const usedIds = await readUsedIds(uid, executionId);
+    const first = await getDoc(executionRef);
+    if (!first.exists()) {
+      return { kind: 'refused', reason: 'missing', report: null };
+    }
+    const earlier = narrowForUndo(
+      await openExecution(first, read),
+      options.docIds ?? null,
+    );
+    if (earlier.kind === 'refused') {
+      return { kind: 'refused', reason: earlier.reason, report: null };
+    }
+    const usedIds = await readUsedIds(
+      uid,
+      earlier.view.effectRefs,
+      new Set([
+        ...earlier.view.effectRefs.map((ref) => ref.docId),
+        ...(earlier.view.captureId ? [earlier.view.captureId] : []),
+      ]),
+    );
     const result = await runTransaction(
       db,
       async (transaction): Promise<UndoResult> => {
@@ -552,12 +573,18 @@ export async function undoExecution(
             }),
           ),
         );
+        const narrowed = narrowForUndo(original, options.docIds ?? null);
+        if (narrowed.kind === 'refused') {
+          return { kind: 'refused', reason: narrowed.reason, report: null };
+        }
         const plan = planUndo({
-          original,
+          original: narrowed.view,
           targets,
           undoExecutionId: undoRef.id,
           now: Date.now(),
           usedIds,
+          questionRef: options.questionRef,
+          reason: options.reason,
         });
         if (plan.kind === 'refused') {
           return { kind: 'refused', reason: plan.reason, report: plan.report };
@@ -611,7 +638,9 @@ export async function undoExecution(
         if (!isRestorable) {
           return { kind: 'refused', reason: 'unreadable', report: null };
         }
-        const questionCaptureId = original.questionRef?.captureId ?? null;
+        const questionCaptureId = narrowed.isFinal
+          ? (original.questionRef?.captureId ?? null)
+          : null;
         const captureRef = questionCaptureId
           ? doc(userOf(uid), 'captures', questionCaptureId)
           : null;
@@ -763,11 +792,20 @@ export async function undoExecution(
         await writeDatesIn(transaction, uid, encryption, plan, dates);
         if (captureRef && reopen) transaction.update(captureRef, reopen);
         transaction.set(undoRef, { ...plan.undoExecution, sealed });
-        transaction.update(executionRef, { undoneByExecutionId: undoRef.id });
+        const undoneDocIds = [
+          ...new Set([...original.undoneDocIds, ...narrowed.recordedDocIds]),
+        ];
+        transaction.update(executionRef, {
+          undoneDocIds,
+          partUndoIds: [...original.partUndoIds, undoRef.id],
+          ...(narrowed.isFinal && { undoneByExecutionId: undoRef.id }),
+        });
         return {
           kind: 'done',
           undoExecutionId: undoRef.id,
           report: plan.report,
+          isFinal: narrowed.isFinal,
+          undoneDocIds,
           objectPaths: plan.deletes.flatMap(({ docId, collection: from }) =>
             from === 'media'
               ? getMediaObjectPaths(
