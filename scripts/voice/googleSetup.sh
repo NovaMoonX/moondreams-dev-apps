@@ -23,7 +23,9 @@ fi
 gcloud services enable texttospeech.googleapis.com --project "$PROJECT"
 echo "✓ Text-to-Speech is enabled for $PROJECT"
 
-if [[ -t 0 ]]; then
+if gcloud auth application-default print-access-token >/dev/null 2>&1; then
+  echo "✓ This machine is already signed in for the Google voices"
+elif [[ -t 0 ]]; then
   printf 'Sign in so the benchmark can use the Google voices from this machine? [Y/n] '
   read -r answer || true
   if [[ ! "$answer" =~ ^[Nn] ]]; then
