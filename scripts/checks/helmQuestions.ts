@@ -27,7 +27,14 @@ import {
   planUndoOffer,
 } from '../../functions/src/apps/helm/nomos/planUndoOffer.ts';
 import { readUndoOffers } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
-import { buildUndoOfferPrompt } from '../../functions/src/apps/helm/nomos/summaries.ts';
+import {
+  OPTION_CAP,
+  QUESTION_CAP,
+} from '../../functions/src/apps/helm/nomos/commands.ts';
+import {
+  buildUndoOfferPrompt,
+  listUndoLines,
+} from '../../functions/src/apps/helm/nomos/summaries.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import {
   planResolve,
@@ -1250,6 +1257,27 @@ test('the undo prompt reads in Helm tone for each kind of change', () => {
     ),
     'Undo adding X? A and B stay.',
   );
+});
+
+test('an undo prompt or option over its cap names fewer lines and keeps whole words and its question mark', () => {
+  const long = (n: number) => ({
+    change: 'added',
+    title: `Plan the wedding rehearsal dinner menu with every cousin number ${n}`,
+    kind: 'task',
+  });
+  const going = [long(1), long(2), long(3), long(4)];
+  const prompt = buildUndoOfferPrompt(going, [long(5)]);
+  assert.ok(prompt.length <= QUESTION_CAP, prompt);
+  assert.ok(prompt.endsWith(' more?'), prompt);
+  assert.ok(prompt.includes('number 1'), prompt);
+  const label = listUndoLines(going, OPTION_CAP);
+  assert.ok(label.length <= OPTION_CAP, label);
+  assert.match(label, /(number \d|…) and \d more$/);
+  const one = listUndoLines(
+    [{ change: 'added', title: 'word '.repeat(60).trim(), kind: 'task' }],
+    OPTION_CAP,
+  );
+  assert.ok(one.length <= OPTION_CAP && one.endsWith('word…'), one);
 });
 
 test('the reply keeps an undo offer only for a turn it was shown, with its quote found in the words', () => {

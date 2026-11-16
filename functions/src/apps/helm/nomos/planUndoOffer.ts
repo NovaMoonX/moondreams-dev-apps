@@ -190,7 +190,7 @@ export function planUndoOffer(input: {
       options: [
         ...candidates.map((candidate, index) => ({
           id: `c${index + 1}`,
-          label: capital(listUndoLines(candidate.going)).slice(0, OPTION_CAP),
+          label: capital(listUndoLines(candidate.going, OPTION_CAP)),
           detail: candidate.said ? candidate.said.slice(0, DETAIL_CAP) : null,
           ref: null,
         })),

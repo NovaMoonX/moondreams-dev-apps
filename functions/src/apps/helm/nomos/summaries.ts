@@ -570,15 +570,35 @@ export const describeUndoLine = (line: {
 const UNDO_LISTED_LINES = 3;
 
 /** "adding A, adding B and 2 more": the first few lines named and a count of the rest, so a long turn never lists them all. */
-export const listUndoLines = (
-  going: { change: string; title: string | null; kind: string }[],
-) => {
-  const named = going.slice(0, UNDO_LISTED_LINES).map(describeUndoLine);
-  const more = going.length - named.length;
-  return more > 0 ? `${named.join(', ')} and ${more} more` : joinNames(named);
+const cutAtWord = (text: string, cap: number) => {
+  if (text.length <= cap) return text;
+  const cut = text.slice(0, cap - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > 0 ? cut.slice(0, space) : cut).replace(/[\s,]+$/, '')}…`;
 };
 
-/** "Undo adding Book flights? Call the vet stays.": what would go (a few lines, then "and N more"), then up to two of what stays and a count of the rest; no second sentence when nothing stays, and the stays sentence goes first when the prompt would pass the question cap. */
+/** What an undo would take back, in words: a few lines then "and N more", naming fewer lines until it fits `cap` and cutting the last at a word only when one line alone is too long. */
+export const listUndoLines = (
+  going: { change: string; title: string | null; kind: string }[],
+  cap = Infinity,
+) => {
+  const described = going.map(describeUndoLine);
+  const listed = (count: number) => {
+    const more = going.length - count;
+    const named = described.slice(0, count);
+    return more > 0 ? `${named.join(', ')} and ${more} more` : joinNames(named);
+  };
+  const counts = Array.from(
+    { length: Math.min(UNDO_LISTED_LINES, going.length) },
+    (_, index) => Math.min(UNDO_LISTED_LINES, going.length) - index,
+  );
+  const fitting = counts.find((count) => listed(count).length <= cap);
+  if (fitting !== undefined) return listed(fitting);
+  const tail = going.length > 1 ? ` and ${going.length - 1} more` : '';
+  return `${cutAtWord(described[0] ?? '', cap - tail.length)}${tail}`;
+};
+
+/** "Undo adding Book flights? Call the vet stays.": what would go (a few lines, then "and N more"), then up to two of what stays and a count of the rest; no second sentence when nothing stays, and when the whole would pass the question cap the stays sentence is dropped and the lines shortened, so it always ends in its question mark. */
 export const buildUndoOfferPrompt = (
   going: { change: string; title: string | null; kind: string }[],
   staying: { title: string | null; kind: string }[],
@@ -596,7 +616,7 @@ export const buildUndoOfferPrompt = (
   const ask = `Undo ${listUndoLines(going)}?`;
   return (ask + stays).length <= QUESTION_CAP
     ? ask + stays
-    : ask.slice(0, QUESTION_CAP);
+    : `Undo ${listUndoLines(going, QUESTION_CAP - 'Undo ?'.length)}?`;
 };
 
 export type PickKind = 'whichPerson' | 'whichPlace';

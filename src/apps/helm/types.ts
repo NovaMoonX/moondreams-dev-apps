@@ -199,7 +199,6 @@ export interface QuestionNumber {
   decimals: 0 | 1 | 2;
 }
 
-/** An opened sealed question, built by code (which person or place) or written by the assistant; a code-built one's link is held until it is answered. */
 /** One thing an undo offer can take back: the records one execution wrote, whole or in part. */
 export interface UndoChoice {
   optionId: string;
@@ -210,6 +209,7 @@ export interface UndoChoice {
   quote: string | null;
 }
 
+/** An opened sealed question, built by code (which person or place) or written by the assistant; a code-built one's link is held until it is answered. */
 export interface HelmQuestion {
   kind:
     | 'whichPerson'
