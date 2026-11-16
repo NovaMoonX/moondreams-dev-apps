@@ -29,6 +29,7 @@ import { toSyncedId } from '../../functions/src/apps/helm/connections/sink.ts';
 import { readUnseenNews } from '../../src/lib/connections/newReads.ts';
 import {
   BULK_CALENDAR,
+  MEETING_CALENDAR,
   FIXTURE_CANCELLED_REF,
   FIXTURE_DUP_TOKEN,
   FIXTURE_GONE_LATER_TOKEN,
@@ -944,6 +945,57 @@ const main = async () => {
       refs(await t.copies()),
       [`${TZ_CALENDARS[0]}|fx-offsite-a`],
       'the same event on calendars in different UTC offsets is kept once',
+    );
+  }
+
+  {
+    const meetings = {
+      accountId: 'g_0000000000000005',
+      email: 'personal@example.com',
+      calendars: [MEETING_CALENDAR],
+    };
+    const t = await setupCalendar(meetings);
+    const readPages = async (
+      cursor: string | null,
+    ): Promise<SharedRecord[]> => {
+      const page = await SOURCE_ADAPTERS[CALENDAR_CONNECTOR].syncPage(
+        await t.ctx(),
+        {
+          category: 'events',
+          cursor,
+          resumeState: null,
+          windowStart: Date.now() - DAY,
+        },
+      );
+      return page.cursor
+        ? [...page.records, ...(await readPages(page.cursor))]
+        : page.records;
+    };
+    const result = { records: await readPages(null) };
+    const read = (id: string) => {
+      const found = result.records.find(
+        (entry) => entry.sourceRef === `${MEETING_CALENDAR}|${id}`,
+      );
+      assert.ok(found, id);
+      return { format: found.extra.format, place: found.placeLabel };
+    };
+    assert.deepEqual(read('fx-m-conference'), {
+      format: 'video',
+      place: '12 Orchard Rd, Westford',
+    });
+    assert.deepEqual(read('fx-m-hangout'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-zoom'), { format: 'video', place: null });
+    assert.deepEqual(read('fx-m-phone'), { format: 'phone', place: null });
+    assert.deepEqual(read('fx-m-address'), {
+      format: null,
+      place: 'Sweet Layer, 4 Main St',
+    });
+    assert.deepEqual(read('fx-m-none'), { format: null, place: null });
+    assert.ok(
+      !JSON.stringify(result.records).match(
+        /https?:|tel:|zoom\.us|secret|meet\./,
+      ),
+      'no link, number or conference detail is kept',
     );
   }
 

@@ -259,6 +259,12 @@ export const IMPORTANCE_OPTIONS = [
   { value: 'could', label: 'Could' },
 ] as const;
 
+export const MEETING_FORMAT_OPTIONS = [
+  { value: 'inPerson', label: 'In person' },
+  { value: 'video', label: 'Video' },
+  { value: 'phone', label: 'Phone' },
+] as const;
+
 export const ENERGY_OPTIONS = [
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
@@ -1851,6 +1857,10 @@ export const HELM_COPY = {
   taskTitleMissing: 'Write what to do first',
   addTask: 'Add task',
   whenLabel: 'When',
+  meetsLabel: 'How it meets',
+  meetsSet: (how: string) => `Marked as ${how.toLowerCase()}.`,
+  meetsCleared: 'Cleared how it meets.',
+  meetsFrom: (source: string) => `From ${source}`,
   noDay: 'No day',
   addTime: 'Add a time',
   removeField: 'Remove',

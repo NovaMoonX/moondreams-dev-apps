@@ -615,6 +615,7 @@ export async function makeTaskAsWritten(
     stepState: {},
     meeting: null,
     readyAnswer: null,
+    meets: null,
     mediaIds: [],
     createdBy: 'person',
     sourceCaptureId: current.id,

@@ -621,6 +621,14 @@ export type Importance = 'must' | 'should' | 'could';
 export type Energy = 'low' | 'medium' | 'high';
 export type TaskContext = 'atHome' | 'out' | 'atComputer' | 'onPhone';
 
+export type MeetingFormat = 'inPerson' | 'video' | 'phone';
+
+/** How a task with a moment due meets; the place is the task's own `placeIds`. */
+export interface TaskMeets {
+  how: MeetingFormat;
+  setBy: 'person' | 'calendar';
+}
+
 export interface Task {
   status: TaskStatus;
   importance: Importance | null;
@@ -641,6 +649,8 @@ export interface Task {
   meeting: TaskMeeting | null;
   /** The answer to "Do they feel ready?" for that meeting. */
   readyAnswer: TaskReadyAnswer | null;
+  /** How the meeting happens, readable; null when never said and on a task from before the field. */
+  meets: TaskMeets | null;
   mediaIds: string[];
   createdBy: 'person' | 'nomos';
   sourceCaptureId: string | null;
@@ -1503,6 +1513,7 @@ export type TaskPlainFields = Partial<
     | 'importance'
     | 'isUrgent'
     | 'due'
+    | 'meets'
     | 'durationMinutes'
     | 'energy'
     | 'context'

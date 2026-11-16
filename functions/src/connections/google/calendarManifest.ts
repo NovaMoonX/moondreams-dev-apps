@@ -7,15 +7,16 @@ export const GOOGLE_CALENDAR_MANIFEST: ConnectorManifest = {
   contractVersion: 1,
   about:
     "Google Calendar, the person's Google calendars, connected through their Google account.",
-  transformVersion: 1,
+  transformVersion: 2,
   categories: [
     {
       id: 'events',
       kind: 'event',
       label: 'Events',
-      detail: "Each event's title, time and calendar.",
+      detail:
+        "Each event's title, time, calendar, place, and whether it is on video or a phone call.",
       meaning:
-        "Events on the person's Google calendars, with their time, calendar, and whether the person is free or busy.",
+        "Events on the person's Google calendars, with their time, calendar, place, whether it is on video or a phone call, and whether the person is free or busy.",
       mode: 'sync',
       isOnAtConnect: true,
       addedInVersion: 1,
@@ -32,11 +33,17 @@ export const GOOGLE_CALENDAR_MANIFEST: ConnectorManifest = {
           sinceVersion: 1,
           addedOn: null,
         },
+        { label: 'Its place', sinceVersion: 2, addedOn: '2026-11-16' },
+        {
+          label: "Whether it's on video or a phone call",
+          sinceVersion: 2,
+          addedOn: '2026-11-16',
+        },
       ],
-      scopeVersion: 1,
+      scopeVersion: 2,
     },
   ],
-  never: ['Descriptions', 'guests', 'places', 'video links', 'attachments'],
+  never: ['Descriptions', 'guests', 'video links', 'attachments'],
   capabilities: { read: true, write: false, backgroundSync: true },
   connect: {
     kind: 'oauth',

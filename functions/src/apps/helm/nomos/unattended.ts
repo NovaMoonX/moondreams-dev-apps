@@ -4,7 +4,7 @@ import type {
   ContextTask,
 } from './buildContext.js';
 import type { SyncedCopy } from '../syncedCopies.js';
-import type { TaskDue } from './commands.js';
+import { readMeets, type TaskDue } from './commands.js';
 import { readMaskedLabel } from '../privacy.js';
 
 /** The name each private thing is called by while the turn is unattended; the same words mask the reply. */
@@ -61,6 +61,7 @@ export const toContextTask = (
     due: TaskDue | null;
     stepState?: Record<string, { doneAt: number | null }>;
     meeting?: { startAt: number } | null;
+    meets?: unknown;
   },
   words: { title: string },
   mask: {
@@ -84,6 +85,7 @@ export const toContextTask = (
             meetingAt: task.meeting.startAt,
           }
         : null,
+    meetsHow: isHidden ? null : (readMeets(task.meets)?.how ?? null),
   };
 };
 

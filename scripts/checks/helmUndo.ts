@@ -286,6 +286,37 @@ test('an update still as written is reverted, resealed with notes and steps kept
   });
 });
 
+test('an update that set how a meeting happens puts the earlier value back', () => {
+  const written = { meets: { how: 'video', setBy: 'person' } };
+  const entry = update('t1', written, { meets: null });
+  const result = asWrite(
+    plan(execution([entry]), [
+      target('t1', { ...written, lastEditedAt: EARLIER }),
+    ]),
+  );
+  assert.equal(result.updates[0].fields.meets, null);
+  const kept = asRefused(
+    plan(execution([entry]), [
+      target('t1', { meets: { how: 'phone', setBy: 'person' } }),
+    ]),
+  );
+  assert.ok(kept);
+  const earlier = update(
+    't1',
+    { meets: { how: 'video', setBy: 'person' } },
+    { meets: { how: 'inPerson', setBy: 'calendar' } },
+  );
+  const back = asWrite(
+    plan(execution([earlier]), [
+      target('t1', { meets: { setBy: 'person', how: 'video' } }),
+    ]),
+  );
+  assert.deepEqual(back.updates[0].fields.meets, {
+    how: 'inPerson',
+    setBy: 'calendar',
+  });
+});
+
 test('an update whose path the person changed since is kept whole', () => {
   const result = asRefused(
     plan(execution([RENAME]), [

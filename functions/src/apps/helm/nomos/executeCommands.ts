@@ -29,6 +29,7 @@ import {
   type MentionRead,
   type NomosCommand,
   type NoteFactCommand,
+  type MeetsHow,
   type NoteFactKind,
   type PlaceRead,
   type ProjectCommand,
@@ -141,6 +142,7 @@ export interface ExistingTask {
   title: string;
   whoIds: string[];
   placeIds: string[];
+  meets?: { how: MeetsHow; setBy: 'person' | 'calendar' } | null;
   sealed: Record<string, unknown>;
   /** What the task says about being private and the parents it is filed under, read with it. */
   privacyFacts?: PrivacyFacts;
@@ -769,7 +771,25 @@ interface Draft {
   isPrivate: boolean;
   questions: string[];
   meeting: QuestionsMeeting | null;
+  meetsHow: MeetsHow | null;
 }
+
+/** How a task meets counts only when its due has a time. */
+const toMeetsHow = (due: TaskDue | null, how: MeetsHow | null | undefined) =>
+  due?.kind === 'moment' ? (how ?? null) : null;
+
+/** An update's meets: absent leaves it, null clears it, a format sets it as the person's only while the due has a time. */
+const toMeetsAfter = (
+  before: ExistingTask['meets'],
+  how: MeetsHow | null | undefined,
+  due: TaskDue | null,
+) => {
+  if (how === undefined) return before ?? null;
+  if (how === null) return null;
+  return due?.kind === 'moment'
+    ? { how, setBy: 'person' as const }
+    : (before ?? null);
+};
 
 const union = (left: string[], right: string[]) => [
   ...new Set([...left, ...right]),
@@ -1201,6 +1221,7 @@ export function planWrites(input: PlanInput): WritePlan {
         isPrivate: false,
         questions: command.questions,
         meeting: command.meeting,
+        meetsHow: toMeetsHow(command.due, command.meetsHow),
       });
       return;
     }
@@ -1278,6 +1299,9 @@ export function planWrites(input: PlanInput): WritePlan {
         draft.title = command.title ?? draft.title;
         if (command.hasDue) draft.due = command.due;
         draft.isUrgent = command.isUrgent ?? draft.isUrgent;
+        if (command.meetsHow !== undefined) {
+          draft.meetsHow = toMeetsHow(draft.due, command.meetsHow);
+        }
         draft.whoIds = union(
           draft.whoIds,
           idsOf(command.whoRefs, entities.whoIdOf),
@@ -1335,12 +1359,22 @@ export function planWrites(input: PlanInput): WritePlan {
     );
     const hasNewWho = whoIds.length > current.whoIds.length;
     const hasNewPlace = placeIds.length > current.placeIds.length;
+    const meetsBefore = current.meets ?? null;
+    const meetsAfter = toMeetsAfter(
+      meetsBefore,
+      command.meetsHow,
+      due === undefined ? current.due : due,
+    );
+    const hasNewMeets =
+      meetsAfter?.how !== meetsBefore?.how ||
+      meetsAfter?.setBy !== meetsBefore?.setBy;
     if (
       title === null &&
       due === undefined &&
       isUrgent === null &&
       !hasNewWho &&
-      !hasNewPlace
+      !hasNewPlace &&
+      !hasNewMeets
     ) {
       return;
     }
@@ -1374,6 +1408,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...(isUrgent !== null && { isUrgent }),
       ...(hasNewWho && { whoIds }),
       ...(hasNewPlace && { placeIds }),
+      ...(hasNewMeets && { meets: meetsAfter }),
       ...(hasNewMark && { 'sealed.privateMark': marked.privateMark }),
       ...(hasNewClass && { privacy: 'private' }),
     };
@@ -1383,6 +1418,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...(isUrgent !== null && { isUrgent: current.isUrgent }),
       ...(hasNewWho && { whoIds: current.whoIds }),
       ...(hasNewPlace && { placeIds: current.placeIds }),
+      ...(hasNewMeets && { meets: meetsBefore }),
       ...(hasNewMark && { 'sealed.privateMark': before.privateMark }),
       ...(hasNewClass && { privacy: 'ordinary' }),
     };
@@ -1399,6 +1435,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...(isUrgent !== null && { isUrgent }),
       ...(hasNewWho && { whoIds }),
       ...(hasNewPlace && { placeIds }),
+      ...(hasNewMeets && { meets: meetsAfter }),
       ...(hasNewClass && { privacy: 'private' }),
       lastEditedAt: now,
     });
@@ -1406,6 +1443,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...current,
       whoIds,
       placeIds,
+      meets: meetsAfter,
       title: title ?? current.title,
       due: due === undefined ? current.due : due,
       isUrgent: isUrgent ?? current.isUrgent,
@@ -2181,6 +2219,7 @@ export function planWrites(input: PlanInput): WritePlan {
         milestoneId: null,
         whoIds: draft.whoIds,
         placeIds: draft.placeIds,
+        meets: draft.meetsHow ? { how: draft.meetsHow, setBy: 'person' } : null,
         notUntil: null,
         waitsOnTaskIds: [],
         waitsOnWhoId: null,

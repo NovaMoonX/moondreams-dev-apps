@@ -47,6 +47,7 @@ export async function openTask(
     stepState: data.stepState ?? {},
     meeting: data.meeting ?? null,
     readyAnswer: data.readyAnswer ?? null,
+    meets: data.meets ?? null,
     mediaIds: data.mediaIds ?? [],
     createdBy: data.createdBy ?? 'person',
     sourceCaptureId: data.sourceCaptureId ?? null,

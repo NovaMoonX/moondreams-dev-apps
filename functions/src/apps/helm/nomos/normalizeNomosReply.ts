@@ -137,6 +137,8 @@ import {
   type SourceRef,
   type NomosCommand,
   type TaskDue,
+  type MeetsHow,
+  MEETS_HOWS,
   type HabitCommand,
   type SetImportanceCommand,
   type ConnectionCommand,
@@ -1166,6 +1168,10 @@ const isQuotedPrivateChange = (
   );
 };
 
+/** A format the model named; undefined when it named none, so an update leaves the field as it is. */
+const readMeetsHow = (value: unknown): MeetsHow | undefined =>
+  MEETS_HOWS.find((known) => known === value);
+
 const readCommand = (
   item: Record<string, unknown>,
   state: { refs: Set<string> },
@@ -1224,6 +1230,9 @@ const readCommand = (
       projectRef: toText(item.projectRef, PROJECT_NAME_CAP),
       questions: readQuestionList(item.questions),
       meeting: readQuestionsMeeting(item.aboutAlias, synced, now),
+      ...(readMeetsHow(item.meetsHow) && {
+        meetsHow: readMeetsHow(item.meetsHow),
+      }),
     };
   }
 
@@ -1234,8 +1243,25 @@ const readCommand = (
   const hasDue = item.dueSpanId !== null && item.dueSpanId !== undefined;
   const links = readLinks(item, title, reading, entities);
   const hasLinks = links.whoRefs.length > 0 || links.placeRefs.length > 0;
-  if (!title && !hasDue && isUrgent === null && !hasLinks) return null;
-  return { kind, taskId, title, due, hasDue, isUrgent, ...links };
+  const meetsHow = readMeetsHow(item.meetsHow);
+  if (
+    !title &&
+    !hasDue &&
+    isUrgent === null &&
+    !hasLinks &&
+    meetsHow === undefined
+  )
+    return null;
+  return {
+    kind,
+    taskId,
+    title,
+    due,
+    hasDue,
+    isUrgent,
+    ...links,
+    ...(meetsHow !== undefined && { meetsHow }),
+  };
 };
 
 export type TopicDrop =

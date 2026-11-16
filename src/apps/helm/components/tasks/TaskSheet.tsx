@@ -31,6 +31,7 @@ import TaskDetails, {
   type TaskEditing,
   type WordsOutcome,
 } from '@apps/helm/components/tasks/TaskDetails';
+import MeetingFormatRow from '@apps/helm/components/tasks/MeetingFormatRow';
 import TaskSteps, { TickButton } from '@apps/helm/components/tasks/TaskSteps';
 import WaitsOnPicker from '@apps/helm/components/tasks/WaitsOnPicker';
 import {
@@ -707,6 +708,7 @@ function TaskSheet({
             </SummaryRow>
           )}
           <WhenRow editing={editing} now={nowMinute} />
+          <MeetingFormatRow editing={editing} />
           {linked.map((entry) => (
             <SummaryRow
               key={`${entry.kind}:${entry.id}`}

@@ -25,6 +25,9 @@ interface FixtureEvent {
   attendees?: { self: boolean; responseStatus: string }[];
   transparency?: string;
   updated?: string;
+  location?: string;
+  hangoutLink?: string;
+  conferenceData?: { entryPoints: { entryPointType: string; uri: string }[] };
 }
 
 const ZONE = 'America/Los_Angeles';
@@ -40,6 +43,7 @@ export const TZ_CALENDARS = [
   'tz-a@group.calendar.google.com',
   'tz-b@group.calendar.google.com',
 ];
+export const MEETING_CALENDAR = 'meetings@group.calendar.google.com';
 export const BULK_CALENDAR = 'bulk@group.calendar.google.com';
 export const BULK_EVENT_COUNT = 1100;
 const BULK_PAGE_SIZE = 300;
@@ -149,7 +153,37 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
     iCalUID: 'fixture-pottery@example.com',
     ...timed(2, '18:00', '19:30'),
   };
+  const meeting = (id: string, extra: Partial<FixtureEvent>) => ({
+    ...base,
+    id,
+    summary: id,
+    iCalUID: `${id}@example.com`,
+    ...timed(3, '10:00', '10:30'),
+    ...extra,
+  });
   const byCalendar: Record<string, FixtureEvent[]> = {
+    [MEETING_CALENDAR]: [
+      meeting('fx-m-conference', {
+        location: '12 Orchard Rd, Westford',
+        conferenceData: {
+          entryPoints: [
+            { entryPointType: 'video', uri: 'https://meet.example/secret' },
+            { entryPointType: 'more', uri: 'https://meet.example/more' },
+          ],
+        },
+      }),
+      meeting('fx-m-hangout', {
+        hangoutLink: 'https://meet.google.com/abc-defg-hij',
+      }),
+      meeting('fx-m-zoom', { location: 'https://zoom.us/j/123456?pwd=secret' }),
+      meeting('fx-m-phone', {
+        conferenceData: {
+          entryPoints: [{ entryPointType: 'phone', uri: 'tel:+15551234567' }],
+        },
+      }),
+      meeting('fx-m-address', { location: '  Sweet Layer, 4 Main St  ' }),
+      meeting('fx-m-none', {}),
+    ],
     'work@example.com': [
       {
         ...base,

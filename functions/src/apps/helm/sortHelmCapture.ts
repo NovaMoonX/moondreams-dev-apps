@@ -208,6 +208,7 @@ import {
   type SetWhereaboutsCommand,
   type TaskDue,
   DEFAULT_ASSISTANT_NAME,
+  readMeets,
 } from './nomos/commands.js';
 import { buildFactWrite, settleRemember } from './nomos/remember.js';
 import {
@@ -558,6 +559,7 @@ interface TaskDoc {
   privacy?: string | null;
   stepState?: Record<string, { doneAt: number | null }>;
   meeting?: { startAt: number } | null;
+  meets?: unknown;
   createdAt: number;
   sealed: SealedPayload;
 }
@@ -4295,6 +4297,7 @@ async function writeResult(
               title: words.title,
               whoIds: task.whoIds ?? [],
               placeIds: task.placeIds ?? [],
+              meets: readMeets(task.meets),
               sealed: words.sealed,
               privacyFacts: readPrivacyFacts({
                 privateMark: toPrivateMark(words.sealed.privateMark),

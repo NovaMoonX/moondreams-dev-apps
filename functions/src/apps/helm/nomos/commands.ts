@@ -39,6 +39,20 @@ import {
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
 
+export const MEETS_HOWS = ['inPerson', 'video', 'phone'] as const;
+export type MeetsHow = (typeof MEETS_HOWS)[number];
+
+/** What a task stores about how it meets; a missing or odd field reads as none. */
+export const readMeets = (
+  value: unknown,
+): { how: MeetsHow; setBy: 'person' | 'calendar' } | null => {
+  const entry = value as { how?: unknown; setBy?: unknown } | null | undefined;
+  const how = MEETS_HOWS.find((known) => known === entry?.how);
+  return how
+    ? { how, setBy: entry?.setBy === 'calendar' ? 'calendar' : 'person' }
+    : null;
+};
+
 export interface Token {
   id: string;
   text: string;
@@ -675,6 +689,8 @@ export type NomosCommand =
       meeting: QuestionsMeeting | null;
       /** People already settled by id, for a task made from an answer rather than a reply's mentions. */
       whoIds?: string[];
+      /** How the task meets; absent or null means it was not said. */
+      meetsHow?: MeetsHow | null;
     }
   | {
       kind: 'updateTask';
@@ -685,6 +701,8 @@ export type NomosCommand =
       isUrgent: boolean | null;
       whoRefs: string[];
       placeRefs: string[];
+      /** Absent leaves it as it is; null clears it. */
+      meetsHow?: MeetsHow | null;
     }
   | { kind: 'completeTask'; taskId: string }
   | { kind: 'setPrivate'; taskId: string; isPrivate: boolean };
@@ -1212,6 +1230,7 @@ export const buildFileResultsTool = ({
             'title',
             'dueSpanId',
             'isUrgent',
+            'meetsHow',
             'isPrivate',
             'scope',
             'question',
@@ -1384,6 +1403,12 @@ export const buildFileResultsTool = ({
               'boolean',
               'true when the capture marks this task urgent; null to leave it as it is.',
             ),
+            meetsHow: {
+              type: ['string', 'null'],
+              enum: [...MEETS_HOWS, null],
+              description:
+                'createTask and updateTask: inPerson, video or phone only when the person says how that meeting or call happens; null for every other kind and whenever it is not said.',
+            },
             isPrivate: nullable(
               'boolean',
               'setPrivate: true to keep the task private, false only when the person asks to stop keeping it private. createHabit: true only when the person asks to keep the habit private; null for every other kind.',

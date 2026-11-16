@@ -17,6 +17,7 @@ import {
   type CaptureReading,
   type TaskDue,
   type Token,
+  type MeetsHow,
 } from './commands.js';
 import type { StepGroupBlock } from '../stepGroups.js';
 import { withoutAddress } from './joinedTurn.js';
@@ -32,6 +33,8 @@ export interface ContextTask {
   due: TaskDue | null;
   /** How many of a task's questions are answered, and when its meeting starts; null for any other task. */
   questions?: { answered: number; total: number; meetingAt: number } | null;
+  /** How a task with a moment due meets; null when it was never said. */
+  meetsHow?: MeetsHow | null;
 }
 
 /** What the records hold about a person, pet, organization or place the turn names; `by` says whether the person said it or the assistant inferred it. */
@@ -464,6 +467,7 @@ export function buildContext(input: ContextInput): {
     alias: aliases.add(task.id),
     title: task.title,
     due: describeDue(task.due),
+    ...(task.meetsHow && { meets: task.meetsHow }),
     ...(task.questions && {
       questions: `${task.questions.answered} of ${task.questions.total} answered`,
       meeting: describeMeetingDay(task.questions.meetingAt, input.timeZone),

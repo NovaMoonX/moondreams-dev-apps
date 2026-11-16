@@ -1228,6 +1228,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       stepState: {},
       meeting: null,
       readyAnswer: null,
+      meets: null,
       mediaIds: [],
       createdBy: index % 2 === 0 ? 'person' : 'nomos',
       sourceCaptureId: null,
