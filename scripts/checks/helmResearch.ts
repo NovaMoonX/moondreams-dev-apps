@@ -2206,15 +2206,20 @@ test('the offer reader caps its words, settles the lead and drops a pick with on
   assert.equal(readOfferResearch([{ kind: 'offerResearch' }]).length, 0);
 });
 
+const makeIds = (prefix: string) => {
+  const made = { count: 0 };
+  return () => {
+    made.count += 1;
+    return `${prefix}-${made.count}`;
+  };
+};
+
 test('an offer on an existing project reseals its words and appends the offer; one on a new project carries it from the start', () => {
   const base = {
     pool: [{ id: 'p1', name: 'Move' }],
     commands: [],
     milestones: [],
-    newId: (() => {
-      let count = 0;
-      return () => `n-${(count += 1)}`;
-    })(),
+    newId: makeIds('n'),
     taskWho: [],
     namedWhoIds: [],
     whoIdOf: new Map<string, string>(),
