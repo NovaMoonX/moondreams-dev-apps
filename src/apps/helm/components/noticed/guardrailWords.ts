@@ -63,9 +63,9 @@ export function readHoursSource(pattern: OpenPattern): string | null {
       : HELM_COPY.guardrailHoursFromCalendar;
 }
 
-/** A date-only day for a card's button ("Dec 1"); null reads as no date. */
+/** A date-only day for a card's button ("Dec 1", held together so a button never wraps between month and day); null reads as no date. */
 export const toShortDay = (day: number | null) =>
-  day === null ? null : formatDateShortUTC(day);
+  day === null ? null : formatDateShortUTC(day).replaceAll(' ', '\u00a0');
 
 /** A date-only day for a toast ("Tue, Dec 1"). */
 export const toToastDay = (day: number | null) =>

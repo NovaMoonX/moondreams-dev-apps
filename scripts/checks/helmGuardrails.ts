@@ -87,11 +87,15 @@ const goals = [
   thing('g2', 'goal', 3),
   thing('g3', 'goal', 2),
 ];
+const idleGoals = goals.map((goal) => ({ ...goal, activity: [ago(30)] }));
 const fourth = thing('g4', 'goal', null, { createdAt: NOW, activity: [] });
 const busy = { freeDay: busyFrom(0, 3) };
 
 const wontFit = () => {
-  const deadline = thing('p', 'project', 1, { dates: [ms(TODAY) + 3 * DAY] });
+  const deadline = thing('p', 'project', 1, {
+    dates: [ms(TODAY) + 3 * DAY],
+    activity: [ago(30)],
+  });
   const longTasks = ['a', 'b', 'c'].map((id) => ({
     id,
     title: id,
@@ -150,6 +154,7 @@ const run = async () => {
     const names = readNameable(input([...goals, fourth, care]), {
       starvedId: null,
       leaveOut: [],
+      hasTimeReason: true,
     }).map((one) => one.id);
     assert.equal(names.includes('care'), false);
   });
@@ -158,9 +163,16 @@ const run = async () => {
     const names = readNameable(input([...goals, fourth]), {
       starvedId: null,
       leaveOut: [],
+      hasTimeReason: true,
     }).map((one) => one.id);
     assert.equal(names.includes('g1'), false);
-    assert.deepEqual(names, ['g4', 'g3', 'g2']);
+    assert.deepEqual(names, ['g4']);
+    const idle = readNameable(input([...idleGoals, fourth]), {
+      starvedId: null,
+      leaveOut: [],
+      hasTimeReason: true,
+    }).map((one) => one.id);
+    assert.deepEqual(idle, ['g4', 'g3', 'g2']);
   });
 
   await test('the named thing is the lowest eligible', () => {
@@ -181,6 +193,7 @@ const run = async () => {
     const names = readNameable(input([...goals, dated]), {
       starvedId: null,
       leaveOut: [],
+      hasTimeReason: true,
     }).map((one) => one.id);
     assert.equal(names.includes('g4'), false);
   });
@@ -209,7 +222,9 @@ const run = async () => {
 
   await test('a deadline that will not fit is shown alone', () => {
     const { deadline, longTasks } = wontFit();
-    const found = checkDaily(input([...goals, deadline], { tasks: longTasks }));
+    const found = checkDaily(
+      input([...idleGoals, deadline], { tasks: longTasks }),
+    );
     assert.ok(found);
     assert.equal(found.kind, 'deadlineWontFit');
     assert.equal(found.moment, 'daily');
@@ -283,7 +298,7 @@ const run = async () => {
     const { deadline, longTasks } = wontFit();
     const found = checkOnStart(
       { id: 'p', kind: 'project' },
-      input([...goals, deadline], { tasks: longTasks }),
+      input([...idleGoals, deadline], { tasks: longTasks }),
     );
     assert.ok(found);
     assert.equal(found.moment, 'onStart');
@@ -313,6 +328,68 @@ const run = async () => {
     assert.ok(found);
     assert.equal(found.effect.kind, 'pause');
     assert.equal(found.effect.kind === 'pause' ? found.effect.until : 0, null);
+  });
+
+  await test('on goal load the new goal is held, never a habit being kept up', () => {
+    const starved = thing('s', 'project', 5, { activity: [] });
+    const stretch = thing('stretch', 'habit', 1, {
+      activity: [1, 2, 3, 4, 5].map(ago),
+    });
+    const found = checkOnStart(
+      { id: 'g4', kind: 'goal' },
+      input([starved, ...goals, fourth, stretch]),
+    );
+    assert.ok(found);
+    assert.deepEqual(found.reasons.map((reason) => reason.kind).sort(), [
+      'starved',
+      'tooManyGoals',
+    ]);
+    assert.equal(found.subject.id, 'g4');
+    assert.equal(found.subject.otherId, 'g4');
+  });
+
+  await test('on goal load a clearly idle goal is held instead of the new one', () => {
+    const starved = thing('s', 'project', 5, { activity: [] });
+    const idle = thing('g3', 'goal', 2, { activity: [ago(40)] });
+    const found = checkOnStart(
+      { id: 'g4', kind: 'goal' },
+      input([starved, goals[0], goals[1], idle, fourth]),
+    );
+    assert.ok(found);
+    assert.equal(found.subject.id, 'g3');
+    assert.equal(found.subject.otherId, 'g4');
+  });
+
+  await test('a habit is offered only when a reason is about time', () => {
+    const stretch = thing('stretch', 'habit', null, { activity: [] });
+    const base = input([...idleGoals, fourth, stretch]);
+    const ids = (hasTimeReason: boolean) =>
+      readNameable(base, { starvedId: null, leaveOut: [], hasTimeReason }).map(
+        (one) => one.id,
+      );
+    assert.equal(ids(false).includes('stretch'), false);
+    assert.equal(ids(true).includes('stretch'), true);
+  });
+
+  await test('a thing being kept up is never named', () => {
+    const names = readNameable(input([...goals, fourth]), {
+      starvedId: null,
+      leaveOut: [],
+      hasTimeReason: true,
+    }).map((one) => one.id);
+    assert.equal(names.includes('g3'), false);
+    assert.equal(names.includes('g2'), false);
+  });
+
+  await test('the comes-first reason never names what comes first', () => {
+    const starved = thing('s', 'project', 5, { activity: [] });
+    const found = checkOnStart(
+      { id: 'g4', kind: 'goal' },
+      input([starved, ...goals, fourth]),
+    );
+    const line = found?.lines.reasonLine ?? '';
+    assert.equal(line.includes('s comes first'), false);
+    assert.ok(line.includes('What matters most has had nothing done in'));
   });
 
   await test('a pattern written before reasons reads as none', () => {

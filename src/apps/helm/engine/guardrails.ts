@@ -385,7 +385,7 @@ const toStarvedReason = (
     starved.starvedId,
     starved.tookId,
   ]),
-  line: HELM_COPY.guardrailStarvedReason(starved.starvedName, starved.days),
+  line: HELM_COPY.guardrailStarvedReason(starved.days),
 });
 
 export interface BusyStretch {
@@ -469,12 +469,21 @@ const sortReasons = (reasons: GuardrailReason[]) =>
     .sort((a, b) => REASON_ORDER.indexOf(a.kind) - REASON_ORDER.indexOf(b.kind))
     .slice(0, REASONS_SHOWN);
 
-/** What a guardrail may offer to pause, lowest-placed first; never care, the first place, or anything with a date within 14 days. */
+/** Whether a reason is about the time there is, rather than about how much is going on. */
+export const isTimeReason = (kind: PatternKind) =>
+  kind === 'busyStretch' || kind === 'deadlineWontFit';
+
+/** What a guardrail may offer to pause, lowest-placed first; never care, the first place, anything with a date within 14 days, or anything being kept up (3 or more done in 14 days). A habit is offered only when a reason is about time. */
 export function readNameable(
   input: GuardrailInput,
-  options: { starvedId: string | null; leaveOut: string[] },
+  options: {
+    starvedId: string | null;
+    leaveOut: string[];
+    hasTimeReason: boolean;
+  },
 ): GuardrailThing[] {
   const today = todayOf(input);
+  const keptSince = input.now - LIMITS.starvedDays * DAY_MS;
   const order = toOrder(input);
   const listed = [...order.inOrder, ...order.notSaid, ...order.canWait];
   const starvedRow =
@@ -486,6 +495,8 @@ export function readNameable(
       isRunning(thing) &&
       !thing.isCare &&
       !isFirst &&
+      (thing.kind !== 'habit' || options.hasTimeReason) &&
+      doneSince(thing, keptSince) < LIMITS.starvedOtherMin &&
       !options.leaveOut.includes(thing.id) &&
       !(
         row.date !== null &&
@@ -500,7 +511,7 @@ export function readNameable(
 /** The lowest-placed thing a guardrail may name, or null. */
 export const pickNamed = (
   input: GuardrailInput,
-  options: { starvedId: string | null; leaveOut: string[] },
+  options: Parameters<typeof readNameable>[1],
 ) => readNameable(input, options)[0] ?? null;
 
 const isGateOpen = (input: GuardrailInput) => {
@@ -520,13 +531,15 @@ const isGateOpen = (input: GuardrailInput) => {
 
 const dayAfter = (day: number) => day + DAY_MS;
 
-const readUntil = (reasons: GuardrailReason[]) => {
+/** The day after the last date a guardrail's reasons run to; null when none has one. */
+export const readUntil = (
+  reasons: { kind: PatternKind; evidence: PatternEvidence }[],
+) => {
   const dates = reasons.flatMap((reason) =>
-    reason.kind === 'busyStretch'
+    reason.evidence.kind === 'load' &&
+    (reason.kind === 'busyStretch' || reason.kind === 'deadlineWontFit')
       ? [Number(reason.evidence.refs[1])]
-      : reason.kind === 'deadlineWontFit'
-        ? [Number(reason.evidence.refs[1])]
-        : [],
+      : [],
   );
   return dates.length === 0 ? null : dayAfter(Math.max(...dates));
 };
@@ -715,10 +728,23 @@ export function checkOnStart(
       : []),
   ];
   if (!meetsGuardrailBar(reasons)) return null;
-  const subject = pickNamed(input, {
+  const hasTimeReason = reasons.some((reason) => isTimeReason(reason.kind));
+  const named = readNameable(input, {
     starvedId: isBelowStarved && starved ? starved.starvedId : null,
     leaveOut: pushed ? [pushed.fit.thingId] : [],
+    hasTimeReason,
   });
+  const isLoadOnly = goals !== null && !hasTimeReason;
+  const subject = isLoadOnly
+    ? (named.find(
+        (thing) =>
+          thing.kind === 'goal' &&
+          thing.id !== started.id &&
+          input.now - lastActive(thing) >= LIMITS.quietGoalDays * DAY_MS,
+      ) ??
+      named.find((thing) => thing.id === started.id) ??
+      named[0])
+    : named[0];
   return subject
     ? toGuardrail(input, subject, reasons, { moment: 'onStart', started })
     : null;
@@ -758,6 +784,7 @@ export function checkDaily(input: GuardrailInput): GuardrailFinding | null {
   const named = readNameable(input, {
     starvedId: starved?.starvedId ?? null,
     leaveOut: wontFit ? [wontFit.fit.thingId] : [],
+    hasTimeReason: reasons.some((reason) => isTimeReason(reason.kind)),
   });
   const subject =
     named.find((thing) => thing.id === goals?.quiet?.id) ?? named[0] ?? null;

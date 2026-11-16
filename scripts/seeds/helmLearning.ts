@@ -624,6 +624,104 @@ export async function buildLearning(input: {
     encryption,
   );
   patterns.push(guardrail);
+  const holdSubject = {
+    collection: 'projects' as const,
+    id: 'seed-project-move',
+    windowId: null,
+    otherId: 'seed-project-move',
+  };
+  const goalsEvidence = {
+    kind: 'load' as const,
+    measured: 3,
+    limit: 3,
+    unit: 'goals' as const,
+    asOf: now,
+    refs: ['seed-project-guitar-goal'],
+  };
+  const holdLine = '3 goals already going: Get back into guitar.';
+  const hold = await toSeedPattern(
+    toSeedFinding({
+      kind: 'tooManyGoals',
+      subject: holdSubject,
+      bucket: { kind: 'none' },
+      evidence: goalsEvidence,
+      effect: {
+        kind: 'pause',
+        collection: 'projects',
+        id: holdSubject.id,
+        until: null,
+      },
+      lastEvidenceAt: now,
+    }),
+    {
+      name: 'Plan the move',
+      now: now - 1 * DAY_MS,
+      overrides: {
+        moment: 'onStart',
+        reasons: [{ kind: 'tooManyGoals', evidence: goalsEvidence }],
+        state: 'suggested',
+        stateAt: now - 30 * 60_000,
+        history: history('suggested', now - 30 * 60_000),
+      },
+    },
+    encryption,
+  );
+  hold.pattern.sealed = await sealJson<PatternSealed>(
+    {
+      statement: 'Maybe hold Plan the move for a while?',
+      evidenceLine: holdLine,
+      reasonLine: holdLine,
+    },
+    encryption,
+  );
+  patterns.push(hold);
+  const taskDay = dayMs(shiftKey(todayKey, 2));
+  const taskSubject = {
+    collection: 'tasks' as const,
+    id: 'seed-task-3-1',
+    windowId: null,
+    otherId: 'seed-task-3-1',
+  };
+  const taskEvidence = {
+    kind: 'load' as const,
+    measured: 420,
+    limit: 240,
+    unit: 'minutes' as const,
+    asOf: now,
+    refs: [taskSubject.id, String(taskDay)],
+  };
+  const taskLine = 'Due in two days: about 7h of work, 4h free before then.';
+  const taskGuardrail = await toSeedPattern(
+    toSeedFinding({
+      kind: 'deadlineWontFit',
+      subject: taskSubject,
+      bucket: { kind: 'none' },
+      evidence: taskEvidence,
+      effect: { kind: 'none' },
+      lastEvidenceAt: now,
+    }),
+    {
+      name: 'Task',
+      now: now - 1 * DAY_MS,
+      overrides: {
+        moment: 'onStart',
+        reasons: [{ kind: 'deadlineWontFit', evidence: taskEvidence }],
+        state: 'suggested',
+        stateAt: now - 20 * 60_000,
+        history: history('suggested', now - 20 * 60_000),
+      },
+    },
+    encryption,
+  );
+  taskGuardrail.pattern.sealed = await sealJson<PatternSealed>(
+    {
+      statement: 'That day looks full for this',
+      evidenceLine: taskLine,
+      reasonLine: taskLine,
+    },
+    encryption,
+  );
+  patterns.push(taskGuardrail);
   const execution = await toSeedActExecution(
     {
       patternId: evening.id,
