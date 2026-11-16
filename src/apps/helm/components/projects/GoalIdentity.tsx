@@ -38,7 +38,7 @@ function GoalIdentity({ project, onOpenWhy, onAddWhy }: GoalIdentityProps) {
         <Button
           type='button'
           variant='tertiary'
-          className='h-auto w-full items-start justify-start px-0 py-1 text-left'
+          className='h-auto w-full items-start justify-start !px-0 py-1 text-left'
           onClick={onOpenWhy}
         >
           <span className='min-w-0 flex-1'>

@@ -9,9 +9,9 @@ import { HELM_COPY } from '@apps/helm/constants';
 
 type HabitsChoice = 'keep' | 'delete';
 
-const OPTIONS: readonly PillOption<HabitsChoice>[] = [
-  { value: 'keep', label: HELM_COPY.goalHabitsKeep },
-  { value: 'delete', label: HELM_COPY.goalHabitsDelete },
+const optionsFor = (count: number): readonly PillOption<HabitsChoice>[] => [
+  { value: 'keep', label: HELM_COPY.goalHabitsKeep(count) },
+  { value: 'delete', label: HELM_COPY.goalHabitsDelete(count) },
 ];
 
 interface GoalHabitsChoiceSheetProps {
@@ -45,14 +45,14 @@ function ChoiceBody({
       </p>
       <PillGroup
         label={HELM_COPY.goalHabitsChoiceLabel}
-        options={OPTIONS}
+        options={optionsFor(habitNames.length)}
         value={choice}
         onChange={setChoice}
       />
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {choice === 'keep'
-          ? HELM_COPY.goalHabitsKeepHint
-          : HELM_COPY.goalHabitsDeleteHint}
+          ? HELM_COPY.goalHabitsKeepHint(habitNames.length)
+          : HELM_COPY.goalHabitsDeleteHint(habitNames.length)}
       </p>
       <ModalFooterActions
         cancelAction={

@@ -3146,10 +3146,17 @@ export const HELM_COPY = {
     names.length === 1
       ? `${names[0]} is a habit on this goal. What should happen to it?`
       : `${names.join(', ')} are habits on this goal. What should happen to them?`,
-  goalHabitsKeep: 'Keep them',
-  goalHabitsKeepHint: 'They stay as habits on their own.',
-  goalHabitsDelete: 'Delete them',
-  goalHabitsDeleteHint: 'Their check-ins go too.',
+  goalHabitsKeep: (count: number) => (count === 1 ? 'Keep it' : 'Keep them'),
+  goalHabitsKeepHint: (count: number) =>
+    count === 1
+      ? 'It stays as a habit on its own.'
+      : 'They stay as habits on their own.',
+  goalHabitsDelete: (count: number) =>
+    count === 1 ? 'Delete it' : 'Delete them',
+  goalHabitsDeleteHint: (count: number) =>
+    count === 1
+      ? 'It goes, with its reminders.'
+      : 'They go, with their reminders.',
   goalHabitsChoiceLabel: 'What happens to the habits',
   goalDeleteConfirm: (name: string) =>
     `${name} and its milestones will be deleted. Its tasks stay.`,

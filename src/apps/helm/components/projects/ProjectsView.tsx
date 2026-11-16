@@ -41,7 +41,9 @@ interface ProjectRowProps {
 function GoalEvidenceLine({ projectId }: { projectId: string }) {
   const evidence = useGoalEvidence(projectId);
   return evidence ? (
-    <span className='text-muted-foreground text-[13px]'>{evidence}</span>
+    <span className='text-muted-foreground line-clamp-2 text-[13px] leading-[18px]'>
+      {evidence}
+    </span>
   ) : null;
 }
 
