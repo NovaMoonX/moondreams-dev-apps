@@ -143,6 +143,16 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     taps: ['createProject', 'changeProjectRole', 'addMilestone'],
   }),
   row({
+    thing: 'Research offered ahead of a dated project, and what the person answered',
+    home: 'projects',
+    classes: ['readable', 'sealed'],
+    readers: ['device', 'server', 'turn'],
+    contextBlock: '<open_projects>',
+    commands: ['offerResearch'],
+    writer: 'actions/aheadActions',
+    taps: ['markAheadShown', 'notNowAhead', 'setAheadTold', 'sendAheadOffer'],
+  }),
+  row({
     thing: 'What the person says about themselves',
     home: 'facts',
     contextBlock: '<about_you>',
