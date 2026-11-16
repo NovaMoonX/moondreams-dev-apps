@@ -2,6 +2,12 @@ import { CLAIM_MS, HELM_COPY } from '@apps/helm/constants';
 import { CURRENT_PLACE_MS } from '@apps/helm/engine/currentPlace';
 import { LET_GO_WINDOW_MS } from '@apps/helm/utils/mediaCaps';
 import { ALL_KEY_KINDS, MOMENT_PRECISIONS } from '@apps/helm/utils/moments';
+import {
+  buildUndoUnits,
+  getRemainingUnits,
+  topicEffectKind,
+  type TopicEffectKind,
+} from '@apps/helm/utils/undoUnits';
 import type {
   EffectRef,
   Execution,
@@ -18,16 +24,56 @@ import type {
   ProcedureSealed,
   RunSealed,
   TopicSealed,
+  UndoChoice,
+  UndoReasonRecord,
   WhoSealed,
 } from '@apps/helm/types';
 
-/** Whether an Undo is offered: a readable, succeeded execution that is not itself an Undo, not yet undone, and changed something. */
-export const canUndo = (execution: OpenExecution) =>
-  !execution.isUnreadable &&
-  execution.state === 'succeeded' &&
-  execution.category !== 'undo' &&
-  execution.undoneByExecutionId === null &&
-  execution.effectRefs.length > 0;
+export { topicEffectKind };
+export type { TopicEffectKind };
+
+/** The undo fields of an execution document, with the ones a document from before partial undo lacks filled in. */
+export const readUndoFields = (
+  data: Partial<
+    Pick<Execution, 'undoneByExecutionId' | 'undoneDocIds' | 'partUndoIds'>
+  >,
+) => ({
+  undoneDocIds: data.undoneDocIds ?? [],
+  partUndoIds:
+    data.partUndoIds ??
+    (data.undoneByExecutionId ? [data.undoneByExecutionId] : []),
+});
+
+/** The records of an execution that an Undo already took back: all of them once it was fully undone, else the ones partial undos recorded. */
+export const getUndoneDocIds = (
+  execution: Pick<
+    OpenExecution,
+    'effectRefs' | 'undoneByExecutionId' | 'undoneDocIds'
+  >,
+) =>
+  new Set(
+    execution.undoneByExecutionId !== null
+      ? execution.effectRefs.map((ref) => ref.docId)
+      : execution.undoneDocIds,
+  );
+
+/** Whether an Undo is offered: a readable, succeeded execution that is not itself an Undo, not yet undone, and still has something to take back. */
+export const canUndo = (execution: OpenExecution) => {
+  if (
+    execution.isUnreadable ||
+    execution.state !== 'succeeded' ||
+    execution.category === 'undo' ||
+    execution.undoneByExecutionId !== null ||
+    execution.effectRefs.length === 0
+  ) {
+    return false;
+  }
+  const { units } = buildUndoUnits(execution);
+  return (
+    units.length === 0 ||
+    getRemainingUnits(units, getUndoneDocIds(execution)).length > 0
+  );
+};
 
 export interface UndoTarget {
   docId: string;
@@ -105,8 +151,8 @@ type Values = Record<string, unknown>;
 
 const SEALED_PREFIX = 'sealed.';
 
-/** An undo reads every record in one transaction, and no execution makes more effects than this; an import of 50 people with their photos is the largest. */
-const MAX_EFFECTS = 40;
+/** An undo reads every record in one transaction. A turn's commands are capped at 40 and it then adds the people, places, home and photos they name; an import of 50 people with their photos is the largest. */
+export const MAX_UNDO_EFFECTS = 80;
 const MAX_IMPORT_EFFECTS = 120;
 
 const isSame = (a: unknown, b: unknown): boolean => {
@@ -630,20 +676,6 @@ const groupByDoc = (original: OpenExecution) =>
     new Map(),
   );
 
-export type TopicEffectKind = 'filing' | 'version' | 'placement' | 'made';
-
-/** Which of the four shapes a topic effect has: a filing (`docState`, `pendingNoteIds`), a new version, a move (`parentId`, `depth`) or a topic the turn made (nothing before it). */
-export const topicEffectKind = (effect: ExecutionEffect): TopicEffectKind =>
-  'docState' in effect.written || 'pendingNoteIds' in effect.written
-    ? 'filing'
-    : 'version' in effect.written
-      ? 'version'
-      : effect.previous === null
-        ? 'made'
-        : 'depth' in effect.written || 'parentId' in effect.written
-          ? 'placement'
-          : 'filing';
-
 const isClaimLive = (data: Values, now: number) => {
   const claim = data.writeClaim as { at?: unknown } | null | undefined;
   return !!claim && typeof claim.at === 'number' && now - claim.at < CLAIM_MS;
@@ -774,6 +806,10 @@ export function planUndo(input: {
   now: number;
   /** People and places this execution made that another task or turn now links. */
   usedIds: Set<string>;
+  /** The question an offered undo answered; written on the undo's own execution. */
+  questionRef?: Execution['questionRef'];
+  /** Why the undo was asked for; written on the undo's own execution. */
+  reason?: UndoReasonRecord;
 }): UndoPlan {
   const { original, targets, now, usedIds } = input;
   if (original.undoneByExecutionId !== null) return refuse('alreadyUndone');
@@ -787,7 +823,9 @@ export function planUndo(input: {
   if (
     original.isUnreadable ||
     original.effectRefs.length >
-      (original.category === 'import' ? MAX_IMPORT_EFFECTS : MAX_EFFECTS) ||
+      (original.category === 'import'
+        ? MAX_IMPORT_EFFECTS
+        : MAX_UNDO_EFFECTS) ||
     original.effects.length !== original.effectRefs.length
   ) {
     return refuse('unreadable');
@@ -1509,7 +1547,9 @@ export function planUndo(input: {
       linkedPlaceIds: [],
       undoesExecutionId: original.id,
       undoneByExecutionId: null,
-      questionRef: null,
+      undoneDocIds: null,
+      partUndoIds: null,
+      questionRef: input.questionRef ?? null,
       errorCode: null,
       privacy: 'ordinary',
       createdAt: now,
@@ -1526,6 +1566,7 @@ export function planUndo(input: {
       undoReport: report,
       spoken: null,
       goneIds,
+      undoReason: input.reason ?? null,
       lines: null,
       abilityOffer: null,
       awayZoneOffer: null,
@@ -1547,6 +1588,120 @@ export function planUndo(input: {
     goneIds,
     report,
   };
+}
+
+export type Narrowing =
+  | {
+      kind: 'ok';
+      view: OpenExecution;
+      /** Whether this undo takes back the last of what the execution wrote. */
+      isFinal: boolean;
+      /** The records the original gains as undone. */
+      recordedDocIds: string[];
+    }
+  | { kind: 'refused'; reason: 'alreadyUndone' };
+
+const toOwnerIds = (effect: ExecutionEffect | undefined) => {
+  const attached = effect?.written.attachedTo;
+  return Array.isArray(attached)
+    ? attached.flatMap((entry: { id?: unknown }) =>
+        typeof entry?.id === 'string' ? [entry.id] : [],
+      )
+    : [];
+};
+
+/** Narrows an execution to the units a partial undo takes back (`null` takes every one still left), keeping each effect with its ref. */
+export function narrowForUndo(
+  original: OpenExecution,
+  docIds: string[] | null,
+): Narrowing {
+  if (original.undoneByExecutionId !== null) {
+    return { kind: 'refused', reason: 'alreadyUndone' };
+  }
+  const built = buildUndoUnits(original);
+  const undone = getUndoneDocIds(original);
+  const remaining = getRemainingUnits(built.units, undone);
+  const refs = original.effectRefs;
+  const keep = (indexes: number[]): OpenExecution => ({
+    ...original,
+    effectRefs: indexes.map((index) => refs[index]),
+    effects: indexes.map((index) => original.effects[index]),
+  });
+  const everyDocId = [...new Set(refs.map((ref) => ref.docId))];
+  if (built.units.length === 0) {
+    return {
+      kind: 'ok',
+      view: original,
+      isFinal: true,
+      recordedDocIds: everyDocId,
+    };
+  }
+  const wanted = docIds === null ? null : new Set(docIds);
+  const selected = remaining.filter(
+    (unit) => !wanted || unit.docIds.some((id) => wanted.has(id)),
+  );
+  if (selected.length === 0)
+    return { kind: 'refused', reason: 'alreadyUndone' };
+  const isFinal = selected.length === remaining.length;
+  const selectedDocIds = new Set(selected.flatMap((unit) => unit.docIds));
+  const executionDocIds = new Set(built.units.flatMap((unit) => unit.docIds));
+  const isMediaEligible = (index: number) => {
+    if (undone.has(refs[index].docId)) return false;
+    if (isFinal) return true;
+    const owners = toOwnerIds(original.effects[index]).filter((id) =>
+      executionDocIds.has(id),
+    );
+    return (
+      owners.length > 0 &&
+      owners.every((id) => selectedDocIds.has(id) || undone.has(id))
+    );
+  };
+  const indexes = [
+    ...selected.flatMap((unit) => unit.effectIndexes),
+    ...built.riders,
+    ...built.media.filter(isMediaEligible),
+    ...(isFinal
+      ? [
+          ...built.entities.filter((index) => !undone.has(refs[index].docId)),
+          ...built.rest.filter((index) => !undone.has(refs[index].docId)),
+        ]
+      : []),
+  ].sort((a, b) => a - b);
+  return {
+    kind: 'ok',
+    view: keep([...new Set(indexes)]),
+    isFinal,
+    recordedDocIds: isFinal
+      ? everyDocId
+      : [
+          ...selectedDocIds,
+          ...built.media
+            .filter(isMediaEligible)
+            .map((index) => refs[index].docId),
+        ],
+  };
+}
+
+/** The records an undo offer's choice would still take back from an execution: every unit left when it is the whole turn, else the ones it names that are not yet undone; empty once nothing is left. */
+export function toOfferDocIds(
+  choice: Pick<UndoChoice, 'docIds' | 'isAll'>,
+  execution: OpenExecution,
+): string[] {
+  if (execution.undoneByExecutionId !== null) return [];
+  const built = buildUndoUnits(execution);
+  if (built.units.length === 0) {
+    return [...new Set(execution.effectRefs.map((ref) => ref.docId))];
+  }
+  const remaining = getRemainingUnits(
+    built.units,
+    getUndoneDocIds(execution),
+  ).flatMap((unit) => unit.docIds);
+  const wanted = new Set(choice.docIds);
+  return [
+    ...new Set(
+      choice.isAll ? remaining : remaining.filter((id) => wanted.has(id)),
+    ),
+  ];
 }
 
 /** The records an Undo took back (restored or deleted), by id. */

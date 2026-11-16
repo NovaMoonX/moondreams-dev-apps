@@ -474,12 +474,15 @@ async function buildUndone(input: {
     original: {
       ...execution,
       id: executionId,
+      undoneDocIds: [],
+      partUndoIds: [],
       summary: summarize(effects.length),
       said: null,
       effects,
       undoReport: null,
       spoken: null,
       goneIds: null,
+      undoReason: null,
       lines: [],
       abilityOffer: null,
       awayZoneOffer: null,
@@ -505,7 +508,12 @@ async function buildUndone(input: {
     tasks: tasks.filter(
       ({ id }) => !result.deletes.some((entry) => entry.docId === id),
     ),
-    original: { ...execution, undoneByExecutionId: undoId },
+    original: {
+      ...execution,
+      undoneByExecutionId: undoId,
+      undoneDocIds: execution.effectRefs.map((ref) => ref.docId),
+      partUndoIds: [undoId],
+    },
     undo: {
       id: undoId,
       execution: {
@@ -543,6 +551,8 @@ async function buildMove(input: {
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: null,
     errorCode: null,
     createdAt: sortedAt,
@@ -571,6 +581,7 @@ async function buildMove(input: {
         undoReport: null,
         spoken: null,
         goneIds: null,
+        undoReason: null,
         lines: [],
         abilityOffer: null,
         awayZoneOffer: null,
@@ -696,7 +707,13 @@ async function buildBackToBack(input: {
         completedAt: null,
         clearedAt: null,
         sealed: await sealJson<TaskSealed>(
-          { title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
+          {
+            title,
+            notes: null,
+            steps: {},
+            privateMark: null,
+            isPrivacyCleared: false,
+          },
           encryption,
         ),
       };
@@ -720,6 +737,8 @@ async function buildBackToBack(input: {
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: null,
     errorCode: null,
     createdAt: sortedAt,
@@ -746,6 +765,7 @@ async function buildBackToBack(input: {
         undoReport: null,
         spoken: null,
         goneIds: null,
+        undoReason: null,
         lines: [],
         abilityOffer: null,
         awayZoneOffer: null,
@@ -1037,6 +1057,8 @@ async function buildGmailTurn(input: {
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: null,
     errorCode: null,
     createdAt: sortedAt,
@@ -1060,6 +1082,7 @@ async function buildGmailTurn(input: {
         undoReport: null,
         spoken: null,
         goneIds: null,
+        undoReason: null,
         lines: [],
         abilityOffer: null,
         awayZoneOffer: null,
@@ -1195,6 +1218,8 @@ async function buildAnswerTurns(input: {
         linkedPlaceIds: [],
         undoesExecutionId: null,
         undoneByExecutionId: null,
+        undoneDocIds: null,
+        partUndoIds: null,
         questionRef: null,
         errorCode: null,
         createdAt: sortedAt,
@@ -1209,6 +1234,7 @@ async function buildAnswerTurns(input: {
             undoReport: null,
             spoken: null,
             goneIds: null,
+            undoReason: null,
             lines: [],
             abilityOffer: null,
             awayZoneOffer: null,
@@ -1248,6 +1274,8 @@ async function buildAnswerTurns(input: {
                 {
                   title: 'How long does cake keep',
                   body: saved.general,
+                  via: null,
+                  links: [],
                   privateMark: null,
                   isPrivacyCleared: false,
                 },
@@ -1286,7 +1314,13 @@ async function buildAnswerTurns(input: {
         completedAt: null,
         clearedAt: null,
         sealed: await sealJson<TaskSealed>(
-          { title: entry.title, notes: null, steps: {}, privateMark: entry.isHealth ? 'health' : null, isPrivacyCleared: false },
+          {
+            title: entry.title,
+            notes: null,
+            steps: {},
+            privateMark: entry.isHealth ? 'health' : null,
+            isPrivacyCleared: false,
+          },
           encryption,
         ),
       };
@@ -1385,7 +1419,13 @@ async function buildPlanDays(input: {
     completedAt: at(yesterdayKey, '14:25'),
     clearedAt: null,
     sealed: await sealJson<TaskSealed>(
-      { title: doneTitle, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
+      {
+        title: doneTitle,
+        notes: null,
+        steps: {},
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       encryption,
     ),
   };
@@ -1497,6 +1537,8 @@ async function buildPlanDays(input: {
       attempts: 1,
       writtenAt: at(yesterdayKey, '23:59') + 5 * MINUTE_MS,
       staleAt: null,
+      batchId: null,
+      batchedAt: null,
       sealed: await sealJson<HelmDaySummarySealed>(summarySealed, encryption),
     },
   };
@@ -1712,7 +1754,11 @@ async function buildProjects(input: {
       createdBy: 'person',
       executionId: null,
       lastEditedAt: null,
-      sealed: await seal<ProjectSealed>({ why: null, importance: null, ...words }),
+      sealed: await seal<ProjectSealed>({
+        why: null,
+        importance: null,
+        ...words,
+      }),
     },
   });
   const taskOf = async (
@@ -1935,7 +1981,14 @@ async function buildProjects(input: {
     taskOf('seed-task-medicine', 'Take the morning medicine', {
       projectId: null,
       privacy: 'private',
-      due: { kind: 'moment', at: zonedDateTimeToEpoch(new Date(today).toISOString().slice(0, 10), '08:00', 'America/Los_Angeles') },
+      due: {
+        kind: 'moment',
+        at: zonedDateTimeToEpoch(
+          new Date(today).toISOString().slice(0, 10),
+          '08:00',
+          'America/Los_Angeles',
+        ),
+      },
       createdAt: now - 2 * DAY_MS,
     }),
     taskOf('seed-task-move-1', 'Change the address', {
@@ -2056,8 +2109,20 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
   );
   const startsOn = today - 37 * DAY_MS;
   const createdAt = now - 37 * DAY_MS;
-  const morning = { start: '08:00', end: '10:00', order: 0, part: 'morning' as const, editedAt: null };
-  const evening = { start: '20:00', end: '22:00', order: 1, part: 'evening' as const, editedAt: null };
+  const morning = {
+    start: '08:00',
+    end: '10:00',
+    order: 0,
+    part: 'morning' as const,
+    editedAt: null,
+  };
+  const evening = {
+    start: '20:00',
+    end: '22:00',
+    order: 1,
+    part: 'evening' as const,
+    editedAt: null,
+  };
   const habits = await Promise.all([
     toHabit(
       {
@@ -2090,7 +2155,13 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
       {
         cadence: { kind: 'timesPerWeek', count: 3 },
         windowState: {
-          e: { start: '19:00', end: '22:00', order: 0, part: 'evening', editedAt: null },
+          e: {
+            start: '19:00',
+            end: '22:00',
+            order: 0,
+            part: 'evening',
+            editedAt: null,
+          },
         },
         reminder: seedReminder(createdAt),
         projectId: 'seed-project-guitar-goal',
@@ -2127,7 +2198,13 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
       {
         cadence: { kind: 'everyDay' },
         windowState: {
-          m: { start: '06:00', end: '09:00', order: 0, part: 'morning', editedAt: null },
+          m: {
+            start: '06:00',
+            end: '09:00',
+            order: 0,
+            part: 'morning',
+            editedAt: null,
+          },
         },
         reminder: seedReminder(createdAt),
         startsOn,
@@ -2163,7 +2240,9 @@ async function buildHabits(input: { now: number; encryption: HelmEncryption }) {
         'seed-habit-pills': {
           checks: {
             m: check(key, '08:45'),
-            ...(isToday || at === 1 || at === 3 ? {} : { e: check(key, '20:30') }),
+            ...(isToday || at === 1 || at === 3
+              ? {}
+              : { e: check(key, '20:30') }),
           },
         },
         'seed-habit-water': {
@@ -2189,6 +2268,9 @@ const TYRE_NOTE_ID = 'seed-note-22';
 const CAPTURE_NOTE_ID = 'seed-note-from-capture';
 const CAPTURE_NOTE_TURN_ID = 'seed-turn-note';
 const CAPTURE_NOTE_EXECUTION_ID = 'seed-execution-note';
+const OUTSIDE_NOTE_ID = 'seed-note-outside-timing-belt';
+const OUTSIDE_TURN_ID = 'seed-turn-outside-handover';
+const OUTSIDE_EXECUTION_ID = 'seed-execution-outside-handover';
 
 /** The turn "Remember that cakes keep 3 days in the fridge": the note it kept in Baking, the topic it marked behind, and the execution with the result line as the assistant writes it. */
 async function buildNoteTurn(input: {
@@ -2279,6 +2361,8 @@ async function buildNoteTurn(input: {
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: null,
     errorCode: null,
     createdAt: sortedAt,
@@ -2302,6 +2386,7 @@ async function buildNoteTurn(input: {
         undoReport: null,
         spoken: null,
         goneIds: null,
+        undoReason: null,
         lines: [],
         abilityOffer: null,
         awayZoneOffer: null,
@@ -2323,7 +2408,17 @@ async function buildNoteTurn(input: {
     executionId: CAPTURE_NOTE_EXECUTION_ID,
     createdAt: sortedAt,
     lastEditedAt: null,
-    sealed: await sealJson<NoteSealed>({ title, body, privateMark: null, isPrivacyCleared: false }, encryption),
+    sealed: await sealJson<NoteSealed>(
+      {
+        title,
+        body,
+        via: null,
+        links: [],
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
+      encryption,
+    ),
   };
   return { capture, execution, note };
 }
@@ -2372,7 +2467,14 @@ async function buildKnowledge(input: {
       lastWrittenAt:
         document.version > 0 ? (document.writtenAt ?? now - 2 * DAY_MS) : null,
       sealed: await sealJson<TopicSealed>(
-        { name, emoji, overview: null, sections: document.sections, privateMark: null, isPrivacyCleared: false },
+        {
+          name,
+          emoji,
+          overview: null,
+          sections: document.sections,
+          privateMark: null,
+          isPrivacyCleared: false,
+        },
         encryption,
       ),
     },
@@ -2462,6 +2564,15 @@ async function buildKnowledge(input: {
     writtenBy: 'nomos',
     sources: [tyreMark],
   };
+  const timingBelt: TopicSection = {
+    id: 'seed-section-car-timing-belt',
+    heading: 'Timing belt',
+    level: 2,
+    markdown:
+      'Most belts last 60,000 to 100,000 miles. Replace it early: a belt that snaps can wreck the engine.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'note', noteId: OUTSIDE_NOTE_ID }],
+  };
   const carVersions: {
     reason: TopicVersion['reason'];
     at: number;
@@ -2521,6 +2632,23 @@ async function buildKnowledge(input: {
         freshener,
         booklet,
         tyreSize,
+        winter,
+      ],
+    },
+    {
+      reason: 'addedFromSource',
+      at: now - 5 * MINUTE_MS,
+      by: 'nomos',
+      noteIds: [OUTSIDE_NOTE_ID],
+      summary: 'Added Timing belt',
+      sections: [
+        introShort,
+        service,
+        tyresHeard,
+        freshener,
+        booklet,
+        tyreSize,
+        timingBelt,
         winter,
       ],
     },
@@ -2676,7 +2804,17 @@ async function buildKnowledge(input: {
       createdAt: now - (21 - index) * DAY_MS,
       lastEditedAt: null,
       ...extra,
-      sealed: await sealJson<NoteSealed>({ title, body, privateMark: null, isPrivacyCleared: false }, encryption),
+      sealed: await sealJson<NoteSealed>(
+        {
+          title,
+          body,
+          via: null,
+          links: [],
+          privateMark: null,
+          isPrivacyCleared: false,
+        },
+        encryption,
+      ),
     },
   });
   const car = 'seed-topic-car';
@@ -2940,6 +3078,8 @@ async function buildKnowledge(input: {
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: null,
     errorCode: null,
     createdAt: tyreBase.sortedAt,
@@ -2970,12 +3110,125 @@ async function buildKnowledge(input: {
         undoReport: null,
         spoken: null,
         goneIds: null,
+        undoReason: null,
         lines: [],
         abilityOffer: null,
         awayZoneOffer: null,
       },
       encryption,
     ),
+  };
+  const outsideText =
+    'Saved a note about the timing belt, with two links, under Car care';
+  const outsideAt = now - 8 * MINUTE_MS;
+  const outsideBase = baseCapture(outsideAt, 0, outsideText);
+  const outsideCapture: Capture = {
+    ...outsideBase,
+    medium: 'mcp',
+    via: 'Gemini',
+    outsideReadScopes: [],
+    sessionId: `seed-${uid}-outside-handover`,
+    status: 'sorted',
+    questionState: {},
+    executionIds: [OUTSIDE_EXECUTION_ID],
+    seenAt: null,
+    privacy: null,
+    touchesPrivate: null,
+    presence: null,
+    abilities: null,
+    sealed: await sealJson<CaptureSealed>(
+      {
+        text: outsideText,
+        reading: outsideBase.reading,
+        answer: null,
+        questionAnswer: null,
+        heardNames: null,
+      },
+      encryption,
+    ),
+  };
+  const outsideExecution: Execution = {
+    captureId: OUTSIDE_TURN_ID,
+    actor: 'nomos',
+    via: 'Gemini',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'create', collection: 'notes', docId: OUTSIDE_NOTE_ID },
+      { op: 'update', collection: 'topics', docId: 'seed-topic-car' },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
+    privacy: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: outsideBase.sortedAt,
+    decidedAt: outsideBase.sortedAt,
+    finishedAt: outsideBase.sortedAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: 'Saved a note: Timing belt · Car care',
+        said: null,
+        commands: [],
+        effects: [
+          {
+            written: { 'sealed.title': 'Saved a note: Timing belt' },
+            previous: null,
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+        undoReason: null,
+        lines: [],
+        abilityOffer: null,
+        awayZoneOffer: null,
+      },
+      encryption,
+    ),
+  };
+  const outsideNote: { id: string; note: Note } = {
+    id: OUTSIDE_NOTE_ID,
+    note: {
+      topicIds: ['seed-topic-car'],
+      source: 'outside',
+      isFromGeneralAnswer: false,
+      checkedAt: null,
+      hasHealthCaution: false,
+      sourceCaptureId: OUTSIDE_TURN_ID,
+      sourceMediaId: null,
+      projectIds: [],
+      createdBy: 'nomos',
+      executionId: OUTSIDE_EXECUTION_ID,
+      privacy: null,
+      createdAt: outsideBase.sortedAt,
+      lastEditedAt: null,
+      sealed: await sealJson<NoteSealed>(
+        {
+          title: 'Timing belt',
+          body: 'Most belts last 60,000 to 100,000 miles. Replace it early: a belt that snaps can wreck the engine.',
+          via: 'Gemini',
+          links: [
+            {
+              title: 'How a timing belt works',
+              url: 'https://example.com/timing-belt-basics',
+            },
+            {
+              title: 'When to replace it',
+              url: 'https://example.com/timing-belt-replacement',
+            },
+          ],
+          privateMark: null,
+          isPrivacyCleared: false,
+        },
+        encryption,
+      ),
+    },
   };
   const groupText = 'Did my long run and then stretched';
   const groupAt = now - 15 * MINUTE_MS;
@@ -3020,13 +3273,17 @@ async function buildKnowledge(input: {
   };
   return {
     topics,
-    notes,
+    notes: [...notes, outsideNote],
     versions,
     captures: [
       { id: TYRE_TURN_ID, capture: tyreCapture },
+      { id: OUTSIDE_TURN_ID, capture: outsideCapture },
       { id: 'seed-turn-group-fitness', capture: groupCapture },
     ],
-    executions: [{ id: TYRE_EXECUTION_ID, execution: tyreExecution }],
+    executions: [
+      { id: TYRE_EXECUTION_ID, execution: tyreExecution },
+      { id: OUTSIDE_EXECUTION_ID, execution: outsideExecution },
+    ],
   };
 }
 
@@ -3689,7 +3946,13 @@ async function buildPhotoTurns(input: {
     completedAt: null,
     clearedAt: null,
     sealed: await sealJson<TaskSealed>(
-      { title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
+      {
+        title,
+        notes: null,
+        steps: {},
+        privateMark: null,
+        isPrivacyCleared: false,
+      },
       encryption,
     ),
   };
@@ -3709,6 +3972,8 @@ async function buildPhotoTurns(input: {
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: null,
     errorCode: null,
     createdAt: keptAt,
@@ -3745,6 +4010,7 @@ async function buildPhotoTurns(input: {
         undoReport: null,
         spoken: null,
         goneIds: null,
+        undoReason: null,
         lines: [],
         abilityOffer: null,
         awayZoneOffer: null,
@@ -4062,7 +4328,13 @@ async function buildFileTurns(input: {
       lastEditedAt: null,
       completedAt: null,
       clearedAt: null,
-      sealed: await seal<TaskSealed>({ title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false }),
+      sealed: await seal<TaskSealed>({
+        title,
+        notes: null,
+        steps: {},
+        privateMark: null,
+        isPrivacyCleared: false,
+      }),
     };
     return { id, task };
   };
@@ -4090,6 +4362,8 @@ async function buildFileTurns(input: {
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: null,
     errorCode: null,
     createdAt: at,
@@ -4103,6 +4377,7 @@ async function buildFileTurns(input: {
       undoReport: null,
       spoken: fields.spoken,
       goneIds: null,
+      undoReason: null,
       lines: fields.lines ?? [],
       abilityOffer: null,
       awayZoneOffer: null,
@@ -4157,7 +4432,14 @@ async function buildFileTurns(input: {
     executionId: mdExecution,
     createdAt: mdAt,
     lastEditedAt: null,
-    sealed: await seal<NoteSealed>({ title: noteTitle, body: mdText, privateMark: null, isPrivacyCleared: false }),
+    sealed: await seal<NoteSealed>({
+      title: noteTitle,
+      body: mdText,
+      via: null,
+      links: [],
+      privateMark: null,
+      isPrivacyCleared: false,
+    }),
   };
   const topic: Topic = {
     privacy: 'ordinary',
@@ -4532,15 +4814,36 @@ async function buildPeople(input: {
             kin: { kind: 'sister', order: 'younger' },
             soundsLike: ['Donna'],
             phones: [
-              { id: 'seed-phone-dana-1', value: '(415) 555-0142', label: 'Mobile', isPrimary: true },
-              { id: 'seed-phone-dana-2', value: '(415) 555-0177 ext 204', label: 'Work', isPrimary: false },
-              { id: 'seed-phone-dana-3', value: '+1 206 555 0111', label: 'Flower shop counter', isPrimary: false },
+              {
+                id: 'seed-phone-dana-1',
+                value: '(415) 555-0142',
+                label: 'Mobile',
+                isPrimary: true,
+              },
+              {
+                id: 'seed-phone-dana-2',
+                value: '(415) 555-0177 ext 204',
+                label: 'Work',
+                isPrimary: false,
+              },
+              {
+                id: 'seed-phone-dana-3',
+                value: '+1 206 555 0111',
+                label: 'Flower shop counter',
+                isPrimary: false,
+              },
             ],
             emails: [
-              { id: 'seed-email-dana-1', value: 'dana@example.com', label: 'Home', isPrimary: true },
+              {
+                id: 'seed-email-dana-1',
+                value: 'dana@example.com',
+                label: 'Home',
+                isPrimary: true,
+              },
               {
                 id: 'seed-email-dana-2',
-                value: 'dana.orders.and.consultations@bloomandbranchfloraldesign.example.com',
+                value:
+                  'dana.orders.and.consultations@bloomandbranchfloraldesign.example.com',
                 label: 'Work',
                 isPrimary: false,
               },
@@ -4561,11 +4864,13 @@ async function buildPeople(input: {
             createdBy: 'person',
           },
           now - DAY_MS,
-          await seal(wordsOf('Priya Raman', {
+          await seal(
+            wordsOf('Priya Raman', {
               email: 'priya@example.com',
               home: leavenworth,
               homeSource: 'said',
-            })),
+            }),
+          ),
         ),
         importedFrom: {
           connectorId: 'google:contacts',
@@ -4606,7 +4911,13 @@ async function buildPeople(input: {
           lastMentionedAt: now - 3 * DAY_MS,
         },
         now - 3 * DAY_MS,
-        await seal(wordsOf('Grandpa Joe', { relation: 'grandfather', aliases: ['Pops'], kin: { kind: 'grandfather', order: null } })),
+        await seal(
+          wordsOf('Grandpa Joe', {
+            relation: 'grandfather',
+            aliases: ['Pops'],
+            kin: { kind: 'grandfather', order: null },
+          }),
+        ),
       ),
     },
     {
@@ -4621,7 +4932,13 @@ async function buildPeople(input: {
           lastMentionedAt: now - 2 * DAY_MS,
         },
         now - 40 * DAY_MS,
-        await seal(wordsOf('Mom', { relation: 'mother', aliases: ['Mother'], kin: { kind: 'mother', order: null } })),
+        await seal(
+          wordsOf('Mom', {
+            relation: 'mother',
+            aliases: ['Mother'],
+            kin: { kind: 'mother', order: null },
+          }),
+        ),
       ),
     },
     {
@@ -4636,7 +4953,12 @@ async function buildPeople(input: {
           lastMentionedAt: now - 12 * DAY_MS,
         },
         now - 30 * DAY_MS,
-        await seal(wordsOf('Eli', { relation: 'brother', kin: { kind: 'brother', order: 'older' } })),
+        await seal(
+          wordsOf('Eli', {
+            relation: 'brother',
+            kin: { kind: 'brother', order: 'older' },
+          }),
+        ),
       ),
     },
     {
@@ -4747,7 +5069,13 @@ async function buildPeople(input: {
       lastEditedAt: null,
       completedAt: null,
       clearedAt: null,
-      sealed: await seal<TaskSealed>({ title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false }),
+      sealed: await seal<TaskSealed>({
+        title,
+        notes: null,
+        steps: {},
+        privateMark: null,
+        isPrivacyCleared: false,
+      }),
     },
   });
   const tasks = await Promise.all([
@@ -5736,6 +6064,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           reflectDueAt: null,
           forgottenAt: null,
           prunedOn: habitDayKey(context.now, HABIT_ZONE),
+          outsideSeenAt: null,
           createdAt,
           lastEditedAt: null,
         });
@@ -5908,6 +6237,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   linkedPlaceIds: [],
                   undoesExecutionId: null,
                   undoneByExecutionId: null,
+                  undoneDocIds: null,
+                  partUndoIds: null,
                   questionRef: null,
                   errorCode: null,
                   createdAt: sortedAt,
@@ -5926,6 +6257,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       undoReport: null,
                       spoken: spoken ?? null,
                       goneIds: null,
+                      undoReason: null,
                       lines: [],
                       abilityOffer: null,
                       awayZoneOffer: null,
@@ -6233,7 +6565,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           ? await buildConnections({ now: context.now, encryption })
           : null;
         connectionWorld?.forEach((entry) =>
-          batch.set(person.collection('connections').doc(entry.id), entry.connection),
+          batch.set(
+            person.collection('connections').doc(entry.id),
+            entry.connection,
+          ),
         );
         if (people) {
           people.who.forEach((entry) =>
@@ -6416,7 +6751,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           : null;
         if (learning) {
           learning.patterns.forEach((entry) =>
-            batch.set(person.collection('patterns').doc(entry.id), entry.pattern),
+            batch.set(
+              person.collection('patterns').doc(entry.id),
+              entry.pattern,
+            ),
           );
           learning.observations.forEach((entry) =>
             batch.set(
@@ -6543,7 +6881,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             1 +
             7 +
             (projects ? projects.projects.length + projects.tasks.length : 0) +
-            (habitWorld ? habitWorld.habits.length + habitWorld.days.length : 0) +
+            (habitWorld
+              ? habitWorld.habits.length + habitWorld.days.length
+              : 0) +
             (learning
               ? learning.patterns.length +
                 learning.observations.length +

@@ -45,6 +45,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   reflectDueAt: data.reflectDueAt ?? null,
   forgottenAt: data.forgottenAt ?? null,
   prunedOn: data.prunedOn ?? null,
+  outsideSeenAt: data.outsideSeenAt ?? null,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,
 });

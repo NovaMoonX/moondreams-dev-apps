@@ -23,7 +23,10 @@ import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
-import { takeBack } from '@apps/helm/store/actions/undoActions';
+import {
+  answerUndoOffer,
+  takeBack,
+} from '@apps/helm/store/actions/undoActions';
 import {
   dismissQuestion,
   skipQuestion,
@@ -216,6 +219,40 @@ function QuestionCard({
     setNote(failure);
   };
 
+  const answerUndoOfferOnCard = async (optionId: string) => {
+    if (!user || isOffline) return;
+    setIsWorking(true);
+    try {
+      const outcome = await answerUndoOffer(user.uid, {
+        captureId,
+        questionId: id,
+        question,
+        optionId,
+        by: 'tap',
+      });
+      setNote(
+        outcome.kind === 'undone'
+          ? outcome.report
+          : outcome.kind === 'kept'
+            ? optionId === 'keep'
+              ? HELM_COPY.undoOfferKeptAll
+              : HELM_COPY.undoOfferKept
+            : outcome.kind === 'already'
+              ? HELM_COPY.questionGone('undoOffer')
+              : outcome.kind === 'nothing'
+                ? (outcome.report ?? HELM_COPY.cannotTakeBack)
+                : outcome.kind === 'offline'
+                  ? HELM_COPY.questionNeedsConnection
+                  : HELM_COPY.heldActionFailed,
+      );
+    } catch (error) {
+      console.error('Helm undo offer was not answered', error);
+      setNote(HELM_COPY.heldActionFailed);
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
   const answer = (
     value: QuestionAnswerValue,
     recordName: string | null = null,
@@ -229,6 +266,13 @@ function QuestionCard({
     ) {
       if (dateId !== null && dateWho) setIsDateOpen(true);
       else setIsNeitherOpen(true);
+      return;
+    }
+    if (
+      question.kind === 'undoOffer' &&
+      (value.shape === 'pickOne' || value.shape === 'yesNo')
+    ) {
+      void answerUndoOfferOnCard(value.optionId);
       return;
     }
     void (isModelWritten
@@ -319,7 +363,18 @@ function QuestionCard({
 
   return (
     <div className='flex w-full flex-col items-start gap-2'>
-      {!isPromptHidden && <AssistantLine>{question.prompt}</AssistantLine>}
+      {isPromptHidden && question.lead !== null && (
+        <p className='text-muted-foreground text-left text-[13px] text-pretty'>
+          {question.lead}
+        </p>
+      )}
+      {!isPromptHidden && (
+        <AssistantLine>
+          {question.lead === null
+            ? question.prompt
+            : `${question.lead} ${question.prompt}`}
+        </AssistantLine>
+      )}
       <div
         className={join(
           'flex flex-col gap-2',

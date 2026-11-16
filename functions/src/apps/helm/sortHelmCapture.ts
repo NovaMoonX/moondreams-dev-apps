@@ -174,6 +174,7 @@ import {
   toReading,
   type AnswerCommand,
   type AskCommand,
+  type UndoOffer,
   type CaptureReading,
   type CreateNoteCommand,
   type MediaDecision,
@@ -249,6 +250,18 @@ import {
   toHeldBackPrompt,
 } from './mcp/sourcesBrief.js';
 import { getDayIn } from './nomos/spoken.js';
+import {
+  MAX_UNDOABLE_UNITS,
+  UNDO_OFFER_MAX_AGE_MS,
+  planUndoOffer,
+  type OfferedExecution,
+} from './nomos/planUndoOffer.js';
+import {
+  buildUndoUnits,
+  getRemainingUnits,
+  type UnitEffect,
+  type UnitEffectRef,
+} from './undoUnits.js';
 import { matchWho } from './nomos/matchEntities.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
 import {
@@ -1596,6 +1609,99 @@ async function readCitedNotes(
     : [];
 }
 
+/** The words an earlier command quoted for the record a line made, matched by the line's title. */
+const quoteForUnit = (
+  commands: unknown,
+  title: string | null,
+): string | null => {
+  if (!title || !Array.isArray(commands)) return null;
+  const same = (text: unknown) =>
+    typeof text === 'string' &&
+    text.trim().toLowerCase() === title.toLowerCase();
+  const found = commands.find(
+    (command: Record<string, unknown> | null) =>
+      !!command &&
+      (same(command.title) || same(command.statement)) &&
+      (typeof command.quote === 'string' ||
+        typeof command.requestQuote === 'string'),
+  ) as Record<string, unknown> | undefined;
+  const quote = found?.quote ?? found?.requestQuote;
+  return typeof quote === 'string' && quote ? quote : null;
+};
+
+/** What an earlier execution did that can still be taken back: its units, each marked taken back or not. Empty for a failed execution, an undo, an import, one with no effects, one fully undone or one older than an offer may reach. */
+export function readUndoableUnits(
+  executionId: string,
+  execution: {
+    effectRefs?: unknown;
+    state?: unknown;
+    category?: unknown;
+    createdAt?: unknown;
+    undoneByExecutionId?: unknown;
+    undoneDocIds?: unknown;
+  },
+  opened: Record<string, unknown>,
+): NonNullable<EarlierTurn['undoable']> {
+  const refs = Array.isArray(execution.effectRefs)
+    ? (execution.effectRefs as UnitEffectRef[])
+    : [];
+  if (
+    execution.state !== 'succeeded' ||
+    execution.category === 'undo' ||
+    execution.category === 'import' ||
+    typeof execution.category !== 'string' ||
+    typeof execution.createdAt !== 'number' ||
+    Date.now() - execution.createdAt > UNDO_OFFER_MAX_AGE_MS ||
+    typeof execution.undoneByExecutionId === 'string' ||
+    refs.length === 0
+  ) {
+    return [];
+  }
+  const undone = new Set(
+    Array.isArray(execution.undoneDocIds)
+      ? (execution.undoneDocIds as string[])
+      : [],
+  );
+  const { units } = buildUndoUnits({
+    category: execution.category,
+    effectRefs: refs,
+    effects: Array.isArray(opened.effects)
+      ? (opened.effects as UnitEffect[])
+      : [],
+  });
+  const left = new Set(getRemainingUnits(units, undone).map((u) => u.key));
+  return units.length === 0 || left.size === 0
+    ? []
+    : [
+        {
+          executionId,
+          createdAt: execution.createdAt,
+          units: units.slice(0, MAX_UNDOABLE_UNITS).map((unit, index) => ({
+            n: index + 1,
+            kind: unit.kind,
+            change: unit.change,
+            title: unit.title,
+            isUndone: !left.has(unit.key),
+            quote: quoteForUnit(opened.commands, unit.title),
+          })),
+        },
+      ];
+}
+
+const UNDO_CLAIMS =
+  /\b(undid|undone|took (it |that |them )?back|taken back|put (it |that |them )?back|reverted|rolled back)\b/i;
+const REMOVAL_WORDS =
+  /\b(took (it |that |them )?(out|off)|taken (out|off)|dropped|removed|deleted|cancell?ed|scrapped|cleared|erased|gone)\b/i;
+const REASON_WORDS = /\b(because|since|as you|you (said|asked|wanted|told))\b/i;
+
+/** The model's line leading an undo offer; one that says or implies something was already taken back is refused, since only the person's answer undoes, while a removal the earlier turn made may be named when the line says why. */
+export const toUndoLead = (line: string | null) =>
+  line &&
+  !UNDO_CLAIMS.test(line) &&
+  (!REMOVAL_WORDS.test(line) || REASON_WORDS.test(line))
+    ? line
+    : null;
+
 /** The last turns of this turn's conversation, oldest first: what was said, the summary of what was done and the tasks it touched. A turn from before conversations were kept has none. */
 export async function readEarlierTurns(
   firestore: Firestore,
@@ -1655,11 +1761,19 @@ export async function readEarlierTurns(
         );
         const done = executions.flatMap((snapshot) => {
           const execution = snapshot.data() as
-            | { effectRefs?: unknown; privacy?: string; sealed: SealedPayload }
+            | {
+                effectRefs?: unknown;
+                privacy?: string;
+                sealed: SealedPayload;
+                state?: unknown;
+                category?: unknown;
+                createdAt?: unknown;
+                undoneByExecutionId?: unknown;
+                undoneDocIds?: unknown;
+              }
             | undefined;
-          const summary = execution
-            ? openTitle(key, execution.sealed)?.sealed.summary
-            : null;
+          const opened = execution ? openTitle(key, execution.sealed) : null;
+          const summary = opened?.sealed.summary;
           const refs = Array.isArray(execution?.effectRefs)
             ? (execution.effectRefs as {
                 collection?: unknown;
@@ -1675,6 +1789,10 @@ export async function readEarlierTurns(
                   ? [ref.docId]
                   : [],
               ),
+              undoable:
+                execution && opened
+                  ? readUndoableUnits(snapshot.id, execution, opened.sealed)
+                  : [],
             },
           ];
         });
@@ -1697,6 +1815,7 @@ export async function readEarlierTurns(
               0,
               EARLIER_RECORDS,
             ),
+            undoable: done.flatMap((entry) => entry.undoable),
           },
         ];
       }),
@@ -2052,6 +2171,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       previousHeard: [],
       knownNames: [],
       heardNames: [],
+      undoOffers: [],
       topics: [],
       hinted: [],
       captureText: '',
@@ -2993,6 +3113,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       habits: context.habits,
       projects: context.projects,
       habitNames: context.habitNames,
+      undoTurns: context.undoTurns,
+      undoUnitCounts: context.undoUnitCounts,
       captureText: combined.text,
       keyDateNames,
       quotes,
@@ -3033,6 +3155,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   reply.runDropped.forEach((code) => logger.info('helm.run.dropped', { code }));
   reply.habitDropped.forEach((code) =>
     logger.info('helm.habit.dropped', { code }),
+  );
+  reply.undoOfferDropped.forEach((code) =>
+    logger.info('helm.undoOffer.dropped', { code }),
   );
   const maskedNames = unattendedMask.names;
   const hide = (text: string | null) =>
@@ -3150,6 +3275,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     previousHeard: previousTurn?.heard ?? [],
     knownNames,
     heardNames: read.heardNames,
+    undoOffers: mode === 'full' ? reply.undoOffers : [],
     topics,
     hinted,
     media: {
@@ -3356,6 +3482,7 @@ async function writeResult(
     previousHeard: HeardName[];
     knownNames: { id: string; names: string[]; kinNames?: string[] }[];
     heardNames: HeardName[];
+    undoOffers: UndoOffer[];
     topics: OpenTopicRecord[];
     hinted: HintedNote[];
     captureText: string;
@@ -3408,6 +3535,7 @@ async function writeResult(
     previousTaskIds,
     previousHeard,
     knownNames,
+    undoOffers,
     topics: contextTopics,
     hinted,
     captureText,
@@ -4506,6 +4634,55 @@ async function writeResult(
     ) {
       throw new SortFailure('nothingToFile');
     }
+    const offeredExecutions = new Map<string, OfferedExecution>(
+      (isStale || undoOffers.length === 0
+        ? []
+        : await Promise.all(
+            undoOffers.map((offer) =>
+              transaction.get(
+                firestore.doc(`${base}/executions/${offer.executionId}`),
+              ),
+            ),
+          )
+      ).flatMap((snapshot): [string, OfferedExecution][] => {
+        const data = snapshot.data();
+        const opened = data ? openTitle(key, data.sealed)?.sealed : null;
+        return data && opened
+          ? [
+              [
+                snapshot.id,
+                {
+                  state: String(data.state),
+                  category: String(data.category),
+                  createdAt: Number(data.createdAt),
+                  undoneByExecutionId:
+                    typeof data.undoneByExecutionId === 'string'
+                      ? data.undoneByExecutionId
+                      : null,
+                  undoneDocIds: Array.isArray(data.undoneDocIds)
+                    ? data.undoneDocIds
+                    : null,
+                  effectRefs: Array.isArray(data.effectRefs)
+                    ? data.effectRefs
+                    : [],
+                  effects: Array.isArray(opened.effects) ? opened.effects : [],
+                  said: typeof opened.said === 'string' ? opened.said : null,
+                },
+              ],
+            ]
+          : [];
+      }),
+    );
+    const undoPlan = planUndoOffer({
+      offers: isStale ? [] : undoOffers,
+      executions: offeredExecutions,
+      now,
+      lead: toUndoLead(replyLine),
+      newId: () => crypto.randomUUID(),
+    });
+    undoPlan.dropped.forEach((code) =>
+      logger.info('helm.undoOffer.planDropped', { code }),
+    );
     const askPlan = planAsks({
       asks: asksNow,
       openAsked: openAskedSnap
@@ -4531,6 +4708,7 @@ async function writeResult(
     const otherQuestions = [
       ...plan.questions,
       ...askPlan.questions,
+      ...(undoPlan.question ? [undoPlan.question] : []),
       ...habitPlan.questions,
       ...importancePlan.questions,
       ...impliedQuestions,
@@ -4942,7 +5120,7 @@ async function writeResult(
       questionState: capture.questionState ?? {},
       executionIds: capture.executionIds ?? [],
       questions,
-      hadAsks: asksNow.length > 0,
+      hadAsks: asksNow.length > 0 || undoPlan.question !== null,
       isAnswerTurn: answerTurn !== null,
       line: quietLine,
     });
