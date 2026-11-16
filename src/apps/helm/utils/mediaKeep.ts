@@ -21,6 +21,7 @@ export const getKeepTarget = (executions: OpenExecution[]): KeepTarget | null =>
     .flatMap((execution) =>
       execution.effectRefs.flatMap((ref, index): KeepTarget[] => {
         if (ref.collection !== 'tasks' && ref.collection !== 'facts') return [];
+        if (execution.undoneDocIds.includes(ref.docId)) return [];
         const effect = execution.effects[index];
         const isTask = ref.collection === 'tasks';
         return [
