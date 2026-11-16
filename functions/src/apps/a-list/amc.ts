@@ -293,7 +293,9 @@ interface AmcShowtime {
   id?: number | string;
   movieName?: string;
   showDateTimeUtc?: string;
+  showDateTimeLocal?: string;
   isSoldOut?: boolean;
+  isDiscountDaysEligible?: boolean;
   isCanceled?: boolean;
   purchaseUrl?: string;
   mobilePurchaseUrl?: string;
@@ -334,6 +336,14 @@ const FORMAT_KEYWORDS: Array<[string, AmcFormat]> = [
   ['reald', 'REALD_3D'],
   ['3d', 'REALD_3D'],
 ];
+
+const DISCOUNT_WEEKDAY = 2;
+
+// AMC lists a Discount Tuesday showing at its regular price and takes the discount off at checkout.
+function isDiscountDay(showtime: AmcShowtime) {
+  const localDay = (showtime.showDateTimeLocal ?? '').slice(0, 10);
+  return Boolean(showtime.isDiscountDaysEligible) && new Date(`${localDay}T00:00:00Z`).getUTCDay() === DISCOUNT_WEEKDAY;
+}
 
 function toFormat(showtime: AmcShowtime): AmcFormat {
   const text = (showtime.attributes ?? []).map((attribute) => `${attribute.code ?? ''} ${attribute.name ?? ''}`.toLowerCase()).join(' ');
@@ -413,6 +423,7 @@ function fixtureDay(date: string): DayShowtime[] {
     taxes: { ADULT: Math.round((priceCents as number) * 0.08), SENIOR: Math.round((priceCents as number) * 0.08), CHILD: Math.round((priceCents as number) * 0.08) },
     purchaseUrl: `https://www.amctheatres.com/order/fixture/${date}/${index + 1}`,
     isSoldOut: index === 9,
+    isDiscountDay: new Date(`${date}T00:00:00Z`).getUTCDay() === DISCOUNT_WEEKDAY,
     // Matches every title, so any movie the emulator is asked about has showings.
     movieTitle: '*',
   }));
@@ -455,6 +466,7 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
               taxes,
               purchaseUrl,
               isSoldOut: Boolean(showtime.isSoldOut),
+              isDiscountDay: isDiscountDay(showtime),
               movieTitle: showtime.movieName,
             } satisfies DayShowtime,
           ]
@@ -490,6 +502,7 @@ export function pickMovieShowtimes(day: DayShowtime[], title: string): ShowtimeO
       taxes: showtime.taxes,
       purchaseUrl: showtime.purchaseUrl,
       isSoldOut: showtime.isSoldOut,
+      isDiscountDay: showtime.isDiscountDay,
     };
   });
   return result;

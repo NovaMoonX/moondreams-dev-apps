@@ -18,6 +18,7 @@ export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
     standardPriceCents: option.standardPriceCents,
     taxCents: option.taxCents ?? null,
     purchaseUrl: option.purchaseUrl,
+    isDiscountDay: option.isDiscountDay === true,
     startedAt: null,
   };
 }
@@ -26,7 +27,7 @@ export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
 export function applyPurchaseToDraft(
   draft: TicketDraft,
   plan: Pick<PurchasePlan, 'format' | 'priceCents' | 'standardPriceCents'> &
-    Partial<Pick<PurchasePlan, 'taxCents'>>,
+    Partial<Pick<PurchasePlan, 'taxCents' | 'isDiscountDay'>>,
 ): TicketDraft {
   const priceCents = plan.priceCents;
   const isNewPrice =
@@ -35,6 +36,7 @@ export function applyPurchaseToDraft(
     ...draft,
     ...(isNewPrice ? { tax: '', isTaxEdited: false } : {}),
     amcTaxCents: plan.taxCents ?? null,
+    isDiscountDay: plan.isDiscountDay === true,
     format: plan.format,
     price: centsToInputValue(plan.priceCents),
     standardPrice:

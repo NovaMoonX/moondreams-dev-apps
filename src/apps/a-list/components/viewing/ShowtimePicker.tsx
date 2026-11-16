@@ -204,6 +204,17 @@ function ShowtimePicker({
           </span>
         </p>
       )}
+      {open.some((option) => option.isDiscountDay) && (
+        <p className='text-muted-foreground flex gap-1.5 text-xs'>
+          <span className='w-5 shrink-0 text-center' aria-hidden='true'>
+            🏷️
+          </span>
+          <span className='min-w-0'>
+            Discount Tuesday: these are AMC&apos;s regular prices, and Stubs
+            members pay less at checkout.
+          </span>
+        </p>
+      )}
       {groups.map((group) => (
         <div key={group.format} className='space-y-1.5'>
           {!isOnlyStandard && (

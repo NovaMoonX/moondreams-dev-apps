@@ -17,6 +17,8 @@ export interface TicketDraft {
   isTaxEdited: boolean;
   /** AMC's tax for the picked showing; null with no pick or when AMC lists none. */
   amcTaxCents: number | null;
+  /** The picked showing is on AMC's Discount Tuesday, so checkout may charge less than its list price and tax. */
+  isDiscountDay: boolean;
   /** The saved ticket's choice (a figure the member picked or typed, never the default left as is) and the tax it was made on, kept while that tax is unchanged. */
   savedTaxChoice: { taxCents: number; choice: TaxChoice | null } | null;
 }
@@ -87,6 +89,7 @@ export function getInitialTicketDraft(ticket: Ticket | null): TicketDraft {
       isFeeEdited: true,
       isTaxEdited: true,
       amcTaxCents: null,
+      isDiscountDay: false,
       savedTaxChoice: {
         taxCents: ticket.taxCents,
         choice: ticket.taxChoice ?? null,
@@ -103,6 +106,7 @@ export function getInitialTicketDraft(ticket: Ticket | null): TicketDraft {
     isFeeEdited: false,
     isTaxEdited: false,
     amcTaxCents: null,
+    isDiscountDay: false,
     savedTaxChoice: null,
   };
 }

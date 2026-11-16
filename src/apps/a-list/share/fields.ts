@@ -126,6 +126,7 @@ const PURCHASE_PLAN_FIELDS = {
   standardPriceCents: 'never',
   taxCents: 'never',
   purchaseUrl: 'never',
+  isDiscountDay: 'never',
   startedAt: 'never',
 } satisfies Record<keyof PurchasePlan, ShareDecision>;
 

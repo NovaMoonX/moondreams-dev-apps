@@ -248,6 +248,7 @@ const SEED_PURCHASES: Record<string, object> = {
     standardPriceCents: 1489,
     taxCents: 182,
     purchaseUrl: 'https://www.amctheatres.com/order/seed/starlight',
+    isDiscountDay: false,
     startedAt: null,
   },
 };

@@ -4,6 +4,7 @@ import { Form, FormFactories } from '@moondreamsdev/dreamer-ui/components';
 
 import MoneyInput from '@/components/MoneyInput';
 import PremiumSavingsHelp from '@apps/a-list/components/shared/PremiumSavingsHelp';
+import DiscountDayNotice from '@apps/a-list/components/viewing/DiscountDayNotice';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
 import SuggestionNote from '@apps/a-list/components/viewing/SuggestionNote';
 import TaxChoiceChips from '@apps/a-list/components/viewing/TaxChoiceChips';
@@ -180,6 +181,7 @@ function TicketFields({ draft, onChange, theatre }: TicketFieldsProps) {
 
   return (
     <div className='space-y-3'>
+      {draft.isDiscountDay && <DiscountDayNotice isPriceFolded={false} />}
       <Form
         key={isPremium ? 'premium' : 'standard'}
         id='a-list-ticket'

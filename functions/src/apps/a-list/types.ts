@@ -67,4 +67,6 @@ export interface ShowtimeOption {
   /** https link to buy this showing on amctheatres.com. */
   purchaseUrl: string;
   isSoldOut: boolean;
+  /** AMC's Discount Tuesday applies, so checkout charges less than these list prices. */
+  isDiscountDay: boolean;
 }

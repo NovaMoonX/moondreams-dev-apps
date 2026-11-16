@@ -10,6 +10,7 @@ import { formatDate } from '@/utils/formatUtils';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import FeeChips from '@apps/a-list/components/viewing/FeeChips';
 import SuggestionNote from '@apps/a-list/components/viewing/SuggestionNote';
+import DiscountDayNotice from '@apps/a-list/components/viewing/DiscountDayNotice';
 import TaxChoiceChips from '@apps/a-list/components/viewing/TaxChoiceChips';
 import TicketFields from '@apps/a-list/components/viewing/TicketFields';
 import { useAppSelector } from '@/store';
@@ -133,6 +134,7 @@ function PurchaseReturnPrompt({
               Change
             </Button>
           </p>
+          {draft.isDiscountDay && <DiscountDayNotice isPriceFolded />}
           <SuggestionNote
             suggestion={suggestion}
             draft={draft}
