@@ -1647,6 +1647,59 @@ export const HELM_COPY = {
     count === 0
       ? `No thorough looks left this month; they come back ${resetOn}.`
       : `About ${count} thorough ${count === 1 ? 'look' : 'looks'} left this month`,
+  learnLaterRow: (count: number) =>
+    count === 0 ? 'Learn later' : `Learn later · ${count}`,
+  learnLaterTitle: 'Learn later',
+  learnSaved: (subject: string) =>
+    `Saved to learn later: ${subject}. I'll bring it up when you have a free half hour.`,
+  learnSavedPlain:
+    "Saved to learn later. I'll bring it up when you have a free half hour.",
+  learnMerged: (subject: string) =>
+    `Added that to what you wanted to learn about ${subject}.`,
+  learnRevived: (subject: string) =>
+    `${subject} is back on your learn later list.`,
+  learnRemoved: (subject: string) => `Okay, I took ${subject} off your list.`,
+  learnNotNowLine: 'Okay, it stays on your list.',
+  learnCardTitle: (subject: string) => `${subject}, the longer version`,
+  learnCardLine: 'Remember that thing you wanted to learn?',
+  learnCardMeta: (minutes: number, savedOn: string) =>
+    `${minutes} min · you saved it ${savedOn} · Suggested`,
+  learnShowMe: 'Show me',
+  learnNotNow: 'Not now',
+  learnStill: (subject: string) =>
+    `Do you still want to learn about ${subject}?`,
+  learnKeepIt: 'Keep it',
+  learnRemoveIt: 'Remove it',
+  learnTogether: (subject: string) => `Want these as one: ${subject}?`,
+  learnTogetherYes: 'Together',
+  learnApart: 'Keep them apart',
+  learnMergedTogether: (subject: string) => `Put those together as ${subject}.`,
+  learnKindQuestion: (subject: string) =>
+    `What would you like to do with ${subject}?`,
+  learnRead: 'Read up on it later',
+  learnGoal: 'Make it a goal you practise',
+  learnGoalOffer: (name: string) => `Make ${name} a goal?`,
+  learnGoalMade: (name: string) => `Made ${name} a goal.`,
+  learnCaution:
+    'From general knowledge and the web, not checked against your records.',
+  learnCautionGeneral:
+    'From general knowledge, not checked against your records. It may be out of date.',
+  learnKeep: 'Save to my knowledge',
+  learnKept: 'Saved to your knowledge.',
+  learnDone: 'Done with it',
+  learnDoneLine: (subject: string) => `Marked ${subject} as learned.`,
+  learnRemove: 'Remove',
+  learnVideos: (count: number) => `Videos · ${count}`,
+  learnVideoMeta: (channel: string, minutes: number) =>
+    `${channel} · ${minutes} min`,
+  learnFailed: "Couldn't put the overview together. It'll try again tomorrow.",
+  learnPreparing: 'Preparing…',
+  learnSavedLine: (savedOn: string, context: string | null) =>
+    context ? `Saved ${savedOn} · ${context}` : `Saved ${savedOn}`,
+  learnEmpty:
+    'Nothing saved yet. Say "one day I want to learn…" and it waits here for a free half hour.',
+  learnActionFailed: "Couldn't save that. Check your connection.",
+  searchGroupLearn: 'Learn later',
   answerGeneralHeading: 'General knowledge',
   answerGeneralCaution: (name: string) =>
     `From general knowledge, not checked against anything you've told ${name}. It may be out of date.`,

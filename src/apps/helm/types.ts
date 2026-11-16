@@ -317,6 +317,10 @@ export interface HelmQuestion {
     | 'undoOffer'
     | 'researchDepth'
     | 'researchRerun'
+    | 'learnKind'
+    | 'learnGoal'
+    | 'learnStill'
+    | 'learnTogether'
     | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
@@ -980,6 +984,7 @@ export type NoteSource =
   | 'savedAnswer'
   | 'importedFile'
   | 'assistantDraft'
+  | 'learnedLater'
   | 'outside';
 
 /** `apps/helm/users/{uid}/notes/{id}`: one piece of knowledge, in any number of topics or none. */
@@ -2074,12 +2079,58 @@ export interface Research {
   subject: string;
   overview: ResearchOverview | null;
   sources: { title: string; url: string; site: string }[];
+  /** Learn later: when the night pass may start it (the next 02:00 in the person's zone); null for any other mode and once it starts. */
+  prepareAt: number | null;
+  /** Learn later: the model's flag on the save; the web is searched only when true. */
+  needsLiveFacts: boolean;
+  /** Learn later: Not nows in a row; Show me and Keep it reset it to 0. */
+  notNowStreak: number;
+  declineReason: LearnDeclineReason | null;
+  /** Learn later: the day key Today last showed it, so it is offered once a day across devices. */
+  offeredOn: string | null;
+  /** Learn later: the last 10 offers, which `findLearnSlot` learns the person's evenings from. */
+  offers: LearnOffer[];
+  /** Learn later: another item's id to when this pair was last offered together (the 4-week line). */
+  relatedOfferedAt: Record<string, number>;
+  /** Learn later: set on the newer item when Together folds it into the older one; it is dismissed, never deleted, so Undo can bring it back. */
+  mergedInto: string | null;
+  videosFetchedAt: number | null;
+  /** Learn later: when the night pass last failed to prepare it; Today skips it that day. */
+  prepareFailedAt: number | null;
+  /** Learn later: the note Keep it filed. */
+  resultNoteId: string | null;
+  removedAt: number | null;
+  /** Learn later: the sealed `moreAsked`, `videos`, `searchQuery` and `contextLine` below. */
+  moreAsked: string[];
+  videos: ResearchVideo[];
+  searchQuery: string | null;
+  /** Where the wish came up, such as "while planning the Leavenworth drive"; at most 60 characters. */
+  contextLine: string | null;
+}
+
+export type LearnDeclineReason = 'timing' | 'lostInterest' | 'changedMind';
+
+export interface LearnOffer {
+  at: number;
+  dayKind: 'weekday' | 'weekend' | null;
+  gapMinutes: number | null;
+  afterBusyDay: boolean | null;
+  outcome: 'yes' | 'notNow';
+}
+
+export interface ResearchVideo {
+  videoId: string;
+  title: string;
+  channel: string;
+  durationSec: number;
 }
 
 export interface ResearchOverview {
   summary: string;
   sections: { heading: string; points: string[] }[];
   comparison: { columns: string[]; rows: string[][] } | null;
+  /** How a learn-later overview is drawn; null reads as points. */
+  form: 'comparison' | 'steps' | 'points' | null;
 }
 
 /** The sealed part of a research item. */
@@ -2088,6 +2139,13 @@ export interface ResearchSealed {
   subject: string;
   overview: ResearchOverview | null;
   sources: { title: string; url: string; site: string }[];
+  /** At most 5 entries of 300 characters. */
+  moreAsked: string[];
+  /** At most 2. */
+  videos: ResearchVideo[];
+  /** At most 100 characters. */
+  searchQuery: string | null;
+  contextLine: string | null;
 }
 
 export interface OpenResearch extends Research {

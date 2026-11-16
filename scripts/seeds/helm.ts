@@ -2229,7 +2229,7 @@ async function buildScheduled(input: { now: number; encryption: HelmEncryption }
   ]);
 }
 
-/** Two research items: a quick look still being made, and a thorough one that is done, with its overview, a comparison and three sources. */
+/** Two research items: a quick look still being made, and a thorough one that is done, with its overview, a comparison and three sources; then five saved to learn later (waiting for tonight, a comparison with two videos, steps, one put off twice, one the person lost interest in). */
 async function buildResearch(input: { now: number; encryption: HelmEncryption }) {
   const { now, encryption } = input;
   const base = {
@@ -2242,10 +2242,58 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
     rerunOn: null,
     cancelledAt: null,
     lastEditedAt: null,
+    prepareAt: null,
+    needsLiveFacts: false,
+    notNowStreak: 0,
+    declineReason: null,
+    offeredOn: null,
+    offers: [],
+    relatedOfferedAt: {},
+    mergedInto: null,
+    videosFetchedAt: null,
+    prepareFailedAt: null,
+    resultNoteId: null,
+    removedAt: null,
   };
-  const item = async (id: string, words: ResearchSealed, fields: Record<string, unknown>) => ({
+  const noLearn = { moreAsked: [], videos: [], searchQuery: null, contextLine: null };
+  const item = async (
+    id: string,
+    words: Omit<ResearchSealed, keyof typeof noLearn> & Partial<ResearchSealed>,
+    fields: Record<string, unknown>,
+  ) => ({
     id,
-    doc: { ...base, ...fields, sealed: await sealJson<ResearchSealed>(words, encryption) },
+    doc: {
+      ...base,
+      ...fields,
+      sealed: await sealJson<ResearchSealed>({ ...noLearn, ...words }, encryption),
+    },
+  });
+  const nov13 = now - 3 * DAY_MS;
+  const learn = (fields: Record<string, unknown>) => ({
+    mode: 'learnLater' as const,
+    depth: 'light' as const,
+    isWithoutWeb: true,
+    reservedCents: 0,
+    createdAt: nov13,
+    ...fields,
+  });
+  const video = (videoId: string, title: string, channel: string, durationSec: number) => ({
+    videoId,
+    title,
+    channel,
+    durationSec,
+  });
+  const learnWords = (
+    question: string,
+    subject: string,
+    fields: Partial<ResearchSealed>,
+  ): ResearchSealed => ({
+    question,
+    subject,
+    overview: null,
+    sources: [],
+    ...noLearn,
+    ...fields,
   });
   return Promise.all([
     item(
@@ -2298,6 +2346,7 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
               ['iRobot Roomba j7', '$500', 'Very good', 'Loud'],
             ],
           },
+          form: null,
         },
         sources: [
           {
@@ -2327,6 +2376,122 @@ async function buildResearch(input: { now: number; encryption: HelmEncryption })
         preparedAt: now - 2 * DAY_MS + 6 * 60_000,
         createdAt: now - 2 * DAY_MS,
       },
+    ),
+    item(
+      'seed-learn-engines',
+      learnWords('How do engines work?', 'how engines work', {
+        moreAsked: ['what an ICE engine is'],
+      }),
+      learn({ status: 'planned', prepareAt: now + 6 * 3_600_000, createdAt: now - DAY_MS }),
+    ),
+    item(
+      'seed-learn-awd',
+      learnWords('What is the difference between AWD and 4WD?', 'AWD vs 4WD', {
+        contextLine: 'while planning the Leavenworth drive',
+        searchQuery: 'AWD vs 4WD explained',
+        videos: [
+          video('M7lc1UVf-VE', 'AWD vs 4WD: what is the difference?', 'Car Explained', 540),
+          video('aqz-KE-bpKQ', 'How four-wheel drive works', 'Everyday Engineering', 780),
+        ],
+        overview: {
+          summary:
+            'All-wheel drive sends power to every wheel on its own and suits wet or icy roads; four-wheel drive is a driver-selected system built for rough ground and deep snow.',
+          sections: [
+            {
+              heading: 'Which one for a mountain pass',
+              points: [
+                'AWD is enough for plowed passes and rain.',
+                'Four-wheel drive earns its weight on unplowed or steep, loose roads.',
+                'Neither stops a car faster, so tires matter most.',
+              ],
+            },
+          ],
+          comparison: {
+            columns: ['', 'AWD', '4WD'],
+            rows: [
+              ['Switches on', 'Automatically', 'You choose'],
+              ['Best for', 'Wet and icy roads', 'Deep snow and off-road'],
+              ['On dry pavement', 'Fine all the time', 'Usually left off'],
+            ],
+          },
+          form: 'comparison',
+        },
+      }),
+      learn({
+        status: 'ready',
+        preparedAt: now - 2 * DAY_MS,
+        videosFetchedAt: now - 2 * DAY_MS,
+        startedAt: now - 2 * DAY_MS,
+      }),
+    ),
+    item(
+      'seed-learn-sourdough',
+      learnWords('How do sourdough starters work?', 'How sourdough starters work', {
+        overview: {
+          summary:
+            'A starter is flour and water that wild yeast and bacteria keep alive; you feed it on a rhythm and it lifts your bread.',
+          sections: [
+            {
+              heading: 'Getting one going',
+              points: [
+                'Mix equal weights of flour and water in a jar and cover it loosely.',
+                'Each day, keep a spoonful and feed it fresh flour and water.',
+                'After about a week it doubles within a few hours of feeding; that is when it is ready to bake with.',
+                'Keep it in the fridge and feed it weekly when you bake less.',
+              ],
+            },
+          ],
+          comparison: null,
+          form: 'steps',
+        },
+      }),
+      learn({
+        status: 'ready',
+        preparedAt: now - 2 * DAY_MS,
+        startedAt: now - 2 * DAY_MS,
+        createdAt: now - 4 * DAY_MS,
+      }),
+    ),
+    item(
+      'seed-learn-electric',
+      learnWords('How do electric cars work?', 'electric cars', {
+        overview: {
+          summary:
+            'An electric car stores energy in a battery pack and turns it into motion with one or two electric motors, with no gearbox to shift.',
+          sections: [
+            {
+              heading: 'The main parts',
+              points: [
+                'The battery pack holds the energy, and its size sets the range.',
+                'The motor turns it into movement and can run backwards to recover energy when you slow down.',
+              ],
+            },
+          ],
+          comparison: null,
+          form: 'points',
+        },
+      }),
+      learn({
+        status: 'ready',
+        notNowStreak: 2,
+        offers: [
+          { at: now - 2 * DAY_MS, dayKind: 'weekday', gapMinutes: 90, afterBusyDay: false, outcome: 'notNow' },
+          { at: now - DAY_MS, dayKind: 'weekday', gapMinutes: 75, afterBusyDay: false, outcome: 'notNow' },
+        ],
+        preparedAt: now - 5 * DAY_MS,
+        startedAt: now - 5 * DAY_MS,
+        createdAt: now - 6 * DAY_MS,
+      }),
+    ),
+    item(
+      'seed-learn-chess',
+      learnWords('What are the main chess openings?', 'chess openings', {}),
+      learn({
+        status: 'dismissed',
+        declineReason: 'lostInterest',
+        removedAt: now - 5 * DAY_MS,
+        createdAt: now - 20 * DAY_MS,
+      }),
     ),
   ]);
 }

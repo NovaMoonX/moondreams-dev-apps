@@ -26,6 +26,7 @@ const SOURCES: readonly NoteSource[] = [
   'savedAnswer',
   'importedFile',
   'assistantDraft',
+  'learnedLater',
   'outside',
 ];
 

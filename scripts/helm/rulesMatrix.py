@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, and one value's shape (a profile's theme is absent, null or a palette Helm ships; its voice name is absent, null or at most 32 characters, and its speed absent, null or 0.8 to 1.2): only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner and deleted by it only once it is older than 396 days, a profile's learning switch is absent or a true or false, observations, reflections and scheduled actions are the owner's like a task, a research item is read by its owner who may only stop it while it is asking or preparing (dismissed, with when) and never creates, deletes or changes any other field, the nightly pass's run records are for the Admin SDK alone, and no other path under apps/helm is open to a client (the reminder planner's and the scheduled actions' queues included). A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner and deleted by it only once it is older than 396 days, a profile's learning switch is absent or a true or false, observations, reflections and scheduled actions are the owner's like a task, a research item is read by its owner who may only stop it while it is asking or preparing (dismissed, with when) and never creates or deletes it; a learn-later item also takes the owner's answers once it is ready (status, not-now count and offers, decline reason, merge and note links, removal and its sealed words) but never what the server runs (allowance, start, preparation time, videos), the nightly pass's run records are for the Admin SDK alone, and no other path under apps/helm is open to a client (the reminder planner's and the scheduled actions' queues included). A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -264,6 +264,39 @@ def main():
         check(f'research update sealed [{a}]', commit(tok, [put(rk, dict(research, status='dismissed', sealed=dict(SEAL, value='y')))]), False)
         check(f'research update rerunOn [{a}]', commit(tok, [put(rk, dict(research, status='dismissed', rerunOn=NOW))]), False)
         check(f'research delete [{a}]', commit(tok, [rm(rk)]), False)
+    # A learn-later item is also the owner's to answer once it is ready (not now, show me, keep it, done with it, remove it, Undo, a reseal); what the server runs stays out of reach, and nothing changes while it is preparing.
+    learn = dict(research, mode='learnLater', status='ready', reservedCents=0, preparedAt=NOW, prepareAt=None, needsLiveFacts=False, notNowStreak=0, declineReason=None, offeredOn=None, offers=[], relatedOfferedAt={}, mergedInto=None, videosFetchedAt=None, prepareFailedAt=None, resultNoteId=None, removedAt=None)
+    offer = lambda n: dict(at=NOW, dayKind='weekday', gapMinutes=60, afterBusyDay=False, outcome='notNow')
+    for a, tok in actors.items():
+        admin([put(rk, learn)])
+        check(f'learn later offered [{a}]', commit(tok, [put(rk, dict(learn, status='offered', offeredOn='2030-01-01'))]), a == 'o')
+        check(f'learn later not now [{a}]', commit(tok, [put(rk, dict(learn, notNowStreak=1, offers=[offer(0)]))]), a == 'o')
+        check(f'learn later done with a note [{a}]', commit(tok, [put(rk, dict(learn, status='done', resultNoteId='note-1', lastEditedAt=NOW))]), a == 'o')
+        check(f'learn later removed [{a}]', commit(tok, [put(rk, dict(learn, status='dismissed', declineReason='lostInterest', removedAt=NOW))]), a == 'o')
+        check(f'learn later reseal [{a}]', commit(tok, [put(rk, dict(learn, sealed=dict(SEAL, value='y')))]), a == 'o')
+        check(f'learn later merged [{a}]', commit(tok, [put(rk, dict(learn, status='dismissed', mergedInto='research-2'))]), a == 'o')
+        check(f'learn later back to planned [{a}]', commit(tok, [put(rk, dict(learn, status='planned'))]), a == 'o')
+        admin([put(rk, dict(learn, status='dismissed', declineReason='lostInterest', removedAt=NOW))])
+        check(f'learn later undo a remove [{a}]', commit(tok, [put(rk, dict(learn, declineReason=None, removedAt=None))]), a == 'o')
+        admin([put(rk, learn)])
+        for field, value in (('reservedCents', 5), ('costCents', 5), ('depth', 'thorough'), ('startedAt', NOW), ('preparedAt', NOW + 1), ('prepareAt', NOW), ('rerunOn', NOW), ('videosFetchedAt', NOW), ('isWithoutWeb', True), ('searchesUsed', 3), ('prepareFailedAt', NOW), ('createdAt', NOW + 1)):
+            check(f'learn later server field {field} [{a}]', commit(tok, [put(rk, dict(learn, **{field: value}))]), False)
+        check(f'learn later mode [{a}]', commit(tok, [put(rk, dict(learn, mode='asked'))]), False)
+        check(f'learn later status preparing set by the client [{a}]', commit(tok, [put(rk, dict(learn, status='preparing'))]), False)
+        check(f'learn later status asking [{a}]', commit(tok, [put(rk, dict(learn, status='asking'))]), False)
+        check(f'learn later offers longer than 10 [{a}]', commit(tok, [put(rk, dict(learn, offers=[offer(i) for i in range(11)]))]), False)
+        check(f'learn later offers of 10 [{a}]', commit(tok, [put(rk, dict(learn, offers=[offer(i) for i in range(10)]))]), a == 'o')
+        check(f'learn later notNowStreak 11 [{a}]', commit(tok, [put(rk, dict(learn, notNowStreak=11))]), False)
+        check(f'learn later notNowStreak negative [{a}]', commit(tok, [put(rk, dict(learn, notNowStreak=-1))]), False)
+        check(f'learn later a decline reason that is not one [{a}]', commit(tok, [put(rk, dict(learn, declineReason='bored'))]), False)
+        check(f'learn later create [{a}]', commit(tok, [put_new(rk + '-learn-' + a, learn)]), False)
+        check(f'learn later delete [{a}]', commit(tok, [rm(rk)]), False)
+        admin([put(rk, dict(learn, status='preparing', startedAt=NOW))])
+        check(f'learn later change while preparing [{a}]', commit(tok, [put(rk, dict(learn, status='preparing', startedAt=NOW, notNowStreak=1))]), False)
+        check(f'learn later remove while preparing [{a}]', commit(tok, [put(rk, dict(learn, status='dismissed', startedAt=NOW, removedAt=NOW))]), False)
+        check(f'learn later stop while preparing [{a}]', commit(tok, [put(rk, dict(learn, status='dismissed', startedAt=NOW, cancelledAt=NOW, lastEditedAt=NOW))]), a == 'o')
+        admin([put(rk, dict(research, status='ready', reservedCents=0, preparedAt=NOW))])
+        check(f'learn later rules leave an asked item alone [{a}]', commit(tok, [put(rk, dict(research, status='ready', reservedCents=0, preparedAt=NOW, notNowStreak=1))]), False)
     check('research read at another uid [o]', get(f'apps/helm/users/{x_uid}/research/r', o_tok), False)
 
     # A who, a place, a project, a note, a topic, a habit, a habit day, a pattern, an observation, a reflection and a connection are the owner's alone, like a task.

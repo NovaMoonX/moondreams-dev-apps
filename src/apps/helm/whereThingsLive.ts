@@ -298,23 +298,49 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     ],
     jobFields: [
       {
-        field: 'lastRunAt, lastRunDueAt, lastRunCaptureId, lastOutcome, lastFailReason, nextRunAt, nextRunKey, runNowAt, status and endedBy once the rule has finished',
+        field:
+          'lastRunAt, lastRunDueAt, lastRunCaptureId, lastOutcome, lastFailReason, nextRunAt, nextRunKey, runNowAt, status and endedBy once the rule has finished',
         job: 'runHelmScheduledActions',
       },
     ],
   }),
   row({
-    thing: 'Research the person asked for, looked up on the web',
+    thing: 'Research the person asked for, and questions saved to learn later',
     home: 'research',
     classes: ['readable', 'sealed'],
-    readers: ['device', 'server'],
-    commands: ['research'],
-    writer: 'actions/researchActions',
-    taps: ['cancelResearch'],
+    readers: ['device', 'server', 'turn'],
+    contextBlock: '<learn_later>',
+    commands: [
+      'research',
+      'saveForLater',
+      'declineLearn',
+      'relatedLearn',
+      'offerLearnGoal',
+    ],
+    writer: 'actions/learnLaterActions',
+    taps: [
+      'cancelResearch',
+      'notNowLearn',
+      'showLearn',
+      'keepLearn',
+      'doneLearn',
+      'removeLearn',
+      'keepStillLearn',
+    ],
     jobFields: [
       {
         field:
           'status, startedAt, preparedAt, reservedCents, searchesUsed, costCents, rerunOn once the person said yes, and the sealed overview and sources',
+        job: 'runHelmResearch',
+      },
+      {
+        field:
+          'prepareAt to the night it is prepared, status preparing from planned, and back to planned with prepareFailedAt when preparing fails',
+        job: 'rerunHelmResearch',
+      },
+      {
+        field:
+          'the sealed videos and searchQuery, and videosFetchedAt, which a month-old lookup refreshes',
         job: 'runHelmResearch',
       },
     ],

@@ -17,7 +17,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Runs of a procedure: look in <open_runs>; change it with startRun or tickRun.
 - Habits, with their cadence and windows: look in <habits>; change it with createHabit, updateHabit or setCare.
 - Scheduled actions, what the assistant does at set times: look in <scheduled_actions>; change it with scheduleAction or changeScheduledAction.
-- Research the person asked for, looked up on the web: change it with research.
+- Research the person asked for, and questions saved to learn later: look in <learn_later>; change it with research, saveForLater, declineLearn, relatedLearn or offerLearnGoal.
 - What matters most: the order of projects, goals and habits: look in <importance>; change it with setImportance.
 - A habit ticked, skipped or counted by a sentence: change it with checkIn.
 - What the app has noticed, and what the person said about it: look in <noticed>; you cannot change it.
@@ -91,7 +91,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 - Runs of a procedure: look in <open_runs>; change it with startRun or tickRun.
 - Habits, with their cadence and windows: look in <habits>; change it with createHabit, updateHabit or setCare.
 - Scheduled actions, what the assistant does at set times: look in <scheduled_actions>; change it with scheduleAction or changeScheduledAction.
-- Research the person asked for, looked up on the web: change it with research.
+- Research the person asked for, and questions saved to learn later: look in <learn_later>; change it with research, saveForLater, declineLearn, relatedLearn or offerLearnGoal.
 - What matters most: the order of projects, goals and habits: look in <importance>; change it with setImportance.
 - A habit ticked, skipped or counted by a sentence: change it with checkIn.
 - What the app has noticed, and what the person said about it: look in <noticed>; you cannot change it.

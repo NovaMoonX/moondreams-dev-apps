@@ -290,7 +290,7 @@ service cloud.firestore {
         && (request.resource.data.staleAt == null || request.resource.data.staleAt is int);
     }
 
-    // A research item is made, run and settled by the server; the owner reads it and may only stop it while it is asking or preparing (status to dismissed, with when) so the server gives back what it held.
+    // A research item is made, run and settled by the server; the owner reads it and may only stop it while it is asking or preparing (status to dismissed, with when) so the server gives back what it held. A learn-later item also takes the owner's answers (see below).
     match /apps/helm/users/{uid}/research/{researchId} {
       allow read: if isHelmOwner(uid);
       allow update: if isHelmOwner(uid)
@@ -298,6 +298,25 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'lastEditedAt'])
         && request.resource.data.status == 'dismissed'
         && (request.resource.data.cancelledAt == null || request.resource.data.cancelledAt is int)
+        && (request.resource.data.lastEditedAt == null || request.resource.data.lastEditedAt is int);
+      // A learn-later item is also the owner's to answer once the server has prepared it: not now, show me, keep it, done with it, remove it and Undo of each, and a reseal when Undo of a merge or an edit restores the words. What the server runs (the allowance, the start, the video lookup, when to prepare) stays out of reach, and nothing changes while it is being prepared.
+      allow update: if isHelmOwner(uid)
+        && resource.data.mode == 'learnLater'
+        && resource.data.status != 'preparing'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'notNowStreak', 'declineReason', 'offeredOn', 'offers', 'relatedOfferedAt', 'mergedInto', 'resultNoteId', 'removedAt', 'sealed', 'lastEditedAt'])
+        && request.resource.data.status in ['planned', 'ready', 'offered', 'done', 'dismissed']
+        && request.resource.data.notNowStreak is int
+        && request.resource.data.notNowStreak >= 0
+        && request.resource.data.notNowStreak <= 10
+        && (request.resource.data.declineReason == null || request.resource.data.declineReason in ['timing', 'lostInterest', 'changedMind'])
+        && (request.resource.data.offeredOn == null || request.resource.data.offeredOn is string)
+        && request.resource.data.offers is list
+        && request.resource.data.offers.size() <= 10
+        && request.resource.data.relatedOfferedAt is map
+        && (request.resource.data.mergedInto == null || request.resource.data.mergedInto is string)
+        && (request.resource.data.resultNoteId == null || request.resource.data.resultNoteId is string)
+        && (request.resource.data.removedAt == null || request.resource.data.removedAt is int)
+        && request.resource.data.sealed is map
         && (request.resource.data.lastEditedAt == null || request.resource.data.lastEditedAt is int);
     }
 
