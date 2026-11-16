@@ -3664,6 +3664,8 @@ export const HELM_COPY = {
   lockScreenNameVoiceHidden: (name: string) =>
     `Done. ${name} is hidden on the lock screen again.`,
   lockScreenNameVoiceKept: 'Okay, it stays hidden.',
+  lockScreenNameConfirmOnScreen:
+    'That one is private, so tap Show it on the screen to put its name on the lock screen.',
   settingsOnItsOwn: (name: string) => `${name} on its own`,
   habitRemindersTitle: 'Habit reminders',
   habitRemindersOnFor: (count: number) =>

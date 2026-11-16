@@ -532,6 +532,11 @@ export function useHelmVoice() {
           now,
           timeZone: helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
         });
+        if (answer.kind === 'write' && isQuiet && entry.habit.isPrivate) {
+          nameAsk.current = pending;
+          show(HELM_COPY.lockScreenNameConfirmOnScreen, 'info');
+          return true;
+        }
         if (answer.kind === 'write') {
           write(entry, true, toNameLine(answer, entry.habit, isQuiet));
           return true;
