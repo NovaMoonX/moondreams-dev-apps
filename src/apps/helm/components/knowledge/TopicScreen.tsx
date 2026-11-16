@@ -24,6 +24,7 @@ import TopicRow from '@apps/helm/components/knowledge/TopicRow';
 import TopicVersionsSheet from '@apps/helm/components/knowledge/TopicVersionsSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { CLAIM_MS, HELM_COPY } from '@apps/helm/constants';
+import { useCaptureById } from '@apps/helm/hooks/useCaptureById';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { useTopicVersions } from '@apps/helm/hooks/useTopicVersions';
 import {
@@ -40,10 +41,13 @@ import {
 } from '@apps/helm/store/actions/topicActions';
 import {
   selectAllTopics,
+  selectNoteById,
   selectNotesByTopic,
   selectSubtopicsByParent,
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
+import type { TopicSource } from '@apps/helm/types';
+import { outsideVias } from '@apps/helm/utils/outsideAttribution';
 import {
   createRefusal,
   legalParents,
@@ -52,7 +56,28 @@ import {
 } from '@apps/helm/utils/topicTree';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
+import OutsideMark from '@apps/helm/components/outside/OutsideMark';
+
 const { option } = DropdownMenuFactories;
+
+/** The door's label: the outside assistants behind a part by mark and name, or where it came from when none is. */
+function OutsideFrom({ sources }: { sources: TopicSource[] }) {
+  const noteById = useAppSelector(selectNoteById);
+  const captureById = useCaptureById();
+  const vias = outsideVias(sources, noteById, captureById);
+  return (
+    <>
+      {vias.map((via) => (
+        <OutsideMark key={via} via={via} isSmall />
+      ))}
+      <span className='truncate'>
+        {vias.length === 0
+          ? HELM_COPY.sourcesTitle
+          : HELM_COPY.assistantFrom(vias.join(', '))}
+      </span>
+    </>
+  );
+}
 
 const HEADING_CLASS = {
   1: 'helm-serif text-[22px] leading-[28px]',
@@ -141,6 +166,30 @@ function TopicScreen({
 
   const { versions: newestVersions } = useTopicVersions(topic?.id ?? null, 1);
   const newest = newestVersions?.[0] ?? null;
+  const noteById = useAppSelector(selectNoteById);
+  const captureById = useCaptureById();
+  const newestVia = newest
+    ? (outsideVias(
+        [
+          ...newest.noteIds.map((noteId) => ({
+            kind: 'note' as const,
+            noteId,
+          })),
+          ...(newest.sourceCaptureId
+            ? [
+                {
+                  kind: 'message' as const,
+                  captureId: newest.sourceCaptureId,
+                  at: newest.createdAt,
+                  noteId: null,
+                },
+              ]
+            : []),
+        ],
+        noteById,
+        captureById,
+      )[0] ?? null)
+    : null;
   const historyLine =
     topic && newest && newest.version === topic.version
       ? HELM_COPY.topicHistoryLine(
@@ -405,10 +454,15 @@ function TopicScreen({
                   type='button'
                   variant='tertiary'
                   size='sm'
-                  className="text-muted-foreground relative block h-auto max-w-full min-w-0 px-0! py-0! text-left text-[13px] font-normal before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                  className="text-muted-foreground relative flex h-auto max-w-full min-w-0 justify-start px-0! py-0! text-left text-[13px] font-normal before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
                   onClick={() => setIsHistoryOpen(true)}
                 >
-                  <span className='block truncate'>{historyLine}</span>
+                  <span className='min-w-0 truncate'>{historyLine}</span>
+                  {newestVia && (
+                    <span className='shrink-0 whitespace-pre'>
+                      {` · ${HELM_COPY.assistantFrom(newestVia)}`}
+                    </span>
+                  )}
                 </Button>
               )}
             </div>
@@ -481,14 +535,17 @@ function TopicScreen({
                   variant='tertiary'
                   size='sm'
                   aria-label={HELM_COPY.topicSectionOpen(section.heading)}
-                  className="text-muted-foreground relative -ml-2 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+                  className="text-muted-foreground relative -ml-2 max-w-full after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
                   onClick={(event) => {
                     event.stopPropagation();
                     setSourcesId(section.id);
                   }}
                 >
-                  {HELM_COPY.sourcesTitle}
-                  <ChevronRight className='size-3.5' aria-hidden='true' />
+                  <OutsideFrom sources={section.sources} />
+                  <ChevronRight
+                    className='size-3.5 shrink-0'
+                    aria-hidden='true'
+                  />
                 </Button>
               </section>
             ))}

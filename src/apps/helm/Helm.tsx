@@ -12,6 +12,7 @@ import AskConversation from '@apps/helm/components/shell/AskConversation';
 import BrowseSheet from '@apps/helm/components/shell/BrowseSheet';
 import HelmShell from '@apps/helm/components/shell/HelmShell';
 import VoiceDock from '@apps/helm/components/shell/VoiceDock';
+import LiveConversation from '@apps/helm/components/voice/LiveConversation';
 import GoogleConnectProvider from '@apps/helm/components/connections/GoogleConnectProvider';
 import ConnectedAssistantsScreen from '@apps/helm/components/settings/ConnectedAssistantsScreen';
 import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedAppsScreen';
@@ -317,6 +318,7 @@ function HelmApp() {
         {isAskRequested && !isLocked && screen && (
           <AskConversation entry={screen} onClose={() => void closeAsk()} />
         )}
+        {voice.isLive && <LiveConversation />}
         <BrowseSheet
           isOpen={isBrowseOpen && isHome && !isLocked}
           onClose={closeBrowse}
