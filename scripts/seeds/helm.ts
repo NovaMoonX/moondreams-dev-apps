@@ -255,13 +255,14 @@ const SEED_TASKS: Record<number, { title: string; dueWords: string | null }[]> =
       { title: 'Book the hair trial', dueWords: null },
       { title: 'Send the save-the-dates', dueWords: 'Saturday' },
     ],
+    9: [{ title: "Book the anniversary dinner at Lucia's", dueWords: null }],
   };
 
 /** The turns that were spoken; their line is the one the server would seal for them. */
-const SEED_VOICE_TURNS = new Set([1, 2, 3]);
+const SEED_VOICE_TURNS = new Set([1, 2, 3, 9]);
 
-/** The task the person kept quiet: it shows on screen, and the spoken turn that made it was held behind "Say it aloud this time". */
-const QUIET_TASK_ID = 'seed-task-4-1';
+/** The tasks the person kept quiet: they show on screen, and the spoken turns that made them were held behind "Say it aloud this time" (the newest is the latest answer, so it shows the button). */
+const QUIET_TASK_IDS = new Set(['seed-task-4-1', 'seed-task-10-1']);
 
 /** The turn whose two tasks were taken back: the first is deleted, the second kept because its day was moved to Sunday afterwards. */
 const UNDONE_TURN = 4;
@@ -354,9 +355,20 @@ const SEED_HELD_TURNS = [
   },
 ] as const;
 
+/** The newest turn: a spoken plan the person kept quiet, so the latest answer shows Say it aloud this time. */
+const SEED_LATE_TURNS = [
+  {
+    session: 'today',
+    minutesAgo: 0.5,
+    text: "Book the anniversary dinner at Lucia's, and don't let Sam hear about it",
+    isSeen: false,
+  },
+] as const;
+
 const ALL_TURNS = [
   ...SEED_TURNS.map((turn) => ({ ...turn, held: null as SeedHold })),
   ...SEED_HELD_TURNS.map((turn) => ({ ...turn, held: turn.held as SeedHold })),
+  ...SEED_LATE_TURNS.map((turn) => ({ ...turn, held: null as SeedHold })),
 ];
 
 const toHeldFields = (
@@ -5269,7 +5281,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             const tasks = await Promise.all(
               sortedTasks.map(async ({ id, title, due }) => {
                 const task: Task = {
-                  privacy: id === QUIET_TASK_ID ? 'private' : 'ordinary',
+                  privacy: QUIET_TASK_IDS.has(id) ? 'private' : 'ordinary',
                   status: 'open',
                   importance: null,
                   isUrgent: false,
@@ -5298,9 +5310,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       title,
                       notes: null,
                       steps: {},
-                      privateMark: id === QUIET_TASK_ID ? 'person' : null,
+                      privateMark: QUIET_TASK_IDS.has(id) ? 'person' : null,
                       isPrivacyCleared: false,
-                      quietMark: id === QUIET_TASK_ID ? 'person' : null,
+                      quietMark: QUIET_TASK_IDS.has(id) ? 'person' : null,
                       quietUntil: null,
                       isQuietCleared: false,
                     },
@@ -5355,7 +5367,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       undoReport: null,
                       ...holdQuietSpoken(
                         spoken ?? null,
-                        sortedTasks.some(({ id }) => id === QUIET_TASK_ID),
+                        sortedTasks.some(({ id }) => QUIET_TASK_IDS.has(id)),
                       ),
                       goneIds: null,
                       lines: [],
