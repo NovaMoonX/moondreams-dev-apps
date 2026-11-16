@@ -326,13 +326,13 @@ function toAmcDate(isoDate: string) {
   return `${month}-${day}-${year}`;
 }
 
+// "Laser at AMC" tags most ordinary showings at some theaters and is priced as Standard, so it never makes a showing premium.
 const FORMAT_KEYWORDS: Array<[string, AmcFormat]> = [
   ['imax', 'IMAX'],
   ['dolby', 'DOLBY_CINEMA'],
   ['prime', 'PRIME'],
   ['reald', 'REALD_3D'],
   ['3d', 'REALD_3D'],
-  ['laser', 'LASER'],
 ];
 
 function toFormat(showtime: AmcShowtime): AmcFormat {
