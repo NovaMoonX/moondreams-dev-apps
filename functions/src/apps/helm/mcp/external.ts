@@ -502,7 +502,7 @@ async function saveTurn({
                 },
               }
             : null,
-        newTopic: topicId ? null : (input.newTopic ?? null),
+        newTopic: opened ? null : (input.newTopic ?? null),
         noteCount: notes.data().count,
         topicCount: topics.data().count,
         via: ctx.clientName,

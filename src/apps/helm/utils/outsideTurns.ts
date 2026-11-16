@@ -55,19 +55,25 @@ export interface OutsideAdditions {
   title: string | null;
 }
 
-/** A filed note also marks its topic behind; the topic is not a second thing the assistant changed. */
-const changedRefs = (execution: OpenExecution) =>
-  execution.effectRefs.filter(
-    (ref) =>
-      ref.op === 'create' ||
-      (ref.op === 'update' &&
-        !(
-          ref.collection === 'topics' &&
-          execution.effectRefs.some(
-            (other) => other.op === 'create' && other.collection === 'notes',
-          )
-        )),
+/** A saved note is the one thing: the topic it was filed under or started is not counted again, and a record touched twice counts once. */
+const changedRefs = (execution: OpenExecution) => {
+  const savedNote = execution.effectRefs.some(
+    (ref) => ref.op === 'create' && ref.collection === 'notes',
   );
+  return execution.effectRefs
+    .filter(
+      (ref) =>
+        (ref.op === 'create' || ref.op === 'update') &&
+        !(savedNote && ref.collection === 'topics'),
+    )
+    .filter(
+      (ref, index, all) =>
+        all.findIndex(
+          (other) =>
+            other.collection === ref.collection && other.docId === ref.docId,
+        ) === index,
+    );
+};
 
 /** What outside assistants made or changed since `since`; an answer, a failed or undone turn, and an execution not loaded yet count for nothing. */
 export function readOutsideAdditions(

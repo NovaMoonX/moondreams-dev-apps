@@ -59,21 +59,22 @@ import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 
 const { option } = DropdownMenuFactories;
 
-/** The outside assistants behind a part, by mark and name, inside the door to where it came from. */
+/** The door's label: the outside assistants behind a part by mark and name, or where it came from when none is. */
 function OutsideFrom({ sources }: { sources: TopicSource[] }) {
   const noteById = useAppSelector(selectNoteById);
   const captureById = useCaptureById();
   const vias = outsideVias(sources, noteById, captureById);
-  return vias.length === 0 ? null : (
-    <span className='flex min-w-0 items-center gap-1.5'>
-      <span aria-hidden='true'>·</span>
+  return (
+    <>
       {vias.map((via) => (
         <OutsideMark key={via} via={via} isSmall />
       ))}
       <span className='truncate'>
-        {HELM_COPY.assistantFrom(vias.join(', '))}
+        {vias.length === 0
+          ? HELM_COPY.sourcesTitle
+          : HELM_COPY.assistantFrom(vias.join(', '))}
       </span>
-    </span>
+    </>
   );
 }
 
@@ -164,12 +165,39 @@ function TopicScreen({
 
   const { versions: newestVersions } = useTopicVersions(topic?.id ?? null, 1);
   const newest = newestVersions?.[0] ?? null;
+  const noteById = useAppSelector(selectNoteById);
+  const captureById = useCaptureById();
+  const newestVia = newest
+    ? (outsideVias(
+        [
+          ...newest.noteIds.map((noteId) => ({
+            kind: 'note' as const,
+            noteId,
+          })),
+          ...(newest.sourceCaptureId
+            ? [
+                {
+                  kind: 'message' as const,
+                  captureId: newest.sourceCaptureId,
+                  at: newest.createdAt,
+                  noteId: null,
+                },
+              ]
+            : []),
+        ],
+        noteById,
+        captureById,
+      )[0] ?? null)
+    : null;
   const historyLine =
     topic && newest && newest.version === topic.version
-      ? HELM_COPY.topicHistoryLine(
-          formatDateShort(newest.createdAt),
-          newest.changeSummary || HELM_COPY.historyReason(newest.reason),
-        )
+      ? [
+          HELM_COPY.topicHistoryLine(
+            formatDateShort(newest.createdAt),
+            newest.changeSummary || HELM_COPY.historyReason(newest.reason),
+          ),
+          ...(newestVia ? [HELM_COPY.assistantFrom(newestVia)] : []),
+        ].join(' · ')
       : null;
 
   const now = useNow(15_000);
@@ -510,7 +538,6 @@ function TopicScreen({
                     setSourcesId(section.id);
                   }}
                 >
-                  <span className='shrink-0'>{HELM_COPY.sourcesTitle}</span>
                   <OutsideFrom sources={section.sources} />
                   <ChevronRight
                     className='size-3.5 shrink-0'

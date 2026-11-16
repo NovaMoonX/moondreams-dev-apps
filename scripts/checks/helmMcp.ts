@@ -644,6 +644,9 @@ const executionOf = (
 ): [string, OpenExecution] => [id, { ...asExecution(onTopic), id, ...over }];
 const executions = new Map<string, OpenExecution>([
   executionOf('saved', {}),
+  executionOf('started', {
+    effectRefs: fresh.effectRefs as OpenExecution['effectRefs'],
+  }),
   executionOf('answer', { category: 'answer', effectRefs: [] }),
   executionOf('failed', { state: 'failed' }),
   executionOf('undone', { undoneByExecutionId: 'u9' }),
@@ -663,6 +666,15 @@ const additions = readOutsideAdditions(
 assert.equal(additions.count, 1);
 assert.equal(additions.isAllNew, true);
 assert.equal(additions.title, 'Timing belt schedule');
+assert.equal(
+  readOutsideAdditions(
+    [turnWith('t6', ['started'])],
+    1000,
+    executions,
+    () => 'Car batteries note',
+  ).title,
+  'Car batteries note',
+);
 assert.equal(
   readOutsideAdditions(
     [turnWith('t2', ['answer'])],

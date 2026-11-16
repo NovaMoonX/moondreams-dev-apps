@@ -88,14 +88,15 @@ function OutsideScreen({
   );
   const { user } = useAuth();
   const uid = user?.uid ?? null;
+  const [openedAt] = useState(() => Date.now());
   useEffect(() => {
     if (uid === null) return;
     return () => {
-      setOutsideSeenAt(uid, Date.now()).catch((error: unknown) =>
+      setOutsideSeenAt(uid, openedAt).catch((error: unknown) =>
         console.error('Helm outside view not marked looked at', error),
       );
     };
-  }, [uid]);
+  }, [uid, openedAt]);
   const [search, setSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const conversations = useMemo(
