@@ -88,6 +88,8 @@ source scripts/lib/firebaseLogin.sh; require_firebase_login
 
 [[ "${1:-}" == "--restart" ]] && rm -rf "$PROGRESS_FILE" "$SETUP_STATE_DIR"
 START=${from:-$(( $(confirmed_step) + 1 ))}
+# --from N redoes N, so the resource addresses a redone step 3 covered are forgotten and walked again.
+[[ -n "$from" ]] && (( from <= 3 )) && rm -f "$SETUP_STATE_DIR/resources"
 echo "Assistant sign-in runs on WorkOS AuthKit (free up to 1 million monthly users)."
 # A saved domain means the dashboard was set up on an earlier run, perhaps on another machine, so it is asked about once instead of walked.
 if [[ -z "$from" ]] && (( START == 1 )) && secret_saved WORKOS_AUTHKIT_DOMAIN; then
@@ -116,7 +118,7 @@ if start_step 2 "the Connect configuration"; then
   echo "     - Client ID Metadata Document: on   (Claude uses this)"
   echo "     - Dynamic Client Registration: on   (Gemini uses this)"
   echo "     - Login URI: $LOGIN_URI"
-  if ask_yes "   Are those three already saved?"; then
+  if [[ -z "$from" ]] && ask_yes "   Are those three already saved?"; then
     echo "   ✓ Noted; this step won't be asked again."
   else
     pause "   Press Enter when those three are saved. "
@@ -135,7 +137,7 @@ if (( ${#new_resources[@]} == 0 )); then
 else
   echo "3. On the same Connect page, find Resource Indicators. It needs these addresses:"
   for resource in "${new_resources[@]}"; do echo "     - $resource"; done
-  if has_record resources || ! ask_yes "   Are they all already added?"; then
+  if has_record resources || [[ -n "$from" ]] || ! ask_yes "   Are they all already added?"; then
     has_record resources || { echo "   Then open the ⋯ menu beside ${RESOURCES[0]} and choose Set as default"; echo "   (for assistants that don't say which server they want)."; }
     pause "   Press Enter when they're added. "
   fi

@@ -71,6 +71,11 @@ trap 'status=$?; (( status == 0 )) || { echo "✗ Stopped at step $CURRENT_STEP:
 [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can confirm each step." >&2; exit 1; }
 [[ "${1:-}" == "--restart" ]] && rm -rf "$SETUP_STATE_DIR"
 START=${from:-$(( $(confirmed_step) + 1 ))}
+# --from N redoes N, so the lists a redone step covered are forgotten and walked again.
+if [[ -n "$from" ]]; then
+  (( from <= 3 )) && rm -f "$SETUP_STATE_DIR/scopes"
+  (( from <= 4 )) && rm -f "$SETUP_STATE_DIR/origins" "$SETUP_STATE_DIR/redirects"
+fi
 if (( START > LAST_STEP )); then
   echo "Every console step was confirmed on an earlier run; checking for anything added since. To redo a step: npm run connections:google-setup -- --from <step>"
 elif (( START > 1 )); then
@@ -103,7 +108,7 @@ if start_step 2 "the consent screen"; then
   echo "     - User type: External (created once for the whole project)."
   echo "     - Audience: \"In production\" (click \"Publish app\", then \"Confirm\" if it says Testing). Testing would block every app's"
   echo "       Google sign-in for anyone not on the test-user list, and expire Gmail and Calendar connections after 7 days."
-  if ask_yes "   Is the consent screen already External and In production?"; then
+  if [[ -z "$from" ]] && ask_yes "   Is the consent screen already External and In production?"; then
     echo "   ✓ Noted; this step won't be asked again."
   else
     pause "   Open the page, set those two, then press Enter. "
@@ -125,7 +130,7 @@ else
     echo "3. The consent screen needs these scopes (Google identifies each permission by its URL; all are read-only):"
     printf '     %s\n' "${new_scopes[@]}"
   fi
-  if ! has_record scopes && ask_yes "   Are all of these already in the consent screen's Data access table?"; then
+  if ! has_record scopes && [[ -z "$from" ]] && ask_yes "   Are all of these already in the consent screen's Data access table?"; then
     echo "   ✓ Noted; only scopes added later will be asked for."
   else
     echo "   Open $CONSENT_PAGE, then Data access, \"Add or remove scopes\", paste into \"Manually add scopes\","
@@ -142,20 +147,20 @@ CURRENT_STEP=4
 CURRENT="the OAuth client"
 echo
 # A client saved by step 5 was made with the addresses this script listed then, so it counts for them on a first run here.
-if client_saved && ! has_record origins; then record origins "${ORIGINS[@]}"; record redirects "${REDIRECTS[@]}"; fi
+if [[ -z "$from" ]] && client_saved && ! has_record origins; then record origins "${ORIGINS[@]}"; record redirects "${REDIRECTS[@]}"; fi
 new_origins=(); while IFS= read -r line; do new_origins+=("$line"); done < <(missing_from origins "${ORIGINS[@]}")
 new_redirects=(); while IFS= read -r line; do new_redirects+=("$line"); done < <(missing_from redirects "${REDIRECTS[@]}")
-if client_saved && (( ${#new_origins[@]} + ${#new_redirects[@]} == 0 )); then
+if client_saved && [[ -z "$from" ]] && (( ${#new_origins[@]} + ${#new_redirects[@]} == 0 )); then
   echo "4. ✓ The Web OAuth client exists ($SECRET is saved) and has every address."
 elif client_saved; then
-  echo "4. The Web OAuth client needs address(es) added since your last run. Open $CREDENTIALS_PAGE, open the Web client, add these and Save:"
+  echo "4. Check the Web OAuth client has these address(es). Open $CREDENTIALS_PAGE, open the Web client, add these and Save:"
   (( ${#new_origins[@]} )) && copy_each "Authorized JavaScript origins (Add URI)" "$(printf '%s\n' "${new_origins[@]}")"
   (( ${#new_redirects[@]} )) && copy_each "Authorized redirect URIs (Add URI)" "$(printf '%s\n' "${new_redirects[@]}")"
   record origins "${ORIGINS[@]}"; record redirects "${REDIRECTS[@]}"
 elif (( START > 4 )); then
   echo "4. ✓ The Web OAuth client was made on an earlier run; step 5 saves its ID and secret."
 else
-  if ask_yes "4. Is there already a Web OAuth client with these addresses: ${ORIGINS[*]} and ${REDIRECTS[*]}?"; then
+  if [[ -z "$from" ]] && ask_yes "4. Is there already a Web OAuth client with these addresses: ${ORIGINS[*]} and ${REDIRECTS[*]}?"; then
     echo "   ✓ Noted; step 5 saves its ID and secret."
   else
     echo "4. Open $CREDENTIALS_PAGE, then Create credentials, OAuth client ID, and choose Application type: Web application."
