@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Ban, CalendarDays, Pause, PauseCircle, Undo2 } from 'lucide-react';
+import { Ban, CalendarDays, Pause, Undo2 } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
@@ -30,7 +30,7 @@ import {
 import { HELM_COPY, PATTERN_BACKOFF_WEEKS } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
-import { selectShownPatterns } from '@apps/helm/store/selectors/patternSelectors';
+import { selectGuardrailRows } from '@apps/helm/store/selectors/patternSelectors';
 import type { OpenPattern } from '@apps/helm/types';
 
 interface GuardrailSheetProps {
@@ -113,7 +113,7 @@ function GuardrailBody({
           {others.map((other) => (
             <ActionRow
               key={other.id}
-              icon={<PauseCircle />}
+              icon={<Pause />}
               label={HELM_COPY.guardrailInstead(other.name, date)}
               isDisabled={isBusy}
               onClick={() =>
@@ -210,7 +210,7 @@ function GuardrailBody({
           )}
           {!isTask && others.length > 0 && (
             <ActionRow
-              icon={<PauseCircle />}
+              icon={<Pause />}
               label={HELM_COPY.guardrailOthers}
               subtitle={HELM_COPY.guardrailOthersSubtitle}
               hasChevron
@@ -236,7 +236,11 @@ function GuardrailBody({
           <ActionRow
             icon={<Ban />}
             label={HELM_COPY.guardrailStop}
-            subtitle={HELM_COPY.guardrailStopSubtitle(name)}
+            subtitle={
+              isTask
+                ? HELM_COPY.guardrailStopTaskSubtitle(name)
+                : HELM_COPY.guardrailStopSubtitle(name)
+            }
             isDestructive
             isDisabled={isBusy}
             onClick={() => done(answers.stop(pattern, name))}
@@ -266,8 +270,9 @@ function GuardrailSheet({
   onClose,
   onFindLater,
 }: GuardrailSheetProps) {
-  const patterns = useAppSelector(selectShownPatterns);
-  const pattern = patterns.find((one) => one.id === patternId) ?? null;
+  const rows = useAppSelector(selectGuardrailRows);
+  const pattern =
+    rows.find((row) => row.pattern.id === patternId)?.pattern ?? null;
   const [shown, setShown] = useState<{ id: string | null; view: SheetView }>({
     id: null,
     view: 'choices',

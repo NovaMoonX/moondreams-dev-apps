@@ -4210,9 +4210,14 @@ export const HELM_COPY = {
   guardrailHoldOtherStatement: (name: string, started: string) =>
     `Maybe hold ${name} while ${started} gets going?`,
   guardrailPauseStatement: (name: string) => `Pause ${name} for a while?`,
-  guardrailTaskStatement: (weekday: string) => `${weekday} looks full for this`,
-  guardrailGoalsReason: (count: number, names: string) =>
-    `${count} goals already going: ${names}.`,
+  guardrailTaskStatement: (weekday: string, title: string) =>
+    `${weekday} looks full for ${title}`,
+  guardrailGoalsReason: (count: number, names: string[]) =>
+    names.length === 0
+      ? `${count} goals already going.`
+      : names.length >= count && count <= 3
+        ? `${count} goals already going: ${formatList(names)}.`
+        : `${count} goals already going, including ${formatList(names.slice(0, 3))}.`,
   guardrailQuietGoalReason: (count: number, name: string, days: number) =>
     `${count} goals going, and nothing's been done on ${name} in ${days} days.`,
   guardrailBusyReason: (days: number, through: string) =>
@@ -4283,6 +4288,8 @@ export const HELM_COPY = {
   guardrailStop: 'Stop suggesting this',
   guardrailStopSubtitle: (name: string) =>
     `Won't suggest pausing ${name} again unless you ask.`,
+  guardrailStopTaskSubtitle: (title: string) =>
+    `Won't flag a full day for ${title} again unless you ask.`,
   guardrailHeld: (name: string, date: string | null) =>
     date === null
       ? `Holding ${name} for now. You can start it any time.`
@@ -4301,6 +4308,8 @@ export const HELM_COPY = {
       : `Okay. I won't bring this up before ${date}.`,
   guardrailStopped: (assistant: string, name: string) =>
     `${assistant} won't suggest pausing ${name} again. You can still ask.`,
+  guardrailStoppedTask: (assistant: string, title: string) =>
+    `${assistant} won't flag a full day for ${title} again. You can still ask.`,
   guardrailOneThought: 'One thought on timing is on screen.',
   guardrailStateSentence: (assistant: string) =>
     `${assistant} is only suggesting this. Nothing changes unless you say so.`,

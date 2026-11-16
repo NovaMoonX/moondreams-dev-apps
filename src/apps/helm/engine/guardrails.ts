@@ -1,5 +1,5 @@
 import { dayKeyToMs, shiftDayKeyBy, type Weekday } from '@/utils/cadenceUtils';
-import { formatDateShortUTC, formatList } from '@/utils/formatUtils';
+import { formatDateShortUTC } from '@/utils/formatUtils';
 import {
   DAY_MS,
   GUARDRAIL_LIMITS as LIMITS,
@@ -172,10 +172,7 @@ export function readGoalLoad(
               'goals',
               others.map((goal) => goal.id),
             ),
-            line: HELM_COPY.guardrailGoalsReason(
-              others.length,
-              formatList(names),
-            ),
+            line: HELM_COPY.guardrailGoalsReason(others.length, names),
           },
         };
   }
@@ -678,6 +675,7 @@ function checkTask(
     lines: {
       statement: HELM_COPY.guardrailTaskStatement(
         HELM_COPY.habitWeekdaysLong[new Date(dueDay).getUTCDay() as Weekday],
+        task.title,
       ),
       evidenceLine: line,
       reasonLine: line,

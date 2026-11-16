@@ -1718,7 +1718,7 @@ export async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   }
 }
 
-/** Alex's projects (and what matters most: the wedding first, then 💼 Work, the guitar goal not said yet, stretching on Can wait): the 🎸 Get back into guitar goal (a why in the person's words with a tidied version offered and a summary with tags, two milestones one reached, the Practice guitar habit as its regular step), the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone. */
+/** Alex's projects (and what matters most: the wedding first, then 💼 Work, the guitar goal not said yet, stretching on Can wait): the 🎸 Get back into guitar goal (a why in the person's words with a tidied version offered and a summary with tags, two milestones one reached, the Practice guitar habit as its regular step), the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone, plus 🎨 Paint the spare room, active and just made, which the start-time hold guardrail is about. */
 async function buildProjects(input: {
   now: number;
   encryption: HelmEncryption;
@@ -1930,6 +1930,25 @@ async function buildProjects(input: {
           order: 1,
           doneAt: null,
         },
+      },
+    ),
+    projectOf(
+      'seed-project-spare-room',
+      {
+        targetDate: null,
+        status: 'active',
+        whoRoles: {},
+        createdAt: now - 1 * DAY_MS,
+        finishedAt: null,
+      },
+      {
+        name: 'Paint the spare room',
+        emoji: '🎨',
+        objective: null,
+        milestones: {},
+        roleNotes: {},
+        privateMark: null,
+        isPrivacyCleared: false,
       },
     ),
     projectOf(
