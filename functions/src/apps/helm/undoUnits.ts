@@ -19,7 +19,8 @@ export type UnitKind =
   | 'topic'
   | 'procedure'
   | 'run'
-  | 'home';
+  | 'home'
+  | 'habit';
 
 export type UnitChange =
   'added' | 'changed' | 'completed' | 'removed' | 'moved';
@@ -105,6 +106,8 @@ const KINDS: Record<string, UnitKind> = {
   procedures: 'procedure',
   procedureRuns: 'run',
   profile: 'home',
+  habits: 'habit',
+  habitDays: 'habit',
 };
 
 const toChange = (
