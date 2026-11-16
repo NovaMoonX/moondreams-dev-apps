@@ -105,11 +105,11 @@ interface VoiceConversationOptions {
   conversationIdleMs?: number;
   /** The person started talking over a line that was playing; the line is already stopped and listening is starting. */
   onBargeIn?: () => void;
-  /** Waits for a phrase on the device (the downloaded model, else the browser's own recognition) while nothing else is going on and the page is visible; Null never does. `onWake` says whether the phrase may start a turn (the app readies its screen); the same listener, and the words said after the phrase, then carry on as that turn's listening. */
-  /** A live conversation (`startLive`) ends after this long with nothing heard or said. */
+  /** A live conversation (`startLive`) ends after this long with nothing heard or said (one the wake phrase started ends sooner if nothing is said at all, and one with its microphone off waits longer). */
   liveIdleMs?: number;
   /** A live conversation ended on its own: an end phrase closed a turn (after its reply), `liveIdleMs` went by in quiet, the page was left, or listening stopped working. */
   onLiveEnd?: (why: VoiceLiveEnd) => void;
+  /** Waits for a phrase on the device (the downloaded model, else the browser's own recognition) while nothing else is going on and the page is visible; Null never does. `onWake` says whether the phrase may start a turn (the app readies its screen); the same listener, and the words said after the phrase, then carry on as that turn's listening. */
   wake?: {
     isOn: boolean;
     spellings: readonly string[];
@@ -132,6 +132,11 @@ const CONVERSATION_IDLE_MS = 10 * 60 * 1000;
 const FIRST_LINE_FIRST_BYTE_MS = 4000;
 const FOLLOW_UP_MS = 8000;
 const LIVE_IDLE_MS = 2 * 60 * 1000;
+// A phrase heard by mistake (a TV, a passing remark) must not hold the microphone for the full quiet limit.
+const LIVE_FIRST_IDLE_MS = 15 * 1000;
+const LIVE_MUTED_MS = 5 * 60 * 1000;
+const LIVE_ERRORS_MAX = 3;
+const LIVE_CHECK_MS = 1000;
 // A reply's audio can end a beat before the queue says so; listening again a moment later never clips the next line.
 const LIVE_REOPEN_MS = 250;
 const WAKE_SETTLE_MS = 400;
@@ -246,6 +251,7 @@ export function useVoiceConversation({
   >(null);
   const pauseOnHide = useRef<() => void>(() => undefined);
   const reopenLive = useRef<() => void>(() => undefined);
+  const checkLive = useRef<() => void>(() => undefined);
   const isMicGranted = useRef(false);
   const run = useRef({
     heldDay: null as string | null,
@@ -275,6 +281,8 @@ export function useVoiceConversation({
     isLiveMuted: false,
     liveAt: 0,
     isLiveClosing: false,
+    hasLiveTurn: false,
+    liveErrors: 0,
   });
   const speechCache = useRef(createSpeechCache());
 
@@ -415,6 +423,7 @@ export function useVoiceConversation({
     if (!pending) return;
     window.clearTimeout(pending.timerId);
     run.current.pending = null;
+    run.current.isLiveClosing = false;
     queueRef.current?.clear();
     latest.current.onBargeIn?.();
     setIsListening(true);
@@ -447,6 +456,7 @@ export function useVoiceConversation({
     }
     run.current.heardWords = text;
     run.current.liveAt = Date.now();
+    run.current.liveErrors = 0;
     armQuiet(text);
     window.clearTimeout(run.current.holdId);
     run.current.holdId = 0;
@@ -504,6 +514,8 @@ export function useVoiceConversation({
     }
     run.current.liveAt = Date.now();
     if (said === '') return false;
+    run.current.hasLiveTurn = true;
+    run.current.liveErrors = 0;
     if (run.current.isLive) setLiveSaid(said);
     setIsThinking(true);
     latest.current.onUtterance(said, { sttProvider });
@@ -538,6 +550,12 @@ export function useVoiceConversation({
       endFollowUp();
       closeGate();
       endLive('left');
+    };
+    checkLive.current = () => {
+      if (!run.current.isLive || (queueRef.current?.isActive() ?? false)) {
+        return;
+      }
+      if (Date.now() - run.current.liveAt >= liveLimit()) endLive('quiet');
     };
     reopenLive.current = () => {
       if (run.current.isLiveClosing) endLive('phrase');
@@ -604,6 +622,13 @@ export function useVoiceConversation({
       return;
     }
     if (isKept) return;
+    if (run.current.isLive) {
+      run.current.liveErrors += 1;
+      if (run.current.liveErrors >= LIVE_ERRORS_MAX) {
+        endLive('failed');
+        return;
+      }
+    }
     if (
       run.current.heardBy === 'on-device' &&
       latest.current.onDeviceListenFailed
@@ -807,7 +832,7 @@ export function useVoiceConversation({
     wakeHandler.current = ({ source, seed, adopt }) => {
       if (run.current.pending !== null) return false;
       const start = () => listen({ source, seed, adopt });
-      return latest.current.wake?.startsLive ? beginLive(start) : start();
+      return latest.current.wake?.startsLive ? beginLive(start, true) : start();
     };
   });
 
@@ -824,8 +849,11 @@ export function useVoiceConversation({
     ) {
       return false;
     }
-    const liveLeft =
-      run.current.liveAt + latest.current.liveIdleMs - Date.now();
+    if (isLiveNow && run.current.isLiveClosing) {
+      endLive('phrase');
+      return false;
+    }
+    const liveLeft = run.current.liveAt + liveLimit() - Date.now();
     if (isLiveNow && liveLeft <= 0) {
       endLive('quiet');
       return false;
@@ -946,16 +974,27 @@ export function useVoiceConversation({
     return 'played';
   };
 
-  const beginLive = (start: () => boolean) => {
+  /** How long a live conversation may go quiet before it ends, for where it is now. */
+  const liveLimit = () =>
+    run.current.isLiveMuted
+      ? LIVE_MUTED_MS
+      : run.current.hasLiveTurn
+        ? latest.current.liveIdleMs
+        : Math.min(LIVE_FIRST_IDLE_MS, latest.current.liveIdleMs);
+
+  const beginLive = (start: () => boolean, isWoken = false) => {
+    const wasLive = run.current.isLive;
     run.current.isLive = true;
     run.current.isLiveClosing = false;
+    run.current.hasLiveTurn = !isWoken;
+    run.current.liveErrors = 0;
     run.current.liveAt = Date.now();
     run.current.isLiveMuted = false;
     setIsLiveMuted(false);
     setLiveSaid('');
     setSaying('');
     if (!start()) {
-      run.current.isLive = false;
+      run.current.isLive = wasLive;
       return false;
     }
     setIsLive(true);
@@ -1189,6 +1228,16 @@ export function useVoiceConversation({
     !isThinking &&
     !isSpeaking &&
     !isSounding;
+  // The quiet limit holds in every state, not only while listening waits for words: a reply that never comes or a microphone left off still ends the conversation.
+  useEffect(() => {
+    if (!isLive) return;
+    const checkId = window.setInterval(
+      () => checkLive.current(),
+      LIVE_CHECK_MS,
+    );
+    return () => window.clearInterval(checkId);
+  }, [isLive]);
+
   useEffect(() => {
     if (!isLiveIdle) return;
     const reopenId = window.setTimeout(

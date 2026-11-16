@@ -214,9 +214,9 @@ html.helm-theme .subview-backdrop:has(.helm-ask-overlay) {
   z-index: 110;
 }
 
-/* A live conversation covers the whole screen at the conversation's layer: above the site header and sheets, under toasts. */
+/* A live conversation covers the whole screen: above the site header, sheets and the conversation over a page, under a sheet it opens and toasts. */
 html.helm-theme .helm-live-screen {
-  z-index: 110;
+  z-index: 115;
 }
 
 /* A sheet opened from inside that conversation mounts after it, so it rises above it too. */
@@ -291,7 +291,7 @@ html.helm-theme .helm-live-ripple {
   border-radius: 50%;
   background: radial-gradient(
     closest-side,
-    color-mix(in oklab, var(--color-primary) 60%, transparent),
+    color-mix(in oklab, var(--color-primary) 45%, transparent),
     color-mix(in oklab, var(--color-primary) 18%, transparent) 60%,
     transparent
   );
