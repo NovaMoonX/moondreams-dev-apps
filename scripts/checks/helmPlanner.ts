@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 
 import { zonedDateTimeToEpoch } from '../../src/utils/timezoneUtils.ts';
+import { readPartOf } from '../../src/apps/helm/engine/patterns.ts';
 import {
+  PART_CLOCKS,
   findFreeGaps,
   findOpenings,
   planDay,
@@ -13,7 +15,7 @@ import {
   CAN_WAIT_PLACE,
   NOT_SAID_PLACE,
 } from '../../src/apps/helm/engine/importance.ts';
-import type { PlanSlot } from '../../src/apps/helm/types.ts';
+import type { PlanSlot, Weekday } from '../../src/apps/helm/types.ts';
 
 const ZONE = 'America/Los_Angeles';
 const DAY = '2026-11-10';
@@ -478,6 +480,84 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
     ['notSaid', 'waits', 'waitsLater'],
     'Can wait follows every not said one, in its own order',
   );
+}
+
+{
+  const weekday = new Date(`${DAY}T00:00:00Z`).getUTCDay() as Weekday;
+  const avoidEvening = [
+    { kind: 'weekdayPart' as const, weekday, part: 'evening' as const },
+  ];
+  const evening = { from: at('18:00'), to: at('21:00') };
+  const inEvening = (result: ReturnType<typeof planDay>) =>
+    Object.values(result.slots).filter(
+      (entry) =>
+        (entry.startAt ?? 0) < evening.to && (entry.endAt ?? 0) > evening.from,
+    );
+  const many = Array.from({ length: 3 }, (_, at) =>
+    task(`t${at}`, { durationMinutes: 60 }),
+  );
+  assert.equal(
+    inEvening(
+      run(
+        base({
+          hasCalendar: true,
+          busy: [busy('08:00', '18:00')],
+          tasks: many,
+          avoidBuckets: avoidEvening,
+        }),
+      ),
+    ).length,
+    0,
+    'an avoided part is left empty',
+  );
+  assert.ok(
+    inEvening(
+      run(
+        base({
+          hasCalendar: true,
+          busy: [busy('08:00', '18:00')],
+          tasks: many,
+        }),
+      ),
+    ).length > 0,
+    'without the pattern the part is used',
+  );
+  const kept = run(
+    base({
+      hasCalendar: true,
+      avoidBuckets: avoidEvening,
+      tasks: [task('keep')],
+      slots: { s1: slot('keep', 'kept', '19:00') },
+    }),
+  );
+  assert.equal(
+    Object.values(kept.slots).find((entry) => entry.taskId === 'keep')?.startAt,
+    at('19:00'),
+    'a slot the person kept is never moved',
+  );
+  const care = run(
+    base({
+      hasCalendar: true,
+      avoidBuckets: avoidEvening,
+      dayStartTime: '18:00',
+      tasks: [task('pill', { isCare: true }), task('other')],
+    }),
+  );
+  assert.deepEqual(
+    taskIdsOf(care),
+    ['pill'],
+    'a care task is still placed in an avoided part, the rest stay out',
+  );
+  const minutes = (clock: string) =>
+    Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3));
+  Object.entries(PART_CLOCKS).forEach(([part, [from]]) => {
+    assert.equal(readPartOf(minutes(from)), part, `${part} starts at ${from}`);
+    assert.notEqual(
+      readPartOf(minutes(from) - 1),
+      part === 'morning' ? 'x' : part,
+      `${part} does not start before ${from}`,
+    );
+  });
 }
 
 console.log('check:helm-planner: planner rules hold.');

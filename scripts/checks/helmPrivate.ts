@@ -8,6 +8,11 @@ import {
   type HelmKey,
 } from '../../functions/src/apps/helm/helmKey.ts';
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
+import {
+  selectShownObservations,
+  selectShownPatterns,
+  selectShownReflections,
+} from '../../src/apps/helm/store/selectors/patternSelectors.ts';
 import { checkInLine } from '../../src/apps/helm/engine/checkInMatch.ts';
 import {
   planWrites,
@@ -1811,6 +1816,39 @@ const NAME_HABITS = [
   { id: 'a', name: 'Pills', lockScreenName: null, isPrivate: true },
   { id: 'b', name: 'Stretch', lockScreenName: 'Stretch', isPrivate: false },
 ];
+
+test('what Forget hid is left out of every read of the noticed docs, and an unreadable pattern is never shown', () => {
+  const state = (forgottenAt: number | null) =>
+    ({
+      helm: {
+        profile: { forgottenAt },
+        patterns: {
+          items: [
+            { id: 'old', createdAt: 100 },
+            { id: 'new', createdAt: 300 },
+            { id: 'bad', createdAt: 300, isUnreadable: true },
+          ],
+        },
+        observations: {
+          items: [
+            { id: 'o1', createdAt: 100 },
+            { id: 'o2', createdAt: 300 },
+          ],
+        },
+        unseenReflections: {
+          items: [
+            { id: 'r1', createdAt: 100 },
+            { id: 'r2', createdAt: 300 },
+          ],
+        },
+      },
+    }) as never;
+  const ids = (list: { id: string }[]) => list.map((one) => one.id);
+  assert.deepEqual(ids(selectShownPatterns(state(200))), ['new']);
+  assert.deepEqual(ids(selectShownObservations(state(200))), ['o2']);
+  assert.deepEqual(ids(selectShownReflections(state(300))), []);
+  assert.deepEqual(ids(selectShownPatterns(state(null))), ['old', 'new']);
+});
 
 test('a spoken or typed lock screen name request is read as one habit and a direction', () => {
   const show = readNameRequest(

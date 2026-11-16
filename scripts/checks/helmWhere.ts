@@ -139,6 +139,7 @@ function findProblems(rows: WhereRow[], known: World) {
   const rowBlocks = toSet(
     rows.flatMap((entry) => (entry.contextBlock ? [entry.contextBlock] : [])),
   );
+  const rowBatchJobs = toSet(rows.flatMap((entry) => entry.batchJobs));
   const rowCategories = toSet(
     rows.flatMap((entry) =>
       entry.grant ? [`${entry.grant.source}/${entry.grant.category}`] : [],
@@ -165,6 +166,7 @@ function findProblems(rows: WhereRow[], known: World) {
       rowBlocks,
     ),
     ...missing('connected category', known.categories, rowCategories),
+    ...missing('batch job', known.batchJobs, rowBatchJobs),
     ...rows.flatMap((entry) =>
       entry.batchJobs
         .filter((job) => !known.batchJobs.includes(job))

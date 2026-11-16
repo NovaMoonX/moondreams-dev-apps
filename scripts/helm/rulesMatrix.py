@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, and one value's shape (a profile's theme is absent, null or a palette Helm ships; its voice name is absent, null or at most 32 characters, and its speed absent, null or 0.8 to 1.2): only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client (the reminder planner's queue included). A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner and deleted by it only once it is older than 396 days, a profile's learning switch is absent or a true or false, observations and reflections are the owner's like a task, the nightly pass's run records are for the Admin SDK alone, and no other path under apps/helm is open to a client (the reminder planner's queue included). A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -151,6 +151,10 @@ def main():
         check(f'profile theme {theme!r} update [o]', commit(o_tok, [put(path, dict(profile, theme=theme))]), allowed)
     for field, value, allowed in [('voiceId', 'Sulafat', True), ('voiceId', None, True), ('voiceId', 'x' * 33, False), ('voiceId', 3, False), ('voiceSpeed', 0.8, True), ('voiceSpeed', 1.2, True), ('voiceSpeed', None, True), ('voiceSpeed', 1.3, False), ('voiceSpeed', 0.7, False), ('voiceSpeed', '1', False)]:
         check(f'profile {field} {value!r} update [o]', commit(o_tok, [put(path, dict(profile, **{field: value}))]), allowed)
+    for value, allowed in [(True, True), (False, True), ('no', False), (None, False), (1, False)]:
+        check(f'profile isLearningOn {value!r} update [o]', commit(o_tok, [put(path, dict(profile, isLearningOn=value))]), allowed)
+    check('profile isLearningOn false update [x]', commit(x_tok, [put(path, dict(profile, isLearningOn=False))]), False)
+    check('profile isLearningOn false update [a]', commit(None, [put(path, dict(profile, isLearningOn=False))]), False)
     check("profile voiceId 'Sulafat' update [x]", commit(x_tok, [put(path, dict(profile, voiceId='Sulafat'))]), False)
     check("profile theme 'plum' update [x]", commit(x_tok, [put(path, dict(profile, theme='plum'))]), False)
     check("profile theme 'plum' update [a]", commit(None, [put(path, dict(profile, theme='plum'))]), False)
@@ -230,7 +234,7 @@ def main():
         admin([rm(sk + '-new-' + a)])
     check('daySummaries read at another uid [o]', get(f'apps/helm/users/{x_uid}/daySummaries/d', o_tok), False)
 
-    # A who, a place, a project, a note, a topic, a habit, a habit day, a pattern and a connection are the owner's alone, like a task.
+    # A who, a place, a project, a note, a topic, a habit, a habit day, a pattern, an observation, a reflection and a connection are the owner's alone, like a task.
     whoDoc = dict(kind='person', tier='passing', tierSetBy='nomos', isSelf=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     placeDoc = dict(isHome=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     projectDoc = dict(status='active', targetDate=None, whoRoles={}, createdBy='person', createdAt=NOW, sealed=SEAL)
@@ -239,8 +243,10 @@ def main():
     habitDoc = dict(status='active', cadence=dict(kind='everyDay'), windowState={}, timesPerDay=None, isCare=False, startsOn=1893456000000, createdBy='person', createdAt=NOW, sealed=SEAL)
     habitDayDoc = dict(date=1893456000000, isInUse=True, entries={}, sealed=None)
     patternDoc = dict(kind='windowMissed', state='candidate', signature='sig', createdAt=NOW, stateAt=NOW, sealed=SEAL)
+    observationDoc = dict(subject=dict(collection='habits', id='habit-1'), dayKey='2030-01-01', at=NOW, source='turn', sourceKeys=['captures/capture-1'], isCare=False, writtenBy='turn', createdAt=NOW, privacy='ordinary', sealed=SEAL)
+    reflectionDoc = dict(dayKey='2030-01-01', reflectionId='r1', candidateCount=1, seenAt=None, sourceKeys=['observations/observation-1'], createdAt=NOW, privacy='ordinary', sealed=SEAL)
     connectionDoc = dict(whoIds=['who-1', 'who-2'], kind='family', source='page', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
-    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted'), ('connections', connectionDoc, 'source', 'confirmed')):
+    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2), ('habits', habitDoc, 'status', 'paused'), ('habitDays', habitDayDoc, 'isInUse', False), ('patterns', patternDoc, 'state', 'accepted'), ('observations', observationDoc, 'isCare', True), ('reflections', reflectionDoc, 'seenAt', NOW), ('connections', connectionDoc, 'source', 'confirmed')):
         dk = f'{path}/{name}/{name}-1'
         for a, tok in actors.items():
             admin([put(dk, doc)])
@@ -411,7 +417,7 @@ def main():
     check('style create without sealed [o]', commit(o_tok, [put_new(sk + '-bare', {k: v for k, v in style.items() if k != 'sealed'})]), False)
     check('style create with a text timestamp [o]', commit(o_tok, [put_new(sk + '-time', dict(style, createdAt='now'))]), False)
 
-    # An execution is the owner's to read, create and update; nobody deletes one.
+    # An execution is the owner's to read, create and update; only the owner deletes one, and only once it is older than 396 days.
     run = dict(captureId='capture-1', actor='nomos', state='succeeded', undoneByExecutionId=None, createdAt=NOW, sealed=SEAL)
     ex = f'{path}/executions/exec-1'
     for a, tok in actors.items():
@@ -422,6 +428,10 @@ def main():
         check(f'executions update [{a}]', commit(tok, [put(ex, dict(run, undoneByExecutionId='exec-2'))]), a == 'o')
         check(f'executions delete [{a}]', commit(tok, [rm(ex)]), False)
         admin([rm(ex + '-new-' + a)])
+        admin([put(ex + '-old', dict(run, createdAt=NOW - 397 * DAY)), put(ex + '-late', dict(run, createdAt=NOW - 395 * DAY))])
+        check(f'executions delete older than 396 days [{a}]', commit(tok, [rm(ex + '-old')]), a == 'o')
+        check(f'executions delete newer than 396 days [{a}]', commit(tok, [rm(ex + '-late')]), False)
+        admin([rm(ex + '-old'), rm(ex + '-late')])
     check('executions create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/executions/e', run)]), False)
 
     # A synced copy is the owner's to read and list; only the platform's functions write one.
@@ -440,7 +450,7 @@ def main():
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}'):
+    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', 'apps/helm/reflectionRuns/run-1', f'apps/helm/server/{uid}/reflection/state', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09', f'apps/helm/reminderQueue/{uid}'):
         admin([put(p, {'x': 1})])
         label = p.split("/")[0] if p.startswith('voice') else p.split("/")[-2]
         for a, tok in actors.items():

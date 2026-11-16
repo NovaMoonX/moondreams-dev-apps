@@ -2,7 +2,13 @@ import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { PLANNER_COPY } from '@apps/helm/constants';
 import { NOT_SAID_PLACE } from '@apps/helm/engine/importance';
 import type { RestDayKind } from '@apps/helm/engine/restDay';
-import type { Energy, Importance, PlanSlot, TaskDue } from '@apps/helm/types';
+import type {
+  Energy,
+  Importance,
+  PatternBucket,
+  PlanSlot,
+  TaskDue,
+} from '@apps/helm/types';
 import {
   DUE_SOON_DAYS,
   formatTaskDue,
@@ -22,6 +28,8 @@ export interface PlannerTask {
   durationMinutes: number | null;
   energy: Energy | null;
   placeIds: string[];
+  /** A care task: a pattern never keeps Helm from placing it. */
+  isCare?: boolean;
 }
 
 export interface BusyBlock {
@@ -45,6 +53,8 @@ export interface PlannerInput {
   busy: BusyBlock[];
   slots: Record<string, PlanSlot>;
   tasks: PlannerTask[];
+  /** Weekday day-parts the person accepted leaving empty; other tasks are never suggested into them. */
+  avoidBuckets?: Extract<PatternBucket, { kind: 'weekdayPart' }>[];
 }
 
 export interface PlannerResult {
@@ -249,6 +259,54 @@ const getTimedReason = (pick: Chosen, span: Span, input: PlannerInput) => {
 
 const ENERGY_ORDER: Record<Energy, number> = { high: 0, medium: 1, low: 2 };
 
+/** Where each day-part begins and ends on the clock; the last runs to the habit day's turn at 03:00. */
+export const PART_CLOCKS = {
+  morning: ['00:00', '11:00'],
+  midday: ['11:00', '14:00'],
+  afternoon: ['14:00', '18:00'],
+  evening: ['18:00', '21:00'],
+  bedtime: ['21:00', '03:00'],
+} as const;
+
+const getAvoidSpans = (input: PlannerInput): Span[] => {
+  const weekday = new Date(`${input.dayKey}T00:00:00Z`).getUTCDay();
+  const nextKey = new Date(Date.parse(`${input.dayKey}T00:00:00Z`) + 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  return (input.avoidBuckets ?? [])
+    .filter((bucket) => bucket.weekday === weekday)
+    .map(({ part }) => {
+      const [from, to] = PART_CLOCKS[part];
+      return {
+        startAt: zonedDateTimeToEpoch(input.dayKey, from, input.timeZone),
+        endAt: zonedDateTimeToEpoch(
+          to < from ? nextKey : input.dayKey,
+          to,
+          input.timeZone,
+        ),
+      };
+    });
+};
+
+/** Places picks so a care task may take any gap and every other task stays out of the spans to avoid. */
+const placeAvoiding = (gaps: Span[], avoid: Span[], picks: Chosen[]) => {
+  if (avoid.length === 0) return placeAll(gaps, picks);
+  const care = placeAll(
+    gaps,
+    picks.filter((pick) => pick.task.isCare),
+  );
+  const open = gaps.flatMap((gap) =>
+    getGaps(gap, [...avoid, ...care.map(({ span }) => span)]),
+  );
+  return [
+    ...care,
+    ...placeAll(
+      open,
+      picks.filter((pick) => !pick.task.isCare),
+    ),
+  ];
+};
+
 const placeAll = (gaps: Span[], picks: Chosen[]) =>
   picks
     .map((pick, index) => ({ pick, index }))
@@ -350,6 +408,7 @@ export function planDay(
   }
 
   const gaps = getGaps(window, getObstacles(input, null, false));
+  const avoid = getAvoidSpans(input);
   const freeMinutes = getMinutes(gaps);
   if (freeMinutes < MIN_USEFUL_MINUTES) return unchanged('full');
   const budget = (freeMinutes * input.fillPercent) / 100;
@@ -362,13 +421,13 @@ export function planDay(
       const planned = state.minutes + pick.minutes;
       if (planned > budget) return state;
       const next = [...state.picks, pick];
-      return placeAll(gaps, next).length === next.length
+      return placeAvoiding(gaps, avoid, next).length === next.length
         ? { ...state, picks: next, minutes: planned }
         : state;
     },
     { picks: [] as Chosen[], minutes: 0 },
   ).picks;
-  const placed = placeAll(gaps, picks).sort(
+  const placed = placeAvoiding(gaps, avoid, picks).sort(
     (first, second) => first.span.startAt - second.span.startAt,
   );
   const entries = placed.map(({ pick, span }) => ({

@@ -3962,6 +3962,8 @@ export const HELM_COPY = {
   },
   patternCareStatement: (name: string) =>
     `You've mentioned how ${name} has been going`,
+  patternTookBack: (line: string) => `Took back: ${line}`,
+  patternTookBackReport: 'Okay, back the way it was.',
 } as const;
 
 /** What was said, in the closed set the model and the code both read. */

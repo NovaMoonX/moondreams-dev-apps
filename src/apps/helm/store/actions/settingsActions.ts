@@ -1,9 +1,14 @@
 import {
   arrayRemove,
   arrayUnion,
+  collection,
   doc,
+  getDocs,
+  query,
   runTransaction,
   updateDoc,
+  where,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { reauthenticateWithPopup } from 'firebase/auth';
@@ -123,6 +128,35 @@ export const setDailyFreshOn = (uid: string, isDailyFreshOn: boolean) =>
     isDailyFreshOn,
     lastEditedAt: Date.now(),
   });
+
+/** "Notice what works for me". Turning it off puts what was asked but not answered back to waiting, so nothing stays on offer that Helm has stopped watching for; what the person accepted or answered stays. */
+export async function setLearningOn(uid: string, isLearningOn: boolean) {
+  const userRef = doc(db, 'apps', 'helm', 'users', uid);
+  await updateDoc(userRef, { isLearningOn, lastEditedAt: Date.now() });
+  if (isLearningOn) return;
+  const asked = await getDocs(
+    query(
+      collection(userRef, 'patterns'),
+      where('isLive', '==', true),
+      where('state', '==', 'suggested'),
+    ),
+  );
+  if (asked.empty) return;
+  const now = Date.now();
+  const batch = writeBatch(db);
+  asked.docs.forEach((entry) =>
+    batch.update(entry.ref, {
+      state: 'candidate',
+      stateAt: now,
+      lastEditedAt: now,
+      history: [
+        ...((entry.data().history as unknown[] | undefined) ?? []),
+        { to: 'candidate', at: now, by: 'person' },
+      ].slice(-20),
+    }),
+  );
+  await batch.commit();
+}
 
 /** Starts a new conversation from now, or puts back the moment it last started fresh (`null` for never) to take that back. */
 export const setConversationFreshAt = (
