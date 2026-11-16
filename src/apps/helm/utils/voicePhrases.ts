@@ -1,3 +1,4 @@
+import { CLOSING_PHRASES } from '@/lib/speech/closingPhrase';
 import { toPlainText } from '@/lib/speech/speechText';
 import {
   ACKNOWLEDGEMENT_WORDS,
@@ -28,8 +29,17 @@ const toAlternatives = (phrases: readonly string[]) =>
 
 const NODS = `(?:(?:${toAlternatives(ACKNOWLEDGEMENT_WORDS)})(?: |$))`;
 const ACKNOWLEDGEMENT_PATTERN = new RegExp(`^${NODS}+$`);
+const isNod = (phrase: string) => ACKNOWLEDGEMENT_PATTERN.test(phrase);
+const LIVE_CLOSERS = [
+  ...CLOSING_PHRASES.finish.filter((phrase) => !isNod(phrase)),
+  ...CLOSING_PHRASES.dismiss.filter((phrase) => phrase === 'stop'),
+  ...LIVE_CLOSING_PHRASES,
+];
 const CLOSING_PATTERN = new RegExp(
-  `^${NODS}*(?:${toAlternatives(LIVE_CLOSING_PHRASES)})(?: |$)${NODS}*$`,
+  `^${NODS}*(?:${toAlternatives([
+    ...LIVE_CLOSERS,
+    ...LIVE_CLOSERS.map((phrase) => phrase.replace(/'/g, '')),
+  ])})(?: |$)${NODS}*$`,
 );
 
 /** Words only, lower case, punctuation as single spaces. */
