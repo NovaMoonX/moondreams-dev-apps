@@ -115,7 +115,6 @@ export const REFLECT_SCHEMA: Record<string, unknown> = {
   },
 };
 
-/** The schema with the `seeYou` list asked for as well. */
 const withSeeYou = (schema: Record<string, unknown>) => ({
   ...schema,
   required: [...(schema.required as string[]), 'seeYou'],

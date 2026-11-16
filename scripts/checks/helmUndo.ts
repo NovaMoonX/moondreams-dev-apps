@@ -3337,7 +3337,12 @@ test('undoing a turn that corrected one line and removed another puts both back 
         'sa_one',
         {
           docId: 'sa_one',
-          data: { ...one.data, state: 'corrected', correctedAt: EARLIER },
+          data: {
+            ...one.data,
+            state: 'corrected',
+            correctedAt: EARLIER,
+            writtenBy: 'person',
+          },
           opened: { ...one.words, corrected: 'I work best at night' },
         },
       ],
@@ -3357,7 +3362,11 @@ test('undoing a turn that corrected one line and removed another puts both back 
     ]),
   );
   const byId = Object.fromEntries(result.updates.map((u) => [u.docId, u]));
-  assert.deepEqual(byId.sa_one.fields, { state: 'shown', correctedAt: null });
+  assert.deepEqual(byId.sa_one.fields, {
+    state: 'shown',
+    correctedAt: null,
+    writtenBy: 'reflection',
+  });
   assert.deepEqual(byId.sa_one.reseal, one.words);
   assert.deepEqual(byId.sa_two.fields, {
     state: 'shown',
@@ -3369,6 +3378,21 @@ test('undoing a turn that corrected one line and removed another puts both back 
   assert.ok(!result.updates.some((u) => 'lastEditedAt' in u.fields));
   assert.equal(result.undoSealed.summary, 'Put back 2 lines about you');
   assert.equal(result.undoSealed.undoReport, 'Put back 2 lines about you.');
+});
+
+test('a line about the person is drawn and offered back under its own words, never as a task', () => {
+  const { original } = seenTurn();
+  const rows = buildResultLines(original, new Map(), 'UTC', NOW);
+  assert.deepEqual(
+    rows.map((row) => row.title),
+    [HELM_COPY.resultSeenAsFallback, HELM_COPY.resultSeenAsFallback],
+  );
+  assert.ok(rows.every((row) => row.title !== HELM_COPY.resultTaskFallback));
+  const { units } = buildUndoUnits(original);
+  assert.deepEqual(
+    units.map((unit) => unit.kind),
+    ['seenAs', 'seenAs'],
+  );
 });
 
 test('a line changed again since the turn is left alone and the other still comes back', () => {

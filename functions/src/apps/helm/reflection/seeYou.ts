@@ -99,7 +99,7 @@ const toSeeYouLine = (value: unknown): SeeYouLine[] => {
   ];
 };
 
-/** The model's lines, shape and caps checked; null when the answer has no `seeYou` list, which is how a night that did not ask is told from one that asked and got nothing. */
+/** The model's lines, shape and caps checked; null when the answer has no list of them, which is how a night that did not ask is told from one that asked and got nothing. */
 export const normalizeSeeYou = (value: unknown): SeeYouLine[] | null =>
   Array.isArray(value)
     ? value.flatMap(toSeeYouLine).slice(0, SEEN_AS_LIMITS.returned)
@@ -143,7 +143,7 @@ const openStatement = (key: HelmKey, sealed: unknown) => {
 const toTime = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : 0;
 
-/** Reads through `read`, so a transaction can hold it. What was made at or before the person's last Forget is never read. */
+/** Reads through the reader it is given, so a transaction can hold it. What was made at or before the person's last Forget is never read. */
 export async function readSeeYouWorld(
   read: Read,
   firestore: Firestore,
@@ -219,9 +219,9 @@ export async function readSeeYouWorld(
         doc.traits.map(([traitKey]) => `${doc.scope}#${traitKey}`),
       ),
     ),
-    existing: seenAsSnap.docs.flatMap(
-      (doc) => toSeenAsRecord(key, doc.id, doc.data()) ?? [],
-    ),
+    existing: seenAsSnap.docs
+      .flatMap((doc) => toSeenAsRecord(key, doc.id, doc.data()) ?? [])
+      .filter((line) => line.createdAt > after),
   };
 }
 
@@ -245,7 +245,7 @@ const toSomeone = (text: string, whoNames: string[]) =>
 const toDataJson = (value: unknown) =>
   JSON.stringify(value).replace(/</g, '\\u003c');
 
-/** The blocks a rebuild adds to the message: aliases only, no name of another person, no words from anything private or care, and the person's corrections as "the person says". */
+/** The blocks a rebuild adds to the message: aliases only, no name of another person, no words from anything private or care (a private correction included), and the person's corrections as "the person says". */
 export function buildSeeYouBlocks(
   uid: string,
   window: ReflectWindow,
@@ -296,7 +296,9 @@ export function buildSeeYouBlocks(
     )}</style_notes>`,
     `<the_person_says>${toDataJson(
       world.existing.flatMap((line) =>
-        line.state === 'corrected' && line.words?.corrected
+        line.state === 'corrected' &&
+        line.privacy !== 'private' &&
+        line.words?.corrected
           ? [
               {
                 kind: line.kind,
@@ -478,7 +480,8 @@ export function planSeeYou(input: PlanSeeYouInput): SeeYouPlan {
         data: { sourceKeys: [], dontDrawFrom: [], sealed: null },
       })),
     ],
-    deletes: plan.remove,
+    // Lines were given and none passed: that may be a bad answer, so it never clears the lines already shown.
+    deletes: lines.length > 0 && kept.length === 0 ? [] : plan.remove,
     counts: {
       asked: lines.length,
       kept: kept.length,
@@ -554,7 +557,7 @@ export async function planSeeYouIn(
     key,
     forgottenAt,
   );
-  return planSeeYou({
+  const plan = planSeeYou({
     uid,
     now,
     key,
@@ -569,4 +572,21 @@ export async function planSeeYouIn(
       world,
     ),
   });
+  const stored =
+    plan.creates.length === 0
+      ? []
+      : await transaction.getAll(
+          ...plan.creates.map(({ id }) =>
+            firestore.doc(`apps/helm/users/${uid}/seenAs/${id}`),
+          ),
+        );
+  const isTaken = new Set(
+    stored
+      .filter((snap) => snap.exists && snap.get('state') !== 'shown')
+      .map((snap) => snap.id),
+  );
+  return {
+    ...plan,
+    creates: plan.creates.filter(({ id }) => !isTaken.has(id)),
+  };
 }

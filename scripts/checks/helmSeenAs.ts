@@ -49,6 +49,11 @@ import {
   toSeenAsId,
   type SeeYouWorld,
 } from '../../functions/src/apps/helm/reflection/seeYou.ts';
+import {
+  planSeeYouIn,
+  readSeeYouWorld,
+  buildSeeYouBlocks,
+} from '../../functions/src/apps/helm/reflection/seeYou.ts';
 import type { ReflectWindow } from '../../functions/src/apps/helm/reflection/readReflectWindow.ts';
 import { DELETING_COMMANDS } from '../../src/apps/helm/constants.ts';
 
@@ -274,7 +279,11 @@ const READING: CaptureReading = {
   addressedAs: null,
 };
 
-const normalize = (commands: unknown[], text: string) => {
+const normalize = (
+  commands: unknown[],
+  text: string,
+  line = 'You get piano done on mornings',
+) => {
   const seenAs = createAliasBook('sy');
   const alias = seenAs.add('sa_line');
   const reply = normalizeNomosReply(
@@ -288,15 +297,16 @@ const normalize = (commands: unknown[], text: string) => {
       reading: READING,
       aliases: createAliasBook('t'),
       seenAs,
-      seenAsWords: new Map([['sa_line', 'You get piano done on mornings']]),
+      seenAsWords: new Map([['sa_line', line]]),
       captureText: text,
     },
   );
   return reply;
 };
 
-const removal = (text: string) =>
-  normalize([{ kind: 'removeSeenAs' }], text).seenAsCommands;
+const removal = (text: string, line?: string, quote = text) =>
+  normalize([{ kind: 'removeSeenAs', requestQuote: quote }], text, line)
+    .seenAsCommands;
 
 test('removeSeenAs is kept only when the words still name the line', () => {
   assert.equal(removal('ugh, forget it').length, 0);
@@ -308,7 +318,8 @@ test('removeSeenAs is kept only when the words still name the line', () => {
     removal('forget it, stop saying I do piano on mornings').length,
     1,
   );
-  assert.equal(removal('remove the one about piano').length, 1);
+  assert.equal(removal('remove the one about piano').length, 0);
+  assert.equal(removal('remove the one about piano mornings').length, 1);
   [...CLOSING_PHRASES.dismiss, ...CLOSING_PHRASES.finish].forEach((phrase) =>
     assert.equal(removal(phrase).length, 0, phrase),
   );
@@ -319,6 +330,20 @@ test('removeSeenAs is kept only when the words still name the line', () => {
   );
   assert.ok(SERVER_DELETING_COMMANDS.includes('removeSeenAs'));
   assert.deepEqual([...DELETING_COMMANDS], [...SERVER_DELETING_COMMANDS]);
+});
+
+test('a removal needs its own quoted words to name the line, not the whole capture', () => {
+  const line = "You get piano done on mornings you've slept well";
+  assert.equal(removal('that went well, thanks', line).length, 0);
+  assert.equal(removal('forget it', line).length, 0);
+  assert.equal(removal('remove the line about piano mornings', line).length, 1);
+  assert.equal(
+    removal('piano mornings are fine, thanks', line, 'thanks').length,
+    0,
+  );
+  assert.equal(removal('remove it', line, 'something not said').length, 0);
+  assert.equal(removal('stop the one about gardening', 'You garden').length, 0);
+  assert.equal(removal('stop saying gardening', 'Gardening').length, 1);
 });
 
 test('correctSeenAs keeps only the words the person said', () => {
@@ -408,7 +433,8 @@ test('correct and remove write what the contract says, and Undo restores the rec
   const fix = correct.updates[0].data;
   assert.equal(fix.state, 'corrected');
   assert.equal(fix.correctedAt, NOW);
-  assert.ok(!('writtenBy' in fix));
+  assert.equal(fix.writtenBy, 'person');
+  assert.equal(fix.privacy, 'ordinary');
   assert.equal(
     openForHelm(key, fix.sealed as never).corrected,
     'I practise in the evenings',
@@ -420,6 +446,8 @@ test('correct and remove write what the contract says, and Undo restores the rec
   );
   assert.equal(undoneCorrect.plain.state, 'shown');
   assert.equal(undoneCorrect.plain.correctedAt, null);
+  assert.equal(undoneCorrect.plain.writtenBy, 'reflection');
+  assert.equal(undoneCorrect.plain.privacy, 'ordinary');
   assert.equal(undoneCorrect.opened.corrected, null);
   assert.equal(undoneCorrect.opened.line, 'You get piano done on mornings');
 
@@ -786,6 +814,215 @@ test('a night asks for the lines only when a rebuild is due, and says what the p
   });
   assert.ok(without && !without.includes('<the_person_says>'));
   assert.ok(!REFLECT_SYSTEM.includes('seeYou'));
+});
+
+test('a correction in refused words is stored private and never reaches the model on its own', async () => {
+  const { id, data, record } = shownRecord();
+  const plan = planSeenAs({
+    commands: [
+      {
+        kind: 'correctSeenAs',
+        lineId: id,
+        words: 'my meds make me groggy in the morning',
+      },
+    ],
+    records: new Map([[id, record]]),
+    now: NOW,
+    seal,
+    room: 10,
+  });
+  const fix = plan.updates[0].data;
+  assert.equal(fix.privacy, 'private');
+  assert.ok(plan.isPrivate);
+  assert.equal(plan.effects[0].written.privacy, 'private');
+  assert.equal(plan.effects[0].previous?.privacy, 'ordinary');
+  const stored = { ...data, ...fix };
+  const privateRecord = toSeenAsRecord(key, id, stored);
+  assert.ok(privateRecord);
+  const blocks = buildSeeYouBlocks(
+    UID,
+    window(),
+    world({ existing: [privateRecord] }),
+  ).join('');
+  assert.match(blocks, /<the_person_says>\[\]<\/the_person_says>/);
+  assert.ok(!blocks.includes('groggy'));
+  const firestore = {
+    collection: () => ({
+      where: () => ({
+        limit: () => ({
+          get: async () => ({
+            docs: [{ id, data: () => stored }],
+          }),
+        }),
+      }),
+    }),
+  };
+  const read = (isMasked: boolean) =>
+    readSeenAsForContext(firestore as never, 'apps/helm/users/u', key, {
+      forgottenAt: null,
+      isMasked,
+    });
+  assert.equal((await read(false)).length, 1);
+  const masked = await read(true);
+  assert.equal(masked.length, 0);
+  const context = buildContext({
+    text: 'hello',
+    reading: READING,
+    createdAt: NOW,
+    timeZone: 'UTC',
+    tasks: [],
+    synced: [],
+    seenAs: masked as ContextSeenAs[],
+  } as never);
+  assert.ok(!context.message.includes('groggy'));
+});
+
+test('a correction guard also holds for lines about no one in particular', () => {
+  const corrected = existing({
+    id: 'sa_c',
+    state: 'corrected',
+    subjectRefs: [],
+    correctedAt: NOW,
+  });
+  assert.deepEqual(
+    reasonOf(
+      [candidate({ subjectRefs: [], newestSourceAt: NOW - DAY })],
+      [corrected],
+    ),
+    ['contradictsCorrection'],
+  );
+  assert.deepEqual(
+    reasonOf(
+      [candidate({ subjectRefs: [], newestSourceAt: NOW + DAY })],
+      [corrected],
+    ),
+    [],
+  );
+  assert.deepEqual(
+    reasonOf(
+      [candidate({ subjectRefs: ['habits/piano'], newestSourceAt: NOW - DAY })],
+      [corrected],
+    ),
+    [],
+  );
+});
+
+const queryOf = (docs: Record<string, unknown>[]) => ({
+  where: () => queryOf(docs),
+  limit: () => queryOf(docs),
+  docs,
+});
+
+test('Forget leaves out the lines made before it, so a re-derived line is new', async () => {
+  const stamp = (id: string, createdAt: number) => ({
+    id,
+    ...shownRecord({ createdAt }).data,
+  });
+  const docs: Record<string, Record<string, unknown>[]> = {
+    patterns: [],
+    style: [],
+    seenAs: [stamp('sa_old', NOW - 5 * DAY), stamp('sa_new', NOW - DAY)],
+  };
+  const firestore = {
+    collection: (path: string) =>
+      queryOf(docs[path.split('/').pop() ?? ''] ?? []),
+  };
+  const result = await readSeeYouWorld(
+    async (query) => {
+      const { docs: found } = query as unknown as {
+        docs: Record<string, unknown>[];
+      };
+      return {
+        docs: found.map(({ id, ...data }) => ({
+          id,
+          data: () => data,
+          get: (field: string) => data[field],
+        })),
+      } as never;
+    },
+    firestore as never,
+    UID,
+    key,
+    NOW - 2 * DAY,
+  );
+  assert.deepEqual(
+    result.existing.map((line) => line.id),
+    ['sa_new'],
+  );
+});
+
+test('a rebuild whose lines all fail the checks never clears the lines already shown', () => {
+  const stale = world({
+    existing: [{ ...shownRecord().record, id: 'sa_stale' }],
+  });
+  const base = {
+    uid: UID,
+    now: NOW,
+    key,
+    window: window(),
+    world: stale,
+    isSourceLive: () => true,
+  };
+  assert.deepEqual(planSeeYou({ ...base, lines: [] }).deletes, ['sa_stale']);
+  assert.deepEqual(
+    planSeeYou({
+      ...base,
+      lines: [
+        {
+          kind: 'rhythm',
+          line: 'You like mornings',
+          sources: [alias('o', 'a')],
+          about: [],
+          isAboutHealth: false,
+        },
+      ],
+    }).deletes,
+    [],
+  );
+});
+
+test('a line removed or corrected since the read is never created again', async () => {
+  const line = 'You keep going when it is shared';
+  const id = toSeenAsId('whatWorks', line);
+  const stored = {
+    exists: true,
+    id,
+    get: (field: string) => (field === 'state' ? 'removed' : undefined),
+  };
+  const seen: string[] = [];
+  const transaction = {
+    get: async () => ({ docs: [] }),
+    getAll: async (...refs: { path: string }[]) => {
+      seen.push(...refs.map((ref) => ref.path));
+      return refs.map((ref) =>
+        ref.path.endsWith(`/seenAs/${id}`)
+          ? stored
+          : { exists: false, id: ref.path, get: () => undefined },
+      );
+    },
+  };
+  const firestore = {
+    collection: () => queryOf([]),
+    doc: (path: string) => ({ path }),
+  };
+  const plan = await planSeeYouIn(transaction as never, firestore as never, {
+    uid: UID,
+    now: NOW,
+    key,
+    window: window(),
+    forgottenAt: null,
+    lines: [
+      {
+        kind: 'whatWorks',
+        line,
+        sources: [alias('o', 'a'), alias('o', 'b')],
+        about: [alias('g', 'goal1')],
+        isAboutHealth: false,
+      },
+    ],
+  });
+  assert.ok(seen.some((path) => path.endsWith(`/seenAs/${id}`)));
+  assert.equal(plan.creates.length, 0);
 });
 
 const failures: string[] = [];

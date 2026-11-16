@@ -278,7 +278,6 @@ export interface ContextInput {
   topicDocument?: 'whole' | 'outline' | null;
   /** Up to ten statements of what has been noticed about the person; left out when learning is off or there are none. */
   noticed?: string[];
-  /** How the assistant sees the person, at most `SEEN_AS_LIMITS.toModel` lines, corrected first; left out when learning is off or there are none. */
   seenAs?: ContextSeenAs[];
   /** The person's style notes, descriptions only; left out when there are none. */
   style?: { traits: string[]; avoid: string[] } | null;

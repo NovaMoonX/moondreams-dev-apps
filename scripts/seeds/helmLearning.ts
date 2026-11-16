@@ -844,8 +844,9 @@ export async function buildLearning(input: {
     toSeedSeenAs(
       {
         kind: 'whatWorks',
-        claim: 'Errands fit Saturday mornings',
+        claim: 'Stretching holds up when it stays a morning thing',
         sourceKeys: [patternKey(2), `habits/${STRETCH}`],
+        subjectRefs: [`habits/${STRETCH}`],
         derivedAt: now - 9 * DAY_MS,
       },
       encryption,
@@ -883,8 +884,8 @@ export async function buildLearning(input: {
     ),
     toSeedSeenAs(
       {
-        kind: 'howYouTalk',
-        claim: '“Later” usually means this week',
+        kind: 'tendency',
+        claim: 'You keep going even when it feels like a chore',
         sourceKeys: [obsKey('seed-obs-guitar-4'), obsKey('seed-obs-stretch-3')],
         derivedAt: now - 3 * DAY_MS,
       },

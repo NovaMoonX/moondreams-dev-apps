@@ -547,6 +547,7 @@ const UNDO_KIND_WORDS: Record<string, string> = {
   procedure: 'a procedure',
   run: 'a run',
   home: 'the home place',
+  seenAs: 'a line about you',
 };
 
 /** What one line of a turn is called when it is offered back: "adding Book flights", "marking Call the vet done", "the change to Wedding". */

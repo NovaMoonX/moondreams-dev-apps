@@ -3,7 +3,11 @@ import { collection, doc, runTransaction, updateDoc } from 'firebase/firestore';
 import { db } from '@lib/firebase/config';
 
 import { store } from '@/store';
-import { cutCorrection, normaliseClaim } from '@apps/helm/engine/seenAs';
+import {
+  cutCorrection,
+  isRefusedLine,
+  normaliseClaim,
+} from '@apps/helm/engine/seenAs';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { sealJson } from '@apps/helm/security';
 import type { OpenSeenAs } from '@apps/helm/store/listeners/seenAsListener';
@@ -25,12 +29,9 @@ interface Written {
   at: number;
 }
 
-/** Puts the fields and the words of a line back as `before` held them, only while the line still holds what this change wrote. */
+/** Puts the fields and the words of a line back as `before` held them, only while the line still holds what this change wrote. Its basis follows the sources the line has now. */
 const restore = async (uid: string, before: OpenSeenAs, written: Written) => {
-  const sealed = await sealJson<SeenAsSealed>(
-    { line: before.line, basis: before.basis, corrected: before.corrected },
-    await getHelmEncryption(uid),
-  );
+  const encryption = await getHelmEncryption(uid);
   const ref = lineRef(uid, before.id);
   return runTransaction(db, async (transaction) => {
     const live = await transaction.get(ref);
@@ -39,11 +40,28 @@ const restore = async (uid: string, before: OpenSeenAs, written: Written) => {
     const stamp =
       written.state === 'corrected' ? data.correctedAt : data.removedAt;
     if (data.state !== written.state || stamp !== written.at) return false;
+    const liveKeys: unknown = data.sourceKeys;
+    const isSameBasis =
+      Array.isArray(liveKeys) &&
+      liveKeys.length === before.sourceKeys.length &&
+      liveKeys.every((key, index) => key === before.sourceKeys[index]);
+    const sealed = await sealJson<SeenAsSealed>(
+      {
+        line: before.line,
+        basis: isSameBasis
+          ? before.basis
+          : (findLine(before.id)?.basis ?? before.basis),
+        corrected: before.corrected,
+      },
+      encryption,
+    );
     transaction.update(ref, {
       state: before.state,
       correctedAt: before.correctedAt,
       removedAt: before.removedAt,
       dontDrawFrom: before.dontDrawFrom,
+      writtenBy: before.writtenBy,
+      privacy: before.privacy,
       sealed,
     });
     return true;
@@ -67,6 +85,8 @@ export async function correctSeenAs(
   await updateDoc(lineRef(uid, id), {
     state: 'corrected',
     correctedAt: at,
+    writtenBy: 'person',
+    privacy: isRefusedLine(corrected, false) ? 'private' : before.privacy,
     sealed,
   });
   return { undo: () => restore(uid, before, { state: 'corrected', at }) };

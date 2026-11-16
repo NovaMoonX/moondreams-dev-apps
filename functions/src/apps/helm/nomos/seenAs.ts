@@ -165,7 +165,6 @@ export interface SeenAsExisting {
 }
 
 export interface SeenAsCandidate {
-  /** The id worked out from `seenAsIdInput(kind, line)`. */
   id: string;
   kind: SeenAsKind;
   line: string;
@@ -216,7 +215,11 @@ export function checkSeenAsCandidates(
     const isOverCorrection = corrected.some(
       (line) =>
         line.kind === candidate.kind &&
-        line.subjectRefs.some((ref) => candidate.subjectRefs.includes(ref)) &&
+        ((line.subjectRefs.length === 0 &&
+          candidate.subjectRefs.length === 0) ||
+          line.subjectRefs.some((ref) =>
+            candidate.subjectRefs.includes(ref),
+          )) &&
         candidate.newestSourceAt <= (line.correctedAt ?? 0),
     );
     if (isOverCorrection) return 'contradictsCorrection';
@@ -296,14 +299,15 @@ export function planSeenAsRebuild(
       ];
     });
   const heldCount =
-    kept.length +
-    existing.filter((line) => line.state === 'corrected').length;
+    kept.length + existing.filter((line) => line.state === 'corrected').length;
   const room = Math.max(0, SEEN_AS_LIMITS.records - heldCount);
   const strip = existing
     .filter((line) => line.state === 'removed')
     .sort((left, right) => (right.removedAt ?? 0) - (left.removedAt ?? 0))
     .slice(room)
-    .filter((line) => line.sourceKeys.length > 0 || line.dontDrawFrom.length > 0)
+    .filter(
+      (line) => line.sourceKeys.length > 0 || line.dontDrawFrom.length > 0,
+    )
     .map((line) => line.id);
   return { write: [...kept], remove, recite, strip };
 }

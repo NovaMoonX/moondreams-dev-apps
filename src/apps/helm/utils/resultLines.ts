@@ -118,6 +118,16 @@ export function buildResultLines(
         },
       ];
     }
+    if (ref.collection === 'seenAs') {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title: HELM_COPY.resultSeenAsFallback,
+          detail: null,
+        },
+      ];
+    }
     if (ref.collection === 'keyDates') {
       return [
         {

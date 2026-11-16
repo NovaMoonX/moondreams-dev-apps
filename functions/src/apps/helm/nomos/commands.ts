@@ -443,7 +443,6 @@ export const MAX_CONTEXT_IMPORTANCE = 30;
 /** The kind the reply may carry that places a project or habit in the person's order of what matters; read from its own list and no `NomosCommand`. */
 export const IMPORTANCE_COMMAND_KINDS = ['setImportance'] as const;
 
-/** The kinds the reply may carry that correct or remove a line of how the assistant sees the person; each is read from its own list and is no `NomosCommand`. */
 export const SEEN_AS_COMMAND_KINDS = ['correctSeenAs', 'removeSeenAs'] as const;
 export const MAX_SEEN_AS_PER_TURN = 3;
 

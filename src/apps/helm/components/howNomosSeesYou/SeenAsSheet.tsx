@@ -138,7 +138,8 @@ function SeenAsSheet({ lineId, onClose }: SeenAsSheetProps) {
   );
 
   const trimmed = draft?.trim() ?? '';
-  const isDirty = draft !== null && trimmed !== '';
+  const isChanged = trimmed !== (line?.corrected ?? line?.line ?? '').trim();
+  const isDirty = draft !== null && trimmed !== '' && isChanged;
   const close = () => {
     setDraft(null);
     onClose();
@@ -290,7 +291,7 @@ function SeenAsSheet({ lineId, onClose }: SeenAsSheetProps) {
                 <Button
                   type='button'
                   loading={isWorking}
-                  disabled={trimmed === ''}
+                  disabled={trimmed === '' || !isChanged}
                   onClick={() =>
                     void run(
                       (uid) => correctSeenAs(uid, line.id, trimmed),

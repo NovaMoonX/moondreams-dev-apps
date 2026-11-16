@@ -2,7 +2,7 @@ import type { SealedPayload } from '../../../appKeys/seal.js';
 import type { SeenAsRecord } from '../seenAsStore.js';
 import type { SeenAsCommand } from './commands.js';
 import type { Effect, EffectRef } from './executeCommands.js';
-import { cutCorrection, normaliseClaim } from './seenAs.js';
+import { cutCorrection, isRefusedLine, normaliseClaim } from './seenAs.js';
 
 export interface SeenAsPlanInput {
   commands: SeenAsCommand[];
@@ -37,7 +37,7 @@ const GONE_LINE = "that line wasn't there any more";
 const ALREADY_LINE = 'that line was already changed in this turn';
 const REMOVED_LINE = 'that line was already removed';
 
-/** What the person's correction or removal writes, without touching a database. Correct sets the person's words and keeps the writer; Remove keeps the record with its claim folded and its sources marked "don't draw this". Each effect holds the fields as they were, so Undo puts the record back exactly. */
+/** What the person's correction or removal writes, without touching a database. Correct sets the person's words, marks the line the person's and private when the words are about something refused; Remove keeps the record with its claim folded and its sources marked "don't draw this". Each effect holds the fields as they were, so Undo puts the record back exactly. */
 export function planSeenAs(input: SeenAsPlanInput): SeenAsPlan {
   return input.commands.reduce<SeenAsPlan>((plan, command) => {
     const record = input.records.get(command.lineId);
@@ -59,6 +59,9 @@ export function planSeenAs(input: SeenAsPlanInput): SeenAsPlan {
     if (command.kind === 'correctSeenAs') {
       const corrected = cutCorrection(command.words);
       if (corrected === '') return skip('those words were empty');
+      const privacy = isRefusedLine(corrected, false)
+        ? 'private'
+        : record.privacy;
       return {
         updates: [
           ...plan.updates,
@@ -67,6 +70,8 @@ export function planSeenAs(input: SeenAsPlanInput): SeenAsPlan {
             data: {
               state: 'corrected',
               correctedAt: input.now,
+              writtenBy: 'person',
+              privacy,
               sealed: input.seal({ ...words, corrected }),
             },
           },
@@ -78,18 +83,22 @@ export function planSeenAs(input: SeenAsPlanInput): SeenAsPlan {
             written: {
               state: 'corrected',
               correctedAt: input.now,
+              writtenBy: 'person',
+              privacy,
               'sealed.corrected': corrected,
             },
             previous: {
               state: record.state,
               correctedAt: record.correctedAt,
+              writtenBy: record.writtenBy,
+              privacy: record.privacy,
               'sealed.corrected': words.corrected,
             },
           },
         ],
         lines: [...plan.lines, buildSeenAsChangedLine(corrected)],
         notKept: plan.notKept,
-        isPrivate: plan.isPrivate || record.privacy === 'private',
+        isPrivate: plan.isPrivate || privacy === 'private',
       };
     }
     const claim = normaliseClaim(words.line);

@@ -2419,7 +2419,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           forgottenAt:
             (profile.get('forgottenAt') as number | null | undefined) ?? null,
           isMasked: earlyMask.isOn,
-        }).catch(() => [])
+        }).catch((error): never[] => {
+          logger.warn('helm.seenAs.read', {
+            cause: error instanceof Error ? error.name : 'error',
+          });
+          return [];
+        })
       : [];
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
