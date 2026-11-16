@@ -277,6 +277,8 @@ const readResearchAsk = (text: string) => {
   if (!match) return null;
   const subject = match[1]
     .replace(/\b(properly|thoroughly|for me|quickly|a quick look)\b/gi, '')
+    .split(',')[0]
+    .replace(/\s+(?:and\s+)?(?:tell me\s+)?(?:which|what|who)\b.*$/i, '')
     .replace(/\s+/g, ' ')
     .trim();
   return {

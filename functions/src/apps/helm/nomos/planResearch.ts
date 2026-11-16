@@ -6,7 +6,11 @@ import type {
   PlannedQuestion,
   QuestionStateEntry,
 } from './executeCommands.js';
-import { baseQuestion, toPlannedQuestion } from './planHabitCommands.js';
+import {
+  baseQuestion,
+  buildHabitAnswerExecution,
+  toPlannedQuestion,
+} from './planHabitCommands.js';
 import {
   RESEARCH_DEPTHS,
   pickResearchDepth,
@@ -23,7 +27,6 @@ export const RESEARCH_WORDS = {
     fiveToTen: "About 5 to 10 minutes; I'll tell you when it's in.",
     byMorning: 'It will be ready by morning.',
   },
-  looking: (subject: string) => `Looking into ${subject}`,
   depthQuestion: (subject: string) => `How deep should I look into ${subject}?`,
   quick: 'A quick look',
   thorough: 'A thorough look',
@@ -33,6 +36,14 @@ export const RESEARCH_WORDS = {
     `Thorough looks are used up this month; they come back ${resetOn}.`,
   cappedLine: (resetOn: string) =>
     `This month's web searches are used up, so this is from what I already know. Want me to look on the web on ${resetOn}?`,
+  cappedBooked: (resetOn: string) =>
+    `This month's web searches are used up, so this is from what I already know. I'm already set to look on the web on ${resetOn}.`,
+  downgraded: (resetOn: string) =>
+    `A thorough look won't fit this month, so this is a quick one; thorough looks come back ${resetOn}.`,
+  alwaysQuickSet:
+    "Got it, I'll always take a quick look. You can change this in Settings → Research.",
+  alwaysThoroughSet:
+    "Got it, I'll always take a thorough look. You can change this in Settings → Research.",
   rerunYes: (resetOn: string) => `Look on ${resetOn}`,
   rerunNo: 'This is enough',
   tooMuch: 'That was too much to look into in one go',
@@ -166,6 +177,25 @@ export const toStartFields = (
 const arrivalWords = (depth: ResearchDepth) =>
   RESEARCH_WORDS.arrival[readResearchArrival(depth, 'now')];
 
+/** What the reply says about a look that starts: when it arrives, that a thorough look was cut to a quick one, or that the month's searches are used up (and when a look on the web is booked). */
+const toReplyLine = (input: {
+  start: ReturnType<typeof planStart>;
+  said: ResearchDepth | 'ask';
+  isRerunBooked: boolean;
+  thoroughResetOn: number;
+}) => {
+  const resetWords = toResetWords(input.start.resetOn);
+  if (input.start.isWithoutWeb) {
+    return input.isRerunBooked
+      ? RESEARCH_WORDS.cappedBooked(resetWords)
+      : RESEARCH_WORDS.cappedLine(resetWords);
+  }
+  const arrival = arrivalWords(input.start.depth);
+  return input.said === 'thorough' && input.start.depth !== 'thorough'
+    ? `${RESEARCH_WORDS.downgraded(toResetWords(input.thoroughResetOn))} ${arrival}`
+    : arrival;
+};
+
 /** The pickOne that asks how deep to look; Thorough is shown locked, with why in its detail, when the month can't pay for one. */
 const buildDepthQuestion = (
   subject: string,
@@ -236,6 +266,8 @@ export interface ResearchPlanInput {
   seal: (fields: Record<string, unknown>) => SealedPayload;
   /** How many effects the turn may still write. */
   room: number;
+  /** A look on the web is already booked or offered, so a capped look makes no second offer. */
+  isRerunBooked: boolean;
 }
 
 const EMPTY: ResearchPlan = {
@@ -324,7 +356,12 @@ export function planResearch(input: ResearchPlanInput): ResearchPlan {
         ? acc.lines
         : [
             ...acc.lines,
-            `${RESEARCH_WORDS.looking(command.subject)}. ${arrivalWords(start.depth)}`,
+            toReplyLine({
+              start,
+              said,
+              isRerunBooked: input.isRerunBooked,
+              thoroughResetOn: allowance.resetOn,
+            }),
           ],
       questions: isAsking
         ? [
@@ -346,6 +383,9 @@ export function planResearch(input: ResearchPlanInput): ResearchPlan {
 }
 
 export interface ResearchResolveInput {
+  captureId: string;
+  executionId: string;
+  seal: ResearchPlanInput['seal'];
   questionId: string;
   optionId: string;
   by: 'tap' | 'voice';
@@ -369,6 +409,8 @@ export type ResearchResolveResult =
       research: { id: string; data: Record<string, unknown> } | null;
       usage: ResearchUsageDoc | null;
       profile: Record<string, unknown> | null;
+      /** The line that confirms an "always" answer, kept as an execution with no effects; null for any other answer. */
+      execution: Record<string, unknown> | null;
       capture: Record<string, unknown>;
     };
 
@@ -455,6 +497,24 @@ export function planResolveResearch(
             : {}),
         }
       : null;
+  const confirmation =
+    start !== null && picked?.isDefault
+      ? picked.depth === 'thorough'
+        ? RESEARCH_WORDS.alwaysThoroughSet
+        : RESEARCH_WORDS.alwaysQuickSet
+      : null;
+  const execution = confirmation
+    ? buildHabitAnswerExecution(
+        {
+          isPrivate: false,
+          effectRefs: [],
+          effects: [],
+          lines: [confirmation],
+          notKept: [],
+        },
+        { captureId: input.captureId, questionId, now, seal: input.seal },
+      )
+    : null;
   const questionState = {
     ...capture.questionState,
     [questionId]: { ...state, answeredAt: now },
@@ -468,6 +528,7 @@ export function planResolveResearch(
     research,
     usage,
     profile,
+    execution,
     capture: {
       questionState,
       sealed: {
@@ -489,7 +550,9 @@ export function planResolveResearch(
       },
       status:
         !isOpen && capture.status === 'needsYou' ? 'sorted' : capture.status,
-      executionIds: capture.executionIds,
+      executionIds: execution
+        ? [...capture.executionIds, input.executionId]
+        : capture.executionIds,
     },
   };
 }

@@ -42,15 +42,19 @@ async function rerunOne(
     ]);
     const data = snap.data();
     const timeZone = String(profileSnap.get('timeZone') ?? 'UTC');
-    if (
-      !data ||
-      (data.status !== 'ready' && data.status !== 'done') ||
-      data.isWithoutWeb !== true ||
-      typeof data.rerunOn !== 'number' ||
-      !isResearchRerunDue(data.rerunOn, now, timeZone)
-    ) {
+    if (!data || typeof data.rerunOn !== 'number') return false;
+    const canRerun =
+      (data.status === 'ready' || data.status === 'done') &&
+      data.isWithoutWeb === true;
+    if (!canRerun) {
+      transaction.update(ref, { rerunOn: null });
+      logger.warn('helm.research.rerunSkipped', {
+        reason: 'neverRerunnable',
+        status: String(data.status),
+      });
       return false;
     }
+    if (!isResearchRerunDue(data.rerunOn, now, timeZone)) return false;
     const usage = await readUsageIn(transaction, firestore, uid, now, timeZone);
     const start = planStart({
       id: researchId,
@@ -59,7 +63,10 @@ async function rerunOne(
       now,
       timeZone,
     });
-    if (start.isWithoutWeb) return false;
+    if (start.isWithoutWeb) {
+      logger.warn('helm.research.rerunSkipped', { reason: 'stillCapped' });
+      return false;
+    }
     transaction.update(ref, {
       ...toStartFields(start, now),
       rerunOn: null,
@@ -77,7 +84,7 @@ async function rerunOne(
   });
 }
 
-/** Gives up an item whose run took the claim and never settled, so what it held comes back. */
+/** Gives up an item whose run took the claim and never settled, or that was never claimed at all, so what it held comes back. */
 async function sweepOne(
   firestore: Firestore,
   keyring: ReturnType<typeof loadKeyringOrFail>,
@@ -86,7 +93,10 @@ async function sweepOne(
   now: number,
 ) {
   const key = await unwrapHelmKey(firestore, keyring, uid).catch(() => null);
-  if (!key) return;
+  if (!key) {
+    logger.warn('helm.research.sweepSkipped', { reason: 'noKey' });
+    return;
+  }
   await settleResearch(
     firestore,
     key,
@@ -110,6 +120,7 @@ export const rerunHelmResearch = onSchedule(
     const due = await firestore
       .collectionGroup('research')
       .where('rerunOn', '<=', now + AHEAD_MS)
+      .orderBy('rerunOn')
       .limit(BATCH)
       .get();
     const reruns = await Promise.all(
@@ -126,9 +137,9 @@ export const rerunHelmResearch = onSchedule(
     const stuck = preparing.docs.flatMap((doc) => {
       const owner = readOwner(doc.ref.path);
       const startedAt = doc.get('startedAt');
-      return owner &&
-        typeof startedAt === 'number' &&
-        now - startedAt > STUCK_AFTER_MS
+      const createdAt = doc.get('createdAt');
+      const since = typeof startedAt === 'number' ? startedAt : createdAt;
+      return owner && typeof since === 'number' && now - since > STUCK_AFTER_MS
         ? [{ uid: owner[1], id: owner[2] }]
         : [];
     });

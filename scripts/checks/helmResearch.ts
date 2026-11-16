@@ -22,6 +22,11 @@ import {
   readResearchArrival,
   readResearchResetOn,
 } from '../../src/apps/helm/engine/research.ts';
+import {
+  planUndo,
+  type UndoTarget,
+} from '../../src/apps/helm/nomos/planUndo.ts';
+import type { OpenExecution } from '../../src/apps/helm/types.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 
 const NOW = Date.UTC(2026, 10, 16, 12, 0);
@@ -60,6 +65,7 @@ const ask = (over: Partial<Parameters<typeof planResearch>[0]> = {}) => {
     newId: () => `id-${(count += 1)}`,
     seal: (fields) => fields as never,
     room: 5,
+    isRerunBooked: false,
     ...over,
   });
 };
@@ -169,7 +175,7 @@ test('planResearch, depth known and live: preparing, reserved, with the arrival 
     collection: 'research',
     docId: 'id-1',
   });
-  assert.match(plan.lines[0] ?? '', /Give me about 2 minutes\.$/);
+  assert.equal(plan.lines[0], 'Give me about 2 minutes.');
   assert.equal(plan.usage?.cents, 11);
   assert.equal(plan.usage?.reserved['id-1'], 11);
   const thorough = ask({
@@ -253,6 +259,18 @@ test('planResearch, capped: preparing from general knowledge, nothing reserved',
   });
   assert.equal(downgraded.creates[0]?.doc.depth, 'light');
   assert.equal(downgraded.creates[0]?.doc.isWithoutWeb, false);
+  assert.equal(
+    downgraded.lines[0],
+    "A thorough look won't fit this month, so this is a quick one; thorough looks come back Dec 1. Give me about 2 minutes.",
+  );
+  assert.match(plan.lines[0] ?? '', /^This month's web searches are used up/);
+  assert.match(plan.lines[0] ?? '', /Dec 1\?$/);
+  assert.doesNotMatch(plan.lines[0] ?? '', /minutes|Looking into/);
+  const booked = ask({ usage: usage(195), isRerunBooked: true });
+  assert.match(
+    booked.lines[0] ?? '',
+    /already set to look on the web on Dec 1/,
+  );
 });
 
 test('the usage reserves, settles at the real cost and releases', () => {
@@ -300,6 +318,9 @@ test('answering the depth question starts the item; always writes the default', 
   });
   const sealed = plan.questions[0]?.sealed as Record<string, unknown>;
   const base = {
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    seal: (fields: Record<string, unknown>) => fields as never,
     questionId: 'q1',
     by: 'tap' as const,
     now: NOW,
@@ -315,10 +336,16 @@ test('answering the depth question starts the item; always writes the default', 
   assert.equal(quick.research?.data.depth, 'light');
   assert.equal(quick.usage?.cents, 11);
   assert.equal(quick.profile?.researchDepth, undefined);
+  assert.equal(quick.execution, null);
   const always = planResolveResearch({ ...base, optionId: 'alwaysThorough' });
   assert.ok(always.refused === null);
   if (always.refused !== null) return;
   assert.equal(always.profile?.researchDepth, 'thorough');
+  assert.deepEqual(always.capture.executionIds, ['exec-1']);
+  assert.match(
+    JSON.stringify(always.execution),
+    /always take a thorough look\. You can change this in Settings/,
+  );
   assert.equal(always.research?.data.reservedCents, 35);
   const wasCancelled = planResolveResearch({
     ...base,
@@ -339,6 +366,9 @@ test('answering the rerun question writes rerunOn only on a yes', () => {
     heldCommands: [{ kind: 'researchRerun', researchId: 'r1', resetOn }],
   };
   const base = {
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    seal: (fields: Record<string, unknown>) => fields as never,
     questionId: 'q1',
     by: 'tap' as const,
     now: NOW,
@@ -410,6 +440,72 @@ test("the reply is read into one capped command; the overview into the depth's c
     rows: [['1', '2']],
   });
   assert.equal(readResearchOverview({ summary: '' }, 'light'), null);
+});
+
+const madeBy = (id: string) =>
+  ({
+    id: 'exec-1',
+    privacy: 'ordinary',
+    said: null,
+    captureId: 'capture-1',
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [{ op: 'create', collection: 'research', docId: id }],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: NOW - 60_000,
+    decidedAt: NOW - 60_000,
+    finishedAt: NOW - 60_000,
+    summary: 'x',
+    effects: [
+      { written: { 'sealed.title': 'standing desks' }, previous: null },
+    ],
+    commands: [],
+    notDone: [],
+    abilityOffer: null,
+    awayZoneOffer: null,
+    undoReport: null,
+    goneIds: [],
+    lines: null,
+    spoken: null,
+    isUnreadable: false,
+  }) as unknown as OpenExecution;
+
+const undoResearch = (data: Record<string, unknown> | null) => {
+  const target: UndoTarget = { docId: 'r1', data, opened: null };
+  return planUndo({
+    original: madeBy('r1'),
+    targets: new Map([['r1', target]]),
+    undoExecutionId: 'undo-1',
+    now: NOW,
+    usedIds: new Set(),
+  });
+};
+
+test('undoing a research create stops it with a field-scoped dismiss, never a delete', () => {
+  const plan = undoResearch({
+    status: 'preparing',
+    lastEditedAt: NOW - 60_000,
+  });
+  assert.equal(plan.kind, 'write');
+  if (plan.kind !== 'write') return;
+  assert.deepEqual(plan.deletes, []);
+  assert.deepEqual(plan.updates[0]?.fields, {
+    status: 'dismissed',
+    cancelledAt: NOW,
+    lastEditedAt: NOW,
+  });
+  assert.equal(plan.updates[0]?.reseal, null);
+  const asking = undoResearch({ status: 'asking', lastEditedAt: null });
+  assert.ok(asking.kind === 'write' && asking.deletes.length === 0);
+  const ready = undoResearch({ status: 'ready', lastEditedAt: NOW - 1_000 });
+  assert.ok(ready.kind === 'write' ? ready.updates.length === 0 : true);
 });
 
 const failures: string[] = [];

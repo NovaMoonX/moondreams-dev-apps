@@ -305,7 +305,11 @@ import {
   readUsageDoc,
   toAllowanceMirror,
 } from './nomos/planResearch.js';
-import { readUsageIn, usageRef } from './research/researchStore.js';
+import {
+  readIsRerunBookedIn,
+  readUsageIn,
+  usageRef,
+} from './research/researchStore.js';
 import type {
   ScheduleCommand,
   ScheduleDrop,
@@ -4660,6 +4664,10 @@ async function writeResult(
             researchTimeZone,
           )
         : readUsageDoc(undefined, now, researchTimeZone);
+    const isResearchRerunBooked =
+      researchCommands.length > 0 && !isStale
+        ? await readIsRerunBookedIn(transaction, firestore, input.uid, null)
+        : false;
     const schedulePlan = planScheduledActions({
       commands: keptSchedule,
       stored: scheduledStored,
@@ -4694,6 +4702,7 @@ async function writeResult(
           ? profileSnap.get('researchDepth')
           : null,
       usage: researchUsage,
+      isRerunBooked: isResearchRerunBooked,
       timeZone: researchTimeZone,
       now,
       captureId: captureRef.id,

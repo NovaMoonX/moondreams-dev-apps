@@ -64,16 +64,22 @@ const toOverview = (value: unknown): ResearchOverview | null => {
   };
 };
 
-const toSources = (value: unknown): ResearchSealed['sources'] =>
-  Array.isArray(value)
-    ? value
-        .filter((one) => one && typeof one.url === 'string')
-        .map((one) => ({
-          title: typeof one.title === 'string' ? one.title : one.url,
-          url: one.url as string,
-          site: typeof one.site === 'string' ? one.site : '',
-        }))
-    : [];
+const toSources = (value: unknown): ResearchSealed['sources'] => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((one) => {
+    const url = typeof one?.url === 'string' ? one.url : '';
+    if (!url.startsWith('https://') || seen.has(url)) return [];
+    seen.add(url);
+    return [
+      {
+        title: typeof one.title === 'string' ? one.title : url,
+        url,
+        site: typeof one.site === 'string' ? one.site : '',
+      },
+    ];
+  });
+};
 
 /** A research item that won't open is kept with no words, so a screen never draws it. */
 async function openResearch(

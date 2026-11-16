@@ -299,8 +299,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     ],
     jobFields: [
       {
-        field:
-          'lastRunAt, lastRunDueAt, lastRunCaptureId, lastOutcome, lastFailReason, nextRunAt, nextRunKey, runNowAt, status and endedBy once the rule has finished',
+        field: 'lastRunAt, lastRunDueAt, lastRunCaptureId, lastOutcome, lastFailReason, nextRunAt, nextRunKey, runNowAt, status and endedBy once the rule has finished',
         job: 'runHelmScheduledActions',
       },
     ],

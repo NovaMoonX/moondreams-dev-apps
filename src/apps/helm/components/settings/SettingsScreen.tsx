@@ -56,7 +56,6 @@ import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
-import { readThoroughLeft } from '@apps/helm/utils/researchWords';
 import { formatClockTime } from '@/utils/formatUtils';
 import { setDailyFreshOn } from '@apps/helm/store/actions/settingsActions';
 import { helmAppName, helmTrustStore } from '@apps/helm/queries/helmKeyQueries';
@@ -228,24 +227,11 @@ function SettingsScreen({
             icon={<Search className='size-5' aria-hidden='true' />}
             title={HELM_COPY.researchSettingsTitle}
             description={
-              <>
-                <span className='block'>
-                  {profile?.researchDepth === 'light'
-                    ? HELM_COPY.researchDepthQuick
-                    : profile?.researchDepth === 'thorough'
-                      ? HELM_COPY.researchDepthThorough
-                      : HELM_COPY.researchSettingsAsk}
-                </span>
-                <span className='block'>
-                  {HELM_COPY.researchThoroughLeft(
-                    readThoroughLeft(
-                      profile?.researchAllowance ?? null,
-                      now,
-                      profile?.timeZone ?? 'UTC',
-                    ),
-                  )}
-                </span>
-              </>
+              profile?.researchDepth === 'light'
+                ? HELM_COPY.researchDepthAlwaysQuick
+                : profile?.researchDepth === 'thorough'
+                  ? HELM_COPY.researchDepthAlwaysThorough
+                  : HELM_COPY.researchSettingsAsk
             }
             onClick={() => setIsResearchOpen(true)}
             hasChevron

@@ -523,6 +523,23 @@ const planRecord = (
         target.data.lastEditedAt !== madeAt);
     if (isUsed) return left;
   }
+  if (create?.ref.collection === 'research') {
+    const status = target.data.status;
+    if (status === 'dismissed') return left;
+    return (status === 'asking' || status === 'preparing') &&
+      (target.data.lastEditedAt === null || target.data.lastEditedAt === madeAt)
+      ? {
+          kind: 'restored',
+          title,
+          fields: { status: 'dismissed', cancelledAt: now, lastEditedAt: now },
+          reseal: null,
+          effect: {
+            written: { status: 'dismissed', 'sealed.title': title },
+            previous: { status, 'sealed.title': title },
+          },
+        }
+      : { kind: 'kept', title };
+  }
   if (create) {
     if (updated.hasKeptEntry) return { kind: 'kept', title };
     // Its own later effects stamp the record with the execution's time, which is not an edit since.

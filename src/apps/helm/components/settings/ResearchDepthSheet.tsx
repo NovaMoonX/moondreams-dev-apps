@@ -5,9 +5,11 @@ import { PillGroup, type PillOption } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { setResearchDepth } from '@apps/helm/store/actions/settingsActions';
+import { readResearchResetOn } from '@apps/helm/engine/research';
 import { readThoroughLeft } from '@apps/helm/utils/researchWords';
 
 interface ResearchDepthSheetProps {
@@ -19,8 +21,8 @@ type DepthChoice = 'ask' | 'light' | 'thorough';
 
 const OPTIONS: PillOption<DepthChoice>[] = [
   { value: 'ask', label: HELM_COPY.researchSettingsAsk },
-  { value: 'light', label: HELM_COPY.researchDepthQuick },
-  { value: 'thorough', label: HELM_COPY.researchDepthThorough },
+  { value: 'light', label: HELM_COPY.researchDepthAlwaysQuick },
+  { value: 'thorough', label: HELM_COPY.researchDepthAlwaysThorough },
 ];
 
 /** How deep to look by default: Ask me when it matters, a quick look or a thorough one, with what is left of the month's allowance. */
@@ -66,6 +68,7 @@ function ResearchDepthSheet({ isOpen, onClose }: ResearchDepthSheetProps) {
               now,
               profile?.timeZone ?? 'UTC',
             ),
+            formatDateUTC(readResearchResetOn(now, profile?.timeZone ?? 'UTC')),
           )}
         </p>
       </div>

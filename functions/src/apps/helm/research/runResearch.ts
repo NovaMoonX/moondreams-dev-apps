@@ -36,9 +36,11 @@ import {
   type ResearchDepth,
 } from '../nomos/research.js';
 import { ANTHROPIC_API_KEY } from '../sortHelmCapture.js';
-import { readUsageIn, usageRef } from './researchStore.js';
+import { readIsRerunBookedIn, readUsageIn, usageRef } from './researchStore.js';
 
 const HUNDREDTHS_PER_CENT = 100;
+/** How often a running look checks whether the person stopped it. */
+const WATCH_EVERY_MS = 8_000;
 /** What one search costs the project, in hundredths of a cent: $10 per 1,000 searches. */
 const SEARCH_HUNDREDTHS = 100;
 /** A run that took the claim and never settled is given up after this long. */
@@ -278,10 +280,16 @@ export async function settleResearch(
       );
     const captureId =
       isWanted && typeof data.captureId === 'string' ? data.captureId : null;
-    const captureSnap =
-      captureId && settlement.result && data?.isWithoutWeb === true
-        ? await transaction.get(firestore.doc(`${base}/captures/${captureId}`))
-        : null;
+    const wantsRerun =
+      captureId !== null &&
+      settlement.result !== null &&
+      data?.isWithoutWeb === true;
+    const [captureSnap, isRerunBooked] = wantsRerun
+      ? await Promise.all([
+          transaction.get(firestore.doc(`${base}/captures/${captureId}`)),
+          readIsRerunBookedIn(transaction, firestore, uid, researchId),
+        ])
+      : [null, false];
     if (isWanted) {
       const opened = openForHelm(key, data.sealed as SealedPayload);
       transaction.update(
@@ -319,7 +327,7 @@ export async function settleResearch(
     if (settlement.hundredths > 0) {
       recordAiSpendIn(transaction, firestore, now, settlement.hundredths);
     }
-    if (captureSnap?.exists) {
+    if (captureSnap?.exists && !isRerunBooked) {
       const capture = captureSnap.data() ?? {};
       try {
         const opened = openForHelm(key, capture.sealed as SealedPayload);
@@ -376,6 +384,28 @@ const toSettlement = (
   };
 };
 
+/** Watches a running item and aborts the search once the person has stopped it, so no further turn is paid for; what it held and spent settles as for any dismissed item. */
+const watchForStop = (
+  firestore: Firestore,
+  uid: string,
+  researchId: string,
+) => {
+  const controller = new AbortController();
+  const ref = firestore.doc(`apps/helm/users/${uid}/research/${researchId}`);
+  const timer = setInterval(() => {
+    ref
+      .get()
+      .then((snap) => {
+        if (snap.get('status') !== 'preparing') controller.abort();
+      })
+      .catch(() => undefined);
+  }, WATCH_EVERY_MS);
+  return {
+    signal: controller.signal,
+    stop: () => clearInterval(timer),
+  };
+};
+
 /** Runs one preparing item: claims it, asks within the depth's budget (with no web tool once the month's allowance was spent), and settles. */
 export async function runResearchItem(
   firestore: Firestore,
@@ -386,11 +416,18 @@ export async function runResearchItem(
   now: number,
 ): Promise<ResearchOutcome> {
   const key = await unwrapHelmKey(firestore, keyring, uid).catch(() => null);
-  if (!key) return 'skipped';
+  if (!key) {
+    logger.warn('helm.research.skipped', { reason: 'noKey' });
+    return 'skipped';
+  }
   const claimed = await claim(firestore, key, uid, researchId, now);
-  if (!claimed) return 'skipped';
+  if (!claimed) {
+    logger.warn('helm.research.skipped', { reason: 'notClaimable' });
+    return 'skipped';
+  }
   const depth = isDepth(claimed.data.depth) ? claimed.data.depth : 'light';
   const hasWeb = claimed.data.isWithoutWeb !== true;
+  const watch = watchForStop(firestore, uid, researchId);
   const search = provider
     ? await provider
         .runWebSearch({
@@ -403,9 +440,11 @@ export async function runResearchItem(
           maxSearches: hasWeb ? RESEARCH_DEPTHS[depth].maxSearches : 0,
           maxMillis: RESEARCH_DEPTHS[depth].timeBudgetMs,
           terminalTool: SUBMIT_RESEARCH_TOOL,
+          signal: watch.signal,
         })
         .catch(() => null)
     : null;
+  watch.stop();
   const settlement = toSettlement(search, depth);
   await settleResearch(firestore, key, uid, researchId, settlement, Date.now());
   logger.info('helm.research.settled', {
@@ -414,6 +453,7 @@ export async function runResearchItem(
     isRead: settlement.result !== null,
     searches: settlement.searches,
     endedBy: search?.endedBy ?? 'noProvider',
+    isStopped: watch.signal.aborted,
   });
   return settlement.result ? 'ran' : 'failed';
 }

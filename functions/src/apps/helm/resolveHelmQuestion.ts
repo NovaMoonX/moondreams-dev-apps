@@ -451,7 +451,11 @@ export const resolveHelmQuestion = onCall(
           now,
           timeZone,
         );
+        const executionRef = firestore.collection(`${base}/executions`).doc();
         const answered = planResolveResearch({
+          captureId,
+          executionId: executionRef.id,
+          seal,
           questionId,
           optionId,
           by,
@@ -479,6 +483,8 @@ export const resolveHelmQuestion = onCall(
             firestore.doc(`${base}/research/${answered.research.id}`),
             answered.research.data,
           );
+        if (answered.execution)
+          transaction.create(executionRef, answered.execution);
         if (answered.usage)
           transaction.set(usageRef(firestore, uid), answered.usage);
         if (answered.profile && profileSnap.exists)
@@ -487,7 +493,10 @@ export const resolveHelmQuestion = onCall(
           ...answered.capture,
           sealed: seal(answered.capture.sealed as Record<string, unknown>),
         });
-        return { executionId: null, isStale: false };
+        return {
+          executionId: answered.execution ? executionRef.id : null,
+          isStale: false,
+        };
       }
       if (held?.kind === 'whichComesFirst') {
         const now = Date.now();

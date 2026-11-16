@@ -1618,6 +1618,10 @@ export const HELM_COPY = {
   researchOpen: 'Open',
   researchCancel: 'Stop looking',
   researchCancelled: 'Stopped looking.',
+  researchStoppedLine: (subject: string) =>
+    `You stopped the look into ${subject}.`,
+  researchStopFailed: "Couldn't stop that look. Try again in a moment.",
+  researchRerunOn: (resetOn: string) => `I'll look on the web on ${resetOn}`,
   researchSources: 'Sources',
   researchDepthQuestion: (subject: string) =>
     `How deep should I look into ${subject}?`,
@@ -1635,13 +1639,13 @@ export const HELM_COPY = {
   researchSettingsDefault: 'How deep to look',
   researchSettingsAsk: 'Ask me when it matters',
   researchSettingsIntro: (name: string) =>
-    `How deep ${name} looks when you ask it to find something out on the web. A thorough look reads more widely and uses more of this month's allowance.`,
+    `How deep ${name} looks on the web. A thorough look reads more and uses more of this month's allowance.`,
   researchSettingsFailed: "Couldn't save that. Check your connection.",
   researchNothingToShow: "I couldn't put anything together for this one.",
   researchComparisonLabel: 'Side by side',
-  researchThoroughLeft: (count: number) =>
+  researchThoroughLeft: (count: number, resetOn: string) =>
     count === 0
-      ? 'No thorough looks left this month'
+      ? `No thorough looks left this month; they come back ${resetOn}.`
       : `About ${count} thorough ${count === 1 ? 'look' : 'looks'} left this month`,
   answerGeneralHeading: 'General knowledge',
   answerGeneralCaution: (name: string) =>

@@ -127,8 +127,11 @@ function ResearchSheet({ research, onClose }: ResearchSheetProps) {
                 {HELM_COPY.researchSources}
               </h3>
               <ul className='divide-border divide-y'>
-                {research.sources.map((source) => (
-                  <li key={source.url} className='flex min-w-0 flex-col py-2'>
+                {research.sources.map((source, index) => (
+                  <li
+                    key={`${source.url}-${index}`}
+                    className='flex min-w-0 flex-col py-2'
+                  >
                     <ExternalLinkText href={source.url} label={source.title} />
                     {source.site && (
                       <span className='text-muted-foreground text-[13px] break-words'>
