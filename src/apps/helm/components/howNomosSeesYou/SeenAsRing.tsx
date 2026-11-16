@@ -6,11 +6,12 @@ import { SEEN_AS_WORDS } from '@apps/helm/components/howNomosSeesYou/seenAsWords
 interface SeenAsRingProps {
   isCorrected: boolean;
   assistant: string;
-  className?: string;
+  /** Sits centred in a caption line, with no drop to meet a first text line. */
+  isInline?: boolean;
 }
 
 /** The ring beside a line: filled when the person said it, hollow when the assistant noticed it. */
-function SeenAsRing({ isCorrected, assistant, className }: SeenAsRingProps) {
+function SeenAsRing({ isCorrected, assistant, isInline }: SeenAsRingProps) {
   return (
     <SourceRing
       isConfirmed={isCorrected}
@@ -19,7 +20,7 @@ function SeenAsRing({ isCorrected, assistant, className }: SeenAsRingProps) {
           ? SEEN_AS_WORDS.ringSaid
           : SEEN_AS_WORDS.ringNoticed(assistant)
       }
-      className={join('mt-1.5', className)}
+      className={join(!isInline && 'mt-1.5')}
     />
   );
 }

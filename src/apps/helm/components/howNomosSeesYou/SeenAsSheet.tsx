@@ -147,7 +147,11 @@ function SeenAsSheet({ lineId, onClose }: SeenAsSheetProps) {
 
   const undoWith = (change: SeenAsChange) => () =>
     void change.undo().then(
-      () => addToast({ title: SEEN_AS_WORDS.undone, type: 'info' }),
+      (isUndone) =>
+        addToast({
+          title: isUndone ? SEEN_AS_WORDS.undone : SEEN_AS_WORDS.changedSince,
+          type: 'info',
+        }),
       (error: unknown) => {
         console.error('Helm seen-as change was not undone', error);
         addToast({ title: SEEN_AS_WORDS.failed, type: 'error' });
@@ -200,7 +204,7 @@ function SeenAsSheet({ lineId, onClose }: SeenAsSheetProps) {
             <SeenAsRing
               isCorrected={isCorrected}
               assistant={assistant}
-              className='mt-0'
+              isInline
             />
             <span className='min-w-0 break-words'>{meta}</span>
             {line.privacy === 'private' && (

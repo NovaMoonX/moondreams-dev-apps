@@ -1,4 +1,4 @@
-import { collection, doc, updateDoc } from 'firebase/firestore';
+import { collection, doc, runTransaction, updateDoc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -10,8 +10,8 @@ import type { OpenSeenAs } from '@apps/helm/store/listeners/seenAsListener';
 import type { SeenAsSealed } from '@apps/helm/types';
 
 export interface SeenAsChange {
-  /** Puts back exactly what the line held before the change. */
-  undo: () => Promise<void>;
+  /** Puts back exactly what the line held before the change; false when the line changed since, and is left alone. */
+  undo: () => Promise<boolean>;
 }
 
 const lineRef = (uid: string, id: string) =>
@@ -20,18 +20,33 @@ const lineRef = (uid: string, id: string) =>
 const findLine = (id: string) =>
   store.getState().helm.seenAs.items.find((one) => one.id === id) ?? null;
 
-/** Puts the fields and the words of a line back as `before` held them. */
-const restore = async (uid: string, before: OpenSeenAs) => {
+interface Written {
+  state: OpenSeenAs['state'];
+  at: number;
+}
+
+/** Puts the fields and the words of a line back as `before` held them, only while the line still holds what this change wrote. */
+const restore = async (uid: string, before: OpenSeenAs, written: Written) => {
   const sealed = await sealJson<SeenAsSealed>(
     { line: before.line, basis: before.basis, corrected: before.corrected },
     await getHelmEncryption(uid),
   );
-  await updateDoc(lineRef(uid, before.id), {
-    state: before.state,
-    correctedAt: before.correctedAt,
-    removedAt: before.removedAt,
-    dontDrawFrom: before.dontDrawFrom,
-    sealed,
+  const ref = lineRef(uid, before.id);
+  return runTransaction(db, async (transaction) => {
+    const live = await transaction.get(ref);
+    if (!live.exists()) return false;
+    const data = live.data();
+    const stamp =
+      written.state === 'corrected' ? data.correctedAt : data.removedAt;
+    if (data.state !== written.state || stamp !== written.at) return false;
+    transaction.update(ref, {
+      state: before.state,
+      correctedAt: before.correctedAt,
+      removedAt: before.removedAt,
+      dontDrawFrom: before.dontDrawFrom,
+      sealed,
+    });
+    return true;
   });
 };
 
@@ -48,12 +63,13 @@ export async function correctSeenAs(
     { line: before.line, basis: before.basis, corrected },
     await getHelmEncryption(uid),
   );
+  const at = Date.now();
   await updateDoc(lineRef(uid, id), {
     state: 'corrected',
-    correctedAt: Date.now(),
+    correctedAt: at,
     sealed,
   });
-  return { undo: () => restore(uid, before) };
+  return { undo: () => restore(uid, before, { state: 'corrected', at }) };
 }
 
 /** "Remove this": the line is forgotten and its sources are marked, so no new line of the kind is drawn from them; the words behind it stay where they were said. */
@@ -67,11 +83,12 @@ export async function removeSeenAs(
     { line: normaliseClaim(before.line), basis: before.basis, corrected: null },
     await getHelmEncryption(uid),
   );
+  const at = Date.now();
   await updateDoc(lineRef(uid, id), {
     state: 'removed',
-    removedAt: Date.now(),
+    removedAt: at,
     dontDrawFrom: before.sourceKeys,
     sealed,
   });
-  return { undo: () => restore(uid, before) };
+  return { undo: () => restore(uid, before, { state: 'removed', at }) };
 }

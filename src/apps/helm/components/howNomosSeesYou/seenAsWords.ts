@@ -38,6 +38,7 @@ export const SEEN_AS_WORDS = {
   removed: (assistant: string) =>
     `Removed it. ${assistant} won't work it out from those words again.`,
   undone: 'Put it back.',
+  changedSince: 'That line changed since, so I left it as it is now.',
   failed: "That didn't save. Try again.",
 } as const;
 
