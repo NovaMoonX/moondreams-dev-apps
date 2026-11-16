@@ -86,7 +86,6 @@ jobs:
       - run: npm run check:natural-dates
       - run: npm run check:helm-close
       - run: npm run check:helm-undo
-      - run: npm run check:helm-importance
       - run: npm run check:helm-activation
       - run: npm run check:helm-task-edits
       - run: npm ci --prefix functions
@@ -113,3 +112,4 @@ jobs:
       - run: npm run check:helm-habits
       - run: npm run check:helm-checkin-match
       - run: npm run check:helm-habit-commands
+      - run: npm run check:helm-importance
