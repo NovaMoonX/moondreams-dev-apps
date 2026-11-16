@@ -10,11 +10,12 @@ const FENCE_RE = /^\s*(```|~~~)/;
 const TABLE_RULE_RE = /^[\s|:-]+$/;
 const URL_RE = /https?:\/\/(?:[^\s<>()[\]"']|\([^\s<>()[\]"']*\))+/g;
 const LINK_DESTINATION_RE =
-  /^\(\s*((?:[^\s()]|\([^\s()]*\))+)(?:\s+"[^"]*")?\s*\)/;
-const INVISIBLE_RE =
-  /\u034F|[\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]/g;
+  /\(\s*((?:[^\s()]|\([^\s()]*\))+)(?:\s+"[^"]*")?\s*\)/y;
+const INVISIBLE_RE = /[\p{Cf}ᅟᅠ⠀ㅤﾠ]|\p{Variation_Selector}|͏/gu;
+const SPACED_DOT_RE = /([\p{L}\p{N}])\s+([.。])\s*(?=\p{L})/gu;
 const CLAIM_RE =
-  /(?<![\p{L}\p{N}-])(?:https?:\/\/)?(?:[\p{L}\p{N}][\p{L}\p{N}-]*[.\u3002])+\p{L}{2,24}(?![\p{L}\p{N}])/giu;
+  /(?<![\p{L}\p{N}-])(?:https?:\/\/)?(?:[\p{L}\p{N}][\p{L}\p{N}-]{0,62}[.。]){1,10}\p{L}{2,24}(?![\p{L}\p{N}])/giu;
+const MAX_LABEL = 300;
 const KNOWN_TLDS = new Set(
   'com net org edu gov mil int info biz name pro app dev io ai co me tv xyz online site shop store tech cloud link live top club vip icu one page bank pay money email news blog life world today space fun cc ly gl gg is it us uk ca au nz de fr es nl eu jp cn in br ru ch se no fi dk be at ie mx za kr sg hk tw ar pt gr tr cz ro hu il ae cl pe'.split(
     ' ',
@@ -78,19 +79,23 @@ export function createLinkGate(
 
 type Claim = { host: string; isSure: boolean };
 
+const withoutInvisible = (text: string) => text.replace(INVISIBLE_RE, '');
+
 const claimsOf = (label: string): Claim[] =>
-  (label.normalize('NFKC').match(CLAIM_RE) ?? []).flatMap((claim) => {
+  (
+    withoutInvisible(withoutInvisible(label).normalize('NFKC'))
+      .replace(SPACED_DOT_RE, '$1$2')
+      .match(CLAIM_RE) ?? []
+  ).flatMap((claim) => {
     const host = hostOf(claim);
     const tld = (claim.split(/[.\u3002]/).pop() ?? '').trim();
-    const isShaped = tld === tld.toLowerCase() || tld === tld.toUpperCase();
-    if (host === null || !isShaped || FILE_EXTENSIONS.has(tld.toLowerCase()))
-      return [];
+    const lower = tld.toLowerCase();
+    const isMixed = tld !== lower && tld !== tld.toUpperCase();
+    if (host === null || (!isMixed && FILE_EXTENSIONS.has(lower))) return [];
     return [
       {
         host,
-        isSure:
-          /^https?:\/\/|^www\./i.test(claim) ||
-          KNOWN_TLDS.has(tld.toLowerCase()),
+        isSure: /^https?:\/\/|^www\./i.test(claim) || KNOWN_TLDS.has(lower),
       },
     ];
   });
@@ -98,13 +103,15 @@ const claimsOf = (label: string): Claim[] =>
 const isSameSite = (claimed: string, host: string) =>
   claimed === host || claimed.endsWith(`.${host}`);
 
-/** The words a link shows: the model's own label, with invisible characters removed, unless it names a web address that isn't the link's own (then the link's host; a doubtful one gets the host beside it). */
+/** The words a link shows: the model's own label, with invisible characters removed and cut at 300 characters, unless it names a web address that isn't the link's own (then the link's host; a doubtful one gets the host beside it). */
 export function labelForLink(rawLabel: string, href: string): string {
-  const label = rawLabel.replace(INVISIBLE_RE, '').trim();
+  const stripped = withoutInvisible(rawLabel.slice(0, MAX_LABEL * 10)).trim();
+  const shown = stripped.slice(0, MAX_LABEL);
+  const label = stripped.length > MAX_LABEL ? `${shown.trimEnd()}…` : stripped;
   const host = hostOf(href);
   if (host === null) return label;
   if (label === '') return host;
-  const claims = claimsOf(label);
+  const claims = claimsOf(shown);
   const other = claims.filter((claim) => !isSameSite(claim.host, host));
   if (other.some((claim) => claim.isSure)) return host;
   const namesHost = claims.length > other.length;
@@ -164,12 +171,25 @@ const readQuoteLine = (state: ReadState, inner: string): ReadState => {
   const cleaned = cleanLine(inner);
   if (cleaned === null) return { ...state, hasGap: true };
   const text = cleaned.replace(LIST_MARK_RE, '').trim();
-  if (text === '') return state;
   const last = state.blocks[state.blocks.length - 1];
+  if (text === '') {
+    return last?.kind === 'quote' &&
+      !state.hasGap &&
+      !last.text.endsWith('\n\n')
+      ? {
+          ...state,
+          blocks: withLast(state.blocks, { ...last, text: `${last.text}\n\n` }),
+        }
+      : state;
+  }
   if (last?.kind === 'quote' && !state.hasGap) {
+    const joiner = last.text.endsWith('\n\n') ? '' : ' ';
     return {
       hasGap: false,
-      blocks: withLast(state.blocks, { ...last, text: `${last.text} ${text}` }),
+      blocks: withLast(state.blocks, {
+        ...last,
+        text: `${last.text}${joiner}${text}`,
+      }),
     };
   }
   return {
@@ -314,33 +334,40 @@ const openerIn = (text: string) =>
     { depth: 0, at: -1 },
   ).at;
 
-/** Replaces each inline link, whatever brackets its label holds, with what `rewrite` returns for its label (brackets removed) and address. */
+/** Replaces each inline link, whatever brackets its label holds, with what `rewrite` returns for its label (brackets removed) and address. One pass over the text, so a very long reply costs no more per link than a short one. */
 const rewriteLinks = (
   text: string,
   rewrite: (label: string, url: string) => string,
-  from = 0,
 ): string => {
-  const close = text.indexOf('](', from);
-  if (close < 0) return text;
-  const opener = openerIn(text.slice(from, close));
-  const destination = LINK_DESTINATION_RE.exec(text.slice(close + 1));
-  if (opener < 0 || !destination) {
-    return rewriteLinks(text, rewrite, close + 2);
-  }
-  const label = text.slice(from + opener + 1, close).replace(/[[\]]/g, '');
-  const head = `${text.slice(0, from + opener)}${rewrite(label, destination[1])}`;
-  return rewriteLinks(
-    `${head}${text.slice(close + 1 + destination[0].length)}`,
-    rewrite,
-    head.length,
+  const state = Array.from(text.matchAll(/\]\(/g)).reduce(
+    (found, match) => {
+      const close = match.index;
+      if (close < found.from) return found;
+      const opener = openerIn(text.slice(found.from, close));
+      LINK_DESTINATION_RE.lastIndex = close + 1;
+      const destination = LINK_DESTINATION_RE.exec(text);
+      if (opener < 0 || !destination) return { ...found, from: close + 2 };
+      const label = text
+        .slice(found.from + opener + 1, close)
+        .replace(/\\?[[\]]/g, '')
+        .replace(/\\+$/, '');
+      const end = close + 1 + destination[0].length;
+      return {
+        from: end,
+        copied: end,
+        out: `${found.out}${text.slice(found.copied, found.from + opener)}${rewrite(label, destination[1])}`,
+      };
+    },
+    { from: 0, copied: 0, out: '' },
   );
+  return `${state.out}${text.slice(state.copied)}`;
 };
 
 const keepLink = (label: string, url: string, allowed: ReadonlySet<string>) => {
   const key = toLinkKey(url.replace(/[.,;:!?]+$/, ''));
   return url.startsWith('https://') && key !== null && allowed.has(key)
     ? `[${labelForLink(label, url)}](${url})`
-    : label.replace(INVISIBLE_RE, '');
+    : withoutInvisible(label);
 };
 
 const readInline = (text: string, allowed: ReadonlySet<string>) =>
@@ -350,14 +377,14 @@ const readInline = (text: string, allowed: ReadonlySet<string>) =>
         .replace(/\\\*/g, LITERAL_STAR)
         .replace(/(\d)\*(?=\d)/g, `$1${LITERAL_STAR}`)
         .replace(/(^|\s)\*(?=\s|$)/g, `$1${LITERAL_STAR}`)
-        .replace(/<(https?:\/\/[^\s>]+)>/g, '$1')
-        .replace(/<\/?[a-z][^>]*>/gi, '')
-        .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1'),
+        .replace(/<(https?:\/\/[^\s<>]+)>/g, '$1')
+        .replace(/<\/?[a-z][^<>]*>/gi, '')
+        .replace(/!\[([^\][]*)\]\([^)]{0,2000}\)/g, '$1'),
       (label, url) => keepLink(label, url, allowed),
     )
-      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
-      .replace(/\[([^\]\n]*)\]\([^)]*$/, '$1')
-      .replace(/\[[^\]]*$/, (rest) => rest.slice(1))
+      .replace(/\[([^\][]+)\]\[[^\][]*\]/g, '$1')
+      .replace(/\[([^\][\n]*)\]\([^)]*$/, '$1')
+      .replace(/\[[^\][]*$/, (rest) => rest.slice(1))
       .replace(/`+/g, '')
       .replace(/~~/g, '')
       .replace(/__([^_]+)__/g, '**$1**')
@@ -378,10 +405,17 @@ const writeBlocks = (
       return text ? [text] : [];
     }
     if (block.kind === 'quote') {
-      const text = readInline(block.text, allowed);
-      if (!text) return [];
-      if (quoteStyle === 'curly') return [`“${text}”`];
-      return [quoteStyle === 'mark' && !block.isPlain ? `> ${text}` : text];
+      const paragraphs = block.text
+        .split('\n\n')
+        .map((paragraph) => readInline(paragraph, allowed))
+        .filter(Boolean);
+      if (quoteStyle === 'curly') return paragraphs.map((text) => `“${text}”`);
+      if (quoteStyle === 'mark' && !block.isPlain) {
+        return paragraphs.length === 0
+          ? []
+          : [paragraphs.map((text) => `> ${text}`).join('\n>\n')];
+      }
+      return paragraphs;
     }
     const items = block.items
       .map((item) => readInline(item, allowed))
@@ -419,7 +453,8 @@ export function normalizeProse(
   const allowed = new Set(
     allowedLinks.flatMap((link) => toLinkKey(link) ?? []),
   );
-  const written = writeProse(value, allowed);
+  const bounded = Number.isFinite(cap) ? value.slice(0, cap * 4) : value;
+  const written = writeProse(bounded, allowed);
   const cut = writeProse(cutAtBreak(written, cap), allowed);
   return cut || null;
 }

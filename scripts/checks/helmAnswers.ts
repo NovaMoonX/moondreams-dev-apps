@@ -2743,7 +2743,6 @@ const tests: [string, () => void | Promise<void>][] = [
       );
       assert.equal(labelForLink('Node.js', href), 'Node.js');
       assert.equal(labelForLink('report.pdf', href), 'report.pdf');
-      assert.equal(labelForLink('Dr.Smith', href), 'Dr.Smith');
       assert.equal(
         labelForLink('the ok.example guide', href),
         'the ok.example guide',
@@ -2770,6 +2769,139 @@ const tests: [string, () => void | Promise<void>][] = [
         normalizeProse('[Node.js](https://ok.example/p)', 1_200, [href]),
         '[Node.js](https://ok.example/p)',
       );
+    },
+  ],
+  [
+    'a label spoofing another address shows the host whatever its casing, spacing or hidden characters; names and file names stay as decided',
+    () => {
+      const href = 'https://ok.example/p';
+      const hidden = [
+        ['pay⁢pal.com', 'invisible times'],
+        ['pay⁤pal.com', 'invisible plus'],
+        ['pay⁪pal.com', 'inhibit symmetric swapping'],
+        ['pay⁯pal.com', 'nominal digit shapes'],
+        ['payㅤpal.com', 'hangul filler'],
+        ['payᅟpal.com', 'hangul choseong filler'],
+        ['payᅠpal.com', 'hangul jungseong filler'],
+        ['payﾠpal.com', 'halfwidth hangul filler'],
+        ['pay⠀pal.com', 'braille blank'],
+        ['pay️pal.com', 'variation selector'],
+        ['pay\u{E0041}pal.com', 'tag character'],
+        ['paypal.comㅤ', 'filler after the name'],
+      ];
+      hidden.forEach(([label, what]) =>
+        assert.equal(labelForLink(label, href), 'ok.example', what),
+      );
+      assert.equal(labelForLink('PayPal.Com', href), 'ok.example');
+      assert.equal(labelForLink('PAYPAL.COM', href), 'ok.example');
+      assert.equal(
+        labelForLink('paypal . com', href),
+        'ok.example',
+        'spaces around the dot',
+      );
+      assert.equal(labelForLink('paypal .com', href), 'ok.example');
+      assert.equal(
+        labelForLink('Done. Then go', href),
+        'Done. Then go',
+        'a sentence end is not a web address',
+      );
+      assert.equal(
+        labelForLink('ASP.NET', href),
+        'ok.example',
+        'NET is a real ending in capitals, so an ASP.NET label shows the host',
+      );
+      assert.equal(
+        labelForLink('Node.js', href),
+        'Node.js',
+        'a file-style ending in one case is a name',
+      );
+      assert.equal(labelForLink('report.pdf', href), 'report.pdf');
+      assert.equal(
+        labelForLink('Report.Pdf', href),
+        'Report.Pdf (ok.example)',
+        'mixed case is never a file name, so the host sits beside it',
+      );
+      assert.equal(
+        labelForLink('Dr.Smith', href),
+        'Dr.Smith (ok.example)',
+        'mixed case after a dot is doubtful, so the host sits beside it',
+      );
+    },
+  ],
+  [
+    'a very long reply or label is handled in one pass, never recursing per link and never slowing per word',
+    () => {
+      const href = 'https://ok.example/p';
+      const timed = <T>(run: () => T) => {
+        const start = performance.now();
+        const value = run();
+        return { ms: performance.now() - start, value };
+      };
+      const links = '[a](b)'.repeat(5_000);
+      const many = timed(() => normalizeProse(links, Infinity));
+      assert.ok(many.ms < 200);
+      assert.equal(many.value, 'a'.repeat(5_000));
+      assert.ok(
+        timed(() => normalizeProse(']('.repeat(8_000), Infinity)).ms < 200,
+      );
+      assert.ok(
+        timed(() => normalizeProse('<a'.repeat(8_000), Infinity)).ms < 200,
+      );
+      assert.ok(
+        timed(() => normalizeProse('!['.repeat(8_000), Infinity)).ms < 200,
+      );
+      assert.ok(timed(() => normalizeProse('['.repeat(8_000), 1_200)).ms < 200);
+      assert.ok(timed(() => labelForLink('a.'.repeat(50_000), href)).ms < 50);
+      assert.ok(timed(() => labelForLink('x'.repeat(100_000), href)).ms < 50);
+      const cutLabel = labelForLink('word '.repeat(100), href);
+      assert.ok(
+        cutLabel.length <= 301 && cutLabel.endsWith('…'),
+        'a label is cut at 300 characters with an ellipsis',
+      );
+      assert.equal(
+        normalizeProse(links.repeat(10), 1_200, [])!.length,
+        800,
+        'a reply far past its cap is read only as far as four times the cap',
+      );
+    },
+  ],
+  [
+    'a bracket escaped before its address leaves no stray backslash, and a blank quote line keeps two paragraphs in one quote',
+    () => {
+      assert.equal(
+        normalizeProse('See [x\\](https://ok.example/p).', 1_200, [
+          'https://ok.example/p',
+        ]),
+        'See [x](https://ok.example/p).',
+      );
+      assert.equal(
+        normalizeProse('See [x\\](https://evil.example).', 1_200),
+        'See x.',
+      );
+      assert.equal(
+        normalizeProse('> a\n>\n> b', 1_200),
+        '> a\n>\n> b',
+        'one quote, two paragraphs',
+      );
+      assert.equal(
+        normalizeProse('> a\n> b\n>\n>\n> c', 1_200),
+        '> a b\n>\n> c',
+        'lines of a paragraph join, repeated blank quote lines are one break',
+      );
+      assert.equal(
+        normalizeProse('> a\n\n> b', 1_200),
+        '> a\n\nb',
+        'a blank line outside the quote ends it, a later quote is a plain paragraph',
+      );
+      assert.equal(
+        normalizeProse(normalizeProse('> a\n>\n> b', 1_200)!, 1_200),
+        '> a\n>\n> b',
+      );
+      assert.equal(
+        stripProseMarks('> a\n>\n> b', { keepBreaks: true }),
+        '“a”\n\n“b”',
+      );
+      assert.equal(stripProseMarks('> a\n>\n> b'), 'a b');
     },
   ],
   [
