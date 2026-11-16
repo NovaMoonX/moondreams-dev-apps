@@ -15,6 +15,7 @@ Helm is a private companion for one person's whole life, and you mostly talk to 
 ## Status
 
 Built:
+- Learn later: questions saved to learn later are listed under Knowledge, prepared into an overview with up to 2 videos, and offered as one card on Today in a free evening; Show me, Not now, Done with it, Remove and Save to my knowledge each have an Undo.
 - What Nomos has noticed: patterns about when things work, from ticks and from what you say, under "What I've noticed" in How Nomos sees you with their evidence, a switch to turn learning off and "Forget what you've noticed"; offered once on the habit page and in Today (a no waits 4 then 8 weeks, a third is final), acted on with Undo only for what Helm planned, never for care.
 - Helm on the site, in its own look, with home's dock and the Browse sheet.
 - Type a line and see it on home as a sealed turn, earlier sessions a scroll up; Needs you lists what's new since you looked.

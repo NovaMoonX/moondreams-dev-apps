@@ -294,6 +294,50 @@ const readResearchAsk = (text: string) => {
   };
 };
 
+/** The emulator's learn-later reading: "one day I want to learn …" is saved, "learn piano" is offered as a goal, and "learn to fix my car's engine" is a wish it can't place, which code asks about. */
+const readLearnAsk = (text: string) => {
+  const skill = text.match(
+    /^\s*(?:i want to |i'd like to )?learn (?:to )?(piano|guitar|violin|chess)\b/i,
+  );
+  if (skill) {
+    return [
+      {
+        kind: 'offerLearnGoal',
+        learnGoalName: `Learn ${skill[1].toLowerCase()}`,
+        learnQuote: skill[0].trim(),
+      },
+    ];
+  }
+  const engine = text.match(/learn to fix my car'?s engine/i);
+  if (engine) {
+    return [
+      {
+        kind: 'saveForLater',
+        learnQuestion: "How do I fix my car's engine?",
+        learnSubject: "fixing my car's engine",
+        learnNeedsLiveFacts: false,
+        learnPractise: 'unclear',
+        learnQuote: engine[0],
+      },
+    ];
+  }
+  const wish = text.match(
+    /^\s*(?:someday|one day)[, ]*i want to learn\s+(.+?)[.?!]*\s*$/i,
+  );
+  return wish
+    ? [
+        {
+          kind: 'saveForLater',
+          learnQuestion: `What should I know about ${wish[1]}?`,
+          learnSubject: wish[1],
+          learnNeedsLiveFacts: false,
+          learnPractise: 'read',
+          learnQuote: wish[0].trim(),
+        },
+      ]
+    : null;
+};
+
 /** The emulator's two questions for "Help me pack for the Tahoe trip": what goes on the list, and how many nights. */
 const readPackingAsks = (text: string) =>
   PACKING_RE.test(text)
@@ -1932,6 +1976,17 @@ function createTextFixtureProvider(
       if (packed !== null || packingAsks) {
         return {
           terminalInput: { commands: packed ?? packingAsks ?? [] },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const learning = readLearnAsk(text);
+      if (learning) {
+        return {
+          terminalInput: { commands: learning },
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

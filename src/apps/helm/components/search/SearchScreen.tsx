@@ -18,6 +18,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { doneTasksQueryOptions } from '@apps/helm/queries/doneTaskQueries';
 import { momentsQueryOptions } from '@apps/helm/queries/momentQueries';
+import { selectLearnLater } from '@apps/helm/store/selectors/researchSelectors';
 import type { HelmView } from '@apps/helm/types';
 import {
   SEARCH_GROUPS,
@@ -35,6 +36,7 @@ const GROUP_LABELS: Record<GroupId, string> = {
   dates: HELM_COPY.searchGroupDates,
   facts: HELM_COPY.searchGroupFacts,
   notes: HELM_COPY.searchGroupNotes,
+  learnLater: HELM_COPY.searchGroupLearn,
   topics: HELM_COPY.searchGroupTopics,
   projects: HELM_COPY.searchGroupProjects,
   procedures: HELM_COPY.searchGroupProcedures,
@@ -53,6 +55,7 @@ const NO_SOURCES: SearchSources = {
   byWho: {},
   moments: NONE,
   notes: NONE,
+  learnLater: NONE,
   topics: NONE,
   projects: NONE,
   procedures: NONE,
@@ -91,6 +94,7 @@ function SearchScreen({
   const places = useAppSelector((state) => state.helm.places.items);
   const facts = useAppSelector((state) => state.helm.facts.items);
   const notes = useAppSelector((state) => state.helm.notes.items);
+  const learnLater = useAppSelector(selectLearnLater);
   const topics = useAppSelector((state) => state.helm.topics.items);
   const projects = useAppSelector((state) => state.helm.projects.items);
   const procedures = useAppSelector((state) => state.helm.procedures.items);
@@ -143,6 +147,7 @@ function SearchScreen({
       byWho,
       moments: moments.data ?? NONE,
       notes,
+      learnLater,
       topics,
       projects,
       procedures,
@@ -157,6 +162,7 @@ function SearchScreen({
       byWho,
       moments.data,
       notes,
+      learnLater,
       topics,
       projects,
       procedures,

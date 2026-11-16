@@ -14,6 +14,7 @@ import type {
   OpenPlace,
   OpenProcedure,
   OpenProject,
+  OpenResearch,
   OpenTask,
   OpenTopic,
   OpenWho,
@@ -65,6 +66,7 @@ export const SEARCH_GROUPS = [
   'dates',
   'facts',
   'notes',
+  'learnLater',
   'topics',
   'projects',
   'procedures',
@@ -90,6 +92,7 @@ export type SearchTarget =
   | { kind: 'seesYou' }
   | { kind: 'task'; id: string }
   | { kind: 'note'; id: string }
+  | { kind: 'learnLater'; id: string }
   | { kind: 'synced'; id: string }
   | { kind: 'media'; id: string };
 
@@ -133,6 +136,8 @@ export interface SearchSources {
   byWho: ByWho;
   moments: WhoMoment[];
   notes: OpenNote[];
+  /** The questions saved to learn later that are still open. */
+  learnLater: OpenResearch[];
   topics: OpenTopic[];
   projects: OpenProject[];
   procedures: OpenProcedure[];
@@ -432,6 +437,32 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
     };
   });
 
+  const learnEntries = sources.learnLater
+    .filter(
+      (item) =>
+        !item.isUnreadable &&
+        item.status !== 'dismissed' &&
+        item.status !== 'done',
+    )
+    .map<SearchEntry>((item) => {
+      const texts = textsOf(item, () => ({
+        title: [item.subject],
+        body: [item.question, ...item.moreAsked],
+      }));
+      return {
+        id: item.id,
+        describe: () => ({
+          title: item.subject,
+          line: HELM_COPY.learnLaterTitle,
+        }),
+        ...texts,
+        target: { kind: 'learnLater', id: item.id },
+        mark: null,
+        tier: 0,
+        recency: item.createdAt,
+      };
+    });
+
   const topicEntries = topics.map<SearchEntry>((topic) => ({
     id: topic.id,
     describe: () => ({
@@ -583,6 +614,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
     dates: [...yearly, ...moments.sort(byRecency)],
     facts: sorted(facts),
     notes: sorted(noteEntries),
+    learnLater: sorted(learnEntries),
     topics: sorted(topicEntries),
     projects: sorted(projectEntries),
     procedures: sorted(procedureEntries),
@@ -598,6 +630,7 @@ const EMPTY_INDEX: SearchIndex = {
   dates: [],
   facts: [],
   notes: [],
+  learnLater: [],
   topics: [],
   projects: [],
   procedures: [],

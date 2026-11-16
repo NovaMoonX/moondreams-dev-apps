@@ -22,6 +22,7 @@ import { withoutAddress } from './joinedTurn.js';
 import { hasReviseCue, hasUndoCue, isQuestion } from './route.js';
 import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
 import type { ContextProject } from '../projectStore.js';
+import type { ContextLearnItem } from '../research/learnStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
 
 export interface ContextTask {
@@ -262,6 +263,8 @@ export interface ContextInput {
   habits?: ContextHabit[];
   /** The person's scheduled actions that have not ended, at most 50, when the turn could be about one. */
   scheduledActions?: ContextScheduledAction[];
+  /** The questions saved to learn later that are still open, at most 30, newest first. */
+  learnLater?: ContextLearnItem[];
   /** What matters most, when the turn is about it; at most `MAX_CONTEXT_IMPORTANCE` entries. */
   importance?: ContextImportance;
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
@@ -407,6 +410,7 @@ export function buildContext(input: ContextInput): {
   runSteps: AliasBook;
   habits: AliasBook;
   scheduledActions: AliasBook;
+  learnLater: AliasBook;
   projects: AliasBook;
   habitNames: Map<string, string>;
   undoTurns: AliasBook;
@@ -423,6 +427,7 @@ export function buildContext(input: ContextInput): {
   const runSteps = createAliasBook('rs');
   const habits = createAliasBook('h');
   const scheduledBook = createAliasBook('sa');
+  const learnBook = createAliasBook('r');
   const projectBook = createAliasBook('p');
   const undoTurns = createAliasBook('u');
   const partIds = new Map<string, string>();
@@ -749,6 +754,18 @@ export function buildContext(input: ContextInput): {
           )}</scheduled_actions>`,
         ]
       : []),
+    ...(input.learnLater?.length
+      ? [
+          `<learn_later>${toDataJson(
+            input.learnLater.map((item) => ({
+              item: learnBook.add(item.id),
+              subject: item.subject,
+              status: item.status,
+              saved: item.saved,
+            })),
+          )}</learn_later>`,
+        ]
+      : []),
     ...(input.importance
       ? [
           `<importance>${toDataJson(
@@ -815,6 +832,7 @@ export function buildContext(input: ContextInput): {
     runSteps,
     habits,
     scheduledActions: scheduledBook,
+    learnLater: learnBook,
     projects: projectBook,
     habitNames: new Map(
       (input.habits ?? [])

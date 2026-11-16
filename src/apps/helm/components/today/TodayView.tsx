@@ -28,6 +28,11 @@ import PastDay from '@apps/helm/components/today/PastDay';
 import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
 import { patternFamily } from '@apps/helm/engine/patterns';
+import LearnItemSheet from '@apps/helm/components/research/LearnItemSheet';
+import {
+  pickLearnOffer,
+  selectLearnLater,
+} from '@apps/helm/store/selectors/researchSelectors';
 import { selectTodayOffer } from '@apps/helm/store/selectors/patternSelectors';
 import SuggestionSheet, {
   type SuggestionTarget,
@@ -115,6 +120,8 @@ function TodayView({
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<SuggestionTarget | null>(null);
   const offer = useAppSelector(selectTodayOffer);
+  const learnItems = useAppSelector(selectLearnLater);
+  const [openLearnId, setOpenLearnId] = useState<string | null>(null);
   const sources = usePlanSources(nowMinute);
   const todayKey = toDayKey(nowMinute, timeZone);
   const selectedKey = pickedKey ?? todayKey;
@@ -150,6 +157,11 @@ function TodayView({
     ? (held.get(openId)?.task ?? tasksById.get(openId) ?? null)
     : null;
   const isCapped = tasks.length >= OPEN_TASKS_LIMIT;
+
+  const learn =
+    isToday && offer === null
+      ? pickLearnOffer(learnItems, todayKey, timeZone)
+      : null;
 
   const handleDeleted = (
     taskId: string,
@@ -259,6 +271,8 @@ function TodayView({
               onUndoTick={(taskId) => void undoTick(taskId)}
               onSelectDay={setPickedKey}
               onOpenHabit={onOpenHabit}
+              learn={learn}
+              onOpenLearn={setOpenLearnId}
             />
           ))}
         {isToday &&
@@ -351,6 +365,10 @@ function TodayView({
         onTick={tick}
         onUndoTick={(taskId) => void undoTick(taskId)}
         onDeleted={handleDeleted}
+      />
+      <LearnItemSheet
+        itemId={openLearnId}
+        onClose={() => setOpenLearnId(null)}
       />
       <SuggestionSheet
         target={suggestion}

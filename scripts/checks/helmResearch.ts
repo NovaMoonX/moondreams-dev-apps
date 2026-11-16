@@ -27,6 +27,45 @@ import {
   planUndo,
   type UndoTarget,
 } from '../../src/apps/helm/nomos/planUndo.ts';
+import {
+  LEARN_WORDS,
+  nextNight,
+  planLearnLater,
+  planResolveLearn,
+  type LearnPlanInput,
+} from '../../functions/src/apps/helm/nomos/planLearnLater.ts';
+import type { LearnItem } from '../../functions/src/apps/helm/research/learnStore.ts';
+import { wrapDataKey } from '../../functions/src/appKeys/wrap.ts';
+import { DEV_KEYRING } from '../../functions/src/appKeys/keyring.ts';
+import {
+  deriveSeedDataKey,
+  openForHelm,
+  sealForHelm,
+  wrappedKeyPath,
+} from '../../functions/src/apps/helm/helmKey.ts';
+import {
+  refreshOldVideos,
+  startDueLearnLater,
+} from '../../functions/src/apps/helm/research/learnLaterPass.ts';
+import {
+  SUBMIT_LEARN_TOOL,
+  buildResearchMessage,
+  buildResearchPrompt,
+  settleResearch,
+  type ResearchSettlement,
+} from '../../functions/src/apps/helm/research/runResearch.ts';
+import {
+  createVideoSearchDeps,
+  searchVideos,
+  toFixtureVideos,
+  type VideoSearchDeps,
+} from '../../functions/src/videoSearch/searchVideos.ts';
+import { createDailyReserve } from '../../functions/src/videoSearch/dailyCap.ts';
+import { parseIsoDuration } from '../../functions/src/videoSearch/youtube.ts';
+import {
+  findLearnSlot,
+  readLearnOffer,
+} from '../../src/apps/helm/engine/learnLater.ts';
 import type { OpenExecution } from '../../src/apps/helm/types.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 
@@ -524,6 +563,1126 @@ test('a rerun started today is not swept as stuck, whatever its creation date', 
     createdLongAgo,
   );
   assert.equal(readResearchStartedSince(null, null, undefined), null);
+});
+
+// ---- Learn later: the planner, the night pass, the video search ----
+
+const DAY_MS = 86_400_000;
+const localTime = (at: number, timeZone: string) =>
+  new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(at);
+
+const learnItem = (over: Partial<LearnItem> = {}): LearnItem => ({
+  id: 'r1',
+  status: 'ready',
+  question: 'How does sourdough work',
+  subject: 'Sourdough',
+  moreAsked: [],
+  contextLine: null,
+  notNowStreak: 0,
+  declineReason: null,
+  offers: [],
+  relatedOfferedAt: {},
+  mergedInto: null,
+  removedAt: null,
+  needsLiveFacts: false,
+  createdAt: NOW - 10 * DAY_MS,
+  sealed: {
+    question: 'How does sourdough work',
+    subject: 'Sourdough',
+    moreAsked: [],
+    overview: null,
+    sources: [],
+    videos: [],
+    searchQuery: null,
+    contextLine: null,
+  },
+  ...over,
+});
+
+const learnPlan = (
+  items: LearnItem[],
+  commands: LearnPlanInput['commands'],
+  over: Partial<LearnPlanInput> = {},
+) => {
+  let count = 0;
+  return planLearnLater({
+    commands,
+    asks: [],
+    items,
+    isSpoken: false,
+    isMidTask: false,
+    timeZone: NY,
+    now: NOW,
+    captureId: 'capture-1',
+    newId: () => `new-${(count += 1)}`,
+    seal: (fields) => fields as never,
+    room: 5,
+    ...over,
+  });
+};
+
+const save = (
+  over: Partial<
+    Extract<LearnPlanInput['commands'][number], { kind: 'saveForLater' }>
+  > = {},
+): LearnPlanInput['commands'][number] => ({
+  kind: 'saveForLater',
+  question: 'How do heat pumps work',
+  subject: 'Heat pumps',
+  contextLine: 'while planning the move',
+  needsLiveFacts: false,
+  practise: 'read',
+  quote: null,
+  ...over,
+});
+
+test('nextNight is the next 02:00 in the person’s zone, across DST and zones', () => {
+  const cases: [string, number][] = [
+    [NY, Date.UTC(2026, 10, 16, 12, 0)],
+    [LA, Date.UTC(2026, 10, 16, 12, 0)],
+    ['Asia/Tokyo', Date.UTC(2026, 10, 16, 12, 0)],
+    [NY, Date.UTC(2026, 2, 7, 12, 0)],
+    [NY, Date.UTC(2026, 10, 1, 3, 0)],
+    [LA, Date.UTC(2026, 2, 8, 6, 0)],
+  ];
+  cases.forEach(([zone, now]) => {
+    const at = nextNight(now, zone);
+    assert.ok(at > now && at - now <= 25 * 3_600_000, `${zone} ${now}`);
+    assert.match(localTime(at, zone), /^0[23]:00$/);
+  });
+  assert.equal(localTime(nextNight(NOW, NY), NY), '02:00');
+  const afterTwo = Date.UTC(2026, 10, 16, 8, 0);
+  assert.equal(nextNight(afterTwo, NY), Date.UTC(2026, 10, 17, 7, 0));
+  assert.equal(
+    nextNight(Date.UTC(2026, 10, 16, 5, 0), NY),
+    Date.UTC(2026, 10, 16, 7, 0),
+  );
+});
+
+test('a saved wish becomes a planned item with a night to run, and says nothing about when it returns', () => {
+  const plan = learnPlan([], [save()]);
+  assert.equal(plan.creates.length, 1);
+  const doc = plan.creates[0].doc;
+  assert.equal(doc.mode, 'learnLater');
+  assert.equal(doc.status, 'planned');
+  assert.equal(doc.prepareAt, nextNight(NOW, NY));
+  assert.equal(doc.needsLiveFacts, false);
+  assert.equal(doc.isWithoutWeb, true);
+  assert.equal(doc.reservedCents, 0);
+  assert.equal(doc.captureId, 'capture-1');
+  assert.deepEqual(plan.lines, [LEARN_WORDS.saved('Heat pumps')]);
+  assert.equal(plan.effectRefs[0]?.op, 'create');
+  const live = learnPlan([], [save({ needsLiveFacts: true })]);
+  assert.equal(live.creates[0].doc.needsLiveFacts, true);
+  assert.equal(live.creates[0].doc.isWithoutWeb, false);
+});
+
+test('saving a subject again merges into the open item and sends a ready one back to planned', () => {
+  const plan = learnPlan(
+    [learnItem()],
+    [save({ subject: 'Sourdough', question: 'Can I use whole wheat flour' })],
+  );
+  assert.equal(plan.creates.length, 0);
+  const update = plan.updates.find((entry) => entry.id === 'r1');
+  assert.equal(update?.data.status, 'planned');
+  assert.equal(update?.data.prepareAt, nextNight(NOW, NY));
+  assert.deepEqual(plan.lines, [LEARN_WORDS.merged('Sourdough')]);
+  const effect = plan.effects[0];
+  assert.ok(effect);
+  assert.equal(effect.previous?.status, 'ready');
+  assert.equal(effect.written.status, 'planned');
+  assert.ok(!('prepareAt' in effect.written));
+});
+
+test('Not now keeps the item, counts the streak, and the third asks whether they still want it', () => {
+  const decline = (streak: number) =>
+    learnPlan(
+      [learnItem({ notNowStreak: streak })],
+      [
+        {
+          kind: 'declineLearn',
+          itemId: 'r1',
+          reason: 'timing',
+          question: null,
+          subject: null,
+        },
+      ],
+    );
+  const first = decline(0);
+  assert.equal(first.updates[0]?.data.notNowStreak, 1);
+  assert.equal(first.updates[0]?.data.declineReason, 'timing');
+  assert.equal(first.questions.length, 0);
+  assert.deepEqual(first.lines, [LEARN_WORDS.notNow]);
+  const third = decline(2);
+  assert.equal(third.questions.length, 1);
+  assert.equal(third.questions[0]?.state.kind, 'learnStill');
+  assert.deepEqual(
+    (third.questions[0]?.sealed.options as { id: string }[]).map(
+      (option) => option.id,
+    ),
+    ['keep', 'remove'],
+  );
+});
+
+test('lost interest takes the item off, and it is never in the model’s list or related again', () => {
+  const plan = learnPlan(
+    [learnItem()],
+    [
+      {
+        kind: 'declineLearn',
+        itemId: 'r1',
+        reason: 'lostInterest',
+        question: null,
+        subject: null,
+      },
+    ],
+  );
+  const update = plan.updates[0];
+  assert.equal(update?.data.status, 'dismissed');
+  assert.equal(update?.data.declineReason, 'lostInterest');
+  assert.equal(update?.data.removedAt, NOW);
+  const letGo = learnItem({
+    status: 'dismissed',
+    declineReason: 'lostInterest',
+    removedAt: NOW - DAY_MS,
+  });
+  const other = learnItem({ id: 'r2', subject: 'Heat pumps' });
+  const related = learnPlan(
+    [letGo, other],
+    [{ kind: 'relatedLearn', firstId: 'r1', secondId: 'r2', together: 'Both' }],
+  );
+  assert.equal(related.questions.length, 0);
+  assert.equal(related.updates.length, 0);
+  const revived = learnPlan([letGo], [save({ subject: 'Sourdough' })]);
+  assert.equal(revived.updates[0]?.data.status, 'planned');
+  assert.deepEqual(revived.lines, [LEARN_WORDS.revived('Sourdough')]);
+});
+
+test('a changed mind rewrites the item and runs it again; a preparing item is refused', () => {
+  const change = (item: LearnItem) =>
+    learnPlan(
+      [item],
+      [
+        {
+          kind: 'declineLearn',
+          itemId: 'r1',
+          reason: 'changedMind',
+          question: 'How do I feed a starter',
+          subject: 'Sourdough starter',
+        },
+      ],
+    );
+  const plan = change(learnItem());
+  assert.equal(plan.updates[0]?.data.status, 'planned');
+  assert.equal(plan.updates[0]?.data.prepareAt, nextNight(NOW, NY));
+  assert.deepEqual(plan.lines, [LEARN_WORDS.reworded('Sourdough starter')]);
+  const busy = change(learnItem({ status: 'preparing' }));
+  assert.equal(busy.updates.length, 0);
+  assert.deepEqual(busy.notKept, [LEARN_WORDS.busy]);
+});
+
+test('related items ask once in four weeks, never mid-task by voice', () => {
+  const first = learnItem({ id: 'r1', createdAt: NOW - 9 * DAY_MS });
+  const second = learnItem({
+    id: 'r2',
+    subject: 'Baking bread',
+    createdAt: NOW - 3 * DAY_MS,
+  });
+  const command = {
+    kind: 'relatedLearn' as const,
+    firstId: 'r1',
+    secondId: 'r2',
+    together: 'Bread baking',
+  };
+  const plan = learnPlan([first, second], [command]);
+  assert.equal(plan.questions[0]?.state.kind, 'learnTogether');
+  assert.equal(plan.updates.length, 2);
+  assert.ok(
+    plan.updates.every(
+      (entry) =>
+        typeof (entry.data.relatedOfferedAt as Record<string, number>)[
+          entry.id === 'r1' ? 'r2' : 'r1'
+        ] === 'number',
+    ),
+  );
+  const recent = learnPlan(
+    [{ ...first, relatedOfferedAt: { r2: NOW - 5 * DAY_MS } }, second],
+    [command],
+  );
+  assert.equal(recent.questions.length, 0);
+  const old = learnPlan(
+    [{ ...first, relatedOfferedAt: { r2: NOW - 30 * DAY_MS } }, second],
+    [command],
+  );
+  assert.equal(old.questions.length, 1);
+  const spoken = learnPlan([first, second], [command], {
+    isSpoken: true,
+    isMidTask: true,
+  });
+  assert.equal(spoken.questions.length, 0);
+});
+
+test('Together folds the newer item into the older and Undo effects stay on writable fields', () => {
+  const first = learnItem({ id: 'r1', createdAt: NOW - 9 * DAY_MS });
+  const second = learnItem({
+    id: 'r2',
+    subject: 'Baking bread',
+    createdAt: NOW - 3 * DAY_MS,
+  });
+  const asked = learnPlan(
+    [first, second],
+    [
+      {
+        kind: 'relatedLearn',
+        firstId: 'r1',
+        secondId: 'r2',
+        together: 'Bread baking',
+      },
+    ],
+  );
+  const question = asked.questions[0];
+  assert.ok(question);
+  const capture = {
+    status: 'needsYou',
+    executionIds: [],
+    questionState: {
+      [question.id]: {
+        kind: question.state.kind,
+        shape: question.state.shape,
+        askedAt: NOW,
+        answeredAt: null,
+        skippedAt: null,
+        dismissedAt: null,
+      },
+    },
+  };
+  const resolve = (optionId: string) =>
+    planResolveLearn({
+      captureId: 'capture-1',
+      executionId: 'exec-2',
+      seal: (fields) => fields as never,
+      questionId: question.id,
+      optionId,
+      by: 'tap',
+      now: NOW + 60_000,
+      timeZone: NY,
+      items: [first, second],
+      newId: () => 'new-9',
+      capture,
+      opened: { questions: { [question.id]: question.sealed } },
+    });
+  const together = resolve('together');
+  assert.equal(together.refused, null);
+  if (together.refused !== null) return;
+  const older = together.plan.updates.find((entry) => entry.id === 'r1');
+  const newer = together.plan.updates.find((entry) => entry.id === 'r2');
+  assert.equal(older?.data.status, 'planned');
+  assert.equal(newer?.data.status, 'dismissed');
+  assert.equal(newer?.data.mergedInto, 'r1');
+  const allowed =
+    /^(status|notNowStreak|declineReason|offers|relatedOfferedAt|mergedInto|removedAt|sealed\..+)$/;
+  together.plan.effects.forEach((effect) => {
+    Object.keys(effect.written).forEach((path) => assert.match(path, allowed));
+    Object.keys(effect.written).forEach((path) =>
+      assert.notEqual(effect.previous?.[path], undefined, path),
+    );
+  });
+  const apart = resolve('apart');
+  assert.equal(apart.refused, null);
+  if (apart.refused !== null) return;
+  assert.ok(
+    apart.plan.updates.every((entry) => entry.data.mergedInto !== 'r1'),
+  );
+  const again = planResolveLearn({
+    captureId: 'capture-1',
+    executionId: 'exec-3',
+    seal: (fields) => fields as never,
+    questionId: question.id,
+    optionId: 'together',
+    by: 'tap',
+    now: NOW,
+    timeZone: NY,
+    items: [first, second],
+    newId: () => 'new-10',
+    capture: {
+      ...capture,
+      questionState: {
+        [question.id]: {
+          ...capture.questionState[question.id],
+          answeredAt: NOW,
+        },
+      },
+    },
+    opened: { questions: { [question.id]: question.sealed } },
+  });
+  assert.deepEqual(again, { refused: 'answered' });
+});
+
+test('the server’s learn words equal the device’s', () => {
+  assert.equal(LEARN_WORDS.saved('X'), HELM_COPY.learnSaved('X'));
+  assert.equal(LEARN_WORDS.merged('X'), HELM_COPY.learnMerged('X'));
+  assert.equal(LEARN_WORDS.revived('X'), HELM_COPY.learnRevived('X'));
+  assert.equal(LEARN_WORDS.removed('X'), HELM_COPY.learnRemoved('X'));
+  assert.equal(LEARN_WORDS.notNow, HELM_COPY.learnNotNowLine);
+  assert.equal(LEARN_WORDS.still('X'), HELM_COPY.learnStill('X'));
+  assert.equal(LEARN_WORDS.keepIt, HELM_COPY.learnKeepIt);
+  assert.equal(LEARN_WORDS.removeIt, HELM_COPY.learnRemoveIt);
+  assert.equal(LEARN_WORDS.together('X'), HELM_COPY.learnTogether('X'));
+  assert.equal(LEARN_WORDS.togetherYes, HELM_COPY.learnTogetherYes);
+  assert.equal(LEARN_WORDS.apart, HELM_COPY.learnApart);
+  assert.equal(
+    LEARN_WORDS.mergedTogether('X'),
+    HELM_COPY.learnMergedTogether('X'),
+  );
+  assert.equal(LEARN_WORDS.kindQuestion('X'), HELM_COPY.learnKindQuestion('X'));
+  assert.equal(LEARN_WORDS.read, HELM_COPY.learnRead);
+  assert.equal(LEARN_WORDS.goal, HELM_COPY.learnGoal);
+  assert.equal(LEARN_WORDS.goalOffer('X'), HELM_COPY.learnGoalOffer('X'));
+  assert.equal(LEARN_WORDS.goalMade('X'), HELM_COPY.learnGoalMade('X'));
+});
+
+// A small in-memory Firestore: only what the night pass and the settle touch.
+type Docs = Map<string, Record<string, unknown>>;
+const makeStore = (docs: Docs) => {
+  const snap = (path: string) => ({
+    id: path.split('/').pop() as string,
+    exists: docs.has(path),
+    ref: ref(path),
+    data: () => docs.get(path),
+    get: (field: string) => docs.get(path)?.[field],
+  });
+  const ref = (path: string): Record<string, unknown> => ({
+    path,
+    id: path.split('/').pop(),
+    get: async () => snap(path),
+    update: async (fields: Record<string, unknown>) => {
+      docs.set(path, { ...docs.get(path), ...fields });
+    },
+    set: async (fields: Record<string, unknown>) => {
+      docs.set(path, fields);
+    },
+  });
+  const group = (
+    name: string,
+    filters: [string, string, number][] = [],
+    order = '',
+    max = 1_000,
+  ) => ({
+    where: (field: string, op: string, value: number) =>
+      group(name, [...filters, [field, op, value]], order, max),
+    orderBy: (field: string) => group(name, filters, field, max),
+    limit: (count: number) => group(name, filters, order, count),
+    get: async () => ({
+      docs: [...docs.keys()]
+        .filter((path) => path.split('/').at(-2) === name)
+        .filter((path) =>
+          filters.every(([field, , value]) => {
+            const found = docs.get(path)?.[field];
+            return typeof found === 'number' && found <= value;
+          }),
+        )
+        .sort(
+          (a, b) => Number(docs.get(a)?.[order]) - Number(docs.get(b)?.[order]),
+        )
+        .slice(0, max)
+        .map(snap),
+    }),
+  });
+  const firestore = {
+    doc: (path: string) => ref(path),
+    collectionGroup: (name: string) => group(name),
+    collection: (path: string) => ({ doc: () => ref(`${path}/auto`) }),
+    runTransaction: async <T>(run: (transaction: unknown) => Promise<T>) =>
+      run({
+        get: async (target: { path: string }) => snap(target.path),
+        update: (target: { path: string }, fields: Record<string, unknown>) => {
+          docs.set(target.path, { ...docs.get(target.path), ...fields });
+        },
+        set: (
+          target: { path: string },
+          fields: Record<string, unknown>,
+          options?: { merge?: boolean },
+        ) => {
+          docs.set(
+            target.path,
+            options?.merge ? { ...docs.get(target.path), ...fields } : fields,
+          );
+        },
+      }),
+  };
+  return firestore as never;
+};
+
+const UID = 'u1';
+const BASE = `apps/helm/users/${UID}`;
+const dataKey = { ...deriveSeedDataKey(DEV_KEYRING, UID), keyVersion: 1 };
+const sealed = (fields: Record<string, unknown>) =>
+  sealForHelm(dataKey, fields);
+const researchDoc = (over: Record<string, unknown> = {}) => ({
+  mode: 'learnLater',
+  status: 'planned',
+  prepareAt: NOW - 1_000,
+  needsLiveFacts: false,
+  depth: null,
+  isWithoutWeb: true,
+  reservedCents: 0,
+  startedAt: null,
+  preparedAt: null,
+  cancelledAt: null,
+  prepareFailedAt: null,
+  videosFetchedAt: null,
+  captureId: 'capture-1',
+  createdAt: NOW - DAY_MS,
+  lastEditedAt: null,
+  sealed: sealed({
+    question: 'How does sourdough work',
+    subject: 'Sourdough',
+    moreAsked: [],
+    overview: null,
+    sources: [],
+    videos: [],
+    searchQuery: null,
+    contextLine: null,
+  }),
+  ...over,
+});
+const baseDocs = (extra: Record<string, Record<string, unknown>>): Docs =>
+  new Map<string, Record<string, unknown>>([
+    [BASE, { timeZone: NY, researchAllowance: null }],
+    [wrappedKeyPath(UID), wrapDataKey(DEV_KEYRING, UID, dataKey, NOW) as never],
+    ...Object.entries(extra),
+  ]);
+
+test('the night pass starts a due item: with live facts it reserves, without it holds nothing', async () => {
+  const docs = baseDocs({
+    [`${BASE}/research/plain`]: researchDoc(),
+    [`${BASE}/research/live`]: researchDoc({ needsLiveFacts: true }),
+    [`${BASE}/research/later`]: researchDoc({ prepareAt: NOW + 3_600_000 }),
+    [`${BASE}/research/readyAlready`]: researchDoc({ status: 'ready' }),
+  });
+  const started = await startDueLearnLater(makeStore(docs), NOW);
+  assert.equal(started, 2);
+  const plain = docs.get(`${BASE}/research/plain`);
+  assert.equal(plain?.status, 'preparing');
+  assert.equal(plain?.isWithoutWeb, true);
+  assert.equal(plain?.reservedCents, 0);
+  assert.equal(plain?.prepareAt, null);
+  assert.equal(plain?.startedAt, null);
+  const live = docs.get(`${BASE}/research/live`);
+  assert.equal(live?.status, 'preparing');
+  assert.equal(live?.isWithoutWeb, false);
+  assert.equal(live?.depth, 'light');
+  assert.equal(live?.reservedCents, RESEARCH_DEPTHS.light.estimateCents);
+  assert.equal(docs.get(`${BASE}/research/later`)?.status, 'planned');
+  assert.equal(docs.get(`${BASE}/research/readyAlready`)?.prepareAt, null);
+});
+
+test('past the month’s cap a wish that needs live facts is prepared from what the model knows', async () => {
+  const docs = baseDocs({
+    [`${BASE}/research/live`]: researchDoc({ needsLiveFacts: true }),
+    [`apps/helm/server/${UID}/research/usage`]: {
+      month: '2026-11',
+      cents: RESEARCH_MONTHLY_CAP_CENTS,
+      searches: 40,
+      reserved: {},
+    },
+  });
+  assert.equal(await startDueLearnLater(makeStore(docs), NOW), 1);
+  const live = docs.get(`${BASE}/research/live`);
+  assert.equal(live?.status, 'preparing');
+  assert.equal(live?.isWithoutWeb, true);
+  assert.equal(live?.reservedCents, 0);
+});
+
+const read: ResearchSettlement['result'] = {
+  overview: {
+    summary: 'Short.',
+    sections: [],
+    comparison: null,
+    form: 'steps',
+  },
+  sources: [],
+};
+const settlement = (
+  over: Partial<ResearchSettlement> = {},
+): ResearchSettlement => ({
+  result: read,
+  spentCents: 3,
+  searches: 0,
+  hundredths: 0,
+  learn: {
+    videos: [
+      {
+        videoId: 'fixture0001',
+        title: 'A video',
+        channel: 'C',
+        durationSec: 400,
+      },
+    ],
+    searchQuery: 'sourdough for beginners',
+    moreAskedAtClaim: [],
+  },
+  ...over,
+});
+
+test('settling a learn-later item: ready with videos sealed, failure goes back to planned, more questions send it round again', async () => {
+  const path = `${BASE}/research/r1`;
+  const docs = baseDocs({
+    [path]: researchDoc({ status: 'preparing', startedAt: NOW - 5_000 }),
+  });
+  const store = makeStore(docs);
+  await settleResearch(store, dataKey, UID, 'r1', settlement(), NOW);
+  const ready = docs.get(path);
+  assert.equal(ready?.status, 'ready');
+  assert.equal(ready?.preparedAt, NOW);
+  assert.equal(ready?.videosFetchedAt, NOW);
+  assert.equal(ready?.prepareFailedAt, null);
+  const opened = openForHelm(dataKey, ready?.sealed as never);
+  assert.equal((opened.overview as { form: string }).form, 'steps');
+  assert.equal((opened.videos as unknown[]).length, 1);
+  assert.equal(opened.searchQuery, 'sourdough for beginners');
+  assert.equal(opened.subject, 'Sourdough');
+
+  docs.set(
+    path,
+    researchDoc({
+      status: 'preparing',
+      startedAt: NOW - 5_000,
+      reservedCents: 4,
+    }),
+  );
+  await settleResearch(
+    store,
+    dataKey,
+    UID,
+    'r1',
+    { result: null, spentCents: 0, searches: 0, hundredths: 0 },
+    NOW,
+  );
+  const failed = docs.get(path);
+  assert.equal(failed?.status, 'planned');
+  assert.equal(failed?.prepareFailedAt, NOW);
+  assert.equal(failed?.prepareAt, nextNight(NOW, NY));
+  assert.equal(failed?.reservedCents, 0);
+  assert.equal(failed?.startedAt, null);
+
+  docs.set(
+    path,
+    researchDoc({
+      status: 'preparing',
+      startedAt: NOW - 5_000,
+      sealed: sealed({
+        question: 'q',
+        subject: 'Sourdough',
+        moreAsked: ['What about rye'],
+        overview: null,
+        sources: [],
+        videos: [],
+        searchQuery: null,
+        contextLine: null,
+      }),
+    }),
+  );
+  await settleResearch(store, dataKey, UID, 'r1', settlement(), NOW);
+  const again = docs.get(path);
+  assert.equal(again?.status, 'planned');
+  assert.equal(again?.prepareAt, nextNight(NOW, NY));
+});
+
+test('a failed learn-later look never asks for a rerun and an asked look still dismisses', async () => {
+  const docs = baseDocs({
+    [`${BASE}/research/ask`]: {
+      ...researchDoc({
+        mode: 'asked',
+        status: 'preparing',
+        isWithoutWeb: true,
+        prepareAt: null,
+      }),
+      sealed: sealed({
+        question: 'q',
+        subject: 's',
+        overview: null,
+        sources: [],
+      }),
+    },
+    [`${BASE}/captures/capture-1`]: {
+      status: 'sorted',
+      sealed: sealed({}),
+      questionState: {},
+    },
+  });
+  await settleResearch(
+    makeStore(docs),
+    dataKey,
+    UID,
+    'ask',
+    { result: null, spentCents: 0, searches: 0, hundredths: 0 },
+    NOW,
+  );
+  assert.equal(docs.get(`${BASE}/research/ask`)?.status, 'dismissed');
+  const learnDocs = baseDocs({
+    [`${BASE}/research/l`]: researchDoc({
+      status: 'preparing',
+      isWithoutWeb: true,
+    }),
+    [`${BASE}/captures/capture-1`]: {
+      status: 'sorted',
+      sealed: sealed({}),
+      questionState: {},
+    },
+  });
+  await settleResearch(
+    makeStore(learnDocs),
+    dataKey,
+    UID,
+    'l',
+    settlement(),
+    NOW,
+  );
+  assert.deepEqual(
+    learnDocs.get(`${BASE}/captures/capture-1`)?.questionState,
+    {},
+  );
+});
+
+test('the learn prompt and message: more questions are data, the tool adds form and videoQuery, nothing is strict', () => {
+  const prompt = buildResearchPrompt('light', false, 'learnLater');
+  assert.match(prompt, /more_asked/);
+  assert.match(prompt, /videoQuery/);
+  assert.doesNotMatch(buildResearchPrompt('light', false), /videoQuery/);
+  const message = buildResearchMessage('q', 's', ['a <b>']);
+  assert.match(message, /<more_asked>\["a \\u003cb>"\]<\/more_asked>/);
+  assert.doesNotMatch(buildResearchMessage('q', 's'), /more_asked/);
+  const schema = SUBMIT_LEARN_TOOL.inputSchema as {
+    required: string[];
+    properties: Record<string, unknown>;
+  };
+  assert.ok(
+    schema.required.includes('form') && schema.required.includes('videoQuery'),
+  );
+  assert.ok('form' in schema.properties && 'videoQuery' in schema.properties);
+  assert.ok(!JSON.stringify(SUBMIT_LEARN_TOOL).includes('"strict":true'));
+});
+
+test('the overview reader keeps a learn form and a comparison at light depth, and no other look has a form', () => {
+  const raw = {
+    summary: 'Short.',
+    sections: [],
+    comparison: { columns: ['A', 'B'], rows: [['1', '2']] },
+    form: 'comparison',
+    sources: [],
+  };
+  const learn = readResearchOverview(raw, 'light', 'learnLater');
+  assert.equal(learn?.overview.form, 'comparison');
+  assert.deepEqual(learn?.overview.comparison, {
+    columns: ['A', 'B'],
+    rows: [['1', '2']],
+  });
+  assert.equal(
+    readResearchOverview({ ...raw, comparison: null }, 'light', 'learnLater')
+      ?.overview.form,
+    'points',
+  );
+  assert.equal(
+    readResearchOverview({ ...raw, form: 'steps' }, 'light', 'learnLater')
+      ?.overview.form,
+    'steps',
+  );
+  assert.equal(
+    readResearchOverview({ ...raw, form: 'sparkles' }, 'light', 'learnLater')
+      ?.overview.form,
+    'points',
+  );
+  assert.equal(readResearchOverview(raw, 'thorough')?.overview.form, null);
+  assert.equal(readResearchOverview(raw, 'light')?.overview.form, null);
+  assert.equal(readResearchOverview(raw, 'light')?.overview.comparison, null);
+});
+
+const noNetwork: VideoSearchDeps['fetch'] = () => {
+  throw new Error('the network must not be called');
+};
+
+const withEnv = async (
+  env: Record<string, string | undefined>,
+  run: () => Promise<void>,
+) => {
+  const before = Object.fromEntries(
+    Object.keys(env).map((name) => [name, process.env[name]]),
+  );
+  Object.entries(env).forEach(([name, value]) => {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  });
+  try {
+    await run();
+  } finally {
+    Object.entries(before).forEach(([name, value]) => {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    });
+  }
+};
+
+const youtubeFetch =
+  (calls: string[]): VideoSearchDeps['fetch'] =>
+  async (url) => {
+    calls.push(String(url));
+    const isSearch = String(url).includes('/search?');
+    const body = isSearch
+      ? {
+          items: [
+            'aaaaaaaaaa1',
+            'bbbbbbbbbb2',
+            'cccccccccc3',
+            'dddddddddd4',
+            'bad id',
+          ].map((videoId) => ({ id: { videoId } })),
+        }
+      : {
+          items: [
+            {
+              id: 'aaaaaaaaaa1',
+              snippet: { title: 'Too short', channelTitle: 'A' },
+              contentDetails: { duration: 'PT2M59S' },
+            },
+            {
+              id: 'bbbbbbbbbb2',
+              snippet: { title: 'Good one', channelTitle: 'B' },
+              contentDetails: { duration: 'PT8M' },
+            },
+            {
+              id: 'cccccccccc3',
+              snippet: { title: 'Also good', channelTitle: 'C' },
+              contentDetails: { duration: 'PT1H' },
+            },
+            {
+              id: 'dddddddddd4',
+              snippet: { title: 'Third good', channelTitle: 'D' },
+              contentDetails: { duration: 'PT20M' },
+            },
+          ],
+        };
+    return new Response(JSON.stringify(body), { status: 200 });
+  };
+
+test('parseIsoDuration reads hours, minutes and seconds and nothing else', () => {
+  assert.equal(parseIsoDuration('PT1H2M3S'), 3723);
+  assert.equal(parseIsoDuration('PT45S'), 45);
+  assert.equal(parseIsoDuration('PT8M'), 480);
+  assert.equal(parseIsoDuration('P0D'), 0);
+  assert.equal(parseIsoDuration(undefined), 0);
+});
+
+test('searchVideos: no key skips, the length filter and limit apply, the cap and failures skip', async () => {
+  const input = {
+    query: ' sourdough  for beginners ',
+    limit: 2,
+    minSeconds: 180,
+    maxSeconds: 1200,
+  };
+  await withEnv(
+    {
+      FUNCTIONS_EMULATOR: undefined,
+      FIREBASE_EMULATOR_HUB: undefined,
+      LOCAL_FIXTURES: undefined,
+    },
+    async () => {
+      const none = await searchVideos(input, {
+        fetch: noNetwork,
+        readSecret: async () => null,
+        reserve: async () => true,
+      });
+      assert.deepEqual(none, { videos: [], skipped: 'noKey' });
+      const calls: string[] = [];
+      const found = await searchVideos(input, {
+        fetch: youtubeFetch(calls),
+        readSecret: async () => 'key',
+        reserve: async () => true,
+      });
+      assert.equal(found.skipped, null);
+      assert.deepEqual(
+        found.videos.map((video) => video.videoId),
+        ['bbbbbbbbbb2', 'dddddddddd4'],
+      );
+      assert.equal(calls.length, 2);
+      assert.ok(
+        calls.every(
+          (url) => url.startsWith('https://') && !url.includes('key='),
+        ),
+      );
+      assert.match(calls[0], /safeSearch=strict/);
+      assert.match(calls[0], /videoEmbeddable=true/);
+      assert.match(calls[0], /q=sourdough\+for\+beginners/);
+      const capped = await searchVideos(input, {
+        fetch: noNetwork,
+        readSecret: async () => 'key',
+        reserve: async () => false,
+      });
+      assert.deepEqual(capped, { videos: [], skipped: 'capped' });
+      const failed = await searchVideos(input, {
+        fetch: async () => new Response('nope', { status: 500 }),
+        readSecret: async () => 'key',
+        reserve: async () => true,
+      });
+      assert.deepEqual(failed, { videos: [], skipped: 'failed' });
+      const empty = await searchVideos(
+        { ...input, query: '  ' },
+        {
+          fetch: noNetwork,
+          readSecret: async () => 'key',
+          reserve: async () => true,
+        },
+      );
+      assert.deepEqual(empty, { videos: [], skipped: null });
+    },
+  );
+});
+
+test('on the emulator searchVideos answers two fixture videos with no key, and when forced even with one', async () => {
+  const input = {
+    query: 'sourdough',
+    limit: 2,
+    minSeconds: 180,
+    maxSeconds: 1200,
+  };
+  const emulator = {
+    FUNCTIONS_EMULATOR: 'true',
+    FIREBASE_EMULATOR_HUB: 'localhost:4400',
+  };
+  await withEnv({ ...emulator, LOCAL_FIXTURES: undefined }, async () => {
+    const result = await searchVideos(input, {
+      fetch: noNetwork,
+      readSecret: async () => null,
+      reserve: async () => true,
+    });
+    assert.deepEqual(result.videos, toFixtureVideos('sourdough', 2));
+    assert.equal(result.skipped, null);
+    assert.equal(result.videos.length, 2);
+    assert.ok(
+      result.videos.every(
+        (video) =>
+          /^[A-Za-z0-9_-]{11}$/.test(video.videoId) &&
+          video.durationSec >= 180 &&
+          video.durationSec <= 1200,
+      ),
+    );
+    assert.equal(
+      (
+        await searchVideos(
+          { ...input, limit: 1 },
+          {
+            fetch: noNetwork,
+            readSecret: async () => null,
+            reserve: async () => true,
+          },
+        )
+      ).videos.length,
+      1,
+    );
+  });
+  await withEnv({ ...emulator, LOCAL_FIXTURES: 'youtube' }, async () => {
+    const result = await searchVideos(input, {
+      fetch: noNetwork,
+      readSecret: async () => 'key',
+      reserve: async () => true,
+    });
+    assert.equal(result.videos.length, 2);
+  });
+  const deps = createVideoSearchDeps(async () => true);
+  assert.equal(typeof deps.readSecret, 'function');
+});
+
+test('the daily video search budget counts by Pacific day and stops at the cap', async () => {
+  const docs: Docs = new Map();
+  const reserve = createDailyReserve(
+    makeStore(docs),
+    'apps/helm/server/videoSearch/days',
+    () => Date.UTC(2026, 10, 16, 5, 0),
+  );
+  await withEnv({ VIDEO_SEARCH_DAILY_CAP: '2' }, async () => {
+    assert.deepEqual(
+      [await reserve(), await reserve(), await reserve()],
+      [true, true, false],
+    );
+  });
+  assert.equal(
+    docs.get('apps/helm/server/videoSearch/days/2026-11-15')?.count,
+    2,
+  );
+  await withEnv({ VIDEO_SEARCH_DAILY_CAP: undefined }, async () => {
+    const other = createDailyReserve(
+      makeStore(docs),
+      'apps/helm/server/videoSearch/days',
+      () => Date.UTC(2026, 10, 16, 20, 0),
+    );
+    assert.equal(await other(), true);
+  });
+  assert.equal(
+    docs.get('apps/helm/server/videoSearch/days/2026-11-16')?.count,
+    1,
+  );
+});
+
+test('old videos are searched again after 30 days, dropped with no search to repeat, and fresh ones are left', async () => {
+  const old = NOW - 31 * DAY_MS;
+  const readyDoc = (searchQuery: string | null, fetchedAt: number | null) =>
+    researchDoc({
+      status: 'ready',
+      prepareAt: null,
+      videosFetchedAt: fetchedAt,
+      sealed: sealed({
+        question: 'q',
+        subject: 'Sourdough',
+        moreAsked: [],
+        overview: null,
+        sources: [],
+        videos: [
+          {
+            videoId: 'oldoldold01',
+            title: 'Old',
+            channel: 'C',
+            durationSec: 300,
+          },
+        ],
+        searchQuery,
+        contextLine: null,
+      }),
+    });
+  const docs = baseDocs({
+    [`${BASE}/research/withQuery`]: readyDoc('sourdough for beginners', old),
+    [`${BASE}/research/noQuery`]: readyDoc(null, old),
+    [`${BASE}/research/fresh`]: readyDoc('x', NOW - 5 * DAY_MS),
+    [`${BASE}/research/planned`]: { ...readyDoc('x', old), status: 'planned' },
+  });
+  await withEnv(
+    {
+      FUNCTIONS_EMULATOR: 'true',
+      FIREBASE_EMULATOR_HUB: 'localhost:4400',
+      LOCAL_FIXTURES: 'youtube',
+    },
+    async () => {
+      const count = await refreshOldVideos(makeStore(docs), DEV_KEYRING, NOW);
+      assert.equal(count, 2);
+    },
+  );
+  const videosOf = (id: string) =>
+    openForHelm(dataKey, docs.get(`${BASE}/research/${id}`)?.sealed as never)
+      .videos as { videoId: string }[];
+  assert.deepEqual(
+    videosOf('withQuery').map((video) => video.videoId),
+    ['fixture0001', 'fixture0002'],
+  );
+  assert.equal(docs.get(`${BASE}/research/withQuery`)?.videosFetchedAt, NOW);
+  assert.deepEqual(videosOf('noQuery'), []);
+  assert.equal(docs.get(`${BASE}/research/noQuery`)?.videosFetchedAt, null);
+  assert.equal(videosOf('fresh')[0]?.videoId, 'oldoldold01');
+  assert.equal(videosOf('planned')[0]?.videoId, 'oldoldold01');
+});
+
+test('findLearnSlot wants 45 free minutes inside the day, never a rest or busy day; readLearnOffer picks one ready item', () => {
+  const plan = {
+    dayKey: '2026-11-16',
+    timeZone: NY,
+    now: Date.UTC(2026, 10, 16, 13, 0),
+    dayStartTime: '08:00',
+    dayEndTime: '22:00',
+    fillPercent: 100,
+    hasCalendar: false,
+    restDay: null,
+    currentPlaceId: null,
+    busy: [],
+    slots: {},
+    tasks: [],
+  };
+  const slot = findLearnSlot({
+    plan,
+    busyShare: 0.2,
+    offers: [],
+    isToday: true,
+    isAfterBusyDay: false,
+  });
+  assert.ok(slot);
+  assert.equal(slot.endAt - slot.startAt, 30 * 60_000);
+  assert.equal(slot.dayKind, 'weekday');
+  assert.equal(
+    findLearnSlot({
+      plan,
+      busyShare: 0.8,
+      offers: [],
+      isToday: true,
+      isAfterBusyDay: null,
+    }),
+    null,
+  );
+  assert.equal(
+    findLearnSlot({
+      plan,
+      busyShare: 0.2,
+      offers: [],
+      isToday: false,
+      isAfterBusyDay: null,
+    }),
+    null,
+  );
+  const declined = Array.from({ length: 3 }, (_, index) => ({
+    at: NOW - index * DAY_MS,
+    dayKind: 'weekday' as const,
+    gapMinutes: 60,
+    afterBusyDay: false,
+    outcome: 'notNow' as const,
+  }));
+  assert.equal(
+    findLearnSlot({
+      plan,
+      busyShare: 0.2,
+      offers: declined,
+      isToday: true,
+      isAfterBusyDay: null,
+    }),
+    null,
+  );
+  const item = (id: string, over: Record<string, unknown>) =>
+    ({
+      id,
+      mode: 'learnLater',
+      status: 'ready',
+      isUnreadable: false,
+      offeredOn: null,
+      prepareFailedAt: null,
+      notNowStreak: 0,
+      createdAt: NOW,
+      ...over,
+    }) as never;
+  const offer = readLearnOffer({
+    items: [
+      item('new', { createdAt: NOW }),
+      item('old', { createdAt: NOW - DAY_MS }),
+      item('planned', { status: 'planned', createdAt: NOW - 9 * DAY_MS }),
+    ],
+    todayKey: '2026-11-16',
+    timeZone: NY,
+  });
+  assert.equal((offer?.item as unknown as { id: string }).id, 'old');
+  assert.equal(offer?.ask, 'offer');
+  const failedToday = readLearnOffer({
+    items: [item('a', { prepareFailedAt: NOW })],
+    todayKey: '2026-11-16',
+    timeZone: NY,
+  });
+  assert.equal(failedToday, null);
+  assert.equal(
+    readLearnOffer({
+      items: [item('a', { notNowStreak: 3 })],
+      todayKey: '2026-11-16',
+      timeZone: NY,
+    })?.ask,
+    'still',
+  );
 });
 
 const failures: string[] = [];

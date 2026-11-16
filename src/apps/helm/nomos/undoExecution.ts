@@ -57,6 +57,7 @@ import type {
   ProcedureSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
+  ResearchSealed,
   RunSealed,
   ProjectSealed,
   Sealed,
@@ -568,6 +569,7 @@ export async function undoExecution(
                       | HabitSealed
                       | HabitDaySealed
                       | ConnectionSealed
+                      | ResearchSealed
                     >(data.sealed as Sealed, encryption)
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);
@@ -673,6 +675,7 @@ export async function undoExecution(
                     | HabitSealed
                     | HabitDaySealed
                     | ConnectionSealed
+                    | ResearchSealed
                   >(update.reseal, encryption),
                 }
               : {},

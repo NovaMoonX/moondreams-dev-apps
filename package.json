@@ -145,6 +145,7 @@
     "voice:listen": "tsx scripts/voice/benchmark.ts --all-voices",
     "voice:deepgram-secret": "bash scripts/voice/deepgramSecret.sh",
     "voice:gemini-secret": "bash scripts/voice/geminiSecret.sh",
+    "video:youtube-secret": "bash scripts/video/youtubeSecret.sh",
     "voice:google-setup": "bash scripts/voice/googleSetup.sh",
     "check:helm-media": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmMedia.ts",
     "check:helm-voice": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmVoice.ts",

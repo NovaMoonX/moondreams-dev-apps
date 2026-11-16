@@ -5,7 +5,9 @@ import {
   orderBy,
   query,
   type QueryDocumentSnapshot,
+  type Query,
   type Unsubscribe,
+  where,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -24,6 +26,7 @@ import type {
 } from '@apps/helm/types';
 
 const RESEARCH_SHOWN = 50;
+const LEARN_LATER_SHOWN = 500;
 
 const MODES: ResearchMode[] = ['asked', 'learnLater', 'leadTime'];
 const STATUSES: ResearchStatus[] = [
@@ -209,20 +212,15 @@ async function openResearch(
   }
 }
 
-/** The person's latest research items, newest first. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
-export function startResearchListener(
-  uid: string,
+function listenToResearch(
+  source: Query,
   read: SealedReader,
   onChange: (items: OpenResearch[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   const run = { isStopped: false, sequence: 0 };
   const stop = onSnapshot(
-    query(
-      collection(db, 'apps', 'helm', 'users', uid, 'research'),
-      orderBy('createdAt', 'desc'),
-      limit(RESEARCH_SHOWN),
-    ),
+    source,
     async (snapshot) => {
       run.sequence += 1;
       const current = run.sequence;
@@ -244,3 +242,39 @@ export function startResearchListener(
     stop();
   };
 }
+
+const researchOf = (uid: string) =>
+  collection(db, 'apps', 'helm', 'users', uid, 'research');
+
+/** The person's latest research items, newest first. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+export const startResearchListener = (
+  uid: string,
+  read: SealedReader,
+  onChange: (items: OpenResearch[]) => void,
+  onError: (error: Error) => void,
+) =>
+  listenToResearch(
+    query(researchOf(uid), orderBy('createdAt', 'desc'), limit(RESEARCH_SHOWN)),
+    read,
+    onChange,
+    onError,
+  );
+
+/** Every question saved to learn later, newest first, apart from the 50 latest research items so an old saved question never falls out of the list. */
+export const startLearnLaterListener = (
+  uid: string,
+  read: SealedReader,
+  onChange: (items: OpenResearch[]) => void,
+  onError: (error: Error) => void,
+) =>
+  listenToResearch(
+    query(
+      researchOf(uid),
+      where('mode', '==', 'learnLater'),
+      orderBy('createdAt', 'desc'),
+      limit(LEARN_LATER_SHOWN),
+    ),
+    read,
+    onChange,
+    onError,
+  );

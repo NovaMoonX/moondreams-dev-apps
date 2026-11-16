@@ -1699,6 +1699,12 @@ export const HELM_COPY = {
   learnEmpty:
     'Nothing saved yet. Say "one day I want to learn…" and it waits here for a free half hour.',
   learnActionFailed: "Couldn't save that. Check your connection.",
+  learnRowMeta: (savedOn: string) => `Learn later · saved ${savedOn}`,
+  learnToday: 'today',
+  learnNoMatch: 'Nothing you saved matches that.',
+  learnSearch: 'Search what you saved',
+  learnOpen: (subject: string) => `Open ${subject}`,
+  learnVideoPlay: (title: string) => `Play ${title}`,
   searchGroupLearn: 'Learn later',
   answerGeneralHeading: 'General knowledge',
   answerGeneralCaution: (name: string) =>

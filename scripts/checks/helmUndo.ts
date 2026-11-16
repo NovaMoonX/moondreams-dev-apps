@@ -33,6 +33,7 @@ import type {
   KeyDateSealed,
   OpenExecution,
   ProcedureSealed,
+  ResearchSealed,
   RunSealed,
   TaskSealed,
   TopicSealed,
@@ -2772,6 +2773,318 @@ test('an undo carries the reason it was asked for, null when none was given', ()
   assert.deepEqual(withReason.undoSealed.undoReason, reason);
   const without = asWrite(plan(execution(TWO_CREATES), targets));
   assert.equal(without.undoSealed.undoReason, null);
+});
+
+const researchSealed = (
+  subject: string,
+  extra: Partial<ResearchSealed> = {},
+): ResearchSealed => ({
+  question: `how does ${subject} work`,
+  subject,
+  overview: null,
+  sources: [],
+  moreAsked: [],
+  videos: [],
+  searchQuery: null,
+  contextLine: null,
+  ...extra,
+});
+
+const researchTarget = (
+  docId: string,
+  data: Record<string, unknown> | null,
+  opened: ResearchSealed | null = data ? researchSealed('Engines') : null,
+): [string, UndoTarget] => [docId, { docId, data, opened }];
+
+const researchRef = (op: EffectRef['op']) =>
+  ({ op, collection: 'research', docId: 'r1' }) as EffectRef;
+
+const researchCreate = (mode: string) => ({
+  ref: researchRef('create'),
+  effect: {
+    written: { mode, status: 'planned', 'sealed.title': 'Engines' },
+    previous: null,
+  },
+});
+
+const researchUpdate = (
+  written: Record<string, unknown>,
+  previous: Record<string, unknown>,
+) => ({
+  ref: researchRef('update'),
+  effect: {
+    written: { ...written, 'sealed.title': 'Engines' },
+    previous: { ...previous, 'sealed.title': 'Engines' },
+  },
+});
+
+const LEARN_UNTOUCHED = {
+  mode: 'learnLater',
+  offers: [],
+  notNowStreak: 0,
+  resultNoteId: null,
+  mergedInto: null,
+  lastEditedAt: EARLIER + 5,
+};
+
+test('a question asked for a look is dismissed while it is still asking or preparing, and kept once ready', () => {
+  const made = execution([researchCreate('asked')]);
+  ['asking', 'preparing'].forEach((status) => {
+    const result = asWrite(
+      plan(made, [
+        researchTarget('r1', { mode: 'asked', status, lastEditedAt: null }),
+      ]),
+    );
+    assert.equal(result.updates[0].fields.status, 'dismissed');
+    assert.equal(result.updates[0].collection, 'research');
+  });
+  const ready = asRefused(
+    plan(made, [
+      researchTarget('r1', {
+        mode: 'asked',
+        status: 'ready',
+        lastEditedAt: null,
+      }),
+    ]),
+  );
+  assert.deepEqual(ready.kept, ['Engines']);
+});
+
+test('a saved learn-later question is dismissed while planned, ready or offered and untouched; being prepared or answered keeps it', () => {
+  const made = execution([researchCreate('learnLater')]);
+  ['planned', 'ready', 'offered'].forEach((status) => {
+    const result = asWrite(
+      plan(made, [researchTarget('r1', { ...LEARN_UNTOUCHED, status })]),
+    );
+    assert.deepEqual(result.updates[0].fields, {
+      status: 'dismissed',
+      lastEditedAt: NOW,
+    });
+  });
+  const preparing = asRefused(
+    plan(made, [
+      researchTarget('r1', { ...LEARN_UNTOUCHED, status: 'preparing' }),
+    ]),
+  );
+  assert.deepEqual(preparing.kept, ['Engines']);
+  const answered = asRefused(
+    plan(made, [
+      researchTarget('r1', {
+        ...LEARN_UNTOUCHED,
+        status: 'ready',
+        notNowStreak: 1,
+      }),
+    ]),
+  );
+  assert.deepEqual(answered.kept, ['Engines']);
+});
+
+test('a merge into a saved question puts its words and status back', () => {
+  const merged = execution([
+    researchUpdate(
+      { status: 'planned', 'sealed.moreAsked': ['what a camshaft does'] },
+      { status: 'ready', 'sealed.moreAsked': [] },
+    ),
+  ]);
+  const result = asWrite(
+    plan(merged, [
+      researchTarget(
+        'r1',
+        { ...LEARN_UNTOUCHED, status: 'planned' },
+        researchSealed('Engines', { moreAsked: ['what a camshaft does'] }),
+      ),
+    ]),
+  );
+  const [one] = result.updates;
+  assert.equal(one.fields.status, 'ready');
+  assert.equal(one.fields.lastEditedAt, NOW);
+  assert.deepEqual((one.reseal as ResearchSealed).moreAsked, []);
+});
+
+test('removing a saved question comes back with its status and reason, kept if it changed since', () => {
+  const removed = execution([
+    researchUpdate(
+      { status: 'dismissed', declineReason: 'lostInterest', removedAt: NOW },
+      { status: 'ready', declineReason: null, removedAt: null },
+    ),
+  ]);
+  const result = asWrite(
+    plan(removed, [
+      researchTarget('r1', {
+        ...LEARN_UNTOUCHED,
+        status: 'dismissed',
+        declineReason: 'lostInterest',
+        removedAt: NOW,
+      }),
+    ]),
+  );
+  assert.deepEqual(result.updates[0].fields, {
+    status: 'ready',
+    declineReason: null,
+    removedAt: null,
+    lastEditedAt: NOW,
+  });
+  assert.equal(result.updates[0].reseal, null);
+  const changed = asRefused(
+    plan(removed, [
+      researchTarget('r1', {
+        ...LEARN_UNTOUCHED,
+        status: 'ready',
+        declineReason: null,
+        removedAt: null,
+      }),
+    ]),
+  );
+  assert.equal(changed.reason, 'nothingToTakeBack');
+});
+
+test('changing what a saved question asks restores its words and sends it back to ready', () => {
+  const changed = execution([
+    researchUpdate(
+      {
+        status: 'planned',
+        declineReason: 'changedMind',
+        'sealed.question': 'how do rockets work',
+        'sealed.subject': 'rockets',
+      },
+      {
+        status: 'ready',
+        declineReason: null,
+        'sealed.question': 'how does engines work',
+        'sealed.subject': 'Engines',
+      },
+    ),
+  ]);
+  const result = asWrite(
+    plan(changed, [
+      researchTarget(
+        'r1',
+        { ...LEARN_UNTOUCHED, status: 'planned', declineReason: 'changedMind' },
+        researchSealed('rockets', { question: 'how do rockets work' }),
+      ),
+    ]),
+  );
+  const [one] = result.updates;
+  assert.equal(one.fields.status, 'ready');
+  assert.equal(one.fields.declineReason, null);
+  assert.equal((one.reseal as ResearchSealed).subject, 'Engines');
+  assert.equal(
+    (one.reseal as ResearchSealed).question,
+    'how does engines work',
+  );
+});
+
+test('Together brings the newer question back and reseals the older one', () => {
+  const newer = {
+    ref: { op: 'update', collection: 'research', docId: 'r2' } as EffectRef,
+    effect: {
+      written: {
+        status: 'dismissed',
+        mergedInto: 'r1',
+        'sealed.title': 'Motors',
+      },
+      previous: { status: 'ready', mergedInto: null, 'sealed.title': 'Motors' },
+    },
+  };
+  const older = {
+    ref: researchRef('update'),
+    effect: {
+      written: {
+        status: 'planned',
+        'sealed.subject': 'How engines and motors work',
+        'sealed.moreAsked': ['how motors work'],
+        'sealed.title': 'Engines',
+      },
+      previous: {
+        status: 'ready',
+        'sealed.subject': 'Engines',
+        'sealed.moreAsked': [],
+        'sealed.title': 'Engines',
+      },
+    },
+  };
+  const result = asWrite(
+    plan(execution([older, newer]), [
+      researchTarget(
+        'r1',
+        { ...LEARN_UNTOUCHED, status: 'planned' },
+        researchSealed('How engines and motors work', {
+          moreAsked: ['how motors work'],
+        }),
+      ),
+      researchTarget(
+        'r2',
+        { ...LEARN_UNTOUCHED, status: 'dismissed', mergedInto: 'r1' },
+        researchSealed('Motors'),
+      ),
+    ]),
+  );
+  const byId = Object.fromEntries(
+    result.updates.map((entry) => [entry.docId, entry]),
+  );
+  assert.equal(byId.r2.fields.status, 'ready');
+  assert.equal(byId.r2.fields.mergedInto, null);
+  assert.equal(byId.r1.fields.status, 'ready');
+  assert.equal((byId.r1.reseal as ResearchSealed).subject, 'Engines');
+  assert.deepEqual((byId.r1.reseal as ResearchSealed).moreAsked, []);
+});
+
+test('Done with it goes back to ready', () => {
+  const done = execution([
+    researchUpdate({ status: 'done' }, { status: 'ready' }),
+  ]);
+  const result = asWrite(
+    plan(done, [researchTarget('r1', { ...LEARN_UNTOUCHED, status: 'done' })]),
+  );
+  assert.deepEqual(result.updates[0].fields, {
+    status: 'ready',
+    lastEditedAt: NOW,
+  });
+});
+
+test('Save to my knowledge takes the note away while unedited and puts the question back', () => {
+  const noteMade = {
+    ref: { op: 'create', collection: 'notes', docId: 'n1' } as EffectRef,
+    effect: { written: { 'sealed.title': 'Engines' }, previous: null },
+  };
+  const kept = execution(
+    [
+      researchUpdate(
+        { status: 'done', resultNoteId: 'n1' },
+        { status: 'ready', resultNoteId: null },
+      ),
+      noteMade,
+    ],
+    { actor: 'person', captureId: null, category: 'plan' },
+  );
+  const targets = (noteEdited: number | null): [string, UndoTarget][] => [
+    researchTarget('r1', {
+      ...LEARN_UNTOUCHED,
+      status: 'done',
+      resultNoteId: 'n1',
+    }),
+    [
+      'n1',
+      {
+        docId: 'n1',
+        data: { lastEditedAt: noteEdited, topicIds: [] },
+        opened: {
+          title: 'Engines',
+          body: 'x',
+        } as unknown as UndoTarget['opened'],
+      },
+    ],
+  ];
+  const result = asWrite(plan(kept, targets(null)));
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['n1'],
+  );
+  assert.equal(result.updates[0].fields.status, 'ready');
+  assert.equal(result.updates[0].fields.resultNoteId, null);
+  const edited = asWrite(plan(kept, targets(NOW)));
+  assert.deepEqual(edited.deletes, []);
+  assert.deepEqual(edited.kept, ['Engines']);
 });
 
 const failures: string[] = [];

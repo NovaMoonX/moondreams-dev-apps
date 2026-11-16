@@ -3253,6 +3253,10 @@ const isPickKind = (kind: string) =>
   kind === 'undoOffer' ||
   kind === 'researchDepth' ||
   kind === 'researchRerun' ||
+  kind === 'learnKind' ||
+  kind === 'learnGoal' ||
+  kind === 'learnStill' ||
+  kind === 'learnTogether' ||
   kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>

@@ -196,6 +196,77 @@ export interface ResearchCommand {
   isDecision: boolean;
 }
 
+/** Read from their own lists: the kinds that save a question to learn later, put one off, relate two or offer a skill as a goal. None is a `NomosCommand`. */
+export const LEARN_COMMAND_KINDS = [
+  'saveForLater',
+  'declineLearn',
+  'relatedLearn',
+  'offerLearnGoal',
+] as const;
+
+export const LEARN_QUESTION_CAP = 400;
+export const LEARN_SUBJECT_CAP = 60;
+export const LEARN_CONTEXT_CAP = 60;
+export const LEARN_NAME_CAP = 80;
+export const MAX_SAVES_PER_TURN = 3;
+export const LEARN_DECLINE_REASONS = [
+  'timing',
+  'lostInterest',
+  'changedMind',
+] as const;
+
+export type LearnDeclineReason = (typeof LEARN_DECLINE_REASONS)[number];
+
+/** A question the person wants to learn about later; `practise` says whether it is something to read up on, a skill to practise (a goal) or unclear, which code asks about. `quote` is the person's own words, kept only when the capture holds them. */
+export interface SaveForLaterCommand {
+  kind: 'saveForLater';
+  question: string;
+  subject: string;
+  contextLine: string | null;
+  needsLiveFacts: boolean;
+  practise: 'read' | 'goal' | 'unclear';
+  quote: string | null;
+}
+
+/** The person puts a saved question off (`timing`), lets it go (`lostInterest`) or asks for it differently (`changedMind`, the only one that carries words). `itemId` is the saved question it names. */
+export interface DeclineLearnCommand {
+  kind: 'declineLearn';
+  itemId: string;
+  reason: LearnDeclineReason;
+  question: string | null;
+  subject: string | null;
+}
+
+/** Two saved questions that are one subject, with the subject they would share. */
+export interface RelatedLearnCommand {
+  kind: 'relatedLearn';
+  firstId: string;
+  secondId: string;
+  together: string;
+}
+
+/** A clear skill to practise ("learn piano"), offered as a goal. */
+export interface OfferLearnGoalCommand {
+  kind: 'offerLearnGoal';
+  name: string;
+  quote: string | null;
+}
+
+export type LearnCommand =
+  | SaveForLaterCommand
+  | DeclineLearnCommand
+  | RelatedLearnCommand
+  | OfferLearnGoalCommand;
+
+/** What code asks when it cannot tell reading from practising: the words to save and the goal's name. */
+export interface LearnAsk {
+  question: string;
+  subject: string;
+  contextLine: string | null;
+  needsLiveFacts: boolean;
+  goalName: string | null;
+}
+
 export const SCHEDULE_CHANGES = [
   'skip',
   'move',
@@ -1193,6 +1264,17 @@ export const buildFileResultsTool = ({
             'researchSubject',
             'researchDepth',
             'researchIsDecision',
+            'learnQuestion',
+            'learnSubject',
+            'learnContext',
+            'learnNeedsLiveFacts',
+            'learnPractise',
+            'learnQuote',
+            'learnAlias',
+            'learnOtherAlias',
+            'learnTogether',
+            'learnReason',
+            'learnGoalName',
           ],
           properties: {
             kind: {
@@ -1204,6 +1286,7 @@ export const buildFileResultsTool = ({
                 ...RUN_COMMAND_KINDS,
                 ...SCHEDULE_COMMAND_KINDS,
                 ...RESEARCH_COMMAND_KINDS,
+                ...LEARN_COMMAND_KINDS,
                 ...HABIT_COMMAND_KINDS,
                 ...IMPORTANCE_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
@@ -1933,6 +2016,54 @@ export const buildFileResultsTool = ({
             researchIsDecision: nullable(
               'boolean',
               'research: true when the answer will feed a choice the person is making ("which one should I buy", "where should we stay"); false for plain curiosity; null for every other kind.',
+            ),
+            learnQuestion: nullable(
+              'string',
+              `saveForLater: what the person wants to learn, in their words made self-contained, at most ${LEARN_QUESTION_CAP} characters. declineLearn with changedMind: the new question; null otherwise.`,
+            ),
+            learnSubject: nullable(
+              'string',
+              `saveForLater: two to five words naming it ("how engines work", "AWD vs 4WD"), at most ${LEARN_SUBJECT_CAP} characters. declineLearn with changedMind: the new subject; null otherwise.`,
+            ),
+            learnContext: nullable(
+              'string',
+              `saveForLater: where the wish came up, only when the capture says it ("while planning the Leavenworth drive"), at most ${LEARN_CONTEXT_CAP} characters; null otherwise.`,
+            ),
+            learnNeedsLiveFacts: nullable(
+              'boolean',
+              'saveForLater: true only when the answer depends on facts that change (prices, models, rules, current events); false for how something works; null for every other kind.',
+            ),
+            learnPractise: {
+              type: ['string', 'null'],
+              enum: ['read', 'goal', 'unclear', null],
+              description:
+                'saveForLater: read for something to understand, goal for a skill to practise, unclear when you cannot tell ("learn to fix my car\'s engine"); null for every other kind.',
+            },
+            learnQuote: nullable(
+              'string',
+              'saveForLater and offerLearnGoal: the words of this capture the wish came from, copied exactly; null for every other kind.',
+            ),
+            learnAlias: nullable(
+              'string',
+              'declineLearn: the alias (r1, r2, …) of the saved question in <learn_later>. relatedLearn: the first of the two; null for every other kind.',
+            ),
+            learnOtherAlias: nullable(
+              'string',
+              'relatedLearn: the alias of the second saved question; null for every other kind.',
+            ),
+            learnTogether: nullable(
+              'string',
+              `relatedLearn: the subject the two would share ("How engines and electric motors work"), at most ${LEARN_SUBJECT_CAP} characters; null for every other kind.`,
+            ),
+            learnReason: {
+              type: ['string', 'null'],
+              enum: [...LEARN_DECLINE_REASONS, null],
+              description:
+                'declineLearn: timing for "not now" or "later", lostInterest for "I don\'t care about that any more", changedMind for "actually I meant …". null for every other kind.',
+            },
+            learnGoalName: nullable(
+              'string',
+              `offerLearnGoal: the skill as a goal's name ("Learn piano"), at most ${LEARN_NAME_CAP} characters; null for every other kind.`,
             ),
           },
         },

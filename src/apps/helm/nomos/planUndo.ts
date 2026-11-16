@@ -20,6 +20,7 @@ import type {
   NoteSealed,
   OpenExecution,
   ProjectSealed,
+  ResearchSealed,
   TaskSealed,
   ProcedureSealed,
   RunSealed,
@@ -92,6 +93,7 @@ export interface UndoTarget {
     | ProcedureSealed
     | RunSealed
     | ConnectionSealed
+    | ResearchSealed
     | null;
   /** For a date that was removed: whether the person it belonged to is still there; for a topic that was moved: whether its old parent is. */
   isOwnerHere?: boolean;
@@ -116,6 +118,7 @@ export type UndoPlan =
           | HabitSealed
           | HabitDaySealed
           | ConnectionSealed
+          | ResearchSealed
           | null;
       }[];
       /** Topics and procedures whose document goes back to an earlier version, written as a new version `from + 1` holding the parts of `to`. */
@@ -217,6 +220,7 @@ type RecordOutcome =
         | HabitSealed
         | HabitDaySealed
         | ConnectionSealed
+        | ResearchSealed
         | null;
       effect: ExecutionEffect;
     }
@@ -478,6 +482,35 @@ const isRunUntouched = (data: Record<string, unknown>) => {
   );
 };
 
+/** A saved question goes back to dismissed while nobody has answered it, kept or opened it since; while it is being prepared the rules allow no change, so it stays. */
+const planLearnCreate = (
+  target: UndoTarget,
+  title: string,
+  now: number,
+): RecordOutcome => {
+  const data = target.data ?? {};
+  const status = data.status;
+  const offers = Array.isArray(data.offers) ? data.offers : [];
+  const isUntouched =
+    (status === 'planned' || status === 'ready' || status === 'offered') &&
+    offers.length === 0 &&
+    ((data.notNowStreak as number | undefined) ?? 0) === 0 &&
+    (data.resultNoteId ?? null) === null &&
+    (data.mergedInto ?? null) === null;
+  return isUntouched
+    ? {
+        kind: 'restored',
+        title,
+        fields: { status: 'dismissed', lastEditedAt: now },
+        reseal: null,
+        effect: {
+          written: { status: 'dismissed', 'sealed.title': title },
+          previous: { status, 'sealed.title': title },
+        },
+      }
+    : { kind: 'kept', title };
+};
+
 const planRecord = (
   target: UndoTarget,
   entries: { ref: EffectRef; effect: ExecutionEffect }[],
@@ -526,6 +559,8 @@ const planRecord = (
   if (create?.ref.collection === 'research') {
     const status = target.data.status;
     if (status === 'dismissed') return left;
+    if (target.data.mode === 'learnLater')
+      return planLearnCreate(target, title, now);
     return (status === 'asking' || status === 'preparing') &&
       (target.data.lastEditedAt === null || target.data.lastEditedAt === madeAt)
       ? {

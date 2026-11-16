@@ -24,6 +24,15 @@ import { planResolveImportance } from './nomos/planImportance.js';
 import { planResolveScheduled } from './nomos/planScheduledActions.js';
 import { planResolveResearch } from './nomos/planResearch.js';
 import { readUsageIn, usageRef } from './research/researchStore.js';
+import { readLearnItemsIn } from './research/learnStore.js';
+import {
+  LEARN_QUESTION_KINDS,
+  LEARN_WORDS,
+  buildLearnAnswerExecution,
+  planResolveLearn,
+} from './nomos/planLearnLater.js';
+import { buildGoalCreate } from './nomos/planProjects.js';
+import { readActiveProjectsIn } from './projectStore.js';
 import { buildHabitAnswerExecution } from './nomos/planHabitCommands.js';
 import { readScheduledState } from './scheduledActions/actionStore.js';
 import {
@@ -495,6 +504,103 @@ export const resolveHelmQuestion = onCall(
         });
         return {
           executionId: answered.execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (
+        held &&
+        LEARN_QUESTION_KINDS.some(
+          (kind) => kind === (held as { kind?: unknown }).kind,
+        )
+      ) {
+        const now = Date.now();
+        const timeZone = String(profileSnap.get('timeZone') ?? 'UTC');
+        const items = await readLearnItemsIn(transaction, firestore, base, key);
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const answered = planResolveLearn({
+          captureId,
+          executionId: executionRef.id,
+          seal,
+          questionId,
+          optionId,
+          by,
+          now,
+          timeZone,
+          items,
+          newId: () => crypto.randomUUID(),
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+        });
+        if (answered.refused !== null) {
+          throw toRefusal(answered.refused, 'person');
+        }
+        const goal = answered.goal
+          ? buildGoalCreate({
+              name: answered.goal,
+              existing: await readActiveProjectsIn(
+                transaction,
+                firestore,
+                base,
+                key,
+              ),
+              newId: () => crypto.randomUUID(),
+              executionId: executionRef.id,
+              captureId,
+              now,
+              seal,
+            })
+          : null;
+        const made = goal && !goal.isExisting ? goal : null;
+        const plan = {
+          ...answered.plan,
+          effectRefs: [
+            ...answered.plan.effectRefs,
+            ...(made?.effects.map(({ ref }) => ref) ?? []),
+          ],
+          effects: [
+            ...answered.plan.effects,
+            ...(made?.effects.map(({ effect }) => effect) ?? []),
+          ],
+          lines: [
+            ...answered.plan.lines,
+            ...(answered.goal
+              ? [
+                  goal?.isExisting
+                    ? LEARN_WORDS.goalExists(answered.goal)
+                    : LEARN_WORDS.goalMade(answered.goal),
+                ]
+              : []),
+          ],
+        };
+        answered.plan.creates.forEach(({ id, doc }) =>
+          transaction.create(firestore.doc(`${base}/research/${id}`), doc),
+        );
+        answered.plan.updates.forEach(({ id, data }) =>
+          transaction.update(firestore.doc(`${base}/research/${id}`), data),
+        );
+        made?.creates.forEach(({ id, data }) =>
+          transaction.create(firestore.doc(`${base}/projects/${id}`), data),
+        );
+        const execution = buildLearnAnswerExecution(plan, {
+          captureId,
+          questionId,
+          now,
+          seal,
+        });
+        if (execution) transaction.create(executionRef, execution);
+        transaction.update(captureRef, {
+          ...answered.capture,
+          executionIds: execution
+            ? [...(capture.executionIds ?? []), executionRef.id]
+            : (capture.executionIds ?? []),
+          sealed: seal(answered.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: execution ? executionRef.id : null,
           isStale: false,
         };
       }

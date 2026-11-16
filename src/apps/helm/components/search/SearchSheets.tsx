@@ -6,6 +6,7 @@ import { useNow } from '@/hooks/useNow';
 import { queryClient } from '@lib/query/queryClient';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
+import LearnItemSheet from '@apps/helm/components/research/LearnItemSheet';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import KeptMediaViewer from '@apps/helm/components/media/KeptMediaViewer';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
@@ -24,7 +25,7 @@ import type { SearchTarget } from '@apps/helm/utils/searchRecords';
 
 export type SearchOpen = Extract<
   SearchTarget,
-  { kind: 'task' | 'note' | 'synced' | 'media' }
+  { kind: 'task' | 'note' | 'learnLater' | 'synced' | 'media' }
 >;
 
 interface SearchSheetsProps {
@@ -140,6 +141,10 @@ function SearchSheets({ open, tasks, onClose }: SearchSheetsProps) {
       />
       <NoteSheet
         noteId={open?.kind === 'note' ? open.id : null}
+        onClose={onClose}
+      />
+      <LearnItemSheet
+        itemId={open?.kind === 'learnLater' ? open.id : null}
         onClose={onClose}
       />
       <SyncedSheet

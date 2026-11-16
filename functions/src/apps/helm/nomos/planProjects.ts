@@ -501,3 +501,50 @@ export function planProjectRoles(input: {
       (createdWrites?.milestoneEffects.length ?? 0),
   };
 }
+
+/** A goal made from a name alone, by the same write a turn's `createProject` makes; a goal or project the name surely means is linked instead, so nothing is made twice (`isExisting`). */
+export function buildGoalCreate(input: {
+  name: string;
+  existing: ExistingProject[];
+  newId: () => string;
+  executionId: string;
+  captureId: string;
+  now: number;
+  seal: (fields: Record<string, unknown>) => SealedPayload;
+}) {
+  const { created } = settleProjectStart({
+    command: {
+      kind: 'createProject',
+      name: input.name,
+      emoji: null,
+      objective: null,
+      targetDate: null,
+      projectKind: 'goal',
+      why: null,
+    },
+    existing: input.existing,
+    newId: input.newId,
+  });
+  if (!created) return { isExisting: true as const };
+  const made = planProjectRoles({
+    created,
+    existing: [],
+    pool: [],
+    commands: [],
+    milestones: [],
+    newId: input.newId,
+    taskWho: [],
+    namedWhoIds: [],
+    whoIdOf: new Map(),
+    nameOf: new Map(),
+    executionId: input.executionId,
+    captureId: input.captureId,
+    now: input.now,
+    seal: input.seal,
+  });
+  return {
+    isExisting: false as const,
+    creates: made.creates,
+    effects: made.effects,
+  };
+}

@@ -32,6 +32,7 @@ import {
   buildFileResultsTool,
   type CaptureReading,
 } from '../../functions/src/apps/helm/nomos/commands.ts';
+import { LEARN_COMMAND_KINDS } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
   buildExecution,
   hasOpenMoreToSort,
@@ -529,6 +530,259 @@ const runFixture = async (text: string) => {
   });
   return (run.terminalInput as { commands: unknown[] }).commands;
 };
+
+const learnBook = () => {
+  const book = createAliasBook('r');
+  book.add('research-a');
+  book.add('research-b');
+  return book;
+};
+const normalizeLearn = (commands: unknown[], captureText = TEXT) =>
+  normalizeNomosReply(
+    { commands },
+    {
+      reading: READING,
+      aliases: newContext().aliases,
+      learnLater: learnBook(),
+      captureText,
+    },
+  );
+const learnItem = (kind: string, extra: Record<string, unknown> = {}) => ({
+  kind,
+  learnQuestion: null,
+  learnSubject: null,
+  learnContext: null,
+  learnNeedsLiveFacts: null,
+  learnPractise: null,
+  learnQuote: null,
+  learnAlias: null,
+  learnOtherAlias: null,
+  learnTogether: null,
+  learnReason: null,
+  learnGoalName: null,
+  ...extra,
+});
+
+test('a learn-later save is read with capped words, its quote only when said, and at most three a turn', () => {
+  const long = 'x'.repeat(500);
+  const read = normalizeLearn(
+    [
+      learnItem('saveForLater', {
+        learnQuestion: long,
+        learnSubject: long,
+        learnContext: long,
+        learnNeedsLiveFacts: true,
+        learnPractise: 'read',
+        learnQuote: 'a made up line',
+      }),
+      learnItem('saveForLater', {
+        learnQuestion: 'How do bees see',
+        learnSubject: 'Bees',
+      }),
+      learnItem('saveForLater', {
+        learnQuestion: 'How do bees see again',
+        learnSubject: ' bees ',
+      }),
+      learnItem('saveForLater', { learnQuestion: 'q3', learnSubject: 'Third' }),
+      learnItem('saveForLater', {
+        learnQuestion: 'q4',
+        learnSubject: 'Fourth',
+      }),
+      learnItem('saveForLater', { learnQuestion: null }),
+    ],
+    'Someday I want to know how bees see',
+  );
+  const saves = read.learnCommands.flatMap((command) =>
+    command.kind === 'saveForLater' ? [command] : [],
+  );
+  assert.equal(saves.length, 3);
+  assert.equal(saves[0].question.length, 400);
+  assert.equal(saves[0].subject.length, 60);
+  assert.equal(saves[0].contextLine?.length, 60);
+  assert.equal(saves[0].needsLiveFacts, true);
+  assert.equal(saves[0].quote, null);
+  assert.equal(saves[1].practise, 'read');
+  assert.equal(saves[1].needsLiveFacts, false);
+  assert.deepEqual(read.learnAsks, []);
+  assert.deepEqual(read.commands, []);
+});
+
+test('a save the model could not place becomes a question and is never filed by itself', () => {
+  const read = normalizeLearn(
+    [
+      learnItem('saveForLater', {
+        learnQuestion: 'Fix my engine',
+        learnSubject: 'Engines',
+        learnPractise: 'unclear',
+      }),
+    ],
+    'I want to learn to fix my engine',
+  );
+  assert.deepEqual(read.learnCommands, []);
+  assert.equal(read.learnAsks.length, 1);
+  assert.equal(read.learnAsks[0].subject, 'Engines');
+  assert.equal(read.learnAsks[0].goalName, null);
+});
+
+test('decline, related and goal commands resolve their aliases; unknown ones and unclear reasons are handled', () => {
+  const read = normalizeLearn(
+    [
+      learnItem('declineLearn', { learnAlias: 'r1', learnReason: 'timing' }),
+      learnItem('declineLearn', {
+        learnAlias: 'r1',
+        learnReason: 'lostInterest',
+      }),
+      learnItem('declineLearn', { learnAlias: 'r2', learnReason: 'whenever' }),
+      learnItem('declineLearn', { learnAlias: 'r9', learnReason: 'timing' }),
+      learnItem('declineLearn', {
+        learnAlias: 'r2',
+        learnReason: 'changedMind',
+      }),
+      learnItem('relatedLearn', {
+        learnAlias: 'r1',
+        learnOtherAlias: 'r2',
+        learnTogether: 'Bread baking',
+      }),
+      learnItem('relatedLearn', {
+        learnAlias: 'r1',
+        learnOtherAlias: 'r1',
+        learnTogether: 'Same',
+      }),
+      learnItem('relatedLearn', {
+        learnAlias: 'r1',
+        learnOtherAlias: 'r7',
+        learnTogether: 'Gone',
+      }),
+      learnItem('offerLearnGoal', {
+        learnGoalName: 'Learn piano',
+        learnQuote: 'learn piano',
+      }),
+      learnItem('offerLearnGoal', { learnGoalName: 'Learn guitar' }),
+    ],
+    'I want to learn piano',
+  );
+  assert.deepEqual(read.learnCommands, [
+    { kind: 'offerLearnGoal', name: 'Learn piano', quote: 'learn piano' },
+    {
+      kind: 'declineLearn',
+      itemId: 'research-a',
+      reason: 'timing',
+      question: null,
+      subject: null,
+    },
+    {
+      kind: 'declineLearn',
+      itemId: 'research-b',
+      reason: 'timing',
+      question: null,
+      subject: null,
+    },
+    {
+      kind: 'relatedLearn',
+      firstId: 'research-a',
+      secondId: 'research-b',
+      together: 'Bread baking',
+    },
+  ]);
+});
+
+test('the same wish as a goal and a save is withheld and asked about, and a doubled offer is dropped', () => {
+  const read = normalizeLearn(
+    [
+      {
+        kind: 'createProject',
+        title: 'Learn piano',
+        projectKind: 'goal',
+        projectEmoji: '🎹',
+        objective: null,
+        dueSpanId: null,
+      },
+      learnItem('saveForLater', {
+        learnQuestion: 'How do I learn piano',
+        learnSubject: 'Piano',
+        learnPractise: 'read',
+      }),
+      learnItem('offerLearnGoal', { learnGoalName: 'Learn piano' }),
+    ],
+    'I want to learn piano',
+  );
+  assert.deepEqual(read.learnCommands, []);
+  assert.equal(read.learnAsks.length, 1);
+  assert.equal(read.learnAsks[0].goalName, 'Learn piano');
+  assert.equal(read.projects.length, 0);
+});
+
+test('the learn-later context lists aliases, not ids, and says nothing of a let-go item', () => {
+  const context = buildContext({
+    text: TEXT,
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 9, 22, 0),
+    timeZone: 'America/Los_Angeles',
+    tasks: [],
+    learnLater: [
+      {
+        id: 'research-a',
+        subject: 'Sourdough',
+        status: 'ready',
+        saved: '2026-11-02',
+      },
+      {
+        id: 'research-b',
+        subject: 'Heat pumps',
+        status: 'planned',
+        saved: '2026-11-05',
+      },
+    ],
+  });
+  const block = context.message;
+  assert.match(block, /<learn_later>/);
+  assert.match(block, /Sourdough/);
+  assert.ok(!block.includes('research-a') && !block.includes('research-b'));
+  assert.equal(context.learnLater.idOf('r1'), 'research-a');
+  const none = buildContext({
+    text: TEXT,
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 9, 22, 0),
+    timeZone: 'America/Los_Angeles',
+    tasks: [],
+  });
+  assert.ok(!none.message.includes('<learn_later>'));
+});
+
+test('the learn commands are in the schema and the fixture reads wishes, skills and unclear saves', async () => {
+  const kinds = (
+    FILE_RESULTS_TOOL.inputSchema as {
+      properties: {
+        commands: { items: { properties: { kind: { enum: string[] } } } };
+      };
+    }
+  ).properties.commands.items.properties.kind.enum;
+  LEARN_COMMAND_KINDS.forEach((kind) => assert.ok(kinds.includes(kind), kind));
+  const piano = await runFixture('I want to learn piano');
+  assert.equal((piano[0] as { kind: string }).kind, 'offerLearnGoal');
+  const engine = await runFixture("I'd like to learn to fix my car's engine");
+  assert.equal(
+    (engine[0] as { learnPractise: string }).learnPractise,
+    'unclear',
+  );
+  const wish = await runFixture('Someday I want to learn pottery.');
+  assert.equal(
+    (wish[0] as { kind: string; learnPractise: string }).learnPractise,
+    'read',
+  );
+  const read = normalizeLearn(wish, 'Someday I want to learn pottery.');
+  assert.equal(read.learnCommands.length, 1);
+  assert.equal(read.learnCommands[0].kind, 'saveForLater');
+  assert.equal(
+    normalizeLearn(engine, "learn to fix my car's engine").learnAsks.length,
+    1,
+  );
+});
+
+test('scheduled captures keep the learn arrays as arrays', () => {
+  const read = normalizeLearn([]);
+  assert.ok(Array.isArray(read.learnCommands) && Array.isArray(read.learnAsks));
+});
 
 test('the fixture reads filler as nothing and a long list as more than 20', async () => {
   assert.equal((await runFixture('the thing with the')).length, 0);

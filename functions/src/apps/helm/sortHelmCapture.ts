@@ -191,6 +191,8 @@ import {
   type ProcedureCommand,
   type NoteSoundsLikeCommand,
   type AddContactPointCommand,
+  type LearnAsk,
+  type LearnCommand,
   type ResearchCommand,
   type RunCommand,
   type PlaceRead,
@@ -305,6 +307,11 @@ import {
   readUsageDoc,
   toAllowanceMirror,
 } from './nomos/planResearch.js';
+import { planLearnLater } from './nomos/planLearnLater.js';
+import {
+  readContextLearnLater,
+  readLearnItemsIn,
+} from './research/learnStore.js';
 import {
   readIsRerunBookedIn,
   readUsageIn,
@@ -2202,6 +2209,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       scheduleCommands: [],
       scheduleDropped: [],
       researchCommands: [],
+      learnCommands: [],
+      learnAsks: [],
+      isMidTask: false,
       soundsLike: [],
       contactPoints: [],
       connectionCommands: [],
@@ -2689,6 +2699,22 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           return [];
         })
       : [];
+    const contextLearn =
+      mode === 'rest' || unattendedMask.isOn || isScheduledCapture(capture)
+        ? []
+        : await readContextLearnLater(
+            firestore,
+            base,
+            key,
+            String(profile.data()?.timeZone ?? timeZone),
+          ).catch(
+            (error): Awaited<ReturnType<typeof readContextLearnLater>> => {
+              logger.warn('helm.sort.learnLaterUnreadable', {
+                cause: error instanceof Error ? error.name : 'error',
+              });
+              return [];
+            },
+          );
     const isHabitsInPlay =
       mode !== 'rest' &&
       isHabitTurn(
@@ -2816,6 +2842,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       runs: masked.runs,
       habits: masked.habits,
       scheduledActions: contextScheduled,
+      learnLater: contextLearn,
       importance: masked.importance,
       attachments: attached.media.map((item) => ({
         alias: item.alias,
@@ -3071,6 +3098,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       procedureTitleByTask,
       focusedProcedureId: focusedLive?.id ?? null,
       focusedTaskId: screen?.focus?.id ?? null,
+      isMidTask: openRunRecords.length > 0,
       knownNames: contextPeople.map((person) => ({
         id: person.id,
         names: [person.name, ...person.alsoCalled],
@@ -3125,6 +3153,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     focusedTaskId,
     keyDateNames,
     knownNames,
+    isMidTask: isRunOpen,
   } = result;
   if (loop.endedBy === 'terminal' && loop.terminalName === REPEAT_TOOL.name) {
     if (read.messages.length === 1 && read.joinedCount === 0) {
@@ -3181,6 +3210,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       runSteps: context.runSteps,
       habits: context.habits,
       scheduledActions: context.scheduledActions,
+      learnLater: context.learnLater,
       projects: context.projects,
       habitNames: context.habitNames,
       undoTurns: context.undoTurns,
@@ -3269,6 +3299,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reply.whereabouts.length +
     reply.scheduleCommands.length +
     reply.researchCommands.length +
+    reply.learnCommands.length +
+    reply.learnAsks.length +
     (reply.planDay ? 1 : 0) +
     (reply.setCurrentPlace ? 1 : 0);
   const outcome =
@@ -3338,6 +3370,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     scheduleCommands: keeps ? reply.scheduleCommands : [],
     scheduleDropped: keeps ? reply.scheduleDropped : [],
     researchCommands: keeps ? reply.researchCommands : [],
+    learnCommands: keeps ? reply.learnCommands : [],
+    learnAsks: keeps ? reply.learnAsks : [],
+    isMidTask: isRunOpen || answerTurn !== null,
     soundsLike: keeps ? reply.soundsLike : [],
     contactPoints: keeps ? reply.contactPoints : [],
     connectionCommands: keeps ? reply.connectionCommands : [],
@@ -3554,6 +3589,10 @@ async function writeResult(
     scheduleCommands: ScheduleCommand[];
     scheduleDropped: ScheduleDrop[];
     researchCommands: ResearchCommand[];
+    learnCommands: LearnCommand[];
+    learnAsks: LearnAsk[];
+    /** A run is open or the turn answers a question, so a question about two saved items would interrupt. */
+    isMidTask: boolean;
     importanceCommands: SetImportanceCommand[];
     soundsLike: NoteSoundsLikeCommand[];
     contactPoints: AddContactPointCommand[];
@@ -3612,6 +3651,9 @@ async function writeResult(
     scheduleCommands,
     scheduleDropped,
     researchCommands,
+    learnCommands,
+    learnAsks,
+    isMidTask,
     soundsLike,
     contactPoints,
     connectionCommands,
@@ -3823,6 +3865,7 @@ async function writeResult(
       whereabouts.length > 0 ||
       scheduleCommands.length > 0 ||
       researchCommands.length > 0 ||
+      learnCommands.length > 0 ||
       observations.length > 0 ||
       offerAbility !== null
         ? transaction.get(firestore.doc(base))
@@ -4721,6 +4764,36 @@ async function writeResult(
           schedulePlan.effects.length,
       ),
     });
+    const keptLearn = isStale ? [] : learnCommands;
+    const learnItems =
+      keptLearn.length > 0
+        ? await readLearnItemsIn(transaction, firestore, base, key)
+        : [];
+    const learnPlan = planLearnLater({
+      commands: keptLearn,
+      asks: isStale ? [] : learnAsks,
+      items: learnItems,
+      isSpoken,
+      isMidTask,
+      timeZone: researchTimeZone,
+      now,
+      captureId: captureRef.id,
+      newId: () => crypto.randomUUID(),
+      seal,
+      room: Math.max(
+        0,
+        MAX_EFFECTS -
+          written.effects.length -
+          soundsPlan.effects.length -
+          wherePlan.effects.length -
+          contactPlan.effects.length -
+          connectionPlan.effects.length -
+          habitPlan.effects.length -
+          importancePlan.effects.length -
+          schedulePlan.effects.length -
+          researchPlan.effects.length,
+      ),
+    });
     const scheduleNotKept = [
       ...schedulePlan.notKept,
       ...(isStale ? [] : scheduleDropped).flatMap(
@@ -4748,6 +4821,7 @@ async function writeResult(
         ...importancePlan.effectRefs,
         ...schedulePlan.effectRefs,
         ...researchPlan.effectRefs,
+        ...learnPlan.effectRefs,
       ],
       effects: [
         ...written.effects,
@@ -4760,6 +4834,7 @@ async function writeResult(
         ...importancePlan.effects,
         ...schedulePlan.effects,
         ...researchPlan.effects,
+        ...learnPlan.effects,
       ],
       notKept: [
         ...written.notKept,
@@ -4770,6 +4845,7 @@ async function writeResult(
         ...importancePlan.notKept,
         ...scheduleNotKept,
         ...researchPlan.notKept,
+        ...learnPlan.notKept,
         ...(heldWhere.length > 0 ? [WHERE_NOT_WITH_NAME_LINE] : []),
       ],
       linkedWhoIds: [
@@ -4894,6 +4970,7 @@ async function writeResult(
       ...importancePlan.questions,
       ...schedulePlan.questions,
       ...researchPlan.questions,
+      ...learnPlan.questions,
       ...impliedQuestions,
     ];
     const followUp =
@@ -5110,6 +5187,12 @@ async function writeResult(
       researchPlan.creates.forEach(({ id, doc }) =>
         transaction.create(firestore.doc(`${base}/research/${id}`), doc),
       );
+      learnPlan.creates.forEach(({ id, doc }) =>
+        transaction.create(firestore.doc(`${base}/research/${id}`), doc),
+      );
+      learnPlan.updates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/research/${id}`), data),
+      );
       if (researchPlan.usage) {
         transaction.set(usageRef(firestore, input.uid), researchPlan.usage);
         if (profileSnap?.exists)
@@ -5198,6 +5281,7 @@ async function writeResult(
               ...importancePlan.lines,
               ...schedulePlan.lines,
               ...researchPlan.lines,
+              ...learnPlan.lines,
             ],
             homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             said: ownLineStands(
@@ -5212,6 +5296,9 @@ async function writeResult(
               researchPlan.lines,
               researchPlan.notKept,
               researchPlan.questions,
+              learnPlan.lines,
+              learnPlan.notKept,
+              learnPlan.questions,
               noted.refused,
               liveRefused,
               askPlan.isDeferred,
@@ -5320,6 +5407,9 @@ async function writeResult(
           researchPlan.lines.length +
           researchPlan.notKept.length +
           researchPlan.questions.length +
+          learnPlan.lines.length +
+          learnPlan.notKept.length +
+          learnPlan.questions.length +
           wherePlan.lines.length +
           wherePlan.notKept.length +
           contactPlan.lines.length +

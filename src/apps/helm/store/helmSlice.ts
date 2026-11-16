@@ -113,6 +113,8 @@ export interface HelmState {
   scheduledActions: LoadedSet<OpenScheduledAction>;
   /** Looking-into-it items and what they found; a screen reads `selectResearch`. */
   research: LoadedSet<OpenResearch>;
+  /** Every question saved to learn later, whatever its age; a screen reads `selectLearnLater`. */
+  learnLater: LoadedSet<OpenResearch>;
   /** The things the person keeps up, active or not. */
   habits: LoadedSet<OpenHabit>;
   /** Each habit's ticks and tallies for the days from two weeks back. */
@@ -205,6 +207,7 @@ const initialState: HelmState = {
   connections: emptyLoadedSet,
   scheduledActions: emptyLoadedSet,
   research: emptyLoadedSet,
+  learnLater: emptyLoadedSet,
   habits: emptyLoadedSet,
   habitDays: emptyHabitDays,
   keyDateIndex: emptyKeyDateIndex,
@@ -441,6 +444,16 @@ const helmSlice = createSlice({
     setResearchFailed: (state) => {
       state.research.isFailed = true;
     },
+    setLearnLater: (state, action: PayloadAction<OpenResearch[]>) => {
+      state.learnLater = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setLearnLaterFailed: (state) => {
+      state.learnLater.isFailed = true;
+    },
     setHabits: (state, action: PayloadAction<OpenHabit[]>) => {
       state.habits = { items: action.payload, isLoaded: true, isFailed: false };
     },
@@ -669,6 +682,8 @@ export const {
   setScheduledActionsFailed,
   setResearch,
   setResearchFailed,
+  setLearnLater,
+  setLearnLaterFailed,
   setHabits,
   setHabitsFailed,
   setHabitDays,

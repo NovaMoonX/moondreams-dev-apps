@@ -87,6 +87,8 @@ import {
   UNDO_QUOTE_CAP,
   UNDO_REASONS,
   type UndoOffer,
+  type LearnAsk,
+  type LearnCommand,
   type ResearchCommand,
   type RunCommand,
   MAX_PARENT_CHILDREN,
@@ -148,6 +150,7 @@ import {
 } from '../goalWhy.js';
 import { readConnectionCommands } from './readConnectionCommands.js';
 import { readResearchCommands } from './readResearchCommands.js';
+import { readLearnCommands, refuseDoubledGoals } from './readLearnCommands.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import type { ModelChange } from '../topicWrite.js';
 
@@ -2187,6 +2190,8 @@ export function normalizeNomosReply(
     scheduledActions?: AliasBook;
     /** The person's projects and goals, by alias (p1, p2, …). */
     projects?: AliasBook;
+    /** The saved learn-later questions, by alias (r1, r2, …). */
+    learnLater?: AliasBook;
     /** Each habit's real name by id, for the check that words in the turn name it. */
     habitNames?: Map<string, string>;
     /** The earlier turns the model may offer to take back, by handle, and how many lines each has. */
@@ -2232,6 +2237,8 @@ export function normalizeNomosReply(
   scheduleCommands: ScheduleCommand[];
   scheduleDropped: ScheduleDrop[];
   researchCommands: ResearchCommand[];
+  learnCommands: LearnCommand[];
+  learnAsks: LearnAsk[];
   importanceCommands: SetImportanceCommand[];
   importanceDropped: ImportanceDrop[];
   soundsLike: NoteSoundsLikeCommand[];
@@ -2410,12 +2417,20 @@ export function normalizeNomosReply(
     context.undoUnitCounts ?? new Map(),
     context.captureText ?? '',
   );
-  const projects = readProjects(
+  const learnRead = readLearnCommands(
     items,
-    entities,
-    context.reading,
-    context.timeZone ?? 'UTC',
+    context.learnLater ?? { add: () => '', idOf: () => null },
     context.captureText ?? '',
+  );
+  const { learn, projects } = refuseDoubledGoals(
+    learnRead,
+    readProjects(
+      items,
+      entities,
+      context.reading,
+      context.timeZone ?? 'UTC',
+      context.captureText ?? '',
+    ),
   );
   const { asks, dropped: askDropped } = readAsks(
     items,
@@ -2499,6 +2514,8 @@ export function normalizeNomosReply(
     scheduleCommands,
     scheduleDropped,
     researchCommands,
+    learnCommands: learn.commands,
+    learnAsks: learn.asks,
     importanceCommands,
     importanceDropped,
     soundsLike,
