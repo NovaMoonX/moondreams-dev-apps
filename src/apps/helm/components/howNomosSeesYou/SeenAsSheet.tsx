@@ -26,7 +26,11 @@ import {
   toSaidAt,
 } from '@apps/helm/components/howNomosSeesYou/seenAsWords';
 import { HELM_COPY } from '@apps/helm/constants';
-import { SEEN_AS_LIMITS, readSourceKey } from '@apps/helm/engine/seenAs';
+import {
+  SEEN_AS_LIMITS,
+  cutCorrection,
+  readSourceKey,
+} from '@apps/helm/engine/seenAs';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
   correctSeenAs,
@@ -138,7 +142,9 @@ function SeenAsSheet({ lineId, onClose }: SeenAsSheetProps) {
   );
 
   const trimmed = draft?.trim() ?? '';
-  const isChanged = trimmed !== (line?.corrected ?? line?.line ?? '').trim();
+  const isChanged =
+    cutCorrection(trimmed) !==
+    cutCorrection(line?.corrected ?? line?.line ?? '');
   const isDirty = draft !== null && trimmed !== '' && isChanged;
   const close = () => {
     setDraft(null);

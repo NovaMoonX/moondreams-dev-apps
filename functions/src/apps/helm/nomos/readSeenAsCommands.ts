@@ -53,22 +53,38 @@ const GENERIC = new Set([
   'today',
 ]);
 
+const stem = (word: string) =>
+  word.replace(/s$/, '').replace(/(?:ing|ed)$/, '');
+
 const contentWords = (text: string) =>
   new Set(
     toComparable(text)
       .split(' ')
-      .filter((word) => word.length >= MIN_WORD && !GENERIC.has(word)),
+      .filter((word) => word.length >= MIN_WORD && !GENERIC.has(word))
+      .map(stem),
   );
 
-/** Whether the words that ask for a removal, with every closing phrase taken out, still name the line: the whole of it, or two of its content words (its only one when it has just one). A removal rests on this, so "forget it" can never remove a line. */
-export const isSeenAsNamed = (quote: string | undefined, line: string) => {
-  const said = ` ${toComparable(withoutClosingPhrases(quote ?? ''))} `;
+const SHORT_ASK = 8;
+
+/** Whether the words that ask for a removal, with every closing phrase taken out, still name the line: the whole of it, two of its content words (its only one when it has just one), or, in a short ask, one word no other listed line has. A removal rests on this, so "forget it" can never remove a line. */
+export const isSeenAsNamed = (
+  quote: string | undefined,
+  line: string,
+  otherLines: readonly string[] = [],
+) => {
+  const plain = toComparable(withoutClosingPhrases(quote ?? ''));
+  const said = new Set(plain.split(' ').map(stem));
   const whole = toComparable(line);
   const words = [...contentWords(line)];
-  const shared = words.filter((word) => said.includes(` ${word} `)).length;
+  const shared = words.filter((word) => said.has(word));
+  const elsewhere = new Set(
+    otherLines.flatMap((other) => [...contentWords(other)]),
+  );
+  const isShortAsk = plain.split(' ').filter(Boolean).length <= SHORT_ASK;
   return (
-    (whole !== '' && said.includes(` ${whole} `)) ||
-    (words.length > 0 && shared >= Math.min(2, words.length))
+    (whole !== '' && ` ${plain} `.includes(` ${whole} `)) ||
+    (words.length > 0 && shared.length >= Math.min(2, words.length)) ||
+    (isShortAsk && shared.some((word) => !elsewhere.has(word)))
   );
 };
 
@@ -101,7 +117,13 @@ export const readSeenAsCommands = (
               ? sliceOfCapture(text, item.requestQuote)
               : null;
           return quote !== null &&
-            isSeenAsNamed(quote, context.lineWords?.get(lineId) ?? '')
+            isSeenAsNamed(
+              quote,
+              context.lineWords?.get(lineId) ?? '',
+              [...(context.lineWords?.entries() ?? [])]
+                .filter(([id]) => id !== lineId)
+                .map(([, words]) => words),
+            )
             ? {
                 ...acc,
                 commands: [...acc.commands, { kind: 'removeSeenAs', lineId }],

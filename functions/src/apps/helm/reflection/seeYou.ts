@@ -588,5 +588,6 @@ export async function planSeeYouIn(
   return {
     ...plan,
     creates: plan.creates.filter(({ id }) => !isTaken.has(id)),
+    counts: { ...plan.counts, kept: plan.counts.kept - isTaken.size },
   };
 }

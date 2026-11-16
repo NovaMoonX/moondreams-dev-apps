@@ -283,9 +283,11 @@ const normalize = (
   commands: unknown[],
   text: string,
   line = 'You get piano done on mornings',
+  other: string | null = null,
 ) => {
   const seenAs = createAliasBook('sy');
   const alias = seenAs.add('sa_line');
+  if (other !== null) seenAs.add('sa_other');
   const reply = normalizeNomosReply(
     {
       commands: commands.map((command) => ({
@@ -297,15 +299,23 @@ const normalize = (
       reading: READING,
       aliases: createAliasBook('t'),
       seenAs,
-      seenAsWords: new Map([['sa_line', line]]),
+      seenAsWords: new Map([
+        ['sa_line', line],
+        ...(other === null ? [] : [['sa_other', other] as [string, string]]),
+      ]),
       captureText: text,
     },
   );
   return reply;
 };
 
-const removal = (text: string, line?: string, quote = text) =>
-  normalize([{ kind: 'removeSeenAs', requestQuote: quote }], text, line)
+const removal = (
+  text: string,
+  line?: string,
+  quote = text,
+  other: string | null = null,
+) =>
+  normalize([{ kind: 'removeSeenAs', requestQuote: quote }], text, line, other)
     .seenAsCommands;
 
 test('removeSeenAs is kept only when the words still name the line', () => {
@@ -318,7 +328,28 @@ test('removeSeenAs is kept only when the words still name the line', () => {
     removal('forget it, stop saying I do piano on mornings').length,
     1,
   );
-  assert.equal(removal('remove the one about piano').length, 0);
+  assert.equal(removal('remove the one about piano').length, 1);
+  assert.equal(
+    removal(
+      'remove the one about piano',
+      undefined,
+      undefined,
+      'Piano has felt hard on weeknights',
+    ).length,
+    0,
+  );
+  assert.equal(
+    removal('so I was thinking you could maybe take out the piano thing for me')
+      .length,
+    0,
+  );
+  assert.equal(
+    removal(
+      "stop saying I'm a morning person",
+      'You do your best work in the mornings',
+    ).length,
+    1,
+  );
   assert.equal(removal('remove the one about piano mornings').length, 1);
   [...CLOSING_PHRASES.dismiss, ...CLOSING_PHRASES.finish].forEach((phrase) =>
     assert.equal(removal(phrase).length, 0, phrase),
@@ -342,7 +373,8 @@ test('a removal needs its own quoted words to name the line, not the whole captu
     0,
   );
   assert.equal(removal('remove it', line, 'something not said').length, 0);
-  assert.equal(removal('stop the one about gardening', 'You garden').length, 0);
+  assert.equal(removal('stop the one about gardening', 'You garden').length, 1);
+  assert.equal(removal('stop the one about cooking', 'You garden').length, 0);
   assert.equal(removal('stop saying gardening', 'Gardening').length, 1);
 });
 
