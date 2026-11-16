@@ -552,12 +552,14 @@ const run = async () => {
     const rows = selectGuardrailRows({
       helm: {
         profile: null,
+        answeringPatternIds: ['saving'],
         patterns: {
           items: [
             pattern('live', 'a'),
             pattern('done', 'b'),
             pattern('paused', 'c'),
             pattern('gone', 'z'),
+            pattern('saving', 'c'),
           ],
         },
         projects: {
@@ -574,7 +576,11 @@ const run = async () => {
     const by = Object.fromEntries(
       rows.map((row) => [row.pattern.id, row.pattern.state]),
     );
-    assert.deepEqual(by, { live: 'suggested', paused: 'retired' });
+    assert.deepEqual(by, {
+      live: 'suggested',
+      paused: 'retired',
+      saving: 'suggested',
+    });
     assert.equal(
       rows.find((row) => row.pattern.id === 'paused')?.isUsed,
       false,
