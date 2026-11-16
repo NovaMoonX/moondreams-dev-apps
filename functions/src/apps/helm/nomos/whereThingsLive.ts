@@ -550,6 +550,21 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     taps: ['setPhoneLocation', 'forgetNearNow', 'declineAbilityOffer'],
   }),
   row({
+    thing: 'How the assistant talks, with its traits and how honest it is',
+    home: 'profile',
+    classes: ['readable'],
+    readers: ['device', 'server', 'turn', 'quick'],
+    commands: ['setPersonality'],
+    writer: 'actions/personalityActions',
+    taps: ['setPersonality', 'askPersonalityPreview'],
+    jobFields: [
+      {
+        field: 'personalityPreview (the sample replies for one personality)',
+        job: 'previewHelmPersonality',
+      },
+    ],
+  }),
+  row({
     thing: 'Settings, the name and the way Helm talks',
     home: 'profile',
     classes: ['readable'],

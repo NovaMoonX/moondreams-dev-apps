@@ -269,6 +269,24 @@ const isStillHome = (value: unknown, now: number) =>
   typeof value.saidAt === 'number' &&
   now - value.saidAt < CURRENT_PLACE_MS;
 
+const PERSONALITY_UNDO = {
+  summary: 'Put back how it talks',
+  phrase: 'how it talks',
+  report: (kept: number) =>
+    [
+      'Put back how it talks.',
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  reportToo: 'How it talks too.',
+};
+
+const isPersonalityEffect = (
+  ref: EffectRef | undefined,
+  effect: ExecutionEffect | undefined,
+) => ref?.collection === 'profile' && 'personality' in (effect?.written ?? {});
+
 const MILESTONE_PATHS = ['milestoneState.', 'sealed.milestones.'];
 
 /** A milestone an effect wrote is one entry under a dotted path, so Undo compares and restores that entry alone. */
@@ -1311,6 +1329,15 @@ export function planUndo(input: {
     collectionOf.get(docId) === 'projects';
   const isNoteDoc = (docId: string) => collectionOf.get(docId) === 'notes';
   const isSeenAsDoc = (docId: string) => collectionOf.get(docId) === 'seenAs';
+  const personalityDocIds = new Set(
+    original.effectRefs.flatMap((ref, index) =>
+      isPersonalityEffect(ref, original.effects[index]) ? [ref.docId] : [],
+    ),
+  );
+  const isPersonalityDoc = (docId: string) => personalityDocIds.has(docId);
+  const personalityCount = done.filter(({ docId }) =>
+    isPersonalityDoc(docId),
+  ).length;
   const projectsDone = done.filter(({ docId }) => isProjectDoc(docId));
   const notesDeleted = done.filter(
     ({ docId, outcome }) => isNoteDoc(docId) && outcome.kind === 'deleted',
@@ -1335,7 +1362,8 @@ export function planUndo(input: {
         !isRunDoc(docId) &&
         !isHabitDoc(docId) &&
         !isHabitDayDoc(docId) &&
-        !isSeenAsDoc(docId),
+        !isSeenAsDoc(docId) &&
+        !isPersonalityDoc(docId),
   );
   const seenAsCount = done.filter(({ docId }) => isSeenAsDoc(docId)).length;
   const habitsDone = done.filter(({ docId }) => isHabitDoc(docId));
@@ -1420,7 +1448,8 @@ export function planUndo(input: {
     procedureCount === 0 &&
     runCount === 0 &&
     habitCount === 0 &&
-    seenAsCount === 0
+    seenAsCount === 0 &&
+    personalityCount === 0
   ) {
     return refuse(
       'nothingToTakeBack',
@@ -1433,8 +1462,10 @@ export function planUndo(input: {
     ({ docId }) => collectionOf.get(docId) !== 'profile',
   );
   const homeEffect =
-    done.find(({ docId }) => collectionOf.get(docId) === 'profile')?.outcome
-      .effect ?? null;
+    done.find(
+      ({ docId }) =>
+        collectionOf.get(docId) === 'profile' && !isPersonalityDoc(docId),
+    )?.outcome.effect ?? null;
   const isHomeRestored = isStillHome(homeEffect?.written.currentPlace, now);
   const wasLeaving = homeEffect?.previous?.currentPlace === null;
   const factCount = factsDone.length;
@@ -1592,16 +1623,36 @@ export function planUndo(input: {
       topicCount +
       procedureCount +
       runCount +
-      habitCount ===
+      habitCount +
+      personalityCount ===
+      0;
+  const isPersonalityOnly =
+    personalityCount > 0 &&
+    photoCount +
+      records.length +
+      factsDone.length +
+      datesDone.length +
+      notesDone.length +
+      projectCount +
+      topicCount +
+      procedureCount +
+      runCount +
+      habitCount +
+      seenAsCount ===
       0;
   const otherReport = isPhotosOnly
     ? HELM_COPY.undoReportPhotos(photoCount)
     : [withHabits, photosToo].filter(Boolean).join(' ');
-  const report = isSeenAsOnly
+  const withSeenAs = isSeenAsOnly
     ? HELM_COPY.undoReportSeenAs(seenAsCount, kept.length, gone)
     : seenAsCount > 0
       ? `${otherReport} ${HELM_COPY.undoReportSeenAsToo(seenAsCount)}`
       : otherReport;
+  const report = isPersonalityOnly
+    ? PERSONALITY_UNDO.report(kept.length)
+    : personalityCount > 0
+      ? `${withSeenAs} ${PERSONALITY_UNDO.reportToo}`
+      : withSeenAs;
   const baseSummary =
     records.length === 0
       ? isNotesOnly
@@ -1717,13 +1768,15 @@ export function planUndo(input: {
       finishedAt: now,
     },
     undoSealed: {
-      summary: isSeenAsOnly
-        ? HELM_COPY.tookBackSeenAs(seenAsCount)
-        : `${
-            isPhotosOnly
-              ? HELM_COPY.tookBackPhotos(photoCount)
-              : withHabitsSummary
-          }${seenAsCount > 0 ? ` and ${HELM_COPY.undoSeenAsPhrase(seenAsCount)}` : ''}`,
+      summary: isPersonalityOnly
+        ? PERSONALITY_UNDO.summary
+        : isSeenAsOnly
+          ? HELM_COPY.tookBackSeenAs(seenAsCount)
+          : `${
+              isPhotosOnly
+                ? HELM_COPY.tookBackPhotos(photoCount)
+                : withHabitsSummary
+            }${seenAsCount > 0 ? ` and ${HELM_COPY.undoSeenAsPhrase(seenAsCount)}` : ''}${personalityCount > 0 ? ` and ${PERSONALITY_UNDO.phrase}` : ''}`,
       said: null,
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
@@ -1887,6 +1940,7 @@ const REOPENABLE_KINDS = [
   'whichKin',
   'kinOrder',
   'questionsTask',
+  'clashChoice',
 ];
 
 /** What taking back an answer to a "which is true now?", "group these?", "is this who?", family or "make these questions a task?" question writes to its turn so the question asks again; null for any other execution. */

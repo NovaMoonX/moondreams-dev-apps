@@ -32,6 +32,11 @@ import {
 } from './readImportanceCommands.js';
 import { readSeenAsCommands, type SeenAsDrop } from './readSeenAsCommands.js';
 import {
+  readPersonalityCommands,
+  type PersonalityDrop,
+} from './readPersonalityCommands.js';
+import type { Personality } from './personality.js';
+import {
   hasProcedureCue,
   hasProcedureReviseCue,
   hasReviseCue,
@@ -142,6 +147,7 @@ import {
   MEETS_HOWS,
   type HabitCommand,
   type SeenAsCommand,
+  type SetPersonalityCommand,
   type SetImportanceCommand,
   type ConnectionCommand,
 } from './commands.js';
@@ -2244,6 +2250,8 @@ export function normalizeNomosReply(
     /** The lines of how the assistant sees the person, by alias (sy1, sy2, …), and the words of each by id. */
     seenAs?: AliasBook;
     seenAsWords?: Map<string, string>;
+    /** The personality the person has now, for the cap on traits. */
+    personality?: Personality;
     quotes?: QuoteBook;
     alreadyMade?: string[];
     records?: RecordBook;
@@ -2286,6 +2294,8 @@ export function normalizeNomosReply(
   importanceDropped: ImportanceDrop[];
   seenAsCommands: SeenAsCommand[];
   seenAsDropped: SeenAsDrop[];
+  personalityCommands: SetPersonalityCommand[];
+  personalityDropped: PersonalityDrop[];
   soundsLike: NoteSoundsLikeCommand[];
   contactPoints: AddContactPointCommand[];
   connectionCommands: ConnectionCommand[];
@@ -2441,6 +2451,11 @@ export function normalizeNomosReply(
       lineWords: context.seenAsWords,
       captureText: context.captureText,
     });
+  const { commands: personalityCommands, dropped: personalityDropped } =
+    readPersonalityCommands(items, {
+      captureText: context.captureText,
+      current: context.personality,
+    });
   const soundsLike = readSoundsLike(
     items,
     context.people,
@@ -2586,6 +2601,8 @@ export function normalizeNomosReply(
     importanceDropped,
     seenAsCommands,
     seenAsDropped,
+    personalityCommands,
+    personalityDropped,
     soundsLike,
     contactPoints,
     connectionCommands,

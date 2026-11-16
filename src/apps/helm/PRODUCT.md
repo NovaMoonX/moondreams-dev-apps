@@ -1355,7 +1355,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Questions for someone: a task with a step for each question, linked to the meeting, with "Do you feel ready?" before it (O) (Issue 121)
 - [ ] Connected apps read as their full state: Going Once's drafts, unpriced and unlisted items and buyers' questions, and the gaps the audit found in every other app (What Each Source Shares) (O) (Issue 124)
 - [x] How [name] sees you, widened: how you talk and what works for you, each line citing what it came from, corrected or removed by tap or voice (O) (Issue 125)
-- [ ] The assistant's personality: traits you pick or say, how honest it may be, a warning when two clash and a sample of how replies will read (O) (Issue 126)
+- [x] The assistant's personality: traits you pick or say, how honest it may be, a warning when two clash and a sample of how replies will read (O) (Issue 126)
 - [x] Hands-free first across habits, goals, learning and thinking ahead: every question answered aloud, listening after asking, talking over it, the wake phrase to answer late (O, N) (Issue 116)
 - [x] Voice follows the turn on every page: spoken on home, through "Ask about this" or after the wake phrase is answered aloud there; typed is answered in writing (O) (Issue 117)
 - [ ] Private things: health and care things private on their own on any kind of record, anything marked private by saying so or a switch; never named in a reminder, copy or export unless turned on for that one thing; every reminder nameless by default (O) (Issue 103)

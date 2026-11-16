@@ -2052,9 +2052,9 @@ export const HELM_COPY = {
   coloursLabel: 'Colour theme',
   coloursLight: 'Light',
   coloursDark: 'Dark',
-  assistantRow: 'Name and tone',
+  assistantRow: 'Name',
   assistantSheetTitle: 'Your assistant',
-  assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
+  assistantLine: (name: string, traits: string) => `${name} · ${traits}`,
   assistantNameLabel: 'Name',
   assistantNameHint:
     "With Hey on in Voice service, it's also the name you say.",
@@ -2063,9 +2063,23 @@ export const HELM_COPY = {
   assistantNameError:
     'Up to 16 letters, numbers, spaces, hyphens or apostrophes.',
   assistantUseDefault: (name: string) => `Use ${name}`,
-  assistantToneLabel: 'How it answers',
-  assistantToneHint:
-    'Shapes its written answers. Names, dates and what it files never change.',
+  personalityRow: (assistant: string) => `How ${assistant} talks`,
+  personalityLead: (assistant: string) =>
+    `Pick what ${assistant} should be like. It shows you how replies will read.`,
+  personalityTraitsHeader: (count: number, max: number) =>
+    `Traits · ${count} of up to ${max}`,
+  personalityTraitsLabel: 'Traits',
+  personalityTooMany: 'Up to five. Drop one first.',
+  personalityHonestHeader: 'How honest',
+  personalityClashTitle: (left: string, right: string) =>
+    `${left} and ${right} pull against each other.`,
+  personalityClashLabel: (assistant: string) =>
+    `What should ${assistant} do when they do?`,
+  personalityKeepBoth: 'Keep both',
+  personalityDrop: (trait: string) => `Drop ${trait}`,
+  personalityPreviewHeader: 'How replies will read',
+  personalityPreviewWaiting: 'Writing a sample',
+  personalityCareNote: 'Health and care stay careful whatever you pick.',
   assistantSave: 'Save',
   settingsPlanning: 'Planning',
   yourDayRow: 'Your day',
@@ -2633,7 +2647,7 @@ export const HELM_COPY = {
   questionGone: (kind: string) =>
     kind === 'whichIsTrue'
       ? 'That changed since.'
-      : kind === 'whichComesFirst'
+      : kind === 'whichComesFirst' || kind === 'clashChoice'
         ? 'That changed since.'
         : kind === 'whichTopic'
           ? 'That note or one of those topics was removed.'

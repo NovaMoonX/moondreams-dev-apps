@@ -166,6 +166,11 @@ const SEED_PROFILES = [
     assistantName: null,
     assistantTone: null,
     theme: null,
+    personality: {
+      traits: ['honest', 'brief', 'warm'],
+      honesty: 'straight',
+      keptClashes: [],
+    },
   },
   {
     user: FIXTURE_USERS.partnerTwo,
@@ -173,6 +178,11 @@ const SEED_PROFILES = [
     assistantName: 'Juniper',
     assistantTone: 'warm',
     theme: 'plum',
+    personality: {
+      traits: ['warm', 'blunt', 'gentle'],
+      honesty: 'straight',
+      keptClashes: ['blunt+gentle'],
+    },
   },
 ];
 
@@ -6966,13 +6976,23 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
 
   const turnCounts = await Promise.all(
     SEED_PROFILES.map(
-      async ({ user, timeZone, assistantName, assistantTone, theme }) => {
+      async ({
+        user,
+        timeZone,
+        assistantName,
+        assistantTone,
+        theme,
+        personality,
+      }) => {
         batch.set(users.doc(user.uid), {
           timeZone,
           assistantName,
           assistantNameVariants:
             assistantName === 'Juniper' ? ['juniper', 'june per'] : null,
           assistantTone,
+          personality,
+          personalitySetAt: null,
+          personalityPreview: null,
           theme,
           dayStartTime: DEFAULT_DAY_START_TIME,
           dayEndTime: DEFAULT_DAY_END_TIME,

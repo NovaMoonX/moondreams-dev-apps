@@ -676,6 +676,13 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       assistantName: null,
       assistantNameVariants: null,
       assistantTone: null,
+      personality: {
+        traits: ['honest', 'brief', 'warm'],
+        honesty: 'straight',
+        keptClashes: [],
+      },
+      personalitySetAt: null,
+      personalityPreview: null,
       theme: null,
       dayStartTime: DEFAULT_DAY_START_TIME,
       dayEndTime: DEFAULT_DAY_END_TIME,

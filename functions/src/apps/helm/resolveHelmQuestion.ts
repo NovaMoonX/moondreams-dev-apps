@@ -24,6 +24,8 @@ import { MAX_CONTEXT_TOPICS } from './nomos/commands.js';
 import { planResolveHabit } from './nomos/planHabitCommands.js';
 import { importanceToday, readImportanceRecordsIn } from './importanceStore.js';
 import { planResolveImportance } from './nomos/planImportance.js';
+import { planResolvePersonality } from './nomos/planPersonality.js';
+import { readAssistantName } from './assistantName.js';
 import { planResolveScheduled } from './nomos/planScheduledActions.js';
 import { planResolveResearch } from './nomos/planResearch.js';
 import { readUsageIn, usageRef } from './research/researchStore.js';
@@ -49,7 +51,7 @@ import {
 import { readStoredConnections } from './connectionStore.js';
 import { toConnectionId, type ConnectionKind } from './nomos/connections.js';
 import { habitDayRef, readHabitState, writeHabitDayIn } from './habitStore.js';
-import { NOTE_TOPICS_CAP } from './nomos/commands.js';
+import { DEFAULT_ASSISTANT_NAME, NOTE_TOPICS_CAP } from './nomos/commands.js';
 import type { NoteTopicState } from './nomos/executeCommands.js';
 import { readIndexIn, writeIndexIn } from './keyDateStore.js';
 import { applyChanges } from './keyDateIndex.js';
@@ -693,6 +695,47 @@ export const resolveHelmQuestion = onCall(
         });
         return {
           executionId: execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === 'clashChoice') {
+        const now = Date.now();
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const storedSetAt = profileSnap.get('personalitySetAt');
+        const picked = planResolvePersonality({
+          captureId,
+          questionId,
+          optionId,
+          by,
+          now,
+          executionId: executionRef.id,
+          stored: profileSnap.get('personality') ?? null,
+          legacyTone: profileSnap.get('assistantTone'),
+          storedSetAt: typeof storedSetAt === 'number' ? storedSetAt : null,
+          profileId: firestore.doc(base).id,
+          assistantName:
+            readAssistantName(profileSnap.get('assistantName')) ??
+            DEFAULT_ASSISTANT_NAME,
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+          seal,
+        });
+        if (picked.refused !== null) {
+          throw toRefusal(picked.refused, 'person');
+        }
+        if (picked.data) transaction.update(firestore.doc(base), picked.data);
+        if (picked.execution)
+          transaction.create(executionRef, picked.execution);
+        transaction.update(captureRef, {
+          ...picked.capture,
+          sealed: seal(picked.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: picked.execution ? executionRef.id : null,
           isStale: false,
         };
       }

@@ -2,6 +2,7 @@ import type { City } from '@/lib/cities/types';
 import type { Cadence, Weekday } from '@/utils/cadenceUtils';
 import type { DayPart } from '@apps/helm/engine/habitDay';
 import type { ImportancePlace } from '@apps/helm/engine/importance';
+import type { Personality } from '@apps/helm/engine/personality';
 import type { ObservationTag } from '@apps/helm/engine/said';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type {
@@ -80,6 +81,11 @@ export interface HelmProfile {
   assistantNameVariants: string[] | null;
   /** How the assistant's answers sound; null reads as composed. */
   assistantTone: AssistantTone | null;
+  /** How the assistant talks; null reads from `assistantTone`. Always read through `readPersonality`. */
+  personality: Personality | null;
+  personalitySetAt: number | null;
+  /** The sample replies made for the personality whose `personalityHash` is `hash`, so a device never asks again for one already made. */
+  personalityPreview: { hash: string; replies: string[]; at: number } | null;
   /** The colour theme; null reads as chestnut. */
   theme: HelmTheme | null;
   /** IANA zone, set from the device on first open. */
@@ -238,6 +244,7 @@ export type QuestionKind =
   | 'whichTopic'
   | 'groupTopics'
   | 'whichComesFirst'
+  | 'clashChoice'
   | 'asked'
   | (string & {});
 
@@ -324,6 +331,7 @@ export interface HelmQuestion {
     | 'whichTopic'
     | 'groupTopics'
     | 'whichComesFirst'
+    | 'clashChoice'
     | 'undoOffer'
     | 'researchDepth'
     | 'researchRerun'

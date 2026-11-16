@@ -30,6 +30,12 @@ import type { Cadence } from '../../../vendor/cadenceUtils.js';
 import type { DayPart } from './habitDay.js';
 import { SEEN_AS_LIMITS } from './seenAs.js';
 import {
+  HONESTY_LEVELS,
+  PERSONALITY_TRAITS,
+  type HonestyLevel,
+  type PersonalityTrait,
+} from './personality.js';
+import {
   CONNECTION_KINDS,
   CONNECTION_STATUSES,
   type ConnectionKind,
@@ -446,6 +452,9 @@ export const IMPORTANCE_COMMAND_KINDS = ['setImportance'] as const;
 export const SEEN_AS_COMMAND_KINDS = ['correctSeenAs', 'removeSeenAs'] as const;
 export const MAX_SEEN_AS_PER_TURN = 3;
 
+export const PERSONALITY_COMMAND_KINDS = ['setPersonality'] as const;
+export const MAX_PERSONALITY_PER_TURN = 1;
+
 export const IMPORTANCE_RELATIONS = [
   'most',
   'above',
@@ -541,6 +550,14 @@ export interface RemoveSeenAsCommand {
 }
 
 export type SeenAsCommand = CorrectSeenAsCommand | RemoveSeenAsCommand;
+
+/** The person asks how the assistant talks to change ("be more blunt with me"): traits to add or take off and how honest, each read only from the closed set. */
+export interface SetPersonalityCommand {
+  kind: 'setPersonality';
+  addTraits: PersonalityTrait[];
+  removeTraits: PersonalityTrait[];
+  honesty: HonestyLevel | null;
+}
 
 export type HabitCommand =
   | CreateHabitCommand
@@ -1348,6 +1365,9 @@ export const buildFileResultsTool = ({
             'subjectName',
             'seenAsAlias',
             'seenAsWords',
+            'addTraits',
+            'removeTraits',
+            'honesty',
             'repeat',
             'startsSpanId',
             'timeSpanId',
@@ -1396,6 +1416,7 @@ export const buildFileResultsTool = ({
                 ...HABIT_COMMAND_KINDS,
                 ...IMPORTANCE_COMMAND_KINDS,
                 ...SEEN_AS_COMMAND_KINDS,
+                ...PERSONALITY_COMMAND_KINDS,
                 ...SOUNDS_LIKE_COMMAND_KINDS,
                 ...CONTACT_COMMAND_KINDS,
                 ...CONNECTION_COMMAND_KINDS,
@@ -1749,7 +1770,7 @@ export const buildFileResultsTool = ({
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, correctSeenAs, removeSeenAs, updateHabit, connect, updateConnection and disconnect: the words of the capture that ask for it, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun, tickRun, setPrivate, setCare, setImportance, correctSeenAs, removeSeenAs, setPersonality, updateHabit, connect, updateConnection and disconnect: the words of the capture that ask for it, copied exactly.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -2002,6 +2023,24 @@ export const buildFileResultsTool = ({
               'string',
               `correctSeenAs: what the person says is true instead, in their own words, at most ${SEEN_AS_LIMITS.corrected} characters; null otherwise. The words of the request are requestQuote.`,
             ),
+            addTraits: {
+              type: ['array', 'null'],
+              items: { type: 'string', enum: [...PERSONALITY_TRAITS] },
+              description:
+                'setPersonality: the traits the person asks the assistant to be or have more of ("be more blunt with me" is blunt); null otherwise.',
+            },
+            removeTraits: {
+              type: ['array', 'null'],
+              items: { type: 'string', enum: [...PERSONALITY_TRAITS] },
+              description:
+                'setPersonality: the traits the person asks the assistant to stop being ("stop being so formal" is formal); null otherwise.',
+            },
+            honesty: {
+              type: ['string', 'null'],
+              enum: [...HONESTY_LEVELS, null],
+              description:
+                'setPersonality: tactful to soften hard news, straight to say it plainly, unvarnished to hold nothing back ("be more honest with me" is unvarnished); null when the request is about traits only.',
+            },
             repeat: {
               type: ['object', 'null'],
               description:

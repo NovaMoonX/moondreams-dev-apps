@@ -21,7 +21,8 @@ export type UnitKind =
   | 'run'
   | 'home'
   | 'habit'
-  | 'seenAs';
+  | 'seenAs'
+  | 'personality';
 
 export type UnitChange =
   'added' | 'changed' | 'completed' | 'removed' | 'moved';
@@ -119,6 +120,14 @@ const KINDS: Record<string, UnitKind> = {
   seenAs: 'seenAs',
 };
 
+const toKindOf = (
+  ref: UnitEffectRef,
+  effect: UnitEffect | undefined,
+): UnitKind =>
+  ref.collection === 'profile' && 'personality' in (effect?.written ?? {})
+    ? 'personality'
+    : (KINDS[ref.collection] ?? 'task');
+
 const toChange = (
   ref: UnitEffectRef,
   effect: UnitEffect | undefined,
@@ -206,7 +215,7 @@ export function buildUndoUnits(input: {
       key: keyOf(first),
       effectIndexes: sorted,
       docIds: unique(sorted.map((index) => effectRefs[index].docId)),
-      kind: KINDS[ref.collection] ?? 'task',
+      kind: toKindOf(ref, effectAt(first)),
       change: toChange(ref, effectAt(first)),
       title: toTitleOf(ref, effectAt(first)),
     };

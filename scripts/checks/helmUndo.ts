@@ -756,6 +756,107 @@ test('"I\'m home" taken back to an earlier home that still holds says so', () =>
   assert.equal(result.undoSealed.summary, 'Took back being home');
 });
 
+const PERSONALITY_WRITTEN = {
+  traits: ['honest', 'brief', 'warm', 'blunt'],
+  honesty: 'straight',
+  keptClashes: [],
+};
+
+const sayPersonality = (previous: Record<string, unknown> | null) => ({
+  ref: { op: 'update', collection: 'profile', docId: 'uid-1' } as EffectRef,
+  effect: {
+    written: {
+      personality: PERSONALITY_WRITTEN,
+      personalitySetAt: EARLIER,
+      'sealed.title': 'How Juniper talks',
+      'sealed.detail': 'Blunt added · Honest, Brief, Warm, Blunt',
+    },
+    previous: {
+      personality: previous,
+      personalitySetAt: previous ? EARLIER - 1000 : null,
+      'sealed.title': 'How Juniper talks',
+      'sealed.detail': 'Blunt added · Honest, Brief, Warm, Blunt',
+    },
+  },
+});
+
+test('a changed personality is taken back by putting the previous one back', () => {
+  const { ref, effect } = sayPersonality(null);
+  const result = asWrite(
+    plan(execution([{ ref, effect }], { category: 'organize' }), [
+      target(
+        'uid-1',
+        {
+          personality: PERSONALITY_WRITTEN,
+          personalitySetAt: EARLIER,
+          lastEditedAt: EARLIER,
+        },
+        null,
+      ),
+    ]),
+  );
+  assert.deepEqual(result.deletes, []);
+  assert.deepEqual(result.updates, [
+    {
+      docId: 'uid-1',
+      collection: 'profile',
+      fields: { personality: null, personalitySetAt: null, lastEditedAt: NOW },
+      reseal: null,
+    },
+  ]);
+  assert.equal(result.report, 'Put back how it talks.');
+  assert.equal(result.undoSealed.summary, 'Put back how it talks');
+});
+
+test('a personality changed since is kept and said so', () => {
+  const { ref, effect } = sayPersonality({
+    traits: ['honest'],
+    honesty: 'straight',
+    keptClashes: [],
+  });
+  const result = asRefused(
+    plan(execution([{ ref, effect }]), [
+      target(
+        'uid-1',
+        {
+          personality: { ...PERSONALITY_WRITTEN, traits: ['honest', 'dry'] },
+          personalitySetAt: NOW,
+          lastEditedAt: NOW,
+        },
+        null,
+      ),
+    ]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['How Juniper talks']);
+  assert.ok(result.report?.includes('How Juniper talks'));
+});
+
+test('a personality change is its own unit and result row, and a clash answer reopens', () => {
+  const { ref, effect } = sayPersonality(null);
+  const original = execution([{ ref, effect }]);
+  const { units } = buildUndoUnits(original);
+  assert.equal(units.length, 1);
+  assert.equal(units[0].kind, 'personality');
+  assert.equal(units[0].change, 'changed');
+  assert.equal(units[0].title, 'How Juniper talks');
+  const lines = buildResultLines(original, new Map(), 'UTC', NOW);
+  assert.equal(lines.length, 1);
+  assert.equal(lines[0].title, 'How Juniper talks');
+  assert.equal(lines[0].detail, 'Blunt added · Honest, Brief, Warm, Blunt');
+  assert.equal(lines[0].unitKey, units[0].key);
+  assert.deepEqual(
+    planReopen(
+      { questionRef: { captureId: 'turn-1', questionId: 'q1' } },
+      {
+        status: 'sorted',
+        questionState: { q1: { kind: 'clashChoice', answeredAt: NOW } },
+      },
+    ),
+    { 'questionState.q1.answeredAt': null, status: 'needsYou' },
+  );
+});
+
 test('an import keeps a person who is in use and says so', () => {
   const result = asWrite(
     plan(

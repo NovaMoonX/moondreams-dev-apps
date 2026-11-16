@@ -133,6 +133,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/engine/personality.ts',
+    dest: 'functions/src/apps/helm/nomos/personality.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/apps/helm/engine/researchAhead.ts',
     dest: 'functions/src/apps/helm/nomos/researchAhead.ts',
     importRewrites: {},

@@ -3312,6 +3312,7 @@ const isPickKind = (kind: string) =>
   kind === 'groupTopics' ||
   kind === 'whichHabit' ||
   kind === 'whichComesFirst' ||
+  kind === 'clashChoice' ||
   kind === 'isMedicine' ||
   kind === 'isConnection' ||
   kind === 'whichMedicine' ||
