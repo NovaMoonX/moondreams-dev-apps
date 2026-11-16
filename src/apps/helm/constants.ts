@@ -679,6 +679,9 @@ export const HELM_COPY = {
   unreadable: "Couldn't open this",
   loadingEarlier: 'Opening earlier turns',
   earlierFold: 'Show earlier',
+  earlierHide: 'Hide earlier',
+  threadToday: 'Today',
+  threadYesterday: 'Yesterday',
   homeNextEvent: (clock: string, title: string) => `${clock} · ${title}`,
   homeNextEventTomorrow: (clock: string, title: string) =>
     `Tomorrow ${clock} · ${title}`,
