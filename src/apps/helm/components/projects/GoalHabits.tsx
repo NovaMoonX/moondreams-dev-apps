@@ -11,7 +11,10 @@ import AddRow from '@apps/helm/components/who/AddRow';
 import { HELM_COPY } from '@apps/helm/constants';
 import { selectHabitWeek } from '@apps/helm/engine/habitDay';
 import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
-import { readWeekFigure } from '@apps/helm/store/selectors/habitSelectors';
+import {
+  readPausedLine,
+  readWeekFigure,
+} from '@apps/helm/store/selectors/habitSelectors';
 
 interface GoalHabitsProps {
   projectId: string;
@@ -34,6 +37,7 @@ function GoalHabits({ projectId, onOpenHabit }: GoalHabitsProps) {
     .sort((left, right) => left.name.localeCompare(right.name));
 
   const readLine = (habit: (typeof mine)[number]) =>
+    readPausedLine(habit, clock.dayKey) ??
     readWeekFigure(
       habit,
       selectHabitWeek(

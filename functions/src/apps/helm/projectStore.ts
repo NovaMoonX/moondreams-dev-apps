@@ -124,10 +124,10 @@ const openProjects = (
 const activeQuery = (firestore: Firestore, base: string) =>
   firestore
     .collection(`${base}/projects`)
-    .where('status', '==', 'active')
+    .where('status', 'in', ['active', 'paused'])
     .limit(MAX_PROJECTS_READ);
 
-/** The person's active projects, most recently touched first, for the turn's transaction. */
+/** The person's active and set-aside projects, most recently touched first, for the turn's transaction: the same ones the model is shown, so a goal set aside is found instead of made again. */
 export async function readActiveProjectsIn(
   transaction: Transaction,
   firestore: Firestore,

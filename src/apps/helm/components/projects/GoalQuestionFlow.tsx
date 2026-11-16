@@ -30,7 +30,7 @@ import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { createHabit } from '@apps/helm/store/actions/habitActions';
 import { createGoal } from '@apps/helm/store/actions/goalActions';
 import { selectKeptHabits } from '@apps/helm/store/selectors/habitSelectors';
-import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { selectOpenProjects } from '@apps/helm/store/selectors/projectSelectors';
 import {
   EMPTY_WHEN,
   formatCadence,
@@ -90,7 +90,7 @@ function GoalFlowForm({
   const { addToast } = useToast();
   const clock = useHabitClock();
   const profile = useAppSelector((state) => state.helm.profile);
-  const active = useAppSelector(selectActiveProjects);
+  const active = useAppSelector(selectOpenProjects);
   const kept = useAppSelector(selectKeptHabits);
   const [answers, setAnswers] = useState<Answers>(INITIAL);
   const [isSaving, setIsSaving] = useState(false);
@@ -254,39 +254,62 @@ function GoalFlowForm({
     }
     setIsSaving(true);
     try {
-      const projectId = await createGoal(user.uid, {
+      const made = await createGoal(user.uid, {
         name,
         emoji: answers.emoji || null,
         whyText: why || null,
       });
-      if (isHabit) {
-        try {
-          const made = await createHabit(
-            user.uid,
-            await getHelmEncryption(user.uid),
-            {
-              name: habitName,
-              emoji: answers.emoji || null,
-              notes: null,
-              isCare: false,
-              forWhoId: null,
-              projectId,
-              startsOn: Date.parse(`${clock.dayKey}T00:00:00Z`),
-              when: fromWhenDraft(answers.when, null, Date.now()),
+      made.written.catch((error: unknown) => {
+        console.error('Helm goal was not saved', error);
+        addToast({ title: HELM_COPY.goalCreateFailed, type: 'error' });
+      });
+      const madeHabit = isHabit
+        ? await createHabit(user.uid, await getHelmEncryption(user.uid), {
+            name: habitName,
+            emoji: answers.emoji || null,
+            notes: null,
+            isCare: false,
+            forWhoId: null,
+            projectId: made.id,
+            startsOn: Date.parse(`${clock.dayKey}T00:00:00Z`),
+            when: fromWhenDraft(answers.when, null, Date.now()),
+          }).then(
+            (habit) => {
+              habit.written.catch((error: unknown) => {
+                console.error('Helm goal habit was not saved', error);
+                addToast({
+                  title: HELM_COPY.goalHabitFailed(name),
+                  type: 'error',
+                });
+              });
+              return habit;
             },
-          );
-          made.written.catch((error: unknown) => {
-            console.error('Helm goal habit was not saved', error);
-            addToast({ title: HELM_COPY.goalHabitFailed(name), type: 'error' });
-          });
-        } catch (error) {
-          console.error('Helm goal habit was not added', error);
-          addToast({ title: HELM_COPY.goalHabitFailed(name), type: 'error' });
-        }
-      }
-      addToast({ title: HELM_COPY.goalCreatedToast(name), type: 'success' });
+            (error: unknown) => {
+              console.error('Helm goal habit was not added', error);
+              addToast({
+                title: HELM_COPY.goalHabitFailed(name),
+                type: 'error',
+              });
+              return null;
+            },
+          )
+        : null;
+      addToast({
+        title: HELM_COPY.goalCreatedToast(name),
+        type: 'success',
+        action: {
+          label: HELM_COPY.undo,
+          onClick: () =>
+            void Promise.all([made.undo(), madeHabit?.undo()]).catch(
+              (error: unknown) => {
+                console.error('Helm goal was not taken back', error);
+                addToast({ title: HELM_COPY.projectUndoFailed, type: 'error' });
+              },
+            ),
+        },
+      });
       onClose();
-      onOpenProject(projectId);
+      onOpenProject(made.id);
     } catch (error) {
       console.error('Helm goal was not started', error);
       addToast({ title: HELM_COPY.goalCreateFailed, type: 'error' });

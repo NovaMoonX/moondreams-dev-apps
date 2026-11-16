@@ -113,12 +113,14 @@ export async function createProject(
   };
 }
 
-/** Changes a project's name, emoji, objective and date in one transaction that re-reads it, so the people's notes and anything changed on another device meanwhile are kept. Needs a connection. */
+/** Changes a project's name, emoji, objective and date, and a goal's why when `why` is given, in one transaction that re-reads it, so the people's notes and anything changed on another device meanwhile are kept. Needs a connection. */
 export async function updateProject(
   uid: string,
   encryption: HelmEncryption,
   projectId: string,
-  edit: ProjectWords,
+  edit: ProjectWords & {
+    why?: (previous: GoalWhy | null) => GoalWhy | null;
+  },
 ): Promise<ProjectEditResult> {
   if (!navigator.onLine) return 'offline';
   const words = toWords(edit);
@@ -140,6 +142,7 @@ export async function updateProject(
             name: words.name,
             emoji: words.emoji,
             objective: words.objective,
+            ...(edit.why ? { why: edit.why(opened.why ?? null) } : {}),
           },
           encryption,
         );

@@ -16,14 +16,13 @@ import { selectHabitWeek } from '@apps/helm/engine/habitDay';
 import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
+  readPausedLine,
   readWeekFigure,
   selectFormedHabits,
   selectKeptHabits,
   selectStoppedHabits,
 } from '@apps/helm/store/selectors/habitSelectors';
 import type { OpenHabit } from '@apps/helm/types';
-import { readHabitStatus } from '@apps/helm/utils/habitToday';
-import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 
 interface HabitsViewProps {
   onBack: () => void;
@@ -98,15 +97,8 @@ function HabitsView({ onBack, onHome, onOpenHabit }: HabitsViewProps) {
     if (habit.status === 'ended' && habit.endedAt !== null) {
       return HELM_COPY.habitsStoppedOn(formatDateShortUTC(habit.endedAt));
     }
-    if (
-      habit.status === 'paused' &&
-      readHabitStatus(habit, clock.dayKey) === 'paused' &&
-      habit.pausedUntil !== null
-    ) {
-      return HELM_COPY.habitsPausedUntil(
-        formatWeekdayDayUTC(habit.pausedUntil),
-      );
-    }
+    const pausedLine = readPausedLine(habit, clock.dayKey);
+    if (pausedLine) return pausedLine;
     const week = selectHabitWeek(
       { ...habit, status: 'active' },
       days,

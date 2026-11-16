@@ -5,6 +5,7 @@ import {
   selectGoalEvidence,
   type GoalStep,
 } from '@apps/helm/engine/goalEvidence';
+import { readPausedLine } from '@apps/helm/store/selectors/habitSelectors';
 import { selectProjectEvidence } from '@apps/helm/engine/projectEvidence';
 
 const tests: [string, () => void][] = [];
@@ -388,6 +389,34 @@ test('a goal line never carries a percentage or a bar', () => {
   [goalLine(ticked([-1, -8, -9])), goalLine({}, [])]
     .flat()
     .forEach((line) => assert.doesNotMatch(line, /%|█|▓/));
+});
+
+test('a goal habit set aside with no end date reads Paused, even when it starts today', () => {
+  const made = { status: 'paused' as const, pausedUntil: null };
+  assert.equal(readPausedLine(made, TODAY_KEY), HELM_COPY.habitsPausedOpen);
+  assert.equal(
+    readPausedLine({ status: 'active', pausedUntil: null }, TODAY_KEY),
+    null,
+  );
+  assert.equal(
+    readPausedLine({ status: 'paused', pausedUntil: day(-1) }, TODAY_KEY),
+    null,
+  );
+  assert.match(
+    readPausedLine({ status: 'paused', pausedUntil: day(3) }, TODAY_KEY) ?? '',
+    /^Paused until /,
+  );
+});
+
+test('the kept-habits toast names one habit and counts several', () => {
+  assert.equal(
+    HELM_COPY.goalHabitsKeptToast(1, 'Morning run'),
+    'Morning run is now a habit on its own',
+  );
+  assert.equal(
+    HELM_COPY.goalHabitsKeptToast(3, 'Morning run'),
+    '3 habits are now on their own',
+  );
 });
 
 const failures: string[] = [];

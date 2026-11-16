@@ -43,6 +43,7 @@ import {
   deleteGoal,
   pickGoalBackUp,
   setGoalAside,
+  setGoalStatus,
   turnIntoProject,
 } from '@apps/helm/store/actions/goalActions';
 import { selectProjectById } from '@apps/helm/store/selectors/projectSelectors';
@@ -156,7 +157,9 @@ function ProjectDetail({
 
   const changeStatus = (next: 'active' | 'finished') => {
     if (!user || !project) return;
-    const change = setProjectStatus(user.uid, project, next);
+    const change = isGoal
+      ? setGoalStatus(user.uid, project, next)
+      : setProjectStatus(user.uid, project, next);
     change.written.catch(reportFailure);
     addToast({
       title:
@@ -180,16 +183,12 @@ function ProjectDetail({
     addToast({ title: HELM_COPY.goalActionFailed, type: 'error' });
   };
 
-  const setAside = async (isAsideNext: boolean) => {
+  const setAside = (isAsideNext: boolean) => {
     if (!user || !project) return;
-    try {
-      await (isAsideNext
-        ? setGoalAside(user.uid, project.id)
-        : pickGoalBackUp(user.uid, project.id));
-    } catch (error) {
-      reportGoalFailure(error);
-      return;
-    }
+    const change = isAsideNext
+      ? setGoalAside(user.uid, project.id)
+      : pickGoalBackUp(user.uid, project.id);
+    change.written.catch(reportGoalFailure);
     addToast({
       title: isAsideNext
         ? HELM_COPY.goalAsideToast(project.name)
@@ -197,12 +196,7 @@ function ProjectDetail({
       type: 'success',
       action: {
         label: HELM_COPY.undo,
-        onClick: () =>
-          void (
-            isAsideNext
-              ? pickGoalBackUp(user.uid, project.id)
-              : setGoalAside(user.uid, project.id)
-          ).catch(reportGoalFailure),
+        onClick: () => void change.undo().catch(reportGoalFailure),
       },
     });
   };
@@ -215,17 +209,54 @@ function ProjectDetail({
     setIsGoalBusy(true);
     try {
       if (kind === 'delete') {
-        await deleteGoal(user.uid, project.id, habitsChoice);
+        const made = await deleteGoal(user.uid, project.id, habitsChoice);
+        made.written.catch(reportGoalFailure);
         onBack();
         addToast({
-          title: HELM_COPY.goalDeletedToast(project.name),
+          title:
+            habitsChoice === 'keep' && goalHabitNames.length > 0
+              ? HELM_COPY.goalHabitsKeptToast(
+                  goalHabitNames.length,
+                  goalHabitNames[0],
+                )
+              : HELM_COPY.goalDeletedToast(project.name),
           type: 'success',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () =>
+              void made.restore().then(
+                (outcome) =>
+                  addToast({
+                    title:
+                      outcome === 'exists'
+                        ? HELM_COPY.restoreExists
+                        : HELM_COPY.projectDeletedBack(project.name),
+                    type: 'info',
+                  }),
+                (error: unknown) => {
+                  console.error('Helm deleted goal was not restored', error);
+                  addToast({
+                    title: HELM_COPY.projectUndoFailed,
+                    type: 'error',
+                  });
+                },
+              ),
+          },
         });
       } else {
-        await turnIntoProject(user.uid, project.id, habitsChoice);
+        const made = await turnIntoProject(user.uid, project.id, habitsChoice);
+        made.written.catch(reportGoalFailure);
         addToast({
           title: HELM_COPY.goalToProjectToast(project.name),
           type: 'success',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () =>
+              void made.undo().catch((error: unknown) => {
+                console.error('Helm goal was not put back', error);
+                addToast({ title: HELM_COPY.projectUndoFailed, type: 'error' });
+              }),
+          },
         });
       }
       setHabitsAsk(null);
@@ -360,8 +391,8 @@ function ProjectDetail({
             else if (value === 'finish') changeStatus('finished');
             else if (value === 'reopen') changeStatus('active');
             else if (value === 'delete') void remove();
-            else if (value === 'aside') void setAside(true);
-            else if (value === 'backUp') void setAside(false);
+            else if (value === 'aside') setAside(true);
+            else if (value === 'backUp') setAside(false);
             else if (value === 'toProject') void askGoalChange('toProject');
             else if (value === 'deleteGoal') void askGoalChange('delete');
           },

@@ -2,6 +2,7 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
+import { readHabitStatusOn } from '@apps/helm/engine/habitDay';
 import type { OpenHabit } from '@apps/helm/types';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 
@@ -73,3 +74,14 @@ export const readWeekFigure = (
     ? HELM_COPY.habitsStartsToday
     : HELM_COPY.habitsNothingYet;
 };
+
+/** "Paused" or "Paused until Fri" while a habit is paused today, otherwise null. */
+export const readPausedLine = (
+  habit: Pick<OpenHabit, 'status' | 'pausedUntil'>,
+  dayKey: string,
+) =>
+  habit.status !== 'paused' || readHabitStatusOn(habit, dayKey) !== 'paused'
+    ? null
+    : habit.pausedUntil !== null
+      ? HELM_COPY.habitsPausedUntil(formatWeekdayDayUTC(habit.pausedUntil))
+      : HELM_COPY.habitsPausedOpen;

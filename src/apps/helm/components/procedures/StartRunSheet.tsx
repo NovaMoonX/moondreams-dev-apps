@@ -33,7 +33,7 @@ import {
 } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { startRun } from '@apps/helm/store/actions/runActions';
-import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { selectOpenProjects } from '@apps/helm/store/selectors/projectSelectors';
 import { selectProcedures } from '@apps/helm/store/selectors/procedureSelectors';
 import {
   findOpenRunFor,
@@ -117,7 +117,7 @@ function StartRunBody({
   const { addToast } = useToast();
   const now = useNow(60_000);
   const synced = useAppSelector((state) => state.helm.synced.items);
-  const projects = useAppSelector(selectActiveProjects);
+  const projects = useAppSelector(selectOpenProjects);
   const procedures = useAppSelector(selectProcedures);
   const openRuns = useAppSelector(selectOpenRuns);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
-import { whyFingerprint } from '../../functions/src/apps/helm/goalWhy.ts';
+import {
+  nextWhyFromWords,
+  whyFingerprint,
+} from '../../functions/src/apps/helm/goalWhy.ts';
 import {
   openForHelm,
   sealForHelm,
@@ -654,6 +658,46 @@ test('a project stays a project with no why, even when the model sends one', () 
   assert.equal(created.data.kind, 'project');
   const opened = openForHelm(KEY, created.data.sealed as SealedPayload);
   assert.equal('why' in opened, false);
+});
+
+test('a why quote inside a longer word is not found in the capture', () => {
+  const { created } = goalOf(
+    { whyQuote: 'miss' },
+    'I want to get back into guitar because of the dismissal',
+  );
+  assert.equal(openWhy(created.data), null);
+  const found = goalOf({ whyQuote: 'miss' }, 'guitar because I miss it');
+  assert.equal(openWhy(found.created.data)?.verbatim, 'miss');
+});
+
+test('new words drop the old summary, tags and fingerprint, and the same words change nothing', () => {
+  const first = nextWhyFromWords(null, 'I miss playing', 10, 'c1');
+  const seen = {
+    ...first,
+    cleaned: 'I miss playing.',
+    cleanedState: 'accepted' as const,
+    summary: 'Misses playing',
+    tags: ['music'],
+    basedOn: whyFingerprint(first.verbatim),
+  };
+  assert.equal(nextWhyFromWords(seen, 'I miss playing', 20, null), seen);
+  const next = nextWhyFromWords(seen, 'I miss my brother', 20, null);
+  assert.equal(next.summary, null);
+  assert.deepEqual(next.tags, []);
+  assert.equal(next.cleaned, null);
+  assert.notEqual(next.basedOn, whyFingerprint(next.verbatim));
+});
+
+test('the write pool reads set-aside projects too, like the model context', () => {
+  const source = readFileSync(
+    new URL('../../functions/src/apps/helm/projectStore.ts', import.meta.url),
+    'utf8',
+  );
+  assert.equal(
+    source.split(".where('status', 'in', ['active', 'paused'])").length - 1,
+    2,
+  );
+  assert.doesNotMatch(source, /where\('status', '==', 'active'\)/);
 });
 
 const failures: string[] = [];

@@ -624,7 +624,11 @@ const readWhyWords = (value: unknown, captureText: string) => {
     .split(' ')
     .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join('\\s+');
-  return new RegExp(pattern, 'i').exec(captureText)?.[0] ?? null;
+  return (
+    new RegExp(`(?<![\\p{L}\\p{N}])${pattern}(?![\\p{L}\\p{N}])`, 'iu').exec(
+      captureText,
+    )?.[0] ?? null
+  );
 };
 
 const readGoalWhy = (

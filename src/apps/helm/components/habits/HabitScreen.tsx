@@ -45,7 +45,10 @@ import {
   setHabitStatus,
 } from '@apps/helm/store/actions/habitActions';
 import { readFormedSummary } from '@apps/helm/store/actions/habitJudgementActions';
-import { selectHabitById } from '@apps/helm/store/selectors/habitSelectors';
+import {
+  readPausedLine,
+  selectHabitById,
+} from '@apps/helm/store/selectors/habitSelectors';
 import type { OpenHabit } from '@apps/helm/types';
 import { formatCadence } from '@apps/helm/utils/habitDraft';
 import { readHabitStatus } from '@apps/helm/utils/habitToday';
@@ -343,8 +346,8 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
       ? HELM_COPY.habitFormedRetiredLine(formatDateShort(habit.retiredAt))
       : habit?.status === 'ended' && habit.endedAt !== null
         ? HELM_COPY.habitsStoppedOn(formatDateShortUTC(habit.endedAt))
-        : isPaused && habit?.pausedUntil != null
-          ? HELM_COPY.habitsPausedUntil(formatWeekdayDayUTC(habit.pausedUntil))
+        : habit
+          ? readPausedLine(habit, clock.dayKey)
           : null;
 
   return (

@@ -21,6 +21,7 @@ import {
   selectActiveProjects,
   selectFinishedProjects,
 } from '@apps/helm/store/selectors/projectSelectors';
+import { selectGoalHabits } from '@apps/helm/store/selectors/habitSelectors';
 import type { OpenProject } from '@apps/helm/types';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 
@@ -40,11 +41,17 @@ interface ProjectRowProps {
 
 function GoalEvidenceLine({ projectId }: { projectId: string }) {
   const evidence = useGoalEvidence(projectId);
-  return evidence ? (
-    <span className='text-muted-foreground line-clamp-2 text-[13px] leading-[18px]'>
-      {evidence}
-    </span>
-  ) : null;
+  const hasHabits = useAppSelector(
+    (state) => selectGoalHabits(state, projectId).length > 0,
+  );
+  if (evidence) {
+    return (
+      <span className='text-muted-foreground line-clamp-2 text-[13px] leading-[18px]'>
+        {evidence}
+      </span>
+    );
+  }
+  return hasHabits ? <span className='block min-h-[18px]' /> : null;
 }
 
 function ProjectRow({ project, state, onOpen }: ProjectRowProps) {

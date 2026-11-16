@@ -55,20 +55,24 @@ export const isWorthTidying = (verbatim: string, cleaned: string | null) =>
   verbatim.trim().split(/\s+/).length >= 8 &&
   loose(verbatim) !== loose(cleaned);
 
-/** The why as the person's new words leave it: the old tidy-up is dropped, the summary waits to be redone. */
+/** The why as the person's new words leave it: the same words change nothing; new words drop the old tidy-up, summary, tags and fingerprint, since they described other words. */
 export const nextWhyFromWords = (
   previous: GoalWhy | null,
   verbatim: string,
   at: number,
   captureId: string | null,
-): GoalWhy => ({
-  verbatim: verbatim.slice(0, WHY_VERBATIM_CAP),
-  cleaned: null,
-  cleanedState: null,
-  summary: previous?.summary ?? null,
-  tags: previous?.tags ?? [],
-  basedOn: previous?.basedOn ?? '',
-  saidAt: previous?.saidAt ?? at,
-  editedAt: previous ? at : null,
-  captureId: previous?.captureId ?? captureId,
-});
+): GoalWhy => {
+  const words = verbatim.slice(0, WHY_VERBATIM_CAP);
+  if (previous && previous.verbatim === words) return previous;
+  return {
+    verbatim: words,
+    cleaned: null,
+    cleanedState: null,
+    summary: null,
+    tags: [],
+    basedOn: '',
+    saidAt: previous?.saidAt ?? at,
+    editedAt: previous ? at : null,
+    captureId: previous?.captureId ?? captureId,
+  };
+};

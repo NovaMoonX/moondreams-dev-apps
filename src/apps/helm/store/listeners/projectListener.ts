@@ -17,12 +17,36 @@ import type {
   ProjectRole,
   ProjectSealed,
 } from '@apps/helm/types';
+import type { GoalWhy } from '@apps/helm/utils/goalWhy';
 import { readPrivacy } from '@apps/helm/utils/privacy';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your projects did not open.');
 
 const toText = (value: unknown) => (typeof value === 'string' ? value : null);
+
+const isString = (value: unknown): value is string => typeof value === 'string';
+
+const toWhy = (value: unknown): GoalWhy | null => {
+  if (typeof value !== 'object' || value === null) return null;
+  const raw = value as Record<string, unknown>;
+  if (!isString(raw.verbatim)) return null;
+  const state = raw.cleanedState;
+  return {
+    verbatim: raw.verbatim,
+    cleaned: isString(raw.cleaned) ? raw.cleaned : null,
+    cleanedState:
+      state === 'offered' || state === 'accepted' || state === 'declined'
+        ? state
+        : null,
+    summary: isString(raw.summary) ? raw.summary : null,
+    tags: Array.isArray(raw.tags) ? raw.tags.filter(isString) : [],
+    basedOn: isString(raw.basedOn) ? raw.basedOn : '',
+    saidAt: typeof raw.saidAt === 'number' ? raw.saidAt : 0,
+    editedAt: typeof raw.editedAt === 'number' ? raw.editedAt : null,
+    captureId: isString(raw.captureId) ? raw.captureId : null,
+  };
+};
 
 const isRole = (value: unknown): value is ProjectRole =>
   value === 'key' || value === 'involved' || value === 'mentioned';
@@ -110,7 +134,7 @@ async function openProject(
       objective: toText(payload.objective),
       milestones: toMilestones(payload.milestones),
       roleNotes: toNotes(payload.roleNotes),
-      why: payload.why ?? null,
+      why: toWhy(payload.why),
       privateMark: payload.privateMark ?? null,
       isPrivacyCleared: payload.isPrivacyCleared ?? false,
       isUnreadable: false,

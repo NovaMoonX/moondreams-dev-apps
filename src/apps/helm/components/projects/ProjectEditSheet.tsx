@@ -18,9 +18,10 @@ import {
 } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import GoalWhyField from '@apps/helm/components/projects/GoalWhyField';
-import { editGoalWhy } from '@apps/helm/store/actions/goalActions';
+import { whyFromText } from '@apps/helm/store/actions/goalActions';
 import { updateProject } from '@apps/helm/store/actions/projectActions';
 import type { OpenProject } from '@apps/helm/types';
+import type { GoalWhy } from '@apps/helm/utils/goalWhy';
 
 interface ProjectEditSheetProps {
   isOpen: boolean;
@@ -84,12 +85,15 @@ function ProjectEditForm({
           emoji: emoji || null,
           objective: isGoal ? project.objective : objective.trim() || null,
           targetDate: fromDateInputValue(date) ?? null,
+          ...(isGoal && whyText.trim() !== (project.why?.verbatim ?? '').trim()
+            ? {
+                why: (previous: GoalWhy | null) =>
+                  whyFromText(previous, whyText.trim() || null),
+              }
+            : {}),
         },
       );
       if (result === 'saved') {
-        if (isGoal && whyText.trim() !== (project.why?.verbatim ?? '').trim()) {
-          await editGoalWhy(user.uid, project.id, whyText.trim() || null);
-        }
         onClose();
         return;
       }

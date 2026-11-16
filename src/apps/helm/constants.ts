@@ -2708,6 +2708,7 @@ export const HELM_COPY = {
   habitsStoppedRow: (count: number) => `Stopped · ${count}`,
   habitsStoppedHide: 'Hide stopped',
   habitsPausedUntil: (date: string) => `Paused until ${date}`,
+  habitsPausedOpen: 'Paused',
   habitsStoppedOn: (date: string) => `Stopped ${date}`,
   habitsWeekLine: (done: number, due: number) => `${done} of ${due} this week`,
   habitsStartsToday: 'Starts today',
@@ -3137,6 +3138,10 @@ export const HELM_COPY = {
   goalActionFailed: "That didn't change. Try again.",
   goalToProjectToast: (name: string) => `${name} is a project now`,
   goalDeletedToast: (name: string) => `Deleted ${name}`,
+  goalHabitsKeptToast: (count: number, name: string) =>
+    count === 1
+      ? `${name} is now a habit on its own`
+      : `${count} habits are now on their own`,
   goalHabitsHeading: 'Habits',
   goalHabitsAdd: 'Add a habit',
   goalHabitsNone: 'No regular step yet',
