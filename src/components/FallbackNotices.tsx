@@ -137,7 +137,7 @@ function FallbackTab({
         }
       >
         <ul ref={listRef} data-site-sheet className='space-y-3'>
-          {ordered.map((fallback) => (
+          {ordered.map((fallback, index) => (
             <li
               key={fallback.key}
               className='border-border space-y-1.5 border-b pb-3 last:border-b-0 last:pb-0'
@@ -169,8 +169,13 @@ function FallbackTab({
                   dismiss(fallback.key, fallback.reason);
                   window.setTimeout(
                     () =>
-                      listRef.current
-                        ?.querySelector<HTMLElement>('button[data-dismiss]')
+                      Array.from(
+                        listRef.current?.querySelectorAll<HTMLElement>(
+                          'button[data-dismiss]',
+                        ) ?? [],
+                      )
+                        .slice(0, index + 1)
+                        .at(-1)
                         ?.focus(),
                     0,
                   );
