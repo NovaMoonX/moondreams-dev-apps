@@ -31,6 +31,9 @@ interface ScheduledViewProps {
 
 const SEARCH_FROM = 8;
 
+/** The cap is worth a line only once it is near. */
+const COUNT_SHOWN_FROM = 40;
+
 /** Scheduled: every action that runs by itself, soonest first, with the paused ones after and the ended ones behind a thin row. A new one is the last row of the list. */
 function ScheduledView({ onBack, onHome, onOpenActivity }: ScheduledViewProps) {
   const assistant = useAssistantName();
@@ -80,7 +83,7 @@ function ScheduledView({ onBack, onHome, onOpenActivity }: ScheduledViewProps) {
           <h1 className='helm-serif text-[28px] leading-[34px]'>
             {HELM_COPY.scheduledTitle}
           </h1>
-          {count > 0 && (
+          {count >= COUNT_SHOWN_FROM && (
             <p className='text-muted-foreground text-[13px]'>
               {HELM_COPY.scheduledCount(count, MAX_SCHEDULED_ACTIONS)}
             </p>

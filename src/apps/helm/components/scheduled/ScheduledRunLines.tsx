@@ -13,10 +13,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { canRunNow } from '@apps/helm/engine/scheduledActions';
 import { useOnceVisible } from '@apps/helm/hooks/useOnceVisible';
 import { markCaptureSeen } from '@apps/helm/store/actions/captureActions';
-import {
-  runScheduledActionNow,
-  skipScheduledRun,
-} from '@apps/helm/store/actions/scheduledActionWrites';
+import { runScheduledActionNow } from '@apps/helm/store/actions/scheduledActionWrites';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import {
   selectScheduledById,
@@ -43,7 +40,7 @@ interface RunLineProps {
 function RunLine({ run, onOpenConnectedApps, onOpen }: RunLineProps) {
   const { user } = useAuth();
   const now = useNow(60_000);
-  const { guard, report, toast } = useScheduledChange();
+  const { guard, toast } = useScheduledChange();
   const ref = useRef<HTMLDivElement>(null);
   const action = useAppSelector(selectScheduledById).get(run.actionId) ?? null;
   const execution = useAppSelector(selectExecutionsById).get(
@@ -111,8 +108,8 @@ function RunLine({ run, onOpenConnectedApps, onOpen }: RunLineProps) {
           aria-hidden='true'
         />
       </Button>
-      {isFailed && (
-        <div className='flex flex-col items-start gap-2 pl-8'>
+      {isFailed && (reconnects || isRunnable) && (
+        <div className='flex flex-wrap items-center gap-4 pl-8'>
           {reconnects && (
             <Button
               type='button'
@@ -126,7 +123,7 @@ function RunLine({ run, onOpenConnectedApps, onOpen }: RunLineProps) {
           {isRunnable && (
             <Button
               type='button'
-              variant='tertiary'
+              variant={reconnects ? 'tertiary' : 'secondary'}
               size='sm'
               disabled={isWorking}
               onClick={runNow}
@@ -134,20 +131,6 @@ function RunLine({ run, onOpenConnectedApps, onOpen }: RunLineProps) {
               {HELM_COPY.scheduledRunNow}
             </Button>
           )}
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            onClick={() =>
-              user &&
-              report(
-                skipScheduledRun(user.uid, run.actionId, null),
-                HELM_COPY.scheduledSkippedNext(run.title),
-              )
-            }
-          >
-            {HELM_COPY.scheduledRunSkip}
-          </Button>
         </div>
       )}
       {!isFailed && execution && (

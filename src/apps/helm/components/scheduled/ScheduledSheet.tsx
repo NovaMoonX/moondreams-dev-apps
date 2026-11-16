@@ -53,7 +53,6 @@ import {
 import type { OpenScheduledAction } from '@apps/helm/types';
 import {
   formatClockWords,
-  formatInstant,
   formatRun,
   formatRunDay,
   formatShortDay,
@@ -377,11 +376,11 @@ function ScheduledSheet({
             }}
           >
             <span className='min-w-0 flex-1'>
-              <span className='text-muted-foreground block text-[13px]'>
-                {formatInstant(lastRun.dueAt, zone)}
-              </span>
               <span className='block text-[15px] text-pretty break-words'>
                 {lastRun.line}
+              </span>
+              <span className='text-muted-foreground block text-[13px]'>
+                {HELM_COPY.scheduledSeeAll}
               </span>
             </span>
             <ChevronRight
@@ -389,21 +388,9 @@ function ScheduledSheet({
               aria-hidden='true'
             />
           </Button>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className='text-muted-foreground justify-start px-0'
-            onClick={() => {
-              close();
-              onOpenActivity();
-            }}
-          >
-            {HELM_COPY.scheduledSeeAll}
-          </Button>
         </section>
       )}
-      <div className='space-y-2'>
+      <div className='space-y-4'>
         {isPaused ? (
           <ActionRow
             icon={<Play />}
@@ -485,19 +472,7 @@ function ScheduledSheet({
   const runView = run && (
     <div className='space-y-4'>
       <p className='text-muted-foreground text-[15px] text-pretty'>{doing}</p>
-      <div className='space-y-2'>
-        <ActionRow
-          icon={<SkipForward />}
-          label={HELM_COPY.scheduledSkipThis}
-          subtitle={
-            after
-              ? HELM_COPY.scheduledSkipSubtitle(
-                  `${formatRunDay(after.day)} at ${formatClockWords(after.time)}`,
-                )
-              : HELM_COPY.scheduledSkipLast
-          }
-          onClick={() => skip(run.key)}
-        />
+      <div className='space-y-4'>
         <ActionRow
           icon={<CalendarArrowUp />}
           label={HELM_COPY.scheduledMoveThis}
@@ -511,6 +486,21 @@ function ScheduledSheet({
           subtitle={HELM_COPY.scheduledChangeRunSubtitle}
           hasChevron
           onClick={() => setForm({ runKey: run.key, token: Date.now() })}
+        />
+      </div>
+      <div className='space-y-3 pt-4'>
+        <SectionDivider label={HELM_COPY.scheduledOtherChoices} />
+        <ActionRow
+          icon={<SkipForward />}
+          label={HELM_COPY.scheduledSkipThis}
+          subtitle={
+            after
+              ? HELM_COPY.scheduledSkipSubtitle(
+                  `${formatRunDay(after.day)} at ${formatClockWords(after.time)}`,
+                )
+              : HELM_COPY.scheduledSkipLast
+          }
+          onClick={() => skip(run.key)}
         />
       </div>
     </div>

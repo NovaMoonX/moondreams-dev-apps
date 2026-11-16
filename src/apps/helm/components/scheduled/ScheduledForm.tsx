@@ -380,7 +380,11 @@ function ScheduledForm({
     <FormSheet
       isOpen
       onClose={requestClose}
-      title={HELM_COPY.scheduledFormTitle}
+      title={
+        isCreate
+          ? HELM_COPY.scheduledFormNewTitle
+          : HELM_COPY.scheduledFormChangeTitle(action.title)
+      }
       viewKey={picker.viewKey}
     >
       {picker.view ?? form}
