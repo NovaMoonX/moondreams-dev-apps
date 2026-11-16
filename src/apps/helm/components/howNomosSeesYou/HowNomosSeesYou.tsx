@@ -5,6 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import FactKindGroup from '@apps/helm/components/howNomosSeesYou/FactKindGroup';
+import WhatIveNoticed from '@apps/helm/components/noticed/WhatIveNoticed';
 import WhereCard from '@apps/helm/components/where/WhereCard';
 import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
 import MomentsPreview from '@apps/helm/components/who/MomentsPreview';
@@ -94,6 +95,7 @@ function HowNomosSeesYou({
             {HELM_COPY.seesYouEmpty(assistant)}
           </p>
         )}
+        <WhatIveNoticed />
         <FactKindGroup
           label={HELM_COPY.seesYouIdentity}
           facts={ofKind('identity')}

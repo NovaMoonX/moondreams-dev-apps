@@ -3962,6 +3962,126 @@ export const HELM_COPY = {
   },
   patternCareStatement: (name: string) =>
     `You've mentioned how ${name} has been going`,
+  patternPartSingular: {
+    morning: 'morning',
+    midday: 'midday',
+    afternoon: 'afternoon',
+    evening: 'evening',
+    bedtime: 'night',
+  },
+  noticedTitle: "What I've noticed",
+  noticedHelp: (assistant: string) =>
+    `Patterns in when things get done, and in what you've said about them. ${assistant} quotes your words and never guesses how you feel.`,
+  noticedEmpty: (assistant: string) =>
+    `Nothing yet. As you and ${assistant} get to know each other's days, patterns about when things work will show up here, with what they're based on.`,
+  noticedOffNote:
+    "Noticing is off, so nothing new shows up here. What you've already answered stays.",
+  noticedShowAll: (count: number) => `Show all ${count}`,
+  noticedShowFewer: 'Show fewer',
+  noticedNotUsed: (count: number) => `Not used \u00b7 ${count}`,
+  noticedRingLabel: (assistant: string) => `Noticed by ${assistant}`,
+  noticedStateAsking: 'Asking you',
+  noticedStateNoticed: 'Noticed',
+  noticedStateChanged: (assistant: string, date: string) =>
+    `Changed by ${assistant} \u00b7 ${date}`,
+  noticedStateKept: (date: string) => `Kept \u00b7 ${date}`,
+  noticedStateNotNow: (date: string) => `Not now \u00b7 not before ${date}`,
+  noticedStateStopped: 'Stopped',
+  noticedStateRetired: 'No longer true',
+  noticedStateWords: {
+    asking: (assistant: string) =>
+      `${assistant} is waiting for your answer before it does anything.`,
+    noticed: (assistant: string) =>
+      `${assistant} has noticed this and hasn't asked about it yet.`,
+    changed: (assistant: string, date: string) =>
+      `${assistant} changed this on ${date}, on its own plans only. You can take it back.`,
+    kept: (date: string) => `You said yes on ${date}.`,
+    notNow: (date: string) =>
+      `You said not now. It won't come up again before ${date}, and only if it keeps happening.`,
+    stopped: (assistant: string) =>
+      `${assistant} won't suggest this again unless you ask it to.`,
+    retired: "This doesn't hold anymore, so it isn't used.",
+  },
+  noticedBasedOn: "What it's based on",
+  noticedBasedOnDone: 'Not done',
+  noticedBasedOnOutside: 'Done at another time',
+  noticedBasedOnSaid: 'You said so',
+  noticedBasedOnMore: (count: number) => `And ${count} earlier`,
+  noticedSheetOpen: (statement: string) => `Open: ${statement}`,
+  noticedYes: {
+    moveWindow: (time: string) => `Move to ${time}`,
+    lowerCadence: 'Do it less often',
+    raiseCadence: 'Do it more often',
+    keepTime: 'Keep this time',
+    talkItThrough: 'Change something',
+    changeTime: 'Change the time',
+  },
+  noticedYesSubtitle: {
+    moveWindow: "Changes this habit's time. You can change it back.",
+    lowerCadence: 'Changes how often it comes up. You can change it back.',
+    raiseCadence: 'Changes how often it comes up. You can change it back.',
+    keepTime: 'Keeps things just as they are.',
+  },
+  noticedNotNow: 'Not now',
+  noticedNotNowSubtitle: (weeks: number | null, assistant: string) =>
+    weeks === null
+      ? `${assistant} won't bring this up again.`
+      : `Back in ${weeks} weeks, and only if it keeps happening.`,
+  noticedItsRight: "It's right",
+  noticedItsRightSubtitle:
+    "Keeps things as they are. It won't ask for a while.",
+  noticedStop: 'Stop suggesting that',
+  noticedStopSubtitle: "Won't bring this up again unless you ask.",
+  noticedStartAgain: 'Start suggesting again',
+  noticedStartAgainSubtitle: 'It can notice and ask about this again.',
+  noticedNoLonger: "This isn't true anymore",
+  noticedNoLongerSubtitle:
+    'Stops using it. It can come back if it starts showing up again.',
+  noticedTakeBack: 'Take this back',
+  noticedTakeBackSubtitle:
+    'Goes back to suggesting here, and waits before trying again.',
+  noticedForgetWords: 'Forget these words',
+  noticedForgetWordsSubtitle:
+    'Removes them from this pattern; your notes and the conversation stay.',
+  noticedWhyOther: 'Why, and other choices',
+  noticedOtherChoices: 'Other choices',
+  noticedCareAsk: (name: string) => `Is the time still right for ${name}?`,
+  noticedWorkingTitle: 'Going well',
+  noticedOfferSaved: 'Okay, done.',
+  noticedOfferNotNow: (date: string | null) =>
+    date === null
+      ? "Okay. I won't bring this up again unless you ask."
+      : `Okay. Not before ${date}, and only if it keeps happening.`,
+  noticedOfferStopped: "Okay. I won't suggest that again.",
+  noticedOfferReopened: 'Okay, it can come up again.',
+  noticedOfferRetired: 'Okay, no longer used.',
+  noticedOfferMissing: 'That changed in the meantime, so nothing was saved.',
+  noticedOfferFailed: "Couldn't save that. Check your connection.",
+  noticedActedLine: (dayName: string, part: string) =>
+    `${dayName}'s ${part} left empty`,
+  noticedForget: "Forget what you've noticed",
+  noticedForgetSubtitle:
+    'Clears every pattern and what it was based on. Your notes and conversations stay.',
+  noticedForgotten: "Forgot what I'd noticed.",
+  noticedForgotUndone: 'Put back what I had noticed.',
+  noticedWordsForgotten: 'Forgot those words.',
+  learningTitle: 'Notice what works for me',
+  learningRowOn: 'On',
+  learningRowOff: 'Off',
+  learningDescription: (assistant: string) =>
+    `${assistant} looks at when things get done and what you say about them, to plan better and to ask about what isn't working. It quotes your words and never guesses how you feel.`,
+  learningServerLine:
+    "To notice from your words, the day's notes and turns are read overnight, and what it finds is sealed again.",
+  learningOffTitle: 'Stop noticing?',
+  learningOffBody: (assistant: string) =>
+    `${assistant} stops changing its own plans from patterns and puts away anything waiting for your answer. What you already said yes to stays.`,
+  learningKeep: 'Keep noticing',
+  learningTurnOff: 'Turn off',
+  learningFailed: "Couldn't save that. Check your connection.",
+  notedLine: (assistant: string) =>
+    `Noted \u00b7 ${assistant} will think it over tonight`,
+  notedForgetIt: 'Forget it',
+  notedForgotten: "Okay, I won't keep that.",
   patternTookBack: (line: string) => `Took back: ${line}`,
   patternTookBackReport: 'Okay, back the way it was.',
 } as const;

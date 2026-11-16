@@ -28,6 +28,7 @@ import {
   type CoupleStatus,
 } from '../../src/apps/helm/engine/connections.ts';
 import { sealJson } from '../../src/apps/helm/security.ts';
+import { buildLearningScale } from './helmLearning.ts';
 import type {
   Capture,
   CaptureSealed,
@@ -696,6 +697,11 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       styleLearnedThroughAt: null,
       conversationFreshAt: null,
       isDailyFreshOn: false,
+      isLearningOn: true,
+      patternsCheckedOn: null,
+      reflectDueAt: null,
+      forgottenAt: null,
+      prunedOn: null,
       createdAt,
       lastEditedAt: null,
     },
@@ -1859,6 +1865,27 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   });
   summaryDocs.forEach((entry) =>
     put('daySummaries', `daySummaries/${entry.dayKey}`, entry.value),
+  );
+
+  // Learning: live and off patterns, observations over 26 weeks and a fortnight of reflections.
+  const learning = await buildLearningScale({
+    now,
+    todayKey: habitDayKey(now, OWNER_TIME_ZONE),
+    encryption,
+    habits: habitSpecs.map((spec) => ({
+      id: spec.id,
+      isCare: spec.isCare,
+      windowIds: Object.keys(spec.windows),
+    })),
+  });
+  learning.patterns.forEach((entry) =>
+    put('patterns', `patterns/${entry.id}`, entry.pattern),
+  );
+  learning.observations.forEach((entry) =>
+    put('observations', `observations/${entry.id}`, entry.observation),
+  );
+  learning.reflections.forEach((entry) =>
+    put('reflections', `reflections/${entry.id}`, entry.reflection),
   );
 
   // The emulator commits one batch at a time, so the batches are written one after another once everything is built.

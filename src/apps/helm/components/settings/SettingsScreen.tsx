@@ -7,6 +7,7 @@ import {
   Bot,
   Eye,
   History,
+  Lightbulb,
   Link2,
   MapPin,
   MessagesSquare,
@@ -38,6 +39,7 @@ import DeleteHelmData from '@apps/helm/components/settings/DeleteHelmData';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import PhoneLocationSheet from '@apps/helm/components/settings/PhoneLocationSheet';
 import HabitRemindersList from '@apps/helm/components/settings/HabitRemindersList';
+import LearningSheet from '@apps/helm/components/settings/LearningSheet';
 import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
@@ -119,6 +121,7 @@ function SettingsScreen({
   const { isVoiceSheetRequested, closeSheet } = useHelmUrlState();
   const [isVoiceOpen, setIsVoiceOpen] = useState(isVoiceSheetRequested);
   const [isDayOpen, setIsDayOpen] = useState(false);
+  const [isLearningOpen, setIsLearningOpen] = useState(false);
   const [isRemindersOpen, setIsRemindersOpen] = useState(false);
   const remindingCount = useAppSelector((state) =>
     countHabitsReminding(state.helm.habits.items),
@@ -204,6 +207,17 @@ function SettingsScreen({
             title={HELM_COPY.habitRemindersTitle}
             description={HELM_COPY.habitRemindersOnFor(remindingCount)}
             onClick={() => setIsRemindersOpen(true)}
+            hasChevron
+          />
+          <SettingsRow
+            icon={<Lightbulb className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.learningTitle}
+            description={
+              profile?.isLearningOn === false
+                ? HELM_COPY.learningRowOff
+                : HELM_COPY.learningRowOn
+            }
+            onClick={() => setIsLearningOpen(true)}
             hasChevron
           />
         </SettingsSection>
@@ -331,6 +345,10 @@ function SettingsScreen({
         onOpenHabit={onOpenHabit}
       />
       <YourDaySheet isOpen={isDayOpen} onClose={() => setIsDayOpen(false)} />
+      <LearningSheet
+        isOpen={isLearningOpen}
+        onClose={() => setIsLearningOpen(false)}
+      />
       <VoiceSettings
         isOpen={isVoiceOpen}
         onClose={() => {

@@ -10,6 +10,7 @@ import { readConnectorAppId } from '@/lib/connections/contract';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import ActedLines from '@apps/helm/components/noticed/ActedLines';
 import HabitLine from '@apps/helm/components/today/HabitLine';
 import CalendarFailedLine from '@apps/helm/components/today/CalendarFailedLine';
 import FeedGroup from '@apps/helm/components/today/FeedGroup';
@@ -479,6 +480,7 @@ function DayPlan({
           })}
         </div>
       )}
+      <ActedLines dayKey={dayKey} todayKey={todayKey} />
       {feedGroups.map((group) => (
         <FeedGroup
           key={`${group[0].connectorId}|${group[0].category}`}

@@ -29,6 +29,8 @@ import HabitEditSheet from '@apps/helm/components/habits/HabitEditSheet';
 import HabitPauseSheet from '@apps/helm/components/habits/HabitPauseSheet';
 import HabitWeek from '@apps/helm/components/habits/HabitWeek';
 import HabitWhenSheet from '@apps/helm/components/habits/HabitWhenSheet';
+import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
+import { selectHabitOffer } from '@apps/helm/store/selectors/patternSelectors';
 import { useHabitWhoName } from '@apps/helm/components/habits/useHabitWhoName';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
@@ -116,6 +118,9 @@ function HabitScreen({
   const { isLoaded } = useAppSelector((state) => state.helm.habits);
   const habit = useAppSelector(selectHabitById).get(habitId ?? '') ?? null;
   const days = useAppSelector((state) => state.helm.habitDays.byId);
+  const offer = useAppSelector((state) =>
+    selectHabitOffer(state, habitId ?? ''),
+  );
   const whoName = useHabitWhoName(habit ?? { forWhoId: null });
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingWhen, setIsChangingWhen] = useState(false);
@@ -451,6 +456,12 @@ function HabitScreen({
               </section>
             )}
             <HabitWeek habit={habit} days={days} clock={clock} />
+            {offer && (
+              <PatternOfferCard
+                pattern={offer}
+                onChange={() => setIsChangingWhen(true)}
+              />
+            )}
             {notes.length > 0 && (
               <section className='space-y-3'>
                 <h2 className='text-muted-foreground text-[13px]'>

@@ -14,6 +14,7 @@ import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import AnswerCard from '@apps/helm/components/home/AnswerCard';
 import AnsweredQuestion from '@apps/helm/components/home/AnsweredQuestion';
 import MediaLine, { TurnPhotos } from '@apps/helm/components/home/MediaLine';
+import NotedRow from '@apps/helm/components/home/NotedRow';
 import QuestionCard from '@apps/helm/components/home/QuestionCard';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ResultLines from '@apps/helm/components/home/ResultLines';
@@ -274,15 +275,22 @@ function TurnCard({
         <div className='flex w-full flex-col items-start gap-2' role='status'>
           <AssistantLine
             speakText={showsOutcome && isOnHome ? planLine : undefined}
-          >{planLine}</AssistantLine>
+          >
+            {planLine}
+          </AssistantLine>
         </div>
       )}
       {quietLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
           <AssistantLine
             speakText={showsOutcome && isOnHome ? quietLine : undefined}
-          >{quietLine}</AssistantLine>
+          >
+            {quietLine}
+          </AssistantLine>
         </div>
+      )}
+      {capture.disposition === 'noted' && !capture.isUnreadable && isSorted && (
+        <NotedRow captureId={capture.id} />
       )}
       {capture.answer && !capture.isUnreadable && (
         <AnswerCard answer={capture.answer} isInset capture={capture} />

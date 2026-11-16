@@ -122,6 +122,7 @@ import { WORTH_THE_WAIT_SHARES } from '../../functions/src/apps/worth-the-wait/s
 import { habitDayKey } from '../../functions/src/apps/helm/nomos/habitDay.ts';
 import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
 import { formatMoney } from '../../functions/src/utils/formatMoney.ts';
+import { buildLearning } from './helmLearning.ts';
 import { getShowtime } from './aList.ts';
 import { getSeedPickupOn } from './goingOnce.ts';
 import { buildSampleShareSummary, readEmulatorKeyring } from './runway.ts';
@@ -5719,6 +5720,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             user.uid === FIXTURE_USERS.partnerOne.uid ? context.now : null,
           conversationFreshAt: null,
           isDailyFreshOn: false,
+          isLearningOn: true,
+          patternsCheckedOn: habitDayKey(context.now, HABIT_ZONE),
+          reflectDueAt: null,
+          forgottenAt: null,
+          prunedOn: habitDayKey(context.now, HABIT_ZONE),
           createdAt,
           lastEditedAt: null,
         });
@@ -6389,6 +6395,36 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             batch.set(person.collection('habitDays').doc(entry.id), entry.day),
           );
         }
+        const learning = people
+          ? await buildLearning({
+              now: context.now,
+              todayKey: habitDayKey(context.now, HABIT_ZONE),
+              encryption,
+            })
+          : null;
+        if (learning) {
+          learning.patterns.forEach((entry) =>
+            batch.set(person.collection('patterns').doc(entry.id), entry.pattern),
+          );
+          learning.observations.forEach((entry) =>
+            batch.set(
+              person.collection('observations').doc(entry.id),
+              entry.observation,
+            ),
+          );
+          learning.reflections.forEach((entry) =>
+            batch.set(
+              person.collection('reflections').doc(entry.id),
+              entry.reflection,
+            ),
+          );
+          learning.executions.forEach((entry) =>
+            batch.set(
+              person.collection('executions').doc(entry.id),
+              entry.execution,
+            ),
+          );
+        }
         const knowledge = people
           ? await buildKnowledge({
               uid: user.uid,
@@ -6496,6 +6532,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             7 +
             (projects ? projects.projects.length + projects.tasks.length : 0) +
             (habitWorld ? habitWorld.habits.length + habitWorld.days.length : 0) +
+            (learning
+              ? learning.patterns.length +
+                learning.observations.length +
+                learning.reflections.length +
+                learning.executions.length
+              : 0) +
             (knowledge
               ? knowledge.topics.length +
                 knowledge.notes.length +

@@ -25,6 +25,8 @@ import DayPlan from '@apps/helm/components/today/DayPlan';
 import DayStrip from '@apps/helm/components/today/DayStrip';
 import KeyDatesLine from '@apps/helm/components/today/KeyDatesLine';
 import PastDay from '@apps/helm/components/today/PastDay';
+import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
+import { selectTodayOffer } from '@apps/helm/store/selectors/patternSelectors';
 import SuggestionSheet, {
   type SuggestionTarget,
 } from '@apps/helm/components/today/SuggestionSheet';
@@ -105,6 +107,7 @@ function TodayView({
   }, [hasTasks]);
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<SuggestionTarget | null>(null);
+  const offer = useAppSelector(selectTodayOffer);
   const sources = usePlanSources(nowMinute);
   const todayKey = toDayKey(nowMinute, timeZone);
   const selectedKey = pickedKey ?? todayKey;
@@ -244,6 +247,16 @@ function TodayView({
               onOpenHabit={onOpenHabit}
             />
           ))}
+        {isToday && offer && (
+          <PatternOfferCard
+            pattern={offer}
+            onChange={
+              offer.subject.collection === 'habits' && offer.subject.id
+                ? () => onOpenHabit(offer.subject.id ?? '')
+                : undefined
+            }
+          />
+        )}
         {isToday && <SyncedToday now={now} />}
         {isToday && isLoaded && (tasks.length > 0 || held.size > 0) && (
           <section className='space-y-3'>
