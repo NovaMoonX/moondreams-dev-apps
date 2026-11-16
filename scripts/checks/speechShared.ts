@@ -1250,12 +1250,24 @@ console.log('speechShared: voice router and playback queue checks passed');
     feature: 'Speaking',
     wanted: 'a',
     used: 'b',
-    reason: 'second',
+    reason: 'first',
   });
   assert.deepEqual(
     [readFallbacks()[0]?.facts, readFallbacks()[0]?.trace],
     [['Error: raw'], 'the trace'],
-    'a later report with no facts keeps the earlier facts and trace',
+    'a later report of the same reason with no facts keeps the earlier facts and trace',
+  );
+  reportFallback({
+    key: 'f',
+    feature: 'Speaking',
+    wanted: 'a',
+    used: 'b',
+    reason: 'second',
+  });
+  assert.deepEqual(
+    [readFallbacks()[0]?.facts, readFallbacks()[0]?.trace],
+    [[], null],
+    'a different reason does not keep the earlier reason facts or trace',
   );
   reportFallback({
     key: 'f',

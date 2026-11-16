@@ -112,6 +112,7 @@ interface VoiceConversationOptions {
   cloudListening?: { tokenSource: VoiceTokenSource; isAllowed: boolean } | null;
   cloudSpeaking?: {
     source: SpeechSource;
+    /** The person chose the cloud voice. False means the device voice is the choice, so using it is never a fallback or shown as one; a held day or failures are tracked apart. */
     isAllowed: boolean;
     /** Read once at a conversation's first cloud line; that voice lasts until it ends. */
     readVoice?: () => SpeechVoice;

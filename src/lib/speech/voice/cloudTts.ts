@@ -178,6 +178,7 @@ export const createCloudTts = ({
   onCut?: () => void;
   onPlayed?: () => void;
   player?: CloudPlayer;
+  /** False for a sample or preview, so a failed one reports nothing. */
   reportsFallback?: boolean;
 }): TtsAdapter => {
   const live = { isSounding: false, isFallingBack: false };

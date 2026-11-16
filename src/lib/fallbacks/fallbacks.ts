@@ -1,4 +1,5 @@
 export interface FallbackReport {
+  /** A fixed constant per fallback, never built from data: dismissal and repeat-merging both go by it. */
   key: string;
   feature: string;
   wanted: string;
@@ -62,14 +63,15 @@ const publish = () => {
 export const reportFallback = (report: FallbackReport) => {
   const now = Date.now();
   const before = store.entries.get(report.key);
+  const kept = before?.reason === report.reason ? before : undefined;
   store.entries.set(report.key, {
     key: report.key,
     feature: report.feature,
     wanted: report.wanted,
     used: report.used,
     reason: report.reason,
-    facts: report.facts?.length ? report.facts : (before?.facts ?? []),
-    trace: report.trace ?? before?.trace ?? null,
+    facts: report.facts?.length ? report.facts : (kept?.facts ?? []),
+    trace: report.trace ?? kept?.trace ?? null,
     count: (before?.count ?? 0) + 1,
     firstAt: before?.firstAt ?? now,
     lastAt: now,

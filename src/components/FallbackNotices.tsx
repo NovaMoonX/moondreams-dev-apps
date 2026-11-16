@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -55,11 +55,17 @@ const toOrdered = (fallbacks: Fallback[]) => [
   ...fallbacks.filter((fallback) => fallback.recoveredAt !== null),
 ];
 
-function FallbackTab() {
-  const { fallbacks, dismiss } = useFallbacks();
+function FallbackTab({
+  fallbacks,
+  dismiss,
+}: {
+  fallbacks: Fallback[];
+  dismiss: (key: string, reason: string) => void;
+}) {
   const { pathname } = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [announcedUntil, setAnnouncedUntil] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
   const ordered = toOrdered(fallbacks);
   const active = ordered.filter((fallback) => fallback.recoveredAt === null);
   const newest = active.reduce<Fallback | null>(
@@ -80,8 +86,6 @@ function FallbackTab() {
     return () => window.clearTimeout(id);
   }, [newestSince]);
 
-  if (ordered.length === 0) return null;
-
   const pill = newest !== null && newestSince > announcedUntil ? newest : null;
   const label = `What isn't working (${ordered.length})`;
 
@@ -93,7 +97,7 @@ function FallbackTab() {
         size='sm'
         aria-label={pill === null ? label : `${label}: ${toShort(pill)}`}
         className={join(
-          "fixed top-1/2 left-0 z-[125] flex h-10 -translate-y-1/2 items-center justify-center rounded-l-none rounded-r-xl border border-l-0 p-0 shadow-md transition-[max-width] duration-300 before:absolute before:inset-y-0 before:-right-4 before:left-0 before:content-[''] motion-reduce:transition-none",
+          "fixed top-1/2 left-0 z-[125] flex h-10 -translate-y-1/2 items-center justify-center rounded-l-none rounded-r-xl border border-l-0 p-0 shadow-md before:absolute before:inset-y-0 before:-right-2 before:left-0 before:content-['']",
           active.length > 0
             ? 'border-warning/60 dark:text-warning bg-[color-mix(in_srgb,var(--color-warning)_30%,var(--color-background))] text-amber-900'
             : 'border-border bg-muted text-muted-foreground',
@@ -132,7 +136,7 @@ function FallbackTab() {
           />
         }
       >
-        <ul className='space-y-3'>
+        <ul ref={listRef} data-site-sheet className='space-y-3'>
           {ordered.map((fallback) => (
             <li
               key={fallback.key}
@@ -159,10 +163,17 @@ function FallbackTab() {
                 type='button'
                 variant='tertiary'
                 size='sm'
+                data-dismiss
                 className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
                 onClick={() => {
-                  if (ordered.length === 1) setIsOpen(false);
                   dismiss(fallback.key, fallback.reason);
+                  window.setTimeout(
+                    () =>
+                      listRef.current
+                        ?.querySelector<HTMLElement>('button[data-dismiss]')
+                        ?.focus(),
+                    0,
+                  );
                 }}
               >
                 Dismiss for this session
@@ -178,8 +189,9 @@ function FallbackTab() {
 /** A left-edge tab that opens what the site fell back from, for debug viewers only. */
 function FallbackNotices() {
   const canSee = useCanSeeDebugDetails();
-  if (!canSee) return null;
-  return <FallbackTab />;
+  const { fallbacks, dismiss } = useFallbacks();
+  if (!canSee || fallbacks.length === 0) return null;
+  return <FallbackTab fallbacks={fallbacks} dismiss={dismiss} />;
 }
 
 export default FallbackNotices;
