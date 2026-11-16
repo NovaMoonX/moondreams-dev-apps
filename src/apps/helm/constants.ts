@@ -546,6 +546,8 @@ export const HELM_COPY = {
   liveEnd: 'End',
   liveEndLabel: 'End the conversation',
   liveEndedQuiet: 'The conversation ended after a quiet spell.',
+  liveEndedFailed:
+    'Listening stopped working, so the conversation ended. Tap Talk to try again.',
   talkByVoice: 'Ask by voice',
   talkByTyping: 'Ask by typing',
   talkNeedsMicrophone:

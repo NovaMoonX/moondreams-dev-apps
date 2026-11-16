@@ -208,6 +208,7 @@ export function useHelmVoice() {
     },
     onLiveEnd: (why) => {
       if (why === 'quiet') showNote(HELM_COPY.liveEndedQuiet);
+      if (why === 'failed') showNote(HELM_COPY.liveEndedFailed);
     },
     // A utility screen with no ask bar has nowhere to show the conversation, so it never listens for the phrase.
     wake: {

@@ -107,7 +107,7 @@ interface VoiceConversationOptions {
   onBargeIn?: () => void;
   /** A live conversation (`startLive`) ends after this long with nothing heard or said (one the wake phrase started ends sooner if nothing is said at all, and one with its microphone off waits longer). */
   liveIdleMs?: number;
-  /** A live conversation ended on its own: an end phrase closed a turn (after its reply), `liveIdleMs` went by in quiet, the page was left, or listening stopped working. */
+  /** A live conversation ended on its own: an end phrase closed a turn (after its reply), it went quiet for too long, the page was left, or listening stopped working. */
   onLiveEnd?: (why: VoiceLiveEnd) => void;
   /** Waits for a phrase on the device (the downloaded model, else the browser's own recognition) while nothing else is going on and the page is visible; Null never does. `onWake` says whether the phrase may start a turn (the app readies its screen); the same listener, and the words said after the phrase, then carry on as that turn's listening. */
   wake?: {
@@ -122,7 +122,9 @@ interface VoiceConversationOptions {
 }
 
 export type VoiceListeningRoute = 'cloud' | 'device';
-export type VoiceLiveEnd = 'phrase' | 'quiet' | 'left' | 'failed';
+/** `unavailable`: listening can't work until something changes, and `onUnavailable` has said why; `failed`: it kept failing for no lasting reason. */
+export type VoiceLiveEnd =
+  'phrase' | 'quiet' | 'left' | 'unavailable' | 'failed';
 /** What a repeat did: played, or why it could not. */
 export type VoiceRepeat = 'played' | 'none' | 'muted' | 'busy';
 
@@ -512,8 +514,8 @@ export function useVoiceConversation({
       endConversation();
       if (run.current.isLive) run.current.isLiveClosing = true;
     }
-    run.current.liveAt = Date.now();
     if (said === '') return false;
+    run.current.liveAt = Date.now();
     run.current.hasLiveTurn = true;
     run.current.liveErrors = 0;
     if (run.current.isLive) setLiveSaid(said);
@@ -559,7 +561,7 @@ export function useVoiceConversation({
     };
     reopenLive.current = () => {
       if (run.current.isLiveClosing) endLive('phrase');
-      else if (latest.current.reason !== null) endLive('failed');
+      else if (latest.current.reason !== null) endLive('unavailable');
       else openFollowUp();
     };
   });
@@ -618,7 +620,7 @@ export function useVoiceConversation({
       if (lasting !== null && isRefusalShown) {
         latest.current.onUnavailable?.(lasting);
       }
-      endLive('failed');
+      endLive('unavailable');
       return;
     }
     if (isKept) return;
@@ -839,6 +841,10 @@ export function useVoiceConversation({
   /** Opens a short window after a spoken answer in which speaking starts a listen without a tap; silence closes it with no sound and nothing sent. In a live conversation it stays open until the conversation's quiet runs out, muted voice or not. False when it can't open now (a line still waiting or playing, muted, already listening, the page hidden). */
   const openFollowUp = () => {
     const { isLive: isLiveNow, isLiveMuted: isMicMuted } = run.current;
+    if (isLiveNow && run.current.isLiveClosing) {
+      endLive('phrase');
+      return false;
+    }
     if (
       latest.current.reason !== null ||
       (latest.current.isMuted && !isLiveNow) ||
@@ -847,10 +853,6 @@ export function useVoiceConversation({
       (queueRef.current?.isActive() ?? false) ||
       document.visibilityState === 'hidden'
     ) {
-      return false;
-    }
-    if (isLiveNow && run.current.isLiveClosing) {
-      endLive('phrase');
       return false;
     }
     const liveLeft = run.current.liveAt + liveLimit() - Date.now();
@@ -869,7 +871,12 @@ export function useVoiceConversation({
     );
     run.current.gate = openSpeechGate({
       onSpeech: (source) => gateHandler.current?.(source, false),
-      onUnavailable: () => endFollowUp(),
+      onUnavailable: () => {
+        endFollowUp();
+        if (!run.current.isLive) return;
+        run.current.liveErrors += 1;
+        if (run.current.liveErrors >= LIVE_ERRORS_MAX) endLive('failed');
+      },
     });
     setIsFollowUpOpen(true);
     setIsListening(true);
@@ -1221,7 +1228,6 @@ export function useVoiceConversation({
 
   const isLiveIdle =
     isLive &&
-    !isLiveMuted &&
     !isListening &&
     !isStarting &&
     !isThinking &&

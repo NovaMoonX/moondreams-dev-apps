@@ -47,6 +47,7 @@ function LiveConversation() {
   const name = useAssistantName();
   const dialog = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const helmParagraph = useRef<HTMLParagraphElement>(null);
   const isHearing = voice.state === 'listening' && voice.heard !== '';
   const personLine = isHearing ? voice.heard : voice.liveSaid;
   const helmLine = isHearing ? '' : voice.lastLine;
@@ -68,11 +69,19 @@ function LiveConversation() {
     };
   }, []);
 
-  // The newest words are the ones that matter; a long line keeps them in view as it grows.
+  // The person's words grow, so their newest stay in view; a reply arrives whole and is read from its start.
   useEffect(() => {
     const box = scroller.current;
     if (box) box.scrollTop = box.scrollHeight;
-  }, [personLine, helmLine]);
+  }, [personLine]);
+
+  useEffect(() => {
+    const box = scroller.current;
+    const reply = helmParagraph.current;
+    if (!box || !reply) return;
+    box.scrollTop =
+      reply.offsetTop - parseFloat(getComputedStyle(box).paddingTop);
+  }, [helmLine]);
 
   return (
     <div
@@ -122,7 +131,12 @@ function LiveConversation() {
             </p>
           )}
           {helmLine !== '' && (
-            <p className='text-[26px] leading-snug text-pretty'>{helmLine}</p>
+            <p
+              ref={helmParagraph}
+              className='text-[26px] leading-snug text-pretty'
+            >
+              {helmLine}
+            </p>
           )}
           {voice.note !== null && voice.note !== helmLine && (
             <p className='text-foreground/80 text-[15px]'>{voice.note}</p>
