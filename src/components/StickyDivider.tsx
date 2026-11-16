@@ -9,10 +9,17 @@ interface StickyDividerProps {
   trailing?: ReactNode;
   /** Positions it: `sticky`, its `top` and `z-*` (a shared utility such as `sticky-day-bar`, or the screen's own). */
   className: string;
+  /** Added while stuck, such as an opaque fill under an opaque header. */
+  stuckClassName?: string;
 }
 
 /** A group's divider that rides along while the page scrolls, as a compact centered bar, until the next group's takes over. Window scroll only. */
-function StickyDivider({ label, trailing, className }: StickyDividerProps) {
+function StickyDivider({
+  label,
+  trailing,
+  className,
+  stuckClassName,
+}: StickyDividerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
 
@@ -56,6 +63,7 @@ function StickyDivider({ label, trailing, className }: StickyDividerProps) {
         'flex min-h-10 items-center border-b border-transparent px-1',
         isStuck && 'bg-background/80 border-border backdrop-blur',
         className,
+        isStuck && stuckClassName,
       )}
     >
       {isStuck ? (

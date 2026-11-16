@@ -311,7 +311,8 @@ function ConversationThread({
                 {scroll === 'window' ? (
                   <StickyDivider
                     label={formatThreadDay(day.dayStart)}
-                    className='sticky top-(--helm-home-header-h,0px) z-[5]'
+                    className='sticky top-(--helm-home-header-h,0px) z-[5] -mx-4 px-5!'
+                    stuckClassName='bg-background! backdrop-blur-none!'
                   />
                 ) : (
                   <SectionDivider label={formatThreadDay(day.dayStart)} />
