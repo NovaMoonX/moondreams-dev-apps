@@ -780,6 +780,7 @@ export const HELM_COPY = {
   undoPickAll: 'Undo all',
   undoPickSome: (count: number) => `Undo ${count}`,
   undoPickNone: 'Tick what to take back.',
+  undoPickKeepHint: 'Untick anything that should stay.',
   undoPickCancel: 'Cancel',
   tookBackHome: 'Took back being home',
   tookBackNotHome: 'Took back No longer home',

@@ -76,7 +76,10 @@ function UndoPickActions({
   return (
     <ModalFooterActions
       note={
-        refusal ?? (chosen.length === 0 ? HELM_COPY.undoPickNone : undefined)
+        refusal ??
+        (chosen.length === 0
+          ? HELM_COPY.undoPickNone
+          : HELM_COPY.undoPickKeepHint)
       }
       cancelAction={
         <Button

@@ -343,12 +343,18 @@ function QuestionCard({
 
   return (
     <div className='flex w-full flex-col items-start gap-2'>
-      {question.lead !== null && (
-        <p className='text-muted-foreground pl-[30px] text-left text-[13px] text-pretty'>
+      {isPromptHidden && question.lead !== null && (
+        <p className='text-muted-foreground text-left text-[13px] text-pretty'>
           {question.lead}
         </p>
       )}
-      {!isPromptHidden && <AssistantLine>{question.prompt}</AssistantLine>}
+      {!isPromptHidden && (
+        <AssistantLine>
+          {question.lead === null
+            ? question.prompt
+            : `${question.lead} ${question.prompt}`}
+        </AssistantLine>
+      )}
       <div
         className={join(
           'flex flex-col gap-2',
