@@ -3069,6 +3069,8 @@ export const HELM_COPY = {
   goalsNew: 'New goal',
   goalsSetAsideRow: (count: number) => `Set aside · ${count}`,
   goalsSetAsideLine: (date: string) => `Set aside ${date}`,
+  goalsSetAsideListLine: (date: string) => `Goal · Set aside ${date}`,
+  goalsTidyRow: 'Want it tidied up?',
   goalsSetAsideHide: 'Hide set aside',
   goalsAskProjects: 'Ask about your projects and goals',
   projectKindTitle: 'Something to finish, or something to grow into?',
@@ -3084,11 +3086,12 @@ export const HELM_COPY = {
   goalFlowWhyPlaceholder:
     'I used to play every night in college, and I miss it',
   goalFlowWhyHint: "Optional. It sits at the top of the goal's page.",
-  goalFlowWhySkipNote: 'You can add it later from the goal',
+  goalFlowWhySkip: 'Skip for now',
   goalFlowStepQuestion: 'A regular step?',
   goalFlowStepLabel: 'Regular step',
   goalFlowStepHabit: 'A habit',
   goalFlowStepNone: 'Not yet',
+  goalFlowStepSkipNote: 'You can add a habit later from the goal',
   goalFlowStepHint:
     'A small thing you do on a rhythm, like practising twice a week.',
   goalFlowHabitName: 'What will you do?',
@@ -3106,7 +3109,6 @@ export const HELM_COPY = {
   goalWhyWrote: (date: string) => `You wrote ${date}`,
   goalWhyTidiedSaid: (date: string) => `Tidied from what you said · ${date}`,
   goalWhyTidiedWrote: (date: string) => `Tidied from what you wrote · ${date}`,
-  goalWhyRingLabel: 'In your words',
   goalWhyAdd: 'Add why it matters',
   goalWhySheetTitle: 'Why it matters',
   goalWhySeeSaid: 'See what I said',
@@ -3147,10 +3149,6 @@ export const HELM_COPY = {
   goalHabitsNone: 'No regular step yet',
   goalTasksHeading: 'Tasks',
   goalMilestoneReachedToast: (title: string) => `${title} · Reached today`,
-  goalHabitsChoiceQuestion: (names: string[]) =>
-    names.length === 1
-      ? `${names[0]} is a habit on this goal. What should happen to it?`
-      : `${names.join(', ')} are habits on this goal. What should happen to them?`,
   goalHabitsKeep: (count: number) => (count === 1 ? 'Keep it' : 'Keep them'),
   goalHabitsKeepHint: (count: number) =>
     count === 1
@@ -3162,7 +3160,10 @@ export const HELM_COPY = {
     count === 1
       ? 'It goes, with its reminders.'
       : 'They go, with their reminders.',
-  goalHabitsChoiceLabel: 'What happens to the habits',
+  goalHabitsChoiceLabel: (names: string[]) =>
+    names.length === 1
+      ? `What happens to ${names[0]}?`
+      : `What happens to its ${names.length} habits?`,
   goalDeleteConfirm: (name: string) =>
     `${name} and its milestones will be deleted. Its tasks stay.`,
   goalDeleteAction: 'Delete goal',

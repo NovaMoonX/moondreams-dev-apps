@@ -13,7 +13,7 @@ import { selectGoalHabits } from '@apps/helm/store/selectors/habitSelectors';
 
 const WEEKS_BACK = 13;
 
-/** The goal's progress line: its parts joined with " · ", or null while there is nothing to read. Twelve weeks of days are read once for every goal; the live days from the store cover the latest two weeks. */
+/** The goal's progress line: this week against its regular step (or the weeks it was kept), or null while there is nothing to read. Twelve weeks of days are read once for every goal; the live days from the store cover the latest two weeks. */
 export function useGoalEvidence(projectId: string): string | null {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
@@ -46,12 +46,14 @@ export function useGoalEvidence(projectId: string): string | null {
   });
   if (!project || project.isUnreadable) return null;
   if (habits.length > 0 && !earlier.data) return null;
-  return selectGoalEvidence({
-    habits,
-    days: { ...(earlier.data ?? {}), ...live },
-    milestoneState: project.milestoneState,
-    milestones: project.milestones,
-    todayKey: dayKey,
-    timeZone,
-  }).join(' · ');
+  return (
+    selectGoalEvidence({
+      habits,
+      days: { ...(earlier.data ?? {}), ...live },
+      milestoneState: project.milestoneState,
+      milestones: project.milestones,
+      todayKey: dayKey,
+      timeZone,
+    })[0] ?? null
+  );
 }

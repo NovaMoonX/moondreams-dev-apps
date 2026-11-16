@@ -11,7 +11,6 @@ import {
 } from '@apps/helm/components/projects/goalWhyView';
 import { useGoalWhyChoice } from '@apps/helm/components/projects/useGoalWhyChoice';
 import WhyTidyOffer from '@apps/helm/components/projects/WhyTidyOffer';
-import SourceRing from '@apps/helm/components/who/SourceRing';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import type { OpenProject } from '@apps/helm/types';
@@ -52,8 +51,7 @@ function WhySheet({ isOpen, onClose, project, onChange }: WhySheetProps) {
             <p className='text-foreground text-[15px] break-words'>
               {`“${shown.text}”`}
             </p>
-            <p className='text-muted-foreground flex items-center gap-2 text-[13px]'>
-              <SourceRing isConfirmed label={HELM_COPY.goalWhyRingLabel} />
+            <p className='text-muted-foreground text-[13px]'>
               {readWhySource(why, shown.isTidied)}
             </p>
           </div>

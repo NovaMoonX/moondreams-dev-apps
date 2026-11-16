@@ -8,6 +8,7 @@ import {
   TabsTrigger,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronRight } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -22,9 +23,7 @@ import GoalHabits from '@apps/helm/components/projects/GoalHabits';
 import GoalHabitsChoiceSheet from '@apps/helm/components/projects/GoalHabitsChoiceSheet';
 import GoalIdentity from '@apps/helm/components/projects/GoalIdentity';
 import { readTidyOffer } from '@apps/helm/components/projects/goalWhyView';
-import { useGoalWhyChoice } from '@apps/helm/components/projects/useGoalWhyChoice';
 import WhySheet from '@apps/helm/components/projects/WhySheet';
-import WhyTidyOffer from '@apps/helm/components/projects/WhyTidyOffer';
 import MilestonesTab from '@apps/helm/components/projects/MilestonesTab';
 import ProjectEditSheet from '@apps/helm/components/projects/ProjectEditSheet';
 import ProjectPeople from '@apps/helm/components/projects/ProjectPeople';
@@ -51,7 +50,7 @@ import { getDueDay } from '@apps/helm/utils/captureReading';
 import { sortProjectTasks } from '@apps/helm/utils/projectTasks';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
 
-const { option } = DropdownMenuFactories;
+const { option, separator } = DropdownMenuFactories;
 
 type ProjectTab = 'tasks' | 'milestones' | 'people';
 
@@ -95,7 +94,6 @@ function ProjectDetail({
   );
   const [isGoalBusy, setIsGoalBusy] = useState(false);
   const habits = useAppSelector((state) => state.helm.habits.items);
-  const whyChoice = useGoalWhyChoice(projectId ?? '');
 
   const openTasks = useMemo(
     () =>
@@ -380,6 +378,7 @@ function ProjectDetail({
           option({ label: HELM_COPY.goalMenuFinish, value: 'finish' }),
         ]),
     option({ label: HELM_COPY.goalMenuToProject, value: 'toProject' }),
+    separator(),
     option({ label: HELM_COPY.goalMenuDelete, value: 'deleteGoal' }),
   ];
   const menu =
@@ -462,12 +461,17 @@ function ProjectDetail({
               )}
             </div>
             {isGoal && !isFinished && tidyOffer && (
-              <WhyTidyOffer
-                tidied={tidyOffer}
-                isBusy={whyChoice.isBusy}
-                onKeep={() => void whyChoice.choose('declined')}
-                onUse={() => void whyChoice.choose('accepted')}
-              />
+              <Button
+                type='button'
+                variant='tertiary'
+                className='helm-card text-muted-foreground flex h-auto min-h-12 w-full min-w-0 items-center justify-between gap-2 px-4 py-3 text-left text-[15px] font-normal'
+                onClick={() => setIsWhyOpen(true)}
+              >
+                <span className='min-w-0 flex-1 break-words'>
+                  {HELM_COPY.goalsTidyRow}
+                </span>
+                <ChevronRight className='size-4 shrink-0' aria-hidden='true' />
+              </Button>
             )}
             {isFinished ? (
               <div className='border-border bg-muted/40 flex items-center justify-between gap-3 rounded-xl border px-4 py-2'>
@@ -514,12 +518,16 @@ function ProjectDetail({
               id={project.id}
               variant='thing'
               onOpen={onOpenRun}
-              start={{
-                attachment: { kind: 'project', id: project.id },
-                label: project.name,
-                dueOn: null,
-                alsoIds: [],
-              }}
+              start={
+                isGoal
+                  ? undefined
+                  : {
+                      attachment: { kind: 'project', id: project.id },
+                      label: project.name,
+                      dueOn: null,
+                      alsoIds: [],
+                    }
+              }
             />
             <Tabs
               value={tab}

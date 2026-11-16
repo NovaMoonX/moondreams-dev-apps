@@ -53,6 +53,7 @@ interface Answers {
   why: string;
   isWhySkipped: boolean;
   step: StepChoice;
+  isStepSkipped: boolean;
   habitName: string;
   when: WhenDraft;
 }
@@ -63,13 +64,13 @@ const INITIAL: Answers = {
   why: '',
   isWhySkipped: false,
   step: 'none',
+  isStepSkipped: false,
   habitName: '',
-  when: EMPTY_WHEN,
+  when: { ...EMPTY_WHEN, mode: 'anyTime' },
 };
 
 const STEP_OPTIONS: readonly PillOption<StepChoice>[] = [
   { value: 'habit', label: HELM_COPY.goalFlowStepHabit },
-  { value: 'none', label: HELM_COPY.goalFlowStepNone },
 ];
 
 const toFirstEmoji = (text: string) =>
@@ -166,14 +167,18 @@ function GoalFlowForm({
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.goalFlowWhyHint}
           </p>
-          <SkipQuestionButton
-            note={HELM_COPY.goalFlowWhySkipNote}
-            isSkipped={answers.isWhySkipped}
-            onSkip={() => {
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className="relative -ml-2 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+            onClick={() => {
               set({ why: '', isWhySkipped: true });
               flow.moveOnFrom('why');
             }}
-          />
+          >
+            {HELM_COPY.goalFlowWhySkip}
+          </Button>
         </div>
       ),
     },
@@ -197,7 +202,7 @@ function GoalFlowForm({
             label={HELM_COPY.goalFlowStepLabel}
             options={STEP_OPTIONS}
             value={answers.step}
-            onChange={(step) => set({ step })}
+            onChange={(step) => set({ step, isStepSkipped: false })}
           />
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.goalFlowStepHint}
@@ -230,6 +235,16 @@ function GoalFlowForm({
               />
             </div>
           )}
+          <SkipQuestionButton
+            note={HELM_COPY.goalFlowStepSkipNote}
+            label={HELM_COPY.goalFlowStepNone}
+            skippedLabel={HELM_COPY.goalFlowStepNone}
+            isSkipped={answers.isStepSkipped}
+            onSkip={() => {
+              set({ step: 'none', isStepSkipped: true });
+              flow.moveOnFrom('step');
+            }}
+          />
         </div>
       ),
     },

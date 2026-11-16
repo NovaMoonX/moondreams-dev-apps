@@ -4,12 +4,14 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { PillGroup, type PillOption } from '@/components/PillGroup';
+import SegmentedControl, {
+  type SegmentOption,
+} from '@/components/SegmentedControl';
 import { HELM_COPY } from '@apps/helm/constants';
 
 type HabitsChoice = 'keep' | 'delete';
 
-const optionsFor = (count: number): readonly PillOption<HabitsChoice>[] => [
+const optionsFor = (count: number): readonly SegmentOption<HabitsChoice>[] => [
   { value: 'keep', label: HELM_COPY.goalHabitsKeep(count) },
   { value: 'delete', label: HELM_COPY.goalHabitsDelete(count) },
 ];
@@ -40,15 +42,17 @@ function ChoiceBody({
   return (
     <div className='space-y-4'>
       <p className='text-[15px] text-pretty'>{message}</p>
-      <p className='text-[15px] text-pretty'>
-        {HELM_COPY.goalHabitsChoiceQuestion(habitNames)}
-      </p>
-      <PillGroup
-        label={HELM_COPY.goalHabitsChoiceLabel}
-        options={optionsFor(habitNames.length)}
-        value={choice}
-        onChange={setChoice}
-      />
+      <div className='space-y-2'>
+        <p className='text-sm font-medium break-words'>
+          {HELM_COPY.goalHabitsChoiceLabel(habitNames)}
+        </p>
+        <SegmentedControl
+          label={HELM_COPY.goalHabitsChoiceLabel(habitNames)}
+          options={optionsFor(habitNames.length)}
+          value={choice}
+          onChange={setChoice}
+        />
+      </div>
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {choice === 'keep'
           ? HELM_COPY.goalHabitsKeepHint(habitNames.length)

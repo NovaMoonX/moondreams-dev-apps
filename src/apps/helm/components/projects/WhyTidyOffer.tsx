@@ -4,6 +4,9 @@ import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
+const CHIP_CLASS =
+  "relative font-medium before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']";
+
 interface WhyTidyOfferProps {
   tidied: string;
   isBusy: boolean;
@@ -29,10 +32,12 @@ function WhyTidyOffer({ tidied, isBusy, onKeep, onUse }: WhyTidyOfferProps) {
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.goalTidyNote}
       </p>
-      <div className='flex items-center justify-between gap-3'>
+      <div className='flex items-center justify-between gap-3 px-3'>
         <Button
           type='button'
-          variant='tertiary'
+          variant='outline'
+          size='sm'
+          className={CHIP_CLASS}
           disabled={isBusy}
           onClick={onKeep}
         >
@@ -42,6 +47,7 @@ function WhyTidyOffer({ tidied, isBusy, onKeep, onUse }: WhyTidyOfferProps) {
           type='button'
           variant='secondary'
           size='sm'
+          className={CHIP_CLASS}
           disabled={isBusy}
           onClick={onUse}
         >

@@ -2,7 +2,6 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { formatDateShort } from '@/utils/formatUtils';
 import { readWhySource } from '@apps/helm/components/projects/goalWhyView';
-import SourceRing from '@apps/helm/components/who/SourceRing';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useGoalEvidence } from '@apps/helm/hooks/useGoalEvidence';
 import type { OpenProject } from '@apps/helm/types';
@@ -14,7 +13,7 @@ interface GoalIdentityProps {
   onAddWhy: () => void;
 }
 
-/** A goal's identity: its emoji and name, the why in quotes with where it came from, and the evidence line. */
+/** A goal's identity: its emoji and name, the why in quotes with where it came from, and one line of what it is and how this week is going. */
 function GoalIdentity({ project, onOpenWhy, onAddWhy }: GoalIdentityProps) {
   const evidence = useGoalEvidence(project.id);
   const shown = readShownWhy(project.why);
@@ -45,8 +44,7 @@ function GoalIdentity({ project, onOpenWhy, onAddWhy }: GoalIdentityProps) {
             <span className='text-foreground line-clamp-2 text-[15px] break-words'>
               {`“${shown.text}”`}
             </span>
-            <span className='text-muted-foreground mt-1 flex items-center gap-2 text-[13px]'>
-              <SourceRing isConfirmed label={HELM_COPY.goalWhyRingLabel} />
+            <span className='text-muted-foreground mt-1 block text-[13px]'>
               {readWhySource(project.why, shown.isTidied)}
             </span>
           </span>
@@ -62,14 +60,14 @@ function GoalIdentity({ project, onOpenWhy, onAddWhy }: GoalIdentityProps) {
           {HELM_COPY.goalWhyAdd}
         </Button>
       )}
-      <p className='text-muted-foreground text-[13px]'>
-        {HELM_COPY.goalKindLine(formatDateShort(project.createdAt))}
+      <p className='text-muted-foreground text-[13px] break-words'>
+        {[
+          HELM_COPY.goalKindLine(formatDateShort(project.createdAt)),
+          evidence !== HELM_COPY.goalNoStep ? evidence : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       </p>
-      {evidence && evidence !== HELM_COPY.goalNoStep && (
-        <p className='text-muted-foreground text-[13px] break-words'>
-          {evidence}
-        </p>
-      )}
     </div>
   );
 }

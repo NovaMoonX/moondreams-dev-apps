@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import MethodPicker from '@/components/MethodPicker';
@@ -46,7 +46,7 @@ function GoalEvidenceLine({ projectId }: { projectId: string }) {
   );
   if (evidence) {
     return (
-      <span className='text-muted-foreground line-clamp-2 text-[13px] leading-[18px]'>
+      <span className='text-muted-foreground line-clamp-1 text-[13px] leading-[18px]'>
         {evidence}
       </span>
     );
@@ -64,7 +64,7 @@ function ProjectRow({ project, state, onOpen }: ProjectRowProps) {
         onClick={() => onOpen(project.id)}
       >
         <span className='w-7 shrink-0 text-center text-2xl' aria-hidden='true'>
-          {project.emoji ?? ''}
+          {project.emoji ?? (project.kind === 'goal' ? '\u{1F331}' : '')}
         </span>
         <span className='min-w-0 flex-1'>
           <PrivateTitle
@@ -83,7 +83,7 @@ function ProjectRow({ project, state, onOpen }: ProjectRowProps) {
               </span>
             ) : state === 'aside' ? (
               <span className='text-muted-foreground text-[13px]'>
-                {HELM_COPY.goalsSetAsideLine(
+                {HELM_COPY.goalsSetAsideListLine(
                   formatDateShort(project.pausedAt ?? project.createdAt),
                 )}
               </span>
@@ -178,27 +178,21 @@ function ProjectsView({ onBack, onHome, onOpenProject }: ProjectsViewProps) {
     back: HELM_COPY.backToProjects,
   });
 
-  const startProject = () => setStarting(hasAnyGoal ? 'project' : 'kind');
+  const newProjectRow = (
+    <AddRow
+      label={HELM_COPY.projectsNew}
+      onClick={() => setStarting(hasAnyGoal ? 'project' : 'kind')}
+      isInList
+    />
+  );
 
   return (
     <>
       <HelmHeader backLabel='Home' onBack={onBack} onHome={onHome} />
       <main className='space-y-4 pt-4'>
-        <div className='flex items-center justify-between gap-3'>
-          <h1 className='helm-serif text-[28px] leading-[34px]'>
-            {HELM_COPY.projectsTitle}
-          </h1>
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            className="relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
-            onClick={startProject}
-          >
-            <Plus className='size-4' aria-hidden='true' />
-            {HELM_COPY.projectsNew}
-          </Button>
-        </div>
+        <h1 className='helm-serif text-[28px] leading-[34px]'>
+          {HELM_COPY.projectsTitle}
+        </h1>
         {isFailed && !isLoaded && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.projectsFailed}
@@ -229,12 +223,13 @@ function ProjectsView({ onBack, onHome, onOpenProject }: ProjectsViewProps) {
             />
           </section>
         )}
-        {hasAnyGoal && projects.length > 0 && (
-          <SectionDivider label={HELM_COPY.projectsTitle} />
-        )}
-        {projects.length > 0 && (
-          <RowList projects={projects} state='going' onOpen={onOpenProject} />
-        )}
+        {hasAnyGoal && <SectionDivider label={HELM_COPY.projectsTitle} />}
+        <RowList
+          projects={projects}
+          state='going'
+          onOpen={onOpenProject}
+          footer={newProjectRow}
+        />
         {aside.length > 0 && (
           <section className='space-y-3'>
             <ShowMoreButton
