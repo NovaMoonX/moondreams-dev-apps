@@ -512,7 +512,10 @@ export const toNoteSource = (
   if (note.source === 'importedFile' && note.sourceMediaId) {
     return { kind: 'file', mediaId: note.sourceMediaId, noteId: note.id };
   }
-  if (note.source === 'capture' && note.sourceCaptureId) {
+  if (
+    (note.source === 'capture' || note.source === 'outside') &&
+    note.sourceCaptureId
+  ) {
     return {
       kind: 'message',
       captureId: note.sourceCaptureId,

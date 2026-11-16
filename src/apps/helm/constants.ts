@@ -1021,6 +1021,27 @@ export const HELM_COPY = {
   assistantDisconnectFailed: "That didn't disconnect. Try again.",
   assistantDisconnected: (name: string) => `Disconnected ${name}`,
   assistantFrom: (name: string) => `From ${name}`,
+  homeOutsideAdded: (
+    vias: string[],
+    count: number,
+    isAllNew: boolean,
+    title: string | null,
+  ) => {
+    const who =
+      vias.length > 3
+        ? 'Your assistants'
+        : vias.length > 1
+          ? `${vias.slice(0, -1).join(', ')} and ${vias.at(-1)}`
+          : vias[0];
+    const verb = isAllNew ? 'added' : 'changed';
+    if (title !== null) return `${who} added ${title}`;
+    return `${who} ${verb} ${count === 1 ? '1 thing' : `${count} things`}`;
+  },
+  sourceOutside: (via: string, date: string) => `From ${via} · ${date}`,
+  noteSavedFromOutside: (via: string) => `Saved from ${via}`,
+  noteLinks: 'Links',
+  versionOutsideAdded: (via: string) => `${via} added this`,
+  versionOutsideNotes: (via: string) => `With notes from ${via}`,
   assistantsConnectHeading: 'Connect an assistant',
   assistantsAddressLabel: (app: string) => `Your ${app}'s address`,
   assistantsAddress: 'https://apps.moondreams.dev/mcp/helm',

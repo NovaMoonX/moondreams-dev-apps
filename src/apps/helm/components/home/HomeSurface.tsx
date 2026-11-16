@@ -15,6 +15,7 @@ import {
   MessageSquarePlus,
   Search,
   Settings2,
+  Sparkles,
 } from 'lucide-react';
 
 import HeaderIconButton from '@/components/HeaderIconButton';
@@ -42,7 +43,17 @@ import { useSession } from '@apps/helm/hooks/useSession';
 import { hasLapsedTrust } from '@apps/helm/queries/helmKeyQueries';
 import { setConversationFreshAt } from '@apps/helm/store/actions/settingsActions';
 import { retryKey, type KeyStatus } from '@apps/helm/store/helmSlice';
-import { selectHeldItems } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectExecutionsById,
+  selectHeldItems,
+  selectOutsideCaptures,
+} from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectNoteById,
+  selectTopicById,
+} from '@apps/helm/store/selectors/knowledgeSelectors';
+import { readOutsideAdditions } from '@apps/helm/utils/outsideTurns';
+import OutsideMark from '@apps/helm/components/outside/OutsideMark';
 import { formatClock, getDayNoon, toDayKey } from '@apps/helm/utils/planDays';
 import { getDayEvents, getTodayRecords } from '@apps/helm/utils/synced';
 
@@ -71,7 +82,7 @@ const getWaitingPlaceholder = (
 const ROW =
   'h-11 w-full min-w-0 justify-between! gap-2 rounded-none px-0! text-[15px] font-normal';
 
-/** The next fixed thing today (tomorrow's first once today's are over) and how many questions wait, each a door. */
+/** The next fixed thing today (tomorrow's first once today's are over), how many questions wait and what outside assistants added since the person looked, each a door. */
 function QuietLines({ now }: { now: number }) {
   const { showView } = useHelmUrlState();
   const { grants } = useConnections({
@@ -82,6 +93,44 @@ function QuietLines({ now }: { now: number }) {
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const needsYou = useAppSelector(selectHeldItems).needsYou.length;
+  const outsideCaptures = useAppSelector(selectOutsideCaptures);
+  const executionsById = useAppSelector(selectExecutionsById);
+  const noteById = useAppSelector(selectNoteById);
+  const topicById = useAppSelector(selectTopicById);
+  const outsideSeenAt = useAppSelector(
+    (state) => state.helm.profile?.outsideSeenAt ?? null,
+  );
+  const outside = useMemo(() => {
+    const added = readOutsideAdditions(
+      outsideCaptures,
+      outsideSeenAt ?? now - 7 * DAY_MS,
+      executionsById,
+      (ref) =>
+        ref.collection === 'notes'
+          ? noteById.get(ref.docId)?.title || null
+          : ref.collection === 'topics'
+            ? (topicById.get(ref.docId)?.name ?? null)
+            : null,
+    );
+    return added.count === 0
+      ? null
+      : {
+          label: HELM_COPY.homeOutsideAdded(
+            added.vias,
+            added.count,
+            added.isAllNew,
+            added.title,
+          ),
+          via: added.vias.length === 1 ? added.vias[0] : null,
+        };
+  }, [
+    outsideCaptures,
+    outsideSeenAt,
+    now,
+    executionsById,
+    noteById,
+    topicById,
+  ]);
   const nextEvent = useMemo(() => {
     const records = getTodayRecords(stored, grants);
     const todayNoon = getDayNoon(toDayKey(now, timeZone), timeZone);
@@ -110,7 +159,7 @@ function QuietLines({ now }: { now: number }) {
       : null;
   }, [stored, grants, now, timeZone]);
 
-  if (!nextEvent && needsYou === 0) return null;
+  if (!nextEvent && needsYou === 0 && outside === null) return null;
 
   return (
     <ul className='divide-border border-border divide-y border-b'>
@@ -152,6 +201,32 @@ function QuietLines({ now }: { now: number }) {
               <span className='truncate'>
                 {HELM_COPY.needsYouCount(needsYou)}
               </span>
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+        </li>
+      )}
+      {outside !== null && (
+        <li>
+          <Button
+            type='button'
+            variant='tertiary'
+            className={ROW}
+            onClick={() => void showView('outside')}
+          >
+            <span className='flex min-w-0 items-center gap-2'>
+              {outside.via !== null ? (
+                <OutsideMark via={outside.via} isSmall />
+              ) : (
+                <Sparkles
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              )}
+              <span className='truncate'>{outside.label}</span>
             </span>
             <ChevronRight
               className='text-muted-foreground size-4 shrink-0'
