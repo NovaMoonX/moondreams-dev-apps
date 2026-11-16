@@ -1849,9 +1849,10 @@ const REOPENABLE_KINDS = [
   'isThisWho',
   'whichKin',
   'kinOrder',
+  'questionsTask',
 ];
 
-/** What taking back an answer to a "which is true now?", "group these?", "is this who?" or family question writes to its turn so the question asks again; null for any other execution. */
+/** What taking back an answer to a "which is true now?", "group these?", "is this who?", family or "make these questions a task?" question writes to its turn so the question asks again; null for any other execution. */
 export const planReopen = (
   original: Pick<OpenExecution, 'questionRef'>,
   capture: {

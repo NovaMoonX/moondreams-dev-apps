@@ -1352,7 +1352,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] Days away: "could I hit the road this weekend?" answered with what must be done first, what it would move and whether it's a poor fit, across projects, the calendar and connected apps (O) (Issue 122)
 - [ ] To learn: a question saved for later and brought back on a quiet evening as a short overview with a table, a picture where one helps and up to 2 videos (O) (Issue 119)
 - [ ] Research offered ahead of a dated project, with a few questions first, coming back as a note on the project (O) (Issue 120)
-- [ ] Questions for someone: a task with a step for each question, linked to the meeting, with "Do they feel ready?" before it (O) (Issue 121)
+- [x] Questions for someone: a task with a step for each question, linked to the meeting, with "Do they feel ready?" before it (O) (Issue 121)
 - [ ] Connected apps read as their full state: Going Once's drafts, unpriced and unlisted items and buyers' questions, and the gaps the audit found in every other app (What Each Source Shares) (O) (Issue 124)
 - [ ] How [name] sees you, widened: how you talk and what works for you, each line citing what it came from, corrected or removed by tap or voice (O) (Issue 125)
 - [ ] The assistant's personality: traits you pick or say, how honest it may be, a warning when two clash and a sample of how replies will read (O) (Issue 126)

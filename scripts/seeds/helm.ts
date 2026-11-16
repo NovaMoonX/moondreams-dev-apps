@@ -201,6 +201,12 @@ const NIGHT_SHIFT_COPY_ID = createHash('sha256')
   .update(`${GOOGLE_CALENDAR_GRANT_ID}|events|${NIGHT_SHIFT_SOURCE_REF}`)
   .digest('hex')
   .slice(0, 40);
+const PLANNING_SOURCE_REF = `${GOOGLE_PRIMARY_CALENDAR}|fx-planning-call`;
+const PLANNING_COPY_ID = createHash('sha256')
+  .update(`${GOOGLE_CALENDAR_GRANT_ID}|events|${PLANNING_SOURCE_REF}`)
+  .digest('hex')
+  .slice(0, 40);
+const PLANNING_TITLE = 'Planning call with Priya and Sam';
 const CAKE_TITLE = 'Cake tasting at Sweet Layer Bakery';
 const CAKE_ZONE = 'America/Los_Angeles';
 const GMAIL_GATE_ID = 'google-mail-and-drive';
@@ -703,6 +709,8 @@ async function buildBackToBack(input: {
         waitsOnTaskIds: [],
         waitsOnWhoId: null,
         stepState: {},
+        meeting: null,
+        readyAnswer: null,
         mediaIds: [],
         createdBy: 'nomos',
         sourceCaptureId: leadId,
@@ -716,6 +724,7 @@ async function buildBackToBack(input: {
             title,
             notes: null,
             steps: {},
+            meetingLabel: null,
             privateMark: null,
             isPrivacyCleared: false,
           },
@@ -925,6 +934,15 @@ const toCakeTimes = (now: number) => {
   return {
     startAt: zonedDateTimeToEpoch(date, '15:00', CAKE_ZONE),
     endAt: zonedDateTimeToEpoch(date, '16:00', CAKE_ZONE),
+  };
+};
+
+// Tomorrow 10:00 to 10:45 AM, so the questions for the couple are due their "Do they feel ready?" on Today.
+const toPlanningCallTimes = (now: number) => {
+  const date = new Date(getSeedToday(now) + DAY_MS).toISOString().slice(0, 10);
+  return {
+    startAt: zonedDateTimeToEpoch(date, '10:00', CAKE_ZONE),
+    endAt: zonedDateTimeToEpoch(date, '10:45', CAKE_ZONE),
   };
 };
 
@@ -1316,6 +1334,8 @@ async function buildAnswerTurns(input: {
         waitsOnTaskIds: [],
         waitsOnWhoId: null,
         stepState: {},
+        meeting: null,
+        readyAnswer: null,
         mediaIds: [],
         createdBy: 'person',
         sourceCaptureId: null,
@@ -1329,6 +1349,7 @@ async function buildAnswerTurns(input: {
             title: entry.title,
             notes: null,
             steps: {},
+            meetingLabel: null,
             privateMark: entry.isHealth ? 'health' : null,
             isPrivacyCleared: false,
           },
@@ -1421,6 +1442,8 @@ async function buildPlanDays(input: {
     waitsOnTaskIds: [],
     waitsOnWhoId: null,
     stepState: {},
+    meeting: null,
+    readyAnswer: null,
     mediaIds: [],
     createdBy: 'person',
     sourceCaptureId: null,
@@ -1434,6 +1457,7 @@ async function buildPlanDays(input: {
         title: doneTitle,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
       },
@@ -1725,7 +1749,7 @@ export async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   }
 }
 
-/** Alex's projects (and what matters most: the wedding first, then 💼 Work, the guitar goal not said yet, stretching on Can wait): the 🎸 Get back into guitar goal (a why in the person's words with a tidied version offered and a summary with tags, two milestones one reached, the Practice guitar habit as its regular step), the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone, plus 🎨 Paint the spare room, active and just made, which the start-time hold guardrail is about. */
+/** Alex's projects (and what matters most: the wedding first, then 💼 Work, the guitar goal not said yet, stretching on Can wait): the 🎸 Get back into guitar goal (a why in the person's words with a tidied version offered and a summary with tags, two milestones one reached, the Practice guitar habit as its regular step), the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone, plus 🎨 Paint the spare room, active and just made, which the start-time hold guardrail is about, and the project-less task "Questions for Priya and Sam" (six steps, two answered) for tomorrow's planning call. */
 async function buildProjects(input: {
   now: number;
   encryption: HelmEncryption;
@@ -1781,6 +1805,7 @@ async function buildProjects(input: {
     id: string,
     title: string,
     fields: Partial<Task> & Pick<Task, 'projectId' | 'createdAt'>,
+    words: Partial<TaskSealed> = {},
   ): Promise<{ id: string; task: Task }> => ({
     id,
     task: {
@@ -1799,6 +1824,8 @@ async function buildProjects(input: {
       waitsOnTaskIds: [],
       waitsOnWhoId: null,
       stepState: {},
+      meeting: null,
+      readyAnswer: null,
       mediaIds: [],
       createdBy: 'person',
       sourceCaptureId: null,
@@ -1811,8 +1838,10 @@ async function buildProjects(input: {
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: fields.privacy === 'private' ? 'health' : null,
         isPrivacyCleared: false,
+        ...words,
       }),
     },
   });
@@ -2072,6 +2101,7 @@ async function buildProjects(input: {
       },
     ),
   ]);
+  const planningStartAt = toPlanningCallTimes(now).startAt;
   const tasks = await Promise.all([
     taskOf('seed-task-wedding-1', 'Book the string quartet', {
       projectId: 'seed-project-wedding',
@@ -2108,6 +2138,36 @@ async function buildProjects(input: {
       },
       createdAt: now - 2 * DAY_MS,
     }),
+    taskOf(
+      'seed-task-questions-couple',
+      'Questions for Priya and Sam',
+      {
+        projectId: null,
+        whoIds: ['seed-who-priya-raman', 'seed-who-sam-rivera'],
+        stepState: Object.fromEntries(
+          Array.from({ length: 6 }, (_, order) => [
+            `seed-step-question-${order + 1}`,
+            { order, doneAt: order < 2 ? now - (2 - order) * 60 * MINUTE_MS : null },
+          ]),
+        ),
+        meeting: { syncedId: PLANNING_COPY_ID, startAt: planningStartAt },
+        readyAnswer: null,
+        createdAt: now - 2 * DAY_MS,
+      },
+      {
+        steps: Object.fromEntries(
+          [
+            'How did you two meet?',
+            'What do you want people to feel at the ceremony?',
+            'Is there a story you want told, or one you want left out?',
+            'Who should I thank by name?',
+            'Do you want to write any of your own vows?',
+            'How long should the ceremony run?',
+          ].map((text, index) => [`seed-step-question-${index + 1}`, { text }]),
+        ),
+        meetingLabel: PLANNING_TITLE,
+      },
+    ),
     taskOf('seed-task-move-1', 'Change the address', {
       projectId: 'seed-project-move',
       status: 'done',
@@ -4745,6 +4805,8 @@ async function buildPhotoTurns(input: {
     waitsOnTaskIds: [],
     waitsOnWhoId: null,
     stepState: {},
+    meeting: null,
+    readyAnswer: null,
     mediaIds: [],
     createdBy: 'nomos',
     sourceCaptureId: keptTurn,
@@ -4758,6 +4820,7 @@ async function buildPhotoTurns(input: {
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
       },
@@ -5131,6 +5194,8 @@ async function buildFileTurns(input: {
       waitsOnTaskIds: [],
       waitsOnWhoId: null,
       stepState: {},
+      meeting: null,
+      readyAnswer: null,
       mediaIds: [],
       createdBy: 'nomos',
       sourceCaptureId: turn.id,
@@ -5143,6 +5208,7 @@ async function buildFileTurns(input: {
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
       }),
@@ -5873,6 +5939,8 @@ async function buildPeople(input: {
       waitsOnTaskIds: [],
       waitsOnWhoId: null,
       stepState: {},
+      meeting: null,
+      readyAnswer: null,
       mediaIds: [],
       createdBy: 'person',
       sourceCaptureId: null,
@@ -5885,6 +5953,7 @@ async function buildPeople(input: {
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
       }),
@@ -7016,6 +7085,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   waitsOnTaskIds: [],
                   waitsOnWhoId: null,
                   stepState: {},
+                  meeting: null,
+                  readyAnswer: null,
                   mediaIds: [],
                   createdBy: 'nomos',
                   sourceCaptureId: `seed-turn-${index + 1}`,
@@ -7029,6 +7100,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       title,
                       notes: null,
                       steps: {},
+                      meetingLabel: null,
                       privateMark: null,
                       isPrivacyCleared: false,
                     },
@@ -7219,6 +7291,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   },
                 ]),
               ),
+              meeting: null,
+              readyAnswer: null,
               mediaIds: [],
               createdBy: 'person',
               sourceCaptureId: null,
@@ -7237,6 +7311,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       { text: (entry.steps ?? [])[order] },
                     ]),
                   ),
+                  meetingLabel: null,
                   privateMark: null,
                   isPrivacyCleared: false,
                 },
@@ -8569,7 +8644,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     options: { calendarIds: [GOOGLE_PRIMARY_CALENDAR, GOOGLE_SHIFTS_CALENDAR] },
     status: 'live',
     categoryState: {
-      events: { lastOkAt: syncedAt, lastError: null, count: 2 },
+      events: { lastOkAt: syncedAt, lastError: null, count: 3 },
     },
     errors: [],
     newCategoryIds: [],
@@ -8680,6 +8755,50 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         { ...alexKey, keyVersion: 1 },
         {
           title: CAKE_TITLE,
+          subtitle: null,
+          detail: null,
+          placeLabel: null,
+          amountCents: null,
+          currency: null,
+          deepLink: null,
+          extra: {
+            calendarId: GOOGLE_PRIMARY_CALENDAR,
+            isTentative: false,
+            isFree: false,
+          },
+        },
+      ),
+    },
+  );
+  const planningTimes = toPlanningCallTimes(context.now);
+  batch.set(
+    users
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('synced')
+      .doc(PLANNING_COPY_ID),
+    {
+      connectorId: googleConnectorId,
+      accountId: GOOGLE_ACCOUNT_ID,
+      grantId: GOOGLE_CALENDAR_GRANT_ID,
+      category: 'events',
+      kind: 'event',
+      sourceRef: PLANNING_SOURCE_REF,
+      startAt: planningTimes.startAt,
+      endAt: planningTimes.endAt,
+      isAllDay: false,
+      dueAt: null,
+      calendarKey: `${GOOGLE_ACCOUNT_ID}/${GOOGLE_PRIMARY_CALENDAR}`,
+      isBusy: true,
+      sourceUpdatedAt: syncedAt - DAY_MS,
+      contentHash: `seed-${PLANNING_COPY_ID}`,
+      syncedAt,
+      transformVersion: 1,
+      connectionEndedAt: null,
+      deleteAfter: null,
+      sealed: sealForHelm(
+        { ...alexKey, keyVersion: 1 },
+        {
+          title: PLANNING_TITLE,
           subtitle: null,
           detail: null,
           placeLabel: null,

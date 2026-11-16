@@ -49,14 +49,31 @@ export const toTaskLabel = (
 /** A task as the model sees it, named by `toTaskLabel`. */
 export const toContextTask = (
   id: string,
-  task: { privacy?: string | null; due: TaskDue | null },
+  task: {
+    privacy?: string | null;
+    due: TaskDue | null;
+    stepState?: Record<string, { doneAt: number | null }>;
+    meeting?: { startAt: number } | null;
+  },
   words: { title: string },
   mask: { isOn: boolean; timeZone: string; names: MaskedName[] },
-): ContextTask => ({
-  id,
-  title: toTaskLabel(task, words.title, mask),
-  due: task.due,
-});
+): ContextTask => {
+  const steps = Object.values(task.stepState ?? {});
+  const isHidden = mask.isOn && task.privacy === 'private';
+  return {
+    id,
+    title: toTaskLabel(task, words.title, mask),
+    due: task.due,
+    questions:
+      task.meeting && steps.length > 0 && !isHidden
+        ? {
+            answered: steps.filter((step) => step.doneAt !== null).length,
+            total: steps.length,
+            meetingAt: task.meeting.startAt,
+          }
+        : null,
+  };
+};
 
 export type Mask = {
   isOn: boolean;

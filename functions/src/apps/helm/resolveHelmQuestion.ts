@@ -35,6 +35,10 @@ import {
 import { buildGoalCreate } from './nomos/planProjects.js';
 import { readActiveProjectsIn } from './projectStore.js';
 import { buildHabitAnswerExecution } from './nomos/planHabitCommands.js';
+import {
+  QUESTIONS_TASK_KIND,
+  planResolveQuestionsTask,
+} from './nomos/planQuestionsTask.js';
 import { readScheduledState } from './scheduledActions/actionStore.js';
 import {
   planResolveConnection,
@@ -592,6 +596,59 @@ export const resolveHelmQuestion = onCall(
           now,
           seal,
         });
+        if (execution) transaction.create(executionRef, execution);
+        transaction.update(captureRef, {
+          ...answered.capture,
+          executionIds: execution
+            ? [...(capture.executionIds ?? []), executionRef.id]
+            : (capture.executionIds ?? []),
+          sealed: seal(answered.capture.sealed as Record<string, unknown>),
+        });
+        return {
+          executionId: execution ? executionRef.id : null,
+          isStale: false,
+        };
+      }
+      if (held?.kind === QUESTIONS_TASK_KIND) {
+        const now = Date.now();
+        const executionRef = firestore.collection(`${base}/executions`).doc();
+        const answered = planResolveQuestionsTask({
+          captureId,
+          executionId: executionRef.id,
+          questionId,
+          optionId,
+          by,
+          now,
+          seal,
+          newId: () => randomUUID(),
+          capture: {
+            status: capture.status,
+            executionIds: capture.executionIds ?? [],
+            questionState: capture.questionState ?? {},
+          },
+          opened,
+        });
+        if (answered.refused !== null) {
+          throw toRefusal(answered.refused, 'person');
+        }
+        if (answered.create) {
+          transaction.create(
+            firestore.doc(`${base}/tasks/${answered.create.id}`),
+            answered.create.data,
+          );
+        }
+        const execution = answered.create
+          ? buildHabitAnswerExecution(
+              {
+                isPrivate: false,
+                effectRefs: answered.effectRefs,
+                effects: answered.effects,
+                lines: answered.lines,
+                notKept: [],
+              },
+              { captureId, questionId, now, seal },
+            )
+          : null;
         if (execution) transaction.create(executionRef, execution);
         transaction.update(captureRef, {
           ...answered.capture,

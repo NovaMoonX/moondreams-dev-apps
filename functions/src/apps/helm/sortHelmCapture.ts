@@ -312,7 +312,11 @@ import {
   readUsageDoc,
   toAllowanceMirror,
 } from './nomos/planResearch.js';
-import { nextNight, planLearnLater } from './nomos/planLearnLater.js';
+import {
+  nextNight,
+  planLearnLater,
+  readOfferedDocuments,
+} from './nomos/planLearnLater.js';
 import {
   planAheadStart,
   readAheadAsk,
@@ -551,6 +555,8 @@ interface TaskDoc {
   placeIds?: string[];
   projectId?: string | null;
   privacy?: string | null;
+  stepState?: Record<string, { doneAt: number | null }>;
+  meeting?: { startAt: number } | null;
   createdAt: number;
   sealed: SealedPayload;
 }
@@ -4854,6 +4860,10 @@ async function writeResult(
           schedulePlan.effects.length -
           researchPlan.effects.length,
       ),
+      offeredDocuments: readOfferedDocuments(
+        profileSnap?.get('questionDocsOffered'),
+      ),
+      knownPeople: knownNames,
     });
     const scheduleNotKept = [
       ...schedulePlan.notKept,
@@ -5260,6 +5270,10 @@ async function writeResult(
       learnPlan.updates.forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/research/${id}`), data),
       );
+      if (profileSnap?.exists && learnPlan.offeredDocuments)
+        transaction.update(firestore.doc(base), {
+          questionDocsOffered: learnPlan.offeredDocuments,
+        });
       if (researchPlan.usage) {
         transaction.set(usageRef(firestore, input.uid), researchPlan.usage);
         if (profileSnap?.exists)

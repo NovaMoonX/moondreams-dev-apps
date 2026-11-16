@@ -1856,6 +1856,23 @@ export const HELM_COPY = {
   doneEditing: 'Done',
   stepsLabel: 'Steps',
   stepsCount: (done: number, total: number) => `${done} of ${total}`,
+  stepsCountMeeting: (answered: number, toAsk: number, day: string) =>
+    toAsk === 0
+      ? `All ${answered} answered`
+      : answered === 0
+        ? `${toAsk} to ask ${day}`
+        : `${answered} answered · ${toAsk} to ask ${day}`,
+  taskMeetingLine: (label: string, when: string) => `For ${label} · ${when}`,
+  questionsMeetingLine: (label: string, time: string) => `${label} · ${time}`,
+  questionsReadyAsk: 'Do they feel ready?',
+  questionsReady: "I'm ready",
+  questionsNotYet: 'Not yet',
+  questionsOpenLabel: (label: string) => `Open your questions for ${label}`,
+  questionsNotYetToast: (time: string, day: string) =>
+    `Set aside ${time} ${day} for your questions`,
+  questionsNoTime:
+    "There's no free time before the meeting, so here are your questions.",
+  questionsActionFailed: "Couldn't save that. Check your connection.",
   noneValue: 'None',
   addStep: 'Add a step',
   stepPlaceholder: 'A step',

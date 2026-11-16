@@ -164,6 +164,8 @@ test('what a turn touches is read from its commands', () => {
       commands: [
         {
           kind: 'createTask',
+          questions: [],
+          meeting: null,
           ref: '$1',
           title: 'Call',
           due: { kind: 'day', date: NOW + 10 * 86_400_000 },

@@ -129,7 +129,7 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     home: 'tasks',
     contextBlock: '<open_tasks>',
     tools: ['search_tasks'],
-    commands: ['createTask', 'updateTask', 'completeTask'],
+    commands: ['createTask', 'updateTask', 'completeTask', 'offerQuestionTask'],
     writer: 'actions/taskActions',
     taps: ['createTask', 'updateTaskFields', 'completeTask', 'deleteTask'],
   }),
@@ -143,7 +143,8 @@ export const WHERE_THINGS_LIVE: WhereRow[] = [
     taps: ['createProject', 'changeProjectRole', 'addMilestone'],
   }),
   row({
-    thing: 'Research offered ahead of a dated project, and what the person answered',
+    thing:
+      'Research offered ahead of a dated project, and what the person answered',
     home: 'projects',
     classes: ['readable', 'sealed'],
     readers: ['device', 'server', 'turn'],

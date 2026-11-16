@@ -23,7 +23,11 @@ import {
   settleAttempts,
 } from '../../functions/src/apps/helm/sortAttempts.ts';
 import { createHelmMcpServer } from '../../functions/src/apps/helm/mcp/server.ts';
-import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
+import {
+  createAliasBook,
+  createQuoteBook,
+  createSyncedBook,
+} from '../../functions/src/apps/helm/nomos/aliases.ts';
 import {
   buildContext,
   readMadeTitles,
@@ -45,6 +49,8 @@ import {
   normalizeNomosReply,
   NomosReplyError,
 } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import { planLearnLater } from '../../functions/src/apps/helm/nomos/planLearnLater.ts';
+import { planResolveQuestionsTask } from '../../functions/src/apps/helm/nomos/planQuestionsTask.ts';
 import { planUndoOffer } from '../../functions/src/apps/helm/nomos/planUndoOffer.ts';
 import { summarize } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import {
@@ -233,6 +239,8 @@ test('a sound reply resolves its alias and its day', () => {
   assert.equal(commands.length, 2);
   assert.deepEqual(commands[0], {
     kind: 'createTask',
+    questions: [],
+    meeting: null,
     ref: '$new1',
     title: 'Call Dana',
     due: { kind: 'day', date: FRIDAY },
@@ -1406,6 +1414,8 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
     ref: `$t${index}`,
     whoRefs: [],
     placeRefs: [],
+    questions: [],
+    meeting: null,
   })) as unknown as Parameters<typeof planWrites>[0]['commands'];
   const squeezed = plan([fact()], [older], null, crowded);
   assert.equal(squeezed.factCreates.length, 1);
@@ -2913,6 +2923,390 @@ test('"never mind" after a filed turn reaches an undo offer through the context,
     hadAsks: true,
   });
   assert.equal(settled.status, 'needsYou');
+});
+
+const QUESTION_NOW = Date.UTC(2026, 10, 16, 15, 0);
+const NO_TOKENS: CaptureReading = { ...READING, people: [], dates: [] };
+const MEETING_AT = Date.UTC(2026, 10, 23, 18, 0);
+const copyOf = (id: string, over: Record<string, unknown> = {}) => ({
+  id,
+  connectorId: 'google:calendar',
+  accountId: 'a1',
+  kind: 'event',
+  category: null,
+  title: 'Call with Priya and Sam',
+  subtitle: null,
+  startAt: MEETING_AT,
+  endAt: MEETING_AT + 3_600_000,
+  dueAt: null,
+  isAllDay: false,
+  isEnded: false,
+  detail: null,
+  placeLabel: null,
+  amountCents: null,
+  currency: null,
+  extra: {},
+  asOf: null,
+  ...over,
+});
+const meetingBook = () => {
+  const synced = createSyncedBook();
+  const aliasOf = (over: Record<string, unknown>, id: string) =>
+    synced.add(copyOf(id, over) as never);
+  return {
+    synced,
+    event: aliasOf({}, 'ev-1'),
+    trip: aliasOf({ kind: 'trip', title: 'Lisbon' }, 'trip-1'),
+    past: aliasOf({ startAt: QUESTION_NOW - 3_600_000 }, 'ev-2'),
+    itinerary: aliasOf({ category: 'itinerary' }, 'ev-3'),
+  };
+};
+const questionNormalize = (
+  commands: unknown[],
+  extra: Record<string, unknown> = {},
+) =>
+  normalizeNomosReply(
+    { commands },
+    {
+      reading: NO_TOKENS,
+      aliases: newContext().aliases,
+      now: QUESTION_NOW,
+      ...extra,
+    },
+  );
+const keepSeal = (fields: Record<string, unknown>) => fields as never;
+const planQuestionTask = (command: Record<string, unknown>) => {
+  let next = 0;
+  return planWrites({
+    commands: [command as never],
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: QUESTION_NOW,
+    seal: keepSeal,
+    newId: () => `id-${(next += 1)}`,
+  });
+};
+
+test('a createTask with questions and a meeting writes a step for each question, the meeting and its label', () => {
+  const book = meetingBook();
+  const [command] = questionNormalize(
+    [
+      create('Questions for Priya and Sam', {
+        ref: '$new1',
+        aboutAlias: book.event,
+        questions: [
+          '  What is the venue? ',
+          'What is the budget?',
+          '',
+          'What is the date?',
+        ],
+      }),
+    ],
+    { synced: book.synced },
+  ).commands;
+  assert.ok(command.kind === 'createTask');
+  if (command.kind !== 'createTask') return;
+  assert.deepEqual(command.questions, [
+    'What is the venue?',
+    'What is the budget?',
+    'What is the date?',
+  ]);
+  assert.deepEqual(command.meeting, {
+    syncedId: 'ev-1',
+    startAt: MEETING_AT,
+    label: 'Call with Priya and Sam',
+  });
+  const made = planQuestionTask(command);
+  const [{ data }] = made.creates;
+  const sealed = data.sealed as unknown as {
+    steps: Record<string, { text: string }>;
+    meetingLabel: string | null;
+  };
+  assert.deepEqual(
+    Object.values(sealed.steps).map((step) => step.text),
+    command.questions,
+  );
+  assert.deepEqual(
+    Object.keys(sealed.steps),
+    Object.keys(data.stepState as object),
+  );
+  assert.deepEqual(Object.values(data.stepState as Record<string, unknown>), [
+    { order: 0, doneAt: null },
+    { order: 1, doneAt: null },
+    { order: 2, doneAt: null },
+  ]);
+  assert.deepEqual(data.meeting, { syncedId: 'ev-1', startAt: MEETING_AT });
+  assert.equal(data.readyAnswer, null);
+  assert.equal(sealed.meetingLabel, 'Call with Priya and Sam');
+});
+
+test('a meeting alias that is not a later event is dropped, and a plain task still carries empty fields', () => {
+  const book = meetingBook();
+  const meetingFor = (aboutAlias: string | null) => {
+    const [command] = questionNormalize(
+      [
+        create('Questions', {
+          ref: '$new1',
+          aboutAlias,
+          questions: ['One?'],
+        }),
+      ],
+      { synced: book.synced },
+    ).commands;
+    return command.kind === 'createTask' ? command.meeting : 'wrong kind';
+  };
+  assert.equal(meetingFor(book.trip), null);
+  assert.equal(meetingFor(book.past), null);
+  assert.equal(meetingFor(book.itinerary), null);
+  assert.equal(meetingFor('e99'), null);
+  assert.equal(meetingFor(null), null);
+  const long = Array.from({ length: 15 }, (_, index) => `Question ${index}?`);
+  const [capped] = questionNormalize([
+    create('Questions', {
+      ref: '$new1',
+      questions: [...long, 'x'.repeat(300)],
+    }),
+  ]).commands;
+  assert.ok(capped.kind === 'createTask' && capped.questions.length === 12);
+  const [plain] = questionNormalize([
+    create('Buy milk', { ref: '$new1' }),
+  ]).commands;
+  const [{ data }] = planQuestionTask(plain).creates;
+  const sealed = data.sealed as unknown as {
+    steps: object;
+    meetingLabel: string | null;
+  };
+  assert.deepEqual(sealed.steps, {});
+  assert.equal(sealed.meetingLabel, null);
+  assert.deepEqual(data.stepState, {});
+  assert.equal(data.meeting, null);
+  assert.equal(data.readyAnswer, null);
+});
+
+const driveQuotes = () => {
+  const quotes = createQuoteBook();
+  const alias = quotes.add({
+    connectorId: 'google:drive',
+    accountId: 'acct-1',
+    ref: 'file-1',
+    title: 'Call prep',
+    from: 'Priya',
+    at: null,
+    snippet: 'Ask about the venue',
+    deepLink: null,
+  });
+  const mailAlias = quotes.add({
+    connectorId: 'google:gmail',
+    accountId: 'acct-1',
+    ref: 'mail-1',
+    title: 'Re: call',
+    from: 'Priya',
+    at: null,
+    snippet: 'See you then',
+    deepLink: null,
+  });
+  return { quotes, alias, mailAlias };
+};
+const offerItem = (over: Record<string, unknown>) => ({
+  kind: 'offerQuestionTask',
+  title: 'Questions for Priya and Sam',
+  questions: ['What is the venue?', 'What is the budget?'],
+  whoRefs: ['$w1', '$w2'],
+  ...over,
+});
+const MENTIONS = [
+  { ref: '$w1', name: 'Priya', kind: 'person', relation: null },
+  { ref: '$w2', name: 'Sam', kind: 'person', relation: null },
+];
+
+test('offerQuestions needs a Drive document read this turn; it is read with its people, meeting and a hash of the document', () => {
+  const book = meetingBook();
+  const { quotes, alias, mailAlias } = driveQuotes();
+  const read = (over: Record<string, unknown>) =>
+    normalizeNomosReply(
+      {
+        commands: [offerItem({ aboutAlias: book.event, ...over })],
+        mentions: MENTIONS,
+      },
+      {
+        reading: NO_TOKENS,
+        aliases: newContext().aliases,
+        now: QUESTION_NOW,
+        synced: book.synced,
+        quotes,
+      },
+    ).learnCommands;
+  assert.equal(read({ quoteAlias: null }).length, 0);
+  assert.equal(read({ quoteAlias: 'q9' }).length, 0);
+  assert.equal(read({ quoteAlias: mailAlias }).length, 0);
+  assert.equal(read({ quoteAlias: alias, questions: [] }).length, 0);
+  const [offer] = read({ quoteAlias: alias });
+  assert.ok(offer.kind === 'offerQuestionTask');
+  if (offer.kind !== 'offerQuestionTask') return;
+  assert.deepEqual(offer.who, ['Priya', 'Sam']);
+  assert.equal(offer.meeting?.syncedId, 'ev-1');
+  assert.ok(!offer.documentKey.includes('file-1'));
+});
+
+const offerPlan = (
+  offeredDocuments: string[] = [],
+  knownPeople: { id: string; names: string[] }[] = [],
+) => {
+  const book = meetingBook();
+  const { quotes, alias } = driveQuotes();
+  const [offer] = normalizeNomosReply(
+    {
+      commands: [offerItem({ aboutAlias: book.event, quoteAlias: alias })],
+      mentions: MENTIONS,
+    },
+    {
+      reading: NO_TOKENS,
+      aliases: newContext().aliases,
+      now: QUESTION_NOW,
+      synced: book.synced,
+      quotes,
+    },
+  ).learnCommands;
+  let next = 0;
+  return planLearnLater({
+    commands: [offer],
+    asks: [],
+    items: [],
+    isSpoken: false,
+    isMidTask: false,
+    timeZone: 'UTC',
+    now: QUESTION_NOW,
+    captureId: 'capture-1',
+    newId: () => `q-${(next += 1)}`,
+    seal: keepSeal,
+    room: 20,
+    offeredDocuments,
+    knownPeople,
+  });
+};
+
+test('an offered document asks once, yes writes the task with its steps and meeting, no writes nothing, a second offer is dropped', () => {
+  const asked = offerPlan();
+  assert.equal(asked.questions.length, 1);
+  const [question] = asked.questions;
+  assert.equal(question.state.kind, 'questionsTask');
+  assert.equal(
+    question.sealed.prompt,
+    'Make these 2 questions for Priya and Sam a task for Nov 23?',
+  );
+  assert.deepEqual(question.sealed.options, [
+    { id: 'yes', label: 'Make the task' },
+    { id: 'no', label: 'No thanks' },
+  ]);
+  assert.equal(asked.creates.length + asked.effects.length, 0);
+  assert.equal(asked.offeredDocuments?.length, 1);
+  const answer = (optionId: string) =>
+    planResolveQuestionsTask({
+      captureId: 'capture-1',
+      executionId: 'exec-2',
+      questionId: question.id,
+      optionId,
+      by: 'tap',
+      now: QUESTION_NOW + 1000,
+      seal: keepSeal,
+      newId: (() => {
+        let next = 0;
+        return () => `w-${(next += 1)}`;
+      })(),
+      capture: {
+        status: 'needsYou',
+        executionIds: [],
+        questionState: { [question.id]: question.state },
+      },
+      opened: { questions: { [question.id]: question.sealed } },
+    });
+  const yes = answer('yes');
+  assert.ok(yes.refused === null && yes.create !== null);
+  if (yes.refused !== null || yes.create === null) return;
+  assert.equal(yes.effectRefs[0].op, 'create');
+  assert.equal(yes.effectRefs[0].collection, 'tasks');
+  assert.equal(Object.keys(yes.create.data.stepState as object).length, 2);
+  assert.deepEqual(yes.create.data.meeting, {
+    syncedId: 'ev-1',
+    startAt: MEETING_AT,
+  });
+  assert.equal(yes.create.data.readyAnswer, null);
+  assert.equal(yes.capture.status, 'sorted');
+  const no = answer('no');
+  assert.ok(no.refused === null && no.create === null);
+  if (no.refused === null) assert.equal(no.effects.length, 0);
+  assert.deepEqual(answer('maybe'), { refused: 'unknown' });
+  const again = offerPlan(asked.offeredDocuments ?? []);
+  assert.equal(again.questions.length, 0);
+  assert.equal(again.offeredDocuments, null);
+  const full = offerPlan(Array.from({ length: 50 }, (_, index) => `d${index}`));
+  assert.equal(full.offeredDocuments?.length, 50);
+  assert.equal(full.offeredDocuments?.[0], 'd1');
+});
+
+test('an offer for an existing person makes a task for that person, a new name makes none, and a meeting already past is left off', () => {
+  const answerYes = (
+    knownPeople: { id: string; names: string[] }[],
+    now: number,
+  ) => {
+    const [question] = offerPlan([], knownPeople).questions;
+    const result = planResolveQuestionsTask({
+      captureId: 'capture-1',
+      executionId: 'exec-2',
+      questionId: question.id,
+      optionId: 'yes',
+      by: 'tap',
+      now,
+      seal: keepSeal,
+      newId: (() => {
+        let next = 0;
+        return () => `v-${(next += 1)}`;
+      })(),
+      capture: {
+        status: 'needsYou',
+        executionIds: [],
+        questionState: { [question.id]: question.state },
+      },
+      opened: { questions: { [question.id]: question.sealed } },
+    });
+    if (result.refused !== null || result.create === null) {
+      throw new Error('expected a task');
+    }
+    return result.create.data;
+  };
+  const priya = { id: 'who-priya', names: ['Priya', 'Pri'] };
+  const known = answerYes(
+    [priya, { id: 'who-x', names: ['Xavier'] }],
+    QUESTION_NOW,
+  );
+  assert.deepEqual(known.whoIds, ['who-priya']);
+  assert.deepEqual(answerYes([], QUESTION_NOW).whoIds, []);
+  const past = answerYes([priya], MEETING_AT + 1);
+  assert.equal(past.meeting, null);
+  assert.equal(
+    (past.sealed as { meetingLabel: string | null }).meetingLabel,
+    null,
+  );
+});
+
+test('an open task reads out how many of its questions are answered and when its meeting is', () => {
+  const { message } = buildContext({
+    text: 'how are my questions for Priya?',
+    reading: NO_TOKENS,
+    createdAt: QUESTION_NOW,
+    timeZone: 'UTC',
+    tasks: [
+      {
+        id: TASK_IDS[0],
+        title: 'Questions for Priya and Sam',
+        due: null,
+        questions: { answered: 2, total: 6, meetingAt: MEETING_AT },
+      },
+    ],
+  });
+  assert.ok(message.includes('"questions":"2 of 6 answered"'));
+  assert.ok(message.includes('"meeting":"Mon, Nov 23"'));
 });
 
 const failures: string[] = [];

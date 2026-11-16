@@ -1226,6 +1226,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       waitsOnTaskIds: [],
       waitsOnWhoId: null,
       stepState: {},
+      meeting: null,
+      readyAnswer: null,
       mediaIds: [],
       createdBy: index % 2 === 0 ? 'person' : 'nomos',
       sourceCaptureId: null,
@@ -1239,6 +1241,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
         notes:
           index % 9 === 0 ? 'Ask for the earlier slot if there is one.' : null,
         steps: {},
+        meetingLabel: null,
         privateMark: null,
         isPrivacyCleared: false,
       }),

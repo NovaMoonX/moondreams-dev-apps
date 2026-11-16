@@ -152,6 +152,11 @@ import { readConnectionCommands } from './readConnectionCommands.js';
 import { readResearchCommands } from './readResearchCommands.js';
 import { readOfferResearch } from './readOfferResearch.js';
 import { readLearnCommands, refuseDoubledGoals } from './readLearnCommands.js';
+import {
+  readOfferQuestions,
+  readQuestionList,
+  readQuestionsMeeting,
+} from './readQuestionTask.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import type { ModelChange } from '../topicWrite.js';
 
@@ -1168,6 +1173,8 @@ const readCommand = (
   aliases: AliasBook,
   entities: Entities,
   captureText: string,
+  synced: SyncedBook | undefined,
+  now: number,
 ): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
   if (
@@ -1215,6 +1222,8 @@ const readCommand = (
       isUrgent: isUrgent ?? reading.isUrgent,
       ...readLinks(item, title, reading, entities),
       projectRef: toText(item.projectRef, PROJECT_NAME_CAP),
+      questions: readQuestionList(item.questions),
+      meeting: readQuestionsMeeting(item.aboutAlias, synced, now),
     };
   }
 
@@ -2420,11 +2429,24 @@ export function normalizeNomosReply(
     context.undoUnitCounts ?? new Map(),
     context.captureText ?? '',
   );
-  const learnRead = readLearnCommands(
+  const learnFound = readLearnCommands(
     items,
     context.learnLater ?? { add: () => '', idOf: () => null },
     context.captureText ?? '',
   );
+  const learnRead = {
+    ...learnFound,
+    commands: [
+      ...learnFound.commands,
+      ...readOfferQuestions(items, {
+        quotes: context.quotes,
+        synced: context.synced,
+        mentions: entities.mentions,
+        whoRefs: entities.whoRefs,
+        now: context.now ?? Date.now(),
+      }),
+    ],
+  };
   const { learn, projects } = refuseDoubledGoals(
     learnRead,
     readProjects(
@@ -2457,6 +2479,8 @@ export function normalizeNomosReply(
       context.aliases,
       entities,
       context.captureText ?? '',
+      context.synced,
+      context.now ?? Date.now(),
     );
     return command ? [command] : [];
   });

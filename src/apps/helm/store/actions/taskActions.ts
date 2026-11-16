@@ -15,6 +15,7 @@ import { store } from '@/store';
 
 import { TASK_TITLE_CAP } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
+import type { TaskReadyAnswer } from '@apps/helm/engine/questionsTask';
 import type {
   HelmEncryption,
   Sealed,
@@ -80,6 +81,8 @@ export async function createTask(
     waitsOnTaskIds: [],
     waitsOnWhoId: null,
     stepState: {},
+    meeting: null,
+    readyAnswer: null,
     mediaIds: [],
     createdBy: 'person',
     sourceCaptureId: null,
@@ -94,6 +97,7 @@ export async function createTask(
         title,
         notes: null,
         steps: {},
+        meetingLabel: null,
         privateMark: facts.privateMark,
         isPrivacyCleared: facts.isPrivacyCleared,
       },
@@ -135,6 +139,13 @@ export const updateTaskFields = (
     ...(hasLinkChange(fields) ? readLinkedPrivacy(taskId, fields) : {}),
     lastEditedAt: Date.now(),
   });
+
+/** Answers "Do they feel ready?" for a meeting; the edit stamp is left alone so Undo of the turn that made the task still works. */
+export const setReadyAnswer = (
+  uid: string,
+  taskId: string,
+  readyAnswer: TaskReadyAnswer,
+) => updateDoc(doc(tasksOf(uid), taskId), { readyAnswer });
 
 /** Changes a task's words in one transaction that re-reads them first, so a change made on another device meanwhile is kept. Needs a connection. */
 export async function updateTaskWords(

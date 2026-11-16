@@ -6,6 +6,10 @@ import {
   TURN_INTENTS,
 } from './actNow.js';
 import { OBSERVATION_TAGS } from './said.js';
+import {
+  QUESTIONS_MAX,
+  QUESTION_CAP as TASK_QUESTION_CAP,
+} from './questionsTask.js';
 import { LEAD_QUESTIONS_MAX, type LeadQuestion } from './researchAhead.js';
 import type { QuoteEntry } from './aliases.js';
 import type { SyncedCopy } from '../syncedCopies.js';
@@ -198,12 +202,13 @@ export interface ResearchCommand {
   isDecision: boolean;
 }
 
-/** Read from their own lists: the kinds that save a question to learn later, put one off, relate two or offer a skill as a goal. None is a `NomosCommand`. */
+/** Read from their own lists: the kinds that save a question to learn later, put one off, relate two, offer a skill as a goal or offer a document's questions as a task. None is a `NomosCommand`. */
 export const LEARN_COMMAND_KINDS = [
   'saveForLater',
   'declineLearn',
   'relatedLearn',
   'offerLearnGoal',
+  'offerQuestionTask',
 ] as const;
 
 export const LEARN_QUESTION_CAP = 400;
@@ -254,11 +259,31 @@ export interface OfferLearnGoalCommand {
   quote: string | null;
 }
 
+/** The meeting a task's questions are for, settled from a synced event that starts later. */
+export interface QuestionsMeeting {
+  syncedId: string;
+  startAt: number;
+  label: string;
+}
+
+/** Questions for someone found in a document read this turn, offered as a task. `documentKey` is a hash of the Drive file's stable key, so one document is offered once; `who` is the names the questions are for. */
+export interface OfferQuestionsCommand {
+  kind: 'offerQuestionTask';
+  title: string;
+  questions: string[];
+  who: string[];
+  /** The people the questions are for that the person already has, by id; new names are not here. */
+  whoIds: string[];
+  meeting: QuestionsMeeting | null;
+  documentKey: string;
+}
+
 export type LearnCommand =
   | SaveForLaterCommand
   | DeclineLearnCommand
   | RelatedLearnCommand
-  | OfferLearnGoalCommand;
+  | OfferLearnGoalCommand
+  | OfferQuestionsCommand;
 
 /** What code asks when it cannot tell reading from practising: the words to save and the goal's name. */
 export interface LearnAsk {
@@ -645,6 +670,11 @@ export type NomosCommand =
       placeRefs: string[];
       /** A project's name as the person said it; code matches it. */
       projectRef: string | null;
+      /** Questions to ask someone, each one a step; empty for any other task. */
+      questions: string[];
+      meeting: QuestionsMeeting | null;
+      /** People already settled by id, for a task made from an answer rather than a reply's mentions. */
+      whoIds?: string[];
     }
   | {
       kind: 'updateTask';
@@ -1295,7 +1325,7 @@ export const buildFileResultsTool = ({
             'offerWhyNow',
             'offerLeadDays',
             'offerIsDecision',
-            'offerQuestions',
+            'offerQuestionTask',
             'researchQuestion',
             'researchSubject',
             'researchDepth',
@@ -1311,6 +1341,7 @@ export const buildFileResultsTool = ({
             'learnTogether',
             'learnReason',
             'learnGoalName',
+            'questions',
           ],
           properties: {
             kind: {
@@ -1343,7 +1374,7 @@ export const buildFileResultsTool = ({
             ),
             title: nullable(
               'string',
-              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters. createParentTopic: the new topic's name, at most ${PARENT_NAME_CAP} characters. createProcedure: the procedure's name, at most ${PROCEDURE_TITLE_CAP} characters. reviseProcedure: the new name, or null to keep it. createHabit: the habit's name ("Evening pills", "Water"), at most ${HABIT_NAME_CAP} characters.`,
+              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters. createParentTopic: the new topic's name, at most ${PARENT_NAME_CAP} characters. createProcedure: the procedure's name, at most ${PROCEDURE_TITLE_CAP} characters. reviseProcedure: the new name, or null to keep it. createHabit: the habit's name ("Evening pills", "Water"), at most ${HABIT_NAME_CAP} characters. offerQuestionTask: the task's name ("Questions for Priya and Sam").`,
             ),
             dueSpanId: nullable(
               'string',
@@ -1410,11 +1441,11 @@ export const buildFileResultsTool = ({
             ),
             quoteAlias: nullable(
               'string',
-              "remember: the alias of the email from search_mail that says it; it must also be in the answer's quoteAliases.",
+              "remember: the alias of the email from search_mail that says it; it must also be in the answer's quoteAliases. offerQuestionTask: the quote alias read_document gave a passage of the document that lists the questions; null for every other kind.",
             ),
             aboutAlias: nullable(
               'string',
-              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with. ask: the alias of the open task the question is about, or null. startRun: the alias (e1, s1, …) of the trip or event in <synced_records> the run is for, only when the person names it; null otherwise.',
+              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with. ask: the alias of the open task the question is about, or null. startRun: the alias (e1, s1, …) of the trip or event in <synced_records> the run is for, only when the person names it. createTask and offerQuestionTask: the alias (e1…) of the meeting in <synced_records> these questions are for; null otherwise.',
             ),
             aboutField: {
               type: ['string', 'null'],
@@ -1427,7 +1458,7 @@ export const buildFileResultsTool = ({
               `remember: what the email says for that part, as it should read ("2:00 PM"), at most ${VALUE_CAP} characters. noteFact: the preferred or favorite thing ("Shell", "Arrival"), at most ${VALUE_CAP} characters; null otherwise.`,
             ),
             whoRefs: NAMED_BY_REF(
-              'createTask, updateTask and noteFact: the ref ($w1, …) of each entry in mentions this task or fact is about; setProjectRole: the people given the role; null or empty when none.',
+              'createTask, updateTask and noteFact: the ref ($w1, …) of each entry in mentions this task or fact is about; offerQuestionTask: the people the questions are for; setProjectRole: the people given the role; null or empty when none.',
             ),
             placeRefs: NAMED_BY_REF(
               'createTask, updateTask and noteFact: the ref ($p1, …) of each entry in places this task or fact is about; null or empty when none.',
@@ -2168,6 +2199,11 @@ export const buildFileResultsTool = ({
               'string',
               `offerLearnGoal: the skill as a goal's name ("Learn piano"), at most ${LEARN_NAME_CAP} characters; null for every other kind.`,
             ),
+            questions: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `createTask: the questions to ask someone, one item each in the person's words, at most ${QUESTIONS_MAX} and ${TASK_QUESTION_CAP} characters each; empty for a task that is not questions. offerQuestionTask: the questions the document lists, the same way; null for every other kind.`,
+            },
           },
         },
       },

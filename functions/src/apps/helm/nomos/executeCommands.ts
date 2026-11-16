@@ -33,6 +33,7 @@ import {
   type PlaceRead,
   type ProjectCommand,
   type ProcedureCommand,
+  type QuestionsMeeting,
   type RunCommand,
   type TaskDue,
   type TopicCommand,
@@ -766,6 +767,8 @@ interface Draft {
   status: 'open' | 'done';
   projectId: string | null;
   isPrivate: boolean;
+  questions: string[];
+  meeting: QuestionsMeeting | null;
 }
 
 const union = (left: string[], right: string[]) => [
@@ -1184,7 +1187,10 @@ export function planWrites(input: PlanInput): WritePlan {
       drafts.set(command.ref, {
         id,
         title: command.title,
-        whoIds: idsOf(command.whoRefs, entities.whoIdOf),
+        whoIds: union(
+          idsOf(command.whoRefs, entities.whoIdOf),
+          command.whoIds ?? [],
+        ),
         placeIds: idsOf(command.placeRefs, entities.placeIdOf),
         due: command.due,
         isUrgent: command.isUrgent,
@@ -1193,6 +1199,8 @@ export function planWrites(input: PlanInput): WritePlan {
           ? matchProject(command.projectRef, projectStart.pool)
           : null,
         isPrivate: false,
+        questions: command.questions,
+        meeting: command.meeting,
       });
       return;
     }
@@ -2157,6 +2165,7 @@ export function planWrites(input: PlanInput): WritePlan {
       null,
     );
     counts.made += 1;
+    const stepIds = draft.questions.map(() => input.newId());
     return {
       id: draft.id,
       data: {
@@ -2175,7 +2184,13 @@ export function planWrites(input: PlanInput): WritePlan {
         notUntil: null,
         waitsOnTaskIds: [],
         waitsOnWhoId: null,
-        stepState: {},
+        stepState: Object.fromEntries(
+          stepIds.map((stepId, order) => [stepId, { order, doneAt: null }]),
+        ),
+        meeting: draft.meeting
+          ? { syncedId: draft.meeting.syncedId, startAt: draft.meeting.startAt }
+          : null,
+        readyAnswer: null,
         mediaIds: [],
         createdBy: 'nomos',
         sourceCaptureId: input.captureId,
@@ -2187,7 +2202,13 @@ export function planWrites(input: PlanInput): WritePlan {
         sealed: seal({
           title: draft.title,
           notes: null,
-          steps: {},
+          steps: Object.fromEntries(
+            stepIds.map((stepId, order) => [
+              stepId,
+              { text: draft.questions[order] },
+            ]),
+          ),
+          meetingLabel: draft.meeting?.label ?? null,
           ...(facts.privateMark && { privateMark: facts.privateMark }),
         }),
       },
@@ -3263,6 +3284,7 @@ const isPickKind = (kind: string) =>
   kind === 'learnGoal' ||
   kind === 'learnStill' ||
   kind === 'learnTogether' ||
+  kind === 'questionsTask' ||
   kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>

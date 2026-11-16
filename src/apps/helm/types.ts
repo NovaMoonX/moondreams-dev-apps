@@ -5,6 +5,10 @@ import type { ImportancePlace } from '@apps/helm/engine/importance';
 import type { ObservationTag } from '@apps/helm/engine/said';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type {
+  TaskMeeting,
+  TaskReadyAnswer,
+} from '@apps/helm/engine/questionsTask';
+import type {
   AheadOfferMeta,
   LeadAnswer,
   LeadQuestion,
@@ -326,6 +330,7 @@ export interface HelmQuestion {
     | 'learnGoal'
     | 'learnStill'
     | 'learnTogether'
+    | 'questionsTask'
     | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
@@ -632,6 +637,10 @@ export interface Task {
   waitsOnTaskIds: string[];
   waitsOnWhoId: string | null;
   stepState: Record<string, { order: number; doneAt: number | null }>;
+  /** The meeting a task's questions are for; null for any other task and for one from before the field. */
+  meeting: TaskMeeting | null;
+  /** The answer to "Do they feel ready?" for that meeting. */
+  readyAnswer: TaskReadyAnswer | null;
   mediaIds: string[];
   createdBy: 'person' | 'nomos';
   sourceCaptureId: string | null;
@@ -1321,6 +1330,8 @@ export interface TaskSealed {
   title: string;
   notes: string | null;
   steps: Record<string, { text: string }>;
+  /** The meeting's name, for a task whose questions are for one; absent in a payload sealed before the field. */
+  meetingLabel: string | null;
   /** The record's own mark; null when it has none or the person cleared it, absent in a payload sealed before the field. */
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
@@ -1333,6 +1344,7 @@ export interface OpenTask extends Omit<Task, 'sealed'> {
   title: string;
   notes: string | null;
   steps: Record<string, { text: string }>;
+  meetingLabel: string | null;
   privateMark: PrivateMark | null;
   isPrivacyCleared: boolean | null;
   isUnreadable: boolean;

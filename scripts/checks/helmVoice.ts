@@ -164,6 +164,8 @@ assert.ok(
 const commands: NomosCommand[] = [
   {
     kind: 'createTask',
+    questions: [],
+    meeting: null,
     ref: '$new1',
     title: 'Call the florist',
     due: { kind: 'day', date: Date.UTC(2026, 10, 13) },

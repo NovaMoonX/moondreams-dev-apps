@@ -80,6 +80,10 @@ import {
   toPlannerTask,
   type Opening,
 } from '@apps/helm/utils/planInput';
+import {
+  formatMeetingWhen,
+  getMeetingDay,
+} from '@apps/helm/utils/meetingWords';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
 import PrivateRow from '@apps/helm/components/privacy/PrivateRow';
@@ -555,6 +559,17 @@ function TaskSheet({
     );
   };
 
+  const getStepsSummary = () => {
+    const answered = steps.filter((entry) => entry.doneAt !== null).length;
+    return task.meeting
+      ? HELM_COPY.stepsCountMeeting(
+          answered,
+          steps.length - answered,
+          getMeetingDay(task.meeting.startAt, nowMinute, timeZone),
+        )
+      : HELM_COPY.stepsCount(answered, steps.length);
+  };
+
   const getBody = () => {
     if (shownView === 'plan') return getPlanBody();
     if (shownView === 'title') {
@@ -645,6 +660,14 @@ function TaskSheet({
     }
     return (
       <div className='space-y-4'>
+        {task.meeting && task.meetingLabel && (
+          <p className='text-muted-foreground text-sm text-pretty break-words'>
+            {HELM_COPY.taskMeetingLine(
+              task.meetingLabel,
+              formatMeetingWhen(task.meeting.startAt, timeZone),
+            )}
+          </p>
+        )}
         {task.isUnreadable && (
           <p className='text-muted-foreground text-sm text-pretty'>
             {HELM_COPY.taskWordsUnreadable}
@@ -717,12 +740,7 @@ function TaskSheet({
               label={HELM_COPY.stepsLabel}
               onClick={() => go('steps')}
             >
-              {steps.length === 0
-                ? HELM_COPY.noneValue
-                : HELM_COPY.stepsCount(
-                    steps.filter((entry) => entry.doneAt !== null).length,
-                    steps.length,
-                  )}
+              {steps.length === 0 ? HELM_COPY.noneValue : getStepsSummary()}
             </SummaryRow>
           )}
         </div>

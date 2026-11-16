@@ -29,6 +29,8 @@ export interface ContextTask {
   id: string;
   title: string;
   due: TaskDue | null;
+  /** How many of a task's questions are answered, and when its meeting starts; null for any other task. */
+  questions?: { answered: number; total: number; meetingAt: number } | null;
 }
 
 /** What the records hold about a person, pet, organization or place the turn names; `by` says whether the person said it or the assistant inferred it. */
@@ -345,6 +347,14 @@ export const describeDue = (due: TaskDue | null) => {
     : new Date(due.at).toISOString();
 };
 
+const describeMeetingDay = (at: number, timeZone: string) =>
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: toKnownZone(timeZone),
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(at));
+
 const describeNow = (at: number, timeZone: string) => {
   const zone = toKnownZone(timeZone);
   const local = new Intl.DateTimeFormat('en-US', {
@@ -451,6 +461,10 @@ export function buildContext(input: ContextInput): {
     alias: aliases.add(task.id),
     title: task.title,
     due: describeDue(task.due),
+    ...(task.questions && {
+      questions: `${task.questions.answered} of ${task.questions.total} answered`,
+      meeting: describeMeetingDay(task.questions.meetingAt, input.timeZone),
+    }),
   }));
   const toRef = (task: ContextTask) => ({
     alias: aliases.add(task.id),

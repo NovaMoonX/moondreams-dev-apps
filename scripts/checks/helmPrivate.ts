@@ -578,6 +578,7 @@ test('the Undo of that turn restores the class and the mark through the same Und
             title: 'Dentist',
             notes: null,
             steps: {},
+            meetingLabel: null,
             privateMark: 'person',
             isPrivacyCleared: false,
           },
@@ -618,6 +619,8 @@ test('a task made with a health word is private and carries the reason, one with
       commands: [
         {
           kind: 'createTask',
+          questions: [],
+          meeting: null,
           ref: '$new1',
           title,
           due: null,
@@ -661,6 +664,8 @@ test('a task made under a private project is stored private from the start, one 
       commands: [
         {
           kind: 'createTask',
+          questions: [],
+          meeting: null,
           ref: '$new1',
           title: 'Book the visit',
           due: null,
@@ -1040,6 +1045,8 @@ test('make this and keep it private starts the new task private', () => {
   const plan = planOf([
     {
       kind: 'createTask',
+      questions: [],
+      meeting: null,
       ref: '$new1',
       title: 'Plan the surprise',
       due: null,

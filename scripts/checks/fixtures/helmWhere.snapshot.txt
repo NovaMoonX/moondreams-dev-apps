@@ -1,6 +1,6 @@
 <where_things_live>
 To answer about a thing, look in its block, then call its tool; never guess where it lives. To change it, use only the commands listed for it; a thing with no command is changed by the person.
-- Tasks: look in <open_tasks>, then call search_tasks; change it with createTask, updateTask or completeTask.
+- Tasks: look in <open_tasks>, then call search_tasks; change it with createTask, updateTask, completeTask or offerQuestionTask.
 - Goals and projects, with their milestones: look in <open_projects>; change it with createProject, setProjectRole or addMilestone.
 - Research offered ahead of a dated project, and what the person answered: look in <open_projects>; change it with offerResearch.
 - What the person says about themselves: look in <about_you>; change it with noteFact or remember.
@@ -75,7 +75,7 @@ To answer about a thing, look in its block, then call its tool; never guess wher
 
 <where_things_live>
 To answer about a thing, look in its block, then call its tool; never guess where it lives. To change it, use only the commands listed for it; a thing with no command is changed by the person.
-- Tasks: look in <open_tasks>, then call search_tasks; change it with createTask, updateTask or completeTask.
+- Tasks: look in <open_tasks>, then call search_tasks; change it with createTask, updateTask, completeTask or offerQuestionTask.
 - Goals and projects, with their milestones: look in <open_projects>; change it with createProject, setProjectRole or addMilestone.
 - Research offered ahead of a dated project, and what the person answered: look in <open_projects>; change it with offerResearch.
 - What the person says about themselves: look in <about_you>; change it with noteFact or remember.

@@ -44,6 +44,11 @@ import {
   selectLearnLater,
 } from '@apps/helm/store/selectors/researchSelectors';
 import { selectTodayOffer } from '@apps/helm/store/selectors/patternSelectors';
+import QuestionsReadyCard from '@apps/helm/components/today/QuestionsReadyCard';
+import {
+  countQuestions,
+  isReadyCheckDue,
+} from '@apps/helm/engine/questionsTask';
 import SuggestionSheet, {
   type SuggestionTarget,
 } from '@apps/helm/components/today/SuggestionSheet';
@@ -195,12 +200,37 @@ function TodayView({
     setIsAheadOpen(true);
   };
 
+  const readyTask = useMemo(
+    () =>
+      !isToday || offer !== null || aheadToday !== null
+        ? null
+        : (tasks
+            .filter(
+              (task) =>
+                !task.isUnreadable &&
+                isReadyCheckDue(
+                  {
+                    status: task.status,
+                    meeting: task.meeting,
+                    readyAnswer: task.readyAnswer,
+                    count: countQuestions(task.stepState),
+                  },
+                  now,
+                ),
+            )
+            .sort(
+              (a, b) => (a.meeting?.startAt ?? 0) - (b.meeting?.startAt ?? 0),
+            )
+            .at(0) ?? null),
+    [isToday, offer, aheadToday, tasks, now],
+  );
+
   const learns = useMemo(
     () =>
-      isToday && offer === null && aheadToday === null
+      isToday && offer === null && aheadToday === null && readyTask === null
         ? pickLearnOffers(learnItems, todayKey, timeZone)
         : [],
-    [isToday, offer, aheadToday, learnItems, todayKey, timeZone],
+    [isToday, offer, aheadToday, readyTask, learnItems, todayKey, timeZone],
   );
 
   const handleDeleted = (
@@ -351,6 +381,16 @@ function TodayView({
             isOpen={isAheadOpen}
             onClose={() => setIsAheadOpen(false)}
             {...aheadTarget}
+          />
+        )}
+        {readyTask && (
+          <QuestionsReadyCard
+            key={readyTask.id}
+            task={readyTask}
+            sources={sources}
+            now={now}
+            timeZone={timeZone}
+            onOpen={setOpenId}
           />
         )}
         {isToday && <SyncedToday now={now} />}

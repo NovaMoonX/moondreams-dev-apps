@@ -48,6 +48,7 @@ const sealedOf = (title: string): TaskSealed => ({
   title,
   notes: 'Ask about the cake',
   steps: { a: { text: 'Find the number' } },
+  meetingLabel: null,
   privateMark: null,
   isPrivacyCleared: false,
 });
@@ -184,6 +185,45 @@ test('full undo deletes every task the execution made', () => {
   assert.equal(result.undoExecution.undoesExecutionId, 'exec-1');
   assert.equal(result.undoExecution.undoneByExecutionId, null);
   assert.equal(result.undoExecution.createdAt, NOW);
+});
+
+test('a task made for a meeting from a document question goes with its turn untouched and stays once a question is ticked', () => {
+  const made = [
+    create('q1', 'Questions for Priya and Sam'),
+    create('t2', 'Send the save-the-dates'),
+  ];
+  const stepState = (doneAt: number | null) => ({
+    a: { order: 0, doneAt },
+    b: { order: 1, doneAt: null },
+  });
+  const untouched = asWrite(
+    plan(
+      execution(made, {
+        questionRef: { captureId: 'turn-1', questionId: 'q' },
+      }),
+      [
+        target('q1', { lastEditedAt: null, stepState: stepState(null) }),
+        target('t2', { lastEditedAt: null }),
+      ],
+    ),
+  );
+  assert.deepEqual(
+    untouched.deletes.map((entry) => entry.docId),
+    ['q1', 't2'],
+  );
+  const ticked = asWrite(
+    plan(execution(made), [
+      target('q1', {
+        lastEditedAt: EARLIER + 1,
+        stepState: stepState(EARLIER + 1),
+      }),
+      target('t2', { lastEditedAt: null }),
+    ]),
+  );
+  assert.deepEqual(
+    ticked.deletes.map((entry) => entry.docId),
+    ['t2'],
+  );
 });
 
 test('a task the person changed is kept and the rest is taken back', () => {
@@ -785,6 +825,10 @@ test('taking back a settle reopens its question and the turn; no other answer do
   assert.deepEqual(
     planReopen({ questionRef: ref }, capture('groupTopics', NOW, 'needsYou')),
     { 'questionState.q1.answeredAt': null },
+  );
+  assert.deepEqual(
+    planReopen({ questionRef: ref }, capture('questionsTask', NOW, 'sorted')),
+    { 'questionState.q1.answeredAt': null, status: 'needsYou' },
   );
   assert.equal(
     planReopen({ questionRef: ref }, capture('groupTopics', null, 'needsYou')),
