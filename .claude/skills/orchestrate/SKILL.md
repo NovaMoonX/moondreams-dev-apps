@@ -98,7 +98,7 @@ The owner merges, unless they hand the merges over. "Merge them through" (in cha
 For each PR, in order:
 
 1. **Gate it.** Merge only when every one holds on the current head, and never with admin rights or past a failing check:
-   - CI is green.
+   - CI is green: the required runs exist on the current head and passed. A head with no runs at all (GitHub dropped the push event) is not green; the next real commit brings them, never an empty one.
    - There is no conflict with the base.
    - Claude Approvals passes, where the repo runs it.
    - Every `(who: owner)` decision on it is answered. A PR with an open decision is skipped, along with those after it that depend on it, and the rest go on.
