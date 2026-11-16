@@ -50,6 +50,8 @@ export interface LiveQueryArgs {
   text?: string | null;
   from?: string | null;
   to?: string | null;
+  /** The reader's IANA zone; instant fields are matched by their day there, date-only fields stay UTC. */
+  timeZone?: string | null;
 }
 
 export interface LiveQueryRequest {

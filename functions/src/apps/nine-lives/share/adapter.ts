@@ -9,6 +9,7 @@ import type {
   SyncPageRequest,
   SyncPageResult,
 } from '../../../connections/registry.js';
+import { dayRangeMs } from '../../../connections/liveDay.js';
 import {
   MAX_RECORDS_PER_CATEGORY,
   SHARED_RECORD_KEYS,
@@ -586,6 +587,8 @@ interface LiveArgs {
   text: string | null;
   from: number | null;
   to: number | null;
+  fromMs: number | null;
+  toMsExclusive: number | null;
 }
 
 interface LiveRow {
@@ -607,34 +610,56 @@ const readDayArg = (value: unknown) => {
     : null;
 };
 
+const toDayText = (at: number | null) =>
+  at === null ? null : new Date(at).toISOString().slice(0, 10);
+
 const readLiveArgs = (args: unknown): LiveArgs => {
   const asked =
     typeof args === 'object' && args !== null && !Array.isArray(args)
       ? (args as Record<string, unknown>)
       : {};
+  const from = readDayArg(asked.from);
+  const to = readDayArg(asked.to);
   return {
     text: readText(asked.text)?.toLowerCase() ?? null,
-    from: readDayArg(asked.from),
-    to: readDayArg(asked.to),
+    from,
+    to,
+    ...dayRangeMs(
+      toDayText(from),
+      toDayText(to),
+      typeof asked.timeZone === 'string' ? asked.timeZone : null,
+    ),
   };
 };
 
-const toDayText = (at: number | null) =>
-  at === null ? null : new Date(at).toISOString().slice(0, 10);
-
-const isInRange = (at: number, { from, to }: LiveArgs) =>
-  (from === null || at >= from) && (to === null || at < to + DAY_MS);
+/** A value on UTC midnight is a picked date; any other is a moment, read in the person's day. */
+const isInRange = (at: number, args: LiveArgs) => {
+  const isDate = at % DAY_MS === 0;
+  const start = isDate ? args.from : args.fromMs;
+  const end = isDate
+    ? args.to === null
+      ? null
+      : args.to + DAY_MS
+    : args.toMsExclusive;
+  return (start === null || at >= start) && (end === null || at < end);
+};
 
 const withRange = (
   query: FirebaseFirestore.Query,
   field: string,
-  { from, to }: LiveArgs,
+  { from, to, fromMs, toMsExclusive }: LiveArgs,
 ) => {
-  const lower = from === null ? query : query.where(field, '>=', from);
-  return (to === null ? lower : lower.where(field, '<', to + DAY_MS)).orderBy(
-    field,
-    'desc',
-  );
+  const lowerBound =
+    from === null || fromMs === null ? null : Math.min(from, fromMs);
+  const upperBound =
+    to === null || toMsExclusive === null
+      ? null
+      : Math.max(to + DAY_MS, toMsExclusive);
+  const lower =
+    lowerBound === null ? query : query.where(field, '>=', lowerBound);
+  return (
+    upperBound === null ? lower : lower.where(field, '<', upperBound)
+  ).orderBy(field, 'desc');
 };
 
 const isTextMatch = (text: string | null, parts: string[]) =>
@@ -758,7 +783,9 @@ const liveDoseHistory = (household: Household, args: LiveArgs) =>
         (entry) => {
           const dose = asObject(entry);
           const at = readTime(dose?.administeredAt);
-          return at === null ? [] : [{ at, dosage: readText(dose?.dosage) }];
+          return at === null
+            ? []
+            : [{ at, dosage: readText(dose?.dosage), id: readText(dose?.id) }];
         },
       );
       const lastGiven = readTime(doc.get('lastAdministeredAt'));
@@ -767,7 +794,7 @@ const liveDoseHistory = (household: Household, args: LiveArgs) =>
           ? logged
           : lastGiven === null
             ? []
-            : [{ at: lastGiven, dosage: null }];
+            : [{ at: lastGiven, dosage: null, id: null }];
       if (names.length === 0 || name === null) return [];
       const title = `${joinNames(names)}: ${name}`;
       return doses.flatMap((dose, index) =>
@@ -776,7 +803,7 @@ const liveDoseHistory = (household: Household, args: LiveArgs) =>
               {
                 at: dose.at,
                 record: toRecord({
-                  sourceRef: `households/${household.id}/${collection}/${doc.id}/doses/${index}`,
+                  sourceRef: `households/${household.id}/${collection}/${doc.id}/doses/${dose.id ?? index}`,
                   kind: 'event',
                   title,
                   subtitle,
@@ -844,6 +871,7 @@ const liveWeights = (household: Household, args: LiveArgs) =>
         !Number.isFinite(weight) ||
         (unit !== 'lb' && unit !== 'kg') ||
         measuredAt === null ||
+        !isInRange(measuredAt, args) ||
         !isTextMatch(args.text, [catName])
       )
         return [];

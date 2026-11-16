@@ -1265,6 +1265,21 @@ savings.records.forEach((record) => {
     record.sourceRef,
   );
 });
+const lateAList = createAListAdapter({
+  firestore: () => firestore,
+  now: () => Date.parse('2026-12-31T23:30:00-08:00'),
+  canOpen: async (uid) => uid === OWNER,
+});
+const lateSavings = await lateAList.query!(aListCtx(OWNER), {
+  category: 'savings',
+  args: { timeZone: 'America/Los_Angeles' },
+});
+assert.equal(
+  lateSavings.records.find((record) => record.sourceRef === 'savings/year')
+    ?.title,
+  'Membership savings in 2026',
+  'still December 31 in Los Angeles',
+);
 assert.deepEqual((await savingsOf(OTHER)).records, []);
 assert.equal((await savingsOf(OTHER)).totalCents, null);
 assert.deepEqual((await savingsOf('empty-uid')).records, []);
@@ -1602,10 +1617,20 @@ assert.deepEqual(
   (
     await queryGoingOnce(OWNER, 'allThings', {
       from: goingOnceDay(TODAY - 4 * DAY),
-      to: goingOnceDay(TODAY),
+      to: goingOnceDay(TODAY - DAY),
     })
   ).records.map((record) => record.title),
   ['Oak desk'],
+);
+assert.equal(
+  (
+    await queryGoingOnce(OWNER, 'allThings', {
+      from: goingOnceDay(TODAY),
+      to: goingOnceDay(TODAY),
+    })
+  ).records.some((record) => record.title === 'Floor lamp'),
+  true,
+  'an item with no status history is placed by its last edit',
 );
 assert.equal(
   (await queryGoingOnce(OWNER, 'allThings', { from: 'nope', to: 5 })).records
@@ -1663,6 +1688,23 @@ assert.equal(
   3,
 );
 assert.deepEqual((await queryGoingOnce(OTHER, 'questions', {})).records, []);
+await goingOnceSales
+  .doc('digits')
+  .set(sale(['digits-uid'], 'Digits', 'OPEN', NOW));
+await goingOnceSales.doc('digits').collection('inquiries').doc('q').set({
+  status: 'NEW',
+  itemTitleAtSend: 'Lamp',
+  name: 'Sam',
+  message: 'Order 1234567 please',
+  createdAt: NOW,
+});
+assert.deepEqual(
+  (await queryGoingOnce('digits-uid', 'questions', {})).records.map(
+    (record) => [record.title, record.detail],
+  ),
+  [['Lamp', null]],
+  'a message with seven digits is dropped whole',
+);
 [allThings, questions].forEach(({ records }) =>
   records.forEach((record) => {
     const values = flatten(record);
@@ -2850,6 +2892,13 @@ await Promise.all([
       body: 'Pack light layers',
       createdAt: NOW - 4 * DAY,
     }),
+  nyc
+    .collection('announcements')
+    .doc('digits')
+    .set({
+      title: 'Door code 1234567890',
+      createdAt: NOW - 5 * DAY,
+    }),
   nyc.collection('eventSuggestions').doc('s').set({ title: TRIP_SECRET }),
   nyc.collection('announcements').doc('a').set({ message: TRIP_SECRET }),
   nyc.collection('contacts').doc('c').set({
@@ -3729,6 +3778,23 @@ unwatch.forEach((restore) => restore());
 
 const queryWait = (uid: string, args: unknown) =>
   waitAdapter.query!(waitCtx(uid), { category: 'revealedItems', args });
+await waitSpaces.doc('wtw-tz').set(waitSpace(['tz-uid'], SPACE_KEY));
+await waitBox('wtw-tz', 'late', 'Late box', '🌙', [true]);
+await waitSpaces
+  .doc('wtw-tz')
+  .collection('boxes')
+  .doc('late')
+  .collection('items')
+  .doc('i0')
+  .update({ revealedAt: Date.parse('2026-11-11T04:00:00Z') });
+const laDay = { from: '2026-11-10', to: '2026-11-10' };
+assert.equal(
+  (await queryWait('tz-uid', { ...laDay, timeZone: 'America/Los_Angeles' }))
+    .records.length,
+  1,
+  'a reveal at 8pm in Los Angeles is that evening, not the next UTC day',
+);
+assert.equal((await queryWait('tz-uid', laDay)).records.length, 0);
 const revealed = await queryWait(OWNER, {});
 assertShape(revealed.records);
 assert.deepEqual(
@@ -4655,6 +4721,12 @@ await Promise.all([
   envItem(BAL, 'e-groc'),
   envItem(BAL, 'e-fun'),
   envItem(BAL, 'e-old', { archivedAt: NOW }),
+  envItem(BAL, 'e-ended', { endedAt: dayText(TODAY - DAY) }),
+  envVersion(BAL, 'v-ended', 'e-ended', 1, 'Ended'),
+  txDoc(BAL, 'p7', 2, {
+    amountCents: 2_000,
+    lines: [txLine('e-ended', 2_000)],
+  }),
   envVersion(BAL, 'v-groc', 'e-groc', 1, 'Groceries'),
   envVersion(BAL, 'v-fun', 'e-fun', 1, 'Fun'),
   envVersion(BAL, 'v-old', 'e-old', 1, 'Old Fund'),
@@ -4812,15 +4884,20 @@ assert.deepEqual(
   ]),
   [
     ['Groceries', 6_500, 'USD'],
+    ['Envelopes since ended', 2_000, 'USD'],
     ['Fun', 1_000, 'USD'],
   ],
   'this month so far: a split counts its share, a refund subtracts, a waiting credit, an income deposit and an archived envelope are left out',
 );
 assert.equal(spending.records[0]?.detail, 'Spent Nov 1, 2026 to Nov 10, 2026');
 assert.deepEqual([spending.from, spending.to], ['2026-11-01', '2026-11-10']);
-assert.equal(spending.totalCents, 7_500);
+assert.equal(
+  spending.totalCents,
+  9_500,
+  'spend on ended envelopes is totalled',
+);
 assert.equal(spending.currency, 'USD');
-assert.equal(spending.matchedCount, 2);
+assert.equal(spending.matchedCount, 3);
 assert.equal(spending.isPartial, false);
 const spendingBack = await queryBal('envelopeBalances', {
   from: '2026-10-01',
@@ -4829,6 +4906,11 @@ const spendingBack = await queryBal('envelopeBalances', {
 assert.deepEqual(
   spendingBack.records.map((record) => [record.title, record.amountCents]),
   [['Groceries', 16_400]],
+);
+assert.equal(
+  spendingBack.isPartial,
+  true,
+  'a text filter leaves ended-envelope spend unlisted, so the figure is partial',
 );
 assert.equal(spendingBack.from, '2026-10-01');
 assert.equal(spendingBack.to, '2026-11-10');

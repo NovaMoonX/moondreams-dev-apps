@@ -1,6 +1,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
+import { todayIn } from '../../../connections/liveDay.js';
 import { openWithKey, unwrapPlanKey, type Keyring } from '../planKey.js';
 import {
   asObject,
@@ -16,11 +17,13 @@ const DAY_MS = 86_400_000;
 const SCAN_LIMIT = 500;
 const LIST_LIMIT = 200;
 const CHUNK = 30;
+const ENDED_ROW_ID = '__ended';
 
 export interface LiveArgs {
   text: string | null;
   from: number | null;
   to: number | null;
+  zone: string | null;
 }
 
 /** The text and days a reader asked for; anything malformed is as if not asked. */
@@ -30,8 +33,13 @@ export const readLiveArgs = (args: unknown): LiveArgs => {
     text: readText(asked?.text)?.toLowerCase() ?? null,
     from: readDay(asked?.from),
     to: readDay(asked?.to),
+    zone: typeof asked?.timeZone === 'string' ? asked.timeZone : null,
   };
 };
+
+/** The person's today as a UTC-midnight day. */
+export const readToday = (zone: string | null, now: number) =>
+  Date.parse(`${todayIn(zone, now)}T00:00:00Z`);
 
 export const toDayText = (at: number | null) =>
   at === null ? null : new Date(at).toISOString().slice(0, 10);
@@ -101,7 +109,7 @@ export async function readEnvelopeSpending(
   args: LiveArgs,
   now: number,
 ): Promise<EnvelopeSpendingRead> {
-  const today = Math.floor(now / DAY_MS) * DAY_MS;
+  const today = readToday(args.zone, now);
   const monthStart = new Date(today);
   const from =
     args.from ??
@@ -150,9 +158,25 @@ export async function readEnvelopeSpending(
     );
   }, new Map<string, number>());
   const currency = await readCurrency(firestore, uid, planKey);
+  const listedIds = new Set(envelopes.map(({ id }) => id));
+  const endedCents = [...spent].reduce(
+    (sum, [id, cents]) => (listedIds.has(id) ? sum : sum + cents),
+    0,
+  );
+  const endedRows =
+    args.text === null && endedCents !== 0
+      ? [
+          {
+            id: ENDED_ROW_ID,
+            name: 'Envelopes since ended',
+            spentCents: endedCents,
+          },
+        ]
+      : [];
   const rows = envelopes
     .filter(({ name }) => isTextMatch(args.text, name))
     .map(({ id, name }) => ({ id, name, spentCents: spent.get(id) ?? 0 }))
+    .concat(endedRows)
     .sort(
       (a, b) => b.spentCents - a.spentCents || a.name.localeCompare(b.name),
     );
@@ -161,7 +185,10 @@ export async function readEnvelopeSpending(
     totalCents: rows.reduce((sum, row) => sum + row.spentCents, 0),
     currency,
     isPartial:
-      !isEnvelopeListFull || snapshot.size > SCAN_LIMIT || unreadable > 0,
+      !isEnvelopeListFull ||
+      snapshot.size > SCAN_LIMIT ||
+      unreadable > 0 ||
+      (args.text !== null && endedCents !== 0),
     from,
     to,
   };
@@ -304,7 +331,7 @@ export async function readCardsDue(
   args: LiveArgs,
   now: number,
 ): Promise<CardsDueRead> {
-  const today = Math.floor(now / DAY_MS) * DAY_MS;
+  const today = readToday(args.zone, now);
   const planKey = await unwrapPlanKey(firestore, keyring, uid);
   const base = `apps/runway/plans/${uid}`;
   const { docs, isFull } = await readDocs(firestore, `${base}/cards`, [

@@ -10,6 +10,7 @@ import type {
   SyncPageRequest,
   SyncPageResult,
 } from '../../../connections/registry.js';
+import { dayRangeMs } from '../../../connections/liveDay.js';
 import {
   MAX_RECORDS_PER_CATEGORY,
   SHARED_RECORD_KEYS,
@@ -692,13 +693,13 @@ async function syncIdeas(
   return { records, isFull: snapshot.size < IDEA_LIMIT };
 }
 
-const DAY_MS = 86_400_000;
 const COOK_LIMIT = MAX_RECORDS_PER_CATEGORY;
 
 interface LiveArgs {
   text: string | null;
   from: string | null;
   to: string | null;
+  zone: string | null;
 }
 
 const readDayText = (value: unknown) =>
@@ -717,6 +718,7 @@ const readLiveArgs = (args: unknown): LiveArgs => {
     text: readText(source.text)?.toLowerCase() ?? null,
     from: readDayText(source.from),
     to: readDayText(source.to),
+    zone: typeof source.timeZone === 'string' ? source.timeZone : null,
   };
 };
 
@@ -852,10 +854,11 @@ async function queryCooked(
   uid: string,
   args: LiveArgs,
 ): Promise<LiveQueryResult> {
-  const fromAt =
-    args.from === null ? null : Date.parse(`${args.from}T00:00:00Z`);
-  const toAt =
-    args.to === null ? null : Date.parse(`${args.to}T00:00:00Z`) + DAY_MS;
+  const { fromMs: fromAt, toMsExclusive: toAt } = dayRangeMs(
+    args.from,
+    args.to,
+    args.zone,
+  );
   const base = firestore.collection(kitchenPath(uid, 'cooks'));
   const dated = [
     ...(fromAt === null ? [] : [['>=', fromAt] as const]),

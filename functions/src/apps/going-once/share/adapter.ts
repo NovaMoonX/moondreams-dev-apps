@@ -16,6 +16,7 @@ import {
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
+import { dayRangeMs } from '../../../connections/liveDay.js';
 import { isListable, toOpenPickupDays } from '../salePageView.js';
 import { GOING_ONCE_SHARES } from './manifest.js';
 
@@ -366,7 +367,7 @@ const clip = (text: string) => {
 
 const LINK_RE =
   /https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|io|co|app|me|ly|us)\b/i;
-const EMAIL_RE = /\S+@\S+/;
+const EMAIL_RE = /\S+@\S+|@\w{2,}/;
 const PHONE_RE = /\+\s?\d|\(\d{3}\)|\b\d{3}[\s.-]?\d{3}[\s.-]?\d{4}\b/;
 
 /** A buyer's own words, dropped whole when they carry a link, an email or a phone number. */
@@ -374,7 +375,8 @@ const screenMessage = (message: string | null) =>
   message === null ||
   LINK_RE.test(message) ||
   EMAIL_RE.test(message) ||
-  PHONE_RE.test(message)
+  PHONE_RE.test(message) ||
+  (message.match(/\d/g)?.length ?? 0) >= 7
     ? null
     : clip(message);
 
@@ -401,20 +403,27 @@ const readQueryArgs = (args: unknown) => {
     typeof args === 'object' && args !== null
       ? (args as Record<string, unknown>)
       : {};
+  const from = readDay(asked.from);
+  const to = readDay(asked.to);
   return {
     text: readText(asked.text)?.toLowerCase() ?? null,
-    from: readDay(asked.from),
-    to: readDay(asked.to),
+    from,
+    to,
+    ...dayRangeMs(
+      toDayText(from),
+      toDayText(to),
+      typeof asked.timeZone === 'string' ? asked.timeZone : null,
+    ),
   };
 };
 
 type QueryArgs = ReturnType<typeof readQueryArgs>;
 
-const isInRange = (at: number | null, { from, to }: QueryArgs) =>
-  (from === null && to === null) ||
+const isInRange = (at: number | null, { fromMs, toMsExclusive }: QueryArgs) =>
+  (fromMs === null && toMsExclusive === null) ||
   (at !== null &&
-    (from === null || at >= from) &&
-    (to === null || at < to + DAY_MS));
+    (fromMs === null || at >= fromMs) &&
+    (toMsExclusive === null || at < toMsExclusive));
 
 const isTextMatch = (text: string | null, ...names: (string | null)[]) =>
   text === null ||
@@ -520,7 +529,9 @@ const queryAllThings = (firestore: Firestore, uid: string, args: QueryArgs) =>
       isFull: items.size < ITEM_LIMIT,
       matched: items.docs.flatMap((item) => {
         const title = readText(item.get('title'));
-        const changedAt = readLastStatusAt(item.get('statusHistory'));
+        const changedAt =
+          readLastStatusAt(item.get('statusHistory')) ??
+          readTime(item.get('lastEditedAt'));
         if (
           !isTextMatch(args.text, title, sale.name) ||
           !isInRange(changedAt, args)

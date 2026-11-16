@@ -10,6 +10,7 @@ import type {
   SourceCtx,
   SyncPageResult,
 } from '../../../connections/registry.js';
+import { dayRangeMs } from '../../../connections/liveDay.js';
 import {
   MAX_RECORDS_PER_CATEGORY,
   SHARED_RECORD_KEYS,
@@ -183,7 +184,6 @@ const syncBoxCounts = async (firestore: Firestore, uid: string) => {
 };
 
 const DETAIL_LIMIT = 120;
-const DAY_MS = 86_400_000;
 
 const clipTo = (text: string, limit: number) =>
   text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`;
@@ -193,14 +193,25 @@ const readDay = (value: unknown) =>
     ? Date.parse(`${value}T00:00:00Z`)
     : null;
 
+const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
+
 const readArgs = (args: unknown) => {
   const given = (
     typeof args === 'object' && args !== null ? args : {}
-  ) as LiveQueryArgs;
+  ) as LiveQueryArgs & { timeZone?: unknown };
+  const from = readDay(given.from);
+  const to = readDay(given.to);
+  const { fromMs, toMsExclusive } = dayRangeMs(
+    from === null ? null : toDayText(from),
+    to === null ? null : toDayText(to),
+    typeof given.timeZone === 'string' ? given.timeZone : null,
+  );
   return {
     text: readText(given.text)?.toLowerCase() ?? null,
-    from: readDay(given.from),
-    to: readDay(given.to),
+    from,
+    to,
+    fromMs,
+    toMsExclusive,
   };
 };
 
@@ -212,15 +223,13 @@ const formatDay = (at: number) =>
     timeZone: 'UTC',
   });
 
-const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
-
 /** Only the items already revealed, opened one box at a time; an item still hidden is never fetched. */
 async function queryRevealedItems(
   firestore: Firestore,
   uid: string,
   args: unknown,
 ): Promise<LiveQueryResult> {
-  const { text, from, to } = readArgs(args);
+  const { text, from, to, fromMs, toMsExclusive } = readArgs(args);
   const { spaces } = await readSpaces(firestore, uid);
   const perSpace = await Promise.all(
     spaces.map(async (space) => {
@@ -229,43 +238,51 @@ async function queryRevealedItems(
         .select('name')
         .limit(BOX_LIMIT)
         .get();
+      const isBoxCapHit = boxes.size >= BOX_LIMIT;
       const perBox = await Promise.all(
         boxes.docs.map(async (box) => {
           const boxName = openField(box.get('name'), space.key);
-          if (boxName === null) return [];
+          if (boxName === null) return { rows: [], isOver: false };
           const items = await box.ref
             .collection('items')
             .where('isRevealed', '==', true)
             .select('content', 'revealedAt')
             .limit(MAX_RECORDS_PER_CATEGORY + 1)
             .get();
-          return items.docs.flatMap((item) => {
-            const name = openField(item.get('content'), space.key);
-            const at = item.get('revealedAt');
-            if (name === null) return [];
-            return [
-              {
-                ref: `spaces/${space.id}/boxes/${box.id}/items/${item.id}`,
-                boxName,
-                name,
-                at: typeof at === 'number' ? at : null,
-              },
-            ];
-          });
+          const rows = items.docs
+            .slice(0, MAX_RECORDS_PER_CATEGORY)
+            .flatMap((item) => {
+              const name = openField(item.get('content'), space.key);
+              const at = item.get('revealedAt');
+              if (name === null) return [];
+              return [
+                {
+                  ref: `spaces/${space.id}/boxes/${box.id}/items/${item.id}`,
+                  boxName,
+                  name,
+                  at: typeof at === 'number' ? at : null,
+                },
+              ];
+            });
+          return { rows, isOver: items.size > MAX_RECORDS_PER_CATEGORY };
         }),
       );
-      return perBox.flat();
+      return {
+        rows: perBox.flatMap((box) => box.rows),
+        isCapped: isBoxCapHit || perBox.some((box) => box.isOver),
+      };
     }),
   );
   const matched = perSpace
-    .flat()
+    .flatMap((space) => space.rows)
     .filter(
       (entry) =>
         (text === null ||
           entry.name.toLowerCase().includes(text) ||
           entry.boxName.toLowerCase().includes(text)) &&
-        (from === null || (entry.at !== null && entry.at >= from)) &&
-        (to === null || (entry.at !== null && entry.at < to + DAY_MS)),
+        (fromMs === null || (entry.at !== null && entry.at >= fromMs)) &&
+        (toMsExclusive === null ||
+          (entry.at !== null && entry.at < toMsExclusive)),
     )
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
   const shown = matched.slice(0, MAX_RECORDS_PER_CATEGORY);
@@ -290,7 +307,9 @@ async function queryRevealedItems(
     matchedCount: matched.length,
     totalCents: null,
     currency: null,
-    isPartial: matched.length > MAX_RECORDS_PER_CATEGORY,
+    isPartial:
+      matched.length > MAX_RECORDS_PER_CATEGORY ||
+      perSpace.some((space) => space.isCapped),
     from: from === null ? null : toDayText(from),
     to: to === null ? null : toDayText(to),
   };

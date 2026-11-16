@@ -10,6 +10,7 @@ import type {
   SyncPageRequest,
   SyncPageResult,
 } from '../../../connections/registry.js';
+import { dayRangeMs } from '../../../connections/liveDay.js';
 import { zonedDateTimeToEpoch } from '../../../notifications/zonedTime.js';
 import {
   MAX_RECORDS_PER_CATEGORY,
@@ -913,6 +914,8 @@ interface LiveArgs {
   to: number | null;
   fromText: string | null;
   toText: string | null;
+  fromMs: number | null;
+  toMsExclusive: number | null;
 }
 
 const readDayText = (value: unknown) =>
@@ -935,6 +938,11 @@ const readLiveArgs = (args: unknown): LiveArgs => {
     to: toText === null ? null : Date.parse(`${toText}T00:00:00Z`) + DAY_MS,
     fromText,
     toText,
+    ...dayRangeMs(
+      fromText,
+      toText,
+      typeof source.timeZone === 'string' ? source.timeZone : null,
+    ),
   };
 };
 
@@ -948,8 +956,14 @@ const isInRange = (args: LiveArgs, at: number | null) =>
     (args.from === null || at >= args.from) &&
     (args.to === null || at < args.to));
 
+const isInstantInRange = (args: LiveArgs, at: number | null) =>
+  (args.fromMs === null && args.toMsExclusive === null) ||
+  (at !== null &&
+    (args.fromMs === null || at >= args.fromMs) &&
+    (args.toMsExclusive === null || at < args.toMsExclusive));
+
 const LINK_RE = /[a-z][a-z0-9+.-]*:\/\/|\bwww\./i;
-const EMAIL_RE = /\S@\S+\.\S/;
+const EMAIL_RE = /\S@\S+\.\S|@\w{2,}/;
 const MEETING_WORDS_RE =
   /\b(?:zoom|webex|google meet|microsoft teams|teams meeting|facetime)\b/i;
 const DIAL_RE =
@@ -962,7 +976,8 @@ const readSharedText = (value: unknown, chars: number) => {
     LINK_RE.test(text) ||
     EMAIL_RE.test(text) ||
     MEETING_WORDS_RE.test(text) ||
-    DIAL_RE.test(text)
+    DIAL_RE.test(text) ||
+    (text.match(/\d/g)?.length ?? 0) >= 7
     ? null
     : clip(text, chars);
 };
@@ -1175,7 +1190,7 @@ async function queryTripIdeas(
       const host = readLinkHost(doc.get('linkUrl'));
       if (
         title === null ||
-        !isInRange(args, createdAt) ||
+        !isInstantInRange(args, createdAt) ||
         !matchesText(args.text, title, trip.title, notes)
       )
         return [];
@@ -1219,7 +1234,7 @@ async function queryAnnouncements(
       const body = readSharedText(doc.get('body'), NAME_CHARS * 2);
       if (
         (title === null && body === null) ||
-        !isInRange(args, createdAt) ||
+        !isInstantInRange(args, createdAt) ||
         !matchesText(args.text, title, body, trip.title)
       )
         return [];

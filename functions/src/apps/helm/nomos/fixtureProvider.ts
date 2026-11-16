@@ -534,7 +534,7 @@ const toSpendRange = (question: string, now: number, timeZone: string) => {
 };
 
 interface SpendResult {
-  records?: { alias?: string; payee: string; amount: string }[];
+  records?: { alias?: string; title: string; amount: string }[];
   matchedCount?: number;
   total?: string;
   from?: string | null;

@@ -10,6 +10,7 @@ import type {
   SyncPageRequest,
   SyncPageResult,
 } from '../../../connections/registry.js';
+import { startOfDay, todayIn } from '../../../connections/liveDay.js';
 import {
   SHARED_RECORD_KEYS,
   type SharedRecord,
@@ -441,6 +442,7 @@ async function queryMembershipSavings(
   firestore: Firestore,
   uid: string,
   now: number,
+  zone: string | null,
 ): Promise<LiveQueryResult> {
   const empty: LiveQueryResult = {
     records: [],
@@ -465,8 +467,10 @@ async function queryMembershipSavings(
   const monthlyTotalCents = readTime(profile.get('monthlyTotalCents'));
   if (startDate === null || monthlyTotalCents === null) return empty;
   const membership = { startDate, monthlyTotalCents } as MembershipProfile;
-  const todayDay = Math.floor(now / DAY_MS) * DAY_MS;
+  const todayText = todayIn(zone, now);
+  const todayDay = Date.parse(`${todayText}T00:00:00Z`);
   const yearStart = Date.UTC(new Date(todayDay).getUTCFullYear(), 0, 1);
+  const yearStartAt = startOfDay(todayText.slice(0, 4) + '-01-01', zone);
   const seen = snapshot.docs.map((doc) => ({
     at: readTime(doc.get('showtimeAt')),
     viewing: {
@@ -481,7 +485,7 @@ async function queryMembershipSavings(
   );
   const thisYear = getSavingsSummary(
     seen
-      .filter((entry) => entry.at !== null && entry.at >= yearStart)
+      .filter((entry) => entry.at !== null && entry.at >= yearStartAt)
       .map((entry) => entry.viewing),
     membership,
     todayDay,
@@ -580,7 +584,13 @@ export function createAListAdapter(
     }),
     query: async (ctx, req: LiveQueryRequest): Promise<LiveQueryResult> => {
       if (req.category !== 'savings') throw new Error('Unknown category.');
-      return queryMembershipSavings(deps.firestore(), ctx.uid, deps.now());
+      const asked = req.args as Record<string, unknown> | null | undefined;
+      return queryMembershipSavings(
+        deps.firestore(),
+        ctx.uid,
+        deps.now(),
+        typeof asked?.timeZone === 'string' ? asked.timeZone : null,
+      );
     },
     deepLink: (ref) => {
       const [collection, id] = ref.split('/');

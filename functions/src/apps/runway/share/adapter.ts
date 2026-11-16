@@ -31,6 +31,7 @@ import {
   readCardsDue,
   readEnvelopeSpending,
   readLiveArgs,
+  readToday,
   toDayText,
 } from './balances.js';
 import { readTransactions } from './transactions.js';
@@ -515,11 +516,12 @@ async function queryEnvelopeSpending(
 ): Promise<LiveQueryResult> {
   const firestore = deps.firestore();
   const now = deps.now();
+  const args = readLiveArgs(rawArgs);
   const stored = await readStoredEnvelopes(
     firestore,
     deps.keyring(),
     uid,
-    Math.floor(now / DAY_MS) * DAY_MS,
+    readToday(args.zone, now),
   );
   const read = await readEnvelopeSpending(
     firestore,
@@ -527,7 +529,7 @@ async function queryEnvelopeSpending(
     uid,
     stored.kind === 'envelopes' ? stored.envelopes : [],
     stored.kind === 'envelopes' && stored.isFull,
-    readLiveArgs(rawArgs),
+    args,
     now,
   );
   return {
