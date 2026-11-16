@@ -167,18 +167,16 @@ function GoalFlowForm({
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.goalFlowWhyHint}
           </p>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className="relative -ml-2 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
-            onClick={() => {
+          <SkipQuestionButton
+            note={HELM_COPY.goalFlowWhySkipNote}
+            label={HELM_COPY.goalFlowWhySkip}
+            skippedLabel={HELM_COPY.goalFlowWhySkip}
+            isSkipped={answers.isWhySkipped}
+            onSkip={() => {
               set({ why: '', isWhySkipped: true });
               flow.moveOnFrom('why');
             }}
-          >
-            {HELM_COPY.goalFlowWhySkip}
-          </Button>
+          />
         </div>
       ),
     },

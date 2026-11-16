@@ -241,7 +241,11 @@ export function setGoalAside(uid: string, projectId: string) {
   }
   const now = Date.now();
   const habits = goalHabitsOf(projectId).filter(
-    (habit) => habit.status === 'active',
+    (habit) =>
+      habit.status === 'active' ||
+      (habit.status === 'paused' &&
+        habit.pausedUntil !== null &&
+        habit.pausedUntil <= now),
   );
   return quick(
     uid,
@@ -332,7 +336,7 @@ export function setGoalStatus(
 const isNamed = (habit: OpenHabit) =>
   !habit.isUnreadable && habit.status !== 'ended';
 
-/** What a goal's change does to its habits. "Keep" unlinks the ones still going (resuming those the goal's pause paused) and leaves stopped ones alone; "delete" removes the ones the choice sheet names and only unlinks the rest. */
+/** What a goal's change does to its habits. "Keep" unlinks the ones still going (resuming those the goal's pause paused) and unlinks stopped ones; "delete" removes the ones the choice sheet names and treats the rest (stopped, or unreadable here) as "keep". */
 interface HabitPlan {
   ref: DocumentReference;
   forward: DocumentData | null;
@@ -376,15 +380,6 @@ async function planHabits(
           live.exists() || !raw ? null : { mode: 'set', data: raw },
       };
       return [{ ref, forward: null, step }];
-    }
-    if (choice === 'delete') {
-      return [
-        {
-          ref,
-          forward: { projectId: null },
-          step: guardedBack(ref, { projectId }, now),
-        },
-      ];
     }
     if (habit.status === 'ended') {
       return [

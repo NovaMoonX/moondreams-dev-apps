@@ -3087,6 +3087,7 @@ export const HELM_COPY = {
     'I used to play every night in college, and I miss it',
   goalFlowWhyHint: "Optional. It sits at the top of the goal's page.",
   goalFlowWhySkip: 'Skip for now',
+  goalFlowWhySkipNote: 'You can add it later from the goal.',
   goalFlowStepQuestion: 'A regular step?',
   goalFlowStepLabel: 'Regular step',
   goalFlowStepHabit: 'A habit',
