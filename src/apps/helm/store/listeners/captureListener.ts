@@ -194,6 +194,12 @@ async function openCapture(
     answersQuestion: data.answersQuestion ?? null,
     ttsProvider: data.ttsProvider ?? null,
     arrivedVia: data.arrivedVia === 'dropBox' ? 'dropBox' : 'direct',
+    disposition:
+      data.disposition === 'acted' ||
+      data.disposition === 'noted' ||
+      data.disposition === 'answered'
+        ? data.disposition
+        : null,
     medium: data.medium === 'mcp' ? 'mcp' : 'web',
     via: typeof data.via === 'string' ? data.via : null,
     outsideReadScopes: Array.isArray(data.outsideReadScopes)

@@ -258,6 +258,11 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/helm/engine/said.ts',
+    dest: 'functions/src/apps/helm/nomos/said.ts',
+    importRewrites: { '@apps/helm/utils/privacy': '../privacy.js' },
+  },
+  {
     src: 'src/apps/helm/engine/checkInMatch.ts',
     dest: 'functions/src/apps/helm/nomos/checkInMatch.ts',
     importRewrites: {

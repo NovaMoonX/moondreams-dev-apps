@@ -2,6 +2,7 @@ import type { City } from '@/lib/cities/types';
 import type { Cadence, Weekday } from '@/utils/cadenceUtils';
 import type { DayPart } from '@apps/helm/engine/habitDay';
 import type { ImportancePlace } from '@apps/helm/engine/importance';
+import type { ObservationTag } from '@apps/helm/engine/said';
 import type { AwayZoneOffer } from '@apps/helm/engine/whereabouts';
 import type { ContactPoint } from '@apps/helm/engine/contactPoints';
 import type {
@@ -119,6 +120,16 @@ export interface HelmProfile {
   conversationFreshAt: number | null;
   /** Home folds sessions from before today under Show earlier, unless one is still open; never ends a conversation. */
   isDailyFreshOn: boolean;
+  /** "Notice what works for me"; a profile from before the field reads on. */
+  isLearningOn: boolean;
+  /** The day key the daily pattern check last ran; null until it has. */
+  patternsCheckedOn: string | null;
+  /** The next night's reflection is due from this instant; null when nothing new waits. */
+  reflectDueAt: number | null;
+  /** When the person last chose Forget what you've noticed; what was made at or before it is hidden. */
+  forgottenAt: number | null;
+  /** The day key the weekly clean-up last ran; null until it has. */
+  prunedOn: string | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -360,6 +371,8 @@ export interface Capture {
   ttsProvider: string | null;
   /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
   arrivedVia: 'direct' | 'dropBox';
+  /** Whether the turn acted, was only noted, or answered a question; null on a turn from before. */
+  disposition: CaptureDisposition | null;
   /** 'mcp' for a turn an outside assistant (Claude, Gemini) sent; 'web' for every turn typed or spoken in Helm. */
   medium: 'web' | 'mcp';
   /** The outside assistant's name on an 'mcp' turn; null on every web turn and on every turn made before the field. */
@@ -1730,6 +1743,16 @@ export interface Pattern {
   }[];
   seenAt: number | null;
   executionId: string | null;
+  /** The execution whose Undo made it `undone`. */
+  undoneByExecutionId: string | null;
+  /** Not off and not retired: the listener reads only these. */
+  isLive: boolean;
+  /** When it was stopped or went off for good. */
+  offAt: number | null;
+  /** The newest instant that counted as evidence, for the live cap. */
+  lastEvidenceAt: number | null;
+  /** The class in effect, readable so a job without the key honours it; a record from before the field reads as ordinary. */
+  privacy: PrivacyClass | null;
   createdAt: number;
   lastEditedAt: number | null;
   stateAt: number;
@@ -1741,6 +1764,73 @@ export interface PatternSealed {
   evidenceLine: string;
   reasonLine: string | null;
 }
+
+export type ObservationSource = 'turn' | 'checkInNote' | 'followUp';
+
+/** `observations/{obsId}`: something said about a habit, goal, task or the day; derived, never edited by hand. */
+export interface Observation {
+  subject: {
+    collection: 'habits' | 'projects' | 'tasks' | 'day';
+    id: string | null;
+  };
+  /** The habit day it is about. */
+  dayKey: string;
+  /** The instant it was said or noted. */
+  at: number;
+  source: ObservationSource;
+  /** 'captures/{id}', or 'habitDays/{dayKey}#{habitId}/{windowId}' for a note. */
+  sourceKeys: string[];
+  /** Copied from the subject when written: never feeds a change to a care item. */
+  isCare: boolean;
+  writtenBy: 'turn' | 'reflection';
+  createdAt: number;
+  privacy: PrivacyClass | null;
+  sealed: Sealed;
+}
+
+export interface ObservationSealed {
+  kind: 'feeling' | 'reason' | 'outcome' | 'answer';
+  /** 1 to 3. */
+  tags: ObservationTag[];
+  /** Verbatim from its source (200 at most); null when it named another person's health. */
+  quote: string | null;
+}
+
+export type ReflectionLink =
+  'shift' | 'busyDay' | 'lateDay' | 'weekday' | 'other';
+
+/** `reflections/{dayKey}`: the nightly pass's candidates for one habit day; written only by the server. */
+export interface Reflection {
+  dayKey: string;
+  /** The request's random id; a retried write with the same id changes nothing. */
+  reflectionId: string;
+  candidateCount: number;
+  /** When the device's daily check weighed it. */
+  seenAt: number | null;
+  /** Every observation and note it read (120 at most). */
+  sourceKeys: string[];
+  createdAt: number;
+  privacy: PrivacyClass | null;
+  sealed: Sealed;
+}
+
+export interface ReflectionSealed {
+  candidates: {
+    subject: { collection: 'habits' | 'projects'; id: string };
+    observationIds: string[];
+    tags: ObservationTag[];
+    linkedTo: ReflectionLink | null;
+    suggestion: 'differentTime' | 'smaller' | 'somethingNew' | 'none';
+  }[];
+  whyRefresh: {
+    projectId: string;
+    summary: string;
+    tags: string[];
+    basedOn: string;
+  }[];
+}
+
+export type CaptureDisposition = 'acted' | 'noted' | 'answered';
 
 /** What happened on one day, counted by code; each item counts on the day it happened, in the profile's zone. */
 export interface HelmDayCounts {
