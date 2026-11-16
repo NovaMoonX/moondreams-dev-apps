@@ -68,7 +68,10 @@ import {
   isAnswerInFlight,
   sendQuestionAnswer,
 } from '@apps/helm/store/actions/questionActions';
-import { takeBack } from '@apps/helm/store/actions/undoActions';
+import {
+  answerUndoOffer,
+  takeBack,
+} from '@apps/helm/store/actions/undoActions';
 import {
   selectAllCaptures,
   selectExecutionsById,
@@ -95,7 +98,11 @@ import {
 } from '@apps/helm/utils/spokenQuestion';
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
 import { readPresence } from '@apps/helm/utils/presence';
-import { toWakeSpellings } from '@apps/helm/utils/voicePhrases';
+import {
+  isAcknowledgement,
+  isLiveCloser,
+  toWakeSpellings,
+} from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
 const CLOSED_MS = 10_000;
@@ -233,6 +240,10 @@ export function useHelmVoice() {
     onBargeIn: () => {
       interruptedCaptureId.current = speakingCaptureId.current;
     },
+    onLiveEnd: (why) => {
+      if (why === 'quiet') showNote(HELM_COPY.liveEndedQuiet);
+      if (why === 'failed') showNote(HELM_COPY.liveEndedFailed);
+    },
     // A utility screen with no ask bar has nowhere to show the conversation, so it never listens for the phrase.
     wake: {
       isOn:
@@ -242,6 +253,7 @@ export function useHelmVoice() {
       spellings: toWakeSpellings(name, nameVariants),
       looseNames: [name],
       onWake: wakeUp,
+      startsLive: isHandsFreeOn,
     },
     cloudListening: {
       tokenSource,
@@ -253,6 +265,13 @@ export function useHelmVoice() {
       readVoice: readHelmVoice,
     },
   });
+
+  function endLiveNow() {
+    waiting.current.clear();
+    stopCount.current += 1;
+    voice.endLive();
+    voice.settle();
+  }
 
   function endDictation() {
     dictation.current = null;
@@ -287,34 +306,16 @@ export function useHelmVoice() {
     });
   }
 
-  /** The phrase was heard: it starts what a Talk tap starts, from the page in front, or sends the words that came with it. */
-  function wakeUp(rest: string | null, heardBy: { sttProvider: string }) {
+  /** The phrase was heard: readies the page in front as a Talk tap does and says whether a turn may start; the voice hook then keeps listening to the same breath. */
+  function wakeUp() {
     if (!voice.isAvailable) return false;
-    endDictation();
     const page = isHomeView
       ? null
       : (selectTopScreen(store.getState())?.context ?? null);
-    const isStarted =
-      rest === null
-        ? talk(page) === 'started'
-        : sendHeard(rest, page, heardBy.sttProvider);
-    if (isStarted) isWakeStarted.current = true;
-    if (isStarted && page !== null && !isAskRequested) void openAsk();
-    return isStarted;
-  }
-
-  function sendHeard(
-    text: string,
-    page: ScreenContext | null,
-    sttProvider: string,
-  ) {
-    screen.current = page;
-    setNotice(null);
-    setHasNoticeDoor(false);
-    setNeedsMicrophone(false);
-    setShowsPhoneLine(false);
-    interruptedCaptureId.current = null;
-    return voice.submit(text, sttProvider);
+    prepareListening(page);
+    isWakeStarted.current = true;
+    if (page !== null && !isAskRequested) void openAsk();
+    return true;
   }
 
   async function handleUtterance(text: string, sttProvider: string) {
@@ -357,7 +358,7 @@ export function useHelmVoice() {
     const state = store.getState();
     const timeZone =
       state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
-    const asked = findAsked(isSpoken, now);
+    const asked = findAskedQuestion(now, null, isSpoken)?.asked;
     const turn = readDeviceTurn({
       text,
       isSpoken,
@@ -370,12 +371,17 @@ export function useHelmVoice() {
       timeZone,
     });
     if (turn.kind === 'undo') {
+      const offer = isSpoken ? findAskedQuestion(now, 'undoOffer') : null;
+      if (offer?.asked.question.kind === 'undoOffer') {
+        await answerOpenUndoOffer(offer.asked, 'yes');
+        return true;
+      }
       await undoLatest();
       return true;
     }
     if (turn.kind === 'stopVoice') {
       voice.settle();
-      startListening(screen.current);
+      startListening(screen.current, voice.isLive);
       return true;
     }
     if (turn.kind === 'close') {
@@ -393,6 +399,15 @@ export function useHelmVoice() {
     }
     const said = turn.kind === 'send' ? turn.text : text;
     if (await answerQuestion(said, sttProvider, now, true)) return true;
+    // A nod or a goodbye in a live conversation is not a turn: filing it read back "nothing to file in it".
+    if (voice.isLive && isLiveCloser(text)) {
+      endLiveNow();
+      return true;
+    }
+    if (voice.isLive && isAcknowledgement(text)) {
+      voice.settle();
+      return true;
+    }
     await sendTurn(
       said,
       sttProvider ?? 'browser',
@@ -495,8 +510,12 @@ export function useHelmVoice() {
     return next ? buildSpokenQuestion(next.question) : null;
   }
 
-  /** The open question of the latest turn that can be answered by words: a spoken turn's for a spoken answer, any turn's for a typed one. */
-  function findAsked(isSpoken: boolean, now: number) {
+  /** The first open, unskipped question (of a kind, when given) of the latest turn that can be answered by words: a spoken turn's for a spoken answer, any turn's for a typed one; with that turn. */
+  function findAskedQuestion(
+    now: number,
+    kind: string | null = null,
+    isSpoken = true,
+  ) {
     const state = store.getState();
     const all = selectAllCaptures(state);
     const sessionId = getOpenSessionId(
@@ -508,17 +527,59 @@ export function useHelmVoice() {
       .filter((capture) => capture.sessionId === sessionId)
       .reverse()
       .find((capture) => capture.answersQuestion === null);
-    return latest &&
+    const asked =
+      latest &&
       (!isSpoken || latest.inputMode === 'voice') &&
       latest.status === 'needsYou'
-      ? getOpenQuestions(latest)
-          .filter(
-            (entry) =>
-              entry.skippedAt === null &&
-              !isAnswerInFlight(latest.id, entry.id),
-          )
-          .map((entry) => ({ captureId: latest.id, ...entry }))[0]
-      : undefined;
+        ? getOpenQuestions(latest)
+            .filter(
+              (entry) =>
+                entry.skippedAt === null &&
+                !isAnswerInFlight(latest.id, entry.id),
+            )
+            .map((entry) => ({ captureId: latest.id, ...entry }))
+            .find((entry) => kind === null || entry.question.kind === kind)
+        : undefined;
+    return latest && asked ? { state, latest, asked } : null;
+  }
+
+  /** Answers an open undo offer by voice and says what happened; a pick between several is finished on the card, never guessed. */
+  async function answerOpenUndoOffer(
+    asked: { captureId: string; id: string; question: HelmQuestion },
+    optionId: string,
+  ) {
+    if (!uid) return;
+    if (asked.question.shape !== 'yesNo' && optionId === 'yes') {
+      say(HELM_COPY.undoOfferFinishOnCard);
+      return;
+    }
+    try {
+      const outcome = await answerUndoOffer(uid, {
+        captureId: asked.captureId,
+        questionId: asked.id,
+        question: asked.question,
+        optionId,
+        by: 'voice',
+      });
+      say(
+        outcome.kind === 'undone'
+          ? outcome.report
+          : outcome.kind === 'kept'
+            ? optionId === 'keep'
+              ? HELM_COPY.undoOfferKeptAll
+              : HELM_COPY.undoOfferKept
+            : outcome.kind === 'already'
+              ? HELM_COPY.questionGone('undoOffer')
+              : outcome.kind === 'nothing'
+                ? (outcome.report ?? HELM_COPY.cannotTakeBack)
+                : outcome.kind === 'offline'
+                  ? HELM_COPY.questionNeedsConnection
+                  : HELM_COPY.heldActionFailed,
+      );
+    } catch (error) {
+      console.error('Helm undo offer was not answered by voice', error);
+      say(HELM_COPY.heldActionFailed);
+    }
   }
 
   /** An answer to the open question of the latest turn settles it instead of becoming a turn of its own kind: a code-built question is answered on the server, one the assistant wrote goes as an answer turn (what could not be placed goes as its words). A code-built question's reply that is none of its choices is asked again once, then goes on as a turn. */
@@ -526,12 +587,12 @@ export function useHelmVoice() {
     text: string,
     sttProvider: string | undefined,
     now: number,
-    isSpoken: boolean,
+    isSpoken = true,
   ) {
-    const state = store.getState();
+    const found = findAskedQuestion(now, null, isSpoken);
+    if (!uid || !found) return false;
+    const { state, asked } = found;
     const all = selectAllCaptures(state);
-    const asked = findAsked(isSpoken, now);
-    if (!uid || !asked) return false;
     const { question } = asked;
     const askedKey = `${asked.captureId}:${asked.id}`;
     const answer = matchSpokenAnswer(text, question, {
@@ -599,6 +660,10 @@ export function useHelmVoice() {
       return answerAsTurn(asked, answer?.value ?? null, text, sttProvider);
     }
     if (choice === null) return false;
+    if (question.kind === 'undoOffer' && optionId !== null) {
+      await answerOpenUndoOffer(asked, optionId);
+      return true;
+    }
     if (question.kind === 'whichIsTrue' && optionId === 'none') {
       say(HELM_COPY.whichIsTrueNoneVoice);
       return true;
@@ -774,7 +839,9 @@ export function useHelmVoice() {
       return;
     }
     try {
-      const result = await takeBack(uid, latest.id);
+      const result = await takeBack(uid, latest.id, {
+        reason: { reason: 'unclear', quote: null, via: 'voice' },
+      });
       if (result.kind === 'done') say(result.report);
       else if (result.kind === 'refused') {
         say(result.report ?? HELM_COPY.cannotTakeBack);
@@ -931,8 +998,9 @@ export function useHelmVoice() {
     });
   };
 
-  /** Starts listening from `page` (what the page publishes, null from home), or sends what is being said, or stops what is working or speaking. */
-  const talk = (page: ScreenContext | null) => {
+  /** Starts listening from `page` (what the page publishes, null from home), as a live conversation when that setting is on and the listen isn't a one-off (dictation), or sends what is being said, or stops what is working or speaking. */
+  const talk = (page: ScreenContext | null, isOneOff = false) => {
+    const isLive = isHandsFreeOn && !isOneOff;
     // An answer window or a line being said gives way to listening: the tap is the answer.
     if (
       voice.isAvailable &&
@@ -942,7 +1010,7 @@ export function useHelmVoice() {
         waiting.current.clear();
         stopCount.current += 1;
       }
-      return startListening(page);
+      return startListening(page, isLive);
     }
     if (voice.state !== 'idle' || voice.isStarting) {
       if (voice.state !== 'listening' && !voice.isStarting) {
@@ -975,10 +1043,10 @@ export function useHelmVoice() {
       );
       return 'blocked' as const;
     }
-    return startListening(page);
+    return startListening(page, isLive);
   };
 
-  function startListening(page: ScreenContext | null) {
+  function prepareListening(page: ScreenContext | null) {
     // A listen that ended on an error never says so, so each new one starts as a turn.
     endDictation();
     screen.current = page;
@@ -988,7 +1056,12 @@ export function useHelmVoice() {
     setNeedsMicrophone(false);
     setShowsPhoneLine(false);
     interruptedCaptureId.current = null;
-    voice.listen();
+  }
+
+  function startListening(page: ScreenContext | null, isLive: boolean) {
+    prepareListening(page);
+    if (isLive && !voice.isLive) voice.startLive();
+    else voice.listen();
     return 'started' as const;
   }
 
@@ -999,7 +1072,7 @@ export function useHelmVoice() {
       return 'stopped' as const;
     }
     if (voice.state !== 'idle' || voice.isStarting) return 'blocked' as const;
-    const result = talk(null);
+    const result = talk(null, true);
     if (result === 'started') {
       dictation.current = write;
       setDictationOwner(owner);
@@ -1032,6 +1105,8 @@ export function useHelmVoice() {
       setNeedsMicrophone(false);
     },
     talk,
+    /** Ends the live conversation: what is being heard is dropped and a reply on its way is written, not said. */
+    endLive: endLiveNow,
     setSurfaceShown,
     /** The quiet line after a close: Undo is offered only when something was dropped; null when none is showing. */
     closed: closed === null ? null : { hasDropped: closed.hasDropped },

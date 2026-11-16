@@ -19,6 +19,10 @@ export interface OpenDaySummary {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** A summary waiting on its batch is left alone this long; same value on the server. */
+export const SUMMARY_BATCH_WAIT_MS = 6 * 60 * 60 * 1000;
+/** The night run's claim before its batch is sent; same value on the server. */
+export const SUMMARY_PENDING_WAIT_MS = 15 * 60 * 1000;
 
 const writeHelmDaySummaryCallable = httpsCallable<
   { dayKey: string },
@@ -36,10 +40,19 @@ const isInWindow = (dayKey: string) =>
   dayKey >=
   toDayKey(Date.now() - DAYS_BACK * DAY_MS, getDeviceTimeZone() ?? 'UTC');
 
-const isDue = (data: Partial<HelmDaySummary> | null) =>
+const isDue = (data: Partial<HelmDaySummary> | null, now: number) =>
   data === null ||
   typeof data.staleAt === 'number' ||
-  (data.status === 'counted' && (data.attempts ?? 0) < 3);
+  (data.status === 'counted' &&
+    (data.attempts ?? 0) < 3 &&
+    !(
+      typeof data.batchId === 'string' &&
+      typeof data.batchedAt === 'number' &&
+      now - data.batchedAt <
+        (data.batchId === 'pending'
+          ? SUMMARY_PENDING_WAIT_MS
+          : SUMMARY_BATCH_WAIT_MS)
+    ));
 
 /** The summary of a past day, read live while it is shown. A one-document subscription only the past day's card reads, keyed on the day, so it lives with that card rather than in the store; a reconnect resubscribes so a day first opened offline is asked for then; a missing, stale or only-counted one is asked of the server once per session, quietly. `undefined` until read, `null` when there is none to show. */
 export function useDaySummary(uid: string | null, dayKey: string) {
@@ -70,7 +83,7 @@ export function useDaySummary(uid: string | null, dayKey: string) {
           : null;
         const mark = `${key}|${data?.staleAt ?? ''}`;
         if (
-          isDue(data) &&
+          isDue(data, Date.now()) &&
           isInWindow(dayKey) &&
           navigator.onLine &&
           !asked.has(mark) &&

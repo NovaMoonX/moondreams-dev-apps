@@ -16,7 +16,7 @@ import {
 } from './commands.js';
 import type { StepGroupBlock } from '../stepGroups.js';
 import { withoutAddress } from './joinedTurn.js';
-import { hasReviseCue, isQuestion } from './route.js';
+import { hasReviseCue, hasUndoCue, isQuestion } from './route.js';
 import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
 import type { ContextProject } from '../projectStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
@@ -212,6 +212,22 @@ export interface EarlierTurn {
   said: string;
   did: string | null;
   taskIds: string[];
+  /** What this turn did that can still be taken back, one entry per execution. */
+  undoable?: {
+    executionId: string;
+    createdAt: number;
+    units: UndoableUnit[];
+  }[];
+}
+
+/** One thing a turn did that a person can take back alone, as the model reads it. */
+export interface UndoableUnit {
+  n: number;
+  kind: string;
+  change: string;
+  title: string | null;
+  isUndone: boolean;
+  quote: string | null;
 }
 
 const MAX_EARLIER_SAID_CHARS = 500;
@@ -257,6 +273,9 @@ export function buildContext(input: ContextInput): {
   procedures: AliasBook;
   procedureSteps: AliasBook;
   runSteps: AliasBook;
+  undoTurns: AliasBook;
+  /** How many lines the model was shown for each turn it may offer to take back. */
+  undoUnitCounts: Map<string, number>;
   focus: { id: string; version: number } | null;
 } {
   const aliases = createAliasBook('t');
@@ -266,6 +285,7 @@ export function buildContext(input: ContextInput): {
   const procedures = createAliasBook('pr');
   const procedureSteps = createAliasBook('ps');
   const runSteps = createAliasBook('rs');
+  const undoTurns = createAliasBook('u');
   const partIds = new Map<string, string>();
   const parts: AliasBook = {
     add: (id) => {
@@ -305,6 +325,16 @@ export function buildContext(input: ContextInput): {
     said: turn.said.slice(0, MAX_EARLIER_SAID_CHARS),
     did: turn.did,
     records: turn.taskIds.map((id) => aliases.add(id)),
+    ...(turn.undoable?.some((entry) => entry.units.length > 0)
+      ? {
+          undoable: turn.undoable
+            .filter((entry) => entry.units.length > 0)
+            .map((entry) => ({
+              turn: undoTurns.add(entry.executionId),
+              lines: entry.units,
+            })),
+        }
+      : {}),
   }));
   const keptNotes = (input.notes ?? []).slice(0, MAX_HINT_NOTES);
   const noteBodies = toNoteBodies(keptNotes);
@@ -436,6 +466,12 @@ export function buildContext(input: ContextInput): {
     ...(earlierTurns.length
       ? [`<earlier_turns>${toDataJson(earlierTurns)}</earlier_turns>`]
       : []),
+    ...(hasUndoCue(input.text) &&
+    !earlierTurns.some((turn) => 'undoable' in turn)
+      ? [
+          `<nothing_to_undo>Nothing from earlier turns can be taken back now. If they are asking to take something back, say plainly you can't and send no offerUndo; otherwise carry on as usual.</nothing_to_undo>`,
+        ]
+      : []),
     ...(input.answeredQuestion
       ? [
           `<answered_question>${toDataJson(input.answeredQuestion)}</answered_question>`,
@@ -552,6 +588,15 @@ export function buildContext(input: ContextInput): {
     procedures,
     procedureSteps,
     runSteps,
+    undoTurns,
+    undoUnitCounts: new Map(
+      (input.earlierTurns ?? []).flatMap((turn) =>
+        (turn.undoable ?? []).map((entry): [string, number] => [
+          entry.executionId,
+          entry.units.length,
+        ]),
+      ),
+    ),
     focus: focused ? { id: focused.id, version: focused.version } : null,
   };
 }

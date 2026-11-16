@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button, Skeleton } from '@moondreamsdev/dreamer-ui/components';
-import { Wallet } from 'lucide-react';
+import { CalendarDays, Wallet } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import ClampedText from '@/components/ClampedText';
@@ -15,8 +15,10 @@ import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useNoIndex } from '@/hooks/useNoIndex';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
+import { formatDayRuns } from '@/utils/dayRunUtils';
 import BuyerCard from '@apps/going-once/components/public/BuyerCard';
 import BuyerThingDrawer from '@apps/going-once/components/public/BuyerThingDrawer';
+
 import {
   GOING_ONCE_TABS,
   SALE_PAGE_PATH,
@@ -27,6 +29,10 @@ import { salePageQueryOptions } from '@apps/going-once/queries/salePageQueries';
 import type { PublicThing, SalePageResult } from '@apps/going-once/types';
 import { getThingPagePath } from '@apps/going-once/utils/listing';
 import { formatPaymentMethods } from '@apps/going-once/utils/paymentMethods';
+import {
+  EMPTY_DAYS_ANSWER,
+  type DaysAnswer,
+} from '@apps/going-once/utils/pickupDays';
 
 const CARD_HEIGHT = 220;
 const EAGER_CARDS = 8;
@@ -152,7 +158,9 @@ interface SaleViewProps {
 
 function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
   const [query, setQuery] = useState('');
+  const [daysAnswer, setDaysAnswer] = useState<DaysAnswer>(EMPTY_DAYS_ANSWER);
   const { sale, things } = page;
+  const openDays = sale.pickupDays ?? [];
   const [openId, setOpenId] = useState<string | null>(() =>
     things.some((thing) => thing.id === linkedThingId) ? linkedThingId : null,
   );
@@ -212,6 +220,17 @@ function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
             </span>
           </p>
         )}
+        {openDays.length > 0 && (
+          <p className='text-muted-foreground flex items-start gap-1.5 text-sm'>
+            <CalendarDays
+              className='mt-0.5 h-4 w-4 shrink-0'
+              aria-hidden='true'
+            />
+            <span className='min-w-0 text-pretty'>
+              Pickups {formatDayRuns(openDays)}
+            </span>
+          </p>
+        )}
       </header>
       {isLinkedGone && (
         <InlineNotice tone='info'>
@@ -253,6 +272,9 @@ function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
           thing={openThing}
           linkId={linkId}
           paymentMethods={sale.paymentMethods ?? []}
+          openDays={openDays}
+          daysAnswer={daysAnswer}
+          onDaysAnswered={setDaysAnswer}
           onClose={closeThing}
         />
       )}

@@ -2700,6 +2700,8 @@ export function buildExecution(
     linkedPlaceIds: plan.linkedPlaceIds,
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: input.questionRef ?? null,
     errorCode: null,
     createdAt: input.now,
@@ -2744,6 +2746,7 @@ export function buildExecution(
       lines: plan.lines,
       undoReport: null,
       goneIds: null,
+      undoReason: null,
       spoken: withQuestion(
         (own && isVoice
           ? own
@@ -2780,6 +2783,8 @@ export function buildAnswerExecution(input: {
     linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
     questionRef: null,
     errorCode: null,
     createdAt: input.now,
@@ -2794,6 +2799,7 @@ export function buildAnswerExecution(input: {
       notDone: input.notDone ?? [],
       undoReport: null,
       goneIds: null,
+      undoReason: null,
       said: null,
       lines: null,
       spoken: input.spoken,
@@ -2846,6 +2852,7 @@ const isPickKind = (kind: string) =>
   kind === 'whichTopic' ||
   kind === 'whichIsTrue' ||
   kind === 'groupTopics' ||
+  kind === 'undoOffer' ||
   kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>

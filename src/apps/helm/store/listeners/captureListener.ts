@@ -21,10 +21,10 @@ import { EARLIER_SESSIONS_PAGE } from '@apps/helm/constants';
 import type {
   Capture,
   CaptureSealed,
-  HelmQuestion,
   OpenCapture,
   ScreenContext,
 } from '@apps/helm/types';
+import { toQuestions } from '@apps/helm/utils/readQuestions';
 import { normalizeAnswer } from '@apps/helm/utils/captureAnswer';
 import {
   EMPTY_READING,
@@ -66,81 +66,6 @@ const toScreen = (value: unknown): ScreenContext | null => {
   }
   return screen as ScreenContext;
 };
-
-const isOption = (value: unknown) => {
-  const option = value as Partial<HelmQuestion['options'][number]> | null;
-  return (
-    typeof option === 'object' &&
-    option !== null &&
-    typeof option.id === 'string' &&
-    typeof option.label === 'string'
-  );
-};
-
-const SHAPES = [
-  'pickOne',
-  'pickSeveral',
-  'yesNo',
-  'freeText',
-  'dateTime',
-  'pickRecord',
-  'number',
-];
-
-const toRecordKinds = (value: unknown): HelmQuestion['recordKinds'] =>
-  Array.isArray(value)
-    ? value.filter(
-        (kind): kind is 'who' | 'place' => kind === 'who' || kind === 'place',
-      )
-    : [];
-
-/** Opens the questions a turn asked, in the shape the cards draw, filling what an older one lacks; one that is not shaped like the contract is left out. */
-const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
-  Object.fromEntries(
-    Object.entries(
-      typeof value === 'object' && value !== null ? value : {},
-    ).flatMap(([id, entry]) => {
-      const question = entry as Partial<HelmQuestion> | null;
-      const isKnown =
-        question?.kind === 'whichPerson' ||
-        question?.kind === 'whichPlace' ||
-        question?.kind === 'whichIsTrue' ||
-        question?.kind === 'whichTopic' ||
-        question?.kind === 'groupTopics' ||
-        question?.kind === 'asked';
-      return typeof question === 'object' &&
-        question !== null &&
-        isKnown &&
-        typeof question.prompt === 'string' &&
-        Array.isArray(question.options) &&
-        question.options.every(isOption)
-        ? [
-            [
-              id,
-              {
-                ...question,
-                builtBy: question.kind === 'asked' ? 'model' : 'code',
-                shape: SHAPES.includes(question.shape ?? '')
-                  ? question.shape
-                  : 'pickOne',
-                options: question.options.map((option) => ({
-                  ...option,
-                  detail: option.detail ?? null,
-                  ref: option.ref ?? null,
-                })),
-                allowsSomethingElse: question.allowsSomethingElse ?? false,
-                noneOption: question.noneOption ?? false,
-                recordKinds: toRecordKinds(question.recordKinds),
-                dateMode: question.dateMode ?? null,
-                number: question.number ?? null,
-                aboutRef: question.aboutRef ?? null,
-                answer: question.answer ?? null,
-              } as HelmQuestion,
-            ],
-          ]
-        : [];
-    }),
-  );
 
 const toLeadId = (value: unknown) => (typeof value === 'string' ? value : null);
 
