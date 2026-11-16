@@ -68,7 +68,12 @@ import {
   isAnswerInFlight,
   sendQuestionAnswer,
 } from '@apps/helm/store/actions/questionActions';
+import { isKeptQuietOnDevice } from '@apps/helm/store/actions/privacyActions';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
+import {
+  PRIVATE_COLLECTIONS,
+  type PrivateKind,
+} from '@apps/helm/utils/privacyParents';
 import {
   selectAllCaptures,
   selectExecutionsById,
@@ -123,6 +128,8 @@ const toVoiceIdentity = (label: string): VoiceIdentity => ({
 });
 
 /** Helm's voice: talking writes a spoken turn like a typed one, the line the server sealed for it is said once the turn is sorted, and "undo that" takes the open session's latest turn back. One instance serves home and the conversation over a page. */
+const PRIVATE_KINDS = Object.keys(PRIVATE_COLLECTIONS) as PrivateKind[];
+
 export function useHelmVoice() {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -794,8 +801,15 @@ export function useHelmVoice() {
       return;
     }
     try {
+      const isHeld =
+        (latest.heldSpoken ?? null) !== null ||
+        latest.effectRefs.some((ref) => {
+          const kind = PRIVATE_KINDS.find(
+            (each) => PRIVATE_COLLECTIONS[each] === ref.collection,
+          );
+          return kind ? isKeptQuietOnDevice(kind, ref.docId) : false;
+        });
       const result = await takeBack(uid, latest.id);
-      const isHeld = (latest.heldSpoken ?? null) !== null;
       if (result.kind === 'done')
         say(result.report, isHeld ? QUIET_SPOKEN_LINE : result.report);
       else if (result.kind === 'refused') {

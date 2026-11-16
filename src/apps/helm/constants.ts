@@ -861,6 +861,14 @@ export const HELM_COPY = {
     ]
       .filter(Boolean)
       .join(' '),
+  tookBackKeptChange: (count: number, names: string[]) =>
+    count === 1 && names.length === 1
+      ? `Put back how ${names[0]} was kept`
+      : `Put back how ${count} things were kept`,
+  undoReportKept: (count: number, names: string[]) =>
+    count === 1 && names.length === 1
+      ? `Put back how ${names[0]} was kept.`
+      : `Put back how ${count} things were kept.`,
   tookBackFacts: (count: number) =>
     `Took back ${count} ${count === 1 ? 'fact' : 'facts'}`,
   undoReportFacts: (takenBack: number, kept: number, gone: number) =>

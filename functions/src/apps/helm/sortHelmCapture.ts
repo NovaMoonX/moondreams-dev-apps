@@ -67,8 +67,10 @@ import {
 import { namedMomentWhoIds, type KeyDateRecord } from './nomos/planKeyDates.js';
 import {
   readActiveProjectsIn,
-  readContextProjects,
-  readQuietProjectIds,
+  readActiveProjects,
+  readQuietProjects,
+  toContextProjects,
+  type ActiveProjectsRead,
 } from './projectStore.js';
 import {
   openTopicRecord,
@@ -195,7 +197,8 @@ import {
   type MediaInput,
   type NoteTopicState,
   type PeopleInput,
-  type ProjectTaskRef,
+  type ProjectChildRef,
+  type ProjectChildren,
   type QuestionStateEntry,
 } from './nomos/executeCommands.js';
 import {
@@ -404,7 +407,7 @@ const readTaskQuiet = (key: HelmKey, task: TaskDoc): TaskQuiet | null => {
     : null;
 };
 
-const MAX_QUIET_CASCADE = 40;
+const MAX_QUIET_CASCADE = 100;
 
 /** A reading that failed in a way a later try may fix; the capture goes back to be sorted again. */
 class SortFailure extends Error {
@@ -1854,32 +1857,25 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               .toISOString()
               .slice(0, 10),
           });
-    const projects =
+    const activeProjects: ActiveProjectsRead | null =
       mode === 'rest'
-        ? []
-        : await readContextProjects(
-            firestore,
-            base,
-            key,
-            MAX_CONTEXT_PROJECTS,
-            today,
-          ).catch((error): Awaited<ReturnType<typeof readContextProjects>> => {
+        ? { projects: [], unreadableIds: new Set(), isCapped: false }
+        : await readActiveProjects(firestore, base, key).catch((error) => {
             logger.warn('helm.sort.projectsUnreadable', {
               cause: error instanceof Error ? error.name : 'error',
             });
-            return [];
+            return null;
           });
-    const quietProjectsRead =
-      mode === 'rest'
-        ? Promise.resolve({ ids: new Set<string>(), isComplete: true })
-        : readQuietProjectIds(firestore, base, key, today).catch(
-            (error) => {
-              logger.warn('helm.quiet.unknown', {
-                cause: error instanceof Error ? error.name : 'error',
-              });
-              return { ids: new Set<string>(), isComplete: false };
-            },
-          );
+    const projects = activeProjects
+      ? toContextProjects(activeProjects, MAX_CONTEXT_PROJECTS, today)
+      : [];
+    const quietProjects = activeProjects
+      ? readQuietProjects(activeProjects, today)
+      : {
+          projects: [],
+          unreadableIds: new Set<string>(),
+          isComplete: false,
+        };
     const [
       topics,
       hintedNotes,
@@ -2010,8 +2006,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         hintedNotes,
       )),
     ];
-    const quietProjects = await quietProjectsRead;
-    const quietProjectIds = quietProjects.ids;
+    const quietProjectIds = new Set(
+      quietProjects.projects.map((project) => project.id),
+    );
+    const isUnderQuietProject = (projectId: string | null) =>
+      projectId !== null &&
+      (quietProjectIds.has(projectId) ||
+        quietProjects.unreadableIds.has(projectId));
     if (!quietProjects.isComplete) {
       logger.warn('helm.quiet.unknown', { cause: 'incomplete' });
     }
@@ -2020,8 +2021,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       const entry = quietOf.get(id);
       return (
         entry !== undefined &&
-        (isQuietOn(entry.facts, today) ||
-          (entry.projectId !== null && quietProjectIds.has(entry.projectId)))
+        (isQuietOn(entry.facts, today) || isUnderQuietProject(entry.projectId))
       );
     };
     const flagQuiet = <T extends ContextTask>(task: T): T =>
@@ -2030,7 +2030,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ...note,
       isQuiet:
         isQuietOn(note.quietFacts, today) ||
-        note.projectIds.some((id) => quietProjectIds.has(id)),
+        note.projectIds.some((id) => isUnderQuietProject(id)),
     }));
     const quietIndex = buildQuietIndex(
       [
@@ -2040,11 +2040,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           name: entry.title,
           isQuiet: isTaskQuiet(id),
         })),
-        ...projects.map((project) => ({
+        ...quietProjects.projects.map((project) => ({
           kind: 'project' as const,
           id: project.id,
           name: project.name,
-          isQuiet: project.isQuiet === true || quietProjectIds.has(project.id),
+          isQuiet: true,
         })),
         ...quietNotes.map((note) => ({
           kind: 'note' as const,
@@ -2231,6 +2231,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         quotes,
         searched,
         mask: unattendedMask,
+        quiet: { today, isUnderQuietProject, found: quietIndex },
         topicRead: isOtherTopicNamed
           ? {
               topics: context.topics,
@@ -3119,7 +3120,35 @@ async function writeResult(
         ];
       }),
     );
-    const projectTasks = new Map<string, ProjectTaskRef[]>(
+    const readChildren = async (
+      kind: ProjectChildRef['kind'],
+      id: string,
+    ): Promise<ProjectChildren> => {
+      const folder = { task: 'tasks', note: 'notes', topic: 'topics' }[kind];
+      const collection = firestore.collection(`${base}/${folder}`);
+      const snapshot = await transaction.get(
+        (kind === 'task'
+          ? collection.where('projectId', '==', id)
+          : collection.where('projectIds', 'array-contains', id)
+        ).limit(MAX_QUIET_CASCADE + 1),
+      );
+      return {
+        isMore: snapshot.size > MAX_QUIET_CASCADE,
+        children: snapshot.docs
+          .slice(0, MAX_QUIET_CASCADE)
+          .flatMap((doc): ProjectChildRef[] => {
+            const data = doc.data() as Pick<TaskDoc, 'privacy' | 'sealed'>;
+            const title =
+              kind === 'topic'
+                ? openLiveTopic(key, doc.id, doc.data())?.name
+                : openTitle(key, data.sealed)?.title;
+            return title
+              ? [{ kind, id: doc.id, title, privacy: data.privacy ?? null }]
+              : [];
+          }),
+      };
+    };
+    const projectChildren = new Map<string, ProjectChildren>(
       isStale
         ? []
         : await Promise.all(
@@ -3134,29 +3163,18 @@ async function writeResult(
                     : [],
                 ),
               ),
-            ].map(async (id): Promise<[string, ProjectTaskRef[]]> => {
-              const snapshot = await transaction.get(
-                firestore
-                  .collection(tasksPath)
-                  .where('projectId', '==', id)
-                  .where('status', '==', 'open')
-                  .limit(MAX_QUIET_CASCADE),
+            ].map(async (id): Promise<[string, ProjectChildren]> => {
+              const reads = await Promise.all(
+                (['task', 'note', 'topic'] as const).map((kind) =>
+                  readChildren(kind, id),
+                ),
               );
               return [
                 id,
-                snapshot.docs.flatMap((doc): ProjectTaskRef[] => {
-                  const task = doc.data() as TaskDoc;
-                  const words = openTitle(key, task.sealed);
-                  return words?.title
-                    ? [
-                        {
-                          id: doc.id,
-                          title: words.title,
-                          privacy: task.privacy ?? null,
-                        },
-                      ]
-                    : [];
-                }),
+                {
+                  children: reads.flatMap((read) => read.children),
+                  isMore: reads.some((read) => read.isMore),
+                },
               ];
             }),
           ),
@@ -3469,7 +3487,7 @@ async function writeResult(
       quietCommands: isStale ? [] : quietCommands,
       today,
       existingNotes,
-      projectTasks,
+      projectChildren,
       quietKeys: quietIndex.keys,
       existingProjects,
       existing,
@@ -3648,6 +3666,9 @@ async function writeResult(
       );
       plan.noteUpdates.forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/notes/${id}`), data),
+      );
+      plan.topicPrivacyUpdates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/topics/${id}`), data),
       );
       plan.mediaKept.forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/media/${id}`), data),

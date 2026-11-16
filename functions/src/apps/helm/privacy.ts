@@ -157,6 +157,9 @@ export const buildOnItsPageLine = () =>
 export const buildUnattendedReleaseLine = () =>
   'Nothing is made not private while the screen is out of sight. Change it once you are looking.';
 
+export const buildKeptQuietLine = () =>
+  "It's kept quiet, so it stays private. Turn off Keep it quiet first.";
+
 export type SetPrivateOutcome =
   | { kind: 'applied'; facts: PrivacyFacts }
   | { kind: 'unchanged' }
@@ -167,12 +170,15 @@ export const readSetPrivate = (input: {
   current: PrivacyFacts;
   isPrivate: boolean;
   parents: readonly PrivateParent[];
+  today: string;
   /** Set for words said to the assistant: a release is never made while nobody is looking, and a mark code set is only cleared on its page. */
   byTurn?: { isUnattended: boolean };
 }): SetPrivateOutcome => {
   const inherited = readInheritedFrom(input.parents);
   if (!input.isPrivate && inherited)
     return { kind: 'refused', line: buildInheritedLine(inherited.name) };
+  if (!input.isPrivate && isQuietOn(input.current, input.today))
+    return { kind: 'refused', line: buildKeptQuietLine() };
   if (input.isPrivate === hasOwn(input.current)) return { kind: 'unchanged' };
   if (!input.isPrivate && input.byTurn?.isUnattended)
     return { kind: 'refused', line: buildUnattendedReleaseLine() };

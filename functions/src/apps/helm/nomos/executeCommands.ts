@@ -148,12 +148,21 @@ export interface ExistingNote {
   parents: PrivateParent[];
 }
 
-/** An open task of a project, read to follow the project's class. */
-export interface ProjectTaskRef {
+/** A task, note or topic filed under a project, read to follow the project's class. */
+export interface ProjectChildRef {
+  kind: 'task' | 'note' | 'topic';
   id: string;
   title: string;
   privacy: string | null;
 }
+
+/** What a project's children read found; `isMore` when the read stopped at its limit. */
+export interface ProjectChildren {
+  children: ProjectChildRef[];
+  isMore: boolean;
+}
+
+const MAX_QUIET_CHILD_WRITES = 300;
 
 /** A who the person already has, with what the tier rule reads about it. */
 export interface KnownWhoState extends KnownWho {
@@ -611,6 +620,7 @@ export interface WritePlan {
   projectUpdates: { id: string; data: Record<string, unknown> }[];
   noteCreates: { id: string; data: Record<string, unknown> }[];
   noteUpdates: { id: string; data: Record<string, unknown> }[];
+  topicPrivacyUpdates: { id: string; data: Record<string, unknown> }[];
   /** Photos kept by this turn, and photos let go for a day. */
   mediaKept: { id: string; data: Record<string, unknown> }[];
   mediaLetGo: { id: string; data: Record<string, unknown> }[];
@@ -751,8 +761,8 @@ interface PlanInput {
   today?: string;
   /** The notes a quiet command names, opened. */
   existingNotes?: Map<string, ExistingNote>;
-  /** The open tasks of each project, by project id, which follow it when it is kept quiet. */
-  projectTasks?: Map<string, ProjectTaskRef[]>;
+  /** The tasks (any status), notes and topics of each project, by project id, which follow it when it is kept quiet. */
+  projectChildren?: Map<string, ProjectChildren>;
   /** The `task:id` and `project:id` keys of everything quiet today. */
   quietKeys?: ReadonlySet<string>;
 }
@@ -1016,6 +1026,17 @@ export function planWrites(input: PlanInput): WritePlan {
     patches.set(id, { ...patches.get(id), ...data });
   const privacyLines: string[] = [];
   const NO_FACTS: PrivacyFacts = { privateMark: null, isPrivacyCleared: false };
+  const personalFactsOf = (draft: Draft) => {
+    const marked = readPrivateMark({
+      current: NO_FACTS,
+      isCare: false,
+      isForOtherWho: false,
+      commandMark: null,
+      isSensitiveHealth: false,
+      words: draft.title,
+    });
+    return draft.isPrivate ? readPersonMark(marked, true) : marked;
+  };
   const linkedFactsOf = (whoIds: string[], placeIds: string[]) => [
     ...whoIds.flatMap(
       (id) =>
@@ -1072,6 +1093,7 @@ export function planWrites(input: PlanInput): WritePlan {
         current: facts,
         isPrivate: command.isPrivate,
         parents,
+        today: input.today ?? '',
         byTurn: { isUnattended: input.isUnattended === true },
       });
       if (outcome.kind === 'refused') {
@@ -1274,6 +1296,7 @@ export function planWrites(input: PlanInput): WritePlan {
   );
   const projectQuiet = new Map<string, Record<string, unknown>>();
   const noteQuiet = new Map<string, Record<string, unknown>>();
+  const topicPrivate = new Map<string, Record<string, unknown>>();
   const refNames = new Map(
     projectCommands.flatMap((command): [string, string][] =>
       command.kind === 'createProject' && command.ref
@@ -1312,7 +1335,12 @@ export function planWrites(input: PlanInput): WritePlan {
     if (command.targetKind === 'task' && command.isNew) {
       const draft = drafts.get(command.targetId);
       if (!draft || !command.isQuiet) return;
-      draft.quiet = settleQuiet(command, NO_FACTS, [], draft.title);
+      draft.quiet = settleQuiet(
+        command,
+        personalFactsOf(draft),
+        [],
+        draft.title,
+      );
       return;
     }
     if (command.targetKind === 'task') {
@@ -1436,23 +1464,41 @@ export function planWrites(input: PlanInput): WritePlan {
       lastEditedAt: now,
     });
     if (!command.isQuiet) return;
-    const room = Math.max(0, MAX_EFFECTS - effects.length - drafts.size);
-    const unmarked = (input.projectTasks?.get(projectId) ?? []).filter(
-      (task) => task.privacy !== 'private',
+    const read = input.projectChildren?.get(projectId);
+    const unmarked = (read?.children ?? []).filter(
+      (child) => child.privacy !== 'private',
     );
-    if (unmarked.length > room) {
+    const writable = unmarked.slice(0, MAX_QUIET_CHILD_WRITES);
+    const left = unmarked.length - writable.length;
+    if (read?.isMore || left > 0) {
       quietLines.push(
-        `${unmarked.length - room} of ${project.name}'s tasks stay quiet through it`,
+        read?.isMore
+          ? `Some of ${project.name}'s things aren't private yet`
+          : `${left} of ${project.name}'s things aren't private yet`,
       );
     }
-    unmarked.slice(0, room).forEach((task) => {
-      record(
-        task.id,
-        'update',
-        { 'sealed.title': task.title, privacy: 'private' },
-        { 'sealed.title': task.title, privacy: 'ordinary' },
-      );
-      patch(task.id, { privacy: 'private', lastEditedAt: now });
+    const room = Math.max(0, MAX_EFFECTS - effects.length - drafts.size);
+    writable.forEach((child, at) => {
+      const isUndoable = at < room && child.kind !== 'topic';
+      if (isUndoable) {
+        record(
+          child.id,
+          'update',
+          { 'sealed.title': child.title, privacy: 'private' },
+          { 'sealed.title': child.title, privacy: 'ordinary' },
+          child.kind === 'note' ? 'notes' : 'tasks',
+        );
+      }
+      if (child.kind === 'task') {
+        patch(child.id, { privacy: 'private', lastEditedAt: now });
+      } else if (child.kind === 'note') {
+        noteQuiet.set(child.id, {
+          ...noteQuiet.get(child.id),
+          privacy: 'private',
+        });
+      } else {
+        topicPrivate.set(child.id, { privacy: 'private' });
+      }
     });
   });
   const createdFacts =
@@ -2169,16 +2215,7 @@ export function planWrites(input: PlanInput): WritePlan {
   ];
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
-    const marked = readPrivateMark({
-      current: { privateMark: null, isPrivacyCleared: false },
-      isCare: false,
-      isForOtherWho: false,
-      commandMark: null,
-      isSensitiveHealth: false,
-      words: draft.title,
-    });
-    const personal = draft.isPrivate ? readPersonMark(marked, true) : marked;
-    const facts = draft.quiet ? { ...personal, ...draft.quiet } : personal;
+    const facts = draft.quiet ?? personalFactsOf(draft);
     record(
       draft.id,
       'create',
@@ -2634,6 +2671,10 @@ export function planWrites(input: PlanInput): WritePlan {
         .map(([id, data]) => ({ id, data })),
     ],
     noteUpdates: [...noteQuiet.entries()].map(([id, data]) => ({ id, data })),
+    topicPrivacyUpdates: [...topicPrivate.entries()].map(([id, data]) => ({
+      id,
+      data,
+    })),
     noteCreates: [
       ...noteSteps.creates,
       ...knowledge.imports.map((made) => ({

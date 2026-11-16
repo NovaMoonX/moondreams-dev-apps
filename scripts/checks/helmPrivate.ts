@@ -31,6 +31,11 @@ import {
   buildQuietIndex,
   isQuietTurn,
 } from '../../functions/src/apps/helm/nomos/quietTurn.ts';
+import {
+  readActiveProjects,
+  readQuietProjects,
+  toContextProjects,
+} from '../../functions/src/apps/helm/projectStore.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
   buildInheritedLine,
@@ -172,6 +177,7 @@ test('setPrivate is refused on an inherited class with the code-built line', () 
     current: NONE,
     isPrivate: false,
     parents: [parent],
+    today: '2026-11-16',
   });
   assert.deepEqual(outcome, {
     kind: 'refused',
@@ -185,16 +191,27 @@ test('setPrivate is refused on an inherited class with the code-built line', () 
 
 test('setPrivate changes nothing when it already is so, and applies otherwise', () => {
   assert.equal(
-    readSetPrivate({ current: NONE, isPrivate: false, parents: [] }).kind,
+    readSetPrivate({
+      current: NONE,
+      isPrivate: false,
+      parents: [],
+      today: '2026-11-16',
+    }).kind,
     'unchanged',
   );
-  const on = readSetPrivate({ current: NONE, isPrivate: true, parents: [] });
+  const on = readSetPrivate({
+    current: NONE,
+    isPrivate: true,
+    parents: [],
+    today: '2026-11-16',
+  });
   assert.equal(on.kind, 'applied');
   assert.equal(
     readSetPrivate({
       current: readPersonMark(NONE, true),
       isPrivate: true,
       parents: [],
+      today: '2026-11-16',
     }).kind,
     'unchanged',
   );
@@ -1570,7 +1587,7 @@ test('an end day that cannot be read keeps it quiet until released, and says so'
   );
 });
 
-test('a project with more tasks than fit says how many stay quiet through it', () => {
+test('a project with more things than fit says how many are not private yet', () => {
   const plan = planWrites({
     commands: [],
     quietCommands: [
@@ -1594,14 +1611,18 @@ test('a project with more tasks than fit says how many stay quiet through it', (
         sealed: { name: 'Anniversary trip' },
       },
     ],
-    projectTasks: new Map([
+    projectChildren: new Map([
       [
         'project-1',
-        Array.from({ length: 200 }, (_, index) => ({
-          id: `task-${index}`,
-          title: `Task ${index}`,
-          privacy: null,
-        })),
+        {
+          isMore: false,
+          children: Array.from({ length: 400 }, (_, index) => ({
+            kind: 'task' as const,
+            id: `task-${index}`,
+            title: `Task ${index}`,
+            privacy: null,
+          })),
+        },
       ],
     ]),
     existing: new Map(),
@@ -1612,10 +1633,12 @@ test('a project with more tasks than fit says how many stay quiet through it', (
     newId: () => 'new-1',
   });
   assert.equal(plan.quietLines.length, 2);
-  assert.match(
+  assert.equal(
     plan.quietLines[1],
-    /^\d+ of Anniversary trip's tasks stay quiet through it$/,
+    "100 of Anniversary trip's things aren't private yet",
   );
+  assert.equal(plan.updates.length, 300);
+  assert.equal(plan.effectRefs.length, 40);
 });
 
 test('keeping a stored project quiet writes an Undo effect and makes its open tasks private', () => {
@@ -1642,8 +1665,21 @@ test('keeping a stored project quiet writes an Undo effect and makes its open ta
         sealed: { name: 'Anniversary trip' },
       },
     ],
-    projectTasks: new Map([
-      ['project-1', [{ id: 'task-9', title: 'Book flights', privacy: null }]],
+    projectChildren: new Map([
+      [
+        'project-1',
+        {
+          isMore: false,
+          children: [
+            {
+              kind: 'task' as const,
+              id: 'task-9',
+              title: 'Book flights',
+              privacy: null,
+            },
+          ],
+        },
+      ],
     ]),
     existing: new Map(),
     captureId: 'capture-1',
@@ -1767,6 +1803,254 @@ test('a turn is quiet when a command, a touched record, an answer source, a name
       texts: ['Moved the dentist visit.'],
     }),
     true,
+  );
+});
+
+const quietPlan = (
+  children: {
+    kind: 'task' | 'note' | 'topic';
+    id: string;
+    title: string;
+    privacy: string | null;
+  }[],
+  isMore = false,
+) =>
+  planWrites({
+    commands: [],
+    quietCommands: [
+      quietCommand({
+        targetId: 'project-1',
+        isNew: false,
+        isGuess: false,
+        until: null,
+      }) as never,
+    ],
+    today: DAY,
+    existingProjects: [
+      {
+        id: 'project-1',
+        name: 'Anniversary',
+        emoji: null,
+        whoRoles: {},
+        roleNotes: {},
+        milestoneState: {},
+        milestoneTitles: {},
+        sealed: { name: 'Anniversary' },
+      },
+    ],
+    projectChildren: new Map([['project-1', { isMore, children }]]),
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: 5000,
+    seal: seal as never,
+    newId: () => 'new-1',
+  });
+
+test('keeping a project quiet makes a done task, a linked note and a topic private, and the line says nothing when all of it happened', () => {
+  const plan = quietPlan([
+    { kind: 'task', id: 'task-done', title: 'Paid deposit', privacy: null },
+    { kind: 'note', id: 'note-1', title: 'Ring ideas', privacy: null },
+    { kind: 'topic', id: 'topic-1', title: 'Gifts', privacy: null },
+    {
+      kind: 'task',
+      id: 'task-own',
+      title: 'Already private',
+      privacy: 'private',
+    },
+  ]);
+  assert.deepEqual(
+    plan.effectRefs.map((ref) => `${ref.collection}:${ref.docId}`),
+    ['projects:project-1', 'tasks:task-done', 'notes:note-1'],
+  );
+  assert.deepEqual(
+    plan.updates.map((entry) => [entry.id, entry.data.privacy]),
+    [['task-done', 'private']],
+  );
+  assert.equal(
+    plan.noteUpdates.find((entry) => entry.id === 'note-1')?.data.privacy,
+    'private',
+  );
+  assert.deepEqual(plan.topicPrivacyUpdates, [
+    { id: 'topic-1', data: { privacy: 'private' } },
+  ]);
+  assert.deepEqual(plan.quietLines, ['Kept Anniversary quiet']);
+});
+
+test('a project read that stopped at its limit says some things are not private yet', () => {
+  const plan = quietPlan(
+    [{ kind: 'task', id: 'task-1', title: 'Book', privacy: null }],
+    true,
+  );
+  assert.equal(
+    plan.quietLines[1],
+    "Some of Anniversary's things aren't private yet",
+  );
+});
+
+test('a new task kept quiet keeps the health mark code gave it', () => {
+  const plan = planWrites({
+    commands: [
+      {
+        kind: 'createTask',
+        ref: '$new1',
+        title: 'Refill my prescription',
+        due: null,
+        isUrgent: false,
+        whoRefs: [],
+        placeRefs: [],
+        projectRef: null,
+      },
+    ] as never,
+    quietCommands: [
+      quietCommand({
+        targetKind: 'task',
+        targetId: '$new1',
+        isNew: true,
+        isGuess: false,
+        until: null,
+      }) as never,
+    ],
+    today: DAY,
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: 5000,
+    seal: seal as never,
+    newId: () => 'new-1',
+  });
+  const sealed = JSON.parse(
+    (plan.creates[0].data.sealed as { ciphertext: string }).ciphertext,
+  ) as Record<string, unknown>;
+  assert.equal(sealed.privateMark, 'health');
+  assert.equal(sealed.quietMark, 'person');
+});
+
+test('a quiet task a tool returns joins the turn quiet set, by its own mark or its project', async () => {
+  const doc = (id: string, over: Record<string, unknown>, own: object) => ({
+    id,
+    data: () => ({
+      status: 'open',
+      due: null,
+      createdAt: 1000,
+      privacy: 'ordinary',
+      projectId: null,
+      ...over,
+      sealed: sealForHelm(HELM_KEY, { title: `Ring ${id}`, ...own }),
+    }),
+  });
+  const query = {
+    where: () => query,
+    orderBy: () => query,
+    limit: () => query,
+    get: async () => ({
+      docs: [
+        doc('own', {}, { quietMark: 'person', privateMark: 'person' }),
+        doc('child', { projectId: 'p-quiet' }, {}),
+        doc('plain', {}, {}),
+      ],
+    }),
+  };
+  const index = buildQuietIndex([]);
+  const found = (await buildHelmTools({
+    uid: 'u1',
+    key: HELM_KEY,
+    aliases: createAliasBook('t'),
+    timeZone: 'UTC',
+    firestore: { collection: () => query } as never,
+    quiet: {
+      today: DAY,
+      isUnderQuietProject: (id) => id === 'p-quiet',
+      found: index,
+    },
+  })
+    .find((tool) => tool.name === 'search_tasks')
+    ?.run({ query: 'ring', includeDone: false } as never)) as {
+    tasks: { title: string; isQuiet?: boolean }[];
+  };
+  assert.deepEqual(
+    found.tasks.map((task) => [task.title, task.isQuiet === true]),
+    [
+      ['Ring own', true],
+      ['Ring child', true],
+      ['Ring plain', false],
+    ],
+  );
+  const turn = (over: Partial<Parameters<typeof isQuietTurn>[0]>) =>
+    isQuietTurn({
+      index,
+      hasQuietCommand: false,
+      touchesQuiet: false,
+      keepQuiet: false,
+      sourceKeys: [],
+      texts: ['Nothing to add.'],
+      ...over,
+    });
+  assert.equal(turn({ sourceKeys: ['task:own'] }), true);
+  assert.equal(turn({ sourceKeys: ['task:child'] }), true);
+  assert.equal(turn({ sourceKeys: ['task:plain'] }), false);
+  assert.equal(turn({ texts: ['Your Ring child is due soon.'] }), true);
+});
+
+test('one project that cannot be opened only makes its own children quiet', async () => {
+  const project = (id: string, sealed: unknown) => ({
+    id,
+    get: (field: string) => (field === 'sealed' ? sealed : undefined),
+  });
+  const query = {
+    where: () => query,
+    limit: () => query,
+    get: async () => ({
+      docs: [
+        project(
+          'good',
+          sealForHelm(HELM_KEY, { name: 'Anniversary', quietMark: 'person' }),
+        ),
+        project('plain', sealForHelm(HELM_KEY, { name: 'Garden' })),
+        project('broken', {
+          nonce: 'x',
+          ciphertext: 'not sealed',
+          keyId: 'k',
+          keyVersion: 1,
+        }),
+      ],
+    }),
+  };
+  const read = await readActiveProjects(
+    { collection: () => query } as never,
+    'apps/helm/users/u1',
+    HELM_KEY,
+  );
+  const quietRead = readQuietProjects(read, DAY);
+  assert.deepEqual(quietRead.projects, [{ id: 'good', name: 'Anniversary' }]);
+  assert.deepEqual([...quietRead.unreadableIds], ['broken']);
+  assert.equal(quietRead.isComplete, true);
+  assert.equal(toContextProjects(read, 20, DAY).length, 2);
+});
+
+test('turning Private off on a quiet thing is refused, and allowed once quiet is released', () => {
+  const kept = quiet(NONE);
+  if (kept.kind !== 'applied') throw new Error('expected applied');
+  const refused = readSetPrivate({
+    current: kept.facts,
+    isPrivate: false,
+    parents: [],
+    today: DAY,
+  });
+  assert.deepEqual(refused, {
+    kind: 'refused',
+    line: "It's kept quiet, so it stays private. Turn off Keep it quiet first.",
+  });
+  const released = quiet(kept.facts, { isQuiet: false });
+  if (released.kind !== 'applied') throw new Error('expected applied');
+  assert.equal(
+    readSetPrivate({
+      current: released.facts,
+      isPrivate: false,
+      parents: [],
+      today: DAY,
+    }).kind,
+    'applied',
   );
 });
 

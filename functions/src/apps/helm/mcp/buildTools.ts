@@ -13,6 +13,8 @@ import {
   TURNED_OFF_FAILURE,
 } from '../nomos/aliases.js';
 import { describeDue } from '../nomos/buildContext.js';
+import { readQuietFacts, toQuietKey } from '../nomos/quietTurn.js';
+import { isQuietOn } from '../privacy.js';
 import {
   cover,
   maskSyncedCopy,
@@ -113,6 +115,12 @@ export interface HelmToolScope {
   live?: LiveReads;
   /** The turn's mask: while nobody is looking, a private record is returned as a label and its words join `names`. */
   mask?: Mask & { timeZone: string };
+  /** The turn's quiet things: a task a tool returns that is kept quiet today (its own mark or its project's) joins `found`, so the turn is spoken as quiet. */
+  quiet?: {
+    today: string;
+    isUnderQuietProject: (projectId: string | null) => boolean;
+    found: { keys: Set<string>; names: string[] };
+  };
   /** Offers `get_topic`; each topic it reads has its version written into `versions`. */
   topicRead?: {
     topics: AliasBook;
@@ -369,17 +377,33 @@ export function buildHelmTools(scope: HelmToolScope) {
               status: string;
               due: TaskDue | null;
               privacy?: string | null;
+              projectId?: string | null;
               createdAt: number;
               sealed: SealedPayload;
             };
-            const title = readTitle(scope.key, data.sealed);
+            const { title, facts } = readTask(scope.key, data.sealed);
             const haystack = toWords(title);
             const isMatch =
               words.length > 0 &&
               words.every((word) =>
                 haystack.some((entry) => entry.includes(word)),
               );
-            return title && isMatch ? [{ id: doc.id, title, data }] : [];
+            return title && isMatch
+              ? [
+                  {
+                    id: doc.id,
+                    title,
+                    data,
+                    isQuiet:
+                      scope.quiet !== undefined &&
+                      ((facts !== null &&
+                        isQuietOn(facts, scope.quiet.today)) ||
+                        scope.quiet.isUnderQuietProject(
+                          data.projectId ?? null,
+                        )),
+                  },
+                ]
+              : [];
           });
         }),
       );
@@ -387,12 +411,19 @@ export function buildHelmTools(scope: HelmToolScope) {
         .flat()
         .sort((a, b) => b.data.createdAt - a.data.createdAt)
         .slice(0, MAX_RESULTS)
-        .map(({ id, title, data }) => ({
-          alias: scope.aliases.add(id),
-          title: scope.mask ? toTaskLabel(data, title, scope.mask) : title,
-          status: data.status,
-          due: describeDue(data.due),
-        }));
+        .map(({ id, title, data, isQuiet }) => {
+          if (isQuiet) {
+            scope.quiet?.found.keys.add(toQuietKey('task', id));
+            scope.quiet?.found.names.push(title);
+          }
+          return {
+            alias: scope.aliases.add(id),
+            title: scope.mask ? toTaskLabel(data, title, scope.mask) : title,
+            status: data.status,
+            due: describeDue(data.due),
+            ...(isQuiet ? { isQuiet: true } : {}),
+          };
+        });
       return { tasks };
     },
   };
@@ -1238,11 +1269,14 @@ export function buildHelmTools(scope: HelmToolScope) {
   ];
 }
 
-const readTitle = (key: HelmKey, sealed: SealedPayload) => {
+const readTask = (key: HelmKey, sealed: SealedPayload) => {
   try {
     const opened = openForHelm(key, sealed);
-    return typeof opened.title === 'string' ? opened.title : '';
+    return {
+      title: typeof opened.title === 'string' ? opened.title : '',
+      facts: readQuietFacts(opened),
+    };
   } catch {
-    return '';
+    return { title: '', facts: null };
   }
 };

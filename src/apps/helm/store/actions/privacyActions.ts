@@ -17,6 +17,7 @@ import type { HelmEncryption, Sealed } from '@apps/helm/types';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { toDayKey } from '@apps/helm/utils/planDays';
 import {
+  isQuietInEffect,
   readEffectivePrivacy,
   readPersonMark,
   readPrivacyFacts,
@@ -294,6 +295,10 @@ export async function setPrivate(
     current: readPrivacyFacts(record),
     isPrivate,
     parents,
+    today: toDayKey(
+      Date.now(),
+      store.getState().helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
+    ),
   });
   if (outcome.kind === 'refused') return outcome;
   if (outcome.kind === 'unchanged') {
@@ -362,7 +367,21 @@ export async function setQuiet(
   const read = (current: PrivacyFacts) =>
     readSetQuiet({ current, isQuiet, until, mark: 'person', parents, today });
   const outcome = read(readPrivacyFacts(record));
-  if (outcome.kind !== 'applied') return outcome;
+  if (outcome.kind === 'refused') return outcome;
+  if (outcome.kind === 'unchanged') {
+    const retried = toParent(
+      kind,
+      id,
+      await getHelmEncryption(uid),
+      readPrivacyFacts(record),
+    );
+    if (!retried || (await rewriteChildren(uid, retried)) === 0) return outcome;
+    return {
+      kind: 'saved',
+      isCascadeIncomplete: true,
+      undo: async () => {},
+    };
+  }
   const encryption = await getHelmEncryption(uid);
   const parentFacts = parents.map((parent) => parent.facts);
   const written = await writePrivacy(
@@ -407,6 +426,19 @@ export async function setQuiet(
       await cascade(putBack.next);
     },
   };
+}
+
+/** Whether a record on the device is kept quiet today, by its own mark or a quiet parent; a record the device doesn't hold is not. */
+export function isKeptQuietOnDevice(kind: PrivateKind, id: string) {
+  const record = readRecords(kind).find((entry) => entry.id === id);
+  if (!record) return false;
+  const zone =
+    store.getState().helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
+  return isQuietInEffect(
+    readPrivacyFacts(record),
+    parentsOf(kind, record, readParentIndex()).map((parent) => parent.facts),
+    toDayKey(Date.now(), zone),
+  );
 }
 
 /** Thrown when a child that is private only through a parent about to go could not be given its own mark: the parent stays. */
