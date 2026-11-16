@@ -35,6 +35,23 @@ function PlayAgainButton({ text }: { text: string }) {
   );
 }
 
+/** Under a turn that kept a quiet thing off the speaker: says the held line once, this time. At most one per turn. */
+export function SayAloudButton({ line }: { line: string }) {
+  const voice = useHelmVoiceContext();
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='sm'
+      className='text-muted-foreground relative ml-[30px] before:absolute before:-inset-2 before:content-[""]'
+      onClick={() => voice.replay(line)}
+    >
+      <Volume2 className='size-4' aria-hidden='true' />
+      {HELM_COPY.quietSayAloud}
+    </Button>
+  );
+}
+
 /** The assistant's words beside its mark. */
 function AssistantLine({
   children,

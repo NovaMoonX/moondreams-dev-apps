@@ -1,7 +1,11 @@
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
-import type { PrivacyClass, PrivateMark } from '@apps/helm/utils/privacy';
+import type {
+  PrivacyClass,
+  PrivateMark,
+  QuietMark,
+} from '@apps/helm/utils/privacy';
 import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
 
 export type { SharedKind };
@@ -429,7 +433,7 @@ export interface CaptureSealed {
   /** On a turn that answers a question, the structured answer; null when a spoken one could not be placed. A turn made before answers had shapes reads as null. */
   questionAnswer: QuestionAnswerValue | null;
   /** The line the server wrote for the person to hear and read; absent until it wrote one. */
-  spoken?: { text: string } | null;
+  spoken?: { text: string; heldText?: string | null } | null;
 }
 
 /** A turn after its words are opened; one that would not open keeps `isUnreadable` and empty words. */
@@ -443,6 +447,8 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
   questions: Record<string, HelmQuestion>;
   /** The server's line for the turn, read aloud and shown on its card; null until it wrote one, and on one that would not open. */
   line: string | null;
+  /** The line the server really wrote when it kept a quiet thing off the speaker and put the screen line in `line`; null on every other turn. */
+  heldLine: string | null;
   isUnreadable: boolean;
   /** The turn was a closing phrase the assistant's own reading found ("ugh, doesn't matter"); it made nothing. False on a turn made before closing phrases. */
   endedConversation: boolean;
@@ -677,6 +683,12 @@ export interface ProjectSealed {
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
   isPrivacyCleared: boolean | null;
+  /** Kept quiet: shown on screen, never said aloud; null when not, absent in a payload sealed before the field. */
+  quietMark: QuietMark | null;
+  /** The last day it stays quiet (YYYY-MM-DD, the profile's zone); null keeps it quiet until released. */
+  quietUntil: string | null;
+  /** The person released it, so a guess never keeps it quiet again. */
+  isQuietCleared: boolean | null;
 }
 
 export interface OpenProject extends Omit<Project, 'sealed'>, ProjectSealed {
@@ -713,6 +725,12 @@ export interface NoteSealed {
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
   isPrivacyCleared: boolean | null;
+  /** Kept quiet: shown on screen, never said aloud; null when not, absent in a payload sealed before the field. */
+  quietMark: QuietMark | null;
+  /** The last day it stays quiet (YYYY-MM-DD, the profile's zone); null keeps it quiet until released. */
+  quietUntil: string | null;
+  /** The person released it, so a guess never keeps it quiet again. */
+  isQuietCleared: boolean | null;
 }
 
 export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
@@ -988,6 +1006,12 @@ export interface TaskSealed {
   privateMark: PrivateMark | null;
   /** The person said it needn't be private, so code never marks it again. */
   isPrivacyCleared: boolean | null;
+  /** Kept quiet: shown on screen, never said aloud; null when not, absent in a payload sealed before the field. */
+  quietMark: QuietMark | null;
+  /** The last day it stays quiet (YYYY-MM-DD, the profile's zone); null keeps it quiet until released. */
+  quietUntil: string | null;
+  /** The person released it, so a guess never keeps it quiet again. */
+  isQuietCleared: boolean | null;
 }
 
 /** A task after its words are opened; one that would not open keeps `isUnreadable` and an empty title. */
@@ -998,6 +1022,9 @@ export interface OpenTask extends Omit<Task, 'sealed'> {
   steps: Record<string, { text: string }>;
   privateMark: PrivateMark | null;
   isPrivacyCleared: boolean | null;
+  quietMark: QuietMark | null;
+  quietUntil: string | null;
+  isQuietCleared: boolean | null;
   isUnreadable: boolean;
 }
 
@@ -1084,6 +1111,8 @@ export interface ExecutionSealed {
   undoReport: string | null;
   /** The line said aloud after a spoken turn, code-built; null for a typed turn, an undo and anything made before voice. */
   spoken: string | null;
+  /** The line the server really wrote when it kept a quiet thing off the speaker and put the screen line in `spoken`; written only by the server, so absent on every other execution. */
+  heldSpoken?: string | null;
   /** The records an undo found deleted, by id; null on every other execution. */
   goneIds: string[] | null;
   /** Result rows that touch no record (a note already kept); null on executions that said none. */
@@ -1098,6 +1127,7 @@ export interface OpenExecution extends Omit<Execution, 'sealed'> {
   effects: ExecutionEffect[];
   undoReport: string | null;
   spoken: string | null;
+  heldSpoken: string | null;
   goneIds: string[] | null;
   lines: ResultNoteLine[];
   isUnreadable: boolean;

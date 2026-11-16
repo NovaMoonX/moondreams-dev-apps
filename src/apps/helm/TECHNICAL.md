@@ -1234,7 +1234,7 @@ The pattern is Runway's (`src/apps/runway/TECHNICAL.md` "Sealed documents", "The
 
 **Observations, notes, reflections, research and scheduled actions (Next).** Readable: ids, the subject's collection and id, day keys, instants, the source, `isCare`, statuses, `offerOn`, cadence, time and `nextRunAt`. Sealed: every quote, tag, note, candidate, why version, overview, video and instruction. A readable observation says only that the person said something about a habit on a day, never what.
 
-**Private.** `privacy` (`'ordinary' | 'private'`, the class in effect) is readable on every private-capable record, so a job without the key can honour it; the record's own mark (`privateMark`: health, care or the person) and `isPrivacyCleared` are sealed. A readable `private` says that something is private, never why (section 29, "Private is a class").
+**Private.** `privacy` (`'ordinary' | 'private'`, the class in effect) is readable on every private-capable record, so a job without the key can honour it; the record's own mark (`privateMark`: health, care or the person) and `isPrivacyCleared` are sealed. A readable `private` says that something is private, never why (section 29, "Private is a class"). Kept quiet is three more sealed fields on a task, project and note (`quietMark`, `quietUntil` as the last quiet day in the profile's zone, `isQuietCleared`), written with the private fields by `setQuiet` in `privacyActions.ts` (same transaction, same parent cascade); an execution's sealed `heldSpoken` and a capture's `spoken.heldText` carry the real line the server held back when it swapped in `QUIET_SPOKEN_LINE`, and the device's `useHelmVoice` and replay buttons speak only the swapped line (`utils/quietSpeech.ts`).
 
 ### The key
 

@@ -14,11 +14,14 @@ import { store } from '@/store';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { openJson, sealJson } from '@apps/helm/security';
 import type { HelmEncryption, Sealed } from '@apps/helm/types';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import { toDayKey } from '@apps/helm/utils/planDays';
 import {
   readEffectivePrivacy,
   readPersonMark,
   readPrivacyFacts,
   readSetPrivate,
+  readSetQuiet,
   type PrivacyFacts,
 } from '@apps/helm/utils/privacy';
 import {
@@ -205,6 +208,9 @@ export async function writePrivacy(
           ...opened,
           privateMark: next.privateMark,
           isPrivacyCleared: next.isPrivacyCleared,
+          quietMark: next.quietMark ?? null,
+          quietUntil: next.quietUntil ?? null,
+          isQuietCleared: next.isQuietCleared ?? false,
         },
         encryption,
       ),
@@ -312,6 +318,62 @@ export async function setPrivate(
     kind,
     id,
     (facts) => readPersonMark(facts, isPrivate),
+    parentFacts,
+  );
+  if (written.kind !== 'saved') return written;
+  const cascade = async (facts: PrivacyFacts) => {
+    const parent = toParent(kind, id, encryption, facts);
+    return parent ? (await rewriteChildren(uid, parent)) > 0 : false;
+  };
+  const isCascadeIncomplete = await cascade(written.next);
+  return {
+    kind: 'saved',
+    isCascadeIncomplete,
+    undo: async () => {
+      await writePrivacy(
+        uid,
+        encryption,
+        kind,
+        id,
+        () => written.previous,
+        parentFacts,
+      );
+      await cascade(written.previous);
+    },
+  };
+}
+
+export type QuietKind = 'task' | 'project' | 'note';
+
+/** The person's switch or date for keeping one thing quiet (shown on screen, never said aloud). Keeping it quiet makes it private too, with the same cascade; releasing leaves it private, and a quiet that comes from a parent is refused with its own line. `until` is the last quiet day, or null for no end. */
+export async function setQuiet(
+  uid: string,
+  kind: QuietKind,
+  id: string,
+  isQuiet: boolean,
+  until: string | null,
+): Promise<SetPrivateResult> {
+  const record = readRecords(kind).find((entry) => entry.id === id);
+  if (!record) return { kind: 'missing' };
+  const parents = parentsOf(kind, record, readParentIndex());
+  const zone =
+    store.getState().helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
+  const today = toDayKey(Date.now(), zone);
+  const read = (current: PrivacyFacts) =>
+    readSetQuiet({ current, isQuiet, until, mark: 'person', parents, today });
+  const outcome = read(readPrivacyFacts(record));
+  if (outcome.kind !== 'applied') return outcome;
+  const encryption = await getHelmEncryption(uid);
+  const parentFacts = parents.map((parent) => parent.facts);
+  const written = await writePrivacy(
+    uid,
+    encryption,
+    kind,
+    id,
+    (facts) => {
+      const next = read(facts);
+      return next.kind === 'applied' ? next.facts : facts;
+    },
     parentFacts,
   );
   if (written.kind !== 'saved') return written;

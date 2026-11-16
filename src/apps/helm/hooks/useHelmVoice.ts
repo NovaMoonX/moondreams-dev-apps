@@ -95,6 +95,8 @@ import {
 } from '@apps/helm/utils/spokenQuestion';
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
 import { readPresence } from '@apps/helm/utils/presence';
+import { QUIET_SPOKEN_LINE } from '@apps/helm/utils/privacy';
+import { findHeldLine } from '@apps/helm/utils/quietSpeech';
 import { toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
@@ -277,10 +279,11 @@ export function useHelmVoice() {
     if (outcome === 'busy') showNote(HELM_COPY.replayBusy);
   }
 
-  function say(line: string) {
+  /** Shows the line; `spoken` is what is said when it differs (a line that names a quiet thing is shown, never said). */
+  function say(line: string, spoken: string = line) {
     voice.settle();
     showNote(line);
-    void voice.speak(line, {
+    void voice.speak(spoken, {
       priority: 'reply',
       turnKey: Date.now(),
       canAnswer: isHandsFreeOn && isSurfaceShown.current,
@@ -492,7 +495,25 @@ export function useHelmVoice() {
           (entry) => entry.id !== settledId && entry.skippedAt === null,
         )
       : undefined;
-    return next ? buildSpokenQuestion(next.question) : null;
+    return next && !isTurnHeld(captureId)
+      ? buildSpokenQuestion(next.question)
+      : null;
+  }
+
+  /** Whether the turn kept a quiet thing off the speaker, so its questions are shown and never read out. */
+  function isTurnHeld(captureId: string) {
+    const state = store.getState();
+    const capture = selectAllCaptures(state).find(
+      (entry) => entry.id === captureId,
+    );
+    if (!capture) return false;
+    const executions = selectExecutionsById(state);
+    return (
+      findHeldLine(
+        [capture],
+        capture.executionIds.flatMap((id) => executions.get(id) ?? []),
+      ) !== null
+    );
   }
 
   /** The open question of the latest turn that can be answered by words: a spoken turn's for a spoken answer, any turn's for a typed one. */
@@ -586,13 +607,12 @@ export function useHelmVoice() {
       const isShort = text.trim().split(/\s+/).length <= ASK_AGAIN_MAX_WORDS;
       if (!isShort || askedAgain.current.has(askedKey)) return false;
       askedAgain.current.add(askedKey);
-      say(
-        question.options.some(
-          (option) => option.id !== 'none' && option.id !== 'new',
-        )
-          ? buildAskAgainLine(question)
-          : buildSpokenQuestion(question),
-      );
+      const askAgain = question.options.some(
+        (option) => option.id !== 'none' && option.id !== 'new',
+      )
+        ? buildAskAgainLine(question)
+        : buildSpokenQuestion(question);
+      say(askAgain, isTurnHeld(asked.captureId) ? QUIET_SPOKEN_LINE : askAgain);
       return true;
     }
     if (isModel) {
@@ -775,9 +795,12 @@ export function useHelmVoice() {
     }
     try {
       const result = await takeBack(uid, latest.id);
-      if (result.kind === 'done') say(result.report);
+      const isHeld = (latest.heldSpoken ?? null) !== null;
+      if (result.kind === 'done')
+        say(result.report, isHeld ? QUIET_SPOKEN_LINE : result.report);
       else if (result.kind === 'refused') {
-        say(result.report ?? HELM_COPY.cannotTakeBack);
+        const refusal = result.report ?? HELM_COPY.cannotTakeBack;
+        say(refusal, isHeld ? QUIET_SPOKEN_LINE : refusal);
       } else say(HELM_COPY.undoNeedsConnectionTitle);
     } catch (error) {
       console.error('Helm undo by voice failed', error);
@@ -835,11 +858,15 @@ export function useHelmVoice() {
           store.getState().helm.profile?.timeZone ??
           getDeviceTimeZone() ??
           'UTC';
+        const turnExecutions = capture.executionIds.flatMap(
+          (id) => executionsById.get(id) ?? [],
+        );
+        const isHeld = findHeldLine([capture], turnExecutions) !== null;
         const spoken = isSettledWithLines
-          ? (capture.executionIds
-              .flatMap((id) => executionsById.get(id) ?? [])
-              .find((execution) => execution.spoken !== null)?.spoken ??
-            capture.line)
+          ? isHeld
+            ? QUIET_SPOKEN_LINE
+            : (turnExecutions.find((execution) => execution.spoken !== null)
+                ?.spoken ?? capture.line)
           : null;
         const answered = afterAnswer.current.get(leadId);
         afterAnswer.current.delete(leadId);
