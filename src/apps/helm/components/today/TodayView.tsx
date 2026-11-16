@@ -209,7 +209,7 @@ function TodayView({
   const offer = readyTask ? null : patternOffer;
 
   const aheadToday = useMemo(() => {
-    if (!isToday || offer !== null) return null;
+    if (!isToday || offer !== null || readyTask !== null) return null;
     const today = dayKeyToMs(todayKey);
     return (
       projects.flatMap((project) => {
@@ -225,7 +225,7 @@ function TodayView({
           : [];
       })[0] ?? null
     );
-  }, [isToday, offer, projects, todayKey]);
+  }, [isToday, offer, readyTask, projects, todayKey]);
 
   const [aheadTarget, setAheadTarget] = useState<AheadSheetTarget | null>(null);
   const [isAheadOpen, setIsAheadOpen] = useState(false);
