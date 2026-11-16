@@ -30,6 +30,34 @@ const shortDayFormat = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
 });
 
+const clockFormat = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+const zoneFormats = new Map<string, Intl.DateTimeFormat>();
+
+const zoneClock = (zone: string, is24Hour: boolean) => {
+  const id = `${is24Hour}:${zone}`;
+  const cached = zoneFormats.get(id);
+  if (cached) return cached;
+  const made = is24Hour
+    ? new Intl.DateTimeFormat('en-GB', {
+        timeZone: zone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      })
+    : new Intl.DateTimeFormat('en-US', {
+        timeZone: zone,
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+  zoneFormats.set(id, made);
+  return made;
+};
+
 /** "Sun, Nov 29" from a day key. */
 export const formatRunDay = (dayKey: string) =>
   dayFormat.format(dayKeyToMs(dayKey));
@@ -40,11 +68,7 @@ export const formatShortDay = (dayKey: string) =>
 
 /** "6:00 PM" from a floating "HH:mm". */
 export const formatClockWords = (time: string) =>
-  new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(Date.parse(`1970-01-01T${time}:00Z`));
+  clockFormat.format(Date.parse(`1970-01-01T${time}:00Z`));
 
 /** The zone's short name after a time, only when this phone's zone is not the action's. */
 export const readZoneSuffix = (zone: string, at: number) => {
@@ -67,11 +91,7 @@ export const formatRun = (
 
 /** The same for an instant in the action's zone, such as when a run was due. */
 export const formatInstant = (at: number, zone: string) =>
-  `${formatRunDay(toDayKeyIn(at, zone))} · ${new Intl.DateTimeFormat('en-US', {
-    timeZone: zone,
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(at))}${readZoneSuffix(zone, at)}`;
+  `${formatRunDay(toDayKeyIn(at, zone))} · ${zoneClock(zone, false).format(new Date(at))}${readZoneSuffix(zone, at)}`;
 
 export const readActionZone = (action: OpenScheduledAction, homeZone: string) =>
   action.timeZone ?? homeZone;
@@ -130,12 +150,7 @@ export function readListMeta(
       formatRun(
         {
           day: toDayKeyIn(action.lastRunDueAt, zone),
-          time: new Intl.DateTimeFormat('en-GB', {
-            timeZone: zone,
-            hour: '2-digit',
-            minute: '2-digit',
-            hourCycle: 'h23',
-          }).format(new Date(action.lastRunDueAt)),
+          time: zoneClock(zone, true).format(new Date(action.lastRunDueAt)),
           at: action.lastRunDueAt,
         },
         zone,

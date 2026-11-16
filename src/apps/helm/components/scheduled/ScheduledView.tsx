@@ -189,6 +189,7 @@ function ScheduledView({ onBack, onHome, onOpenActivity }: ScheduledViewProps) {
         )}
       </main>
       <ScheduledSheet
+        key={openId ?? 'none'}
         actionId={openId}
         onClose={() => setOpenId(null)}
         onOpenActivity={onOpenActivity}

@@ -12,7 +12,7 @@ import {
   runHelmSort,
   type SortResult,
 } from '../sortHelmCapture.js';
-import { openStoredAction } from './actionStore.js';
+import { actionsQuery, openStoredAction } from './actionStore.js';
 import {
   decideRun,
   isHeldError,
@@ -32,7 +32,7 @@ const PEOPLE_MAX = 100;
 const AT_ONCE = 5;
 const STOP_STARTING_AFTER = 180_000;
 const ALREADY_EXISTS = 6;
-const READ_CAP = 51;
+const NOT_FOUND = 5;
 const OPENED = new Set(['sorted', 'needsYou', 'failed']);
 
 const queuePath = (uid: string) => `apps/helm/actionQueue/${uid}`;
@@ -42,6 +42,7 @@ export interface RunReport {
   ran: number;
   patched: number;
   failed: number;
+  deferred: number;
 }
 
 export type SortOne = (uid: string, captureId: string) => Promise<SortResult>;
@@ -136,6 +137,20 @@ const makeCapture = async (input: {
     });
 };
 
+const closeWaiting = async (
+  firestore: Firestore,
+  base: string,
+  captureId: string,
+  now: number,
+) => {
+  const ref = firestore.doc(`${base}/captures/${captureId}`);
+  await firestore.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (snap.data()?.status !== 'received') return;
+    transaction.update(ref, { status: 'failed', dismissedAt: now });
+  });
+};
+
 const applyPatch = (
   firestore: Firestore,
   ref: ReturnType<Firestore['doc']>,
@@ -175,9 +190,20 @@ async function runPerson(
   const base = `apps/helm/users/${uid}`;
   const queueRef = firestore.doc(queuePath(uid));
   const isLeased = await firestore.runTransaction(async (transaction) => {
-    const snap = await transaction.get(queueRef);
+    const [snap, profileSnap] = await Promise.all([
+      transaction.get(queueRef),
+      transaction.get(firestore.doc(base)),
+    ]);
     const until = snap.data()?.leaseUntil;
     if (typeof until === 'number' && until > now) return false;
+    const lookAt = snap.data()?.lookAt;
+    const stamp = profileSnap.data()?.scheduledActionsChangedAt;
+    if (
+      typeof stamp === 'number' &&
+      snap.data()?.plannedChangedAt === stamp &&
+      (typeof lookAt !== 'number' || lookAt > now)
+    )
+      return false;
     transaction.set(queueRef, { leaseUntil: now + LEASE }, { merge: true });
     return true;
   });
@@ -193,10 +219,7 @@ async function runPerson(
       ? profile.scheduledActionsChangedAt
       : null;
   const key = await unwrapHelmKey(firestore, keyring, uid);
-  const snap = await firestore
-    .collection(`${base}/scheduledActions`)
-    .limit(READ_CAP)
-    .get();
+  const snap = await actionsQuery(firestore, base).get();
   await Promise.all(
     snap.docs.map(async (entry) => {
       const stored = openStoredAction(key, entry.id, entry.data());
@@ -205,9 +228,14 @@ async function runPerson(
       const editedAt = (entry.data().lastEditedAt ?? null) as number | null;
       if (decision.kind === 'patch') {
         await applyPatch(firestore, entry.ref, decision.patch, editedAt);
+        if (decision.closes)
+          await closeWaiting(firestore, base, decision.closes, now);
         report.patched += 1;
         return;
       }
+      if (decision.closes)
+        await closeWaiting(firestore, base, decision.closes, now);
+      if (!(await firestore.doc(base).get()).exists) return;
       await makeCapture({
         firestore,
         uid,
@@ -235,9 +263,14 @@ async function runPerson(
             spoken: null,
             abilityOffer: null,
           } as SortResult)
-        : await sort(uid, decision.captureId).catch((error: unknown) =>
-            isHeldError(error) ? { held: 'limit' } : { error: true as const },
-          );
+        : await sort(uid, decision.captureId).catch((error: unknown) => {
+            if (isHeldError(error)) return { held: 'limit' };
+            logger.warn('helm.scheduled.sortFailed', {
+              who: uid.slice(0, 4),
+              name: error instanceof Error ? error.name : 'error',
+            });
+            return { error: true as const };
+          });
       const patch = settleRun(decision, result, now);
       if (patch) {
         await applyPatch(firestore, entry.ref, patch, editedAt);
@@ -245,18 +278,20 @@ async function runPerson(
       }
     }),
   );
-  const after = await firestore
-    .collection(`${base}/scheduledActions`)
-    .limit(READ_CAP)
-    .get();
-  await queueRef.set({
-    lookAt: readLookAt(
-      after.docs.map((entry) => entry.data()),
-      now,
-    ),
-    plannedAt: now,
-    leaseUntil: null,
-  });
+  const after = await actionsQuery(firestore, base).get();
+  await queueRef
+    .update({
+      lookAt: readLookAt(
+        after.docs.map((entry) => entry.data()),
+        now,
+      ),
+      plannedAt: now,
+      plannedChangedAt: changedAt,
+      leaseUntil: null,
+    })
+    .catch((error: unknown) => {
+      if ((error as { code?: unknown }).code !== NOT_FOUND) throw error;
+    });
 }
 
 const readPeople = async (firestore: Firestore, now: number) => {
@@ -270,15 +305,17 @@ const readPeople = async (firestore: Firestore, now: number) => {
       .collection('apps/helm/users')
       .where('scheduledActionsChangedAt', '>=', now - CHANGED_BEHIND)
       .where('scheduledActionsChangedAt', '<=', now + CHANGED_AHEAD)
+      .orderBy('scheduledActionsChangedAt', 'desc')
       .limit(PEOPLE_MAX)
       .get(),
   ]);
-  return [
+  const all = [
     ...new Set([
       ...due.docs.map((doc) => doc.id),
       ...changed.docs.map((doc) => doc.id),
     ]),
-  ].slice(0, PEOPLE_MAX);
+  ];
+  return { people: all.slice(0, PEOPLE_MAX), cut: all.length - PEOPLE_MAX };
 };
 
 const runGroups = async (
@@ -290,8 +327,11 @@ const runGroups = async (
   sort: SortOne,
   report: RunReport,
 ): Promise<RunReport> => {
-  if (groups.length === 0 || Date.now() - startedAt > STOP_STARTING_AFTER)
+  if (groups.length === 0) return report;
+  if (Date.now() - startedAt > STOP_STARTING_AFTER) {
+    report.deferred += groups.flat().length;
     return report;
+  }
   await Promise.all(
     groups[0].map((uid) =>
       runPerson(firestore, keyring, uid, now, sort, report).catch(
@@ -327,7 +367,7 @@ export async function runScheduledActions(
   now: number,
   sort: SortOne = sortOne,
 ): Promise<RunReport> {
-  const people = await readPeople(firestore, now);
+  const { people, cut } = await readPeople(firestore, now);
   const groups = Array.from(
     { length: Math.ceil(people.length / AT_ONCE) },
     (_, index) => people.slice(index * AT_ONCE, (index + 1) * AT_ONCE),
@@ -337,6 +377,7 @@ export async function runScheduledActions(
     ran: 0,
     patched: 0,
     failed: 0,
+    deferred: Math.max(0, cut),
   });
 }
 

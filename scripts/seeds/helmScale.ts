@@ -1516,6 +1516,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       answersQuestion: null,
       ttsProvider: null,
       arrivedVia: 'direct',
+      scheduledActionId: null,
       disposition: null,
       noticedCount: null,
       medium: 'web',

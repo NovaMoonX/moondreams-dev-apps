@@ -2,7 +2,10 @@ import {
   collection,
   limit,
   onSnapshot,
+  orderBy,
   query,
+  where,
+  type Query,
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -71,6 +74,7 @@ async function openAction(
     lastFailReason: REASONS.find((one) => one === data.lastFailReason) ?? null,
     pausedFrom: numberOrNull(data.pausedFrom),
     pausedUntil: numberOrNull(data.pausedUntil),
+    pausedForSpanId: stringOrNull(data.pausedForSpanId),
     runNowAt: numberOrNull(data.runNowAt),
     createdBy: data.createdBy === 'person' ? 'person' : 'nomos',
     sourceCaptureId: stringOrNull(data.sourceCaptureId),
@@ -100,35 +104,84 @@ async function openAction(
   }
 }
 
-/** Every scheduled action, ended ones included. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+const ENDED_SHOWN = 20;
+
+/** The active and paused actions, and the last few the person ended for the Ended fold; ended ones are never deleted, so only these two bounded reads are made. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startScheduledActionsListener(
   uid: string,
   read: SealedReader,
   onChange: (actions: OpenScheduledAction[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
-  const sequence = { latest: 0 };
+  const parts = {
+    live: null as OpenScheduledAction[] | null,
+    ended: [] as OpenScheduledAction[],
+  };
+  const sequence = { live: 0, ended: 0 };
   const run = { isStopped: false };
+  const actions = collection(
+    db,
+    'apps',
+    'helm',
+    'users',
+    uid,
+    'scheduledActions',
+  );
 
-  const stop = onSnapshot(
+  const emit = () => {
+    if (!parts.live) return;
+    const byId = new Map<string, OpenScheduledAction>();
+    [...parts.live, ...parts.ended].forEach((action) => {
+      const held = byId.get(action.id);
+      if (!held || (action.lastEditedAt ?? 0) > (held.lastEditedAt ?? 0))
+        byId.set(action.id, action);
+    });
+    onChange(Array.from(byId.values()));
+  };
+
+  const listen = (
+    part: 'live' | 'ended',
+    source: Query,
+    handleError: (error: unknown) => void,
+  ) =>
+    onSnapshot(
+      source,
+      async (snapshot) => {
+        sequence[part] += 1;
+        const current = sequence[part];
+        const opened = await Promise.all(
+          snapshot.docs.map((entry) => openAction(entry, read)),
+        );
+        if (current !== sequence[part] || run.isStopped) return;
+        parts[part] = opened;
+        emit();
+      },
+      handleError,
+    );
+
+  const stopLive = listen(
+    'live',
     query(
-      collection(db, 'apps', 'helm', 'users', uid, 'scheduledActions'),
+      actions,
+      where('status', 'in', ['active', 'paused']),
       limit(HELM_CAPS.scheduledActions + 1),
     ),
-    async (snapshot) => {
-      sequence.latest += 1;
-      const current = sequence.latest;
-      const opened = await Promise.all(
-        snapshot.docs.map((entry) => openAction(entry, read)),
-      );
-      if (current !== sequence.latest || run.isStopped) return;
-      onChange(opened);
-    },
     (error) => onError(toError(error)),
+  );
+  const stopEnded = listen(
+    'ended',
+    query(
+      actions,
+      where('endedBy', '==', 'person'),
+      orderBy('lastEditedAt', 'desc'),
+      limit(ENDED_SHOWN),
+    ),
+    (error) => console.error('Helm ended actions did not open', error),
   );
 
   return () => {
     run.isStopped = true;
-    stop();
+    stopLive();
+    stopEnded();
   };
 }

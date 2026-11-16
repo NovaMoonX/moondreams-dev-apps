@@ -173,6 +173,7 @@ export async function sendCapture(
     answersQuestion: turn.answersQuestion,
     ttsProvider: null,
     arrivedVia: 'direct',
+    scheduledActionId: null,
     disposition: null,
     medium: 'web',
     via: null,

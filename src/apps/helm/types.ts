@@ -394,7 +394,7 @@ export interface Capture {
   /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
   arrivedVia: 'direct' | 'dropBox' | 'scheduled';
   /** The scheduled action a run's turn was made for; null on any other turn. */
-  scheduledActionId?: string | null;
+  scheduledActionId: string | null;
   /** Whether the turn acted, was only noted, or answered a question; null on a turn from before. */
   disposition: CaptureDisposition | null;
   /** 'mcp' for a turn an outside assistant (Claude, Gemini) sent; 'web' for every turn typed or spoken in Helm. */
@@ -787,6 +787,7 @@ export interface ScheduledAction {
   /** Date-only, inclusive; runs on a day between them are paused. */
   pausedFrom: number | null;
   pausedUntil: number | null;
+  pausedForSpanId: string | null;
   /** Set by the device to run it once now, only before its next scheduled run; the server clears it. */
   runNowAt: number | null;
   createdBy: 'person' | 'nomos';

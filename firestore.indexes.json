@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "scheduledActions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "endedBy", "order": "ASCENDING" },
+        { "fieldPath": "lastEditedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "viewings",
       "queryScope": "COLLECTION",
       "fields": [

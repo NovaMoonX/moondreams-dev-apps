@@ -4395,7 +4395,7 @@ export const HELM_COPY = {
   scheduledTimeLabel: 'Time',
   scheduledMake: 'Schedule it',
   scheduledSave: 'Save changes',
-  scheduledSaveFailed: "That didn't save. Check your connection and try again.",
+  scheduledSaveFailed: "That didn't save. Check your connection.",
   scheduledUndoKept: 'Something changed since, so that stays as it is.',
   scheduledUndoFailed: "That couldn't be put back right now.",
   scheduledDropped: (count: number) =>
@@ -4429,6 +4429,14 @@ export const HELM_COPY = {
   awayPauseAction: 'Pause them',
   awayPauseOn: (days: string) =>
     `What runs at home is paused while you're away (${days}).`,
+  awayPauseKept: (count: number) =>
+    count === 1
+      ? 'One is already paused on other days, so it keeps running.'
+      : `${count} are already paused on other days, so they keep running.`,
+  awayPauseNotPutBack: (count: number) =>
+    count === 1
+      ? 'One was changed since, so it stays as it is.'
+      : `${count} were changed since, so they stay as they are.`,
 } as const;
 
 /** What was said, in the closed set the model and the code both read. */

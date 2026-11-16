@@ -217,7 +217,10 @@ const sortSource = readFileSync(
   'utf8',
 );
 assert.match(sortSource, /isOutside: lead\?\.medium === 'mcp'/);
-assert.match(sortSource, /mode !== 'rest' && !read\.isOutside && isQuestion/);
+assert.match(
+  sortSource,
+  /mode !== 'rest' &&\s*!read\.isOutside &&\s*!isScheduledCapture\(capture\) &&\s*isQuestion/,
+);
 
 // An outside assistant is never there to see: its tools and its filed turns always mask a private record.
 assert.match(external, /mask: \{\s*isOn: true,/);

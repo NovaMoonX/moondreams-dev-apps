@@ -205,16 +205,19 @@ export const readScheduledCommands = (
       }
       const title = toWords(item.title, SCHEDULE_TITLE_CAP);
       const repeat = toRepeat(item.repeat, context.reading);
-      const held = toHeld(item.heldCommands);
+      const read = toHeld(item.heldCommands);
+      const held = read.filter(
+        (entry) => entry.kind === 'createTask' && entry.title !== null,
+      );
       const instruction = toWords(item.instruction, SCHEDULE_INSTRUCTION_CAP);
-      if (!title || !repeat || (held.length === 0 && !instruction)) {
-        return { drop: 'schedule-shape' };
-      }
       const asked = (
         Array.isArray(item.allowedKinds) ? item.allowedKinds : []
       ).filter((kind): kind is string => typeof kind === 'string');
-      if ([...held.map((entry) => entry.kind), ...asked].some(isOutbound)) {
+      if ([...read.map((entry) => entry.kind), ...asked].some(isOutbound)) {
         return { drop: 'schedule-outbound' };
+      }
+      if (!title || !repeat || (held.length === 0 && !instruction)) {
+        return { drop: 'schedule-shape' };
       }
       return {
         command: {

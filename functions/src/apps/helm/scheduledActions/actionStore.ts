@@ -18,8 +18,12 @@ import {
 
 const READ_CAP = MAX_SCHEDULED_ACTIONS + 1;
 
-const actionsQuery = (firestore: Firestore, base: string) =>
-  firestore.collection(`${base}/scheduledActions`).limit(READ_CAP);
+/** Ended actions are never deleted, so an unfiltered read would let them crowd live ones out of the cap. */
+export const actionsQuery = (firestore: Firestore, base: string) =>
+  firestore
+    .collection(`${base}/scheduledActions`)
+    .where('status', 'in', ['active', 'paused'])
+    .limit(READ_CAP);
 
 /** A stored action with its words opened; words that won't open leave `words` null, and the action is never run. */
 export const openStoredAction = (
@@ -73,7 +77,7 @@ export const readContextScheduled = async (
   const snap = await actionsQuery(firestore, base).get();
   return snap.docs.flatMap((entry): ContextScheduledAction[] => {
     const stored = openStoredAction(key, entry.id, entry.data());
-    if (!stored.words || stored.doc.status === 'ended') return [];
+    if (!stored.words) return [];
     const state = readActionState(stored.doc);
     const { words, next } = describeScheduledRule(state, homeZone, now);
     return [

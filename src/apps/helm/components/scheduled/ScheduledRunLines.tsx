@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, ChevronRight } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
@@ -31,7 +31,7 @@ interface ScheduledRunLinesProps {
   /** Today shows the unseen runs, the ones seen today and any that failed; Activity shows the last run of every action. */
   scope: 'today' | 'activity';
   onOpenConnectedApps: () => void;
-  onOpenActivity: () => void;
+  onOpenActivity?: () => void;
 }
 
 interface RunLineProps {
@@ -106,6 +106,10 @@ function RunLine({ run, onOpenConnectedApps, onOpen }: RunLineProps) {
         <span className='min-w-0 flex-1 text-[15px] leading-[21px] text-pretty break-words'>
           {run.line}
         </span>
+        <ChevronRight
+          className='text-muted-foreground mt-0.5 size-4 shrink-0'
+          aria-hidden='true'
+        />
       </Button>
       {isFailed && (
         <div className='flex flex-col items-start gap-2 pl-8'>
@@ -168,7 +172,7 @@ function ScheduledRunLines({
   const todayKey = toDayKey(useNow(60_000), homeZone);
   const shown =
     scope === 'activity'
-      ? runs
+      ? runs.filter((run) => run.executionId === null)
       : runs.filter(
           (run) =>
             run.isUnseen ||
@@ -191,7 +195,7 @@ function ScheduledRunLines({
             onOpen={setOpenId}
           />
         ))}
-        {more > 0 && (
+        {more > 0 && onOpenActivity && (
           <Button
             type='button'
             variant='tertiary'
@@ -204,6 +208,7 @@ function ScheduledRunLines({
         )}
       </div>
       <ScheduledSheet
+        key={openId ?? 'none'}
         actionId={openId}
         onClose={() => setOpenId(null)}
         onOpenActivity={onOpenActivity}

@@ -218,7 +218,6 @@ function ActivityScreen({
         <ScheduledRunLines
           scope='activity'
           onOpenConnectedApps={onOpenConnectedApps}
-          onOpenActivity={() => undefined}
         />
         {isFailed && (
           <p className='helm-card p-4 text-[15px] text-pretty' role='alert'>

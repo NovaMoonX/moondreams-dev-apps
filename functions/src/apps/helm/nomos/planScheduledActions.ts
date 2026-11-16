@@ -32,7 +32,7 @@ import type { ScheduleCommand, ScheduleDrop } from './readScheduledCommands.js';
 
 export const SCHEDULE_DROP_LINES: Partial<Record<ScheduleDrop, string>> = {
   'schedule-outbound':
-    "Helm can't send or add anything outside itself on a schedule yet, so that one wasn't made. It can make tasks or plan a day for you at a set time",
+    "I can't send or add anything outside this app on a schedule yet, so that one wasn't made. I can make tasks or plan a day for you at a set time",
 };
 
 const DEFAULT_TIME = '09:00';
@@ -69,7 +69,7 @@ export interface ScheduledPlanInput {
   isAnswer?: boolean;
   newId: () => string;
   /** Time-away spans (date-only `from` and `to`) the person chose to pause what runs at home for; a new action with a run inside one waits it out. */
-  pauseSpans?: { from: number; to: number }[];
+  pauseSpans?: { id: string; from: number; to: number }[];
   seal: (fields: Record<string, unknown>) => SealedPayload;
   /** How many effects the turn may still write. */
   room: number;
@@ -136,6 +136,8 @@ export function readActionState(doc: Record<string, unknown>): ActionState {
     lastRunDueAt: isNumber(doc.lastRunDueAt) ? doc.lastRunDueAt : null,
     pausedFrom: isNumber(doc.pausedFrom) ? doc.pausedFrom : null,
     pausedUntil: isNumber(doc.pausedUntil) ? doc.pausedUntil : null,
+    pausedForSpanId:
+      typeof doc.pausedForSpanId === 'string' ? doc.pausedForSpanId : null,
   };
 }
 
@@ -184,7 +186,7 @@ const buildSplitQuestion = (command: ScheduleActionCommand) => ({
   ...baseQuestion,
   kind: 'splitDaily' as const,
   shape: 'yesNo' as const,
-  prompt: `Helm runs things once a day at most. Make ${command.times.length} daily actions, at ${command.times
+  prompt: `I run things once a day at most. Make ${command.times.length} daily actions, at ${command.times
     .map(clockWords)
     .join(' and ')}?`,
   options: [
@@ -235,7 +237,7 @@ export function planScheduledActions(input: ScheduledPlanInput): ScheduledPlan {
     if (command.repeat.freq === 'subDaily') {
       if (command.times.length < 2 || input.isAnswer) {
         return withNotKept(
-          'Helm runs things once a day at most. Say the times you want ("at 8 and at 6") and it will make one daily action for each',
+          'I run things once a day at most. Say the times you want ("at 8 and at 6") and I will make one daily action for each',
         );
       }
       return {
@@ -271,6 +273,7 @@ export function planScheduledActions(input: ScheduledPlanInput): ScheduledPlan {
       moved: {},
       pausedFrom: null,
       pausedUntil: null,
+      pausedForSpanId: null,
     };
     const spanPause =
       (input.pauseSpans ?? [])
@@ -282,7 +285,9 @@ export function planScheduledActions(input: ScheduledPlanInput): ScheduledPlan {
             { fromDay: msToDayKey(span.from), toDay: msToDayKey(span.to) },
             input.now,
           );
-          return pause ? [pause] : [];
+          return pause && 'pausedFrom' in pause
+            ? [{ ...pause, pausedForSpanId: span.id }]
+            : [];
         })[0] ?? null;
     const schedule = { ...unpaused, ...spanPause };
     const { words, next } = describeScheduledRule(

@@ -2,7 +2,7 @@ import type { ToolLoopResult } from '../../../ai/modelProvider.js';
 import { SCHEDULED_OWN_KINDS } from '../nomos/commands.js';
 
 export interface ScheduledCaptureFields {
-  arrivedVia?: string;
+  arrivedVia?: string | null;
   heldCommands?: unknown;
   allowedKinds?: unknown;
 }
@@ -17,14 +17,12 @@ const allowedOf = (capture: ScheduledCaptureFields) =>
       (SCHEDULED_OWN_KINDS as readonly string[]).includes(kind),
   );
 
-/** The reply a held-commands run files without asking a model: each held task is made as the person set it. Only a task can be made without words to read. */
-export const readHeldLoop = (
-  capture: ScheduledCaptureFields,
-): ToolLoopResult | null => {
+/** The commands a held run files without a model: only a titled task needs no words to read. */
+export const buildHeldCommands = (capture: ScheduledCaptureFields) => {
   if (!isScheduledCapture(capture) || !Array.isArray(capture.heldCommands))
     return null;
   const allowed = allowedOf(capture);
-  const commands = (capture.heldCommands as Record<string, unknown>[]).flatMap(
+  return (capture.heldCommands as Record<string, unknown>[]).flatMap(
     (held, index) =>
       held.kind === 'createTask' &&
       allowed.includes('createTask') &&
@@ -43,6 +41,14 @@ export const readHeldLoop = (
           ]
         : [],
   );
+};
+
+/** The reply a held-commands run files without asking a model: each held task is made as the person set it. */
+export const readHeldLoop = (
+  capture: ScheduledCaptureFields,
+): ToolLoopResult | null => {
+  const commands = buildHeldCommands(capture);
+  if (!commands) return null;
   return {
     terminalInput: { commands },
     terminalName: 'file_results',

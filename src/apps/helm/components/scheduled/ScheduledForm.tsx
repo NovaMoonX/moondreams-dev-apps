@@ -118,10 +118,11 @@ function ScheduledForm({
         })
       : null;
 
-  const isRuleChanged = !isCreate && !sameRepeatRule(rule, oldRule);
+  const isRuleChanged = !isCreate && !isOne && !sameRepeatRule(rule, oldRule);
   const isTimeChanged = !isCreate && time !== (moved?.time ?? action.time);
   const isWordsChanged =
     !isCreate &&
+    !isOne &&
     (title.trim() !== action.title ||
       (!isCommands && (instruction.trim() || null) !== action.instruction));
   const isDayChanged = isOne && day !== (moved?.day ?? targetKey);
@@ -129,7 +130,7 @@ function ScheduledForm({
     ? title !== '' || instruction !== '' || rule !== null
     : isRuleChanged || isTimeChanged || isWordsChanged || isDayChanged;
   const hasWords =
-    title.trim() !== '' && (isCommands || instruction.trim() !== '');
+    isOne || (title.trim() !== '' && (isCommands || instruction.trim() !== ''));
   const isDayValid =
     !isOne ||
     range === null ||
@@ -179,6 +180,10 @@ function ScheduledForm({
       return;
     }
     if (!action) return;
+    const editedWords = {
+      title: title.trim(),
+      instruction: isCommands ? action.instruction : instruction.trim(),
+    };
     const changes = [
       ...(isOne && targetKey && isDayChanged
         ? [
@@ -199,14 +204,19 @@ function ScheduledForm({
           : []),
       ...(!isOne && (isRuleChanged || isTimeChanged)
         ? [
-            changeScheduledAction(user.uid, action.id, {
-              kind: 'following',
-              fromKey: runKey,
-              rule: isRuleChanged
-                ? (rule ?? toSingleRule(action.repeat))
-                : null,
-              time: isTimeChanged ? time : null,
-            }),
+            changeScheduledAction(
+              user.uid,
+              action.id,
+              {
+                kind: 'following',
+                fromKey: runKey,
+                rule: isRuleChanged
+                  ? (rule ?? toSingleRule(action.repeat))
+                  : null,
+                time: isTimeChanged ? time : null,
+              },
+              { words: isWordsChanged ? editedWords : undefined },
+            ),
           ]
         : []),
     ];
@@ -217,14 +227,13 @@ function ScheduledForm({
       return;
     }
     const writes = changes.map((change) => guard(change));
-    const wordsWrite = isWordsChanged
-      ? guard(
-          changeScheduledWords(user.uid, action.id, {
-            title: title.trim(),
-            instruction: isCommands ? action.instruction : instruction.trim(),
-          }),
-        )
-      : null;
+    const isSplit = changes.some(
+      (change) => 'createdId' in change && change.createdId !== null,
+    );
+    const wordsWrite =
+      isWordsChanged && !isSplit
+        ? guard(changeScheduledWords(user.uid, action.id, editedWords))
+        : null;
     const kept = [...writes, wordsWrite].flatMap((write) => write ?? []);
     const dropped = kept.reduce((total, write) => total + write.dropped, 0);
     if (kept.length > 0) {
@@ -273,19 +282,21 @@ function ScheduledForm({
       {runKey !== null && (
         <RadioRows rows={rows} value={scope} onChange={setScope} />
       )}
-      <div className='space-y-1.5'>
-        <label htmlFor={`${fieldId}-title`} className='text-sm font-medium'>
-          {HELM_COPY.scheduledNameLabel}
-        </label>
-        <Input
-          id={`${fieldId}-title`}
-          value={title}
-          maxLength={TITLE_CAP}
-          autoFocus={isCreate}
-          placeholder={HELM_COPY.scheduledNamePlaceholder}
-          onChange={(event) => setTitle(event.target.value)}
-        />
-      </div>
+      {!isOne && (
+        <div className='space-y-1.5'>
+          <label htmlFor={`${fieldId}-title`} className='text-sm font-medium'>
+            {HELM_COPY.scheduledNameLabel}
+          </label>
+          <Input
+            id={`${fieldId}-title`}
+            value={title}
+            maxLength={TITLE_CAP}
+            autoFocus={isCreate}
+            placeholder={HELM_COPY.scheduledNamePlaceholder}
+            onChange={(event) => setTitle(event.target.value)}
+          />
+        </div>
+      )}
       {!isCommands && !isOne && (
         <div className='space-y-1.5'>
           <label

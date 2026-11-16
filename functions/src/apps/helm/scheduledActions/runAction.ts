@@ -2,12 +2,14 @@ import { HttpsError } from 'firebase-functions/v2/https';
 
 import type { SortResult } from '../sortHelmCapture.js';
 import { SCHEDULED_OWN_KINDS } from '../nomos/commands.js';
+import { buildHeldCommands } from './scheduledTurn.js';
 import {
   readActionState,
   type StoredScheduled,
 } from '../nomos/planScheduledActions.js';
 import {
   canRunNow,
+  pruneRuns,
   readCaptureKey,
   readDueRuns,
   readNextRun,
@@ -16,8 +18,10 @@ import {
   readRunBlocker,
   toCaptureId,
   toDayKeyIn,
+  type ActionState,
   type Occurrence,
 } from '../nomos/scheduledActions.js';
+import { zonedDateTimeToEpoch } from '../../../notifications/zonedTime.js';
 
 const SCAN = 100;
 
@@ -28,7 +32,11 @@ type Reason =
 /** What one stored action needs this tick, decided from its fields alone so no model is asked first. */
 export type RunDecision =
   | { kind: 'none' }
-  | { kind: 'patch'; patch: Record<string, unknown> }
+  | {
+      kind: 'patch';
+      patch: Record<string, unknown>;
+      closes?: string;
+    }
   | {
       kind: 'run';
       captureId: string;
@@ -37,6 +45,8 @@ export type RunDecision =
       isNow: boolean;
       skipped: Occurrence[];
       next: Occurrence | null;
+      pruned: Pick<ActionState, 'skipped' | 'moved'>;
+      closes?: string;
     };
 
 export interface RunInput {
@@ -67,8 +77,79 @@ const failedPatch = (
   runNowAt: null,
 });
 
+const NOW_ID = /_now\d*$/;
+
+// An action following the home zone may have been stored under another zone.
+const readDueAt = (state: ActionState, homeZone: string) => {
+  if (state.nextRunAt === null || state.timeZone !== null || !state.nextRunKey)
+    return state.nextRunAt;
+  const moved = state.moved[state.nextRunKey];
+  return Math.min(
+    state.nextRunAt,
+    zonedDateTimeToEpoch(
+      moved?.day ?? state.nextRunKey,
+      moved?.time ?? state.time,
+      homeZone,
+    ),
+  );
+};
+
+const holdsNothing = (stored: StoredScheduled) =>
+  stored.words !== null &&
+  stored.doc.kind === 'commands' &&
+  buildHeldCommands({
+    arrivedVia: 'scheduled',
+    heldCommands: stored.words.heldCommands,
+    allowedKinds: stored.doc.allowed,
+  })?.length === 0;
+
 /** Decides what an action does now: nothing, a field patch (finished, skipped, blocked, invalid) or a run to make. */
-export function decideRun({
+export function decideRun(input: RunInput): RunDecision {
+  const { doc } = input.stored;
+  const waitingId =
+    doc.lastOutcome === 'waiting' &&
+    typeof doc.lastRunCaptureId === 'string' &&
+    !NOW_ID.test(doc.lastRunCaptureId)
+      ? doc.lastRunCaptureId
+      : null;
+  if (!waitingId) return decideCore(input);
+  const state = readActionState(doc);
+  const dueAt = readDueAt(state, input.homeZone);
+  const isStale =
+    state.status !== 'active' ||
+    state.nextRunKey !== readCaptureKey(waitingId) ||
+    dueAt === null ||
+    dueAt > input.now;
+  const settled = decideCore(
+    isStale
+      ? {
+          ...input,
+          stored: { ...input.stored, doc: { ...doc, lastOutcome: 'skipped' } },
+        }
+      : input,
+  );
+  if (settled.kind === 'none') {
+    return isStale
+      ? { kind: 'patch', patch: { lastOutcome: 'skipped' }, closes: waitingId }
+      : settled;
+  }
+  if (settled.kind === 'patch') {
+    return isStale || 'lastOutcome' in settled.patch
+      ? {
+          ...settled,
+          patch: isStale
+            ? { lastOutcome: 'skipped', ...settled.patch }
+            : settled.patch,
+          closes: waitingId,
+        }
+      : settled;
+  }
+  return settled.captureId === waitingId
+    ? settled
+    : { ...settled, closes: waitingId };
+}
+
+function decideCore({
   stored,
   homeZone,
   now,
@@ -81,6 +162,7 @@ export function decideRun({
       ? { kind: 'none' }
       : { kind: 'patch', patch: { runNowAt: null } };
   }
+  const dueAt = readDueAt(state, homeZone);
   const isRunNow =
     typeof doc.runNowAt === 'number' &&
     canRunNow({
@@ -97,31 +179,30 @@ export function decideRun({
     permitted: SCHEDULED_OWN_KINDS,
     needs: [],
   });
+  const cannotRun = blocker || !stored.words || holdsNothing(stored);
+  const failReason = (): Reason => (blocker ? blocker.reason : 'runFailed');
   if (isRunNow && lastKey) {
-    const dueAt = typeof doc.lastRunDueAt === 'number' ? doc.lastRunDueAt : now;
-    const captureId = `${toCaptureId(id, lastKey)}_now`;
-    return blocker || !stored.words
+    const lastDueAt =
+      typeof doc.lastRunDueAt === 'number' ? doc.lastRunDueAt : now;
+    const captureId = `${toCaptureId(id, lastKey)}_now${doc.runNowAt}`;
+    return cannotRun
       ? {
           kind: 'patch',
-          patch: failedPatch(
-            now,
-            dueAt,
-            captureId,
-            blocker ? blocker.reason : 'runFailed',
-          ),
+          patch: failedPatch(now, lastDueAt, captureId, failReason()),
         }
       : {
           kind: 'run',
           captureId,
-          dueAt,
+          dueAt: lastDueAt,
           key: lastKey,
           isNow: true,
           skipped: [],
           next: null,
+          pruned: { skipped: state.skipped, moved: state.moved },
         };
   }
   const clear = typeof doc.runNowAt === 'number' ? { runNowAt: null } : {};
-  if (state.nextRunAt === null || state.nextRunAt > now) {
+  if (dueAt === null || dueAt > now) {
     return Object.keys(clear).length > 0
       ? { kind: 'patch', patch: clear }
       : { kind: 'none' };
@@ -133,7 +214,7 @@ export function decideRun({
   )
     return { kind: 'none' };
   const fromKey =
-    state.nextRunKey ?? toDayKeyIn(state.nextRunAt, state.timeZone ?? homeZone);
+    state.nextRunKey ?? toDayKeyIn(dueAt, state.timeZone ?? homeZone);
   const occurrences = readRuleProblem(state.repeat, state.startsOn)
     ? null
     : readOccurrences(state, homeZone, { fromKey, limit: SCAN });
@@ -141,7 +222,7 @@ export function decideRun({
     return {
       kind: 'patch',
       patch: {
-        ...failedPatch(now, state.nextRunAt, null, 'ruleInvalid'),
+        ...failedPatch(now, dueAt, null, 'ruleInvalid'),
         nextRunAt: null,
         nextRunKey: null,
       },
@@ -156,6 +237,7 @@ export function decideRun({
     return { kind: 'patch', patch: { ...clear, ...advance(next) } };
   }
   const next = readNextRun(state, homeZone, { now, afterKey: handled.key });
+  const pruned = pruneRuns(state, handled.key);
   const skippedPatch = {
     lastRunAt: now,
     lastRunDueAt: handled.at,
@@ -164,20 +246,17 @@ export function decideRun({
     lastFailReason: null,
     runNowAt: null,
     ...advance(next),
+    ...pruned,
   };
   if (!due.run) return { kind: 'patch', patch: skippedPatch };
   const captureId = toCaptureId(id, due.run.key);
-  if (blocker || !stored.words) {
+  if (cannotRun) {
     return {
       kind: 'patch',
       patch: {
-        ...failedPatch(
-          now,
-          due.run.at,
-          captureId,
-          blocker ? blocker.reason : 'runFailed',
-        ),
+        ...failedPatch(now, due.run.at, captureId, failReason()),
         ...advance(next),
+        ...pruned,
       },
     };
   }
@@ -189,6 +268,7 @@ export function decideRun({
     isNow: false,
     skipped: due.skipped,
     next,
+    pruned,
   };
 }
 
@@ -231,7 +311,9 @@ export function settleRun(
     ...base,
     lastOutcome: outcome,
     lastFailReason: outcome === 'failed' ? 'runFailed' : null,
-    ...(decision.isNow ? {} : advance(decision.next)),
+    ...(decision.isNow
+      ? {}
+      : { ...advance(decision.next), ...decision.pruned }),
   };
 }
 

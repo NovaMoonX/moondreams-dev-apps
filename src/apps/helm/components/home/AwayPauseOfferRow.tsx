@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useAppSelector } from '@/store';
 import { msToDayKey } from '@/utils/cadenceUtils';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -13,7 +14,10 @@ import {
 } from '@apps/helm/engine/whereabouts';
 import { useTodayKey } from '@apps/helm/hooks/useTodayKey';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
-import { pauseScheduledActionsForSpan } from '@apps/helm/store/actions/scheduledActionWrites';
+import {
+  pauseScheduledActionsForSpan,
+  unpauseScheduledActionsForSpan,
+} from '@apps/helm/store/actions/scheduledActionWrites';
 import { setWhoWhere } from '@apps/helm/store/actions/whoActions';
 
 interface AwayPauseOfferRowProps {
@@ -22,21 +26,8 @@ interface AwayPauseOfferRowProps {
 
 const dismissedKey = (awayId: string) => `helm-pause-offer-not-now:${awayId}`;
 
-const readDismissed = (awayId: string) => {
-  try {
-    return localStorage.getItem(dismissedKey(awayId)) === '1';
-  } catch {
-    return false;
-  }
-};
-
-const keepDismissed = (awayId: string) => {
-  try {
-    localStorage.setItem(dismissedKey(awayId), '1');
-  } catch {
-    return;
-  }
-};
+const parseDismissed = (stored: unknown) =>
+  stored === true || stored === 1 ? true : null;
 
 /** Under the answer that wrote a time-away span, when the person has scheduled actions: pause the ones that run at home while they are away, now and for ones made during the span; once per span, with Not now and Pause them, then one line with Undo. */
 function AwayPauseOfferRow({ offer }: AwayPauseOfferRowProps) {
@@ -55,11 +46,13 @@ function AwayPauseOfferRow({ offer }: AwayPauseOfferRowProps) {
     self?.away?.some(
       (span) => span.id === offer.awayId && span.pausesScheduled === true,
     ) ?? false;
-  const [isDismissed, setIsDismissed] = useState(() =>
-    readDismissed(offer.awayId),
+  const [isDismissed, setIsDismissed] = useLocalStorageState(
+    dismissedKey(offer.awayId),
+    false,
+    parseDismissed,
   );
   const [isBusy, setIsBusy] = useState(false);
-  const putBack = useRef<(() => Promise<void>) | null>(null);
+  const [keptCount, setKeptCount] = useState(0);
 
   const mark = async (value: boolean | null) => {
     if (!user || !self) return;
@@ -82,23 +75,34 @@ function AwayPauseOfferRow({ offer }: AwayPauseOfferRowProps) {
       .finally(() => setIsBusy(false));
   };
 
+  const span = {
+    awayId: offer.awayId,
+    fromDay: msToDayKey(offer.from),
+    toDay: msToDayKey(offer.to),
+  };
+
   const pause = () =>
     run(async () => {
       if (!user) return;
-      const paused = pauseScheduledActionsForSpan(user.uid, {
-        fromDay: msToDayKey(offer.from),
-        toDay: msToDayKey(offer.to),
-      });
-      putBack.current = paused.undo;
+      const paused = pauseScheduledActionsForSpan(user.uid, span);
+      setKeptCount(paused.kept);
       await Promise.all([paused.written, mark(true)]);
     });
 
   const undo = () =>
     run(async () => {
       if (!user) return;
+      const { notPutBack } = await unpauseScheduledActionsForSpan(
+        user.uid,
+        span,
+      );
       await mark(null);
-      await putBack.current?.();
-      putBack.current = null;
+      setKeptCount(0);
+      if (notPutBack > 0)
+        addToast({
+          title: HELM_COPY.awayPauseNotPutBack(notPutBack),
+          type: 'info',
+        });
     });
 
   if (!self || (!isMarked && !hasActions)) return null;
@@ -107,6 +111,7 @@ function AwayPauseOfferRow({ offer }: AwayPauseOfferRowProps) {
       <div className='ml-[30px] flex items-baseline justify-between gap-3'>
         <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
           {HELM_COPY.awayPauseOn(formatSpanDays(offer.from, offer.to))}
+          {keptCount > 0 && ` ${HELM_COPY.awayPauseKept(keptCount)}`}
         </p>
         <Button
           type='button'
@@ -134,7 +139,6 @@ function AwayPauseOfferRow({ offer }: AwayPauseOfferRowProps) {
           variant='tertiary'
           size='sm'
           onClick={() => {
-            keepDismissed(offer.awayId);
             setIsDismissed(true);
           }}
         >

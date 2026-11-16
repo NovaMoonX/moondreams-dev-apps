@@ -96,7 +96,7 @@ const HABIT_CUES = new Set(['habit', 'habits', ...MEDICINE_CUES]);
 export const hasHabitCue = (text: string) => hasWordIn(HABIT_CUES, text);
 
 const SCHEDULE_CUES = new Set(
-  'schedule scheduled every each weekly daily monthly yearly weekdays weekends annually nightly hourly other'.split(
+  'schedule scheduled every each weekly daily monthly yearly weekdays weekends annually nightly hourly other skip skipping pause paused resume unpause stop'.split(
     ' ',
   ),
 );

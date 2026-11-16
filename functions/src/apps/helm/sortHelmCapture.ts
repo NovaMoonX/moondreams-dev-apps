@@ -485,10 +485,10 @@ export interface CaptureDoc {
   inputMode?: string;
   medium?: 'web' | 'mcp';
   via?: string | null;
-  arrivedVia?: string;
-  scheduledActionId?: string | null;
-  heldCommands?: unknown;
-  allowedKinds?: unknown;
+  arrivedVia: string | null;
+  scheduledActionId: string | null;
+  heldCommands: unknown;
+  allowedKinds: unknown;
   outsideReadScopes?: unknown;
   attachmentIds?: string[];
   route?: Route | null;

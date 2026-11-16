@@ -76,7 +76,8 @@ interface ScheduledSheetProps {
   /** The action to show; null keeps the sheet closed. */
   actionId: string | null;
   onClose: () => void;
-  onOpenActivity: () => void;
+  /** Without it the last-run row and "See all" are left out. */
+  onOpenActivity?: () => void;
   /** Where "Ended · Undo" is said once the action is ended; without it the sheet says it in a toast. */
   onEnded?: (title: string, undo: () => void) => void;
 }
@@ -103,7 +104,6 @@ const rowClass =
 const readRunRows = (
   action: OpenScheduledAction,
   next: Occurrence[],
-  zone: string,
 ): RunRow[] => {
   const last = next.at(-1)?.key ?? null;
   const first = next[0]?.key ?? null;
@@ -129,9 +129,7 @@ const readRunRows = (
     })),
   ].sort(
     (left, right) =>
-      left.day.localeCompare(right.day) ||
-      left.time.localeCompare(right.time) ||
-      zone.localeCompare(zone),
+      left.day.localeCompare(right.day) || left.time.localeCompare(right.time),
   );
 };
 
@@ -177,7 +175,7 @@ function ScheduledSheet({
   const next = readNextOf(action, homeZone, now);
   const isPaused = isPausedNow(action, now, zone);
   const { words } = readRuleWords(action, homeZone, now);
-  const rows = readRunRows(action, next, zone);
+  const rows = readRunRows(action, next);
   const lastRun = runs.find((run) => run.actionId === action.id) ?? null;
   const mayChange = [
     ...new Set(action.allowed.map((kind) => MAY_CHANGE[kind] ?? kind)),
@@ -366,7 +364,7 @@ function ScheduledSheet({
           })}
         </ul>
       </section>
-      {lastRun && (
+      {lastRun && onOpenActivity && (
         <section className='space-y-1'>
           <SectionHeader title={HELM_COPY.scheduledWhatItDid} />
           <Button

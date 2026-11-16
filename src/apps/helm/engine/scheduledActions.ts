@@ -43,7 +43,7 @@ export const toCaptureId = (actionId: string, key: string) =>
 
 /** The day key a capture id was made for; null for an id this module didn't make. */
 export const readCaptureKey = (captureId: string | null) =>
-  captureId?.match(/^sa_.+_(\d{4}-\d{2}-\d{2})(?:_now)?$/)?.[1] ?? null;
+  captureId?.match(/^sa_.+_(\d{4}-\d{2}-\d{2})(?:_now\d*)?$/)?.[1] ?? null;
 
 const dayKeyIn = (at: number, zone: string) =>
   new Intl.DateTimeFormat('en-CA', {
@@ -111,9 +111,16 @@ export function readNextRun(
   options: { now: number; afterKey?: string | null },
 ): Occurrence | null {
   const afterKey = options.afterKey ?? null;
+  const yesterday = shiftDayKeyBy(
+    dayKeyIn(options.now, schedule.timeZone ?? homeZone),
+    -1,
+  );
   const from =
     afterKey ??
-    shiftDayKeyBy(dayKeyIn(options.now, schedule.timeZone ?? homeZone), -1);
+    Object.keys(schedule.moved).reduce(
+      (least, key) => (key < least ? key : least),
+      yesterday,
+    );
   const found = readOccurrences(schedule, homeZone, {
     fromKey: from,
     limit: SCAN,
@@ -196,7 +203,7 @@ export const RULE_PROBLEM_WORDS: Record<RepeatCapError, string> = {
   count: 'That runs too many times (the most is 999)',
   untilBeforeStart: 'That ends before it starts',
   neverComes: 'That never comes round',
-  shape: "That isn't a repeat Helm can keep",
+  shape: "That isn't a repeat I can keep",
 };
 
 const timeWords = (at: number, zone: string) =>
@@ -228,10 +235,10 @@ export function describeScheduledOutcome(input: {
   if (input.outcome === 'needsYou')
     return `${input.title}: ready for you · ${when}`;
   if (input.outcome === 'waiting') {
-    return `${input.title} is waiting until you open Helm, since today's limit was reached`;
+    return `${input.title} is waiting until you open the app, since today's limit was reached`;
   }
   if (input.outcome === 'skipped') {
-    return `${input.title} was skipped (${when}): Helm wasn't able to run it within 6 hours`;
+    return `${input.title} was skipped (${when}): it couldn't run within 6 hours`;
   }
   if (input.reason === 'ruleInvalid') {
     return `${input.title} didn't run (${when}): its repeat can't be read. Change it to set it again.`;
@@ -402,13 +409,13 @@ export function planFollowing(input: {
   };
 }
 
-/** A pause by a time-away span for an action with a run inside it, or null when none falls there. `fromDay`/`toDay` are day keys, inclusive. */
+/** A span's pause when a run falls inside it; null when none does, `clash` when the action already waits out a stretch that neither overlaps nor touches it. */
 export function readSpanPause(
   schedule: RunSchedule,
   homeZone: string,
   span: { fromDay: string; toDay: string },
   now: number,
-): { pausedFrom: number; pausedUntil: number } | null {
+): { pausedFrom: number; pausedUntil: number } | { clash: true } | null {
   const free: RunSchedule = {
     ...schedule,
     pausedFrom: null,
@@ -423,15 +430,30 @@ export function readSpanPause(
     (run) => run.day >= span.fromDay && run.day <= span.toDay,
   );
   if (!isInside) return null;
-  const from = Math.min(
-    dayKeyToMs(span.fromDay),
-    schedule.pausedFrom ?? Infinity,
-  );
-  const until = Math.max(
-    dayKeyToMs(span.toDay),
-    schedule.pausedUntil ?? -Infinity,
-  );
-  return { pausedFrom: from, pausedUntil: until };
+  const existing = spanKeys(schedule);
+  const isLive =
+    existing !== null &&
+    existing.to >= dayKeyIn(now, schedule.timeZone ?? homeZone);
+  if (
+    existing &&
+    isLive &&
+    !(
+      existing.from <= shiftDayKeyBy(span.toDay, 1) &&
+      existing.to >= shiftDayKeyBy(span.fromDay, -1)
+    )
+  ) {
+    return { clash: true };
+  }
+  const merged = isLive
+    ? {
+        from: existing.from < span.fromDay ? existing.from : span.fromDay,
+        to: existing.to > span.toDay ? existing.to : span.toDay,
+      }
+    : { from: span.fromDay, to: span.toDay };
+  return {
+    pausedFrom: dayKeyToMs(merged.from),
+    pausedUntil: dayKeyToMs(merged.to),
+  };
 }
 
 /** Whether Run it now is allowed: only after a run that couldn't go, and only before the action's next scheduled run. */
@@ -452,6 +474,8 @@ export interface ActionState extends RunSchedule {
   nextRunAt: number | null;
   nextRunKey: string | null;
   lastRunDueAt: number | null;
+  /** The span that paused it, so undoing that span puts back only its own pauses. */
+  pausedForSpanId: string | null;
 }
 
 export type ScheduleChange =
@@ -487,7 +511,7 @@ export const CHANGE_REFUSAL_WORDS: Record<ChangeRefusal, string> = {
   tooLate: 'A run can move at most to the day before the one after it',
   tooMany: 'That has too many skipped or moved runs; let some pass first',
   countSpent: 'Its repeat has already gone round that many times',
-  shape: "That isn't a repeat Helm can keep",
+  shape: "That isn't a repeat I can keep",
   neverComes: 'That never comes round',
 };
 
@@ -558,6 +582,7 @@ export function planScheduleChange(
       status: 'active',
       pausedFrom: null,
       pausedUntil: null,
+      pausedForSpanId: null,
     };
     const run = readNextRun(resumed, homeZone, { now });
     return run
@@ -565,13 +590,19 @@ export function planScheduleChange(
           status: 'active',
           pausedFrom: null,
           pausedUntil: null,
+          pausedForSpanId: null,
           nextRunAt: run.at,
           nextRunKey: run.key,
         })
       : { refused: 'neverComes' };
   }
   const key = change.kind === 'following' ? change.fromKey : change.key;
-  const target = key ?? state.nextRunKey;
+  const target =
+    key ??
+    state.nextRunKey ??
+    (state.status === 'paused'
+      ? (readNextRun(state, homeZone, { now })?.key ?? null)
+      : null);
   if (target === null) return { refused: 'noRun' };
   const runs = readOccurrences(state, homeZone, {
     fromKey: state.nextRunKey ?? target,
@@ -644,6 +675,7 @@ export function planScheduleChange(
         lastRunDueAt: null,
         pausedFrom: following.isSplit ? state.pausedFrom : null,
         pausedUntil: following.isSplit ? state.pausedUntil : null,
+        pausedForSpanId: following.isSplit ? state.pausedForSpanId : null,
       })
     : null;
   const newer = following.isSplit ? createdState : kept;
@@ -653,6 +685,7 @@ export function planScheduleChange(
     afterKey: null,
   });
   if (!run) return { refused: 'neverComes' };
+  const isActive = state.status === 'active';
   if (!following.isSplit) {
     return {
       fields: {
@@ -661,8 +694,8 @@ export function planScheduleChange(
         time: kept.time,
         skipped: kept.skipped,
         moved: kept.moved,
-        nextRunAt: run.at,
-        nextRunKey: run.key,
+        nextRunAt: isActive ? run.at : null,
+        nextRunKey: isActive ? run.key : null,
       },
       created: null,
       dropped: following.dropped,
@@ -675,8 +708,8 @@ export function planScheduleChange(
       repeat: kept.repeat,
       skipped: kept.skipped,
       moved: kept.moved,
-      nextRunAt: older?.at ?? null,
-      nextRunKey: older?.key ?? null,
+      nextRunAt: isActive ? (older?.at ?? null) : null,
+      nextRunKey: isActive ? (older?.key ?? null) : null,
     },
     created: {
       ...newer,

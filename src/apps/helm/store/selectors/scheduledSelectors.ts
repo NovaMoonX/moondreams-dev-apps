@@ -44,38 +44,6 @@ export interface ScheduledOutcomeRow {
   line: string;
 }
 
-/** The last run of each action that happened after `since` (the time of the person's previous open), newest first, each as the one line Today and Activity show. A waiting run is listed until it goes. */
-export const selectScheduledOutcomes = createSelector(
-  [selectItems, selectHomeZone, (_state: RootState, since: number) => since],
-  (items, homeZone, since): ScheduledOutcomeRow[] =>
-    items
-      .flatMap((action): ScheduledOutcomeRow[] =>
-        action.isUnreadable ||
-        action.lastOutcome === null ||
-        action.lastRunAt === null ||
-        action.lastRunDueAt === null ||
-        action.lastRunAt < since
-          ? []
-          : [
-              {
-                id: `${action.id}:${action.lastRunDueAt}`,
-                actionId: action.id,
-                at: action.lastRunAt,
-                outcome: action.lastOutcome,
-                captureId: action.lastRunCaptureId,
-                line: describeScheduledOutcome({
-                  title: action.title,
-                  outcome: action.lastOutcome,
-                  reason: action.lastFailReason,
-                  dueAt: action.lastRunDueAt,
-                  zone: action.timeZone ?? homeZone,
-                }),
-              },
-            ],
-      )
-      .sort((left, right) => right.at - left.at),
-);
-
 /** The actions the person ended, newest first; one that ended on its own after its last run is left out. */
 export const selectEndedScheduled = createSelector([selectItems], (items) =>
   items

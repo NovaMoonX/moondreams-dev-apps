@@ -104,6 +104,7 @@ const toCapture = async (
     answersQuestion: null,
     ttsProvider: null,
     arrivedVia: 'direct',
+    scheduledActionId: null,
     disposition: null,
     medium: 'web',
     via: null,

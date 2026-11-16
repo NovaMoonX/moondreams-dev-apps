@@ -25,13 +25,13 @@ interface ScheduledRuleRowsProps {
   hasUndoHere: boolean;
 }
 
-/** What a reply that made or changed an action says it will do, in the rule's own words with Change; the action may have changed or ended since, so it is read live and a gone one draws nothing. */
 /** Undo for a whole turn, offering a pick when more than one thing is left to take back. */
 export function TurnUndo({ execution }: { execution: OpenExecution }) {
   const { units } = useUndoChoices(execution);
   return <UndoButton execution={execution} unitCount={units.length} />;
 }
 
+/** What a reply that made or changed an action says it will do, in the rule's own words with Change; the action may have changed or ended since, so it is read live and a gone one draws nothing. */
 function ScheduledRuleRows({ execution, hasUndoHere }: ScheduledRuleRowsProps) {
   const now = useNow(60_000);
   const byId = useAppSelector(selectScheduledById);

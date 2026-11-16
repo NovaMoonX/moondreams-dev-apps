@@ -25,11 +25,13 @@ import {
   readDueRuns,
   readNextRun,
   readOccurrences,
+  readCaptureKey,
   readRunBlocker,
   readSpanPause,
   toCaptureId,
   type ActionState,
 } from '../../src/apps/helm/engine/scheduledActions.ts';
+import { dayKeyToMs } from '../../src/utils/cadenceUtils.ts';
 import { zonedDateTimeToEpoch } from '../../src/utils/timezoneUtils.ts';
 
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -56,6 +58,7 @@ const state = (over: Partial<ActionState> = {}): ActionState => ({
   lastRunDueAt: null,
   pausedFrom: null,
   pausedUntil: null,
+  pausedForSpanId: null,
   ...over,
 });
 
@@ -518,7 +521,10 @@ test('Run it now: only after a failed run and before the next one, and it never 
     }),
   );
   assert.equal(decision.isNow, true);
-  assert.equal(decision.captureId, `${toCaptureId('a1', key)}_now`);
+  assert.equal(
+    decision.captureId,
+    `${toCaptureId('a1', key)}_now${NOW - 1000}`,
+  );
   const patch = settleRun(
     decision,
     {
@@ -547,7 +553,7 @@ test('Pause what runs at home by a span: runs inside it wait, and a time zone sp
   );
   const span = { fromDay: '2026-11-24', toDay: '2026-12-01' };
   const pause = readSpanPause(weekly, NY, span, NOW);
-  assert.ok(pause);
+  assert.ok(pause && 'pausedFrom' in pause);
   const paused = { ...weekly, ...pause };
   const days = (
     readOccurrences(paused, NY, { fromKey: '2026-11-17', limit: 6 }) ?? []
@@ -604,6 +610,214 @@ test('pausing and ending leave the rule and the time alone', () => {
   assert.equal(readActionState({ status: 'paused' }).status, 'paused');
 });
 
+test('every read of the live actions names their status, so ended ones never crowd them out', () => {
+  const dir = join(ROOT, 'functions/src/apps/helm/scheduledActions');
+  const store = readFileSync(join(dir, 'actionStore.ts'), 'utf8');
+  assert.match(store, /\.where\('status', 'in', \['active', 'paused'\]\)/);
+  const runner = readFileSync(join(dir, 'runHelmScheduledActions.ts'), 'utf8');
+  assert.equal(/scheduledActions`\)\s*\.limit/.test(runner), false);
+  assert.equal((runner.match(/actionsQuery\(/g) ?? []).length, 2);
+});
+
+test('a move whose original day has passed still runs on its new day, even after a later skip', () => {
+  const fridays = state({
+    repeat: 'FREQ=WEEKLY;WKST=MO;BYDAY=FR',
+    startsOn: '2026-11-13',
+    time: '08:00',
+    moved: { '2026-11-20': { day: '2026-11-25', time: '08:00' } },
+    skipped: ['2026-11-27'],
+  });
+  const now = Date.UTC(2026, 10, 22, 15, 0);
+  const next = readNextRun(fridays, NY, { now });
+  assert.equal(next?.key, '2026-11-20');
+  assert.equal(next?.day, '2026-11-25');
+});
+
+test('a run that goes prunes the skips and moves behind it and keeps the ones ahead', () => {
+  const base = withNext(
+    state({
+      time: '08:00',
+      startsOn: '2026-11-01',
+      skipped: ['2026-11-03', '2026-11-30'],
+      moved: { '2026-11-04': { day: '2026-11-04', time: '10:00' } },
+    }),
+    NY,
+    NOW - 24 * HOUR,
+  );
+  const at = base.nextRunAt! + 1000;
+  const decision = runOf(
+    decideRun({
+      stored: stored('a1', base),
+      homeZone: NY,
+      now: at,
+      changedAt: null,
+    }),
+  );
+  assert.equal(
+    'skipped' in (settleRun(decision, { held: 'limit' }, at) ?? {}),
+    false,
+  );
+  const done = settleRun(
+    decision,
+    {
+      status: 'sorted',
+      executionId: 'e1',
+      releasedIds: [],
+      hasAnswer: false,
+      spoken: null,
+      abilityOffer: null,
+    },
+    at,
+  );
+  assert.deepEqual(done?.skipped, ['2026-11-30']);
+  assert.deepEqual(done?.moved, {});
+});
+
+test('the home zone decides whether a run is due: a stored time from another zone neither runs early nor hides', () => {
+  const stale = (storedZone: string, now: number) =>
+    decideRun({
+      stored: stored('a1', {
+        ...state({ time: '08:00', startsOn: '2026-11-17' }),
+        nextRunKey: '2026-11-17',
+        nextRunAt: zonedDateTimeToEpoch('2026-11-17', '08:00', storedZone),
+      }),
+      homeZone: LISBON,
+      now,
+      changedAt: null,
+    });
+  const lisbonRuns = runOf(
+    stale(NY, zonedDateTimeToEpoch('2026-11-17', '08:30', LISBON)),
+  );
+  assert.equal(lisbonRuns.key, '2026-11-17');
+  assert.equal(
+    lisbonRuns.dueAt,
+    zonedDateTimeToEpoch('2026-11-17', '08:00', LISBON),
+  );
+  const early = stale(
+    'Asia/Tokyo',
+    zonedDateTimeToEpoch('2026-11-17', '07:00', LISBON),
+  );
+  assert.equal(early.kind, 'patch');
+  if (early.kind === 'patch') {
+    assert.equal(
+      early.patch.nextRunAt,
+      zonedDateTimeToEpoch('2026-11-17', '08:00', LISBON),
+    );
+  }
+});
+
+test('a held task list that builds nothing fails the run before any capture is made', () => {
+  const base = withNext(state({ time: '08:00' }), NY, NOW - 24 * HOUR);
+  const action = stored('a1', base);
+  const decision = decideRun({
+    stored: {
+      ...action,
+      words: {
+        title: 'Plan',
+        instruction: null,
+        heldCommands: [{ kind: 'createTask', title: null }],
+      },
+    },
+    homeZone: NY,
+    now: base.nextRunAt! + 1000,
+    changedAt: null,
+  });
+  assert.equal(decision.kind, 'patch');
+  if (decision.kind === 'patch') {
+    assert.equal(decision.patch.lastFailReason, 'runFailed');
+    assert.equal(decision.patch.lastOutcome, 'failed');
+  }
+});
+
+test('a second Run it now after a failure makes its own capture', () => {
+  const base = withNext(state({ time: '08:00' }), NY, NOW - 24 * HOUR);
+  const key = base.nextRunKey!;
+  const again = (runNowAt: number) =>
+    runOf(
+      decideRun({
+        stored: stored(
+          'a1',
+          { ...base, nextRunAt: NOW + HOUR },
+          {
+            lastOutcome: 'failed',
+            lastRunCaptureId: `${toCaptureId('a1', key)}_now${NOW - 5000}`,
+            lastRunDueAt: base.nextRunAt,
+            runNowAt,
+          },
+        ),
+        homeZone: NY,
+        now: NOW,
+        changedAt: null,
+      }),
+    ).captureId;
+  assert.notEqual(again(NOW - 1000), again(NOW - 2000));
+  assert.equal(readCaptureKey(again(NOW - 1000)), key);
+});
+
+test('a waiting run that was paused away is closed, not run late', () => {
+  const base = withNext(state({ time: '08:00' }), NY, NOW - 24 * HOUR);
+  const captureId = toCaptureId('a1', base.nextRunKey!);
+  const paused = decideRun({
+    stored: stored(
+      'a1',
+      { ...base, status: 'paused' },
+      { lastOutcome: 'waiting', lastRunCaptureId: captureId },
+    ),
+    homeZone: NY,
+    now: base.nextRunAt! + HOUR,
+    changedAt: null,
+  });
+  assert.equal(paused.kind, 'patch');
+  if (paused.kind === 'patch') {
+    assert.equal(paused.closes, captureId);
+    assert.equal(paused.patch.lastOutcome, 'skipped');
+  }
+});
+
+test('a span pause refuses an action that already waits out a separate stretch, and joins one it touches', () => {
+  const daily = withNext(state({ time: '08:00' }), NY);
+  const stretch = (from: string, to: string) => ({
+    pausedFrom: dayKeyToMs(from),
+    pausedUntil: dayKeyToMs(to),
+  });
+  const held = { ...daily, ...stretch('2026-12-01', '2026-12-03') };
+  assert.deepEqual(
+    readSpanPause(
+      held,
+      NY,
+      { fromDay: '2026-12-20', toDay: '2026-12-25' },
+      NOW,
+    ),
+    { clash: true },
+  );
+  assert.deepEqual(
+    readSpanPause(
+      held,
+      NY,
+      { fromDay: '2026-12-04', toDay: '2026-12-06' },
+      NOW,
+    ),
+    stretch('2026-12-01', '2026-12-06'),
+  );
+});
+
+test('Change on a paused action with no run named targets its next run instead of refusing', () => {
+  const paused = {
+    ...state({ time: '08:00' }),
+    status: 'paused' as const,
+    nextRunAt: null,
+    nextRunKey: null,
+  };
+  const result = planScheduleChange(
+    paused,
+    { kind: 'following', fromKey: null, rule: null, time: '09:00' },
+    { homeZone: NY, now: NOW },
+  );
+  assert.ok('fields' in result);
+  assert.equal(result.fields.nextRunAt, null);
+  assert.equal(result.fields.time, '09:00');
+});
+
 test('no outcome ever sends a push: the scheduled-actions code never touches reminders or messaging', () => {
   const dir = join(ROOT, 'functions/src/apps/helm/scheduledActions');
   const files = readdirSync(dir).filter((name) => name.endsWith('.ts'));
@@ -625,7 +839,7 @@ test('no outcome ever sends a push: the scheduled-actions code never touches rem
 });
 
 test('an action the server makes inside a marked time-away span waits it out, and one outside does not', () => {
-  const plan = (pauseSpans: { from: number; to: number }[]) =>
+  const plan = (pauseSpans: { id: string; from: number; to: number }[]) =>
     planScheduledActions({
       commands: [
         {
@@ -660,7 +874,7 @@ test('an action the server makes inside a marked time-away span waits it out, an
       room: 5,
     }).creates[0]?.doc;
   const inside = plan([
-    { from: Date.UTC(2026, 10, 17), to: Date.UTC(2026, 10, 20) },
+    { id: 'away-1', from: Date.UTC(2026, 10, 17), to: Date.UTC(2026, 10, 20) },
   ]);
   assert.equal(inside?.pausedFrom, Date.UTC(2026, 10, 17));
   assert.equal(inside?.pausedUntil, Date.UTC(2026, 10, 20));
