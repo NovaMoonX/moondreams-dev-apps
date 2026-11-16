@@ -25,6 +25,8 @@ export interface ContextTask {
   id: string;
   title: string;
   due: TaskDue | null;
+  /** Kept quiet today, by its own mark or a quiet project. */
+  isQuiet?: boolean;
 }
 
 /** What the records hold about a person, pet, organization or place the turn names; `by` says whether the person said it or the assistant inferred it. */
@@ -100,6 +102,7 @@ export interface ContextNote {
   body?: string;
   isUnchecked?: boolean;
   isPrivate?: boolean;
+  isQuiet?: boolean;
 }
 
 /** Each body trimmed so that all together stay within the cap: the shortest keep every word and what they leave over is shared by the longer ones. */
@@ -252,6 +255,7 @@ export function buildContext(input: ContextInput): {
   keyDates: AliasBook;
   topics: AliasBook;
   notes: AliasBook;
+  projects: AliasBook;
   parts: AliasBook;
   sections: AliasBook;
   procedures: AliasBook;
@@ -263,6 +267,7 @@ export function buildContext(input: ContextInput): {
   const sectionBook = createAliasBook('s');
   const topics = createAliasBook('tp');
   const notes = createAliasBook('n');
+  const projects = createAliasBook('p');
   const procedures = createAliasBook('pr');
   const procedureSteps = createAliasBook('ps');
   const runSteps = createAliasBook('rs');
@@ -286,10 +291,12 @@ export function buildContext(input: ContextInput): {
     alias: aliases.add(task.id),
     title: task.title,
     due: describeDue(task.due),
+    ...(task.isQuiet ? { isQuiet: true } : {}),
   }));
   const toRef = (task: ContextTask) => ({
     alias: aliases.add(task.id),
     title: task.title,
+    ...(task.isQuiet ? { isQuiet: true } : {}),
   });
   const screen = input.screen
     ? {
@@ -312,6 +319,7 @@ export function buildContext(input: ContextInput): {
     alias: notes.add(note.id),
     title: note.title,
     ...(noteBodies[index] === null ? {} : { body: noteBodies[index] }),
+    ...(note.isQuiet ? { isQuiet: true } : {}),
     ...(note.isUnchecked ? { savedFromGeneralAnswer: true } : {}),
   }));
   const focusedProcedure = input.focusedProcedure ?? null;
@@ -479,9 +487,12 @@ export function buildContext(input: ContextInput): {
           `<open_projects>${toDataJson(
             input.projects
               .slice(0, MAX_CONTEXT_PROJECTS)
-              .map(({ name, milestones }) =>
-                milestones.length > 0 ? { name, milestones } : { name },
-              ),
+              .map(({ id, name, milestones, isQuiet }) => ({
+                alias: projects.add(id),
+                name,
+                ...(milestones.length > 0 ? { milestones } : {}),
+                ...(isQuiet ? { isQuiet: true } : {}),
+              })),
           )}</open_projects>`,
         ]
       : []),
@@ -547,6 +558,7 @@ export function buildContext(input: ContextInput): {
     keyDates,
     topics,
     notes,
+    projects,
     parts,
     sections: sectionBook,
     procedures,

@@ -34,6 +34,9 @@ const sealedOf = (title: string): TaskSealed => ({
   steps: { a: { text: 'Find the number' } },
   privateMark: null,
   isPrivacyCleared: false,
+  quietMark: null,
+  quietUntil: null,
+  isQuietCleared: false,
 });
 
 const target = (
@@ -94,6 +97,7 @@ const execution = (
   effects: entries.map((entry) => entry.effect),
   undoReport: null,
   spoken: null,
+  heldSpoken: null,
   goneIds: null,
   lines: [],
   isUnreadable: false,
@@ -1017,6 +1021,9 @@ const projectSealed = (
   roleNotes,
   privateMark: null,
   isPrivacyCleared: false,
+  quietMark: null,
+  quietUntil: null,
+  isQuietCleared: false,
 });
 
 test('a project the turn made is deleted by its undo, and says projects', () => {

@@ -6,6 +6,8 @@ import type {
 
 import type { SealedPayload } from '../../appKeys/seal.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
+import { isQuietOn } from './privacy.js';
+import { readQuietFacts } from './nomos/quietTurn.js';
 import { MAX_CONTEXT_MILESTONES } from './nomos/commands.js';
 import type {
   ExistingMilestoneState,
@@ -17,9 +19,12 @@ const MAX_PROJECTS_READ = 200;
 
 /** A project as the model sees it: its name and the milestones still open, dates as YYYY-MM-DD. */
 export interface ContextProject {
+  id: string;
   name: string;
   milestones: { title: string; date: string | null }[];
   isPrivate?: boolean;
+  /** Kept quiet today by its own mark. */
+  isQuiet?: boolean;
 }
 
 const isRole = (value: unknown): value is ProjectRoleName =>
@@ -131,13 +136,16 @@ export async function readContextProjects(
   base: string,
   key: HelmKey,
   max: number,
+  today: string,
 ): Promise<ContextProject[]> {
   const docs = (await activeQuery(firestore, base).get()).docs;
   return openProjects(key, docs)
     .slice(0, max)
     .map((project) => ({
+      id: project.id,
       name: project.name,
       isPrivate: project.isPrivate === true,
+      isQuiet: isQuietOn(readQuietFacts(project.sealed), today),
       milestones: Object.entries(project.milestoneState)
         .flatMap(([id, state]) =>
           state.doneAt === null && project.milestoneTitles[id]

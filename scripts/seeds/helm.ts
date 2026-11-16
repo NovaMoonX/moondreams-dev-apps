@@ -461,6 +461,7 @@ async function buildUndone(input: {
       effects,
       undoReport: null,
       spoken: null,
+      heldSpoken: null,
       goneIds: null,
       lines: [],
       isUnreadable: false,
@@ -670,7 +671,7 @@ async function buildBackToBack(input: {
         completedAt: null,
         clearedAt: null,
         sealed: await sealJson<TaskSealed>(
-          { title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
+          { title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false , quietMark: null, quietUntil: null, isQuietCleared: false},
           encryption,
         ),
       };
@@ -1209,7 +1210,7 @@ async function buildAnswerTurns(input: {
                   title: 'How long does cake keep',
                   body: saved.general,
                   privateMark: null,
-                  isPrivacyCleared: false,
+                  isPrivacyCleared: false, quietMark: null, quietUntil: null, isQuietCleared: false,
                 },
                 encryption,
               ),
@@ -1246,7 +1247,7 @@ async function buildAnswerTurns(input: {
         completedAt: null,
         clearedAt: null,
         sealed: await sealJson<TaskSealed>(
-          { title: entry.title, notes: null, steps: {}, privateMark: entry.isHealth ? 'health' : null, isPrivacyCleared: false },
+          { title: entry.title, notes: null, steps: {}, privateMark: entry.isHealth ? 'health' : null, isPrivacyCleared: false , quietMark: null, quietUntil: null, isQuietCleared: false},
           encryption,
         ),
       };
@@ -1345,7 +1346,7 @@ async function buildPlanDays(input: {
     completedAt: at(yesterdayKey, '14:25'),
     clearedAt: null,
     sealed: await sealJson<TaskSealed>(
-      { title: doneTitle, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
+      { title: doneTitle, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false , quietMark: null, quietUntil: null, isQuietCleared: false},
       encryption,
     ),
   };
@@ -1692,7 +1693,7 @@ async function buildProjects(input: {
         notes: null,
         steps: {},
         privateMark: fields.privacy === 'private' ? 'health' : null,
-        isPrivacyCleared: false,
+        isPrivacyCleared: false, quietMark: null, quietUntil: null, isQuietCleared: false,
       }),
     },
   });
@@ -1725,7 +1726,7 @@ async function buildProjects(input: {
         },
         roleNotes: { 'seed-who-dana': 'florist' },
         privateMark: null,
-        isPrivacyCleared: false,
+        isPrivacyCleared: false, quietMark: null, quietUntil: null, isQuietCleared: false,
       },
       {
         'seed-milestone-wedding-1': {
@@ -1757,7 +1758,7 @@ async function buildProjects(input: {
         milestones: { 'seed-milestone-move-1': { title: 'Keys handed over' } },
         roleNotes: {},
         privateMark: null,
-        isPrivacyCleared: false,
+        isPrivacyCleared: false, quietMark: null, quietUntil: null, isQuietCleared: false,
       },
       {
         'seed-milestone-move-1': {
@@ -1941,7 +1942,7 @@ async function buildNoteTurn(input: {
     executionId: CAPTURE_NOTE_EXECUTION_ID,
     createdAt: sortedAt,
     lastEditedAt: null,
-    sealed: await sealJson<NoteSealed>({ title, body, privateMark: null, isPrivacyCleared: false }, encryption),
+    sealed: await sealJson<NoteSealed>({ title, body, privateMark: null, isPrivacyCleared: false , quietMark: null, quietUntil: null, isQuietCleared: false}, encryption),
   };
   return { capture, execution, note };
 }
@@ -2294,7 +2295,7 @@ async function buildKnowledge(input: {
       createdAt: now - (21 - index) * DAY_MS,
       lastEditedAt: null,
       ...extra,
-      sealed: await sealJson<NoteSealed>({ title, body, privateMark: null, isPrivacyCleared: false }, encryption),
+      sealed: await sealJson<NoteSealed>({ title, body, privateMark: null, isPrivacyCleared: false , quietMark: null, quietUntil: null, isQuietCleared: false}, encryption),
     },
   });
   const car = 'seed-topic-car';
@@ -3295,7 +3296,7 @@ async function buildPhotoTurns(input: {
     completedAt: null,
     clearedAt: null,
     sealed: await sealJson<TaskSealed>(
-      { title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false },
+      { title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false , quietMark: null, quietUntil: null, isQuietCleared: false},
       encryption,
     ),
   };
@@ -3662,7 +3663,7 @@ async function buildFileTurns(input: {
       lastEditedAt: null,
       completedAt: null,
       clearedAt: null,
-      sealed: await seal<TaskSealed>({ title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false }),
+      sealed: await seal<TaskSealed>({ title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false , quietMark: null, quietUntil: null, isQuietCleared: false}),
     };
     return { id, task };
   };
@@ -3755,7 +3756,7 @@ async function buildFileTurns(input: {
     executionId: mdExecution,
     createdAt: mdAt,
     lastEditedAt: null,
-    sealed: await seal<NoteSealed>({ title: noteTitle, body: mdText, privateMark: null, isPrivacyCleared: false }),
+    sealed: await seal<NoteSealed>({ title: noteTitle, body: mdText, privateMark: null, isPrivacyCleared: false , quietMark: null, quietUntil: null, isQuietCleared: false}),
   };
   const topic: Topic = {
     privacy: 'ordinary',
@@ -4086,7 +4087,7 @@ async function buildPeople(input: {
       lastEditedAt: null,
       completedAt: null,
       clearedAt: null,
-      sealed: await seal<TaskSealed>({ title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false }),
+      sealed: await seal<TaskSealed>({ title, notes: null, steps: {}, privateMark: null, isPrivacyCleared: false , quietMark: null, quietUntil: null, isQuietCleared: false}),
     },
   });
   const tasks = await Promise.all([
@@ -5184,7 +5185,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       notes: null,
                       steps: {},
                       privateMark: null,
-                      isPrivacyCleared: false,
+                      isPrivacyCleared: false, quietMark: null, quietUntil: null, isQuietCleared: false,
                     },
                     encryption,
                   ),
@@ -5387,7 +5388,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                     ]),
                   ),
                   privateMark: null,
-                  isPrivacyCleared: false,
+                  isPrivacyCleared: false, quietMark: null, quietUntil: null, isQuietCleared: false,
                 },
                 encryption,
               ),

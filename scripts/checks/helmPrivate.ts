@@ -9,7 +9,9 @@ import {
 } from '../../functions/src/apps/helm/helmKey.ts';
 import { buildHelmTools } from '../../functions/src/apps/helm/mcp/buildTools.ts';
 import {
+  buildExecution,
   planWrites,
+  settleCapture,
   type KnownWhoState,
   type PeopleInput,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
@@ -24,6 +26,10 @@ import {
   type MaskedName,
 } from '../../functions/src/apps/helm/nomos/unattended.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import {
+  buildQuietIndex,
+  isQuietTurn,
+} from '../../functions/src/apps/helm/nomos/quietTurn.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import {
   buildInheritedLine,
@@ -32,9 +38,13 @@ import {
   buildLeftOutLine,
   filterPrivate,
   filterPrivateOwnPage,
+  holdQuietSpoken,
   isPrivateInEffect,
+  isQuietOn,
   isUnattendedTurn,
   maskPrivateNames,
+  mentionsQuietName,
+  QUIET_SPOKEN_LINE,
   readDerivedPrivacy,
   readEffectivePrivacy,
   readMaskedLabel,
@@ -42,6 +52,7 @@ import {
   readPrivateMark,
   readPrivacy,
   readSetPrivate,
+  readSetQuiet,
   type PrivacyFacts,
 } from '../../src/apps/helm/utils/privacy.ts';
 import {
@@ -514,6 +525,7 @@ test('the Undo of that turn restores the class and the mark through the same Und
       effects: plan.effects,
       undoReport: null,
       spoken: null,
+      heldSpoken: null,
       goneIds: null,
       lines: [],
       isUnreadable: false,
@@ -530,6 +542,9 @@ test('the Undo of that turn restores the class and the mark through the same Und
             steps: {},
             privateMark: 'person',
             isPrivacyCleared: false,
+            quietMark: null,
+            quietUntil: null,
+            isQuietCleared: false,
           },
         },
       ],
@@ -1293,6 +1308,381 @@ test('the message the model reads over masked inputs holds no private word', () 
     assert.ok(!message.includes(word), `${word} reached the message`),
   );
   assert.ok(message.includes('a private task'));
+});
+
+const DAY = '2026-11-16';
+const quiet = (
+  facts: PrivacyFacts,
+  over: Partial<Parameters<typeof readSetQuiet>[0]> = {},
+) =>
+  readSetQuiet({
+    current: facts,
+    isQuiet: true,
+    until: null,
+    mark: 'person',
+    parents: [],
+    today: DAY,
+    ...over,
+  });
+
+test('keeping a thing quiet makes it private, and releasing it leaves it private', () => {
+  const kept = quiet(NONE);
+  assert.equal(kept.kind, 'applied');
+  if (kept.kind !== 'applied') return;
+  assert.equal(kept.facts.privateMark, 'person');
+  assert.equal(kept.facts.quietMark, 'person');
+  const released = quiet(kept.facts, { isQuiet: false });
+  assert.equal(released.kind, 'applied');
+  if (released.kind !== 'applied') return;
+  assert.equal(released.facts.quietMark, null);
+  assert.equal(released.facts.isQuietCleared, true);
+  assert.equal(released.facts.privateMark, 'person');
+  assert.equal(readEffectivePrivacy(released.facts, []), 'private');
+});
+
+test('a quiet release is refused on an inherited quiet and while nobody is looking', () => {
+  const marked: PrivacyFacts = {
+    ...NONE,
+    privateMark: 'person',
+    quietMark: 'person',
+  };
+  const inherited = quiet(NONE, {
+    isQuiet: false,
+    parents: [{ id: 'p1', name: 'Anniversary trip', facts: marked }],
+  });
+  assert.equal(inherited.kind, 'refused');
+  const unattended = quiet(marked, {
+    isQuiet: false,
+    byTurn: { isUnattended: true },
+  });
+  assert.equal(unattended.kind, 'refused');
+});
+
+test('a guess never re-marks a release or changes a person mark, and the end day is included', () => {
+  const released: PrivacyFacts = { ...NONE, isQuietCleared: true };
+  assert.equal(quiet(released, { mark: 'guessed' }).kind, 'unchanged');
+  const person: PrivacyFacts = {
+    ...NONE,
+    privateMark: 'person',
+    quietMark: 'person',
+    quietUntil: '2026-11-20',
+  };
+  assert.equal(
+    quiet(person, { mark: 'guessed', until: '2026-11-30', today: '2026-11-18' })
+      .kind,
+    'unchanged',
+  );
+  const lapsed = quiet(person, {
+    mark: 'guessed',
+    until: '2026-11-30',
+    today: '2026-11-25',
+  });
+  assert.equal(lapsed.kind, 'applied');
+  if (lapsed.kind === 'applied') {
+    assert.equal(lapsed.facts.quietMark, 'person');
+  }
+  assert.equal(isQuietOn(person, '2026-11-20'), true);
+  assert.equal(isQuietOn(person, '2026-11-21'), false);
+});
+
+test('a quiet turn says only the screen line and holds its own, anything else is said as it is', () => {
+  assert.deepEqual(holdQuietSpoken('Made a task for the ring.', true), {
+    spoken: QUIET_SPOKEN_LINE,
+    heldSpoken: 'Made a task for the ring.',
+  });
+  assert.deepEqual(holdQuietSpoken('Made a task for the ring.', false), {
+    spoken: 'Made a task for the ring.',
+    heldSpoken: null,
+  });
+  assert.deepEqual(holdQuietSpoken(null, true), {
+    spoken: null,
+    heldSpoken: null,
+  });
+  assert.deepEqual(holdQuietSpoken(QUIET_SPOKEN_LINE, true), {
+    spoken: QUIET_SPOKEN_LINE,
+    heldSpoken: null,
+  });
+});
+
+test('a quiet name is found as a whole word in any case, and a part of another word is not', () => {
+  assert.equal(
+    mentionsQuietName('Added it to the anniversary trip', ['Anniversary trip']),
+    true,
+  );
+  assert.equal(mentionsQuietName('The ringing stopped', ['Ring']), false);
+  assert.equal(mentionsQuietName('Anything', ['', '  ']), false);
+});
+
+const quietReply = (text: string, items: Record<string, unknown>[]) => {
+  const aliases = createAliasBook('t');
+  aliases.add('task-1');
+  const projects = createAliasBook('p');
+  projects.add('project-1');
+  return normalizeNomosReply(
+    { commands: items },
+    {
+      reading: READING,
+      aliases,
+      projectAliases: projects,
+      captureText: text,
+    },
+  );
+};
+
+const setQuiet = (
+  targetAlias: string,
+  extra: Record<string, unknown> = {},
+) => ({
+  kind: 'setQuiet',
+  targetAlias,
+  isQuiet: true,
+  untilSpanId: null,
+  isGuess: false,
+  requestQuote: null,
+  ...extra,
+});
+
+test('a quiet request is kept with a quote copied from the capture, whatever words it holds', () => {
+  const words = "don't let Sam hear about the ring";
+  const kept = quietReply(words, [setQuiet('t1', { requestQuote: words })]);
+  assert.deepEqual(kept.quietCommands, [
+    {
+      kind: 'setQuiet',
+      targetKind: 'task',
+      targetId: 'task-1',
+      isNew: false,
+      isQuiet: true,
+      until: null,
+      isGuess: false,
+    },
+  ]);
+  const invented = quietReply(words, [
+    setQuiet('t1', { requestQuote: 'keep it quiet' }),
+  ]);
+  assert.deepEqual(invented.quietCommands, []);
+  assert.deepEqual(invented.quietDropped, ['quiet-unquoted']);
+});
+
+test('a guess may only keep quiet and needs no quote, a guessed release is dropped', () => {
+  const guessed = quietReply('buy a ring for Sam', [
+    setQuiet('p1', { isGuess: true }),
+  ]);
+  assert.equal(guessed.quietCommands.length, 1);
+  assert.equal(guessed.quietCommands[0].targetKind, 'project');
+  assert.equal(guessed.quietCommands[0].isGuess, true);
+  const release = quietReply('buy a ring for Sam', [
+    setQuiet('p1', { isGuess: true, isQuiet: false }),
+  ]);
+  assert.deepEqual(release.quietCommands, []);
+  assert.deepEqual(release.quietDropped, ['quiet-guess-release']);
+  assert.deepEqual(
+    quietReply('x', [setQuiet('t9', { isGuess: true })]).quietDropped,
+    ['quiet-unknown-target'],
+  );
+});
+
+const quietProject = (name: string) => ({
+  kind: 'createProject' as const,
+  ref: '$new1',
+  name,
+  emoji: null,
+  objective: null,
+  targetDate: null,
+});
+
+const quietCommand = (over: Record<string, unknown>) => ({
+  kind: 'setQuiet' as const,
+  targetKind: 'project' as const,
+  targetId: '$new1',
+  isNew: true,
+  isQuiet: true,
+  until: '2026-12-01',
+  isGuess: true,
+  ...over,
+});
+
+test('a project made quiet in the same reply is stored quiet and private, with its tasks private', () => {
+  const plan = planWrites({
+    commands: [
+      {
+        kind: 'createTask',
+        ref: '$new2',
+        title: 'Book the table',
+        due: null,
+        isUrgent: false,
+        whoRefs: [],
+        placeRefs: [],
+        projectRef: 'Anniversary trip',
+      },
+    ],
+    projectCommands: [quietProject('Anniversary trip')],
+    quietCommands: [quietCommand({}) as never],
+    today: DAY,
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: 5000,
+    seal: seal as never,
+    newId: (() => {
+      let next = 0;
+      return () => `id-${(next += 1)}`;
+    })(),
+  });
+  assert.equal(plan.projectCreates.length, 1);
+  const [made] = plan.projectCreates;
+  assert.equal(made.data.privacy, 'private');
+  const sealed = JSON.parse(
+    (made.data.sealed as { ciphertext: string }).ciphertext,
+  );
+  assert.equal(sealed.quietMark, 'guessed');
+  assert.equal(sealed.quietUntil, '2026-12-01');
+  assert.equal(sealed.privateMark, 'person');
+  assert.equal(plan.creates[0].data.privacy, 'private');
+  assert.equal(plan.isQuiet, true);
+  assert.deepEqual(plan.quietLines, [
+    'Kept Anniversary trip quiet: it sounded like a surprise',
+  ]);
+});
+
+test('keeping a stored project quiet writes an Undo effect and makes its open tasks private', () => {
+  const plan = planWrites({
+    commands: [],
+    quietCommands: [
+      quietCommand({
+        targetId: 'project-1',
+        isNew: false,
+        isGuess: false,
+        until: null,
+      }) as never,
+    ],
+    today: DAY,
+    existingProjects: [
+      {
+        id: 'project-1',
+        name: 'Anniversary trip',
+        emoji: null,
+        whoRoles: {},
+        roleNotes: {},
+        milestoneState: {},
+        milestoneTitles: {},
+        sealed: { name: 'Anniversary trip' },
+      },
+    ],
+    projectTasks: new Map([
+      ['project-1', [{ id: 'task-9', title: 'Book flights', privacy: null }]],
+    ]),
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: 5000,
+    seal: seal as never,
+    newId: () => 'new-1',
+  });
+  assert.deepEqual(
+    plan.effectRefs.map((ref) => `${ref.op}:${ref.collection}:${ref.docId}`),
+    ['update:projects:project-1', 'update:tasks:task-9'],
+  );
+  const [project] = plan.effects;
+  assert.equal(project.written['sealed.quietMark'], 'person');
+  assert.equal(project.previous?.['sealed.quietMark'], null);
+  assert.equal(project.previous?.privacy, 'ordinary');
+  assert.equal(plan.projectUpdates[0].data.privacy, 'private');
+  assert.equal(plan.updates[0].data.privacy, 'private');
+  assert.deepEqual(plan.quietLines, ['Kept Anniversary trip quiet']);
+});
+
+test('a quiet turn swaps its spoken line for the screen line and keeps the real one', () => {
+  const plan = planWrites({
+    commands: [
+      {
+        kind: 'createTask',
+        ref: '$new1',
+        title: 'Pick up the ring',
+        due: null,
+        isUrgent: false,
+        whoRefs: [],
+        placeRefs: [],
+        projectRef: null,
+      },
+    ],
+    quietCommands: [
+      quietCommand({
+        targetKind: 'task',
+        isGuess: false,
+        until: null,
+      }) as never,
+    ],
+    today: DAY,
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: 5000,
+    seal: seal as never,
+    newId: () => 'new-1',
+  });
+  assert.equal(plan.creates[0].data.privacy, 'private');
+  const build = (isQuiet: boolean) =>
+    JSON.parse(
+      (
+        buildExecution(plan, {
+          captureId: 'capture-1',
+          now: 5000,
+          seal: seal as never,
+          commands: [],
+          inputMode: 'voice',
+          isQuiet,
+        }).sealed as { ciphertext: string }
+      ).ciphertext,
+    );
+  const held = build(true);
+  assert.equal(held.spoken, QUIET_SPOKEN_LINE);
+  assert.ok(String(held.heldSpoken).includes('Pick up the ring'));
+  const loud = build(false);
+  assert.equal(loud.heldSpoken, null);
+  assert.ok(String(loud.spoken).includes('Pick up the ring'));
+  const settled = settleCapture({
+    mode: 'full',
+    filed: 1,
+    hasMore: false,
+    executionId: 'exec-1',
+    now: 5000,
+    newId: () => 'q',
+    opened: { text: 'x' },
+    questionState: {},
+    executionIds: [],
+    line: 'The ring is on your list.',
+    isQuiet: true,
+  });
+  assert.deepEqual((settled.sealed as { spoken?: unknown }).spoken, {
+    text: QUIET_SPOKEN_LINE,
+    priority: 'reply',
+    builtBy: 'code',
+    heldText: 'The ring is on your list.',
+  });
+});
+
+test('a turn is quiet when a command, a touched record, an answer source, a name or the model says so', () => {
+  const index = buildQuietIndex([
+    { kind: 'project', id: 'p1', name: 'Anniversary trip', isQuiet: true },
+    { kind: 'task', id: 't1', name: 'Dentist', isQuiet: false },
+  ]);
+  const turn = (over: Partial<Parameters<typeof isQuietTurn>[0]> = {}) =>
+    isQuietTurn({
+      index,
+      hasQuietCommand: false,
+      touchesQuiet: false,
+      keepQuiet: false,
+      sourceKeys: [],
+      texts: ['Moved the dentist visit.'],
+      ...over,
+    });
+  assert.equal(turn(), false);
+  assert.equal(turn({ hasQuietCommand: true }), true);
+  assert.equal(turn({ touchesQuiet: true }), true);
+  assert.equal(turn({ keepQuiet: true }), true);
+  assert.equal(turn({ sourceKeys: ['project:p1'] }), true);
+  assert.equal(turn({ sourceKeys: ['task:t1'] }), false);
+  assert.equal(turn({ texts: ['Added to Anniversary trip.'] }), true);
 });
 
 const failures = (
