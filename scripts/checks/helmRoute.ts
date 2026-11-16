@@ -8,6 +8,7 @@ import type { HeldReason } from '../../functions/src/apps/helm/aiLimits.ts';
 import { combineMessages } from '../../functions/src/apps/helm/nomos/joinedTurn.ts';
 import {
   HAND_OVER_TOOL,
+  hasUndoCue,
   pickRoute,
   runRouted,
   type Route,
@@ -199,6 +200,38 @@ test('each route holds at its own limits, the day first', () => {
   });
   assert.equal(readLimitHit('quick', 100, 25), null);
   assert.equal(readLimitHit('full', 100, 25), 'recentLimit');
+});
+
+test('a wish to take something back goes to the fuller model', () => {
+  [
+    'never mind',
+    'Nevermind.',
+    'undo that',
+    'scrap that',
+    "That's not what I wanted",
+    'No, I meant a note',
+    'take it back',
+    'revert that',
+    "That's wrong",
+  ].forEach((text) => {
+    assert.equal(hasUndoCue(text), true, text);
+    assert.equal(quick(text), 'full', text);
+  });
+  assert.equal(
+    pickRoute({
+      text: "No, that's not what I wanted",
+      mode: 'full',
+      isAnswer: true,
+    }),
+    'full',
+  );
+  assert.equal(
+    pickRoute({ text: 'Friday', mode: 'full', isAnswer: true }),
+    'quick',
+  );
+  assert.equal(hasUndoCue('Add milk'), false);
+  assert.equal(quick('mind the gap'), 'quick');
+  assert.equal(pickRoute({ text: 'never mind', mode: 'rest' }), 'full');
 });
 
 const failures: string[] = [];
