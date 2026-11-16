@@ -569,7 +569,6 @@ export const describeUndoLine = (line: {
 
 const UNDO_LISTED_LINES = 3;
 
-/** "adding A, adding B and 2 more": the first few lines named and a count of the rest, so a long turn never lists them all. */
 const cutAtWord = (text: string, cap: number) => {
   if (text.length <= cap) return text;
   const cut = text.slice(0, cap - 1);
@@ -595,7 +594,7 @@ export const listUndoLines = (
   const fitting = counts.find((count) => listed(count).length <= cap);
   if (fitting !== undefined) return listed(fitting);
   const tail = going.length > 1 ? ` and ${going.length - 1} more` : '';
-  return `${cutAtWord(described[0] ?? '', cap - tail.length)}${tail}`;
+  return `${cutAtWord(described[0] ?? '', Math.max(1, cap - tail.length))}${tail}`;
 };
 
 /** "Undo adding Book flights? Call the vet stays.": what would go (a few lines, then "and N more"), then up to two of what stays and a count of the rest; no second sentence when nothing stays, and when the whole would pass the question cap the stays sentence is dropped and the lines shortened, so it always ends in its question mark. */
