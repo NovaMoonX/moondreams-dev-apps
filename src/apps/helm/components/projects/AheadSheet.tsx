@@ -310,6 +310,9 @@ function AheadForm({
             />
           </>
         )}
+        {draft.kind === 'picks' && (
+          <p className='text-sm font-medium'>{question.label}</p>
+        )}
         {draft.kind === 'picks' && question.shape === 'pickOne' && (
           <PillGroup
             label={question.label}
