@@ -209,7 +209,7 @@ function ConversationThread({
       (session.startedAt < foldsBefore && session.sessionId !== lastSessionId));
   const foldedSessions = sessions.filter(isFolded);
   const hasFold = foldedSessions.length > 0 && !isUnfolded;
-  // Once opened, Hide earlier sits just above the first session after the last folded one.
+  // Once opened, Hide earlier sits just above the first session after the last folded one, or at the end when every session was folded.
   const foldEnd = sessions.reduce(
     (end, session, index) => (isFolded(session) ? index + 1 : end),
     0,
@@ -323,6 +323,7 @@ function ConversationThread({
             </Fragment>
           );
         })}
+        {!hasFold && foldEnd === sessions.length && hideButton}
         <div data-anchor='end' />
       </div>
     </div>
