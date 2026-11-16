@@ -21,6 +21,7 @@ import {
   readResearchAllowance,
   readResearchArrival,
   readResearchResetOn,
+  readResearchStartedSince,
 } from '../../src/apps/helm/engine/research.ts';
 import {
   planUndo,
@@ -498,7 +499,7 @@ test('undoing a research create stops it with a field-scoped dismiss, never a de
   assert.deepEqual(plan.deletes, []);
   assert.deepEqual(plan.updates[0]?.fields, {
     status: 'dismissed',
-    cancelledAt: NOW,
+    cancelledAt: null,
     lastEditedAt: NOW,
   });
   assert.equal(plan.updates[0]?.reseal, null);
@@ -506,6 +507,23 @@ test('undoing a research create stops it with a field-scoped dismiss, never a de
   assert.ok(asking.kind === 'write' && asking.deletes.length === 0);
   const ready = undoResearch({ status: 'ready', lastEditedAt: NOW - 1_000 });
   assert.ok(ready.kind === 'write' ? ready.updates.length === 0 : true);
+});
+
+test('a rerun started today is not swept as stuck, whatever its creation date', () => {
+  const createdLongAgo = NOW - 30 * 86_400_000;
+  assert.equal(
+    readResearchStartedSince(null, NOW - 1_000, createdLongAgo),
+    NOW - 1_000,
+  );
+  assert.equal(
+    readResearchStartedSince(NOW - 5_000, NOW - 1_000, createdLongAgo),
+    NOW - 5_000,
+  );
+  assert.equal(
+    readResearchStartedSince(null, null, createdLongAgo),
+    createdLongAgo,
+  );
+  assert.equal(readResearchStartedSince(null, null, undefined), null);
 });
 
 const failures: string[] = [];

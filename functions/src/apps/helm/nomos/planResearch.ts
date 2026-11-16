@@ -359,7 +359,9 @@ export function planResearch(input: ResearchPlanInput): ResearchPlan {
             toReplyLine({
               start,
               said,
-              isRerunBooked: input.isRerunBooked,
+              isRerunBooked:
+                input.isRerunBooked ||
+                acc.creates.some((made) => made.doc.isWithoutWeb === true),
               thoroughResetOn: allowance.resetOn,
             }),
           ],

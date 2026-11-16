@@ -130,3 +130,14 @@ export function isResearchRerunDue(
   const today = Date.UTC(pick('year'), pick('month') - 1, pick('day'));
   return today >= rerunOn;
 }
+
+/** When a waiting look last started, for the stuck sweep: its claim, else its latest start (a depth answer or a rerun stamps `lastEditedAt`), else when it was made. */
+export function readResearchStartedSince(
+  startedAt: unknown,
+  lastEditedAt: unknown,
+  createdAt: unknown,
+): number | null {
+  if (typeof startedAt === 'number') return startedAt;
+  if (typeof lastEditedAt === 'number') return lastEditedAt;
+  return typeof createdAt === 'number' ? createdAt : null;
+}

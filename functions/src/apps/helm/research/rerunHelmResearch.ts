@@ -10,7 +10,10 @@ import {
   toAllowanceMirror,
   toStartFields,
 } from '../nomos/planResearch.js';
-import { isResearchRerunDue } from '../nomos/research.js';
+import {
+  isResearchRerunDue,
+  readResearchStartedSince,
+} from '../nomos/research.js';
 import { ANTHROPIC_API_KEY, loadKeyringOrFail } from '../sortHelmCapture.js';
 import { readUsageIn, usageRef } from './researchStore.js';
 import { STUCK_AFTER_MS, settleResearch } from './runResearch.js';
@@ -136,10 +139,12 @@ export const rerunHelmResearch = onSchedule(
       .get();
     const stuck = preparing.docs.flatMap((doc) => {
       const owner = readOwner(doc.ref.path);
-      const startedAt = doc.get('startedAt');
-      const createdAt = doc.get('createdAt');
-      const since = typeof startedAt === 'number' ? startedAt : createdAt;
-      return owner && typeof since === 'number' && now - since > STUCK_AFTER_MS
+      const since = readResearchStartedSince(
+        doc.get('startedAt'),
+        doc.get('lastEditedAt'),
+        doc.get('createdAt'),
+      );
+      return owner && since !== null && now - since > STUCK_AFTER_MS
         ? [{ uid: owner[1], id: owner[2] }]
         : [];
     });

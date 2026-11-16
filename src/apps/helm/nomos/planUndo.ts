@@ -531,7 +531,7 @@ const planRecord = (
       ? {
           kind: 'restored',
           title,
-          fields: { status: 'dismissed', cancelledAt: now, lastEditedAt: now },
+          fields: { status: 'dismissed', cancelledAt: null, lastEditedAt: now },
           reseal: null,
           effect: {
             written: { status: 'dismissed', 'sealed.title': title },
