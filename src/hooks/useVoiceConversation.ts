@@ -137,7 +137,8 @@ const LISTEN_SHOW_DELAY_MS = 400;
 const QUIET_MS = 8000;
 const CONVERSATION_IDLE_MS = 10 * 60 * 1000;
 const FIRST_LINE_FIRST_BYTE_MS = 4000;
-const FOLLOW_UP_MS = 8000;
+/** How long the short window after an answer listens. */
+export const FOLLOW_UP_MS = 8000;
 const LIVE_IDLE_MS = 2 * 60 * 1000;
 // A phrase heard by mistake (a TV, a passing remark) must not hold the microphone for the full quiet limit.
 const LIVE_FIRST_IDLE_MS = 15 * 1000;

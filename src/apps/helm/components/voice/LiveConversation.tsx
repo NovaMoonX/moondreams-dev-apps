@@ -6,6 +6,7 @@ import { Mic, MicOff, X } from 'lucide-react';
 
 import WorkingRing from '@/components/WorkingRing';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
+import { LiveAnswerHint } from '@apps/helm/components/voice/ListeningStrip';
 import MuteControl from '@apps/helm/components/voice/MuteControl';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -165,8 +166,10 @@ function LiveConversation() {
                 ? HELM_COPY.liveMicMuted
                 : isWaiting
                   ? HELM_COPY.talkGettingReady
-                  : HELM_COPY.liveReady(name)}
+                  : (voice.askedAloud?.question.prompt ??
+                    HELM_COPY.liveReady(name))}
             </p>
+            <LiveAnswerHint />
           </div>
         ) : (
           <div className='my-auto flex flex-col gap-5'>
@@ -199,6 +202,7 @@ function LiveConversation() {
                 {helmLine}
               </p>
             )}
+            <LiveAnswerHint />
             {voice.note !== null && voice.note !== helmLine && (
               <p className='text-foreground/80 text-[15px]'>{voice.note}</p>
             )}

@@ -19,6 +19,7 @@ import PickRecordAnswer from '@apps/helm/components/home/PickRecordAnswer';
 import PickSeveralAnswer from '@apps/helm/components/home/PickSeveralAnswer';
 import WhichComesFirstAnswer from '@apps/helm/components/home/WhichComesFirstAnswer';
 import YesNoAnswer from '@apps/helm/components/home/YesNoAnswer';
+import ListeningStrip from '@apps/helm/components/voice/ListeningStrip';
 import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -426,6 +427,13 @@ function QuestionCard({
               </div>
             )}
           </>
+        )}
+        {!isInSheet && !isSent && (
+          <ListeningStrip
+            captureId={captureId}
+            questionId={id}
+            question={question}
+          />
         )}
         {isDateOpen && dateId !== null && dateWho && !dateWho.isUnreadable && (
           <KeyDateSheet

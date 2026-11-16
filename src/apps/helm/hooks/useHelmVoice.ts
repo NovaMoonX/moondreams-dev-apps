@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 
 import { httpsCallable } from 'firebase/functions';
@@ -101,6 +102,10 @@ import {
   buildAskAgainLine,
   buildSpokenQuestion,
 } from '@apps/helm/utils/spokenQuestion';
+import {
+  OPEN_QUESTION_MS,
+  pickQuestionTurn,
+} from '@apps/helm/utils/openQuestion';
 import { getFreshFrom, getOpenSessionId } from '@apps/helm/utils/sessions';
 import { takeDeviceCheckIn } from '@apps/helm/utils/deviceCheckIn';
 import { isUnattendedTurn } from '@apps/helm/utils/privacy';
@@ -145,6 +150,30 @@ const toVoiceIdentity = (label: string): VoiceIdentity => ({
   },
 });
 
+type AskedAloud = {
+  captureId: string;
+  questionId: string;
+  question: HelmQuestion;
+  wakeUntil: number;
+} | null;
+
+// Kept outside React state: it is set from a reply's playback, and a setter there makes the compiler treat every clock read on the answer path as render work.
+function createAskedStore() {
+  let value: AskedAloud = null;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (next: AskedAloud) => {
+      value = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
+
 /** Helm's voice: talking writes a spoken turn like a typed one, the line the server sealed for it is said once the turn is sorted, and "undo that" takes the open session's latest turn back. One instance serves home and the conversation over a page. */
 export function useHelmVoice() {
   const { user } = useAuth();
@@ -169,6 +198,8 @@ export function useHelmVoice() {
   // Turns whose reply, once said, doesn't reopen listening: they ended with a finish phrase.
   const finishedIds = useRef(new Set<string>());
   const captures = useAppSelector(selectAllCaptures);
+  const [askedStore] = useState(createAskedStore);
+  const askedAloud = useSyncExternalStore(askedStore.subscribe, askedStore.get);
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
   const screen = useRef<ScreenContext | null>(null);
@@ -771,7 +802,7 @@ export function useHelmVoice() {
     return next ? buildSpokenQuestion(next.question) : null;
   }
 
-  /** The first open, unskipped question (of a kind, when given) of the latest turn that can be answered by words: a spoken turn's for a spoken answer, any turn's for a typed one; with that turn. */
+  /** The first open, unskipped question (of a kind, when given) of the turn an answer goes to (`pickQuestionTurn`), with that turn. */
   function findAskedQuestion(
     now: number,
     kind: string | null = null,
@@ -784,14 +815,13 @@ export function useHelmVoice() {
       now,
       getFreshFrom(state.helm.profile),
     );
-    const latest = all
-      .filter((capture) => capture.sessionId === sessionId)
-      .reverse()
-      .find((capture) => capture.answersQuestion === null);
+    const latest = pickQuestionTurn(
+      all.filter((capture) => capture.sessionId === sessionId),
+      !isSpoken ? 'typed' : isWakeStarted.current ? 'wake' : 'spoken',
+      now,
+    );
     const asked =
-      latest &&
-      (!isSpoken || latest.inputMode === 'voice') &&
-      latest.status === 'needsYou'
+      latest && latest.status === 'needsYou'
         ? getOpenQuestions(latest)
             .filter(
               (entry) =>
@@ -1275,6 +1305,27 @@ export function useHelmVoice() {
     });
   };
 
+  const isListeningForAnswer =
+    voice.isFollowUpOpen || (voice.isLive && voice.state === 'listening');
+
+  // Each time it listens for an answer, the question an answer would go to is marked on its card.
+  useEffect(() => {
+    if (!isListeningForAnswer) return;
+    const found = findAskedQuestion(Date.now());
+    askedStore.set(
+      found
+        ? {
+            captureId: found.asked.captureId,
+            questionId: found.asked.id,
+            question: found.asked.question,
+            wakeUntil:
+              (found.latest.sortedAt ?? found.latest.createdAt) +
+              OPEN_QUESTION_MS,
+          }
+        : null,
+    );
+  }, [isListeningForAnswer, askedStore]);
+
   /** Starts listening from `page` (what the page publishes, null from home), as a live conversation when that setting is on and the listen isn't a one-off (dictation), or sends what is being said, or stops what is working or speaking. */
   const talk = (page: ScreenContext | null, isOneOff = false) => {
     const isLive = isHandsFreeOn && !isOneOff;
@@ -1400,6 +1451,10 @@ export function useHelmVoice() {
     handleTyped,
     handleCheckIn: (text: string) => takeCheckIn(text, false),
     registerField,
+    /** The question a reply last said aloud, which its card marks as listened for. */
+    askedAloud,
+    /** The wake phrase is on here, so a question asked aloud can still be answered with it for a while. */
+    canWakeAnswer: isWakeWordOn && keyStatus === 'ready',
     /** Plays a line the person tapped again, or says why it can't right now. */
     replay: (line: string) => sayRepeatRefusal(voice.repeat(line)),
   };

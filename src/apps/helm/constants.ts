@@ -646,6 +646,9 @@ export const HELM_COPY = {
   talkListening: 'Listening',
   talkSendLabel: 'Send what you said',
   talkListeningHint: 'Listening…',
+  questionListening: 'Listening',
+  questionListeningFor: (phrases: string) => `Listening · say ${phrases}`,
+  questionWakeToAnswer: (name: string) => `Say “Hey ${name}” to answer`,
   talkGettingReady: 'Getting ready…',
   heardAsTitle: (heard: string) => `Heard “${heard}”`,
   heardAsShownAs: (name: string) =>
