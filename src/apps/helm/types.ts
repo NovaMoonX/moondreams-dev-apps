@@ -47,6 +47,7 @@ export type HelmView =
   | 'procedure'
   | 'run'
   | 'howNomosSeesYou'
+  | 'importance'
   | 'comingUp'
   | 'search';
 
@@ -204,6 +205,7 @@ export type QuestionKind =
   | 'whichIsTrue'
   | 'whichTopic'
   | 'groupTopics'
+  | 'whichComesFirst'
   | 'asked'
   | (string & {});
 
@@ -279,6 +281,7 @@ export interface HelmQuestion {
     | 'whichIsTrue'
     | 'whichTopic'
     | 'groupTopics'
+    | 'whichComesFirst'
     | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;

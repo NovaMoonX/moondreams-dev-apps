@@ -265,3 +265,26 @@ export async function answerWhichComesFirst(
       })
     : { kind: 'unchanged' };
 }
+
+/** Takes every thing out of the order in one write; Undo puts each back where it was. */
+export async function clearImportanceOrder(
+  uid: string,
+): Promise<ImportanceResult> {
+  const placed = selectImportanceItems(store.getState()).filter(
+    (item) => item.place !== null,
+  );
+  if (placed.length === 0) return { kind: 'unchanged' };
+  const encryption = await getHelmEncryption(uid);
+  const before = placed.map(({ id }): Write => ({ id, place: placeNow(id) }));
+  return {
+    kind: 'written',
+    written: commit(
+      uid,
+      placed.map(({ id }): Write => ({ id, place: null })),
+      encryption,
+    ),
+    undo: () => commit(uid, before, encryption),
+    changedIds: placed.map(({ id }) => id),
+    tie: null,
+  };
+}

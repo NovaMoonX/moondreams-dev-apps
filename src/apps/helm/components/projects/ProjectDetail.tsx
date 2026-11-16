@@ -18,6 +18,7 @@ import { useAppSelector } from '@/store';
 import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import DoneTasksFold from '@apps/helm/components/projects/DoneTasksFold';
+import ImportancePlaceRow from '@apps/helm/components/importance/ImportancePlaceRow';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
 import GoalHabits from '@apps/helm/components/projects/GoalHabits';
 import GoalHabitsChoiceSheet from '@apps/helm/components/projects/GoalHabitsChoiceSheet';
@@ -63,6 +64,7 @@ interface ProjectDetailProps {
   onOpenWho: (whoId: string) => void;
   onOpenRun: (runId: string) => void;
   onOpenHabit: (habitId: string) => void;
+  onOpenImportance: (focusId: string) => void;
 }
 
 /** One project: what it is, what its tasks show, and tabs for its tasks and its people. A finished project reads only, with a way to reopen it. */
@@ -74,6 +76,7 @@ function ProjectDetail({
   onOpenWho,
   onOpenRun,
   onOpenHabit,
+  onOpenImportance,
 }: ProjectDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -517,6 +520,11 @@ function ProjectDetail({
                 />
               )
             )}
+            <ImportancePlaceRow
+              id={project.id}
+              variant='quiet'
+              onOpen={onOpenImportance}
+            />
             <RunsSection
               field='attachedTo.id'
               id={project.id}

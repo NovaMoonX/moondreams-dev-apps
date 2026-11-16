@@ -34,6 +34,7 @@ const URL_VIEWS = [
   'procedure',
   'run',
   'howNomosSeesYou',
+  'importance',
   'search',
 ] as const satisfies readonly HelmView[];
 
@@ -124,6 +125,7 @@ export function useHelmUrlState() {
         next === 'place' ||
         next === 'project' ||
         next === 'habit' ||
+        next === 'importance' ||
         next === 'topic' ||
         next === 'procedure' ||
         next === 'run'

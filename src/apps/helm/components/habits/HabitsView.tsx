@@ -5,19 +5,15 @@ import { CalendarCheck, ChevronRight } from 'lucide-react';
 
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
-import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import HabitQuestionFlow from '@apps/helm/components/habits/HabitQuestionFlow';
+import { useHabitListLine } from '@apps/helm/components/habits/useHabitListLine';
 import { useHabitWhoName } from '@apps/helm/components/habits/useHabitWhoName';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import AddRow from '@apps/helm/components/who/AddRow';
 import { HELM_COPY } from '@apps/helm/constants';
-import { selectHabitWeek } from '@apps/helm/engine/habitDay';
-import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
-  readPausedLine,
-  readWeekFigure,
   selectFormedHabits,
   selectKeptHabits,
   selectStoppedHabits,
@@ -74,9 +70,7 @@ function HabitRow({ habit, line, onOpen }: HabitRowProps) {
 
 /** Habits: every one kept, A to Z, each with its week; the ones stopped behind a thin row. A new one is the last row of the list. */
 function HabitsView({ onBack, onHome, onOpenHabit }: HabitsViewProps) {
-  const clock = useHabitClock();
   const { isLoaded, isFailed } = useAppSelector((state) => state.helm.habits);
-  const days = useAppSelector((state) => state.helm.habitDays.byId);
   const kept = useAppSelector(selectKeptHabits);
   const stopped = useAppSelector(selectStoppedHabits);
   const formed = useAppSelector(selectFormedHabits);
@@ -90,23 +84,7 @@ function HabitsView({ onBack, onHome, onOpenHabit }: HabitsViewProps) {
     back: HELM_COPY.backToHabits,
   });
 
-  const readLine = (habit: OpenHabit) => {
-    if (habit.status === 'retired' && habit.retiredAt !== null) {
-      return HELM_COPY.habitsFormedOn(formatDateShort(habit.retiredAt));
-    }
-    if (habit.status === 'ended' && habit.endedAt !== null) {
-      return HELM_COPY.habitsStoppedOn(formatDateShortUTC(habit.endedAt));
-    }
-    const pausedLine = readPausedLine(habit, clock.dayKey);
-    if (pausedLine) return pausedLine;
-    const week = selectHabitWeek(
-      { ...habit, status: 'active' },
-      days,
-      clock.dayKey,
-      clock.timeZone,
-    );
-    return readWeekFigure(habit, week, clock.dayKey);
-  };
+  const readLine = useHabitListLine();
 
   const start = () => setIsStarting(true);
 

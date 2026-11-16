@@ -10,18 +10,20 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
+import GoalEvidenceLine from '@apps/helm/components/projects/GoalEvidenceLine';
+import ImportanceDoor from '@apps/helm/components/importance/ImportanceDoor';
 import GoalQuestionFlow from '@apps/helm/components/projects/GoalQuestionFlow';
 import ProjectQuestionFlow from '@apps/helm/components/projects/ProjectQuestionFlow';
-import { useGoalEvidence } from '@apps/helm/hooks/useGoalEvidence';
+import { useImportanceToday } from '@apps/helm/hooks/useImportancePlace';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import AddRow from '@apps/helm/components/who/AddRow';
 import { HELM_COPY } from '@apps/helm/constants';
+import { selectImportanceOrder } from '@apps/helm/store/selectors/importanceSelectors';
 import {
   selectActiveProjects,
   selectFinishedProjects,
 } from '@apps/helm/store/selectors/projectSelectors';
-import { selectGoalHabits } from '@apps/helm/store/selectors/habitSelectors';
 import type { OpenProject } from '@apps/helm/types';
 import PrivateTitle from '@apps/helm/components/privacy/PrivateTitle';
 
@@ -29,6 +31,7 @@ interface ProjectsViewProps {
   onBack: () => void;
   onHome: () => void;
   onOpenProject: (projectId: string) => void;
+  onOpenImportance: () => void;
 }
 
 type RowState = 'going' | 'finished' | 'aside';
@@ -37,21 +40,6 @@ interface ProjectRowProps {
   project: OpenProject;
   state: RowState;
   onOpen: (projectId: string) => void;
-}
-
-function GoalEvidenceLine({ projectId }: { projectId: string }) {
-  const evidence = useGoalEvidence(projectId);
-  const hasHabits = useAppSelector(
-    (state) => selectGoalHabits(state, projectId).length > 0,
-  );
-  if (evidence) {
-    return (
-      <span className='text-muted-foreground line-clamp-1 text-[13px] leading-[18px]'>
-        {evidence}
-      </span>
-    );
-  }
-  return hasHabits ? <span className='block min-h-[18px]' /> : null;
 }
 
 function ProjectRow({ project, state, onOpen }: ProjectRowProps) {
@@ -142,7 +130,12 @@ function RowList({ projects, state, onOpen, footer }: RowListProps) {
 }
 
 /** Projects and goals: the ones going, goals first under their own divider once there is one, each with what it shows; set-aside and finished ones behind thin rows. */
-function ProjectsView({ onBack, onHome, onOpenProject }: ProjectsViewProps) {
+function ProjectsView({
+  onBack,
+  onHome,
+  onOpenProject,
+  onOpenImportance,
+}: ProjectsViewProps) {
   const { isLoaded, isFailed } = useAppSelector((state) => state.helm.projects);
   const items = useAppSelector((state) => state.helm.projects.items);
   const active = useAppSelector(selectActiveProjects);
@@ -153,8 +146,19 @@ function ProjectsView({ onBack, onHome, onOpenProject }: ProjectsViewProps) {
     null,
   );
 
-  const goals = active.filter((project) => project.kind === 'goal');
-  const projects = active.filter((project) => project.kind !== 'goal');
+  const today = useImportanceToday();
+  const order = useAppSelector((state) => selectImportanceOrder(state, today));
+  const byOrder = (list: OpenProject[]) => {
+    const canWaitAt = order.rows.findIndex((row) => row.group === 'canWait');
+    const rankOf = (id: string) => {
+      const at = order.rows.findIndex((row) => row.id === id);
+      if (at >= 0) return at;
+      return canWaitAt >= 0 ? canWaitAt - 0.5 : order.rows.length;
+    };
+    return [...list].sort((left, right) => rankOf(left.id) - rankOf(right.id));
+  };
+  const goals = byOrder(active.filter((project) => project.kind === 'goal'));
+  const projects = byOrder(active.filter((project) => project.kind !== 'goal'));
   const aside = useMemo(
     () =>
       items
@@ -198,6 +202,7 @@ function ProjectsView({ onBack, onHome, onOpenProject }: ProjectsViewProps) {
             {HELM_COPY.projectsFailed}
           </p>
         )}
+        <ImportanceDoor onOpen={onOpenImportance} />
         {isLoaded &&
           active.length === 0 &&
           finished.length === 0 &&

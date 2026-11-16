@@ -17,6 +17,7 @@ import NumberAnswer from '@apps/helm/components/home/NumberAnswer';
 import PickOneAnswer from '@apps/helm/components/home/PickOneAnswer';
 import PickRecordAnswer from '@apps/helm/components/home/PickRecordAnswer';
 import PickSeveralAnswer from '@apps/helm/components/home/PickSeveralAnswer';
+import WhichComesFirstAnswer from '@apps/helm/components/home/WhichComesFirstAnswer';
 import YesNoAnswer from '@apps/helm/components/home/YesNoAnswer';
 import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -105,7 +106,14 @@ function QuestionCard({
   );
   const isSkipped = skippedAt !== null;
   const isModelWritten = question.builtBy === 'model';
-  const Part = PARTS[question.shape];
+  const Part =
+    question.kind === 'whichComesFirst'
+      ? WhichComesFirstAnswer
+      : PARTS[question.shape];
+  const skippedLine =
+    question.kind === 'whichComesFirst'
+      ? HELM_COPY.importanceWhichSkipped
+      : HELM_COPY.questionSkipped;
 
   const answerAsTurn = async (
     value: QuestionAnswerValue,
@@ -291,7 +299,7 @@ function QuestionCard({
     return (
       <div className='flex flex-wrap items-center gap-x-3 gap-y-1 self-start pl-[30px]'>
         <p className='text-muted-foreground text-left text-[13px] text-pretty'>
-          {HELM_COPY.questionSkipped}
+          {skippedLine}
         </p>
         {canDismiss && dismissButton}
         {note && (
@@ -311,11 +319,7 @@ function QuestionCard({
 
   return (
     <div className='flex w-full flex-col items-start gap-2'>
-      {!isPromptHidden && (
-        <AssistantLine>
-          {question.prompt}
-        </AssistantLine>
-      )}
+      {!isPromptHidden && <AssistantLine>{question.prompt}</AssistantLine>}
       <div
         className={join(
           'flex flex-col gap-2',
@@ -324,7 +328,7 @@ function QuestionCard({
       >
         {isSkipped && isInSheet && (
           <p className='text-muted-foreground text-left text-[13px] text-pretty'>
-            {HELM_COPY.questionSkipped}
+            {skippedLine}
           </p>
         )}
         {isSent || isAnswerInFlight(captureId, id) ? (

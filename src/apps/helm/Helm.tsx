@@ -5,6 +5,7 @@ import { store, useAppSelector } from '@/store';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import Loading from '@/ui/Loading';
+import ImportanceView from '@apps/helm/components/importance/ImportanceView';
 import HowNomosSeesYou from '@apps/helm/components/howNomosSeesYou/HowNomosSeesYou';
 import HomeSurface from '@apps/helm/components/home/HomeSurface';
 import InboxView from '@apps/helm/components/inbox/InboxView';
@@ -221,6 +222,7 @@ function HelmApp() {
             onBack={goBack}
             onHome={goHome}
             onOpenProject={(projectId) => showView('project', projectId)}
+            onOpenImportance={() => showView('importance')}
           />
         )}
         {!isLocked && view === 'project' && (
@@ -232,6 +234,7 @@ function HelmApp() {
             onOpenWho={(whoId) => showView('who', whoId)}
             onOpenRun={(runId) => showView('run', runId)}
             onOpenHabit={(habitId) => showView('habit', habitId)}
+            onOpenImportance={(id) => showView('importance', id)}
           />
         )}
         {!isLocked && view === 'habits' && (
@@ -247,6 +250,7 @@ function HelmApp() {
             backLabel={toBackLabel(HELM_COPY.habitsTitle)}
             onBack={goBackToOrigin}
             onHome={goHome}
+            onOpenImportance={(id) => showView('importance', id)}
           />
         )}
         {!isLocked && view === 'knowledge' && (
@@ -305,6 +309,16 @@ function HelmApp() {
             backLabel={isFromSearch ? HELM_COPY.searchTitle : undefined}
             onBack={isFromSearch ? goBackToOrigin : goBack}
             onHome={goHome}
+          />
+        )}
+        {!isLocked && view === 'importance' && (
+          <ImportanceView
+            focusId={item}
+            backLabel={toBackLabel(HELM_COPY.projectsTitle)}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+            onOpenProject={(projectId) => showView('project', projectId)}
+            onOpenHabit={(habitId) => showView('habit', habitId)}
           />
         )}
         {!isLocked && view === 'place' && (

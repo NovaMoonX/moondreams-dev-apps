@@ -3011,6 +3011,8 @@ Owner, round 2 answer: importance is said in natural language, stored, used, not
 - **Where it is used.** The planner's tie-break among tasks equal in due date and Must/Should/Could (a task in a higher-placed project first); answers ("what should I work on?") through the `<importance>` context block; and guardrails' `starved` reason and naming rules (below). Never to nag, never spoken first, never pushed.
 - **In the prompt.** `<importance>`: up to 30 placed entries in order, each its alias, place words ("first", "beside p3", "can wait"), the person's words and the day, so "what matters most to me?" is answered from the record.
 
+**As built (issue 112, the screens).** `importance` is a content view (parent `projects`, `item` carries the thing to scroll to) in `ImportanceView`: three groups through the shared `ReorderList`, whose drops map to `placeFirst`, `placeAbove(next)`, `placeAfter(previous)`, `takeOutOfOrder` and `moveToCanWait`; a row's tap opens `ImportancePlaceSheet` (the same commands plus an overlay list for "Put it above…"). A goal's habits are hidden from the list (`readListedApartIds`) since they take their goal's place; `readPlaceWords` is the one place that words a place for a page's row. `clearImportanceOrder` writes null places in one commit with Undo. The `whichComesFirst` question is a pick-one drawn by `WhichComesFirstAnswer` and is in `captureListener`'s known kinds, `heldCaptures.hasOpenChoice`, `planUndo`'s reopenable kinds, and the server's `sanitizeScreen` views carry `importance`.
+
 ### Guardrails: pause this, or maybe don't start it now
 
 

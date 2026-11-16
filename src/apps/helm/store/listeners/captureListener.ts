@@ -134,6 +134,7 @@ const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
         question?.kind === 'whichIsTrue' ||
         question?.kind === 'whichTopic' ||
         question?.kind === 'groupTopics' ||
+        question?.kind === 'whichComesFirst' ||
         question?.kind === 'asked';
       return typeof question === 'object' &&
         question !== null &&

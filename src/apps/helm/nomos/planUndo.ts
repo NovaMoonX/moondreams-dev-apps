@@ -1562,6 +1562,7 @@ export const getTakenBackIds = (undo: OpenExecution | null) =>
 const REOPENABLE_KINDS = [
   'whichIsTrue',
   'groupTopics',
+  'whichComesFirst',
   'isThisWho',
   'whichKin',
   'kinOrder',

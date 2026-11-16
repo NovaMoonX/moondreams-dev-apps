@@ -20,6 +20,7 @@ import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import HabitFormedOffer from '@apps/helm/components/habits/HabitFormedOffer';
 import HabitReminderOffer from '@apps/helm/components/habits/HabitReminderOffer';
 import { isInOfferWindow } from '@apps/helm/components/habits/habitOfferWindow';
+import ImportancePlaceRow from '@apps/helm/components/importance/ImportancePlaceRow';
 import HabitReminderRow from '@apps/helm/components/habits/HabitReminderRow';
 import HabitStage from '@apps/helm/components/habits/HabitStage';
 import { useHabitChange } from '@apps/helm/components/habits/useHabitChange';
@@ -83,6 +84,7 @@ interface HabitScreenProps {
   backLabel: string;
   onBack: () => void;
   onHome: () => void;
+  onOpenImportance: (focusId: string) => void;
 }
 
 const readWindowsLine = (habit: OpenHabit) => {
@@ -99,7 +101,13 @@ const readWindowsLine = (habit: OpenHabit) => {
 };
 
 /** One habit: what it is, how often, this week and its notes; a way to change its words and times, pause it, stop it, and mark it medicine or care. */
-function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
+function HabitScreen({
+  habitId,
+  backLabel,
+  onBack,
+  onHome,
+  onOpenImportance,
+}: HabitScreenProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -412,6 +420,11 @@ function HabitScreen({ habitId, backLabel, onBack, onHome }: HabitScreenProps) {
               )}
             </div>
             <HabitStage habit={habit} />
+            <ImportancePlaceRow
+              id={habit.id}
+              variant='summary'
+              onOpen={onOpenImportance}
+            />
             {isFormedOffered && (
               <HabitFormedOffer
                 habit={habit}

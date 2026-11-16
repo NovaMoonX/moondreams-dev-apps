@@ -11,6 +11,7 @@ import {
   Inbox,
   Link2,
   ListChecks,
+  ListOrdered,
   MapPin,
   Search,
   Settings2,
@@ -54,6 +55,7 @@ const VIEW_ENTRIES: Record<
   procedure: { label: HELM_COPY.proceduresTitle, icon: ClipboardList },
   run: { label: HELM_COPY.proceduresTitle, icon: ClipboardList },
   howNomosSeesYou: { label: HELM_COPY.seesYouTitle, icon: UserRound },
+  importance: { label: HELM_COPY.importanceTitle, icon: ListOrdered },
   search: { label: HELM_COPY.searchTitle, icon: Search },
 };
 

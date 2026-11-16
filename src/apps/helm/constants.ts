@@ -2340,13 +2340,15 @@ export const HELM_COPY = {
   questionGone: (kind: string) =>
     kind === 'whichIsTrue'
       ? 'That changed since.'
-      : kind === 'whichTopic'
-        ? 'That note or one of those topics was removed.'
-        : kind === 'groupTopics'
-          ? 'Those topics changed since.'
-          : kind === 'whichPlace'
-            ? 'That place was removed.'
-            : 'That person was removed.',
+      : kind === 'whichComesFirst'
+        ? 'That changed since.'
+        : kind === 'whichTopic'
+          ? 'That note or one of those topics was removed.'
+          : kind === 'groupTopics'
+            ? 'Those topics changed since.'
+            : kind === 'whichPlace'
+              ? 'That place was removed.'
+              : 'That person was removed.',
   editUnreadable: "This page couldn't be opened.",
   whoTierTitle: 'How close',
   whoTierHelp: (assistant: string) =>
@@ -3895,6 +3897,28 @@ export const HELM_COPY = {
   importanceWhichComesBefore: 'Which of these comes before the others?',
   importanceWhichSkipped:
     'Okay, nothing\u2019s changed. It\u2019s waiting in Needs you.',
+  importanceYouSaid: (date: string) => `you said ${date}`,
+  importanceSearch: 'Search what matters most',
+  importanceNoMatch: 'Nothing matches that.',
+  askImportance: 'Ask about what matters',
+  chipImportance: 'About what matters most',
+  backToImportance: 'Back to What matters most',
+  importanceFew:
+    'Once there are two projects, goals or habits to put in order, they show up here.',
+  importanceDoorFirst: (names: string[]) => `${formatList(names)} first`,
+  importanceDoorNone: 'Not said yet \u00b7 by date',
+  importanceClearConfirm:
+    'Clear the whole order? Everything goes back to being ordered by date.',
+  importanceClearAction: 'Clear it',
+  importanceCleared: 'Cleared what matters most.',
+  importanceDragHandle: 'Move',
+  importancePutAboveSearch: 'Search what it should come before',
+  importancePutAboveNone: 'Nothing is in order yet to put it above.',
+  importanceWhichRest: 'The other two can share second place.',
+  importanceWhichRestMany: 'The others can share second place.',
+  importanceWhichFirstSince: (date: string) => `First since ${date}`,
+  importanceWhichPlaceSince: (place: string, date: string) =>
+    `${place} since ${date}`,
 } as const;
 
 export const PLANNER_COPY = {

@@ -20,6 +20,8 @@ export interface ReorderGroup<T extends { id: string }> {
   id: string;
   /** Words on the group's divider; `null` draws the group with no heading. */
   label: string | null;
+  /** Sits beside the divider's label, such as how the group is sorted. */
+  trailing?: ReactNode;
   items: T[];
   /** Draws place numbers and a drag handle on each row. */
   isOrdered: boolean;
@@ -629,7 +631,11 @@ function ReorderList<T extends { id: string }>({
               ref={(el) => register(`head:${group.id}`, el)}
               className='transition-transform duration-150 motion-reduce:transition-none'
             >
-              <SectionDivider label={group.label} className='py-2' />
+              <SectionDivider
+                label={group.label}
+                trailing={group.trailing}
+                className='py-2'
+              />
             </div>
           )}
           <div ref={(el) => register(`items:${group.id}`, el)}>
