@@ -1635,9 +1635,9 @@ test('a project with more things than fit says how many are not private yet', ()
   assert.equal(plan.quietLines.length, 2);
   assert.equal(
     plan.quietLines[1],
-    "100 of Anniversary trip's things aren't private yet",
+    "150 of Anniversary trip's things aren't private yet",
   );
-  assert.equal(plan.updates.length, 300);
+  assert.equal(plan.updates.length, 250);
   assert.equal(plan.effectRefs.length, 40);
 });
 
@@ -1875,6 +1875,86 @@ test('keeping a project quiet makes a done task, a linked note and a topic priva
     { id: 'topic-1', data: { privacy: 'private' } },
   ]);
   assert.deepEqual(plan.quietLines, ['Kept Anniversary quiet']);
+});
+
+test('two quiet projects share one write budget for their children, and the second says what is left', () => {
+  const project = (id: string, name: string) => ({
+    id,
+    name,
+    emoji: null,
+    whoRoles: {},
+    roleNotes: {},
+    milestoneState: {},
+    milestoneTitles: {},
+    sealed: { name },
+  });
+  const children = (prefix: string) => ({
+    isMore: false,
+    children: Array.from({ length: 200 }, (_, index) => ({
+      kind: 'task' as const,
+      id: `${prefix}-${index}`,
+      title: `Task ${index}`,
+      privacy: null,
+    })),
+  });
+  const plan = planWrites({
+    commands: [],
+    quietCommands: ['p-home', 'p-work'].map(
+      (targetId) =>
+        quietCommand({
+          targetId,
+          isNew: false,
+          isGuess: false,
+          until: null,
+        }) as never,
+    ),
+    today: DAY,
+    existingProjects: [project('p-home', 'Home'), project('p-work', 'Work')],
+    projectChildren: new Map([
+      ['p-home', children('home')],
+      ['p-work', children('work')],
+    ]),
+    existing: new Map(),
+    captureId: 'capture-1',
+    executionId: 'exec-1',
+    now: 5000,
+    seal: seal as never,
+    newId: () => 'new-1',
+  });
+  assert.equal(plan.updates.length, 250);
+  assert.ok(
+    plan.quietLines.includes("150 of Work's things aren't private yet"),
+  );
+});
+
+test('a child whose words cannot be opened is still made private, with no Undo line', () => {
+  const plan = quietPlan([
+    { kind: 'note', id: 'note-locked', title: '', privacy: null },
+  ]);
+  assert.equal(
+    plan.noteUpdates.find((entry) => entry.id === 'note-locked')?.data.privacy,
+    'private',
+  );
+  assert.deepEqual(
+    plan.effectRefs.map((ref) => ref.docId),
+    ['project-1'],
+  );
+});
+
+test('a turn whose tools read something under a quiet project is spoken as quiet', () => {
+  const index = buildQuietIndex([]);
+  index.isRead = true;
+  assert.equal(
+    isQuietTurn({
+      index,
+      hasQuietCommand: false,
+      touchesQuiet: false,
+      keepQuiet: false,
+      sourceKeys: [],
+      texts: ['Here is what is in it.'],
+    }),
+    true,
+  );
 });
 
 test('a project read that stopped at its limit says some things are not private yet', () => {

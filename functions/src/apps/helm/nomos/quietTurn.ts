@@ -43,6 +43,8 @@ export interface QuietIndex {
   names: string[];
   /** Some quiet marks could not be read, so nothing can be said to be not quiet. */
   isUnknown: boolean;
+  /** A tool read the words of something under a quiet project this turn. */
+  isRead: boolean;
 }
 
 export const buildQuietIndex = (
@@ -54,6 +56,7 @@ export const buildQuietIndex = (
     keys: new Set(quiet.map((thing) => toQuietKey(thing.kind, thing.id))),
     names: [...new Set(quiet.map((thing) => thing.name))],
     isUnknown,
+    isRead: false,
   };
 };
 
@@ -71,6 +74,7 @@ export const isQuietTurn = (input: {
   input.touchesQuiet ||
   input.keepQuiet ||
   input.index.isUnknown ||
+  input.index.isRead ||
   input.sourceKeys.some((key) => input.index.keys.has(key)) ||
   input.texts.some(
     (text) =>

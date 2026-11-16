@@ -119,7 +119,7 @@ export interface HelmToolScope {
   quiet?: {
     today: string;
     isUnderQuietProject: (projectId: string | null) => boolean;
-    found: { keys: Set<string>; names: string[] };
+    found: { keys: Set<string>; names: string[]; isRead: boolean };
   };
   /** Offers `get_topic`; each topic it reads has its version written into `versions`. */
   topicRead?: {
@@ -1077,6 +1077,20 @@ export function buildHelmTools(scope: HelmToolScope) {
       const topic = data ? openLiveTopic(scope.key, id, data) : null;
       if (!topic) return { error: 'That topic could not be read.' };
       topicRead.versions.set(id, topic.version);
+      const projectIds: unknown[] = Array.isArray(data?.projectIds)
+        ? data.projectIds
+        : [];
+      const isQuiet =
+        scope.quiet !== undefined &&
+        projectIds.some(
+          (projectId) =>
+            typeof projectId === 'string' &&
+            scope.quiet?.isUnderQuietProject(projectId) === true,
+        );
+      if (isQuiet && scope.quiet) {
+        scope.quiet.found.isRead = true;
+        scope.quiet.found.names.push(topic.name);
+      }
       const isHidden =
         scope.mask !== undefined &&
         cover(scope.mask, data?.privacy === 'private', 'a private topic', [
@@ -1095,6 +1109,7 @@ export function buildHelmTools(scope: HelmToolScope) {
         topic: topicAlias,
         name: topic.name,
         version: topic.version,
+        ...(isQuiet ? { isQuiet: true } : {}),
         sections: topic.sections.map((section) => ({
           section: topicRead.sections.add(section.id),
           heading: section.heading,

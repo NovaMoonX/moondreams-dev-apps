@@ -162,7 +162,7 @@ export interface ProjectChildren {
   isMore: boolean;
 }
 
-const MAX_QUIET_CHILD_WRITES = 300;
+const MAX_QUIET_CHILD_WRITES = 250;
 
 /** A who the person already has, with what the tier rule reads about it. */
 export interface KnownWhoState extends KnownWho {
@@ -1297,6 +1297,7 @@ export function planWrites(input: PlanInput): WritePlan {
   const projectQuiet = new Map<string, Record<string, unknown>>();
   const noteQuiet = new Map<string, Record<string, unknown>>();
   const topicPrivate = new Map<string, Record<string, unknown>>();
+  const childWrites = { spent: 0 };
   const refNames = new Map(
     projectCommands.flatMap((command): [string, string][] =>
       command.kind === 'createProject' && command.ref
@@ -1416,6 +1417,7 @@ export function planWrites(input: PlanInput): WritePlan {
         'notes',
       );
       noteQuiet.set(command.targetId, {
+        ...noteQuiet.get(command.targetId),
         privacy: 'private',
         sealed: seal({ ...note.sealed, ...toQuietSealed(next) }),
         lastEditedAt: now,
@@ -1466,9 +1468,16 @@ export function planWrites(input: PlanInput): WritePlan {
     if (!command.isQuiet) return;
     const read = input.projectChildren?.get(projectId);
     const unmarked = (read?.children ?? []).filter(
-      (child) => child.privacy !== 'private',
+      (child) =>
+        child.privacy !== 'private' &&
+        !noteQuiet.has(child.id) &&
+        patches.get(child.id)?.privacy !== 'private',
     );
-    const writable = unmarked.slice(0, MAX_QUIET_CHILD_WRITES);
+    const writable = unmarked.slice(
+      0,
+      Math.max(0, MAX_QUIET_CHILD_WRITES - childWrites.spent),
+    );
+    childWrites.spent += writable.length;
     const left = unmarked.length - writable.length;
     if (read?.isMore || left > 0) {
       quietLines.push(
@@ -1479,7 +1488,8 @@ export function planWrites(input: PlanInput): WritePlan {
     }
     const room = Math.max(0, MAX_EFFECTS - effects.length - drafts.size);
     writable.forEach((child, at) => {
-      const isUndoable = at < room && child.kind !== 'topic';
+      const isUndoable =
+        at < room && child.kind !== 'topic' && child.title !== '';
       if (isUndoable) {
         record(
           child.id,

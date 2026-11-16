@@ -3136,15 +3136,18 @@ async function writeResult(
         isMore: snapshot.size > MAX_QUIET_CASCADE,
         children: snapshot.docs
           .slice(0, MAX_QUIET_CASCADE)
-          .flatMap((doc): ProjectChildRef[] => {
+          .map((doc): ProjectChildRef => {
             const data = doc.data() as Pick<TaskDoc, 'privacy' | 'sealed'>;
             const title =
               kind === 'topic'
                 ? openLiveTopic(key, doc.id, doc.data())?.name
                 : openTitle(key, data.sealed)?.title;
-            return title
-              ? [{ kind, id: doc.id, title, privacy: data.privacy ?? null }]
-              : [];
+            return {
+              kind,
+              id: doc.id,
+              title: typeof title === 'string' ? title : '',
+              privacy: data.privacy ?? null,
+            };
           }),
       };
     };
