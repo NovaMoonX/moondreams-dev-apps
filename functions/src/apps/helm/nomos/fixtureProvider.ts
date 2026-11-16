@@ -1502,6 +1502,39 @@ const readTopicWork = (text: string, message: string) => {
   return null;
 };
 
+/** The emulator's stand-in for taking something back: "never mind", "undo that" or "scrap that" offers the newest earlier turn that still has a line to take back, the whole of what is left of it, with the reason read from the words. Null for any other words, or when no earlier turn has anything left. */
+const readUndoWork = (text: string, message: string) => {
+  const cue = /\b(never ?mind|undo that|scrap that|i meant)\b/i.exec(text);
+  const turns =
+    readBlock<
+      { undoable?: { turn: string; lines: { isUndone: boolean }[] }[] }[]
+    >(message, 'earlier_turns') ?? [];
+  const target = turns
+    .flatMap((turn) => turn.undoable ?? [])
+    .reverse()
+    .find((entry) => entry.lines.some((line) => !line.isUndone));
+  if (!cue || !target) return null;
+  const reason = /\bi meant\b/i.test(text)
+    ? 'wrongThing'
+    : /\bnever ?mind\b/i.test(text)
+      ? 'changedMind'
+      : 'unclear';
+  return {
+    commands: [
+      toAnswer({
+        kind: 'offerUndo',
+        undoTurn: target.turn,
+        undoLines: [],
+        undoReason: reason,
+        undoQuote: cue[0],
+      }),
+    ],
+    replyLine: 'That was filed from the last message.',
+    mentions: [],
+    places: [],
+  };
+};
+
 const PACKING_STEPS: [string, string | null][] = [
   ['Check the weather at the destination', null],
   ['Confirm the hotel booking', null],
@@ -1897,6 +1930,7 @@ function createTextFixtureProvider(
         };
       }
       const grown =
+        readUndoWork(text, messageText(messages[0]?.content ?? '')) ??
         readRunWork(text, messageText(messages[0]?.content ?? '')) ??
         readHabitWork(text, messageText(messages[0]?.content ?? '')) ??
         readProcedureWork(text, messageText(messages[0]?.content ?? '')) ??

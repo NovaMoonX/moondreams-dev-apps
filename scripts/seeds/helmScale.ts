@@ -692,6 +692,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       styleLearnedThroughAt: null,
       conversationFreshAt: null,
       isDailyFreshOn: false,
+      outsideSeenAt: null,
       createdAt,
       lastEditedAt: null,
     },
@@ -1332,6 +1333,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       sealed: await seal<NoteSealed>({
         title: `Notes on ${subject} ${index + 1}`,
         body: `What worked last time for ${subject}: ${pick(FACT_TEMPLATES)}. Check again before the next ${pick(['season', 'trip', 'service', 'filing'])}.`,
+        via: null,
+        links: [],
         privateMark: null,
         isPrivacyCleared: false,
       }),
@@ -1823,6 +1826,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       attempts: status === 'counted' ? 3 : 1,
       writtenAt: Date.parse(dayKey) + DAY_MS + 5 * MINUTE_MS,
       staleAt: null,
+      batchId: null,
+      batchedAt: null,
       sealed:
         status === 'empty'
           ? null
