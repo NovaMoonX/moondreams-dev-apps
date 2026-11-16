@@ -29,7 +29,7 @@ import {
   pickTopicProvider,
   TOPIC_LOOP_LIMITS,
 } from './topicModel.js';
-import { AUTOMATIC_LEVEL } from './nomos/policy.js';
+import { buildWriteExecution } from './topicWriteExecution.js';
 import { ANTHROPIC_API_KEY, loadKeyringOrFail } from './sortHelmCapture.js';
 import {
   readVersionNumbers,
@@ -313,38 +313,6 @@ const describeWrite = (name: string, reason: string, taken: number) =>
         ? `Took out what a removed note said in ${name}`
         : `Brought ${taken} ${taken === 1 ? 'note' : 'notes'} into ${name}`;
 
-const buildWriteExecution = (
-  now: number,
-  seal: (fields: Record<string, unknown>) => SealedPayload,
-  summary: string,
-) => ({
-  captureId: null,
-  actor: 'nomos',
-  category: 'organize',
-  autonomyLevel: AUTOMATIC_LEVEL,
-  state: 'succeeded',
-  effectRefs: [],
-  linkedWhoIds: [],
-  linkedPlaceIds: [],
-  undoesExecutionId: null,
-  undoneByExecutionId: null,
-  questionRef: null,
-  errorCode: null,
-  createdAt: now,
-  decidedAt: now,
-  finishedAt: now,
-  sealed: seal({
-    summary,
-    commands: [],
-    effects: [],
-    undoReport: null,
-    spoken: null,
-    goneIds: null,
-    said: null,
-    lines: null,
-  }),
-});
-
 interface WriteInput {
   firestore: Firestore;
   uid: string;
@@ -411,6 +379,13 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
               now,
               seal,
               describeWrite(name, 'sourceRemoved', 0),
+              {
+                topicId,
+                name,
+                reason: 'sourceRemoved',
+                from: current.version,
+                to: version,
+              },
             ),
           );
           return version;
@@ -567,7 +542,12 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
     });
     transaction.set(
       executionRef,
-      buildWriteExecution(now, seal, describeWrite(name, reason, taken.length)),
+      buildWriteExecution(
+        now,
+        seal,
+        describeWrite(name, reason, taken.length),
+        { topicId, name, reason, from: current.version, to: version },
+      ),
     );
     return { version, waiting: pendingNoteIds.length };
   });

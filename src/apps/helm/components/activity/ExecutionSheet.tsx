@@ -2,15 +2,19 @@ import { useEffect, useState } from 'react';
 
 import DetailSheet from '@/components/DetailSheet';
 import { useAuth } from '@/hooks/useAuth';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import ActorMark from '@apps/helm/components/activity/ActorMark';
+import UndoChoices from '@apps/helm/components/activity/UndoChoices';
 import UndoButton from '@apps/helm/components/activity/UndoButton';
+import UndoPickActions from '@apps/helm/components/activity/UndoPickActions';
 import AnswerCard from '@apps/helm/components/home/AnswerCard';
 import ResultRows from '@apps/helm/components/home/ResultRows';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useResultLines } from '@apps/helm/hooks/useResultLines';
-import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
+import { useUndoChoices } from '@apps/helm/hooks/useUndoChoices';
+import { useUndosOf } from '@apps/helm/hooks/useUndosOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { loadCaptureWords } from '@apps/helm/store/actions/activityActions';
 import {
@@ -96,10 +100,26 @@ function useAskedQuestion(execution: OpenExecution) {
   };
 }
 
-function SheetBody({ execution }: { execution: OpenExecution }) {
+/** The sheet's unticked choices while the person picks what to undo; the sheet holds them since its body and its foot both read them. */
+interface PickState {
+  kept: Set<string>;
+  onKeptChange: (kept: Set<string>) => void;
+  isBusy: boolean;
+  onBusyChange: (isBusy: boolean) => void;
+  onStop: () => void;
+}
+
+function SheetBody({
+  execution,
+  pick,
+}: {
+  execution: OpenExecution;
+  pick: PickState | null;
+}) {
   const lines = useResultLines(execution);
+  const { choices } = useUndoChoices(execution);
   const asked = useAskedQuestion(execution);
-  const { undo } = useUndoOf(execution);
+  const { undos } = useUndosOf(execution);
   const { texts, answer } = useCaptureTexts(execution.captureId);
 
   return (
@@ -130,19 +150,55 @@ function SheetBody({ execution }: { execution: OpenExecution }) {
       {execution.category === 'answer' && answer && (
         <AnswerCard answer={answer} />
       )}
-      {lines.length > 0 && (
+      {pick && (
+        <section className='space-y-1'>
+          <h3 className='text-[13px] font-medium'>{HELM_COPY.undoPickTitle}</h3>
+          <UndoChoices
+            units={choices}
+            picked={
+              new Set(
+                choices.flatMap((c) => (pick.kept.has(c.key) ? [] : [c.key])),
+              )
+            }
+            onChange={(next) =>
+              pick.onKeptChange(
+                new Set(
+                  choices.flatMap((c) => (next.has(c.key) ? [] : [c.key])),
+                ),
+              )
+            }
+            isBusy={pick.isBusy}
+          />
+        </section>
+      )}
+      {!pick && lines.length > 0 && (
         <section className='space-y-1'>
           <h3 className='text-[13px] font-medium'>{HELM_COPY.sheetChanged}</h3>
-          <ResultRows execution={execution} lines={lines} undo={undo} isFlat />
+          <ResultRows
+            execution={execution}
+            lines={lines}
+            undos={undos}
+            isFlat
+          />
         </section>
       )}
     </div>
   );
 }
 
-function SheetFoot({ execution }: { execution: OpenExecution }) {
-  const lines = useResultLines(execution);
-  const { undo } = useUndoOf(execution);
+function SheetFoot({
+  execution,
+  pick,
+  onPick,
+}: {
+  execution: OpenExecution;
+  pick: PickState | null;
+  onPick: () => void;
+}) {
+  const { units, choices } = useUndoChoices(execution);
+  const { latest: undo } = useUndosOf(execution);
+  const isPartlyUndone =
+    execution.undoneByExecutionId === null && execution.partUndoIds.length > 0;
 
   if (execution.category === 'undo') {
     return (
@@ -163,9 +219,37 @@ function SheetFoot({ execution }: { execution: OpenExecution }) {
     );
   }
   if (!canUndo(execution)) return null;
+  if (pick) {
+    return (
+      <div className='px-6 pt-2 pb-6'>
+        <UndoPickActions
+          execution={execution}
+          units={units}
+          picked={
+            new Set(
+              choices.flatMap((c) => (pick.kept.has(c.key) ? [] : [c.key])),
+            )
+          }
+          isBusyChange={pick.onBusyChange}
+          onCancel={pick.onStop}
+          onDone={pick.onStop}
+        />
+      </div>
+    );
+  }
   return (
-    <div className='px-6 pt-2 pb-6'>
-      <UndoButton execution={execution} lineCount={lines.length} isFull />
+    <div className='space-y-2 px-6 pt-2 pb-6'>
+      {isPartlyUndone && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {undo?.undoReport ?? HELM_COPY.partlyTakenBackLabel}
+        </p>
+      )}
+      <UndoButton
+        execution={execution}
+        unitCount={units.length}
+        onPick={onPick}
+        isFull
+      />
     </div>
   );
 }
@@ -174,15 +258,46 @@ function SheetFoot({ execution }: { execution: OpenExecution }) {
 function ExecutionSheet({ execution: opened, onClose }: ExecutionSheetProps) {
   const byId = useAppSelector(selectExecutionsById);
   const execution = opened ? (byId.get(opened.id) ?? opened) : null;
+  const [isPicking, setIsPicking] = useState(false);
+  const [kept, setKept] = useState<Set<string>>(new Set());
+  const [isBusy, setIsBusy] = useState(false);
+  const stop = () => {
+    setIsPicking(false);
+    setKept(new Set());
+  };
+  useBackStep(isPicking, stop);
+  const pick: PickState | null =
+    isPicking && execution !== null && canUndo(execution)
+      ? {
+          kept,
+          onKeptChange: setKept,
+          isBusy,
+          onBusyChange: setIsBusy,
+          onStop: stop,
+        }
+      : null;
 
   return (
     <DetailSheet
       isOpen={execution !== null}
-      onClose={onClose}
+      onClose={() => {
+        stop();
+        onClose();
+      }}
       title={execution ? getActivityLine(execution) : ''}
-      footer={execution && <SheetFoot execution={execution} />}
+      footer={
+        execution && (
+          <SheetFoot
+            execution={execution}
+            pick={pick}
+            onPick={() => setIsPicking(true)}
+          />
+        )
+      }
     >
-      {execution && <SheetBody key={execution.id} execution={execution} />}
+      {execution && (
+        <SheetBody key={execution.id} execution={execution} pick={pick} />
+      )}
     </DetailSheet>
   );
 }

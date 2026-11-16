@@ -69,12 +69,22 @@ export function getActivitySubject(execution: OpenExecution) {
     : null;
 }
 
-/** Whether a row was taken back in full or in part; `undo` is the execution that took it back, once that is loaded. */
+/** Whether a row was taken back in full or in part; `undos` are the loaded executions that took it back, oldest first. */
 export function getTakenBackMark(
   execution: OpenExecution,
-  undo: OpenExecution | null,
+  undos: OpenExecution[],
 ) {
-  if (execution.undoneByExecutionId === null) return null;
+  if (execution.undoneByExecutionId === null) {
+    return execution.partUndoIds.length > 0
+      ? HELM_COPY.partlyTakenBackLabel
+      : null;
+  }
+  if (execution.partUndoIds.length > 1) {
+    return undos.some((entry) => entry.goneIds?.length)
+      ? HELM_COPY.partlyTakenBackLabel
+      : HELM_COPY.takenBackLabel;
+  }
+  const undo = undos[0] ?? null;
   const isImport = execution.category === 'import';
   const isPartial =
     !!undo &&

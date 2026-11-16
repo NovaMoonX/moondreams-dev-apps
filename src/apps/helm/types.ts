@@ -85,6 +85,8 @@ export interface HelmProfile {
   conversationFreshAt: number | null;
   /** Home folds sessions from before today under Show earlier, unless one is still open; never ends a conversation. */
   isDailyFreshOn: boolean;
+  /** When the person last looked at what outside assistants added; null until then, and on a profile from before. */
+  outsideSeenAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -199,6 +201,16 @@ export interface QuestionNumber {
   decimals: 0 | 1 | 2;
 }
 
+/** One thing an undo offer can take back: the records one execution wrote, whole or in part. */
+export interface UndoChoice {
+  optionId: string;
+  executionId: string;
+  docIds: string[];
+  isAll: boolean;
+  reason: UndoReason;
+  quote: string | null;
+}
+
 /** An opened sealed question, built by code (which person or place) or written by the assistant; a code-built one's link is held until it is answered. */
 export interface HelmQuestion {
   kind:
@@ -207,10 +219,15 @@ export interface HelmQuestion {
     | 'whichIsTrue'
     | 'whichTopic'
     | 'groupTopics'
+    | 'undoOffer'
     | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
   prompt: string;
+  /** A quiet line drawn above the prompt (the assistant's reason for an undo offer); null on every other kind. */
+  lead: string | null;
+  /** What each choice of an undo offer takes back; [] on every other kind. */
+  undoChoices: UndoChoice[];
   options: QuestionOption[];
   allowsSomethingElse: boolean;
   noneOption: boolean;
@@ -650,7 +667,12 @@ export interface OpenProject extends Omit<Project, 'sealed'>, ProjectSealed {
 }
 
 export type NoteSource =
-  'typed' | 'capture' | 'savedAnswer' | 'importedFile' | 'assistantDraft';
+  | 'typed'
+  | 'capture'
+  | 'savedAnswer'
+  | 'importedFile'
+  | 'assistantDraft'
+  | 'outside';
 
 /** `apps/helm/users/{uid}/notes/{id}`: one piece of knowledge, in any number of topics or none. */
 export interface Note {
@@ -672,6 +694,10 @@ export interface Note {
 export interface NoteSealed {
   title: string;
   body: string;
+  /** The outside assistant that saved it; null on every other note and on one made before the field. */
+  via: string | null;
+  /** Links the outside assistant brought; empty on every other note and on one made before the field. */
+  links: { title: string; url: string }[];
 }
 
 export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
@@ -995,6 +1021,10 @@ export interface Execution {
   linkedPlaceIds: string[];
   undoesExecutionId: string | null;
   undoneByExecutionId: string | null;
+  /** Records a partial undo took back, by id; null on a document written before partial undo and on every execution not yet partly undone. */
+  undoneDocIds: string[] | null;
+  /** Every undo that took part of this execution back, oldest first; null as above. */
+  partUndoIds: string[] | null;
   questionRef: { captureId: string; questionId: string } | null;
   errorCode: string | null;
   createdAt: number;
@@ -1019,19 +1049,36 @@ export interface ExecutionSealed {
   spoken: string | null;
   /** The records an undo found deleted, by id; null on every other execution. */
   goneIds: string[] | null;
+  /** Why an undo was asked for and how; null on every execution that is not an undo and on ones made before this. */
+  undoReason: UndoReasonRecord | null;
   /** Result rows that touch no record (a note already kept); null on executions that said none. */
   lines: ResultNoteLine[] | null;
 }
 
+export type UndoReason =
+  'wrongThing' | 'wrongDetails' | 'tooHasty' | 'changedMind' | 'unclear';
+
+export interface UndoReasonRecord {
+  reason: UndoReason;
+  quote: string | null;
+  via: 'offer' | 'card' | 'voice';
+}
+
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */
-export interface OpenExecution extends Omit<Execution, 'sealed'> {
+export interface OpenExecution extends Omit<
+  Execution,
+  'sealed' | 'undoneDocIds' | 'partUndoIds'
+> {
   id: string;
+  undoneDocIds: string[];
+  partUndoIds: string[];
   summary: string;
   said: string | null;
   effects: ExecutionEffect[];
   undoReport: string | null;
   spoken: string | null;
   goneIds: string[] | null;
+  undoReason: UndoReasonRecord | null;
   lines: ResultNoteLine[];
   isUnreadable: boolean;
 }
@@ -1232,6 +1279,9 @@ export interface HelmDaySummary {
   writtenAt: number;
   /** Set when something from that day is undone; the next open rewrites it. */
   staleAt: number | null;
+  /** The batch this `counted` summary is waiting on; the server writes it, the device only reads it. */
+  batchId: string | null;
+  batchedAt: number | null;
   sealed: Sealed | null;
 }
 

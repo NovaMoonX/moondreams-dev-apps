@@ -392,11 +392,7 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
           />
           <SwitchRow
             title={HELM_COPY.voiceHandsFreeTitle}
-            description={
-              isHandsFreeOn
-                ? HELM_COPY.voiceHandsFreeOn
-                : HELM_COPY.voiceHandsFreeOff
-            }
+            description={HELM_COPY.voiceHandsFree}
             checked={isHandsFreeOn}
             onChange={(isOn) => changeSwitch(setHandsFreeOn, isOn)}
           />
@@ -406,12 +402,12 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
               onDevice.isOn
                 ? HELM_COPY.voiceWakeOffline(name)
                 : canListenForPhrase
-                  ? HELM_COPY.voiceWake(name)
+                  ? HELM_COPY.voiceWake(name, onDevice.block === null)
                   : HELM_COPY.voiceWakeLocked
             }
             alternatives={[
               HELM_COPY.voiceWakeOffline(name),
-              HELM_COPY.voiceWake(name),
+              HELM_COPY.voiceWake(name, true),
               HELM_COPY.voiceWakeLocked,
             ]}
             checked={canListenForPhrase && isWakeWordOn}
