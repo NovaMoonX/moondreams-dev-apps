@@ -1460,6 +1460,7 @@ export function planWrites(input: PlanInput): WritePlan {
     whoIdOf: entities.whoIdOf,
     nameOf,
     executionId: input.executionId,
+    captureId: input.captureId,
     now,
     seal,
   });

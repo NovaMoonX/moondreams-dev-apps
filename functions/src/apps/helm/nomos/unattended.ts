@@ -147,9 +147,15 @@ export const maskContextRecords = (
   projects: input.projects?.map((project) =>
     cover(mask, project.isPrivate, 'a private project', [
       project.name,
+      ...(project.why ? [project.why] : []),
       ...project.milestones.map((milestone) => milestone.title),
     ])
-      ? { ...project, name: 'a private project', milestones: [] }
+      ? {
+          ...project,
+          name: 'a private project',
+          milestones: [],
+          why: undefined,
+        }
       : project,
   ),
   topics: input.topics?.map((topic) =>

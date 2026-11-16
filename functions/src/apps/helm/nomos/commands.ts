@@ -5,6 +5,12 @@ import { toPlainText } from '../../../vendor/speechText.js';
 import { SENSITIVE_CATEGORIES } from './sensitive.js';
 import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
 import type { ModelChange } from '../topicWrite.js';
+import {
+  WHY_CLEANED_CAP,
+  WHY_SUMMARY_CAP,
+  WHY_TAGS_CAP,
+  WHY_VERBATIM_CAP,
+} from '../goalWhy.js';
 import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
 import { KIN_KINDS, KIN_ORDERS, type WhoKin } from './kinKinds.js';
 import { CONTACT_LABEL_CAP, CONTACT_VALUE_CAP } from './contactPoints.js';
@@ -519,6 +525,14 @@ export interface CreateProjectCommand {
   emoji: string | null;
   objective: string | null;
   targetDate: number | null;
+  projectKind: 'project' | 'goal';
+  /** For a goal only: the person's own words copied from the capture, and the model's tidy-up, summary and tags, each already cut. */
+  why: {
+    verbatim: string;
+    cleaned: string | null;
+    summary: string | null;
+    tags: string[];
+  } | null;
 }
 
 /** A person is key to or involved in a project, named by words code matches; it only raises a role. */
@@ -911,6 +925,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'projectRef',
             'projectEmoji',
             'objective',
+            'projectKind',
+            'whyQuote',
+            'whyCleaned',
+            'whySummary',
+            'whyTags',
             'role',
             'roleNote',
             'bodyQuote',
@@ -1222,6 +1241,29 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               'string',
               `createProject: what done looks like in one plain sentence, only when said, at most ${PROJECT_OBJECTIVE_CAP} characters; null otherwise.`,
             ),
+            projectKind: {
+              type: ['string', 'null'],
+              enum: ['project', 'goal', null],
+              description:
+                'createProject: goal for something the person wants to grow into or become ("get back into guitar", "be a calmer parent") that has no finish line; project for something with steps that ends; null means project.',
+            },
+            whyQuote: nullable(
+              'string',
+              `createProject goal only: the exact words from <capture> where the person says why it matters to them ("I miss playing"), copied as written, at most ${WHY_VERBATIM_CAP} characters; null when they gave no reason. Never write or invent a reason.`,
+            ),
+            whyCleaned: nullable(
+              'string',
+              `createProject goal only: whyQuote with punctuation and grammar tidied and nothing added or dropped, at most ${WHY_CLEANED_CAP} characters; null when there is no whyQuote.`,
+            ),
+            whySummary: nullable(
+              'string',
+              `createProject goal only: one short line that sums up whyQuote, at most ${WHY_SUMMARY_CAP} characters; null when there is no whyQuote.`,
+            ),
+            whyTags: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `createProject goal only: up to ${WHY_TAGS_CAP} short lowercase tags for the why ("music", "calm"); null when there is no whyQuote.`,
+            },
             role: {
               type: ['string', 'null'],
               enum: [...PROJECT_ROLES, null],

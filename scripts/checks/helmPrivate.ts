@@ -636,6 +636,7 @@ test('a task made with a health word is private and carries the reason, one with
 
 test('a task made under a private project is stored private from the start, one under an ordinary project is not', () => {
   const project = (id: string, name: string, mark: 'health' | null) => ({
+    kind: 'project' as const,
     id,
     name,
     emoji: null,

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 
-import { sealForHelm } from '../../functions/src/apps/helm/helmKey.ts';
+import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
+import { whyFingerprint } from '../../functions/src/apps/helm/goalWhy.ts';
+import {
+  openForHelm,
+  sealForHelm,
+} from '../../functions/src/apps/helm/helmKey.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import type { CaptureReading } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
@@ -42,8 +47,16 @@ const DATED: CaptureReading = {
     },
   ],
 };
-const read = (raw: Record<string, unknown>, reading = READING) =>
-  normalizeNomosReply(raw, { reading, aliases: createAliasBook('t') });
+const read = (
+  raw: Record<string, unknown>,
+  reading = READING,
+  captureText = '',
+) =>
+  normalizeNomosReply(raw, {
+    reading,
+    aliases: createAliasBook('t'),
+    captureText,
+  });
 
 const task = (title: string, extra: Record<string, unknown> = {}) => ({
   kind: 'createTask',
@@ -125,6 +138,7 @@ const existingProject = (
     ]),
   ),
   milestoneTitles,
+  kind: 'project',
   sealed: {
     name,
     emoji: '💍',
@@ -148,6 +162,7 @@ const plan = (
   raw: { commands: unknown[]; mentions?: unknown[] },
   options: {
     reading?: CaptureReading;
+    captureText?: string;
     projects?: ExistingProject[];
     who?: KnownWhoState[];
   } = {},
@@ -155,6 +170,7 @@ const plan = (
   const reply = read(
     { mentions: [], places: [], ...raw },
     options.reading ?? READING,
+    options.captureText,
   );
   const people: PeopleInput = {
     mentions: reply.mentions,
@@ -578,6 +594,66 @@ test('a reply keeps three milestones, cuts the title and reads the date from its
   );
   assert.equal(only.title.length, 80);
   assert.equal(only.date, null);
+});
+
+const GOAL_WORDS =
+  'I want to get back into guitar because I miss playing with my brother on weekends.';
+const goal = (extra: Record<string, unknown> = {}) =>
+  project('Get back into guitar', {
+    projectKind: 'goal',
+    whyQuote: 'i miss  playing with my brother on weekends',
+    whyCleaned: 'I miss playing guitar with my brother on weekends.',
+    whySummary: 'Misses playing with his brother',
+    whyTags: ['Music', 'family', 'music'],
+    ...extra,
+  });
+const goalOf = (extra: Record<string, unknown> = {}, text = GOAL_WORDS) => ({
+  created: plan({ commands: [goal(extra)] }, { captureText: text })
+    .projectCreates[0],
+});
+const openWhy = (data: Record<string, unknown>) =>
+  openForHelm(KEY, data.sealed as SealedPayload).why as Record<
+    string,
+    unknown
+  > | null;
+
+test('a goal copies its why from the capture word for word', () => {
+  const { created } = goalOf();
+  assert.equal(created.data.kind, 'goal');
+  assert.equal(created.data.pausedAt, null);
+  assert.equal(created.data.pausedUntil, null);
+  const why = openWhy(created.data);
+  assert.equal(why?.verbatim, 'I miss playing with my brother on weekends');
+  assert.equal(why?.basedOn, whyFingerprint(why?.verbatim as string));
+  assert.equal(why?.cleanedState, 'offered');
+  assert.deepEqual(why?.tags, ['music', 'family']);
+  assert.equal(why?.saidAt, 5000);
+  assert.equal(why?.captureId, 'c1');
+});
+
+test('a why that is not in the capture is dropped, never written', () => {
+  const { created } = goalOf({ whyQuote: 'I miss my dad' });
+  assert.equal(openWhy(created.data), null);
+});
+
+test('a tidy-up that only changes punctuation is dropped', () => {
+  const { created } = goalOf({
+    whyCleaned: 'i miss playing with my brother on weekends',
+  });
+  const why = openWhy(created.data);
+  assert.equal(why?.cleaned, null);
+  assert.equal(why?.cleanedState, null);
+  assert.equal(why?.verbatim, 'I miss playing with my brother on weekends');
+});
+
+test('a project stays a project with no why, even when the model sends one', () => {
+  const [created] = plan(
+    { commands: [project('Move', { whyQuote: 'because', projectKind: null })] },
+    { captureText: 'start a project for the move because' },
+  ).projectCreates;
+  assert.equal(created.data.kind, 'project');
+  const opened = openForHelm(KEY, created.data.sealed as SealedPayload);
+  assert.equal('why' in opened, false);
 });
 
 const failures: string[] = [];

@@ -85,6 +85,7 @@ import {
   PROJECT_ROLE_NOTE_CAP,
   PROJECT_ROLES,
   type ProjectCommand,
+  type CreateProjectCommand,
   KEY_DATE_KINDS,
   KEY_DATE_LABEL_CAP,
   type KeyDateCommand,
@@ -116,6 +117,13 @@ import {
   type HabitCommand,
   type ConnectionCommand,
 } from './commands.js';
+import {
+  WHY_CLEANED_CAP,
+  WHY_SUMMARY_CAP,
+  WHY_TAGS_CAP,
+  WHY_VERBATIM_CAP,
+  isWorthTidying,
+} from '../goalWhy.js';
 import { readConnectionCommands } from './readConnectionCommands.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import type { ModelChange } from '../topicWrite.js';
@@ -172,6 +180,11 @@ const KNOWN_KEYS = new Set([
   'projectRef',
   'projectEmoji',
   'objective',
+  'projectKind',
+  'whyQuote',
+  'whyCleaned',
+  'whySummary',
+  'whyTags',
   'role',
   'roleNote',
   'bodyQuote',
@@ -603,16 +616,50 @@ const readProjectDate = (
     : getDayIn(span.due.at, toKnownZone(timeZone));
 };
 
+/** The person's own words for a goal's why: the capture's exact slice the quote points at (case and spacing as the person wrote them), or null when the quote is not in the capture. */
+const readWhyWords = (value: unknown, captureText: string) => {
+  const quote = toText(value, WHY_VERBATIM_CAP);
+  if (!quote) return null;
+  const pattern = quote
+    .split(' ')
+    .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('\\s+');
+  return new RegExp(pattern, 'i').exec(captureText)?.[0] ?? null;
+};
+
+const readGoalWhy = (
+  item: Record<string, unknown>,
+  captureText: string,
+): CreateProjectCommand['why'] => {
+  const verbatim = readWhyWords(item.whyQuote, captureText);
+  if (!verbatim) return null;
+  const cleaned = toText(item.whyCleaned, WHY_CLEANED_CAP);
+  return {
+    verbatim: verbatim.slice(0, WHY_VERBATIM_CAP),
+    cleaned: isWorthTidying(verbatim, cleaned) ? cleaned : null,
+    summary: toText(item.whySummary, WHY_SUMMARY_CAP),
+    tags: (Array.isArray(item.whyTags) ? item.whyTags : [])
+      .flatMap((tag) => {
+        const text = toText(tag, 24)?.toLowerCase();
+        return text ? [text] : [];
+      })
+      .filter((tag, index, all) => all.indexOf(tag) === index)
+      .slice(0, WHY_TAGS_CAP),
+  };
+};
+
 /** A project to start, a role to give or a milestone to add; null when its words are missing. At most one project, `MAX_PROJECT_ROLES` roles and `MAX_MILESTONES_PER_TURN` milestones. */
 const readProjects = (
   items: Record<string, unknown>[],
   entities: Entities,
   reading: CaptureReading,
   timeZone: string,
+  captureText: string,
 ): ProjectCommand[] => {
   const read = items.flatMap((item): ProjectCommand[] => {
     if (item.kind === 'createProject') {
       const name = toText(item.title, PROJECT_NAME_CAP);
+      const isGoal = item.projectKind === 'goal';
       return name
         ? [
             {
@@ -621,6 +668,8 @@ const readProjects = (
               emoji: toEmoji(item.projectEmoji),
               objective: toText(item.objective, PROJECT_OBJECTIVE_CAP),
               targetDate: readProjectDate(item.dueSpanId, reading, timeZone),
+              projectKind: isGoal ? 'goal' : 'project',
+              why: isGoal ? readGoalWhy(item, captureText) : null,
             },
           ]
         : [];
@@ -2201,6 +2250,7 @@ export function normalizeNomosReply(
     entities,
     context.reading,
     context.timeZone ?? 'UTC',
+    context.captureText ?? '',
   );
   const { asks, dropped: askDropped } = readAsks(
     items,
