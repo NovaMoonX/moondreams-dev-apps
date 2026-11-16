@@ -58,10 +58,14 @@ type Draft =
 
 /** A pick question whose prefill names nothing among its options has nothing ticked, so it says nothing was filled. */
 const settleQuestion = (question: LeadQuestion): LeadQuestion =>
-  (question.shape === 'pickOne' || question.shape === 'pickMany') &&
-  !question.prefill.some((pick) => question.options.includes(pick))
+  !question.from ||
+  ((question.shape === 'pickOne' || question.shape === 'pickMany') &&
+    !question.prefill.some((pick) => question.options.includes(pick)))
     ? { ...question, prefill: [], from: null }
     : question;
+
+const toDollarsValue = (cents: number) =>
+  cents % 100 === 0 ? String(cents / 100) : centsToInputValue(cents);
 
 const toStartDraft = (question: LeadQuestion): Draft => {
   if (question.shape === 'text') {
@@ -71,8 +75,8 @@ const toStartDraft = (question: LeadQuestion): Draft => {
     const [min, max] = (question.prefill[0] ?? '').split('-').map(Number);
     return {
       kind: 'range',
-      min: Number.isFinite(min) && min > 0 ? centsToInputValue(min) : '',
-      max: Number.isFinite(max) && max > 0 ? centsToInputValue(max) : '',
+      min: Number.isFinite(min) && min > 0 ? toDollarsValue(min) : '',
+      max: Number.isFinite(max) && max > 0 ? toDollarsValue(max) : '',
     };
   }
   const picks = question.prefill.filter((pick) =>
@@ -322,6 +326,7 @@ function AheadForm({
             </label>
             <Input
               id={inputId}
+              variant='outline'
               value={draft.text}
               maxLength={200}
               onChange={(event) =>
@@ -359,22 +364,30 @@ function AheadForm({
           <>
             <p className='text-sm font-medium'>{question.label}</p>
             <div className='flex items-start gap-3'>
-              <MoneyInput
-                variant='outline'
-                wrapperClassName='min-w-0 flex-1'
-                ariaLabel={`${question.label}: ${HELM_COPY.aheadMinField}`}
-                placeholder={HELM_COPY.aheadMinField}
-                value={draft.min}
-                onChange={(min) => change(question.id, { ...draft, min })}
-              />
-              <MoneyInput
-                variant='outline'
-                wrapperClassName='min-w-0 flex-1'
-                ariaLabel={`${question.label}: ${HELM_COPY.aheadMaxField}`}
-                placeholder={HELM_COPY.aheadMaxField}
-                value={draft.max}
-                onChange={(max) => change(question.id, { ...draft, max })}
-              />
+              <label className='min-w-0 flex-1 space-y-1'>
+                <span className='text-muted-foreground block text-[13px]'>
+                  {HELM_COPY.aheadMinField}
+                </span>
+                <MoneyInput
+                  variant='outline'
+                  ariaLabel={`${question.label}: ${HELM_COPY.aheadMinField}`}
+                  placeholder={HELM_COPY.aheadMinField}
+                  value={draft.min}
+                  onChange={(min) => change(question.id, { ...draft, min })}
+                />
+              </label>
+              <label className='min-w-0 flex-1 space-y-1'>
+                <span className='text-muted-foreground block text-[13px]'>
+                  {HELM_COPY.aheadMaxField}
+                </span>
+                <MoneyInput
+                  variant='outline'
+                  ariaLabel={`${question.label}: ${HELM_COPY.aheadMaxField}`}
+                  placeholder={HELM_COPY.aheadMaxField}
+                  value={draft.max}
+                  onChange={(max) => change(question.id, { ...draft, max })}
+                />
+              </label>
             </div>
           </>
         )}
@@ -385,17 +398,6 @@ function AheadForm({
 
   return (
     <div className='space-y-4'>
-      <section
-        className='border-border bg-muted/40 space-y-1 rounded-xl border px-3.5 py-3'
-        aria-label={HELM_COPY.aheadBriefLabel}
-      >
-        <p className='text-muted-foreground text-[13px]'>
-          {HELM_COPY.aheadBriefLabel}
-        </p>
-        <p className='text-[15px] leading-[21px] text-pretty break-words'>
-          {brief}
-        </p>
-      </section>
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.aheadOptional}
       </p>
@@ -451,6 +453,12 @@ function AheadForm({
           aria-label={HELM_COPY.aheadStartNow}
         />
       </div>
+      <p className='text-muted-foreground text-[13px] text-pretty break-words'>
+        <span className='text-foreground font-medium'>
+          {HELM_COPY.aheadBriefLabel}
+        </span>{' '}
+        {brief}
+      </p>
       <ModalFooterActions
         cancelAction={
           <Button

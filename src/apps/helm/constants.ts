@@ -1663,7 +1663,7 @@ export const HELM_COPY = {
       : `I won't bring it up for ${weeks} weeks.`,
   aheadActionFailed: "Couldn't save that. Check your connection.",
   aheadSheetTitle: (subject: string) => `Before I look into ${subject}`,
-  aheadBriefLabel: "What I'll look into",
+  aheadBriefLabel: "What I'll send:",
   aheadOptional: 'Everything here is optional. Skip what you like.',
   aheadInferred: (assistant: string, from: string) =>
     `${assistant} inferred · ${from}`,
@@ -1674,7 +1674,7 @@ export const HELM_COPY = {
   aheadDepthQuickLine: 'Reads a few good sources',
   aheadDepthThorough: 'Thorough',
   aheadDepthThoroughLine: (left: number) =>
-    `Reads more widely · about ${left} thorough ${left === 1 ? 'look' : 'looks'} left this month`,
+    `Reads more widely · ${left} left this month`,
   aheadStartNow: 'Start now',
   aheadStartNowLine: (arrival: string | null) =>
     arrival === null

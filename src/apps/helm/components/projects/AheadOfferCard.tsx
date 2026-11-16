@@ -19,7 +19,7 @@ interface AheadOfferCardProps {
   offer: AheadOfferMeta;
   /** The person's day as a date-only UTC midnight. */
   today: number;
-  /** Set on Today: the first showing stamps the offer, so Today offers it once. */
+  /** Set on Today: the first showing stamps the offer, so Today offers it once, and the card names the date the page heading would. */
   dayKey?: string;
   /** Opens the questions; the parent holds the sheet so typed work outlives this card. */
   onOpen: (target: AheadSheetTarget) => void;
@@ -71,20 +71,22 @@ function AheadOfferCard({
       <p className='text-foreground text-[15px] leading-[21px] font-medium text-pretty break-words'>
         {HELM_COPY.aheadStatement(ask.subject, project.name)}
       </p>
-      <ul className='space-y-1.5'>
-        <li className='text-muted-foreground flex items-start gap-2 text-[13px] text-pretty'>
-          <CalendarDays
-            className='mt-0.5 size-3.5 shrink-0'
-            aria-hidden='true'
-          />
-          <span className='min-w-0 break-words'>
-            {HELM_COPY.aheadDateReason(
-              formatWeekdayDayUTC(project.targetDate),
-              Math.round((project.targetDate - today) / DAY_MS),
-              project.name,
-            )}
-          </span>
-        </li>
+      <ul className='space-y-1.5 empty:hidden'>
+        {dayKey && (
+          <li className='text-muted-foreground flex items-start gap-2 text-[13px] text-pretty'>
+            <CalendarDays
+              className='mt-0.5 size-3.5 shrink-0'
+              aria-hidden='true'
+            />
+            <span className='min-w-0 break-words'>
+              {HELM_COPY.aheadDateReason(
+                formatWeekdayDayUTC(project.targetDate),
+                Math.round((project.targetDate - today) / DAY_MS),
+                project.name,
+              )}
+            </span>
+          </li>
+        )}
         {ask.whyNow && (
           <li className='text-muted-foreground flex items-start gap-2 text-[13px] text-pretty'>
             <Lightbulb

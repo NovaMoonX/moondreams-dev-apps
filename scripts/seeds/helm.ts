@@ -1999,7 +1999,7 @@ async function buildProjects(input: {
             subject: 'apartments',
             question:
               'What neighborhoods, sizes and rents fit what you want in a new place?',
-            whyNow: "Nothing in New place yet says what you're looking for.",
+            whyNow: "A few answers first and I'll know what you're after.",
             isDecision: true,
             questions: [
               {
@@ -2017,7 +2017,7 @@ async function buildProjects(input: {
                 shape: 'pickOne',
                 options: ['1', '2', '3+'],
                 prefill: ['2'],
-                from: null,
+                from: 'From what you said · Nov 10',
                 isInferred: false,
               },
               {
@@ -2026,7 +2026,7 @@ async function buildProjects(input: {
                 shape: 'pickMany',
                 options: ['Pets', 'In-unit laundry', 'Parking'],
                 prefill: ['Pets'],
-                from: 'Inferred · Miso and Pepper',
+                from: 'Inferred · your cats, Miso and Pepper',
                 isInferred: true,
               },
               {
@@ -2035,7 +2035,7 @@ async function buildProjects(input: {
                 shape: 'amountRange',
                 options: [],
                 prefill: ['220000-280000'],
-                from: null,
+                from: 'From what you said · Nov 10',
                 isInferred: false,
               },
             ],
@@ -2854,7 +2854,7 @@ async function buildPartnerAhead(input: { now: number; encryption: HelmEncryptio
           'seed-ahead-reunion': {
             subject: 'reunion places',
             question: 'Where could a family reunion for about twenty people happen?',
-            whyNow: 'Nothing in Family reunion says where it will be yet.',
+            whyNow: "Once I know who's coming and roughly where, I can find places that fit.",
             isDecision: true,
             questions: [
               {
