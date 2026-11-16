@@ -1,4 +1,5 @@
 import { readConnectorAppId } from '../../../vendor/connectionsContract.js';
+import { stripProseMarks } from '../../../vendor/proseUtils.js';
 import { connectorLabel } from '../syncedCopies.js';
 import {
   TURNED_OFF_FAILURE,
@@ -58,8 +59,6 @@ export interface CaptureAnswer {
 }
 
 export type AnswerDrop = 'answer-unsourced' | 'answer-general-refused';
-
-const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim();
 
 /** Said whatever the question's grammar, so the line never has to be bent around it. */
 export const NOTHING_LINE = 'Nothing in your records answers that.';
@@ -173,24 +172,25 @@ export function buildAnswer(
   const fromRecords =
     command.fromRecordsText &&
     (sources.length + quotes.length > 0 || hasAppLook)
-      ? oneLine(command.fromRecordsText)
+      ? command.fromRecordsText.trim()
       : null;
   if (hasRecordsText && !fromRecords) onDrop('answer-unsourced');
   const mayAddGeneral =
     command.scope === 'both' ||
     (command.scope === 'theWorld' && fromRecords === null);
   const general =
-    command.generalText && mayAddGeneral ? oneLine(command.generalText) : null;
+    command.generalText && mayAddGeneral ? command.generalText.trim() : null;
   if (command.generalText && !general) onDrop('answer-general-refused');
 
-  const spokenRecords = fromRecords
-    ? readSpokenRecordsLine(command.fromRecordsSpoken, fromRecords)
+  const plainRecords = fromRecords ? stripProseMarks(fromRecords) : null;
+  const spokenRecords = plainRecords
+    ? readSpokenRecordsLine(command.fromRecordsSpoken, plainRecords)
     : null;
-  const recordsSpoken = fromRecords
-    ? (spokenRecords ?? fromRecords)
+  const recordsSpoken = plainRecords
+    ? (spokenRecords ?? plainRecords)
     : NOTHING_LINE;
   const generalSpoken = general
-    ? oneLine(command.generalSpoken || general)
+    ? stripProseMarks(command.generalSpoken || general)
     : null;
   const differs = command.differsFromNoteId
     ? notes.get(command.differsFromNoteId)

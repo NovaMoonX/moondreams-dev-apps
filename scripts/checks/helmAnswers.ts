@@ -50,6 +50,11 @@ import {
   isLiveDeepLink,
   toDocumentLink,
 } from '../../functions/src/connections/deepLinks.ts';
+import {
+  extractLinks,
+  normalizeProse,
+  stripProseMarks,
+} from '../../src/utils/proseUtils.ts';
 import { SPOKEN_MAX_CHARS } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   sealForHelm,
@@ -2450,6 +2455,138 @@ const tests: [string, () => void | Promise<void>][] = [
         answer(none, failed.entries()),
         null,
         'an app whose live look failed rests nothing, whatever a stored look found',
+      );
+    },
+  ],
+  [
+    'written text keeps one blank line between paragraphs and flattens inside them',
+    () => {
+      const text = normalizeProse(
+        '  Your tasting is Friday at 2.\nBring   the deposit.\r\n\r\n\r\n\n  The venue is Pike Place.  ',
+        1_200,
+      );
+      assert.equal(
+        text,
+        'Your tasting is Friday at 2. Bring the deposit.\n\nThe venue is Pike Place.',
+      );
+      assert.equal(normalizeProse(' \n\n ', 1_200), null);
+      assert.equal(normalizeProse('One line only.', 1_200), 'One line only.');
+    },
+  ],
+  [
+    'lists are kept as lists, renumbered, and a list item continues on an indented line',
+    () => {
+      assert.equal(
+        normalizeProse(
+          'Next steps:\n* Call the florist\n* Book the van\n  for Saturday\n\n3. Pay\n7. Confirm',
+          1_200,
+        ),
+        'Next steps:\n\n- Call the florist\n- Book the van for Saturday\n\n1. Pay\n2. Confirm',
+      );
+    },
+  ],
+  [
+    'headings, tables, images, code and raw html are reduced to plain words',
+    () => {
+      assert.equal(
+        normalizeProse(
+          '# Plan\n<b>Friday</b> at `2` ![map](https://x.example/m.png)\n| a | b |\n|---|---|\n| 1 | 2 |',
+          1_200,
+        ),
+        'Plan\n\nFriday at 2 map\n\na, b\n\n1, 2',
+      );
+    },
+  ],
+  [
+    'a link stays only for a web address the answer rests on, every other link is its words',
+    () => {
+      const allowed = extractLinks([
+        'See https://docs.example/contract. Also https://x.example/a?b=1,',
+      ]);
+      assert.deepEqual(allowed, [
+        'https://docs.example/contract',
+        'https://x.example/a?b=1',
+      ]);
+      assert.equal(
+        normalizeProse(
+          'Open the [contract](https://docs.example/contract) or [this](https://evil.example/x) or <https://evil.example/y>.',
+          1_200,
+          allowed,
+        ),
+        'Open the [contract](https://docs.example/contract) or this or https://evil.example/y.',
+      );
+      assert.equal(
+        normalizeProse('[contract](https://docs.example/contract)', 1_200),
+        'contract',
+        'general text has no records to link to',
+      );
+    },
+  ],
+  [
+    'a cut never leaves a mark or a link half open on screen',
+    () => {
+      const bold = normalizeProse(
+        `Start **Friday at 2 and everything after it that runs on`,
+        1_200,
+      );
+      assert.equal(
+        bold,
+        'Start Friday at 2 and everything after it that runs on',
+      );
+      const cut = normalizeProse(
+        'The tasting is **Friday at 2 PM** at the bakery on Pike Place today.',
+        30,
+      );
+      assert.ok(cut !== null && !cut.includes('*'), `cut left a mark: ${cut}`);
+      assert.ok(cut !== null && cut.length <= 30);
+      const link = normalizeProse(
+        'Read [the whole contract](https://docs.example/contract) now',
+        30,
+        ['https://docs.example/contract'],
+      );
+      assert.ok(
+        link !== null && !link.includes('[') && !link.includes(']('),
+        `cut left a link open: ${link}`,
+      );
+      const italic = normalizeProse('A *rare* and *odd', 1_200);
+      assert.equal(italic, 'A *rare* and odd');
+    },
+  ],
+  [
+    'the spoken line is one plain line: no marks, no newlines, list items as sentences, no addresses',
+    () => {
+      const built = buildAnswer(
+        answer({
+          fromRecordsText:
+            'You have **two** things.\n\n- Call [the florist](https://docs.example/c)\n- Book the van\n\nSee https://docs.example/c for more.',
+          generalText: null,
+        }),
+      );
+      assert.equal(
+        built.spoken,
+        'You have two things. Call the florist. Book the van. See for more.',
+      );
+      assert.ok(!/[\n*_[\]]/.test(built.spoken));
+      assert.ok(
+        built.answer.fromRecords?.includes('\n\n'),
+        'the stored text keeps its paragraphs',
+      );
+      const general = buildAnswer(
+        answer({
+          scope: 'both',
+          generalText: 'Cake keeps **a few days**.\n\nKeep it cool.',
+          generalSpoken: null,
+        }),
+      );
+      assert.ok(
+        general.spoken.includes('Cake keeps a few days. Keep it cool.'),
+      );
+      assert.ok(!general.spoken.includes('\n'));
+      assert.equal(
+        stripProseMarks('**Bold** and *soft*\n\n1. One\n2. Two', {
+          keepBreaks: true,
+        }),
+        'Bold and soft\n\n1. One\n2. Two',
       );
     },
   ],

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { BookOpen, Globe, Stethoscope } from 'lucide-react';
 
+import MarkdownText from '@/components/MarkdownText';
 import SectionDivider from '@/components/SectionDivider';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -59,9 +60,7 @@ function GeneralKnowledgeCard({
           </p>
         )}
         {differs && <DiffersLine differs={differs} />}
-        <p className='text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
-          {text}
-        </p>
+        <MarkdownText text={text} className='text-[15px] break-words' />
         <p className='text-muted-foreground text-[13px] text-pretty'>
           {HELM_COPY.answerGeneralCaution(name)}
         </p>

@@ -6,6 +6,7 @@ import { Mic, MicOff, X } from 'lucide-react';
 
 import WorkingRing from '@/components/WorkingRing';
 import { useFollowScroll } from '@/hooks/useFollowScroll';
+import { splitIntoParagraphs } from '@/utils/proseUtils';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import MuteControl from '@apps/helm/components/voice/MuteControl';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -70,8 +71,8 @@ function LiveConversation() {
   const name = useAssistantName();
   const dialog = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const personParagraph = useRef<HTMLParagraphElement>(null);
-  const helmParagraph = useRef<HTMLParagraphElement>(null);
+  const personBlock = useRef<HTMLDivElement>(null);
+  const helmBlock = useRef<HTMLDivElement>(null);
   const isHearing = voice.state === 'listening' && voice.heard !== '';
   const personLine = isHearing ? voice.heard : voice.liveSaid;
   const helmLine =
@@ -103,7 +104,7 @@ function LiveConversation() {
   useLayoutEffect(() => {
     const box = scroller.current;
     if (!box) return;
-    const line = personParagraph.current;
+    const line = personBlock.current;
     if (line && isHearing) fitHeard(box, line);
     else if (line) line.style.fontSize = '';
     box.scrollTop = box.scrollHeight;
@@ -111,7 +112,7 @@ function LiveConversation() {
 
   useEffect(() => {
     const box = scroller.current;
-    const reply = helmParagraph.current;
+    const reply = helmBlock.current;
     if (!box || !reply) return;
     box.scrollTop =
       reply.offsetTop - parseFloat(getComputedStyle(box).paddingTop);
@@ -119,7 +120,7 @@ function LiveConversation() {
 
   useFollowScroll({
     scrollerRef: scroller,
-    targetRef: helmParagraph,
+    targetRef: helmBlock,
     progress: voice.lineProgress,
     restartKey: helmLine,
   });
@@ -179,15 +180,17 @@ function LiveConversation() {
         ) : (
           <div className='my-auto flex flex-col gap-5'>
             {personLine !== '' && (
-              <p
-                ref={personParagraph}
+              <div
+                ref={personBlock}
                 className={join(
-                  'leading-snug font-medium text-pretty',
+                  'space-y-3 leading-snug font-medium text-pretty',
                   isHearing ? 'text-[30px]' : 'text-muted-foreground text-xl',
                 )}
               >
-                {personLine}
-              </p>
+                {splitIntoParagraphs(personLine).map((part, index) => (
+                  <p key={index}>{part}</p>
+                ))}
+              </div>
             )}
             {isThinking && (
               <div role='status' className='flex items-center gap-3'>
@@ -200,12 +203,14 @@ function LiveConversation() {
               </div>
             )}
             {helmLine !== '' && (
-              <p
-                ref={helmParagraph}
-                className='text-[26px] leading-snug text-pretty'
+              <div
+                ref={helmBlock}
+                className='space-y-4 text-[26px] leading-snug text-pretty'
               >
-                {helmLine}
-              </p>
+                {splitIntoParagraphs(helmLine).map((part, index) => (
+                  <p key={index}>{part}</p>
+                ))}
+              </div>
             )}
             {voice.note !== null && voice.note !== helmLine && (
               <p className='text-foreground/80 text-[15px]'>{voice.note}</p>

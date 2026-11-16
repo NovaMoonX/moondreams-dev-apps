@@ -38,9 +38,7 @@ const COMPONENTS: Components = {
     </h5>
   ),
   p: ({ children }) => (
-    <p className='text-foreground text-[15px] leading-[22px] break-words'>
-      {children}
-    </p>
+    <p className='text-[15px] leading-[22px] break-words'>{children}</p>
   ),
   ul: ({ children }) => (
     <ul className='ml-5 list-disc space-y-1 text-[15px] leading-[22px]'>
@@ -56,6 +54,7 @@ const COMPONENTS: Components = {
   strong: ({ children }) => (
     <strong className='font-semibold'>{children}</strong>
   ),
+  em: ({ children }) => <em className='italic'>{children}</em>,
   blockquote: ({ children }) => (
     <blockquote className='border-border text-muted-foreground border-l-2 pl-3'>
       {children}
@@ -90,7 +89,7 @@ const COMPONENTS: Components = {
   img: ({ alt }) => (alt ? <span>{alt}</span> : null),
 };
 
-/** Markdown drawn in the theme's tokens: links open outside, a picture shows only as its description, and raw HTML shows as plain text. */
+/** Markdown drawn in the theme's tokens (text takes the colour of what holds it): links open outside, a picture shows only as its description, and raw HTML shows as plain text. */
 function MarkdownText({ text, className }: MarkdownTextProps) {
   return (
     <div className={join('space-y-2', className)}>

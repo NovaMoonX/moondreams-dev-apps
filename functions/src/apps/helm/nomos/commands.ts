@@ -743,7 +743,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             fromRecordsText: nullable(
               'string',
-              `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters; null when they say nothing about it.`,
+              `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters, in short paragraphs separated by a blank line (light Markdown only: bold, italics, lists, links); null when they say nothing about it.`,
             ),
             fromRecordsSpoken: nullable(
               'string',
@@ -762,7 +762,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             generalText: nullable(
               'string',
-              `answer: general knowledge about the world, at most ${ANSWER_TEXT_CAP} characters, only for what the records do not say and never about the person's own plans, people or things.`,
+              `answer: general knowledge about the world, at most ${ANSWER_TEXT_CAP} characters, in short paragraphs separated by a blank line (light Markdown only), only for what the records do not say and never about the person's own plans, people or things.`,
             ),
             generalSpoken: nullable(
               'string',

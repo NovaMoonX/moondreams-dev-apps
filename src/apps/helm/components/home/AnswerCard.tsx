@@ -1,3 +1,4 @@
+import MarkdownText from '@/components/MarkdownText';
 import AnswerSources from '@apps/helm/components/home/AnswerSources';
 import QuoteLine from '@apps/helm/components/home/QuoteLine';
 import RecordGroup from '@apps/helm/components/home/RecordGroup';
@@ -45,15 +46,16 @@ function AnswerCard({ answer, isInset = false, capture }: AnswerCardProps) {
     >
       {recordsText !== null && (
         <section className='bg-secondary text-secondary-foreground rounded-[14px] px-3.5 py-3'>
-          <p
-            className={
-              fromRecords === null
-                ? 'text-[15px] leading-[21px] break-words'
-                : 'pb-2 text-[15px] leading-[21px] break-words whitespace-pre-wrap'
-            }
-          >
-            {recordsText}
-          </p>
+          {fromRecords === null ? (
+            <p className='text-[15px] leading-[21px] break-words'>
+              {recordsText}
+            </p>
+          ) : (
+            <MarkdownText
+              text={fromRecords}
+              className='pb-2 text-[15px] break-words'
+            />
+          )}
           {fromRecords !== null && (
             <AnswerSources sources={answer.sources} canOpen={isInset} />
           )}

@@ -2,6 +2,7 @@ import {
   createOptionMatcher,
   toComparable,
 } from '../../../vendor/optionMatchUtils.js';
+import { extractLinks, normalizeProse } from '../../../vendor/proseUtils.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { ASK_WORDS } from './summaries.js';
 import {
@@ -320,25 +321,47 @@ const readAnswer = (
   const listedQuotes = Array.isArray(item.quoteAliases)
     ? item.quoteAliases.slice(0, MAX_QUOTES)
     : [];
+  const citedQuotes = listedQuotes.flatMap((alias: unknown) => {
+    const quote = toQuote(alias, quotes);
+    return quote ? [quote] : [];
+  });
+  const citedCopies = listed.flatMap((alias: unknown) => {
+    const copy = typeof alias === 'string' ? synced?.get(alias) : null;
+    return copy ? [copy] : [];
+  });
+  const recordLinks = [
+    ...citedQuotes.flatMap((quote) => (quote.deepLink ? [quote.deepLink] : [])),
+    ...extractLinks([
+      ...citedQuotes.map((quote) => quote.snippet),
+      ...citedCopies.flatMap((copy) => [
+        copy.title,
+        copy.subtitle ?? '',
+        copy.detail ?? '',
+        copy.placeLabel ?? '',
+        ...Object.values(copy.extra).map(String),
+      ]),
+    ]),
+  ];
   return {
     scope,
     question,
     isHealth: item.isHealth === true,
-    fromRecordsText: toText(item.fromRecordsText, ANSWER_TEXT_CAP),
+    fromRecordsText: normalizeProse(
+      item.fromRecordsText,
+      ANSWER_TEXT_CAP,
+      recordLinks,
+    ),
     fromRecordsSpoken: toWholeLine(item.fromRecordsSpoken, ANSWER_SPOKEN_CAP),
     sources: listed.flatMap((alias: unknown) => {
       const source = toSource(alias, aliases, synced, facts, parts);
       return source ? [source] : [];
     }),
-    quotes: listedQuotes.flatMap((alias: unknown) => {
-      const quote = toQuote(alias, quotes);
-      return quote ? [quote] : [];
-    }),
+    quotes: citedQuotes,
     syncedKeys: listed.flatMap((alias: unknown) => {
       const copy = typeof alias === 'string' ? synced?.get(alias) : null;
       return copy ? [`${copy.connectorId}|${copy.accountId}`] : [];
     }),
-    generalText: toText(item.generalText, ANSWER_TEXT_CAP),
+    generalText: normalizeProse(item.generalText, ANSWER_TEXT_CAP),
     generalSpoken: toText(item.generalSpoken, ANSWER_SPOKEN_CAP),
     noteIds: [
       ...new Set(
