@@ -444,13 +444,27 @@ const helmSlice = createSlice({
         ...action.payload.filter((entry) => !known.has(entry.id)),
       ];
     },
-    markExecutionUndone: (
+    markExecutionPartUndone: (
       state,
-      action: PayloadAction<{ executionId: string; undoExecutionId: string }>,
+      action: PayloadAction<{
+        executionId: string;
+        undoExecutionId: string;
+        undoneDocIds: string[];
+        isFinal: boolean;
+      }>,
     ) => {
+      const { executionId, undoExecutionId, undoneDocIds, isFinal } =
+        action.payload;
       const patch = (entry: OpenExecution) =>
-        entry.id === action.payload.executionId
-          ? { ...entry, undoneByExecutionId: action.payload.undoExecutionId }
+        entry.id === executionId
+          ? {
+              ...entry,
+              undoneDocIds,
+              partUndoIds: entry.partUndoIds.includes(undoExecutionId)
+                ? entry.partUndoIds
+                : [...entry.partUndoIds, undoExecutionId],
+              ...(isFinal && { undoneByExecutionId: undoExecutionId }),
+            }
           : entry;
       state.earlierExecutions = state.earlierExecutions.map(patch);
       state.recentExecutions.items = state.recentExecutions.items.map(patch);
@@ -552,7 +566,7 @@ export const {
   setRecentExecutions,
   setRecentExecutionsFailed,
   addEarlierExecutions,
-  markExecutionUndone,
+  markExecutionPartUndone,
   setActivity,
   setActivityFailed,
   showMoreActivity,
