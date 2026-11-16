@@ -31,6 +31,7 @@ import {
 } from '@apps/helm/engine/research';
 import {
   buildAheadBrief,
+  readAmountRangePrefill,
   type AheadOfferMeta,
   type LeadAnswer,
   type LeadQuestion,
@@ -59,6 +60,8 @@ type Draft =
 /** A pick question whose prefill names nothing among its options has nothing ticked, so it says nothing was filled. */
 const settleQuestion = (question: LeadQuestion): LeadQuestion =>
   !question.from ||
+  (question.shape === 'amountRange' &&
+    !readAmountRangePrefill(question.prefill[0])) ||
   ((question.shape === 'pickOne' || question.shape === 'pickMany') &&
     !question.prefill.some((pick) => question.options.includes(pick)))
     ? { ...question, prefill: [], from: null }
@@ -72,11 +75,11 @@ const toStartDraft = (question: LeadQuestion): Draft => {
     return { kind: 'text', text: question.prefill[0] ?? '' };
   }
   if (question.shape === 'amountRange') {
-    const [min, max] = (question.prefill[0] ?? '').split('-').map(Number);
+    const range = readAmountRangePrefill(question.prefill[0]);
     return {
       kind: 'range',
-      min: Number.isFinite(min) && min > 0 ? toDollarsValue(min) : '',
-      max: Number.isFinite(max) && max > 0 ? toDollarsValue(max) : '',
+      min: range?.min ? toDollarsValue(range.min) : '',
+      max: range?.max ? toDollarsValue(range.max) : '',
     };
   }
   const picks = question.prefill.filter((pick) =>

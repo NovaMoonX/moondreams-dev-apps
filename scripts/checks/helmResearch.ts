@@ -2168,7 +2168,7 @@ test('offerResearch is refused, in code words, with no date, at the cap or for t
   );
 });
 
-test('the offer reader caps its words, settles the lead and drops a pick with one option', () => {
+test('the offer reader caps its words, settles the lead, drops a pick with one option and a range prefill that is not cents', () => {
   const [read] = readOfferResearch([
     {
       kind: 'offerResearch',
@@ -2195,14 +2195,24 @@ test('the offer reader caps its words, settles the lead and drops a pick with on
           from: 'What you said',
           isInferred: true,
         },
+        {
+          label: 'Rent',
+          shape: 'amountRange',
+          options: [],
+          prefill: ['$1,800-$2,400'],
+          from: 'What you said',
+          isInferred: false,
+        },
       ],
     },
   ]);
   assert.equal(read.subject.length, 60);
   assert.equal(read.leadDays, 7);
-  assert.equal(read.questions.length, 1);
+  assert.equal(read.questions.length, 2);
   assert.deepEqual(read.questions[0].options, []);
   assert.equal(read.questions[0].isInferred, true);
+  assert.deepEqual(read.questions[1].prefill, []);
+  assert.equal(read.questions[1].from, null);
   assert.equal(readOfferResearch([{ kind: 'offerResearch' }]).length, 0);
 });
 

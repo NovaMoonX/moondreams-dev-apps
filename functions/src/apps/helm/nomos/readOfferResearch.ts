@@ -15,6 +15,7 @@ import {
 import {
   LEAD_QUESTIONS_MAX,
   clampLeadDays,
+  readAmountRangePrefill,
   type LeadQuestionShape,
 } from './researchAhead.js';
 
@@ -51,9 +52,14 @@ const readQuestion = (value: unknown): OfferQuestionInput[] => {
     : [];
   if (isPick && options.length < 2) return [];
   const prefill = toList(value.prefill, OFFER_PREFILL_CAP, OFFER_OPTIONS_MAX);
-  const kept = isPick
-    ? prefill.filter((entry) => options.includes(entry))
-    : prefill.slice(0, 1);
+  const readKept = () => {
+    if (isPick) return prefill.filter((entry) => options.includes(entry));
+    if (shape === 'amountRange') {
+      return readAmountRangePrefill(prefill[0]) ? prefill.slice(0, 1) : [];
+    }
+    return prefill.slice(0, 1);
+  };
+  const kept = readKept();
   return [
     {
       label,

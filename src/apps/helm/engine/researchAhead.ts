@@ -120,6 +120,16 @@ export interface LeadQuestion {
   isInferred: boolean;
 }
 
+/** An amountRange prefill as cents, "min-max" with either side empty; null when it isn't one, so a source line never sits over blank boxes. */
+export const readAmountRangePrefill = (text: string | undefined) => {
+  const match = /^(\d*)-(\d*)$/.exec(text ?? '');
+  if (!match) return null;
+  const toCents = (part: string) => (Number(part) > 0 ? Number(part) : null);
+  const min = toCents(match[1]);
+  const max = toCents(match[2]);
+  return min === null && max === null ? null : { min, max };
+};
+
 export type LeadAnswer =
   | { kind: 'text'; text: string }
   | { kind: 'picks'; picks: string[] }

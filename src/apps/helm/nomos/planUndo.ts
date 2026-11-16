@@ -309,6 +309,39 @@ const writePaths = (
     source,
   );
 
+const OFFERS_PATH = 'researchOffers';
+const ASKS_PATH = 'sealed.aheadAsks';
+
+const toEntries = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter(
+        (entry): entry is Values & { id: string } =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof (entry as Values).id === 'string',
+      )
+    : [];
+
+const toKeyed = (value: unknown) =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Values)
+    : null;
+
+/** Offers the turn added, by id: the device stamps a seen day on them, so only what the person answered keeps one. */
+const madeOfferIds = (written: Values, previous: Values) => {
+  const before = new Set(toEntries(previous[OFFERS_PATH]).map((e) => e.id));
+  return new Set(
+    toEntries(written[OFFERS_PATH])
+      .map((entry) => entry.id)
+      .filter((id) => !before.has(id)),
+  );
+};
+
+const isOfferUnanswered = (entry: Values) =>
+  entry.state === 'waiting' &&
+  entry.declineCount === 0 &&
+  (entry.researchId ?? null) === null;
+
 const stepBack = (step: Step, effect: ExecutionEffect): Step => {
   if (step.isKept) return step;
   const { written, previous } = effect;
@@ -326,45 +359,82 @@ const stepBack = (step: Step, effect: ExecutionEffect): Step => {
       : readPath(step.data, path);
     return isMilestonePath(path) ? (value ?? null) : value;
   };
-  const isMatch = own.every((path) =>
-    path.startsWith(SEALED_PREFIX)
-      ? step.opened !== null && isSame(live(path), written[path])
-      : step.data !== null && isSame(live(path), written[path]),
-  );
+  const madeIds = madeOfferIds(written, previous);
+  const isByEntry = (path: string) =>
+    madeIds.size > 0 && (path === OFFERS_PATH || path === ASKS_PATH);
+  const isEntryMatch = (path: string) => {
+    if (path === OFFERS_PATH) {
+      const liveOffers = toEntries(live(path));
+      return [...madeIds].every((id) =>
+        liveOffers.some((entry) => entry.id === id && isOfferUnanswered(entry)),
+      );
+    }
+    const liveAsks = toKeyed(live(path));
+    return [...madeIds].every((id) => liveAsks !== null && id in liveAsks);
+  };
+  const isMatch = own.every((path) => {
+    if (
+      path.startsWith(SEALED_PREFIX) ? step.opened === null : step.data === null
+    ) {
+      return false;
+    }
+    return isByEntry(path)
+      ? isEntryMatch(path)
+      : isSame(live(path), written[path]);
+  });
   if (!isMatch) {
     // A milestone the person changed since stays; the rest of the turn is still taken back.
     return own.every(isMilestonePath)
       ? { ...step, hasKeptEntry: true }
       : { ...step, isKept: true };
   }
+  const withoutMade = (path: string) => {
+    if (path === OFFERS_PATH) {
+      return toEntries(live(path)).filter((entry) => !madeIds.has(entry.id));
+    }
+    const rest = Object.fromEntries(
+      Object.entries(toKeyed(live(path)) ?? {}).filter(
+        ([key]) => !madeIds.has(key),
+      ),
+    );
+    return Object.keys(rest).length === 0 && previous[path] === null
+      ? null
+      : rest;
+  };
+  const back: Values = {
+    ...previous,
+    ...Object.fromEntries(
+      own.filter(isByEntry).map((path) => [path, withoutMade(path)]),
+    ),
+  };
   const sealedPaths = own.filter((path) => path.startsWith(SEALED_PREFIX));
   const dataPaths = own.filter((path) => !path.startsWith(SEALED_PREFIX));
   const identity = (path: string) => path;
   return {
     ...step,
-    data: step.data && writePaths(step.data, dataPaths, previous, identity),
+    data: step.data && writePaths(step.data, dataPaths, back, identity),
     opened:
       sealedPaths.length > 0 && step.opened
         ? (writePaths(
             step.opened as unknown as Values,
             sealedPaths,
-            previous,
+            back,
             toField,
           ) as unknown as Step['opened'])
         : step.opened,
     fields: {
       ...step.fields,
-      ...Object.fromEntries(dataPaths.map((path) => [path, previous[path]])),
+      ...Object.fromEntries(dataPaths.map((path) => [path, back[path]])),
     },
     sealedFields: {
       ...step.sealedFields,
       ...Object.fromEntries(
-        sealedPaths.map((path) => [toField(path), previous[path]]),
+        sealedPaths.map((path) => [toField(path), back[path]]),
       ),
     },
     restored: {
       ...step.restored,
-      ...Object.fromEntries(own.map((path) => [path, previous[path]])),
+      ...Object.fromEntries(own.map((path) => [path, back[path]])),
     },
     current: {
       ...Object.fromEntries(own.map((path) => [path, written[path]])),

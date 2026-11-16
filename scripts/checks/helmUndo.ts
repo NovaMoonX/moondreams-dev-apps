@@ -1239,7 +1239,7 @@ const offerAsk = (subject: string) => ({
   brief: null,
 });
 
-test('an offer the turn added to a project is taken away from both places by its undo, and one taken since is kept', () => {
+test('an offer the turn added to a project is taken away from both places by its undo, even once Today showed it, and one answered since is kept', () => {
   const line = 'I will offer to look into venues 2 weeks before Wedding';
   const added: { ref: EffectRef; effect: ExecutionEffect } = {
     ref: { op: 'update', collection: 'projects', docId: 'p1' },
@@ -1280,6 +1280,21 @@ test('an offer the turn added to a project is taken away from both places by its
   ]);
   assert.equal(taken.kind, 'refused');
   assert.deepEqual(taken.kept, ['Wedding']);
+  const shown = asWrite(
+    plan(execution([added]), [
+      target([
+        offerMeta('o0', { shownOn: '2026-11-10' }),
+        offerMeta('o1', { shownOn: '2026-11-16' }),
+      ]),
+    ]),
+  );
+  assert.deepEqual(shown.updates[0].fields.researchOffers, [
+    offerMeta('o0', { shownOn: '2026-11-10' }),
+  ]);
+  const declined = plan(execution([added]), [
+    target([offerMeta('o0'), offerMeta('o1', { declineCount: 1 })]),
+  ]);
+  assert.equal(declined.kind, 'refused');
 });
 
 test('a project the turn made stays when the person ticked one of its milestones since', () => {
