@@ -13,7 +13,6 @@ const RELEASE_KEYS = new Set([
 
 export interface FollowProgress {
   get: () => number;
-  /** Called as it moves on; returns how to stop. A 0 starts a new target. */
   subscribe: (listener: (fraction: number) => void) => () => void;
 }
 

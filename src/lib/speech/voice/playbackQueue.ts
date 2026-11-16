@@ -184,7 +184,6 @@ export const createPlaybackQueue = ({
         priority: SpeechPriority;
         turnKey: number;
         onStart?: () => void;
-        /** How far through the line the sound is (0 to 1); never goes back. */
         onProgress?: (fraction: number) => void;
       },
     ) =>
@@ -224,7 +223,6 @@ export const createPlaybackQueue = ({
     unduck: () => setDucked(false),
     /** The words of the line playing now; null when none is. */
     getPlayingText: () => state.playing?.line.text ?? null,
-    /** How the line playing now is voiced: `cloud` unless a device voice speaks it (by choice or after a fallback); null when none plays. */
     getPlayingVoice: () => {
       const { playing } = state;
       if (playing === null) return null;

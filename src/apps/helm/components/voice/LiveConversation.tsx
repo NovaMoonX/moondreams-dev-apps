@@ -149,20 +149,20 @@ function LiveConversation() {
         <span className='helm-live-glow' />
         {isHearing && <span key={wordCount} className='helm-live-ripple' />}
       </div>
-      <div className='relative mx-auto flex h-[calc(max(3rem,env(safe-area-inset-top))+2.25rem)] w-full max-w-xl shrink-0 items-center justify-between gap-3 px-6 pt-[max(3rem,env(safe-area-inset-top))]'>
-        <p
-          aria-live='polite'
-          className='text-foreground/80 relative text-[15px] font-medium'
-        >
-          {isOpening || isThinking
-            ? ''
-            : toStatus(voice.state, voice.isLiveMuted, isWaiting)}
-          {isDeviceVoice && !isOpening && (
-            <span className='text-muted-foreground absolute top-full left-0 text-xs font-normal whitespace-nowrap'>
-              {HELM_COPY.voiceUsingDevice}
-            </span>
-          )}
-        </p>
+      <div className='relative mx-auto flex min-h-[calc(max(3rem,env(safe-area-inset-top))+2.25rem)] w-full max-w-xl shrink-0 items-center justify-between gap-3 px-6 pt-[max(3rem,env(safe-area-inset-top))]'>
+        <div className='min-w-0 flex-1'>
+          <p
+            aria-live='polite'
+            className='text-foreground/80 text-[15px] font-medium'
+          >
+            {isOpening || isThinking
+              ? ''
+              : toStatus(voice.state, voice.isLiveMuted, isWaiting)}
+          </p>
+          <p className='text-foreground/75 min-h-4 min-w-0 truncate text-xs'>
+            {isDeviceVoice && !isOpening ? HELM_COPY.voiceUsingDevice : ''}
+          </p>
+        </div>
         <MuteControl shows='whileSpeaking' />
         <MuteControl shows='whileMuted' />
       </div>

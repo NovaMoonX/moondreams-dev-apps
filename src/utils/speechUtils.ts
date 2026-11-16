@@ -22,7 +22,6 @@ interface SpeakOptions {
   /** Gives up when the reading hasn't started by then (`onNoStart`, then `onEnd`). */
   startTimeoutMs?: number;
   onNoStart?: () => void;
-  /** How far through the text the voice is (0 to 1). */
   onProgress?: (fraction: number) => void;
 }
 

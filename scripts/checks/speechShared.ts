@@ -76,6 +76,7 @@ import {
   clearFallback,
   dismissFallback,
   readFallbacks,
+  removeFallback,
   reportFallback,
   resetFallbacks,
 } from '../../src/lib/fallbacks/fallbacks.ts';
@@ -109,10 +110,20 @@ import {
 } from '../../src/lib/speech/voice/voiceRouter.ts';
 import {
   isOnDeviceLang,
+  ON_DEVICE_FALLBACK_KEYS,
   ON_DEVICE_FILES,
   ON_DEVICE_SIZE_MB,
 } from '../../src/lib/speech/onDevice/config.ts';
 import { toHeardText } from '../../src/lib/speech/onDevice/onDeviceStt.ts';
+import { unloadRecognizer } from '../../src/lib/speech/onDevice/recognizer.ts';
+import { removeOnDeviceModel } from '../../src/lib/speech/onDevice/modelStore.ts';
+import {
+  getNaturalVoiceState,
+  NATURAL_VOICE_FALLBACK_KEY,
+  recordSlowNaturalReading,
+  removeNaturalVoice,
+  unloadNaturalVoice,
+} from '../../src/lib/speech/naturalVoice/naturalVoiceEngine.ts';
 import {
   getVoiceQuality,
   pickVoice,
@@ -1165,26 +1176,101 @@ console.log('speechShared: voice router and playback queue checks passed');
   );
   clearFallback('b');
   assert.deepEqual(
+    ['a', 'b'].map(
+      (key) =>
+        readFallbacks().find((entry) => entry.key === key)?.recoveredAt ===
+        null,
+    ),
+    [true, false],
+    'a recovered key stays, marked recovered; the other stays active',
+  );
+  assert.equal(
+    readFallbacks().find(({ key }) => key === 'b')?.reason,
+    'it broke',
+    'a recovered entry keeps its reason',
+  );
+  const snapshot = readFallbacks();
+  clearFallback('b');
+  assert.equal(
+    readFallbacks(),
+    snapshot,
+    'clearing an already recovered key changes nothing',
+  );
+  report('b');
+  assert.equal(
+    readFallbacks().find(({ key }) => key === 'b')?.recoveredAt,
+    null,
+    'a recovered entry that fails again is active again',
+  );
+  assert.equal(
+    readFallbacks().find(({ key }) => key === 'b')?.count,
+    2,
+    'and keeps counting',
+  );
+  removeFallback('b');
+  assert.deepEqual(
     readFallbacks().map(({ key }) => key),
     ['a'],
-    'a recovered key goes away',
+    'removing the preferred route deletes the entry',
   );
-  clearFallback('b');
-  dismissFallback('a');
-  assert.equal(readFallbacks().length, 0, 'a dismissed key is hidden');
-  report('a');
+  clearFallback('zzz');
+  removeFallback('zzz');
+  dismissFallback('a', 'it broke again');
+  assert.equal(readFallbacks().length, 0, 'a dismissed cause is hidden');
+  report('a', 'it broke again');
   assert.equal(
     readFallbacks().length,
     0,
-    'a fresh failure of a dismissed key stays hidden for the session',
+    'the same cause again stays hidden for the session',
   );
-  clearFallback('a');
-  report('a');
+  report('a', 'something else broke');
+  assert.deepEqual(
+    readFallbacks().map(({ key, reason }) => [key, reason]),
+    [['a', 'something else broke']],
+    'a different cause under a dismissed key shows again',
+  );
+  report('a', 'it broke again');
   assert.equal(
     readFallbacks().length,
     0,
-    'recovering never undoes a dismissal',
+    'a dismissed cause stays dismissed after another cause came and went',
   );
+  resetFallbacks();
+  reportFallback({
+    key: 'f',
+    feature: 'Speaking',
+    wanted: 'a',
+    used: 'b',
+    reason: 'first',
+    facts: ['Error: raw'],
+    trace: 'the trace',
+  });
+  reportFallback({
+    key: 'f',
+    feature: 'Speaking',
+    wanted: 'a',
+    used: 'b',
+    reason: 'second',
+  });
+  assert.deepEqual(
+    [readFallbacks()[0]?.facts, readFallbacks()[0]?.trace],
+    [['Error: raw'], 'the trace'],
+    'a later report with no facts keeps the earlier facts and trace',
+  );
+  reportFallback({
+    key: 'f',
+    feature: 'Speaking',
+    wanted: 'a',
+    used: 'b',
+    reason: 'third',
+    facts: ['Error: newer'],
+  });
+  assert.deepEqual(
+    readFallbacks()[0]?.facts,
+    ['Error: newer'],
+    'a later report with facts replaces them',
+  );
+  resetFallbacks();
   report('c');
   assert.deepEqual(
     readFallbacks().map(({ key }) => key),
@@ -1197,6 +1283,62 @@ console.log('speechShared: voice router and playback queue checks passed');
     readFallbacks().length,
     1,
     'a new session starts with nothing dismissed',
+  );
+  resetFallbacks();
+
+  const reportKeys = (keys: string[]) =>
+    keys.forEach((key) => report(key, 'it failed'));
+  const onDeviceKeys = Object.values(ON_DEVICE_FALLBACK_KEYS);
+  reportKeys([...onDeviceKeys, 'other']);
+  unloadRecognizer();
+  assert.deepEqual(
+    readFallbacks()
+      .map(({ key }) => key)
+      .sort(),
+    [
+      ON_DEVICE_FALLBACK_KEYS.download,
+      ON_DEVICE_FALLBACK_KEYS.storage,
+      'other',
+    ].sort(),
+    'freeing the model deletes its model and listen reports only',
+  );
+  Object.assign(globalThis, {
+    caches: {
+      delete: async () => true,
+      open: async () => ({ delete: async () => true }),
+    },
+  });
+  reportKeys(onDeviceKeys);
+  await removeOnDeviceModel();
+  assert.deepEqual(
+    readFallbacks().map(({ key }) => key),
+    ['other'],
+    'removing the downloaded model deletes every on-device report',
+  );
+  resetFallbacks();
+  recordSlowNaturalReading();
+  recordSlowNaturalReading();
+  const slow = readFallbacks().filter(
+    ({ key }) => key === NATURAL_VOICE_FALLBACK_KEY,
+  );
+  assert.deepEqual(
+    [slow.length, slow[0]?.count, getNaturalVoiceState().problem],
+    [1, 1, 'slow'],
+    'the natural voice reports being too slow once, when it is set aside',
+  );
+  unloadNaturalVoice();
+  assert.equal(
+    readFallbacks().length,
+    0,
+    'turning the natural voice off deletes its report',
+  );
+  recordSlowNaturalReading();
+  recordSlowNaturalReading();
+  await removeNaturalVoice();
+  assert.equal(
+    readFallbacks().length,
+    0,
+    'removing the natural voice deletes its report',
   );
   resetFallbacks();
 
@@ -1285,10 +1427,47 @@ console.log('speechShared: voice router and playback queue checks passed');
     fallback: system,
     player: played,
   }).speak('Fine', speakOptions());
+  assert.notEqual(
+    readFallbacks().find(({ key }) => key === cloudKey)?.recoveredAt ?? null,
+    null,
+    'a cloud line that plays marks the report recovered and keeps it',
+  );
+  resetFallbacks();
+  await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({ status: 'unavailable', detail: 'HTTP 500' }),
+    },
+    fallback: system,
+    reportsFallback: false,
+  }).speak('Sample', speakOptions());
+  await createCloudTts({
+    source: { fetchSpeech: async () => mpeg() },
+    fallback: system,
+    player: played,
+    reportsFallback: false,
+  }).speak('Sample', speakOptions());
   assert.equal(
-    readFallbacks().some(({ key }) => key === cloudKey),
-    false,
-    'a cloud line that plays clears the report',
+    readFallbacks().length,
+    0,
+    'a line that opts out reports and clears nothing',
+  );
+  reportFallback({
+    key: cloudKey,
+    feature: 'Speaking',
+    wanted: 'w',
+    used: 'u',
+    reason: 'r',
+  });
+  await createCloudTts({
+    source: { fetchSpeech: async () => mpeg() },
+    fallback: system,
+    player: played,
+    reportsFallback: false,
+  }).speak('Sample', speakOptions());
+  assert.equal(
+    readFallbacks()[0]?.recoveredAt,
+    null,
+    'a preview that plays leaves the real report alone',
   );
   resetFallbacks();
 

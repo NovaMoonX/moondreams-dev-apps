@@ -6,7 +6,7 @@ import {
   subscribeFallbacks,
 } from '@/lib/fallbacks/fallbacks';
 
-/** The fallbacks in play right now (newest first, dismissed ones left out) and how to dismiss one for the session. */
+/** The fallbacks in play right now (newest first, dismissed ones left out) and how to dismiss one cause for the session. */
 export function useFallbacks() {
   const fallbacks = useSyncExternalStore(
     subscribeFallbacks,

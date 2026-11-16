@@ -47,7 +47,6 @@ export interface TtsSpeakOptions {
   signal: AbortSignal;
   onStart: () => void;
   onEnd: () => void;
-  /** How far through the line the sound is (0 to 1); an adapter that can't tell never calls it. */
   onProgress?: (fraction: number) => void;
   onRouteChange?: () => void;
 }
@@ -57,9 +56,7 @@ export interface TtsAdapter {
   route: VoiceRoute;
   /** Resolves with the id of what actually played (provider-qualified for the cloud, the fallback's id when it stood in); void means this adapter's id. */
   speak: (text: string, options: TtsSpeakOptions) => Promise<string | void>;
-  /** True while the sound goes through the page's audio, so echo cancellation hears it. */
   isPlayingThroughWebAudio: boolean;
-  /** True once a fallback voice has taken over the line this adapter was given. */
   isFallingBack?: boolean;
 }
 

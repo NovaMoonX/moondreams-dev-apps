@@ -1,17 +1,10 @@
 export interface FallbackReport {
-  /** A fixed string for one fallback ("speech:cloud-voice"), never built from data: the same key reported again updates its entry instead of adding one. */
   key: string;
-  /** The capability that fell back, in a word or two ("Speaking"). */
   feature: string;
-  /** What was meant to be used ("Your chosen voice"). */
   wanted: string;
-  /** What stood in ("This device's voice"). */
   used: string;
-  /** Why the preferred one wasn't used, in the failure's own words. */
   reason: string;
-  /** Short facts read beside the failure, one per line. */
   facts?: string[];
-  /** A long trace, folded in the details. */
   trace?: string | null;
 }
 
@@ -26,9 +19,14 @@ export interface Fallback {
   count: number;
   firstAt: number;
   lastAt: number;
+  recoveredAt: number | null;
+  activeSince: number;
 }
 
 const DISMISSED_KEY = 'fallbacks:dismissed';
+
+const toDismissId = (key: string, reason: string) =>
+  JSON.stringify([key, reason]);
 
 const readDismissed = (): string[] => {
   if (typeof window === 'undefined') return [];
@@ -53,12 +51,14 @@ const store = {
 
 const publish = () => {
   store.visible = Array.from(store.entries.values())
-    .filter((entry) => !store.dismissed.has(entry.key))
+    .filter(
+      (entry) => !store.dismissed.has(toDismissId(entry.key, entry.reason)),
+    )
     .sort((a, b) => b.lastAt - a.lastAt);
   store.listeners.forEach((listener) => listener());
 };
 
-/** Notes that something preferred wasn't used and a stand-in was (a chosen voice, a downloaded model, a service, a cached copy), so debug viewers get a dismissible notice with Copy. Cheap and silent for everyone else. */
+/** Notes that something preferred wasn't used and a stand-in was (a chosen voice, a downloaded model, a service, a cached copy), so debug viewers get a dismissible notice with Copy. Cheap and silent for everyone else. A fixed `key` per fallback keeps repeats on one entry. */
 export const reportFallback = (report: FallbackReport) => {
   const now = Date.now();
   const before = store.entries.get(report.key);
@@ -68,24 +68,37 @@ export const reportFallback = (report: FallbackReport) => {
     wanted: report.wanted,
     used: report.used,
     reason: report.reason,
-    facts: report.facts ?? [],
-    trace: report.trace ?? null,
+    facts: report.facts?.length ? report.facts : (before?.facts ?? []),
+    trace: report.trace ?? before?.trace ?? null,
     count: (before?.count ?? 0) + 1,
     firstAt: before?.firstAt ?? now,
     lastAt: now,
+    recoveredAt: null,
+    activeSince:
+      before === undefined ||
+      before.recoveredAt !== null ||
+      before.reason !== report.reason
+        ? now
+        : before.activeSince,
   });
   publish();
 };
 
-/** The preferred route works again: its notice goes away, and a later failure starts a fresh count. */
+/** The preferred route works again: the entry stays, marked recovered, so a debug viewer can still read what failed; a later failure makes it active again and keeps counting. */
 export const clearFallback = (key: string) => {
+  const before = store.entries.get(key);
+  if (before === undefined || before.recoveredAt !== null) return;
+  store.entries.set(key, { ...before, recoveredAt: Date.now() });
+  publish();
+};
+
+/** The person removed or turned off the preferred route, so there is nothing left to fall back from: the entry is deleted. */
+export const removeFallback = (key: string) => {
   if (!store.entries.delete(key)) return;
   publish();
 };
 
-/** Hides this key for the rest of the session (the tab), even if it fails again. */
-export const dismissFallback = (key: string) => {
-  store.dismissed.add(key);
+const keepDismissed = () => {
   try {
     window.sessionStorage.setItem(
       DISMISSED_KEY,
@@ -94,6 +107,12 @@ export const dismissFallback = (key: string) => {
   } catch {
     // Kept for this page only, so a reload shows it again.
   }
+};
+
+/** Hides this cause of this key for the rest of the session (the tab); a different cause under the same key shows again. */
+export const dismissFallback = (key: string, reason: string) => {
+  store.dismissed.add(toDismissId(key, reason));
+  keepDismissed();
   publish();
 };
 
@@ -101,11 +120,7 @@ export const dismissFallback = (key: string) => {
 export const resetFallbacks = () => {
   store.entries.clear();
   store.dismissed.clear();
-  try {
-    window.sessionStorage.removeItem(DISMISSED_KEY);
-  } catch {
-    // Nothing kept to remove.
-  }
+  keepDismissed();
   publish();
 };
 

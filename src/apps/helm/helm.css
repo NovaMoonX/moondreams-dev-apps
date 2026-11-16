@@ -224,6 +224,11 @@ html.helm-theme .subview-backdrop:has(.helm-ask-overlay) ~ .z-\[100\] {
   z-index: 120;
 }
 
+/* The site's own sheets (the debug list of fallbacks) open over a live conversation too. */
+html.helm-theme:has(.helm-live-screen) [role='dialog'].z-\[100\] {
+  z-index: 126;
+}
+
 /* A title: the serif at 600, tight like stationery. Everything else stays the site's sans. */
 html.helm-theme .helm-serif,
 html.helm-theme [role='dialog'] :is(h1, h2) {

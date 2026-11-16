@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 
 import { createSpeechListener } from '@/hooks/useSpeechCommands';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
-import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+import {
+  clearFallback,
+  removeFallback,
+  reportFallback,
+} from '@/lib/fallbacks/fallbacks';
 import { unlockAudio } from '@/lib/speech/audioContext';
 import {
   createListeningState,
@@ -42,7 +46,10 @@ import {
   type BrowserSttAdoption,
 } from '@/lib/speech/voice/browserStt';
 import { createDeepgramStt } from '@/lib/speech/voice/deepgramStream';
-import { createCloudTts } from '@/lib/speech/voice/cloudTts';
+import {
+  CLOUD_VOICE_FALLBACK_KEY,
+  createCloudTts,
+} from '@/lib/speech/voice/cloudTts';
 import { createDeviceTts } from '@/lib/speech/voice/deviceTts';
 import {
   createPlaybackQueue,
@@ -90,7 +97,6 @@ interface VoiceConversationOptions {
   onUtterance: (text: string, heardBy: { sttProvider: string }) => void;
   /** Listening ended with nothing heard (not a cancel). `isAsked` is false when the listen started without a tap (the person's voice opened it after a reply or over a line), where saying so would be a fault the person didn't earn. */
   onNothingHeard?: (isAsked: boolean) => void;
-  /** The on-device model failed while listening; `isAsked` as for `onNothingHeard`. Without it this counts as nothing heard. */
   onDeviceListenFailed?: (isAsked: boolean) => void;
   /** A tapped listen ended on a lasting failure (the microphone refused, recognition off). */
   onUnavailable?: (reason: VoiceUnavailableReason) => void;
@@ -104,7 +110,6 @@ interface VoiceConversationOptions {
   onCloudHeld?: (reason: CloudHeldReason) => void;
   /** Listens in the cloud while `isAllowed`, online and not held for the day; the device takes over whenever it can't (the downloaded model, else the browser's recognition). Null listens on the device only. */
   cloudListening?: { tokenSource: VoiceTokenSource; isAllowed: boolean } | null;
-  /** Speaks a `reply` or `summary` in the cloud while `isAllowed`; the device voice covers a line the cloud can't, and the rest of a conversation after two in a row fail. An `ack` stays on the device. Null: device only. */
   cloudSpeaking?: {
     source: SpeechSource;
     isAllowed: boolean;
@@ -133,7 +138,6 @@ interface VoiceConversationOptions {
 
 export interface VoiceLineProgress {
   get: () => number;
-  /** Called as the sound moves on, about every 150 ms; returns how to stop. */
   subscribe: (listener: (fraction: number) => void) => () => void;
 }
 
@@ -158,7 +162,6 @@ const createLineProgress = () => {
 };
 
 export type VoiceListeningRoute = 'cloud' | 'device';
-/** `device`: a reply was spoken in a device voice though the app's chosen (cloud) voice is on, so the person hears something other than their pick. */
 export type VoiceSpeaking = 'chosen' | 'device';
 /** `unavailable`: listening can't work until something changes, and `onUnavailable` has said why; `failed`: it kept failing for no lasting reason. */
 export type VoiceLiveEnd =
@@ -337,6 +340,18 @@ export function useVoiceConversation({
   });
   const speechCache = useRef(createSpeechCache());
   const [lineProgress] = useState(createLineProgress);
+  const isCloudSpeakingAllowed = cloudSpeaking?.isAllowed === true;
+  const isCloudListeningAllowed = cloudListening?.isAllowed === true;
+
+  useEffect(() => {
+    if (isCloudSpeakingAllowed) return;
+    removeFallback(CLOUD_VOICE_FALLBACK_KEY);
+    removeFallback(LATCH_FALLBACK_KEY);
+  }, [isCloudSpeakingAllowed]);
+
+  useEffect(() => {
+    if (!isCloudListeningAllowed) removeFallback(CLOUD_LISTEN_FALLBACK_KEY);
+  }, [isCloudListeningAllowed]);
 
   useEffect(() => {
     latest.current = {
@@ -1442,7 +1457,6 @@ export function useVoiceConversation({
     cloudHeld: held?.reason ?? null,
     /** Where the words being heard are listened to; null when not listening. */
     listeningRoute,
-    /** How the last reply or summary was voiced: `device` when the chosen voice was on but a device voice spoke it (offline, a fallback, the conversation's latch); `chosen` otherwise; null before any, and after a conversation ends. */
     speakingVoice,
   };
 }

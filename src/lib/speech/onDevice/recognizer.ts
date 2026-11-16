@@ -1,7 +1,12 @@
-import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+import {
+  clearFallback,
+  removeFallback,
+  reportFallback,
+} from '@/lib/fallbacks/fallbacks';
 import {
   ON_DEVICE_BINARY,
   ON_DEVICE_CACHE_NAME,
+  ON_DEVICE_FALLBACK_KEYS,
   ON_DEVICE_MODELS,
   ON_DEVICE_RUNTIME,
 } from '@/lib/speech/onDevice/config';
@@ -12,7 +17,7 @@ import type {
 
 export type RecognizerStatus = 'idle' | 'loading' | 'ready' | 'failed';
 
-const FALLBACK_KEY = 'speech:on-device-model';
+const FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.model;
 
 interface RecognitionHandlers {
   onPartial: (text: string) => void;
@@ -86,6 +91,8 @@ export const unloadRecognizer = () => {
   store.worker = null;
   store.loading = null;
   failAll();
+  removeFallback(FALLBACK_KEY);
+  removeFallback(ON_DEVICE_FALLBACK_KEYS.listen);
   setStatus('idle');
 };
 

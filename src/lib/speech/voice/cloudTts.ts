@@ -25,7 +25,7 @@ const FIRST_BYTE_MS = 5000;
 const BODY_BASE_MS = 6000;
 const BODY_MS_PER_CHAR = 30;
 const PROGRESS_MS = 150;
-const FALLBACK_KEY = 'speech:cloud-voice';
+export const CLOUD_VOICE_FALLBACK_KEY = 'speech:cloud-voice';
 
 export interface CloudPlayer {
   /** Turns the audio into something `play` can start; throws when it can't. */
@@ -166,19 +166,19 @@ export const createCloudTts = ({
   onCut,
   onPlayed,
   player = webAudioPlayer,
+  reportsFallback = true,
 }: {
   source: SpeechSource;
   fallback: TtsAdapter;
   firstByteMs?: number;
-  /** How long a buffered answer may take to arrive; by default it grows with the text. */
   bodyMs?: number;
   gapMs?: number;
   onHeld?: (reason: SpeechHeldReason) => void;
   onFallback?: () => void;
-  /** A piece stalled or broke after it began sounding; the line carried on without its tail. */
   onCut?: () => void;
   onPlayed?: () => void;
   player?: CloudPlayer;
+  reportsFallback?: boolean;
 }): TtsAdapter => {
   const live = { isSounding: false, isFallingBack: false };
   return {
@@ -207,8 +207,9 @@ export const createCloudTts = ({
         run.failure = { reason, raw };
       };
       const reportFailure = (index: number, isCut: boolean) =>
+        reportsFallback &&
         reportFallback({
-          key: FALLBACK_KEY,
+          key: CLOUD_VOICE_FALLBACK_KEY,
           feature: 'Speaking',
           wanted: isCut
             ? 'the whole line in your chosen voice'
@@ -485,7 +486,7 @@ export const createCloudTts = ({
       const speakFrom = async (index: number): Promise<string | undefined> => {
         if (index >= pieces.length) {
           if (!run.isCut) {
-            clearFallback(FALLBACK_KEY);
+            if (reportsFallback) clearFallback(CLOUD_VOICE_FALLBACK_KEY);
             onPlayed?.();
           }
           return run.playedBy;

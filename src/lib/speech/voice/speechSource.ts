@@ -11,7 +11,6 @@ export type SpeechFetch =
       contentType: string;
     }
   | { status: 'held'; reason: SpeechHeldReason }
-  /** `detail` is what the request met (a status, the error's words), for the debug details. */
   | { status: 'unavailable'; detail?: string };
 
 export interface SpeechVoice {

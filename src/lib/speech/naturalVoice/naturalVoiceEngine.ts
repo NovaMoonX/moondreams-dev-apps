@@ -1,6 +1,11 @@
-import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+import {
+  clearFallback,
+  removeFallback,
+  reportFallback,
+} from '@/lib/fallbacks/fallbacks';
 import {
   NATURAL_MAX_SLOW_READINGS,
+  NATURAL_START_TIMEOUT_MS,
   NATURAL_VOICE_CACHE_NAME,
   NATURAL_VOICE_CONFIG_URL,
   NATURAL_VOICE_MODEL_BYTES,
@@ -311,6 +316,7 @@ export const warmNaturalVoice = async () => {
 export const unloadNaturalVoice = () => {
   store.abort?.abort();
   stopWorker();
+  removeFallback(NATURAL_VOICE_FALLBACK_KEY);
   setState({ status: 'idle', progress: 0, problem: null });
 };
 
@@ -366,7 +372,10 @@ export const recordSlowNaturalReading = () => {
     wanted: 'the natural voice',
     used: "the browser's voice",
     reason: 'it was too slow on this device',
-    facts: [`Slow readings in a row: ${store.slowReadings}`],
+    facts: [
+      `Slow readings in a row: ${store.slowReadings}`,
+      `Limit: ${NATURAL_START_TIMEOUT_MS} ms`,
+    ],
   });
 };
 

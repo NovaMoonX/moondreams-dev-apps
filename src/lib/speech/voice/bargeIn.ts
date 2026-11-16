@@ -108,7 +108,6 @@ export const BARGE_IN_GATE: SpeechGateOptions = {
   triggerMs: 300,
 };
 
-/** How long the gate stays shut after a listen over a line came to nothing. */
 export const BARGE_SUPPRESS_MS = 6000;
 
 export const isBargeSuppressed = (suppressedUntil: number, now: number) =>

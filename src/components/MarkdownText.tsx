@@ -9,7 +9,6 @@ import { createLinkGate, labelForLink } from '@/utils/proseUtils';
 interface MarkdownTextProps {
   text: string;
   className?: string;
-  /** When given, only these web addresses are drawn as links; any other link shows its words. */
   allowedLinks?: ReadonlySet<string> | null;
 }
 

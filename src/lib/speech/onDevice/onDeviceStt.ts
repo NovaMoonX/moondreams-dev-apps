@@ -1,5 +1,7 @@
 import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+import { ON_DEVICE_FALLBACK_KEYS } from '@/lib/speech/onDevice/config';
 import {
+  getRecognizerStatus,
   loadRecognizer,
   openRecognition,
 } from '@/lib/speech/onDevice/recognizer';
@@ -27,9 +29,11 @@ export const toHeardText = (parts: string[]) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
-const FALLBACK_KEY = 'speech:on-device-listen';
+const FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.listen;
 
+// A model that failed to load is already reported under its own key, so the listen it ended isn't reported twice.
 const reportListenFailed = (raw: string) => {
+  if (getRecognizerStatus() === 'failed') return;
   const events = readSpeechEvents();
   reportFallback({
     key: FALLBACK_KEY,

@@ -27,9 +27,7 @@ export interface ReadAloudOptions {
   /** Gives up the browser's voice when it hasn't started by then (`onNoStart`, then `onEnd`). */
   startTimeoutMs?: number;
   onNoStart?: () => void;
-  /** How far through the text the voice is (0 to 1). */
   onProgress?: (fraction: number) => void;
-  /** Which voice is sounding; called again if the natural voice gives way to the browser's. */
   onVoice?: (voice: 'natural' | 'system') => void;
 }
 
@@ -213,9 +211,11 @@ const readNatural = (
     if (run.isStarted || run.isStopped) return;
     cancelNaturalSynthesis();
     recordSlowNaturalReading();
-    reportBrowserVoice('it was too slow to start', [
-      `Limit: ${NATURAL_START_TIMEOUT_MS} ms`,
-    ]);
+    if (getNaturalVoiceState().status !== 'failed') {
+      reportBrowserVoice('it was too slow to start', [
+        `Limit: ${NATURAL_START_TIMEOUT_MS} ms`,
+      ]);
+    }
     giveUpOn(0);
   }, NATURAL_START_TIMEOUT_MS);
 
@@ -265,7 +265,9 @@ export function readAloud(text: string, options: ReadAloudOptions): () => void {
       options.isNatural === true && sentences.length > 0
         ? toNaturalBlock(options, context)
         : null;
-    if (block !== null) reportBrowserVoice(block, []);
+    if (block !== null && getNaturalVoiceState().status !== 'failed') {
+      reportBrowserVoice(block, []);
+    }
     options.onVoice?.('system');
     return speakText(spokenText, options);
   }

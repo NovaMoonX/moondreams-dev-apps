@@ -1,7 +1,12 @@
-import { clearFallback, reportFallback } from '@/lib/fallbacks/fallbacks';
+import {
+  clearFallback,
+  removeFallback,
+  reportFallback,
+} from '@/lib/fallbacks/fallbacks';
 import { hasRoomForOnDevice } from '@/lib/speech/onDevice/capability';
 import {
   ON_DEVICE_CACHE_NAME,
+  ON_DEVICE_FALLBACK_KEYS,
   ON_DEVICE_FILES,
   ON_DEVICE_TOTAL_BYTES,
   type OnDeviceFile,
@@ -21,8 +26,8 @@ export interface OnDeviceModelState {
 
 class FileCheckError extends Error {}
 
-const STORAGE_FALLBACK_KEY = 'speech:on-device-storage';
-const DOWNLOAD_FALLBACK_KEY = 'speech:on-device-download';
+const STORAGE_FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.storage;
+const DOWNLOAD_FALLBACK_KEY = ON_DEVICE_FALLBACK_KEYS.download;
 
 const reportModelFallback = (key: string, reason: string, facts: string[]) =>
   reportFallback({
@@ -102,6 +107,7 @@ export const refreshOnDeviceStored = async () => {
   if (store.abort !== null) return;
   try {
     if (!(await caches.has(ON_DEVICE_CACHE_NAME))) {
+      removeFallback(STORAGE_FALLBACK_KEY);
       setState({ isStored: false });
       return;
     }
@@ -211,5 +217,6 @@ export const cancelOnDeviceDownload = () => store.abort?.abort();
 export const removeOnDeviceModel = async () => {
   store.abort?.abort();
   await caches.delete(ON_DEVICE_CACHE_NAME);
+  Object.values(ON_DEVICE_FALLBACK_KEYS).forEach(removeFallback);
   setState({ isStored: false, problem: null, loadedBytes: 0 });
 };
