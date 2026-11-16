@@ -4099,6 +4099,92 @@ export const HELM_COPY = {
   notedNothingKept: 'Nothing from this is kept anymore.',
   patternTookBack: (line: string) => `Took back: ${line}`,
   patternTookBackReport: 'Okay, back the way it was.',
+  guardrailGroupTitle: 'About taking things on',
+  guardrailHoldStatement: (name: string, date: string | null) =>
+    date === null
+      ? `Maybe hold ${name} for a while?`
+      : `Maybe hold ${name} until ${date}?`,
+  guardrailHoldOtherStatement: (name: string, started: string) =>
+    `Maybe hold ${name} while ${started} gets going?`,
+  guardrailPauseStatement: (name: string) => `Pause ${name} for a while?`,
+  guardrailTaskStatement: (weekday: string) => `${weekday} looks full for this`,
+  guardrailGoalsReason: (count: number, names: string) =>
+    `${count} goals already going: ${names}.`,
+  guardrailQuietGoalReason: (count: number, name: string, days: number) =>
+    `${count} goals going, and nothing's been done on ${name} in ${days} days.`,
+  guardrailBusyReason: (days: number, through: string) =>
+    `${days} full days on your calendar through ${through}.`,
+  guardrailBusyStepReason: (name: string, days: number, through: string) =>
+    `${name}'s regular step falls on ${days} full days through ${through}.`,
+  guardrailDeadlineReason: (
+    name: string,
+    tasks: number,
+    date: string,
+    work: string,
+    free: string,
+    hasCalendar: boolean,
+  ) =>
+    `${name}: ${tasks} tasks due by ${date} need about ${work}; ${
+      hasCalendar ? 'your calendar has' : 'your day has'
+    } about ${free} free.`,
+  guardrailTaskReason: (date: string, work: string, free: string) =>
+    `Due ${date}: about ${work} of work, ${free} free before then.`,
+  guardrailStarvedReason: (name: string, days: number) =>
+    `${name} comes first, and nothing's been done on it in ${days} days.`,
+  guardrailHoursFromCalendar:
+    "From the lengths on your tasks and your calendar's free time",
+  guardrailHoursNoCalendar: 'No calendar connected, so counting your whole day',
+  guardrailHold: (date: string | null) =>
+    date === null ? 'Hold it for now' : `Hold it until ${date}`,
+  guardrailHoldSubtitle: 'It stays off your plans until then. You can undo it.',
+  guardrailPauseNamed: (name: string, date: string | null) =>
+    date === null ? `Pause ${name} for a while` : `Pause ${name} until ${date}`,
+  guardrailPause: (date: string | null) =>
+    date === null ? 'Pause for a while' : `Pause until ${date}`,
+  guardrailStartNow: 'Start it now',
+  guardrailKeepGoing: 'Keep going',
+  guardrailKeepDay: (weekday: string) => `Keep ${weekday}`,
+  guardrailFindLater: 'Find a later day',
+  guardrailFindLaterSubtitle: "Opens the task's due date.",
+  guardrailKeepGoingSubtitle: (date: string | null, assistant: string) =>
+    date === null
+      ? `${assistant} won't raise this again. You can still ask.`
+      : `${assistant} won't raise this before ${date}.`,
+  guardrailPickDay: 'Pause until a day you pick',
+  guardrailPickDaySubtitle: 'Choose when it comes back.',
+  guardrailPickDayConfirm: 'Pause',
+  guardrailOthers: 'Other things it could pause',
+  guardrailInstead: (name: string, date: string | null) =>
+    date === null
+      ? `Set ${name} aside for a while instead`
+      : `Set ${name} aside until ${date} instead`,
+  guardrailInsteadSubtitle: 'Keeps this one going. You can undo it.',
+  guardrailStop: 'Stop suggesting this',
+  guardrailStopSubtitle: (name: string) =>
+    `Won't suggest pausing ${name} again unless you ask.`,
+  guardrailHeld: (name: string, date: string | null) =>
+    date === null
+      ? `Holding ${name} for now. You can start it any time.`
+      : `Holding ${name} until ${date}. It starts that morning.`,
+  guardrailPaused: (name: string, date: string | null, assistant: string) =>
+    date === null
+      ? `Paused ${name}. ${assistant} won't plan it until you pick it back up.`
+      : `Paused ${name} until ${date}. ${assistant} won't plan it until then.`,
+  guardrailSetAside: (name: string, date: string | null) =>
+    date === null
+      ? `Set ${name} aside for a while.`
+      : `Set ${name} aside until ${date}.`,
+  guardrailNo: (date: string | null) =>
+    date === null
+      ? "Okay. I won't raise this again. You can still ask."
+      : `Okay. I won't bring this up before ${date}.`,
+  guardrailStopped: (assistant: string, name: string) =>
+    `${assistant} won't suggest pausing ${name} again. You can still ask.`,
+  guardrailUndoFailed: "Couldn't put it back. Check your connection.",
+  guardrailOneThought: 'One thought on timing is on screen.',
+  guardrailStateSentence: (assistant: string) =>
+    `${assistant} is only suggesting this. Nothing changes unless you say so.`,
+  guardrailRowLabel: (statement: string) => `Open: ${statement}`,
 } as const;
 
 /** What was said, in the closed set the model and the code both read. */
@@ -4124,6 +4210,25 @@ export const PATTERN_THRESHOLDS = {
   slotMissedShare: 0.8,
   suggestedAtOnce: 3,
   newPerDay: 1,
+} as const;
+
+export const GUARDRAIL_LIMITS = {
+  goalsOnStart: 3,
+  goalsDaily: 4,
+  quietGoalDays: 21,
+  deadlineWindowDays: 60,
+  deadlineSlackMinutes: 60,
+  deadlineMinTasks: 3,
+  lengthsKnownShare: 0.5,
+  defaultTaskMinutes: 30,
+  starvedDays: 14,
+  starvedOtherMin: 3,
+  busyDayShare: 0.75,
+  busyRun: 3,
+  busyTotal: 5,
+  busyWindowDays: 14,
+  firstDaysQuiet: 7,
+  nearDeadlineDays: 14,
 } as const;
 
 export const OBSERVATION_KEEP_WEEKS = 26;

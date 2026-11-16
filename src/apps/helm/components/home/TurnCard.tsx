@@ -15,6 +15,7 @@ import AnswerCard from '@apps/helm/components/home/AnswerCard';
 import AnsweredQuestion from '@apps/helm/components/home/AnsweredQuestion';
 import MediaLine, { TurnPhotos } from '@apps/helm/components/home/MediaLine';
 import NotedRow from '@apps/helm/components/home/NotedRow';
+import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import QuestionCard from '@apps/helm/components/home/QuestionCard';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ResultLines from '@apps/helm/components/home/ResultLines';
@@ -27,6 +28,7 @@ import {
   retryCapture,
 } from '@apps/helm/store/actions/captureActions';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import { selectStartGuardrail } from '@apps/helm/store/selectors/patternSelectors';
 import type { OpenCapture } from '@apps/helm/types';
 import {
   getAnsweredQuestions,
@@ -112,6 +114,16 @@ function TurnCard({
     const execution = executionsById.get(id);
     return execution ? [execution] : [];
   });
+  const madeIds = executions
+    .flatMap((execution) =>
+      execution.effectRefs.flatMap((ref) =>
+        ref.op === 'create' ? [ref.docId] : [],
+      ),
+    )
+    .join(',');
+  const startGuardrail = useAppSelector((state) =>
+    madeIds === '' ? null : selectStartGuardrail(state, madeIds),
+  );
   // A turn that asked to sort the rest has already made something, and shows it while it waits.
   const hasResults = !capture.isUnreadable && capture.executionIds.length > 0;
   const missingKey = hasResults
@@ -262,6 +274,11 @@ function TurnCard({
               canReplay={showsOutcome && isOnHome}
             />
           ))}
+        </div>
+      )}
+      {hasCard && startGuardrail && (
+        <div className='flex w-full flex-col items-start gap-2'>
+          <GuardrailLine pattern={startGuardrail} />
         </div>
       )}
       {!capture.isUnreadable && capture.attachmentIds.length > 0 && (

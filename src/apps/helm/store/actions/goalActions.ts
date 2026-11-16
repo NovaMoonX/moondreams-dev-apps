@@ -233,8 +233,12 @@ const resumedHabits = (
       },
     }));
 
-/** Sets a goal aside: the project pauses and so does each active habit in it (one whose words can't be read too), in one batch, so a pause the person made themselves is never mistaken for this one. A goal already aside is left as it is. Undo puts every field back. */
-export function setGoalAside(uid: string, projectId: string) {
+/** Sets a goal aside: the project pauses and so does each active habit in it (one whose words can't be read too), in one batch, so a pause the person made themselves is never mistaken for this one; `pausedUntil` (date-only) ends both. A goal already aside is left as it is. Undo puts every field back. */
+export function setGoalAside(
+  uid: string,
+  projectId: string,
+  pausedUntil: number | null = null,
+) {
   const project = openProjectOf(projectId);
   if (project?.status === 'paused') {
     return { written: Promise.resolve(), undo: () => Promise.resolve() };
@@ -252,14 +256,14 @@ export function setGoalAside(uid: string, projectId: string) {
     [
       {
         ref: projectRef(uid, projectId),
-        data: { status: 'paused', pausedAt: now, pausedUntil: null },
+        data: { status: 'paused', pausedAt: now, pausedUntil },
       },
       ...habits.map((habit) => ({
         ref: habitRef(uid, habit.id),
         data: {
           status: 'paused',
           pausedAt: now,
-          pausedUntil: null,
+          pausedUntil,
           history: addEvent(habit.history, 'paused', now),
         },
       })),

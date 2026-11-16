@@ -15,9 +15,11 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { selectSubjectGuardrail } from '@apps/helm/store/selectors/patternSelectors';
 import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import DoneTasksFold from '@apps/helm/components/projects/DoneTasksFold';
+import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import ImportancePlaceRow from '@apps/helm/components/importance/ImportancePlaceRow';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
 import GoalHabits from '@apps/helm/components/projects/GoalHabits';
@@ -85,6 +87,9 @@ function ProjectDetail({
   const { isLoaded } = useAppSelector((state) => state.helm.projects);
   const project =
     useAppSelector(selectProjectById).get(projectId ?? '') ?? null;
+  const guardrail = useAppSelector((state) =>
+    selectSubjectGuardrail(state, projectId ?? ''),
+  );
   const projectTasks = useAppSelector((state) => state.helm.projectTasks.items);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
@@ -520,6 +525,7 @@ function ProjectDetail({
                 />
               )
             )}
+            {guardrail && <GuardrailLine pattern={guardrail} />}
             <ImportancePlaceRow
               id={project.id}
               variant='quiet'

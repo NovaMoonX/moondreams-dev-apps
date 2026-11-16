@@ -161,7 +161,7 @@ export async function updateProject(
   }
 }
 
-/** Finishes, pauses or reopens a project; the earlier state is handed back so Undo can write it. A pause here leaves habits alone and has no end date. */
+/** Finishes, pauses or reopens a project; the earlier state is handed back so Undo can write it. A pause here leaves habits alone and ends on `pausedUntil` (date-only), or when the person picks it back up. */
 export function setProjectStatus(
   uid: string,
   project: {
@@ -172,13 +172,14 @@ export function setProjectStatus(
     pausedUntil: number | null;
   },
   status: Project['status'],
+  pausedUntil: number | null = null,
 ) {
   const now = Date.now();
   const written = updateDoc(doc(projectsOf(uid), project.id), {
     status,
     finishedAt: status === 'finished' ? now : null,
     pausedAt: status === 'paused' ? now : null,
-    pausedUntil: null,
+    pausedUntil: status === 'paused' ? pausedUntil : null,
     lastEditedAt: now,
   });
   return {

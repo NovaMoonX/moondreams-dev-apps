@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import { useHabitClock } from '@apps/helm/hooks/useHabitClock';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
@@ -9,7 +10,7 @@ import {
   pruneWeekly,
 } from '@apps/helm/store/actions/retentionActions';
 
-/** Once a day on open, after the habits, observations and reflections have loaded: notices patterns and offers at most one, and once a week cleans up what is old. Online only; each day is tried once per open, and a failure is tried again on the next open. */
+/** Once a day on open, after the habits, observations and reflections have loaded: notices patterns, weighs whether to hold something off, and offers at most one, and once a week cleans up what is old. Online only; each day is tried once per open, and a failure is tried again on the next open. */
 export function useDailyPatternCheck(uid: string | null) {
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const profile = useAppSelector((state) => state.helm.profile);
@@ -26,11 +27,15 @@ export function useDailyPatternCheck(uid: string | null) {
   const reflectionsLoaded = useAppSelector(
     (state) => state.helm.unseenReflections.isLoaded,
   );
+  const { grants, isLoading: isGrantsLoading } = useConnections({
+    readerAppId: 'helm',
+  });
   const clock = useHabitClock();
   const tried = useRef('');
   const key = `${uid}:${clock.dayKey}`;
   const isReady =
     keyStatus === 'ready' &&
+    !isGrantsLoading &&
     profile !== null &&
     habitsLoaded &&
     projectsLoaded &&
@@ -52,6 +57,7 @@ export function useDailyPatternCheck(uid: string | null) {
         await runDailyPatternCheck(uid, encryption, {
           todayKey: clock.dayKey,
           timeZone: clock.timeZone,
+          grants,
         }).catch((error: unknown) =>
           console.error('Helm patterns were not checked', error),
         );
@@ -68,6 +74,7 @@ export function useDailyPatternCheck(uid: string | null) {
     key,
     clock.dayKey,
     clock.timeZone,
+    grants,
     profile?.prunedOn,
   ]);
 }

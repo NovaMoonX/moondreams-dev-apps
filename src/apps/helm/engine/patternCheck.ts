@@ -55,19 +55,24 @@ export const toSourceKeys = (evidence: PatternEvidence) =>
 /** A finding as the pattern document's readable fields; the sealed lines are made beside it. */
 export const toPatternFields = (
   finding: PatternFinding,
-  input: { now: number; privacy: PrivacyClass },
+  input: {
+    now: number;
+    privacy: PrivacyClass;
+    moment?: Pattern['moment'];
+    reasons?: Pattern['reasons'];
+  },
 ): Omit<Pattern, 'sealed'> => ({
   kind: finding.kind,
   subject: finding.subject,
   bucket: finding.bucket,
   signature: finding.signature,
-  moment: 'daily',
+  moment: input.moment ?? 'daily',
   state: 'candidate',
   handling: finding.handling,
   acceptedBy: null,
   effect: finding.effect,
   evidence: finding.evidence,
-  reasons: [],
+  reasons: input.reasons ?? [],
   evidenceSince: 0,
   sourceKeys: toSourceKeys(finding.evidence),
   declineCount: 0,

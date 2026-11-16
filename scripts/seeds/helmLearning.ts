@@ -548,6 +548,79 @@ export async function buildLearning(input: {
       encryption,
     ),
   ];
+  const weddingDay = dayMs(shiftKey(todayKey, -3));
+  const busyFrom = dayMs(shiftKey(todayKey, -1));
+  const guardrailReasons = [
+    {
+      kind: 'deadlineWontFit' as const,
+      evidence: {
+        kind: 'load' as const,
+        measured: 540,
+        limit: 360,
+        unit: 'minutes' as const,
+        asOf: now,
+        refs: ['seed-project-wedding', String(weddingDay)],
+      },
+    },
+    {
+      kind: 'busyStretch' as const,
+      evidence: {
+        kind: 'load' as const,
+        measured: 3,
+        limit: 5,
+        unit: 'days' as const,
+        asOf: now,
+        refs: [String(busyFrom), String(weddingDay)],
+      },
+    },
+  ];
+  const guardrailLines = [
+    'Wedding: 3 tasks due by Thursday need about 9h, and your calendar leaves about 6h.',
+    '3 full days on your calendar through Thursday.',
+  ];
+  const guardrailSubject = {
+    collection: 'projects' as const,
+    id: 'seed-project-guitar-goal',
+    windowId: null,
+    otherId: null,
+  };
+  const guardrailFinding = toSeedFinding({
+    kind: 'deadlineWontFit',
+    subject: guardrailSubject,
+    bucket: { kind: 'none' },
+    evidence: guardrailReasons[0].evidence,
+    effect: {
+      kind: 'pause',
+      collection: 'projects',
+      id: guardrailSubject.id,
+      until: dayMs(shiftKey(todayKey, -4)),
+    },
+    lastEvidenceAt: now,
+  });
+  const guardrail = await toSeedPattern(
+    guardrailFinding,
+    {
+      name: 'Get back into guitar',
+      now: now - 1 * DAY_MS,
+      overrides: {
+        moment: 'daily',
+        reasons: guardrailReasons,
+        state: 'suggested',
+        stateAt: now - 60 * 60_000,
+        history: history('suggested', now - 60 * 60_000),
+      },
+    },
+    encryption,
+  );
+  guardrail.pattern.sealed = await sealJson<PatternSealed>(
+    {
+      statement: 'Pause Get back into guitar for a while?',
+      evidenceLine: guardrailLines[0],
+      reasonLine: guardrailLines.join('\n'),
+    },
+    encryption,
+  );
+  patterns.push(guardrail);
   const execution = await toSeedActExecution(
     {
       patternId: evening.id,

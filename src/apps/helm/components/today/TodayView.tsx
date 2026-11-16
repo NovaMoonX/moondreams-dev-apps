@@ -25,7 +25,9 @@ import DayPlan from '@apps/helm/components/today/DayPlan';
 import DayStrip from '@apps/helm/components/today/DayStrip';
 import KeyDatesLine from '@apps/helm/components/today/KeyDatesLine';
 import PastDay from '@apps/helm/components/today/PastDay';
+import GuardrailLine from '@apps/helm/components/noticed/GuardrailLine';
 import PatternOfferCard from '@apps/helm/components/noticed/PatternOfferCard';
+import { patternFamily } from '@apps/helm/engine/patterns';
 import { selectTodayOffer } from '@apps/helm/store/selectors/patternSelectors';
 import SuggestionSheet, {
   type SuggestionTarget,
@@ -247,16 +249,27 @@ function TodayView({
               onOpenHabit={onOpenHabit}
             />
           ))}
-        {isToday && offer && (
-          <PatternOfferCard
-            pattern={offer}
-            onChange={
-              offer.subject.collection === 'habits' && offer.subject.id
-                ? () => onOpenHabit(offer.subject.id ?? '')
-                : undefined
-            }
-          />
-        )}
+        {isToday &&
+          offer &&
+          (patternFamily(offer.kind) === 'guardrail' ? (
+            <GuardrailLine
+              pattern={offer}
+              onFindLater={
+                offer.subject.collection === 'tasks' && offer.subject.id
+                  ? () => setOpenId(offer.subject.id)
+                  : undefined
+              }
+            />
+          ) : (
+            <PatternOfferCard
+              pattern={offer}
+              onChange={
+                offer.subject.collection === 'habits' && offer.subject.id
+                  ? () => onOpenHabit(offer.subject.id ?? '')
+                  : undefined
+              }
+            />
+          ))}
         {isToday && <SyncedToday now={now} />}
         {isToday && isLoaded && (tasks.length > 0 || held.size > 0) && (
           <section className='space-y-3'>

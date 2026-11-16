@@ -91,14 +91,75 @@ const offerOrder = (a: OpenPattern, b: OpenPattern) =>
   b.stateAt - a.stateAt ||
   a.id.localeCompare(b.id);
 
-/** The one offer Today shows: a person-set thing's pattern Helm asked about, care first, then the newest. */
+/** The guardrails (advice to hold something off): accepted first, then asked, then not yet asked, then what was said no to. */
+export const selectGuardrailRows = createSelector(
+  [selectShownPatterns],
+  (patterns): NoticedRow[] =>
+    patterns
+      .filter(
+        (pattern) =>
+          patternFamily(pattern.kind) === 'guardrail' &&
+          pattern.statement !== '',
+      )
+      .sort(
+        (a, b) =>
+          STATE_ORDER[a.state] - STATE_ORDER[b.state] ||
+          b.stateAt - a.stateAt ||
+          a.id.localeCompare(b.id),
+      )
+      .map((pattern) => ({
+        pattern,
+        isUsed: STATE_ORDER[pattern.state] <= STATE_ORDER.candidate,
+      })),
+);
+
+const selectOfferable = createSelector(
+  [selectNoticedRows, selectGuardrailRows, selectIsLearningOn],
+  (noticed, guardrails, isLearningOn): OpenPattern[] =>
+    [...noticed, ...(isLearningOn ? guardrails : [])].map((row) => row.pattern),
+);
+
+/** The one offer Today shows: a person-set thing's pattern Helm asked about, care first, then the newest; a guardrail is one of them. */
 export const selectTodayOffer = createSelector(
-  [selectNoticedRows],
-  (rows): OpenPattern | null =>
-    rows
+  [selectOfferable],
+  (patterns): OpenPattern | null =>
+    patterns.filter(isOffer).sort(offerOrder)[0] ?? null,
+);
+
+/** The guardrail asking on one project, goal or habit's page: the thing it suggests holding or pausing, or the thing just started. */
+export const selectSubjectGuardrail = createSelector(
+  [
+    selectGuardrailRows,
+    selectIsLearningOn,
+    (_state: RootState, id: string) => id,
+  ],
+  (rows, isLearningOn, id): OpenPattern | null =>
+    (isLearningOn ? rows : [])
       .map((row) => row.pattern)
-      .filter(isOffer)
-      .sort(offerOrder)[0] ?? null,
+      .filter(
+        (pattern) =>
+          isOffer(pattern) &&
+          pattern.subject.collection !== 'tasks' &&
+          (pattern.subject.id === id || pattern.subject.otherId === id),
+      )[0] ?? null,
+);
+
+/** The guardrail raised the moment something was started, shown once under the turn that started it: it is about one of `ids` (the records the turn made, joined with a comma). */
+export const selectStartGuardrail = createSelector(
+  [
+    selectGuardrailRows,
+    selectIsLearningOn,
+    (_state: RootState, ids: string) => ids,
+  ],
+  (rows, isLearningOn, ids): OpenPattern | null =>
+    (isLearningOn ? rows : [])
+      .map((row) => row.pattern)
+      .filter(
+        (pattern) =>
+          isOffer(pattern) &&
+          pattern.moment === 'onStart' &&
+          ids.split(',').includes(pattern.subject.otherId ?? ''),
+      )[0] ?? null,
 );
 
 /** The offer waiting on one habit's page. */

@@ -13,6 +13,7 @@ import {
   type Transaction,
 } from 'firebase/firestore';
 
+import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import { db } from '@lib/firebase/config';
 import { createSealedReader } from '@lib/security';
 
@@ -50,6 +51,10 @@ import {
   type PatternFinding,
   type PlannedSlot,
 } from '@apps/helm/engine/patterns';
+import {
+  checkDaily,
+  type GuardrailFinding,
+} from '@apps/helm/engine/guardrails';
 import type { SaidObservation } from '@apps/helm/engine/said';
 import { openJson, sealJson } from '@apps/helm/security';
 import { toLifeDay } from '@apps/helm/store/actions/habitJudgementActions';
@@ -77,6 +82,7 @@ import type {
 } from '@apps/helm/types';
 import { toWhenDraft, fromWhenDraft } from '@apps/helm/utils/habitDraft';
 import { whyFingerprint } from '@apps/helm/utils/goalWhy';
+import { buildGuardrailInput } from '@apps/helm/utils/guardrailInput';
 import { toDayKey } from '@apps/helm/utils/planDays';
 import type { PrivacyClass } from '@apps/helm/utils/privacy';
 
@@ -97,7 +103,7 @@ const isUnavailable = (error: unknown) =>
 export type PatternChangeResult = 'saved' | 'kept' | 'missing' | 'offline';
 
 /** Re-reads one pattern in a transaction and writes the fields `change` makes of what is stored, so an answer given on another device meanwhile is never overwritten; `null` leaves it. */
-async function changePattern(
+export async function changePattern(
   uid: string,
   id: string,
   change: (current: Pattern, now: number) => Partial<Pattern> | null,
@@ -173,8 +179,9 @@ export async function markPatternsSeen(uid: string, ids: string[]) {
 
 const toSealedLines = (
   encryption: HelmEncryption,
-  lines: Pick<PatternSealed, 'statement' | 'evidenceLine'>,
-) => sealJson<PatternSealed>({ ...lines, reasonLine: null }, encryption);
+  lines: Pick<PatternSealed, 'statement' | 'evidenceLine'> &
+    Partial<Pick<PatternSealed, 'reasonLine'>>,
+) => sealJson<PatternSealed>({ reasonLine: null, ...lines }, encryption);
 
 interface CheckWorld {
   habits: OpenHabit[];
@@ -331,10 +338,14 @@ const readPrivacyOf = (
 ): PrivacyClass => {
   const { helm } = store.getState();
   const habit = helm.habits.items.find((one) => one.id === finding.subject.id);
+  const project = helm.projects.items.find(
+    (one) => one.id === finding.subject.id,
+  );
   const ids =
     finding.evidence.kind === 'said' ? finding.evidence.observationIds : [];
   return finding.isCare ||
     habit?.privacy === 'private' ||
+    project?.privacy === 'private' ||
     observations.some(
       (one) => ids.includes(one.id) && one.privacy === 'private',
     )
@@ -404,18 +415,29 @@ const readActedSummary = (finding: PatternFinding) =>
       )
     : finding.kind;
 
-/** One finding in one transaction on its own id, so two devices make one pattern. A Helm-planned thing is accepted and told at once, with its execution in the same transaction. */
-async function writeFinding(
+interface FindingCheck {
+  today: string;
+  recheck: (since: number) => PatternFinding | null;
+}
+
+/** One finding in one transaction on its own id, so two devices make one pattern. A Helm-planned thing is accepted and told at once, with its execution in the same transaction. A guardrail brings its own lines, moment and reasons. */
+export async function writeFinding(
   uid: string,
   encryption: HelmEncryption,
-  world: CheckWorld,
-  finding: PatternFinding,
+  check: FindingCheck,
+  finding: PatternFinding | GuardrailFinding,
   observations: OpenObservation[],
 ) {
   const id = patternDocId(finding);
   const ref = doc(patternsOf(uid), id);
-  const lines = buildPatternLines({ finding, name: readSubjectName(finding) });
+  const guardrail = 'lines' in finding ? finding : null;
+  const lines =
+    guardrail?.lines ??
+    buildPatternLines({ finding, name: readSubjectName(finding) });
   const privacy = readPrivacyOf(finding, observations);
+  const guardrailFields = guardrail
+    ? { moment: guardrail.moment, reasons: guardrail.reasons }
+    : {};
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const current = snapshot.exists() ? (snapshot.data() as Pattern) : null;
@@ -423,15 +445,15 @@ async function writeFinding(
     const move = readPatternMove({
       current,
       finding,
-      recheck: (since) => recheck(world, finding, since),
-      today: dayKeyToMs(world.today),
+      recheck: check.recheck,
+      today: dayKeyToMs(check.today),
     });
     if (move.kind === 'skip') return;
     const evidenceFinding = move.kind === 'comeBack' ? move.fresh : finding;
     const sealed = await toSealedLines(encryption, lines);
     const fields =
       move.kind === 'create'
-        ? toPatternFields(finding, { now, privacy })
+        ? toPatternFields(finding, { now, privacy, ...guardrailFields })
         : null;
     const stateFields = {
       state: 'candidate' as const,
@@ -447,6 +469,14 @@ async function writeFinding(
       effect: evidenceFinding.effect,
       lastEvidenceAt: evidenceFinding.lastEvidenceAt,
       sourceKeys: toPatternFields(evidenceFinding, { now, privacy }).sourceKeys,
+      ...(guardrail
+        ? {
+            ...guardrailFields,
+            effect: guardrail.effect,
+            evidence: guardrail.evidence,
+            lastEvidenceAt: guardrail.lastEvidenceAt,
+          }
+        : {}),
       sealed,
     };
     const isActing =
@@ -505,8 +535,8 @@ async function offerOne(uid: string, todayKey: string, timeZone: string) {
         habitDayKey(event.at, timeZone) === todayKey,
     );
   const pick = pickTodayOffer({
-    patterns: patterns.filter(
-      ({ pattern }) => patternFamily(pattern.kind) === 'noticed',
+    patterns: patterns.filter(({ pattern }) =>
+      ['noticed', 'guardrail'].includes(patternFamily(pattern.kind)),
     ),
     suggestedCount: patterns.filter(
       ({ pattern }) =>
@@ -1019,6 +1049,8 @@ export async function undoPattern(
 export interface DailyCheckContext {
   todayKey: string;
   timeZone: string;
+  /** The calendar grants, for the guardrails' free time; none reads as no calendar connected. */
+  grants?: ConnectionGrantWithId[];
 }
 
 /** The once-a-day pass: notices what the last weeks show, weighs last night's reflections, offers at most one new thing, and marks the day checked only when every write landed. A person who turned learning off is never read. */
@@ -1064,11 +1096,53 @@ export async function runDailyPatternCheck(
     forgottenAt,
   };
   const findings = detectAll(world, forgottenAt);
+  const guardrail = checkDaily(
+    buildGuardrailInput({
+      state,
+      now: Date.now(),
+      todayKey,
+      timeZone,
+      grants: context.grants ?? [],
+      days,
+    }),
+  );
   const foundIds = new Set(findings.map(patternDocId));
   const outcomes = await Promise.allSettled([
     ...findings.map((finding) =>
-      writeFinding(uid, encryption, world, finding, observations),
+      writeFinding(
+        uid,
+        encryption,
+        {
+          today: world.today,
+          recheck: (since) => recheck(world, finding, since),
+        },
+        finding,
+        observations,
+      ),
     ),
+    ...(guardrail
+      ? [
+          writeFinding(
+            uid,
+            encryption,
+            { today: todayKey, recheck: () => guardrail },
+            guardrail,
+            observations,
+          ),
+        ]
+      : []),
+    ...helm.patterns.items
+      .filter(
+        (pattern) =>
+          pattern.state === 'candidate' &&
+          patternFamily(pattern.kind) === 'guardrail' &&
+          pattern.id !== (guardrail ? patternDocId(guardrail) : ''),
+      )
+      .map((pattern) =>
+        changePattern(uid, pattern.id, (current, now) =>
+          current.state === 'candidate' ? applyRetire(current, { now }) : null,
+        ),
+      ),
     ...helm.patterns.items
       .filter(
         (pattern) =>

@@ -21,6 +21,7 @@ import {
 } from '@apps/helm/security';
 import { useHabitJudgement } from '@apps/helm/hooks/useHabitJudgement';
 import { useDailyPatternCheck } from '@apps/helm/hooks/useDailyPatternCheck';
+import { useStartCheck } from '@apps/helm/hooks/useStartCheck';
 import { useStyleLearning } from '@apps/helm/queries/styleLearning';
 import {
   ensureHelmProfile,
@@ -282,6 +283,7 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
   useKeyDateRepair(uid);
   useHabitJudgement(uid);
   useDailyPatternCheck(uid);
+  useStartCheck(uid);
   useStyleLearning(uid);
 
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);

@@ -118,6 +118,7 @@
     "check:helm-said": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSaid.ts",
     "check:helm-act-now": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmActNow.ts",
     "check:helm-patterns": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPatterns.ts",
+    "check:helm-guardrails": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmGuardrails.ts",
     "check:helm-retention": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRetention.ts",
     "check:helm-habits": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts && TZ=America/Los_Angeles TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmHabits.ts",
     "check:helm-reminders-server": "firebase emulators:exec --only firestore --project demo-helm-reminders \"TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRemindersServer.ts\"",

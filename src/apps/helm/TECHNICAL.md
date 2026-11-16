@@ -2852,6 +2852,20 @@ offReason set ──"you can suggest that again" / Reopen──► declined, dec
 - **Issue 69 becomes this layer.** PRODUCT.md's "a declined suggestion of the same kind for the same thing is not offered again" is replaced by the back-off: every Not now on an offer (a plan suggestion, a procedure run for an event, a link, a role, a topic grouping) writes or updates an `offerDeclined` pattern by signature, and each offer's code asks `isPatternEligible(signature, today)` before offering. A Not now already stored by an MVP offer reads as one no dated when it was made.
 - **Races**: every pattern write is a transaction on its deterministic id that re-reads the state, so two devices noticing the same thing on the same day write it once, and a no on one device is never overwritten by a show on another.
 
+### Guardrails (as built, issue 114)
+
+A guardrail is a `Pattern` of kind `tooManyGoals`, `deadlineWontFit`, `starved` or `busyStretch`: family `guardrail`, load evidence, effect `{ kind: 'pause', collection, id, until }` and a `moment` of `daily` or `onStart`. It reuses the pattern states, the back-off (4 weeks, 8, the third no final) and `isEvidenceAsStrong` unchanged. It advises only: nothing waits on it and nothing blocks a save.
+
+- **`engine/guardrails.ts`** (pure, `check:helm-guardrails`): `readGoalLoad`, `readDeadlineFit`, `readStarved`, `readBusyStretch`, the bar (`meetsGuardrailBar`: two reasons of different kinds, or one `deadlineWontFit`), `readNameable` / `pickNamed`, `checkOnStart` and `checkDaily`. The gate is learning on and 7 days since the first habit or goal.
+- **Who is named:** the lowest-placed running thing that is not health or care, not the first place in what matters most, not within 14 days of a date, not below what is starved and not the deadline's own thing. On start, `subject.otherId` is the new thing's id, equal to `subject.id` when it is the one held.
+- **Refs and signature:** deadline refs are `[thingId, dateMs, 'noCalendar'?]`, busy refs `[fromMs, toMs]`, starved refs `[starvedId, tookId]`. The signature is kind plus subject with no bucket, so a moving stretch is one pattern. Every shown reason line is sealed in `reasonLine` (joined by newline), aligned with `Pattern.reasons`.
+- **Free time** is `readFreeMinutes` and `readBusyShare` in `engine/planner.ts`, over the planner's own input from `utils/guardrailInput.ts`; connection grants come from `useConnections`, and none counts as no calendar.
+- **Daily:** `runDailyPatternCheck` calls `checkDaily`, writes the winner through `writeFinding` and retires stale guardrail candidates. **On start:** `useStartCheck` (in `useHelmSync`) sees a record arriving within 60 seconds, skipping what was loaded at open, and `runStartCheck` writes the finding and sets it suggested at once.
+- **Answering:** `acceptGuardrail` pauses through `setGoalAside`, `setProjectStatus` or `setHabitStatus` (each takes an optional `pausedUntil`; the server already ends due pauses), then marks the pattern accepted. Undo puts the thing back and counts it as a no. No execution document is written, as for every person-accepted pattern.
+- **UI:** `GuardrailLine` (Today, a habit, a project, the turn's result card) and `GuardrailSheet`; What I've noticed has an "About taking things on" group.
+
+Deferred: asked-for voice answers, "Don't tell me to pause things", the 60-day calendar read with Today's day lines, "Change the date" on a project deadline card, and the scale seed.
+
 ### Learning from what is said: two layers
 
 
