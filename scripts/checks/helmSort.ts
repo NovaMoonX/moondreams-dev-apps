@@ -73,7 +73,6 @@ import {
   readHeardNames,
   toContextHeard,
 } from '../../functions/src/apps/helm/nomos/heardNames.ts';
-import { readPrivacyFacts } from '../../functions/src/apps/helm/privacy.ts';
 import { readDates } from '../../functions/src/apps/helm/dateReading.ts';
 import { planScheduledActions } from '../../functions/src/apps/helm/nomos/planScheduledActions.ts';
 import { planSoundsLike } from '../../functions/src/apps/helm/nomos/planSoundsLike.ts';
