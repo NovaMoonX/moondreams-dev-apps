@@ -32,6 +32,7 @@ import TaskDetails, {
   type WordsOutcome,
 } from '@apps/helm/components/tasks/TaskDetails';
 import MeetingFormatRow from '@apps/helm/components/tasks/MeetingFormatRow';
+import MeetingWhere from '@apps/helm/components/today/MeetingWhere';
 import TaskSteps, { TickButton } from '@apps/helm/components/tasks/TaskSteps';
 import WaitsOnPicker from '@apps/helm/components/tasks/WaitsOnPicker';
 import {
@@ -670,6 +671,11 @@ function TaskSheet({
                 formatMeetingWhen(meeting.startAt, timeZone),
               )}
             </span>
+            <MeetingWhere
+              how={meeting.format}
+              place={meeting.place}
+              hasBefore
+            />
           </p>
         )}
         {task.isUnreadable && (

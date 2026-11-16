@@ -220,6 +220,22 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
       { ...pottery, id: 'fx-pottery' },
       {
         ...base,
+        id: 'fx-planning-call',
+        summary: 'Planning call with Priya and Sam',
+        iCalUID: 'fx-planning-call@example.com',
+        ...timed(1, '10:00', '10:45'),
+        hangoutLink: 'https://meet.google.com/fix-ture-call',
+        conferenceData: {
+          entryPoints: [
+            {
+              entryPointType: 'video',
+              uri: 'https://meet.google.com/fix-ture-call',
+            },
+          ],
+        },
+      },
+      {
+        ...base,
         id: 'fx-maya',
         summary: 'Maya in Portland',
         iCalUID: 'fx-maya@example.com',
