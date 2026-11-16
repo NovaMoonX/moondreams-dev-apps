@@ -537,6 +537,54 @@ export const buildGroupQuestion = (input: {
   answer: null,
 });
 
+const UNDO_KIND_WORDS: Record<string, string> = {
+  task: 'a task',
+  fact: 'a fact',
+  keyDate: 'a date',
+  project: 'a project',
+  note: 'a note',
+  topic: 'a topic',
+  procedure: 'a procedure',
+  run: 'a run',
+  home: 'the home place',
+};
+
+/** What one line of a turn is called when it is offered back: "adding Book flights", "marking Call the vet done", "the change to Wedding". */
+export const describeUndoLine = (line: {
+  change: string;
+  title: string | null;
+  kind: string;
+}) => {
+  const name = line.title ?? UNDO_KIND_WORDS[line.kind] ?? 'something';
+  return line.change === 'completed'
+    ? `marking ${name} done`
+    : line.change === 'changed'
+      ? `the change to ${name}`
+      : line.change === 'removed'
+        ? `removing ${name}`
+        : line.change === 'moved'
+          ? `moving ${name}`
+          : `adding ${name}`;
+};
+
+/** "Undo adding Book flights? Call the vet stays.": what would go, then up to two of what stays and a count of the rest; no second sentence when nothing stays. */
+export const buildUndoOfferPrompt = (
+  going: { change: string; title: string | null; kind: string }[],
+  staying: { title: string | null; kind: string }[],
+) => {
+  const names = staying.map(
+    (line) => line.title ?? UNDO_KIND_WORDS[line.kind] ?? 'something',
+  );
+  const more = names.length - 2;
+  const stays =
+    names.length === 0
+      ? ''
+      : more > 0
+        ? ` ${names.slice(0, 2).join(', ')} and ${more} more stay.`
+        : ` ${joinNames(names)} ${names.length === 1 ? 'stays' : 'stay'}.`;
+  return `Undo ${joinNames(going.map(describeUndoLine))}?${stays}`;
+};
+
 export type PickKind = 'whichPerson' | 'whichPlace';
 
 /** Fixed wording for the "which one?" questions asked when a name fits more than one record. */
@@ -764,7 +812,7 @@ export const buildAskedQuestion = (ask: AskCommand) => ({
 const SPOKEN_OPTIONS = 4;
 const SPOKEN_FIRST = 3;
 const YES_NO_OPENERS = new Set(
-  'is are do does did can could should will would have has'.split(' '),
+  'is are do does did can could should will would have has undo'.split(' '),
 );
 
 const joinOr = (labels: string[]) =>

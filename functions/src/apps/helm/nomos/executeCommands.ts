@@ -2634,6 +2634,7 @@ const isPickKind = (kind: string) =>
   kind === 'whichTopic' ||
   kind === 'whichIsTrue' ||
   kind === 'groupTopics' ||
+  kind === 'undoOffer' ||
   kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>

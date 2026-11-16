@@ -49,6 +49,10 @@ import {
   type ProcedureCommand,
   MAX_TICKS_PER_TURN,
   RUN_COMMAND_KINDS,
+  MAX_UNDO_OFFERS,
+  UNDO_QUOTE_CAP,
+  UNDO_REASONS,
+  type UndoOffer,
   type RunCommand,
   MAX_PARENT_CHILDREN,
   MAX_TOPIC_ADD_CHARS,
@@ -1570,6 +1574,73 @@ const readRunCommands = (
     );
 };
 
+export type UndoOfferDrop = 'undo-unknown-turn' | 'undo-no-lines';
+
+/** The offers to take back an earlier turn's lines: a turn handle must be one offered, each line one that turn has, a reason outside the list is `unclear`, and a quote stays only when its words are in this turn's text. At most `MAX_UNDO_OFFERS`, one per turn. */
+export function readUndoOffers(
+  items: Record<string, unknown>[],
+  turns: AliasBook | undefined,
+  unitCounts: Map<string, number>,
+  captureText: string,
+): { offers: UndoOffer[]; dropped: UndoOfferDrop[] } {
+  const words = ` ${toComparable(captureText)} `;
+  return items
+    .filter((item) => item.kind === 'offerUndo')
+    .reduce<{ offers: UndoOffer[]; dropped: UndoOfferDrop[] }>(
+      (acc, item) => {
+        const drop = (code: UndoOfferDrop) => ({
+          ...acc,
+          dropped: [...acc.dropped, code],
+        });
+        const executionId =
+          typeof item.undoTurn === 'string'
+            ? (turns?.idOf(item.undoTurn) ?? null)
+            : null;
+        const count = executionId ? (unitCounts.get(executionId) ?? 0) : 0;
+        if (!executionId || count === 0) return drop('undo-unknown-turn');
+        const asked = Array.isArray(item.undoLines)
+          ? [
+              ...new Set(
+                item.undoLines.filter(
+                  (line): line is number =>
+                    Number.isInteger(line) && line >= 1 && line <= count,
+                ),
+              ),
+            ]
+          : [];
+        const isAll =
+          !Array.isArray(item.undoLines) || item.undoLines.length === 0;
+        if (!isAll && asked.length === 0) return drop('undo-no-lines');
+        if (acc.offers.some((offer) => offer.executionId === executionId)) {
+          return acc;
+        }
+        if (acc.offers.length >= MAX_UNDO_OFFERS) return acc;
+        const quote =
+          typeof item.undoQuote === 'string'
+            ? item.undoQuote.trim().slice(0, UNDO_QUOTE_CAP)
+            : '';
+        const isFound =
+          toComparable(quote).length > 0 &&
+          words.includes(` ${toComparable(quote)} `);
+        return {
+          ...acc,
+          offers: [
+            ...acc.offers,
+            {
+              executionId,
+              lineNumbers: isAll ? 'all' : asked.sort((a, b) => a - b),
+              reason:
+                UNDO_REASONS.find((entry) => entry === item.undoReason) ??
+                'unclear',
+              quote: isFound ? quote : null,
+            },
+          ],
+        };
+      },
+      { offers: [], dropped: [] },
+    );
+}
+
 const toKey = (title: string) => title.trim().toLowerCase();
 
 const hasEveryToken = (
@@ -1736,6 +1807,9 @@ export function normalizeNomosReply(
     procedureVersions?: Map<string, number>;
     /** The undone steps of the open runs, by alias. */
     runSteps?: AliasBook;
+    /** The earlier turns the model may offer to take back, by handle, and how many lines each has. */
+    undoTurns?: AliasBook;
+    undoUnitCounts?: Map<string, number>;
     /** The words of the turn, which a note's words must come from. */
     captureText?: string;
     quotes?: QuoteBook;
@@ -1764,6 +1838,8 @@ export function normalizeNomosReply(
   procedureDropped: ProcedureDrop[];
   runCommands: RunCommand[];
   runDropped: RunDrop[];
+  undoOffers: UndoOffer[];
+  undoOfferDropped: UndoOfferDrop[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -1865,6 +1941,12 @@ export function normalizeNomosReply(
       captureText: context.captureText,
     },
   );
+  const { offers: undoOffers, dropped: undoOfferDropped } = readUndoOffers(
+    items,
+    context.undoTurns,
+    context.undoUnitCounts ?? new Map(),
+    context.captureText ?? '',
+  );
   const projects = readProjects(
     items,
     entities,
@@ -1932,6 +2014,8 @@ export function normalizeNomosReply(
     procedureDropped,
     runCommands,
     runDropped,
+    undoOffers,
+    undoOfferDropped,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

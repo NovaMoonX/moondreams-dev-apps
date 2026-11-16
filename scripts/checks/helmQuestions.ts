@@ -18,6 +18,9 @@ import {
   buildSpokenPick,
   buildWhichIsTrueQuestion,
 } from '../../functions/src/apps/helm/nomos/summaries.ts';
+import { planUndoOffer } from '../../functions/src/apps/helm/nomos/planUndoOffer.ts';
+import { readUndoOffers } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import { buildUndoOfferPrompt } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import {
   planResolve,
@@ -1037,6 +1040,320 @@ test('only New conversation ends the open session; a new day (when on) only clea
   assert.equal(getOpenSessionId([turn(now - 60_000)], now, 0), 's1');
   assert.equal(getOpenSessionId([turn(now - 60_000)], now, now - 30_000), null);
   assert.equal(getOpenSessionId([turn(now - 60_000)], now, midnight), 's1');
+});
+
+const offerExecution = (extra: Record<string, unknown> = {}) => ({
+  state: 'succeeded',
+  category: 'organize',
+  createdAt: 10_000,
+  undoneByExecutionId: null,
+  undoneDocIds: null,
+  effectRefs: [
+    { op: 'create', collection: 'tasks', docId: 'tk1' },
+    { op: 'create', collection: 'tasks', docId: 'tk2' },
+  ],
+  effects: [
+    { written: { 'sealed.title': 'Book flights' }, previous: null },
+    { written: { 'sealed.title': 'Call the vet' }, previous: null },
+  ],
+  said: 'Added both for the trip.',
+  ...extra,
+});
+const offerOf = (
+  lineNumbers: number[] | 'all',
+  executionId = 'ex1',
+  quote: string | null = null,
+) => ({ executionId, lineNumbers, reason: 'wrongThing' as const, quote });
+const planOffer = (
+  offers: ReturnType<typeof offerOf>[],
+  executions: Record<string, ReturnType<typeof offerExecution>>,
+  lead: string | null = 'Added Book flights because the message asked for it.',
+) =>
+  planUndoOffer({
+    offers,
+    executions: new Map(Object.entries(executions)),
+    now: 20_000,
+    lead,
+    newId: () => 'q-offer',
+  });
+
+test('an offer for one line of a turn is a yes or no with what stays', () => {
+  const { question, dropped } = planOffer([offerOf([1])], {
+    ex1: offerExecution(),
+  });
+  assert.deepEqual(dropped, []);
+  assert.ok(question);
+  assert.equal(question.state.kind, 'undoOffer');
+  assert.equal(question.state.shape, 'yesNo');
+  assert.equal(question.state.answeredAt, null);
+  assert.equal(
+    question.sealed.prompt,
+    'Undo adding Book flights? Call the vet stays.',
+  );
+  assert.deepEqual(
+    (question.sealed.options as { id: string; label: string }[]).map(
+      (option) => [option.id, option.label],
+    ),
+    [
+      ['yes', 'Undo it'],
+      ['no', 'Keep it'],
+    ],
+  );
+  assert.equal(question.sealed.kind, 'undoOffer');
+  assert.equal(question.sealed.builtBy, 'code');
+  assert.equal(
+    question.sealed.lead,
+    'Added Book flights because the message asked for it.',
+  );
+  assert.deepEqual(question.sealed.heldCommands, [
+    {
+      kind: 'undoOffer',
+      choices: [
+        {
+          optionId: 'yes',
+          executionId: 'ex1',
+          docIds: ['tk1'],
+          isAll: false,
+          reason: 'wrongThing',
+          quote: null,
+        },
+      ],
+    },
+  ]);
+  assert.match(question.spoken, /^Added Book flights because/);
+  assert.match(
+    question.spoken,
+    /Undo adding Book flights\? Call the vet stays\./,
+  );
+});
+
+test('offering the whole turn names no staying clause, and lines already undone are not offered', () => {
+  const whole = planOffer([offerOf('all')], { ex1: offerExecution() });
+  assert.equal(
+    whole.question?.sealed.prompt,
+    'Undo adding Book flights and adding Call the vet?',
+  );
+  const partly = planOffer([offerOf('all')], {
+    ex1: offerExecution({ undoneDocIds: ['tk1'] }),
+  });
+  assert.equal(partly.question?.sealed.prompt, 'Undo adding Call the vet?');
+  const choice = (
+    partly.question?.sealed.heldCommands as {
+      choices: { docIds: string[]; isAll: boolean }[];
+    }[]
+  )[0].choices[0];
+  assert.deepEqual(choice.docIds, ['tk2']);
+  assert.equal(choice.isAll, true);
+});
+
+test('an offer that cannot be undone is dropped and named', () => {
+  const executions = {
+    ok: offerExecution(),
+    failed: offerExecution({ state: 'failed' }),
+    undo: offerExecution({ category: 'undo' }),
+    imported: offerExecution({ category: 'import' }),
+    whole: offerExecution({ undoneByExecutionId: 'ex9' }),
+    old: offerExecution({ createdAt: 10_000 - 25 * 60 * 60 * 1000 }),
+    spent: offerExecution({ undoneDocIds: ['tk1', 'tk2'] }),
+  };
+  const dropOf = (id: string, lines: number[] | 'all' = 'all') =>
+    planOffer([offerOf(lines, id)], executions).dropped;
+  assert.deepEqual(dropOf('gone'), ['missing']);
+  assert.deepEqual(dropOf('failed'), ['notSucceeded']);
+  assert.deepEqual(dropOf('undo'), ['notUndoable']);
+  assert.deepEqual(dropOf('imported'), ['notUndoable']);
+  assert.deepEqual(dropOf('whole'), ['fullyUndone']);
+  assert.deepEqual(dropOf('old'), ['tooOld']);
+  assert.deepEqual(dropOf('spent', [1]), ['allUndone']);
+  assert.deepEqual(dropOf('ok', [3]), ['outOfRange']);
+  assert.equal(
+    planOffer([offerOf('all', 'failed')], executions).question,
+    null,
+  );
+  const twice = planOffer(
+    [offerOf([1], 'ok'), offerOf('all', 'ok')],
+    executions,
+  );
+  assert.deepEqual(twice.dropped, ['repeated']);
+  assert.equal(twice.question?.state.shape, 'yesNo');
+});
+
+test('several turns offered make one pick, with Keep everything last', () => {
+  const { question } = planOffer(
+    [offerOf([1], 'a'), offerOf([2], 'b')],
+    { a: offerExecution(), b: offerExecution({ said: 'x'.repeat(200) }) },
+    null,
+  );
+  assert.ok(question);
+  assert.equal(question.state.shape, 'pickOne');
+  const options = question.sealed.options as {
+    id: string;
+    label: string;
+    detail: string | null;
+  }[];
+  assert.deepEqual(
+    options.map((option) => [option.id, option.label]),
+    [
+      ['c1', 'Adding Book flights'],
+      ['c2', 'Adding Call the vet'],
+      ['keep', 'Keep everything'],
+    ],
+  );
+  assert.equal(options[0].detail, 'Added both for the trip.');
+  assert.equal(options[1].detail?.length, 80);
+  const choices = (
+    question.sealed.heldCommands as { choices: { optionId: string }[] }[]
+  )[0].choices;
+  assert.deepEqual(
+    choices.map((entry) => entry.optionId),
+    ['c1', 'c2'],
+  );
+  assert.equal(question.sealed.lead, null);
+});
+
+test('the undo prompt reads in Helm tone for each kind of change', () => {
+  const line = (change: string, title: string) => ({
+    change,
+    title,
+    kind: 'task',
+  });
+  assert.equal(
+    buildUndoOfferPrompt([line('completed', 'Pay rent')], []),
+    'Undo marking Pay rent done?',
+  );
+  assert.equal(
+    buildUndoOfferPrompt([line('changed', 'Dentist')], [line('added', 'A')]),
+    'Undo the change to Dentist? A stays.',
+  );
+  assert.equal(
+    buildUndoOfferPrompt(
+      [line('removed', 'X'), line('moved', 'Y')],
+      [line('a', 'A'), line('a', 'B'), line('a', 'C'), line('a', 'D')],
+    ),
+    'Undo removing X and moving Y? A, B and 2 more stay.',
+  );
+  assert.equal(
+    buildUndoOfferPrompt(
+      [line('added', 'X')],
+      [line('a', 'A'), line('a', 'B')],
+    ),
+    'Undo adding X? A and B stay.',
+  );
+});
+
+test('the reply keeps an undo offer only for a turn it was shown, with its quote found in the words', () => {
+  const book = createAliasBook('u');
+  const handle = book.add('ex1');
+  const read = (item: Record<string, unknown>) =>
+    readUndoOffers(
+      [{ kind: 'offerUndo', ...item }],
+      book,
+      new Map([['ex1', 2]]),
+      'No, I meant a note',
+    );
+  const kept = read({
+    undoTurn: handle,
+    undoLines: [2, 2],
+    undoReason: 'wrongThing',
+    undoQuote: 'I meant a note',
+  });
+  assert.deepEqual(kept.offers, [
+    {
+      executionId: 'ex1',
+      lineNumbers: [2],
+      reason: 'wrongThing',
+      quote: 'I meant a note',
+    },
+  ]);
+  const loose = read({
+    undoTurn: handle,
+    undoLines: [],
+    undoReason: 'nonsense',
+    undoQuote: 'something never said',
+  });
+  assert.equal(loose.offers[0].lineNumbers, 'all');
+  assert.equal(loose.offers[0].reason, 'unclear');
+  assert.equal(loose.offers[0].quote, null);
+  assert.deepEqual(read({ undoTurn: 'u9', undoLines: [] }).dropped, [
+    'undo-unknown-turn',
+  ]);
+  assert.deepEqual(read({ undoTurn: handle, undoLines: [7] }).dropped, [
+    'undo-no-lines',
+  ]);
+});
+
+const undoOfferQuestion = () => {
+  const { question } = planOffer([offerOf([1])], { ex1: offerExecution() });
+  return question as NonNullable<typeof question>;
+};
+const answerInput = (optionId: string, answeredAt: number | null = null) => {
+  const question = undoOfferQuestion();
+  return resolveInput(optionId, {
+    capture: {
+      status: 'needsYou',
+      createdAt: 4000,
+      whoIds: [],
+      placeIds: [],
+      executionIds: ['e1'],
+      questionState: {
+        q1: { ...question.state, answeredAt },
+      },
+    },
+    opened: { text: 'never mind', questions: { q1: question.sealed } },
+  });
+};
+
+test('answering an undo offer records the answer and writes nothing else', () => {
+  const result = planResolve(answerInput('yes'));
+  assert.equal(result.refused, null);
+  if (result.refused !== null) return;
+  const { plan } = result;
+  assert.equal(plan.execution, null);
+  assert.equal(plan.isStale, false);
+  assert.deepEqual(plan.taskUpdates, []);
+  assert.equal(plan.whoCreate, null);
+  assert.equal(plan.factCreate, null);
+  const written = plan.capture as {
+    executionIds: string[];
+    status: string;
+    questionState: Record<string, { answeredAt: number | null }>;
+    sealed: { questions: Record<string, { answer: unknown }> };
+  };
+  assert.deepEqual(written.executionIds, ['e1']);
+  assert.equal(written.status, 'sorted');
+  assert.equal(written.questionState.q1.answeredAt, 9000);
+  const answer = written.sealed.questions.q1.answer as {
+    optionId: string;
+    shape: string;
+  };
+  assert.equal(answer.optionId, 'yes');
+  assert.equal(answer.shape, 'yesNo');
+  assert.equal(planResolve(answerInput('no')).refused, null);
+});
+
+test('an undo offer refuses an unknown option and an answered one', () => {
+  assert.deepEqual(planResolve(answerInput('maybe')), { refused: 'unknown' });
+  assert.deepEqual(planResolve(answerInput('yes', 8000)), {
+    refused: 'answered',
+  });
+});
+
+test('an open undo offer keeps the turn waiting in Needs you', () => {
+  const question = undoOfferQuestion();
+  const settled = settleCapture({
+    mode: 'full',
+    filed: 0,
+    hasMore: false,
+    executionId: null,
+    now: 9000,
+    newId: () => 'z',
+    opened: { text: 'never mind' },
+    questionState: {},
+    executionIds: [],
+    questions: [question],
+    hadAsks: true,
+  });
+  assert.equal(settled.status, 'needsYou');
 });
 
 const failures: string[] = [];

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
 import { MAX_EXECUTION_EFFECTS } from '../../functions/src/apps/helm/nomos/commands.ts';
+import { buildWriteExecution } from '../../functions/src/apps/helm/writeHelmTopic.ts';
+import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import {
   MAX_UNDO_EFFECTS,
@@ -2374,6 +2376,57 @@ test('an execution from before partial undo opens with its undone ids filled in'
   });
   assert.deepEqual(part.undoneDocIds, ['t1']);
   assert.deepEqual(part.partUndoIds, ['u1', 'u2']);
+});
+
+test('a later batch write to a topic is taken back as a version; the first write has nothing to go back to', () => {
+  const written = (from: number, reason = 'notesBrought') =>
+    buildWriteExecution(
+      NOW,
+      (fields) => fields as unknown as SealedPayload,
+      'Brought 2 notes into Car care',
+      { topicId: 'car', name: 'Car care', reason, from, to: from + 1 },
+    ) as unknown as {
+      effectRefs: EffectRef[];
+      sealed: { effects: ExecutionEffect[] };
+    };
+  const first = written(0, 'firstWritten');
+  assert.deepEqual(first.effectRefs, []);
+  assert.deepEqual(first.sealed.effects, []);
+  const later = written(4);
+  assert.deepEqual(later.effectRefs, [
+    { op: 'update', collection: 'topics', docId: 'car' },
+  ]);
+  assert.deepEqual(Object.keys(later.sealed.effects[0].written).sort(), [
+    'change',
+    'sealed.title',
+    'version',
+  ]);
+  const result = asWrite(
+    plan(
+      execution(
+        later.effectRefs.map((ref, index) => ({
+          ref,
+          effect: later.sealed.effects[index],
+        })),
+      ),
+      [topicTarget('car', { version: 5, writeClaim: null })],
+    ),
+  );
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'car', collection: 'topics', from: 5, to: 4 },
+  ]);
+  const moved = asRefused(
+    plan(
+      execution(
+        later.effectRefs.map((ref, index) => ({
+          ref,
+          effect: later.sealed.effects[index],
+        })),
+      ),
+      [topicTarget('car', { version: 6, writeClaim: null })],
+    ),
+  );
+  assert.ok(moved);
 });
 
 const failures: string[] = [];

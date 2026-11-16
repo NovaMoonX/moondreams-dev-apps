@@ -44,6 +44,7 @@ import {
   normalizeNomosReply,
   NomosReplyError,
 } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import { planUndoOffer } from '../../functions/src/apps/helm/nomos/planUndoOffer.ts';
 import { summarize } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import {
   HOME_TOO_LATE_LINE,
@@ -1805,6 +1806,118 @@ test('prices count cache reads and writes', () => {
     }),
     Math.ceil((2 + 10 + 0.2 + 2.5) * 10_000),
   );
+});
+
+test('"never mind" after a filed turn reaches an undo offer through the context, the reply checks and the plan', async () => {
+  const text = 'Never mind, I do not need it';
+  const executionId = 'exec-earlier';
+  const context = buildContext({
+    text,
+    reading: READING,
+    createdAt: 20_000,
+    timeZone: 'UTC',
+    tasks: [],
+    earlierTurns: [
+      {
+        said: 'Add book flights and call the vet',
+        did: 'Made 2 tasks',
+        taskIds: [],
+        undoable: [
+          {
+            executionId,
+            createdAt: 10_000,
+            units: [
+              {
+                n: 1,
+                kind: 'task',
+                change: 'added',
+                title: 'Book flights',
+                isUndone: false,
+                quote: null,
+              },
+              {
+                n: 2,
+                kind: 'task',
+                change: 'added',
+                title: 'Call the vet',
+                isUndone: true,
+                quote: null,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  assert.match(context.message, /"undoable":\[\{"turn":"u1","lines":\[\{"n":1/);
+  assert.ok(!context.message.includes(executionId));
+  const run = await createFixtureProvider(text, READING).runToolLoop({
+    role: 'interpret',
+    system: '',
+    messages: [{ role: 'user', content: context.message }],
+    mcpClient: {} as never,
+    terminalTool: FILE_RESULTS_TOOL,
+    limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 1000 },
+  });
+  const reply = normalizeNomosReply(run.terminalInput, {
+    reading: READING,
+    aliases: context.aliases,
+    undoTurns: context.undoTurns,
+    undoUnitCounts: context.undoUnitCounts,
+    captureText: text,
+  });
+  assert.deepEqual(reply.commands, []);
+  assert.deepEqual(reply.undoOfferDropped, []);
+  assert.deepEqual(reply.undoOffers, [
+    {
+      executionId,
+      lineNumbers: 'all',
+      reason: 'changedMind',
+      quote: 'Never mind',
+    },
+  ]);
+  assert.ok(reply.replyLine);
+  const { question } = planUndoOffer({
+    offers: reply.undoOffers,
+    executions: new Map([
+      [
+        executionId,
+        {
+          state: 'succeeded',
+          category: 'organize',
+          createdAt: 10_000,
+          undoneByExecutionId: null,
+          undoneDocIds: ['tk2'],
+          effectRefs: [
+            { op: 'create', collection: 'tasks', docId: 'tk1' },
+            { op: 'create', collection: 'tasks', docId: 'tk2' },
+          ],
+          effects: [
+            { written: { 'sealed.title': 'Book flights' }, previous: null },
+            { written: { 'sealed.title': 'Call the vet' }, previous: null },
+          ],
+        },
+      ],
+    ]),
+    now: 20_000,
+    lead: reply.replyLine,
+    newId: () => 'q1',
+  });
+  assert.equal(question?.sealed.prompt, 'Undo adding Book flights?');
+  const settled = settleCapture({
+    mode: 'full',
+    filed: 0,
+    hasMore: false,
+    executionId: null,
+    now: 20_000,
+    newId: () => 'z',
+    opened: { text },
+    questionState: {},
+    executionIds: [],
+    questions: question ? [question] : [],
+    hadAsks: true,
+  });
+  assert.equal(settled.status, 'needsYou');
 });
 
 const failures: string[] = [];

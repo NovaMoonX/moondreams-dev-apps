@@ -313,39 +313,66 @@ const describeWrite = (name: string, reason: string, taken: number) =>
         ? `Took out what a removed note said in ${name}`
         : `Brought ${taken} ${taken === 1 ? 'note' : 'notes'} into ${name}`;
 
-const buildWriteExecution = (
+/** A write past the first version records the version it made, so Undo restores the one before as a new version; the first write has nothing to go back to and records no effect. */
+export const buildWriteExecution = (
   now: number,
   seal: (fields: Record<string, unknown>) => SealedPayload,
   summary: string,
-) => ({
-  captureId: null,
-  actor: 'nomos',
-  category: 'organize',
-  autonomyLevel: AUTOMATIC_LEVEL,
-  state: 'succeeded',
-  effectRefs: [],
-  linkedWhoIds: [],
-  linkedPlaceIds: [],
-  undoesExecutionId: null,
-  undoneByExecutionId: null,
-  undoneDocIds: null,
-  partUndoIds: null,
-  questionRef: null,
-  errorCode: null,
-  createdAt: now,
-  decidedAt: now,
-  finishedAt: now,
-  sealed: seal({
-    summary,
-    commands: [],
-    effects: [],
-    undoReport: null,
-    spoken: null,
-    goneIds: null,
-    said: null,
-    lines: null,
-  }),
-});
+  written: {
+    topicId: string;
+    name: string;
+    reason: string;
+    from: number;
+    to: number;
+  },
+) => {
+  const isUndoable = written.from >= 1;
+  return {
+    captureId: null,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: AUTOMATIC_LEVEL,
+    state: 'succeeded',
+    effectRefs: isUndoable
+      ? [{ op: 'update', collection: 'topics', docId: written.topicId }]
+      : [],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    undoneDocIds: null,
+    partUndoIds: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: now,
+    decidedAt: now,
+    finishedAt: now,
+    sealed: seal({
+      summary,
+      commands: [],
+      effects: isUndoable
+        ? [
+            {
+              written: {
+                version: written.to,
+                change: written.reason,
+                'sealed.title': written.name,
+              },
+              previous: {
+                version: written.from,
+                'sealed.title': written.name,
+              },
+            },
+          ]
+        : [],
+      undoReport: null,
+      spoken: null,
+      goneIds: null,
+      said: null,
+      lines: null,
+    }),
+  };
+};
 
 interface WriteInput {
   firestore: Firestore;
@@ -413,6 +440,13 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
               now,
               seal,
               describeWrite(name, 'sourceRemoved', 0),
+              {
+                topicId,
+                name,
+                reason: 'sourceRemoved',
+                from: current.version,
+                to: version,
+              },
             ),
           );
           return version;
@@ -569,7 +603,12 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
     });
     transaction.set(
       executionRef,
-      buildWriteExecution(now, seal, describeWrite(name, reason, taken.length)),
+      buildWriteExecution(
+        now,
+        seal,
+        describeWrite(name, reason, taken.length),
+        { topicId, name, reason, from: current.version, to: version },
+      ),
     );
     return { version, waiting: pendingNoteIds.length };
   });

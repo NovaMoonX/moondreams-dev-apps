@@ -293,6 +293,7 @@ export const resolveHelmQuestion = onCall(
       const isPick =
         groupIds.length === 0 &&
         held?.kind !== 'groupTopics' &&
+        held?.kind !== 'undoOffer' &&
         !isSettle &&
         !isDateSettle &&
         !isFileNote &&
